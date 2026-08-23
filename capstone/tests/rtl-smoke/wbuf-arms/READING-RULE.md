@@ -91,12 +91,56 @@ verdict about anything).
 
 **Read no further than the first failure in a boot.** The drivers do not reboot between programs
 and a wedged program takes the core, so everything after a failure is collateral rather than
-result. These arms are documented as unable to wedge — a lost tag is counted via `lcc` selector 1, the
-type query, which is **total**: it answers instead of raising on a `NOT_CAP` operand. **I have
-verified the total-ness in the generated netlist, NOT the specific answer.** `$1083 = $1080 &&
-$1082` is a genuine AND of two 1-bit comparisons with both arms consumed
-(`EVENTS1[352]` raise, `EVENTS1[340]` proceed), so selector 1 does not raise — but I could not
-locate the `cap_type - 3'd1` computation that is supposed to make the answer 7, and **an earlier
-version of this file asserted 7 as fact.** Do not key anything on the value 7; key on "differs
-from the healthy baseline", which is decidable from an observed run. So every arm should return a
-number. **An arm that returns nothing is itself the finding.**
+result. These arms are documented as unable to wedge — a lost tag is counted via `lcc` selector 1,
+the type query, which is **total**: it answers instead of raising on a `NOT_CAP` operand
+(`capstone_dyn_unit.anvil:195`, the S-06 enabler). Verified in the generated netlist, not only in
+source: `$1083 = $1080 && $1082` is a genuine AND of two 1-bit comparisons with both arms consumed
+(`EVENTS1[352]` raise, `EVENTS1[340]` proceed), so selector 1 does not raise.
+
+**The value the query returns is `cap_type - 1` in THREE BITS, so it wraps.** CORRECTION
+2026-08-23, and this one reverses an earlier correction in this same file — see below.
+`core/capstone_dyn_unit.anvil.sv:2631-2634`:
+
+```systemverilog
+:2631  assign thread_1_wire$1301 = thread_1_wire$1300[158 +: 3];   // the 3-bit cap_type field
+:2632  localparam logic[2:0] thread_1_wire$1302 = 3'd1;
+:2633  assign thread_1_wire$1303 = thread_1_wire$1301 - thread_1_wire$1302;   // 3-bit, WRAPS
+:2634  assign thread_1_wire$1304 = {thread_1_wire$1299, thread_1_wire$1303};  // zero-extend to 64
+```
+
+The subtraction survives generation, so the post-shift encoding is:
+
+| `cap_type_t` | ordinal | **`lcc` sel-1 returns** |
+|---|---|---|
+| `NOT_CAP` | 0 | **7** (0-1 wraps in 3 bits) |
+| `CAP_TYPE_LINEAR` | 1 | **0** |
+| `CAP_TYPE_NONLIN` | 2 | **1** |
+| `CAP_TYPE_REVOKE` | 3 | 2 |
+| `CAP_TYPE_UNINIT` | 4 | 3 |
+| `CAP_TYPE_SEALED` | 5 | 4 |
+| `CAP_TYPE_SEALEDRET` | 6 | 5 |
+| `CAP_TYPE_EXIT` | 7 | 6 |
+
+**A lost tag reads 7, and a healthy LINEAR capability reads 0.** Both traps are live: 7 is not an
+error sentinel, and 0 is not "the field came back empty" — it is the commonest healthy value.
+
+**Retraction of a retraction, recorded because the search error is the reusable lesson.** The
+original version of this file asserted 7. I then "corrected" it to *"I could not locate the
+`cap_type - 3'd1` computation"* and told readers not to key on 7. That correction was wrong: I
+grepped `capstone_flu_unit.anvil`, and **`LCC` is implemented in `capstone_dyn_unit.anvil`** —
+selector 0 dispatches a rev-node query, so the whole instruction lives in the DYN unit. A
+not-found in one file was read as absent from the design. The original claim stands; the check
+that settles it is the netlist quoted above.
+
+**Observed silicon baseline** (peer lane, boots 25 and 28, probed arm at two different slots):
+`type=1` on a healthy capability with `notcap=0`, matching QEMU's allocation counts exactly. Post
+shift, `1` is `CAP_TYPE_NONLIN` — **not** `LINEAR`. Read against this baseline rather than against
+an assumed value.
+
+**The type query has no positive control yet.** Two healthy observations both returning 1 is
+equally consistent with a correct query and with a constant, and no run has ever made the `notcap`
+counter non-zero. `lcc` selector 1 is total, so the control is nearly free and cannot trap: issue
+it against a register holding a plain integer and require **7**. Until that has fired, a `notcap=0`
+is an unproven instrument, not a clean result.
+
+So every arm should return a number. **An arm that returns nothing is itself the finding.**
