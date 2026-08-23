@@ -2681,3 +2681,50 @@ around from software, and no ordering of arms helps because the monitor runs fir
 
 `sw=204 = 0x00` halted, with the 220 selftest passing in the same boot. Displacement remains
 excluded on a controlled negative -- now seven boots.
+
+## Spill side: disfavoured, not excluded -- and why it cannot be excluded
+
+`CAPSTONE_WIDTH_PAIR` already runs the spill-side check: it forces a reload of the pWInfo slot
+via `*(WhereInfo *volatile *)&pWInfo` and applies `lcc` selector 1 (total, cannot trap) at the
+top of the callee, immediately after the prologue spill. On silicon:
+
+    boot 25 arm2   WIDTH type=1 lo=2197710272 hi=7660733082902  calls=5 notcap=0
+    boot 28 arm3   WIDTH type=1 lo=2201904576 hi=11337225088278 calls=5 notcap=0
+
+`type=1` is healthy NONLIN; five calls each; **never 7**. If the spill side were broken the query
+would return 7 and the arm would return normally. So spill-side breakage is excluded **for the
+perturbed path**.
+
+**The caveat is structural and worth stating precisely: both runs COMPLETED.** The probe perturbs
+the fault away -- that is exactly why `sqrtw` completes where `sqrt` wedges at the same arm with
+the same input. So the measurement is "healthy right after the spill, in runs where the fault
+does not occur".
+
+**And no experiment can do better from software.** Seeing both halves in one run needs a run that
+reads early AND still faults, but the wedge is an M-mode wedge: it takes the core, Linux dies
+with it, and no in-domain record survives -- including anything written to the host-shared
+region. **A faulting run cannot report.** Any observation that survives is an observation that
+prevented the thing it was observing.
+
+Recorded strength: **spill-side breakage DISFAVOURED, not excluded.** It survives only if the
+same perturbation that prevents the fault also repairs the spill, which is an odd shape but not
+an impossible one.
+
+## Lesson: LIVENESS and ATTRIBUTION are two different controls
+
+The 208 false positive is worth generalising, because five offline controls missed it.
+
+A positive control proves a detector **can fire**. It does not prove the firing was **yours**.
+All five of my controls tested *decoding* -- that the byte would be read correctly given a value.
+None could ask whose value it was, and a liveness gate structurally cannot: bit 7 is set either
+way.
+
+**Where a recorder exposes an address, a tag, or any identity beside its verdict, checking that
+identity against the subject is a SECOND control, not a refinement of the first.** Without it,
+"the detector fired" and "the detector fired for me" are indistinguishable -- and on a machine
+whose boot software routinely issues untagged LDCs, the first is nearly guaranteed while the
+second is nearly impossible.
+
+This is already covered in spirit by "ask what the instrument cannot distinguish", but that rule
+did not stop it: the question was asked, and asked only about decoding. The sharper form is
+**"could this reading belong to something other than my subject?"**
