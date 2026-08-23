@@ -85,3 +85,86 @@ board nor the `rootfs.ext2` lock, so it costs no one anything and cannot collide
 **NOT the padding experiment.** If the mechanism is residency of any kind, padding closes the
 window and returns "it is residency" — which is already suspected, does not distinguish *which*
 residency, and costs a board session. The trace distinguishes; the padding does not.
+
+---
+
+# RESOLVED: it is a NULL pointer in software. No tag was lost, and no hypothesis in this note was right.
+
+**Date:** 2026-08-23. Settled by four latched values read together, from apertures that were on the
+bitstream the whole time and had never been sampled.
+
+```
+sw=255  TRAP LOG {seen, mcause[6:0]}  0x99   -> trap_seen = 1, mcause = 25
+        trap mepc  (LATCHED)          0x0000000082cf499c   <- MATCHES the faulting instruction
+        trap tval  (LATCHED)          0x0000000000000000
+```
+
+The staleness guard passes: `trap_seen` is set and `mepc` is exactly the `cincoffsetimm` at
+`0x10499C`, so the latch belongs to **this** fault rather than an earlier one. Without that check a
+bare `tval` would have been unreadable — the same trap that made `TRAP LOG 0x89` a stale kernel
+ecall.
+
+**`tval` carries the rs1 CURSOR.** A capability that had lost its tag would still carry its address
+bits and read pointer-like. **Zero means the value is genuinely zero, not a de-tagged pointer.**
+`pWInfo` is NULL, and `cincoffsetimm a4, a4, 0xb0` is `&pWInfo->sWC` — on a conventional machine
+that computes an offset from NULL and hurts nobody until the load; on Capstone it traps at the
+offset computation.
+
+**So: a null dereference in software. No lost tag, no store buffer, no hardware defect in this
+fault.**
+
+## The premise that was wrong, and it was available all evening
+
+Everything above was built on "mcause 25 = UNEXPECTED_OPERAND = the operand is NOT_CAP". **On this
+bitstream 25 has TWO live producers:**
+
+```
+ex_stage.sv:479       64'd24 + exception_code    ordinal 1 = UNEXPECTED_OPERAND
+commit_stage.sv:226   64'd25  // INVALID_CAPABILITY (23 + 2)   <- base 23, the PC-capability check
+```
+
+Both verified in the flown commit `80843404c`, not merely in-tree. And
+`core/anvil_build/capstone_unit.anvilh:298-300` states it outright:
+
+> *"commit_stage.sv:205-228 (the PC-capability check) uses base 23 instead of 24 and so emits a
+> DIFFERENT name for the same number. That block disagrees with both encoders and with
+> riscv_pkg.sv and looks like an off-by-one in its own right."*
+
+**That block was read in this same session** — it is where `ILLEGAL_OPERAND_VALUE = 30` was taken
+from for the S-11 SEAL test, and the line immediately above the note was quoted at the time. The
+fact needed was three lines away and was not applied.
+
+A second argument in the same chain was **vacuous rather than wrong**: "mcause 25 not 29, so a tag
+failure rather than a bounds failure". `capstone_flu_unit.anvil:57-90` gives `CINCOFFSETIMM` **no
+bounds arm at all**, so 29 was never reachable and excluding it excluded nothing — an exclusion
+that could not have come out the other way.
+
+## The rule that already covers this, and was not applied
+
+CLAUDE.md, verbatim: **"Ask what the instrument cannot distinguish — before the claim goes out, not
+after."** `mcause 25` cannot distinguish UNEXPECTED_OPERAND from INVALID_CAPABILITY on this
+bitstream. **No new rule is needed; the existing one was not applied to a cause code, only to
+matchers and counters.** Worth recording that the failure was in scope of an existing rule rather
+than in a gap.
+
+## What dies with it
+
+* **S-10b as the explanation** — already withdrawn on the address evidence.
+* **S-10's `gran_clr`** — already withdrawn on the one-entry reading.
+* **The capacity chain** — nine distinct granules against `WtDcacheWbufDepth = 8`, one over. It
+  explained the 6537 non-firing pairs without special pleading and had a threshold prediction,
+  which made it the best-supported of the three. **It is still not what happened.** A hypothesis
+  can fit every constraint you have collected and be about a phenomenon that is not occurring.
+
+The counting work survives as a fact about the frame even though the hypothesis does not: that
+window really does need nine write-buffer entries against a depth of eight. If a genuine
+capacity-related tag loss is ever chased, the shape is already measured.
+
+## Still open, and not ours to close
+
+Whether a silicon defect produced the NULL upstream. `sqlite3WhereBegin` allocates `pWInfo` via
+`sqlite3DbMallocRawNN` and checks `db->mallocFailed`, so NULL should not reach the loop, and the
+heap is 256 KiB on both silicon and QEMU — so the obvious configuration difference is already ruled
+out. The board lane is converting the hang into a returning answer with an entry-point NULL check
+and the `oom=/malloc=/free=` counters. **A non-zero `oom` on silicon with an identical heap under
+QEMU would put it back on the hardware.**
