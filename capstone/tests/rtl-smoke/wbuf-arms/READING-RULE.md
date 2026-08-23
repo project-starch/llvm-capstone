@@ -21,8 +21,16 @@ byte-identical arms silently tested nothing.
 | `wr7` | `c80aec6406b2b48d` | 10304 | 3 | `-DWBUF_ARM=7` |
 | `wr8` | `a630a0193883e478` | 10424 | 4 | `-DWBUF_ARM=8` |
 
-Carve cost is 2–4 per arm against a **1000-entry pool budget**, and arms run one at a time, so the
-worst case is 4 — no pool pressure. (Counted from `gp-carve-count.py`'s labelled `carve count`
+Carve cost is 2–4 per arm against a **1000-entry pool budget**. **CORRECTION 2026-08-23: I
+originally wrote "arms run one at a time, so the worst case is 4, not 40." That reasoning is
+wrong.** `capstone_rev_node.anvil:79` allocates with `set head := *head + 16'd1` — a monotone bump
+with **no reclamation**, and nothing in the monitor resets it on `create_dom`. So the head is
+**cumulative across every arm in a boot** and only clears on a power cycle. Ten arms at 2–4 each is
+20–40 for the boot, not 4.
+
+The conclusion survives — 40 against a 1000-entry budget is still no pressure — but the reasoning
+did not, and the corrected version matters for anyone reading this to size a longer ladder. **A
+boot's arms share the pool; they do not each get a fresh one.** (Counted from `gp-carve-count.py`'s labelled `carve count`
 field. Reading the last number on its output instead gives `1000`, the *budget*, which would make
 every arm look pinned at the limit.)
 
