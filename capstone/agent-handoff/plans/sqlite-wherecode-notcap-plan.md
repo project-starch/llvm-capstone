@@ -162,3 +162,98 @@ that as wandering was an error that an auditor also missed. My case differs — 
 different pads — so the sweep is not simply re-treading it, **but the failure mode is identical
 in shape: treating a link-address difference as an address effect.** Design the arms against that
 section, not against my own table.
+
+---
+
+# UPDATE 2 — auditor verdict. One row of mine downgraded, one new leading candidate.
+
+## Strengthened
+
+* **The granule arithmetic is now PROVEN, not assumed.** `stc` alignment is hardware-enforced:
+  `capstone_dyn_unit.anvil:418` raises `STORE_ADDRESS_MISALIGNED` on `(rs1 & 15) != 0`. The
+  subject `stc` executes without it, so `s0 ≡ 0 (mod 16)` and the granule is `[s0-0x70, s0-0x60)`.
+  It matters because the granule is **sandwiched**: `sw` at `s0-0x74` sits immediately below and
+  `stc` at `s0-0x60` immediately above. A one-unit boundary error either way would have put a
+  store inside.
+* **The callee gap is CLOSED.** No `jalr`/`jal` between the subject `stc` and the reload (first
+  call is after the fault); 1210 branch targets extracted from the whole function, **zero** land
+  in the window. Parser positive-controlled before the empty result was believed.
+
+## REFUTED — my stated reason for distinctness
+
+"A plain store into the granule is S-07's **required** trigger" is **wrong**. It is demonstrated
+only for the `sqlite3JournalOpen` -> `sqlite3OsRead` pathway. For `pagerFreeMapHdrs`,
+`sqlite3BackupRestart` and `whereLoopOutputAdjust` the folder never enumerates one. **The
+folder's actual invariant is a DATAFLOW SHAPE**, `00-README.md:433-435`: the value produced by
+the preceding `ldc` arrived NOT_CAP — "the back-to-back dependent capability-load pair".
+
+So "no same-granule plain store" separates this from the **memset pathway**, not from S-07. It
+does not distinguish us from three of S-07's own four recorded sites.
+
+## DOWNGRADED — a contradiction in this plan's own ESTABLISHED table
+
+The table listed `cap_type == NOT_CAP` and "producer is the FLU" as established, while the same
+document records that the **FLU tval path has never been shown to fire**. Both rows lean on that.
+
+Partly defensible and partly not, precisely:
+
+* **"Not commit_stage" is reasonable.** `commit_stage.sv:604` sets `tval = commit_instr.pc`, the
+  latch demonstrably records a NON-zero tval (mcause 15 case), and `tval != mepc` therefore does
+  argue against that producer.
+* **"The value was NULL" is NOT established**, and neither is "a de-tagged capability". Those
+  remain undiscriminated, because separating them needs the FLU tval assignment to be live.
+
+**So `cap_type == NOT_CAP` moves from ESTABLISHED to WELL-SUPPORTED**: it follows from
+`mcause 25` at an unambiguous `cincoffsetimm` *given* the FLU producer, and the producer
+determination rests on `tval != mepc` rather than on a fired instrument.
+
+## CORRECTION to the auditor
+
+The report states the arm-position confound is "unbroken, 5 for 5". **It was broken.** Boot #26:
+`[stages] <-- TEST 2/3 .../sqrt.dom:--slt .../q_two.test NO RETURN within 400s` — the un-probed
+build wedging at **arm 2**. The auditor read the retraction section without the later refutation.
+Position is not the variable.
+
+## NEW LEADING CANDIDATE — the S-10 fix that is IN this bitstream
+
+The 62-line delta between the S-07-fix-validated build and the flown `80843404c` is **exactly the
+S-10 fix in `wt_dcache_mem.sv`**, and it is a **read-path** change that existed in no earlier
+bitstream:
+
+    assign wbuffer_gran_clr_oh[k] = wbuffer_gran_oh[k] & ~wbuffer_data_i[k].ctag;
+    // S-10: the granule-scoped clear is applied to BOTH legs, and it DOMINATES.
+
+Its own commit subject is **"S-10 FIX: works in simulation, and costs a combinational loop — NOT
+ready to merge"**, its comment records `UNOPTFLAT 39 -> 40 on wt_dcache.rd_ctag`, no later commit
+in range resolves the loop, and the bitstream has **never closed timing** (WNS −10.629 ns).
+
+**A dominating tag-clearing override, carrying a known combinational loop, on a timing-failing
+bitstream, produces EXACTLY the observed polarity — data correct, tag zero — if it ever fires
+spuriously.** And S-10b (`c867dfcbb`) is *not* in this bitstream.
+
+This displaces granule co-residency, which is fixed here and micro-arm validated
+(`wb1` 1107 -> 0, and `wt_dcache_wbuffer.sv` byte-identical between the validated and flown
+builds).
+
+## The defensible sentence today
+
+> A reproducible mcause-25 wedge at `sqlite3WhereCodeOneLoopStart+0x8c` on
+> `caplifive_s10fix_80843404c.bit`. S-07's granule-co-residency mechanism is excluded at this slot
+> on two independent grounds. Whether a tag was lost at all is undetermined: the FLU `tval`
+> instrument has never been shown to fire, and `mcause 25` has two producers on this bitstream.
+
+## Revised next steps
+
+1. **Fire the tval instrument** — `li a0,0xBEEF ; cincoffsetimm a0,a0,8` must trap mcause 25 with
+   `tval == 0xBEEF` AND `mepc` at that instruction. Until it fires, "lost tag" and "NULL" are
+   both void. **This is now step 1, ahead of everything else.**
+2. **Repetitions, not single boots.** p(wedge) is 25% at the measured S-07 site; two clean runs
+   prove nothing.
+3. Only if (1) fires non-zero does "a capability lost its tag" become a fact — and then the target
+   is the **read-side** S-10 override above, not co-residency.
+
+## Still do NOT
+
+Open a folder. P3 is unproven — a folder asserting a distinct silicon defect would be a claim
+ahead of its evidence. Equally, do **not** file it as a fifth S-07 instance: the mechanism is
+excluded at this slot, and the family-signature match is a shape, not an attribution.
