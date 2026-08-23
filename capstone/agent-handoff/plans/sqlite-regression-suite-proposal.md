@@ -2357,3 +2357,42 @@ was also zero. The type finding does not depend on it.
 working query and a constant. The probe now issues `lcc` selector 1 against a plain integer and
 reports `CTL(must be 7)`, riding in the returning arm at no cost. If CTL is not 7, `notcap=0`
 means nothing.
+
+### The NOT_CAP step needed one more check, and it passes
+
+"mcause 25 at the FLU" does NOT by itself mean an operand lost its tag. Of the 21
+`UNEXPECTED_OPERAND` raise sites, **seven are disjunctions whose other arm is `!= NOT_CAP`** --
+firing when an operand that should be a plain integer is unexpectedly a CAPABILITY. The split
+runs through one mnemonic family: `CINCOFFSETIMM` (`capstone_flu_unit.anvil:58`) is the single
+condition `cap_rs1.cap_type == NOT_CAP`, but the register-form `CINCOFFSET` (`:30`) is
+`(rs1 == NOT_CAP) || (rs2 != NOT_CAP)` and under that a 25 has two readings.
+
+So the conclusion required knowing WHICH instruction faulted. Disassembled at the mepc VA in both
+surviving binaries:
+
+    adb59241 (boots 25,26)  0x104a50 ldc a4,0x0(a0) / 0x104a54 cincoffsetimm a4,a4,0xb0
+    277b73f0 (boots 21,22)  0x104998 ldc a4,0x0(a0) / 0x10499c cincoffsetimm a4,a4,0xb0
+
+Identical encoding `5b 27 07 0b`. **The IMMEDIATE form** -- and structurally it cannot be
+otherwise, since it has only one capability operand and therefore no rs2 to be unexpectedly a
+capability. **`cap_type == NOT_CAP` stands.**
+
+Gap labelled rather than glossed: boot 24's binary `c7eff841` has been overwritten (the reused
+bake directory again). Its mepc mapped to function+0x8C and the instruction there is
+byte-identical in both surviving binaries, so it is almost certainly the same, but for that boot
+it is an inference from neighbours, not a disassembly. Boots 21, 22, 25, 26 are direct.
+
+Also recorded: **only `mcause[6:0]` survives the debug bank** (`cva6.sv:1341-1342` packs
+`{trap_seen, mcause[6:0]}`), so `0x99` = seen + 25. Fine for causes 24-30; a cause >= 128 would
+alias silently.
+
+### Where the fault now stands
+
+A capability spilled by `stc` and reloaded by `ldc` 18 instructions later comes back with
+`cap_type == NOT_CAP` -- deterministically, at the same source line, across three binaries and
+six boots -- and inserting instrumentation between the spill and the reload makes it stop.
+
+Not established: which half of the instrumentation does that. The probe changes `stc`->`ldc`
+distance (19 -> 44 instructions) AND pre-touches the granule with a scalar `ld`. A matched pair
+separating those is the next experiment. Also, the `q_one` (passing) row is N=1, whereas the
+`q_two` wedge is solid at both arm slots.
