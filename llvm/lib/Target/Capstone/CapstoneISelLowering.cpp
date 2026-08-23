@@ -8253,6 +8253,31 @@ static SDValue normalizeScalarI128ShiftOperandToXLen(
     }
   }
 
+  // A constant is its own extension whenever its high half is determined by its
+  // low half, which is most of the constants that reach here. There was no case
+  // for one, so this helper bailed on every operand pair containing a literal
+  // and the node arrived at isel unlowered. The shape that made it matter:
+  // DAGCombiner expands a negation into the NOT idiom, `xor x, -1`, so
+  // `-(sext i64 to i128)` -- an ordinary pointer difference in C -- ended as
+  // "Cannot select: i128 = xor ..., Constant:i128<-1>" (issue C-2).
+  //
+  // Classify by which extension is EXACT, and prefer the signed reading: a
+  // negative constant has only that one, and a non-negative constant has the
+  // same bits either way, so it lands in the mixed-extend recovery above, which
+  // already handles precisely that case. A genuine 128-bit literal still bails.
+  if (auto *C = dyn_cast<ConstantSDNode>(V)) {
+    const APInt &Val = C->getAPIntValue();
+    unsigned XLen = XLenVT.getSizeInBits();
+    if (Val.getSignificantBits() <= XLen) {
+      ExtOpcode = ISD::SIGN_EXTEND;
+      return DAG.getConstant(Val.trunc(XLen), DL, XLenVT);
+    }
+    if (Val.getActiveBits() <= XLen) {
+      ExtOpcode = ISD::ZERO_EXTEND;
+      return DAG.getConstant(Val.trunc(XLen), DL, XLenVT);
+    }
+  }
+
   return SDValue();
 }
 
