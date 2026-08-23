@@ -1803,6 +1803,45 @@ PYPAD
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_NOPS=${CAPSTONE_PAD_NOPS}"
 fi
 
+# CAPSTONE_PAD_LOOP=<n> -- DELAY WITH CONSTANT CODE SIZE. Supersedes CAPSTONE_PAD_NOPS.
+#
+# A run of N nops varies delay AND code size AND I-cache footprint together, which is why the
+# nop result can only be read as "distance/time OR alignment". A bounded register-only loop of N
+# iterations has **constant code size and constant alignment for every N**, so across a sweep the
+# only thing that varies is CYCLES. The confound is not controlled for, it is gone.
+#
+# It also removes a subtler version of the same problem: at 600 nops the pad spans many I-cache
+# lines, so a bisection over nop count is simultaneously a bisection over footprint and the
+# extracted threshold would be a blend of the two.
+#
+# Register-only and volatile: no memory is touched, so this stays a pure DELAY arm and does not
+# reintroduce the traffic variable. The counter is a local in a register; `volatile` asm with no
+# memory clobber keeps the loop from being optimised away without forcing spills.
+if [[ -n "${CAPSTONE_PAD_LOOP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PAD_LOOP" <<'PYLOOP'
+import sys
+path, n = sys.argv[1], int(sys.argv[2])
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("PAD_LOOP: callee anchor count %d" % s.count(CALLEE))
+pad = ('\n  { unsigned long cap_pad_i = %dUL;\n'
+       '    __asm__ volatile ("1: addi %%0, %%0, -1\\n\\t bnez %%0, 1b"\n'
+       '                      : "+r"(cap_pad_i) : : );\n  }' % n)
+s = s.replace(CALLEE, CALLEE + pad, 1)
+open(path, "w").write(s)
+print("   PAD_LOOP: %d-iteration register-only delay loop injected (constant code size)" % n)
+PYLOOP
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_LOOP=${CAPSTONE_PAD_LOOP}"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on

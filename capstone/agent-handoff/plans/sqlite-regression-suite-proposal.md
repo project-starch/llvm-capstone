@@ -2447,3 +2447,44 @@ The tval verdict line still printed "the operand was NULL, therefore a SOFTWARE 
 that was retracted. It now says tval==0 is NO DATA until the `0xBEEF` control fires, and points at
 the cause code, which gives `cap_type == NOT_CAP` for `cincoffsetimm` without needing tval at all.
 A retracted claim left printing itself into every future run is worse than no message.
+
+### CORRECTION: the pad600 result establishes DELAY-dependence, not DRAIN-latency
+
+The entry above called the mechanism a "store-to-load drain-latency window". **That over-claims.**
+What the experiment establishes is that the fault is **delay-dependent**. Other time-dependent
+mechanisms scale with a 619-instruction gap just as well:
+
+* DRAM refresh phase,
+* a periodic interrupt,
+* another AXI master's traffic.
+
+`miss_req_o = (|dirty) && free_tx_slots` makes drain-latency the **leading** hypothesis and a good
+one, but the pad600 arm alone cannot separate it from "something periodic got a chance to happen".
+
+**Simulation separates them for free**, because it has no refresh and no competing masters: if the
+effect survives in sim, drain latency is essentially the only candidate left; if it vanishes, the
+periodic-external family moves to the front.
+
+### Two design fixes for the next round
+
+* **`CAPSTONE_PAD_LOOP=<n>` supersedes `CAPSTONE_PAD_NOPS`.** A bounded register-only loop has
+  **constant code size and constant alignment for every n**, so a sweep varies CYCLES ONLY. That
+  removes the I-cache-alignment confound outright instead of bisecting around it -- and removes a
+  subtler one too: a 600-nop pad spans many cache lines, so a bisection over nop count would also
+  be a bisection over footprint and the extracted threshold would blend the two. Register-only and
+  volatile, so it stays a pure delay arm and does not reintroduce traffic.
+* **Next round goes to SIMULATION, not the board.** The shape is now a plain `stc` / delay / `ldc`
+  at a fixed address -- exactly what a directed assembly test expresses. RVFI gives the load's
+  RETURNED VALUE and the store's WRITTEN DATA directly, which no board instrument can. A run is
+  ~14 s, so bracketing `10 < T <= 600` is a ten-run binary search in minutes rather than five
+  boots.
+
+  **Asymmetry, stated up front:** if sim REPRODUCES, everything downstream is cheap and the trace
+  is available. If sim does NOT reproduce, that is **not exoneration** -- the known fidelity gaps
+  are bare M-mode vs a real capability domain, a register-resident capability vs one loaded from
+  the cap table, a `.data` buffer vs a monitor-carved stack, and cache warmth. A non-reproduction
+  says the gap matters, having cost minutes instead of boots.
+
+Also still open: pad600 has never run at arm 3. Position is dead on the evidence (boot #26), but
+this is the pair the whole result rests on, and it is the one asymmetry left in it -- worth one
+cheap arm whenever a slot is spare.
