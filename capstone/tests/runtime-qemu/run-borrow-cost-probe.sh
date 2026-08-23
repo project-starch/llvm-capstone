@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
@@ -33,14 +34,24 @@ rm -f "$SHARE_DIR"/borrow_cost.dom "$SHARE_DIR"/borrow_cost_probe.user
 
 bash "$SCRIPT_DIR/build-borrow-cost-probe.sh" "$SHARE_DIR"
 
-python3 "$SCRIPT_DIR/run-domain-smoke.py" \
+set +e
+capstone_retry_infra_flake \
+  python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
   --qemu-extra-arg=-icount \
   --qemu-extra-arg="$ICOUNT" \
   --guest-command "cp /mnt/host/borrow_cost_probe.user /tmp/bc.user && chmod 0755 /tmp/bc.user && /tmp/bc.user /mnt/host/borrow_cost.dom" \
-  --success-marker "borrow-cost-probe: measurement complete" \
-  || { echo "run-borrow-cost-probe.sh: domain run FAILED; see $LOG_FILE" >&2; exit 1; }
+  --success-marker "borrow-cost-probe: measurement complete"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  # Retries exhausted. 75 here means the guest never ran, so there is no verdict
+  # to report -- exiting 1 would publish an infra flake as a measurement failure.
+  capstone_verdict_or_flake "$LOG_FILE" "borrow-cost-probe:" "$rc" || rc=$?
+  echo "run-borrow-cost-probe.sh: no measurement (rc=$rc); see $LOG_FILE" >&2
+  exit "$rc"
+fi
 
 echo
 echo "=== borrow-cost-probe: instruction-count results (functional-model proxy) ==="

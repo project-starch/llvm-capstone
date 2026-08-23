@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
@@ -26,7 +27,8 @@ rm -f "$SHARE_DIR"/sqlite_borrow_revoke_probe.user \
 
 bash "$SCRIPT_DIR/build-sqlite-borrow-revoke-probe.sh" "$SHARE_DIR"
 
-python3 "$SCRIPT_DIR/run-domain-smoke.py" \
+capstone_retry_infra_flake \
+  python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
   --guest-command "cp /mnt/host/sqlite_borrow_revoke_probe.user /tmp/sbr.user && chmod 0755 /tmp/sbr.user && /tmp/sbr.user /mnt/host/sqlite_borrow_revoke_probe.smode" \

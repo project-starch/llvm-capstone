@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
@@ -36,7 +37,8 @@ run_case() {
 
 mapfile -t CMDS < <(run_case 2; run_case 3)
 
-python3 "$SCRIPT_DIR/run-domain-smoke.py" \
+capstone_retry_infra_flake \
+  python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
   "${CMDS[@]}" \

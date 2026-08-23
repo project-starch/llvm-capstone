@@ -18,6 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
@@ -42,9 +43,7 @@ bash "$SCRIPT_DIR/build-static-cap-globals-probe.sh" "$SHARE_DIR"
 # 75 is the shared infra-flake code: the guest never reached login, which says
 # nothing about the domain. Retry it rather than let it decide the verdict.
 run_domain() { # $1=log  $2=dom
-  local rc
-  for _ in 1 2 3; do
-    set +e
+  capstone_retry_infra_flake \
     python3 "$SCRIPT_DIR/run-domain-smoke.py" \
       --share-dir "$SHARE_DIR" \
       --log-file "$1" \
@@ -52,11 +51,6 @@ run_domain() { # $1=log  $2=dom
       --guest-command "/mnt/host/capstone-test.user /mnt/host/$2" \
       --success-marker 'Created domain ID = 0' \
       --success-marker 'Called dom (1-th time) retval = 305397871'
-    rc=$?
-    set -e
-    [ "$rc" -eq 75 ] || return "$rc"
-  done
-  return "$rc"
 }
 
 run_domain "$DIRECT_LOG" static_cap_globals_direct.dom
