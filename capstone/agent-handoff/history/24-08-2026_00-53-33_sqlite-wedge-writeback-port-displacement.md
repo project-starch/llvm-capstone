@@ -7,6 +7,16 @@
 > by exactly one. So the zero is a **controlled negative**, not an unfired instrument. The
 > localization argued below is wrong; the mechanism it describes did not occur.
 >
+> **Narrower than first stated: the exclusion rests on the HALTED reads only.** The aperture is
+> read on two paths and they disagree — halted `0x00` at the wedge, running `0x0c` which the
+> driver self-flags VOID. The selftest reads are halted too. The running path is not merely
+> weaker evidence, it is *invalid*: `cva6.sv:1026` computes
+> `s07_gran_match = s07_ldc0_valid && s07_stc_valid && <granule compare>`, a combinational AND
+> requiring both valid bits, so a byte with `gran_match` set and `ldc0_valid` clear is
+> **structurally impossible** for the logic to produce. That sample is a readout artifact, and
+> it also refutes the "running reads only OR in extra bits" model, so subset reasoning must not
+> be used to promote a running read. Halted reads are the only ones that carry a verdict.
+>
 > **Coverage was then checked for holes and there are none.** `include/ariane_pkg.sv:237-243`
 > gives `FLU_WB=0, STORE_WB=1, LOAD_WB=2, FPU_WB=3, CAP_WB=4`. Ports 0 and 4 carry capability
 > data and cannot erase. **Port 3 is the FPU port**, driven by a single direct assignment from
@@ -28,6 +38,22 @@
 > it drives the displacement counter only. But bit 7 is its own liveness check: at a wedge an
 > untagged LDC is known to have occurred, so `ldc0_valid` clear means the recorder never fired
 > and the byte is void.
+>
+> **But bit 7 guards only one direction, and the other is a live false-positive risk.**
+> `load_unit.sv:66,766` records the **FIRST** LDC whose response tag was 0 —
+> `if (ldc_result_back && !req_port_i.data_rtag && !s07_ldc0_valid_q)` — one-shot, and there is
+> **no clear**: the only reset is `rst_ni`. (`dom_switch_log_clear` exists for the domain-switch
+> log at bank `3'b101` reg 31; there is no s07 equivalent.) An untagged LDC is not inherently a
+> fault — a load over a zeroed stack slot returns tag 0 legitimately — so any earlier arm, or
+> the monitor, can permanently claim the slot. Bit 7 then reads 1, the liveness gate passes, and
+> every other bit describes an unrelated earlier load.
+>
+> **The cross-check that closes it is already on the mux:** `s07_ldc0_paddr` at reg 13/14
+> (switch 205/206) and `s07_stc_paddr` at reg 15/17 (switch 207/209). Not UART-safe, but the
+> documented use is post-run and a halted read after a wedge is exactly that. Requiring the
+> recorded granule to match the subject slot upgrades bit 7 from "an untagged LDC was recorded"
+> to "the subject's was", and reading the STC address validates `gran_match` directly instead of
+> trusting it.
 >
 > **The body below is kept as written**, because the reasoning was sound and the exclusion is
 > what makes it worth keeping: the signature it matches — correct cursor, NOT_CAP metadata, next
