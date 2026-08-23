@@ -22899,8 +22899,9 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
 
   // If this is an FP_ROUND or TRUNC followed by a store, fold this into a
   // truncating store.  We can do this even if this is already a truncstore.
-  if ((Value.getOpcode() == ISD::FP_ROUND ||
-       Value.getOpcode() == ISD::TRUNCATE) &&
+  // Integer truncates only: folding away a fat pointer's address read would
+  // leave a truncating store whose stored value is not an integer.
+  if ((Value.getOpcode() == ISD::FP_ROUND || isIntegerTruncate(Value)) &&
       Value->hasOneUse() && ST->isUnindexed() &&
       TLI.canCombineTruncStore(Value.getOperand(0).getValueType(),
                                ST->getMemoryVT(), LegalOperations)) {

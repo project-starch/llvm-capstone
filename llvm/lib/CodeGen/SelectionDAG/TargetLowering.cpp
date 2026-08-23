@@ -10384,6 +10384,15 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     return std::make_pair(Load, TF);
   }
 
+  // A fat pointer is not an integer, but splitting it into halves is exactly the
+  // right answer for an unaligned load: the two halves cannot carry a tag, and
+  // an unaligned capability is not one. Do the arithmetic in the same-size
+  // integer type and reinterpret at the end.
+  EVT ResultVT = VT;
+  if (!LoadedVT.isInteger() && !LoadedVT.isVector()) {
+    LoadedVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
+    VT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
+  }
   assert(LoadedVT.isInteger() && !LoadedVT.isVector() &&
          "Unaligned load of unsupported type.");
 
@@ -10433,6 +10442,9 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
 
   SDValue TF = DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Lo.getValue(1),
                              Hi.getValue(1));
+
+  if (ResultVT != VT)
+    Result = DAG.getNode(ISD::BITCAST, dl, ResultVT, Result);
 
   return std::make_pair(Result, TF);
 }
@@ -10530,6 +10542,13 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
     return Result;
   }
 
+  // As in expandUnalignedLoad: split a fat pointer in the same-size integer
+  // type. The halves carry no tag, which is what an unaligned store means.
+  if (!StoreMemVT.isInteger() && !StoreMemVT.isVector()) {
+    StoreMemVT = EVT::getIntegerVT(*DAG.getContext(), StoreMemVT.getSizeInBits());
+    VT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
+    Val = DAG.getNode(ISD::BITCAST, dl, VT, Val);
+  }
   assert(StoreMemVT.isInteger() && !StoreMemVT.isVector() &&
          "Unaligned store of unknown type.");
   // Get the half-size VT
