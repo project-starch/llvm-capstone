@@ -1687,6 +1687,7 @@ def main():
                 pc_bytes = {}
                 mepc_bytes = {}
                 tval_bytes = {}
+                traplog_v = None
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -1843,6 +1844,8 @@ def main():
                         # pre-test baseline means no non-trivial trap was latched since, and the
                         # trap fields carry no verdict about the domain that just wedged. The
                         # displacement byte is unaffected either way.
+                        if sw == 255 and v is not None:
+                            traplog_v = v
                         if sw == 255 and v is not None and TRAPLOG_CLEAR != "all":
                             # No pre-test baseline is taken any more (reading 255 mid-run injects
                             # trace bytes into the console -- see the sampling block). So
@@ -1933,7 +1936,31 @@ def main():
                                   flush=True)
                         else:
                             print(f"  [wedge] trap tval = 0x{tval:016x}", flush=True)
-                            if mepc is not None and tval == mepc:
+                            # STALENESS GATE, and it is not optional. The latch is
+                            # last-writer-wins over commit-stage exceptions, so a tval whose
+                            # companions do not belong to a capability fault in a DOMAIN is some
+                            # earlier trap's value. Without this gate a VOID boot -- control
+                            # never entered, mcause 15, mepc 0x860 -- printed a confident
+                            # "a real capability LOST ITS TAG". Measured, 2026-08-23.
+                            _seen = None if traplog_v is None else (traplog_v >> 7) & 1
+                            _cause = None if traplog_v is None else traplog_v & 0x7F
+                            if traplog_v is None:
+                                print("          <== NO VERDICT: the trap-log byte (sw 255) was "
+                                      "not read, so staleness cannot be judged.", flush=True)
+                            elif not _seen:
+                                print("          <== NO VERDICT: trap_seen is CLEAR -- nothing "
+                                      "was latched, so this tval is reset state, not a "
+                                      "measurement.", flush=True)
+                            elif not (24 <= _cause <= 39):
+                                print(f"          <== NO VERDICT: mcause {_cause} is not a "
+                                      f"capability fault (24..39), so this latch is ordinary "
+                                      f"traffic from earlier and says NOTHING about this "
+                                      f"domain -- tval included.", flush=True)
+                            elif mepc is None or not (0x80000000 <= mepc < 0x90000000):
+                                print(f"          <== NO VERDICT: mepc is not in the "
+                                      f"domain/monitor range, so the latch is from an unrelated "
+                                      f"trap.", flush=True)
+                            elif mepc is not None and tval == mepc:
                                 print("          <== tval == mepc: this is the commit_stage.sv:226 "
                                       "PC-CAPABILITY check (base 23), NOT UNEXPECTED_OPERAND. "
                                       "The instruction's OPERAND is innocent; PCC's revocation "
