@@ -2598,3 +2598,47 @@ instruction: pads of 0, 1, 2, 3, 4 nops. If the fault appears and disappears wit
 placement is the variable and delay is a passenger. That is cheap, needs no new mechanism, and is
 decisive in a way the loop ladder cannot be -- the loop instrument cannot bisect anything,
 because it never wedges.
+
+## Writeback-port displacement EXCLUDED -- six boots, controlled negative, zero board time
+
+The peer lane named a mechanism that matches the signature verbatim: `scoreboard.sv:328-330` ties
+`cap_data` to `'0` on writeback ports 1, 2 and 3, so a displaced capability response retires with
+a **correct cursor and NOT_CAP metadata**, and the next capability consumer raises mcause 25.
+That is `ldc` then `cincoffsetimm` exactly.
+
+It is also **already instrumented and already in our wedge readout**, and it has answered:
+
+    [wedge] sw=204 S-07 displacement {stc,ldc,count[5:0]}   0x00 00000000
+    [s07] SELFTEST pre-204  = 0x00
+    [s07] SELFTEST 220 flag = 0x01  OK
+    [s07] SELFTEST post-204 = 0x41  OK: ldc_seen set and count moved by exactly 1
+    [s07] SELFTEST PASS
+
+Identical in boots 21, 22, 24, 25, 26, 29. The selftest drives the SAME sticky and the SAME
+counter through the real path and moves it by one, so the zero at the wedge is a **controlled
+negative**, not an unfired instrument. **Displacement onto ports 1-2 is excluded.**
+
+Also corrected: the board is on `caplifive_s10fix_80843404c.bit`, not `caplifive_s07fix.bit`, and
+the detector is present and alive in that image -- proven by the selftest rather than asserted.
+
+### The hole in that exclusion, flagged rather than glossed
+
+`scoreboard.sv:328-330` scalarises ports **1, 2 AND 3**, but the detector watches only two:
+
+    cap_wb_displaced_o[0] = wt_valid_i[2] && ... && op == LDC
+    cap_wb_displaced_o[1] = wt_valid_i[1] && ... && op == STC
+
+**Port 3 is scalar and unwatched.** A capability response displaced onto port 3 would erase
+metadata identically and still read 0x00 here. So the established claim is "no displacement onto
+ports 1 or 2", NOT "no displacement". The selftest exercises the LDC/port-2 path, so its
+authority does not extend to port 3 either.
+
+Open with the RTL lane: can port 3 carry an LDC response on this configuration? If yes, the
+exclusion has a hole and the next arm is a detector that watches it. If the dyn unit's syncer can
+only ever land on ports 1 or 2, the exclusion is complete.
+
+### Consequence
+
+With displacement excluded on ports 1-2, the NOT_CAP came from memory or tag state rather than
+from the pipeline erasing it in flight -- which puts the alignment sweep back in scope, pending
+the port-3 answer.
