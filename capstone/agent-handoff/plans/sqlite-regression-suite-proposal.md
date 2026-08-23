@@ -2488,3 +2488,64 @@ periodic-external family moves to the front.
 Also still open: pad600 has never run at arm 3. Position is dead on the evidence (boot #26), but
 this is the pair the whole result rests on, and it is the one asymmetry left in it -- worth one
 cheap arm whenever a slot is spare.
+
+## Simulation does NOT reproduce -- and the gap that matters is not on the standard list
+
+The peer lane built and ran the directed test (`verif/tests/custom/capstone/stc-delay-ldc.S`,
+submodule commit `2d0c26b27` on `timing-multicycle`, unpushed -- not on the allowlist). Six arms,
+register-only counted loop, three instructions wide for every N so size and alignment are constant:
+
+    N=1     reload @cyc 401    Type 2, cursor 0x10000, bounds 0x10000..0x40000
+    N=4     reload @cyc 445    identical
+    N=16    reload @cyc 533    identical
+    N=64    reload @cyc 770    identical
+    N=256   reload @cyc 1835   identical
+    N=1024  reload @cyc 4945   identical
+    control @cyc 4992          NOT_CAP, lcc = 7
+
+**Zero exceptions at any delay.** Two positive controls fired, which is the only reason the clean
+result is readable rather than void: the DETECTOR can report a loss (an `ldc` from a granule that
+never held a capability reports NOT_CAP), and the PAD genuinely scales (~3 cycles/iteration, gaps
+34/46/81/223/1065/3106) so the arms differ from one another.
+
+**The decisive gap is that the test never creates the triggering condition.** `stc` and `ldc` to
+the same address with nothing else in flight means ONE write-buffer entry draining into an idle
+memory system. SQLite has a working set. If the effect needs a co-resident entry, a competing
+miss, or a partially-drained buffer, this test cannot see it at ANY delay -- and would come back
+exactly this clean.
+
+**That reconciles the two results rather than leaving them in tension: delay DRAINS co-resident
+entries.** "600 nops fixed it on silicon" and "the mechanism needs contention" are the same story
+from opposite ends.
+
+### The contention arm, with the REAL pattern rather than generic traffic
+
+Nine stores sit between the subject `stc` and the subject `ldc` in the actual binary, touching
+**9 distinct granules against `WtDcacheWbufDepth = 8` -- over by one**:
+
+    stc  -> s0-0x70    SUBJECT, granule-aligned, tagged
+    stc  -> s0-0x5d0   cap, tagged
+    sw   -> s0-0x74    scalar 4B  (granule s0-0x80)
+    stc  -> s0-0x5b0   cap, tagged
+    stc  -> s0-0x90    cap, tagged
+    sd   -> s0-0x98    scalar 8B  (granule s0-0xa0)
+    stc  -> s0-0x5a0   cap, ctag=0   (movc rX, zero ; stc)
+    sw   -> s0-0x10c   scalar 4B \_ same granule s0-0x110; may merge to ONE entry or take two
+    sw   -> s0-0x110   scalar 4B /
+    stc  -> s0-0x120   cap, ctag=0
+
+Three features generic traffic would miss, each a candidate trigger: the **two ctag=0 capability
+entries** (the class `wbuffer_gran_clr` keys on, needing no plain store to create); the
+**9-vs-8 over-by-one**, which predicts that dropping any granule-OWNING store stops it while
+dropping one of the two merging `sw`s does not; and the **mix** (6 tagged stc, 2 ctag=0 stc, 3
+scalar) rather than uniform traffic.
+
+### Two instrument traps recorded
+
+* **Two type encodings.** `CAPPRINT` shows the RAW `cap_type` (healthy = 2, NONLIN) while `lcc`
+  selector 1 shows type-minus-one (healthy = 1). Same capability, different numbers. Our probe
+  uses the query form, so its healthy baseline is 1.
+* **`SUCCESS (tohost = 0)` is a STRING LITERAL** in the harness success branch
+  (`corev_apu/tb/ariane_tb.cpp:397`), printed by every passing test and carrying no value. Read
+  the pass/fail word, never that number. Same family as `tval=0`: a number that renders like data
+  and carries none.
