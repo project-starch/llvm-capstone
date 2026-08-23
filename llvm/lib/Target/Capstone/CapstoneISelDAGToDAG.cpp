@@ -1387,15 +1387,12 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   MVT XLenVT = Subtarget->getXLenVT();
 
   // cscincoffset requires the tagged capability in the base position. ISD::ADD
-  // is commutative, so `int + ptr` can reach here with the integer in operand(0)
-  // (e.g. a spilled integer arriving as CopyFromReg i128 facing a real
-  // capability). CapstoneTargetLowering applies this same canonicalization to
-  // add nodes that are custom-lowered; adds that reach instruction selection
-  // directly (this path and the CapstoneISD::CIncOffset case) need it here too.
-  // Use the shared operand-role predicates so both sites agree. A FrameIndex
-  // offset is left alone — it has its own base-materialization path.
-  if (((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
-       (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base))) &&
+  // is commutative, so `int + ptr` can reach here the other way round. Which
+  // operand is the capability is now a question about TYPES -- it is the c128
+  // one -- where it used to be answered by asking which operand looked like an
+  // offset. A FrameIndex offset is left alone; it has its own base
+  // materialisation path.
+  if (Base.getValueType() != MVT::c128 && Offset.getValueType() == MVT::c128 &&
       !isa<FrameIndexSDNode>(Offset))
     std::swap(Base, Offset);
   auto materializeXLenAndMask = [&](SDValue LHS, const APInt &Mask) -> SDValue {

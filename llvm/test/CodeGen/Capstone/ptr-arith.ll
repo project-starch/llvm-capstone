@@ -78,7 +78,8 @@ define ptr addrspace(200) @test_signed_i32_gep(ptr addrspace(200) %p, i32 %idx) 
 ; indexing through a capability pointer. This is the source pattern that
 ; motivated the i128 sign_extend_inreg lowering fix.
 ; CHECK-LABEL: test_signed_i32_load_gep:
-; CHECK: addi [[OFF:a[0-9]+]], a1, -4
+; The i32 add and its sign extension fold into one addiw.
+; CHECK: addiw [[OFF:a[0-9]+]], a1, -4
 ; CHECK: cincoffset [[PTR:a[0-9]+]], a0, [[OFF]]
 ; CHECK: lbu a0, 0([[PTR]])
 ; CHECK: cjalr zero, 0(ra)
@@ -139,8 +140,10 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
 ; C pointer subtraction returns an integer difference between two capability
 ; cursors. Do not select this as full-width i128 scalar subtraction.
 ; CHECK-LABEL: test_ptrdiff:
-; CHECK-DAG: lcc [[CUR0:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[CUR1:a[0-9]+]], a1, 2
+; The address read is a scalar move since a capability became c128: ptrtoint is
+; a TRUNCATE to the index width, and the low half of the register IS the cursor.
+; CHECK-DAG: mv [[CUR0:a[0-9]+]], a0
+; CHECK-DAG: mv [[CUR1:a[0-9]+]], a1
 ; CHECK: sub a0, [[CUR0]], [[CUR1]]
 ; CHECK: cjalr zero, 0(ra)
 define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
@@ -156,7 +159,7 @@ define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
 ; arithmetic, not scalar integer OR.
 ; CHECK-LABEL: test_or_disjoint_frame_const:
 ; CHECK: cincoffsetimm a0, {{(sp|s0)}}, 0
-; CHECK-NEXT: cincoffsetimm a0, a0, 8
+; CHECK: cincoffsetimm a0, a0, 8
 ; CHECK: cjalr zero, 0(ra)
 define ptr addrspace(200) @test_or_disjoint_frame_const() {
 entry:

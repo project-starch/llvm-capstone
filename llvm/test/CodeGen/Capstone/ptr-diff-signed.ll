@@ -1,7 +1,13 @@
-; Verify signed element scaling after subtracting two capability cursors.
+; Verify signed element scaling after subtracting two capability addresses.
 ; An exact signed division by a power of two must use SRA after the i128
 ; pointer-difference carrier is narrowed to XLEN. SRL is wrong for negative
-; differences. Genuine logical shifts must remain SRL.
+; differences. Genuine logical shifts must remain SRL. That is what this test is
+; for, and it is unchanged.
+;
+; The address read is a scalar move rather than `lcc rd, rs, 2` since a
+; capability became c128: ptrtoint is a TRUNCATE to the index width, selected as
+; PseudoTRUNC_CAP. Both read the cursor -- the low half of the register IS the
+; cursor -- and the move is one instruction instead of two.
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s
@@ -9,8 +15,8 @@
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
 ; CHECK-LABEL: ptrdiff_signed_positive:
-; CHECK-DAG: lcc [[POS_LHS:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[POS_RHS:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[POS_LHS:a[0-9]+]], a0
+; CHECK-DAG: mv [[POS_RHS:a[0-9]+]], a1
 ; CHECK: sub [[POS_DIFF:a[0-9]+]], [[POS_LHS]], [[POS_RHS]]
 ; CHECK-NEXT: srai a0, [[POS_DIFF]], 2
 ; CHECK-NOT: srli
@@ -27,8 +33,8 @@ define i64 @ptrdiff_signed_positive(ptr addrspace(200) %high,
 
 ; Reverse the subtraction operands to represent the negative-result path.
 ; CHECK-LABEL: ptrdiff_signed_negative:
-; CHECK-DAG: lcc [[NEG_HIGH:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[NEG_LOW:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[NEG_HIGH:a[0-9]+]], a0
+; CHECK-DAG: mv [[NEG_LOW:a[0-9]+]], a1
 ; CHECK: sub [[NEG_DIFF:a[0-9]+]], [[NEG_LOW]], [[NEG_HIGH]]
 ; CHECK-NEXT: srai a0, [[NEG_DIFF]], 2
 ; CHECK-NOT: srli

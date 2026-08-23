@@ -1,10 +1,14 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
 
 ; Bitwise arithmetic on a CAPABILITY, which is what C that goes through uintptr_t and back turns
-; into: align a pointer down, steal a low bit as a flag, hash two pointers. The address is read
-; with the same `lcc rd, rs, 2` that a pointer difference uses (ptr-arith.ll), the operation happens
-; at XLen, and the result is untagged -- which is what the source asked for, since a value built out
-; of uintptr_t bits cannot carry a tag.
+; into: align a pointer down, steal a low bit as a flag, hash two pointers. The address is read with
+; the same scalar move a pointer difference uses (ptr-diff-signed.ll), the operation happens at XLen,
+; and the result is untagged -- which is what the source asked for, since a value built out of
+; uintptr_t bits cannot carry a tag.
+;
+; The read used to be `lcc rd, rs, 2`. Since a capability became c128, ptrtoint is a TRUNCATE to the
+; index width, selected as PseudoTRUNC_CAP; the low half of the register IS the cursor, so the two
+; read the same thing and the move is one instruction instead of two.
 ;
 ; The narrow form is not avoidable by writing better C: expressing the align-down as
 ; `p - (p & (N-1))` to stay in the pointer domain is folded straight back into `p & ~(N-1)` by
@@ -12,7 +16,7 @@
 ; MicroPython: gc_init, pairheap.c's NEXT_GET_RIGHTMOST_PARENT, and bound_meth_unary_op.
 
 ; CHECK-LABEL: align_down:
-; CHECK:      lcc a0, a0, 2
+; CHECK:      mv a0, a0
 ; CHECK-NEXT: andi a0, a0, -32
 define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
@@ -23,7 +27,7 @@ define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
 }
 
 ; CHECK-LABEL: clear_flag_bit:
-; CHECK:      lcc a0, a0, 2
+; CHECK:      mv a0, a0
 ; CHECK-NEXT: andi a0, a0, -2
 define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
@@ -35,8 +39,8 @@ define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) 
 
 ; Two capabilities, no constant: both cursors are read.
 ; CHECK-LABEL: hash_two:
-; CHECK-DAG:  lcc a0, a0, 2
-; CHECK-DAG:  lcc a1, a1, 2
+; CHECK-DAG:  mv a0, a0
+; CHECK-DAG:  mv a1, a1
 ; CHECK:      xor a0, a0, a1
 define i64 @hash_two(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) {
   %x = ptrtoint ptr addrspace(200) %a to i64

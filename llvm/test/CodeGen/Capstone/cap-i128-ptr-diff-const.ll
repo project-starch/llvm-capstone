@@ -12,22 +12,25 @@
 ; through it, so the interpreter trapped on the first `print()` (and any other base
 ; function) even though pure-core chunks ran fine.
 ;
-; Fix: when neither operand of the i128 add is a capability base -- the offset is
-; an integer offset and the base is a ptr-ptr SUB of two capability values (or an
-; already-lowered sign-extended difference) -- lower the add in the XLen domain
-; (scalar `addi`) and sign-extend back. The element adjustment must be a scalar
-; add, never a cincoffset on the difference.
+; That question no longer exists. Since a capability became c128, an i128 add is
+; integer arithmetic by TYPE, and the element adjustment stays in the pointer
+; domain where the source put it: `q + 1` is a GEP, so it is a cincoffsetimm on
+; the tagged capability BEFORE the difference is taken. What must never happen is
+; a cincoffset on the DIFFERENCE, which is untagged -- so each check below pins
+; "no cincoffset between the sub and the return" rather than "no cincoffset".
 
 target triple = "capstone64-unknown-elf"
 
 %struct.SV = type { [4 x i64] }   ; 32-byte element, like Lua's StackValue
 
-; p - (q + 1): loaded capabilities, difference is a scalar; the -32 element
-; adjustment must be a scalar `addi`, never a cincoffset on the difference.
+; p - (q + 1): loaded capabilities, difference is a scalar. The +1 element is a
+; cincoffsetimm on the tagged capability; nothing may cincoffset the difference.
 ; CHECK-LABEL: ptr_diff_q1:
+; CHECK:      cincoffsetimm [[Q:a[0-9]+]], [[Q]], 32
 ; CHECK:      sub [[D:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NEXT: addi [[D]], [[D]], -32
+; CHECK-NEXT: srai [[D]], [[D]], 5
 ; CHECK-NOT:  cincoffset
+; CHECK:      cjalr zero, 0(ra)
 define i64 @ptr_diff_q1(ptr addrspace(200) %slots) addrspace(200) {
 entry:
   %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1
@@ -42,11 +45,13 @@ entry:
   ret i64 %r
 }
 
-; (p + 1) - q: same, with a +32 adjustment.
+; (p + 1) - q: same, with the adjustment on the other side.
 ; CHECK-LABEL: ptr_diff_p1:
+; CHECK:      cincoffsetimm [[P:a[0-9]+]], [[P]], 32
 ; CHECK:      sub [[E:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NEXT: addi [[E]], [[E]], 32
+; CHECK-NEXT: srai [[E]], [[E]], 5
 ; CHECK-NOT:  cincoffset
+; CHECK:      cjalr zero, 0(ra)
 define i64 @ptr_diff_p1(ptr addrspace(200) %slots) addrspace(200) {
 entry:
   %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1
@@ -63,9 +68,11 @@ entry:
 
 ; Plain p - q stays a clean cursor difference + arithmetic shift (control).
 ; CHECK-LABEL: ptr_diff_plain:
-; CHECK:      sub [[F:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
 ; CHECK-NOT:  cincoffset
-; CHECK:      srai
+; CHECK:      sub [[F:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
+; CHECK-NEXT: srai [[F]], [[F]], 5
+; CHECK-NOT:  cincoffset
+; CHECK:      cjalr zero, 0(ra)
 define i64 @ptr_diff_plain(ptr addrspace(200) %slots) addrspace(200) {
 entry:
   %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1

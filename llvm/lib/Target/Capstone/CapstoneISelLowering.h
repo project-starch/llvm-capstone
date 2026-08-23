@@ -26,13 +26,6 @@ class InstructionCost;
 class CapstoneSubtarget;
 struct CapstoneRegisterInfo;
 
-// Operand-role predicates for commutative i128 capability arithmetic, defined
-// in CapstoneISelLowering.cpp. Shared with instruction selection so the
-// cscincoffset base/offset canonicalization (tagged capability in the base
-// position) is identical whether an `add` is custom-lowered or reaches ISel
-// directly.
-bool isCapstoneIntegerOffset(SDValue V);
-bool isCapstoneCapabilityValue(SDValue V);
 
 class CapstoneTargetLowering : public TargetLowering {
   const CapstoneSubtarget &Subtarget;

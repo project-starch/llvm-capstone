@@ -3997,7 +3997,7 @@ void SelectionDAGBuilder::visitPtrToInt(const User &I) {
                           DAG.getDataLayout().getIndexSizeInBits(AS)),
         N);
   }
-  N = DAG.getSExtOrTrunc(N, getCurSDLoc(), DestVT);
+  N = DAG.getZExtOrTrunc(N, getCurSDLoc(), DestVT);
   setValue(&I, N);
 }
 
