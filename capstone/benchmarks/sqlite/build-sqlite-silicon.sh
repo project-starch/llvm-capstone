@@ -1668,6 +1668,91 @@ PYWHERE
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_WHERE_NULL_PROBE=1"
 fi
 
+# CAPSTONE_WIDTH_PAIR=1 -- separate ACCESS WIDTH from BUFFER TRAFFIC, in ONE build.
+#
+# Boot #24 left two variables moving together across two binaries: the un-probed build's 16-byte
+# `ldc` of the pWInfo spill slot yields cursor 0 and traps, while the probed build's plain 8-byte
+# `ld` of the same slot reads non-zero. But the probe also adds memory traffic between the spill
+# and the reload, which would close a residency window on its own. Two builds cannot separate
+# those.
+#
+# This puts BOTH reads in the SAME build, SAME frame, adjacent instants, with the 16-byte read
+# FIRST so the 8-byte read cannot be what drains the entry.
+#
+# THE TYPE QUERY IS THE KEY, and it is the one capability query that cannot trap.
+# capstone_dyn_unit.anvil:169-201: LCC raises UNEXPECTED_OPERAND on a NOT_CAP operand for EVERY
+# selector EXCEPT zimm==1, which was deliberately made TOTAL as an S-06 enabler -- it answers 7
+# for a non-capability instead of raising, precisely so software can ask "does this granule hold
+# a capability?" and branch. Verified present in the FLOWN bitstream:
+#   git show 80843404c:core/anvil_build/capstone_dyn_unit.anvil  -> the zimm!=1 guard at :195
+# No builtin reaches selector 1 (CapstoneInstrInfo.td:2444-2448 wires 0,2,3,4,5 only), so it goes
+# in as inline asm. cap_get_tag is selector 0, the VALIDITY query, which is explicitly NOT total
+# and WOULD trap here.
+#
+# Outcomes, and all three are unambiguous:
+#   type==7 and lo/hi non-zero -> the 16-byte read produced a non-capability out of memory that
+#                                 holds a real pointer. WIDTH is the variable. Hardware.
+#   type!=7                    -> the ldc was fine in this layout, so the perturbation removed the
+#                                 fault. TRAFFIC was doing the work.
+#   type==7 and lo/hi zero     -> memory really is zero. Software after all.
+if [[ -n "${CAPSTONE_WIDTH_PAIR:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYWIDTH'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("WIDTH_PAIR: callee anchor count %d" % s.count(CALLEE))
+s = s.replace(CALLEE, CALLEE + """
+  {
+    WhereInfo *volatile *cap_slot = (WhereInfo *volatile *)&pWInfo;
+    volatile unsigned long *word = (volatile unsigned long *)(void *)cap_slot;
+    WhereInfo *cap_w;
+    unsigned long cap_ty, cap_lo, cap_hi;
+    cap_w  = *cap_slot;               /* 16-byte ldc -- FIRST, before any 8-byte read */
+    __asm__ volatile ("lcc %0, %1, 1" : "=r"(cap_ty) : "r"(cap_w));  /* total: 7 == NOT_CAP */
+    cap_lo = word[0];                 /* 8-byte read, low word of the SAME slot */
+    cap_hi = word[1];                 /* 8-byte read, high word */
+    capstone_w_calls++;
+    /* FIRST call's values, as an on-silicon baseline. Recorded on call 1 only. */
+    if( capstone_w_calls==1UL ){
+      capstone_w_type = cap_ty; capstone_w_lo = cap_lo; capstone_w_hi = cap_hi;
+    }
+    /* THE ANOMALY, recorded separately and keyed on != 1 rather than == 7.
+       The healthy type is MEASURED (QEMU baseline: type=1), whereas the claim that NOT_CAP
+       encodes as 7 could not be confirmed in the generated netlist -- only that selector 1 is
+       total and will not raise. Keying on an unconfirmed constant would be a branch that can
+       never fire, which reads exactly like "the ldc was fine". So: compare against the value
+       actually observed on a healthy run, and REPORT THE RAW TYPE rather than interpreting it.
+       Recording first-anomalous SEPARATELY from first-call also means a healthy call 1 cannot
+       mask a bad call 2 -- the earlier version recorded only the first observation and would
+       have done exactly that. */
+    if( cap_ty!=1UL && capstone_w_notcap==0UL ){
+      capstone_w_bad_type = cap_ty; capstone_w_bad_lo = cap_lo; capstone_w_bad_hi = cap_hi;
+      capstone_w_bad_call = capstone_w_calls;
+    }
+    if( cap_ty!=1UL ){                /* branch ONLY after recording, so a wedge cannot hide it */
+      capstone_w_notcap++;
+      return notReady;
+    }
+  }""", 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("WIDTH_PAIR: prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap, capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call;\n", 1)
+open(path, "w").write(s)
+print("   WIDTH_PAIR probe injected (ldc-first, total type query, both 8-byte words)")
+PYWIDTH
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_WIDTH_PAIR=1"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on

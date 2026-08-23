@@ -320,6 +320,8 @@ unsigned long capstone_m5_oom, capstone_m5_malloc, capstone_m5_free;
    was compiled in cannot distinguish "no NULL" from "not measured". */
 unsigned long capstone_where_null, capstone_where_null_level, capstone_where_caller_arg,
               capstone_where_caller_calls, capstone_where_callee_calls;
+unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap;
+unsigned long capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6128,6 +6130,27 @@ static unsigned capstone_slt_entry(void) {
       capstone_slt_out(0, b + i);
     }
     capstone_slt_out(0, "\n"); }
+#ifdef CAPSTONE_WIDTH_PAIR
+  /* type 7 == NOT_CAP (capstone_dyn_unit.anvil:181-184). lo/hi are the SAME slot read as two
+     plain 8-byte words. type==7 with lo/hi non-zero means the 16-byte read manufactured a
+     non-capability out of memory that holds a real pointer. */
+  { static const char *const wp[9] = {"WIDTH type=", " lo=", " hi=", " calls=", " notcap=",
+                                      " badtype=", " badlo=", " badhi=", " badcall="};
+    unsigned long pv[9];
+    int k;
+    pv[0] = capstone_w_type; pv[1] = capstone_w_lo; pv[2] = capstone_w_hi;
+    pv[3] = capstone_w_calls; pv[4] = capstone_w_notcap;
+    pv[5] = capstone_w_bad_type; pv[6] = capstone_w_bad_lo; pv[7] = capstone_w_bad_hi;
+    pv[8] = capstone_w_bad_call;
+    for (k = 0; k < 9; k++) {
+      char b[24]; int i = (int)sizeof b; unsigned long v = pv[k];
+      capstone_slt_out(0, wp[k]);
+      b[--i] = '\0'; if (!v) b[--i] = '0';
+      while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+      capstone_slt_out(0, b + i);
+    }
+    capstone_slt_out(0, "\n"); }
+#endif
 #ifdef CAPSTONE_WHERE_NULL_PROBE
   /* caller_arg is the cursor of pWInfo AS THE CALLER SAW IT, recorded immediately before the
      call; null/level/calls are the callee's view. Non-zero caller_arg with a NULL callee view
