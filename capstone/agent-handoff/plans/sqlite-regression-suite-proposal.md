@@ -1987,3 +1987,66 @@ failure, NOT a bounds failure. A tag was lost between the `stc` that spilled `pW
   `sqlite3WhereBegin`, which allocates the variable-sized `WhereInfo` -- and its size DOES
   depend on the number of FROM terms, which is the one thing that differs between q_one and
   q_two), or whether the tag is lost in the spill slot itself.
+
+## S-06 REFUTED as the cause; S-10b is the candidate. Static analysis of both frames.
+
+The RTL lane answered the bitstream question, and the answer kills my own hypothesis:
+
+* **S-06 IS in `caplifive_s10fix_80843404c.bit`.** Verified two ways on their side: `25035c4c0`
+  is an ancestor of `80843404c`, and the whole `core/` delta from the S-07 bitstream's base to
+  `80843404c` is exactly one file, `wt_dcache_mem.sv`. So S-06/S-07/S-08 are all in and S-10 is
+  the only addition. **This is not S-06** -- my hypothesis in the previous commit is REFUTED.
+* **The AMO I-4 residual is not in play.** It is confined to atomics, and its polarity is the
+  OPPOSITE of this symptom: it makes non-capability data read back as TAGGED. Ours is a tag
+  going missing.
+* **S-10b is the candidate and is NOT in this bitstream** (`c867dfcbb` is not an ancestor;
+  `store_buffer.sv` still compares `page_offset_i[11:3]`). The RAW interlock between a load and
+  a not-yet-drained store compares at 64-bit WORD granularity while a tag is a per-16-byte
+  GRANULE property. It has no shippable fix: widening the compares to `[11:4]` failed synthesis
+  twice with `DRC LUTLP-1`, a 69-LUT combinational loop across `rev_node`/`load_unit`/
+  `csr_regfile`, and `write_bitstream` refused.
+
+### Their check #1 -- does a scalar store share the pWInfo granule? NO, in either frame.
+
+Checked statically, verifying each `cincoffsetimm`/store pair inside its own basic block rather
+than by linear scan (a whole-function linear scan is control-flow-blind and gave a WRONG answer
+first time -- it paired definitions with stores thousands of instructions away).
+
+CALLER `sqlite3WhereBegin` (0xef8ac):
+
+* pWInfo lives at caller `s0-0xc0`, written ONCE by `stc a1, 0x0(a2)` at `0xefa80`, BEFORE the loop.
+* The calling loop is `0xf10a0..0xf1398` (back-edge `j 0xf10a0` at `0xf1398`), reloading pWInfo
+  each iteration at `0xf1304`/`0xf130c`.
+* **Inside that loop nothing writes into `[s0-0xc0, s0-0xb0)`** -- no scalar store, no capability
+  store.
+* Scalar stores DO hit that granule (`-0xc0`, `-0xbc`, `-0xb8` = base+8, `-0xb4`) at `0xf16c4`,
+  `0xf16cc`, `0xf1d54`, `0xf2920`, `0xf3538`, `0xf3544` -- but every one is AFTER the loop ends.
+  That is ordinary slot reuse once pWInfo is dead. **So this is NOT a codegen live-range
+  overlap**, which was the other way this could have gone and would have made it our bug.
+
+CALLEE `sqlite3WhereCodeOneLoopStart` (0x104910):
+
+* pWInfo spills to callee `s0-0x70`, 16-byte aligned, granule `[s0-0x70, s0-0x60)`.
+* The only nearby scalar, `sw a3, 0x0(a2)` at `0x10495c` with `a2 = s0-0x74`, is in the PREVIOUS
+  granule `[s0-0x80, s0-0x70)`. No overlap.
+
+### The better candidate: the callee's own tight stc->ldc pair
+
+    104950: stc a2, 0x0(a0)      ; a0 = s0-0x70, spill pWInfo
+    ...9 unrelated stores in between...
+    104998: ldc a4, 0x0(a0)      ; SAME address, 18 instructions later
+    10499c: cincoffsetimm a4, a4, 0xb0    ; traps
+
+Same address, so a `[11:3]` compare should match on word 0 and stall. The symptom needs correct
+DATA with a STALE (clear) TAG, i.e. the reverse polarity of the S-10b legs described to me.
+Whether the word-vs-granule mismatch can run that way is with the RTL lane.
+
+### Call counts, measured natively (counter injected into the amalgamation)
+
+    SELECT t1.a FROM t1            -> 1 call  (iLevel=0)
+    SELECT t1.a FROM t1, t1 AS y   -> 2 calls (iLevel=0 then 1), SAME pWInfo pointer
+
+**Correction to the previous commit's reasoning:** I argued the fault must be on call #2, since
+0x10499C is unconditional prologue code and q_one's single call passes it. That assumed q_two's
+FIRST call behaves like q_one's, which is not guaranteed -- the preceding planning code differs,
+so store-buffer residency can differ. Call #2 is likely but NOT proven, and is not claimed.
