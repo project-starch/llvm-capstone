@@ -3709,14 +3709,19 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   }
   case ISD::BITCAST: {
     MVT SrcVT = Node->getOperand(0).getSimpleValueType();
-    // inttoptr: the integer and the capability that spells its bits share a
-    // register, so this is a move -- and it must be the SCALAR move, which does
-    // not carry a tag. Forging a tagged capability out of an integer is not
-    // something inttoptr may do.
+    // c128 <-> i128 is a REINTERPRETATION of one register, not a conversion:
+    // inttoptr's integer, and an inline-asm "r" operand whose value the generic
+    // code bitcasts to the register class's first legal type. A plain COPY is
+    // right for both, and the coalescer removes it.
+    //
+    // It must NOT be the scalar move. That move exists to DROP a tag, and using
+    // it here silently untagged every capability passed to inline asm --
+    // CoreMark's CAPSTONE_DELIN(A) became `mv a6, a1; delin a6`, a delin on an
+    // untagged register. An integer needs no dropping: whatever produced it
+    // already cleared the tag.
     if (isCapabilityVT(VT) && isCapabilityVT(SrcVT) && VT != SrcVT) {
-      ReplaceNode(Node,
-                  CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128, DL,
-                                         VT, Node->getOperand(0)));
+      ReplaceNode(Node, CurDAG->getMachineNode(TargetOpcode::COPY, DL, VT,
+                                               Node->getOperand(0)));
       return;
     }
     // Just drop bitcasts between vectors if both are fixed or both are

@@ -625,8 +625,18 @@ static ISD::CondCode getSetCCInverseImpl(ISD::CondCode Op, bool isIntegerLike) {
   return ISD::CondCode(Operation);
 }
 
+// A comparison of two pointers is an integer comparison of their addresses:
+// there is no unordered case to represent, so a fat pointer type takes the
+// integer condition-code tables even though it is not an integer type. Reading
+// isInteger() alone gives it the FLOATING-POINT tables, which quietly turns
+// `setult` into `setoge` -- an ordered predicate on a value that has no
+// ordering relation, and a comparison that means something else.
+static bool hasIntegerSetCCSemantics(EVT Type) {
+  return Type.isInteger() || Type.isCheriCapability();
+}
+
 ISD::CondCode ISD::getSetCCInverse(ISD::CondCode Op, EVT Type) {
-  return getSetCCInverseImpl(Op, Type.isInteger());
+  return getSetCCInverseImpl(Op, hasIntegerSetCCSemantics(Type));
 }
 
 ISD::CondCode ISD::GlobalISel::getSetCCInverse(ISD::CondCode Op,
@@ -655,7 +665,7 @@ static int isSignedOp(ISD::CondCode Opcode) {
 
 ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                        EVT Type) {
-  bool IsInteger = Type.isInteger();
+  bool IsInteger = hasIntegerSetCCSemantics(Type);
   if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
     // Cannot fold a signed integer setcc with an unsigned integer setcc.
     return ISD::SETCC_INVALID;
@@ -676,7 +686,7 @@ ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
 
 ISD::CondCode ISD::getSetCCAndOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                         EVT Type) {
-  bool IsInteger = Type.isInteger();
+  bool IsInteger = hasIntegerSetCCSemantics(Type);
   if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
     // Cannot fold a signed setcc with an unsigned setcc.
     return ISD::SETCC_INVALID;

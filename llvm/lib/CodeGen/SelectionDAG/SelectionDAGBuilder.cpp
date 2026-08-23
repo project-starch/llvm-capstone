@@ -558,8 +558,11 @@ getCopyToParts(SelectionDAG &DAG, const SDLoc &DL, SDValue Val, SDValue *Parts,
     Val = DAG.getNode(ISD::BITCAST, DL, PartVT, Val);
   } else if (NumParts * PartBits < ValueVT.getSizeInBits()) {
     // If the parts cover less bits than value has, truncate the value.
+    // A fat pointer is not an integer, but narrowing one to a smaller part IS
+    // a truncate: it reads the address, which is what a callee expecting a thin
+    // pointer asked for.
     assert((PartVT.isInteger() || PartVT == MVT::x86mmx) &&
-           ValueVT.isInteger() &&
+           (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
            "Unknown mismatch!");
     ValueVT = EVT::getIntegerVT(*DAG.getContext(), NumParts * PartBits);
     Val = DAG.getNode(ISD::TRUNCATE, DL, ValueVT, Val);
