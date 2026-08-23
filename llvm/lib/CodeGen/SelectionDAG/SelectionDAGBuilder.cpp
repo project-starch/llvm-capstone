@@ -3985,7 +3985,19 @@ void SelectionDAGBuilder::visitPtrToInt(const User &I) {
   EVT PtrMemVT =
       TLI.getMemValueType(DAG.getDataLayout(), I.getOperand(0)->getType());
   N = DAG.getPtrExtOrTrunc(N, getCurSDLoc(), PtrMemVT);
-  N = DAG.getZExtOrTrunc(N, getCurSDLoc(), DestVT);
+  // A fat pointer is not an integer, and ptrtoint yields its ADDRESS -- the
+  // index width -- not its representation. Narrowing here is what the target's
+  // "read the cursor" instruction does; after it the extend/truncate below
+  // behaves exactly as it does for a thin pointer.
+  if (!N.getValueType().isInteger()) {
+    unsigned AS = I.getOperand(0)->getType()->getPointerAddressSpace();
+    N = DAG.getNode(
+        ISD::TRUNCATE, getCurSDLoc(),
+        EVT::getIntegerVT(*DAG.getContext(),
+                          DAG.getDataLayout().getIndexSizeInBits(AS)),
+        N);
+  }
+  N = DAG.getSExtOrTrunc(N, getCurSDLoc(), DestVT);
   setValue(&I, N);
 }
 
@@ -3996,7 +4008,22 @@ void SelectionDAGBuilder::visitIntToPtr(const User &I) {
   auto &TLI = DAG.getTargetLoweringInfo();
   EVT DestVT = TLI.getValueType(DAG.getDataLayout(), I.getType());
   EVT PtrMemVT = TLI.getMemValueType(DAG.getDataLayout(), I.getType());
-  N = DAG.getZExtOrTrunc(N, getCurSDLoc(), PtrMemVT);
+  if (PtrMemVT.isInteger()) {
+    N = DAG.getZExtOrTrunc(N, getCurSDLoc(), PtrMemVT);
+  } else {
+    // A fat pointer is not an integer and cannot be extended to. Widen in the
+    // integer domain and reinterpret at the end. inttoptr is the one place in
+    // IR where making a pointer out of an integer is what was asked for, so
+    // unlike the implicit conversions it gets to say so.
+    EVT IntVT = EVT::getIntegerVT(*DAG.getContext(), PtrMemVT.getSizeInBits());
+    N = DAG.getZExtOrTrunc(N, getCurSDLoc(), IntVT);
+    // A constant needs no move; build it in the pointer type directly, so the
+    // target sees the same node it gets from a null or absolute pointer.
+    if (auto *C = dyn_cast<ConstantSDNode>(N))
+      N = DAG.getConstant(C->getAPIntValue(), getCurSDLoc(), PtrMemVT);
+    else
+      N = DAG.getNode(ISD::BITCAST, getCurSDLoc(), PtrMemVT, N);
+  }
   N = DAG.getPtrExtOrTrunc(N, getCurSDLoc(), DestVT);
   setValue(&I, N);
 }
@@ -4342,6 +4369,20 @@ void SelectionDAGBuilder::visitExtractValue(const ExtractValueInst &I) {
                            DAG.getVTList(ValValueVTs), Values));
 }
 
+// A GEP's offset lives in the INDEX type. Built in
+// the pointer type it is a capability-typed value, which getSExtOrTrunc cannot
+// even produce and which getMemBasePlusOffset rightly rejects. All three index
+// paths needed it, which is why the plan calls the 64-bit index width a
+// requirement of captype rather than an option of its own.
+static EVT getGEPOffsetVT(SDValue N, const TargetLowering &TLI,
+                          SelectionDAG &DAG) {
+  EVT VT = N.getValueType();
+  if (VT.isInteger())
+    return VT;
+  return TLI.getPointerTy(DAG.getDataLayout(), 0);
+}
+
+
 void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
   Value *Op0 = I.getOperand(0);
   // Note that the pointer operand may be a vector of pointers. Take the scalar
@@ -4377,7 +4418,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
           Flags |= SDNodeFlags::NoUnsignedWrap;
 
         N = DAG.getMemBasePlusOffset(
-            N, DAG.getConstant(Offset, dl, N.getValueType()), dl, Flags);
+            N, DAG.getConstant(Offset, dl, getGEPOffsetVT(N, TLI, DAG)), dl, Flags);
       }
     } else {
       // IdxSize is the width of the arithmetic according to IR semantics.
@@ -4419,7 +4460,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
             (Offs.isNonNegative() && NW.hasNoUnsignedSignedWrap()))
           Flags.setNoUnsignedWrap(true);
 
-        OffsVal = DAG.getSExtOrTrunc(OffsVal, dl, N.getValueType());
+        OffsVal = DAG.getSExtOrTrunc(OffsVal, dl, getGEPOffsetVT(N, TLI, DAG));
 
         N = DAG.getMemBasePlusOffset(N, OffsVal, dl, Flags);
         continue;
@@ -4442,7 +4483,10 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
       // If the index is smaller or larger than intptr_t, truncate or extend
       // it.
-      IdxN = DAG.getSExtOrTrunc(IdxN, dl, N.getValueType());
+      // With a non-integer pointer VT this must extend to the INDEX type, not
+      // the pointer type -- getSExtOrTrunc cannot extend to a non-integer at all.
+      EVT IdxVT = getGEPOffsetVT(N, TLI, DAG);
+      IdxN = DAG.getSExtOrTrunc(IdxN, dl, IdxVT);
 
       SDNodeFlags ScaleFlags;
       // The multiplication of an index by the type size does not wrap the
@@ -4453,30 +4497,32 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       // pointer index type in an unsigned sense (mul nuw).
       ScaleFlags.setNoUnsignedWrap(NW.hasNoUnsignedWrap());
 
+      // Scale the index in the INDEX type, which IdxN already has. Upstream
+      // uses N's type here; the two are the same for a thin pointer and differ
+      // for a fat one, where N's type is not even an integer.
+      EVT ScaleVT = IdxN.getValueType();
       if (ElementScalable) {
-        EVT VScaleTy = N.getValueType().getScalarType();
+        EVT VScaleTy = ScaleVT.getScalarType();
         SDValue VScale = DAG.getNode(
             ISD::VSCALE, dl, VScaleTy,
             DAG.getConstant(ElementMul.getZExtValue(), dl, VScaleTy));
-        if (N.getValueType().isVector())
-          VScale = DAG.getSplatVector(N.getValueType(), dl, VScale);
-        IdxN = DAG.getNode(ISD::MUL, dl, N.getValueType(), IdxN, VScale,
-                           ScaleFlags);
+        if (ScaleVT.isVector())
+          VScale = DAG.getSplatVector(ScaleVT, dl, VScale);
+        IdxN = DAG.getNode(ISD::MUL, dl, ScaleVT, IdxN, VScale, ScaleFlags);
       } else {
         // If this is a multiply by a power of two, turn it into a shl
         // immediately.  This is a very common case.
         if (ElementMul != 1) {
           if (ElementMul.isPowerOf2()) {
             unsigned Amt = ElementMul.logBase2();
-            IdxN = DAG.getNode(
-                ISD::SHL, dl, N.getValueType(), IdxN,
-                DAG.getShiftAmountConstant(Amt, N.getValueType(), dl),
-                ScaleFlags);
+            IdxN =
+                DAG.getNode(ISD::SHL, dl, ScaleVT, IdxN,
+                            DAG.getShiftAmountConstant(Amt, ScaleVT, dl),
+                            ScaleFlags);
           } else {
-            SDValue Scale = DAG.getConstant(ElementMul.getZExtValue(), dl,
-                                            IdxN.getValueType());
-            IdxN = DAG.getNode(ISD::MUL, dl, N.getValueType(), IdxN, Scale,
-                               ScaleFlags);
+            SDValue Scale =
+                DAG.getConstant(ElementMul.getZExtValue(), dl, ScaleVT);
+            IdxN = DAG.getNode(ISD::MUL, dl, ScaleVT, IdxN, Scale, ScaleFlags);
           }
         }
       }
@@ -4525,7 +4571,17 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
 
   SDValue AllocSize = getValue(I.getArraySize());
 
-  EVT IntPtr = TLI.getPointerTy(DL, I.getAddressSpace());
+  // The alloca's SIZE is arithmetic and belongs in the index type; its RESULT
+  // is a pointer. The two are the same type for a thin pointer, which is why one
+  // variable used to do both jobs; for a fat one the size must not be widened
+  // into the pointer type, which would be building a capability out of an
+  // integer.
+  EVT PtrVT = TLI.getPointerTy(DL, I.getAddressSpace());
+  EVT IntPtr = PtrVT.isInteger()
+                   ? PtrVT
+                   : EVT::getIntegerVT(
+                         *DAG.getContext(),
+                         DL.getIndexSizeInBits(I.getAddressSpace()));
   if (AllocSize.getValueType() != IntPtr)
     AllocSize = DAG.getZExtOrTrunc(AllocSize, dl, IntPtr);
 
@@ -4563,7 +4619,7 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
   SDValue Ops[] = {
       getRoot(), AllocSize,
       DAG.getConstant(Alignment ? Alignment->value() : 0, dl, IntPtr)};
-  SDVTList VTs = DAG.getVTList(AllocSize.getValueType(), MVT::Other);
+  SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
   SDValue DSA = DAG.getNode(ISD::DYNAMIC_STACKALLOC, dl, VTs, Ops);
   setValue(&I, DSA);
   DAG.setRoot(DSA.getValue(1));

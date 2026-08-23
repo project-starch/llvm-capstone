@@ -1598,6 +1598,11 @@ SDValue SelectionDAG::getVPZeroExtendInReg(SDValue Op, SDValue Mask,
 }
 
 SDValue SelectionDAG::getPtrExtOrTrunc(SDValue Op, const SDLoc &DL, EVT VT) {
+  // Nothing to do. Worth saying explicitly: for a same-size type the helper
+  // below picks TRUNCATE, and a fat pointer truncated to itself is not the
+  // integer narrowing that TRUNCATE means.
+  if (Op.getValueType() == VT)
+    return Op;
   // Only unsigned pointer semantics are supported right now. In the future this
   // might delegate to TLI to check pointer signedness.
   return getZExtOrTrunc(Op, DL, VT);
@@ -1671,7 +1676,10 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
-  assert(VT.isInteger() && "Cannot create FP integer constant!");
+  // A capability VT is not an integer, and this is one of the sites the PTRADD
+  // comment further down anticipates.
+  assert((VT.isInteger() || VT.isCheriCapability()) &&
+         "Cannot create FP integer constant!");
 
   EVT EltVT = VT.getScalarType();
   const ConstantInt *Elt = &Val;
@@ -4090,6 +4098,10 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     break;
   }
   case ISD::TRUNCATE: {
+    // The operand need not be an integer: on a fat-pointer target a truncate
+    // reads a pointer's address. Nothing is known about it bitwise here.
+    if (!Op.getOperand(0).getValueType().isInteger())
+      break;
     Known = computeKnownBits(Op.getOperand(0), DemandedElts, Depth + 1);
     Known = Known.trunc(BitWidth);
     break;
@@ -5119,6 +5131,10 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     // at least as many sign bits as the left hand side.
     return ComputeNumSignBits(Op.getOperand(0), DemandedElts, Depth + 1);
   case ISD::TRUNCATE: {
+    // As in computeKnownBits: the operand of a truncate can be a fat pointer,
+    // which has no sign bits to count.
+    if (!Op.getOperand(0).getValueType().isInteger())
+      break;
     // Check if the sign bits of source go down as far as the truncated value.
     unsigned NumSrcBits = Op.getOperand(0).getScalarValueSizeInBits();
     unsigned NumSrcSignBits = ComputeNumSignBits(Op.getOperand(0), Depth + 1);
@@ -6653,7 +6669,12 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     }
     break;
   case ISD::TRUNCATE:
-    assert(VT.isInteger() && N1.getValueType().isInteger() &&
+    // Truncating a fat pointer to the index width is ptrtoint -- "read the
+    // address". The reverse, building a pointer out of an integer, stays
+    // refused here; inttoptr says so explicitly with a BITCAST instead.
+    assert(VT.isInteger() &&
+           (N1.getValueType().isInteger() ||
+            N1.getValueType().isCheriCapability()) &&
            "Invalid TRUNCATE!");
     assert(VT.isVector() == N1.getValueType().isVector() &&
            "TRUNCATE result type type should be vector iff the operand "
@@ -7671,6 +7692,16 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   case ISD::XOR:
   case ISD::ADD:
   case ISD::PTRADD:
+    // The relaxation the comment below anticipates: PTRADD(fatptr, int), where
+    // the base is the pointer VT and the offset the index type. The test is on
+    // the opcode, not just the type, because AND/OR/XOR/ADD fall through into
+    // this label and must keep the strong form.
+    if (Opcode == ISD::PTRADD && !VT.isInteger()) {
+      assert(N1.getValueType() == VT && N2.getValueType().isInteger() &&
+             "PTRADD: base must be the pointer VT and the offset an integer");
+      break;
+    }
+    [[fallthrough]];
   case ISD::SUB:
     assert(VT.isInteger() && "This operator does not apply to FP types!");
     assert(N1.getValueType() == N2.getValueType() &&
@@ -8525,6 +8556,15 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
   EVT VT = Base.getValueType();
+  // A fat pointer's OFFSET lives in the index type, not the pointer type. Built
+  // in the pointer type it would be a pointer-typed constant, which the assert
+  // in the overload below rightly rejects.
+  // ponytail: the address space is not plumbed to this overload, so AS0's
+  // pointer type stands in for the index width. That is right on any target
+  // whose address spaces share one index width, and wrong on one that mixes
+  // them -- plumbing the AS through is the upgrade.
+  if (!VT.isInteger())
+    VT = TLI->getPointerTy(getDataLayout(), 0);
   SDValue Index;
 
   if (Offset.isScalable())

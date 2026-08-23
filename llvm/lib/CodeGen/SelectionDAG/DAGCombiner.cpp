@@ -2391,9 +2391,19 @@ static ConstantSDNode *getAsNonOpaqueConstant(SDValue N) {
 // the value being truncated in Op and which of Op's bits are zero/one in Known.
 // This function computes KnownBits to avoid a duplicated call to
 // computeKnownBits in the caller.
+/// A TRUNCATE whose operand is an integer, i.e. one that really is a narrowing
+/// of a value and can be undone by extending. On a target with a fat pointer
+/// type the operand can be the pointer itself -- there the truncate reads the
+/// pointer's ADDRESS, and re-extending the result does not give the pointer
+/// back, so every fold that looks through the truncate must skip it.
+static bool isIntegerTruncate(SDValue N) {
+  return N.getOpcode() == ISD::TRUNCATE &&
+         N.getOperand(0).getValueType().isInteger();
+}
+
 static bool isTruncateOf(SelectionDAG &DAG, SDValue N, SDValue &Op,
                          KnownBits &Known) {
-  if (N->getOpcode() == ISD::TRUNCATE) {
+  if (isIntegerTruncate(N)) {
     Op = N->getOperand(0);
     Known = DAG.computeKnownBits(Op);
     if (N->getFlags().hasNoUnsignedWrap())
@@ -2683,9 +2693,11 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   EVT IntVT = N1.getValueType();
   SDLoc DL(N);
 
-  // This is already ensured by an assert in SelectionDAG::getNode(). Several
-  // combines here depend on this assumption.
-  assert(PtrVT == IntVT &&
+  // SelectionDAG::getNode() allows a fat-pointer base with an index-typed
+  // offset (PtrVT != IntVT). The folds below stay correct there: they only ever
+  // combine offsets with offsets, and the one that assumes both operands are
+  // interchangeable ((ptradd 0, x) -> x) tests PtrVT == IntVT itself.
+  assert((PtrVT == IntVT || !PtrVT.isInteger()) &&
          "PTRADD with different operand types is not supported");
 
   // fold (ptradd x, 0) -> x
@@ -6205,7 +6217,10 @@ SDValue DAGCombiner::hoistLogicOpWithSameOpcodeHands(SDNode *N) {
   }
 
   // logic_op (truncate x), (truncate y) --> truncate (logic_op x, y)
-  if (HandOpcode == ISD::TRUNCATE) {
+  // Only when the truncates are integer narrowings: hoisting the logic above a
+  // pointer-to-address read would perform it on the pointers.
+  if (HandOpcode == ISD::TRUNCATE && isIntegerTruncate(N0) &&
+      isIntegerTruncate(N1)) {
     // If both operands have other uses, this transform would create extra
     // instructions without eliminating anything.
     if (!N0.hasOneUse() && !N1.hasOneUse())
@@ -14560,7 +14575,7 @@ SDValue DAGCombiner::visitSIGN_EXTEND(SDNode *N) {
     }
   }
 
-  if (N0.getOpcode() == ISD::TRUNCATE) {
+  if (isIntegerTruncate(N0)) {
     // fold (sext (truncate (load x))) -> (sext (smaller load x))
     // fold (sext (truncate (srl (load x), c))) -> (sext (smaller load (x+c/n)))
     if (SDValue NarrowLoad = reduceLoadWidth(N0.getNode())) {
@@ -14849,7 +14864,7 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   }
 
   // fold (zext (truncate x)) -> (and x, mask)
-  if (N0.getOpcode() == ISD::TRUNCATE) {
+  if (isIntegerTruncate(N0)) {
     // fold (zext (truncate (load x))) -> (zext (smaller load x))
     // fold (zext (truncate (srl (load x), c))) -> (zext (smaller load (x+c/n)))
     if (SDValue NarrowLoad = reduceLoadWidth(N0.getNode())) {
@@ -14924,7 +14939,7 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   // Fold (zext (and (trunc x), cst)) -> (and x, cst),
   // if either of the casts is not free.
   if (N0.getOpcode() == ISD::AND &&
-      N0.getOperand(0).getOpcode() == ISD::TRUNCATE &&
+      isIntegerTruncate(N0.getOperand(0)) &&
       N0.getOperand(1).getOpcode() == ISD::Constant &&
       (!TLI.isTruncateFree(N0.getOperand(0).getOperand(0), N0.getValueType()) ||
        !TLI.isZExtFree(N0.getValueType(), VT))) {
@@ -15158,7 +15173,7 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
 
   // fold (aext (truncate (load x))) -> (aext (smaller load x))
   // fold (aext (truncate (srl (load x), c))) -> (aext (small load (x+c/n)))
-  if (N0.getOpcode() == ISD::TRUNCATE) {
+  if (isIntegerTruncate(N0)) {
     if (SDValue NarrowLoad = reduceLoadWidth(N0.getNode())) {
       SDNode *oye = N0.getOperand(0).getNode();
       if (NarrowLoad.getNode() != N0.getNode()) {
@@ -15171,13 +15186,13 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
   }
 
   // fold (aext (truncate x))
-  if (N0.getOpcode() == ISD::TRUNCATE)
+  if (isIntegerTruncate(N0))
     return DAG.getAnyExtOrTrunc(N0.getOperand(0), DL, VT);
 
   // Fold (aext (and (trunc x), cst)) -> (and x, cst)
   // if the trunc is not free.
   if (N0.getOpcode() == ISD::AND &&
-      N0.getOperand(0).getOpcode() == ISD::TRUNCATE &&
+      isIntegerTruncate(N0.getOperand(0)) &&
       N0.getOperand(1).getOpcode() == ISD::Constant &&
       !TLI.isTruncateFree(N0.getOperand(0).getOperand(0), N0.getValueType())) {
     SDValue X = DAG.getAnyExtOrTrunc(N0.getOperand(0).getOperand(0), DL, VT);
