@@ -1966,9 +1966,15 @@ def main():
                                       "The instruction's OPERAND is innocent; PCC's revocation "
                                       "node was invalidated.", flush=True)
                             elif tval == 0:
-                                print("          <== tval == 0: the operand was a NULL/integer, "
-                                      "i.e. a legitimate null-deref -- a SOFTWARE bug, not a "
-                                      "lost tag (ex_stage.sv:481-486).", flush=True)
+                                print("          <== tval == 0. DO NOT read this as "
+                                      "'the operand was NULL, therefore a software bug' -- that "
+                                      "reading was RETRACTED. The FLU tval path has never been "
+                                      "shown to produce a NON-zero value on this bitstream, so a "
+                                      "zero here is equally consistent with the instrument never "
+                                      "populating it. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8` "
+                                      "traps with tval==0xBEEF, treat tval==0 as NO DATA. The "
+                                      "cause code alone already gives cap_type==NOT_CAP for "
+                                      "cincoffsetimm.", flush=True)
                             else:
                                 print("          <== tval is pointer-like: a real capability that "
                                       "LOST ITS TAG (ex_stage.sv:481-487 puts the rs1 cursor "

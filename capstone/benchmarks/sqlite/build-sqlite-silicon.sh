@@ -1766,6 +1766,43 @@ PYWIDTH
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_WIDTH_PAIR=1"
 fi
 
+# CAPSTONE_PAD_NOPS=<n> -- the DISTANCE-ONLY arm.
+#
+# "The probe stops the fault" is established, but the probe changes THREE things at once:
+# stc->ldc distance, elapsed time, memory traffic, and whether the granule is pre-touched. This
+# arm changes only the first two: n `nop`s at the top of sqlite3WhereCodeOneLoopStart, touching
+# NO memory and never referencing the pWInfo slot.
+#
+#   completes -> distance/time alone suffices. A residency or drain-latency effect; no traffic
+#                and no granule access needed. Pairs with the capacity reading.
+#   wedges    -> distance is NOT the variable, and the next arm adds traffic (counter
+#                increments, still not touching the granule), then granule pre-touch.
+#
+# NOPS ONLY, deliberately: no "memory" clobber, because a clobber would force spills and
+# reintroduce the traffic this arm exists to exclude.
+if [[ -n "${CAPSTONE_PAD_NOPS:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PAD_NOPS" <<'PYPAD'
+import sys
+path, n = sys.argv[1], int(sys.argv[2])
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("PAD_NOPS: callee anchor count %d" % s.count(CALLEE))
+pad = '\n  __asm__ volatile (' + ' '.join('"nop;"' for _ in range(n)) + ');'
+s = s.replace(CALLEE, CALLEE + pad, 1)
+open(path, "w").write(s)
+print("   PAD_NOPS: %d nops injected, no memory touched" % n)
+PYPAD
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_NOPS=${CAPSTONE_PAD_NOPS}"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on

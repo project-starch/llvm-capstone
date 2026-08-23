@@ -2396,3 +2396,54 @@ Not established: which half of the instrumentation does that. The probe changes 
 distance (19 -> 44 instructions) AND pre-touches the granule with a scalar `ld`. A matched pair
 separating those is the next experiment. Also, the `q_one` (passing) row is N=1, whereas the
 `q_two` wedge is solid at both arm slots.
+
+## DISTANCE IS THE VARIABLE. 600 nops of pure delay make the fault vanish.
+
+Boot #29, control returned in 6s (boot valid). Two arms differing ONLY in how many `nop`s sit
+between the `stc` that spills `pWInfo` and the `ldc` that reloads it. The pads touch NO memory --
+no traffic, no granule access, nothing but fetch slots.
+
+| pad | `stc`->`ldc` gap | outcome |
+|---|---|---|
+| 10 nops | 19 -> 29 instructions | **WEDGES**, `cincoffsetimm a4,a4,0xb0` at VA 0x104A9C, mcause 25 |
+| 600 nops | 19 -> 619 instructions | **COMPLETES**, fully correct: `records=2 completed=1`, `M5 oom=0 malloc=241 free=241`, `ops=7` -- identical to QEMU |
+
+So a deterministic fault that reproduced across 7 boots and 3 binaries is removed by **delay
+alone**. Nothing is stored, nothing is loaded, nothing touches the granule.
+
+Combined with the peer lane's reading of `wt_dcache_wbuffer.sv:291`
+(`miss_req_o = (|dirty) && free_tx_slots`), drain is **autonomous** -- it needs neither a
+subsequent store nor memory pressure, only time and a free tx slot. That makes this a
+**store-to-load drain-latency window on capability data**, and specifically NOT a capacity or
+pressure effect. The capacity chain predicted the opposite sign anyway: more traffic means FEWER
+free tx slots and a SLOWER drain.
+
+### Verification done before believing it
+
+* **Gate**: the bake refused unless exactly 600 nops sat between the spill and the faulting
+  instruction. It passed, and the baked `sqpad600.dom` (`068681485a217f57`) is byte-identical to
+  the QEMU-validated binary.
+* **Uncompressed nops** (`13 00 00 00`), so 600 are 600 fetch slots, not ~300 `c.nop`s.
+* **A no-return is a wedge, not a timeout**: 5 calls x 600 nops is ~60 us against a 400 s
+  timeout, bounded BEFORE the boot rather than argued after.
+* **The wedging arm faults at the same instruction**: pad10 VA 0x104A9C is
+  `ldc a4,0x0(a0)` / `cincoffsetimm a4,a4,0xb0`, verified in that exact binary.
+
+### Caveats, stated not buried
+
+* **The pair is not perfectly matched on arm slot** -- pad600 ran at arm 2, pad10 at arm 3.
+  Position was independently shown irrelevant in boot #26 (the un-probed build wedges at arm 2
+  AND at arm 3), so this is acceptable, but pad600 has not been run at arm 3.
+* **I-cache alignment is uncontrolled.** A 600-nop pad shifts everything after it. The asymmetry
+  matters: alignment cannot explain a fault SURVIVING a 619-instruction gap, so a wedging 600 arm
+  would have been clean -- but since 600 COMPLETED, this result reads as "distance/time OR
+  alignment", not distance/time alone. A nop-count bisection with alignment held constant is the
+  way to separate them.
+* **The threshold is bracketed only as 10 < T <= 600.**
+
+### Driver text corrected
+
+The tval verdict line still printed "the operand was NULL, therefore a SOFTWARE bug" -- a reading
+that was retracted. It now says tval==0 is NO DATA until the `0xBEEF` control fires, and points at
+the cause code, which gives `cap_type == NOT_CAP` for `cincoffsetimm` without needing tval at all.
+A retracted claim left printing itself into every future run is worse than no message.
