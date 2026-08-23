@@ -1,0 +1,2 @@
+/usr/include/bits/floatn.h:97:9: error: __float128 is not supported on this target
+   97 | typedef __float128 _Float128;
