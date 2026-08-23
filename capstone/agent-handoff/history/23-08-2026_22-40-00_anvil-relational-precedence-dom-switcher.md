@@ -107,8 +107,34 @@ so this is the current generation and not a leftover.
 
 ## What should happen next
 
-The fix for both S-11 and this one is parentheses, and the *class* is worth a sweep: any
-unparenthesised relational sharing a line with `||`/`&&`. That search over `anvil_build/`
-returns exactly two hits that are not already fully parenthesised — `capstone_flu_unit.anvil:167`
-(S-11) and `capstone_dom_switcher.anvil:115` (this one). Everything else in the tree already
-wraps its relationals, which is why the class has stayed almost entirely invisible.
+The fix for both S-11 and this one is parentheses, and the *class* is worth a sweep.
+
+**The sweep is netlist-grade, not a source grep, and the first version of it was wrong.** A
+source-line regex cannot settle this: it requires the relational and the logical operator on the
+same physical line, so any multi-line unparenthesised condition evades it by construction. The
+sound test is the collapse *signature* in the generated SystemVerilog — a `||`/`&&` with a
+multi-bit operand (which folds to a constant), or a relational with exactly one 1-bit operand:
+
+```python
+# per MODULE, since wire namespaces restart and a global width map silently collides
+assign W = A || B;   with width(A) > 1 or width(B) > 1      -> folded constant
+assign W = A <  B;   with exactly one of width(A), width(B) == 1  -> compares against a bit
+```
+
+Run over every `core/*.anvil.sv`, that returns **7 signature lines in exactly 2 guards**:
+
+| site | lines | guard |
+|---|---|---|
+| `capstone_dom_switcher.anvil.sv` | 265, 267, 268, 269, 270 | this one |
+| `capstone_flu_unit.anvil.sv` | 2204, 2205 | S-11's SEAL |
+
+**No third instance.** The sweep has an intrinsic positive control — it fires on both known-bad
+guards — and it correctly stays silent on `SHRINK`, which was hand-verified correct above, so it
+discriminates rather than merely alarming.
+
+**The first run of it reported three sites, and the extra one was an artifact of the
+instrument.** Building the wire-width map per *file* rather than per *module* collided the
+namespaces in the multi-module `capstone_dyn_unit.anvil.sv`, giving a correct
+`cap_type == 1 || == 3 || == 4 …` chain at `:9592-9602` fabricated 64-bit operand widths. Worth
+recording because the failure looked exactly like a finding: a real line, a real signature, and
+a completely wrong width. Per-module scoping fixes it.

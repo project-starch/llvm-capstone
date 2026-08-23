@@ -135,9 +135,12 @@ not been confirmed against an Anvil precedence table, because there is no Anvil 
 tree (`ANVILC ?= anvil`, not present) — reading the upstream table, or running `anvil` on a
 five-line case, would close the last gap.
 
-**The class has one other instance, and it is not in SEAL.** A sweep for unparenthesised
-relationals sharing a line with `||`/`&&` across `core/anvil_build/` returns exactly two hits: the
-line above, and `capstone_dom_switcher.anvil:115`, whose guard collapses to `cur_idx == 0`. That
+**The class has one other instance, and it is not in SEAL.** Swept in the generated netlist
+rather than in source — a source-line grep cannot settle it, because a multi-line unparenthesised
+condition evades it by construction. Searching every `core/*.anvil.sv` for the collapse signature
+(a `||`/`&&` with a multi-bit operand, or a relational with exactly one 1-bit operand, scoped per
+module) returns **7 signature lines in exactly 2 guards**: the line above, and
+`capstone_dom_switcher.anvil:115`, whose guard collapses to `cur_idx == 0`. That
 one is latent (its enclosing branch is unreachable on this RTL) and is **not part of this issue** —
 it is written up separately at
 `capstone/agent-handoff/history/23-08-2026_22-40-00_anvil-relational-precedence-dom-switcher.md`.
