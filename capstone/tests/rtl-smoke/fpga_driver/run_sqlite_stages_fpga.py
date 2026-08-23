@@ -2118,6 +2118,75 @@ def main():
                             print(f"  [wedge] gdb CSRs: mcause={_csr['$mcause']} "
                                   f"mepc={_csr['$mepc']} mtval={_csr['$mtval']}", flush=True)
 
+                            # ---- SHADOW TAG + DATA READ, halted, over the SAME session ----
+                            # The capability tag is a BYTE IN DRAM, one per 16-byte granule:
+                            #   tag_byte_addr = CAP_TAG_MEM_BASE + (data_paddr >> 4)
+                            #   CAP_TAG_MEM_BASE = 0xBC2D2D2D   (ariane_pkg.sv:592-593)
+                            #
+                            # This tests the CONSEQUENCE rather than hunting the cause, which is
+                            # the only way past the boundary static analysis cannot cross: whether
+                            # anything OUTSIDE the program's control flow (trap handler, monitor,
+                            # domain switch) wrote the granule.
+                            #
+                            #   data intact  -> nothing overwrote it. Any plain store able to
+                            #                   clear the tag would have changed the data. That is
+                            #                   a POSITIVE observation, not an absence.
+                            #   tag == 1 while the load returned NOT_CAP
+                            #                -> lost in L1 ONLY: the documented issue/return
+                            #                   desync (ctag sampled at TX ISSUE for DRAM, TX
+                            #                   RETURN for L1).
+                            #   tag == 0     -> genuinely gone from memory; desync EXCLUDED.
+                            #
+                            # WEDGE_TAG_PADDR is the subject granule's physical address.
+                            # WEDGE_TAG_CTL_PADDR is a granule KNOWN to hold a live capability --
+                            # the positive control, and it is not optional: if it reads 0 the read
+                            # path is unproven and the subject's tag carries no verdict. DRAM
+                            # survives a wedge; only a power cycle clears it.
+                            _tp = os.environ.get("WEDGE_TAG_PADDR", "")
+                            _tc = os.environ.get("WEDGE_TAG_CTL_PADDR", "")
+                            def _rd(expr, fmt):
+                                _s0 = len(console.gdb_text)
+                                console._emit("gdb_input", text=f"x/{fmt} {expr}\n")
+                                try:
+                                    _m = console.wait_gdb(r"0x[0-9a-fA-F]+.*?:\s+0x[0-9a-fA-F]+",
+                                                          timeout=25.0, search_from=_s0)
+                                    return _m.group(0)
+                                except Exception:
+                                    return None
+                            for _lbl, _pa in (("CONTROL", _tc), ("SUBJECT", _tp)):
+                                if not _pa:
+                                    continue
+                                try:
+                                    _g = int(_pa, 0) & ~0xF
+                                except ValueError:
+                                    print(f"  [wedge] {_lbl} paddr {_pa!r} unparseable", flush=True)
+                                    continue
+                                # RELATIVE TO MEMORY_BASE, not absolute. ariane_pkg.sv:592
+                                # comments it as "CAP_TAG_MEM_BASE + (data_paddr >> 4)", but the
+                                # absolute form puts tags ABOVE DRAM top and would read garbage.
+                                # The arithmetic settles it: with MEMORY_BASE 0x8000_0000 and
+                                # MEMORY_TOP == CAP_TAG_MEM_BASE == 0xBC2D_2D2D,
+                                #   0xBC2D2D2D + ((MEMORY_TOP-MEMORY_BASE) >> 4) = 0xBFEF_FFFF
+                                # which is exactly CAP_REVNODE_MEM_BASE (0xBFF0_0000). The shadow
+                                # region fits its space EXACTLY under the relative form and
+                                # overflows under the absolute one.
+                                _tag = 0xBC2D2D2D + ((_g - 0x80000000) >> 4)
+                                if not (0xBC2D2D2D <= _tag < 0xBFF00000):
+                                    print(f"  [wedge] {_lbl} tag addr 0x{_tag:x} is OUTSIDE the "
+                                          f"shadow region [0xBC2D2D2D,0xBFF00000) -- refusing to "
+                                          f"read; the paddr or the formula is wrong.", flush=True)
+                                    continue
+                                _d = _rd(f"0x{_g:x}", "2gx")
+                                _t = _rd(f"0x{_tag:x}", "1bx")
+                                print(f"  [wedge] {_lbl} granule 0x{_g:x}", flush=True)
+                                print(f"            data : {_d if _d else 'READ FAILED'}", flush=True)
+                                print(f"            tag@0x{_tag:x} : {_t if _t else 'READ FAILED'}",
+                                      flush=True)
+                            if _tc and _tp:
+                                print("  [wedge] READ THE CONTROL FIRST: if the CONTROL granule's "
+                                      "tag byte is not 1, the shadow-tag read path is unproven and "
+                                      "the SUBJECT tag carries no verdict.", flush=True)
+
                             # HALTED RE-READ OF THE MUX -- the control this instrument has
                             # never had, and it costs nothing because the hart is ALREADY
                             # halted here for the CSR reads above.

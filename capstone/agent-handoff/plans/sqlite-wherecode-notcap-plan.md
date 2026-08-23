@@ -389,3 +389,64 @@ so it answered the question."**
 The defence that actually worked, three times, is **a second reading that has to agree**: the
 selftest against the wedge read, the granule address against the valid bit, and `-16.400` against
 `+4.907`. **None was caught by making the first query more careful.**
+
+---
+
+# UPDATE 5 — THE FAULT IS SPORADIC. Several pad-ladder conclusions rest on N=1.
+
+Boot #32, control passed, and **`sqpad10` COMPLETED** — the same binary that wedged in boots #29
+and #31.
+
+    sqpad10   boot 29  WEDGED
+    sqpad10   boot 31  WEDGED
+    sqpad10   boot 32  COMPLETED
+
+**Two wedges in three runs.** The fault is sporadic at this site, not deterministic, which the
+S-07 folder already measured for its own site (p ≈ 25%) and which this investigation had not
+applied to its own arms.
+
+## What that costs
+
+**Every "this arm completes" result in the pad ladder is N=1 or N=2**, and a completion is now
+known not to mean absence:
+
+| arm | observations | claim it supported |
+|---|---|---|
+| `pad600` | 1 completion | "600 nops fix it" -> **unsupported at N=1** |
+| `loop3` | 1 completion | "the loop pad never wedges" -> **unsupported at N=1** |
+| `loop200` | 1 completion | same |
+| `sqrtw` | 3 completions | "the probe removes the fault" -> weak, and already qualified |
+
+So **"delay is the variable" and "the probe is a variable" are both further weakened**, and the
+`loop3`-vs-`pad10` pair that killed the delay reading is itself two single observations. The
+direction of the evidence has not changed, but its weight has.
+
+**The un-probed `sqrt` arm remains the strongest single fact**: wedged in boots 21, 22, 24, 25 and
+26 — 5 for 5 — which at p=0.25 would be p≈0.001. Its rate is genuinely high. Everything else needs
+repetitions.
+
+## Method change, applying from here
+
+**No single-boot arm may support a conclusion.** Minimum 5 repetitions for a "completes" claim,
+and outcomes reported as rates, not verdicts. This is the peer lane's warning applied to my own
+ladder rather than only to theirs.
+
+## Shadow-tag formula CORRECTED before it was used
+
+`ariane_pkg.sv:592` comments the tag address as `CAP_TAG_MEM_BASE + (data_paddr >> 4)`. Taken
+absolutely that puts tags **above DRAM top** and would have read garbage. It is **relative to
+`MEMORY_BASE`**, and the arithmetic proves it:
+
+    MEMORY_BASE 0x8000_0000,  MEMORY_TOP == CAP_TAG_MEM_BASE == 0xBC2D_2D2D
+    0xBC2D2D2D + ((MEMORY_TOP - MEMORY_BASE) >> 4) = 0xBFEF_FFFF
+                                                   = exactly CAP_REVNODE_MEM_BASE (0xBFF0_0000)
+
+The shadow region fits its address space **exactly** under the relative form and overflows under
+the absolute one. Driver now uses `CAP_TAG_MEM_BASE + ((paddr - MEMORY_BASE) >> 4)` and **refuses**
+any address outside `[0xBC2D2D2D, 0xBFF00000)` rather than reading it.
+
+Measured addresses, from boot #32 (`slotaddr = 0x82f91430` at arm 2, `DBAS 0x82C00000`, so the
+in-domain offset is `0x391430`):
+
+    arm 2   granule 0x82f91430   tag byte 0xbc5cbe70
+    arm 3   granule 0x83391430   tag byte 0xbc60be70
