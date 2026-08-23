@@ -257,3 +257,65 @@ builds).
 Open a folder. P3 is unproven — a folder asserting a distinct silicon defect would be a claim
 ahead of its evidence. Equally, do **not** file it as a fifth S-07 instance: the mechanism is
 excluded at this slot, and the family-signature match is a shape, not an attribution.
+
+---
+
+# UPDATE 3 — the candidate sharpens; two of my numbers corrected; the A/B image EXISTS
+
+## Corrections to what this plan recorded
+
+* **The combinational-loop premise is WRONG.** `UNOPTFLAT 39 -> 40` belongs to a **rejected**
+  variant, not the shipped fix: `wt_dcache_mem.sv:390-399` records that adding a fourth
+  `rd_ctag_src_o` code cost the loop, *"so the fix changes `rd_ctag_o` only"*. The commit subject
+  I quoted (`4fee13b2d`, "NOT ready to merge") predates that resolution. Empirically the bitstream
+  **exists**, so `DRC LUTLP-1` passed — with S-10b as positive control that the check fires, since
+  its real loop did block bitgen.
+* **The WNS figure was the wrong build's.** `-10.629 ns` is the **CONTROL** (`39b21639d`, 96727
+  failing endpoints). The **FLOWN** image `80843404c` is **worse: -16.400 ns**, 102769 endpoints.
+* **The S-10 cone is NOT the failing cone.** In the flown build's 2.9 MB forensics `rd_ctag`,
+  `gran_clr` and `wbuffer_gran` appear **zero times**, against 26 mentions of `wt_dcache_mem` — so
+  the module is covered and the fix's nets are simply not on failing paths. All 102769 failing
+  endpoints launch from one register, `dom_switcher/cur_idx_q_reg[3]`, which transitions only on
+  a domain switch.
+
+## The candidate, restated in the form that can be attacked
+
+S-10 replaces the tag read with a **bare OR** whose soundness is **conditional on S-07's stall
+being complete**. Its own comment:
+
+> *"A plain-store entry and a capability entry can no longer co-reside in one granule: the S-07
+> fix refuses to allocate the second one... Without the S-07 stall this reduction would be wrong:
+> a plain store and a later `stc` could both be resident, and 'any ctag=0 clears' would discard a
+> tag the program had just written."*
+
+**If ANY path lets a plain entry and a capability entry co-reside in one granule** — an allocation
+route bypassing `gran_hazard`, a merge rather than an allocate, an entry re-validated mid-drain —
+**S-10 discards a tag the program just wrote.** That is exactly the observed polarity (data
+correct, tag zero), needs no loop and no timing violation, and exists **only in this bitstream**.
+
+## What my code analysis says about that mechanism — and the one route it cannot cover
+
+Within `sqlite3WhereCodeOneLoopStart`, checked in the artifact:
+
+* **After** the spill: nine stores, none in `[s0-0x70, s0-0x60)`.
+* **Before** the spill: the only PLAIN store is `sd ra, 0x7e0(sp)` -> **`s0-0x10`**; every other
+  pre-spill store is an `stc`. Nothing plain touches the subject granule.
+* The **previous invocation** of this same function uses the SAME frame, and its only plain store
+  near the slot is `sw` at `s0-0x74`, granule `[s0-0x80, s0-0x70)` — adjacent, not the subject's.
+
+**NOT COVERED, and it is the route the mechanism needs:** a plain store to that physical address
+from **any earlier function at the same stack depth**, still resident in the buffer. That is not
+statically enumerable from one function, and my exclusion should never have been stated without
+this boundary.
+
+## The A/B EXISTS, and its caveat
+
+`/tmp/capstone/_bitstream/synth-39b21639d-exit0.tar.gz` -> `work-fpga/ariane_xilinx.bit`.
+`39b21639d` has the **S-07 fix PRESENT and the S-10 fix ABSENT** — the exact single-variable image.
+
+**Caveat that must be reported with any result:** both images fail timing, so the comparison is
+not confounded by one closing and one not — but they fail by **different margins**, `-10.629` vs
+`-16.400`. A difference in outcome could be **5.8 ns of margin rather than S-10's logic.** It is
+much the cleanest experiment available and it is still not single-variable.
+
+**A reflash is the project lead's call. Surfaced, not assumed.**
