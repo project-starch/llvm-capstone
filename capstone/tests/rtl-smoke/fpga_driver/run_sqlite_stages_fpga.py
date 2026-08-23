@@ -1686,6 +1686,7 @@ def main():
                 log("WEDGED -- reading the debug mux now, before releasing the board")
                 pc_bytes = {}
                 mepc_bytes = {}
+                tval_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -1805,7 +1806,30 @@ def main():
                                             (200, "trap mepc[39:32] (LATCHED)", "mepc"),
                                             (201, "trap mepc[47:40] (LATCHED)", "mepc"),
                                             (202, "trap mepc[55:48] (LATCHED)", "mepc"),
-                                            (203, "trap mepc[63:56] (LATCHED)", "mepc")):
+                                            (203, "trap mepc[63:56] (LATCHED)", "mepc"),
+                                            # LATCHED trap tval. THIS IS THE DISCRIMINATOR for the
+                                            # two live producers of mcause 25 on this bitstream:
+                                            #   ex_stage.sv:479  64'd24 + code -> UNEXPECTED_OPERAND
+                                            #   commit_stage.sv:226  64'd25 (base 23!) -> PC-cap check
+                                            # capstone_unit.anvilh:299-301 documents the collision.
+                                            # ex_stage.sv:487 puts the rs1 CURSOR in tval for a
+                                            # capability cause; commit_stage.sv:604 puts the PC in
+                                            # tval for the PC-cap cause. So:
+                                            #   tval == mepc   -> PC-cap path, operand is innocent
+                                            #   tval == 0      -> operand was NULL/integer (software bug)
+                                            #   tval otherwise -> a real capability that lost its tag
+                                            # NOTE the aperture numbering SKIPS 212: cva6.sv:1355-1362
+                                            # maps 5'b10010,10011,10101,10110,10111,11000,11001,11010,
+                                            # i.e. sw 210,211,213,214,215,216,217,218 (sw = 192+sel).
+                                            # Verified against `git show 80843404c:core/cva6.sv`.
+                                            (210, "trap tval[7:0]   (LATCHED)", "tval"),
+                                            (211, "trap tval[15:8]  (LATCHED)", "tval"),
+                                            (213, "trap tval[23:16] (LATCHED)", "tval"),
+                                            (214, "trap tval[31:24] (LATCHED)", "tval"),
+                                            (215, "trap tval[39:32] (LATCHED)", "tval"),
+                                            (216, "trap tval[47:40] (LATCHED)", "tval"),
+                                            (217, "trap tval[55:48] (LATCHED)", "tval"),
+                                            (218, "trap tval[63:56] (LATCHED)", "tval")):
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
@@ -1850,6 +1874,11 @@ def main():
                             pc_bytes[sw - 230] = v
                         if kind == "mepc":
                             mepc_bytes[sw - 196] = v
+                        if kind == "tval":
+                            # NOT sw-210: aperture 5'b10100 (sw 212) is skipped in
+                            # cva6.sv:1355-1362, so the mapping is explicit.
+                            tval_bytes[{210: 0, 211: 1, 213: 2, 214: 3,
+                                        215: 4, 216: 5, 217: 6, 218: 7}[sw]] = v
                     for bit in range(8):
                         console.set_switch(bit, False)
 
@@ -1892,6 +1921,35 @@ def main():
                                   f"instruction", flush=True)
                     else:
                         print(f"  [wedge] trap mepc {_mnote}", flush=True)
+
+                    # THE LATCHED trap tval -- the DISCRIMINATOR between the two live producers
+                    # of mcause 25. Same all-or-nothing rule; a partial read here would be worse
+                    # than useless because the three verdicts below are distinguished by the
+                    # VALUE, so a wrong value picks a wrong root cause outright.
+                    if len(tval_bytes) == 8 and all(b is not None for b in tval_bytes.values()):
+                        tval = sum(tval_bytes[i] << (8 * i) for i in range(8))
+                        if tval == 0xca11ab1ebadcab1e:
+                            print("  [wedge] trap tval = AXI ERROR-SLAVE PATTERN -- NO DATA",
+                                  flush=True)
+                        else:
+                            print(f"  [wedge] trap tval = 0x{tval:016x}", flush=True)
+                            if mepc is not None and tval == mepc:
+                                print("          <== tval == mepc: this is the commit_stage.sv:226 "
+                                      "PC-CAPABILITY check (base 23), NOT UNEXPECTED_OPERAND. "
+                                      "The instruction's OPERAND is innocent; PCC's revocation "
+                                      "node was invalidated.", flush=True)
+                            elif tval == 0:
+                                print("          <== tval == 0: the operand was a NULL/integer, "
+                                      "i.e. a legitimate null-deref -- a SOFTWARE bug, not a "
+                                      "lost tag (ex_stage.sv:481-486).", flush=True)
+                            else:
+                                print("          <== tval is pointer-like: a real capability that "
+                                      "LOST ITS TAG (ex_stage.sv:481-487 puts the rs1 cursor "
+                                      "here). This is the tag-loss reading.", flush=True)
+                    else:
+                        missing = [i for i in range(8) if tval_bytes.get(i) is None]
+                        print(f"  [wedge] trap tval UNREAD (missing bytes {missing}) -- reporting "
+                              f"nothing rather than a partial value", flush=True)
 
                     # THE ARCHITECTURAL mtval, VIA GDB -- the only channel that reports the
                     # faulting OPERAND at ANY site.

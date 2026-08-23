@@ -2107,3 +2107,70 @@ control, A/B across S-10 present and absent. Board-free and lock-free.
 whether S-10 introduced this. That needs a **reflash, which is ask-first** and the lead's call.
 The earlier 3/3 plain-SQLite baseline on that image is NOT evidence here: it was single-table
 throughout, so it never built a self-join spill layout.
+
+## RESOLVED DIRECTION: tval = 0. It is a NULL DEREFERENCE, in software. Not silicon.
+
+An adversarial audit of the previous localization confirmed the address, function, instruction
+and operand slot (it also found corroboration I had missed: `cincoffsetimm a4, a4, 0xb0` is
+literally `pWC = &pWInfo->sWC;` at `sqlite3-capstone.c:165463`, the function's FIRST statement,
+with the next three source lines mapping 1:1 onto `0x1049a8..0x1049cc`). But it REFUTED the
+semantic step, on two grounds:
+
+1. **mcause 25 has TWO live producers on this bitstream.** `ex_stage.sv:479` builds
+   `64'd24 + code` (ordinal 1 = UNEXPECTED_OPERAND), but `commit_stage.sv:226` at `80843404c`
+   emits `64'd25` from the **PC-capability** check using base **23**, into the same latch.
+   `capstone_unit.anvilh:299-301` documents the collision -- I had quoted only the first half of
+   that note.
+2. **"25 not 29, so tag not bounds" was VACUOUS.** `capstone_flu_unit.anvil:57-90` gives
+   `CINCOFFSETIMM` no bounds arm at all; 29 was unreachable, so excluding it excluded nothing.
+   An exclusion that could not have gone the other way. (Also: 25 is specifically NOT_CAP;
+   a genuine *type* failure would be 27, so "tag/type failure" blurred the distinction.)
+
+**The discriminator existed on this bitstream and had never been sampled.** `tval` carries the
+rs1 CURSOR for a capability cause (`ex_stage.sv:487`) but the PC for the PC-cap cause
+(`commit_stage.sv:604`). Added switches 210/211/213-218 to the wedge readout -- note aperture
+212 is SKIPPED in the mux, verified against `git show 80843404c:core/cva6.sv:1355-1362` -- with
+assembly, an all-or-nothing rule, and all three verdict branches positive-controlled offline
+before spending the boot.
+
+Boot #22, control passed, `q_one` returned bit-identically to QEMU and to boot #21:
+
+    trap_seen = 1        (sw=255 -> 0x99, bit 7)
+    mcause    = 25
+    mepc      = 0x0000000082cf499c   <- MATCHES the faulting instruction, so the latch is NOT stale
+    tval      = 0x0000000000000000
+
+The staleness guard matters and it passes: the latch is last-writer-wins on commit-stage
+exceptions, so a tval whose mepc did not match would have belonged to some earlier trap.
+
+**tval = 0 means the operand was a NULL/integer.** The reasoning is sharper than the RTL comment
+alone: tval carries the rs1 **cursor**, so a capability that had merely lost its TAG would still
+read pointer-like. Zero means the value is genuinely zero. **`pWInfo` is NULL.**
+
+So `cincoffsetimm a4, a4, 0xb0` is `&pWInfo->sWC` on a NULL pointer. On a conventional machine
+that computes 0xb0 and hurts nobody until the load; on Capstone the offset computation itself
+traps. **This is a null dereference in our software, not a lost tag and not a silicon defect.**
+
+### Everything the tag-loss reading supported is withdrawn
+
+Withdrawn: the S-10b store-buffer route, the S-10 `wbuffer_gran_clr` route, the write-buffer
+capacity chain (nine distinct granules against `WtDcacheWbufDepth = 8`), and my own "a tag went
+missing across an stc/ldc spill pair". None of them is what is happening. The 6537-pair
+constraint and the alignment verification remain true and simply no longer have anything to
+explain. The RTL lane's directed sweep was held before it was built.
+
+### What is NOT settled
+
+Where the NULL comes from. `sqlite3WhereBegin` allocates `pWInfo` with `sqlite3DbMallocRawNN`
+and checks `db->mallocFailed`, so a NULL should never reach the loop at all.
+
+Ruled out already: **the heap is not the difference.** `build-sqlite-silicon.sh:44` defaults
+`SQLITE_HEAP_SIZE` to `256*1024`, exactly what the board bake passes explicitly, so QEMU and
+silicon run the same 256 KiB arena. And silicon's own allocator behaviour matches QEMU exactly
+on the passing arm -- `q_one` reports `M5 oom=0 malloc=236 free=236` on BOTH.
+
+Next: convert the hang into a returning answer. A build that checks `pWInfo == NULL` at entry to
+`sqlite3WhereCodeOneLoopStart`, records a marker and returns, so the run survives to print
+`SLT-SUMMARY` and `M5 oom=/malloc=/free=`. Non-zero `oom` means an allocation failed and the
+question becomes why it failed on silicon and not under QEMU with an identical heap; zero `oom`
+means the NULL came from somewhere else.
