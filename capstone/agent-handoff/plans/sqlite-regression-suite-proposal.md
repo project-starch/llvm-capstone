@@ -2642,3 +2642,42 @@ only ever land on ports 1 or 2, the exclusion is complete.
 With displacement excluded on ports 1-2, the NOT_CAP came from memory or tag state rather than
 from the pipeline erasing it in flight -- which puts the alignment sweep back in scope, pending
 the port-3 answer.
+
+## The S-07 tag-history byte cannot answer this, and the address check is why we know
+
+Boot #31, control returned in 6s, `sqpad10` wedged as expected. First HALTED read of switch 208
+(every prior sample came from the running `[s07]` path, which the RTL lane confirmed is
+structurally incapable of a valid value -- `cva6.sv:1026` makes `gran_match` a combinational AND
+requiring both valid bits, so `0x0c` with `ldc0_valid=0` cannot be produced by the logic).
+
+    [wedge] sw=208 = 0xb0   ldc0_valid=1  src=1 (miss refill)  stc_valid=1
+                            stc_ctag=0  gran_match=0  clobbered=0
+    [wedge] s07 ldc0 granule paddr[19:4] = 0x81170
+    [wedge] s07 stc  granule paddr[19:4] = 0x9f370     <== DIFFERENT
+
+**Bit 7 is SET, so the liveness gate PASSES -- and the byte is still meaningless.** The recorded
+LDC and STC are different granules and neither is the subject slot. With `stc_ctag=0` the decode
+would have read "stored UNTAGGED, the fault is on the SPILL side", which would have moved the
+whole investigation onto the wrong half of the problem.
+
+**The address cross-check is the only thing that caught it**, and it was added specifically
+because the peer lane pointed out that bit 7 cannot self-guard against a false positive.
+
+### Root cause of the instrument's failure, and it is structural
+
+`load_unit.sv:766` records **the FIRST LDC whose response tag was 0**, one-shot, with **no clear
+but reset** (there is a `dom_switch_log_clear` at bank `3'b101` reg 31 for the domain-switch log;
+there is no equivalent for the s07 recorders). An `ldc` over a zeroed stack slot is LEGITIMATELY
+untagged, so ordinary boot software consumes the slot.
+
+Measured directly: the **PRE-RUN baseline already reads `0xb8` with `ldc0_valid=1`**, before any
+arm ran. The slot was gone before the domain started.
+
+**So this instrument is unusable for any workload that runs after boot software** -- which is
+every workload we have. Making it usable needs a clear, i.e. an RTL change; it cannot be worked
+around from software, and no ordering of arms helps because the monitor runs first regardless.
+
+### What still holds from this boot
+
+`sw=204 = 0x00` halted, with the 220 selftest passing in the same boot. Displacement remains
+excluded on a controlled negative -- now seven boots.

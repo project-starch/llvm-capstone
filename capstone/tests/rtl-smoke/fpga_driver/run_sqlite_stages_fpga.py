@@ -1688,6 +1688,7 @@ def main():
                 mepc_bytes = {}
                 tval_bytes = {}
                 traplog_v = None
+                s07a_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -1830,7 +1831,47 @@ def main():
                                             (215, "trap tval[39:32] (LATCHED)", "tval"),
                                             (216, "trap tval[47:40] (LATCHED)", "tval"),
                                             (217, "trap tval[55:48] (LATCHED)", "tval"),
-                                            (218, "trap tval[63:56] (LATCHED)", "tval")):
+                                            (218, "trap tval[63:56] (LATCHED)", "tval"),
+                                            # S-07 TAG-HISTORY VERDICT. Read HALTED here for the
+                                            # first time: 208 has only ever been sampled on the
+                                            # RUNNING path, which OR-contaminates across apertures
+                                            # and has decoded as INSTRUMENT FAULT in every boot
+                                            # (0x0c with ldc0_valid=0). A running sample of this
+                                            # byte cannot be read at all.
+                                            #   [7]   ldc0_valid    an untagged LDC was recorded
+                                            #   [6:5] ldc0_src      0=L1 hit, 1=miss refill, 2=WBUFFER FORWARD
+                                            #   [4]   stc_valid     a cap-granule store was recorded
+                                            #   [3]   stc_ctag      the tag that store WROTE
+                                            #   [2]   gran_match    both records = SAME 16B granule
+                                            #   [1]   stc_clobbered a PLAIN store later cleared it
+                                            # SELF-CONTROLLING, and the 220 selftest does NOT cover
+                                            # it (that drives the displacement sticky only -- do not
+                                            # extend its authority here). Bit 7 IS the liveness
+                                            # check: at a wedge an untagged LDC demonstrably
+                                            # occurred, so ldc0_valid CLEAR means the recorder never
+                                            # fired and the whole byte is VOID.
+                                            (208, "S-07 tag history {ldc_v,src,stc_v,ctag,match,clob}", "s07"),
+                                            # RECORDED GRANULE ADDRESSES -- the control that turns
+                                            # bit 7 from "AN untagged LDC was recorded" into "the
+                                            # SUBJECT's untagged LDC was recorded".
+                                            #
+                                            # The recorder (load_unit.sv:766) is FIRST-WINS,
+                                            # ONE-SHOT, and has NO clear but reset. An `ldc` over a
+                                            # zeroed stack slot is LEGITIMATELY untagged, so any
+                                            # earlier arm -- or the monitor -- can latch a benign
+                                            # event permanently. Bit 7 then reads 1, the gate
+                                            # passes, and src/match/ctag all describe somebody
+                                            # else's load. That is a FALSE POSITIVE on the liveness
+                                            # check, the one direction bit 7 cannot self-guard.
+                                            #
+                                            # NOT UART-safe (205&3==1, 206&3==2 steal console TX or
+                                            # arm a tracer dump), which is fine: these are read
+                                            # HALTED after the run is over, which is the documented
+                                            # use.
+                                            (205, "s07 ldc0_paddr[11:4]", "s07a"),
+                                            (206, "s07 ldc0_paddr[19:12]", "s07a"),
+                                            (207, "s07 stc_paddr[11:4]", "s07a"),
+                                            (209, "s07 stc_paddr[19:12]", "s07a")):
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
@@ -1877,6 +1918,37 @@ def main():
                             pc_bytes[sw - 230] = v
                         if kind == "mepc":
                             mepc_bytes[sw - 196] = v
+                        if kind == "s07a" and v is not None:
+                            s07a_bytes[sw] = v
+                        if kind == "s07" and v is not None:
+                            _lv = (v >> 7) & 1
+                            if not _lv:
+                                print("          <== VOID: ldc0_valid CLEAR at a wedge where an "
+                                      "untagged LDC demonstrably occurred -- the recorder did not "
+                                      "fire, so no bit of this byte carries a verdict.", flush=True)
+                            else:
+                                _src = (v >> 5) & 3
+                                _stcv = (v >> 4) & 1
+                                _ctag = (v >> 3) & 1
+                                _match = (v >> 2) & 1
+                                _clob = (v >> 1) & 1
+                                _srcname = {0: "L1 hit", 1: "miss refill (tag mem)",
+                                            2: "WBUFFER FORWARD", 3: "(reserved)"}[_src]
+                                print(f"          ldc0_valid=1 src={_src} ({_srcname}) "
+                                      f"stc_valid={_stcv} stc_ctag={_ctag} gran_match={_match} "
+                                      f"clobbered={_clob}", flush=True)
+                                if _clob:
+                                    print("          <== a PLAIN store cleared the granule "
+                                          "legitimately; byte carries no verdict.", flush=True)
+                                elif not _match:
+                                    print("          <== granules DIFFER: the untagged load's "
+                                          "granule was not filled by the recorded store.", flush=True)
+                                elif _ctag:
+                                    print("          <== TAG GENUINELY LOST between store and "
+                                          f"load, via {_srcname}.", flush=True)
+                                else:
+                                    print("          <== stored UNTAGGED: fault is UPSTREAM of "
+                                          "memory, on the SPILL side, not the reload.", flush=True)
                         if kind == "tval":
                             # NOT sw-210: aperture 5'b10100 (sw 212) is skipped in
                             # cva6.sv:1355-1362, so the mapping is explicit.
@@ -1924,6 +1996,30 @@ def main():
                                   f"instruction", flush=True)
                     else:
                         print(f"  [wedge] trap mepc {_mnote}", flush=True)
+
+                    # S-07 recorded granule addresses. Reported together because the ONLY
+                    # thing that makes the tag-history byte readable is whether the recorded LDC
+                    # granule is the subject's -- and whether it equals the recorded STC granule,
+                    # which validates gran_match directly instead of trusting the comparison.
+                    if all(k in s07a_bytes for k in (205, 206, 207, 209)):
+                        _ldcp = (s07a_bytes[205] << 4) | (s07a_bytes[206] << 12)
+                        _stcp = (s07a_bytes[207] << 4) | (s07a_bytes[209] << 12)
+                        print(f"  [wedge] s07 ldc0 granule paddr[19:4] = 0x{_ldcp:05x}", flush=True)
+                        print(f"  [wedge] s07 stc  granule paddr[19:4] = 0x{_stcp:05x}", flush=True)
+                        if _ldcp == _stcp:
+                            print("          <== SAME granule: gran_match corroborated by address, "
+                                  "not just by the compare bit.", flush=True)
+                        else:
+                            print("          <== DIFFERENT granules: the recorded LDC and STC are "
+                                  "not the same slot, so tag-history bits describe unrelated "
+                                  "events.", flush=True)
+                        if _ldcp == 0 and _stcp == 0:
+                            print("          <== both zero: recorders almost certainly never fired; "
+                                  "treat the tag-history byte as VOID regardless of bit 7.",
+                                  flush=True)
+                    else:
+                        print("  [wedge] s07 granule addresses UNREAD -- tag-history byte cannot be "
+                              "attributed to the subject and is NOT readable", flush=True)
 
                     # THE LATCHED trap tval -- the DISCRIMINATOR between the two live producers
                     # of mcause 25. Same all-or-nothing rule; a partial read here would be worse
