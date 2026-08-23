@@ -1716,6 +1716,13 @@ s = s.replace(CALLEE, CALLEE + """
     volatile unsigned long *word = (volatile unsigned long *)(void *)cap_slot;
     WhereInfo *cap_w;
     unsigned long cap_ty, cap_lo, cap_hi;
+    /* SLOT ADDRESS, so a COMPLETING arm can hand the wedging arms something to compare
+       against. The s07 STC recorder is LAST-WINS (store_unit.sv:549-553 has no
+       !s07_stc_valid_q guard, unlike the LDC side), so it SURVIVES a wedge holding the last
+       capability store with the tag that store wrote. That is directly readable in a FAULTING
+       run with no perturbation at all -- but only if we know which granule is the subject's.
+       This is how we learn that. */
+    if( capstone_w_slotaddr==0UL ) capstone_w_slotaddr = (unsigned long)(void *)cap_slot;
     cap_w  = *cap_slot;               /* 16-byte ldc -- FIRST, before any 8-byte read */
     __asm__ volatile ("lcc %0, %1, 1" : "=r"(cap_ty) : "r"(cap_w));  /* total: 7 == NOT_CAP */
     cap_lo = word[0];                 /* 8-byte read, low word of the SAME slot */
@@ -1759,7 +1766,7 @@ s = s.replace(CALLEE, CALLEE + """
 ANCHOR = "#define SQLITE_CORE 1\n"
 if ANCHOR not in s:
     sys.exit("WIDTH_PAIR: prologue anchor not found")
-s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap, capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call, capstone_w_ctl;\n", 1)
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap, capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call, capstone_w_ctl, capstone_w_slotaddr;\n", 1)
 open(path, "w").write(s)
 print("   WIDTH_PAIR probe injected (ldc-first, total type query, both 8-byte words)")
 PYWIDTH

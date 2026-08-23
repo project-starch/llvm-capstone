@@ -323,6 +323,7 @@ unsigned long capstone_where_null, capstone_where_null_level, capstone_where_cal
 unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap;
 unsigned long capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call;
 unsigned long capstone_w_ctl;
+unsigned long capstone_w_slotaddr;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6135,15 +6136,15 @@ static unsigned capstone_slt_entry(void) {
   /* type 7 == NOT_CAP (capstone_dyn_unit.anvil:181-184). lo/hi are the SAME slot read as two
      plain 8-byte words. type==7 with lo/hi non-zero means the 16-byte read manufactured a
      non-capability out of memory that holds a real pointer. */
-  { static const char *const wp[10] = {"WIDTH type=", " lo=", " hi=", " calls=", " notcap=",
-                                      " badtype=", " badlo=", " badhi=", " badcall=", " CTL(must be 7)="};
-    unsigned long pv[10];
+  { static const char *const wp[11] = {"WIDTH type=", " lo=", " hi=", " calls=", " notcap=",
+                                      " badtype=", " badlo=", " badhi=", " badcall=", " CTL(must be 7)=", " slotaddr="};
+    unsigned long pv[11];
     int k;
     pv[0] = capstone_w_type; pv[1] = capstone_w_lo; pv[2] = capstone_w_hi;
     pv[3] = capstone_w_calls; pv[4] = capstone_w_notcap;
     pv[5] = capstone_w_bad_type; pv[6] = capstone_w_bad_lo; pv[7] = capstone_w_bad_hi;
-    pv[8] = capstone_w_bad_call; pv[9] = capstone_w_ctl;
-    for (k = 0; k < 10; k++) {
+    pv[8] = capstone_w_bad_call; pv[9] = capstone_w_ctl; pv[10] = capstone_w_slotaddr;
+    for (k = 0; k < 11; k++) {
       char b[24]; int i = (int)sizeof b; unsigned long v = pv[k];
       capstone_slt_out(0, wp[k]);
       b[--i] = '\0'; if (!v) b[--i] = '0';

@@ -2728,3 +2728,55 @@ second is nearly impossible.
 This is already covered in spirit by "ask what the instrument cannot distinguish", but that rule
 did not stop it: the question was asked, and asked only about decoding. The sharper form is
 **"could this reading belong to something other than my subject?"**
+
+### CORRECTION: "nothing survives a wedge" is WRONG, and it was committed
+
+The entry above says an M-mode wedge kills Linux "including anything written to the host-shared
+region", and concludes that any observation which survives is one that prevented what it was
+observing. **The first half is false and the conclusion does not follow.**
+
+A wedge destroys **software's ability to REPORT**. It does not destroy **memory**. DRAM contents
+survive a wedge; only a power cycle clears them. And the driver already halts the core and reads
+debug apertures over GDB in exactly that state -- GDB reads memory as readily as registers.
+
+So the escape from the bind is that an observation does not have to survive **in software**, only
+**in memory**:
+
+    lcc  t, <value being spilled>, 1    ; total, cannot trap
+    sd   t, <address in the shared region>
+    ... normal spill, pad, reload, fault, wedge ...
+    then read that address over JTAG while halted, in the same session that reads switch 204
+
+The cache is write-through and the buffer drains autonomously, so the marker reaches memory
+within a few cycles -- long before a fault ~19 instructions later.
+
+### And the STC recorder SURVIVES the wedge -- it is LAST-WINS, not one-shot
+
+`store_unit.sv:549-553` has **no `&& !s07_stc_valid_q` guard**, unlike the LDC side. Every
+capability-granule store overwrites it, so boot software cannot consume it, and at a wedge it
+holds the **last capability store before the core died**, with the tag that store wrote.
+
+So boot #31's `stc paddr = 0x9f370` was NOT the instrument failing -- it was a later `stc` from
+the same basic block legitimately claiming the record. The subject usually loses the slot (nine
+stores sit between spill and reload, several of them `stc`s), but on any wedge where the recorded
+paddr DOES match the subject granule, `stc_ctag` answers the spill-side fork **directly, in a
+faulting run, with no perturbation at all**.
+
+To use it we need the subject granule's physical address. `CAPSTONE_WIDTH_PAIR` now reports
+`slotaddr`, captured in a COMPLETING arm, so wedging arms have something to compare against.
+
+### Two further design corrections
+
+* **The width probe is too heavy, and heavy in the worst possible way.** It forces a reload via
+  `*(WhereInfo *volatile *)&pWInfo` -- an **extra `ldc`**, the very operation under suspicion,
+  and the likeliest reason `sqrtw` completes where `sqrt` wedges. The spill-side fork needs no
+  reload at all: query the **register about to be spilled**. `lcc` selector 1 on a register is
+  total, touches no memory, and answers "was this value tagged at spill time", which IS the
+  question.
+* **A marker store is still traffic, so it needs its own control**: a marker-only arm, `sd` with
+  no query and no reload, which must **still wedge**. If it does, the marker is not the
+  perturbation. If the marker alone fixes it, that is a sharp result about how little it takes.
+
+**So "spill-side breakage disfavoured, not excluded" stands, but its escape hatch is now
+TESTABLE rather than permanent** -- by the STC recorder on a matching wedge, or by the
+memory-marker route.
