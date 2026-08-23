@@ -319,3 +319,73 @@ not confounded by one closing and one not — but they fail by **different margi
 much the cleanest experiment available and it is still not single-variable.
 
 **A reflash is the project lead's call. Surfaced, not assumed.**
+
+---
+
+# UPDATE 4 — both named mechanisms require a store this window does not contain
+
+## The RTL lane closed both routes I proposed, and weakened its own hypothesis
+
+* **Draining entries are covered.** `wt_dcache_wbuffer.sv:621-623`: an entry keeps `valid` while
+  `txblock` is set, and `gran_conflict` consults `valid[k]`, so a mid-drain entry still blocks.
+* **The merge route is deliberate and architecturally correct**, not a bypass (`:625-628`):
+  same-word requests take `wr_ptr = hit_ptr` and merge, where the S-06 P4 rules (sticky `is_cap`,
+  last-writer-wins `ctag`) give the right answer — a plain store overwriting part of a granule
+  **should** clear its tag.
+
+**So co-residency looks genuinely blocked, and the "S-10 is sound only if the S-07 stall is
+complete" mechanism REQUIRES co-residency. That hypothesis is weaker, not stronger** — surfaced
+by its own author rather than defended.
+
+## A real documented window with the exact polarity
+
+`wt_dcache_wbuffer.sv:612-619` — the **issue/return desync**, deliberately permitted:
+
+> *"a same-word merge into an entry whose transaction has already issued (`.ctag` written
+> unconditionally, no txblock guard, and `wr_ptr = hit_ptr` keeps hitting the entry because
+> `valid` survives txblock). **`stc G` then `sd x0, G+0` gives DRAM ctag=1 and L1 ctag=0.**
+> It CONVERGES ... so it is a bounded window, and it is PRE-EXISTING rather than introduced here."*
+
+**L1 reads tag 0 with correct data, transiently.** Correct polarity, and *intermittent by
+construction*, which fits a ~25% rate far better than anything deterministic.
+
+## But it needs a store this window does not have either
+
+The desync requires a **plain store to the subject WORD after the `stc`**. Enumerated in the
+artifact: the nine stores between the subject `stc` and the reload are at `s0-0x74`, `-0x5d0`,
+`-0x5b0`, `-0x90`, `-0x98`, `-0x5a0`, `-0x10c`, `-0x110`, `-0x120`. **None is in
+`[s0-0x70, s0-0x68)`**, and there is no call in the window through which a callee could add one.
+
+**So BOTH named mechanisms — S-10-conditional co-residency and the pre-existing desync — require
+a plain store into the subject granule or word that this window does not contain.** Either the
+mechanism is a third thing, or the store comes from outside this function's control flow: the
+trap handler, the monitor, or a domain switch. That last class is the one route neither of us can
+enumerate statically, and it is now the common requirement of both candidates.
+
+## The A/B is now DISCRIMINATING, which it was not before
+
+| hypothesis | prediction on `39b21639d` (S-07 fix present, S-10 absent) |
+|---|---|
+| S-10 fix implicated | fault **ABSENT** |
+| pre-existing issue/return desync | fault **PRESENT** |
+
+Two named hypotheses with **opposite** predictions, so either result is informative. Still not
+single-variable (`-10.629` vs `-16.400` WNS), but a **present/absent** split is much harder to
+explain by 5.8 ns of margin than a rate change would be.
+
+**Run it enough times to see the RATE, not just the outcome.** At ~25% a single non-wedge on the
+control image is not absence.
+
+Note also: **"only in this bitstream" is not something this investigation established.** No
+earlier bitstream has been tested with this reproducer. It is a property of the S-10 candidate as
+argued, not a measurement.
+
+## The general rule, since it caught three things tonight
+
+`pgrep -f` matching its own shell; a file-size check that could not separate two instruments; a
+grep taking `eth_rxck` instead of the CPU clock. All three are **"the query returned something,
+so it answered the question."**
+
+The defence that actually worked, three times, is **a second reading that has to agree**: the
+selftest against the wedge read, the granule address against the valid bit, and `-16.400` against
+`+4.907`. **None was caught by making the first query more careful.**
