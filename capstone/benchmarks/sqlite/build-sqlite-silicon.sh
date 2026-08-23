@@ -1821,6 +1821,15 @@ if [[ -n "${CAPSTONE_PAD_LOOP:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PAD_LOOP" <<'PYLOOP'
 import sys
 path, n = sys.argv[1], int(sys.argv[2])
+# HARD LIMIT, enforced not documented, because exceeding it fails SILENTLY. The point of the
+# loop pad over nops is CONSTANT CODE SIZE, which holds only while the count fits one 12-bit
+# immediate. Above 2047 the constant load becomes lui+addi, the pad grows three->four
+# instructions, and the I-cache alignment confound is quietly back: nothing fails, nothing
+# looks wrong. The risk is a later sweep reaching for a big n PRECISELY because this
+# instrument "has no alignment problem".
+if not (1 <= n <= 2047):
+    sys.exit("PAD_LOOP: n=%d out of range 1..2047; above 2047 the pad is no longer "
+             "constant-size and the alignment confound returns silently." % n)
 s = open(path).read()
 CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
   Parse *pParse,       /* Parsing context */
@@ -1840,6 +1849,52 @@ open(path, "w").write(s)
 print("   PAD_LOOP: %d-iteration register-only delay loop injected (constant code size)" % n)
 PYLOOP
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_LOOP=${CAPSTONE_PAD_LOOP}"
+fi
+
+# CAPSTONE_PAD_GRAN=<n> -- vary DISTINCT-GRANULE COUNT at constant instruction count.
+#
+# The peer lane's sim contention sweep came back clean at 6..10 granules and was then found VOID:
+# peak simultaneous write-buffer entries was **1** against a depth of 8, because the testbench
+# memory retires each entry before the next store arrives. Nine distinct granule STORES is not
+# nine CO-RESIDENT entries, and the gap between those is the whole hypothesis. Sim structurally
+# cannot hold the condition without slowing the memory; DRAM latency is what creates it, so the
+# BOARD is the instrument.
+#
+# Design borrowed from that test, which is sound even though its environment was not: EVERY arm
+# issues the SAME ten stores and the same instruction sequence. Arms below ten make the count up
+# by re-storing to a granule already touched. So instruction count, store count and elapsed time
+# are constant across the sweep and **only the distinct-granule count varies**.
+#
+# Stores are to a local array, never to the pWInfo slot or its granule -- this arm adds
+# OCCUPANCY, not a granule collision.
+#
+#   fault returns as n rises, with a step at the buffer depth -> occupancy is the variable
+#   flat across n                                             -> occupancy is not, at this delay
+if [[ -n "${CAPSTONE_PAD_GRAN:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PAD_GRAN" <<'PYGRAN'
+import sys
+path, n = sys.argv[1], int(sys.argv[2])
+if not (0 <= n <= 10): sys.exit("PAD_GRAN: n must be 0..10")
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("PAD_GRAN: callee anchor count %d" % s.count(CALLEE))
+# 10 slots, 16 bytes apart = 10 distinct granules. Arms below 10 repeat slot 0.
+idx = [min(i, n-1) if n > 0 else 0 for i in range(10)]
+body = "\n".join("    cap_gr[%d*2] = (unsigned long)(%d);" % (idx[i], i+1) for i in range(10))
+pad = ("\n  { volatile unsigned long cap_gr[20];\n" + body + "\n  }")
+s = s.replace(CALLEE, CALLEE + pad, 1)
+open(path, "w").write(s)
+print("   PAD_GRAN: 10 stores over %d distinct granules (constant instruction count)" % n)
+PYGRAN
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_GRAN=${CAPSTONE_PAD_GRAN}"
 fi
 
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a

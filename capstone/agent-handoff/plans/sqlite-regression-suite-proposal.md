@@ -2549,3 +2549,52 @@ scalar) rather than uniform traffic.
   (`corev_apu/tb/ariane_tb.cpp:397`), printed by every passing test and carrying no value. Read
   the pass/fail word, never that number. Same family as `tval=0`: a number that renders like data
   and carries none.
+
+## Boot A: the loop pad does NOT reproduce the fault -- and that undercuts "delay is the variable"
+
+The peer lane insisted on an instrument-validation boot with NO unknown arms before any
+bisection. It paid for itself immediately. Boot #30, control returned in 6s:
+
+    sqlp200 (200-iteration loop)  returned rc=0, records=2 completed=1, M5 malloc=241
+    sqlp3   (3-iteration loop)    returned rc=0, records=2 completed=1, M5 malloc=241
+
+**n=3 was the arm expected to WEDGE** -- it is the loop-instrument analogue of `pad10`, which
+wedges. It completed. So the loop pad and the nop pad are NOT interchangeable, exactly the branch
+that was pre-registered as "itself the finding".
+
+### The problem this exposes, which is bigger than the instrument
+
+Line the outcomes up against the faulting instruction's ADDRESS:
+
+| variant | pad | faulting insn | dynamic delay | result |
+|---|---|---|---|---|
+| un-probed | none | `0x104A54` | 0 | **WEDGE** |
+| pad10 | 10 nops | `0x104a9c` | ~10 | **WEDGE** |
+| loop3 | 3-iter loop | `0x104a94` | ~10 | completes |
+| loop200 | 200-iter loop | `0x104a94` | ~600 | completes |
+| pad600 | 600 nops | `0x1053d4` | ~600 | completes |
+
+**`loop3` and `pad10` carry the same dynamic delay (~10 instructions) and give opposite
+outcomes.** Delay alone therefore does not explain the data.
+
+And within the loop instrument -- where the faulting instruction is pinned at `0x104a94` for
+EVERY n, verified by disassembly -- the fault does not occur at all, at n=3 or n=200. So varying
+delay across a 66x range with alignment held constant produces NO change.
+
+**That inverts the reading of the pad600 result.** "600 nops fixed it" was confounded with a
+2360-byte code shift, which I had recorded as an acknowledged caveat rather than a live
+candidate. It now looks like the stronger candidate: the two variants that wedge have the
+faulting instruction at `0x104A54` and `0x104a9c`; all three that complete have it elsewhere.
+
+**So "distance/time is the variable" is DOWNGRADED to unproven.** The delay-dependence
+observation stands as an observation; the causal reading does not. What the data now supports is
+that *something about code placement* separates wedging from completing, with delay unable to
+account for the loop3-vs-pad10 pair.
+
+### Next experiment: vary alignment while barely varying delay
+
+Small nop counts shift the faulting instruction 4 bytes each while changing delay by ~1
+instruction: pads of 0, 1, 2, 3, 4 nops. If the fault appears and disappears with 4-byte shifts,
+placement is the variable and delay is a passenger. That is cheap, needs no new mechanism, and is
+decisive in a way the loop ladder cannot be -- the loop instrument cannot bisect anything,
+because it never wedges.
