@@ -37,6 +37,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
 source "$SCRIPT_DIR/infra-retry.sh"
+source "$SCRIPT_DIR/../select.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -65,6 +66,7 @@ smoke() { # $1=share dir  $2=probe  $3=extra guest argv  rest: extra harness arg
 }
 
 run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
+  capstone_selected "$2" || { echo "SKIP  $2"; return 0; }
   local share="$1" name="$2" retval="$3" guest_arg="${4:-}"
   local marker="intra-domain-mrev-revoke-probe: call retval = $retval"
   local log="$share/$name.log"
@@ -100,6 +102,7 @@ run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
 }
 
 run_fault() { # $1=share  $2=probe  $3=expected diagnostic  $4=expected cause
+  capstone_selected "$2" || { echo "SKIP  $2"; return 0; }
   local share="$1" name="$2" msg="$3" want="$4"
   local log="$share/$name.log"
   local attempt=0 cause
@@ -130,6 +133,8 @@ run_fault() { # $1=share  $2=probe  $3=expected diagnostic  $4=expected cause
     return $?
   done
 }
+
+capstone_select_banner intra-domain-mrev
 
 fail=0
 infra=0
@@ -171,6 +176,8 @@ for opt in $OPT_LEVELS; do
   # ...while a second live value and the un-carved arena remainder keep working.
   run_ok "$share" held_arena_survives_revoke 0x22370077 read-arena; note $?
 done
+
+capstone_select_verify || exit 2
 
 if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2

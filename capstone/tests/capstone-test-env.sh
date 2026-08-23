@@ -27,6 +27,13 @@ fi
 export CAPSTONE_REPO_ROOT=$_CAPSTONE_REPO_CANDIDATE
 unset _CAPSTONE_REPO_CANDIDATE
 export CAPSTONE_TMP_ROOT=${CAPSTONE_TMP_ROOT:-/tmp/capstone}
+
+# A backend assert inside a suite used to leave one line in a log and nothing
+# reusable, so the same failure got re-investigated at suite cost (minutes to
+# over an hour) instead of at llc cost (0.09 s). The driver reads this variable
+# on every clang invocation in the project, so one export covers all of them:
+# a crash now drops a self-contained reproducer here, ready for reduce.sh.
+export CLANG_CRASH_DIAGNOSTICS_DIR=${CLANG_CRASH_DIAGNOSTICS_DIR:-$CAPSTONE_TMP_ROOT/crash}
 export CAPSTONE_LLVM_BUILD_DIR=${CAPSTONE_LLVM_BUILD_DIR:-$CAPSTONE_REPO_ROOT/llvm/cmake-build-debug}
 export CAPSTONE_LLVM_BIN=${CAPSTONE_LLVM_BIN:-$CAPSTONE_LLVM_BUILD_DIR/bin}
 export CAPSTONE_LLVM_LIT=${CAPSTONE_LLVM_LIT:-$CAPSTONE_LLVM_BIN/llvm-lit}

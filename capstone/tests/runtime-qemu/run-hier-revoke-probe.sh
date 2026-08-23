@@ -21,6 +21,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
+source "$SCRIPT_DIR/../select.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -42,6 +44,7 @@ smoke() { # $1=probe  rest: extra harness args
 }
 
 run_ok() { # $1=probe  $2=expected retval
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" retval="$2"
   local marker="hier-revoke-probe: call retval = $retval"
   local log="$SHARE/$name.log"
@@ -60,11 +63,14 @@ run_ok() { # $1=probe  $2=expected retval
        ! grep -q "hier-revoke-probe: call retval" "$log" 2>/dev/null; then
       echo "  ...no boot/retval for $name (attempt $attempt), retrying" >&2; continue
     fi
+    capstone_domain_ran "$log" "hier-revoke-probe:" || {
+      echo "FLAKE $name  (guest never ran; no verdict; see $log)" >&2; return 75; }
     echo "FAIL  $name  (rc=$rc; see $log)" >&2; return 1
   done
 }
 
 run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" msg="$2" want="$3"
   local log="$SHARE/$name.log"
   local attempt=0 cause
@@ -84,11 +90,26 @@ run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
       echo "FAIL  $name  (returned instead of faulting -- parent revoke missed the child; see $log)" >&2; return 1
     fi
     [[ $attempt -le $RETRIES ]] && { echo "  ...no boot/fault for $name (attempt $attempt), retrying" >&2; continue; }
+    capstone_domain_ran "$log" "hier-revoke-probe:" || {
+      echo "FLAKE $name  (guest never ran; no verdict; see $log)" >&2; return 75; }
     echo "FAIL  $name  (no fault after $attempt attempts; see $log)" >&2; return 1
   done
 }
 
-fail=0
+capstone_select_banner hier-revoke
+
+fail=0 flaked=0
+
+# A probe that never ran is not a probe that failed. Counting both as `fail=1`
+# is how this suite reported FAIL(1) on a night when the guest simply never
+# reached login. A real failure still outranks a flake.
+record() { # $1 = a probe's exit code
+  case "$1" in
+    0)  ;;
+    75) flaked=$((flaked + 1)) ;;
+    *)  fail=1 ;;
+  esac
+}
 for opt in $OPT_LEVELS; do
   SHARE="$TMP_ROOT/hier-revoke-share$opt"
   rm -rf "$SHARE"; mkdir -p "$SHARE"
@@ -99,14 +120,18 @@ for opt in $OPT_LEVELS; do
   echo "== running at $opt (one boot each) =="
   want=$(primary_cause "$opt")
   [[ "$want" == 25 ]] && msg="$REVOKED" || msg="$UNTAGGED"
-  run_fault hier_child_revoked_fault "$msg" "$want" || fail=1
-  run_ok   hier_no_close_ok 0x0872005e || fail=1
-  run_ok   hier_sibling_conn_survives_ok 0x0873003c || fail=1
+  run_fault hier_child_revoked_fault "$msg" "$want" || record $?
+  run_ok   hier_no_close_ok 0x0872005e || record $?
+  run_ok   hier_sibling_conn_survives_ok 0x0873003c || record $?
 done
 
-if [[ $fail -eq 0 ]]; then
-  echo "__CAPSTONE_HIER_REVOKE_PASSED__"
-else
+capstone_select_verify || exit 2
+
+if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2
+  exit 1
+elif [[ $flaked -ne 0 ]]; then
+  echo "$flaked probe(s) never ran -- infra flake, no verdict" >&2
+  exit 75
 fi
-exit $fail
+echo "__CAPSTONE_HIER_REVOKE_PASSED__"

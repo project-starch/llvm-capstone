@@ -29,7 +29,30 @@ for s in "${SUITES[@]}"; do
   fi
 done
 
+# Second check, same idea one level down: a `source` line whose path does not
+# resolve. bash does not stop for it without -e, so the helper is simply absent
+# and every call lands in its `||` branch -- which reads like "nothing selected"
+# rather than like a broken script. That happened while adding select.sh: a regex
+# escape leaked into the path and all seven rv8 benchmarks silently SKIPped.
+badsrc=0
+while IFS= read -r f; do
+  dir=$(dirname "$f")
+  while IFS= read -r ref; do
+    resolved=${ref//\$SCRIPT_DIR/$dir}
+    case "$resolved" in
+      *'$'*) continue ;;   # another variable in the path: not resolvable here
+      *.sh) ;;             # only judge things that name a shell file
+      *) continue ;;       # not a source path (the grep pattern matches itself)
+    esac
+    if [ ! -f "$resolved" ]; then
+      printf '  BAD SOURCE  %s -> %s\n' "${f##*/}" "$ref"
+      badsrc=$((badsrc + 1)); rc=1
+    fi
+  done < <(grep -oE 'source "[^"]+"' "$f" 2>/dev/null | sed 's/^source "//; s/"$//')
+done < <(find "$SCRIPT_DIR" "$SCRIPT_DIR/../benchmarks" -name '*.sh' -type f 2>/dev/null)
+
 echo
+[ "$badsrc" -eq 0 ] || echo "$badsrc source line(s) point at a file that does not exist." >&2
 echo "$uses suite(s) use the shared verdict rule, $missing do not."
 [ "$rc" -eq 0 ] || echo "A suite without it can report a boot flake as a FAIL." >&2
 exit "$rc"

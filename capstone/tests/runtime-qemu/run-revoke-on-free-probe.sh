@@ -20,6 +20,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
 source "$SCRIPT_DIR/infra-retry.sh"
+source "$SCRIPT_DIR/../select.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -41,6 +42,7 @@ smoke() { # $1=probe  rest: extra harness args
 }
 
 run_ok() { # $1=probe  $2=expected retval
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" retval="$2"
   local marker="revoke-on-free-probe: call retval = $retval"
   local log="$SHARE/$name.log"
@@ -65,6 +67,7 @@ run_ok() { # $1=probe  $2=expected retval
 }
 
 run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" msg="$2" want="$3"
   local log="$SHARE/$name.log"
   local attempt=0 cause
@@ -89,6 +92,8 @@ run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
   done
 }
 
+capstone_select_banner revoke-on-free
+
 fail=0
 infra=0
 # A probe whose guest never ran is not a verdict. Keep the two apart so an
@@ -109,6 +114,8 @@ for opt in $OPT_LEVELS; do
     run_ok   alloc_no_free_ok 0x0812005e; note $?
     run_ok   alloc_sibling_survives_ok 0x0813003c; note $?
 done
+
+capstone_select_verify || exit 2
 
 if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2

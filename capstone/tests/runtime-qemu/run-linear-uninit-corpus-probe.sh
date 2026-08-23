@@ -37,6 +37,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
+source "$SCRIPT_DIR/../select.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -61,6 +63,7 @@ smoke() { # $1=share dir  $2=probe  $3=extra guest argv  rest: extra harness arg
 }
 
 run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
+  capstone_selected "$2" || { echo "SKIP  $2"; return 0; }
   local share="$1" name="$2" retval="$3" guest_arg="${4:-}"
   local marker="linear-uninit-corpus-probe: call retval = $retval"
   local log="$share/$name.log"
@@ -88,12 +91,17 @@ run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
       echo "  ...no boot/retval for $name (attempt $attempt), retrying" >&2
       continue
     fi
+    capstone_domain_ran "$log" "linear-uninit-corpus-probe:" || {
+      echo "FLAKE $name  (guest never ran; no verdict; see $log)" >&2
+      return 75
+    }
     echo "FAIL  $name  (rc=$rc; see $log)" >&2
     return 1
   done
 }
 
 run_fault() { # $1=share  $2=probe  $3=expected diagnostic  $4=expected cause
+  capstone_selected "$2" || { echo "SKIP  $2"; return 0; }
   local share="$1" name="$2" msg="$3" want="$4"
   local log="$share/$name.log"
   local attempt=0 cause
@@ -119,12 +127,29 @@ run_fault() { # $1=share  $2=probe  $3=expected diagnostic  $4=expected cause
       echo "  ...no boot/fault for $name (attempt $attempt), retrying" >&2
       continue
     fi
+    capstone_domain_ran "$log" "linear-uninit-corpus-probe:" || {
+      echo "FLAKE $name  (guest never ran; no verdict; see $log)" >&2
+      return 75
+    }
     echo "FAIL  $name  (no fault line after $attempt attempts; see $log)" >&2
     return 1
   done
 }
 
-fail=0
+capstone_select_banner linear-uninit-corpus
+
+fail=0 flaked=0
+
+# A probe that never ran is not a probe that failed. Counting both as `fail=1`
+# is how this suite reported FAIL(1) on a night when the guest simply never
+# reached login. A real failure still outranks a flake.
+record() { # $1 = a probe's exit code
+  case "$1" in
+    0)  ;;
+    75) flaked=$((flaked + 1)) ;;
+    *)  fail=1 ;;
+  esac
+}
 for opt in $OPT_LEVELS; do
   share="$TMP_ROOT/linear-uninit-corpus-share$opt"
   rm -rf "$share"
@@ -136,31 +161,35 @@ for opt in $OPT_LEVELS; do
 
   echo "== row14 UNINIT (use-before-init) at $opt =="
   # The mechanism: an uninitialised connection handle has no read authority.
-  run_fault "$share" uninit_use_before_init_fault "$UNINIT" 26 || fail=1
+  run_fault "$share" uninit_use_before_init_fault "$UNINIT" 26 || record $?
   # ...and that is enforced by the capability's TYPE, not by where its cursor
   # sits: a negative offset is inside the bounds and still traps.
-  run_fault "$share" uninit_negative_offset_fault "$UNINIT" 26 || fail=1
+  run_fault "$share" uninit_negative_offset_fault "$UNINIT" 26 || record $?
   # Control: csinit (sqlite3_open) reclaims the same bytes through the same
   # handle. Proves the trap was the type, not dead memory or a broken grant.
-  run_ok "$share" uninit_init_then_use_ok 0x1412005e || fail=1
+  run_ok "$share" uninit_init_then_use_ok 0x1412005e || record $?
 
   echo "== row11 LINEAR (double-free) at $opt =="
   # The mechanism: the first finalize consumes the move-only statement handle,
   # and linearity leaves no second copy for a later use.
-  run_fault "$share" linear_drop_use_fault "$UNTAGGED" 24 || fail=1
+  run_fault "$share" linear_drop_use_fault "$UNTAGGED" 24 || record $?
   # The literal shape: the second sqlite3_finalize itself faults, at the drop.
-  run_fault "$share" linear_double_drop_fault "$DROPPED" 24 || fail=1
+  run_fault "$share" linear_double_drop_fault "$DROPPED" 24 || record $?
   # Control for both cause-24 expectations: the same carve, no drop, no fault.
-  run_ok "$share" linear_no_drop_ok 0x11120033 || fail=1
+  run_ok "$share" linear_no_drop_ok 0x11120033 || record $?
   # csdrop consumes a handle; it does not revoke a lineage or free memory. The
   # connection the statement was carved from keeps working, and the host mmap
   # independently sees the byte written through it after the drop.
-  run_ok "$share" linear_drop_sibling_ok 0x11130044 read-arena || fail=1
+  run_ok "$share" linear_drop_sibling_ok 0x11130044 read-arena || record $?
 done
 
-if [[ $fail -eq 0 ]]; then
-  echo "__CAPSTONE_LINEAR_UNINIT_CORPUS_PASSED__"
-else
+capstone_select_verify || exit 2
+
+if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2
+  exit 1
+elif [[ $flaked -ne 0 ]]; then
+  echo "$flaked probe(s) never ran -- infra flake, no verdict" >&2
+  exit 75
 fi
-exit $fail
+echo "__CAPSTONE_LINEAR_UNINIT_CORPUS_PASSED__"

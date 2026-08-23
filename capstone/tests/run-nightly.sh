@@ -20,6 +20,9 @@
 #     --skip-build       run suites against the current toolchain, no rebuild
 #     --extended         also run the setup-heavier suites (sqlite/hostcall/nullblk)
 #     --only a,b,c       run only the named suites (see --list); still serial
+#     --quick            the ~3 min pre-commit tier (smoke, coremark, borrow-cost,
+#                        shared-region). To pick cases INSIDE one suite, run that
+#                        suite directly with CAPSTONE_ONLY=name1,name2.
 #     --list             print the suite names and exit
 #     --timeout SECONDS  per-suite timeout (default 1800)
 #     -j N               build parallelism (default ~70% of nproc)
@@ -77,6 +80,13 @@ EXTENDED_SUITES=(
 )
 
 # ---- options ------------------------------------------------------------------
+# The quick tier, chosen from the durations the reports actually recorded rather
+# than by feel: smoke 121 s, coremark 23 s, borrow-cost 17 s, shared-region 15 s.
+# About 3 minutes, and between them they cover "a benchmark still compiles and
+# runs", "a domain boots and does capability operations" and "shared memory still
+# works" -- which is what a codegen change breaks. Pre-COMMIT gate, never pre-push.
+QUICK_NAMES="smoke,coremark,borrow-cost,shared-region"
+
 DO_CLEAN=0 SKIP_BUILD=0 EXTENDED=0 ONLY="" TIMEOUT=1800
 JOBS=${JOBS:-$(( $(nproc) * 7 / 10 ))}; [ "$JOBS" -lt 1 ] && JOBS=1
 
@@ -90,6 +100,7 @@ while [ $# -gt 0 ]; do
     --skip-build) SKIP_BUILD=1 ;;
     --extended) EXTENDED=1 ;;
     --only) ONLY="$2"; shift ;;
+    --quick) ONLY="$QUICK_NAMES" ;;
     --list) print_list; exit 0 ;;
     --timeout) TIMEOUT="$2"; shift ;;
     -j) JOBS="$2"; shift ;;
@@ -101,6 +112,16 @@ done
 
 SUITES=("${CORE_SUITES[@]}")
 [ "$EXTENDED" -eq 1 ] && SUITES+=("${EXTENDED_SUITES[@]}")
+
+# CAPSTONE_ONLY narrows the cases INSIDE a suite. That is for iterating on one
+# suite by hand; the nightly is the full run by definition, so inheriting it from
+# the environment would silently shrink the gate -- while every suite whose cases
+# do not match the pattern exited 2 and filled the report with noise.
+if [ -n "${CAPSTONE_ONLY:-}" ]; then
+  echo "run-nightly.sh: ignoring CAPSTONE_ONLY=$CAPSTONE_ONLY (the nightly runs every case;" >&2
+  echo "  use --only to pick suites, or run one suite directly to pick cases)" >&2
+  unset CAPSTONE_ONLY
+fi
 
 # ---- output dir + report ------------------------------------------------------
 TS=$(date +%Y%m%d_%H%M%S)
