@@ -425,11 +425,12 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = Capstone::getArgGPRs(ABI);
 
-  // Capability (i128) handling.
-  // Treat i128 values as a single capability that occupies one integer argument
-  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
-  // might already be canonicalized to XLenVT during legalization/splitting.
-  if (ValVT == MVT::i128) {
+  // Capability handling.
+  // A capability occupies one integer argument register, or one 16-byte stack
+  // slot. We must key off ValVT, because LocVT might already be canonicalized
+  // to XLenVT during legalization/splitting. i128 is here only because __int128
+  // still shares the capability register class.
+  if (ValVT == MVT::c128 || ValVT == MVT::i128) {
     if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
@@ -620,7 +621,7 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   }
 
   assert(((ValVT.isFloatingPoint() && !ValVT.isVector()) || LocVT == XLenVT ||
-          LocVT == MVT::i128 ||
+          LocVT == MVT::i128 || LocVT == MVT::c128 ||
           (TLI.getSubtarget().hasVInstructions() &&
            (ValVT.isVector() || ValVT.isCapstoneVectorTuple()))) &&
          "Expected an XLenVT or vector types at this stage");
@@ -716,11 +717,8 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = getFastCCArgGPRs(ABI);
 
-  // Capability (i128) handling, mirroring CC_Capstone.
-  // Treat i128 values as a single capability that occupies one integer argument
-  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
-  // might already be canonicalized to XLenVT during legalization/splitting.
-  if (ValVT == MVT::i128) {
+  // Capability handling, mirroring CC_Capstone.
+  if (ValVT == MVT::c128 || ValVT == MVT::i128) {
     if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));

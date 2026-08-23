@@ -187,9 +187,12 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // Set up the register classes.
   addRegisterClass(XLenVT, &Capstone::GPRRegClass);
 
-  // If we are on 64-bit, allow to store 128-bit Capabilities in registers.
+  // A capability lives in a GPR. So does __int128, for now: the two share the
+  // register class and are told apart by their VT, which is the point of having
+  // c128 at all. drop-i128 removes the i128 half.
   if (Subtarget.is64Bit())
     addRegisterClass(MVT::i128, &Capstone::GPRRegClass);
+  addRegisterClass(MVT::c128, &Capstone::GPRRegClass);
 
   if (Subtarget.hasStdExtZfhmin())
     addRegisterClass(MVT::f16, &Capstone::FPR16RegClass);
@@ -356,8 +359,10 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Custom);
-  if (Subtarget.is64Bit())
+  if (Subtarget.is64Bit()) {
     setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i128, Custom);
+    setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::c128, Custom);
+  }
 
   //===--------------------------------------------------------------------===//
   // Custom Capstone-specific lowering
@@ -399,6 +404,19 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_CC, XLenVT, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i128, Expand);
   setOperationAction(ISD::SELECT_CC, XLenVT, Expand);
+
+  // A capability pointer is c128, not i128. These mirror the i128 lines above
+  // for the operations a pointer actually takes part in; when i128 stops being
+  // a legal register type, these are what remains.
+  setOperationAction(ISD::PTRADD, MVT::c128, Custom);
+  setOperationAction(ISD::GlobalAddress, MVT::c128, Custom);
+  setOperationAction(ISD::BlockAddress, MVT::c128, Custom);
+  setOperationAction(ISD::ConstantPool, MVT::c128, Custom);
+  // SETCC's action is keyed on the operand type, the rest on the result type.
+  setOperationAction(ISD::SETCC, MVT::c128, Custom);
+  setOperationAction(ISD::SELECT, MVT::c128, Custom);
+  setOperationAction(ISD::BR_CC, MVT::c128, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::c128, Expand);
   //===--------------------------------------------------------------------===//
 
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
@@ -6863,7 +6881,7 @@ static SDValue lowerConstant(SDValue Op, SelectionDAG &DAG,
   SDLoc DL(Op);
   const ConstantInt *CI = cast<ConstantSDNode>(Op)->getConstantIntValue();
   SDValue CPIdx = DAG.getTargetConstantPool(CI, MVT::i64, Align(8));
-  SDValue Cap = DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, CPIdx);
+  SDValue Cap = DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, CPIdx);
   return DAG.getLoad(MVT::i64, DL, DAG.getEntryNode(), Cap,
                      MachinePointerInfo::getConstantPool(
                          DAG.getMachineFunction()),
@@ -7814,7 +7832,14 @@ bool CapstoneTargetLowering::shouldPreservePtrArith(const Function &F,
                                                     EVT PtrVT) const {
   // Only for AS200, whose pointer VT is the capability carrier. AS0 pointers
   // are ordinary 64-bit integers and gain nothing from PTRADD.
-  return PtrVT == MVT::i128;
+  return PtrVT == MVT::c128;
+}
+
+// A value that lives in a capability register. c128 is the capability VT; i128
+// is still listed only because __int128 shares GPR -- drop-i128 removes the
+// second half of every one of these tests.
+static bool isCapstoneCapabilityVT(MVT VT) {
+  return VT == MVT::c128 || VT == MVT::i128;
 }
 
 bool llvm::isCapstoneIntegerOffset(SDValue V) {
@@ -7879,290 +7904,31 @@ static SDValue getCapstoneCapabilityCursor(SDValue Cap, SelectionDAG &DAG,
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, XLenVT, IntrinsicID, Cap);
 }
 
-static SDValue narrowOffsetForCIncOffset(SDValue V, SelectionDAG &DAG,
-                                         const CapstoneSubtarget &Subtarget,
-                                         const SDLoc &DL,
-                                         unsigned &ExtOpcode) {
-  MVT XLenVT = Subtarget.getXLenVT();
 
-  if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
-       ExtOpcode == ISD::ANY_EXTEND) &&
-      V.getOperand(0).getValueType().isScalarInteger() &&
-      !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
-    if (ExtOpcode == ISD::SIGN_EXTEND)
-      return DAG.getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
-    if (ExtOpcode == ISD::ZERO_EXTEND)
-      return DAG.getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
-    if (V.getOperand(0).getSimpleValueType() == XLenVT)
-      return V.getOperand(0);
-    return DAG.getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
-  }
+static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
+                                      const CapstoneSubtarget &Subtarget);
 
-  if (V.getOpcode() == ISD::SIGN_EXTEND_INREG) {
-    SDValue Base = V.getOperand(0);
-    if (Base.getOpcode() == ISD::ANY_EXTEND &&
-        Base.getOperand(0).getValueType().isScalarInteger() &&
-        !Base.getOperand(0).getValueType().bitsGT(XLenVT))
-      Base = Base.getOperand(0);
-    if (Base.getValueType().isScalarInteger() &&
-        !Base.getValueType().bitsGT(XLenVT)) {
-      ExtOpcode = ISD::SIGN_EXTEND;
-      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT,
-                         DAG.getAnyExtOrTrunc(Base, DL, XLenVT),
-                         V.getOperand(1));
-    }
-  }
-
-  if (auto *Ld = dyn_cast<LoadSDNode>(V)) {
-    ISD::LoadExtType ExtType = Ld->getExtensionType();
-    EVT MemVT = Ld->getMemoryVT();
-    if (Ld->isSimple() && ExtType != ISD::NON_EXTLOAD &&
-        MemVT.isScalarInteger() && !MemVT.bitsGT(XLenVT)) {
-      if (ExtType == ISD::SEXTLOAD)
-        ExtOpcode = ISD::SIGN_EXTEND;
-      else if (ExtType == ISD::ZEXTLOAD)
-        ExtOpcode = ISD::ZERO_EXTEND;
-      else
-        ExtOpcode = ISD::ANY_EXTEND;
-
-      SDValue NarrowLoad =
-          DAG.getExtLoad(ExtType, DL, XLenVT, Ld->getChain(),
-                         Ld->getBasePtr(), MemVT, Ld->getMemOperand());
-      DAG.makeEquivalentMemoryOrdering(Ld, NarrowLoad);
-      return NarrowLoad;
-    }
-  }
-
-  return SDValue();
+// An i128 ADD or SUB is INTEGER arithmetic. Capability arithmetic is a PTRADD
+// on c128 and never reaches these, so there is no longer a question of which
+// operand "is" the pointer -- which is the whole point of giving capabilities
+// their own type. Do the arithmetic on the 64-bit value the carrier holds and
+// re-extend, exactly as the logical ops do.
+static SDValue lowerScalarI128AddSub(SDValue Op, SelectionDAG &DAG,
+                                     const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+  return lowerScalarI128Logical(Op, DAG, Subtarget);
 }
 
 static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
                         const CapstoneSubtarget &Subtarget) {
-  if (Op.getSimpleValueType() != MVT::i128)
-    return SDValue();
-
-  SDLoc DL(Op);
-  MVT XLenVT = Subtarget.getXLenVT();
-  SDValue Base = Op.getOperand(0);
-  SDValue Offset = Op.getOperand(1);
-
-  if (!isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) {
-    SDValue BaseCursor =
-        getCapstoneCapabilityCursor(Base, DAG, DL, Subtarget.getXLenVT());
-    SDValue OffsetCursor =
-        getCapstoneCapabilityCursor(Offset, DAG, DL, Subtarget.getXLenVT());
-    SDValue Diff = DAG.getNode(ISD::SUB, DL, Subtarget.getXLenVT(), BaseCursor,
-                               OffsetCursor);
-    return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Diff);
-  }
-
-  if (!isCapstoneIntegerOffset(Offset) || isCapstoneIntegerOffset(Base))
-    return SDValue();
-
-  SDValue NegOffset;
-  if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    NegOffset = DAG.getConstant(-C->getAPIntValue(), DL, MVT::i128);
-  } else {
-    unsigned ExtOpcode = Offset.getOpcode();
-    SDValue XLenOffset;
-
-    if (Offset.getOpcode() == ISD::SHL &&
-        isa<ConstantSDNode>(Offset.getOperand(1))) {
-      ExtOpcode = Offset.getOperand(0).getOpcode();
-      XLenOffset =
-          narrowOffsetForCIncOffset(Offset.getOperand(0), DAG, Subtarget, DL,
-                                    ExtOpcode);
-      if (XLenOffset) {
-        SDValue ShAmt = DAG.getZExtOrTrunc(Offset.getOperand(1), DL, XLenVT);
-        XLenOffset = DAG.getNode(ISD::SHL, DL, XLenVT, XLenOffset, ShAmt);
-      }
-    } else {
-      XLenOffset =
-          narrowOffsetForCIncOffset(Offset, DAG, Subtarget, DL, ExtOpcode);
-    }
-
-    // Fallback: any other integer-offset shape. Its value lives in the low XLen
-    // bits (byte offsets fit in XLen), so truncate rather than fall through to
-    // the generic i128 expansion, which would ptrtoint(lcc)/scalar-subtract/
-    // cincoffset-a-scalar and drop the base capability's tag.
-    if (!XLenOffset)
-      XLenOffset = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
-
-    SDValue Zero = DAG.getConstant(0, DL, XLenVT);
-    SDValue NegXLen = DAG.getNode(ISD::SUB, DL, XLenVT, Zero, XLenOffset);
-    NegOffset = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, NegXLen);
-  }
-
-  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, NegOffset);
+  return lowerScalarI128AddSub(Op, DAG, Subtarget);
 }
 
 SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
-  // 1. Check if this is an operation on 128 bits (our pointers/capabilities)
-  MVT VT = Op.getSimpleValueType();
-
-  // If this is not i128, return the operation unchanged to let LLVM handle it
-  // normally
-  if (VT != MVT::i128)
-    return Op; // Changed: return Op instead of SDValue()
-
-  // 2. Get context and operands
-  SDLoc DL(Op);
-  SDValue Base = Op.getOperand(0); // Base (i128)
-  SDValue Offset = Op.getOperand(1); // Offset (i128)
-
-  // ISD::ADD is commutative; DAGCombine may place the integer offset in
-  // operand(0). Restore canonical order: capability in Base, integer in
-  // Offset.
-  //
-  // Two complementary checks are used:
-  //   isIntegerOffset — recognizes values that are definitely integer offsets:
-  //     bare {S,Z,A}_EXTEND, constants, and scaled-index (shl(ext, k)).
-  //   isCapabilityValue — recognizes values that are definitely capabilities:
-  //     i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
-  //
-  // Swap when Base looks like an integer but Offset does not, OR when Offset
-  // looks like a capability but Base does not. This handles the spill-reload
-  // case where the capability comes back as a raw ISD::LOAD i128 and the
-  // integer index has already been scaled (shl) so neither operand is a bare
-  // extend.
-  {
-    // ISD::ADD is commutative; DAGCombine may place the integer offset in
-    // operand(0). Restore canonical order: capability in Base, integer in
-    // Offset.
-    //
-    // isIntegerOffset — recognizes values that are definitely integer offsets:
-    //   bare {S,Z,A}_EXTEND, constants, and scaled-index shl(ext, k).
-    // isCapabilityValue — recognizes values that are definitely capabilities:
-    //   i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
-    //   NOTE: CopyFromReg i128 is intentionally excluded — integers stored in
-    //   i128 registers appear as CopyFromReg i128 and must not be mistaken for
-    //   capabilities. Without this exclusion the swap incorrectly fires when an
-    //   integer (Base=CopyFromReg i128) faces a real capability (Offset=CIncOffset).
-    if ((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
-        (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base)))
-      std::swap(Base, Offset);
-  }
-
-  // Scalar i128 add, NOT capability+offset: when neither operand is a capability
-  // base, there is nothing to CIncOffset and emitting one would cincoffset an
-  // untagged scalar and fault (cscincoffsetimm rs1->tag). This is the shape a
-  // pointer DIFFERENCE plus a constant takes: lua_gettop's
-  // `top.p - (func.p + 1)` DAGCombines to `add(sub(top.p, func.p), -32)`, and the
-  // interpreter faults on the first C-API call through it.
-  //
-  // Offset is an integer offset (the constant/extend); the scalar Base appears in
-  // one of two forms depending on legalization order:
-  //   (a) already an integer offset itself (a sign_extended cursor difference), or
-  //   (b) still a raw ptr-ptr SUB of two capabilities (not yet lowered).
-  // Either way, do the arithmetic in the XLen domain and sign-extend back, exactly
-  // as lowerSUB's ptr-ptr branch does (byte offsets and their sums fit in XLen).
-  if (isCapstoneIntegerOffset(Offset)) {
-    MVT XLenVT = Subtarget.getXLenVT();
-    SDValue BaseScalar;
-    if (isCapstoneIntegerOffset(Base)) {
-      BaseScalar = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base); // form (a)
-    } else if (Base.getOpcode() == ISD::SUB &&
-               isCapstoneCapabilityValue(Base.getOperand(0)) &&
-               isCapstoneCapabilityValue(Base.getOperand(1))) {
-      // form (b): a pointer difference -- (cursor(A) - cursor(B)), scalar.
-      SDValue AC = getCapstoneCapabilityCursor(Base.getOperand(0), DAG, DL, XLenVT);
-      SDValue BC = getCapstoneCapabilityCursor(Base.getOperand(1), DAG, DL, XLenVT);
-      BaseScalar = DAG.getNode(ISD::SUB, DL, XLenVT, AC, BC);
-    }
-    if (BaseScalar) {
-      SDValue O = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
-      SDValue Sum = DAG.getNode(ISD::ADD, DL, XLenVT, BaseScalar, O);
-      return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Sum);
-    }
-  }
-
-  // --- Optimization for GEP scaling (loop_test fix) ---
-  // LLVM often emits: (add Base, (shl (sext i64:Index), ShAmt))
-  // We want:          (CIncOffset Base, (sext (shl i64:Index, ShAmt)))
-  // This moves the shift to 64-bit domain where it is legal (SLLI).
-
-  if (Offset.getOpcode() == ISD::SHL && Offset.getValueType() == MVT::i128) {
-    SDValue ShlVal = Offset.getOperand(0);
-    SDValue ShlAmt = Offset.getOperand(1);
-
-    // Restrict to the common GEP pattern where the shift amount is constant.
-    if (isa<ConstantSDNode>(ShlAmt)) {
-      auto extractShiftIndexToXLen = [&](SDValue V, unsigned &ExtOpcode) {
-        if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND) &&
-            V.getOperand(0).getValueType() == MVT::i64)
-          return V.getOperand(0);
-
-        if (V.getOpcode() == ISD::AND) {
-          auto *MaskC = dyn_cast<ConstantSDNode>(V.getOperand(1));
-          SDValue Ext = V.getOperand(0);
-          if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
-              Ext.getOperand(0).getValueType() == MVT::i64) {
-            APInt Mask = MaskC->getAPIntValue();
-            if (Mask.countl_zero() >= 64) {
-              ExtOpcode = ISD::ZERO_EXTEND;
-              return DAG.getNode(
-                  ISD::AND, DL, MVT::i64, Ext.getOperand(0),
-                  DAG.getConstant(Mask.trunc(64), DL, MVT::i64));
-            }
-          }
-        }
-
-        if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
-            isa<ConstantSDNode>(V.getOperand(1))) {
-          SDValue Inner = V.getOperand(0);
-          auto *InnerShlAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
-          auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
-          if (Inner.getOpcode() == ISD::SHL && InnerShlAmt &&
-              InnerShlAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
-            SDValue Ext = Inner.getOperand(0);
-            if (Ext.getOpcode() == ISD::ANY_EXTEND &&
-                Ext.getOperand(0).getValueType() == MVT::i64) {
-              unsigned NarrowBits = V.getValueType().getSizeInBits() -
-                                    OuterShAmt->getZExtValue();
-              if (NarrowBits > 0 && NarrowBits < 64 &&
-                  isPowerOf2_32(NarrowBits)) {
-                if (V.getOpcode() == ISD::SRA) {
-                  ExtOpcode = ISD::SIGN_EXTEND;
-                  return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, MVT::i64,
-                                     Ext.getOperand(0),
-                                     DAG.getValueType(MVT::getIntegerVT(NarrowBits)));
-                }
-
-                ExtOpcode = ISD::ZERO_EXTEND;
-                return DAG.getNode(
-                    ISD::AND, DL, MVT::i64, Ext.getOperand(0),
-                    DAG.getConstant(APInt::getLowBitsSet(64, NarrowBits), DL,
-                                    MVT::i64));
-              }
-            }
-          }
-        }
-
-        return SDValue();
-      };
-
-      unsigned ExtOpc = ShlVal.getOpcode();
-      SDValue Index64 = extractShiftIndexToXLen(ShlVal, ExtOpc);
-
-      if (Index64) {
-        // Normalize shift amount to i64 (pointer width for arithmetic)
-        SDValue ShAmt64 = DAG.getZExtOrTrunc(ShlAmt, DL, MVT::i64);
-
-        // 1. Perform shift in i64 domain (Standard RISC-V SLLI)
-        SDValue NewShift64 = DAG.getNode(ISD::SHL, DL, MVT::i64, Index64,
-                                         ShAmt64);
-
-        // 2. Extend the result back to i128.
-        Offset = DAG.getNode(ExtOpc, DL, MVT::i128, NewShift64);
-      }
-    }
-  }
-  // ----------------------------------------------------
-
-  // 3. Create a new CIncOffset node
-  // Note: we pass MVT::i128. This matches the .td file definition.
-  // We pass Op1 (offset) as i128, even if it's a constant.
-  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
+  if (Op.getSimpleValueType() != MVT::i128)
+    return Op;
+  return lowerScalarI128AddSub(Op, DAG, Subtarget);
 }
 
 static SDValue normalizeScalarI128ShiftOperandToXLen(
@@ -8452,10 +8218,25 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
   }
 
   SDValue ShiftInput = Op.getOperand(0);
-  bool IsPointerDifference =
-      ShiftInput.getOpcode() == ISD::SUB &&
-      !isCapstoneIntegerOffset(ShiftInput.getOperand(0)) &&
-      !isCapstoneIntegerOffset(ShiftInput.getOperand(1));
+  // The difference of two XLen-wide values, widened into the carrier. This used
+  // to ask whether the operands "looked like" capabilities, which stopped being
+  // answerable once ptrtoint produced an ordinary widened address -- and got it
+  // wrong in the direction that turns a negative pointer difference into a large
+  // positive one. The shape is decidable instead: both operands are extensions
+  // of XLen values.
+  // ponytail: the difference is taken to fit in XLen, which is the same rule C
+  // applies to ptrdiff_t. A difference that genuinely needs XLen+1 bits (two
+  // addresses more than 2^63 apart) would need the full 128-bit shift this
+  // target cannot express.
+  auto isXLenExtension = [&](SDValue V) {
+    return (V.getOpcode() == ISD::SIGN_EXTEND ||
+            V.getOpcode() == ISD::ZERO_EXTEND ||
+            V.getOpcode() == ISD::ANY_EXTEND) &&
+           V.getOperand(0).getValueType() == XLenVT;
+  };
+  bool IsPointerDifference = ShiftInput.getOpcode() == ISD::SUB &&
+                             isXLenExtension(ShiftInput.getOperand(0)) &&
+                             isXLenExtension(ShiftInput.getOperand(1));
   unsigned ExtOpcode = Op.getOperand(0).getOpcode();
   SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
       Op.getOperand(0), DAG, Subtarget, DL, ExtOpcode);
@@ -8524,6 +8305,15 @@ static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
       Op.getOperand(1), DAG, Subtarget, DL, RHSExtOpcode);
   if (!LHS || !RHS)
     return SDValue();
+
+  // ANY_EXTEND says the high half is don't-care, so it agrees with whichever
+  // rule the other operand needs -- this is not one of the mixed extends the
+  // bail below exists for, and re-extending under the other operand's rule is a
+  // refinement of undef, not a guess.
+  if (LHSExtOpcode == ISD::ANY_EXTEND && RHSExtOpcode != ISD::ANY_EXTEND)
+    LHSExtOpcode = RHSExtOpcode;
+  else if (RHSExtOpcode == ISD::ANY_EXTEND && LHSExtOpcode != ISD::ANY_EXTEND)
+    RHSExtOpcode = LHSExtOpcode;
 
   auto IsUnsignedExt = [](unsigned Opcode) {
     return Opcode == ISD::ZERO_EXTEND || Opcode == ISD::ANY_EXTEND;
@@ -8676,8 +8466,8 @@ SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
   MVT VT = Op0.getSimpleValueType();
   SDLoc DL(Op);
 
-  if (VT == MVT::i128) {
-    // We want to compare two i128 (Capabilities).
+  if (isCapstoneCapabilityVT(VT)) {
+    // We want to compare two capabilities.
     // For basic C support (pointer equality, null check)
     // we can compare their addresses (lower 64 bits).
 
@@ -9576,7 +9366,7 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   }
   case ISD::SETCC: {
     MVT OpVT = Op.getOperand(0).getSimpleValueType();
-    if (OpVT == MVT::i128)
+    if (isCapstoneCapabilityVT(OpVT))
       return lowerSETCC(Op, DAG);
 
     if (OpVT.isScalarInteger()) {
@@ -10334,10 +10124,10 @@ SDValue CapstoneTargetLowering::lowerGlobalAddress(
     int Index = getGpCaptableIndex(GV);
     if (Index >= 0) {
       // Address of the cap-table slot: gp with cursor at index * capWidth.
-      SDValue GP = DAG.getRegister(Capstone::X3, MVT::i128);
+      SDValue GP = DAG.getRegister(Capstone::X3, MVT::c128);
       SDValue Slot = DAG.getNode(
-          CapstoneISD::CIncOffset, DL, MVT::i128, GP,
-          DAG.getConstant((int64_t)Index * 16, DL, MVT::i128));
+          CapstoneISD::CIncOffset, DL, MVT::c128, GP,
+          DAG.getConstant((int64_t)Index * 16, DL, MVT::i64));
       // Load the per-global data capability from the table. It is set up once at
       // domain entry and read-only thereafter -> invariant/dereferenceable, and
       // chained off the entry node so it can float freely. Selection folds the
@@ -10347,12 +10137,12 @@ SDValue CapstoneTargetLowering::lowerGlobalAddress(
           MachinePointerInfo(), MachineMemOperand::MOLoad |
                                     MachineMemOperand::MODereferenceable |
                                     MachineMemOperand::MOInvariant,
-          LLT(MVT::i128), Align(16));
-      SDValue Ptr = DAG.getLoad(MVT::i128, DL, DAG.getEntryNode(), Slot, MMO);
+          LLT(MVT::c128), Align(16));
+      SDValue Ptr = DAG.getLoad(MVT::c128, DL, DAG.getEntryNode(), Slot, MMO);
       // Interior offset (global + constant): advance the loaded capability.
       if (Offset != 0)
-        Ptr = DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Ptr,
-                          DAG.getConstant(Offset, DL, MVT::i128));
+        Ptr = DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::c128, Ptr,
+                          DAG.getConstant(Offset, DL, MVT::i64));
       return Ptr;
     }
     // Not an indexable domain global (function ref, declaration, unsized,
@@ -10368,7 +10158,7 @@ SDValue CapstoneTargetLowering::lowerGlobalAddress(
   // 2. Create the LGA node.
   // This node tells the selector: "Here is the symbol (TargetAddr),
   // make me a valid Capability Pointer out of it, using GP".
-  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, TargetAddr);
 }
 
 SDValue CapstoneTargetLowering::lowerBlockAddress(
@@ -10378,7 +10168,7 @@ SDValue CapstoneTargetLowering::lowerBlockAddress(
   // Create TargetBlockAddress (i64)
   SDValue TargetAddr = DAG.getTargetBlockAddress(BA, MVT::i64, 0, 0);
   // Wrap in LGA
-  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, TargetAddr);
 }
 
 SDValue CapstoneTargetLowering::lowerConstantPool(
@@ -10391,7 +10181,7 @@ SDValue CapstoneTargetLowering::lowerConstantPool(
   // LGA:i128. For ConstantPool:i64 (e.g. division-by-constant magic numbers),
   // the user's LOAD node uses this capability as the address operand directly,
   // matching the Capstone `ld rd, 0(cap_base)` pattern.
-  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, TargetAddr);
 }
 
 SDValue CapstoneTargetLowering::lowerJumpTable(SDValue Op,
@@ -10734,8 +10524,8 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
     // Special case for a select of 2 constants that have a difference of 1.
     // This materialises the result via ISD::ADD/SUB on VT, an integer transform
     // that is not valid for capability (i128) selects -- those must stay on the
-    // branch-based path (see the VT == MVT::i128 caller below).
-    if (VT != MVT::i128 && isa<ConstantSDNode>(TrueV) &&
+    // branch-based path (see the capability caller below).
+    if (!isCapstoneCapabilityVT(VT) && isa<ConstantSDNode>(TrueV) &&
         isa<ConstantSDNode>(FalseV) && CCVal == ISD::SETLT) {
       const APInt &TrueVal = TrueV->getAsAPIntVal();
       const APInt &FalseVal = FalseV->getAsAPIntVal();
@@ -10894,7 +10684,7 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
   // Capability selects must remain on the branch-based path below. Reusing the
   // existing SELECT_CC lowering avoids integer/bitwise transforms that are not
   // valid for capabilities.
-  if (VT == MVT::i128) {
+  if (isCapstoneCapabilityVT(VT)) {
     if (SDValue V = lowerCapabilitySelect())
       return V;
     return lowerBranchSelect();
@@ -25002,7 +24792,7 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // compiler-generated ExternalSymbol callees (RTLIB/libc helpers) through
     // the same GP-relative LGA path we already use for GlobalAddress nodes.
     SDValue TargetAddr = DAG.getTargetExternalSymbol(S->getSymbol(), MVT::i64, 0);
-    Callee = DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
+    Callee = DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, TargetAddr);
   }
 
   // The first call operand is the chain and the second is the target address.
@@ -26887,7 +26677,7 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
   SDLoc dl(Op);
   EVT VT = Op.getValueType();
 
-  if (VT == MVT::i128) {
+  if (isCapstoneCapabilityVT(VT.getSimpleVT())) {
     SDValue Chain = Op.getOperand(0);
     SDValue Size = Op.getOperand(1);
     Align Alignment = cast<ConstantSDNode>(Op.getOperand(2))->getAlignValue();
@@ -26916,8 +26706,13 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
     if (TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown)
       OffsetXLen = DAG.getNode(ISD::SUB, dl, XLenVT,
                                DAG.getConstant(0, dl, XLenVT), SizeXLen);
-    SDValue Offset = DAG.getNode(ISD::SIGN_EXTEND, dl, VT, OffsetXLen);
-    SDValue NewSP = DAG.getNode(ISD::ADD, dl, VT, SP, Offset);
+    // c128 says outright that SP is a capability and the displacement an
+    // integer, so the node is a CIncOffset and the offset needs no widening.
+    SDValue NewSP =
+        VT == MVT::c128
+            ? DAG.getNode(CapstoneISD::CIncOffset, dl, VT, SP, OffsetXLen)
+            : DAG.getNode(ISD::ADD, dl, VT, SP,
+                          DAG.getNode(ISD::SIGN_EXTEND, dl, VT, OffsetXLen));
 
     // C1 stack narrowing (gated on -capstone-shrink-stack): the real stack
     // pointer (X2) must keep the broad bounds it needs for further allocations,
@@ -26936,12 +26731,17 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
       SDValue Cursor = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, XLenVT, CursorId,
                                    Ptr);
       SDValue EndXLen = DAG.getNode(ISD::ADD, dl, XLenVT, Cursor, SizeXLen);
-      SDValue BaseI128 = DAG.getZExtOrTrunc(Cursor, dl, MVT::i128);
-      SDValue EndI128 = DAG.getZExtOrTrunc(EndXLen, dl, MVT::i128);
+      // SHRINK's bounds operands are plain XLen registers; only the i128
+      // carrier ever needed them widened.
+      SDValue BaseArg = Cursor, EndArg = EndXLen;
+      if (VT != MVT::c128) {
+        BaseArg = DAG.getZExtOrTrunc(Cursor, dl, MVT::i128);
+        EndArg = DAG.getZExtOrTrunc(EndXLen, dl, MVT::i128);
+      }
       SDValue ShrinkId =
           DAG.getTargetConstant(Intrinsic::capstone_cap_shrink, dl, XLenVT);
       return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT, ShrinkId, Ptr,
-                         BaseI128, EndI128);
+                         BaseArg, EndArg);
     };
 
     if (hasInlineStackProbe(MF)) {

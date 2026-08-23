@@ -311,6 +311,21 @@ public:
   /// is exactly what PTRADD models: base is the pointer, offset is an integer.
   /// Keeping it as PTRADD means nothing downstream has to infer which operand
   /// is the capability.
+
+  // An AS200 pointer is a capability, so its VT is not an integer. The default
+  // is MVT::getIntegerVT(DL.getPointerSizeInBits(AS)) -- it uses the address
+  // space to fetch a size and then discards it.
+  MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const override {
+    if (AS == 200)
+      return MVT::c128;
+    return TargetLowering::getPointerTy(DL, AS);
+  }
+  MVT getPointerMemTy(const DataLayout &DL, uint32_t AS = 0) const override {
+    if (AS == 200)
+      return MVT::c128;
+    return TargetLowering::getPointerMemTy(DL, AS);
+  }
+
   bool shouldPreservePtrArith(const Function &F, EVT PtrVT) const override;
 
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,

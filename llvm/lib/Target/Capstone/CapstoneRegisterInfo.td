@@ -238,7 +238,13 @@ class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
 }
 
 class GPRRegisterClass<dag regList>
-    : CapstoneRegisterClass<[i128, XLenVT, XLenFVT, i32, i16], 128, regList> {
+    // c128 goes AFTER i128, not before it. Generic code takes a register class's
+    // FIRST legal type as representative -- inline asm's RegVT is one -- and a
+    // capability is not an integer, so leading with it makes every "r" operand
+    // come out capability-typed and getCopyFromParts reject it. XLenVT first
+    // would be better still, and TableGen cannot infer the patterns with that
+    // order. drop-i128 will have to answer this properly.
+    : CapstoneRegisterClass<[i128, c128, XLenVT, XLenFVT, i32, i16], 128, regList> {
   let RegInfos = XLenRI;
 }
 

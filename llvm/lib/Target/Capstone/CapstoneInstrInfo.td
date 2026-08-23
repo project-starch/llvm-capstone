@@ -196,16 +196,17 @@ def capstone_split_gpr_pair : RVSDNode<"SplitGPRPair",
 /// Name in quotes "CapstoneISD::CIncOffset"
 /// must match what getTargetNodeName returns.
 /// Profile types: 1 result, 2 operands.
-/// All types i128 (to avoid type conflicts).
+/// Result and base are capabilities; the offset is a plain XLen integer.
+/// That is the whole point of c128: neither operand has to be guessed at.
 def capstone_cincoffset : RVSDNode<"CIncOffset",
-                                   SDTypeProfile<1, 2, [SDTCisVT<0, i128>,
-                                                        SDTCisVT<1, i128>,
-                                                        SDTCisVT<2, i128>]>>;
+                                   SDTypeProfile<1, 2, [SDTCisVT<0, c128>,
+                                                        SDTCisVT<1, c128>,
+                                                        SDTCisVT<2, i64>]>>;
 
 def capstone_lga : SDNode<"CapstoneISD::LGA",
                           SDTypeProfile<1, 1,
                                         // Result (Pointer)
-                                        [SDTCisVT<0, i128>,
+                                        [SDTCisVT<0, c128>,
                                         // Operand (TargetAddr)
                                         SDTCisVT<1, i64>]>>;
                                                      
@@ -1745,14 +1746,13 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
-// NOTE (2026-07-31): this instantiation does NOT cover RV64. Both
-// Select_GPRCAP_Using_CC_GPR entries in the generated matcher come out guarded by
-// `!Subtarget->is64Bit()`, so on capstone64 an i128 select has no pattern at all and ISel
-// aborts with "Cannot select: i128 = CapstoneISD::SELECT_CC". Adding explicit i64-typed
-// Pats here does not help -- TableGen drops those too, silently, with no
-// --warn-on-skipped-patterns diagnostic. Not yet root-caused; see
-// agent-handoff/history/ for the investigation and the two-line reproducer.
-defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, i128>;
+// NOTE: this instantiation only covers RV32. A pseudo that mixes a HwMode type
+// (XLenVT) with a fixed one (c128) gets only the RV32 expansion and the RV64
+// pattern is dropped with no diagnostic; typing the compare i64 instead fails
+// differently, because GPR has no i64 under RV32. A capability select therefore
+// never matches here on capstone64 -- lowerSELECT expands it to a branch
+// instead, which is the path i128 selects already took.
+defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, c128>;
 
 class SelectCompressOpt<CondCode Cond>
     : Pat<(capstone_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
@@ -2411,9 +2411,9 @@ def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
                   (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
                   "stc", "$rs2, ${imm12}(${rs1})">;
 
-// "When we see a load/store of type i128 -> use CLC/CSC instruction"
-def : LdPat<load, LDC, i128>;
-def : StPat<store, STC, GPR, i128>;
+// "When we see a load/store of a capability -> use LDC/STC"
+def : LdPat<load, LDC, c128>;
+def : StPat<store, STC, GPR, c128>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 // CIncOffset (Register form): increment the cursor of a capability

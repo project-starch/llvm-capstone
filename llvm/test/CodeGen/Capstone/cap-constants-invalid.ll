@@ -13,9 +13,13 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %t/gep-truncates.ll -o - | FileCheck %s --check-prefix=GEP
 
 ; DIRECT: LLVM ERROR: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as capabilities; capabilities are unforgeable
-; INCOFFSET: LLVM ERROR: Capstone PureCap: CIncOffset displacement must fit in 64 bits
+; The other three arrive at the shared guard in CapstoneDAGToDAGISel::Select, which
+; refuses the constant before the generated matcher reads it as an int64_t. They used
+; to be refused further along, at three different sites with three different messages,
+; because each shape reached a different piece of the capability-arithmetic guessing.
+; INCOFFSET: LLVM ERROR: Capstone PureCap: Address displacement must fit in 64 bits
 ; SCALAR-LOAD: LLVM ERROR: Capstone PureCap: Address displacement must fit in 64 bits
-; CAP-LOAD: LLVM ERROR: Capstone PureCap: Folded load/store displacement must fit in 64 bits
+; CAP-LOAD: LLVM ERROR: Capstone PureCap: Address displacement must fit in 64 bits
 
 ;--- direct.ll
 define ptr addrspace(200) @wide_const() {
