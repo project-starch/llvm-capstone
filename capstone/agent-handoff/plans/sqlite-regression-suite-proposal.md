@@ -2174,3 +2174,88 @@ Next: convert the hang into a returning answer. A build that checks `pWInfo == N
 `SLT-SUMMARY` and `M5 oom=/malloc=/free=`. Non-zero `oom` means an allocation failed and the
 question becomes why it failed on silicon and not under QEMU with an identical heap; zero `oom`
 means the NULL came from somewhere else.
+
+## RETRACTION: arm position is a confound, and `tval` is an UNFIRED instrument
+
+An adversarial audit killed the width/traffic reversal AND undermined the NULL reading it
+reversed. **Both readings are unsupported. Do not act on either.**
+
+### 1. Arm position, 5 for 5
+
+Every "matched pair" this session compared a probed/passing arm at **slot 2** against a
+wedging arm at **slot 3**. Those arms differ in slot, domain id, DBAS, rgid pair, and all
+allocator/rev-node state carried over from the previous arm.
+
+| boot | arm 2 | arm 3 |
+|---|---|---|
+| 19 | negative-control `rc=0` | p8_selfjoin WEDGE |
+| 20 | p8_trivial `rc=0` | p8_empty WEDGE |
+| 21 | q_one `rc=0` | q_two WEDGE |
+| 22 | q_one `rc=0` | q_two WEDGE |
+| 24 | q_two (PROBED) `rc=0` | q_two WEDGE |
+
+**Arm 3 has never completed; arm 2 has always completed.** Boots 21-22 are decisive: the
+UN-PROBED binary completes at arm 2. Nothing on record has run the probed build at arm 3, or
+un-probed `q_two` at arm 2 -- and boot 24's preflight warned a slot was free.
+
+The wedge is also **input-independent**: `p8_empty` (one CREATE TABLE, no rows) wedges at the
+same instruction as the self-join. Hard to square with "this query's pWInfo", easy to square
+with position.
+
+**So the q_one/q_two "matched pair" was never matched.** The one-line `diff` was real; the arm
+slot was not held constant. That invalidates the minimal-reproducer reasoning built on it.
+
+### 2. `tval` has never been shown to fire on the FLU path on this silicon
+
+Every latched `tval` at a capability wedge in `slt-board-out*.txt` reads 0x00 in all eight
+bytes. The one non-zero `tval` on record came from **mcause 15**, a store page fault, whose tval
+comes from the LSU, not from `ex_stage.sv:488`. So the FLU capability path has never produced a
+non-zero tval here. **A zero from an unfired instrument reads exactly like a finding.**
+
+What I called a "positive control" was offline simulation of my own PARSING logic. That is not
+the hardware path, and conflating them is the same error this file warns about.
+
+Directed control that settles it, one arm:
+
+    li a0, 0xBEEF ; cincoffsetimm a0, a0, 8    -> must trap mcause 25 with tval == 0xBEEF
+
+**Until that fires, every `tval=0` is NO DATA**, and both the "software NULL" reading and the
+"manufactured zero" reversal rest on it.
+
+### 3. The probe cannot see what the fault checks
+
+`CINCOFFSETIMM` raises on `cap_type == NOT_CAP` and never consults the cursor
+(`capstone_flu_unit.anvil`). A granule with a good non-zero cursor and a clobbered `cap_type`
+reads NON-ZERO to a scalar `ld` and still faults the `ldc`+`cincoffsetimm` -- the S-07 signature
+verbatim. So the 8-byte read cannot distinguish tag-loss from value-loss, which are the two live
+hypotheses. The width claim was unearned.
+
+Also, probed vs un-probed differ in `stc`->`ldc` distance (19 vs 44 instructions) AND the probed
+build pre-touches the granule. So even if the probe mattered, naming the LOAD path specifically
+was unsupported; a store-side/commit-latency effect fits equally.
+
+### What SURVIVES the audit
+
+* Probe mechanics: guard runs, polarity correct, counter incremented before the test, and the
+  `ldc`+`cincoffsetimm` pair still EXISTS and executed 5 times in the probed build -- nothing was
+  optimised away.
+* `caller_arg` is plausible and cross-checks against QEMU at the SAME allocation offset
+  (`0x3E5CE0`) from a different base.
+* Spill layout is identical between builds (`s0-0x50/-0x60/-0x70/-0x74/-0x90/-0x98`), so
+  "different spill layout" is dead as an alternative.
+* The fault is deterministic: same instruction, function+0x8C, 5 boots, 2 binaries, 6 inputs.
+
+### Artifact hygiene problem to fix
+
+`/tmp/capstone/slt-qemu-clamp/` is a REUSED build directory -- its `sqlite_silicon.dom` and
+`sqlite-slt.log` are overwritten by every QEMU run, so QEMU reference numbers cited from it are
+not reproducible afterwards. Worse: the "probe does not perturb behaviour" check compared against
+`277b73f08742a71b`, a DIFFERENT un-probed binary from the one that wedged on boot 24
+(`c7eff8412`). **The exact wedging binary has never been observed to complete anywhere.**
+Future QEMU references need a per-run output directory.
+
+### Next boot: break the confound, and fire the instrument
+
+Four arms: `sqbase` control, un-probed `q_two` at **arm 2**, probed `q_two` at **arm 3**, and the
+`li a0,0xBEEF; cincoffsetimm` tval control. If position predicts the outcome, the probe is
+irrelevant and the real variable is domain slot / DBAS / carried-over allocator state.
