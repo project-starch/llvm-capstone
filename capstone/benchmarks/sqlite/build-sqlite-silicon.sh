@@ -1614,6 +1614,60 @@ PYVDBE
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_VDBE_CLAMP=${CAPSTONE_VDBE_CLAMP}"
 fi
 
+# CAPSTONE_WHERE_NULL_PROBE=1 -- the SQLite silicon wedge is a NULL pWInfo reaching
+# `&pWInfo->sWC` (the first statement of sqlite3WhereCodeOneLoopStart). tval=0 at the trap proves
+# the value is genuinely zero, not a de-tagged pointer. This probe answers the ONE question that
+# splits software from hardware, and it makes the run RETURN instead of wedging:
+#
+#   caller_arg != 0 and callee sees 0  -> the argument lost its DATA in transit. Hardware.
+#   caller_arg == 0                    -> software: pWInfo was already NULL at the call site.
+#
+# It also reports the call count and which iLevel first saw NULL, so "call #1 vs call #2" --
+# which could not be settled from mepc alone -- is answered in the same boot.
+if [[ -n "${CAPSTONE_WHERE_NULL_PROBE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYWHERE'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+
+# 1. Callee guard. Converts the hang into a returning answer -- a wedge yields one bit, a
+#    returning wrong answer is bisectable and carries the counters out with it.
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("WHERE_NULL_PROBE: callee anchor count %d -- patch shape changed" % s.count(CALLEE))
+s = s.replace(CALLEE, CALLEE + """
+  capstone_where_callee_calls++;
+  if( pWInfo==0 ){
+    capstone_where_null++;
+    if( capstone_where_null_level==0 ) capstone_where_null_level = (unsigned long)iLevel + 1;
+    return notReady;
+  }""", 1)
+
+# 2. Caller record, immediately before the call, so the two views are of the SAME invocation.
+CALLER = "    notReady = sqlite3WhereCodeOneLoopStart(pParse,v,pWInfo,ii,pLevel,notReady);"
+if s.count(CALLER) != 1:
+    sys.exit("WHERE_NULL_PROBE: caller anchor count %d -- patch shape changed" % s.count(CALLER))
+s = s.replace(CALLER, """    capstone_where_caller_calls++;
+    capstone_where_caller_arg = (unsigned long)(pWInfo);
+""" + CALLER, 1)
+
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("WHERE_NULL_PROBE: amalgamation prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_where_null, capstone_where_null_level, capstone_where_caller_arg, capstone_where_caller_calls, capstone_where_callee_calls;\n", 1)
+open(path, "w").write(s)
+print("   WHERE_NULL probe injected (callee guard + caller record)")
+PYWHERE
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_WHERE_NULL_PROBE=1"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on

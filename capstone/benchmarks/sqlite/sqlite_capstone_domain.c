@@ -315,6 +315,11 @@ unsigned long capstone_vdbe_clamp_n =
    amalgamation. Defined unconditionally: a global that exists only under the same knob
    as its writer is the defect shape that made capstone_real_db read zero for a boot. */
 unsigned long capstone_m5_oom, capstone_m5_malloc, capstone_m5_free;
+/* WHERE_NULL probe. Declared unconditionally so the amalgamation's externs always resolve;
+   the REPORT below is gated on the macro, because a line that appears whether or not the probe
+   was compiled in cannot distinguish "no NULL" from "not measured". */
+unsigned long capstone_where_null, capstone_where_null_level, capstone_where_caller_arg,
+              capstone_where_caller_calls, capstone_where_callee_calls;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6123,6 +6128,27 @@ static unsigned capstone_slt_entry(void) {
       capstone_slt_out(0, b + i);
     }
     capstone_slt_out(0, "\n"); }
+#ifdef CAPSTONE_WHERE_NULL_PROBE
+  /* caller_arg is the cursor of pWInfo AS THE CALLER SAW IT, recorded immediately before the
+     call; null/level/calls are the callee's view. Non-zero caller_arg with a NULL callee view
+     means the argument lost its data in transit -- hardware. Zero caller_arg means pWInfo was
+     already NULL in the caller -- software. */
+  { static const char *const wn[5] = {"WHERE null=", " level=", " caller_arg=",
+                                      " caller_calls=", " callee_calls="};
+    unsigned long wv[5];
+    int k;
+    wv[0] = capstone_where_null;         wv[1] = capstone_where_null_level;
+    wv[2] = capstone_where_caller_arg;   wv[3] = capstone_where_caller_calls;
+    wv[4] = capstone_where_callee_calls;
+    for (k = 0; k < 5; k++) {
+      char b[24]; int i = (int)sizeof b; unsigned long v = wv[k];
+      capstone_slt_out(0, wn[k]);
+      b[--i] = '\0'; if (!v) b[--i] = '0';
+      while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+      capstone_slt_out(0, b + i);
+    }
+    capstone_slt_out(0, "\n"); }
+#endif
 #ifdef CAPSTONE_VDBE_CLAMP
   /* Reported unconditionally, including the nothing-fired case: whether the clamp was reached
      at all is part of the measurement, and a missing line would be indistinguishable from an
