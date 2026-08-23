@@ -117,15 +117,34 @@ this is **latent**: real, in silicon, with no exploit path from the monitor as i
 **Verified in simulation only.** Nobody has executed `SEAL` with an undersized or misaligned
 region on the board.
 
-**The cause is UNRESOLVED, and the distinction decides ownership.** The sibling line
-`capstone_flu_unit.anvil:165` (`perm&3'd6!=3'd6`) is a bare relational next to a bitwise operator
-and generates **correctly**, which rules out a simple flat-associativity story. The model
-consistent with every observation is that Anvil binds logical and bitwise operators **tighter**
-than the comparison operators — the opposite of C, and internally self-consistent. Under that
-reading the defect is in the **RTL source**, which relies on C precedence that Anvil does not use,
-rather than in the compiler. We could not settle it: there is no Anvil compiler in the tree
-(`ANVILC ?= anvil`, not present). Reading the upstream precedence table, or running `anvil` on a
-five-line case, ends the question. **Either way the fix is the same one line of parentheses.**
+**The cause is now LOCALISED to an Anvil precedence rule, and the defect is in the RTL source.**
+An earlier version of this report proposed that Anvil binds logical and bitwise operators tighter
+than comparison operators generally. **That model is too broad and is refuted in-tree**, by
+`capstone_flu_unit.anvil:182` (`SHRINK`): an unparenthesised `==`/`!=` chain next to `||` that
+generates **correctly** as three separate comparisons OR'd together
+(`capstone_flu_unit.anvil.sv:2328-2338`). Equality binds tighter than `||`, exactly as in C.
+
+The narrower rule fits every observation: **relational operators `<` `>` `<=` `>=` have the
+LOWEST precedence in Anvil**, below `||`/`&&`, which in turn sit below `==`/`!=`, which sit below
+`&` (the `perm&3'd6!=3'd6` sibling at `:165`, which also generates correctly). So `a < b || c`
+parses as `a < (b || c)`; with `b` a nonzero constant the disjunction folds to `1` and the guard
+becomes `a == 0` — precisely the collapse above.
+
+This makes it a **source** defect: the line relies on C precedence that Anvil does not use. It has
+not been confirmed against an Anvil precedence table, because there is no Anvil compiler in the
+tree (`ANVILC ?= anvil`, not present) — reading the upstream table, or running `anvil` on a
+five-line case, would close the last gap.
+
+**The class has one other instance, and it is not in SEAL.** A sweep for unparenthesised
+relationals sharing a line with `||`/`&&` across `core/anvil_build/` returns exactly two hits: the
+line above, and `capstone_dom_switcher.anvil:115`, whose guard collapses to `cur_idx == 0`. That
+one is latent (its enclosing branch is unreachable on this RTL) and is **not part of this issue** —
+it is written up separately at
+`capstone/agent-handoff/history/23-08-2026_22-40-00_anvil-relational-precedence-dom-switcher.md`.
+Everything else in the tree already parenthesises its relationals, which is why the class stayed
+invisible.
+
+**Either way the fix here is the same one line of parentheses.**
 
 **Which minimum is authoritative is also unresolved**, and matters before anyone "fixes" the RTL:
 
