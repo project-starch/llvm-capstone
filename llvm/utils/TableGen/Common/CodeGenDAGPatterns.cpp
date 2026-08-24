@@ -38,7 +38,11 @@ using namespace llvm;
 #define DEBUG_TYPE "dag-patterns"
 
 static inline bool isIntegerOrPtr(MVT VT) {
-  return VT.isInteger() || VT == MVT::iPTR;
+  // A capability IS a pointer type. Leaving it out makes iPTR intersect to the
+  // empty set against a capability-typed operand, which TableGen reports as
+  // "Type set is empty for each HW mode" -- the reason a target whose addresses
+  // are capabilities cannot type its addressing modes.
+  return VT.isInteger() || VT.isCheriCapability() || VT == MVT::iPTR;
 }
 static inline bool isFloatingPoint(MVT VT) { return VT.isFloatingPoint(); }
 static inline bool isVector(MVT VT) { return VT.isVector(); }
@@ -334,7 +338,10 @@ bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
   // Note: must be non-overlapping
   using WildPartT = std::pair<MVT, std::function<bool(MVT)>>;
   static const WildPartT WildParts[] = {
-      {MVT::iPTR, [](MVT T) { return T.isScalarInteger() || T == MVT::iPTR; }},
+      {MVT::iPTR,
+       [](MVT T) {
+         return T.isScalarInteger() || T.isCheriCapability() || T == MVT::iPTR;
+       }},
   };
 
   bool Changed = false;

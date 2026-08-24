@@ -781,11 +781,12 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Register SrcCap = getCapabilityFormOf(SrcReg);
     if (SrcCap == DstReg)
       return;
-    // Also movc: the source may be a capability the compiler is tracking as an
-    // integer (the mirror of the case below), and dropping its tag here would
-    // be the same fault one instruction later.
-    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
-        .addReg(SrcCap, KillFlag | getRenamableRegState(RenamableSrc));
+    // inttoptr: an integer becomes an untagged capability.
+    Register DstAddr = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
+    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstAddr)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
+        .addImm(0)
+        .addReg(DstReg, RegState::ImplicitDefine);
     return;
   }
   if (Capstone::GPRRegClass.contains(DstReg) &&
@@ -794,18 +795,14 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     // Same hardware register: nothing to do.
     if (SrcAddr == DstReg)
       return;
-    // Different register, and the move must PRESERVE THE TAG. `addi rd, rs, 0`
-    // would not, and the reason a capability is asked for as an integer here is
-    // usually that it is about to be a memory base -- every access on this
-    // target goes through a capability, so an untagged base faults ("Cap mem
-    // access requires capability"). Since C and X are the same register file,
-    // movc on the capability forms is exactly the right instruction; the extra
-    // tag on a register the compiler calls an integer is harmless, and the first
-    // ALU write to it clears the tag anyway.
-    Register DstCap = getCapabilityFormOf(DstReg);
-    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstCap)
-        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
-        .addReg(DstReg, RegState::ImplicitDefine);
+    // Different register: read the address into it. This DROPS the tag, and
+    // that is correct -- the only reason a capability is wanted in an integer
+    // register is ptrtoint, which discards authority by definition. It used to
+    // also happen for memory bases, where dropping the tag faults; those no
+    // longer cross classes, because the load/store base operand is GPCR.
+    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
+        .addReg(SrcAddr, KillFlag | getRenamableRegState(RenamableSrc))
+        .addImm(0);
     return;
   }
 

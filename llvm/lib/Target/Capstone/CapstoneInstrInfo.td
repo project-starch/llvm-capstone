@@ -712,8 +712,15 @@ class BranchCC_rri<bits<3> funct3, string opcodestr>
 }
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+// The base is a CAPABILITY. Every memory access on this target goes through one
+// -- there is no integer addressing mode -- and typing it GPR made the register
+// allocator copy the pointer into an integer register first. NEITHER instruction
+// available for that copy is correct: `addi` drops the tag, and `movc` and
+// `cincoffsetimm` both CONSUME a linear source. A linear capability cannot be
+// copied, by design, so the allocator must never be asked to; the base stays in
+// its class instead.
 class Load_ri<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
-    : RVInstI<funct3, OPC_LOAD, (outs rty:$rd), (ins GPRMem:$rs1, simm12:$imm12),
+    : RVInstI<funct3, OPC_LOAD, (outs rty:$rd), (ins GPCRMem:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 
 class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
@@ -729,7 +736,7 @@ class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
 class Store_rri<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
     : RVInstS<funct3, OPC_STORE, (outs),
-              (ins rty:$rs2, GPRMem:$rs1, simm12:$imm12),
+              (ins rty:$rs2, GPCRMem:$rs1, simm12:$imm12),
               opcodestr, "$rs2, ${imm12}(${rs1})">;
 
 class HStore_rr<bits<7> funct7, string opcodestr>
@@ -1238,22 +1245,22 @@ let Predicates = [HasStdExtZihintntl] in {
 
 let EmitPriority = 0 in {
 def : InstAlias<"lb $rd, (${rs1})",
-                (LB  GPR:$rd, GPR:$rs1, 0)>;
+                (LB  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lh $rd, (${rs1})",
-                (LH  GPR:$rd, GPR:$rs1, 0)>;
+                (LH  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lw $rd, (${rs1})",
-                (LW  GPR:$rd, GPR:$rs1, 0)>;
+                (LW  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lbu $rd, (${rs1})",
-                (LBU  GPR:$rd, GPR:$rs1, 0)>;
+                (LBU  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lhu $rd, (${rs1})",
-                (LHU  GPR:$rd, GPR:$rs1, 0)>;
+                (LHU  GPR:$rd, GPCR:$rs1, 0)>;
 
 def : InstAlias<"sb $rs2, (${rs1})",
-                (SB  GPR:$rs2, GPR:$rs1, 0)>;
+                (SB  GPR:$rs2, GPCR:$rs1, 0)>;
 def : InstAlias<"sh $rs2, (${rs1})",
-                (SH  GPR:$rs2, GPR:$rs1, 0)>;
+                (SH  GPR:$rs2, GPCR:$rs1, 0)>;
 def : InstAlias<"sw $rs2, (${rs1})",
-                (SW  GPR:$rs2, GPR:$rs1, 0)>;
+                (SW  GPR:$rs2, GPCR:$rs1, 0)>;
 
 def : InstAlias<"add $rd, $rs1, $imm12",
                 (ADDI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
@@ -1271,11 +1278,11 @@ def : InstAlias<"sra $rd, $rs1, $shamt",
                 (SRAI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
 let Predicates = [IsRV64] in {
 def : InstAlias<"lwu $rd, (${rs1})",
-                (LWU  GPR:$rd, GPR:$rs1, 0)>;
+                (LWU  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"ld $rd, (${rs1})",
-                (LD  GPR:$rd, GPR:$rs1, 0)>;
+                (LD  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"sd $rs2, (${rs1})",
-                (SD  GPR:$rs2, GPR:$rs1, 0)>;
+                (SD  GPR:$rs2, GPCR:$rs1, 0)>;
 
 def : InstAlias<"addw $rd, $rs1, $imm12",
                 (ADDIW  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
@@ -2068,8 +2075,8 @@ def PseudoZEXT_W : Pseudo<(outs GPR:$rd), (ins GPR:$rs), [], "zext.w", "$rd, $rs
 /// Loads
 
 class LdPat<PatFrag LoadOp, RVInst Inst, ValueType vt = XLenVT>
-    : Pat<(vt (LoadOp (AddrRegImm (XLenVT GPRMem:$rs1), simm12:$imm12))),
-          (Inst GPRMem:$rs1, simm12:$imm12)>;
+    : Pat<(vt (LoadOp (AddrRegImm (CLenVT GPCRMem:$rs1), simm12:$imm12))),
+          (Inst GPCRMem:$rs1, simm12:$imm12)>;
 
 def : LdPat<sextloadi8, LB>;
 def : LdPat<extloadi8, LBU>; // Prefer unsigned due to no c.lb in Zcb.
@@ -2083,9 +2090,9 @@ def : LdPat<zextloadi16, LHU>;
 
 class StPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy,
             ValueType vt>
-    : Pat<(StoreOp (vt StTy:$rs2), (AddrRegImm (XLenVT GPRMem:$rs1),
+    : Pat<(StoreOp (vt StTy:$rs2), (AddrRegImm (CLenVT GPCRMem:$rs1),
                    simm12:$imm12)),
-          (Inst StTy:$rs2, GPRMem:$rs1, simm12:$imm12)>;
+          (Inst StTy:$rs2, GPCRMem:$rs1, simm12:$imm12)>;
 
 def : StPat<truncstorei8, SB, GPR, XLenVT>;
 def : StPat<truncstorei16, SH, GPR, XLenVT>;
