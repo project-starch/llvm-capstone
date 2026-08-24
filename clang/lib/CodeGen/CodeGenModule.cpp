@@ -432,8 +432,13 @@ CodeGenModule::CodeGenModule(ASTContext &C,
   CharTy =
     llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getCharWidth());
   IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
+  // intptr_t, size_t and ptrdiff_t are ADDRESS-sized, not pointer-sized. The two
+  // agree everywhere except on a capability target, where a pointer carries
+  // bounds and permissions alongside the address; running pointer arithmetic at
+  // the full pointer width there dragged an oversized integer through the whole
+  // pipeline -- `p - q` over a 48-byte element came out as a __divti3 call.
   IntPtrTy = llvm::IntegerType::get(LLVMContext,
-    C.getTargetInfo().getMaxPointerWidth());
+                                    C.getTargetInfo().getMaxAddressWidth());
   Int8PtrTy = llvm::PointerType::get(LLVMContext,
                                      C.getTargetAddressSpace(LangAS::Default));
   const llvm::DataLayout &DL = M.getDataLayout();

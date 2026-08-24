@@ -497,6 +497,16 @@ public:
     return PointerWidth;
   }
 
+  /// Return the maximum width of an ADDRESS on this target -- the width of the
+  /// integers that describe memory: intptr_t, size_t, ptrdiff_t.
+  ///
+  /// The same as the pointer width everywhere except on a capability target,
+  /// where a pointer carries bounds and permissions alongside the address and is
+  /// therefore wider than the address it holds. Doing pointer arithmetic at the
+  /// full pointer width there drags an oversized integer through the whole
+  /// pipeline for no gain.
+  virtual uint64_t getMaxAddressWidth() const { return getMaxPointerWidth(); }
+
   /// Get integer value for null pointer.
   /// \param AddrSpace address space of pointee in source language.
   virtual uint64_t getNullPointerValue(LangAS AddrSpace) const { return 0; }

@@ -232,6 +232,7 @@ public:
       : CapstoneTargetInfo(Triple, Opts) {
     LongWidth = LongAlign = 64;
     PointerWidth = PointerAlign = 128;
+
     IntMaxType = Int64Type = SignedLong;
     AddrSpaceMap = &CapstoneAddrSpaceMap;
 
@@ -247,6 +248,11 @@ public:
         "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128"
         "-ni:200-A200-P200-G200");
   }
+
+  // A capability is 128 bits; the address inside it is 64. intptr_t, size_t and
+  // ptrdiff_t describe the ADDRESS -- which is what this target's C types
+  // already say, and this is how codegen is told the same thing.
+  uint64_t getMaxAddressWidth() const override { return 64; }
 
   bool setABI(const std::string &Name) override {
     if (Name == "lp64e") {
