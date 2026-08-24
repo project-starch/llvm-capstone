@@ -161,7 +161,7 @@ WBUF_SEL(wbuf_perm,   5)   /* at risk */
 static unsigned wbuf_compute(void)
 {
   unsigned long lost = 0, corrupt = 0;
-  unsigned ctl_ok = 0u;
+  unsigned ctl_ok = 0u, subj_type = 0u;
   unsigned i, r, k;
 #if WBUF_ARM == 8
   /* THE EVICTION PROOF. See the arm-8 block below: without it a green wr8 is produced by
@@ -228,6 +228,56 @@ static unsigned wbuf_compute(void)
          wbuffer_gran_clr keys on, and the feature generic traffic would miss */
       wbuf_slots[WBUF_N] = (void *)0;
       wbuf_slots[WBUF_N + 1] = (void *)0;
+#elif WBUF_ARM == 13
+      /* THE DERIVED-SUBJECT ARM. Arms 9-12 all measured ZERO, so neither shape, granule count,
+         the load->store->load chain nor the stack region reproduces it. What is left is WHAT
+         KIND OF CAPABILITY the subject is:
+             wbuf 0-12   `&wbuf_anchor` -- a whole-region capability straight from the cap table
+             SQLite      pWInfo -- SPLIT-DERIVED, narrowed bounds, derived revnode id, and the
+                         measured healthy type was 1 == NONLIN post-shift
+         This arm narrows the subject with `shrink` first, so it carries derived bounds and a
+         derived revnode rather than the cap table's own. It also REPORTS the subject's type in
+         bits 25-27, because if wbuf's subject has been LINEAR all along then every arm above
+         tested a different capability class from the one that faults. */
+      { void *narrowed = base;
+        narrowed = __builtin_capstone_cap_shrink(narrowed,
+                     (unsigned long)(void *)&wbuf_anchor,
+                     (unsigned long)(void *)&wbuf_anchor + 4ul);
+        subj_type = wbuf_type(narrowed) & 7u;
+        wbuf_slots[i] = narrowed;              /* SUBJECT stc, a DERIVED capability */
+        wbuf_sink[0] = 0xBEBEBEBEul + i;
+        wbuf_sink[2] = 0xBEBEBEBEul + i;
+        wbuf_sink[4] = 0xBEBEBEBEul + i; }
+#elif WBUF_ARM == 12
+      /* THE STACK ARM. Arms 9, 10 and 11 all measured ZERO over 16384 trials with fired
+         controls, so neither the window shape, nor granule count, nor the load->store->load
+         chain reproduces it. The remaining structural difference is WHERE the slot lives:
+             wbuf 0-11   a GLOBAL array (wbuf_slots), reached through the cap table
+             SQLite      the monitor-carved STACK, reached through sp/s0
+         Those are different capabilities over different regions -- the stack is a `split` of the
+         domain data region -- and they map to different cache sets, since `wr_idx = paddr[11:4]`.
+         A defect keyed to the stack region, or to a set only stack addresses reach, is invisible
+         to every arm above and would be the first thing SQLite has that wbuf does not.
+         Same in-arm control (bit 24). */
+      /* THE HARNESS CONTRACT: every arm must leave a valid capability in wbuf_slots[i],
+         because the shared check below runs FIELD queries on it and every selector except 1
+         RAISES on a NOT_CAP. A first version wrote only the stack slot; the shared check then
+         queried an uninitialised global and the domain TRAPPED, producing no retval at all --
+         caught by the QEMU gate before it reached the board. */
+      wbuf_slots[i] = base;                    /* satisfy the shared check */
+      { /* 16-BYTE ALIGNED EXPLICITLY. An `stc` to a misaligned address raises
+           STORE_ADDRESS_MISALIGNED (capstone_dyn_unit.anvil:418) and the domain then produces
+           no output at all -- which is what the first version did. Do not rely on the
+           compiler choosing capability alignment for a stack local. */
+        void *volatile stack_slot[2] __attribute__((aligned(16)));
+        stack_slot[0] = base;                  /* SUBJECT stc, to a stack granule */
+        wbuf_sink[0] = 0xBDBDBDBDul + i;       /* the window's other-granule traffic */
+        wbuf_sink[2] = 0xBDBDBDBDul + i;
+        wbuf_sink[4] = 0xBDBDBDBDul + i;
+        wbuf_slots[WBUF_N] = (void *)0;        /* the two ctag=0 capability stores */
+        wbuf_slots[WBUF_N + 1] = (void *)0;
+        if (wbuf_type(stack_slot[0]) == 7ul) lost++;   /* reload from the STACK slot */
+      }
 #elif WBUF_ARM == 11
       /* THE LOAD-TO-STORE-TO-LOAD CHAIN. Arms 9/10 measured ZERO loss over 16384 trials with a
          fired control, so the SQLite window's SHAPE is not sufficient. This arm adds the one
@@ -461,7 +511,7 @@ static unsigned wbuf_compute(void)
     return 0xB8000000u | (unsigned)(ratio << 12) | (unsigned)corrupt;
   }
 #else
-#if WBUF_ARM == 9 || WBUF_ARM == 10 || WBUF_ARM == 11
+#if WBUF_ARM == 9 || WBUF_ARM == 10 || WBUF_ARM == 11 || WBUF_ARM == 12 || WBUF_ARM == 13
   /* IN-ARM POSITIVE CONTROL, bit 24. A zero loss count is worthless unless the detector is
      known to fire, and arm 2 -- the harness positive control -- CANNOT be QEMU-verified: the
      native oracle is a stub that always answers WBUF_OK with zero loss (wbuf_host.c:4), and
@@ -482,7 +532,7 @@ static unsigned wbuf_compute(void)
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ctl_ty) : "r"(ctl_scalar));
     if (ctl_ty == 7ul) ctl_ok = 1u; }
 #endif
-  return WBUF_OK | (unsigned)(ctl_ok << 24) | (unsigned)(corrupt << 12) | (unsigned)lost;
+  return WBUF_OK | (unsigned)(subj_type << 25) | (unsigned)(ctl_ok << 24) | (unsigned)(corrupt << 12) | (unsigned)lost;
 #endif
 }
 #endif

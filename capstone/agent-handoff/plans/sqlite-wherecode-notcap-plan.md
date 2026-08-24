@@ -523,3 +523,60 @@ The one structural difference between the microbenchmark and the SQLite window:
 The capability being spilled is itself the result of a recent load. If a forwarding path carries
 a load's result into a store without carrying its tag, arm 11 sees it and arms 9/10 structurally
 cannot.
+
+## The counted exclusion set — five arms, 16384 trials each, ALL ZERO with fired controls
+
+Every row ran on a boot whose `k800` control returned its oracle of 4, and every `wb9`-family arm
+carries an in-arm positive control (bit 24) proving the detector answers 7 for a non-capability
+in the SAME run. So these are **meaningful zeros**.
+
+| arm | what it adds to the window | retval | lost |
+|---|---|---|---|
+| wb0 | baseline, no plain store at all | `0xB0000000` | 0 |
+| wb10 | 4 distinct granules in flight | `0xB1000000` | 0 |
+| wb9 | 10 granules (OVER depth 8) + two `ctag=0` `stc` | `0xB1000000` | 0 |
+| wb11 | `ldc` -> `stc` -> `ldc` chain (spilled value is itself a load result) | `0xB1000000` | 0 |
+| wb12 | subject slot on the monitor-carved STACK, not a global | `0xB1000000` | 0 |
+| wb13 | subject `shrink`-DERIVED: narrowed bounds, derived revnode, **type 1 = NONLIN** | `0xB3000000` | 0 |
+
+**Excluded as SUFFICIENT causes:** granule count and write-buffer pressure; the `ctag=0` entry
+class; the bare window shape; the load-to-store-to-load chain; the stack region; and the
+subject's own derivation and metadata class.
+
+`wb13` also confirms the arms test the RIGHT capability class: its subject reads **type 1
+(NONLIN)**, the same as the measured healthy baseline of the SQLite capability that faults. Had
+it read LINEAR, every arm above would have been testing a different class.
+
+## Revocation-tree depth: DEAD, retired by RTL reading rather than a boot
+
+The rev-node head reads 630 at the SQLite wedge against a handful in wbuf, which looked like the
+one state variable differing by orders of magnitude. It cannot be the mechanism
+(`capstone_dyn_unit.anvil:357-362`):
+
+* the node a plain `ldc` consults is **`rs1`'s — the AUTHORITY capability**, not the loaded
+  value's, so deep revocation state belonging to the spilled capability is never queried;
+* failure raises **`INVALID_CAPABILITY` = mcause 26 AT THE `ldc`**, whereas the observed wedge is
+  **mcause 25 at a later `cincoffsetimm`** with the `ldc` having completed;
+* `CINCOFFSETIMM` has no revnode check at all — only NOT_CAP -> 25 and UNINIT/SEALED -> 27.
+
+So no instruction in the window can turn revocation state into a NOT_CAP operand.
+
+## Where this leaves it
+
+**The trigger is not reproducible from the instruction window, the memory region, or the
+subject's metadata.** What remains untested is SCALE: SQLite runs ~10^5 instructions with a
+working set that thrashes the caches, takes timer interrupts, and touches a specific physical
+set, where wbuf's loop is ~4 KiB and stays resident.
+
+**The honest status: the root cause is NOT found.** What exists is a sharply bounded search
+space, a 588-byte reproducer, and a counted instrument that eliminates a family per boot instead
+of producing one bit.
+
+### Two harness rules learned, both worth carrying into any future arm
+
+* **Every arm must leave a valid capability in `wbuf_slots[i]`.** The shared check runs FIELD
+  queries, and every selector except 1 RAISES on a NOT_CAP, so an arm that writes only its own
+  slot traps and produces no retval.
+* **A stack local holding a capability needs explicit `aligned(16)`.** Without it the `stc`
+  raises `STORE_ADDRESS_MISALIGNED` and the domain produces **NO OUTPUT AT ALL** — indis-
+  tinguishable from a hang, and it cost two QEMU cycles to find.
