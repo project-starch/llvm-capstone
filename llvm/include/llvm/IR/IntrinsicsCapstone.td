@@ -85,8 +85,8 @@ let TargetPrefix = "capstone" in {
   // For length intrinsic, we do not make it yet, as it is (end - base),
   // we can implement it in C-header or later with pattern.
 
-  // ptr shrink(ptr cap, i128 new_base, i128 new_end)
-  // We use i128 for base/end to match the GPR register class size directly.
+  // ptr shrink(ptr cap, i64 new_base, i64 new_end)
+  // Bounds are addresses, so XLen.
   def int_capstone_cap_shrink :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty, llvm_i64_ty],
               [IntrNoMem]>;
@@ -97,9 +97,8 @@ let TargetPrefix = "capstone" in {
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty],
               [IntrNoMem, ImmArg<ArgIndex<1>>]>;
 
-  // ptr scc(ptr cap, i128 cursor)
-  // The cursor is an integer, but we use i128 so it fits smoothly into
-  // the GPR class (like SHRINK).
+  // ptr scc(ptr cap, i64 cursor)
+  // The cursor is an address, so XLen (like SHRINK).
   def int_capstone_cap_scc :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty],[IntrNoMem]>;
 
@@ -111,7 +110,7 @@ let TargetPrefix = "capstone" in {
   def int_capstone_cap_delin :
     Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>], [IntrInaccessibleMemOnly]>;
 
-  // ptr init(ptr cap, i128 value)
+  // ptr init(ptr cap, i64 value)
   def int_capstone_cap_init :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty], [IntrNoMem]>;
 

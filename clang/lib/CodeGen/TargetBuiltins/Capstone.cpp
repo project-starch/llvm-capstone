@@ -1385,10 +1385,10 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     ID = Intrinsic::capstone_cap_shrink;
     // Resolve overloaded return type
     IntrinsicTypes.push_back(Ops[0]->getType());
-    // Manually extend 64-bit arguments to i128 to match intrinsic signature
-    llvm::Type *Int128Ty = llvm::Type::getInt128Ty(getLLVMContext());
-    Ops[1] = Builder.CreateZExt(Ops[1], Int128Ty);
-    Ops[2] = Builder.CreateZExt(Ops[2], Int128Ty);
+    // The bounds are addresses, so XLen -- like the tighten immediate below.
+    llvm::Type *Int64Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops[1] = Builder.CreateZExtOrTrunc(Ops[1], Int64Ty);
+    Ops[2] = Builder.CreateZExtOrTrunc(Ops[2], Int64Ty);
     break;
   }
   case Capstone::BI__builtin_capstone_cap_scc:
@@ -1398,10 +1398,9 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
 
     IntrinsicTypes.push_back(Ops[0]->getType()); // Type of returned pointer
 
-    // Just like for SHRINK, we extend the second argument (integer) to i128
-    // so it fits smoothly into our GPR register class.
-    llvm::Type *Int128Ty = llvm::Type::getInt128Ty(getLLVMContext());
-    Ops[1] = Builder.CreateZExt(Ops[1], Int128Ty);
+    // Just like for SHRINK, the cursor is an address, so XLen.
+    llvm::Type *Int64Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops[1] = Builder.CreateZExtOrTrunc(Ops[1], Int64Ty);
     break;
   }
   case Capstone::BI__builtin_capstone_cap_tighten: {
