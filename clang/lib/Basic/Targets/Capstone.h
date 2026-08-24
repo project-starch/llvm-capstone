@@ -268,56 +268,20 @@ public:
     return false;
   }
 
-  // __int128 IS NOT AVAILABLE ON capstone64, AND THIS IS A DELIBERATE RESTRICTION.
+  // __int128 and wide _BitInt are ORDINARY INTEGERS here, and both were refused until
+  // 2026-08-24 because they were not. MVT::i128 used to be the machine type for a
+  // CAPABILITY, with no separate capability MVT to hold the two apart, so the backend
+  // told them apart by heuristics that defaulted to capability. A source-level
+  // __int128 matched none of them and was compiled AS a capability, silently:
   //
-  // MVT::i128 is the machine type this backend uses FOR CAPABILITIES: PtrVT is
-  // MVT::i128 (CapstoneISelDAGToDAG.cpp), i128 is in the GPR register class
-  // (CapstoneISelLowering.cpp, CapstoneRegisterInfo.td), and ADD/SUB/AND/OR/XOR/
-  // shifts/MUL on i128 are custom-lowered as capability operations. There is no
-  // capability MVT to hold them apart, so the backend separates a genuine 128-bit
-  // integer from a capability with heuristics that DEFAULT TO CAPABILITY -- which is
-  // correct, since capabilities are overwhelmingly the common case.
+  //     unsigned __int128 a + b  ->  cincoffset a0, a1, a0   (a cursor increment)
+  //     (unsigned long)(v >> 64) ->  fatal error, "cannot lower a 128-bit right shift"
   //
-  // A source-level `__int128` matches none of those heuristics and is therefore
-  // compiled AS A CAPABILITY. Measured on 2026-08-21, and it is silent:
-  //     unsigned __int128 a + b   ->  cincoffset a0, a1, a0      (cursor increment)
-  //     unsigned __int128 a & b   ->  lcc a0,a0,2 / lcc a1,a1,2 / and
-  // `lcc rd, rs, 2` reads field 2, THE CURSOR, so the high 64 bits are not merely
-  // dropped -- they were never in the computation. Wrong arithmetic that links and
-  // runs is far more dangerous than a diagnostic: it reaches the board and gets
-  // debugged as a hardware fault.
-  //
-  // The base implementation enables __int128 for any target with pointers >= 64 bits,
-  // and capstone64 pointers are 128-bit CAPABILITIES, so it was enabled by accident of
-  // that rule rather than by any decision.
-  //
-  // WHAT THIS DOES NOT AFFECT: uintptr_t round-trips. Those reach the backend as
-  // ptrtoint/inttoptr on ptr addrspace(200), not as a source-level __int128, so
-  // capability arithmetic (cap-i128-*.ll) is untouched. Capstone32 is unaffected too --
-  // its pointers are 32-bit, so the base rule already returns false there.
-  //
-  // WORKAROUND for real 128-bit integer arithmetic: a struct of two uint64_t with an
-  // explicit carry, which compiles correctly (add/add/sltu/add). The high half of a
-  // widening 64x64 multiply is supported directly and lowers to a single mulhu, but
-  // ONLY with the M extension enabled.
-  //
-  // LIFTING THIS means giving capabilities their own MVT, as CHERI-LLVM does, so the
-  // two stay distinguishable all the way down. Until then this returns false.
-  bool hasInt128Type() const override { return false; }
-
-  // _BitInt IS CAPPED AT XLen FOR THE SAME REASON, and it is a separate hole: disabling
-  // __int128 alone does NOT close it, because _BitInt is a different type that reaches the
-  // same i128 machine type. Measured 2026-08-21, with __int128 already rejected:
-  //     _BitInt(64)   ->  plain `add`                                  correct
-  //     _BitInt(65)   ->  fatal error in the backend
-  //     _BitInt(128)  ->  fatal error in the backend
-  // so the boundary is exactly XLen: at or below it the value lives in an XLen register and
-  // behaves; above it, it is widened into the 128-bit capability register class and collides
-  // with capabilities exactly as __int128 did.
-  //
-  // The WIDTH is capped rather than the type disabled, because _BitInt is a required type in
-  // C23 and the narrow widths are perfectly sound here. hasBitIntType() therefore stays true.
-  size_t getMaxBitIntWidth() const override { return 64; }
+  // A capability is MVT::c128 in its own register class now, exactly as the note here
+  // said lifting this would require, so i128 is an ordinary illegal type that the
+  // generic legalizer expands. The output is instruction-for-instruction identical to
+  // upstream riscv64 on the same IR. Both overrides are therefore gone and the base
+  // rules apply.
 
   void setMaxAtomicWidth() override {
     MaxAtomicPromoteWidth = 128;

@@ -15,10 +15,11 @@
 // assumption "nothing in source C reaches this any more" was recorded, it turned
 // out to be wrong. So the routes are pinned here, compiling.
 //
-// __int128 and _BitInt(65..128) are still rejected in the front end -- that is a
-// separate policy with its own test, Sema/capstone-no-int128.c -- so the routes
-// that remain are the ones that reach a 16-byte machine type without asking for
-// a 128-bit integer by name.
+// __int128 and _BitInt(65..128) were rejected in the front end for the same
+// reason and are accepted again as of the same day; their arithmetic is checked
+// in capstone-int128.c. The routes below are the ones that reach a 16-byte
+// machine type WITHOUT asking for a 128-bit integer by name, which is what makes
+// them worth pinning separately.
 
 #include <stdatomic.h>
 
