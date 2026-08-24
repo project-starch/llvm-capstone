@@ -31,6 +31,12 @@ CAP_USE = {                     # opcode -> operand indices that must be tagged
  'delin':[0], 'scc':[1], 'cincoffset':[1], 'cincoffsetimm':[1], 'movc':[1],
  'shrink':[1], 'tighten':[1], 'seal':[1], 'init':[1], 'lcc':[1], 'mrev':[1],
  'revoke':[0], 'ldc':[1], 'stc':[1], 'cjalr':[1],
+ # EVERY memory access on this target goes through a capability base, not just
+ # ldc/stc. Leaving these out is what made the scan come back clean while the
+ # domain faulted with "Cap mem access requires capability" on a plain `ld`.
+ 'ld':[1], 'lw':[1], 'lwu':[1], 'lh':[1], 'lhu':[1], 'lb':[1], 'lbu':[1],
+ 'sd':[1], 'sw':[1], 'sh':[1], 'sb':[1],
+ 'fld':[1], 'flw':[1], 'fsd':[1], 'fsw':[1],
 }
 def ops(text):
     text = re.sub(r'#.*$', '', text)
