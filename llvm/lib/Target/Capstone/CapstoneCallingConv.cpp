@@ -124,6 +124,21 @@ static const MCPhysReg ArgVRN4M2s[] = {
 static const MCPhysReg ArgVRN2M4s[] = {Capstone::V8M4_V12M4, Capstone::V12M4_V16M4,
                                        Capstone::V16M4_V20M4};
 
+// The capability argument registers. Same ABI slots as the integer ones, same
+// hardware registers -- C10 IS X10 seen at capability width -- but a capability
+// argument has to be assigned the C register, or the machine verifier rightly
+// refuses `$x10 = CIncOffset ...`.
+ArrayRef<MCPhysReg> Capstone::getArgGPCRs(const CapstoneABI::ABI ABI) {
+  static const MCPhysReg ArgICaps[] = {Capstone::C10, Capstone::C11, Capstone::C12,
+                                       Capstone::C13, Capstone::C14, Capstone::C15,
+                                       Capstone::C16, Capstone::C17};
+  static const MCPhysReg ArgECaps[] = {Capstone::C10, Capstone::C11, Capstone::C12,
+                                       Capstone::C13, Capstone::C14, Capstone::C15};
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
+    return ArrayRef(ArgECaps);
+  return ArrayRef(ArgICaps);
+}
+
 ArrayRef<MCPhysReg> Capstone::getArgGPRs(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the ILP32* and LP64* ABIs, except
   // the ILP32E ABI.
@@ -431,7 +446,10 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   // to XLenVT during legalization/splitting. i128 is here only because __int128
   // still shares the capability register class.
   if (ValVT == MVT::c128 || ValVT == MVT::i128) {
-    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+    ArrayRef<MCPhysReg> ArgRegs = ValVT == MVT::c128
+                                      ? Capstone::getArgGPCRs(ABI)
+                                      : ArgGPRs;
+    if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
       return false;
@@ -719,7 +737,10 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   // Capability handling, mirroring CC_Capstone.
   if (ValVT == MVT::c128 || ValVT == MVT::i128) {
-    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+    ArrayRef<MCPhysReg> ArgRegs = ValVT == MVT::c128
+                                      ? Capstone::getArgGPCRs(ABI)
+                                      : ArgGPRs;
+    if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
       return false;

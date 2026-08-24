@@ -13,10 +13,14 @@
 // The Capstone calling convention is handled with custom code in
 // CapstoneISelLowering.cpp (CC_Capstone).
 
-def CSR_ILP32E_LP64E : CalleeSavedRegs<(add X1, X8, X9)>;
+// Callee-saved registers are named by their CAPABILITY form. Every Capstone
+// register is 128 bits wide and may hold a capability, so saving one has to be
+// an `stc` and restoring it an `ldc` -- a 64-bit save would silently drop a tag
+// across every call. Naming C here is what makes the frame code emit those.
+def CSR_ILP32E_LP64E : CalleeSavedRegs<(add C1, C8, C9)>;
 
 def CSR_ILP32_LP64
-    : CalleeSavedRegs<(add CSR_ILP32E_LP64E, (sequence "X%u", 18, 27))>;
+    : CalleeSavedRegs<(add CSR_ILP32E_LP64E, (sequence "C%u", 18, 27))>;
 
 def CSR_ILP32F_LP64F
     : CalleeSavedRegs<(add CSR_ILP32_LP64,

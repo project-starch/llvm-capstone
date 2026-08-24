@@ -1583,7 +1583,7 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   // We need: Ptr = GP + SymbolAddress
 
   // 1. Get GP (c3)
-  SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+  SDValue GP = CurDAG->getRegister(Capstone::C3, PtrVT);
 
   // 2. Materialize the Symbol Address into a register.
   // We use the PseudoLLA pseudo-instruction (Load Local Address).
@@ -1662,6 +1662,16 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   }
 
   ReplaceNode(Node, Final);
+}
+
+// LCC reads one field of a capability into an integer register. Field numbers
+// are Table 8 of the spec: 0 valid, 1 type, 2 cursor, 3 base, 4 end, 5 perms.
+void CapstoneDAGToDAGISel::selectLCCField(SDNode *Node, unsigned Field) {
+  SDLoc DL(Node);
+  MVT XLenVT = Subtarget->getXLenVT();
+  ReplaceNode(Node, CurDAG->getMachineNode(
+                        Capstone::LCC, DL, XLenVT, Node->getOperand(1),
+                        CurDAG->getTargetConstant(Field, DL, XLenVT)));
 }
 
 void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
@@ -1932,7 +1942,7 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
       TargetReg = SDValue(Offset, 0);
     } else {
       // 2. GP: Get the root data capability
-      SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+      SDValue GP = CurDAG->getRegister(Capstone::C3, PtrVT);
 
       // 3. CIncOffset: Create the final function pointer capability
       SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT, GP,
@@ -3260,6 +3270,21 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectTighten(Node);
     case Intrinsic::capstone_cap_seal:
       return selectSeal(Node);
+    // The five LCC field reads. These were TableGen patterns until the
+    // capability register class arrived; they cannot stay patterns, because the
+    // intrinsics take llvm_anyptr_ty and TableGen cannot reconcile iPTRAny with
+    // CLenVT ("Type set is empty for each HW mode"). Selecting them here puts
+    // them where every other capability intrinsic already is.
+    case Intrinsic::capstone_cap_get_tag:
+      return selectLCCField(Node, 0);
+    case Intrinsic::capstone_cap_get_cursor:
+      return selectLCCField(Node, 2);
+    case Intrinsic::capstone_cap_get_base:
+      return selectLCCField(Node, 3);
+    case Intrinsic::capstone_cap_get_end:
+      return selectLCCField(Node, 4);
+    case Intrinsic::capstone_cap_get_perm:
+      return selectLCCField(Node, 5);
     }
     break;
   }

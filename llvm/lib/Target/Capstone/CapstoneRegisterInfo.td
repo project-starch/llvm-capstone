@@ -213,6 +213,65 @@ let RegAltNameIndices = [ABIRegAltName] in {
   }
 }
 
+// A capability register: the same hardware register as its X sub-register, seen
+// at capability width. Capstone has ONE register file, so the assembly must keep
+// printing "a0", not "c10" -- the assembler and the board consume it. The record
+// name stays distinct because the compressed-instruction emitter resolves
+// registers by asm name and a duplicate breaks it; CapstoneInstPrinter maps a
+// capability register to its X sub-register on the way out.
+//
+// Its sub-register is the integer register holding the
+// ADDRESS, so reading a capability's address is a subregister access rather than
+// an ALU move -- an `addi rd, rs, 0` is simultaneously a copy and a tag clear,
+// and that double meaning is what silently untagged every capability passed to
+// inline asm (2026-08-23). Same shape as CHERI's C0..C31 over X0..X31.
+// Size/offset deliberately unknown, as CHERI declares theirs. Giving it 64
+// makes it indistinguishable from the existing sub_64 index over the same X
+// registers, and TableGen then splits GPR apart ("Register 'X0' is not in
+// register class 'GPR'" out of the compressed-instruction emitter).
+def sub_cap_addr : SubRegIndex<-1, -1>;
+
+let SubRegIndices = [sub_cap_addr] in {
+  def C0 : CapstoneRegWithSubRegs<0, "c0", [X0]>, DwarfRegNum<[0]>;
+  def C1 : CapstoneRegWithSubRegs<1, "c1", [X1]>, DwarfRegNum<[1]>;
+  def C2 : CapstoneRegWithSubRegs<2, "c2", [X2]>, DwarfRegNum<[2]>;
+  def C3 : CapstoneRegWithSubRegs<3, "c3", [X3]>, DwarfRegNum<[3]>;
+  def C4 : CapstoneRegWithSubRegs<4, "c4", [X4]>, DwarfRegNum<[4]>;
+  def C5 : CapstoneRegWithSubRegs<5, "c5", [X5]>, DwarfRegNum<[5]>;
+  def C6 : CapstoneRegWithSubRegs<6, "c6", [X6]>, DwarfRegNum<[6]>;
+  def C7 : CapstoneRegWithSubRegs<7, "c7", [X7]>, DwarfRegNum<[7]>;
+  def C8 : CapstoneRegWithSubRegs<8, "c8", [X8]>, DwarfRegNum<[8]>;
+  def C9 : CapstoneRegWithSubRegs<9, "c9", [X9]>, DwarfRegNum<[9]>;
+  def C10 : CapstoneRegWithSubRegs<10, "c10", [X10]>, DwarfRegNum<[10]>;
+  def C11 : CapstoneRegWithSubRegs<11, "c11", [X11]>, DwarfRegNum<[11]>;
+  def C12 : CapstoneRegWithSubRegs<12, "c12", [X12]>, DwarfRegNum<[12]>;
+  def C13 : CapstoneRegWithSubRegs<13, "c13", [X13]>, DwarfRegNum<[13]>;
+  def C14 : CapstoneRegWithSubRegs<14, "c14", [X14]>, DwarfRegNum<[14]>;
+  def C15 : CapstoneRegWithSubRegs<15, "c15", [X15]>, DwarfRegNum<[15]>;
+  def C16 : CapstoneRegWithSubRegs<16, "c16", [X16]>, DwarfRegNum<[16]>;
+  def C17 : CapstoneRegWithSubRegs<17, "c17", [X17]>, DwarfRegNum<[17]>;
+  def C18 : CapstoneRegWithSubRegs<18, "c18", [X18]>, DwarfRegNum<[18]>;
+  def C19 : CapstoneRegWithSubRegs<19, "c19", [X19]>, DwarfRegNum<[19]>;
+  def C20 : CapstoneRegWithSubRegs<20, "c20", [X20]>, DwarfRegNum<[20]>;
+  def C21 : CapstoneRegWithSubRegs<21, "c21", [X21]>, DwarfRegNum<[21]>;
+  def C22 : CapstoneRegWithSubRegs<22, "c22", [X22]>, DwarfRegNum<[22]>;
+  def C23 : CapstoneRegWithSubRegs<23, "c23", [X23]>, DwarfRegNum<[23]>;
+  def C24 : CapstoneRegWithSubRegs<24, "c24", [X24]>, DwarfRegNum<[24]>;
+  def C25 : CapstoneRegWithSubRegs<25, "c25", [X25]>, DwarfRegNum<[25]>;
+  def C26 : CapstoneRegWithSubRegs<26, "c26", [X26]>, DwarfRegNum<[26]>;
+  def C27 : CapstoneRegWithSubRegs<27, "c27", [X27]>, DwarfRegNum<[27]>;
+  def C28 : CapstoneRegWithSubRegs<28, "c28", [X28]>, DwarfRegNum<[28]>;
+  def C29 : CapstoneRegWithSubRegs<29, "c29", [X29]>, DwarfRegNum<[29]>;
+  def C30 : CapstoneRegWithSubRegs<30, "c30", [X30]>, DwarfRegNum<[30]>;
+  def C31 : CapstoneRegWithSubRegs<31, "c31", [X31]>, DwarfRegNum<[31]>;
+}
+
+def CLenVT : ValueTypeByHwMode<[RV32, RV64],
+                               [c64,  c128]>;
+def CLenRI : RegInfoByHwMode<
+      [RV32,             RV64],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>]>;
+
 def XLenVT : ValueTypeByHwMode<[RV32, RV64],
                                [i32,  i64]>;
 defvar XLenPairVT = untyped;
@@ -244,12 +303,29 @@ class GPRRegisterClass<dag regList>
     // come out capability-typed and getCopyFromParts reject it. XLenVT first
     // would be better still, and TableGen cannot infer the patterns with that
     // order. drop-i128 will have to answer this properly.
-    : CapstoneRegisterClass<[i128, c128, XLenVT, XLenFVT, i32, i16], 128, regList> {
+    : CapstoneRegisterClass<[i128, XLenVT, XLenFVT, i32, i16], 128, regList> {
   let RegInfos = XLenRI;
 }
 
 // The order of registers represents the preferred allocation sequence.
 // Registers are listed in the order caller-save, callee-save, specials.
+// The capability register class. Integers keep GPR; capabilities get this. That
+// separation is the point: copyPhysReg, inline asm and the register allocator
+// can all ask which one they are holding instead of guessing.
+def GPCR : CapstoneRegisterClass<[CLenVT], 128,
+                                 (add (sequence "C%u", 10, 17),
+                                      (sequence "C%u", 5, 7),
+                                      (sequence "C%u", 28, 31),
+                                      (sequence "C%u", 8, 9),
+                                      (sequence "C%u", 18, 27),
+                                      (sequence "C%u", 0, 4))> {
+  let RegInfos = CLenRI;
+}
+
+def GPCRNoC0 : CapstoneRegisterClass<[CLenVT], 128, (sub GPCR, C0)> {
+  let RegInfos = CLenRI;
+}
+
 def GPR : GPRRegisterClass<(add (sequence "X%u", 10, 17),
                                 (sequence "X%u", 5, 7),
                                 (sequence "X%u", 28, 31),

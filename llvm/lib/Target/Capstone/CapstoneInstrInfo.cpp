@@ -589,6 +589,30 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
   unsigned KillFlag = getKillRegState(KillSrc);
 
+  // A capability copy, decided by the register CLASS. This is what the split
+  // buys: the question "is this copy a capability?" used to be answered by a
+  // heuristic on liveness, and answering it wrong dropped a tag silently.
+  //
+  // MOVC is the right and only instruction here. From op_helper.c's
+  // helper_csmovc, it zeroes its source ONLY when the source is a TAGGED,
+  // non-copyable (linear) capability -- and a linear capability is one the ISA
+  // forbids copying at all, so a live-source copy of one is not a thing the
+  // register allocator may ask for. An untagged value or a NONLIN capability is
+  // copied without destroying anything.
+  //
+  // ponytail: on silicon `movc` is reported to zero an untagged source
+  // unconditionally, where the model guards on the tag (R-18). An untagged value
+  // can sit in a capability register after an inttoptr, so that case is not
+  // impossible here -- it is just no longer reachable from an INTEGER copy,
+  // which is what R-18 was about. cincoffsetimm rd, rs, 0 would be the
+  // non-destructive alternative and it faults outright on an untagged source,
+  // which is worse.
+  if (Capstone::GPCRRegClass.contains(DstReg, SrcReg)) {
+    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
+    return;
+  }
+
   if (Capstone::GPRRegClass.contains(DstReg, SrcReg)) {
     // C-14. `movc` is a MOVE, not a copy: on CVA6 it writes cnull to its SOURCE
     // whenever the source is not a non-linear capability
@@ -737,6 +761,30 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     return;
   }
 
+  // Between the two classes. A capability register and an integer register are
+  // the SAME hardware register at two widths -- X is C's sub_cap_addr
+  // sub-register -- so this is an integer move of the address, and it clears the
+  // tag. That is what both directions mean: reading a capability as an integer
+  // discards its authority, and writing an integer into a capability register
+  // produces an untagged capability, which is exactly what inttoptr asks for.
+  if (Capstone::GPCRRegClass.contains(DstReg) &&
+      Capstone::GPRRegClass.contains(SrcReg)) {
+    Register DstAddr = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
+    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstAddr)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
+        .addImm(0)
+        .addReg(DstReg, RegState::ImplicitDefine);
+    return;
+  }
+  if (Capstone::GPRRegClass.contains(DstReg) &&
+      Capstone::GPCRRegClass.contains(SrcReg)) {
+    Register SrcAddr = TRI->getSubReg(SrcReg, Capstone::sub_cap_addr);
+    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
+        .addReg(SrcAddr, KillFlag | getRenamableRegState(RenamableSrc))
+        .addImm(0);
+    return;
+  }
+
   // VR->VR copies.
   const TargetRegisterClass *RegClass =
       TRI->getCommonMinimalPhysRegClass(SrcReg, DstReg);
@@ -759,7 +807,15 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   MachineFrameInfo &MFI = MF->getFrameInfo();
 
   unsigned Opcode;
-  if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
+  // A capability spills with STC, an integer with SD/SW. That used to be decided
+  // by asking how wide GPR is -- 128, so use STC -- which is the same question
+  // the register class now answers directly.
+  if (Capstone::GPCRRegClass.hasSubClassEq(RC)) {
+    // gp-free keeps ra as a plain integer return address.
+    Opcode = (capstoneGpFreeAbiActive() && SrcReg == Capstone::C1)
+                 ? Capstone::SD
+                 : Capstone::STC;
+  } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
     if (Size == 128) {
       if (capstoneGpFreeAbiActive() && SrcReg == Capstone::X1)
@@ -849,7 +905,12 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
       Flags & MachineInstr::FrameDestroy ? MBB.findDebugLoc(I) : DebugLoc();
 
   unsigned Opcode;
-  if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
+  // Mirror of storeRegToStackSlot: the class decides.
+  if (Capstone::GPCRRegClass.hasSubClassEq(RC)) {
+    Opcode = (capstoneGpFreeAbiActive() && DstReg == Capstone::C1)
+                 ? Capstone::LD
+                 : Capstone::LDC;
+  } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
     if (Size == 128) {
       if (capstoneGpFreeAbiActive() && DstReg == Capstone::X1)

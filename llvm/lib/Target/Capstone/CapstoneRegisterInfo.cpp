@@ -29,9 +29,11 @@
 
 using namespace llvm;
 
+// Was a list of the three frame registers. It is a class question now: sp, fp
+// and the base pointer are capability registers, and so is anything else the
+// frame code is handed that lives in GPCR.
 static bool isCapabilityFrameReg(Register Reg) {
-  return Reg == Capstone::X2 || Reg == Capstone::X8 ||
-         Reg == CapstoneABI::getBPReg();
+  return Capstone::GPCRRegClass.contains(Reg);
 }
 
 static cl::opt<bool> DisableCostPerUse("capstone-disable-cost-per-use",
@@ -699,7 +701,7 @@ bool CapstoneRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
     }
 
     int64_t MaxFPOffset = Offset - CalleeSavedSize;
-    return !isFrameOffsetLegal(MI, Capstone::X8, MaxFPOffset);
+    return !isFrameOffsetLegal(MI, Capstone::C8, MaxFPOffset);
   }
 
   // Assume 128 bytes spill slots size to estimate the maximum possible
@@ -708,7 +710,7 @@ bool CapstoneRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
   // real one for Capstone.
   int64_t MaxSPOffset = Offset + 128;
   MaxSPOffset += MFI.getLocalFrameSize();
-  return !isFrameOffsetLegal(MI, Capstone::X2, MaxSPOffset);
+  return !isFrameOffsetLegal(MI, Capstone::C2, MaxSPOffset);
 }
 
 // Determine whether a given base register plus offset immediate is
@@ -780,7 +782,7 @@ int64_t CapstoneRegisterInfo::getFrameIndexInstrOffset(const MachineInstr *MI,
 
 Register CapstoneRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? Capstone::X8 : Capstone::X2;
+  return TFI->hasFP(MF) ? Capstone::C8 : Capstone::C2;
 }
 
 StringRef CapstoneRegisterInfo::getRegAsmName(MCRegister Reg) const {

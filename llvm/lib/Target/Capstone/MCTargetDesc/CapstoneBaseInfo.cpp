@@ -117,7 +117,8 @@ ABI getTargetABI(StringRef ABIName) {
 // To avoid the BP value clobbered by a function call, we need to choose a
 // callee saved register to save the value. RV32E only has X8 and X9 as callee
 // saved registers and X8 will be used as fp. So we choose X9 as bp.
-MCRegister getBPReg() { return Capstone::X9; }
+// The base pointer is a capability, like sp and fp.
+MCRegister getBPReg() { return Capstone::C9; }
 
 // Returns the register holding shadow call stack pointer.
 MCRegister getSCSPReg() { return Capstone::X3; }

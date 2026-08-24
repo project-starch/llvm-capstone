@@ -251,6 +251,8 @@ def GPRMemZeroOffset : MemOperand<GPR> {
 }
 
 def GPRMem : MemOperand<GPR>;
+// A capability used as a memory base.
+def GPCRMem : MemOperand<GPCR>;
 
 def SPMem : MemOperand<SP>;
 
@@ -1746,13 +1748,11 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
-// NOTE: this instantiation only covers RV32. A pseudo that mixes a HwMode type
-// (XLenVT) with a fixed one (c128) gets only the RV32 expansion and the RV64
-// pattern is dropped with no diagnostic; typing the compare i64 instead fails
-// differently, because GPR has no i64 under RV32. A capability select therefore
-// never matches here on capstone64 -- lowerSELECT expands it to a branch
-// instead, which is the path i128 selects already took.
-defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, c128>;
+// Both types are now HwMode types (CLenVT and XLenVT), so the pseudo expands
+// consistently in each mode. It used to mix a HwMode type with a fixed c128,
+// which silently produced only the RV32 half. lowerSELECT still expands a
+// capability select to a branch, so this is the pseudo that path emits.
+defm Select_GPRCAP : SelectCC_GPR_rrirr<GPCR, CLenVT>;
 
 class SelectCompressOpt<CondCode Cond>
     : Pat<(capstone_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
@@ -2401,31 +2401,33 @@ def : Pat<(int_capstone_pause), (FENCE 0x1, 0x0)>;
 
 // LDC: Capability Load 128-bit
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPR:$rd),
-                  (ins GPRMem:$rs1, simm12_i64_op:$imm12),
+def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPCR:$rd),
+                  (ins GPCRMem:$rs1, simm12_i64_op:$imm12),
                   "ldc", "$rd, ${imm12}(${rs1})">;
 
 // STC: Capability Store 128-bit
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
-                  (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
+                  (ins GPCR:$rs2, GPCRMem:$rs1, simm12_i64_op:$imm12),
                   "stc", "$rs2, ${imm12}(${rs1})">;
 
-// "When we see a load/store of a capability -> use LDC/STC"
-def : LdPat<load, LDC, c128>;
-def : StPat<store, STC, GPR, c128>;
+// No LdPat/StPat for LDC/STC. They are selected in CapstoneDAGToDAGISel::
+// selectLDC_STC, which has to pick between LDC/LD/SD/SW/SH/SB by memory VT and
+// fold the displacement itself. The patterns that used to sit here produced
+// NOTHING -- `Capstone::LDC` never appeared in the generated matcher at all --
+// because LdPat types its base operand XLenVT, which a capability is not.
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 // CIncOffset (Register form): increment the cursor of a capability
 // by a given amount (offset): ptr = ptr + rs2
-def CIncOffset : RVInstR<0b0001100, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                         (ins GPR:$rs1, GPR:$rs2),
+def CIncOffset : RVInstR<0b0001100, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                         (ins GPCR:$rs1, GPR:$rs2),
                          "cincoffset", "$rd, $rs1, $rs2">;
 
 // CIncOffsetImm (Immediate form): increment the cursor of a capability
 // by a given amount (offset):  ptr = ptr + imm
-def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPR:$rd),
-                            (ins GPR:$rs1, simm12_i64_op:$imm12),
+def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPCR:$rd),
+                            (ins GPCR:$rs1, simm12_i64_op:$imm12),
                             "cincoffsetimm", "$rd, $rs1, $imm12">;
 }
 
@@ -2434,24 +2436,22 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def LCC : RVInstRI<0b0000100, 0b001, OPC_CAP_OP,
                    (outs GPR:$rd), // Result: integer
                    // Input: Capability + 5-bit field specifier
-                   (ins GPR:$rs1, uimm5_i64:$imm5),
+                   (ins GPCR:$rs1, uimm5_i64:$imm5),
                    "lcc", "$rd, $rs1, $imm5">;
 
 // Mappings for LCC fields (Table 8 from Spec)
 // 0: valid, 1: type, 2: cursor, 3: base, 4: end, 5: perms
 // get_tag, get_type, get_cursor, get_base, get_end, get_perm
 // Field 1 answers cap_type-1, so a NON-capability reads 7 (NOT_CAP(0)-1 wraps in 3 bits).
-def : Pat<(int_capstone_cap_get_tag GPR:$src),    (LCC GPR:$src, 0)>;
-def : Pat<(int_capstone_cap_get_cursor GPR:$src), (LCC GPR:$src, 2)>;
-def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
-def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;
-def : Pat<(int_capstone_cap_get_perm GPR:$src),   (LCC GPR:$src, 5)>;
+// The five LCC field reads are selected in CapstoneDAGToDAGISel::selectLCCField.
+// They cannot be patterns: the intrinsics take llvm_anyptr_ty, and TableGen
+// cannot reconcile iPTRAny with a capability value type.
 
 // SHRINK: Capability bounds narrowing
 // rd = shrink(cap_in, base, end)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Constraints = "$rd = $cap_in" in
-def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                     (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2),
+def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                     (ins GPCR:$cap_in, GPR:$rs1, GPR:$rs2),
                      "shrink", "$rd, $rs1, $rs2">;
 
 // Scalar i64/i32 values sometimes need to flow through the i128 carrier type
@@ -2470,7 +2470,7 @@ def PseudoSCALAR_COPY_I128 : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
 // Used to copy capabilities between GPRs preserving the Tag bit.
 // Format: R-type, but rs2 is unused (must be 0).
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
   let rs2 = 0;
 }
@@ -2494,20 +2494,20 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
 
 // TIGHTEN: Permission Tightening (RI-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def TIGHTEN : RVInstRI<0b0000010, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                       (ins GPR:$rs1, uimm5_i64:$imm5),
+def TIGHTEN : RVInstRI<0b0000010, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                       (ins GPCR:$rs1, uimm5_i64:$imm5),
                        "tighten", "$rd, $rs1, $imm5">;
 
 // SCC: Set Cursor Capability (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                  (ins GPR:$rs1, GPR:$rs2),
+def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                  (ins GPCR:$rs1, GPR:$rs2),
                   "scc", "$rd, $rs1, $rs2">;
 
 // INIT: Initialization (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                   (ins GPR:$rs1, GPR:$rs2),
+def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                   (ins GPCR:$rs1, GPR:$rs2),
                    "init", "$rd, $rs1, $rs2">;
 
 // DELIN: Delinearisation
@@ -2517,8 +2517,8 @@ def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // must not be machine-DCE'd or CSE'd away.
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0,
     Constraints = "$rd = $cap_in" in
-def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                    (ins GPR:$cap_in),
+def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                    (ins GPCR:$cap_in),
                     "delin", "$rd"> {
   let rs1 = 0;
   let rs2 = 0;
@@ -2550,7 +2550,7 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // CapstoneISelDAGToDAG.cpp selectLGA and
 // llvm/test/CodeGen/Capstone/global-base-nonlinear.ll.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
-def PseudoCapGlobalBase : Pseudo<(outs GPR:$rd), (ins GPR:$rs1), []>;
+def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
 
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so
@@ -2559,14 +2559,14 @@ def PseudoCapGlobalBase : Pseudo<(outs GPR:$rd), (ins GPR:$rs1), []>;
 // register allocator would otherwise pick x0, and helper_csmrev writes rd
 // unconditionally -- clobbering the hardwired-zero register.
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
-def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPRNoX0:$rd),
-                   (ins GPR:$rs1), "mrev", "$rd, $rs1"> {
+def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPCRNoC0:$rd),
+                   (ins GPCR:$rs1), "mrev", "$rd, $rs1"> {
   let rs2 = 0;
 }
 
 // SEAL: Seal a capability
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "seal", "$rd, $rs1"> {
   let rs2 = 0;
 }
@@ -2582,8 +2582,8 @@ def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
 // REVOKE: Revoke capability globally (Memory Sweep)
 let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1,
     Constraints = "$rd = $rs1" in
-def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                     (ins GPR:$rs1), "revoke", "$rs1"> {
+def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                     (ins GPCR:$rs1), "revoke", "$rs1"> {
   let rs2 = 0;
   let rd = 0; // Don't care field encoded as 0
 }

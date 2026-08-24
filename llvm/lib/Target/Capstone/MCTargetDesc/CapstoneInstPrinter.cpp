@@ -16,6 +16,7 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/CommandLine.h"
@@ -82,6 +83,14 @@ void CapstoneInstPrinter::printInst(const MCInst *MI, uint64_t Address,
 }
 
 void CapstoneInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
+  // A capability register and its X sub-register are the SAME hardware register
+  // on Capstone; only the type differs. Print the X name, because that is what
+  // the assembler and the board accept. The record names have to stay distinct
+  // (the compressed-instruction emitter resolves registers by asm name), so the
+  // mapping happens here, once.
+  if (MRI.getRegClass(Capstone::GPCRRegClassID).contains(Reg))
+    Reg = MRI.getSubReg(Reg, Capstone::sub_cap_addr);
+
   markup(O, Markup::Register) << getRegisterName(Reg);
 }
 

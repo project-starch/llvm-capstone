@@ -192,7 +192,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // c128 at all. drop-i128 removes the i128 half.
   if (Subtarget.is64Bit())
     addRegisterClass(MVT::i128, &Capstone::GPRRegClass);
-  addRegisterClass(MVT::c128, &Capstone::GPRRegClass);
+  addRegisterClass(MVT::c128, &Capstone::GPCRRegClass);
 
   if (Subtarget.hasStdExtZfhmin())
     addRegisterClass(MVT::f16, &Capstone::FPR16RegClass);
@@ -349,7 +349,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // Compute derived properties from the register classes.
   computeRegisterProperties(STI.getRegisterInfo());
 
-  setStackPointerRegisterToSaveRestore(Capstone::X2);
+  setStackPointerRegisterToSaveRestore(Capstone::C2);
 
   setLoadExtAction({ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}, XLenVT,
                    MVT::i1, Promote);
@@ -10074,7 +10074,7 @@ SDValue CapstoneTargetLowering::lowerGlobalAddress(
     int Index = getGpCaptableIndex(GV);
     if (Index >= 0) {
       // Address of the cap-table slot: gp with cursor at index * capWidth.
-      SDValue GP = DAG.getRegister(Capstone::X3, MVT::c128);
+      SDValue GP = DAG.getRegister(Capstone::C3, MVT::c128);
       SDValue Slot = DAG.getNode(
           CapstoneISD::CIncOffset, DL, MVT::c128, GP,
           DAG.getConstant((int64_t)Index * 16, DL, MVT::i64));
@@ -10531,7 +10531,8 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
       if (!C)
         return V;
       if (C->isZero())
-        return DAG.getRegister(Capstone::X0, VT);
+        return DAG.getRegister(
+            isCapstoneCapabilityVT(VT) ? Capstone::C0 : Capstone::X0, VT);
       if (C->getAPIntValue().getActiveBits() > XLenVT.getSizeInBits())
         return SDValue();
       SDValue KCap = DAG.getConstant(
@@ -24782,7 +24783,7 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
       EVT CapPtrVT = getPointerTy(DAG.getDataLayout(),
                                   DAG.getDataLayout().getAllocaAddrSpace());
       if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, Capstone::X2, CapPtrVT);
+        StackPtr = DAG.getCopyFromReg(Chain, DL, Capstone::C2, CapPtrVT);
       SDValue Address =
           DAG.getNode(CapstoneISD::CIncOffset, DL, CapPtrVT, StackPtr,
                       DAG.getConstant(VA.getLocMemOffset(), DL, XLenVT));

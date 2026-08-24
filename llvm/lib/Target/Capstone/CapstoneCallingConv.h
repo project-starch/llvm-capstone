@@ -38,6 +38,7 @@ bool CC_Capstone_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
 namespace Capstone {
 
 ArrayRef<MCPhysReg> getArgGPRs(const CapstoneABI::ABI ABI);
+ArrayRef<MCPhysReg> getArgGPCRs(const CapstoneABI::ABI ABI);
 
 } // end namespace Capstone
 
