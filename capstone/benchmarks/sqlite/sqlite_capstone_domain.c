@@ -325,6 +325,14 @@ unsigned long capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capston
 unsigned long capstone_w_ctl;
 unsigned long capstone_w_slotaddr;
 unsigned long capstone_mk_slot, capstone_mk_type, capstone_mk_ctl, capstone_mk_calls, capstone_mk_bad;
+/* ENTRY MARKER, written into the SHARED REGION so it survives a wedge.
+   A wedge destroys software's ability to REPORT; it does not destroy MEMORY. DRAM survives and
+   only a power cycle clears it, and the driver already halts the core and reads over JTAG. So an
+   observation does not have to survive in software, only in memory.
+   The one question left: at entry to the faulting function, was the incoming pWInfo ALREADY zero
+   (the caller passed NULL -> software) or healthy (-> the value was lost between the spill and
+   the reload, 18 instructions later, to the SAME slot)? */
+volatile unsigned long *capstone_entry_mark;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6098,6 +6106,12 @@ static unsigned capstone_slt_entry(void) {
      value untouched, so an unset region behaves exactly as before. */
   if ((unsigned long)hostcall_metadata->phase != 0UL)
     capstone_vdbe_clamp_n = (unsigned long)hostcall_metadata->phase;
+
+  /* Point the entry marker at a fixed, otherwise-unused offset in the shared region. The host
+     prints that region's physical BASE, so the slot is readable over JTAG after a wedge. */
+  capstone_entry_mark = (volatile unsigned long *)((char *)hostcall_payload + 0x800);
+  capstone_entry_mark[0] = 0xE47C0DEUL;   /* sentinel: the marker code RAN */
+  capstone_entry_mark[1] = 0; capstone_entry_mark[2] = 0; capstone_entry_mark[3] = 0;
 
   in_len = (unsigned long)hostcall_metadata->offset;
   if (in_len == 0UL || in_len > SQLITE_HC_SLT_MAX_INPUT)

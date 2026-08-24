@@ -2144,6 +2144,48 @@ def main():
                             # survives a wedge; only a power cycle clears it.
                             _tp = os.environ.get("WEDGE_TAG_PADDR", "")
                             _tc = os.environ.get("WEDGE_TAG_CTL_PADDR", "")
+                            # PREFERRED FORM: an OFFSET within the domain image plus THIS ARM's
+                            # own DBAS, scraped from the arm's own transcript. An absolute paddr
+                            # cannot be known before the boot -- DBAS varies per boot AND per arm
+                            # (boot #26 took 0x82800000/0x82C00000, not the earlier pattern), so a
+                            # constant address would be wrong by whole megabytes while still
+                            # looking like an address. The offset IS stable: the same binary gives
+                            # the same slot offset under QEMU and on silicon (measured: 0x391430
+                            # both vehicles for the width build).
+                            # ENTRY MARKER, read from the SHARED REGION -- the one channel that
+                            # survives a wedge. A wedging run cannot REPORT, but DRAM persists and
+                            # the hart is already halted here. The domain writes, at
+                            # shared_base + 0x800:
+                            #   [0] 0xE47C0DE sentinel -- the marker code RAN
+                            #   [1] call count
+                            #   [2] the incoming pWInfo VALUE (its cursor, if a capability)
+                            #   [3] its type: 1 = NONLIN healthy, 7 = NOT_CAP
+                            # This settles the last question: was the register ALREADY zero at
+                            # entry (caller passed NULL -> software), or healthy at entry and zero
+                            # at the reload 18 instructions later (-> lost in between)?
+                            _bm = re.findall(r"BASE:([0-9A-Fa-f]{8})", console.uart_text)
+                            if _bm:
+                                _sb = int(_bm[-1], 16)
+                                _mk = _rd(f"0x{_sb + 0x800:x}", "4gx")
+                                print(f"  [wedge] entry marker @ shared 0x{_sb + 0x800:x}: "
+                                      f"{_mk if _mk else 'READ FAILED'}", flush=True)
+                                print("          [sentinel, calls, pWInfo value, type] -- "
+                                      "sentinel != 0xe47c0de means the marker never ran and the "
+                                      "other three words are NOT data.", flush=True)
+                            _toff = os.environ.get("WEDGE_TAG_OFF", "")
+                            if _toff and not _tp:
+                                _utxt = console.uart_text
+                                _cut = _utxt.rfind("TEST ")
+                                _dm = re.findall(r"DBAS:([0-9A-Fa-f]{8})",
+                                                 _utxt[_cut:] if _cut > 0 else _utxt)
+                                if _dm:
+                                    _dbas = int(_dm[-1], 16)
+                                    _tp = hex(_dbas + int(_toff, 0))
+                                    print(f"  [wedge] tag paddr from THIS ARM's DBAS "
+                                          f"0x{_dbas:x} + off {_toff} -> {_tp}", flush=True)
+                                else:
+                                    print("  [wedge] WEDGE_TAG_OFF set but no DBAS in this arm's "
+                                          "transcript -- refusing to guess an address", flush=True)
                             def _rd(expr, fmt):
                                 _s0 = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"x/{fmt} {expr}\n")

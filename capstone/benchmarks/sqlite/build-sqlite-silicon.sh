@@ -1904,6 +1904,108 @@ PYGRAN
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PAD_GRAN=${CAPSTONE_PAD_GRAN}"
 fi
 
+# CAPSTONE_SLOT_MARKER=1 -- record the subject slot ADDRESS and the SPILL-TIME tag, lightly.
+#
+# Two things this exists for, both of which the heavy CAPSTONE_WIDTH_PAIR probe does badly:
+#
+# 1. THE SLOT ADDRESS DOES NOT TRANSFER BETWEEN BUILDS. The stack sits after
+#    code|blob|captable|storage, so a build whose code_len differs by even a few hundred bytes
+#    has a different stack base. Measured: the width build is 1445016 and the pad10 build
+#    1444680, so an address taken from one is WRONG for the other -- and wrong by an amount
+#    small enough to look plausible. Each build must report its own.
+#
+# 2. THE SPILL-SIDE FORK, with no reload. WIDTH_PAIR forces `*(WhereInfo *volatile *)&pWInfo`,
+#    an extra `ldc` -- the operation under suspicion, and the likeliest reason that build stops
+#    faulting. This queries the REGISTER about to be spilled instead: `lcc` selector 1 is total,
+#    cannot trap, and touches no memory. If the register is healthy at spill time, the spill
+#    side is clean and the fault is on the reload side.
+#
+# Deliberately NOT branching on the result: recording only, so control flow is untouched.
+if [[ -n "${CAPSTONE_SLOT_MARKER:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYMARK'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("SLOT_MARKER: callee anchor count %d" % s.count(CALLEE))
+s = s.replace(CALLEE, CALLEE + """
+  { unsigned long cap_mk_ty, cap_mk_ctl = 0x1234UL, cap_mk_cv;
+    __asm__ volatile ("lcc %0, %1, 1" : "=r"(cap_mk_ty) : "r"(pWInfo));
+    __asm__ volatile ("lcc %0, %1, 1" : "=r"(cap_mk_cv) : "r"(cap_mk_ctl));
+    capstone_mk_calls++;
+    if( capstone_mk_calls==1UL ){
+      capstone_mk_slot = (unsigned long)(void *)&pWInfo;
+      capstone_mk_type = cap_mk_ty;
+      capstone_mk_ctl  = cap_mk_cv;      /* must read 7: proves the query answers NOT_CAP */
+    }
+    if( cap_mk_ty!=1UL ) capstone_mk_bad++;   /* 1 == NONLIN, the measured healthy value */
+  }""", 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("SLOT_MARKER: prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_mk_slot, capstone_mk_type, capstone_mk_ctl, capstone_mk_calls, capstone_mk_bad;\n", 1)
+open(path, "w").write(s)
+print("   SLOT_MARKER injected (register query only, no reload)")
+PYMARK
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SLOT_MARKER=1"
+fi
+
+# CAPSTONE_ENTRY_MARK=1 -- record the INCOMING pWInfo into memory that survives a wedge.
+#
+# The spill and the reload are PROVEN to use the same slot: `stc a2,0x0(a0)` and `ldc a4,0x0(a0)`
+# with `a0 = s0-0x70` in both, 18 instructions apart, straight-line, no call between. So a
+# wrong-slot read is excluded and exactly one question remains:
+#     was the register ALREADY zero at entry (the caller passed NULL -> software),
+#     or healthy at entry and zero at reload (-> lost in between)?
+#
+# A wedging run cannot REPORT, but MEMORY SURVIVES -- only a power cycle clears DRAM, and the
+# driver already halts the core and reads over JTAG. So the answer goes into the shared region,
+# whose physical BASE the host prints, and is read at the wedge.
+#
+# `sd` of the register captures its VALUE whether or not it is a capability (a capability stores
+# its cursor); `lcc` selector 1 is TOTAL and cannot trap, so it captures the type safely. Neither
+# can fault, so the marker cannot itself change whether the run wedges.
+if [[ -n "${CAPSTONE_ENTRY_MARK:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYMARK2'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+CALLEE = """SQLITE_PRIVATE Bitmask sqlite3WhereCodeOneLoopStart(
+  Parse *pParse,       /* Parsing context */
+  Vdbe *v,             /* Prepared statement under construction */
+  WhereInfo *pWInfo,   /* Complete information about the WHERE clause */
+  int iLevel,          /* Which level of pWInfo->a[] should be coded */
+  WhereLevel *pLevel,  /* The current level pointer */
+  Bitmask notReady     /* Which tables are currently available */
+){"""
+if s.count(CALLEE) != 1:
+    sys.exit("ENTRY_MARK: callee anchor count %d" % s.count(CALLEE))
+s = s.replace(CALLEE, CALLEE + """
+  if( capstone_entry_mark ){
+    unsigned long em_ty;
+    __asm__ volatile("lcc %0, %1, 1" : "=r"(em_ty) : "r"(pWInfo));   /* total, cannot trap */
+    capstone_entry_mark[1] += 1UL;                 /* call count */
+    capstone_entry_mark[2] = (unsigned long)(pWInfo);  /* the VALUE (cursor if a capability) */
+    capstone_entry_mark[3] = em_ty;                /* 1 = NONLIN healthy, 7 = NOT_CAP */
+  }""", 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("ENTRY_MARK: prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR + "extern volatile unsigned long *capstone_entry_mark;\n", 1)
+open(path, "w").write(s)
+print("   ENTRY_MARK injected (survives a wedge; read over JTAG)")
+PYMARK2
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_ENTRY_MARK=1"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on

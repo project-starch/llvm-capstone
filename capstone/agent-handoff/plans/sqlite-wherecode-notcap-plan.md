@@ -743,3 +743,67 @@ match stands. But S-07 is a **tag**-loss family and this measurement says the va
 so the filing needs qualifying: same shape, possibly different mechanism. Worth re-reading whether
 instance 1 ever had a `tval` reading of its own — if it did and it was pointer-like, the two are
 different faults despite the identical shape.
+
+---
+
+# The entry marker perturbs too — and the structural wall, restated precisely
+
+`CAPSTONE_ENTRY_MARK` writes the incoming `pWInfo` value and type into the SHARED REGION at
+`base + 0x800`, so it survives a wedge and is read over JTAG while the core is halted. That was
+meant to escape the bind that "any observation which survives prevented what it was observing",
+because **memory survives a wedge; only REPORTING dies**.
+
+It escapes the *reporting* half. It does not escape the *perturbation* half.
+
+    sqem (entry marker)   completed 3 / 3, wedged 0
+    sqpad10 (10 nops)     wedged 2 / 3
+    sqrt (un-probed)      wedged 5 / 5 + the A/B baseline
+
+Three consecutive completions at a ~2-in-3 rate is p ~= 0.04 — suggestive, not proof. But it
+matches what the S-07 folder recorded from three instrumented builds: **"a software probe can
+never be the thing that fires — the uncovered site always kills the run first."**
+
+## Two instrument saves in the same campaign, both of which would have manufactured findings
+
+* **The staleness gate refused a spurious `tval`.** A wedging arm latched `mcause 9` at
+  `mepc 0xffffffff800072cc` — a kernel ecall — with `tval = 0x73`. The gate (added after it
+  misread a VOID boot) rejected it. Without it: "the operand was 0x73", from another
+  process's trap.
+* **A "wedge" that never entered.** The same arm read `G/enter: False`, dying in setup at
+  `SQ: C/mkregion2` with `RGNN = 18`: **monitor region-pool exhaustion**. Each SLT arm costs
+  1 `create_dom` + 2 `create_region`, so TWO SLT arms plus a control exhausts the pool. The driver
+  prints `NO RETURN`, which reads exactly like a wedge. **One SLT arm per boot.**
+
+## Where the fault actually stands
+
+**ESTABLISHED**
+* Faults at `sqlite3WhereCodeOneLoopStart+0x8c`, `cincoffsetimm` after `ldc` from `s0-0x70`,
+  mcause 25, across 3 binaries, 2 bitstreams, ~10 boots.
+* **The `tval` instrument WORKS** (fired at `0xBEEF`, `mepc` attributing it to the control's own
+  instruction), so every `tval == 0` is real data.
+* **TAG LOSS IS EXCLUDED.** `tval` carries the rs1 cursor; a de-tagged capability keeps its
+  address bits and would read pointer-like. It read 0 — the VALUE was zero.
+* **The S-10 fix is exonerated** (A/B on `39b21639d`), **S-10b is excluded** (a granule-aligned
+  `ldc` presents word 0, the word the interlock DOES match; and its polarity is tag *survival*),
+  **writeback displacement is excluded** (switch 204, 8 boots, selftest firing),
+  **wrong-slot read is excluded** (spill and reload both `a0 = s0-0x70`, straight-line, no call).
+* Shape, granule count, buffer pressure, the `ctag=0` class, load->store->load, the stack region
+  and derived-subject metadata are all excluded by **five counted 16384-trial arms**.
+
+**THE ONE OPEN QUESTION**, unchanged: was the register **already zero at entry** (caller passed
+NULL -> software, ours) or **healthy at entry and zero at the reload** 18 instructions later
+(-> silicon)?
+
+**AND IT MAY NOT BE ANSWERABLE BY A SOFTWARE PROBE AT ALL**, because every probe built to answer
+it has removed the fault. That is not a failure of any one probe; it is the same wall the S-07
+folder hit with three instrumented builds.
+
+## What would actually settle it, and it is not more software
+
+* **An RTL-side trace** of the spill/reload pair with the real workload's state — which needs the
+  `axi_delayer` or an equivalent, since the microbenchmark environment provably cannot hold the
+  triggering condition (peak write-buffer occupancy 1 against depth 8).
+* **Or a clear on the s07 LDC recorder** (`load_unit.sv:766` is one-shot with no clear and is
+  consumed by boot software before any domain runs), which would make the existing granule
+  apertures usable and answer it with no new probe at all. Purely additive; competes for a
+  synthesis slot.
