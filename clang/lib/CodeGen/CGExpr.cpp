@@ -5324,7 +5324,6 @@ static Address maybeNarrowSubobjectBounds(CodeGenFunction &CGF,
   llvm::Value *P = addr.emitRawPointer(CGF);
   llvm::Type *PtrTy = P->getType();
   llvm::Type *I64 = llvm::Type::getInt64Ty(VMCtx);
-  llvm::Type *I128 = llvm::Type::getInt128Ty(VMCtx);
 
   // base = cursor(&field); end = base + sizeof(field). Same idiom as the heap
   // allocator shim: read the cursor as a scalar address (no forging), then
@@ -5334,11 +5333,11 @@ static Address maybeNarrowSubobjectBounds(CodeGenFunction &CGF,
   llvm::Value *Cursor = Builder.CreateCall(GetCursor, {P});
   llvm::Value *SizeV = llvm::ConstantInt::get(I64, Size);
   llvm::Value *End = Builder.CreateAdd(Cursor, SizeV);
-  llvm::Value *BaseW = Builder.CreateZExt(Cursor, I128);
-  llvm::Value *EndW = Builder.CreateZExt(End, I128);
+  // The bounds are XLen values and the intrinsic now says so; they used to be
+  // widened to i128 only because everything on this target was.
   llvm::Function *Shrink =
       CGF.CGM.getIntrinsic(llvm::Intrinsic::capstone_cap_shrink, {PtrTy});
-  llvm::Value *NP = Builder.CreateCall(Shrink, {P, BaseW, EndW});
+  llvm::Value *NP = Builder.CreateCall(Shrink, {P, Cursor, End});
   return addr.withPointer(NP, addr.isKnownNonNull());
 }
 

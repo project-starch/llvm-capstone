@@ -88,7 +88,7 @@ let TargetPrefix = "capstone" in {
   // ptr shrink(ptr cap, i128 new_base, i128 new_end)
   // We use i128 for base/end to match the GPR register class size directly.
   def int_capstone_cap_shrink :
-    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty, llvm_i128_ty],
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty, llvm_i64_ty],
               [IntrNoMem]>;
 
   // ptr tighten(ptr cap, i64 imm5)
@@ -101,7 +101,7 @@ let TargetPrefix = "capstone" in {
   // The cursor is an integer, but we use i128 so it fits smoothly into
   // the GPR class (like SHRINK).
   def int_capstone_cap_scc :
-    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty],[IntrNoMem]>;
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty],[IntrNoMem]>;
 
   // ptr delin(ptr cap)
   // Mutates the revocation tree: clears the node's `linear` flag, which decides
@@ -113,7 +113,7 @@ let TargetPrefix = "capstone" in {
 
   // ptr init(ptr cap, i128 value)
   def int_capstone_cap_init :
-    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty], [IntrNoMem]>;
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty], [IntrNoMem]>;
 
   // ptr mrev(ptr cap)
   // Mutates the revocation tree: allocates a node senior to the source's and

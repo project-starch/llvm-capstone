@@ -26048,7 +26048,8 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
       Op.isAligned(Align(16))) {
     unsigned NumChunks = Op.size() / 16;
     if (NumChunks <= 32) {
-      MemOps.assign(NumChunks, MVT::i128);
+      // Capability-grained copy chunks are capabilities.
+      MemOps.assign(NumChunks, MVT::c128);
       return true;
     }
   }

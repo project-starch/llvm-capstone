@@ -8,10 +8,10 @@ declare i64 @llvm.capstone.cap.get.end.p200(ptr addrspace(200))
 declare i64 @llvm.capstone.cap.get.perm.p200(ptr addrspace(200))
 
 ; --- Non-destructive manipulations (no side effects) ---
-declare ptr addrspace(200) @llvm.capstone.cap.shrink.p200(ptr addrspace(200), i128, i128)
+declare ptr addrspace(200) @llvm.capstone.cap.shrink.p200(ptr addrspace(200), i64, i64)
 declare ptr addrspace(200) @llvm.capstone.cap.tighten.p200(ptr addrspace(200), i64)
-declare ptr addrspace(200) @llvm.capstone.cap.scc.p200(ptr addrspace(200), i128)
-declare ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200), i128)
+declare ptr addrspace(200) @llvm.capstone.cap.scc.p200(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200), i64)
 declare ptr addrspace(200) @llvm.capstone.cap.seal.p200(ptr addrspace(200))
 
 ; --- Revocation-tree mutations (side effects; see cap-mrev-delin-side-effects.ll) ---
@@ -68,9 +68,9 @@ entry:
 
 ; CHECK-LABEL: test_shrink:
 ; CHECK: shrink a0, a1, a2
-define ptr addrspace(200) @test_shrink(ptr addrspace(200) %p, i128 %base, i128 %end) {
+define ptr addrspace(200) @test_shrink(ptr addrspace(200) %p, i64 %base, i64 %end) {
 entry:
-  %0 = call ptr addrspace(200) @llvm.capstone.cap.shrink.p200(ptr addrspace(200) %p, i128 %base, i128 %end)
+  %0 = call ptr addrspace(200) @llvm.capstone.cap.shrink.p200(ptr addrspace(200) %p, i64 %base, i64 %end)
   ret ptr addrspace(200) %0
 }
 
@@ -85,9 +85,9 @@ entry:
 
 ; CHECK-LABEL: test_scc:
 ; CHECK: scc a0, a0, a1
-define ptr addrspace(200) @test_scc(ptr addrspace(200) %p, i128 %cursor) {
+define ptr addrspace(200) @test_scc(ptr addrspace(200) %p, i64 %cursor) {
 entry:
-  %0 = call ptr addrspace(200) @llvm.capstone.cap.scc.p200(ptr addrspace(200) %p, i128 %cursor)
+  %0 = call ptr addrspace(200) @llvm.capstone.cap.scc.p200(ptr addrspace(200) %p, i64 %cursor)
   ret ptr addrspace(200) %0
 }
 
@@ -101,9 +101,9 @@ entry:
 
 ; CHECK-LABEL: test_init:
 ; CHECK: init a0, a0, a1
-define ptr addrspace(200) @test_init(ptr addrspace(200) %p, i128 %val) {
+define ptr addrspace(200) @test_init(ptr addrspace(200) %p, i64 %val) {
 entry:
-  %0 = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %p, i128 %val)
+  %0 = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %p, i64 %val)
   ret ptr addrspace(200) %0
 }
 
