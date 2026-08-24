@@ -580,3 +580,54 @@ of producing one bit.
 * **A stack local holding a capability needs explicit `aligned(16)`.** Without it the `stc`
   raises `STORE_ADDRESS_MISALIGNED` and the domain produces **NO OUTPUT AT ALL** — indis-
   tinguishable from a hang, and it cost two QEMU cycles to find.
+
+---
+
+# A/B RESULT: the S-10 fix is EXONERATED. The fault predates it.
+
+Reflashed to `caplifive_s07only_39b21639d.bit` — **S-07 fix PRESENT, S-10 fix ABSENT**, ancestry
+verified both directions (`5c5f4e3a7` IS an ancestor, `4fee13b2d` is NOT), sha `f5af588fc676cd9a`,
+from the exit-0 archive. Resident name RE-READ after a power cycle rather than trusted from the
+flash call, and independently re-checked by the driver's own preflight.
+
+Everything else held constant: same binary `ee9a9a86ed12f06b`, same arms, same firmware image,
+same control.
+
+| bitstream | S-10 fix | control | `sqrt.dom --slt q_two.test` |
+|---|---|---|---|
+| `caplifive_s10fix_80843404c.bit` | present | 7 s OK | **WEDGE** |
+| `caplifive_s07only_39b21639d.bit` | **absent** | 7 s OK | **WEDGE** |
+
+Same fault, not a different one:
+
+    mcause  0x99 -> 25                                   identical
+    mepc    0x828f4ba0, DBAS 0x82800000 -> VA 0x104ba0
+            = sqlite3WhereCodeOneLoopStart + 0x8c        identical source line
+    sw=204  0x00 with SELFTEST PASS                      displacement still excluded
+
+**N=1 is SUFFICIENT in this direction, and the asymmetry is the point.** Proving *absence* needs
+many repetitions — a single non-wedge at ~25% is not absence. Proving *presence* needs exactly
+one: a fault that does not exist cannot occur by chance. So one wedge settles it.
+
+### What this eliminates
+
+* **The S-10 read-path override is NOT the cause.** It was the last named candidate and the only
+  mechanism that existed uniquely in the flown bitstream. Gone.
+* **"Only in this bitstream" is dead as a property** — it was always an argued claim rather than
+  a measurement, and this is the measurement that refutes it.
+
+### What it promotes
+
+**The pre-existing issue/return desync** (`wt_dcache_wbuffer.sv:612-619`) — a same-word merge into
+an entry whose transaction has already issued, giving DRAM `ctag=1` and L1 `ctag=0`. It is
+deliberately permitted, bounded, converging, and **pre-existing**, which is exactly what a fault
+present in both bitstreams requires. It remains the case that it needs a plain store into the
+subject word that this window does not contain — so it is promoted, not proven.
+
+### Caveat, stated with the result
+
+The two images fail timing by different margins (**−10.629 vs −16.400 ns WNS**), so the
+comparison is not strictly single-variable. It matters far less for this outcome than it would
+have for the other: a **present/absent** split could have been argued as 5.8 ns of margin, but
+**present on both** cannot — the fault occurring on the image with the *better* margin is not
+explicable by margin.
