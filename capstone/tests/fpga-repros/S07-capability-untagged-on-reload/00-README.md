@@ -51,6 +51,72 @@
 > `agent-handoff/ref/RATE-RULE.md`, and it is not S-10.
 
 
+> # SECOND SITE FOR THE INSTANCE-1 RESIDUAL — 2026-08-24. The root cause below does NOT cover it.
+>
+> **Placed ABOVE the root-cause box deliberately**, because that box says it supersedes everything
+> below it and this is the case it does not explain. The mechanism below requires a **plain store
+> into the subject granule**. Instance 1 (`memcpy`, §"Ruled out from disassembly") has none, and
+> neither does this.
+>
+> **New site: `sqlite3WhereCodeOneLoopStart + 0x8c`**, reached from a 588-byte SQLLogicTest
+> reproducer (`benchmarks/sqlite/slt/q_one.test` vs `q_two.test`, differing by one line:
+> `SELECT t1.a FROM t1` vs `SELECT t1.a FROM t1, t1 AS y`, over an EMPTY table).
+>
+>     memcpy+0x2a8  (instance 1)          sqlite3WhereCodeOneLoopStart+0x8c  (this site)
+>       cincoffsetimm a2, s0, -0x60         cincoffsetimm a0, s0, -0x70
+>       ldc           a2, 0x0(a2)           ldc           a4, 0x0(a0)
+>       cincoffset    a1, a2, a1            cincoffsetimm a4, a4, 0xb0
+>       -> mcause 25                        -> mcause 25
+>
+> Same triple as §"THE PATTERN, MEASURED THREE TIMES": a capability spilled to a stack slot,
+> reloaded, and the immediately dependent capability op raising 25. Sporadic, as here: **2 wedges
+> in 3 runs** of one binary.
+>
+> **REPRODUCES ON BOTH BITSTREAMS, with the S-07 fix present in each:**
+>
+> | bitstream | S-10 fix | control | result |
+> |---|---|---|---|
+> | `caplifive_s10fix_80843404c.bit` | present | 7 s OK | **WEDGE** |
+> | `caplifive_s07only_39b21639d.bit` | **absent** | 7 s OK | **WEDGE** |
+>
+> `5c5f4e3a7` is an ancestor of both. Identical signature on each: mcause 25, and the latched
+> `mepc` mapping through that arm's own `DBAS` to `+0x8c` of the same function.
+>
+> ### Contribution back: the CAP_WB/LOAD_WB path has its first EMPIRICAL answer
+>
+> §"What would settle it" lists the register-delivery path — an `ldc` response bypassed to
+> `LOAD_WB` has `cap_result` erased, giving "a NOT_CAP register with a correct cursor, having
+> never touched memory". The folder argues it cannot happen, but from source reading.
+>
+> **Measured: switch 204 reads `0x00` at every wedge across 8 boots, on BOTH bitstreams, with the
+> switch-220 selftest firing in the same boot** — so each zero is a controlled negative, not an
+> unproven one. Displacement onto the watched ports is excluded empirically.
+>
+> ### Also excluded here, by COUNTED arms rather than one bit per boot
+>
+> `wbuf` arms 9-13 (`runtime-qemu/silicon-ladder/wbuf_kernel.h`), 16384 trials each, every arm
+> carrying an in-arm positive control proving the type query answers 7 for a non-capability in the
+> same run — so these are meaningful zeros:
+>
+> * granule count / write-buffer pressure (10 granules against `WtDcacheWbufDepth = 8`) — 0 lost
+> * the `ctag=0` capability-store entry class — 0 lost
+> * the bare spill/other-stores/reload window shape — 0 lost
+> * an `ldc` -> `stc` -> `ldc` chain (the spilled value itself a load result) — 0 lost
+> * the subject slot on the monitor-carved STACK rather than a global — 0 lost
+> * a `shrink`-derived subject (narrowed bounds, derived revnode, type 1 = NONLIN, matching the
+>   faulting capability's measured healthy class) — 0 lost
+>
+> ### NOT established — do not read this as a proven mechanism
+>
+> **No tag has been shown lost.** The FLU `tval` path has never been observed to produce a
+> non-zero value on this silicon: every latched `tval` at a capability wedge reads `0x00`, and the
+> one non-zero on record came from mcause 15, whose `tval` comes from the LSU rather than
+> `ex_stage.sv`. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8` traps with `tval == 0xBEEF`, every
+> `tval == 0` here is NO DATA, and "a tag was lost" and "the value was genuinely zero" are
+> undiscriminated. This site is recorded as a **reproduction**, not as a mechanism.
+>
+> Full trail: `agent-handoff/plans/sqlite-wherecode-notcap-plan.md`.
+
 > # ROOT CAUSE FOUND AND CONFIRMED ON SILICON — 2026-08-19. THIS SUPERSEDES EVERYTHING BELOW.
 >
 > **The write buffer reorders two stores to the same 16-byte granule, and the loser's tag wins.**

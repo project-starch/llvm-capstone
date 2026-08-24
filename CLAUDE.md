@@ -195,6 +195,19 @@ the loss.
 - **Say what you considered and rejected**, so the lead can see the alternatives were weighed
   rather than a rule being reflexively appended.
 
+## Search prior art before investigating, and read PAST the root cause
+
+Before spending board time or building an instrument, search the **issue registry, the per-bug
+repro folders including archived ones, and the commit history** — not only `agent-handoff/`. A
+whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
+of a bug believed to be fixed.
+
+**Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
+individual instances, residuals, and "what would settle it" lists. Reading only the headline root
+cause gave the wrong answer twice — "this is not that bug", because the documented *mechanism* did
+not match, while the folder's own unexplained instance matched exactly. **A mechanism that does
+not fit is not evidence of a different bug; check the residuals.**
+
 ## A CLEAN result is not evidence until the check is known to fire
 
 **Before believing a zero, a pass, or a "not found", show the check can produce the opposite.**
