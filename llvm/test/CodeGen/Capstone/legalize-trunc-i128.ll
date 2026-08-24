@@ -4,8 +4,10 @@
 ; comparing capability pointers (ptr addrspace(200)). The backend must be able
 ; to select the truncate without crashing.
 
+; Reading the address costs NO instruction: X is the low half of C, so the
+; truncate is EXTRACT_SUBREG on sub_cap_addr.
 ; CHECK-LABEL: ptr_to_long:
-; CHECK: mv a0, a0
+; CHECK-NOT: mv
 ; CHECK: cjalr zero, 0(ra)
 define i64 @ptr_to_long(ptr addrspace(200) %p) {
 entry:

@@ -623,9 +623,17 @@ bool CapstoneAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
   case MachineOperand::MO_Immediate:
     OS << MO.getImm();
     return false;
-  case MachineOperand::MO_Register:
-    OS << CapstoneInstPrinter::getRegisterName(MO.getReg());
+  case MachineOperand::MO_Register: {
+    // Inline asm names registers by their X name even when the value is a
+    // capability: C and X are the same hardware register and encode identically,
+    // and `.insn` and hand-written asm only know the X names. This mirrors what
+    // CapstoneInstPrinter does for generated instructions.
+    Register Reg = MO.getReg();
+    if (Capstone::GPCRRegClass.contains(Reg))
+      Reg = STI->getRegisterInfo()->getSubReg(Reg, Capstone::sub_cap_addr);
+    OS << CapstoneInstPrinter::getRegisterName(Reg);
     return false;
+  }
   case MachineOperand::MO_GlobalAddress:
     PrintSymbolOperand(MO, OS);
     return false;

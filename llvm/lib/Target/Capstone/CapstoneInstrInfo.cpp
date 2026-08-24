@@ -63,77 +63,6 @@ static cl::opt<bool> PreferWholeRegisterMove(
     "capstone-prefer-whole-register-move", cl::init(false), cl::Hidden,
     cl::desc("Prefer whole register move for vector registers."));
 
-// C-14: `movc` is a MOVE and nulls its source unless the source is a non-linear
-// capability, so using it to copy a register whose value is still needed destroys
-// that value on silicon. On by default because leaving it off miscompiles ordinary
-// loops; the flag exists so the old behaviour can be restored for a bisect.
-// R-18: `movc rd, x0` writes compress_cap(NULL) = 0x08000000 into rd's capability
-// metadata shadow. wt_dcache_mem.sv:138 then classifies ANY ordinary store out of that
-// register as a capability store (`st_wr_cap = |wr_user_i`, by VALUE not by opcode),
-// :230-238 makes it write BOTH banks, and :152-158 applies the same byte enable to both
-// -- so the store also lands in the same byte lanes of the other bank, silently
-// overwriting an unrelated scalar 8 bytes away.
-//
-// A copy FROM THE ZERO REGISTER is materialising an integer zero, not moving a
-// capability, so an integer ALU move is both correct and free of the shadow. Validated
-// in RTL simulation: capstone-ariane verif/tests/custom/capstone/scalar-store-addi-zero.S
-// is byte-identical to scalar-store-movc-zero.S except for this one instruction and it
-// PASSES where the movc form corrupts a witness.
-//
-// This removes the COMMON case, not the class: any value reaching a store's data
-// register from a capability-producing op still carries a non-zero shadow. The complete
-// fix is on the hardware side (classify by opcode, or gate the metadata onto the
-// sideband by opcode at issue).
-//
-// VALIDATION 2026-08-08, flag OFF: byte-identical on 4/4 rungs checked (c8 reproduces the
-// frozen 9ecd8c6f... exactly), QEMU ladder 6/6, lit 47/47. Flag ON: QEMU ladder 6/6, and on
-// matmult_int it is a pure local substitution -- 9 sites, 27 differing bytes, file size
-// unchanged, no relocation or layout shift.
-//
-// TWO REASONS IT STAYS DEFAULT OFF.
-//
-// 1. It is keyed on SrcReg == X0, NOT on whether the copy is semantically an integer zero or
-//    a null CAPABILITY. `llvm/test/CodeGen/Capstone/select-cap.ll` (select_cap_null) and
-//    `calling-conv.ll` (test_call_vararg) materialise genuine `ptr addrspace(200)` nulls that
-//    lower to `movc rd, zero` today and become `li rd, 0` under the flag. The argument that
-//    this is harmless -- X0 is hardwired and can never carry a tag, so both are untagged zero
-//    -- is PLAUSIBLE BUT UNVERIFIED HERE: `0x08000000` is compress_cap(NULL), a canonical null
-//    encoding, whereas an integer op leaves the shadow at 0, and nothing in this session
-//    checked what a later `stc` of such a register writes to memory in each case. Verify that
-//    before promoting the flag, on the ISA semantics, not by argument from X0.
-// 2. Those two lit tests FileCheck the literal `movc` mnemonic and would flip to FAIL if the
-//    flag were forced on globally. They need flag-on RUN lines, or updated CHECKs, first.
-//
-// Every measured rung must stay byte-identical while it is off.
-static cl::opt<bool> CapstoneIntZeroForZeroCopy(
-    "capstone-int-zero-for-zero-copy", cl::Hidden, cl::init(false),
-    cl::desc("Materialise a copy from x0 with an integer ALU move instead of `movc rd, x0`, "
-             "so the destination carries no null-capability metadata shadow (R-18)."));
-
-static cl::opt<bool> CapstoneScalarCopyForLiveSrc(
-    // DEFAULT-ON since 2026-08-06. Confirmed on silicon, one boot, control green, fixed and
-    // unfixed builds of the same source side by side: locfl3 (fix off) WEDGES, locfl3fix (fix
-    // on) returns its oracle 26, same call count and shape. Mechanism: a function pointer is
-    // materialised as a SCALAR (auipc+addi), `movc` with a scalar source yields cnull AND
-    // DESTROYS THE SOURCE, so a loop that re-reads the register stores cnull and later jalrs
-    // it -- jalr 0, which with mtvec=0 is a silent hang rather than a trap.
-    // The post-RA pass alone is not enough: it only rewrites when the source's first use is an
-    // integer ALU op or a branch, so a pointer whose first use is movc/stc/jalr keeps the
-    // destructive form. Off-by-default left that class broken on hardware.
-    // REVERTED to OFF 2026-08-06, same day it was flipped on. Flipping it on IS confirmed to
-    // fix the C-14 silicon hang (locfl3 wedges with it off, returns 26 with it on), but it is
-    // WRONG as a blanket default: matmult_int then faults at -O1 with
-    // "Cap mem access requires capability, cause = 24". copyPhysReg dispatches on
-    // Capstone::GPRRegClass, the SINGLE register class used for both scalar integers AND
-    // capabilities, so at that point it cannot tell which one SrcReg holds -- and replacing
-    // `movc s1, a0` with `mv s1, a0` drops the tag when a0 holds a live CAPABILITY. The code's
-    // own comment below anticipated exactly this.
-    // The correct fix is narrower and lives in the post-RA pass, which CAN prove the source is
-    // a scalar: see CapstonePostRAExpandPseudoInsts.cpp isScalarIntegerUse.
-    "capstone-scalar-copy-live-src", cl::init(false), cl::Hidden,
-    cl::desc("Copy a still-live GPR source with a scalar ALU move instead of the "
-             "destructive `movc` (C-14)."));
-
 static cl::opt<MachineTraceStrategy> ForceMachineCombinerStrategy(
     "capstone-force-machine-combiner-strategy", cl::Hidden,
     cl::desc("Force machine combiner to use a specific strategy for machine "
@@ -622,47 +551,18 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     return;
   }
 
+  // An integer copy. GPR holds only integers now, so this is an ordinary ALU
+  // move -- no MOVC, no tag to preserve, and no liveness question.
+  // Those flags existed because a capability could be sitting in a GPR and the
+  // copy had to guess which case it was in; the register class answers it now,
+  // in the GPCR arm above.
   if (Capstone::GPRRegClass.contains(DstReg, SrcReg)) {
-    // C-14. `movc` is a MOVE, not a copy: on CVA6 it writes cnull to its SOURCE
-    // whenever the source is not a non-linear capability
-    // (capstone_flu_unit.anvil:14-25), which includes a plain integer. Emitting it
-    // for an ordinary register-to-register copy therefore destroys a live scalar --
-    // board-proven: a loop counter copied this way reads back as 0, turning
-    // `bne a6, a5` into an infinite loop and `beq a6, a4` into an early exit
-    // (gpw2 returned 3950255460, exactly the early-exit checksum).
-    //
-    // QEMU hides it: helper_csmovc guards the same zeroing with `rs1_v->tag &&`
-    // (op_helper.c:580-584), so scalars survive in the model and every affected
-    // test is green there.
-    //
-    // When the source is dead, a destructive move is exactly right -- and for a
-    // LINEAR capability it is the only legal semantics, since the ISA permits
-    // moving but not copying those (spec parts/intro.adoc:59-61).
-    //
-    // When the source must survive, use the scalar ALU move instead. That is
-    // correct for integers and is what PseudoSCALAR_COPY_I128 already does for
-    // scalars flowing through the i128 carrier; it would drop metadata for a
-    // capability, so if a capability copy ever reaches here with a live source
-    // the QEMU suites (which track tags) will fail loudly rather than silently.
-    // R-18. See CapstoneIntZeroForZeroCopy above. x0 is hardwired zero, so `movc`'s
-    // destructive-source semantics are irrelevant here and this is not a capability move
-    // in any case -- it is how -O0 materialises an integer zero.
-    if (SrcReg == Capstone::X0 && CapstoneIntZeroForZeroCopy) {
-      BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
-          .addReg(Capstone::X0)
-          .addImm(0);
-      return;
-    }
-
-    if (!KillSrc && CapstoneScalarCopyForLiveSrc) {
-      BuildMI(MBB, MBBI, DL, get(Capstone::PseudoSCALAR_COPY_I128), DstReg)
-          .addReg(SrcReg, getRenamableRegState(RenamableSrc));
-      return;
-    }
-    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
-        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
+    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
+        .addImm(0);
     return;
   }
+
 
   if (Capstone::GPRF16RegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(Capstone::PseudoMV_FPR16INX), DstReg)
@@ -837,14 +737,11 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                  ? Capstone::SD
                  : Capstone::STC;
   } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
-    unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
-    if (Size == 128) {
-      if (capstoneGpFreeAbiActive() && SrcReg == Capstone::X1)
-        Opcode = Capstone::SD; // gp-free: ra is a plain integer return address
-      else
-        Opcode = Capstone::STC; // Use Store Capability instruction
-    } else
-      Opcode = Size == 32 ? Capstone::SW : Capstone::SD;
+    // An integer register, so an integer store. It used to be necessary to ask
+    // how wide GPR was and reach for STC when the answer was 128; the class is
+    // the answer now.
+    Opcode = TRI->getRegSizeInBits(Capstone::GPRRegClass) == 32 ? Capstone::SW
+                                                                : Capstone::SD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::SH_INX;
   } else if (Capstone::GPRF32RegClass.hasSubClassEq(RC)) {
@@ -932,14 +829,9 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
                  ? Capstone::LD
                  : Capstone::LDC;
   } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
-    unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
-    if (Size == 128) {
-      if (capstoneGpFreeAbiActive() && DstReg == Capstone::X1)
-        Opcode = Capstone::LD; // gp-free: ra is a plain integer return address
-      else
-        Opcode = Capstone::LDC; // Use Load Capability instruction
-    } else
-      Opcode = Size == 32 ? Capstone::LW : Capstone::LD;
+    // An integer register, so an integer load -- see storeRegToStackSlot.
+    Opcode = TRI->getRegSizeInBits(Capstone::GPRRegClass) == 32 ? Capstone::LW
+                                                                : Capstone::LD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::LH_INX;
   } else if (Capstone::GPRF32RegClass.hasSubClassEq(RC)) {

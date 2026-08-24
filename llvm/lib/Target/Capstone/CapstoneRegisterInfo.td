@@ -283,7 +283,7 @@ def XLenPairFVT : ValueTypeByHwMode<[RV32],
                                     [f64]>;
 def XLenRI : RegInfoByHwMode<
       [RV32,              RV64],
-      [RegInfo<32,32,32>, RegInfo<128,128,128>]>;
+      [RegInfo<32,32,32>, RegInfo<64,64,64>]>;
 
 class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
     : RegisterClass<"Capstone", regTypes, align, regList> {
@@ -297,13 +297,13 @@ class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
 }
 
 class GPRRegisterClass<dag regList>
-    // c128 goes AFTER i128, not before it. Generic code takes a register class's
-    // FIRST legal type as representative -- inline asm's RegVT is one -- and a
-    // capability is not an integer, so leading with it makes every "r" operand
-    // come out capability-typed and getCopyFromParts reject it. XLenVT first
-    // would be better still, and TableGen cannot infer the patterns with that
-    // order. drop-i128 will have to answer this properly.
-    : CapstoneRegisterClass<[i128, XLenVT, XLenFVT, i32, i16], 128, regList> {
+    // An X register is 64 bits and holds integers. It used to be 128 and lead
+    // with i128, because one class had to serve both integers and capabilities;
+    // generic code takes a class's FIRST legal type as representative (inline
+    // asm's RegVT is one), so that ordering decided what an "r" operand meant.
+    // Capabilities have their own class now, so XLenVT leads and the size is
+    // the register's real one -- an "r" operand is an integer by construction.
+    : CapstoneRegisterClass<[XLenVT, XLenFVT, i32, i16], 64, regList> {
   let RegInfos = XLenRI;
 }
 

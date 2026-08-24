@@ -48,7 +48,6 @@ public:
   bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
   bool isTruncateFree(SDValue Val, EVT VT2) const override;
   bool isZExtFree(SDValue Val, EVT VT2) const override;
-  bool isZExtFree(EVT SrcVT, EVT DstVT) const override;
   bool isSExtCheaperThanZExt(EVT SrcVT, EVT DstVT) const override;
   bool signExtendConstant(const ConstantInt *CI) const override;
   bool isCheapToSpeculateCttz(Type *Ty) const override;
@@ -521,7 +520,6 @@ private:
   SDValue getTLSDescAddr(GlobalAddressSDNode *N, SelectionDAG &DAG) const;
 
   SDValue lowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerADD(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;

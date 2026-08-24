@@ -461,10 +461,8 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   // slot. We must key off ValVT, because LocVT might already be canonicalized
   // to XLenVT during legalization/splitting. i128 is here only because __int128
   // still shares the capability register class.
-  if (ValVT == MVT::c128 || ValVT == MVT::i128) {
-    ArrayRef<MCPhysReg> ArgRegs = ValVT == MVT::c128
-                                      ? Capstone::getArgGPCRs(ABI)
-                                      : ArgGPRs;
+  if (ValVT == MVT::c128) {
+    ArrayRef<MCPhysReg> ArgRegs = Capstone::getArgGPCRs(ABI);
     if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
@@ -752,10 +750,8 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
   ArrayRef<MCPhysReg> ArgGPRs = getFastCCArgGPRs(ABI);
 
   // Capability handling, mirroring CC_Capstone.
-  if (ValVT == MVT::c128 || ValVT == MVT::i128) {
-    ArrayRef<MCPhysReg> ArgRegs = ValVT == MVT::c128
-                                      ? getFastCCArgGPCRs(ABI)
-                                      : ArgGPRs;
+  if (ValVT == MVT::c128) {
+    ArrayRef<MCPhysReg> ArgRegs = getFastCCArgGPCRs(ABI);
     if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));

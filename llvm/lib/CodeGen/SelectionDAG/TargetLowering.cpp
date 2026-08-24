@@ -10300,7 +10300,15 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   SDLoc dl(LD);
   auto &MF = DAG.getMachineFunction();
 
-  if (VT.isFloatingPoint() || VT.isVector()) {
+  // Floating point, a vector, or a capability. Spelled out rather than as
+  // !isInteger(), because EVT::isInteger() is true for an integer VECTOR too --
+  // writing it the short way dropped v32i8 out of this block and into the assert
+  // below. The isTypeLegal test then chooses between reinterpreting through a
+  // same-size integer and going via a stack slot; a capability has no legal
+  // same-size integer (i128 is not legal on RV64), so it takes the stack route,
+  // and the value that comes back carries no tag -- which is what an unaligned
+  // capability is.
+  if (VT.isFloatingPoint() || VT.isVector() || VT.isCheriCapability()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
       if (!isOperationLegalOrCustom(ISD::LOAD, intVT) &&
@@ -10338,8 +10346,13 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     EVT PtrVT = Ptr.getValueType();
     EVT StackPtrVT = StackPtr.getValueType();
 
-    SDValue PtrIncrement = DAG.getConstant(RegBytes, dl, PtrVT);
-    SDValue StackPtrIncrement = DAG.getConstant(RegBytes, dl, StackPtrVT);
+    // Step through getObjectPtrOffset's TypeSize form, which builds the offset
+    // in the pointer's INDEX type. Materialising it in the pointer type breaks
+    // when a pointer is not an integer -- a capability offset by a capability is
+    // not a thing, and getMemBasePlusOffset asserts on it.
+    auto PtrIncrement = TypeSize::getFixed(RegBytes);
+    auto StackPtrIncrement = TypeSize::getFixed(RegBytes);
+    (void)PtrVT; (void)StackPtrVT;
 
     // Do all but one copies using the full register width.
     for (unsigned i = 1; i < NumRegs; i++) {
@@ -10384,15 +10397,6 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     return std::make_pair(Load, TF);
   }
 
-  // A fat pointer is not an integer, but splitting it into halves is exactly the
-  // right answer for an unaligned load: the two halves cannot carry a tag, and
-  // an unaligned capability is not one. Do the arithmetic in the same-size
-  // integer type and reinterpret at the end.
-  EVT ResultVT = VT;
-  if (!LoadedVT.isInteger() && !LoadedVT.isVector()) {
-    LoadedVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
-    VT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
-  }
   assert(LoadedVT.isInteger() && !LoadedVT.isVector() &&
          "Unaligned load of unsupported type.");
 
@@ -10443,8 +10447,6 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   SDValue TF = DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Lo.getValue(1),
                              Hi.getValue(1));
 
-  if (ResultVT != VT)
-    Result = DAG.getNode(ISD::BITCAST, dl, ResultVT, Result);
 
   return std::make_pair(Result, TF);
 }
@@ -10462,7 +10464,9 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   EVT StoreMemVT = ST->getMemoryVT();
 
   SDLoc dl(ST);
-  if (StoreMemVT.isFloatingPoint() || StoreMemVT.isVector()) {
+  // See expandUnalignedLoad for why this is spelled out rather than negated.
+  if (StoreMemVT.isFloatingPoint() || StoreMemVT.isVector() ||
+      StoreMemVT.isCheriCapability()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
     if (isTypeLegal(intVT)) {
       if (!isOperationLegalOrCustom(ISD::STORE, intVT) &&
@@ -10500,8 +10504,13 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
 
     EVT StackPtrVT = StackPtr.getValueType();
 
-    SDValue PtrIncrement = DAG.getConstant(RegBytes, dl, PtrVT);
-    SDValue StackPtrIncrement = DAG.getConstant(RegBytes, dl, StackPtrVT);
+    // Step through getObjectPtrOffset's TypeSize form, which builds the offset
+    // in the pointer's INDEX type. Materialising it in the pointer type breaks
+    // when a pointer is not an integer -- a capability offset by a capability is
+    // not a thing, and getMemBasePlusOffset asserts on it.
+    auto PtrIncrement = TypeSize::getFixed(RegBytes);
+    auto StackPtrIncrement = TypeSize::getFixed(RegBytes);
+    (void)PtrVT; (void)StackPtrVT;
     SmallVector<SDValue, 8> Stores;
     unsigned Offset = 0;
 
@@ -10542,13 +10551,6 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
     return Result;
   }
 
-  // As in expandUnalignedLoad: split a fat pointer in the same-size integer
-  // type. The halves carry no tag, which is what an unaligned store means.
-  if (!StoreMemVT.isInteger() && !StoreMemVT.isVector()) {
-    StoreMemVT = EVT::getIntegerVT(*DAG.getContext(), StoreMemVT.getSizeInBits());
-    VT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
-    Val = DAG.getNode(ISD::BITCAST, dl, VT, Val);
-  }
   assert(StoreMemVT.isInteger() && !StoreMemVT.isVector() &&
          "Unaligned store of unknown type.");
   // Get the half-size VT

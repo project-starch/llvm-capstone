@@ -30,7 +30,7 @@ def SDT_CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
                                      SDTCisVT<1, i32>]>;
 
 // Target-dependent type requirements.
-def SDT_CapstoneCall     : SDTypeProfile<0, -1, [SDTCisVT<0, XLenVT>]>;
+def SDT_CapstoneCall     : SDTypeProfile<0, -1, [SDTCisVT<0, CLenVT>]>;
 def SDT_CapstoneSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<1, 2>,
                                              SDTCisVT<3, OtherVT>,
                                              SDTCisSameAs<0, 4>,
@@ -1890,13 +1890,16 @@ def PseudoCALLReg : Pseudo<(outs GPR:$rd), (ins call_symbol:$func), [],
 // if the offset fits in a signed 21-bit immediate.
 // Define AsmString to print "call" when compile with -S flag.
 // Define isCodeGenOnly = 0 to support parsing assembly "call" instruction.
-let isCall = 1, Defs = [X1], isCodeGenOnly = 0, Size = 8 in
+let isCall = 1, Defs = [X1], isCodeGenOnly = 0, Size = 8, hasSideEffects = 0,
+    mayLoad = 0, mayStore = 0 in
 def PseudoCALL : Pseudo<(outs), (ins call_symbol:$func), [],
                         "call", "$func">,
                  Sched<[WriteIALU, WriteJalr, ReadJalr]>;
 
-def : Pat<(capstone_call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
-def : Pat<(capstone_call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
+// No direct-call patterns. LowerCall forces every global call indirect through
+// LGA on this target (a code capability has to be derived, not named), so these
+// never matched; with the call target typed as a capability they cannot.
+
 
 def : Pat<(capstone_sret_glue), (SRET)>;
 def : Pat<(capstone_mret_glue), (MRET)>;
@@ -1912,18 +1915,18 @@ let Predicates = [NoStdExtZicfilp] in
 // an UNTAGGED target for cjalr.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPCRJALR:$rs1),
-                                []>,
+                                [(capstone_call GPCRJALR:$rs1)]>,
                          // Use CJALR
                          PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPCRJALRNonC7:$rs1),
-                                     []>,
+                                     [(capstone_call GPCRJALRNonC7:$rs1)]>,
                               PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
-                                  []>,
+                                  [(capstone_sw_guarded_call GPCRC7:$rs1)]>,
                            PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 }
 }
@@ -1936,7 +1939,8 @@ def PseudoRET : Pseudo<(outs), (ins), [(capstone_ret_glue)]>,
 // expand to auipc and jalr while encoding.
 // Define AsmString to print "tail" when compile with -S flag.
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2],
-    Size = 8, isCodeGenOnly = 0 in
+    Size = 8, isCodeGenOnly = 0, hasSideEffects = 0, mayLoad = 0,
+    mayStore = 0 in
 def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), [],
                         "tail", "$dst">,
                  Sched<[WriteIALU, WriteJalr, ReadJalr]>;
@@ -1945,26 +1949,23 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in {
 let Predicates = [NoStdExtZicfilp] in
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
-                                []>,
+                                [(capstone_tail GPCRTC:$rs1)]>,
                                 // Use CJALR
                          PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPCRTCNonC7:$rs1),
-                                     []>,
+                                     [(capstone_tail GPCRTCNonC7:$rs1)]>,
                               PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
-                                  []>,
+                                  [(capstone_sw_guarded_tail GPCRC7:$rs1)]>,
                            PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 }
 }
 
-def : Pat<(capstone_tail (iPTR tglobaladdr:$dst)),
-          (PseudoTAIL tglobaladdr:$dst)>;
-def : Pat<(capstone_tail (iPTR texternalsym:$dst)),
-          (PseudoTAIL texternalsym:$dst)>;
+// As for the direct call above: a tail call to a symbol goes through LGA too.
 
 let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1, Size = 8,
     isCodeGenOnly = 0, hasSideEffects = 0, mayStore = 0, mayLoad = 0 in
@@ -2472,18 +2473,6 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
                      (ins GPCR:$cap_in, GPR:$rs1, GPR:$rs2),
                      "shrink", "$rd, $rs1, $rs2">;
 
-// Scalar i64/i32 values sometimes need to flow through the i128 carrier type
-// used by PureCap lowering.  Those moves must not reuse the capability-copy
-// path because that preserves tag/bounds metadata. Materialize them through a
-// scalar ALU move instead so the result stays a plain numeric value.
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def PseudoSCALAR_COPY_I128 : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
-                             PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
-
-// Selection for scalar -> i128 carrier moves is done in
-// CapstoneISelDAGToDAG::Select so the selector can make a targeted decision
-// without falling back to the generic capability-preserving COPY path.
-
 // MOVC: Move Capability.
 // Used to copy capabilities between GPRs preserving the Tag bit.
 // Format: R-type, but rs2 is unused (must be 0).
@@ -2497,14 +2486,8 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // Truncation and Subregister extraction
 //===----------------------------------------------------------------------===//
 
-// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
-// This is semantically equivalent to taking the lower 64 bits.
-// We define it as a move, but with different register classes if needed.
-// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
-                      PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+// Reading a capability's address is EXTRACT_SUBREG on sub_cap_addr, selected in
+// CapstoneISelDAGToDAG. It needs no instruction: X is the low half of C.
 
 //===----------------------------------------------------------------------===//
 // Capability Manipulation Instructions (1)
@@ -2591,7 +2574,7 @@ def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 
 // DROP: Invalidate capability locally
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Constraints = "$rd = $rs1" in
-def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "drop", "$rs1"> {
   let rs2 = 0;
   let rd = 0; // Don't care field encoded as 0
@@ -2643,15 +2626,15 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
 
     // CAPEXIT: Exit Secure World
     def CAPEXIT : RVInstR<0b0100011, 0b001, OPC_CAP_OP,
-                          (outs), (ins GPR:$rs1, GPR:$rs2),
+                          (outs), (ins GPCR:$rs1, GPR:$rs2),
                           "capexit", "$rs1, $rs2"> {
       let rd = 0;
     }
   }
 
   // CCSRRW: Capability CSR Read/Write (I-Type format)
-  def CCSRRW : RVInstI<0b111, OPC_CAP_OP, (outs GPR:$rd),
-                       (ins csr_sysreg:$imm12, GPR:$rs1),
+  def CCSRRW : RVInstI<0b111, OPC_CAP_OP, (outs GPCR:$rd),
+                       (ins csr_sysreg:$imm12, GPCR:$rs1),
                        "ccsrrw", "$rd, $imm12, $rs1">;
 }
 

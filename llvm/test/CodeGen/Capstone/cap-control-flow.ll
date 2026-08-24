@@ -52,6 +52,9 @@ entry:
 
 ; MIR-LABEL: name:            test_cap_enter
 ; MIR: renamable $c10 = CAPENTER killed renamable $c10, csr_ilp32_lp64
-; MIR: renamable $x10 = PseudoTRUNC_CAP killed renamable $x10
+; Reading the returned address needs no instruction at all: $x10 IS the low half
+; of $c10, so the truncate is a subregister reference that coalesces away.
+; MIR-NEXT: renamable $x10 = KILL renamable $x10, implicit killed $c10
+; MIR-NEXT: PseudoRET implicit killed $x10
 
 

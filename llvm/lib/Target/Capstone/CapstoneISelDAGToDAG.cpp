@@ -1239,9 +1239,7 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
 // A value that lives in a capability register. c128 is the capability VT;
 // i128 is still listed only because __int128 shares GPR -- drop-i128 removes
 // the second half of every one of these tests.
-static bool isCapabilityVT(EVT VT) {
-  return VT == MVT::c128 || VT == MVT::i128;
-}
+static bool isCapabilityVT(EVT VT) { return VT == MVT::c128; }
 
 bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
@@ -1847,10 +1845,10 @@ void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
                                        CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, RegMask, Chain});
 
-  SDNode *Trunc = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
-                                         MVT::i64, SDValue(Res, 0));
+  SDValue Trunc = CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
+                                                 MVT::i64, SDValue(Res, 0));
 
-  ReplaceUses(SDValue(Node, 0), SDValue(Trunc, 0));
+  ReplaceUses(SDValue(Node, 0), Trunc);
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
   CurDAG->RemoveDeadNode(Node);
 }
@@ -1960,7 +1958,9 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
 
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(TargetReg); // rs1 (Target Function Pointer)
-  Ops.push_back(Zero);      // imm12 (Offset 0)
+  // No imm12: PseudoCALLIndirect takes only $rs1, and its expansion supplies the
+  // zero displacement. Pushing one here was an extra explicit operand, hidden
+  // for as long as the pseudo carried a pattern and was therefore variadic.
 
   // Forward all remaining CALL operands (arg regs, regmask, etc.).
   // This is critical: without the RegMask, the register allocator may legally
@@ -3978,71 +3978,17 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     SDValue Src = Node->getOperand(0);
     MVT SrcVT = Src.getSimpleValueType();
 
-    // Intercept only truncation of i128 -> i64
+    // Reading the address out of a capability. X is the low half of C, so this
+    // is a subregister reference and costs nothing -- it used to be an ADDI,
+    // which is both an instruction and a write to the address half of a
+    // register whose capability may still be live.
     if (isCapabilityVT(SrcVT) && VT == Subtarget->getXLenVT()) {
-      // Workaround: Explicitly select truncation from i128 to XLenVT (i64).
-      // We use a pseudo-instruction that expands to a register move (ADDI).
-      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP,
-                                           SDLoc(Node), VT, Src);
-      ReplaceNode(Node, Res);
+      ReplaceNode(Node, CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr,
+                                                       SDLoc(Node), VT, Src)
+                            .getNode());
       return;
     }
     break; // Let the remaining TRUNCATEs be processed as usual
-  }
-  case ISD::SIGN_EXTEND_INREG: {
-    // i128 = sign_extend_inreg(i128 X, srcVT)  --  issue C-1.
-    //
-    // This is lowered *here*, at selection, and deliberately not in a DAG
-    // combine. The combiner cannot own it: expanding to
-    // sign_extend(sign_extend_inreg(trunc(X), srcVT)) is immediately folded by
-    // visitSIGN_EXTEND back into sign_extend_inreg(any_extend(...), srcVT),
-    // which re-enters the same combine -- the infinite loop that
-    // performSIGN_EXTEND_INREGCombine's i128 arm documents and avoids by
-    // handling ONLY the any_extend(i64) shape. Every other shape (an `int`
-    // index feeding capability address arithmetic is the common one) then
-    // survives to here unselectable: "Cannot select: i128 = sign_extend_inreg".
-    //
-    // At selection there is no combiner left to fight, so emit the sequence
-    // directly: take the low XLen bits, sign-extend the source field within
-    // XLen with a shift pair, then widen to i128 -- PseudoSCALAR_COPY_I128
-    // replicates bit 63 into the high half, which is exactly the i128 sign
-    // extension.
-    MVT VT = Node->getSimpleValueType(0);
-    if (VT != MVT::i128)
-      break;
-    MVT XLenVT = Subtarget->getXLenVT();
-    unsigned SrcBits =
-        cast<VTSDNode>(Node->getOperand(1))->getVT().getSizeInBits();
-    unsigned XLenBits = XLenVT.getSizeInBits();
-    SDValue Lo(CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL, XLenVT,
-                                      Node->getOperand(0)),
-               0);
-    // srcVT >= XLen: the low half already holds the value; only the widening
-    // to i128 is needed.
-    if (SrcBits < XLenBits) {
-      SDValue ShAmt = CurDAG->getTargetConstant(XLenBits - SrcBits, DL, XLenVT);
-      SDValue Shl(
-          CurDAG->getMachineNode(Capstone::SLLI, DL, XLenVT, Lo, ShAmt), 0);
-      Lo = SDValue(
-          CurDAG->getMachineNode(Capstone::SRAI, DL, XLenVT, Shl, ShAmt), 0);
-    }
-    ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
-                                             DL, VT, Lo));
-    return;
-  }
-  case ISD::ZERO_EXTEND:
-  case ISD::SIGN_EXTEND:
-  case ISD::ANY_EXTEND: {
-    SDValue Src = Node->getOperand(0);
-    MVT SrcVT = Src.getSimpleValueType();
-
-    if (VT == MVT::i128 && SrcVT.isScalarInteger() && !SrcVT.bitsGT(XLenVT)) {
-      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
-                                           DL, VT, Src);
-      ReplaceNode(Node, Res);
-      return;
-    }
-    break;
   }
   case CapstoneISD::CIncOffset: {
     selectCIncOffset(Node);

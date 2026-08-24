@@ -1,53 +1,57 @@
-; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
-
-; Bitwise arithmetic on a CAPABILITY, which is what C that goes through uintptr_t and back turns
-; into: align a pointer down, steal a low bit as a flag, hash two pointers. The address is read with
-; the same scalar move a pointer difference uses (ptr-diff-signed.ll), the operation happens at XLen,
-; and the result is untagged -- which is what the source asked for, since a value built out of
+; Bitwise arithmetic on a CAPABILITY, which is what C that goes through uintptr_t
+; and back turns into: align a pointer down, steal a low bit as a flag, hash two
+; pointers. The address is read, the operation happens at XLen, and the result is
+; UNTAGGED -- which is what the source asked for, since a value built out of
 ; uintptr_t bits cannot carry a tag.
 ;
-; The read used to be `lcc rd, rs, 2`. Since a capability became c128, ptrtoint is a TRUNCATE to the
-; index width, selected as PseudoTRUNC_CAP; the low half of the register IS the cursor, so the two
-; read the same thing and the move is one instruction instead of two.
+; The file keeps its i128 name for the history that references it. There is no
+; i128 left in it: a capability is c128 and its address is i64, so both the read
+; (EXTRACT_SUBREG on sub_cap_addr) and the write back (INSERT_SUBREG, an ADDI on
+; the address half that clears the tag) are subregister references. Each of these
+; three functions is now a SINGLE arithmetic instruction -- the reads and writes
+; coalesce away entirely. They used to cost a `mv` on the way in, and before the
+; inttoptr lowering existed the way back out was a stack round-trip: two `sd` and
+; an `ldc` to assemble a 128-bit value whose metadata half is not data.
 ;
-; The narrow form is not avoidable by writing better C: expressing the align-down as
-; `p - (p & (N-1))` to stay in the pointer domain is folded straight back into `p & ~(N-1)` by
-; DAGCombiner, which is why this is lowered rather than diagnosed. All three shapes come from
-; MicroPython: gc_init, pairheap.c's NEXT_GET_RIGHTMOST_PARENT, and bound_meth_unary_op.
+; The result of the mask is UNTAGGED, and that is the point: nothing here may
+; produce a tagged capability out of integer bits. The implicit-check-nots cover
+; the WHOLE output, not just the tail after the last CHECK -- each names an
+; instruction that would appear if inttoptr tried to preserve provenance instead
+; of writing the address half.
+; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s \
+; RUN:   | FileCheck %s --implicit-check-not=init --implicit-check-not=scc \
+; RUN:       --implicit-check-not=movc --implicit-check-not=cincoffset
+
+target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
 ; CHECK-LABEL: align_down:
-; CHECK:      mv a0, a0
-; CHECK-NEXT: andi a0, a0, -32
+; CHECK: andi a0, a0, -32
+; CHECK-NEXT: cjalr zero, 0(ra)
 define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
   %and = and i64 %i, -32
-  %conv = zext i64 %and to i128
-  %r = inttoptr i128 %conv to ptr addrspace(200)
+  %r = inttoptr i64 %and to ptr addrspace(200)
   ret ptr addrspace(200) %r
 }
 
 ; CHECK-LABEL: clear_flag_bit:
-; CHECK:      mv a0, a0
-; CHECK-NEXT: andi a0, a0, -2
+; CHECK: andi a0, a0, -2
+; CHECK-NEXT: cjalr zero, 0(ra)
 define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
   %and = and i64 %i, -2
-  %conv = zext i64 %and to i128
-  %r = inttoptr i128 %conv to ptr addrspace(200)
+  %r = inttoptr i64 %and to ptr addrspace(200)
   ret ptr addrspace(200) %r
 }
 
-; Two capabilities, no constant: both cursors are read.
 ; CHECK-LABEL: hash_two:
-; CHECK-DAG:  mv a0, a0
-; CHECK-DAG:  mv a1, a1
-; CHECK:      xor a0, a0, a1
+; CHECK: xor a0, a0, a1
+; CHECK-NEXT: cjalr zero, 0(ra)
 define i64 @hash_two(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) {
   %x = ptrtoint ptr addrspace(200) %a to i64
   %y = ptrtoint ptr addrspace(200) %b to i64
   %h = xor i64 %x, %y
-  %w = zext i64 %h to i128
-  %p = inttoptr i128 %w to ptr addrspace(200)
+  %p = inttoptr i64 %h to ptr addrspace(200)
   %r = ptrtoint ptr addrspace(200) %p to i64
   ret i64 %r
 }
