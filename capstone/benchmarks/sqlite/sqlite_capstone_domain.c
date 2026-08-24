@@ -324,6 +324,7 @@ unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, c
 unsigned long capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call;
 unsigned long capstone_w_ctl;
 unsigned long capstone_w_slotaddr;
+unsigned long capstone_mk_slot, capstone_mk_type, capstone_mk_ctl, capstone_mk_calls, capstone_mk_bad;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6062,6 +6063,25 @@ static void capstone_slt_out(void *ctx, const char *text) {
    a result" failure. The marker only says whether the runner STARTED; every error value
    below means no records were evaluated at all. */
 static unsigned capstone_slt_entry(void) {
+#ifdef CAPSTONE_TVAL_CTL
+  /* THE tval POSITIVE CONTROL. Fires the FLU trap-value instrument deliberately, because it has
+     NEVER been shown to produce a non-zero value on this silicon: every latched `tval` at a
+     capability wedge reads 0x00, and the one non-zero on record came from mcause 15, whose tval
+     comes from the LSU rather than ex_stage.sv. So EVERY `tval == 0` in this investigation is NO
+     DATA -- including the one a root cause was built on and then retracted.
+     `cincoffsetimm` on a PLAIN INTEGER raises mcause 25, and ex_stage.sv:487 puts the rs1 CURSOR
+     in tval for capability causes. Therefore:
+        tval == 0xBEEF -> the instrument WORKS, and every previous tval==0 becomes real evidence
+        tval == 0      -> the instrument is DEAD on this path, and no tval reading is a finding
+     funct3 = 2 is DECODED from a real cincoffsetimm (0x0085255b), not guessed -- a first version
+     used 0 and the constant never reached the artifact.
+     THIS WEDGES BY DESIGN and returns nothing; the latched tval is read from the debug mux. It
+     lives here rather than in a wbuf arm because a wedging arm can never earn the QEMU pass the
+     ladder preflight demands, and that gate is not mine to weaken. */
+  { unsigned long beef = 0xBEEFUL, sink;
+    __asm__ volatile(".insn i 0x5b, 0x2, %0, %1, 8" : "=r"(sink) : "r"(beef));
+    (void)sink; }
+#endif
   slt_stats st;
   unsigned long in_len;
   const char *input;
@@ -6132,6 +6152,21 @@ static unsigned capstone_slt_entry(void) {
       capstone_slt_out(0, b + i);
     }
     capstone_slt_out(0, "\n"); }
+#ifdef CAPSTONE_SLOT_MARKER
+  { static const char *const mk[5] = {"MK slot=", " type=", " CTL(must be 7)=", " calls=", " bad="};
+    unsigned long mv[5];
+    int k;
+    mv[0] = capstone_mk_slot; mv[1] = capstone_mk_type; mv[2] = capstone_mk_ctl;
+    mv[3] = capstone_mk_calls; mv[4] = capstone_mk_bad;
+    for (k = 0; k < 5; k++) {
+      char b[24]; int i = (int)sizeof b; unsigned long v = mv[k];
+      capstone_slt_out(0, mk[k]);
+      b[--i] = '\0'; if (!v) b[--i] = '0';
+      while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+      capstone_slt_out(0, b + i);
+    }
+    capstone_slt_out(0, "\n"); }
+#endif
 #ifdef CAPSTONE_WIDTH_PAIR
   /* type 7 == NOT_CAP (capstone_dyn_unit.anvil:181-184). lo/hi are the SAME slot read as two
      plain 8-byte words. type==7 with lo/hi non-zero means the 16-byte read manufactured a

@@ -688,3 +688,58 @@ that folder, do not open a new issue"* -- **the finding belongs in the S-07 fold
 site for instance 1's residual**, not in a new `fpga-repros` folder. Still true that no tag has
 been shown lost (the FLU `tval` path has never fired), so the site is recorded as a reproduction,
 not as a proven mechanism.
+
+---
+
+# THE tval INSTRUMENT FIRES. Every prior `tval == 0` is REAL DATA, and the reading changes.
+
+    [wedge] trap mepc = 0x00000000828233ac   -> DBAS 0x82800000 -> VA 0x333ac
+    [wedge] trap tval = 0x000000000000beef
+
+VA `0x333ac` disassembles to **`cincoffsetimm a0, a0, 0x8`** with `a0` holding `0xBEEF` — the
+control's own instruction, not an inherited latch. `ex_stage.sv:487` puts the rs1 **cursor** in
+`tval` for capability causes, and it did.
+
+**So the FLU `tval` path WORKS on this silicon.** The retraction that called every `tval == 0`
+"NO DATA" was correct *at the time* — the instrument genuinely had no fired control — but the
+control has now fired, and those zeros are evidence.
+
+## What that establishes, and what it does NOT
+
+`tval` carries the rs1 **cursor**. At every SQLite wedge it read **0**. Therefore:
+
+* **A DE-TAGGED CAPABILITY IS EXCLUDED.** A capability that lost only its tag keeps its address
+  bits, so its cursor would be pointer-like and `tval` would be non-zero. It was zero.
+* **The operand's VALUE was genuinely zero**, not a pointer stripped of authority.
+
+**This points AWAY from tag loss and TOWARD zero DATA.** Which matters, because the whole S-07
+family — including the instance-1 residual this site was just filed under — is a **tag**-loss
+phenomenon with the data intact.
+
+**Two mechanisms remain, and `tval` alone does not separate them:**
+
+1. **Software passed a genuine NULL** — the reading originally recorded, then retracted for want
+   of a fired instrument. It is now *supported* again, though still not proven.
+2. **The load returned zero DATA** — a stale read. Note the peer lane's measured S-10b signature:
+   a stale read of a granule an `stc` has written returns a **clean zero**
+   (`ld x29, 40(a1)` -> `0x0000000000000000` before the fix, `0xfedcba9876543210` after).
+
+## And S-10b's DEFECT is present in BOTH bitstreams — verified
+
+    c867dfcbb (S-10b fix) ancestor of 80843404c?  NO  -> defect present
+    c867dfcbb (S-10b fix) ancestor of 39b21639d?  NO  -> defect present
+
+That is exactly what a fault reproducing on both images requires, and it is the **data** route,
+whose signature is a clean zero — matching `tval == 0` rather than the tag-loss family.
+
+**S-10b is now the leading candidate**, displacing the tag-loss reading that has framed this
+investigation since the beginning.
+
+## Consequence for the S-07 filing
+
+The site was filed under S-07's instance-1 residual on the strength of an identical *code shape*
+(stack spill, reload, dependent `cincoffset`, mcause 25, no same-granule plain store). That shape
+match stands. But S-07 is a **tag**-loss family and this measurement says the value was **zero**,
+so the filing needs qualifying: same shape, possibly different mechanism. Worth re-reading whether
+instance 1 ever had a `tval` reading of its own — if it did and it was pointer-like, the two are
+different faults despite the identical shape.

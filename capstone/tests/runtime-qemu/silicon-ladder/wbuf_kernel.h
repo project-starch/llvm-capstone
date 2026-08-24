@@ -228,6 +228,25 @@ static unsigned wbuf_compute(void)
          wbuffer_gran_clr keys on, and the feature generic traffic would miss */
       wbuf_slots[WBUF_N] = (void *)0;
       wbuf_slots[WBUF_N + 1] = (void *)0;
+#elif WBUF_ARM == 14
+      /* THE tval CONTROL. Not a tag test at all -- it fires the FLU trap-value instrument, which
+         has NEVER been shown to produce a non-zero value on this silicon. Every latched `tval` at
+         a capability wedge reads 0x00, and the one non-zero on record came from mcause 15, whose
+         tval comes from the LSU rather than ex_stage.sv. So every `tval == 0` in this whole
+         investigation is NO DATA, including the one a root cause was once built on and retracted.
+         `cincoffsetimm` on a PLAIN INTEGER must raise mcause 25 with tval = that integer
+         (ex_stage.sv:487 puts the rs1 CURSOR there for capability causes). Read tval at the wedge:
+            tval == 0xBEEF -> the instrument WORKS; every previous tval==0 becomes real evidence
+            tval == 0      -> the instrument is DEAD on this path; every tval reading is void
+         This arm WEDGES BY DESIGN -- it must be last in any boot, and it returns nothing. */
+      { unsigned long beef = 0xBEEFul, sink;
+        /* funct3 = 2, DECODED from a real cincoffsetimm in this very binary
+           (0x0085255b -> opcode 0x5b, funct3 2), not guessed. A first version used funct3 0 and
+           the constant did not even appear in the artifact -- the arm would have wedged for an
+           unrelated reason and the tval reading would have been attributed to the wrong
+           instruction. */
+        __asm__ volatile(".insn i 0x5b, 0x2, %0, %1, 8" : "=r"(sink) : "r"(beef));
+        wbuf_slots[i] = base; }
 #elif WBUF_ARM == 13
       /* THE DERIVED-SUBJECT ARM. Arms 9-12 all measured ZERO, so neither shape, granule count,
          the load->store->load chain nor the stack region reproduces it. What is left is WHAT
