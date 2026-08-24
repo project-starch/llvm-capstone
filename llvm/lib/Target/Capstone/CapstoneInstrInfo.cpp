@@ -589,6 +589,15 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
   unsigned KillFlag = getKillRegState(KillSrc);
 
+  // X and C are the same hardware register at two widths; this maps one to the
+  // other.
+  auto getCapabilityFormOf = [&](Register R) -> Register {
+    if (Capstone::GPCRRegClass.contains(R))
+      return R;
+    return Capstone::C0 + (R - Capstone::X0);
+  };
+  (void)getCapabilityFormOf;
+
   // A capability copy, decided by the register CLASS. This is what the split
   // buys: the question "is this copy a capability?" used to be answered by a
   // heuristic on liveness, and answering it wrong dropped a tag silently.
@@ -769,19 +778,34 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // produces an untagged capability, which is exactly what inttoptr asks for.
   if (Capstone::GPCRRegClass.contains(DstReg) &&
       Capstone::GPRRegClass.contains(SrcReg)) {
-    Register DstAddr = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
-    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstAddr)
-        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
-        .addImm(0)
-        .addReg(DstReg, RegState::ImplicitDefine);
+    Register SrcCap = getCapabilityFormOf(SrcReg);
+    if (SrcCap == DstReg)
+      return;
+    // Also movc: the source may be a capability the compiler is tracking as an
+    // integer (the mirror of the case below), and dropping its tag here would
+    // be the same fault one instruction later.
+    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
+        .addReg(SrcCap, KillFlag | getRenamableRegState(RenamableSrc));
     return;
   }
   if (Capstone::GPRRegClass.contains(DstReg) &&
       Capstone::GPCRRegClass.contains(SrcReg)) {
     Register SrcAddr = TRI->getSubReg(SrcReg, Capstone::sub_cap_addr);
-    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
-        .addReg(SrcAddr, KillFlag | getRenamableRegState(RenamableSrc))
-        .addImm(0);
+    // Same hardware register: nothing to do.
+    if (SrcAddr == DstReg)
+      return;
+    // Different register, and the move must PRESERVE THE TAG. `addi rd, rs, 0`
+    // would not, and the reason a capability is asked for as an integer here is
+    // usually that it is about to be a memory base -- every access on this
+    // target goes through a capability, so an untagged base faults ("Cap mem
+    // access requires capability"). Since C and X are the same register file,
+    // movc on the capability forms is exactly the right instruction; the extra
+    // tag on a register the compiler calls an integer is harmless, and the first
+    // ALU write to it clears the tag anyway.
+    Register DstCap = getCapabilityFormOf(DstReg);
+    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstCap)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
+        .addReg(DstReg, RegState::ImplicitDefine);
     return;
   }
 

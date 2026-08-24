@@ -24451,9 +24451,12 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
     MF.getInfo<CapstoneMachineFunctionInfo>()->setIsVectorCall();
 
   if (IsVarArg) {
-    ArrayRef<MCPhysReg> ArgRegs = Capstone::getArgGPRs(Subtarget.getTargetABI());
+    // The vararg save area is written with STC to keep tags, so the registers
+    // saved are the CAPABILITY argument registers.
+    ArrayRef<MCPhysReg> ArgRegs =
+        Capstone::getArgGPCRs(Subtarget.getTargetABI());
     unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
-    const TargetRegisterClass *RC = &Capstone::GPRRegClass;
+    const TargetRegisterClass *RC = &Capstone::GPCRRegClass;
     MachineFrameInfo &MFI = MF.getFrameInfo();
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
     CapstoneMachineFunctionInfo *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
@@ -24492,7 +24495,7 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
         RegInfo.addLiveIn(ArgRegs[I], Reg);
         // Capstone: Load full 128-bit capability from register.
         // This ensures the Tag bit is preserved.
-        SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, MVT::i128);
+        SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, MVT::c128);
         SDValue Store = DAG.getStore(
             Chain, DL, ArgValue, FIN,
             MachinePointerInfo::getFixedStack(
@@ -26736,11 +26739,11 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
 
     SDValue SP;
     if (hasInlineStackProbe(MF)) {
-      SP = DAG.getCopyFromReg(Chain, dl, Capstone::X2, VT);
+      SP = DAG.getCopyFromReg(Chain, dl, Capstone::C2, VT);
       Chain = SP.getValue(1);
     } else {
       Chain = DAG.getCALLSEQ_START(Chain, 0, 0, dl);
-      SP = DAG.getCopyFromReg(Chain, dl, Capstone::X2, VT);
+      SP = DAG.getCopyFromReg(Chain, dl, Capstone::C2, VT);
       Chain = SP.getValue(1);
     }
 
@@ -26797,7 +26800,7 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
       return DAG.getMergeValues({narrowAllocaResult(NewSP), Chain}, dl);
     }
 
-    Chain = DAG.getCopyToReg(Chain, dl, Capstone::X2, NewSP);
+    Chain = DAG.getCopyToReg(Chain, dl, Capstone::C2, NewSP);
     Chain = DAG.getCALLSEQ_END(Chain, 0, 0, SDValue(), dl);
     return DAG.getMergeValues({narrowAllocaResult(NewSP), Chain}, dl);
   }

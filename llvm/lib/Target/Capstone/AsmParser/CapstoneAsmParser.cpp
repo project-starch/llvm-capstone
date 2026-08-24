@@ -1330,6 +1330,32 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
       CapstoneMCRegisterClasses[Capstone::FPR64CRegClassID].contains(Reg);
   bool IsRegVR = CapstoneMCRegisterClasses[Capstone::VRRegClassID].contains(Reg);
 
+  // The assembly names a capability operand with its INTEGER name -- `a0`, not
+  // `c10` -- because Capstone has one register file and that is what the
+  // hardware manuals, the hand-written domain entry glue and the board all use.
+  // The parser therefore hands us an X register where a capability class was
+  // asked for; coerce it, exactly as the FPR64->FPR32 cases below do.
+  if (CapstoneMCRegisterClasses[Capstone::GPRRegClassID].contains(Reg)) {
+    unsigned Idx = Reg - Capstone::X0;
+    switch (Kind) {
+    case MCK_GPCR:
+    case MCK_GPCRJALR:
+    case MCK_GPCRTC:
+      Op.Reg.RegNum = Capstone::C0 + Idx;
+      return Match_Success;
+    case MCK_GPCRNoC0:
+    case MCK_GPCRJALRNonC7:
+    case MCK_GPCRTCNonC7:
+    case MCK_GPCRC7:
+      if (Idx == 0 && Kind == MCK_GPCRNoC0)
+        break;
+      Op.Reg.RegNum = Capstone::C0 + Idx;
+      return Match_Success;
+    default:
+      break;
+    }
+  }
+
   if (IsRegFPR64 && Kind == MCK_FPR128) {
     Op.Reg.RegNum = convertFPR64ToFPR128(Reg);
     return Match_Success;

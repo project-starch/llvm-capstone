@@ -503,6 +503,16 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
   // -- exactly the reference monitor's own within-PCC call/ret ABI. JALR shares
   // CJALR's (rd, rs1, imm12) shape, so this is an opcode swap.
   if (capstoneGpFreeAbiActive()) {
+    // JALR is an INTEGER jump, so its target operand has to be the integer
+    // register. The call pseudos carry the capability form; take its
+    // sub_cap_addr sub-register, or the InstAlias that prints `jalr a0` will
+    // not match and the encoding would name a register class JALR does not take.
+    const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+    auto AsIntReg = [&](Register R) -> Register {
+      if (Capstone::GPCRRegClass.contains(R))
+        return TRI->getSubReg(R, Capstone::sub_cap_addr);
+      return R;
+    };
     switch (MI->getOpcode()) {
     case Capstone::PseudoRET:
       // ret: jalr x0, 0(x1)
@@ -515,14 +525,14 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
       // indirect call: jalr x1, 0(rs1)
       EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::JALR)
                                        .addReg(Capstone::X1)
-                                       .addReg(MI->getOperand(0).getReg())
+                                       .addReg(AsIntReg(MI->getOperand(0).getReg()))
                                        .addImm(0));
       return;
     case Capstone::PseudoTAILIndirect:
       // indirect tail call: jalr x0, 0(rs1)
       EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::JALR)
                                        .addReg(Capstone::X0)
-                                       .addReg(MI->getOperand(0).getReg())
+                                       .addReg(AsIntReg(MI->getOperand(0).getReg()))
                                        .addImm(0));
       return;
     }

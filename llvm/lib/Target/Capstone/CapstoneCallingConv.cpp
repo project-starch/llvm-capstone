@@ -189,6 +189,22 @@ static ArrayRef<MCPhysReg> getArgGPR32s(const CapstoneABI::ABI ABI) {
   return ArrayRef(ArgIGPRs);
 }
 
+// The capability form of the FastCC argument registers. Same slots, capability
+// class -- without it the four FastCC-only registers go unused and every
+// capability past the eighth spills to the stack.
+static ArrayRef<MCPhysReg> getFastCCArgGPCRs(const CapstoneABI::ABI ABI) {
+  static const MCPhysReg FastCCICaps[] = {
+      Capstone::C10, Capstone::C11, Capstone::C12, Capstone::C13,
+      Capstone::C14, Capstone::C15, Capstone::C16, Capstone::C17,
+      Capstone::C28, Capstone::C29, Capstone::C30, Capstone::C31};
+  static const MCPhysReg FastCCECaps[] = {Capstone::C10, Capstone::C11,
+                                          Capstone::C12, Capstone::C13,
+                                          Capstone::C14, Capstone::C15};
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
+    return ArrayRef(FastCCECaps);
+  return ArrayRef(FastCCICaps);
+}
+
 static ArrayRef<MCPhysReg> getFastCCArgGPRs(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the FastCC, X5 and X6 might be used
   // for save-restore libcall, so we don't use them.
@@ -738,7 +754,7 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
   // Capability handling, mirroring CC_Capstone.
   if (ValVT == MVT::c128 || ValVT == MVT::i128) {
     ArrayRef<MCPhysReg> ArgRegs = ValVT == MVT::c128
-                                      ? Capstone::getArgGPCRs(ABI)
+                                      ? getFastCCArgGPCRs(ABI)
                                       : ArgGPRs;
     if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,

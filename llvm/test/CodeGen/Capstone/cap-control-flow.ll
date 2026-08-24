@@ -47,10 +47,11 @@ entry:
 ; CHECK-NOT: cjalr	zero, 0(ra)
 
 ; MIR-LABEL: name:            test_cap_call
-; MIR: renamable $x10 = CAP_CALL killed renamable $x10, csr_ilp32_lp64
+; The capability register form: $c10 IS $x10, seen at capability width.
+; MIR: renamable $c10 = CAP_CALL killed renamable $c10, csr_ilp32_lp64
 
 ; MIR-LABEL: name:            test_cap_enter
-; MIR: renamable $x10 = CAPENTER killed renamable $x10, csr_ilp32_lp64
+; MIR: renamable $c10 = CAPENTER killed renamable $c10, csr_ilp32_lp64
 ; MIR: renamable $x10 = PseudoTRUNC_CAP killed renamable $x10
 
 

@@ -832,8 +832,8 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
 // CJALR: Capability Jump and Link Register
 // 1. Save PC+4 to rd (creating a return capability).
 // 2. Jump to target in rs1 (checking tag/perms).
-def CJALR : RVInstI<0b101, OPC_CAP_OP, (outs GPR:$rd),
-                    (ins GPR:$rs1, simm12_i64_op:$imm12),
+def CJALR : RVInstI<0b101, OPC_CAP_OP, (outs GPCR:$rd),
+                    (ins GPCR:$rs1, simm12_i64_op:$imm12),
                     "cjalr", "$rd, ${imm12}(${rs1})">;
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
@@ -1898,24 +1898,32 @@ def : Pat<(capstone_mnret_glue), (MNRET)>;
 
 let isCall = 1, Defs = [X1] in {
 let Predicates = [NoStdExtZicfilp] in
-def PseudoCALLIndirect : Pseudo<(outs), (ins GPRJALR:$rs1),
-                                [(capstone_call GPRJALR:$rs1)]>,
+// No pattern: CapstoneISD::CALL/TAIL are selected in
+// CapstoneDAGToDAGISel::selectCall. What matters here is the operand CLASS --
+// a call target is a capability, and routing it through GPR made the register
+// allocator copy it into an integer register, which is an `addi` and therefore
+// an UNTAGGED target for cjalr.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirect : Pseudo<(outs), (ins GPCRJALR:$rs1),
+                                []>,
                          // Use CJALR
-                         PseudoInstExpansion<(CJALR X1, GPR:$rs1, 0)>;
+                         PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
-def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPRJALRNonX7:$rs1),
-                                     [(capstone_call GPRJALRNonX7:$rs1)]>,
-                              PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPCRJALRNonC7:$rs1),
+                                     []>,
+                              PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
-def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(capstone_sw_guarded_call GPRX7:$rs1)]>,
-                           PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
+                                  []>,
+                           PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 }
 }
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(capstone_ret_glue)]>,
-                PseudoInstExpansion<(CJALR X0, X1, 0)>; // Use CJALR
+                PseudoInstExpansion<(CJALR C0, C1, 0)>; // Use CJALR
 
 // PseudoTAIL is a pseudo instruction similar to PseudoCALL and will eventually
 // expand to auipc and jalr while encoding.
@@ -1928,18 +1936,21 @@ def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), [],
 
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in {
 let Predicates = [NoStdExtZicfilp] in
-def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
-                                [(capstone_tail GPRTC:$rs1)]>,
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
+                                []>,
                                 // Use CJALR
-                         PseudoInstExpansion<(CJALR X0, GPR:$rs1, 0)>;
+                         PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
-def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPRTCNonX7:$rs1),
-                                     [(capstone_tail GPRTCNonX7:$rs1)]>,
-                              PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPCRTCNonC7:$rs1),
+                                     []>,
+                              PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
-def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(capstone_sw_guarded_tail GPRX7:$rs1)]>,
-                           PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
+                                  []>,
+                           PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 }
 }
 
@@ -2602,14 +2613,14 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
   // on the SelectionDAG path for now, and the full call/debug-site modelling
   // will be added later together with a dedicated call-like lowering path.
   def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
-                         (outs GPR:$rd), (ins GPR:$rs1),
+                         (outs GPCR:$rd), (ins GPCR:$rs1),
                          "call", "$rd, $rs1"> {
     let rs2 = 0;
   }
 
   // CAPENTER: Enter Secure World
   def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
-                         (outs GPR:$rd), (ins GPR:$rs1),
+                         (outs GPCR:$rd), (ins GPCR:$rs1),
                          "capenter", "$rd, $rs1"> {
     let rs2 = 0;
   }
@@ -2617,7 +2628,7 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
   let isTerminator = 1 in {
     // RETURN: Domain Return
     def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP,
-                             (outs), (ins GPR:$rs1, GPR:$rs2),
+                             (outs), (ins GPCR:$rs1, GPCR:$rs2),
                              "return", "$rs1, $rs2"> {
       let isReturn = 1;
       let rd = 0;

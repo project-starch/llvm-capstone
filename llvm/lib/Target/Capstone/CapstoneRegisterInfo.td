@@ -326,6 +326,31 @@ def GPCRNoC0 : CapstoneRegisterClass<[CLenVT], 128, (sub GPCR, C0)> {
   let RegInfos = CLenRI;
 }
 
+// The capability forms of the indirect-call operand classes. A call target is a
+// capability: routing it through GPR made the allocator copy it into an integer
+// register, which is an `addi` and therefore an UNTAGGED target for cjalr.
+def GPCRJALR : CapstoneRegisterClass<[CLenVT], 128,
+                                     (sub GPCR, (sequence "C%u", 0, 5))> {
+  let RegInfos = CLenRI;
+}
+def GPCRJALRNonC7 : CapstoneRegisterClass<[CLenVT], 128, (sub GPCRJALR, C7)> {
+  let RegInfos = CLenRI;
+}
+def GPCRC7 : CapstoneRegisterClass<[CLenVT], 128, (add C7)> {
+  let RegInfos = CLenRI;
+}
+
+def GPCRTC : CapstoneRegisterClass<[CLenVT], 128,
+                                   (add (sequence "C%u", 6, 7),
+                                        (sequence "C%u", 10, 17),
+                                        (sequence "C%u", 28, 31))> {
+  let RegInfos = CLenRI;
+}
+
+def GPCRTCNonC7 : CapstoneRegisterClass<[CLenVT], 128, (sub GPCRTC, C7)> {
+  let RegInfos = CLenRI;
+}
+
 def GPR : GPRRegisterClass<(add (sequence "X%u", 10, 17),
                                 (sequence "X%u", 5, 7),
                                 (sequence "X%u", 28, 31),

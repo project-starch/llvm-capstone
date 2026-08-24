@@ -41,7 +41,10 @@ entry:
 ; CHECK: srli a0, a0, 4
 ; CHECK: mul a0, a0, a1
 ; CHECK-NOT: or {{[a-z]}}
-; CHECK: sw a0, 0(a2)
+; The store base is copied with movc, not addi: a memory base has to keep its
+; tag. That copy exists because the ordinary store instructions still type their
+; base operand GPR while the pointer is GPCR; retyping them removes it.
+; CHECK: sw a0, 0({{a[0-9]+}})
 define void @ptrdiff_div_nonpow2_store(ptr addrspace(200) %p, ptr addrspace(200) %q, ptr addrspace(200) %out) {
 entry:
   %pi = ptrtoint ptr addrspace(200) %p to i128

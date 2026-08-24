@@ -2125,8 +2125,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     // Capstone pointers/capabilities live in a 128-bit register.
     if (isCapabilityVT(VT)) {
       if (ConstNode->isZero()) {
-        SDValue New = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL,
-                                             Capstone::X0, VT);
+        // The null capability is C0, not X0: a c128-typed CopyFromReg has to
+        // name a register that is in a c128 register class.
+        SDValue New = CurDAG->getCopyFromReg(
+            CurDAG->getEntryNode(), DL,
+            VT == MVT::c128 ? Capstone::C0 : Capstone::X0, VT);
         ReplaceNode(Node, New.getNode());
         return;
       }
