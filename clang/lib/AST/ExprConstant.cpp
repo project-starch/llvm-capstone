@@ -9828,21 +9828,26 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
       break;
 
     if (Value.isInt()) {
-      // Clamp to 64 bits: `N` is read back with getZExtValue(), which requires
-      // that. On a capability target the pointer's REPRESENTATION is wider than
-      // the address it carries -- Capstone.h sets PointerWidth to 128, the
-      // address is 64 -- so extending a NEGATIVE constant to the full width
-      // sets every high bit and the assert fires. `(void *)-100` reproduces it,
-      // which mattered because AT_FDCWD is -100 and musl casts it in every
-      // *at() wrapper. See ISSUES.md C-21.
+      // `N` is used just below as CharUnits::fromQuantity(N), i.e. as an
+      // ADDRESS, and it is read with getZExtValue(), which requires <= 64 bits.
+      // The pointer TYPE's size is the representation width, and on a capability
+      // target that is wider than the address it carries: Capstone.h sets
+      // PointerWidth to 128 while the address is 64. Extending a NEGATIVE
+      // constant to the full width therefore sets every high bit and the assert
+      // fires. `(void *)-100` reproduces it, which matters because AT_FDCWD is
+      // -100 and musl casts it in every *at() wrapper. See ISSUES.md C-21.
       //
-      // Deliberately a clamp rather than "use the address width": every
-      // upstream target has pointers of at most 64 bits, so this branch is
-      // unreachable for them and their behaviour is provably unchanged.
-      // Substituting uintptr_t's width would NOT be provably unchanged --
-      // targets exist with a 32-bit pointer in one address space and a 64-bit
-      // uintptr_t, and there the extension width would silently move.
-      unsigned Size = std::min<unsigned>(Info.Ctx.getTypeSize(E->getType()), 64);
+      // Bound by the target's ADDRESS width rather than by a hardcoded 64, so
+      // the line says WHY the bound is what it is. Provably a no-op everywhere
+      // else: getMaxAddressWidth() defaults to getMaxPointerWidth(), the maximum
+      // over address spaces, which is never below this type's own pointer width.
+      //
+      // Not simply getMaxAddressWidth() on its own -- that would WIDEN for a
+      // target with a 32-bit pointer in one address space and a 64-bit one in
+      // another, where this type's size is the narrower of the two.
+      unsigned Size =
+          std::min<unsigned>(Info.Ctx.getTypeSize(E->getType()),
+                             Info.Ctx.getTargetInfo().getMaxAddressWidth());
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       if (N == Info.Ctx.getTargetNullPointerValue(E->getType())) {
         Result.setNull(Info.Ctx, E->getType());
