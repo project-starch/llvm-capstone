@@ -925,6 +925,35 @@ def main():
             n_tot = len(DOMS)
             start_banner = f"### TEST {dom_idx}/{n_tot} START {label} ###"
             log(f"--> TEST {dom_idx}/{n_tot}  {label}")
+
+            # CLEAR THE s07 LDC RECORDER IMMEDIATELY BEFORE THE ARM.
+            #
+            # That recorder is FIRST-WINS, one-shot, with no clear but reset (load_unit.sv:766),
+            # and an `ldc` over a zeroed stack slot is LEGITIMATELY untagged -- so ordinary boot
+            # software consumes the slot before any domain runs. Measured: the PRE-RUN baseline
+            # already reads 0xb8 with ldc0_valid=1. The valid bit is then set for somebody else's
+            # load, the granule apertures describe an unrelated event, and a liveness gate PASSES
+            # on it. (Seen: recorded LDC granule 0x81170, STC 0x9f370, subject 0x91470 -- three
+            # different things.)
+            #
+            # Switch 160 (bank 3'b101 reg 0) is the added clear: level-sensitive, dominating while
+            # applied, clearing the granule address and source WITH the valid bit so a stale
+            # granule can never sit beside a fresh valid. UART-safe (160 & 3 == 0), which is what
+            # makes a mid-run clear possible at all.
+            #
+            # Requires a bitstream carrying s07-recorder-clear-39b. On an image without it the
+            # write is inert, so this is safe to leave enabled -- but then the apertures are as
+            # unattributable as before, which is why WEDGE_S07_CLEAR defaults OFF: an inert clear
+            # that looks applied is exactly the failure this is meant to remove.
+            if os.environ.get("WEDGE_S07_CLEAR") == "1":
+                try:
+                    console.set_switch(160, True); time.sleep(0.3)
+                    console.set_switch(160, False); time.sleep(0.3)
+                    log(f"    s07 recorder CLEARED via sw160 before {label}")
+                except Exception as _e:
+                    log(f"    s07 clear FAILED ({_e}) -- granule apertures are NOT attributable "
+                        f"for this arm; do not read them")
+
             t_dom = time.time()
             try:
                 console.run_command(

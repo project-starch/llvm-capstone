@@ -807,3 +807,57 @@ folder hit with three instrumented builds.
   consumed by boot software before any domain runs), which would make the existing granule
   apertures usable and answer it with no new probe at all. Purely additive; competes for a
   synthesis slot.
+
+---
+
+# CORRECTION: the flown bitstream DOES carry a combinational-loop hazard
+
+Earlier this plan recorded, on the RTL lane's word, that the `UNOPTFLAT 39 -> 40` in
+`wt_dcache_mem.sv` belonged to a **rejected** variant and the shipped S-10 fix was clean. **That
+was wrong, and they have retracted it.** Measured single-variable, the only `core/` difference
+between the two commits being that one file:
+
+    39b21639d  (S-10 ABSENT)   UNOPTFLAT 39   LINT GATE PASS
+    80843404c  (S-10 PRESENT)  UNOPTFLAT 40   LINT GATE FAIL
+    signal added: cva6.gen_cache_wt.i_cache_subsystem.i_wt_dcache.rd_ctag
+
+One signal added, none removed. `4fee13b2d`'s own subject said so — *"costs a combinational loop
+— NOT ready to merge"* — and nothing after it resolves it.
+
+**Do not over-correct either.** It is a *Verilator* warning, not proof of a physical loop, and the
+bitstream built, so DRC `LUTLP-1` passed — with S-10b as the positive control that the check does
+fire. Buildable and carrying a flagged hazard are both true at once.
+
+**Consequence for this investigation's write-ups:** `caplifive_s10fix_80843404c.bit` — the image
+most of this work ran on — carries it. Nothing measured is invalidated, but it is a **SECOND
+uncontrolled difference** between the two images, alongside the WNS gap (−10.629 vs −16.400 ns),
+and both belong beside any A/B result. The A/B conclusion is unaffected in direction: the fault is
+**present on both**, and neither a timing margin nor a lint hazard explains a fault appearing on
+the image with the *better* margin and the *cleaner* lint.
+
+# The recorder clear is BUILT and IN SYNTHESIS
+
+`s07-recorder-clear-39b` @ `84ed6eafb`, based on **`39b21639d`** — deliberately not the flown
+image, because a failing lint gate cannot separate a new change from an inherited one, and the
+project rule is that the gate passes before RTL goes to synthesis. That base also already has an
+exit-0 synthesis, which is the best prior for a 32-line additive change.
+
+    lint gate      PASS, UNOPTFLAT 39
+    signal set     byte-identical to base (not merely the same count)
+    capldc         PASS at 529 cycles
+
+**Switch 160** (bank `3'b101` reg 0), level-sensitive, mirroring `dom_switch_log_clear` in the
+same bank. **UART-safe** (`160 & 3 == 0`), so it can be applied mid-run — which is the entire
+point. Bank 101 has no read mux, so it costs no readable aperture. The clear sits *after* the
+capture arm so it dominates while applied, and it clears the granule address and source **with**
+the valid bit, so a stale granule can never sit beside a fresh valid.
+
+**The last-wins reduction was NOT taken**, as requested.
+
+**Branch hazard:** there are two on the remote. Build **`s07-recorder-clear-39b`**. The other,
+`s07-recorder-clear` @ `170512416`, is the same change on the failing-gate base and is stranded
+because the push hook forbids branch deletion.
+
+**Note the new image will be S-10-ABSENT plus the clear** — two differences from the flown image.
+That is fine for this purpose: the A/B already established the fault reproduces on `39b21639d`,
+so the arm will still fault there.
