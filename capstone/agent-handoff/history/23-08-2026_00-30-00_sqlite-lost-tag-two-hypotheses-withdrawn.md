@@ -88,7 +88,25 @@ residency, and costs a board session. The trace distinguishes; the padding does 
 
 ---
 
-# RESOLVED: it is a NULL pointer in software. No tag was lost, and no hypothesis in this note was right.
+# RETRACTED 2026-08-24 -- the section below is WRONG. Read this first.
+
+> **The "NULL pointer in software" verdict below was RETRACTED.** It rested on `tval == 0` read
+> from the FLU capability path, and that instrument **has never been shown to fire on this
+> silicon**: every latched `tval` at a capability wedge reads 0x00, and the one non-zero on record
+> came from mcause 15, whose tval comes from the LSU rather than `ex_stage.sv`. A zero from an
+> unfired instrument reads exactly like a finding. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8`
+> traps with `tval == 0xBEEF`, **every `tval == 0` here is NO DATA**, and both "software NULL" and
+> "a tag was lost" are undetermined.
+>
+> Retraction and evidence: `plans/sqlite-regression-suite-proposal.md` (§"RETRACTION: arm position
+> is a confound, and tval is an UNFIRED instrument") and
+> `plans/sqlite-wherecode-notcap-plan.md`. Later measurement also exonerated the S-10 fix: the
+> fault reproduces on `caplifive_s07only_39b21639d.bit` (S-10 ABSENT) at the same instruction.
+>
+> Left in place rather than deleted, because the reasoning is the record of how the wrong
+> conclusion was reached -- but it must not be read as a verdict.
+
+# (RETRACTED) RESOLVED: it is a NULL pointer in software. No tag was lost, and no hypothesis in this note was right.
 
 **Date:** 2026-08-23. Settled by four latched values read together, from apertures that were on the
 bitstream the whole time and had never been sampled.

@@ -375,6 +375,60 @@ text with Python regex. This applies to hand-grepping the raw capture.
 
 **Bitstream re-flash is ask-first, always.**
 
+## Re-flashing a bitstream
+
+**Two stores, and using the wrong one wastes a session.** The console keeps boot images and
+bitstreams separately:
+
+| store | endpoint | holds | wrapped in our driver? |
+|---|---|---|---|
+| images | `/api/images/upload` | `fw_payload.bin` | YES — `upload_boot_image()` |
+| **bitstreams** | `/api/bitstreams/upload` | `.bit` | **NO — deliberately not wired** |
+
+`flash_bitstream(name)` names a **server-side** bitstream. So:
+
+* **If the `.bit` is already server-side** (most are — the board owner puts them there), no upload
+  is needed and a flash is a few lines. `caplifive_s10fix_80843404c.bit` and ~25 others are there.
+* **If it is only local, our driver CANNOT put it there.** `upload_boot_image()` will happily
+  accept an 11 MB `.bit` and file it under **images**, where `load_image` JTAG-loads to
+  `0x80000000` as firmware — a hazard sitting next to the `fw_*.bin` files, and the flash then
+  has no such name to resolve. Use the GUI Bitstream Manager or ask the board owner.
+
+**Sequence, in this order.** Each step exists because skipping it has cost a session:
+
+```python
+c.power(True); time.sleep(15.0)      # POWER ON FIRST -- a cold board races the JTAG programmer:
+                                     # flash_state -> error in ~1 s with NO SPI write
+c.lock()                             # the flash takes ~90 s; auto-shutdown is 600 s
+c.flash_bitstream(NAME)              # server-side name
+c.power(False); time.sleep(8.0)      # POWER CYCLE IS MANDATORY -- the flash writes SPI only, the
+c.power(True);  time.sleep(15.0)     # FPGA keeps the old config until it reconfigures at power-on.
+                                     # Skip it and the DTM comes up IDCODE 0x00000001.
+rb = flash_state["nv_bitstream_name"]   # RE-READ. Never trust the call.
+```
+
+**Reading the resident name is itself a trap, twice over.** `_current_state()` returns only the
+`state` field and **drops `nv_bitstream_name`**; and registering the event handler *after*
+`connect()` misses the initial state burst. Both return `None`, which is indistinguishable from
+"a non-Capstone design is resident" — so both read as a failed flash that actually succeeded.
+Register the handler **before** connect, take the full payload, and settle before reading.
+
+**After any re-flash, before trusting a result:**
+
+* **Check whether the memory map moved** — `CAP_TAG_MEM_BASE` / `CAP_REVNODE_MEM_BASE` in
+  `capstone-ariane/core/include/ariane_pkg.sv` **at the new bitstream's commit**. If it moved,
+  update `reg = <...>` in BOTH `caplifive.dts` and `configs/caplifive.dts` and verify in the built
+  DTB. (`git show <commit>:core/include/ariane_pkg.sv` answers this in seconds and is worth doing
+  every time — it cost two boots once.)
+* **Pass `FPGA_BITSTREAM` explicitly per run** while experimenting. The drivers' defaults go stale
+  and a stale default burns a launch on a HARD STOP; update them once, after the experiment
+  settles on a resident image.
+* **Name the bitstream in every recorded result.**
+
+**Only `run_ladder_perf_fpga.py` flashes** (gated on `FPGA_ALLOW_FLASH=1`). In
+`run_base_bare_fpga.py` that same variable **bypasses the HARD STOP without flashing**, so the run
+proceeds on the wrong silicon — do not set it there expecting a flash.
+
 ## Reporting a result
 
 State which arms were **reachable**, not just which failed — an entry stall biases *which

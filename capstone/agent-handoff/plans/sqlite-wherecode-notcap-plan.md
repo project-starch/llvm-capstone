@@ -631,3 +631,60 @@ comparison is not strictly single-variable. It matters far less for this outcome
 have for the other: a **present/absent** split could have been argued as 5.8 ns of margin, but
 **present on both** cannot — the fault occurring on the image with the *better* margin is not
 explicable by margin.
+
+---
+
+# IDENTITY SETTLED: this IS S-07 — the instance its own root cause does NOT explain
+
+A documentation sweep found the match, and it was in the S-07 folder the whole time.
+
+**`S07-capability-untagged-on-reload/00-README.md:1040-1043`, "instance 1" (`memcpy`):**
+
+> *"every instruction touching the faulting granule is `stc`, one plain `ld` and three `ldc` --
+> **zero plain stores**. Neither correct tag-clearing on a partial overwrite, nor the write-buffer
+> `.user` clobber ... which needs a coalescing plain STORE to the same word."*
+
+Independently in `ref/ISSUES.md:914-923`: mcause 25 at `memcpy+0x2a8`, operand reloaded by
+`ldc a2,0x0(a2)` **from the stack slot at `s0-0x60`**, and "**Nothing writes the granule.**"
+
+    memcpy+0x2a8                    sqlite3WhereCodeOneLoopStart+0x8c   (ours)
+      cincoffsetimm a2, s0, -0x60     cincoffsetimm a0, s0, -0x70
+      ldc           a2, 0x0(a2)       ldc           a4, 0x0(a0)
+      cincoffset    a1, a2, a1        cincoffsetimm a4, a4, 0xb0
+      -> mcause 25                    -> mcause 25
+
+**Same shape: stack slot, reload, dependent `cincoffset`, mcause 25, no plain store in the
+granule.** S-07 generalises it at `00-README.md:565-570` across three independent builds: *"a
+capability is loaded, spilled to a stack slot, reloaded, and the immediately dependent `ldc`
+raises mcause 25."* Sporadicity matches too (`ISSUES.md:214-217`: the same image passed and wedged
+eight minutes apart).
+
+**Why this resolves the identity question that has been open all session.** S-07's root cause --
+write-buffer granule co-residency -- **requires a same-granule plain store**, which instance 1
+does not have and neither do we. So our fault is not a *counterexample* to S-07; it is the
+**already-documented residual** that the S-07 fix could not have cured. That is exactly consistent
+with it reproducing on BOTH `caplifive_s10fix_80843404c.bit` and `caplifive_s07only_39b21639d.bit`
+with `5c5f4e3a7` present in each.
+
+**Instance 1 was never revisited after the 2026-08-19 root cause** -- no document after that date
+mentions it. The residual is documented and never closed.
+
+## What we contribute back to S-07
+
+Its one un-refuted mechanism is the **CAP_WB / LOAD_WB register-delivery path**
+(`00-README.md:1104-1113`): an `ldc` response bypassed to LOAD_WB has `cap_result` erased by
+`scoreboard.sv:242-246`, giving *"a NOT_CAP register with a correct cursor, having never touched
+memory"*. The folder argues it cannot happen, but by **source reading**, and lists it under "what
+would settle it".
+
+**Our switch-204 result is the first empirical answer**: `0x00` at every wedge across 8 boots with
+the 220 selftest firing in the same boot -- a controlled negative, on both bitstreams. That
+narrows S-07's own open list.
+
+## Consequence for where this goes
+
+Per this plan's own P0 rule -- *"if it is S-07 or a known residual: STOP, record the new site in
+that folder, do not open a new issue"* -- **the finding belongs in the S-07 folder as a second
+site for instance 1's residual**, not in a new `fpga-repros` folder. Still true that no tag has
+been shown lost (the FLU `tval` path has never fired), so the site is recorded as a reproduction,
+not as a proven mechanism.
