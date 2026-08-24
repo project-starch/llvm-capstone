@@ -450,3 +450,76 @@ in-domain offset is `0x391430`):
 
     arm 2   granule 0x82f91430   tag byte 0xbc5cbe70
     arm 3   granule 0x83391430   tag byte 0xbc60be70
+
+---
+
+# UPDATE 6 — METHOD CHANGED, and the first COUNTED result: the window alone is NOT sufficient
+
+## How S-07 was actually cracked, from the commit history
+
+    25b964349b05  granule apertures read HALTED at the wedge -> two granules exactly adjacent
+    b8824114deb8  wbuf: a DIRECTED SILICON TEST, with a control that must fail
+    d644cd273039  ROOT CAUSE CONFIRMED ON SILICON
+
+**The decisive instrument was a counting microbenchmark, not an instrumented SQLite.** `wbuf`
+runs `WBUF_N 256 x WBUF_REPS 64 = 16384` trials per arm and returns
+`0xB0000000 | (corrupt<<12) | lost`, 12-bit counters saturating at 0xFFF. That is a **rate per
+boot**. This investigation had been harvesting **one bit per boot** against a sporadic fault,
+which is exactly why its ladder kept producing N=1 conclusions.
+
+## Result, boot with k800 control passing (oracle 4)
+
+| rung | retval | control bit | lost | meaning |
+|---|---|---|---|---|
+| k800 | 4 | — | — | boot VALID |
+| wb0 | 0xB0000000 | — | 0 | baseline, no plain store at all |
+| wb10 | **0xB1000000** | **1** | **0** | 4 granules in flight |
+| wb9 | **0xB1000000** | **1** | **0** | 10 granules in flight (OVER depth 8) |
+
+**16384 trials each, ZERO losses, with the detector PROVEN to fire.** So this is a meaningful
+zero, not an unproven one.
+
+### What that eliminates
+
+* **Buffer pressure / granule count alone.** 10 distinct granules against `WtDcacheWbufDepth = 8`
+  produced zero loss. The over-by-one reading is dead as a sufficient cause.
+* **The two `ctag=0` capability stores.** Present in both arms, zero loss.
+* **The bare window shape** — subject `stc`, stores to OTHER granules, reload.
+
+**So the SQLite fault needs something the instruction window does not contain**, which is the
+same conclusion the static analysis reached from the other side: both named mechanisms required a
+plain store into the subject granule or word that the code demonstrably lacks.
+
+## The in-arm positive control, and why it was necessary
+
+`wb2` — the harness's own positive control — **cannot be QEMU-verified, structurally**: the
+native oracle is a stub that always returns `0xB0000000` (`wbuf_host.c:4`), and arm 2's entire
+purpose is a divergence only capability silicon exhibits. That is the C13 blocker, and it is the
+project lead's call; the gate was left alone.
+
+So arms 9/10/11 carry their own control in **bit 24**, set only when the type query answers 7 for
+a known non-capability. Native, QEMU and silicon must all produce it.
+
+**It caught its own first version.** The control initially asked `wbuf_type(&ctl_scalar)` — the
+address of a local, which IS a real capability here — so it returned that capability's type
+rather than 7, and would have reported "detector dead" on healthy hardware. Fixed to query the
+integer VALUE.
+
+## k800 unblocked as a side effect
+
+The preflight blocked the run because no first rung was a verified known-good control. `k800` had
+an oracle but **no QEMU pass**. Verified it: `oracle: k800 = 4`, `qemu: PASS`. That was one of the
+two decisions the RTL lane was blocked on, and it turned out to be a missing verification rather
+than a real failure.
+
+## Next arm: the LOAD-to-STORE-to-LOAD chain (arm 11, QEMU-verified)
+
+The one structural difference between the microbenchmark and the SQLite window:
+
+    wbuf 9/10   register -> stc -> ldc      (`base` stays in a register)
+    SQLite      ldc -> stc -> ldc           (pWInfo is RELOADED from the caller's frame, passed
+                                             in a2, spilled by the callee, reloaded again)
+
+The capability being spilled is itself the result of a recent load. If a forwarding path carries
+a load's result into a store without carrying its tag, arm 11 sees it and arms 9/10 structurally
+cannot.

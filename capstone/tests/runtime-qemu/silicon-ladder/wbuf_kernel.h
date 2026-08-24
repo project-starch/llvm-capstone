@@ -161,6 +161,7 @@ WBUF_SEL(wbuf_perm,   5)   /* at risk */
 static unsigned wbuf_compute(void)
 {
   unsigned long lost = 0, corrupt = 0;
+  unsigned ctl_ok = 0u;
   unsigned i, r, k;
 #if WBUF_ARM == 8
   /* THE EVICTION PROOF. See the arm-8 block below: without it a green wr8 is produced by
@@ -199,6 +200,74 @@ static unsigned wbuf_compute(void)
 #elif WBUF_ARM == 4
       *nxt = 0xB8B8B8B8ul + i;         /* plain store to the NEXT granule */
       wbuf_slots[i] = base;            /* stc, LOW word of THIS granule */
+#elif WBUF_ARM == 9
+      /* THE WHERECODE SHAPE. Reproduces the SQLite wedge window with NO same-granule plain
+         store at all -- which is exactly what makes it a different question from arms 1-4.
+         The faulting window in sqlite3WhereCodeOneLoopStart is:
+             stc <cap> -> subject granule
+             9 stores to OTHER granules, of which TWO are `movc rX,zero; stc` (ctag=0)
+             ldc <- subject granule        -> comes back NOT_CAP
+         Arms 1-4 all place a plain store IN the subject granule. This one deliberately does
+         not, so a loss here means the co-residency mechanism is NOT required and the S-07 fix
+         does not cover the shape. A zero here is equally informative: it says the window alone
+         is insufficient and the trigger involves state this kernel does not reproduce (stack
+         history, monitor, or a domain switch).
+         Arm 2 remains the positive control for the whole harness.
+         A CLEAN QEMU RUN OF THIS ARM PROVES ONLY THAT IT BUILDS AND COUNTS. Only arm 2 aborts
+         under emulation (see the header), so emulation cannot exhibit this defect at all and a
+         zero there is not evidence about silicon. */
+      wbuf_slots[i] = base;                    /* SUBJECT stc */
+      wbuf_sink[0] = 0xB9B9B9B9ul + i;         /* 9 stores, all to OTHER granules */
+      wbuf_sink[2] = 0xB9B9B9B9ul + i;
+      wbuf_sink[4] = 0xB9B9B9B9ul + i;
+      wbuf_sink[6] = 0xB9B9B9B9ul + i;
+      wbuf_sink[8] = 0xB9B9B9B9ul + i;
+      wbuf_sink[10] = 0xB9B9B9B9ul + i;
+      wbuf_sink[12] = 0xB9B9B9B9ul + i;
+      /* the two ctag=0 CAPABILITY stores -- `movc rX,zero` then `stc`, the entry class
+         wbuffer_gran_clr keys on, and the feature generic traffic would miss */
+      wbuf_slots[WBUF_N] = (void *)0;
+      wbuf_slots[WBUF_N + 1] = (void *)0;
+#elif WBUF_ARM == 11
+      /* THE LOAD-TO-STORE-TO-LOAD CHAIN. Arms 9/10 measured ZERO loss over 16384 trials with a
+         fired control, so the SQLite window's SHAPE is not sufficient. This arm adds the one
+         structural difference between that window and the microbenchmark:
+             wbuf arms 9/10   register -> stc -> ldc      (`base` lives in a register throughout)
+             SQLite           ldc -> stc -> ldc           (pWInfo is RELOADED from the caller's
+                                                           frame, passed in a2, spilled by the
+                                                           callee, then reloaded again)
+         So the capability being spilled is itself the result of a recent load. If a forwarding
+         path carries a load's result into a store without carrying its tag, this arm sees it and
+         arms 9/10 structurally cannot. Same in-arm control (bit 24). */
+      wbuf_slots[i] = base;                    /* seed the source slot */
+      { void *reloaded = wbuf_slots[i];        /* ldc  -- the extra link */
+        wbuf_slots[(i + 1u) % WBUF_N] = reloaded;   /* stc of a just-loaded capability */
+        wbuf_sink[0] = 0xBCBCBCBCul + i; }
+#elif WBUF_ARM == 10
+      /* ARM 9b -- THE ATTRIBUTION ARM. Identical to arm 9 except for how many distinct
+         granules are in flight. COUNTED, not estimated -- wbuf_slots[] elements are 16-byte
+         capabilities and wbuf_sink[] elements are 8-byte scalars, so two adjacent sink
+         indices share one granule:
+             arm 9   subject + 7 sink + 2 ctag = 10 granules   -> OVER  WtDcacheWbufDepth (8)
+             arm 10  subject + 1 sink + 2 ctag =  4 granules   -> under the depth
+         That straddles the buffer depth, which is the interesting boundary rather than an
+         arbitrary pair. Arm 9 differs from arms 1-4 in TWO ways at once (no same-granule plain
+         store AND far more granules), so a loss there alone could not say which mattered.
+             9 vs 10          isolates GRANULE COUNT (10 over the depth vs 4 under it)
+             10 vs arms 1-4   isolates the SAME-GRANULE STORE
+             wb0              the paired baseline, measured 0, no plain store at all
+         The "co-residency is not required" claim is the one that would be new, and this arm is
+         what makes it attributable rather than merely observed. */
+      wbuf_slots[i] = base;                    /* SUBJECT stc */
+      wbuf_sink[0] = 0xBABABABAul + i;         /* ONE other granule, 7 stores into it */
+      wbuf_sink[1] = 0xBABABABAul + i;
+      wbuf_sink[0] = 0xBABABABBul + i;
+      wbuf_sink[1] = 0xBABABABBul + i;
+      wbuf_sink[0] = 0xBABABABCul + i;
+      wbuf_sink[1] = 0xBABABABCul + i;
+      wbuf_sink[0] = 0xBABABABDul + i;
+      wbuf_slots[WBUF_N] = (void *)0;          /* the two ctag=0 stores, same as arm 9 */
+      wbuf_slots[WBUF_N + 1] = (void *)0;
 #elif WBUF_ARM == 5
       /* THE SCRUB ARM. Same store order as arm 2 -- capability first, plain store second --
          but the plain store now carries a DISTINCTIVE NON-ZERO pattern and is READ BACK.
@@ -392,7 +461,28 @@ static unsigned wbuf_compute(void)
     return 0xB8000000u | (unsigned)(ratio << 12) | (unsigned)corrupt;
   }
 #else
-  return WBUF_OK | (unsigned)(corrupt << 12) | (unsigned)lost;
+#if WBUF_ARM == 9 || WBUF_ARM == 10 || WBUF_ARM == 11
+  /* IN-ARM POSITIVE CONTROL, bit 24. A zero loss count is worthless unless the detector is
+     known to fire, and arm 2 -- the harness positive control -- CANNOT be QEMU-verified: the
+     native oracle is a stub that always answers WBUF_OK with zero loss (wbuf_host.c:4), and
+     arm 2's whole purpose is a divergence only capability silicon exhibits. So these arms
+     carry their own.
+     The query is asked about a KNOWN NON-CAPABILITY. Selector 1 is total and answers 7 for
+     NOT_CAP without raising, on RTL (capstone_dyn_unit.anvil:195) and now in QEMU
+     (op_helper.c helper_cslcc). All three vehicles must therefore set this bit:
+        bit 24 SET   -> the detector can report a loss; a zero count MEANS zero
+        bit 24 CLEAR -> the query did not answer 7, and NO count in this arm carries a verdict
+     Deliberately a separate bit rather than folded into `lost`, so a broken control can never
+     be mistaken for a finding. */
+  { unsigned long ctl_scalar = 0x5A5A5A5Aul, ctl_ty = 0ul;
+    /* THE OPERAND MUST BE A PLAIN INTEGER VALUE, NOT A POINTER. A first version asked
+       `wbuf_type(&ctl_scalar)` and the control correctly FAILED: the address of a local IS a
+       real capability here, so the query answered its type (0/1) rather than 7, and the
+       control would have reported "detector dead" on perfectly good hardware. Query the VALUE. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ctl_ty) : "r"(ctl_scalar));
+    if (ctl_ty == 7ul) ctl_ok = 1u; }
+#endif
+  return WBUF_OK | (unsigned)(ctl_ok << 24) | (unsigned)(corrupt << 12) | (unsigned)lost;
 #endif
 }
 #endif
