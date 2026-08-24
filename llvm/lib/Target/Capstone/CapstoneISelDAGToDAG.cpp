@@ -394,8 +394,8 @@ static SDValue selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
   return selectImmSeq(CurDAG, DL, VT, Seq);
 }
 
-// The i128 carrier holds a 64-bit numeric value, and it arrives in two
-// spellings that name the same register contents. A signed quantity comes
+// A wide constant used as an ADDRESS holds a 64-bit numeric value, and it
+// arrives in two spellings that name the same register contents. A signed quantity comes
 // sign-extended, as `inttoptr i128 -1`. The SAME value written through C as a
 // cast of a negative or unsigned integer to a capability-width pointer comes
 // ZERO-extended instead, as `inttoptr i128 18446744073709551615`, because the
@@ -1269,10 +1269,9 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
       // For example: *(long*)ptr = (long)ptr_val;
     else if (MemVT == MVT::i64)
       MachineOpcode = Capstone::SD;
-      // 3. Store narrower integer values carried in a 128-bit capability register.
-      // This arises when a pointer-difference result (i64 in an i128 carrier via
-      // any_extend) is stored into an int/short/char field through a capability
-      // pointer.  SW/SH/SB store the low 32/16/8 bits of the source register.
+      // 3. Store narrower integer values through a capability pointer, e.g. a
+      // pointer-difference result stored into an int/short/char field.
+      // SW/SH/SB store the low 32/16/8 bits of the source register.
     else if (MemVT == MVT::i32)
       MachineOpcode = Capstone::SW;
     else if (MemVT == MVT::i16)

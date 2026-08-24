@@ -7799,53 +7799,13 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 bool CapstoneTargetLowering::shouldPreservePtrArith(const Function &F,
                                                     EVT PtrVT) const {
-  // Only for AS200, whose pointer VT is the capability carrier. AS0 pointers
-  // are ordinary 64-bit integers and gain nothing from PTRADD.
+  // Only for AS200, whose pointer VT is the capability type. AS0 pointers are
+  // ordinary 64-bit integers and gain nothing from PTRADD.
   return PtrVT == MVT::c128;
 }
 
-// A value that lives in a capability register. c128 is the capability VT; i128
-// is still listed only because __int128 shares GPR -- drop-i128 removes the
-// second half of every one of these tests.
+// A value that lives in a capability register.
 static bool isCapstoneCapabilityVT(MVT VT) { return VT == MVT::c128; }
-
-
-
-
-
-
-// True when every use of V reads only the low XLen bits of the i128 carrier.
-// Two shapes do: a truncate to XLen or narrower, and the bitcast that inttoptr
-// builds -- which is selected as the scalar move, an ADDI whose result is XLen
-// wide. Where this holds, narrowing to XLen is EXACT rather than a guess about
-// what the high half means, so the mixed-extend bail below does not apply.
-// An i128 ADD or SUB is INTEGER arithmetic. Capability arithmetic is a PTRADD
-// on c128 and never reaches these, so there is no longer a question of which
-// operand "is" the pointer -- which is the whole point of giving capabilities
-// their own type. Do the arithmetic on the 64-bit value the carrier holds and
-// re-extend, exactly as the logical ops do.
-// Recognise an operand of a widening multiply: a value extended from XLen, or a
-// constant small enough to be one. Returns the XLen-wide operand in Out.
-// IsSigned is set on the first extended operand seen and then required to match,
-// so a mixed zext/sext pair is rejected rather than guessed at.
-// A bitwise operation whose operand is a CAPABILITY rather than a widened
-// integer. It comes from C that went through uintptr_t and back:
-//
-//     p = (void *)((uintptr_t)p & ~(N - 1));   // align down
-//     p = (void *)((uintptr_t)p | 1);          // steal a low bit as a flag
-//     h = (mp_uint_t)a ^ (mp_uint_t)b;         // hash two pointers
-//
-// The narrow form is what the source wrote and what DAGCombiner keeps
-// rebuilding: rewriting the align-down as `p - (p & (N-1))` to keep it in the
-// pointer domain does not help, because the combiner folds that straight back
-// into `p & ~(N-1)`. So the target has to lower it.
-//
-// Read the address (a TRUNCATE to the index width, which is what ptrtoint is on
-// a capability), do the operation at XLen, and hand back an UNTAGGED value. Untagged is not a compromise, it is what the C asked for: a value
-// built out of uintptr_t bits cannot carry a tag on this machine, and any
-// source that then dereferences the result has a real porting bug that no
-// lowering can hide.
-//
 
 SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
                                            SelectionDAG &DAG) const {
