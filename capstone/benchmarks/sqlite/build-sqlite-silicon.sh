@@ -1058,7 +1058,26 @@ probe = m.group(0) + """
     unsigned long ap_t1_, ap_t2_, ap_ra_;
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ap_t1_) : "r"(""" + args[0] + """));
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ap_t2_) : "r"(""" + args[1] + """));
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x2" : "=r"(ap_ra_));
+    /* THE CALLER QUERY MUST ASK THE TYPE FIRST. It used to be an unconditional selector-2
+       (cursor) `lcc` on ra. Selector 2 is NOT total: on an untagged operand QEMU trips
+       `assert(rs1_v->tag)` (op_helper.c:762) and ABORTS THE EMULATOR, and silicon RAISES.
+       In this build that is not an edge case, it is guaranteed -- the SQLite silicon domain
+       contains ZERO cjalr (verified by objdump), so calls are plain `jal` and ra is ALWAYS a
+       plain integer. The probe therefore killed every run before reaching the site it was
+       pointed at, and would have faulted the domain on the board too. "Non-perturbing" was
+       wrong for it.
+       Selector 1 IS total (returns 7 for an untagged operand instead of failing), so ask that
+       first and only take the cursor when there is a capability to take it from; otherwise ra
+       is already the address. */
+    {
+      unsigned long ap_rt_;
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x1" : "=r"(ap_rt_));
+      if (ap_rt_ == 7UL) {
+        __asm__ volatile("mv %0, ra" : "=r"(ap_ra_));
+      } else {
+        __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x2" : "=r"(ap_ra_));
+      }
+    }
     if (capstone_arg_calls == 0UL) {
       capstone_arg_ty1 = ap_t1_; capstone_arg_ty2 = ap_t2_; capstone_arg_ra = ap_ra_;
     }
