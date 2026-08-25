@@ -1372,3 +1372,63 @@ instructions, exactly as it now arms 0x810.
    result reads as "no store happened". That is an rtl-sim question, answerable in the same harness
    that just proved group-2 capture, and it is a **positive control that must fire before any
    empty group-9 result is believed.**
+
+---
+
+# The subject slot, read at the wedge with no instrumentation at all
+
+    [wedge] gdb CSRs:  mcause=2 mepc=2 mtval=0        <- the known junk; the LATCHED
+                                                          apertures are the real values
+    [wedge] gdb frame: s0(x8)=0x82b9f3d0  sp=0x82b9e790
+    [wedge] trap mepc = 0x00000000828f4ba0             <- +0x8c, the faulting instruction
+
+**The read is genuine, and the check that says so is not the range check.** Any plausible-looking
+number passes a range check. This one satisfies an arithmetic identity it could not satisfy by
+accident:
+
+    s0 - sp   = 0xc40
+    prologue  = 0x7f0 + 0x450 = 0xc40          <-  cincoffsetimm sp, sp, -0x7f0   (+0x00)
+                                                   movc s0, sp / +0x7f0           (+0x0c)
+                                                   cincoffsetimm sp, sp, -0x450   (+0x14)
+
+So the core is halted **inside `sqlite3WhereCodeOneLoopStart`'s own frame, past its prologue and
+before any further call** — which is exactly where `mepc` says the fault is. Two independent
+routes, one from the trap latch and one from the register file, agreeing on the same frame.
+
+Secondary checks, all passing: `s0 - DBAS = 0x39f3d0`, inside the 4 MiB allocation; `s0` is
+16-byte aligned; the slot sits `0x606a0` below the fixed stack end at `DBAS+0x3FFA00`, a plausible
+call depth rather than a boundary value.
+
+    SUBJECT SLOT = s0 - 0x70 = 0x82b9f360        va_offset = 0x39f360
+
+**It is 16-byte aligned, so it is a GRANULE BASE** — which the watchpoint requires and which is not
+a coincidence worth glossing over: the comparator is word-granular (`st_commit_paddr[PLEN-1:3]`)
+against a capability store's single queue entry, which carries the granule base. An address
+anywhere in the upper half of the granule would compare against word 1 while the entry holds word
+0, and would **silently never fire**. A capability store must be 16-byte aligned, so the address we
+care about and an address the watchpoint can match coincide here — but they are different
+statements and only alignment makes them agree.
+
+## Carry the OFFSET, never the physical address
+
+`DBAS` is **not stable across boots or arm positions** — this same boot shows `0x82400000` for arm
+1 and `0x82800000` for arm 2. Carrying `0x82b9f360` into a later run and arming it blind would
+point at a different domain's allocation, group 9 would fire on nothing, and **an empty group 9
+reads as "the subject store never happened"** — i.e. it would manufacture the software-NULL
+conclusion that is the very thing under test.
+
+`va_offset = 0x39f360` is the stable quantity: same binary, same query, same call chain. The run
+that arms the watchpoint must recompute `slot = DBAS_that_run + va_offset` and **refuse to report a
+group-9 result at all if the DBAS it actually observes differs from the one the prediction assumed**.
+That turns the silent failure into a loud one, which is the only version worth having.
+
+## Two loose ends from this boot
+
+* `gdb mtval read failed (UnboundLocalError)` fired immediately after the frame line, so the
+  shadow-tag read did not run. The frame data was already printed, so nothing was lost, but the
+  granule/tag read still needs the fix.
+* The GDB CSRs read `mcause=2 mepc=2 mtval=0` — the documented nested-trap collapse. Worth
+  restating because it is the reason the latched apertures exist: **the debugger's own view of the
+  trap cause at this wedge is junk, and only the hardware latch is trustworthy.** The frame
+  registers are a different matter — the monitor saves and restores `s0` across traps, so ordinary
+  timer-tick traffic cannot clobber it, and the prologue identity above confirms it did not.

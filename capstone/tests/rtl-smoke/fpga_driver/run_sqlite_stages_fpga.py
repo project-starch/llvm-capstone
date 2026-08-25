@@ -1217,7 +1217,13 @@ def main():
                 # it wraps the 256-entry ring continuously, so the subject window would be
                 # gone long before the wedge. Re-arm to group 2 alone for the arms that
                 # matter.
-                if dom_idx == 1 and TRACER_MASK_CTL != TRACER_MASK:
+                # Only meaningful on the GDB arming route. Under host arming the mask is
+                # compiled into sqlite_host.c and every arm re-arms it on its own, so this
+                # block would open a GDB session for nothing -- and it does not merely waste
+                # time: the failed session left the wedge-time register read timing out,
+                # which cost the slot address on two boots.
+                if (os.environ.get("TRACER_GDB_ARM") == "1"
+                        and dom_idx == 1 and TRACER_MASK_CTL != TRACER_MASK):
                     log(f"  [tracer] re-arming to {TRACER_MASK:#x} (group 2 only) for the "
                         f"remaining arms")
                     tracer_armed = arm_tracer(console, C, mask=TRACER_MASK,
@@ -2388,8 +2394,28 @@ def main():
                         # discard a perfectly good reading (or, worse, accept a wrong one).
                         _latched, _ = assemble_mepc(mepc_bytes, _probe_gen2)
                         try:
-                            console.gdb_start()
-                            console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                            # SESSION-AWARE, WITH ONE RETRY. `gdb_start()` on an already-open
+                            # session hangs, and a halt that times out here costs the whole
+                            # point of the wedge -- the register read that names the subject
+                            # slot. Two boots were lost that way. So: do not re-start a live
+                            # session, and if the halt fails anyway, tear the session down and
+                            # rebuild it once rather than giving up on the reading.
+                            if not _gdb_open[0]:
+                                console.gdb_start()
+                            try:
+                                console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                            except Exception as _he:
+                                print(f"  [wedge] halt failed ({type(_he).__name__}); "
+                                      f"rebuilding the GDB session and retrying once",
+                                      flush=True)
+                                try:
+                                    console.gdb_stop()
+                                except Exception:
+                                    pass
+                                _gdb_open[0] = False
+                                console.gdb_start()
+                                console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                            _gdb_open[0] = True
                             _csr = {}
                             # READ THE FRAME POINTER TOO -- this is the no-instrumentation route
                             # to the subject slot's physical address.
