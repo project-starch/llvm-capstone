@@ -2757,6 +2757,33 @@ def main():
                             # documented ~110 lines above -- reintroduced below it. Aliasing to
                             # the hoisted reader fixes it at the point of use.
                             _rd = _memrd
+                            # THE SLOT ITSELF. The one measurement this investigation kept
+                            # inferring instead of taking: what do the 16 bytes at s0-0x70 --
+                            # the granule the faulting `ldc` read -- actually contain?
+                            #
+                            # It discriminates directly, because decompress_cap_tagged
+                            # (ariane_pkg.sv:766-782) STASHES the raw metadata word into
+                            # bound_start on an untagged read rather than zeroing it, and passes
+                            # the cursor through. So the observed bit-for-bit create_cnull
+                            # operand requires BOTH 64-bit halves to have been zero:
+                            #   both words 0  -> the slot really held zero; the load did not
+                            #                    lose a capability, it read one that was not there
+                            #   cursor != 0   -> memory held a real pointer and the value was
+                            #                    lost between memory and the FLU
+                            # Also reads s0-0x120, the target of the `movc a4,zero; stc` two
+                            # instructions earlier, so a wrong-address forward would be visible
+                            # as the SAME bits appearing in both places.
+                            #
+                            # A DRAM read is not the L1 tag the load consumed -- that conflation
+                            # is what forced an earlier retraction -- so this settles the CONTENT
+                            # question only, and the tag question stays open.
+                            if _s0 is not None:
+                                for _lbl, _off in (("slot   s0-0x70 ", 0x70),
+                                                   ("zerost s0-0x120", 0x120)):
+                                    _a = _s0 - _off
+                                    _v = _rd(f"0x{_a:x}", "2gx")
+                                    print(f"  [wedge] {_lbl} @0x{_a:x}: "
+                                          f"{_v if _v else 'READ FAILED'}", flush=True)
                             if _bm:
                                 _sb = int(_bm[-1], 16)
                                 _mk = _rd(f"0x{_sb + 0x800:x}", "4gx")

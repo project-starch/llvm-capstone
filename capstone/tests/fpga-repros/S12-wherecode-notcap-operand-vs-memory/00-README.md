@@ -1574,3 +1574,61 @@ pad=32  STACK 2346992     (32 costs 80)
 
 so the carve arithmetic has its own rounding and a stack address must be **measured**, not predicted
 from a pad size.
+
+## MEASURED AT LAST: memory holds a live capability; the FLU was handed `create_cnull`
+
+The driver now reads the faulting granule directly at the wedge, via GDB, using `s0` from the
+same halt. Baseline image, real wedge (`ENT0`,`ENT1`, no `ENT2`):
+
+```
+slot   s0-0x70  @0x8279f410:  0x00000000827e4cd0   0x000003c7a7462d16
+zerost s0-0x120 @0x8279f360:  0x0000000000000000   0x0000000000000000
+LATCHED tval (sw 210..217):   0x00 x8   ->  tval = 0
+```
+
+* **The slot holds a real capability** — cursor `0x827e4cd0`, a live pointer into the domain's
+  data region, with non-zero packed metadata. Memory is INTACT.
+* **The zero-store slot is correctly zero**, so the two granules are not being confused.
+* **`tval` is 0**, and this is the LATCHED value from the trap latch — not the gdb CSR the driver
+  correctly discards as clobbered by a later trap.
+
+**Why that is decisive.** `decompress_cap_tagged` (`ariane_pkg.sv:766-782`) passes the **cursor
+through unchanged** on an untagged read, stashing the raw metadata into `bound_start` rather than
+zeroing it. So:
+
+| if the load had… | the FLU would have seen | `tval` |
+|---|---|---|
+| returned memory, tagged | a valid capability | no fault |
+| returned memory, **untagged** (tag loss) | cursor `0x827e4cd0`, NOT_CAP | **`0x827e4cd0`** |
+| **observed** | cursor **0**, NOT_CAP | **0** |
+
+A cursor of 0 cannot be produced from this memory content under **any** tag state. **The operand
+the FLU consumed did not come from the slot.** S-12 is an operand-DELIVERY failure, not a
+memory-path loss and not a tag loss — the S-07 family is excluded at this site by direct
+measurement rather than by inference.
+
+### This restores a claim I retracted — but the retraction was still correct
+
+"The value was never lost; it was never delivered" was withdrawn earlier because its evidence was
+the shadow-tag read (DRAM, not the L1 tag the load consumed) and arm 4, which never wrote its slot.
+That evidence was worthless and the retraction was right. **The claim now rests on different
+evidence**: a direct read of the granule showing a non-zero cursor, plus the latched `tval` of 0,
+plus the RTL's own untagged-decompress semantics. Same conclusion, sound basis. Worth stating
+plainly, because "it was right all along" is the wrong lesson — it was *unsupported* all along,
+and is supported now.
+
+### Standing caveat
+
+A GDB read at the halt shows memory *after* the fault. Nothing between the fault and the halt has
+any reason to write a domain stack slot, and the value is exactly the shape the code stores there
+(`pWInfo`), but this does not strictly prove the content at the instant of the load. The
+non-perturbing rolling-LDC recorder is what would close that, by recording what the load itself
+returned.
+
+### Where the mechanism must now live
+
+Between the load's result and the FLU's operand: the DYN unit's load syncer and its `trans_id`
+pairing, the forwarding/bypass network, or write-back arbitration. The RTL review already flagged
+that the syncer's "one op in flight" gating is weaker than the 96-LDC overlap test proved — that
+test likely never forced a cache miss, so the long-latency window it was built to open may never
+have opened. That is the next thing to attack, and it is a simulation question, not a board one.
