@@ -94,18 +94,19 @@ done
 
 # FILES THE SURVEY CANNOT COMPILE AT ITS OWN LEVEL, RESCUED AT -O0.
 #
-# Same shape as the vfprintf case below and for the same underlying reason: the
-# optimiser re-widens 64-bit integer arithmetic to the POINTER width and leaves
-# an i128 operation instruction selection cannot match. src/stdlib/qsort.c dies
-# with "Cannot select: i128 = xor t6, Constant:i128<-1>" at -O1 and compiles
-# clean at -O0 -- measured both ways, not assumed.
+# THE LIST IS EMPTY as of 2026-08-25, which is what it was always supposed to
+# become. It held src/stdlib/qsort.c, which died at -O1 with
+# "Cannot select: i128 = xor t6, Constant:i128<-1>" because the optimiser
+# re-widened 64-bit integer arithmetic to the POINTER width and left an i128
+# operation instruction selection could not match. The note here said "the real
+# fix is in the backend, alongside the other i128-selection gaps; this list is
+# the holding pattern and should shrink, not grow". That fix landed: a capability
+# is MVT::c128 in its own register class, so i128 is an ordinary illegal type the
+# generic legalizer expands, and qsort.c compiles at -O1.
 #
-# It matters because qsort_nr.o (which DOES compile) calls __qsort_r, so any
-# program that sorts fails to link with an undefined hidden symbol rather than
-# with anything that names qsort. mruby's gem test suite is what found it.
-#
-# The real fix is in the backend, alongside the other i128-selection gaps; this
-# list is the holding pattern and should shrink, not grow.
+# The guard below stays, and it is what caught this: a rescue whose object
+# already exists is refused rather than allowed to shadow a good one. Keep it if
+# the list ever grows again.
 mapfile -t EXT_FLAGS_EARLY < <(python3 "$SCRIPT_DIR/survey-musl-capstone.py" \
                                        "$MUSL_SRC_DIR" --print-flags)
 RESCUE_O0=()
@@ -129,7 +130,7 @@ if [[ " ${MUSL_CAPSTONE_EXTRA_CFLAGS:-} " == *" -flto "* ]]; then
   echo "LTO build: skipping the -O0 rescue list; selection failures move to the link"
   RESCUE_LIST=()
 else
-  RESCUE_LIST=(src/stdlib/qsort.c)
+  RESCUE_LIST=()
 fi
 for rescue in "${RESCUE_LIST[@]}"; do
   obj="$OBJ_DIR/src_$(echo "${rescue#src/}" | tr / _ | sed 's/\.c$//').o"
