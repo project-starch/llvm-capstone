@@ -189,6 +189,26 @@ static unsigned s12_compute(void)
 
 
 
+#if S12_ARM == 5
+    /* WHICH CAP TYPE IS THE STORED VALUE? This decides between the two live hypotheses.
+     *
+     * An LDC of a LINEAR-class capability performs a MOVE: load_unit.sv:225-226 fires a clear
+     * for {LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET} with write permission, and that clear
+     * writes cursor 0, metadata 0, tag 0 (store_unit.sv:462-469) -- bit-for-bit create_cnull,
+     * exactly the operand observed at the fault. If the clear fires every iteration, its write
+     * competes with the next iteration's stc for the same granule in an 8-entry write buffer
+     * that this kernel structurally overflows every iteration, and a merge landing out of order
+     * reads back as a null.
+     *
+     * If the type is NONLIN the clear NEVER fires and that whole mechanism is dead, leaving the
+     * stale-FLU-operand account standing alone.
+     *
+     * Post-shift encoding: LINEAR 0, NONLIN 1, REVOKE 2, UNINIT 3, SEALED 4, SEALEDRET 5,
+     * EXIT 6, NOT_CAP 7. Reported in bits 8-11 of the return value, which are otherwise unused
+     * (bad occupies 0-11 but is 0 on this arm, and the arm number sits at 12-15). */
+    bad = (bad & ~0xF00UL) | ((s12_type(v) & 0xF) << 8);
+#endif
+
     /* THE RELOAD and its consumer. Reading through the volatile slot is the ldc; the type
      * query is the consumer, standing in for cincoffsetimm without the raise. */
     void *back = *slot;

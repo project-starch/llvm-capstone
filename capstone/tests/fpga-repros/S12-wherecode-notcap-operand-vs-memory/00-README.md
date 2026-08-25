@@ -484,3 +484,56 @@ the thing that makes the record attributable at all. Rolling-without-filter woul
 consumed by trap traffic; filtered-without-rolling would still be first-wins. Both halves are
 load-bearing, which is worth knowing before anyone considers dropping one under synthesis
 pressure.
+
+---
+
+# THE STORED VALUE IS **REVOKE**-TYPED — so the LDC MOVE-CLEAR FIRES, and every earlier sim was blind to it
+
+Measured on the board with a type-probe arm: `retval 0xC12A5200` → `lcc` selector 1 returned **2**,
+and that selector reports `cap_type - 1` (`capstone_dyn_unit.anvil`, `64'd1 => cap.metadata.cap_type - 3'd1`),
+so the raw type is **3 = `CAP_TYPE_REVOKE`**.
+
+**`REVOKE` is in the LDC move-clear set.** `load_unit.sv:225-226` fires the clear for
+`{LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET}` with write permission. So on silicon, **every
+iteration's reload also WRITES the source granule** — and the payload it writes is
+`store_unit.sv:462-469`:
+
+    .data_i  (load_unit_clear_i ? '0   : st_data_q)      cursor   = 0
+    .user_i  (load_unit_clear_i ? '0   : st_user_q)      metadata = 0
+    .ctag_i  (load_unit_clear_i ? 1'b0 : st_ctag_q)      tag      = 0
+
+which is **bit-for-bit `create_cnull()`** — and therefore bit-for-bit the operand observed at the
+fault, `tval = 0` included. This is the first candidate that produces the exact value as a
+*designed payload* rather than as corruption.
+
+## Why this invalidates five earlier "clean" simulation results
+
+**Every one of the five directed sims set `CAP_TYPE_NONLIN`**, which `load_unit.sv:225-226`
+explicitly excludes. The clear **never fired in any of them**. Their clean results were not
+evidence about this mechanism — they were testing a configuration in which it is structurally
+absent, and I read them as exclusions.
+
+That is the same failure as the rest of this investigation, in its most expensive form yet: not a
+broken instrument, but a **correct instrument pointed at the wrong configuration**, five times,
+with three of them carrying proven-firing positive controls that made them look rigorous.
+
+## What the clear implies about the traffic
+
+With the clear firing, each iteration issues **two** writes to the subject granule — the `stc` and
+the reload's clear — into a write buffer that is 8 entries deep and which this kernel already
+overflows (≥16 dirty words per iteration). If a merge ever lands the clear *after* the following
+iteration's `stc`, the granule reads back as the clear payload: a null.
+
+## Status: NOT established, and one attempt already failed
+
+A directed sim using `CAP_TYPE_LIN` **failed for an unrelated reason** — `MOVC` of a linear-class
+capability nulls its source, so copying it around violates linearity and `CINCOFFSET` raised
+`UNEXPECTED_OPERAND` on a legitimately-nulled operand. Correct architecture, invalid test.
+
+**And the simple version of this account is already excluded by measurement:** if the domain's own
+`v` were being nulled by move semantics, the store watchpoint would have recorded it. It recorded
+**256 stores, one PC, one non-zero DATA value** — `v` is stable across every iteration. So whatever
+happens, it is not the program nulling its own capability.
+
+The next test must respect linearity: a fresh clear-class capability per iteration, or `REVOKE`
+specifically (which is what the board actually has), rather than copying one around.
