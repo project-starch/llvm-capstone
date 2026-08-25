@@ -1248,3 +1248,39 @@ is not enough to carry the "layout decides it" reading. A repeat of the identica
 is running. If it wedges again the foundation is sound; if it does not, S-12 may be an
 alignment/layout **lottery** of the same class as R-16, and every arm above needs re-reading in
 that light.
+
+### N=2: the wedge is DETERMINISTIC, not a lottery
+
+The identical un-probed image was re-run on a fresh boot and wedged again, bit-identically:
+
+| run | control | `--slt q_two.test` | latched trap |
+|---|---|---|---|
+| 1 | returned 7 s | `G/enter`, no `H/return` | `mcause=25  mepc=0x828f4814` |
+| 2 | returned 7 s | `G/enter`, no `H/return` | `mcause=25  mepc=0x828f4814` |
+
+Same PC, same cause. **The R-16-class "alignment lottery" hypothesis is refuted**: this image does
+not sometimes wedge, it always does. Together with the probed images completing (two different
+probe placements, plus their controls), the tally is:
+
+```
+un-probed image          q_two   WEDGED     2/2
+probe-in-WhereCode       q_two   completed  1/1
+probe-in-WhereMalloc     q_two   completed  1/1
+```
+
+So the behaviour is a deterministic function of the image, and **layout selects it**. That is what
+licenses the layout reading; before this repeat it rested on a single observation, and "this image
+lost a lottery" predicted exactly the same data.
+
+**Two variables are now both known to matter, independently:**
+
+* **The SQL.** In the *same* un-probed image and the same slot position, `q_one` completes and
+  `q_two` wedges. The pair differs by exactly `, t1 AS y`, with both tables EMPTY — so it is the
+  join's generated code path, not data.
+* **The layout.** With the *same* SQL, moving `WhereCodeOneLoopStart` cures it without altering a
+  single instruction of that function.
+
+A mechanism has to explain both: a code path that only the join generates, which faults only at
+certain placements. Deterministic, PC-sensitive, and not source-granule clearing (NONLIN, measured
+on silicon) — that profile points at the front end or at something indexed by address, rather than
+at data or memory corruption.
