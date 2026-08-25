@@ -392,5 +392,36 @@ Verified in the artifact too: both arms share slot VA `0x12690` and contain exac
     arm 4 (production consumer): -DS12_ARM=4 -DS12_SELF_ARM_WP=1     expect a WEDGE
     control:                      k800, which must return 4 first
 
+### A WEDGE IS NOT ENOUGH: it must be at the RIGHT INSTRUCTION
+
+`lcc` selector 2 is **not total** — only selector 1 is (`capstone_dyn_unit.anvil:195` excludes
+`zimm != 1` from the NOT_CAP guard). Every other selector RAISES on a NOT_CAP operand, so the
+**arming `lcc` can itself wedge the domain during setup**, before the body ever runs. From
+outside, that is indistinguishable from the subject fault: both are "no return".
+
+The two candidate sites in the self-arming build:
+
+    arming lcc         VA 0x103bc   DBAS + 0x3bc   db 96 26 08   lcc a3, a3, 0x2
+    subject consumer   VA 0x10484   DBAS + 0x484   5b 27 07 0b   cincoffsetimm a4, a4, 0xb0
+
+**PRECONDITION: a wedge whose latched `mepc` is not `DBAS + 0x484` is NOT the subject fault.**
+It is an arming failure or something else, and that arm is VOID.
+
+**MEASURED, on the build that will actually run:**
+
+    sw=255 TRAP LOG = 0x99          ->  seen=1, mcause = 25
+    mepc            = 0x819e0484
+    the arm's DBAS  = 0x819E0000
+    mepc - DBAS     = 0x484          ->  THE SUBJECT CONSUMER. The arming lcc did not raise.
+
+### The constant this replaces, and why that matters
+
+An earlier note committed `expected mepc = DBAS + 0x41c`. **That was for the pre-self-arming
+build**: adding the arming code shifted the consumer from `+0x41c` to `+0x484`. Using the stale
+value as the precondition would have declared a perfectly good wedge VOID and thrown the real
+result away — a constant that was true when written, silently false after a change, and
+confidently wrong at the point of use. **Re-derive both site addresses from the artifact whenever
+the build changes**; they are not properties of the bug.
+
 Both arms carry group 9, including the one that returns cleanly — an empty LDC record means
 *"the load was fine"* only where group 9 has fired at the subject store on that same boot.
