@@ -73,9 +73,17 @@ memory-path and a delivery-path explanation remain live.
 > does not reproduce S-12. That is a result, not an absence of one.
 >
 > **Also corrected:** the recorded finding "the stored value is REVOKE-typed" is **inverted** — it
-> is **NONLIN**. By this kernel's own text the LDC move-clear then never fires, so the five earlier
-> "clean" simulation results that used NONLIN were in the *right* configuration and their
-> exclusions are reinstated.
+> is **NONLIN**. Read the scope of that carefully, because it is narrower than it looks: it is
+> about **the repro's `v`**, not about SQLite's value. NONLIN means the move-clear does not fire
+> *in the repro*. It kills the move-clear account **for S-12** only if SQLite's stored value at
+> the fault site is also NONLIN — **and that has never been measured.** Same caveat on "the five
+> NONLIN simulations were in the right configuration": right only if production's value is NONLIN.
+>
+> **That makes SQLite's value type the discriminating unknown**, and the kernel's own line — `v`
+> is "any tagged capability; its identity is irrelevant" — is now the weakest assumption in this
+> folder, because type is exactly what gates the clear set at `load_unit.sv:225-226`. If SQLite's
+> value is in that set, the repro never exercised the mechanism it was built to test, and an arm
+> with a matching-type `v` is the first variant that *can* reproduce.
 
 ## The fault
 

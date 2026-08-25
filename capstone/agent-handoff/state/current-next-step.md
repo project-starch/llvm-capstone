@@ -1,5 +1,60 @@
 # Next step
 
+## 0. CURRENT — 2026-08-25. S-12 HAS NO MINIMAL REPRODUCER, and the reason was our own bug.
+
+**This supersedes section 0 below, which is now history.**
+
+**What happened.** The S-12 minimal repro's arm 4 read a subject slot it never wrote. The
+`*slot = v` store sat inside an `#if S12_ARM == 0 / #elif == 1 || == 3 / #elif == 2` chain that
+arm 4 matched no branch of, so the reload returned an untagged granule and the `cincoffsetimm`
+consumer raised `mcause 25` — **correct ISA behaviour, not a defect.** Arms 5 and 6 had the same
+defect. Three board boots were spent walking that null backwards up the chain.
+
+**Net status, after fixing it and re-running (one boot, control returned, all arms vs QEMU
+oracles):**
+
+| arm | shape | consumer | reps | result |
+|---|---|---|---|---|
+| 1 | subject store + 9 intervening stores | `lcc` (counts) | 512 | `0xC12A1000` bad=0 |
+| 4 | **identical** | `cincoffsetimm` (**raises**) | 1 | `0xC12A4000` no fault |
+| 4 | **identical** | `cincoffsetimm` (**raises**) | 512 | `0xC12A4000` no fault |
+
+Arm 2's positive control fires (`bad == REPS`), so the detector works. Arms 1 and 4 are a matched
+pair differing in exactly one thing — count vs raise — and both are clean. **The 40-line window
+does not reproduce S-12.** That is a result, not an absence of one.
+
+**Inverted, not merely voided:** the recorded "stored value is REVOKE-typed" is **NONLIN**. Arm 5
+packed the type into bits 8–11 of the same word as its NOT_CAP counter, so the observed `0x200`
+had two readings; the never-written slot selects NONLIN, and arm 5 rebuilt *with* the store
+returns `0xC12A5100` under QEMU. NONLIN is not in the LDC move-clear set
+(`load_unit.sv:225-226`), so that mechanism does not fire in the repro.
+
+**THE DISCRIMINATING UNKNOWN, and where to go next.** The NONLIN result is about the **repro's**
+`v`, not SQLite's value. **What cap type SQLite's pointer has at the fault site has never been
+measured.** The kernel's own line — `v` is "any tagged capability; its identity is irrelevant" —
+is now the weakest assumption in the folder, because type is exactly what gates the clear set.
+
+1. **Read SQLite's value type from source** (allocator / monitor / borrow path; is a `delin`
+   issued, which is what turns LINEAR into NONLIN?). Board-free.
+2. **If it is in the clear set** {LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET} → the repro never
+   exercised the mechanism it was built to test. Build an arm with a matching-type `v`; that is
+   the first variant that *can* reproduce.
+3. **If it is also NONLIN** → the window with the right type is genuinely clean, and the missing
+   ingredient is elsewhere (cache pressure, interrupts, rev-node churn) → SQLite-side bisection.
+
+**Harness fixes landed today, each of which had cost a boot** — all negative-tested:
+* early-halt control now **fail-closed** (it left the core halted and logged "the run continues",
+  producing two boots whose *control* died identically);
+* preflight **C15 requested-but-absent** (a run named a `.dom` that was never staged; the staging
+  script aborts on an unmatchable native oracle while still printing a retval, so the only signal
+  was an absent `staged:` line);
+* `RUNG_ORACLE` override for rungs whose reported quantity native code cannot model (a cap type);
+* the subject store is **hoisted above the arm chain**, so no arm can miss it — impossible rather
+  than merely detected.
+
+Commits: `5f277921dfe7`, `d9ccb82438fd`, `b001b65944a5`, `1e600267178f`.
+
+
 ## 0. CURRENT — 2026-08-20. S-07 is FIXED and SQLite passes its correctness workload on silicon.
 
 **Everything below this section is the record of how we got here, not the current state.**
@@ -21,7 +76,10 @@
 2. **Q-01 — the QEMU reference arm is broken** (order-11 allocation; needs `code_len <= 2 MiB`).
    Board-free. With silicon now *passing*, there is no reference model to attribute a future
    silicon failure against.
-3. **S-10 / S-10b** — write-buffer route fixed by the RTL lane, store-buffer route still open.
+3. **S-10 / S-10b** — write-buffer route fixed (S-10, unsynthesised into any flashed bitstream);
+   store-buffer DATA route fixed (S-10b, demonstrated on `untagged-ldc-stc-fixup`); store-buffer
+   TAG route also fixed and **now reproduced** — `s10b-storebuf-primed` goes 0/8 → 8/8 across the
+   fix. See the S-10 / S-10b entry in `ref/ISSUES.md`. None of the three is in a flashed bitstream.
    `wr8`, the forced-eviction acceptance arm, is built and disassembly-verified.
 4. **Regression-suite claim** — see `plans/sqlite-regression-suite-proposal.md`. What we have is
    ~18 of our own assertions, NOT SQLite's regression suite.
