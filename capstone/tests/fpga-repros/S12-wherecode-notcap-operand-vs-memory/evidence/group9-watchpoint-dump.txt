@@ -1,0 +1,47 @@
+PROVENANCE: transcribed from the run transcript, NOT the original file.
+
+The original /tmp/capstone/tracer-run-raw-trace-arm2.txt was destroyed by the runner
+script's own `rm -f tracer-run-raw*.txt` before the next boot, before it had been copied
+here. The content below is verbatim from the session transcript that printed it, but it is
+a COPY OF A PRINTOUT and not the artifact. Treat it accordingly: it is good enough to read
+and to reason from, and it is NOT good enough to be the sole basis of a published claim.
+Re-capture on the next firing boot and replace this file.
+
+Run: sqrt.dom --slt q_two.test, DBAS 0x82800000, wedged.
+     CSR 0x810 = 0x200 (group 9 only), CSR 0x811 = 0x82b9f360, both armed by the host.
+     Arm 1 (sqbase.dom, DBAS 0x82400000) was the negative control: same armed address,
+     different allocation, dump correctly empty ("No entries captured.").
+
+   Index  Group                                   PC                 Payload
+------------------------------------------------------------------------------------------
+[     0]  WATCHPOINT                              PC=0xfffffff8036de5c  DATA   =0x0000000000000000
+[     1]  WATCHPOINT                              PC=0x000000082883aa0  DATA   =0x0000000000000000
+[     2]  WATCHPOINT                              PC=0x000000082883aa8  DATA   =0x0000000000000007
+[     3]  WATCHPOINT                              PC=0x0000000828d01f0  DATA   =0x0000000082be5b00
+[     4]  WATCHPOINT                              PC=0x0000000828d0c18  DATA   =0x0000000082be5b80
+[     5]  WATCHPOINT                              PC=0x0000000828c5a9c  DATA   =0x0000000082b9f3e0
+[     6]  WATCHPOINT                              PC=0x000000082815328  DATA   =0x0000000082bf24f0
+[     7]  WATCHPOINT                              PC=0x000000082807348  DATA   =0x0000000082bf24f0
+[     8]  WATCHPOINT                              PC=0x000000082824d28  DATA   =0x00000000828249b8
+[     9]  WATCHPOINT                              PC=0x0000000828ef780  DATA   =0x0000000082b9f3a0
+[    10]  WATCHPOINT                              PC=0x0000000828f0b40  DATA   =0x0000000082be5af0
+[    11]  WATCHPOINT                              PC=0x0000000828f107c  DATA   =0x0000000000000000
+[    12]  WATCHPOINT                              PC=0x0000000828f2af8  DATA   =0x0000000082be5b00
+[    13]  WATCHPOINT                              PC=0x0000000828afe44  DATA   =0x0000000082be70f0
+[    14]  WATCHPOINT                              PC=0x0000000828afbb4  DATA   =0x0000000082be4910
+[    15]  WATCHPOINT                              PC=0x0000000828bec94  DATA   =0x0000000082b9f3d0
+[    16]  WATCHPOINT                              PC=0x0000000828afe44  DATA   =0x0000000082be70f0
+[    17]  WATCHPOINT                              PC=0x0000000828afbb4  DATA   =0x0000000082be4930
+[    18]  WATCHPOINT                              PC=0x0000000828bec94  DATA   =0x0000000082b9f3d0
+[    19]  WATCHPOINT                              PC=0x0000000828f4b54  DATA   =0x0000000082be4cf0
+[    20]  WATCHPOINT                              PC=0x0000000828f4b54  DATA   =0x0000000082be4cf0
+------------------------------------------------------------------------------------------
+Total: 21 entries
+  WATCHPOINT: 21
+
+Index 19/20 = sqlite3WhereCodeOneLoopStart+0x40, the subject `stc a2, 0x0(a0)`.
+Index 11 = a plain `sw` captured at the same word with DATA=0 -- an incidental POSITIVE
+CONTROL that a zero-data scalar store to word 0 IS visible, so the absence of any DATA=0
+entry after index 20 is a real absence rather than a silent zero.
+21 entries against a 256-entry ring: it never wrapped, so this is every committed store to
+that word for the whole run.
