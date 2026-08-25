@@ -220,7 +220,14 @@ public:
   bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
     return VT.isScalarInteger();
   }
-  bool convertSelectOfConstantsToMath(EVT VT) const override { return true; }
+  // Only for integers. "To math" means shifts, zexts and adds on VT, which is
+  // meaningless for a capability -- and DAGCombiner::SimplifySelectCC builds a
+  // ZERO_EXTEND to VT, whose "Invalid ZERO_EXTEND!" assert catches it now that a
+  // capability is not an integer type. A capability-typed select of two constant
+  // capabilities stays a select. Found by musl's src/ctype/wctrans.c.
+  bool convertSelectOfConstantsToMath(EVT VT) const override {
+    return VT.isInteger();
+  }
 
   bool isCtpopFast(EVT VT) const override;
 
