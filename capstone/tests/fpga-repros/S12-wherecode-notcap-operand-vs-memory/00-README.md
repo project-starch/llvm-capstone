@@ -659,3 +659,49 @@ disagree with a measurement, so the recorder is no longer confirming a favoured 
 only thing that can say where the null comes from **without** a hypothesis in hand. An empty record
 is no longer "as predicted": it is one of two informative answers, and the non-empty one would
 resurrect the granule row against a structural argument, which would be the more interesting result.
+
+## IT FAULTS ON **ONE** ITERATION — accumulation is dead, and so is the last granule story
+
+Sweeping the loop count with the production consumer, ascending, control first:
+
+    k800    RETURNED  retval=4
+    s12r1   NO RETURN                <== S12_REPS = 1
+
+Confirmed the same fault, not a different one — the discipline that the `SHA5` retraction bought:
+
+    TRAP LOG 0x99            ->  seen = 1, mcause = 25
+    mepc                     =   0x819e0460
+    the arm's own DBAS       =   0x819E0000
+    mepc - DBAS              =   0x460      -> the SUBJECT consumer
+    (the arming lcc sits at   0x39c, so the two are distinguishable and it was not that)
+
+### What one iteration excludes
+
+* **Accumulation across iterations** — there are no other iterations. Any account needing state
+  to build up over repetitions is dead: rev-node consumption, cache-set rotation, write-buffer
+  phase advancing over a loop.
+* **The move-clear as a source of the null.** With `REPS = 1` there is no *previous* iteration
+  whose clear could be read back, and the reload's own clear happens at the reload — it cannot
+  precede it. The granule story was already excluded structurally by the FIFO argument; this
+  closes it independently, from the other end.
+* **Any "low per-iteration probability" reading of the earlier threshold sweep.** That caveat was
+  raised before this ran and it was the right one to raise — but a single iteration faulting
+  deterministically leaves no room for it.
+
+### What survives
+
+One pass: store a capability to the slot, nine intervening stores, `movc a4, zero`, reload,
+consume. The consumer receives `{cursor 0, NOT_CAP}` — and `movc a4, zero`, **in this same pass**,
+is the only thing that put exactly that value anywhere.
+
+So the **stale-operand account is now the only named mechanism that works at `REPS = 1`.** It also
+remains the one the RAW-hazard simulation says should not happen — `HAZARDS = 0` with the window
+proven created. Those two facts are in direct tension, and the tension is the finding: either the
+RTL check has a gap the directed test did not construct, or it is marginal after synthesis in a
+way simulation cannot show.
+
+### The repro is now smaller again
+
+`-DS12_ARM=4 -DS12_SELF_ARM_WP=1 -DS12_REPS=1` — no loop, roughly twenty instructions of body,
+faulting deterministically at a known VA with a known cause. That is the artifact to hand anyone,
+and it is what the pending bitstream should be pointed at.
