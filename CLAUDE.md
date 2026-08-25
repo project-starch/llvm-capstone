@@ -272,6 +272,21 @@ signal crossing a module boundary into it — is the highest-risk edit available
 check we have is blind to it. If a change does that, it goes to synthesis before it goes
 anywhere else.
 
+**A bitstream costs ~90 minutes plus a reflash. Audit for SUFFICIENCY, not just correctness — and
+BATCH.**
+
+Before committing an RTL change to synthesis, ask the auditors two questions the lint gate cannot:
+
+- **Is it enough?** A change that is correct but insufficient costs the same cycle as one that is
+  wrong. Write down every question the resulting bitstream must answer, and check the change
+  answers all of them.
+- **Can the instrument fail SILENTLY?** An observation-only change that never fires leaves you
+  worse off than before, because the absent signal reads as a clean result. Ask specifically what
+  would stop it firing.
+
+Then batch: every RTL change the investigation needs goes into ONE bitstream. Discovering the
+second one afterwards costs another full cycle.
+
 **Keep an observation-only change a strict reduction where it can be**, and turn `RETIMING`
 off for debug bitstreams. An instrument rich enough to be interesting is rich enough to be
 unsynthesizable; the minimal version is the one that ships.
