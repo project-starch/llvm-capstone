@@ -1741,3 +1741,68 @@ Also standing from the audit: attacks on `tval` semantics and on latch coherence
 `ex_stage.sv:489` and the single-cycle `always_ff` at `cva6.sv:1133-1143` hold, and the commit-stage
 producer is excluded arithmetically. The tag-address formula is confirmed at the bitstream rev. And
 this is **N=1 on a fault the folder itself calls sporadic**.
+
+---
+
+# The load-syncer lead, its checker, and why the first measurement is VOID rather than negative
+
+## The mechanism, verified in source rather than taken from a report
+
+`func LDC` does not read the dcache response directly. It dispatches and rendezvous
+(`capstone_dyn_unit.anvil:368`, `:370`, `:372`), and the pairing is done by
+`capstone_load_syncer`, which demultiplexes the **shared** load-unit response stream — ordinary
+scalar loads included — against the DYN unit's pending capability load, **matching purely by
+`trans_id`**. The syncer holds **one** pending identifier and sets it on a new `init` with **no
+guard** on `req_set`:
+
+    set cap_trans_id := trans_id;
+    set req_set := 1'd1
+
+So a second LDC's `init` overwrites the first's pending id while the first is outstanding. The
+first LDC's response then fails the match and is **diverted onto the scalar return path**
+(`send lsu_ep.normal_res(msg)`), while `check_load_data` pairs whatever did match against whatever
+`cap_msg` it dequeues — taking `rd = msg.cap_result`, a whole `fat_cap_t`, **cursor and metadata
+together** (`capstone_unit.anvilh:584`).
+
+**That single coupled substitution is the only shape found that is consistent with `tval == 0`
+AND `cap_type == NOT_CAP` simultaneously.** It also fits sporadicity, cure-by-added-instruction
+(cycle realignment), and five short directed sims missing it.
+
+**Only LDCs contend.** `send cap_load_ri.init` has exactly one sender —
+`capstone_dyn_unit.anvil:326`, inside `func LDC`. The comment at `:555` reading *"There is a STC
+request"* is **stale and names the wrong instruction class**; the race needs **two overlapping
+LDCs**, not an LDC racing one of the window's five `stc`.
+
+## The checker, and the counter that saved it from being read wrongly
+
+Instrumented in `capstone_load_syncer` — **not** the store syncer, whose register block is
+character-identical, so a naive anchor matches both and would have measured an endpoint no LDC
+ever touches. Counted separately, on purpose:
+
+* **precondition** — `init` firing while `req_set == 1`;
+* **outcome** — the same, with the incoming id differing from the pending one;
+* **`init` TOTAL** — so a zero in the first two is attributable.
+
+Outcome-only instrumentation cannot separate *"the race is unreachable"* from *"I did not catch
+it"*. The precondition is strictly easier to trigger and is decisive **both** ways.
+
+## First run: ALIVE, and inits = 0. VOID, not negative.
+
+    S12-SYNC: ALIVE (load-syncer checker compiled in)
+    S12-SYNC: tick 500  inits=0  init-while-pending=0  clobbers=0
+
+The checker is compiled in and running — the heartbeat says so, which is exactly why it exists.
+But **`inits = 0` on a test containing 23 `ldc` instructions**: the DYN unit's `func LDC` never ran,
+so `s12-full-window.S` does not exercise the syncer at all. The wiring was checked rather than
+assumed (`_dyn_ep_init_valid` ← `_cap_load_le_init_valid`, driven by `send cap_load_ri.init`).
+
+**So this measurement says nothing about the hypothesis.** Without the total-inits counter it would
+have read as a clean zero and the lead would have been wrongly dismissed.
+
+**Next step is a POSITIVE CONTROL for the checker**: find or build a case that drives `inits > 0`,
+prove the counter moves, and only then read a zero in the precondition column as evidence. Until
+that fires, the syncer lead is neither supported nor excluded.
+
+**Caveat that must travel with the file:** `core/capstone_dyn_unit.anvil.sv` is a **generated,
+gitignored artifact**. `make -C core/anvil_build` silently removes this checker — hence the ALIVE
+line, so absence means "not compiled in" rather than "measured zero".
