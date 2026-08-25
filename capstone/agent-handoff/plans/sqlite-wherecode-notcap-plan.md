@@ -1806,3 +1806,52 @@ that fires, the syncer lead is neither supported nor excluded.
 **Caveat that must travel with the file:** `core/capstone_dyn_unit.anvil.sv` is a **generated,
 gitignored artifact**. `make -C core/anvil_build` silently removes this checker — hence the ALIVE
 line, so absence means "not compiled in" rather than "measured zero".
+
+## The load-syncer lead is DEAD: the DYN unit serialises LDCs, measured
+
+    s12-ldc-overlap.S -- 96 back-to-back LDCs to distinct granules and distinct destinations
+    S12-SYNC: tick 1450  inits=96  init-while-pending=0  clobbers=0
+    S12-PAR:  tick 1450  dyn-dispatches=99  ldc-inits=96
+
+**96 inits and not one arrived while a request was pending.** The mispair needs a second LDC's
+`init` to overwrite the first's pending id while the first is outstanding; that window never
+opens. **The mechanism is unreachable, so it cannot be the cause.**
+
+**The zero is meaningful because the counter is proven to move**: the previous test recorded
+`inits=2` and this one 96, from the same instrument. That is the positive control the precondition
+column needed, and it is why this reads as a measured zero rather than a silent one.
+
+It also confirms by measurement what `ex_stage.sv:902-904` asserts in a comment — *"the dyn unit
+serializes (capstone_dyn_ready backpressure => one op in flight)"*. The oracle flagged that as
+argued-but-unproven; it is now measured.
+
+## Two instrument failures on the way, both mine, both the same shape
+
+**The report cadence outlived the test.** The first run printed only at tick 500 while the LDCs
+under test execute at cycles 529-693 of a 734-cycle test — so every counter was displayed *before*
+the window it was measuring and read as `inits=0`. I nearly recorded "the DYN unit never ran".
+Cadence is now every 50 ticks, finer than any directed test is short.
+
+**A naive anchor matched both syncers.** `capstone_load_syncer` and `capstone_store_syncer` declare
+character-identical register blocks; instrumenting the wrong one would have measured an endpoint no
+LDC ever touches. Caught by asserting the anchor count rather than trusting it.
+
+Both are the same failure this investigation keeps producing: **an instrument whose silence has two
+meanings.** The fix each time was a counter that makes "not exercised" distinguishable from
+"exercised and clean" — the total-inits column here, the heartbeat in the scoreboard checker, the
+must-fail arm in the adjacent-granule test.
+
+## Where the hunt stands
+
+Every specific mechanism proposed by either lane is now excluded, each with a quoted line or a
+fired control: software NULL, plain S-07 tag loss, the R-20 forwarding class, wrong-producer
+scoreboard selection, adjacent-granule scalar stores, write-buffer depth, the domain-switch cnull
+pack, and now the load-syncer mispair.
+
+**The open question is unchanged and is the one measurement never taken: what the LOAD RETURNED.**
+The next step is the board-side one the auditor proposed — with the switch-160 clear applied before
+the arm, read the s07 LDC recorder (`load_unit.sv:769-772`) at sw 208 for `{valid, src}` and sw
+205/206 for the granule. `valid=1` with the subject granule says the reload itself returned
+untagged and `src` names the leg (L1 hit / miss refill / write-buffer forward). Anything else is
+**inconclusive**, not exculpatory: the recorder is first-wins, so an earlier legitimate untagged
+`ldc` in the same arm consumes the slot.
