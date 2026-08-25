@@ -1284,3 +1284,74 @@ A mechanism has to explain both: a code path that only the join generates, which
 certain placements. Deterministic, PC-sensitive, and not source-granule clearing (NONLIN, measured
 on silicon) — that profile points at the front end or at something indexed by address, rather than
 at data or memory corruption.
+
+## Isolated: the deciding variable is the INSTRUCTION side, not the data side
+
+`link-gpfree.ld` puts `.text` at `0x10000` and the globals at `0x10000 + GOFF`, so raising `GOFF`
+moves the globals region while leaving every `.text` address untouched. A new diagnostic knob
+(`SQLITE_GOFF_OVERRIDE`, refused if below the computed value so globals can never overlap `.text`)
+builds exactly that image. Verified rather than assumed: **331778 instructions, 4 differing** — all
+`auipc` globals-base constants (`0x161`→`0x171`) — and `sqlite3WhereCodeOneLoopStart` still at
+`0x104788`.
+
+| `WhereCode` @ | globals @ | `.text` | result |
+|---|---|---|---|
+| `0x104788` | `0x150000` | baseline | **WEDGE**, 2/2 |
+| `0x104788` | `0x160000` | 4 `auipc` differ | **WEDGE**, 1/1 |
+| `0x104b48` | `0x150000` | +probe in the function | completes |
+| `0x104c0c` | `0x150000` | probe in `WhereMalloc` | completes |
+
+**Globals placement is eliminated by direct experiment.** It was already suspect — `GOFF` is
+`0x150000` in *all* earlier builds, wedging and curing alike, because it rounds up to 64 KiB and a
+~800-byte probe never crosses the boundary — but now it has been moved deliberately and the fault
+survived. Every image with the function at `0x104788` wedges (3/3); every image with it moved
+completes (2/2).
+
+## What the fault operand actually implies — stronger than "detagged"
+
+`decompress_cap_tagged` (`core/include/ariane_pkg.sv:766-782`) does **not** zero the metadata word
+on an untagged read; it stashes the raw 64 bits into `bound_start`, and the cursor passes through
+unchanged:
+
+```systemverilog
+end else begin
+  return '{ metadata: '{ ..., cap_type: NOT_CAP, ...,
+                         bound_start: tagged_metadata[63:0],   // raw stash
+                         bound_end: '0 },
+            cursor: cursor };
+```
+
+So an operand that is bit-for-bit `create_cnull` — which `tval = 0` together with `cap_type ==
+NOT_CAP` implies — requires the memory to have been **genuinely all-zero on both halves**, not
+merely detagged. **A detagged capability would have delivered a non-zero cursor and `tval` would
+not be 0.** That excludes the whole "a good pointer lost its tag" family at this site and demands
+either a location that really held zero, or a load that returned a default without reading.
+
+**One tempting instantiation, refuted by arithmetic.** The window stores an all-zero capability two
+instructions before the reload (`movc a4, zero; stc a4, 0x0(a5)` → `s0-0x120`), so "the reload was
+served that zero from the wrong address" is a bit-exact match for the signature. It does not
+survive the addresses: at the wedge `s0 = 0x82b9f480`, so the zero-store lands at `0x82b9f360` and
+the reload reads `a0 = 0x82b9f410` (= `s0-0x70`). D$ is 32 KiB / 8-way = 4 KiB per way, so the
+index is `paddr[11:4]`: **0x36 vs 0x41**, and the granules (`0x82b9f36` vs `0x82b9f41`) differ too.
+No set collision and no write-buffer granule match. (`s0` is corroborated independently: the s07
+STC recorder reported the last capability store at granule `0x9f360`, exactly `s0-0x120`.)
+
+## Two exclusions in the older notes that are narrower than they read
+
+* **The writeback-port displacement detector** (`core/scoreboard.sv:335-347`) fires on
+  `op == LDC` at the writeback trans_id and never inspects the data. Its own comment describes the
+  signature it catches as *"retires with a correct cursor and NOT_CAP metadata"*. **Our fault has
+  cursor 0 as well**, so a mechanism that zeroes *both* halves would not trip it. Reading its
+  `0x00` as "displacement excluded" is only valid for "wrong port, data preserved".
+* **Instruction realignment** (`core/instr_realign.sv:66-115`) branches on `address_i[1]`, which is
+  layout-dependent in general — but **excluded for this pair by arithmetic**: `0x104788 & 3 == 0`
+  and `0x104c0c & 3 == 0`, and the intervening stream is unchanged, so every instruction's
+  alignment parity relative to the function start is preserved. (Not a general exclusion — a shift
+  that changed the mod-4 residue would reopen it.)
+
+**Still PC-indexed and not excluded:** the I-cache line phase (`CVA6ConfigIcacheLineWidth = 128`,
+16-byte lines; `0x104788 mod 16 = 8` vs `0x104c0c mod 16 = 12`) and the BTB, which indexes on
+`vpc_i[PREDICTION_BITS-1:ROW_ADDR_BITS+OFFSET]` with only 8 entries (`core/frontend/btb.sv:66-72`),
+so aliasing shifts when a function moves. Neither has a demonstrated path to a corrupted capability
+*value* — both are timing/contention knobs, which is how this folder should keep describing them
+until a path is shown.

@@ -2297,6 +2297,25 @@ else: print(0)')
 # Round up to 64 KiB so the boundary is representable and there is headroom.
 GOFF=$(( ((TEXT + 0xFFFF) / 0x10000) * 0x10000 ))
 [[ $GOFF -lt 65536 ]] && GOFF=65536
+# SQLITE_GOFF_OVERRIDE=<hex|dec> -- DIAGNOSTIC ONLY, and it exists to isolate one variable.
+#
+# link-gpfree.ld places .text at 0x10000 and the globals at 0x10000 + GOFF, so raising GOFF
+# moves the GLOBALS REGION while leaving .text's addresses alone. S-12 vanishes when the code
+# is relaid out, but address, .text size and globals placement all moved together in every
+# build tried so far, so "layout decides it" is under-determined. This knob changes exactly one
+# of them.
+#
+# It must be >= the computed value or the globals overlap .text, so the override is REFUSED
+# when smaller rather than silently producing an image that corrupts itself.
+if [[ -n "${SQLITE_GOFF_OVERRIDE:-}" ]]; then
+  _ovr=$(( SQLITE_GOFF_OVERRIDE ))
+  if (( _ovr < GOFF )); then
+    echo "ERROR: SQLITE_GOFF_OVERRIDE 0x$(printf %x $_ovr) is below the computed 0x$(printf %x $GOFF); globals would overlap .text" >&2
+    exit 1
+  fi
+  printf "   globals offset OVERRIDDEN: 0x%x -> 0x%x (.text addresses unchanged)\n" "$GOFF" "$_ovr"
+  GOFF=$_ovr
+fi
 printf "   .text = %d bytes -> globals offset 0x%x\n" "$TEXT" "$GOFF"
 
 echo "== pass 2: link with the real globals offset"
