@@ -863,3 +863,69 @@ proves the shell answers, and aborts the boot loudly if it does not), and the di
 the `board-run` skill. The fail-closed path is **unexercised** — this run disables the diagnostic
 outright, since it already answered its question in an earlier boot — so by this project's own
 standard it is an unproven gate, not a fixed one, until it has been negative-tested.
+
+## RETRACTION — every arm-4 measurement in this folder is VOID
+
+**Arm 4 read a slot it never wrote.** In the kernel the subject store lives inside
+
+```c
+#if   S12_ARM == 0                    *slot = v;
+#elif S12_ARM == 1 || S12_ARM == 3    *slot = v;   /* + the 9 intervening stores */
+#elif S12_ARM == 2                    *slot = v;   /* + the scalar scribble */
+#endif
+```
+
+and **arm 4 matches no branch of it**, so no store to the slot is emitted. The reload
+`void *back = *slot;` then reads `s12_frame + 0x690`, and `s12_frame` is zero-initialised BSS.
+`back` is therefore a genuine NOT_CAP, and the `cincoffsetimm` consumer raising `mcause 25` is
+**correct ISA behaviour** — the hardware doing exactly what the spec says.
+
+Verified with the preprocessor, not by reading:
+
+```
+clang -E -P -DS12_ARM=N -DS12_REPS=1 -DS12_DRAW=0 -x c s12_kernel.h
+  ARM=1  ->  `*slot = v;`  then  `void *back = *slot;`
+  ARM=4  ->  no `*slot = v` anywhere;  `void *back = *slot;` reads zeroed BSS
+```
+
+and corroborated in the artifact: `llvm-objdump` of `s12g.dom` shows no `stc` to the slot pointer
+between `ldc a0, 0x0(a0)` (0x1043c) and `ldc a1, 0x0(a0)` (0x10440).
+
+**What this voids.** Everything measured on arm 4 — the group-9 zero at the spill `s0-0xb0`, the
+group-9 zero one level up at `s0-0xa0`, `a4 = 0x0` at the wedge, and the whole "the null predates
+the store, move the subject up one level" chain of reasoning. Each of those was measuring
+uninitialised memory. The backwards walk kept finding zeros because there was never a capability
+in that slot to lose. **Arms 5 and 6 never write the slot either**, but they are not equally
+affected, and the difference matters:
+
+- **Arm 5's type measurement SURVIVES.** Its report is `s12_type(v)` (`s12_kernel.h:251`) — it
+  queries **`v`**, the register-resident capability from the cap table, not the slot. So "the
+  stored value is REVOKE-typed" stands. Its `bad` counter does not: arm 5 still evaluates
+  `s12_type(back)` on the unwritten slot, so bits 0–11 of its return value are contaminated,
+  and the comment asserting "`bad` is 0 on this arm" is false as built.
+- **Arm 6's conclusion is VOID.** Its design — "reload the same slot twice; if the move-clear
+  fires the second must come back null" — is vacuous when both reloads read zeroed BSS. Both
+  come back null regardless of whether the clear fires, so the arm cannot distinguish its two
+  hypotheses. Note arm 6's own comment cites arm 5's REVOKE result as its premise; that premise
+  is sound, the experiment built on it is not.
+
+**What survives.** Arms 0/1/2/3 do write the slot, so their results stand. The original SQLite
+S-12 observation stands — it is a real workload fault and owes nothing to this repro.
+
+**Why no existing check caught it.** The artifact was correct. The fault was the right `mcause`
+at the right `mepc`, predicted from the disassembly before the run. The repro was deterministic
+and reproduced at `REPS=1`. Every one of those reads as a strong result. The only thing that
+distinguished it was the **absence** of a store, and nothing was looking for an absence. This is
+the "directed tests that come back clean without ever creating the triggering condition" class
+from CLAUDE.md, in its inverted form — a test that *fails* without ever creating the condition,
+which is harder to spot because failure is what you were hoping for.
+
+**The fix, and the guard.** Arm 4 now takes arm 1's branch. Each writing branch defines
+`S12_SLOT_WRITTEN`, and the reload site carries `#if !defined(S12_SLOT_WRITTEN) #error ...` — so
+an arm that reads the slot without writing it **fails the build** rather than producing a
+beautiful void result. Negative-tested in both directions:
+
+| arm | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 9 |
+|---|---|---|---|---|---|---|---|---|
+| slot store emitted | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
+| guard fires | · | · | · | · | · | **✓** | **✓** | **✓** |

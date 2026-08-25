@@ -199,8 +199,10 @@ static unsigned s12_compute(void)
 
 #if S12_ARM == 0
     *slot = v;
-#elif S12_ARM == 1 || S12_ARM == 3
+#  define S12_SLOT_WRITTEN 1
+#elif S12_ARM == 1 || S12_ARM == 3 || S12_ARM == 4
     *slot = v;                            /* +0x40  THE SUBJECT STORE */
+#  define S12_SLOT_WRITTEN 1
     /* The nine intervening stores, at the board's own offsets: five capability-sized and four
      * scalar, in the same order. Kept as C stores through volatile so the compiler may not
      * sink or reorder them across the reload. */
@@ -215,6 +217,7 @@ static unsigned s12_compute(void)
     *(void *volatile *)(fp - 0x120) = (void *)0;     /* +0x84 */
 #elif S12_ARM == 2
     *slot = v;
+#  define S12_SLOT_WRITTEN 1
     /* POSITIVE CONTROL: destroy the slot with scalar stores. This is correct architecture --
      * a plain store clears the granule's tag -- so it must report bad, and if it does not,
      * the detector is blind and no other arm carries a verdict. */
@@ -272,6 +275,25 @@ static unsigned s12_compute(void)
     { void *back2 = *slot;
       if (s12_type(back2) == S12_NOT_CAP) bad++;
       s12_sink[4] = (unsigned long)(__UINTPTR_TYPE__)back2; }
+#endif
+
+    /* ACCEPTANCE CRITERION, and it FAILS THE BUILD rather than the run.
+     *
+     * Arm 4 was added as "arm 1's shape with the production raising consumer", but the
+     * `*slot = v` store lives inside the #if/#elif chain above and arm 4 matched NO branch
+     * of it. So arm 4 read a slot it had never written. `s12_frame` is zero-initialised BSS,
+     * which makes `back` a genuine NOT_CAP and the `cincoffsetimm` below raise mcause 25 --
+     * EXACTLY the production symptom, produced by correct hardware doing what the ISA says.
+     * Three boots of group-9 watchpoint measurements were spent walking that null backwards
+     * up the chain; every one of them was measuring uninitialised memory.
+     *
+     * The failure is invisible to every check we had: the artifact is correct, the fault is
+     * the right mcause at the right PC, the ladder is monotone, and the repro is beautifully
+     * deterministic. Only the ABSENCE of a store distinguishes it, and nothing was looking
+     * for an absence. Hence a compile-time assertion: an arm that reads the slot must have
+     * declared that it wrote it. */
+#if !defined(S12_SLOT_WRITTEN)
+#  error "This arm reads the subject slot but no branch above writes it. The reload would return zero-initialised BSS and the consumer would raise mcause 25 for a trivially correct reason, which is indistinguishable from the defect under test. Add this arm to a branch that does `*slot = v` (and defines S12_SLOT_WRITTEN), or give it its own."
 #endif
 
     /* THE RELOAD and its consumer. Reading through the volatile slot is the ldc; the type
