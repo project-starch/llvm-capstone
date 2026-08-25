@@ -341,6 +341,23 @@ with no rebuild in between. The discriminator that settled it: the variable was 
 not the firmware — diff what actually changed on our side before spending a rebuild or a
 reflash.
 
+**A CONTROL THAT FAILS THE SAME WAY TWICE IS THE HARNESS, NOT THE 1-IN-5 FLAKE.** The control
+fails on its own roughly 1 boot in 5, so one failure is genuinely a void boot worth retrying.
+But that flake is an entry stall — it varies. **Two boots whose control dies with an identical
+signature are a variable you introduced**, and retrying spends a second boot to learn nothing.
+Diff the driver log of the failing boot against the last boot whose control PASSED and read
+forward to the first line that differs; on 2026-08-20 that line was
+`[s07] early halt control failed (ActionTimeout) -- no verdict, and the run continues`, an
+optional pre-run diagnostic that timed out with the core left HALTED, after which every stage
+timed out at `SQLITE_STAGE_TIMEOUT` and read exactly like a wedge.
+
+Generalising, because this is the expensive half: **an optional diagnostic must never be able
+to cost a boot silently.** Anything that halts the core, drives the switches, or opens GDB
+before the arms run has to either prove it put the core back — the shell answering is the
+proof — or abort the boot loudly. "No verdict, and the run continues" is fail-OPEN, and a
+fail-open pre-run step converts itself into N false wedges. When a diagnostic has already
+answered its question in an earlier boot, turn it off rather than re-running it.
+
 **THE BOOTROM BANNER IS THE FIRST DISCRIMINATOR. Check it before suspecting anything you built.**
 
 The FPGA bootrom prints, on power-on, BEFORE the JTAG firmware load:

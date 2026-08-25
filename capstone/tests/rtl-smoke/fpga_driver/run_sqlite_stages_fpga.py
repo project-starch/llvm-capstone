@@ -1034,8 +1034,39 @@ def main():
                     # session stays OPEN on purpose; see "ONE GDB SESSION FOR THE WHOLE RUN"
                     _gdb_open[0] = True
             except Exception as exc:
-                _t = (f"  [s07] early halt control failed ({type(exc).__name__}) -- no verdict, "
-                      f"and the run continues")
+                # FAIL CLOSED. This used to log "no verdict, and the run continues" and carry
+                # on -- but a timeout here can leave the core HALTED, and then every stage
+                # times out at PER_DOM and reads exactly like "the domain wedged". Two boots
+                # were spent that way on 2026-08-20, and the identical NO-RETURN signature on
+                # the CONTROL is what finally gave it away. An optional pre-run diagnostic must
+                # never be able to cost a boot silently: recover, then PROVE the shell is alive
+                # before spending a stage on it, and abort loudly if it is not.
+                _t = (f"  [s07] early halt control FAILED ({type(exc).__name__}) -- the core may "
+                      f"have been left HALTED. Recovering before any stage runs.")
+                print(_t, flush=True)
+                transcript.append(_t + "\n")
+                for _fn in (lambda: console.gdb_cmd("continue", C.GDB_PROMPT, timeout=10.0),
+                            console.gdb_stop):
+                    try:
+                        _fn()
+                    except Exception:
+                        pass          # `continue` never returns to a prompt; gdb_stop may 400
+                _gdb_open[0] = False
+                try:
+                    console.run_command("echo A''LIVE_$?", r"ALIVE_\d",
+                                        timeout=30.0, idle_timeout=30.0)
+                    _t = ("  [s07] recovery OK -- the shell answered, so the core is running "
+                          "and the stages below carry their normal weight.")
+                except Exception as _pe:
+                    _t = ("  [s07] recovery FAILED -- the shell does not answer, so the core is "
+                          "still halted. ABORTING: every stage would time out and look like a "
+                          "wedge. This boot is VOID and carries no verdict about anything.")
+                    print(_t, flush=True)
+                    transcript.append(_t + "\n")
+                    raise RuntimeError(
+                        "VOID BOOT: core left halted by the early halt control "
+                        f"({type(exc).__name__}); shell probe then failed "
+                        f"({type(_pe).__name__}). Re-run, or set EARLY_HALT_CONTROL=0.")
                 print(_t, flush=True)
                 transcript.append(_t + "\n")
 
@@ -1163,7 +1194,11 @@ def main():
                 try:
                     set_switch_value(console, 160)
                     time.sleep(0.6)
-                    set_switch_value(console, 0)
+                    # Restore to the TRACER's resting value when the tracer is on, not to 0.
+                    # sw[2] is the tracer's ring-mode input, so parking at 0 here silently
+                    # changes the ring polarity of every arm that runs after the first clear
+                    # -- an instrument setting decided by an unrelated probe's cleanup.
+                    set_switch_value(console, SW_TRACER_RUN if TRACER_ON else 0)
                     log(f"  [s07] recorder CLEARED before arm {dom_idx} "
                         f"-- its record now belongs to this arm's first untagged LDC")
                 except Exception as _ce:

@@ -809,3 +809,57 @@ artifact, not the one that ran (`0x46c`). The same stale-constant mistake as `0x
 one explicit fix later. The precondition still held — `0x46c` **is** the consumer in the build that
 ran, confirmed by re-deriving from the correct artifact — but it was confirmed after the fact
 rather than predicted, and that is the weaker form.
+
+## Pre-registered reading of the one-level-up measurement (written BEFORE the dump)
+
+The group-9 watchpoint is armed one level up, on the store at `s0 - 0xa0`:
+
+```
+0x10440  ldc  a1, 0(a0)     the REAL slot read
+0x10448  stc  a1, 0(a0)  <- ARMED HERE
+0x1045c  ldc  a4, 0(a0)     reads it back -> ZERO
+0x1046c  cincoffsetimm a4   <- FAULTS (mcause 25, UNEXPECTED_OPERAND)
+```
+
+**The entry COUNT discriminates, not just the payload.** The armed slot holds a live REVOKE
+capability, and the reload at `0x1045c` is exactly the LDC shape that fires the move-clear
+(`load_unit.sv:225-226`), whose payload — cursor 0, metadata 0, ctag 0 (`store_unit.sv:462-469`)
+— is written back to the **same granule** through the shared store port (`store_unit.sv:449`).
+So the move-clear can post a *second* group-9 entry, at the same address, reading zero. Three
+outcomes, all registered in advance:
+
+| group 9 | reading |
+|---|---|
+| 1 entry, payload ≠ 0 | the store wrote a real capability and the **load** returned NOT_CAP — the move-clear never fired because the load never saw a cap type. A genuine load-path defect, and the repro vehicle is sound. |
+| 1 entry, payload = 0 | `a1` was **already null** upstream; the subject moves up again to the `ldc` at `0x10440`. |
+| **2 entries (≠ 0, then 0)** | the store wrote the cap **and** the load *saw* it (move-clear fired) — yet the consumer still faulted. The null then enters **after** the load, in writeback/forwarding, not in memory and not in the load path. This is the most informative signature available and must not be read as "the store wrote zero", nor discarded as noise. |
+| empty | uninterpretable — says nothing about the subject. See the instrument caveat below. |
+
+**If it comes back empty, suspect the instrument before the subject.** This is the first boot
+combining `WEDGE_S07_CLEAR_PERARM=1` with `WEDGE_TRACER=1`, and the per-arm clear used to restore
+the switches to `0` rather than to the tracer's resting value — parking `sw[2]`, the ring-mode
+input, low for every arm after the first clear. Read the driver's own `switch_state` events for
+the value in force while arm 2 ran before drawing any conclusion from an empty dump. (Fixed in
+the driver as of this run's revision, but the running process loaded the older copy.)
+
+## Two boots lost to a fail-open diagnostic — recorded because the class recurs
+
+Two consecutive boots reported the **control** (`k800`, which returns in ~2 s) as NO-RETURN, which
+looks like a board or firmware failure. It was neither. Both logs carry the same line:
+
+```
+[s07] early halt control failed (ActionTimeout) -- no verdict, and the run continues
+```
+
+An optional pre-run diagnostic halted the core over GDB, timed out, and left it **halted**; the
+driver logged "the run continues" and carried on, so every stage then timed out at
+`SQLITE_STAGE_TIMEOUT` and read exactly like a wedge. The discriminator that settled it: the
+control failed **identically** twice. Its own flake rate is ~1 in 5 but that flake is an entry
+stall, which varies — two identical control failures are a variable we introduced, and the diff
+of the failing driver log against the last passing one lands on the line above.
+
+Two changes followed: the early-halt control is now **fail-closed** (it forces a resume, then
+proves the shell answers, and aborts the boot loudly if it does not), and the discriminator is in
+the `board-run` skill. The fail-closed path is **unexercised** — this run disables the diagnostic
+outright, since it already answered its question in an earlier boot — so by this project's own
+standard it is an unproven gate, not a fixed one, until it has been negative-tested.
