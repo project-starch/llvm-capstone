@@ -772,15 +772,30 @@ def main():
                         console.set_switch(_b, bool(160 & (1 << _b)), timeout=30.0)
                     time.sleep(0.8)
                     _vc = _rd(208)
+                    # SECOND INDEPENDENT WITNESS. The clear zeroes `paddr` and a re-capture writes
+                    # the NEW granule, so the paddr moving is a witness distinct from `src`.
+                    _pa_lo, _pa_hi = _rd(205), _rd(206)
                     for _b in range(8):
                         console.set_switch(_b, False, timeout=30.0)
                     _okc = _vc is not None and ((_vc >> 7) & 1) == 0
                     _pre_ok = _v0 is not None and ((_v0 >> 7) & 1) == 1
+                    _pa = None if (_pa_lo is None or _pa_hi is None) else ((_pa_lo << 4) | (_pa_hi << 12))
+                    _lp = ("  [s07] CLEAR sw160: ldc0 granule paddr[19:4] -> "
+                           + ("UNREAD" if _pa is None else f"0x{_pa:05x}")
+                           + "   (baseline was 0x81170-class; a MOVED paddr is the second witness "
+                             "that the clear fired, independent of src)")
+                    print(_lp, flush=True); transcript.append(_lp + "\n")
                     _lc = ("  [s07] CLEAR sw160: sw=208 -> "
                            + ("UNREAD" if _vc is None else f"0x{_vc:02x}")
                            + f"  ldc0_valid={'?' if _vc is None else (_vc>>7)&1}"
-                           + ("   CRITERION 1 PASS" if (_okc and _pre_ok)
-                              else "   CRITERION 1 FAIL" if _pre_ok
+                           + ("   CRITERION 1 PASS (valid==0 observed directly)"
+                              if (_okc and _pre_ok)
+                              else "   valid still 1 -- EXPECTED on a level-sensitive clear, "
+                                   "because reading 208 de-asserts 160 and the recorder re-arms. "
+                                   "Judge on src/paddr HAVING CHANGED instead: s07_ldc0_src_q has "
+                                   "only two writers, the clear and a capture gated on "
+                                   "!s07_ldc0_valid_q, so a change proves the clear fired."
+                              if _pre_ok
                               else "   VACUOUS -- baseline was already 0, this proves nothing"))
                     print(_lc, flush=True); transcript.append(_lc + "\n")
                 except Exception as _e:

@@ -909,3 +909,53 @@ verification only, not the Linux consumption).
   wedged 0, against 5/5 for the un-probed binary. Every software probe built this session removes
   the fault, which is exactly why the hardware clear matters.
 * **The fault still reproduces** on the new bitstream, and the memory map did not move.
+
+## CRITERION 1: PASSED, on the RTL lane's ruling — and it is a PROOF, not an inference
+
+They made the call I asked them to make, with the reasoning, rather than my relaxing my own
+criterion because its result was inconvenient.
+
+`s07_ldc0_src_q` has **exactly two writers**:
+
+    capture arm:  if (ldc_result_back && !data_rtag && !s07_ldc0_valid_q)   <- gated on !valid
+    the clear:    if (s07_ldc0_clear_i)                                      <- writes src = 0
+
+So `src` changing 1 -> 0 has only two possible causes and **both require the clear to have
+fired**: either the clear wrote it, or a capture wrote it — and a capture cannot occur unless
+`s07_ldc0_valid_q` is 0, which nothing but the clear produces outside reset. There is no third
+path. Absent a reset between the two readings, **the observed `0xb8` -> `0x98` is a proof.**
+
+**The unobservability was the instrument's design, not the criterion's wording** — their words:
+level-sensitive was chosen deliberately to mirror `dom_switch_log_clear`, while knowing
+`debug_byte_sel = switches_i[7:5]`, and the two facts were not connected. The criterion was
+correct for the instrument as described.
+
+Driver now also reads `paddr` at the same moment: the clear zeroes it and a re-capture writes the
+new granule, so a moved paddr is a **second independent witness** from the same read.
+
+## The fix that closes it by construction: gate the capture on `capmode`
+
+A domain runs at M privilege with **capmode ON** (`CAPENTER` sets it, sticky). Linux does not, and
+neither does the monitor before `CAPENTER`. So gating the recorder on capmode means **only a load
+executed inside a domain can ever take the slot** — the Linux-consumption problem disappears
+rather than moving later in time.
+
+Cheap because `capmode_i` is **already an input to `load_store_unit`** (`:196`), currently
+forwarded only to `i_pmp_data_if` (`:510`):
+
+    load_unit.sv        one new input port, one AND term on the capture arm
+    load_store_unit.sv  one wire to the existing i_load_unit instantiation
+
+Two files; no change to `ex_stage.sv` or `cva6.sv`. Smaller than the clear itself.
+
+**It composes with the clear rather than replacing it.** The clear still scopes between arms
+within a boot; what changes is that **its release stops mattering**, because between arms nothing
+is in a domain and nothing can re-capture. It also makes criterion 1 observable as originally
+written, since a clear during Linux would then stay clear.
+
+**Rejected, with reasons:** edge-triggered (option 1) makes verification possible but leaves Linux
+consuming the slot — the actual problem — and inverts the semantics so a missed re-arm silently
+yields a stale record, a worse failure mode than a visibly empty one. A non-colliding read
+aperture (option 3) fixes the observation and not the thing observed.
+
+**Cost: another synthesis and another reflash — the project lead's call, not ours.**
