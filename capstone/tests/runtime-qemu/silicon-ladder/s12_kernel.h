@@ -98,6 +98,41 @@ static unsigned s12_compute(void)
 {
   unsigned long bad = 0;
   (void)s12_draw_seed;
+
+#ifdef S12_SELF_ARM_WP
+  /* ARM THE WATCHPOINT FROM INSIDE THE DOMAIN, using its own capability.
+   *
+   * The watchpoint compares a PHYSICAL address, and page-aligning the frame only made the
+   * VIRTUAL address identical across arms -- DBAS is per-ARM, not per-boot (measured: arms in
+   * one boot took 0x82400000 and 0x82800000). So one csrw before the boot cannot serve both
+   * arms of the matched pair, and whichever arm it was not computed for yields an empty record,
+   * which the decision table reads as "the load was fine".
+   *
+   * The host cannot fix this: create_dom returns only a domain id, and DBAS is printed by the
+   * monitor, so userspace never sees it. But the DOMAIN does not need it. Capabilities here
+   * carry physical addresses -- the trap mepc is physical, and the monitor's BASE: trace is
+   * physical -- so `lcc` selector 2 on a capability pointing at the slot returns the slot's
+   * PHYSICAL address directly. No DBAS, no host, no race with the driver.
+   *
+   * Placed BEFORE the loop, outside the measured window. Layout changes ahead of the window are
+   * known survivable: page-aligning the frame moved everything after it and the fault still
+   * fired. That is evidence, not an assumption -- but it is evidence about a DIFFERENT change,
+   * so this arm's ability to still fault is verified on the board before it is relied on. */
+  {
+    void *volatile _p = (void *)(s12_frame + 0x700 - 0x70);
+    unsigned long _pa = 0;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(_pa) : "r"(_p));
+    __asm__ volatile("csrw 0x811, %0" :: "r"(_pa));
+    { unsigned long _bk = 0;
+      __asm__ volatile("csrr %0, 0x811" : "=r"(_bk));
+      s12_sink[2] = _bk;          /* readback, so a failed arm is visible rather than assumed */
+      s12_sink[3] = _pa; }
+    /* group 9 (store watchpoint) so the arming is PROVEN on this boot: an empty LDC record only
+       means "the load was fine" if group 9 fired at the subject store. */
+    { unsigned long _m = 0x200UL;
+      __asm__ volatile("csrw 0x810, %0" :: "r"(_m)); }
+  }
+#endif
 #ifdef S12_SENTINEL
   /* ENTRY-STALL DISCRIMINATOR. Returns before touching the frame, the slot or the consumer.
    *

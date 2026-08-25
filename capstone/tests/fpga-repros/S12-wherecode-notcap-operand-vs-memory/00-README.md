@@ -350,3 +350,47 @@ which would have made it useless as a vehicle:
 
 Both derived from the ELF plus DBAS, with **no dependence on call depth** and no scraping from a
 previous wedge.
+
+## The vehicle is complete: the domain arms its own watchpoint, and still faults
+
+Page-aligning the frame made the **virtual** slot address identical across arms. The watchpoint
+compares a **physical** address, and `DBAS` is per-**ARM**, not per-boot — measured: one boot's
+arms took `0x82400000` and `0x82800000`. So a single `csrw 0x811` before the boot covers at most
+one arm of the matched pair, and the uncovered arm returns an empty record, which the decision
+table reads as *"the load was fine"*.
+
+**The host cannot fix it** — `create_dom` returns only a domain id, and `DBAS` is printed by the
+monitor, so userspace never sees it. **The domain does not need it.** Capabilities on this design
+carry PHYSICAL addresses (the trap `mepc` is physical; the monitor's `BASE:` trace is physical),
+so `lcc` **selector 2** — the cursor query (`capstone_dyn_unit.anvil`, `64'd2 => cap.cursor`) — on
+a capability pointing at the slot returns the slot's physical address directly:
+
+    lcc  rd, &s12_frame[0x700-0x70], 2     -> the slot's PHYSICAL address
+    csrw 0x811, rd                          -> arm the granule filter
+    csrr rd, 0x811                          -> readback into a sink: a failed arm is VISIBLE
+    csrw 0x810, 0x200                       -> group 9, so the arming is PROVEN this boot
+
+No `DBAS`, no host, no race with the driver, and **each arm arms its own address by
+construction** — which is the safe form of per-arm arming, as distinct from scraping an address
+from a previous wedge and reusing it.
+
+### And it still faults, which had to be measured rather than assumed
+
+The arming code shifts layout, and this fault vanishes whenever anything shifts. Page-alignment
+survived, but that is evidence about a *different* change and does not transfer:
+
+    k800   RETURNED  retval=4            control valid
+    s12w1  RETURNED  retval=0xC12A1000   matches oracle, bad = 0
+    s12w4  NO RETURN                     still wedges
+
+Verified in the artifact too: both arms share slot VA `0x12690` and contain exactly one
+`csrw 0x811`.
+
+### Build recipe for the pending bitstream run
+
+    arm 1 (non-raising, lcc):    -DS12_ARM=1 -DS12_SELF_ARM_WP=1     expect 0xC12A1000
+    arm 4 (production consumer): -DS12_ARM=4 -DS12_SELF_ARM_WP=1     expect a WEDGE
+    control:                      k800, which must return 4 first
+
+Both arms carry group 9, including the one that returns cleanly — an empty LDC record means
+*"the load was fine"* only where group 9 has fired at the subject store on that same boot.
