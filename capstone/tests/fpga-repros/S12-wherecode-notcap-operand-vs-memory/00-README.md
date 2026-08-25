@@ -1355,3 +1355,80 @@ STC recorder reported the last capability store at granule `0x9f360`, exactly `s
 so aliasing shifts when a function moves. Neither has a demonstrated path to a corrupted capability
 *value* — both are timing/contention knobs, which is how this folder should keep describing them
 until a path is shown.
+
+## RETRACTION x2 — the "byte-identical body" claim and the "NONLIN measured at the fault site" claim
+
+Both were caught by an adversarial audit and both are verified against primary source here.
+
+### 1. The fault function was NOT byte-identical between the two builds
+
+Stated in this file and in commits `384a919666bf` / `96288aa211fa` as *"2866 instructions in the
+same order, the only body difference one immediate"*. **False.** Measured over the exact symbol
+bounds from `llvm-nm --print-size` (`0x104788`+`0x47e0` vs `0x104c0c`+`0x47dc`):
+
+```
+slt2 (wedges)    4600 instructions
+slt5 (completes) 4599 instructions        <- not even the same COUNT
+differing:       1469,  of which 958 differ in mnemonic/register, not just an immediate
+```
+
+Register allocation and the gp-table index materialisation changed. **How the error was made:**
+the comparison helper's end-of-function regex terminated early (2866 instructions instead of
+4600), and it printed only the FIRST difference — which I then reported as though it were the
+ONLY one. Counting was one line away and would have caught it.
+
+**Consequence:** *"the cure does not require touching the fault function's instructions"* is
+**unearned**. The instructions were touched. The discriminator did not do what it was built to do.
+
+The confound list was also wrong. Between the wedging and curing images `.text` size, every data
+section's VA, `.capstone_gp_table` size (+0x90, nine more entries) and the cap-init entry count all
+moved, along with register allocation inside the fault function. And **the globals offset was never
+a confound at all** — `GOFF` is `0x150000` in every build (it rounds to 64 KiB); the
+`-0x3d0`→`-0x3d4` difference is a per-reference offset, not the region base. The GOFF-override
+experiment is still valid and still useful (it independently confirms the wedge at N=3 and rules
+the globals region out), but it was answering a question that was not open.
+
+### 2. NONLIN was NOT measured at the fault site
+
+The arg probe reads arguments **1 and 2**. The faulting value is argument **3**:
+
+```
+1047a4:  movc a6, a0             a6 = arg1 (pParse)     <- ty1
+1047a8:  ldc  a0, -0x600(s0)     a0 = arg2 (v)          <- ty2
+1047c0:  cincoffsetimm a0, s0, -0x70
+1047c8:  stc  a2, 0x0(a0)        arg3 -> s0-0x70        <- THE SUBJECT, never probed
+104810:  ldc  a4, 0x0(a0)        reload arg3
+104814:  cincoffsetimm a4, a4, 0xb0   FAULTS
+```
+
+So `ty1=ty2=1` says two *sibling* arguments are NONLIN. The value that is stored, reloaded and
+faults was never measured — and it could not have been, because probing the image cures it.
+
+**What survives:** the RTL half. NONLIN is absent from the clear set (`load_unit.sv:226-229`), so
+*if* the value is NONLIN the move-clear cannot fire. The claim must read **"inferred NONLIN by
+analogy with two sibling arguments, not measured"**. Re-pointing the probe at argument 3 would not
+fix this — it can only ever measure a completing build. Only a non-perturbing hardware instrument
+can read the operand on an image that actually wedges.
+
+### 3. Corrections to two other things this folder asserted
+
+* **"The two-pass link offers no such knob" is false.** `build-sqlite-silicon.sh:462` already has
+  `CAPSTONE_TEXT_PAD=N` — dead, never-called code at the top of `.text`, no globals, written for
+  exactly this purpose ("the null-shift control the audit asked for"). With `.text` at `0x144004`
+  and globals pinned at `0x160000` there is ~49 KB of headroom before anything downstream moves.
+* **"One subject arm per boot" is false.** Three domains have reached `H/return` in a single boot
+  (`slt-board8/10/11.log`, ids 0,1,2), with `SPLB:0000E010` (`CAPSTONE_ERR_SPLIT_EXACT`) hitting on
+  the *fourth*. `up6b`'s death at the third is pool-state dependence, already documented in
+  `RATE-RULE.md`. **Budget three arms.**
+* **"Deterministic" is overclaimed at 2/2.** `RATE-RULE.md` records a background wedge rate of
+  p̂ ≈ 0.22, and 2/2 gives only a 95% lower bound of p ≥ 0.224 — indistinguishable from background.
+  N=3 puts P(background) at 0.011, which is the cheap meaningful step; "deterministic" by counting
+  alone would need n≈14–29. (The 0.22 was measured on a *different* bitstream, `s07debug_18august`,
+  not the resident `s07clear_84ed6eafb` — quote it with that caveat.) The **signature** carries more
+  weight than the count: two bit-identical `25 / 0x828f4814` readings are far less likely under
+  background than two bare wedges, but nothing currently records per-wedge signatures to establish
+  that. Worth starting to record.
+* **Entry attribution should quote `ENT1`, not `SQ: G/enter`.** The monitor's own rule
+  (`sbi_capstone.c:924-926`): `ENT0` then silence = died before the switch; `ENT1` then silence =
+  control genuinely left M-mode and the domain owns the wedge; `ENT2` = returned. Both wedges show
+  `ENT0`+`ENT1` then silence.
