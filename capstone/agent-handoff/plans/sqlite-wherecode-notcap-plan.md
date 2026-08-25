@@ -1532,3 +1532,86 @@ That is the word that matters — the cursor lives in word 0 and `tval` reported
 so the argument survives intact. It is stated this way because a plain store to the granule's upper
 half is genuinely invisible to this instrument, and an unqualified "nothing wrote to the slot"
 would be a claim the measurement does not support.
+
+---
+
+# RETRACTION: "the reload returned zero" was never measured
+
+An auditor found the instruction I had not looked at, and it breaks the memory-path half of the
+claim. Disassembly of the four instructions before the fault, which the whole trail had skipped:
+
+    +0x7c  cincoffsetimm a5, s0, -0x120
+    +0x80  movc  a4, zero          <== the LAST architectural writer of a4 before the reload
+    +0x84  stc   a4, 0x0(a5)
+    +0x88  ldc   a4, 0x0(a0)       <== the reload
+    +0x8c  cincoffsetimm a4, a4, 0xb0     <== the fault, rs1 = a4
+
+**The prior architectural value of `a4` is exactly `{cursor 0, NOT_CAP}`** — byte-for-byte what
+the FLU is observed to have received. So a **stale operand delivery** — the load returning
+correctly and the consumer being handed the *previous* `a4` — predicts `mcause 25`, `tval 0`, at
+`+0x8c`, with memory and the load both entirely correct.
+
+## What `tval` actually measures, and what I claimed it measured
+
+    core/ex_stage.sv:489   tval : ... fu_data_i[0].operand_a
+    core/ex_stage.sv:797   cap_rs1 : decompress_cap_tagged(fu_data_i[0].operand_a, ...)
+
+Guard and `tval` come from the same `fu_data_i[0]` in the same cycle. So what is established is
+**"the FLU received `{cursor 0, NOT_CAP}` for a4"** — not "the load returned zero". The bracket the
+instrument measures is `[store commit → operand delivery]`, which contains writeback and forwarding,
+**not only memory**.
+
+I wrote "the reload of that same slot produced zero". That measurement was never taken. **Retracted.**
+
+## This is not a hypothetical alternative — it is a documented defect class on this core
+
+`capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/00-README.md`, sim- and board-reproduced:
+*"memory is right, the load is right, and only the consumer's operand is wrong."* Its fix is in the
+resident bitstream (`core/issue_read_operands.sv:568`) but was **x10-specific and empirical**, not a
+proven invariant; the general capability-forward path (`issue_read_operands.sv:674-677`) is
+register-agnostic.
+
+And the signature I had been treating as a curiosity — **"every software probe removes the fault"** —
+is a *scheduling* signature, which is exactly what R-20 showed: cured by one nop on the board, four
+in simulation. That fact has been sitting in this document as evidence of nothing since the first
+day; it now reads as a positive indication for the forwarding hypothesis.
+
+## What SURVIVES, precisely worded
+
+* A committed store put cursor `0x82be4cf0` into **word 0** of PA `0x82b9f360`. **Holds.**
+* **No committed store instruction** wrote word 0 of that granule afterwards. **Holds** — with
+  blind spots that must travel with it: AMOs are excluded at `commit_stage.sv:339`, domain-switch
+  stores bypass the speculative queue the tap reads, and the tap is upstream of the write buffer and
+  D-cache, so R-18/R-19/S-07-class corruption is invisible to it *by construction*.
+* **This is not a software NULL.** **Holds** — and it is the load-bearing result, because both
+  surviving alternatives are hardware.
+* "The loss is in the memory path." **UNPROVEN.** Operand delivery survives as an alternative.
+
+## Two wordings to stop using
+
+1. **"valid non-zero capability."** The group-9 entry is `{group, pc, data[63:0]}` with **no tag
+   bit** (`tracer.sv:237-239`). Validity at store time is *unmeasured*. Say **"cursor
+   `0x82be4cf0`"**. (The `sw=208` recorder's `stc_ctag=0` is about `paddr 0x82b9f2b0` = `s0-0x120`,
+   the `stc` at +0x84 — a **different store**, and reading it as the subject's tag would have been a
+   second error.)
+2. **"nothing nulled the slot"** → "no committed store instruction wrote word 0", with the blind
+   spots above.
+
+## One thing the audit made STRONGER
+
+Every one of the 20 domain-range captures decodes as a store instruction — near-conclusive that the
+address filter was armed and working. And **entry 11 is a built-in positive control I had not
+noticed**: a plain `sw` captured at that very word with `DATA = 0x0`. So a zero-data scalar store to
+word 0 *is* visible to this instrument, which means "no `DATA=0` after index 20" is a real absence
+rather than a silent zero.
+
+## The discriminator, and it already exists
+
+**Read the 16 bytes at `0x82b9f360` and its shadow tag byte, over GDB, at the wedge.**
+
+    memory intact (0x82be4cf0, tagged)  -> operand delivery. RETRACT the memory-path claim.
+    zeros / compress_cap(NULL)          -> memory path. The claim stands.
+
+The instrument is already written and already aimed; it failed on a driver `UnboundLocalError`
+immediately after printing the frame registers. **That one-line bug is the single highest-value fix
+in this whole trail** — it was three lines away from settling the fork two boots ago.

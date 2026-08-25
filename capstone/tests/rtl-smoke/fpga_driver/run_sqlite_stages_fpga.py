@@ -2475,7 +2475,23 @@ def main():
                                   + ("UNREAD" if _s0 is None else f"0x{_s0:x}")
                                   + "  sp=" + ("UNREAD" if _spv is None else f"0x{_spv:x}"),
                                   flush=True)
-                            if _s0 is not None and _bm:
+                            # LOCAL MEMORY READ. Defined here, before use: the previous
+                            # version referenced helpers assigned ~100 lines further down the
+                            # same function, so it raised UnboundLocalError the instant s0 read
+                            # successfully -- i.e. it failed exactly when it had the thing it
+                            # was built to use. That cost the discriminating measurement on the
+                            # one boot that had everything else right.
+                            def _memrd(_expr, _fmt):
+                                _mk = len(console.gdb_text)
+                                console._emit("gdb_input", text=f"x/{_fmt} {_expr}\n")
+                                try:
+                                    _mm = console.wait_gdb(
+                                        r"0x[0-9a-fA-F]+.*?:\s+0x[0-9a-fA-F]+",
+                                        timeout=25.0, search_from=_mk)
+                                    return _mm.group(0)
+                                except Exception:
+                                    return None
+                            if _s0 is not None:
                                 _dm2 = re.findall(r"DBAS:([0-9A-Fa-f]{8})", console.uart_text)
                                 if _dm2:
                                     _db = int(_dm2[-1], 16)
@@ -2512,22 +2528,18 @@ def main():
                                         # while a MISMATCH is INCONCLUSIVE -- it may simply be
                                         # somebody else's record -- and is NOT a refutation of the
                                         # s0 derivation.
-                                        _al, _ah = _rd(205), _rd(206)
-                                        if _al is not None and _ah is not None:
-                                            _ap = (_al << 4) | (_ah << 12)
-                                            _mine = _gran & 0xFFFFF
-                                            print(f"          aperture ldc0 granule[19:4] = "
-                                                  f"0x{_ap:05x}   s0-derived[19:0] = 0x{_mine:05x}"
-                                                  + ("   MATCH -- two independent routes agree"
-                                                     if _ap == _mine else
-                                                     "   no match -- INCONCLUSIVE (the recorder "
-                                                     "may hold boot software's capture); does NOT "
-                                                     "refute the s0 derivation"), flush=True)
+                                        # (The aperture 205/206 cross-check was removed:
+                                        # it called a helper defined later under the same name
+                                        # and could only ever raise. It is also no longer
+                                        # needed -- the group-9 watchpoint capture confirms the
+                                        # slot address DYNAMICALLY, since the filter matches on
+                                        # st_commit_paddr, which is stronger than two static
+                                        # derivations agreeing.)
                                         print(f"          subject slot = 0x{_slot:x}  granule "
                                               f"0x{_gran:x}  tag byte 0x{_tagb:x}", flush=True)
                                         for _lbl, _a, _f in (("granule data", _gran, "2gx"),
                                                              ("shadow tag", _tagb, "1bx")):
-                                            _r = _rd(f"0x{_a:x}", _f)
+                                            _r = _memrd(f"0x{_a:x}", _f)
                                             print(f"          {_lbl}: {_r if _r else 'READ FAILED'}",
                                                   flush=True)
 
