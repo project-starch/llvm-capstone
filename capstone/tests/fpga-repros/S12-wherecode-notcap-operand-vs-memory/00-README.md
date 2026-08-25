@@ -620,3 +620,42 @@ is wrong**, and that is the more interesting outcome of the two.
 And it raises the stakes on the group-9 arming proof: with empty as the predicted answer, group 9
 firing is the only thing separating *"empty because the load was fine"* from *"empty because the
 filter never armed"*.
+
+## And the REGISTER-FILE row takes a hit too: the RAW check HELD, with the window proven created
+
+`s12-flu-raw.S` builds the window the surviving account needs — a strided, cache-missing `ldc`
+followed **immediately** by an FLU consumer of its destination, every granule pre-seeded with a
+real capability so a NOT_CAP operand can only come from the pipeline:
+
+    RAW-DBG: ALIVE
+    flu-issues = 131    ldc-pending-cycles = 82    HAZARDS = 0
+
+**The condition was created** — 82 cycles with an LDC outstanding, 131 FLU issues alongside — and
+**not once** did an FLU op get acked for issue while an LDC writing its `rs1` was still pending.
+The generic RAW machinery stalled it every time.
+
+This is a real negative rather than the earlier void: the previous run reported
+`ldc-pending-cycles = 0` because its loads all hit, so nothing was tested. The totals are what make
+this zero admissible.
+
+### So both named mechanisms now have negative evidence
+
+    granule (clear reordered after the next store)   EXCLUDED structurally -- one FIFO, program order
+    register file (stale FLU operand)                RAW check HELD in sim, window proven created
+
+**The fault is not in doubt** — it is deterministic on silicon, at a known instruction, with a
+known cause. What is in doubt is every mechanism either lane has named for it.
+
+**Caveat that keeps the register-file row alive, and it is not a small one:** this is simulation.
+The RAW check holding here does not prove it holds on silicon, and the fault has never reproduced
+in simulation at all. A hazard that is correct in RTL and marginal after synthesis would look
+exactly like this. So the row is **weakened, not excluded** — and I am not recording it as an
+exclusion for that reason.
+
+### What this does to the pending bitstream
+
+It makes it **more** valuable, not less. Both candidate mechanisms now predict outcomes that
+disagree with a measurement, so the recorder is no longer confirming a favoured story — it is the
+only thing that can say where the null comes from **without** a hypothesis in hand. An empty record
+is no longer "as predicted": it is one of two informative answers, and the non-empty one would
+resurrect the granule row against a structural argument, which would be the more interesting result.
