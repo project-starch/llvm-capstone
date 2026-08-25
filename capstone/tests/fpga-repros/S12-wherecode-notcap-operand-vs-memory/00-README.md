@@ -455,3 +455,32 @@ firing *is* the proof, and an **empty** group 9 is what carries no verdict.
 
 Same class as the stale `mepc` constant: text that was true where it was written, wrong where it
 was read, and pointing toward "nothing to see" in both cases.
+
+## Why the CURRENT bitstream cannot answer this for ANY workload — measured, not argued
+
+It was worth one boot to ask whether the first-wins LDC recorder becomes usable on the small
+vehicle. The reasoning was that SQLite issues thousands of legitimately-untagged loads before the
+subject and consumes the slot, whereas `s12` has **14 static LDCs**. With the clear applied
+immediately before the arm, the first untagged LDC had a real chance of *being* the subject.
+
+**It is not.** Clear confirmed running before both arms; selftest firing, so a zero would be a
+controlled negative:
+
+    subject slot paddr        0x819e2690   -> recorder should read granule 0xe2690
+    recorder actually read                     0x82280
+
+**And `0x82280` is the same value the SQLite runs recorded — on a domain 6 MB away.** A record
+that does not move when the workload moves is not the workload's record.
+
+**The reason generalises, and that is the useful part.** The monitor's trap entry issues
+`LDC(gp, sp, -16)` on **every timer tick**, so between the clear and any domain instruction at
+least one tick almost certainly lands and takes the first-wins slot. That is independent of how
+small the domain is, so **no workload can win this race** — shrinking the vehicle was the wrong
+lever.
+
+**This independently justifies the granule filter in the pending bitstream.** The filter is
+precisely what makes the recorder immune to the monitor's traps: it is not a convenience, it is
+the thing that makes the record attributable at all. Rolling-without-filter would still be
+consumed by trap traffic; filtered-without-rolling would still be first-wins. Both halves are
+load-bearing, which is worth knowing before anyone considers dropping one under synthesis
+pressure.
