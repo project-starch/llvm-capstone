@@ -217,3 +217,57 @@ The pre-written next step therefore stands: **move the consumer back to `cincoff
 wedging arms.** That trades the rate for one bit per boot, which is why it was not the first
 version — but a clean arm 1 with a non-raising consumer cannot rule out a fault that only the
 raising consumer exposes.
+
+---
+
+## THE MINIMAL REPRO REPRODUCES — 130 lines instead of all of SQLite
+
+| rung | result | meaning |
+|---|---|---|
+| `k800` (known-good control) | RETURNED, `retval=4` | the boot carries verdicts |
+| `s12a4sent` (SENTINEL) | RETURNED, `retval=0xC12A4E17` | **glue, cap-init, entry and return all work** |
+| `s12a4d2` (the window) | **NO RETURN** | the silence is attributable to the **BODY** |
+| `s12a1` (same body, non-raising consumer) | RETURNED, `bad=0` | — |
+| `s12a2` (must-fail control) | RETURNED at its exact oracle | the detector is proven |
+
+**Three draws of arm 4** — `s12a4`, `s12a4d1`, `s12a4d2`, distinct images with a byte-identical
+window — fell silent **3/3**. The sentinel, built from the same source with the body skipped,
+returned in 599 cycles.
+
+### Why the sentinel is the load-bearing arm
+
+`SHA5`-last on the `lpc` path is **ambiguous by construction**: that controller emits no
+post-entry marker, so it cannot distinguish *"the body wedged"* from *"the domain never ran"* —
+`locagg_kernel.h:34-36` says exactly this, and the tree records every lpc-hosted domain dying in
+share #1 on 2026-08-06 regardless of content. An earlier version of this note read `SHA5`-last as
+an **R-16 entry stall**; that was unsupported and is **retracted**. Two draws falling silent at the
+same point was itself evidence against R-16, which is per-image and should have shaken loose on a
+redraw.
+
+The sentinel removes the ambiguity: it returns, so entry works.
+
+### The matched pair, and the part that does not yet add up
+
+Arm 1 and arm 4 differ by **exactly one thing** — the consuming instruction:
+
+* arm 1 consumes with `lcc` selector 1 (total, non-raising) → **returns, `bad = 0`**
+* arm 4 consumes with `cincoffsetimm a4,a4,0xb0` (raises on NOT_CAP), verified byte-identical to
+  the board's faulting instruction (`5b 27 07 0b`) → **no return, 3/3**
+
+**But `bad = 0` in arm 1 means the reload was never NOT_CAP there.** And `CINCOFFSETIMM` raises
+*only* on `cap_type == NOT_CAP` — it has no bounds arm (`capstone_flu_unit.anvil:57-70`). So the
+two results cannot both be about the reload's value unless **the consumer changes the timing**.
+
+That is not a contradiction so much as the signature this whole investigation has been chasing:
+the fault is scheduling-sensitive, and *every added instruction makes it disappear*. `lcc` and
+`cincoffsetimm` are different instructions with different timing, so arm 1 is not a control for
+arm 4's value — it is a different experiment. **Stated here rather than resolved**, because the
+alternative readings are still open:
+
+* arm 4 wedges at the `cincoffsetimm` on a NOT_CAP operand that arm 1's timing never produces;
+* arm 4 wedges somewhere else in the body for a reason the non-raising build tolerates;
+* arm 4 fails for a reason unrelated to the window.
+
+**The trap cause and `mepc` have NOT been read for arm 4.** Until they are, "it reproduces the
+S-12 signature" is unproven — what is proven is that a 130-line domain, with the production
+consumer, does not return, while the same domain minus its body does.

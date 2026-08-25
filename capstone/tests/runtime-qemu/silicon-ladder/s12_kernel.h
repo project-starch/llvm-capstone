@@ -51,6 +51,18 @@
 
 /* The frame. Sized and aligned so the slot at -0x70 and every intervening-store target down to
  * -0x5e0 stay inside it, exactly as they do relative to s0 on the board. */
+/* REDRAW SEED. R-16 (entry stall) is PER-IMAGE: the domain never enters, so retrying the same
+ * image is futile and the skill says to REDRAW instead -- rebuild with a harmless constant
+ * varied so the code under test stays byte-identical across draws.
+ *
+ * This seeds an unused volatile global, so it changes .data and therefore the image hash while
+ * not altering a single instruction. That is stronger than padding with nops, which would shift
+ * alignment inside the window under test and make the draws differ in something that matters. */
+#ifndef S12_DRAW
+#define S12_DRAW 0
+#endif
+static unsigned long volatile s12_draw_seed = 0xD2A0000UL + S12_DRAW;
+
 static unsigned char volatile s12_frame[0x800] __attribute__((aligned(16)));
 static void *volatile s12_subject;
 static unsigned long volatile s12_sink[8];
@@ -74,6 +86,24 @@ static inline unsigned long s12_type(const void *p) {
 static unsigned s12_compute(void)
 {
   unsigned long bad = 0;
+  (void)s12_draw_seed;
+#ifdef S12_SENTINEL
+  /* ENTRY-STALL DISCRIMINATOR. Returns before touching the frame, the slot or the consumer.
+   *
+   * This exists because the lpc controller emits NO post-entry marker, so `SHA5` last on this
+   * path CANNOT tell "the body wedged" from "the domain never ran" -- locagg_kernel.h:34-36
+   * says so in as many words, and the tree records every lpc-hosted domain dying in share #1
+   * on 2026-08-06 regardless of content. Arm 4 fell silent at SHA5 on two successive draws and
+   * I read that as an entry stall; that reading is unsupported without this arm.
+   *
+   *   returns 0xC12A4E17 -> glue, cap-init, entry and return all work, so arm 4's silence is
+   *                         attributable to its BODY -- i.e. the window faulted
+   *   wedges             -> the rung is an entry stall and says NOTHING about the window
+   *
+   * The sentinel value cannot collide with a real result: a real arm-4 return is
+   * 0xC12A4000 | bad, and arm 4 never increments bad, so it returns exactly 0xC12A4000. */
+  return 0xC12A0000u | (4u << 12) | 0xE17u;
+#endif
   /* fp plays s0. The slot is fp-0x70 and is 16-byte aligned by construction, which the
    * hardware requires of a capability store and which the board's s0-0x70 also satisfies. */
   unsigned char volatile *fp = s12_frame + 0x700;
@@ -111,11 +141,41 @@ static unsigned s12_compute(void)
     __asm__ volatile("nop");              /* the separation control */
 #endif
 
+
+
     /* THE RELOAD and its consumer. Reading through the volatile slot is the ldc; the type
      * query is the consumer, standing in for cincoffsetimm without the raise. */
     void *back = *slot;
+#if S12_ARM != 4
     if (s12_type(back) == S12_NOT_CAP)
       bad++;
+#endif
+
+#if S12_ARM == 4
+    /* THE RAISING CONSUMER -- the production shape, and the reason this arm exists.
+     *
+     * Arms 0/1/3 inspect the reload with `lcc` selector 1, which is TOTAL: it answers 7 for
+     * NOT_CAP without raising, so a bad reload is counted and the arm still returns a rate.
+     * That is what makes them bisectable, and it is also a real deviation -- production uses
+     * `cincoffsetimm`, which RAISES. A clean arm 1 therefore cannot rule out a fault that only
+     * the raising consumer exposes, and the kernel said so before arm 1 was ever run.
+     *
+     * So this arm consumes the reload EXACTLY as sqlite3WhereCodeOneLoopStart+0x8c does:
+     * cincoffsetimm on the loaded value, same 0xb0 displacement. If the operand arrives
+     * NOT_CAP the domain takes mcause 25 and WEDGES -- one bit per boot instead of a rate,
+     * which is the price of matching production.
+     *
+     * The counter is written to the sink BEFORE the consumer runs, so a wedge still leaves
+     * evidence of how many iterations completed rather than dying silently. */
+    s12_sink[0] = r;
+    {
+      void *volatile _c = back;
+      __asm__ volatile(".insn i 0x5b, 0x2, %0, %1, 0xb0" : "=r"(_c) : "r"(_c));
+      /* cursor half only; a capability does not fit a long, and this is a liveness
+         marker rather than a value under test */
+      s12_sink[1] = (unsigned long)(__UINTPTR_TYPE__)_c;
+    }
+#endif
 
     s12_sink[r & 7] = (unsigned long)back;
   }
