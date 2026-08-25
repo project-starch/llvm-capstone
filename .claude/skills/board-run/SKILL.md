@@ -266,6 +266,51 @@ Lock → power-cycle → run → **power off + unlock in `finally`**. The driver
   shell, and once matched an editor with the script open and closed it.
 * Confirm `gdb_state` is `idle` before blaming the board.
 
+### The board looks dead: OpenOCD cannot claim the JTAG adapter
+
+Symptom — every `gdb_start` fails server-side and `cold_boot` burns all three retries with
+`timed out waiting for event 'gdb_state'`:
+
+    [GDB] Start failed: OpenOCD exited during GDB startup (code 1)
+    Error: libusb_claim_interface() failed with LIBUSB_ERROR_BUSY
+    Error: unable to open ftdi device ...
+    Error: [riscv.cpu] Unsupported DTM version: -1     <- CONSEQUENCE, not a second symptom
+    Error: [riscv.cpu] Could not identify target type. <- likewise
+
+**The FPGA is usually fine** — check the UART, which will show a clean `Hello World! …
+booting!`. Only JTAG is unavailable.
+
+**RECOVERY, and run it in this order:**
+
+1. **Clear every switch to 0**, bit 7 first. `sw[0]` muxes the console TX to the tracer and
+   `sw[1]` triggers a dump, so an aperture walk can leave the console owned by the tracer.
+2. `gdb_stop()` — documented to terminate OpenOCD on the host.
+3. **A real power cycle**: off, settle ~6 s, on, settle ~12 s. Not `POST /api/reset-board`,
+   which succeeded and changed nothing.
+4. **`gdb_start()` as a PROBE.**
+
+**Step 4 is the only step that answers anything.** Steps 1-3 all report success whether or
+not the adapter is free. `gdb_stop()` taking `gdb_state` from `error` to `idle` looks exactly
+like a recovery and is not — the next `gdb_start` goes straight back to `error`. **Clearing
+state is not clearing the device.**
+
+**Probe with the board POWERED ON.** With power off there is no DTM, so `gdb_start` fails
+whether or not the FTDI is free, and it fails with the same two trailing lines. A probe taken
+with power off cannot separate *"USB is busy"* from *"there is no target"*, and reading its
+failure as evidence about the adapter is a wrong verdict.
+
+**Honest limit on this recipe:** when it first worked, switches were cleared AND a full power
+cycle was done in the same attempt, so **which step recovers it is not established** — an
+earlier attempt with `gdb_stop` + `reset-board` + power-on (no switch clear, shorter settles)
+did NOT recover it. If you hit this, consider varying one step at a time and recording which
+one worked; nobody has done that yet.
+
+If it survives all four steps, the adapter is genuinely held by another process. Check
+`user_count` for other sessions, then it needs host-side intervention — killing the stale
+OpenOCD on the board server — which the socket.io/HTTP surface does not expose.
+
+`/tmp/capstone/recover_full.py` implements the sequence.
+
 ## 5b. After a RE-FLASH: the memory map may have moved
 
 A new bitstream can change the reserved capability-memory constants, and the device tree must
