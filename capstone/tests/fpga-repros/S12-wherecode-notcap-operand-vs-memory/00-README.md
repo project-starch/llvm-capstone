@@ -12,11 +12,26 @@ this one.
 and written to be handed over in that state rather than held until it is tidy. What is settled is
 what has been *excluded*, and the exclusions are real even though the localisation is not:
 
-> **A committed store put cursor `0x82be4cf0` into WORD 0 of the slot. That word still held it at
-> the wedge, and the granule's shadow tag byte read 1. The FLU received cursor 0.**
+> **A committed store put cursor `0x82be4cf0` into WORD 0 of the slot. That word still held it in
+> DRAM at the wedge. The FLU received cursor 0.**
 >
 > This excludes a **software NULL**, and excludes anything having **persistently overwritten**
-> word 0. It does **NOT** locate the fault.
+> word 0 in DRAM. It does **NOT** locate the fault.
+
+**The shadow-tag half of that evidence is WITHDRAWN as evidence about the load.** The byte read
+`0x01`, and that is a true statement about DRAM and a useless one about the `ldc`. The tag the load
+consumed comes from a **different storage**: `wt_dcache_mem.sv:143` declares a per-{set,way} L1
+array `cap_tag_q`, and `rd_ctag_o` (`:319-338`) is sourced from the write buffer, from refill
+`user` bits, or from `cap_tag_hit` — **never from a DRAM tag read**. A GDB read of `0xBC58CC63`
+therefore has no path to the bit the load actually saw.
+
+Worse, the documented desync runs in **exactly** the direction that would fool this measurement.
+`wt_dcache_wbuffer.sv:604-620`: *"ctag is sampled TWICE — at TX ISSUE for DRAM and at TX RETURN for
+L1 … `stc G` then `sd x0, G+0` gives DRAM ctag=1 and L1 ctag=0."* **Stale-high DRAM with correct-low
+L1 is a known failure mode of this hardware, and the measurement sits inside it.** The usual
+mitigation — that the two converge — does not obviously apply on a **wedged** core, since
+convergence needs the entry to re-drain and whether that window is still open at read time is
+unmeasured.
 
 **Read that limitation, because a stronger claim was published from these same numbers and had to
 be retracted.** The reasoning was: memory intact at the wedge ⇒ the memory path is innocent ⇒ the
