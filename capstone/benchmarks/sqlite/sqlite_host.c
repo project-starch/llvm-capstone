@@ -123,6 +123,37 @@ int main(int argc, char **argv) {
      monitor (0x8001xxxx) nor the domain (0x10000). This host is a dynamic PIE, so print a
      known libc address and a known host-image address; subtracting identifies which
      mapping contains the fault, without parsing /proc/self/maps in a wedging process. */
+#ifdef CAPSTONE_TRACE_ARM
+  /* ARM THE COMMIT TRACER FROM THE RUNNING CORE, not from GDB.
+   *
+   * The tracer (core/tracer.sv, group 2 = every LDC/STC commit with its PC and its real
+   * tag bit) is already in the flashed bitstream, and RTL simulation proves capture fires
+   * when the group mask is set: four capability accesses, four captures, varying tag bits.
+   * On the board it captured NOTHING across three boots -- and the one difference was the
+   * arming route. There the mask went in over GDB, and the readback was taken at the same
+   * halt as the write, which cannot tell the hardware register from the debugger's copy.
+   *
+   * Here the write is an ordinary csrw executed by this process, exactly as in the sim
+   * that works. CSR 0x810 has bits[9:8] == 00, i.e. U-mode accessible, and CVA6 enforces
+   * precisely that (privilege_violation tests access_priv < csr_addr priv_lvl, never true
+   * for priv_lvl 0), so userspace may write it.
+   *
+   * This is in the HOST, deliberately, not in the domain. Every probe ever added INSIDE a
+   * domain for this bug has made the fault disappear -- probed builds complete ~4/4 while
+   * the un-probed build wedges 5/5 -- so an in-domain arm would buy observability by
+   * destroying the thing being observed. The host runs in Linux userspace before capenter,
+   * touches no domain image, and trace_enable_q is cleared only by hardware reset, so
+   * arming here survives into the domain.
+   *
+   * The readback is printed rather than assumed: it is a read of the real CSR by the real
+   * core, and it is the measurement that was missing on all three board boots. */
+  {
+    unsigned long _tm = (unsigned long)(CAPSTONE_TRACE_ARM), _tb = 0;
+    __asm__ volatile("csrw 0x810, %0" :: "r"(_tm));
+    __asm__ volatile("csrr %0, 0x810" : "=r"(_tb));
+    mark_u("SQ: tracearm=", _tb);
+  }
+#endif
   mark_u("SQ: libc=", (unsigned long)(void *)&printf);
   mark_u("SQ: self=", (unsigned long)(void *)&main);
   mark("SQ: B/mkregion1\n");

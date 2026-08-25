@@ -1229,3 +1229,76 @@ gets mistaken for a subject.
 something this boot introduced — most likely the tracer dump immediately before it, which toggles
 switches and puts the server into capture mode. The two instruments need to be sequenced or
 separated, and that is a driver problem rather than a board one.
+
+---
+
+# RTL SIMULATION SETTLES IT: the tracer works, and the board failure was the ARMING PATH
+
+Three board boots armed CSR 0x810 over GDB — once with group 2, once with groups 0-8, where
+group 8 is *every other committed instruction* — and the dump FSM reported an empty ring every
+time, from domains that retired thousands of LDC/STC. Rather than spend a fourth boot, the
+question went to simulation, where it costs ~14 s. **That should have come before the second
+boot**, and the rule it illustrates is one this project already has: do not board-debug an
+instrument that simulation can exonerate for free.
+
+`verif/tests/custom/capstone/tracer-capture.S` — real pass at **585 cycles**, not a timeout
+(checked, because the harness prints SUCCESS at the timeout too):
+
+    TRACER-DBG: trace_enable_i changed to 00000004 at time 484
+    TRACER-DBG: CAPTURE port 0 group 2 pc 00000008000014e payload 0000000000000000
+    TRACER-DBG: CAPTURE port 0 group 2 pc 000000080000152 payload 0000000000000001
+    TRACER-DBG: CAPTURE port 0 group 2 pc 000000080000156 payload 0000000000000000
+    TRACER-DBG: CAPTURE port 0 group 2 pc 00000008000015a payload 0000000000000001
+
+Four capability accesses, four captures, correct group, correct PCs. **The payloads vary**, which
+matters more than their values — a bit that is always 0 or always 1 would be equally consistent
+with a tied-off signal, and this is not that.
+
+**The single difference from the board is the arming route.** In sim the mask is written by an
+architectural `csrw 0x810` executed by the core itself. On the board it went in over GDB, and the
+readback was taken *at the same halt as the write* — which cannot distinguish the hardware
+register from the debugger's copy. An empty ring under an unverified mask was never evidence about
+the silicon; it was evidence about the instrument, and it took three boots to say so.
+
+## The fix: arm from the running core, in the HOST, where perturbation is free
+
+    sqlite_host.c
+      csrw 0x810, %0        /* mask */
+      csrr %0, 0x810        /* and PRINT it: SQ: tracearm=<n> */
+
+Verified in the built artifact rather than in the intent — `edc: 81079073 csrw 0x810,a5`,
+`ee0: 810025f3 csrr a1,0x810`, once each.
+
+Three reasons this is the right home, and the third is the one that matters:
+
+* CSR 0x810 has `bits[9:8] == 00`, i.e. **U-mode accessible**, and CVA6 enforces exactly that
+  (`privilege_violation` tests `access_priv < csr_addr.csr_decode.priv_lvl`, never true for
+  priv_lvl 0). So userspace may write it — no monitor change, no firmware/CAPENTER ordering
+  question.
+* `trace_enable_q` is cleared only by hardware reset (`csr_regfile.sv:1787` write, `:1111` hold,
+  `:3078` update — two assignments, neither a clear), so arming once in the host survives into the
+  domain and across arms.
+* **It adds ZERO instructions to any domain image.** Every probe added inside a domain for this
+  bug has made the fault disappear — probed builds complete ~4/4, the un-probed build wedges 5/5 —
+  so an in-domain arm would buy observability by destroying the thing being observed. The host
+  runs in Linux userspace before `capenter` and touches no domain binary, so this is the first
+  instrument in the whole investigation that is outside that bind on **both** arms, not just the
+  control.
+
+The printed readback is the measurement all three GDB boots lacked. From here an empty ring is a
+real statement about the tracer; before it, it was not.
+
+## Consequence for the RTL side: no synthesis
+
+The batch that was being scoped — dropping the first-wins term at `load_unit.sv:769`, a
+watchpoint-granule filter on the STC capture and its `clobbered` arm, the `ariane_pkg.sv:592`
+comment fix — stays **designed and unbuilt**. If the tracer returns both tag bits at the subject
+PCs, none of it is needed.
+
+## One observation NOT to build on yet
+
+The four sim captures read **STC payload 0 then LDC payload 1** on the same granule — the inverse
+of the S-07 direction. That is most likely an artifact of the test (`CAPCREATE` alone may leave the
+register untagged until bounds and permissions are set, so the first store genuinely stores an
+untagged value), not a finding. Recorded because it was seen, flagged because it is unexplained,
+and explicitly not used as evidence for anything.

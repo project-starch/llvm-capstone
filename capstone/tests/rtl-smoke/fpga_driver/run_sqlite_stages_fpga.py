@@ -615,6 +615,13 @@ def decode_probe(obs):
 # apertures before dumping fires spurious dumps into the terminal and steals the console.
 # Dump first, then read apertures.
 TRACER_MASK    = int(os.environ.get("TRACER_MASK", "0x4"), 0)  # bit 2 = group 2 only
+# THE CONTROL MASK IS DELIBERATELY THE EASIEST POSSIBLE CHECK TO FIRE.
+# Groups 0-8, where group 8 is "all other committed instructions" -- so if capture works at
+# all, the ring CANNOT come back empty. A selective mask that reports silence cannot tell
+# "the subject is clean" from "the instrument never armed", and this project has paid for
+# that confusion repeatedly. Prove capture with the wide mask on the control arm, THEN
+# narrow to group 2 for the measurement.
+TRACER_MASK_CTL = int(os.environ.get("TRACER_MASK_CONTROL", "0x1FF"), 0)
 SW_TRACER_RUN  = 0x4   # bit2 ring-mode(keep newest) | bit1 low no dump | bit0 low console TX
 SW_TRACER_DUMP = 0x7   # + bit1 dump trigger | + bit0 TX mux -> tracer
 CSR_TRACE_ENABLE = 0x810                                        # csr_regfile.sv:213
@@ -1042,9 +1049,22 @@ def main():
         # silently clear overwrite mode and flip the ring from keep-newest to drop-on-full.
         # That is a change of what the instrument measures, announced nowhere.
         if TRACER_ON:
-            tracer_armed = arm_tracer(console, C, gdb_already_open=_gdb_open[0])
-            if tracer_armed:
-                _gdb_open[0] = True
+            # ARMING NOW HAPPENS IN THE HOST, not here. `sqlite_host.c` does a plain
+            # `csrw 0x810` and prints the `csrr` readback as `SQ: tracearm=<n>` -- a read
+            # of the real CSR by the real core, which is the measurement all three GDB
+            # boots lacked. RTL sim proves capture fires when the mask is set this way.
+            # Set TRACER_GDB_ARM=1 to fall back to the debugger route.
+            if os.environ.get("TRACER_GDB_ARM") == "1":
+                tracer_armed = arm_tracer(console, C, mask=TRACER_MASK_CTL,
+                                          gdb_already_open=_gdb_open[0])
+                if tracer_armed:
+                    _gdb_open[0] = True
+            else:
+                # Assumed armed so the dump still runs; the host's own readback is what
+                # decides, and it is checked per arm below rather than asserted here.
+                tracer_armed = True
+                log("  [tracer] arming delegated to the host `csrw 0x810` "
+                    "-- watch for `SQ: tracearm=` in each arm's output")
             # Ring mode on, dump trigger low, console TX still ours. Set AFTER arming so no
             # aperture walk can move it again before the first domain runs.
             set_switch_value(console, SW_TRACER_RUN)
@@ -1168,6 +1188,21 @@ def main():
             # back as monitor trap-stack PCs. That answer is worth having: it says the wedge is
             # live, and it says to re-run with overwrite LOW and arm as late as possible.
             if TRACER_ON and tracer_armed:
+                # THE ARMING MEASUREMENT, from the running core. Without this an empty
+                # ring is uninterpretable -- it cannot separate "nothing to capture" from
+                # "never armed", which is exactly what sank the three GDB-armed boots.
+                _tam = re.search(r"SQ: tracearm=(\d+)", text)
+                if _tam:
+                    _tav = int(_tam.group(1))
+                    log(f"  [tracer] host readback: CSR 0x810 = {_tav:#x} "
+                        + ("(ARMED -- an empty ring is now a real result about the tracer)"
+                           if _tav == TRACER_MASK else
+                           f"(!! wanted {TRACER_MASK:#x} -- the write did NOT stick, so this "
+                           f"arm's dump says nothing)"))
+                else:
+                    log("  [tracer] NO `SQ: tracearm=` in this arm's output -- either the "
+                        "host was built without CAPSTONE_TRACE_ARM or it died before the "
+                        "csrw. Arming UNMEASURED; treat any dump as uninterpretable.")
                 tr = tracer_dump(console, C, f"arm{dom_idx}{'-WEDGED' if wedged else ''}")
                 if tr:
                     OUT_TR = f"{RAW_OUT.rsplit('.', 1)[0]}-trace-arm{dom_idx}.txt"
@@ -1176,6 +1211,18 @@ def main():
                     log(f"  [tracer] frames written to {OUT_TR}")
                     for _l in tr.splitlines()[:12]:
                         log(f"  [tracer]   {_l}")
+                # NARROW THE MASK once the control arm has answered "does capture work".
+                # Group 8 fires on every committed instruction, which is what makes it a
+                # usable positive control and also what makes it useless as a measurement:
+                # it wraps the 256-entry ring continuously, so the subject window would be
+                # gone long before the wedge. Re-arm to group 2 alone for the arms that
+                # matter.
+                if dom_idx == 1 and TRACER_MASK_CTL != TRACER_MASK:
+                    log(f"  [tracer] re-arming to {TRACER_MASK:#x} (group 2 only) for the "
+                        f"remaining arms")
+                    tracer_armed = arm_tracer(console, C, mask=TRACER_MASK,
+                                              gdb_already_open=_gdb_open[0])
+                    set_switch_value(console, SW_TRACER_RUN)
 
             # A MISSING DOMAIN MUST NOT READ AS SUCCESS.
             #
