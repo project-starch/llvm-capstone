@@ -1170,3 +1170,46 @@ trigger needs something the window does not have — cache pressure, timer traff
 or simply the surrounding code volume — and the next step is SQLite-side bisection between the
 single-table case that passes and the self-join that does not. `q_one` and `q_two` differ by
 exactly `, t1 AS y`, and both tables are EMPTY, so no data is involved either way.
+
+## Silicon: NONLIN confirmed, and S-12 is PERTURBATION-SENSITIVE
+
+Same domain, same `q_two.test`, same slot (arm 2 of 2), with the repaired arg probe enabled:
+
+```
+arm 1  sqprb.dom (no --slt), control   G/enter -> H/return   returned 7s
+arm 2  sqprb.dom --slt q_two.test      G/enter -> H/return   returned 6s
+       ARGP calls=1 ty1=1 ty2=1
+       SLT-SUMMARY records=2 stmt_pass=1 query_pass=0 query_fail=1 completed=1
+```
+
+**1. The type is now an FPGA measurement.** `ty1=ty2=1` = NONLIN (selector 1 reports
+`cap_type - 1`). Previously derived from source and measured only under QEMU. The linear
+move-clear is not live at this site, confirmed on the hardware that actually has the bug.
+
+**2. The probed build does not wedge** — where the un-probed build, in the identical slot, wedged
+at `+0x8c` in the boot immediately before. And it completes *correctly*: its summary matches QEMU
+and native record for record.
+
+**What that does and does not support.** The two builds differ in **two** respects:
+
+| build | size | `WhereCodeOneLoopStart` |
+|---|---|---|
+| un-probed (wedges) | 1624152 | `0x104788` |
+| probed (completes) | 1624904 | `0x104b48` |
+
+The probe adds instructions to the function **and** moves it 960 bytes. So *"S-12 is sensitive to
+code perturbation"* is supported; *"the probe's instructions cure it"* is **not**. This is exactly
+the arms-differ-in-more-than-one-respect case, and link address is the named confound.
+
+Perturbation sensitivity is itself a strong hint: it is **R-20's signature** — cured by exactly one
+nop — which points at a pipeline/scheduling hazard rather than data or memory corruption. It also
+explains why the 40-line repro comes back clean: its instruction context is not production's.
+
+**UNRESOLVED:** only one `ARGP` line appears for a two-table self-join, which should drive two
+where-loop levels. Whether the report is first-call-sticky or the function is genuinely entered
+once is not established.
+
+**The one-boot discriminator:** inject the probe into `sqlite3WhereMalloc` (`0x102f54`, *before*
+the fault site). That moves `WhereCodeOneLoopStart`'s address while leaving its body
+**byte-identical**. Wedges → the instructions inside the function are what matter. Completes →
+the address/layout shift is, and the instructions are incidental.
