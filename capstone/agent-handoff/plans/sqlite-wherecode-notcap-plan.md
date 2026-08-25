@@ -1670,3 +1670,74 @@ proven heartbeat measured **zero** such cycles with peak occupancy 2 of 8, even 
 built to force backpressure. So the *location* is established and the *mechanism* is not.
 
 Going to an auditor before this enters ISSUES.md.
+
+---
+
+# RETRACTION 2: "memory intact ⇒ the fault is in delivery" is an INVALID INFERENCE
+
+An auditor refuted the headline result. The two measured facts stand; the conclusion drawn from
+them does not.
+
+**The inference was:** granule intact and tagged at the wedge ⇒ the memory path did not lose the
+value ⇒ the fault is in operand delivery.
+
+**Why it is invalid:** the decision table's "memory path ⇒ granule reads 0/untagged" is only
+correct for a **persistent** loss. **Every documented memory/load-path defect on this core is
+transient and self-heals** long before a debugger read seconds later — write-buffer residency, the
+issue/return desync (`wt_dcache_wbuffer.sv:612-619`), S-10b. In all of them the store *does* reach
+DRAM correctly; only the load, at the instant it executed, saw something else. So an intact granule
+at T+seconds is predicted by **both** arms and discriminates nothing.
+
+**And the existence proof is unfixed on this exact silicon.** Verified independently rather than
+taken from the report:
+
+    git merge-base --is-ancestor c867dfcbb 84ed6eafb   ->  false
+    c867dfcbb  S-10b: compare the load/store hazard at GRANULE granularity,
+               and a stale-data read disappears
+
+S-10b's own record is a load returning `0x0000000000000000` while memory held the stored value.
+That is a load-path fault producing a clean zero with memory intact — precisely what the retracted
+claim called impossible. (S-10b as a *named* mechanism is unlikely here: `load_unit.sv:312` presents
+`vaddr[11:0]` and `store_buffer.sv:279/287/293` compare `[11:3]`, so a granule-aligned reload and a
+granule-aligned spill share `[11:3]` and the interlock would stall. It is cited as the counterexample
+to the inference rule, not as the mechanism.)
+
+## Two instrument defects found by EXECUTING the driver, not reading it
+
+**I1 — the granule read was truncated to ONE word.** The pattern
+`r"0x[0-9a-fA-F]+.*?:\s+0x[0-9a-fA-F]+"` is non-greedy and ends after the first hex group, so
+`x/2gx` reported **word 0 only** and word 1 — the capability's METADATA half — was requested and
+never printed. So "the granule is intact" was always a **word-0-only** statement that did not say
+so. Both instruments backing "intact" (this and the group-9 watchpoint, `st_commit_paddr[PLEN-1:3]`)
+are blind to the same half of the granule. Fixed, and negative-tested against realistic output:
+the old pattern captures `0x...82be4cf0`, the new one captures both words.
+
+**I2 — the SAME UnboundLocalError, reintroduced 110 lines below its own fix.** `_rd` is used at
+`:2594` and `def`ined at `:2614`; a `def` binds the name as a local of the enclosing function, so
+the use raises, and the enclosing `try` swallows it. Silently skipped on **every wedge**:
+
+* the **entry-marker read** — the one measurement that would settle whether `a4` was already zero
+  at function entry;
+* the **mandatory positive control** for the tag path, whose own in-source comment says *"it is not
+  optional: if it reads 0 the read path is unproven and the subject's tag carries no verdict"*;
+* the gdb-`mtval` mcause/mepc cross-check.
+
+**The evidence file from the boot that produced the headline result ends at exactly the predicted
+truncation point.** I had fixed this identical defect for `_memrd` earlier in the same session and
+written a comment about it — then reintroduced it below.
+
+## What survives, worded so it cannot be over-read
+
+* A committed store put cursor `0x82be4cf0` into **word 0** of the slot. **Holds.**
+* Word 0 still held it at the wedge, and the granule's shadow tag byte read 1. **Holds** — word 0
+  only, and at T+seconds.
+* The FLU received cursor 0, and separately `cap_type == NOT_CAP`. **Holds** — and note these are
+  **two facts on two lanes** (`tval` reports `operand_a`, the cursor; cause 25 is raised on the
+  metadata's `cap_type`), consistent with a whole-zero 128-bit operand but not a single observation.
+* **Excluded:** a software NULL; anything having **persistently overwritten** word 0.
+* **NOT excluded:** a transient memory-path defect. **What the load returned has never been measured.**
+
+Also standing from the audit: attacks on `tval` semantics and on latch coherence both **failed** —
+`ex_stage.sv:489` and the single-cycle `always_ff` at `cva6.sv:1133-1143` hold, and the commit-stage
+producer is excluded arithmetically. The tag-address formula is confirmed at the bitstream rev. And
+this is **N=1 on a fault the folder itself calls sporadic**.

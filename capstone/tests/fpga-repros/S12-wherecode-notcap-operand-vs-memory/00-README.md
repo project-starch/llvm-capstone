@@ -8,22 +8,31 @@ an **untagged capability surviving a store/reload pair**, that is **S-07**, not 
 **R-20 — `stc`/rs1 cursor forwarding** (`R20-stc-rs1-cursor-forward-x10/`). Read that one before
 this one.
 
-**This folder is about a fault whose MECHANISM IS NOT ESTABLISHED.** It is open, and it is
-written to be handed over in that state rather than held back until it is tidy. Its *location*,
-however, now is established, and that is the headline:
+**This folder is about a fault whose LOCATION AND MECHANISM ARE BOTH UNESTABLISHED.** It is open,
+and written to be handed over in that state rather than held until it is tidy. What is settled is
+what has been *excluded*, and the exclusions are real even though the localisation is not:
 
-> **Memory is intact and tagged at the wedge. The consumer received zero.**
-> The value was never lost. It was never delivered.
+> **A committed store put cursor `0x82be4cf0` into WORD 0 of the slot. That word still held it at
+> the wedge, and the granule's shadow tag byte read 1. The FLU received cursor 0.**
 >
->     granule data at the slot : 0x0000000082be4cf0   <- the value IS there
->     shadow tag byte          : 0x01                 <- and it IS tagged
->     tval at the trap         : 0x0000000000000000   <- what the consumer got
->
-> So this is **not** a software NULL, and **not** a memory-path loss. Both are excluded by
-> measurement. The fault lies between the load's memory access and the consumer's operand.
+> This excludes a **software NULL**, and excludes anything having **persistently overwritten**
+> word 0. It does **NOT** locate the fault.
 
-A memory-path reading of this bug was published earlier in the investigation and is **retracted**;
-see "What this excludes" below.
+**Read that limitation, because a stronger claim was published from these same numbers and had to
+be retracted.** The reasoning was: memory intact at the wedge ⇒ the memory path is innocent ⇒ the
+fault is in operand delivery. That inference is invalid. **Every documented memory/load-path defect
+on this core is transient and self-heals long before a debugger read seconds later** — write-buffer
+residency, the issue/return desync (`wt_dcache_wbuffer.sv:612-619`), S-10b. So "the granule is
+intact at T+seconds" is predicted by **both** arms of the fork and separates nothing.
+
+The existence proof is on this very silicon: **S-10b (`c867dfcbb`) is ABSENT from the resident
+bitstream** — verified, `git merge-base --is-ancestor c867dfcbb 84ed6eafb` returns false — and its
+commit records a load returning `0x0000000000000000` while the store's data was in memory. A
+load-path fault producing a clean zero with memory intact is exactly the combination the retracted
+claim asserted was impossible.
+
+**WHAT THE LOAD RETURNED HAS STILL NEVER BEEN MEASURED.** That is the open question, and both a
+memory-path and a delivery-path explanation remain live.
 
 ---
 

@@ -2485,8 +2485,15 @@ def main():
                                 _mk = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"x/{_fmt} {_expr}\n")
                                 try:
+                                    # MATCH THE WHOLE LINE, NOT THE FIRST WORD.
+                                    # The previous pattern ended after ONE hex group, so an
+                                    # `x/2gx` -- which is what the granule read issues -- was
+                                    # silently truncated to word 0 and word 1, the capability's
+                                    # METADATA half, was requested and never reported. Every
+                                    # "the granule is intact" statement built on it was a
+                                    # word-0-only statement that did not say so.
                                     _mm = console.wait_gdb(
-                                        r"0x[0-9a-fA-F]+.*?:\s+0x[0-9a-fA-F]+",
+                                        r"0x[0-9a-fA-F]+[^:\n]*:(?:\s+0x[0-9a-fA-F]+)+",
                                         timeout=25.0, search_from=_mk)
                                     return _mm.group(0)
                                 except Exception:
@@ -2589,6 +2596,20 @@ def main():
                             # entry (caller passed NULL -> software), or healthy at entry and zero
                             # at the reload 18 instructions later (-> lost in between)?
                             _bm = re.findall(r"BASE:([0-9A-Fa-f]{8})", console.uart_text)
+                            # `_rd` IS DEFINED BELOW, AND THAT IS THE BUG.
+                            #
+                            # A `def` binds the name as a local of the ENCLOSING function, so
+                            # using it here -- ~20 lines before the def -- raises
+                            # UnboundLocalError, and the surrounding try swallows it. Everything
+                            # from here to the handler is then skipped IN SILENCE: the entry
+                            # marker read, the MANDATORY positive control for the tag path, and
+                            # the gdb-mtval cross-check. The evidence file from the boot that
+                            # produced the headline result ends at exactly this line.
+                            #
+                            # This is the SAME defect already fixed once for `_memrd` and
+                            # documented ~110 lines above -- reintroduced below it. Aliasing to
+                            # the hoisted reader fixes it at the point of use.
+                            _rd = _memrd
                             if _bm:
                                 _sb = int(_bm[-1], 16)
                                 _mk = _rd(f"0x{_sb + 0x800:x}", "4gx")
@@ -2611,7 +2632,7 @@ def main():
                                 else:
                                     print("  [wedge] WEDGE_TAG_OFF set but no DBAS in this arm's "
                                           "transcript -- refusing to guess an address", flush=True)
-                            def _rd(expr, fmt):
+                            def _rd_unused_legacy(expr, fmt):   # superseded by _memrd
                                 _s0 = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"x/{fmt} {expr}\n")
                                 try:
