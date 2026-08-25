@@ -583,3 +583,40 @@ halves of the pipeline.
 Note also what arm 1 already says: with the non-raising consumer, the FIRST reload was never
 NOT_CAP across 512 iterations. So on that build no reordering occurred — consistent with the
 DYN-serialisation difference, and consistent with the reordering being timing-gated.
+
+## The GRANULE row is excluded — structurally, and without a boot
+
+The reordering hypothesis above needs iteration N's clear to merge into the write buffer *after*
+iteration N+1's store. **There is no path for that**, and the reason is not the commit gate alone:
+
+    store_unit.sv:449    .valid_i (store_buffer_valid || load_unit_clear_i)
+    store_buffer.sv      monotonic +1 pointers on BOTH queues -- a strict FIFO
+    load_unit.sv:707-712 valid_o = 0 while the clear has not been accepted
+
+**The clear uses the SAME store-buffer port as ordinary stores**, and that buffer is a strict
+FIFO. The gate guarantees the clear is *enqueued* before the LDC commits; in-order commit puts the
+next iteration's `stc` later; one FIFO then delivers them to the write buffer **in program order**.
+Same granule and same word means they merge into one entry, where `ctag` is last-writer-wins and
+the merge order *is* arrival order. The different-word case is covered by the `gran_hazard` stall
+for the same reason, and if the clear has already drained there is no merge at all — but it still
+landed first.
+
+All three premises verified at the resident revision rather than taken from the report.
+
+**So the fork narrows to one named mechanism**: the null comes from the **register file**, not the
+granule — a stale FLU operand read before the load's writeback lands.
+
+### What that does to the pending bitstream's reading
+
+RTL's recorder reports whether the **load** returned untagged. Under the surviving account it
+should come back **EMPTY on the faulting arm** — and that is now a **PREDICTION with a named
+mechanism behind it**, not a default.
+
+That distinction matters. An expected empty is the result nobody scrutinises; an empty that one
+mechanism predicts while the competing mechanism — which predicted the opposite — has just been
+excluded on structure, is a result. **A NON-empty record would mean the structural argument above
+is wrong**, and that is the more interesting outcome of the two.
+
+And it raises the stakes on the group-9 arming proof: with empty as the predicted answer, group 9
+firing is the only thing separating *"empty because the load was fine"* from *"empty because the
+filter never armed"*.
