@@ -1484,3 +1484,65 @@ reads the cause from the trap-log value (`traplog_v & 0x7F`), which is where it 
 whole time. **A "fix" that produces a plausible number from the wrong variable is worse than the
 bug it replaced**, and it very nearly bought a mechanism investigation into an exception code that
 was never raised.
+
+## FOUND: `.bss` SIZE decides S-12 — 32 bytes cures it, and the prediction was made first
+
+Tabulating every image built against its outcome, exactly one property separates the two groups:
+
+| build | fn @ | caps | `.bss` VA | **`.bss` size** | outcome |
+|---|---|---|---|---|---|
+| slt2 | `104788` | 328 | `170bf0` | **`409c0`** | WEDGE ×2 |
+| pad2 (TEXT_PAD) | `104c0c` | 328 | `170bf0` | **`409c0`** | WEDGE |
+| goff (globals +64K) | `104788` | 328 | `180bf0` | **`409c0`** | WEDGE |
+| gp6 (+6 `.data` globals) | `1048e4` | 338 | `170d20` | **`409c0`** | WEDGE |
+| slt4 (probe in fn) | `104b48` | 337 | `170cb0` | **`409e0`** | completes |
+| slt5 (probe in WhereMalloc) | `104c0c` | 337 | `170cb0` | **`409e0`** | completes |
+| **bss32 (+32 B `.bss`)** | `10479c` | 329 | `170c00` | **`409e0`** | **COMPLETES** |
+
+Function address, cap count, `.bss` VA and heap VA each vary *within both groups*, so each is
+refuted by its own data. **`.bss` size does not**: `0x409c0` in every wedging build, `0x409e0` in
+every completing one. The `0x20` delta is exactly the four `unsigned long` globals the arg probe
+adds.
+
+**`gp6` is the control that makes this a mechanism rather than a coincidence.** It appends six
+dummy globals *with initialisers*, so they land in `.data` and `.bss` never moves — same extra
+globals, wrong section — **and it wedges.**
+
+**And `bss32` was predicted before it was run.** Take the wedging build, append 32 bytes of
+uninitialised global, change nothing else. Predicted: completes. It completed —
+`ENT2=5117600D`, `SLT-SUMMARY records=2 … completed=1`, matching QEMU and native.
+
+### The mechanism chain, visible in the build's own output
+
+`.bss` size decides how much room `domdata-budget` leaves for the stack:
+
+```
+slt2   (WEDGES)     = STACK  2347072
+bss32  (COMPLETES)  = STACK  2346992        <- 80 bytes smaller
+```
+
+So: **`.bss` size → stack size/base → `s0` → the address of the faulting slot at `s0-0x70`.** That
+is a data-address mechanism, and it survives every code-side refutation — address, cap count,
+globals region, and the code of the fault function itself (whose instructions are byte-identical
+from entry through the fault in both a wedging and a completing build).
+
+### What this retires
+
+Every "layout"/"perturbation-sensitivity" reading in this folder above should be read as **stack
+address sensitivity**. The probe builds never cured anything by perturbing *code*; they cured it by
+adding four globals to `.bss` and moving the stack. That is why probing the function and probing an
+uncalled function worked equally well, and why `TEXT_PAD` at the identical address did not.
+
+### Next: the periodicity ladder
+
+`CAPSTONE_BSS_PAD=N` is now the knob, and it is cheap and code-neutral. A ladder of N
+(16/32/48/64/…/4096) maps wedge vs complete against stack displacement. If the pattern is periodic,
+the period names the aliasing structure directly — D$ set (32 KiB/8-way → 4 KiB per way, index
+`paddr[11:4]`), write-buffer granule, or page. That is a far sharper question than anything
+available before today.
+
+### Boot-budget caveat
+
+The third arm of this boot died at `SPLB:0000E010` (`CAPSTONE_ERR_SPLIT_EXACT`) on domain `id=2`,
+before `SQ: G/enter` — no verdict, exactly as in the earlier three-arm boot. Three arms is a
+gamble, not a guarantee: it is pool-state dependent. **Put the arm that matters second.**

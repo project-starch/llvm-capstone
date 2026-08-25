@@ -483,6 +483,70 @@ print(f"   inserted {n} bytes ({n//4} nops) of dead code")
 PYPAD
 fi
 
+# CAPSTONE_GLOBAL_PAD=N -- APPEND N dummy globals, changing the carve/cap-table geometry and
+# NOTHING ELSE. This is the single-variable knob for the one difference left standing between a
+# wedging and a completing S-12 image.
+#
+# Why it is needed. Address is refuted (a TEXT_PAD build at the curing address still wedges) and
+# the globals region is refuted (moving it via SQLITE_GOFF_OVERRIDE still wedges). What remains
+# between pad2 (WEDGES, 328 cap-table entries, ~215 allocations) and slt5 (completes, 337, ~221)
+# is the carve geometry -- and, decisively, the executed code is BYTE-IDENTICAL from the function
+# entry through the fault at +0x8c; the first structural divergence is ~15 KB later at +0x3a58.
+# So the trigger cannot be in the code that runs before the fault.
+#
+# APPENDED, not prepended, and that is the whole point: getGpCaptableIndex numbers globals
+# positionally, so appending gives the new globals the HIGHEST indices and leaves every existing
+# index -- and therefore every existing instruction -- untouched. Prepending would renumber
+# everything and reintroduce exactly the confound this knob exists to remove.
+#
+# `volatile` and address-taken so they cannot be optimised away and must each take a carve.
+# CAPSTONE_BSS_PAD=N -- append N bytes of UNINITIALISED global, growing .bss and nothing else.
+#
+# This is the sharp one. Across six images, .bss SIZE is the only property that separates the
+# wedging set from the completing set:
+#
+#   fn address   varies within BOTH groups   (refuted by TEXT_PAD)
+#   cap count    338 wedges, 337 completes   (refuted: not monotone, not the variable)
+#   .bss VA      varies within BOTH groups
+#   heap VA      varies within BOTH groups
+#   .bss SIZE    0x409c0 in ALL FOUR wedging builds; 0x409e0 in BOTH completing ones
+#
+# 0x20 is exactly the four `unsigned long` globals the arg probe adds. CAPSTONE_GLOBAL_PAD gave
+# its dummies INITIALISERS, so they landed in .data and .bss never moved -- which is why that
+# build still wedged, and which is the control that makes this hypothesis worth testing.
+#
+# The plausible chain: .bss size decides how much room domdata-budget leaves for the STACK, which
+# moves the stack base, which moves s0, which moves the address of the faulting slot at s0-0x70.
+# That is a data-address mechanism, and it survives every code-side refutation so far.
+if [[ -n "${CAPSTONE_BSS_PAD:-}" ]]; then
+  echo "== BSS PAD: appending ${CAPSTONE_BSS_PAD} bytes of uninitialised global (.bss only)"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_BSS_PAD" <<'PYBSS'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); n = int(sys.argv[2])
+# No initialiser -> .bss. volatile so it cannot be discarded.
+p.write_text(p.read_text() + f"\nvolatile unsigned char capstone_bss_pad[{n}];\n")
+print(f"   appended {n} bytes of .bss")
+PYBSS
+fi
+
+if [[ -n "${CAPSTONE_GLOBAL_PAD:-}" ]]; then
+  echo "== GLOBAL PAD: appending ${CAPSTONE_GLOBAL_PAD} dummy globals (carve geometry only)"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_GLOBAL_PAD" <<'PYGPAD'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); n = int(sys.argv[2])
+lines = ["", "/* CAPSTONE_GLOBAL_PAD: carve-geometry-only padding; appended so existing gp indices",
+         "   keep their numbering and no existing instruction changes. */"]
+for i in range(n):
+    lines.append(f"volatile unsigned long capstone_global_pad_{i} = {i + 1};")
+lines.append("void *capstone_global_pad_keep[] = {")
+for i in range(n):
+    lines.append(f"  (void *)&capstone_global_pad_{i},")
+lines.append("};")
+p.write_text(p.read_text() + "\n".join(lines) + "\n")
+print(f"   appended {n} dummy global(s)")
+PYGPAD
+fi
+
 # SQLITE_REG_BISECT=1 -- split sqlite3RegisterBuiltinFunctions into its sub-steps behind a
 # COMPILE-TIME limit, one image per point.
 #
