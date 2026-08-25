@@ -209,10 +209,36 @@ static unsigned s12_compute(void)
     bad = (bad & ~0xF00UL) | ((s12_type(v) & 0xF) << 8);
 #endif
 
+#if S12_ARM == 6
+    /* DOES THE LDC MOVE-CLEAR ACTUALLY FIRE ON SILICON? Measure its CONSEQUENCE, not its type.
+     *
+     * The stored value is REVOKE-typed (measured: arm 5 returned type 2 post-shift = raw 3),
+     * which is in the clear set at load_unit.sv:225-226. If the clear fires, an LDC of that slot
+     * is a MOVE: it returns the value AND writes the granule to all-zero
+     * (store_unit.sv:462-469 -- cursor 0, metadata 0, tag 0 = create_cnull).
+     *
+     * So reload the SAME slot twice. If the clear fires, the second reload MUST come back
+     * NOT_CAP, every time. If it does not fire, the second reload is a valid capability.
+     *
+     * Retyping was the obvious alternative and is not available here: CAPTYPE lives on opcode
+     * 0x7b, which no domain kernel uses and which is unverified inside a domain, and DELIN
+     * raises UNEXPECTED_CAP_TYPE on anything that is not LINEAR (capstone_dyn_unit.anvil:476-477)
+     * -- ours is REVOKE. This probe needs neither: it uses only lcc selector 1, which is TOTAL
+     * and cannot raise, so the arm returns a RATE rather than wedging.
+     *
+     *   count == REPS -> the clear FIRES every iteration; the granule is zeroed by the reload
+     *   count == 0    -> the clear never fires, and the whole clear-ordering candidate is DEAD
+     *   0 < count     -> it fires SOMETIMES, which would itself be the defect
+     */
+    { void *back2 = *slot;
+      if (s12_type(back2) == S12_NOT_CAP) bad++;
+      s12_sink[4] = (unsigned long)(__UINTPTR_TYPE__)back2; }
+#endif
+
     /* THE RELOAD and its consumer. Reading through the volatile slot is the ldc; the type
      * query is the consumer, standing in for cincoffsetimm without the raise. */
     void *back = *slot;
-#if S12_ARM != 4
+#if S12_ARM != 4 && S12_ARM != 6
     if (s12_type(back) == S12_NOT_CAP)
       bad++;
 #endif

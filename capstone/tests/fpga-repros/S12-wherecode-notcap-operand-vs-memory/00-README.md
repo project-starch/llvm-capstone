@@ -537,3 +537,49 @@ happens, it is not the program nulling its own capability.
 
 The next test must respect linearity: a fresh clear-class capability per iteration, or `REVOKE`
 specifically (which is what the board actually has), rather than copying one around.
+
+## MEASURED: the LDC move-clear fires on EVERY iteration (512/512)
+
+Arm 6 reloads the same slot **twice** and asks whether the second reload comes back NOT_CAP. If
+the clear fires, the first reload zeroed the granule and the second must find nothing.
+
+    control k800   retval 4, oracle 4      OK -- the boot carries verdicts
+    s12c           retval 0xC12A6200       arm 6, count = 512 of 512
+
+**Every reload zeroes its own source granule.** That is correct architecture — a move — and it is
+now measured rather than inferred from the type. Combined with the type probe (REVOKE, in the
+clear set at `load_unit.sv:225-226`) and the clear's payload (`store_unit.sv:462-469`: cursor 0,
+metadata 0, tag 0 = `create_cnull()`), the picture on silicon is:
+
+    per iteration:  stc  writes the capability to the slot
+                    ...9 intervening stores to other granules...
+                    ldc  reads it back AND writes create_cnull into the SAME granule
+
+So **two writes per iteration target the subject granule, from two different agents**, into a
+write buffer that is 8 entries deep and that this kernel drives past capacity every iteration
+(>=16 dirty words). The buffer's own comments (`wt_dcache_wbuffer.sv:611-619`) document a
+merge-ordering residual of exactly this class, for a different instruction pair.
+
+### The hypothesis this makes concrete — and it is a HYPOTHESIS, not a measurement
+
+If iteration N's **clear** ever merges into the buffer *after* iteration N+1's **store**, then
+iteration N+1's reload reads the clear's payload instead of its own store's value — and the
+payload is `{cursor 0, NOT_CAP}`, which is the operand observed at the fault, `tval = 0` included.
+
+**What is measured:** the clear fires every iteration; the value is REVOKE-typed; the clear's
+payload is bit-for-bit `create_cnull`; the store writes a stable non-zero value 256/256.
+**What is NOT measured:** that the two writes ever land out of order. Nobody has observed a
+reordering; this is a mechanism that *would* produce the observed value, on hardware where both
+writes demonstrably exist.
+
+### Why this reopens the memory-path arm
+
+The delivery account (a stale FLU operand read before the load lands) and this one both predict
+`{cursor 0, NOT_CAP}`. They differ in **where** the null comes from: the register file versus the
+granule. RTL's pending recorder distinguishes them directly — it reports whether the LOAD returned
+untagged. That is now a fork between two *specific* mechanisms rather than between two vague
+halves of the pipeline.
+
+Note also what arm 1 already says: with the non-raising consumer, the FIRST reload was never
+NOT_CAP across 512 iterations. So on that build no reordering occurred — consistent with the
+DYN-serialisation difference, and consistent with the reordering being timing-gated.
