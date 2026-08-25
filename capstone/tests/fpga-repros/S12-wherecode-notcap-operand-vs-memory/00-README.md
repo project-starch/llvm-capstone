@@ -758,3 +758,54 @@ in delivery"*. It would have produced a confident wrong answer rather than a nul
 * **The corrected address is dynamic** — `s0 - 0xc0` — which reintroduces the hazard the static
   array was chosen to remove. `0xc0` is a fixed offset per build and can be re-derived from the
   artifact; only `s0` needs measuring.
+
+---
+
+# THE NULL PREDATES THE SPILL: the subject is one instruction EARLIER
+
+With the watchpoint finally armed at the real subject slot — computed at runtime from `s0`, and
+cross-checked against hardware — group 9 fired **exactly once**, at the spill, writing **zero**.
+
+    0x1045c  ldc a4, 0x0(a0)              <- the null enters HERE
+    0x10460  cincoffsetimm a3, s0, -0xb0
+    0x10464  stc a4, 0x0(a3)              <- THE SPILL.  group 9: 1 entry, DATA = 0x0
+    0x10468  ldc a4, 0x0(a3)              <- reload reads the zero back
+    0x1046c  cincoffsetimm a4, a4, 0xb0   <- FAULT (mepc - DBAS = 0x46c, mcause 25)
+
+`a4` was **already zero when the spill executed**. So the spill/reload pair is faithful — it stores
+a null and returns the same null — and the whole investigation has been instrumenting **one
+instruction too late**. The subject is `ldc a4, 0x0(a0)` at `0x1045c`, or whatever put a null in
+the memory it reads.
+
+**The cross-check is what makes this readable:** the s07 STC recorder independently reported
+granule `0xFF5C0`, matching the armed slot `s0 - 0xb0`. Hardware agreed the right address was
+armed, which is exactly the check that caught the previous wrong granule.
+
+## What this retires
+
+* **The spill/reload pair as the site.** It is doing its job correctly. Every measurement aimed at
+  it — including the group-9 arming work and the corrected address — was aimed one step past the
+  defect.
+* **Both remaining accounts, as stated.** The stale-operand story was about the consumer reading
+  around the *reload*; the memory story was about the *reload's* granule. Neither survives the null
+  already being in the register before either happens.
+
+## How the address problem was finally solved, since it will recur
+
+The subject slot is a compiler spill at `s0 - OFF`, and **the compiler chooses OFF**: measured
+`0xc0`, then `0xa0`, then `0xb0` across three builds, because adding the arming code moves the
+frame. A hardcoded physical address is therefore stale the moment anything is rebuilt — and arming
+it *is* a rebuild. That is circular.
+
+The fix is to compute it at runtime: `s0` is a capability register, so the domain reads it, offsets
+it, and queries its cursor for the physical address. Only `OFF` remains a build constant, and being
+an immediate it does not change code size — verified by convergence, `0xb0` on two successive
+builds. No DBAS, no host, no measured address.
+
+## Recurrence worth noting
+
+The `mepc` predicted before this run (`DBAS + 0x458`) was taken from the **previous** build's
+artifact, not the one that ran (`0x46c`). The same stale-constant mistake as `0x41c`, one day and
+one explicit fix later. The precondition still held — `0x46c` **is** the consumer in the build that
+ran, confirmed by re-deriving from the correct artifact — but it was confirmed after the fact
+rather than predicted, and that is the weaker form.

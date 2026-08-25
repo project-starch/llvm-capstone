@@ -119,9 +119,48 @@ static unsigned s12_compute(void)
    * fired. That is evidence, not an assumption -- but it is evidence about a DIFFERENT change,
    * so this arm's ability to still fault is verified on the board before it is relied on. */
   {
-    void *volatile _p = (void *)(s12_frame + 0x700 - 0x70);
     unsigned long _pa = 0;
+#ifdef S12_WP_FRAME_OFF
+    /* COMPUTE THE SUBJECT SLOT AT RUNTIME FROM s0. This is the only form that survives a rebuild.
+     *
+     * The subject is a COMPILER spill at `s0 - OFF`, and OFF is chosen by the compiler: it was
+     * 0xc0 in one build and 0xa0 in the next, because adding the arming code moved the frame.
+     * So a hardcoded physical address is stale the moment anything is rebuilt -- which is
+     * circular, since arming it IS a rebuild.
+     *
+     * s0 is the frame pointer and is a CAPABILITY register, so the domain can read it, offset it
+     * and query its cursor for the PHYSICAL address -- no DBAS, no host, no measured constant.
+     * Only OFF stays a build constant, and OFF is an immediate: changing it does not change code
+     * size, so the layout is stable across the derive-then-rebuild step and the offset can be
+     * confirmed unchanged afterwards.
+     *
+     *   movc tmp, s0        ; tmp = the frame pointer capability
+     *   cincoffsetimm       ; tmp = s0 - OFF, the subject slot
+     *   lcc  sel 2          ; cursor = its PHYSICAL address
+     */
+    { void *volatile _fp;
+      __asm__ volatile(".insn r 0x5b, 0x1, 0xa, %0, x8, x0" : "=r"(_fp));
+      __asm__ volatile(".insn i 0x5b, 0x2, %0, %1, %2"
+                       : "=r"(_fp) : "r"(_fp), "i"(-(S12_WP_FRAME_OFF)));
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(_pa) : "r"(_fp)); }
+#elif defined(S12_WP_ADDR)
+    /* EXPLICIT PHYSICAL ADDRESS, because the subject slot is NOT this kernel's array.
+     *
+     * The fault is on a COMPILER-GENERATED spill at s0-0xc0, not on `s12_frame`. The kernel's
+     * own store is a different, earlier one, and computing the array's address -- however
+     * carefully -- arms a granule the fault never touches. That yields an EMPTY record, which
+     * the decision table reads as "the load was fine": a confident wrong answer, not a null one.
+     *
+     * The compiler picks the frame slot and does not consult us, so the address has to come from
+     * a measured wedge (s0 at the halt, minus the build's frame offset) rather than from source.
+     * It is therefore a hardcoded PHYSICAL address and only valid for the DBAS it was measured
+     * at -- the driver's DBAS guard and the s07 STC-recorder cross-check are what make it safe.
+     */
+    _pa = (unsigned long)(S12_WP_ADDR);
+#else
+    void *volatile _p = (void *)(s12_frame + 0x700 - 0x70);
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(_pa) : "r"(_p));
+#endif
     __asm__ volatile("csrw 0x811, %0" :: "r"(_pa));
     { unsigned long _bk = 0;
       __asm__ volatile("csrr %0, 0x811" : "=r"(_bk));
