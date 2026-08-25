@@ -144,7 +144,17 @@ static unsigned s12_compute(void)
                        : "=r"(_fp) : "r"(_fp), "i"(-(S12_WP_FRAME_OFF)));
       __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(_pa) : "r"(_fp)); }
 #elif defined(S12_WP_ADDR)
-    /* EXPLICIT PHYSICAL ADDRESS, because the subject slot is NOT this kernel's array.
+    /* SUPERSEDED -- READ THIS BEFORE ARMING ANYTHING.
+     *
+     * The paragraph below concluded "the subject slot is NOT this kernel's array, it is a
+     * compiler spill at s0-0xc0". That conclusion came from arm 4, which never wrote the array,
+     * so of course the array's granule looked untouched. In every arm that DOES write --
+     * which, since the hoist above, is every arm -- the kernel's array store IS the subject.
+     * Arming a compiler spill instead arms a granule the subject never touches, which is the
+     * same class of error the retraction is about. Kept for the derivation technique only.
+     *
+     * ORIGINAL TEXT FOLLOWS, and its premise is false:
+     * EXPLICIT PHYSICAL ADDRESS, because the subject slot is NOT this kernel's array.
      *
      * The fault is on a COMPILER-GENERATED spill at s0-0xc0, not on `s12_frame`. The kernel's
      * own store is a different, earlier one, and computing the array's address -- however
@@ -197,12 +207,23 @@ static unsigned s12_compute(void)
   for (unsigned r = 0; r < S12_REPS; r++) {
     void *v = (void *)&s12_subject;      /* any tagged capability; its identity is irrelevant */
 
-#if S12_ARM == 0
-    *slot = v;
-#  define S12_SLOT_WRITTEN 1
-#elif S12_ARM == 1 || S12_ARM == 3 || S12_ARM == 4
+    /* THE SUBJECT STORE, HOISTED ABOVE THE ARM CHAIN ON PURPOSE.
+     *
+     * It used to sit inside the #if/#elif chain below, once per branch. Arm 4 was added and
+     * matched no branch, so it read a slot it never wrote -- zero-initialised memory, a NOT_CAP
+     * reload, and a raising consumer taking mcause 25 for a trivially correct reason. Arms 5 and
+     * 6 had the identical defect. Three boots were spent measuring it.
+     *
+     * Every arm that is not the entry-stall discriminator needs this store, so making it
+     * conditional was never buying anything -- it only created a way to forget it. Hoisted, an
+     * arm CANNOT miss it: the failure mode is impossible rather than merely detected. The
+     * #error at the reload site is kept as a tripwire in case someone re-conditionalises this. */
     *slot = v;                            /* +0x40  THE SUBJECT STORE */
-#  define S12_SLOT_WRITTEN 1
+#define S12_SLOT_WRITTEN 1
+
+#if S12_ARM == 0
+    /* nothing further: store, reload, type-check */
+#elif S12_ARM == 1 || S12_ARM == 3 || S12_ARM == 4
     /* The nine intervening stores, at the board's own offsets: five capability-sized and four
      * scalar, in the same order. Kept as C stores through volatile so the compiler may not
      * sink or reorder them across the reload. */
@@ -216,8 +237,6 @@ static unsigned s12_compute(void)
     *(unsigned volatile *)(fp - 0x110) = 0u;         /* +0x78  scalar, again */
     *(void *volatile *)(fp - 0x120) = (void *)0;     /* +0x84 */
 #elif S12_ARM == 2
-    *slot = v;
-#  define S12_SLOT_WRITTEN 1
     /* POSITIVE CONTROL: destroy the slot with scalar stores. This is correct architecture --
      * a plain store clears the granule's tag -- so it must report bad, and if it does not,
      * the detector is blind and no other arm carries a verdict. */

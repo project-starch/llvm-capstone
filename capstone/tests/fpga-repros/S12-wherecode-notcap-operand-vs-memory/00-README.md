@@ -51,6 +51,32 @@ memory-path and a delivery-path explanation remain live.
 
 ---
 
+
+> ## ⚠ STATUS, 2026-08-25 — READ BEFORE ANY SECTION BELOW
+>
+> **Every section of this file headed "THE MINIMAL REPRO REPRODUCES", "CONFIRMED … produces the
+> S-12 SIGNATURE", "…still reproduces", "…and still faults", and "IT FAULTS ON ONE ITERATION" is
+> RETRACTED.** All of them rest on arm 4, which read a subject slot it never wrote. See
+> **"RETRACTION — every arm-4 measurement in this folder is VOID"** at the end of this file.
+>
+> **Net status: S-12 has NO minimal reproducer.** With the detector proven to fire (arm 2 reports
+> `bad == REPS`), the real shape returns clean:
+>
+> | arm | shape | consumer | reps | result |
+> |---|---|---|---|---|
+> | 1 | subject store + 9 intervening stores | `lcc` (counts) | 512 | `0xC12A1000`, bad=0 |
+> | 4 | **identical** | `cincoffsetimm` (**raises**) | 1 | `0xC12A4000`, no fault |
+> | 4 | **identical** | `cincoffsetimm` (**raises**) | 512 | `0xC12A4000`, no fault |
+>
+> Arms 1 and 4 are a matched pair differing in exactly one thing — whether the consumer counts or
+> raises — and both are clean, so the consumer is not the missing ingredient. The 40-line window
+> does not reproduce S-12. That is a result, not an absence of one.
+>
+> **Also corrected:** the recorded finding "the stored value is REVOKE-typed" is **inverted** — it
+> is **NONLIN**. By this kernel's own text the LDC move-clear then never fires, so the five earlier
+> "clean" simulation results that used NONLIN were in the *right* configuration and their
+> exclusions are reinstated.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
@@ -876,8 +902,13 @@ standard it is an unproven gate, not a fixed one, until it has been negative-tes
 ```
 
 and **arm 4 matches no branch of it**, so no store to the slot is emitted. The reload
-`void *back = *slot;` then reads `s12_frame + 0x690`, and `s12_frame` is zero-initialised BSS.
-`back` is therefore a genuine NOT_CAP, and the `cincoffsetimm` consumer raising `mcause 25` is
+`void *back = *slot;` then reads `s12_frame + 0x690`, which the image never writes. **The
+conclusion rests on "never written", not on "zero"**: a granule no capability store ever targets
+has its tag clear, so the reload is NOT_CAP whatever the bytes hold. An earlier draft said
+"zero-initialised BSS", which is not established — `llvm-readelf -l` shows `.bss` as `NOBITS`
+inside a `NULL` program header rather than a `LOAD`, and nothing in the startup assembly or the
+build script zeroes it. The observed zeros (`tval` 0, group-9 payload 0) are an empirical fact
+about these runs, not a loader guarantee. `back` is therefore a genuine NOT_CAP, and the `cincoffsetimm` consumer raising `mcause 25` is
 **correct ISA behaviour** — the hardware doing exactly what the spec says.
 
 Verified with the preprocessor, not by reading:
@@ -888,8 +919,13 @@ clang -E -P -DS12_ARM=N -DS12_REPS=1 -DS12_DRAW=0 -x c s12_kernel.h
   ARM=4  ->  no `*slot = v` anywhere;  `void *back = *slot;` reads zeroed BSS
 ```
 
-and corroborated in the artifact: `llvm-objdump` of `s12g.dom` shows no `stc` to the slot pointer
-between `ldc a0, 0x0(a0)` (0x1043c) and `ldc a1, 0x0(a0)` (0x10440).
+and corroborated in the artifact. **State that check over the whole loop body, not "between the
+two `ldc`s"** — those are adjacent instructions four bytes apart, so a check for a store between
+them spans zero instructions and cannot fire. That is this project's own "a clean result is not
+evidence until the check is known to fire" class, committed *inside* the retraction about that
+class. The check that does fire: the loop body of `s12g.dom` is `0x1042c`–`0x104a8` and holds
+exactly four `stc`, all to the stack frame — `0x10434`→`s0-0x90`, `0x10448`→`s0-0xa0`, `0x10464`
+and `0x10470`→`s0-0xb0` — and **none through `a0`**, the slot pointer loaded at `0x1043c`.
 
 **What this voids.** Everything measured on arm 4 — the group-9 zero at the spill `s0-0xb0`, the
 group-9 zero one level up at `s0-0xa0`, `a4 = 0x0` at the wedge, and the whole "the null predates
@@ -898,11 +934,32 @@ uninitialised memory. The backwards walk kept finding zeros because there was ne
 in that slot to lose. **Arms 5 and 6 never write the slot either**, but they are not equally
 affected, and the difference matters:
 
-- **Arm 5's type measurement SURVIVES.** Its report is `s12_type(v)` (`s12_kernel.h:251`) — it
-  queries **`v`**, the register-resident capability from the cap table, not the slot. So "the
-  stored value is REVOKE-typed" stands. Its `bad` counter does not: arm 5 still evaluates
-  `s12_type(back)` on the unwritten slot, so bits 0–11 of its return value are contaminated,
-  and the comment asserting "`bad` is 0 on this arm" is false as built.
+- **Arm 5's type report does not merely survive — it INVERTS, from REVOKE to NONLIN.** Arm 5
+  encodes the type into bits 8–11 *of `bad`* and then also runs the counting consumer, because
+  the `#if S12_ARM != 4 && S12_ARM != 6` at the reload site admits arm 5. So the type field and
+  the NOT_CAP counter share one word, and the observed `retval=3240776192` = `0xC12A5200` has
+  **two readings**, confirmed by simulating the loop exactly:
+
+  | reading | yields |
+  |---|---|
+  | type = 2 (REVOKE), reload clean every iteration | `0x200` |
+  | type = 1 (NONLIN), reload NOT_CAP every iteration, REPS=512 | `0x200` |
+
+  Arm 5 never wrote the slot, so its reload *was* NOT_CAP every iteration — which selects the
+  second row. Corroborated twice: arm 6 counted `bad = 512` on the same address (512/512
+  NOT_CAP, direct measurement), and rebuilding arm 5 **with** the slot written makes the
+  encoding unambiguous (`bad = t<<8`, zero low byte) — QEMU then returns `3240775936` =
+  `0xC12A5100` = **type 1, NONLIN**.
+
+  **This reverses a downstream conclusion rather than voiding it.** The kernel's own text
+  (`s12_kernel.h:243-244`) says that if the type is NONLIN "the clear NEVER fires and that whole
+  mechanism is dead". So the LDC move-clear account is dead, and the five earlier "clean"
+  simulation results that used NONLIN were in the **right** configuration all along — their
+  exclusions are **reinstated**, not invalidated. Any section of this file arguing that those
+  five sims used the wrong type is itself retracted.
+
+  Still open: QEMU's type model need not equal silicon's, so a board run of the rebuilt arm 5
+  is queued to confirm NONLIN on the FPGA. Two independent lines already agree.
 - **Arm 6's conclusion is VOID.** Its design — "reload the same slot twice; if the move-clear
   fires the second must come back null" — is vacuous when both reloads read zeroed BSS. Both
   come back null regardless of whether the clear fires, so the arm cannot distinguish its two
