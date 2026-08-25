@@ -147,6 +147,19 @@ export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload
 | ladder rungs | `fpga_driver/run_baked_rungs_fpga.py` | `BAKED_RUNGS`, `BAKED_TIMEOUT`, `LADDER_FPGA_DIR`, `BAKED_OUT` |
 | SQLite / staged probes | `fpga_driver/run_sqlite_stages_fpga.py` | `SQLITE_STAGE_DOMS` (`dom:selector`), `SQLITE_STAGE_TIMEOUT`, `PROBE_SCOPED_OUT` |
 
+**`SQLITE_HOST` applies to EVERY arm, and the two hosts take different argument orders.**
+`lpc` (ladder) is `lpc <name> <dom>`, so ladder entries are written `name:/path/x.dom`.
+`sqlite_host.user` is `sqlite_host.user <dom> [--slt <test>]`, so its entries are `/path/x.dom`
+or `/path/x.dom:--slt /path/case.test` — **no label**. Put a `label:` on a SQLite entry and the
+label becomes argv[1], i.e. the domain path: the loader prints `Failed to open the file.` and
+the domain never loads. Because one host serves the whole run, **a ladder rung and a SQLite
+domain cannot share a boot** — pick a control that uses the same host (for SQLite, the same
+domain with no `--slt` runs its built-in workload and returns).
+
+The driver already hard-stops on this and calls the arm a PHANTOM, refusing to read the
+`SQ: G/enter` / `SQ: H/return` markers that follow — they belong to a domain that was never
+loaded. Trust that guard; it is there because those markers otherwise look like a real run.
+
 ```bash
 cd capstone/tests/rtl-smoke
 BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
