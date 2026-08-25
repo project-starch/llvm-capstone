@@ -1442,6 +1442,22 @@ def main():
                 log(f"  {dom}: S-07 probe report -- rs1_untagged={a} rs2_tagged={b} "
                     f"retry_persistent={c}")
                 bad = False
+            # LADDER RUNGS REPORT DIFFERENTLY, and that is a gap in this guard's SCOPE rather
+            # than a reason to relax it. A silicon-ladder domain run through the lpc controller
+            # emits `ladder-perf: RESULT <rung> retval=N`, never `SQ: obs=`, so the guard fires
+            # on a perfectly good rung and aborts the boot -- which is exactly what it did to a
+            # k800 control that had already returned retval=4.
+            #
+            # Recognised only when a ladder HOST override is actually in use, so the SQLite path
+            # keeps the guard at full strength. The marker must carry a retval, so "the domain
+            # was never staged" still cannot masquerade as success.
+            if not wedged and bad and "ladder" in (os.environ.get("SQLITE_HOST") or "").lower() \
+                    or (not wedged and bad
+                        and re.search(r"ladder-perf: RESULT \S+ retval=\d+", text)):
+                _lm = re.search(r"ladder-perf: RESULT (\S+) retval=(\d+)", text)
+                if _lm:
+                    log(f"  {dom}: ladder rung {_lm.group(1)} returned retval={_lm.group(2)}")
+                    bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
@@ -2469,6 +2485,28 @@ def main():
                                 console.gdb_start()
                                 console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                             _gdb_open[0] = True
+                            # SETTLE SBA vs PROGBUF, once, and record the reply verbatim.
+                            #
+                            # This decides whether ANY halted memory read can speak for what the
+                            # load saw. SBA bypasses the L1 entirely, so it can never report L1
+                            # state; progbuf makes the hart execute the load, so it goes THROUGH
+                            # the L1 but seconds late. Neither reconstructs the load's own view,
+                            # but which one is in use changes what a granule read even means --
+                            # and the in-tree ariane.cfg (`set_prefer_sba off`) is stock upstream
+                            # from 2021 and is NOT the board's config, so it proves nothing.
+                            for _q in ("monitor riscv set_mem_access",
+                                       "monitor riscv set_prefer_sba"):
+                                _qm = len(console.gdb_text)
+                                try:
+                                    console.gdb_cmd(_q, C.GDB_PROMPT, timeout=15.0)
+                                    _rep = console.gdb_text[_qm:].strip().splitlines()
+                                    _rep = [l for l in _rep if l.strip()
+                                            and "(gdb)" not in l and _q not in l]
+                                    print(f"  [wedge] {_q!r} -> {_rep[:2] if _rep else 'no reply'}",
+                                          flush=True)
+                                except Exception as _qe:
+                                    print(f"  [wedge] {_q!r} -> unsupported "
+                                          f"({type(_qe).__name__})", flush=True)
                             _csr = {}
                             # READ THE FRAME POINTER TOO -- this is the no-instrumentation route
                             # to the subject slot's physical address.

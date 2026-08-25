@@ -271,3 +271,42 @@ alternative readings are still open:
 **The trap cause and `mepc` have NOT been read for arm 4.** Until they are, "it reproduces the
 S-12 signature" is unproven — what is proven is that a 130-line domain, with the production
 consumer, does not return, while the same domain minus its body does.
+
+## CONFIRMED: the 130-line repro produces the S-12 SIGNATURE, not merely a hang
+
+The prediction was written down **before** the measurement (`git log` proves the ordering): if this
+is S-12, `mepc` must read `DBAS + 0x41c` and `mcause` must be 25.
+
+    sw=255 TRAP LOG {seen, mcause[6:0]} = 0x99   ->  seen=1, mcause = 0x19 = 25
+    mepc (latched)                      = 0x819e041c
+    the wedged arm's own DBAS           = 0x819E0000
+    mepc - DBAS                         = 0x41c   ->  VA 0x1041c
+
+`VA 0x1041c` is `cincoffsetimm a4, a4, 0xb0`, encoded `5b 27 07 0b` — **byte-identical to the
+instruction that faults in SQLite**, same registers, same displacement.
+
+**Same cause. Same instruction. Same encoding. In 130 lines instead of 2.2 MB of SQLite, and in
+599 cycles instead of minutes.**
+
+### What this changes
+
+* **The reproducer is no longer SQLite.** Any future experiment — including the pending bitstream
+  — can use `s12a4`, which is small, fast, and whose entire source is in `src/s12_kernel.h`.
+* **The sentinel makes it attributable.** `s12a4sent` (same build, body skipped) returns cleanly,
+  so this is the body faulting and not an entry stall.
+* **It is not sporadic in the same way.** Three distinct draws with a byte-identical window
+  wedged 3/3, where the SQLite repro fires roughly 2 in 3. A deterministic repro is a much better
+  vehicle than a sporadic one.
+
+### What it still does NOT establish
+
+The **mechanism**. This is the same fault, reproduced small — it is not an explanation of it.
+Every named mechanism remains excluded (software NULL, S-07 tag loss, R-20 forwarding class,
+wrong-producer scoreboard selection, adjacent-granule scalar stores, write-buffer depth,
+domain-switch `cnull`, load-syncer mispair), and **what the load returned is still the unmeasured
+fact**. The pending bitstream is still what answers it — this just makes the run cheap.
+
+Also still open, and recorded rather than resolved: arm 1 (same body, non-raising `lcc` consumer)
+returns `bad = 0`, so *its* reload was never NOT_CAP, while `CINCOFFSETIMM` raises only on
+NOT_CAP. Both cannot be about the reload's value unless the consumer changes the timing — which is
+consistent with the scheduling sensitivity seen throughout, but is not itself established.
