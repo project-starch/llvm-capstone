@@ -1171,3 +1171,61 @@ space-separated pair is one arm (*"1 domains requested"*), and `FPGA_BITSTREAM` 
 resident-silicon guard *cannot fire* — it says so and blocks rather than passing quietly. Three
 gates, three real errors, zero board time. That is what these gates are for, and it is worth
 noting that none of the three would have announced itself in the results.
+
+---
+
+# The tracer boot: the fault reproduced on the right binary, the instrument did not fire
+
+Boot structurally VALID — control `sqbase.dom` **returned in 7 s**, so this boot carries verdicts.
+
+## The fault, now confirmed on the un-probed subject rather than inferred from a sibling
+
+    [wedge] trap mepc = 0x00000000828f4ba0
+    [wedge] trap tval = 0x0000000000000000
+
+`sqrt.dom` loads at DBAS `0x82800000` with ELF VA base `0x10000`, so
+`mepc - DBAS + 0x10000 = 0x104ba0` — **exactly `sqlite3WhereCodeOneLoopStart+0x8c`**, the
+`cincoffsetimm a4, a4, 0xb0` two instructions after the reload. Same site, same `tval = 0`, on the
+binary that actually wedges. Everything previously established about the window transfers, and now
+without relying on a probed sibling to supply the disassembly.
+
+## Both dumps were empty, and both causes were bugs in the driver, not in the silicon
+
+**Cause 1 — the dump raced its own output channel.** `sw[0]` muxes the console TX to the tracer and
+`sw[1]` triggers the dump, and `set_switch_value` chooses its own bit order (it only avoids the
+destructive apertures). When `sw[1]` rose first the dump streamed into a TX that was not yet muxed,
+every byte was lost — **and the FSM is ONE-SHOT** (`tracer.sv:330-335`: `dump_enable_i` must fall
+and rise again before it will fire), so raising `sw[0]` afterwards produced nothing and the server
+waited for a `trace_result` that could never arrive. That is arm 2's timeout exactly. Order is now
+forced: `sw[0]` first, then `sw[1]`.
+
+**Cause 2 — the arming readback did not prove what it claimed.** `set $csr2064 = 4` followed
+immediately by `p/x $csr2064` returned `0x4`, and that was logged as "verified by readback". But
+**GDB caches registers while the target is halted**, so that read can return GDB's own copy whether
+or not the value ever reached the CSR. It is precisely the shape this project keeps paying for: a
+check that fires, and still cannot separate the two hypotheses on the table. The arming now halts a
+second time *after a resume* — which flushes the cache — and reports NOT ARMED if the value did not
+survive.
+
+Worth stating plainly: the dump FSM **did** run for arm 1 and reported an empty ring, so the read
+path works end to end — server parse included. What is unproven is **capture**.
+
+## What the ring being empty does and does not mean
+
+It does **not** mean the tracer is dead. `sqbase.dom` completed, so thousands of LDC/STC
+instructions committed while the mask was supposedly set; an empty ring under those conditions
+points at the mask never reaching `trace_enable_i`, which is Cause 2's hypothesis and is now
+directly testable.
+
+**The next boot makes the check as easy to fire as possible before making it selective.** Arm 1
+runs with groups 0-8 enabled (`0x1FF`) — group 8 is *every other committed instruction*, so if
+capture works at all the ring cannot be empty. Only if that fires is the narrow group-2 mask worth
+running. Arming a selective mask first and reading its silence as evidence is how an instrument
+gets mistaken for a subject.
+
+## Collateral: the frame-pointer read did not happen this boot
+
+`[wedge] gdb mtval read failed (ActionTimeout)`. It ran on the previous boot, so the variable is
+something this boot introduced — most likely the tracer dump immediately before it, which toggles
+switches and puts the server into capture mode. The two instruments need to be sequenced or
+separated, and that is a driver problem rather than a board one.

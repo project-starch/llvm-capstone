@@ -620,7 +620,7 @@ SW_TRACER_DUMP = 0x7   # + bit1 dump trigger | + bit0 TX mux -> tracer
 CSR_TRACE_ENABLE = 0x810                                        # csr_regfile.sv:213
 
 
-def arm_tracer(console, C, mask=TRACER_MASK):
+def arm_tracer(console, C, mask=TRACER_MASK, gdb_already_open=False):
     """Write the group mask to CSR 0x810 and PROVE it took. Returns True if armed.
 
     An unverified write is worse than none: the run would look valid and the empty dump
@@ -632,7 +632,13 @@ def arm_tracer(console, C, mask=TRACER_MASK):
     (csr_regfile.sv:405-432 covers reg_ids 1-8, 9-25 cpmp, 57-66 -- no trace), so arming
     once after boot covers every arm of the boot."""
     reg = f"$csr{CSR_TRACE_ENABLE}"          # OpenOCD names RISC-V CSRs by decimal number
-    console.gdb_start()
+    # ONE GDB SESSION FOR THE WHOLE RUN -- do NOT gdb_stop() here. Stopping the session
+    # right after `continue` left the hart HALTED on the first attempt: the board booted
+    # to a shell and then produced nothing, and the control arm timed out at 400 s looking
+    # exactly like a wedge. The rest of this file has carried the one-session discipline
+    # since boots 11 and 12 for the same reason; this call site simply did not follow it.
+    if not gdb_already_open:
+        console.gdb_start()
     try:
         console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
         console.gdb_cmd(f"set {reg} = {mask}", C.GDB_PROMPT, timeout=15.0)
@@ -641,12 +647,47 @@ def arm_tracer(console, C, mask=TRACER_MASK):
         back = console.gdb_text[mark:]
         m = re.search(r"=\s*(0x[0-9a-fA-F]+)", back)
         got = int(m.group(1), 16) if m else None
-        console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
-    finally:
-        console.gdb_stop()
+        # `continue` NEVER RETURNS TO A PROMPT -- it blocks until the target stops, which
+        # for a running Linux is never. gdb_cmd waits for `(gdb)` and therefore always
+        # times out here; the command itself is delivered regardless (the transcript shows
+        # "Continuing."). Swallowing the timeout is the established idiom at every other
+        # continue in this file. Letting it propagate aborted the boot AFTER the CSR had
+        # been armed and verified -- the run was thrown away one line past its own success.
+        try:
+            console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+        except Exception:
+            pass
+    except Exception as exc:
+        log(f"  [tracer] arming FAILED ({type(exc).__name__}: {exc}) -- not armed")
+        return False
     if got == mask:
-        log(f"  [tracer] ARMED: CSR 0x810 = {mask:#x} (group 2 = LDC/STC + tag), verified by readback")
-        return True
+        # A READBACK TAKEN AT THE SAME HALT IS NOT PROOF THE HARDWARE TOOK THE WRITE.
+        # GDB caches registers while the target is halted, so `set` followed immediately by
+        # `p` can return GDB's own copy whether or not the value ever reached the CSR. The
+        # only readback that means anything is one taken after a resume has flushed the
+        # cache -- so halt again and re-read. If THAT still reads the mask, the register
+        # really holds it.
+        try:
+            console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+            mark2 = len(console.gdb_text)
+            console.gdb_cmd(f"p/x {reg}", C.GDB_PROMPT, timeout=15.0)
+            m2 = re.search(r"=\s*(0x[0-9a-fA-F]+)", console.gdb_text[mark2:])
+            got2 = int(m2.group(1), 16) if m2 else None
+            try:
+                console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+            except Exception:
+                pass
+        except Exception as exc:
+            log(f"  [tracer] post-resume re-read failed ({type(exc).__name__}) -- arming UNCONFIRMED")
+            return True
+        if got2 == mask:
+            log(f"  [tracer] ARMED: CSR 0x810 = {mask:#x}, CONFIRMED across a resume "
+                f"(so this is the hardware register, not GDB's cache)")
+            return True
+        log(f"  [tracer] NOT ARMED: the write read back {mask:#x} at the halt but {got2!r} "
+            f"after a resume -- GDB accepted it and the hardware did not keep it. An empty "
+            f"ring this boot says nothing about the tracer.")
+        return False
     log(f"  [tracer] NOT ARMED -- readback gave {got!r}, wanted {mask:#x}. "
         f"Every dump this boot is therefore UNINTERPRETABLE: an empty ring would say "
         f"nothing about whether the tracer works. Treat this boot as VOID for the tracer.")
@@ -660,11 +701,22 @@ def tracer_dump(console, C, tag, timeout=150.0):
     to its trace parser and answers with trace_result), so this does not have to decode
     them -- which matters, because the console decodes UART as utf-8/replace and would
     mangle raw binary irreversibly."""
-    global _SW_CURRENT
     try:
         mark = console.now()
         console._post("trace_start")            # route UART -> parser BEFORE the TX mux moves
-        set_switch_value(console, SW_TRACER_DUMP)
+        # ORDER IS LOAD-BEARING: sw[0] (TX mux) MUST rise before sw[1] (dump trigger).
+        #
+        # The dump FSM is ONE-SHOT -- dump_enable_i has to fall and rise again before it
+        # will fire a second time (tracer.sv:330-335, `dump_seen_q`). So if sw[1] rises
+        # first, the dump streams into a TX that is not yet muxed to the tracer, every byte
+        # is lost, AND the one-shot is spent -- raising sw[0] afterwards produces nothing.
+        # The server then waits for a trace_result that can never arrive. set_switch_value
+        # picks its own bit order (it only avoids the destructive apertures), so the order
+        # has to be forced here rather than assumed.
+        console.set_switch(0, True)                       # TX mux -> tracer, FIRST
+        console.set_switch(1, True)                       # then trigger the dump
+        global _SW_CURRENT
+        _SW_CURRENT = SW_TRACER_DUMP                      # keep the tracker honest
         data = console.wait_event(C.LISTEN["trace_result"], timeout=timeout, since=mark)
         text = str(data.get("text", "")) if isinstance(data, dict) else str(data)
     except Exception as exc:
@@ -780,12 +832,8 @@ def main():
                     raise
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
 
-        # ARM THE TRACER, once per boot, before any domain runs.
         TRACER_ON = os.environ.get("WEDGE_TRACER") == "1"
         tracer_armed = False
-        if TRACER_ON:
-            set_switch_value(console, SW_TRACER_RUN)   # ring mode on, dump off, console TX ours
-            tracer_armed = arm_tracer(console, C)
 
         # PRE-RUN BASELINE: is the one-shot LDC record already spent before ANY domain runs?
         #
@@ -986,6 +1034,20 @@ def main():
 
         # One-element list so the per-domain block can rebind it without a nonlocal.
         _rev_head_prev = [None]
+
+        # ARM THE TRACER -- LAST, after every pre-run aperture read.
+        #
+        # Ordering is forced, not tidy. The pre-run reads walk the switches, and sw[2] IS
+        # the tracer's ring-mode input, so arming earlier would have the baseline walk
+        # silently clear overwrite mode and flip the ring from keep-newest to drop-on-full.
+        # That is a change of what the instrument measures, announced nowhere.
+        if TRACER_ON:
+            tracer_armed = arm_tracer(console, C, gdb_already_open=_gdb_open[0])
+            if tracer_armed:
+                _gdb_open[0] = True
+            # Ring mode on, dump trigger low, console TX still ours. Set AFTER arming so no
+            # aperture walk can move it again before the first domain runs.
+            set_switch_value(console, SW_TRACER_RUN)
 
         for dom_idx, dom_spec in enumerate(DOMS, 1):
             # "path" or "path:selector". The optional selector is passed to the host as its
