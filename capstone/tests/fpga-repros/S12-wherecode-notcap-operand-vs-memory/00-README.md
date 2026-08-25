@@ -1020,3 +1020,56 @@ the kernel's "any tagged capability; its identity is irrelevant" is the weakest 
 folder. If SQLite's value is in the clear set {LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET}, this
 repro has never exercised the mechanism it was built to test, and an arm with a matching-type `v`
 is the first variant that could reproduce.
+
+## The discriminating unknown is answered: SQLite's value is NONLIN too
+
+The open question above — is SQLite's stored value at the fault site in the LDC clear set? — is
+**no**. The derivation, with each link re-verified against the primary source rather than taken on
+report:
+
+1. The monitor hands the domain `dom_data` as **LINEAR** (`sbi_capstone.c:302-305`; `split_out_cap`
+   with `linear=1` *asserts* linearity and only the `!linear` arm calls `__delin`,
+   `sbi_capstone.c:275-281`). It becomes the domain's `sp`.
+2. The entry glue **delinearizes `sp` exactly once**: `delin(sp)` at
+   `start-gp-captable-interp.S:268`. **Verified this is the shipping path, not a diagnostic one** —
+   the line sits in the `#else` arm, and `INTERP_FAKE_COUNT` (which selects the other arm) is never
+   defined for the SQLite build; it appears only for one BEEBS rung in `ladder-rungs.spec`.
+3. `SPLIT` preserves `cap_type` (`capstone_dyn_unit.anvil:113-149` touches only start/end/cursor/
+   revnode), and so does `cincoffset`/`cincoffsetimm` (`capstone_flu_unit.anvil:38-40`, `:68-70`
+   copy the whole `metadata`). So every cap-table storage capability and every carved pointer
+   below `sp` inherits NONLIN.
+4. Both branches converge. **Stack** pointers and `s0` are `sp` itself or splits of it. **Heap**
+   pointers are not what the premise assumed: this build does **not** use `umm_malloc` (that is the
+   rv8 benchmarks, zero references in the SQLite path) — SQLite runs memsys5 over a static `.bss`
+   arena, `sqlite_heap` (`sqlite_capstone_domain.c:28`, configured at `:1559`), which is itself a
+   carved global reached through cap-table slot 176. So a "malloc'd" pointer is pointer arithmetic
+   inside one NONLIN global. No `mrev`/REVOKE path is live: `revoke_on_free_alloc.h` is not
+   referenced by the SQLite build.
+5. **Empirically corroborated by S-02**: a `delin` on `hostcall_payload` *wedged the board*
+   precisely because the capability was already NONLIN and the RTL's DELIN accepts LINEAR only
+   (`sqlite_capstone_domain.c:208-238`).
+
+**Consequence — a real exclusion, on two independent legs.** The linear move-clear mechanism is
+**not live at the S-12 fault site**, for SQLite or for the repro. Measured on silicon here (arm 6,
+`bad=0`) and derived-and-verified for SQLite above. It is likewise exempt from the STC rs2-clear
+(`capstone_dyn_unit.anvil:439`, `:458`). Whatever loses the value at the fault site, **it is not
+source-granule clearing on `ldc`/`stc`.**
+
+**And it clears the repro of the fidelity charge that was open against it.** The worry was that
+`v`'s type made the repro test the wrong thing. It did not — the repro's NONLIN matches
+production's NONLIN. So the window *with the right type* is genuinely clean, and the missing
+ingredient is elsewhere: cache pressure, interrupt/timer traffic, rev-node churn, or simply the
+surrounding code volume. That is where an S-12 reproducer has to come from, and it points at
+SQLite-side bisection rather than at another arm of this kernel.
+
+**One caveat on provenance.** The derivation above was produced by an agent that read a *stale*
+copy of `s12_kernel.h` and quoted its "the granule is intact AND TAGGED … never lost, it was never
+delivered" paragraph as current. That paragraph is **withdrawn** (see the header rewrite). The
+derivation does not depend on it, but do not carry that sentence forward from any report quoting it.
+
+**The one measurement that would close this by observation rather than derivation** already exists
+as an instrument: `CAPSTONE_ARG_PROBE=sqlite3WhereCodeOneLoopStart`
+(`build-sqlite-silicon.sh:1030-1060`), expecting **1** on the incoming `pWInfo`. Note the encoding
+trap: `lcc` selector 1 reports `cap_type - 1` with NOT_CAP special-cased to 7, so **1 means NONLIN**
+and reading it as LINEAR against the raw `asm_insn.h` numbering is the natural mistake
+(`sqlite_capstone_domain.c:217-222`).
