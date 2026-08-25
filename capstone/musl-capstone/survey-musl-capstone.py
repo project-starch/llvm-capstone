@@ -27,6 +27,7 @@ import pathlib
 import re
 import shlex
 import subprocess
+import tempfile
 import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
@@ -160,6 +161,114 @@ def bucket(message: str) -> str:
     return "other: " + stripped[:70]
 
 
+# --strict-ptr: the conversions the survey's own flags hide, split BY DIRECTION.
+#
+# compile_flags() carries -w -Wno-int-conversion for a documented reason: the
+# syscall ABI passes fd/count/flags as pointers, and 497 files do it on purpose.
+# A single total would therefore mostly count intended code and read as alarming.
+# The directions are not equally serious:
+#
+#   int  -> ptr   fabricates an UNTAGGED capability. Intended in the syscall
+#                 path; a latent fault anywhere else.
+#   ptr  -> int   narrows 128 bits to 64. The address survives, the capability
+#                 does not. Fine for (uintptr_t)p & 15; FATAL if cast back.
+#
+# What actually destroys a capability is the ROUND TRIP, and it gets bounded
+# from both sides: both directions somewhere in a file is an upper bound, both
+# on the SAME LINE is a lower bound. Reporting only the upper bound reads as a
+# finding; only the lower bound reads as an all-clear.
+#
+# The names below are clang's and were wrong on the first attempt -- void* has
+# its OWN diagnostics, separate from typed pointers. The positive control caught
+# that before any number was reported, which is the entire reason it exists.
+STRICT_TO_INT = ("pointer-to-int-cast", "void-pointer-to-int-cast")
+STRICT_TO_PTR = ("int-to-pointer-cast", "int-to-void-pointer-cast", "int-conversion")
+STRICT_SUPPRESSIONS = {"-w", "-Wno-int-conversion", "-Wno-error=int-conversion"}
+STRICT_LINE = re.compile(r"^(.*?):(\d+):\d+: warning: .*\[-W([a-z-]+)\]$", re.M)
+
+
+def strict_ptr_scan(musl, clang, files, flags, jobs) -> int:
+    # Removing the suppressions is not enough. int-conversion is an ERROR in
+    # current clang, so the compile STOPS at the first site and every later one
+    # in that file is never emitted -- the scan then silently reports fewer
+    # conversions than exist. Demote all four to warnings so the file compiles
+    # through and every site is seen. (Measured: 391 files vs 539 without this.)
+    strict = [f for f in flags if f not in STRICT_SUPPRESSIONS] + [
+        "-Wno-error=int-conversion", "-Wno-error=int-to-pointer-cast",
+        "-Wno-error=pointer-to-int-cast", "-Wno-error=incompatible-pointer-types",
+        "-Wno-error=int-to-void-pointer-cast",
+        "-Wno-error=void-pointer-to-int-cast",
+    ]
+
+    def scan(src):
+        done = subprocess.run([clang, *strict, "-c", str(src), "-o", "/dev/null"],
+                              capture_output=True, text=True)
+        by_line = collections.defaultdict(set)
+        for where, line, tag in STRICT_LINE.findall(done.stderr):
+            if tag in STRICT_TO_INT:
+                by_line[(where, line)].add("to_int")
+            elif tag in STRICT_TO_PTR:
+                by_line[(where, line)].add("to_ptr")
+        return src, by_line
+
+    # CONTROLS. A detector that has never fired is unproven, and one that fires
+    # on everything is worse than none. Both run before any number is printed.
+    with tempfile.TemporaryDirectory() as tmp:
+        pos = pathlib.Path(tmp) / "roundtrip.c"
+        pos.write_text("#include <stdint.h>\n"
+                       "void *rt(void *p) { return (void *)(uintptr_t)p; }\n")
+        neg = pathlib.Path(tmp) / "split.c"
+        neg.write_text("#include <stdint.h>\n"
+                       "unsigned long a(void *p) { return (uintptr_t)p; }\n"
+                       "void *b(unsigned long v) { return (void *)v; }\n")
+        _, pb = scan(pos)
+        if not any(v == {"to_int", "to_ptr"} for v in pb.values()):
+            print("ERROR: same-line positive control did not fire; the scan is "
+                  f"measuring nothing. got {dict(pb)}", file=sys.stderr)
+            return 2
+        _, nb = scan(neg)
+        if any(v == {"to_int", "to_ptr"} for v in nb.values()):
+            print("ERROR: negative control DID fire; the scan overcounts split "
+                  f"directions as round trips. got {dict(nb)}", file=sys.stderr)
+            return 2
+    print("controls       same-line fires, different-line does not\n")
+
+    sites = collections.Counter()
+    seen_in = collections.Counter()
+    upper, lower = [], []
+    touched = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        for src, by_line in pool.map(scan, files):
+            rel = str(src.relative_to(musl))
+            dirs = set()
+            for (where, line), kinds in by_line.items():
+                dirs |= kinds
+                for k in kinds:
+                    sites[k] += 1
+            for k in dirs:
+                seen_in[k] += 1
+            if dirs:
+                touched += 1
+            if dirs == {"to_int", "to_ptr"}:
+                upper.append(rel)
+            hits = sorted((line for (w, line), v in by_line.items()
+                           if v == {"to_int", "to_ptr"}), key=int)
+            if hits:
+                lower.append((rel, hits))
+
+    print(f"surveyed       {len(files)} files")
+    print(f"no conversion  {len(files) - touched:6} files are free of both")
+    print(f"ptr -> int     {sites['to_int']:6} lines, in {seen_in['to_int']} files"
+          "   (address kept, capability dropped)")
+    print(f"int -> ptr     {sites['to_ptr']:6} lines, in {seen_in['to_ptr']} files"
+          "   (untagged capability; intended in the syscall path)")
+    print(f"\nround trip, upper bound (both directions in one file): {len(upper)}")
+    print(f"round trip, lower bound (both on the SAME line):       {len(lower)}")
+    for rel, hits in sorted(lower):
+        print(f"  {rel}   line {','.join(hits)}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
@@ -170,6 +279,11 @@ def main() -> int:
                         help="also keep the object files, so an archive can be "
                              "built from whatever compiles. The flags and the "
                              "file set then have exactly one definition, here.")
+    parser.add_argument("--strict-ptr", action="store_true",
+                        help="instead of surveying compiles, report the "
+                             "pointer/integer conversions that -w and "
+                             "-Wno-int-conversion hide, split by direction and "
+                             "bounded from both sides. No QEMU, seconds to run.")
     parser.add_argument("--print-flags", action="store_true",
                         help="print the compile flags, one per line, and exit. "
                              "For the sources that are OURS rather than musl's "
@@ -205,6 +319,9 @@ def main() -> int:
         return 2
 
     flags = compile_flags(musl)
+
+    if args.strict_ptr:
+        return strict_ptr_scan(musl, clang, files, flags, args.jobs)
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 
