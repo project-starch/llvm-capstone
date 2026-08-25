@@ -159,6 +159,28 @@ not widen its own permissions by editing this file. In particular the paper rule
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
+## Do not stop while something is still runnable
+
+**Waiting on someone else is not a reason to stop — it is a reason to find the next thing that
+does not depend on them.** Before reporting a pause, name the blocker and check it is real:
+"while synthesis runs" was written once when nothing had been submitted to synthesis.
+
+**Something is still runnable if you can:** run a board arm, a simulation, a build or a test;
+read a file, a disassembly or an RTL source; re-check a claim against its primary source; or fix
+an instrument that has been producing unreadable results. If any of those is true, keep going and
+report the result when it lands.
+
+**Only these are serious enough to stop:**
+- an **irreversible or outward-facing** action needing approval — reflash, force-push,
+  destructive delete, anything a third party sees;
+- a question that is genuinely the **project lead's** — paper framing, project direction;
+- a **RETRACTION**, which must be surfaced;
+- **every** remaining experiment needs a resource that is provably unavailable — and *provably*
+  means you tried it and recorded the failure, not that you assumed it.
+
+Running out of *leads* is not one of them. Neither is a clean result, a refuted hypothesis, a
+subagent still working, or a peer lane owing you something.
+
 ## Capture the lesson when it is cheap — do not wait to be asked
 
 Process improvements have so far been written only when the project lead asked for them, which

@@ -182,3 +182,38 @@ Confirmed byte-identical against the native oracle.
 
 Run a known-good control first in the same boot: a boot whose control fails carries no verdict, and
 the control is also what proved the ring flood is ordinary trap traffic rather than a wedge spin.
+
+---
+
+## The minimal repro does NOT reproduce — with the detector proven to fire
+
+Board run, `caplifive_s07clear_84ed6eafb.bit`:
+
+| rung | retval | oracle | verdict |
+|---|---|---|---|
+| `k800` (known-good control) | 4 | 4 | **OK** — the boot carries verdicts |
+| `s12a2` (must-fail control) | `0xC12A2200` | `0xC12A2200` | **FIRED** |
+| `s12a1` (the window) | `0xC12A1000` | — | **bad = 0** |
+| `s12a3` (window + one nop) | `0xC12A3000` | — | **bad = 0** |
+
+**Arm 2 matched its oracle exactly**, so the detector demonstrably reports a bad reload, and arm
+1's zero is a measured zero rather than a silent one. `0xC12A2200` decodes as arm 2 with
+`bad = 512 = S12_REPS` — every iteration's reload came back NOT_CAP, which is *correct*
+architecture (a plain store clears the granule tag) and exists only to prove the instrument.
+
+**So the instruction window, executed inside a real capability domain — after `capenter`, through
+a cap table, on a monitor-carved stack — does not fault.** That closes the largest fidelity gap
+the five bare-metal simulations left open, and closes it negatively.
+
+**This is NOT an exoneration, and the kernel said so before the run.** Two deviations from the
+production shape remain, both recorded in `src/s12_kernel.h` in advance:
+
+1. the consumer is `lcc` selector 1 (**total**, does not raise) rather than the production
+   `cincoffsetimm` (**raises**) — so the exact consuming instruction differs;
+2. this is a tight loop, where the board's window sits at a deterministic depth in a long call
+   chain, executed twice.
+
+The pre-written next step therefore stands: **move the consumer back to `cincoffsetimm` and accept
+wedging arms.** That trades the rate for one bit per boot, which is why it was not the first
+version — but a clean arm 1 with a non-raising consumer cannot rule out a fault that only the
+raising consumer exposes.

@@ -1,0 +1,21 @@
+HAND-COMPUTED, and here is why it is not a QEMU-derived oracle.
+
+s12 arm 2 is BOARD-ONLY. It clears a granule's tag on purpose and then type-queries the reload;
+QEMU aborts on that (op_helper.c:719 asserts rs1_v->tag before the selector check), so it cannot
+be run under emulation. Same board-only status wbuf's arm 2 carries, for the same reason.
+
+The value is what a CORRECT machine must return, derived from the kernel's own encoding
+0xC12A0000 | (arm << 12) | bad:
+
+  base 0xC12A0000   -- confirmed against the QEMU-measured arm 0 oracle 3240755200
+  arm  2 << 12      = 0x2000
+  bad  = S12_REPS   = 512, because a plain store legitimately clears the granule tag, so EVERY
+                      iteration's reload is NOT_CAP. Arm 2 failing completely is CORRECT
+                      architecture, not a defect -- it exists to prove the detector can report
+                      a bad reload at all.
+
+  0xC12A0000 | 0x2000 | 0x200 = 0xC12A2200 = 3240763904
+
+READ IT THIS WAY: arm 2 matching this oracle means the detector WORKS, and only then do arms
+0/1/3 carry any verdict. Arm 2 returning 0xC12A2000 (bad = 0) means the detector is BLIND and
+the whole boot says nothing.
