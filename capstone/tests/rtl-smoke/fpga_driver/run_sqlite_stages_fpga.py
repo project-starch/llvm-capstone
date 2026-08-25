@@ -1143,6 +1143,33 @@ def main():
                 except Exception as exc:  # never let instrumentation abort the run
                     log(f"trap-log clear failed ({type(exc).__name__}) -- wedge reads will be stale")
 
+            # PER-ARM S-07 CLEAR. The LDC recorder is FIRST-WINS, so by the time the
+            # subject arm runs, an earlier legitimate untagged `ldc` -- boot software, or the
+            # control arm -- has already consumed the slot. That is why every previous wedge
+            # read a granule (0x82280) that is NOT the subject's (low 20 bits 0x9f360): the
+            # record belonged to somebody else, and the reading was unattributable rather
+            # than negative.
+            #
+            # The resident bitstream DOES carry the clear (84ed6eafb is the commit that adds
+            # it), and between arms the shell is alive, so a switch write completes here
+            # where it times out against a wedged core. Clearing immediately before the arm
+            # scopes the record to that arm's FIRST untagged LDC.
+            #
+            # Still one-sided, and the driver says so at the read: valid=1 with the subject
+            # granule means the reload returned untagged and `src` names the leg. Anything
+            # else is INCONCLUSIVE -- an earlier untagged `ldc` inside the same arm can still
+            # consume the slot -- and must not be read as the load having been fine.
+            if os.environ.get("WEDGE_S07_CLEAR_PERARM") == "1":
+                try:
+                    set_switch_value(console, 160)
+                    time.sleep(0.6)
+                    set_switch_value(console, 0)
+                    log(f"  [s07] recorder CLEARED before arm {dom_idx} "
+                        f"-- its record now belongs to this arm's first untagged LDC")
+                except Exception as _ce:
+                    log(f"  [s07] per-arm clear FAILED ({type(_ce).__name__}) -- the record is "
+                        f"NOT scoped to this arm and any granule it reports is unattributable")
+
             mark = console.uart_mark()
             wedged = False
             # NAME EVERY TEST ON THE UART, not just in this runner's local log.

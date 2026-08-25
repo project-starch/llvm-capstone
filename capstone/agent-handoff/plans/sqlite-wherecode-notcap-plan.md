@@ -1855,3 +1855,50 @@ the arm, read the s07 LDC recorder (`load_unit.sv:769-772`) at sw 208 for `{vali
 untagged and `src` names the leg (L1 hit / miss refill / write-buffer forward). Anything else is
 **inconclusive**, not exculpatory: the recorder is first-wins, so an earlier legitimate untagged
 `ldc` in the same arm consumes the slot.
+
+## The per-arm clear worked, and the recorder STILL cannot answer the question
+
+    [s07] recorder CLEARED before arm 2 -- its record now belongs to this arm's first untagged LDC
+    [wedge] s07 ldc0 granule paddr[19:4] = 0x82280      <- NOT the subject's 0x9f360
+    [s07] SELFTEST PASS -- the detector fires on this silicon
+
+The clear executed (logged for both arms) and the selftest fires, so the instrument is working.
+The record simply belongs to a **different, earlier untagged LDC inside the same arm** — which is
+expected, because `load_unit.sv:774-780` documents that *"an `ldc` over a zeroed stack slot is
+LEGITIMATELY untagged"* and SQLite does that constantly.
+
+**So the reading is INCONCLUSIVE, not exculpatory.** It does not say the subject reload returned
+tagged; it says the first-wins slot was taken before the subject reload happened. Recorded as such.
+
+**This exhausts what the resident bitstream can measure.** The recorder is first-wins with no
+address filter, so on any real workload it is consumed by legitimate untagged loads long before the
+instruction under test. No arrangement of clears fixes that: the clear scopes it to an arm, and one
+arm contains thousands of untagged loads.
+
+## New data the regex fix bought: the metadata half of the granule
+
+    granule data: 0x82b9f360:  0x0000000082be4cf0   0x0000072ba7462d16
+                               word 0 = cursor       word 1 = METADATA, non-zero
+
+Word 1 was requested on every previous boot and silently discarded by the truncating pattern. It is
+**non-zero**, so DRAM holds a complete capability-shaped value rather than a cursor beside zeros.
+That is consistent with the store having written a real capability and does **not** advance the
+load question — but it is the first time the metadata half has been seen at all.
+
+## What is now the gating item, and why a bitstream is finally justified
+
+Every mechanism proposed by either lane is excluded. The single unmeasured fact is **what the load
+returned**, and the resident silicon cannot report it. The minimal change that can:
+
+**Drop `&& !s07_ldc0_valid_q` from `load_unit.sv:769`** — restoring the ROLLING capture that
+already shipped working in `caplifive_s07debug_18august.bit` before `83a7d061f` reverted it. It is
+a **strict fanin reduction**: it removes the register's own output from its own enable, i.e. deletes
+a feedback edge rather than adding one. Combined with a freeze at the trap
+(`recent_nontrivial_trap_seen_log_q`, already present at `cva6.sv:1015`), the record becomes *"the
+LAST untagged LDC before the fault"* — which, two instructions after the reload, is the subject.
+
+Better still if it rides with a **granule filter on `CSR_WATCHPOINT_ADDR` (0x811)**, which is
+already a physical-address register, already outside the domain-switch context list, and which this
+investigation has already **proven armable from userspace and exact** (the group-9 store watchpoint
+fired on the armed granule and stayed silent on the unwatched one, confirmed against the
+disassembly).
