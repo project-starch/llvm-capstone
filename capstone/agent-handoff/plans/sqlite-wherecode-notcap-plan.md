@@ -1488,3 +1488,47 @@ though `tval = 0` means the cursor bits themselves came back zero, which a de-ta
 would not do.
 
 Going to `claim-auditor` before this enters ISSUES.md or any report.
+
+## Gap 1 closed twice, by two independent methods
+
+The board result compares a group-9 payload against `tval`. That is only like-for-like if the
+payload is the stored capability's **cursor** — `st_commit_data` is `[XLEN-1:0]`, 64 bits of a
+128-bit store, and if that half were the metadata the whole comparison would be meaningless.
+
+**By measurement** (`verif/tests/custom/capstone/watchpoint-cursor.S`, pass at 551 cycles): store a
+capability whose cursor is set to a deliberately distinctive value and see what comes back.
+
+    CAPPRINT  Reg[13]: Cursor: 0000000080003030 | Metadata-> Revnode_id: 2 | Type: 2 | Perm: 7 ...
+    TRACER-DBG: CAPTURE port 0 group 9 pc 000000080000162 payload 0000000080003030
+
+Identical. **The payload is the cursor.**
+
+**By source, independently** — the data and metadata travel on deliberately disjoint lanes:
+
+    store_buffer.sv:197   st_commit_data_o = speculative_queue_q[rd_ptr].data
+    store_buffer.sv:118   .data = data_i
+    store_unit.sv:462     data_i = st_data_q
+    store_unit.sv:369     st_data_n = data_align(lsu_ctrl.vaddr[2:0], lsu_ctrl.data)
+    store_unit.sv:377     st_user_n = (op inside {STC} || sel_dom_switch) ? lsu_ctrl.user : '0
+
+The metadata rides `user`, a separate register behind its own gate; `st_commit_data_o` is wired to
+`data`. So `0x82be4cf0` is the stored cursor and `tval` is the rs1 cursor at the trap — same
+quantity, same half, both 64-bit.
+
+## And a precision the exhaustiveness argument needs: it is WORD 0, not "the slot"
+
+The watchpoint compare is `st_commit_paddr[PLEN-1:3]` — word-granular — so a store to
+`G+8..G+15` presents word 1's tag against an entry carrying word 0's and **never fires**. Nothing
+in the hit condition tests `is_cap` (`cva6.sv:904-906` gates on `lsu_commit_commit_ex`, the address
+compare, and `st_commit_be[...]`, and `st_be_n = lsu_ctrl.be` is set for every store), so plain
+`sd`/`sw` stores **are** visible — but only to word 0.
+
+So the correct statement of the exhaustiveness argument is:
+
+> No entry with `DATA = 0` after index 20 proves nothing nulled **word 0** of that granule between
+> the spill and the reload.
+
+That is the word that matters — the cursor lives in word 0 and `tval` reported the cursor as zero —
+so the argument survives intact. It is stated this way because a plain store to the granule's upper
+half is genuinely invisible to this instrument, and an unqualified "nothing wrote to the slot"
+would be a claim the measurement does not support.
