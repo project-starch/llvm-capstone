@@ -57,6 +57,26 @@ HOST_EXTRA_CFLAGS=${HOST_EXTRA_CFLAGS:-${DOMAIN_EXTRA_CFLAGS:-}}
 # shellcheck disable=SC2086
 cc -O0 $HOST_EXTRA_CFLAGS -o "$OUT_DIR/${RUNG}_host" "$HOST"
 ORACLE=$("$OUT_DIR/${RUNG}_host")
+# ORACLE OVERRIDE, for rungs the NATIVE oracle structurally cannot model.
+#
+# The oracle is a native x86 build of the same source. That works whenever the rung computes a
+# value, and CANNOT work when the rung reports something only capability hardware has -- a cap
+# TYPE, a tag, a bounds field. S-12 arm 5 reports the type of `v` in bits 8-11, which natively
+# is whatever the stub returns (0), so the QEMU comparison is guaranteed to fail and the rung
+# never reaches the staging step below.
+#
+# That failure is silent in the way that matters: the script still PRINTS the QEMU retval, so
+# the value looks measured, and only the absent "staged:" line says the .dom was never placed.
+# On 2026-08-25 that cost a board boot -- the run asked for a domain the image did not contain
+# and died on "open .dom failed".
+#
+# So allow an explicit expected value, and require it to be justified rather than guessed:
+#   RUNG_ORACLE=<n>  the value QEMU must return, when the native oracle cannot produce it.
+if [[ -n "${RUNG_ORACLE:-}" ]]; then
+  echo "oracle: $RUNG = $ORACLE (native) -- OVERRIDDEN to $RUNG_ORACLE"
+  echo "  reason: the native build cannot model this rung's reported quantity."
+  ORACLE="$RUNG_ORACLE"
+fi
 echo "oracle: $RUNG = $ORACLE"
 
 # ---- 2. QEMU build + run ----------------------------------------------------------

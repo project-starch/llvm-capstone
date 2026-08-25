@@ -124,10 +124,33 @@ if [[ -d "$OVERLAY" ]]; then
   # BAKED_RUNGS names rungs WITHOUT the .dom suffix ("lf0"), while SQLITE_STAGE_DOMS gives full
   # paths ("/test-domains/q31.dom", optionally "host args|path:selector"). Accept both spellings
   # or the gate flags the very domains the run needs -- which it did on the first dry run.
+  _req=()
   for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do
     _b="$(basename "${_d##*|}" | cut -d: -f1)"
     _wanted+="$_b ${_b%.dom}.dom "
+    [[ "$_b" == *.dom ]] && _req+=("$_b")
   done
+  # C15 REQUESTED-BUT-ABSENT. The gate above catches files that are present and unwanted; this
+  # catches the opposite, which is the one that costs a boot. A run naming a .dom that was never
+  # staged boots, reaches the arm, and dies on "ladder-perf: open .dom failed" -- and everything
+  # after it in the sequence is lost with it.
+  #
+  # It happens in a specific, quiet way: verify-and-stage-rung.sh deletes its artifact FIRST,
+  # then builds, then compares against the native oracle, and only stages if that matches. A rung
+  # whose oracle cannot match -- one reporting a capability TYPE, which native code cannot model
+  # -- still PRINTS its QEMU retval, so the measurement looks taken while the .dom was never
+  # placed. The only signal is an absent "staged:" line. On 2026-08-25 that read as success and
+  # cost a boot.
+  #
+  # BLOCKING, not a warning: there is no version of "the run needs a file the image lacks" that
+  # is worth spending a JTAG upload and a boot to discover.
+  _missing=()
+  for _b in "${_req[@]}"; do [[ -f "$OVERLAY/$_b" ]] || _missing+=("$_b"); done
+  if (( ${#_missing[@]} )); then
+    bad "requested but NOT staged in the overlay: ${_missing[*]} -- the boot would reach the arm and die on 'open .dom failed', losing every test after it. Re-run verify-and-stage-rung.sh and confirm it prints a 'staged:' line (an oracle mismatch aborts BEFORE staging while still printing a retval)."
+  else
+    ok "all ${#_req[@]} requested domain(s) present in the overlay"
+  fi
   # Cost is proportional to SIZE, so the gate is too: at 128 KiB/s a stray 13 KB rung costs a
   # tenth of a second and a stray 1.5 MB SQLite domain costs twelve. BLOCK only on the big ones;
   # mention the small ones without stopping the run. The 30.6 minutes lost this session were
