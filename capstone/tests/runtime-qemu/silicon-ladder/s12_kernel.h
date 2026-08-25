@@ -14,10 +14,28 @@
  * .data buffer instead of a monitor-carved stack. This closes that gap, which is the largest
  * one left, while staying small enough to hand over.
  *
- * WHAT IS ESTABLISHED, so nobody re-derives it. At the wedge the memory is INTACT AND TAGGED
- * -- the granule holds the stored cursor and its shadow tag byte reads 1 -- while tval says the
- * consumer received cursor 0. The value was never lost; it was never delivered. That excludes a
- * software NULL and excludes a memory-path loss. The mechanism is open.
+ * WHAT IS ESTABLISHED -- REWRITTEN 2026-08-25, because the previous version was not.
+ *
+ * It used to read: "at the wedge the memory is INTACT AND TAGGED ... the value was never lost, it
+ * was never delivered, which excludes a software NULL and excludes a memory-path loss." Every
+ * clause of that is withdrawn. It rested on two things that did not survive: the shadow-tag read,
+ * which is DRAM and not the L1 tag the load actually consumed, and arm 4, which never wrote the
+ * slot -- so the granule was untouched because nothing had touched it, not because the value
+ * survived. "Delivered but not lost" was an inference from a measurement of uninitialised memory.
+ *
+ * WHAT IS ACTUALLY ESTABLISHED, and it is less:
+ *   - This repro does NOT reproduce S-12. Arm 2's positive control fires (bad == REPS), so the
+ *     detector works, and arm 1 returns bad == 0 across three builds. Arm 4 -- the same shape
+ *     with the production RAISING consumer -- runs 512 iterations clean once the subject store
+ *     is actually emitted.
+ *   - The repro's `v` is NONLIN (arm 5, rebuilt with the store; QEMU 0xC12A5100). NONLIN is not
+ *     in the LDC clear set (load_unit.sv:225-226), so the move-clear does not fire HERE.
+ *   - What cap type SQLite's value carries at the fault site is UNMEASURED, and it is the
+ *     discriminating unknown: if it is in that clear set, this repro never exercised the
+ *     mechanism it was built to test. The line below calling `v`'s identity "irrelevant" is the
+ *     weakest assumption in this file for exactly that reason.
+ *
+ * The mechanism is open, and so is whether this kernel is even the right instrument for it.
  *
  * WHY IT CANNOT WEDGE. The reloaded value is inspected with `lcc` selector 1, the TOTAL type
  * query, which answers 7 for NOT_CAP WITHOUT raising (capstone_dyn_unit.anvil:195). So a bad
@@ -266,7 +284,15 @@ static unsigned s12_compute(void)
      *
      * Post-shift encoding: LINEAR 0, NONLIN 1, REVOKE 2, UNINIT 3, SEALED 4, SEALEDRET 5,
      * EXIT 6, NOT_CAP 7. Reported in bits 8-11 of the return value, which are otherwise unused
-     * (bad occupies 0-11 but is 0 on this arm, and the arm number sits at 12-15). */
+     * (bad occupies 0-11 but is 0 on this arm, and the arm number sits at 12-15).
+     *
+     * WARNING -- THIS PACKING IS WHY THE FIRST READING OF THIS ARM WAS WRONG. The type shares one
+     * word with the NOT_CAP counter, and arm 5 also runs the counting consumer below. So the
+     * observed 0x200 had TWO readings -- type 2 (REVOKE) with a clean reload, or type 1 (NONLIN)
+     * with the reload NOT_CAP on all 512 iterations -- and the folder recorded REVOKE for days.
+     * It is NONLIN. With the subject store now hoisted above the arm chain the reload is clean,
+     * so the low byte is 0 and the encoding is unambiguous again; if you ever reintroduce a
+     * failing reload on this arm, the ambiguity comes back. Report the type in its own field. */
     bad = (bad & ~0xF00UL) | ((s12_type(v) & 0xF) << 8);
 #endif
 

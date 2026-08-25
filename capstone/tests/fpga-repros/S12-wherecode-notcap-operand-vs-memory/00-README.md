@@ -994,3 +994,29 @@ beautiful void result. Negative-tested in both directions:
 |---|---|---|---|---|---|---|---|---|
 | slot store emitted | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 0 |
 | guard fires | · | · | · | · | · | **✓** | **✓** | **✓** |
+
+## Silicon confirmation: NONLIN, and the LDC move-clear does not fire
+
+One boot, control returned, both arms run with the subject store present for the first time.
+
+| arm | what it measures | retval | reading |
+|---|---|---|---|
+| 5 | cap type of `v`, bits 8–11 | `0xC12A5100` | **type 1 = NONLIN** |
+| 6 | reload the same slot twice, count NOT_CAP on the second | `0xC12A6000` bad=**0** | **the move-clear does not fire** |
+
+Arm 5's **low byte is 0**, which is the internal consistency check: it means the counting consumer
+never saw a NOT_CAP reload, i.e. the hoisted store actually landed and the encoding is unambiguous
+again. That is what makes this reading trustworthy where the earlier `0x200` was not.
+
+Silicon agrees with QEMU (`0xC12A5100` both). So the REVOKE→NONLIN inversion is confirmed on the
+FPGA, not merely in emulation, and arm 6 — which could not distinguish its two hypotheses while the
+slot went unwritten — now measures directly that loading a NONLIN-stored slot leaves it intact.
+Consistent with `load_unit.sv:225-226`, where NONLIN is absent from the clear set.
+
+**What this does NOT establish.** Both results are about **the repro's `v`**. They say the
+move-clear does not fire *here*. They bear on S-12 only if SQLite's stored value at the fault site
+is also NONLIN, and **that is still unmeasured** — it is the discriminating unknown, and the reason
+the kernel's "any tagged capability; its identity is irrelevant" is the weakest assumption in this
+folder. If SQLite's value is in the clear set {LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET}, this
+repro has never exercised the mechanism it was built to test, and an arm with a matching-type `v`
+is the first variant that could reproduce.
