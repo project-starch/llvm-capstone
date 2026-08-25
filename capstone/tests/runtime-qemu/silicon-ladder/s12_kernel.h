@@ -63,7 +63,18 @@
 #endif
 static unsigned long volatile s12_draw_seed = 0xD2A0000UL + S12_DRAW;
 
-static unsigned char volatile s12_frame[0x800] __attribute__((aligned(16)));
+/* PAGE-ALIGNED so every arm places the slot at the SAME address.
+ *
+ * The matched-pair experiment arms ONE watchpoint address and runs both the raising and the
+ * non-raising arm against it -- which only works if both arms put the slot in the same place.
+ * At 16-byte alignment they did not: the lcc arm landed the slot at VA 0x11750 and the
+ * cincoffsetimm arm at 0x11790, 64 bytes apart, because the two bodies differ in size and shift
+ * everything after them. One armed address could not have served both, and arming per-arm would
+ * reintroduce exactly the wrong-allocation failure class this static array exists to remove.
+ *
+ * 4096 swamps the inter-arm drift, so the frame -- and therefore the slot -- lands identically.
+ * VERIFY IT rather than assume it: the addresses are compared across arms before any run. */
+static unsigned char volatile s12_frame[0x800] __attribute__((aligned(4096)));
 static void *volatile s12_subject;
 static unsigned long volatile s12_sink[8];
 

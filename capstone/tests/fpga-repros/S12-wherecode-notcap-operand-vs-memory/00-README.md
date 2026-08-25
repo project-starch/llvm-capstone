@@ -310,3 +310,43 @@ Also still open, and recorded rather than resolved: arm 1 (same body, non-raisin
 returns `bad = 0`, so *its* reload was never NOT_CAP, while `CINCOFFSETIMM` raises only on
 NOT_CAP. Both cannot be about the reload's value unless the consumer changes the timing — which is
 consistent with the scheduling sensitivity seen throughout, but is not itself established.
+
+## The matched-pair vehicle: page-aligned, one slot address, still reproduces
+
+The pending experiment arms **one** watchpoint address and runs both consumers against it — the
+raising `cincoffsetimm` arm and the non-raising `lcc` arm — so the loads can be compared with the
+consumer as the only variable. That requires both arms to place the slot at the **same** address,
+and at 16-byte alignment they did not:
+
+    lcc arm            slot VA = 0x11750
+    cincoffsetimm arm  slot VA = 0x11790     <- 64 bytes apart
+
+The bodies differ in size and shift everything after them. One armed address could not have served
+both, and arming per-arm would reintroduce the **wrong-allocation failure class** the static array
+exists to remove — the one that fired for real on an earlier arm and produced a clean-looking
+empty record.
+
+**Fixed by page-aligning `s12_frame`**; 4096 swamps the inter-arm drift. Verified, not assumed:
+
+    s12p1 (lcc)            slot VA = 0x12690
+    s12p4 (cincoffsetimm)  slot VA = 0x12690     <- ONE address serves both
+
+### And the aligned build still faults, which had to be checked
+
+This fault is layout-sensitive — every added instruction has made it vanish — and page-aligning
+moved everything after the frame. So the aligned build could easily have stopped reproducing,
+which would have made it useless as a vehicle:
+
+    k800   RETURNED  retval=4            control valid
+    s12p1  RETURNED  retval=0xC12A1000   matches its oracle, bad = 0
+    s12p4  NO RETURN                     still wedges
+
+### Constants for the run
+
+    watchpoint paddr  = DBAS + 0x2690        (slot VA 0x12690, 16-byte aligned -> granule base)
+    expected mepc     = DBAS + 0x41c         (consumer VA 0x1041c, bytes 5b 27 07 0b)
+    expected mcause   = 25 (UNEXPECTED_OPERAND)
+    arm 1 returns     = 0xC12A1000           arm 4 returns 0xC12A4000 or wedges
+
+Both derived from the ELF plus DBAS, with **no dependence on call depth** and no scraping from a
+previous wedge.
