@@ -51,6 +51,25 @@ CORE_SUITES=(
   "authority|bash $SCRIPT_DIR/capstone-authority/run-authority-suite.sh|3600"
   "smoke|bash $RUNTIME_DIR/run-smoke.sh"
   "coremark|bash $RUNTIME_DIR/run-coremark.sh"
+  # SQLITE IS HERE BECAUSE IT WAS BROKEN FOR DAYS AND NOTHING SAID SO. Two SQLite
+  # domains stopped being creatable when their images crossed the single-region
+  # ceiling (1376256 bytes) and the module fell back to max(2*code_len, 512K); the
+  # only thing that noticed was domdata-budget.py printing "VERDICT: DOES NOT FIT"
+  # into a log nobody reads, because nothing ran these on a schedule. The rule that
+  # broke them was a reasonable change made elsewhere, which is exactly the case a
+  # nightly exists for.
+  #
+  # sqlite-memory is the end-to-end application gate: open, CREATE, INSERT, SELECT,
+  # plus an extended workload (transactions, a secondary index, prepared inserts,
+  # UPDATE/DELETE, aggregates and the sorter, index-driven WHERE, JOIN, GROUP BY,
+  # string functions). It is the broadest single check of "the compiler still builds
+  # a working program" that exists here.
+  #
+  # No explicit timeout: MEASURED at 87 s with a warm build, and 790 s on a run
+  # whose boot flaked and retried, so the 1800 default carries better than 2x over
+  # the worst observed. A cold run rebuilds the amalgamation and costs a few
+  # minutes more, still well inside it.
+  "sqlite-memory|bash $BENCH_DIR/sqlite/run-sqlite-memory.sh"
   "rv8|bash $BENCH_DIR/rv8/run-all-rv8.sh|3600"
   "beebs|bash $BENCH_DIR/beebs/run-all-beebs.sh|10800"
   "revoke-matrix|bash $RUNTIME_DIR/run-revoke-matrix-probe.sh"
@@ -69,6 +88,20 @@ CORE_SUITES=(
   "hier-revoke|bash $RUNTIME_DIR/run-hier-revoke-probe.sh"
   "shared-region|bash $RUNTIME_DIR/run-shared-region-probe.sh"
   "linear-uninit-corpus|bash $RUNTIME_DIR/run-linear-uninit-corpus-probe.sh|3600"
+  # SQLLogicTest, and it is the only CORRECTNESS oracle in this tier: everything
+  # else checks that a program runs, this one checks that its answers are right.
+  # select1.test alone is 1031 records (1000 queries, 31 statements), compared
+  # against expected results, so a miscompile that merely produces wrong values --
+  # the class no marker or fault can catch -- fails here.
+  #
+  # Last, because it is the slowest, and second-to-last in value to nothing.
+  # The corpus is fetched once and cached, pinned by commit AND per-file SHA-256;
+  # a machine with no cache and no network will fail this suite at the fetch, which
+  # is honest rather than silent.
+  # 3600, not the 1800 default, and the reason is the COLD path rather than the run:
+  # measured at 161 s warm, but a cold one compiles a second full amalgamation for
+  # the silicon domain, links it in three passes, and fetches the corpus.
+  "sqlite-slt|bash $BENCH_DIR/sqlite/run-sqlite-slt.sh|3600"
 )
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
