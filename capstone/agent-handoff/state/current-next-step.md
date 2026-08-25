@@ -73,7 +73,19 @@ Commits: `5f277921dfe7`, `d9ccb82438fd`, `b001b65944a5`, `1e600267178f`.
 **Open, and none of it blocks the others:**
 
 1. **Rate ladder to n≈30** — needs the board, competes with the S-10 reflash.
-2. **Q-01 — the QEMU reference arm is broken** (order-11 allocation; needs `code_len <= 2 MiB`).
+2. **Q-01 — RESOLVED 2026-08-25.** Built in the SILICON configuration as Q-01 itself
+   prescribed (1.48–1.55 MiB, well under the 2 MiB order-10 threshold), the reference arm
+   runs: `G/enter → H/return`, `SLT-SUMMARY … completed=1`, no `mcause 25`. The native
+   baseline is identical record for record (`records=2 stmt_pass=1 query_fail=1
+   completed=1`), so `query_fail=1` is what `q_two.test` specifies — two empty tables and an
+   expected block of `0` — not a QEMU defect. **There is now a reference model, and its first
+   verdict is that S-12 is SILICON-SPECIFIC.** Use `run-sqlite-slt.sh`: it sets the region
+   size once for BOTH builds and asserts `completed=1`. Building host and domain separately
+   yields `obs=0x5117BAD0` (`ERR_REGION_MISMATCH`), and omitting `-DCAPSTONE_SQLITE_SLT`
+   yields "slt did not run" while the built-in workload still prints EXTENDED_PASSED /
+   MEMORY_PASSED — both read as passes and neither carries a verdict.
+
+   ~~Q-01 — the QEMU reference arm is broken~~ (order-11 allocation; needs `code_len <= 2 MiB`).
    Board-free. With silicon now *passing*, there is no reference model to attribute a future
    silicon failure against.
 3. **S-10 / S-10b** — write-buffer route fixed (S-10, unsynthesised into any flashed bitstream);
