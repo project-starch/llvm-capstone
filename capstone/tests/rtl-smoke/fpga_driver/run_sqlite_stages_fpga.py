@@ -2540,7 +2540,23 @@ def main():
                             # VALIDATE THE READ. GDB against a wedged core has returned junk before
                             # (mcause=2 mepc=2 mtval=0, and the AXI pattern 0xca11ab1ebadcab1e), so
                             # an s0 outside the domain's stack range is NOT an address.
-                            for _e in ("$mcause", "$mepc", "$mtval", "$x8", "$sp"):
+                            # $x14 = a4 IS THE DISCRIMINATOR for the surviving account.
+                            #
+                            # The stale-operand story says the consumer read a4 BEFORE the load
+                            # wrote it. If so the LOAD itself was fine and, since commit is
+                            # in-order and the LDC is older than the consumer that faulted, a4
+                            # must hold the REAL capability by the time the core is wedged.
+                            #
+                            #   a4 cursor != 0  -> the load worked; the consumer read stale.
+                            #                      The stale-operand account is CONFIRMED.
+                            #   a4 cursor == 0  -> a4 never received a good value, so the load
+                            #                      did not deliver one. The account is WRONG.
+                            #
+                            # The two candidate values differ in the CURSOR, so the 64-bit GPR
+                            # read discriminates them on its own -- `movc a4, zero` leaves cursor
+                            # 0, a real capability leaves ~0x82be4cf0. $x10 = a0 comes along as
+                            # context: it is the slot pointer and should still be sane.
+                            for _e in ("$mcause", "$mepc", "$mtval", "$x8", "$sp", "$x14", "$x10"):
                                 _s = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"p/x {_e}\n")
                                 try:
@@ -2551,6 +2567,20 @@ def main():
                                     _csr[_e] = None
                             print(f"  [wedge] gdb CSRs: mcause={_csr['$mcause']} "
                                   f"mepc={_csr['$mepc']} mtval={_csr['$mtval']}", flush=True)
+                            _a4 = _csr.get("$x14")
+                            _a0 = _csr.get("$x10")
+                            print(f"  [wedge] a4(x14)="
+                                  + ("UNREAD" if _a4 is None else f"0x{_a4:x}")
+                                  + "   a0(x10)=" + ("UNREAD" if _a0 is None else f"0x{_a0:x}"),
+                                  flush=True)
+                            if _a4 is not None:
+                                print("          => a4 cursor is ZERO: it never received a good "
+                                      "value, so the load did not deliver one and the "
+                                      "STALE-OPERAND ACCOUNT IS WRONG"
+                                      if _a4 == 0 else
+                                      "          => a4 holds a NON-ZERO cursor: the load DID "
+                                      "write it, so the consumer read something else -- the "
+                                      "STALE-OPERAND ACCOUNT IS CONFIRMED", flush=True)
                             _s0 = _csr.get("$x8")
                             _spv = _csr.get("$sp")
                             print(f"  [wedge] gdb frame: s0(x8)="

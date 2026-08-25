@@ -705,3 +705,56 @@ way simulation cannot show.
 `-DS12_ARM=4 -DS12_SELF_ARM_WP=1 -DS12_REPS=1` — no loop, roughly twenty instructions of body,
 faulting deterministically at a known VA with a known cause. That is the artifact to hand anyone,
 and it is what the pending bitstream should be pointed at.
+
+---
+
+# CORRECTION: the subject slot is a COMPILER stack spill, not the kernel's static array
+
+The watchpoint address recorded above — `DBAS + 0x2690`, the slot inside `s12_frame` — is **the
+wrong granule**. The fault is not on the array the kernel stores to; it is on a spill the compiler
+inserts afterwards.
+
+    0x10450  ldc a4, 0x0(a0)              load from the kernel's frame slot
+    0x10454  cincoffsetimm a3, s0, -0xc0  a3 = a COMPILER stack slot
+    0x10458  stc a4, 0x0(a3)              <- the REAL spill
+    0x1045c  ldc a4, 0x0(a3)              <- the REAL reload
+    0x10460  cincoffsetimm a4, a4, 0xb0   <- THE FAULT
+
+**Corrected address, and it is corroborated independently rather than merely recomputed:**
+
+    s0 at the wedge   = 0x819ff670
+    subject slot      = s0 - 0xc0 = 0x819FF5B0     (== sp; 16-byte aligned, so a granule base)
+    low 20 bits       = 0xFF5B0
+    s07 STC recorder  = 0xFF5B0                    <- EXACT MATCH
+
+**The STC recorder had been reporting the subject spill all along and I read past it**, because I
+was checking it against the address I expected rather than asking what it was pointing at.
+
+## How this happened, and why it is worse than a slip
+
+For SQLite I had this right — the pair was `stc a2, 0x0(a0)` / `ldc a4, 0x0(a0)` with
+`a0 = s0 - 0x70`, plainly a stack slot. When I built the minimal repro I **assumed my own static
+array would be the subject**, because I had written the store myself. The compiler still spills
+`a4` to its own frame slot, and the fault is on reloading *that*. The kernel's `*slot = v` is a
+different, earlier store.
+
+Everything downstream inherited the assumption: the page-alignment work, the `lcc`-selector-2
+self-arming, the "one address serves both arms" property, and the constants handed over for the
+pending bitstream run. **The repro itself is unaffected** — it faults deterministically at a known
+VA with a known cause — but every *measurement aimed at a granule* was aimed at the wrong one.
+
+**And it failed in the expensive direction:** an armed address the fault never touches yields an
+empty record, and this folder's own decision table reads empty as *"the load was fine, the fault is
+in delivery"*. It would have produced a confident wrong answer rather than a null one.
+
+## Consequences for the earlier results
+
+* **The group-9 measurement (256 stores, one PC, one DATA)** was real but was watching the
+  kernel's array store, **not** the subject spill. It still proves the self-arm mechanism works and
+  that group 9 fires; it says nothing about the subject granule.
+* **The `a4 = 0` reading needs re-examination**, since the reload feeding the fault comes from `a3`
+  (the stack slot), not `a0`. The precondition held and the value is real; what it means is not yet
+  settled and is deliberately not being claimed here.
+* **The corrected address is dynamic** — `s0 - 0xc0` — which reintroduces the hazard the static
+  array was chosen to remove. `0xc0` is a fixed offset per build and can be re-derived from the
+  artifact; only `s0` needs measuring.
