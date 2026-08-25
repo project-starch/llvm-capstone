@@ -748,6 +748,45 @@ def main():
                    + (f"  {_d0[0]}: {_d0[1]}" if _d0 else ""))
             print(_l0, flush=True)
             transcript.append(_l0 + "\n")
+
+            # APPLY THE s07 RECORDER CLEAR HERE, not between arms.
+            #
+            # WHY HERE. Switch writes complete in this pre-run phase and DO NOT complete mid-run:
+            # `set_switch` timed out waiting for `switch_state` at BOTH 10 s and 30 s while the
+            # console streams UART, so the between-arms clear silently never happened. This phase
+            # already does switch work successfully (the read just above).
+            #
+            # WHY IT IS ENOUGH. Region-pool exhaustion limits a boot to ONE SLT arm anyway
+            # (each costs 1 create_dom + 2 create_region), so a single clear before that arm is
+            # all that is needed.
+            #
+            # NON-VACUOUS BY CONSTRUCTION: the baseline printed above reads 0xb8 with
+            # ldc0_valid=1, because boot software has already consumed the one-shot slot. So a
+            # working clear MUST drive it to 0 and a clear that does nothing MUST leave it at 1 --
+            # the check can produce both answers. An earlier version tested this on a
+            # powered-but-unbooted board where the recorder was empty from reset, so it read 0
+            # before AND after and "passed" without being able to fail.
+            if os.environ.get("WEDGE_S07_CLEAR") == "1":
+                try:
+                    for _b in range(8):
+                        console.set_switch(_b, bool(160 & (1 << _b)), timeout=30.0)
+                    time.sleep(0.8)
+                    _vc = _rd(208)
+                    for _b in range(8):
+                        console.set_switch(_b, False, timeout=30.0)
+                    _okc = _vc is not None and ((_vc >> 7) & 1) == 0
+                    _pre_ok = _v0 is not None and ((_v0 >> 7) & 1) == 1
+                    _lc = ("  [s07] CLEAR sw160: sw=208 -> "
+                           + ("UNREAD" if _vc is None else f"0x{_vc:02x}")
+                           + f"  ldc0_valid={'?' if _vc is None else (_vc>>7)&1}"
+                           + ("   CRITERION 1 PASS" if (_okc and _pre_ok)
+                              else "   CRITERION 1 FAIL" if _pre_ok
+                              else "   VACUOUS -- baseline was already 0, this proves nothing"))
+                    print(_lc, flush=True); transcript.append(_lc + "\n")
+                except Exception as _e:
+                    _lc = (f"  [s07] CLEAR sw160 FAILED ({_e}) -- the granule apertures are NOT "
+                           f"attributable this boot; do not read them")
+                    print(_lc, flush=True); transcript.append(_lc + "\n")
             if _v0 is not None and ((_v0 >> 7) & 1):
                 _l1 = (("  [s07] ROLLING RECORD, NOT SPENT: ldc0_valid=1 before any domain ran "
                         "means boot software produced at least one untagged LDC, which is "
@@ -925,34 +964,6 @@ def main():
             n_tot = len(DOMS)
             start_banner = f"### TEST {dom_idx}/{n_tot} START {label} ###"
             log(f"--> TEST {dom_idx}/{n_tot}  {label}")
-
-            # CLEAR THE s07 LDC RECORDER IMMEDIATELY BEFORE THE ARM.
-            #
-            # That recorder is FIRST-WINS, one-shot, with no clear but reset (load_unit.sv:766),
-            # and an `ldc` over a zeroed stack slot is LEGITIMATELY untagged -- so ordinary boot
-            # software consumes the slot before any domain runs. Measured: the PRE-RUN baseline
-            # already reads 0xb8 with ldc0_valid=1. The valid bit is then set for somebody else's
-            # load, the granule apertures describe an unrelated event, and a liveness gate PASSES
-            # on it. (Seen: recorded LDC granule 0x81170, STC 0x9f370, subject 0x91470 -- three
-            # different things.)
-            #
-            # Switch 160 (bank 3'b101 reg 0) is the added clear: level-sensitive, dominating while
-            # applied, clearing the granule address and source WITH the valid bit so a stale
-            # granule can never sit beside a fresh valid. UART-safe (160 & 3 == 0), which is what
-            # makes a mid-run clear possible at all.
-            #
-            # Requires a bitstream carrying s07-recorder-clear-39b. On an image without it the
-            # write is inert, so this is safe to leave enabled -- but then the apertures are as
-            # unattributable as before, which is why WEDGE_S07_CLEAR defaults OFF: an inert clear
-            # that looks applied is exactly the failure this is meant to remove.
-            if os.environ.get("WEDGE_S07_CLEAR") == "1":
-                try:
-                    console.set_switch(160, True); time.sleep(0.3)
-                    console.set_switch(160, False); time.sleep(0.3)
-                    log(f"    s07 recorder CLEARED via sw160 before {label}")
-                except Exception as _e:
-                    log(f"    s07 clear FAILED ({_e}) -- granule apertures are NOT attributable "
-                        f"for this arm; do not read them")
 
             t_dom = time.time()
             try:

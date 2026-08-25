@@ -861,3 +861,51 @@ because the push hook forbids branch deletion.
 **Note the new image will be S-10-ABSENT plus the clear** — two differences from the flown image.
 That is fine for this purpose: the A/B already established the fault reproduces on `39b21639d`,
 so the arm will still fault there.
+
+---
+
+# The recorder clear is FLASHED and appears to work — but the delivery path defeats it
+
+`caplifive_s07clear_84ed6eafb.bit` flashed, resident, re-read after power cycle. WNS −13.516 ns,
+approved by the project lead **with that number stated**, on the argument that the experiment is
+**self-gating**: the acceptance criteria fail loudly if timing corrupts the instrument, so a bad
+image yields a failed criterion rather than a plausible wrong reading.
+
+## Criterion 1 is UNOBSERVABLE as specified, and that is a specification error
+
+    PRE-RUN baseline    sw=208 = 0xb8   ldc0_valid=1  src=1 (miss refill)
+    after asserting 160 sw=208 = 0x98   ldc0_valid=1  src=0 (L1 hit)
+
+**The switches are BOTH the clear input and the read selector.** Reading aperture 208 writes the
+switch byte to 208, which **de-asserts 160** — so *the act of reading releases the clear*. It is
+level-sensitive (correctly), the recorder re-arms first-wins, and with Linux running an untagged
+`ldc` re-takes the slot before the read lands.
+
+So `ldc0_valid=1` with a **fresh `src`** is a re-capture, not a failed clear. `src` changing
+1 -> 0 is evidence the clear DID fire — a no-op clear would have left the record untouched.
+
+**Recorded as: the clear probably works; criterion 1 as written cannot observe it.** NOT recorded
+as a pass — the acceptance criterion is not being relaxed because its result was inconvenient.
+
+## The same mechanism defeats the intended USE, which is the real problem
+
+* **Switch writes do not complete mid-run.** `set_switch` timed out on `switch_state` at BOTH
+  10 s and 30 s while the console streams UART, so there is no clearing between arms.
+* **Clearing in the pre-run phase works** — but the clear is released as soon as anything touches
+  the switches, and **Linux consumes the slot again** before the domain runs. That is the same
+  first-wins consumption the clear was built to solve, moved later in time.
+
+Three options put to the RTL lane: make the clear **edge-triggered** (clear on 0->1, stay
+cleared, so reads do not re-arm); **gate the re-arm on domain entry** so the first recorded LDC is
+necessarily the domain's; or a **read aperture that does not collide** with 160 (fixes
+verification only, not the Linux consumption).
+
+## Also settled this round
+
+* **The switches were NOT left stuck.** A later baseline read `0xb8` again, so the earlier `0x18`
+  came from a VOID boot's store page fault, not from a held clear. The "accidental evidence the
+  clear works" reading from that byte is WITHDRAWN.
+* **The software route is dead, measured.** The entry-marker build has now completed ~4 times and
+  wedged 0, against 5/5 for the un-probed binary. Every software probe built this session removes
+  the fault, which is exactly why the hardware clear matters.
+* **The fault still reproduces** on the new bitstream, and the memory map did not move.
