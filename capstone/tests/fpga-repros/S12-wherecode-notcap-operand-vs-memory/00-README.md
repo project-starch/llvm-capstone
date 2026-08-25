@@ -1432,3 +1432,55 @@ can read the operand on an image that actually wedges.
   (`sbi_capstone.c:924-926`): `ENT0` then silence = died before the switch; `ENT1` then silence =
   control genuinely left M-mode and the domain owns the wedge; `ENT2` = returned. Both wedges show
   `ENT0`+`ENT1` then silence.
+
+## RETRACTED (3rd time): "layout decides it" is DEAD. Address is not the variable.
+
+The address-only experiment, built properly this time. `CAPSTONE_TEXT_PAD=1120` inserts dead,
+never-called nops at the top of `.text` — no globals, no control flow — tuned offline in two
+builds so `sqlite3WhereCodeOneLoopStart` lands at **exactly `0x104c0c`**, the address at which the
+probe builds completed. Gates run BEFORE the boot, which is what the retracted attempt skipped:
+
+```
+instruction count          4600 == 4600
+STRUCTURAL diffs in fn     0            (605 immediate/label-only, from pcrel shifts)
+.capstone_gp_initdesc      VA+size IDENTICAL
+.rodata / .data / .bss     VA+size IDENTICAL
+residual                   .gct +0x50, gp_table VA +0x50 (SIZE unchanged -> same indices)
+```
+
+**It wedges.** `ENT0=1, ENT1=1`, no `ENT2` — control left M-mode and the domain owns it. Latched
+trap `mcause 25`, `mepc 0x828f4c98` = `0x104c0c + 0x8c`, and the instruction there is the same
+`cincoffsetimm a4, a4, 0xb0` preceded by the same `ldc a4, 0x0(a0)`.
+
+| image | `WhereCode` @ | globals @ | fault | cause |
+|---|---|---|---|---|
+| baseline | `0x104788` | `0x150000` | `+0x8c` ×2 | 25 |
+| GOFF moved | `0x104788` | `0x160000` | `+0x8c` | 25 |
+| **TEXT_PAD** | **`0x104c0c`** | `0x150000` | **`+0x8c`** | **25** |
+| probe in WhereCode | `0x104b48` | `0x150000` | — completes | |
+| probe in WhereMalloc | `0x104c0c` | `0x150000` | — completes | |
+
+**Same address, opposite outcomes.** `TEXT_PAD` and the WhereMalloc-probe build both put the
+function at `0x104c0c`; one wedges and one completes. Address cannot be the variable, and neither
+can the globals region. **What is left is the code change the probe introduced** — the register
+allocation inside the fault function (958 structurally different instructions), the nine extra
+gp-table entries, and the changed cap-init length. The `TEXT_PAD` build has none of those and
+faults exactly like the baseline.
+
+So the correct statement is the narrow one: **something about the code generated for this function
+(or the cap-table/cap-init geometry around it) decides the fault, and pure placement does not.**
+
+### And a self-inflicted error, recorded because it is the same class
+
+This boot's driver line first read `latched trap (24/...)`, and I began interpreting mcause 24 —
+checking whether it was `NO_EXCEPTION` or the `commit_stage` off-by-one at `commit_stage.sv:205-228`.
+It was neither. Earlier today I "fixed" the message's hardcoded `25` by interpolating
+`_latched & 0x7f` — but `_latched` is the latched **mepc**, not the cause, and `0x828f4c98 & 0x7f`
+is 24 by coincidence. The trap log itself read `0x99` → cause `0x19` = **25** all along.
+
+The original hardcoded `25` was wrong for a different reason (it printed 25 even when the latch
+held cause 9), so the defect was real — but my fix invented a number out of an address. It now
+reads the cause from the trap-log value (`traplog_v & 0x7F`), which is where it was available the
+whole time. **A "fix" that produces a plausible number from the wrong variable is worse than the
+bug it replaced**, and it very nearly bought a mechanism investigation into an exception code that
+was never raised.

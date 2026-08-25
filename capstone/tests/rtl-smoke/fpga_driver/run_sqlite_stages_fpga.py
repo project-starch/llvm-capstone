@@ -2954,8 +2954,9 @@ def main():
                             elif _csr["$mcause"] != 25 or _csr["$mepc"] != _latched:
                                 print(f"  [wedge] mtval DISCARDED: gdb mcause/mepc "
                                       f"({_csr['$mcause']}/{_csr['$mepc']}) do not match the "
-                                      f"latched trap ({_latched & 0x7f}/{_latched}). The CSRs "
-                                      f"were clobbered by "
+                                      f"latched trap "
+                                      f"({'?' if _cause is None else _cause}/{_latched}). "
+                                      f"The CSRs were clobbered by "
                                       f"a later trap, so mtval belongs to a DIFFERENT fault.",
                                       flush=True)
                             else:
