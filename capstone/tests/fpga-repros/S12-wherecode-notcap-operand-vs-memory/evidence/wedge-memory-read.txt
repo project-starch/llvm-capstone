@@ -1,0 +1,36 @@
+The decisive read: memory INTACT and TAGGED at the wedge, consumer got zero.
+
+Result lines only, not the raw capture. A raw board log is contaminated by construction --
+kernel and driver banners carry account names and build hostnames -- so scrubbing it is
+endless and per-log. These twelve lines are the evidence and are better evidence than 1100.
+
+Run: control sqbase.dom returned in 7 s (so the boot carries verdicts);
+     subject sqrt.dom --slt q_two.test WEDGED, DBAS 0x82800000, un-probed binary.
+
+  [wedge] trap mepc = 0x00000000828f4ba0
+  [wedge] trap tval = 0x0000000000000000
+  [wedge] gdb frame: s0(x8)=0x82b9f3d0  sp=0x82b9e790
+          s0 - DBAS = 0x39f3d0   PLAUSIBLE (inside the 4 MiB domain)
+          subject slot = 0x82b9f360  granule 0x82b9f360  tag byte 0xbc58cc63
+          granule data: 0x82b9f360:  0x0000000082be4cf0
+          shadow tag:   0xbc58cc63:  0x01
+
+Checks that make these numbers mean something:
+
+  mepc  -> VA 0x104ba0 = sqlite3WhereCodeOneLoopStart+0x8c, the faulting cincoffsetimm.
+  s0-sp = 0xc40 = the prologue's 0x7f0 + 0x450, so the core is halted inside that
+        function's own frame, past its prologue and before any further call.
+  s0    = 0x82b9f3d0, BIT-IDENTICAL to the previous firing boot -> deterministic call depth.
+  tag address: 0xBC2D2D2D + ((0x82b9f360 - 0x80000000) >> 4) = 0xBC58CC63, the address read.
+  granule data == the value the group-9 store watchpoint recorded being written (0x82be4cf0).
+
+Reading:
+
+  memory holds the value AND the tag byte is 1  -> the memory path did NOT lose it
+  tval = 0                                      -> the consumer was handed cursor 0
+  therefore the value was never DELIVERED, not never STORED
+
+Limit that travels with this: a DRAM read reports what DRAM holds, not what the load saw.
+The documented issue/return desync runs DRAM-stale-high with L1 correct-low; the mirror case
+is UNRESOLVED. So this excludes memory having LOST the value. It does not on its own prove
+the load returned what memory holds.

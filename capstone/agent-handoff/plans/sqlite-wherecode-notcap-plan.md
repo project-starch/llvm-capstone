@@ -1615,3 +1615,58 @@ rather than a silent zero.
 The instrument is already written and already aimed; it failed on a driver `UnboundLocalError`
 immediately after printing the frame registers. **That one-line bug is the single highest-value fix
 in this whole trail** — it was three lines away from settling the fork two boots ago.
+
+---
+
+# THE FORK IS SETTLED: memory is INTACT and TAGGED, the consumer got zero
+
+Read over GDB at the wedge, on the un-probed binary, with nothing added to the domain:
+
+    [wedge] trap mepc     = 0x00000000828f4ba0     (+0x8c, the faulting cincoffsetimm)
+    [wedge] trap tval     = 0x0000000000000000     what the CONSUMER received
+    [wedge] gdb frame     : s0(x8)=0x82b9f3d0  sp=0x82b9e790
+            subject slot  = 0x82b9f360
+            granule data  = 0x0000000082be4cf0     <== THE VALUE IS THERE
+            shadow tag    = 0x01                   <== AND IT IS TAGGED
+
+Tag address arithmetic checked rather than trusted:
+`0xBC2D2D2D + ((0x82b9f360 - 0x80000000) >> 4) = 0xBC58CC63`, which is the address read.
+
+## What this decides
+
+| hypothesis | prediction | result |
+|---|---|---|
+| **Memory path** — the slot lost the value | granule reads 0 / untagged | **REFUTED** |
+| **Delivery** — memory fine, consumer got the wrong operand | granule intact and tagged | **SUPPORTED** |
+
+**The memory-path reading is now dead, and I had published it.** Three independent numbers agree
+that memory did its job: the store watchpoint recorded `0x82be4cf0` written; the granule still
+holds `0x82be4cf0` at the wedge; and the shadow tag byte reads `1`. Meanwhile `tval` says the
+consumer was handed cursor `0`.
+
+**The value was never lost. It was never delivered.**
+
+## Why this is trustworthy, and where it still is not
+
+* `s0 = 0x82b9f3d0` is **bit-identical to the previous firing boot**, so the call depth is
+  deterministic and the slot address is not a one-off coincidence.
+* The DBAS guard fired correctly on arm 1 again (`0x82400000` vs the `0x82800000` the address was
+  derived from) and that arm's group-9 dump came back empty — the negative control still works.
+* **The honest limit:** a DRAM read reports *what DRAM holds*, not *what the load saw*. The
+  documented issue/return desync runs DRAM-stale-high while L1 is correct-low; the mirror case is
+  UNRESOLVED. So this does not by itself exclude the load returning something different from what
+  memory holds — it excludes memory having *lost* the value, which is a weaker and different claim
+  than "the load path is innocent".
+
+## What remains open, stated as the next question rather than a conclusion
+
+The fault is now bracketed to **[load memory access → consumer operand delivery]**, and the prime
+suspect is a stale operand: `movc a4, zero` at +0x80 makes `a4`'s prior architectural value exactly
+the `{cursor 0, NOT_CAP}` the FLU received.
+
+**The obvious mechanism for that has already been refuted by measurement** — the wrong-producer
+forwarding theory needs two live scoreboard entries sharing an `rd`, and a scoreboard checker with a
+proven heartbeat measured **zero** such cycles with peak occupancy 2 of 8, even under a scalar test
+built to force backpressure. So the *location* is established and the *mechanism* is not.
+
+Going to an auditor before this enters ISSUES.md.

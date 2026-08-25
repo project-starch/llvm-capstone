@@ -8,9 +8,22 @@ an **untagged capability surviving a store/reload pair**, that is **S-07**, not 
 **R-20 — `stc`/rs1 cursor forwarding** (`R20-stc-rs1-cursor-forward-x10/`). Read that one before
 this one.
 
-**This folder is about a fault whose CAUSE IS NOT ESTABLISHED.** It is open, and it is written to
-be handed over in that state rather than held back until it is tidy. What is settled is what has
-been *excluded*, and that is worth more than it sounds: the software explanation is gone.
+**This folder is about a fault whose MECHANISM IS NOT ESTABLISHED.** It is open, and it is
+written to be handed over in that state rather than held back until it is tidy. Its *location*,
+however, now is established, and that is the headline:
+
+> **Memory is intact and tagged at the wedge. The consumer received zero.**
+> The value was never lost. It was never delivered.
+>
+>     granule data at the slot : 0x0000000082be4cf0   <- the value IS there
+>     shadow tag byte          : 0x01                 <- and it IS tagged
+>     tval at the trap         : 0x0000000000000000   <- what the consumer got
+>
+> So this is **not** a software NULL, and **not** a memory-path loss. Both are excluded by
+> measurement. The fault lies between the load's memory access and the consumer's operand.
+
+A memory-path reading of this bug was published earlier in the investigation and is **retracted**;
+see "What this excludes" below.
 
 ---
 
