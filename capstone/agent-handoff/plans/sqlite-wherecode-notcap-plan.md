@@ -959,3 +959,215 @@ yields a stale record, a worse failure mode than a visibly empty one. A non-coll
 aperture (option 3) fixes the observation and not the thing observed.
 
 **Cost: another synthesis and another reflash — the project lead's call, not ours.**
+
+---
+
+# Scoping the ONE remaining RTL change — auditor findings, and a route that may need none
+
+The project lead's constraint: synthesis is ~90 min plus a reflash, so **this must be the last RTL
+update**. RTL synthesis is HELD while both lanes audit the scope.
+
+## The STC gap is CONFIRMED, and capmode would NOT fix it
+
+`store_unit.sv:549-553` has **no** `!s07_stc_valid_q` guard, no clear, no scoping — unlike the LDC
+side. And gating it on capmode changes nothing: the subject `stc`, the nine intervening stores and
+the reload all execute **inside the same domain**, so capmode is 1 throughout. **Last-wins is the
+binding problem and capmode is not a per-store selector.**
+
+**So if the STC record is needed, that is a SECOND RTL change** (first-wins + clear, mirroring the
+LDC side). Exactly the batching question the "make this the last one" constraint exists for — and
+the reason holding was right rather than shipping the capmode gate alone.
+
+## The no-RTL route: read the frame pointer at the halt
+
+At a wedge the core is **halted**, so the frame pointer is directly readable — no instrumentation,
+on the un-probed binary that wedges 5/5, where every in-domain probe REMOVES the fault.
+
+    slot     = s0 - 0x70          (s0 = x8)
+    granule  = slot & ~0xF
+    tag byte = 0xBC2D2D2D + ((granule - 0x80000000) >> 4)
+
+**`s0` IS a frame pointer — verified in the current binary, not assumed:**
+
+    104a70: movc s0, sp                  <== s0 := sp
+    104a74: cincoffsetimm s0, s0, 0x7f0
+
+Not `-fomit-frame-pointer`; `s0` is written from `sp` in the prologue. That is what licenses
+computing a slot from a halted register read — "the store is written relative to s0" and "s0 is
+the frame pointer" are different claims and only the second licenses it.
+
+**Deriving the address from build metadata was tried and FAILS.** The layout arithmetic is clean —
+`code_size + blob + captable + storage + STACK = 4192768` for every build, so the stack END is
+fixed at `DBAS + 0x3FFA00` — but measured slot offsets still differ by **64 bytes** between builds
+whose only difference was INSIDE the faulting function. Call-chain consumption is not derivable.
+
+## The tag-address formula: the header comment is WRONG, and dangerously so
+
+    ariane_pkg.sv:592        CAP_TAG_MEM_BASE + (data_paddr >> 4)              <- NO subtraction
+    wt_axi_adapter.sv:158    TAG_MEM_BASE + ((paddr - DATA_MEM_BASE) >> 4)     <- the actual code
+
+`DATA_MEM_BASE = MEMORY_BASE = 0x8000_0000`. **The subtraction is real.** Dangerous rather than
+merely wrong: for a domain paddr the two differ by ~5.7 MB and **both land inside the tag region**,
+so the wrong one returns a real byte from an unrelated granule with nothing to flag it. Two
+independent derivations agree on the subtracting form — that agreement, not either alone, is what
+makes the read safe. The comment fix rides along with a future change; a comment cannot justify a
+synthesis, and touching that file would invalidate the resident image's provenance.
+
+## Two caveats on the tag byte, both stated rather than assumed away
+
+* **Drain staleness.** The DRAM tag write is not synchronous with retirement, so a byte read
+  before the subject store's write-buffer entry drained would hold the PREVIOUS occupant's tag —
+  and a `0` would read as "never tagged" when the truth is "not landed yet". That is a
+  confident-and-wrong answer pointing straight at software-NULL. **Almost certainly not biting:**
+  the drain is not gated on the core (`miss_req_o = (|dirty) && free_tx_slots`, handshake from the
+  memory side), so a wedged core stops issuing while the buffer keeps draining, and seconds pass
+  before the halt-and-read. Recorded as an inference from the drain logic, NOT a measurement.
+* **Direction residual.** The documented issue/return desync runs the OPPOSITE way (DRAM stale
+  HIGH, L1 correct low). The mirror case — DRAM stale LOW after a genuinely tagged store — is
+  UNRESOLVED: nothing says it is impossible and the path is direction-symmetric, but nobody has
+  traced it. **So a tag byte of 1 is strong; a 0 carries this residual.**
+
+## Independent witness for the ADDRESS, and its asymmetry
+
+`cva6.sv:1352-1355` exposes `s07_ldc0_paddr[19:4]` at switches **205/206**, driven by switches
+rather than by any instruction — so it **perturbs nothing**, the property every in-domain probe
+lacks. Cross-checked against the `s0`-derived granule in the driver.
+
+**Asymmetric by construction:** the recorder is first-wins and may still hold BOOT SOFTWARE's
+capture, so a **MATCH is strong** (two independent routes agreeing on one address) while a
+**MISMATCH is INCONCLUSIVE** — it may simply be somebody else's record — and is NOT a refutation
+of the `s0` derivation. The driver says so in its own output rather than leaving it to be read
+wrongly later.
+
+---
+
+# The RTL change may not be needed at all: the instrument is already on the board
+
+Two audits ran in parallel against the "one last bitstream" scope. Both **refuted the change I was
+about to request**, and the second turned up an asset nobody had used.
+
+## The capmode gate is REFUTED — it would have filtered nothing
+
+`core/csr_regfile.sv:295`:
+
+    assign capmode_d = capmode_q | capmode_set_i;   // set by CAPENTER, sticky
+
+An OR. The only write of 0 is reset (`:2994`). **No clear on domain exit, return, trap or wedge** —
+and `CAPENTER` executes in the monitor's own init (`sbi_capstone_init.S`, reached from
+`sbi_hart.c:1085`, the last statement before entering S-mode), so capmode is 1 for the monitor, for
+Linux, and for domains alike. Verified in the flashed image itself, not the working tree:
+
+    80020014: 1a94105b   <unknown>      <- CAPENTER, funct7 0x0d
+    80020018: a009       j sbi_capstone_init_cap
+
+The gate closes on an empty set. Worse than useless: it would have made the recorder look fixed
+while changing nothing, on a run whose whole point was to be the last one.
+
+**And the thing actually eating the slot is worse than "Linux somewhere":** the monitor's trap entry
+does `LDC(gp, sp, -16)`, installed as `ctvec` *after* the CAPENTER, so **every ecall and every timer
+tick** issues an untagged-capable LDC with capmode already 1. The window is not "something might";
+it is "something will, on a millisecond cadence".
+
+## The STC recorder cannot be fixed by scoping either — and the disassembly says why
+
+An independent read of the actual window in the shipped binary (`sqbase.dom`,
+`sqlite3WhereCodeOneLoopStart` at 0x1043b0):
+
+    1043e8  cincoffsetimm a0, s0, -0x70     a0 = s0 - 0x70
+    1043f0  stc  a2, 0x0(a0)                <== THE SUBJECT STORE
+    1043f8  stc / 1043fc sw / 104404 stc / 104408 stc / 104410 sd
+    10441c  stc / 104420 sw / 104428 sw / 104434 stc      <== 9 stores, 5 of them stc
+    104438  ldc  a4, 0x0(a0)                <== THE RELOAD
+    10443c  cincoffsetimm a4, a4, 0xb0      <== THE FAULT, +0x8c
+
+Last-wins over *any* capability store means the record at the wedge is the store at `0x104434`,
+0xb0 bytes away — so `s07_gran_match` is **guaranteed 0** and the verdict byte degenerates to
+exactly the useless answer already measured. Capmode does not help: all nine stores are in-domain.
+
+**One incidental result worth more than the instrument it came from.** `s0` is the entry `sp`
+(`sp -= 0x7f0`, `s0 = sp + 0x7f0`, both multiples of 16), so `[s0-0x70, s0-0x60)` is a granule, and
+the four plain stores target `s0-0x74`, `s0-0x98`, `s0-0x10c`, `s0-0x110` — **all in other
+granules**. So the subject granule's tag is *not* legitimately cleared between store and reload.
+`stc_clobbered` is excluded as an explanation, and a tag read of that granule is unambiguous on
+that axis. That holds independently of which instrument eventually reads it.
+
+## The asset: `core/tracer.sv` logs the tag bit, and it is ALREADY IN THE FLASHED BITSTREAM
+
+    core/tracer.sv:126-131
+      end else if (commit_instr_i[i].op inside {LDC, STC}) begin
+          group_id = 4'd2;
+          payload  = {63'b0, commit_instr_i[i].cap_result.result_metadata[CapTagBit]};
+
+Every LDC and STC commit, with **its PC and its real tag bit**. 256-entry ring; the dump FSM is
+clocked independently of the core; output reaches the physical console TX
+(`cva6.sv:930` → `ariane_xilinx.sv:808` → `ariane_peripherals_xilinx.sv:316`); and the board server
+**parses the format natively** (`/api/trace-start` → `trace_result {text}`), already wrapped by the
+driver at `fpga_console.py:694`.
+
+**It is in the bitstream on the board right now.** Checked against the revision the resident
+bitstream was built from, not the working tree — the distinction that matters, since the tree is
+ahead of what is flashed:
+
+    git show 80843404c:core/cva6.sv    -> :960 `tracer #(`  :966 `) i_tracer (`
+    git show 80843404c:core/tracer.sv  -> 436 lines, CapTagBit=64 at :94,
+                                          identical group-2 payload at :126-129
+
+Arming is CSR **0x810** (`csr_regfile.sv:213` decl, `:1787` write, `:449` readback), and it is
+**not** in the domain-switch context list (`csr_regfile.sv:405-432` covers reg_ids 1-8, 9-25 cpmp,
+57-66 — no trace), so it survives CAPENTER. Controls: ring mode `sw[2]`, dump `sw[1]`, TX mux
+`sw[0]`.
+
+**Why this is the right instrument and every software probe was the wrong one:** it adds **zero
+in-domain instructions**. Every probe built so far perturbs the binary and the fault disappears
+(probed builds complete ~4/4, un-probed wedge 5/5) — the single fact that has blocked this
+investigation throughout. A commit-stage observer is outside that bind entirely.
+
+## It is UNPROVEN, which on this project means broken
+
+The tracer has never been shown to fire on this silicon. So the next boot is a **positive control
+on a non-wedging domain** — not the wedge run. Open, and to be settled by that control rather than
+by argument:
+
+* Does the dump FSM complete against a **wedged** hart rather than a merely halted one? It looks
+  independently clocked, which is the whole attraction, but that is a reading, not a measurement.
+* **Ring polarity.** `overwrite_i=1` keeps the LAST 256 entries; `=0` keeps the FIRST 256 and then
+  silently drops (`tracer.sv:163`, `:227`). SQLite issues far more than 256 LDC/STC pairs before
+  reaching the fault, so first-256 is guaranteed to miss the window. Last-256 is right **only if
+  the wedged core is not spinning through a trap handler that itself issues LDCs** — and the
+  monitor's trap entry does exactly that. This is the one that decides whether the route works.
+* Enable **group 2 only** — bit 0 and bits 16+ off — or a spinning wedge appends trap frames until
+  the ring is nothing but exception records.
+
+## Three corrections made while setting the run up, each caught by a gate rather than by care
+
+**1. The subject binary was wrong, and it invalidated the whole previous boot.** The frame-pointer
+route was pointed at `sqem.dom`. `sqem` is a **probed** build and completes on every boot; the
+un-probed build that wedges 5/5 is **`sqrt.dom`**. The s0 route's entire value is that it needs no
+in-domain probe, so running it against a probed binary tests nothing — and the boot came back
+"completed", which reads like a non-firing draw rather than like a mis-aimed experiment. The
+window transfers unchanged between the two binaries (verified instruction-by-instruction: both
+carry `cincoffsetimm a0, s0, -0x70` at +0x38, the subject `stc` at +0x40, the reload at +0x88 and
+the fault at +0x8c), and `movc s0, sp` at +0x0c confirms the frame pointer in `sqrt.dom` itself —
+but that is a fact I checked afterwards, not a reason the run was sound.
+
+**2. `SLT-FAIL query line=14 nvalue=0 nexpected=1` is the TEST FILE's bug, not a silicon result.**
+Both `q_one.test` and `q_two.test` declare `----\n0`, expecting one value, while querying an
+**empty** table, which correctly yields zero rows. Settled by running the native oracle rather than
+by reading the file: `slt_native` produces the **byte-identical** failure line and summary for both
+tests. So the arm that "failed" actually completed correctly, and the matched pair is measuring
+wedge-vs-return, not answer correctness — which is what it was built for.
+
+**3. The resident bitstream was NOT the one assumed.** The preflight guard hard-stopped with
+*"resident bitstream is `caplifive_s07clear_84ed6eafb.bit`, expected `caplifive_s10fix_80843404c.bit`"*
+— before powering the board, so no boot was spent. The tracer verification had been done against
+`80843404c`. Re-checked against the revision that is **actually resident**: `84ed6eafb` carries the
+same 436-line `core/tracer.sv`, the same group-2 payload at `:126-129`, the same `CSR_TRACE_ENABLE`
+at `csr_regfile.sv:213/449/1787`, and the same switch wiring (`cva6.sv:929-930`, `:970-971`). The
+conclusion is unchanged, but it was luck rather than method: **verify against the resident hash,
+not against the revision you happen to have been reading.**
+
+Two more caught by the preflight in the same launch: `SQLITE_STAGE_DOMS` splits on **`,`**, so a
+space-separated pair is one arm (*"1 domains requested"*), and `FPGA_BITSTREAM` unset means the
+resident-silicon guard *cannot fire* — it says so and blocks rather than passing quietly. Three
+gates, three real errors, zero board time. That is what these gates are for, and it is worth
+noting that none of the three would have announced itself in the results.

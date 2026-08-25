@@ -592,6 +592,98 @@ def decode_probe(obs):
     return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
 
 
+
+# ---------------------------------------------------------------------------
+# THE TRACER: group 2 = every LDC/STC commit, with its PC and its REAL TAG BIT.
+#
+# Why this instrument and not another. Every software probe built for this bug adds
+# instructions INSIDE the domain, and every one of them makes the fault disappear
+# (probed builds complete ~4/4; the un-probed build wedges 5/5). The tracer observes at
+# the commit stage, so it adds nothing to the domain image at all -- it is outside that
+# bind by construction. It is already in the flashed bitstream: checked against the
+# revision the resident bitstream was built from, `git show 80843404c:core/tracer.sv`,
+# not the working tree, which is ahead of what is on the board.
+#
+# What the tag bit MEANS, per side (core/ex_stage.sv:821-822 and :854-855):
+#   LDC -> "the real granule tag from the dcache response"  (what the load got back)
+#   STC -> "the real rs2 register tag"                      (what software handed over)
+# So one dump carries both halves of the spill-vs-reload fork, each attributed to a PC.
+#
+# SWITCH CONFLICT, and why the dump must come FIRST. sw[0] muxes the console TX over to
+# the tracer and sw[1] triggers a dump, but those same lines are debug_reg_sel[1:0] -- so
+# the aperture walk toggles them as a side effect of selecting a register. Walking
+# apertures before dumping fires spurious dumps into the terminal and steals the console.
+# Dump first, then read apertures.
+TRACER_MASK    = int(os.environ.get("TRACER_MASK", "0x4"), 0)  # bit 2 = group 2 only
+SW_TRACER_RUN  = 0x4   # bit2 ring-mode(keep newest) | bit1 low no dump | bit0 low console TX
+SW_TRACER_DUMP = 0x7   # + bit1 dump trigger | + bit0 TX mux -> tracer
+CSR_TRACE_ENABLE = 0x810                                        # csr_regfile.sv:213
+
+
+def arm_tracer(console, C, mask=TRACER_MASK):
+    """Write the group mask to CSR 0x810 and PROVE it took. Returns True if armed.
+
+    An unverified write is worse than none: the run would look valid and the empty dump
+    would read as "the tracer does not fire on this silicon", which is a conclusion about
+    the instrument masquerading as one about the subject. So this reads the CSR back and
+    reports a hard NOT ARMED rather than letting a void run proceed quietly.
+
+    CSR 0x810 survives CAPENTER: it is absent from the domain-switch context list
+    (csr_regfile.sv:405-432 covers reg_ids 1-8, 9-25 cpmp, 57-66 -- no trace), so arming
+    once after boot covers every arm of the boot."""
+    reg = f"$csr{CSR_TRACE_ENABLE}"          # OpenOCD names RISC-V CSRs by decimal number
+    console.gdb_start()
+    try:
+        console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+        console.gdb_cmd(f"set {reg} = {mask}", C.GDB_PROMPT, timeout=15.0)
+        mark = len(console.gdb_text)
+        console.gdb_cmd(f"p/x {reg}", C.GDB_PROMPT, timeout=15.0)
+        back = console.gdb_text[mark:]
+        m = re.search(r"=\s*(0x[0-9a-fA-F]+)", back)
+        got = int(m.group(1), 16) if m else None
+        console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+    finally:
+        console.gdb_stop()
+    if got == mask:
+        log(f"  [tracer] ARMED: CSR 0x810 = {mask:#x} (group 2 = LDC/STC + tag), verified by readback")
+        return True
+    log(f"  [tracer] NOT ARMED -- readback gave {got!r}, wanted {mask:#x}. "
+        f"Every dump this boot is therefore UNINTERPRETABLE: an empty ring would say "
+        f"nothing about whether the tracer works. Treat this boot as VOID for the tracer.")
+    return False
+
+
+def tracer_dump(console, C, tag, timeout=150.0):
+    """Trigger a dump and return the server-parsed frame text ('' on failure).
+
+    The board server parses the 16-byte frames natively (POST /api/trace-start routes UART
+    to its trace parser and answers with trace_result), so this does not have to decode
+    them -- which matters, because the console decodes UART as utf-8/replace and would
+    mangle raw binary irreversibly."""
+    global _SW_CURRENT
+    try:
+        mark = console.now()
+        console._post("trace_start")            # route UART -> parser BEFORE the TX mux moves
+        set_switch_value(console, SW_TRACER_DUMP)
+        data = console.wait_event(C.LISTEN["trace_result"], timeout=timeout, since=mark)
+        text = str(data.get("text", "")) if isinstance(data, dict) else str(data)
+    except Exception as exc:
+        log(f"  [tracer] dump({tag}) produced no result: {type(exc).__name__}: {exc}")
+        text = ""
+    finally:
+        # Restore the console unconditionally. Leaving sw[0] high hands the TX to the
+        # tracer, and the next arm's shell output would vanish -- which reads exactly
+        # like a wedge.
+        try:
+            set_switch_value(console, SW_TRACER_RUN)
+            console._post("trace_cancel")
+        except Exception as exc:
+            log(f"  [tracer] WARNING: could not restore the console after dump({tag}): {exc}")
+    n = len([l for l in text.splitlines() if l.strip()])
+    log(f"  [tracer] dump({tag}): {len(text)} chars, {n} non-empty lines")
+    return text
+
+
 def main():
     # BEFORE the board is touched: a blocked run must cost no lock, no power cycle
     # and no JTAG upload. The gate encodes C1-C14, every one a failure that already
@@ -687,6 +779,13 @@ def main():
                 if _boot_attempt == 3:
                     raise
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
+
+        # ARM THE TRACER, once per boot, before any domain runs.
+        TRACER_ON = os.environ.get("WEDGE_TRACER") == "1"
+        tracer_armed = False
+        if TRACER_ON:
+            set_switch_value(console, SW_TRACER_RUN)   # ring mode on, dump off, console TX ours
+            tracer_armed = arm_tracer(console, C)
 
         # PRE-RUN BASELINE: is the one-shot LDC record already spent before ANY domain runs?
         #
@@ -993,6 +1092,28 @@ def main():
                 log(f"<-- TEST {dom_idx}/{n_tot}  {label}  NO RETURN within "
                     f"{PER_DOM:.0f}s ({type(exc).__name__}) -- everything after this is lost")
             text = console.uart_since(mark)
+
+            # TRACER DUMP -- FIRST, before anything else touches the switches.
+            #
+            # Ordering is not stylistic: the aperture walk drives debug_reg_sel[1:0], which
+            # ARE sw[1] (dump trigger) and sw[0] (TX mux). Reading apertures first would fire
+            # stray dumps into the terminal and hand the console away mid-run.
+            #
+            # A FLOODED RING IS STILL A RESULT, and it is the one that decides ring polarity.
+            # The monitor's trap entry issues LDC(gp, sp, -16) -- group 2, the very group
+            # enabled here -- so if the wedge is a trap SPIN rather than a hang, the newest-256
+            # ring is scavenged clean of the subject within microseconds and the dump comes
+            # back as monitor trap-stack PCs. That answer is worth having: it says the wedge is
+            # live, and it says to re-run with overwrite LOW and arm as late as possible.
+            if TRACER_ON and tracer_armed:
+                tr = tracer_dump(console, C, f"arm{dom_idx}{'-WEDGED' if wedged else ''}")
+                if tr:
+                    OUT_TR = f"{RAW_OUT.rsplit('.', 1)[0]}-trace-arm{dom_idx}.txt"
+                    with open(OUT_TR, "w") as _fh:
+                        _fh.write(tr)
+                    log(f"  [tracer] frames written to {OUT_TR}")
+                    for _l in tr.splitlines()[:12]:
+                        log(f"  [tracer]   {_l}")
 
             # A MISSING DOMAIN MUST NOT READ AS SUCCESS.
             #
@@ -2161,7 +2282,22 @@ def main():
                             console.gdb_start()
                             console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                             _csr = {}
-                            for _e in ("$mcause", "$mepc", "$mtval"):
+                            # READ THE FRAME POINTER TOO -- this is the no-instrumentation route
+                            # to the subject slot's physical address.
+                            #
+                            # The faulting frame's slot is `s0 - 0x70`, and s0 is register x8. At a
+                            # wedge the core is HALTED, so it is directly readable -- on the
+                            # UN-PROBED binary, which wedges 5/5, where every in-domain probe that
+                            # could report the address instead REMOVES the fault (probed builds
+                            # complete ~4/4). Build metadata cannot substitute: the stack END is
+                            # fixed at DBAS+0x3FFA00 for every build, but measured slot offsets
+                            # still differ by 64 B between binaries, so call-chain consumption is
+                            # not derivable from the layout.
+                            #
+                            # VALIDATE THE READ. GDB against a wedged core has returned junk before
+                            # (mcause=2 mepc=2 mtval=0, and the AXI pattern 0xca11ab1ebadcab1e), so
+                            # an s0 outside the domain's stack range is NOT an address.
+                            for _e in ("$mcause", "$mepc", "$mtval", "$x8", "$sp"):
                                 _s = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"p/x {_e}\n")
                                 try:
@@ -2172,6 +2308,67 @@ def main():
                                     _csr[_e] = None
                             print(f"  [wedge] gdb CSRs: mcause={_csr['$mcause']} "
                                   f"mepc={_csr['$mepc']} mtval={_csr['$mtval']}", flush=True)
+                            _s0 = _csr.get("$x8")
+                            _spv = _csr.get("$sp")
+                            print(f"  [wedge] gdb frame: s0(x8)="
+                                  + ("UNREAD" if _s0 is None else f"0x{_s0:x}")
+                                  + "  sp=" + ("UNREAD" if _spv is None else f"0x{_spv:x}"),
+                                  flush=True)
+                            if _s0 is not None and _bm:
+                                _dm2 = re.findall(r"DBAS:([0-9A-Fa-f]{8})", console.uart_text)
+                                if _dm2:
+                                    _db = int(_dm2[-1], 16)
+                                    _rel = _s0 - _db
+                                    # domain allocation is 4 MiB; the stack lives in its top part
+                                    _plaus = 0 < _rel < 0x400000
+                                    print(f"          s0 - DBAS = 0x{_rel:x}   "
+                                          + ("PLAUSIBLE (inside the 4 MiB domain)" if _plaus
+                                             else "OUT OF RANGE -- this is NOT a frame pointer, "
+                                                  "do not derive a slot address from it"),
+                                          flush=True)
+                                    if _plaus:
+                                        _slot = _s0 - 0x70
+                                        _gran = _slot & ~0xF
+                                        # TAG ADDRESS: the subtraction is REAL.
+                                        # wt_axi_adapter.sv:158 is
+                                        #   TAG_MEM_BASE + ((paddr - DATA_MEM_BASE) >> 4)
+                                        # with DATA_MEM_BASE = MEMORY_BASE = 0x8000_0000.
+                                        # The header comment at ariane_pkg.sv:592 OMITS the
+                                        # subtraction and is a documentation defect. This is
+                                        # dangerous rather than merely wrong: for a domain paddr
+                                        # the two formulas differ by ~5.7 MB and BOTH land inside
+                                        # the tag region, so the wrong one returns a real byte
+                                        # belonging to an unrelated granule with nothing to flag
+                                        # it. Two independent derivations agree on this form.
+                                        _tagb = 0xBC2D2D2D + ((_gran - 0x80000000) >> 4)
+                                        # INDEPENDENT WITNESS of the same granule: aperture
+                                        # 205/206 exposes s07_ldc0_paddr[19:4], driven by switches
+                                        # rather than by any instruction, so it PERTURBS NOTHING --
+                                        # the property every in-domain probe lacks.
+                                        # ASYMMETRIC, deliberately: the recorder is first-wins and
+                                        # may still hold BOOT SOFTWARE's capture, so a MATCH is
+                                        # strong (two independent routes agreeing on one address),
+                                        # while a MISMATCH is INCONCLUSIVE -- it may simply be
+                                        # somebody else's record -- and is NOT a refutation of the
+                                        # s0 derivation.
+                                        _al, _ah = _rd(205), _rd(206)
+                                        if _al is not None and _ah is not None:
+                                            _ap = (_al << 4) | (_ah << 12)
+                                            _mine = _gran & 0xFFFFF
+                                            print(f"          aperture ldc0 granule[19:4] = "
+                                                  f"0x{_ap:05x}   s0-derived[19:0] = 0x{_mine:05x}"
+                                                  + ("   MATCH -- two independent routes agree"
+                                                     if _ap == _mine else
+                                                     "   no match -- INCONCLUSIVE (the recorder "
+                                                     "may hold boot software's capture); does NOT "
+                                                     "refute the s0 derivation"), flush=True)
+                                        print(f"          subject slot = 0x{_slot:x}  granule "
+                                              f"0x{_gran:x}  tag byte 0x{_tagb:x}", flush=True)
+                                        for _lbl, _a, _f in (("granule data", _gran, "2gx"),
+                                                             ("shadow tag", _tagb, "1bx")):
+                                            _r = _rd(f"0x{_a:x}", _f)
+                                            print(f"          {_lbl}: {_r if _r else 'READ FAILED'}",
+                                                  flush=True)
 
                             # ---- SHADOW TAG + DATA READ, halted, over the SAME session ----
                             # The capability tag is a BYTE IN DRAM, one per 16-byte granule:
