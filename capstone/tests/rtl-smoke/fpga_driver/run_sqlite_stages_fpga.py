@@ -1226,6 +1226,23 @@ def main():
                            if _tav == TRACER_MASK else
                            f"(!! wanted {TRACER_MASK:#x} -- the write did NOT stick, so this "
                            f"arm's dump says nothing)"))
+                elif re.search(r"ladder-perf:", text) or "lpc" in (os.environ.get("SQLITE_HOST") or ""):
+                    # A LADDER DOMAIN ARMS ITSELF, so the HOST marker is absent by design.
+                    #
+                    # s12 computes its own slot address with `lcc` selector 2 and does the csrw
+                    # from inside the domain, precisely so no host or driver is in the path.
+                    # The old message called that "UNMEASURED -- treat any dump as
+                    # uninterpretable", which is the wrong reading and the expensive direction:
+                    # it would discard a dump that is in fact fully armed. Measured on this
+                    # path: 256 group-9 entries, one PC, one DATA value.
+                    #
+                    # The arming is still PROVEN rather than assumed -- by the dump itself.
+                    # Group 9 fires only on stores to the ARMED address, so a non-empty group-9
+                    # record IS the proof the address was right. An EMPTY one is what carries no
+                    # verdict here.
+                    log("  [tracer] ladder domain: arming is done INSIDE the domain, so no host "
+                        "marker is expected. Group 9 firing is itself the proof the armed "
+                        "address was correct; an EMPTY group 9 is what would be uninterpretable.")
                 else:
                     log("  [tracer] NO `SQ: tracearm=` in this arm's output -- either the "
                         "host was built without CAPSTONE_TRACE_ARM or it died before the "

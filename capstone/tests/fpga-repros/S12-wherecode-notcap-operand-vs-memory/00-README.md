@@ -425,3 +425,33 @@ the build changes**; they are not properties of the bug.
 
 Both arms carry group 9, including the one that returns cleanly — an empty LDC record means
 *"the load was fine"* only where group 9 has fired at the subject store on that same boot.
+
+## Group 9 FIRES in this vehicle — the precondition of the row table, measured
+
+The pending decision table reads an empty LDC record as *"the load was fine"* **only where group 9
+has fired at the subject store on the same boot**. Nobody had ever confirmed group 9 fires in this
+vehicle at all — and discovering it does not, after a reflash, would have cost the whole cycle.
+
+Measured on the CURRENT bitstream, arm 1 (the arm that returns), self-arming:
+
+    256 entries, ONE distinct PC:   0x819e043c  ->  VA 0x1043c  =  stc a2, 0x0(a3)   the SUBJECT store
+    256 entries, ONE distinct DATA: 0x819ff760                                        the stored cursor
+
+Group 9 fires **only** on stores to the armed address, so its firing is itself the proof that the
+domain's self-arm computed the correct physical address — no separate check needed, and none
+possible to forget. A single PC and a single DATA value across all 256 entries is exactly what the
+loop should produce, and rules out the record having been filled by unrelated traffic.
+
+**So the row table is usable**: an empty LDC record will be distinguishable from a mis-armed
+filter, which is the property the whole matched-pair reading rests on.
+
+### A driver message that would have inverted this result
+
+The driver announced *"NO `SQ: tracearm=` ... Arming UNMEASURED; treat any dump as
+uninterpretable"* — because that marker is printed by the SQLite **host**, and a ladder domain
+arms **itself** by design, so the marker is absent for a correct run. Taken at face value it would
+have discarded a fully-armed 256-entry dump. Scoped to say the opposite for this path: group 9
+firing *is* the proof, and an **empty** group 9 is what carries no verdict.
+
+Same class as the stale `mepc` constant: text that was true where it was written, wrong where it
+was read, and pointing toward "nothing to see" in both cases.
