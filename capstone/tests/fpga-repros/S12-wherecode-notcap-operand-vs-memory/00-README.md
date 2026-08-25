@@ -1546,3 +1546,31 @@ available before today.
 The third arm of this boot died at `SPLB:0000E010` (`CAPSTONE_ERR_SPLIT_EXACT`) on domain `id=2`,
 before `SQ: G/enter` — no verdict, exactly as in the earlier three-arm boot. Three arms is a
 gamble, not a guarantee: it is pool-state dependent. **Put the arm that matters second.**
+
+### But the slot's ADDRESS is not the variable — `gp6` moved it and still wedged
+
+| build | `s0` | slot (`a0`) | outcome |
+|---|---|---|---|
+| slt2 | `0x82b9f480` | `0x82b9f410` | WEDGE |
+| pad2 | `0x82b9f480` | `0x82b9f410` | WEDGE |
+| goff | `0x82b9f480` | `0x82b9f410` | WEDGE |
+| **gp6** | **`0x82b9f350`** | **`0x82b9f2e0`** | **WEDGE** |
+
+`gp6`'s stack sits `0x130` lower and its faulting slot is at a different address — and it wedges
+anyway. So the fault is **not** "the slot must land at one particular address", and not a fixed
+D-cache index (`paddr[11:4]` = `0x41` for the first three, `0x2e` for gp6) or granule.
+
+This matters because it kills the tempting chain *.bss → stack base → slot address → address-indexed
+structure* at its **last** link, using data already in hand. `.bss` size still separates the two
+groups across seven images; what it does downstream is not simply "moves the slot somewhere bad".
+
+The first link is independently confirmed — the stack budget tracks the pad — but **not linearly**:
+
+```
+pad=0   STACK 2347072
+pad=16  STACK 2347008     (16 bytes of .bss costs 64 of stack)
+pad=32  STACK 2346992     (32 costs 80)
+```
+
+so the carve arithmetic has its own rounding and a stack address must be **measured**, not predicted
+from a pad size.
