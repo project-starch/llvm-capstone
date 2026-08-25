@@ -1118,3 +1118,55 @@ through" was false for that half.
 Fixed to ask the total selector first and take the cursor only when there is a capability to take
 it from. Positive-tested the same day: zero `helper_cslcc` aborts, run completes, summary identical
 to the un-probed run and to native.
+
+## CONFIRMED LIVE on silicon, 2026-08-25 — and silicon-only
+
+Two arms, one boot, host and domain staged from the same build:
+
+| arm | markers | verdict |
+|---|---|---|
+| `sqslt.dom` (no `--slt`) — control | `G/enter` → `H/return` | returned in 7 s, **so the boot carries verdicts** |
+| `sqslt.dom --slt q_two.test` | `G/enter`, **no `H/return`** | **entered and WEDGED** |
+
+`G/enter` present with no `H/return` is a real wedge, not an entry stall — that distinction is the
+whole reason the arm is readable. The fault site was re-derived from the binary that actually ran:
+
+```
+latched trap  mcause=25 (UNEXPECTED_OPERAND)   mepc=0x828f4814   DBAS=0x82800000
+  -> VA 0x104814;  sqlite3WhereCodeOneLoopStart at 0x104788  ->  +0x8c
+
+104808:  movc  a4, zero               the zeroed value
+10480c:  stc   a4, 0x0(a5)
+104810:  ldc   a4, 0x0(a0)            the reload
+104814:  cincoffsetimm a4, a4, 0xb0   <- FAULTS
+```
+
+Exactly the documented signature. **Read the CSRs with care:** gdb reported `mcause=2 mepc=2`,
+which the driver DISCARDED because it disagreed with the latched trap — a later trap had clobbered
+them. Taking the gdb values at face value would have produced a completely different, wrong story.
+
+**And it does not reproduce under QEMU.** The *same* domain image running the *same* `q_two.test`
+completes in emulation (`G/enter → H/return`, `SLT-SUMMARY … completed=1`) and matches the native
+baseline record for record. S-12 is **silicon-specific**, and there is now a reference model to say
+so — the Q-01 fix.
+
+### Two arms that were NOT verdicts, recorded so they are not re-run as if they were
+
+* A three-arm boot put `q_two` **third** (domain `id=2`, region ids already `0x0A`). It returned
+  nothing, but stopped at `SQ: C/mkregion2` — before `D/mapped`, `F/share2` or `G/enter`. That is
+  a hang in **region creation, outside the domain**, while S-12 is inside it and necessarily
+  follows `G/enter`. "NO RETURN" alone does not separate the two. Put the subject in **slot 2**,
+  matching the historical configuration that wedged.
+* An earlier boot used a ladder-style `label:path` entry with `SQLITE_HOST=sqlite_host.user`. The
+  label became `argv[1]`, the loader printed `Failed to open the file.`, and the driver hard-stopped
+  the arm as a PHANTOM — correctly refusing to read the `SQ: G/enter`/`H/return` that followed,
+  which belonged to a domain that was never loaded.
+
+### Where this leaves the mechanism
+
+Open, and now bounded from both sides. The move-clear account is dead (NONLIN, measured and
+derived). The 40-line window is clean with a proven-firing detector under both consumers. So the
+trigger needs something the window does not have — cache pressure, timer traffic, rev-node churn,
+or simply the surrounding code volume — and the next step is SQLite-side bisection between the
+single-table case that passes and the self-join that does not. `q_one` and `q_two` differ by
+exactly `, t1 AS y`, and both tables are EMPTY, so no data is involved either way.

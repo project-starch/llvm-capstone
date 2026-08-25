@@ -12,6 +12,51 @@ Last updated 2026-08-09.
 
 ---
 
+## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `OPEN — reproduced on silicon 2026-08-25, does NOT reproduce under QEMU`
+
+A pure-capability SQLite domain running a **two-table self-join** wedges with `mcause 25`
+(UNEXPECTED_OPERAND) at a fixed instruction. Confirmed live on the resident bitstream
+`caplifive_s07clear_84ed6eafb.bit`, with the fault site re-derived from the binary that ran:
+
+```
+latched trap  mcause=25  mepc=0x828f4814   DBAS=0x82800000  ->  VA 0x104814
+sqlite3WhereCodeOneLoopStart is at 0x104788  ->  VA - fn = +0x8c
+
+104808:  movc  a4, zero
+10480c:  stc   a4, 0x0(a5)            the zeroed-value store
+104810:  ldc   a4, 0x0(a0)            the reload
+104814:  cincoffsetimm a4, a4, 0xb0   <- FAULTS
+```
+
+**The boot carries a verdict:** the control (same domain, no `--slt`) entered and returned in 7 s,
+and the subject shows `SQ: G/enter` with no `SQ: H/return` — entered and wedged, not an entry
+stall. Read the CSRs with care: gdb showed `mcause=2 mepc=2`, which the driver correctly
+DISCARDED as a later trap clobbering the latched 25.
+
+**It does NOT reproduce under QEMU.** The *same* domain image and the *same* `q_two.test` run to
+completion in emulation (`G/enter → H/return`, `SLT-SUMMARY … completed=1`) and match the NATIVE
+baseline record for record. So S-12 is **silicon-specific**. This reference arm is new: it is the
+Q-01 fix (build the arm in the silicon configuration, which fits under the order-10 threshold).
+
+**Mechanism: OPEN. What is excluded, and on what evidence:**
+
+* **The linear LDC move-clear is NOT live at this site.** NONLIN is absent from the clear set
+  (`load_unit.sv:227-229`). SQLite's pointers there are NONLIN both by derivation (monitor LINEAR
+  → `delin(sp)` → type-preserving `SPLIT`/`cincoffset`) and by direct measurement — the repaired
+  arg probe reports `ty1=1 ty2=1`, and `lcc` selector 1 returns `cap_type - 1`, so **1 is NONLIN,
+  not LINEAR**.
+* **The 40-line minimal repro does NOT reproduce it.** With its detector proven to fire (arm 2
+  returns `bad == REPS`), the instruction window returns clean at 512 iterations under *both* the
+  counting and the production raising consumer. The window is not sufficient; the missing
+  ingredient is elsewhere (cache pressure, timer traffic, code volume).
+
+**Beware — three retracted claims still quoted in older notes:** "memory is intact AND TAGGED at
+the wedge", "the value was never lost, it was never delivered", and "the stored value is
+REVOKE-typed". The first two rested on a shadow-tag read (DRAM, not the L1 tag the load consumed)
+and on a repro arm that never wrote its slot; the third inverts to NONLIN.
+
+Full trail: **`tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/`**.
+
 ## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `RESOLVED as observed 2026-08-20`
 
 **Gone.** The workload that passed 3/3 on `caplifive_s07fix.bit` runs `sqlite3_initialize()` and
