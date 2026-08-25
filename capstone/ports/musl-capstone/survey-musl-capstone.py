@@ -96,6 +96,19 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # compile and archive cleanly and fault only when called, which is why a
         # survey counting compiles could never have caught it.
         "-fno-jump-tables",
+        # THE VERIFIER, and it earns its ~15% here. It is a free deterministic
+        # gate that this project ran nowhere: 34 of 58 Capstone lit tests pass
+        # -verify-machineinstrs and 2 use the gp-captable ABI every domain builds
+        # with, and the two sets did not intersect. Turning it on over this
+        # corpus fired on 60 of 60 sampled files and produced two real bugs in an
+        # hour -- an SD naming a capability register with a memory operand
+        # claiming twice what it wrote, and a CIncOffset writing an X register
+        # whose untagged result the next instruction used as a capability base,
+        # which faults with UNEXP_OP_TYPE at run time.
+        #
+        # It catches what the asserts cannot: invalid machine code that
+        # assembles, runs, and is wrong. Do not remove it to make a number go up.
+        "-mllvm", "-verify-machineinstrs",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
         f"-I{musl}/arch/generic",
