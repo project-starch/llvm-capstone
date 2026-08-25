@@ -1002,7 +1002,29 @@ MachineInstr *CapstoneInstrInfo::foldMemoryOperandImpl(
   std::optional<unsigned> LoadOpc = getFoldedOpcode(MF, MI, Ops, STI);
   if (!LoadOpc)
     return nullptr;
+
+  // The folded load writes the destination WHOLE, so refuse when MI writes only
+  // a SUBREGISTER of it, and refuse when the destination cannot hold a narrowed
+  // integer load at all.
+  //
+  // inttoptr lowers to an integer written into a capability's ADDRESS half:
+  //
+  //     undef %146.sub_cap_addr:gpcr = ADDIW %14:gpr, 0
+  //
+  // and isSEXT_W matches `ADDIW rd, rs, 0`, so the fold produced
+  // `%146:gpcr = LW %stack.8, 0` -- an integer load defining a whole capability
+  // register, with a memory operand claiming 8 bytes for an instruction that
+  // reads 4. Losing the fold is a missed narrowing; taking it is invalid machine
+  // code. Found by -verify-machineinstrs over musl's src/time/timer_create.c.
+  if (MI.getOperand(0).getSubReg())
+    return nullptr;
   Register DstReg = MI.getOperand(0).getReg();
+  if (DstReg.isVirtual()) {
+    if (!Capstone::GPRRegClass.hasSubClassEq(MF.getRegInfo().getRegClass(DstReg)))
+      return nullptr;
+  } else if (!Capstone::GPRRegClass.contains(DstReg)) {
+    return nullptr;
+  }
   return BuildMI(*MI.getParent(), InsertPt, MI.getDebugLoc(), get(*LoadOpc),
                  DstReg)
       .addFrameIndex(FrameIndex)
