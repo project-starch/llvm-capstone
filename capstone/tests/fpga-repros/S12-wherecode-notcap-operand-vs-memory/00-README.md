@@ -1073,3 +1073,48 @@ as an instrument: `CAPSTONE_ARG_PROBE=sqlite3WhereCodeOneLoopStart`
 trap: `lcc` selector 1 reports `cap_type - 1` with NOT_CAP special-cased to 7, so **1 means NONLIN**
 and reading it as LINEAR against the raw `asm_insn.h` numbering is the natural mistake
 (`sqlite_capstone_domain.c:217-222`).
+
+## MEASURED: SQLite's pointers at the fault site are NONLIN (type 1)
+
+The derivation above is now closed by observation. With the arg probe repaired (its caller query
+used a non-total selector and aborted every run — see below), a QEMU run of the same domain and
+the same `q_two.test` case reports, at `sqlite3WhereCodeOneLoopStart` itself:
+
+```
+ARGP calls=1 ty1=0000000000000001 ty2=0000000000000001 ra=0000000101ce154c
+SLT-SUMMARY records=2 stmt_pass=1 stmt_fail=0 query_pass=0 query_fail=1 completed=1
+```
+
+`ty1`/`ty2` are the two incoming pointers. **`lcc` selector 1 reports `cap_type - 1`, with NOT_CAP
+special-cased to 7 — so `1` is NONLIN, not LINEAR.** Reading it against the raw `asm_insn.h`
+numbering is the natural mistake and is documented at `sqlite_capstone_domain.c:217-222`.
+
+Two independent routes now agree — the five-link derivation (monitor LINEAR → `delin(sp)` →
+type-preserving `SPLIT`/`cincoffset`) and this direct measurement. That matters because any one
+broken link would have taken the derivation's conclusion with it.
+
+**Caveat:** measured under QEMU, not silicon — a cross-check of the derivation, not a silicon
+measurement. The comparable repro measurement did agree across both (arm 5 returned `0xC12A5100`
+on QEMU *and* on the FPGA), which is evidence the type models match at least here, but the silicon
+reading at this site remains unmeasured.
+
+### The probe defect that had to be fixed first
+
+`CAPSTONE_ARG_PROBE`'s two argument queries are selector 1 (total, answers 7 for an untagged
+operand). Its **caller** query was not:
+
+```c
+__asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x2" : "=r"(ap_ra_));   /* lcc ra, selector 2 */
+```
+
+Selector 2 is not total: on an untagged operand QEMU trips `assert(rs1_v->tag)`
+(`op_helper.c:762`) and **aborts the emulator**; silicon raises. And in this build that is
+guaranteed, not incidental — the SQLite silicon domain contains **zero `cjalr`** (verified by
+`objdump`), so every call is a plain `jal` and `ra` is always a plain integer. The probe therefore
+died immediately after `SQ: G/enter` on every run, never reaching the site it was aimed at, and
+would have faulted the domain on the board too. Its header's "non-perturbing — records and falls
+through" was false for that half.
+
+Fixed to ask the total selector first and take the cursor only when there is a capability to take
+it from. Positive-tested the same day: zero `helper_cslcc` aborts, run completes, summary identical
+to the un-probed run and to native.
