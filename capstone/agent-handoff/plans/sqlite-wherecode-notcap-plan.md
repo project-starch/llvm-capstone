@@ -1302,3 +1302,73 @@ of the S-07 direction. That is most likely an artifact of the test (`CAPCREATE` 
 register untagged until bounds and permissions are set, so the first store genuinely stores an
 untagged value), not a finding. Recorded because it was seen, flagged because it is unexplained,
 and explicitly not used as evidence for anything.
+
+---
+
+# The tracer FIRES on silicon — and group 2 can never see the subject window
+
+Host-side arming worked on the first attempt. `SQ: tracearm=4` came back from the running core,
+and both dumps returned **256 real entries** with real PCs and real tag bits. The instrument is
+alive on the board, the arming is measured rather than assumed, and no RTL change was needed to
+get there.
+
+## But every entry is in the MONITOR, and none is in the domain
+
+    arm1 (COMPLETED): 256 entries, 38 distinct PCs, range 0x800200a8-0x80024c2c
+    arm2 (WEDGED):    256 entries, 38 distinct PCs, range 0x800200a8-0x80024c2c
+    entries in the domain range 0x82800000-0x82c00000:  0
+
+## The near-miss: this is NOT evidence that the wedge is a spin
+
+The obvious reading — a ring full of monitor trap-stack PCs means the wedged core is spinning
+through the trap handler — was the fork RTL and I had agreed to decide from exactly this
+measurement. **It is wrong, and the check that catches it is comparing against the arm that did
+not wedge:**
+
+    PCs only in arm2 (the wedged one): NONE
+    PCs only in arm1:                  NONE
+    identical PC SET:                  True
+
+The completed arm and the wedged arm produce the *same* 38 PCs at the *same* frequencies. So the
+flood is **ordinary monitor trap traffic** — the trap entry's `LDC(gp, sp, -16)` on every timer
+tick — scavenging the ring during the interval between the domain stopping and the dump. It
+happens identically whether the domain returned or wedged, and therefore says nothing about which.
+
+A proven-firing instrument that still cannot separate the two hypotheses on the table: the exact
+shape this project's own rule names, caught this time before it was reported rather than after.
+
+## Consequence: ring polarity is not the problem, and no setting of it helps
+
+* `overwrite` HIGH keeps the newest 256 — monitor traffic *after* the domain stopped.
+* `overwrite` LOW keeps the oldest 256 after arming — host and monitor traffic during domain
+  *setup*.
+
+The subject window sits in the middle, thousands of LDC/STC commits from either end. **A 256-entry
+ring keyed on a group the monitor itself triggers continuously cannot reach it at any polarity.**
+That retires the whole overwrite-HIGH-vs-LOW question rather than answering it.
+
+## The route that does work: group 9, the store watchpoint — selective by ADDRESS
+
+`CSR_WATCHPOINT_ADDR` (0x811) is a physical-address register, and group 9 logs the **64-bit value a
+committed store wrote** when it touches that address (`tracer.sv:236-252`). Because it fires on one
+address rather than on an opcode class, the monitor's trap traffic does not touch it and **the ring
+does not flood** — 256 entries is then enormous headroom instead of a hard limit.
+
+It also answers a sharper question than group 2 did. `tval` already established that the reload
+*returned* zero; group 9 says what the subject store *wrote*. Wrote a tagged non-zero capability
+and the reload returned zero → the value was lost between the two, i.e. silicon. Wrote zero →
+software, and the whole S-07 framing for this instance is wrong.
+
+Both CSRs are outside the domain-switch context list, so the host can arm them with zero in-domain
+instructions, exactly as it now arms 0x810.
+
+**Two things must be settled before spending a boot on it, and neither needs the board:**
+
+1. **The subject slot's physical address**, which is `s0 - 0x70` and needs `s0` read at the wedge.
+   That route is built but has now failed twice with `ActionTimeout`, both times after a tracer
+   dump — it needs a halt-timeout fallback rather than more sequencing changes.
+2. **Whether a 16-byte `stc` presents on `st_commit_paddr`/`be` such that the watchpoint can see
+   it at all.** If it does not, group 9 silently never fires on the subject store and the empty
+   result reads as "no store happened". That is an rtl-sim question, answerable in the same harness
+   that just proved group-2 capture, and it is a **positive control that must fire before any
+   empty group-9 result is believed.**
