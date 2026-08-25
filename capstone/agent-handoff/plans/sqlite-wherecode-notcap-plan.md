@@ -1432,3 +1432,59 @@ That turns the silent failure into a loud one, which is the only version worth h
   trap cause at this wedge is junk, and only the hardware latch is trustworthy.** The frame
   registers are a different matter — the monitor saves and restores `s0` across traps, so ordinary
   timer-tick traffic cannot clobber it, and the prologue identity above confirms it did not.
+
+---
+
+# THE DISCRIMINATOR FIRES: software stored a real pointer, the reload returned zero
+
+Store watchpoint armed at the subject slot `0x82b9f360`, group 9 only, arming and address both
+written by the running core and read back by it (`SQ: tracearm=0x200`, `SQ: tracewp=`).
+
+    [    19]  WATCHPOINT   PC=0x0000000828f4b54   DATA = 0x0000000082be4cf0
+    [    20]  WATCHPOINT   PC=0x0000000828f4b54   DATA = 0x0000000082be4cf0
+    Total: 21 entries
+
+`0x828f4b54` is `sqlite3WhereCodeOneLoopStart+0x40` — **the subject `stc a2, 0x0(a0)`**, the spill
+whose reload at `+0x88` feeds the faulting `cincoffsetimm` at `+0x8c`.
+
+    stored cursor    0x82be4cf0     (group 9 payload = st_commit_data, the 64-bit value written)
+    reloaded cursor  0x00000000     (tval at the trap = the faulting instruction's rs1 cursor)
+
+**Both numbers are the same quantity** — a 64-bit capability cursor — so this is a like-for-like
+comparison, not an inference across two different measurements. `0x82be4cf0` is inside the
+domain's own allocation (`0x82800000`-`0x82c00000`), i.e. a plausible live pointer, not a sentinel.
+
+**Software wrote a real pointer to that slot. The reload of that slot produced zero.** The value
+was lost between the store and the load.
+
+## Why the ring being SHORT is the strongest part of the result
+
+21 entries against a 256-entry capacity — **the ring never wrapped**, so this is the *complete*
+list of every committed store to that address for the entire run, not a window onto the last few.
+
+That closes the one remaining way software could still be to blame: if some later code had nulled
+the slot between the spill and the reload, there would be an entry at that address with
+`DATA = 0` after index 20. **There is none.** The last thing anything wrote to that granule was
+`0x82be4cf0`.
+
+## What the two controls in this same boot establish
+
+* **Arm 1 is a negative control that fired.** `sqbase.dom` landed at `DBAS 0x82400000`, so the
+  compiled-in address pointed into a different allocation — the guard said so, and the dump came
+  back `No entries captured.` A watchpoint that returned entries there would have meant it was not
+  address-selective at all.
+* **Arm 2's guard passed**: `DBAS 0x82800000` matches the basis the address was derived from, so
+  the armed address is in this domain's allocation.
+
+Together: the instrument fires when aimed correctly, stays silent when aimed elsewhere, and the
+run that produced the result is the one where it was aimed correctly.
+
+## Status: NOT YET A ROOT CAUSE
+
+This localises the loss to **between the committed store and the load's return**, which is the
+memory path, and it retires the software-NULL hypothesis for this instance. It does **not** say
+which part of that path, and it does not by itself distinguish a lost tag from a lost value —
+though `tval = 0` means the cursor bits themselves came back zero, which a de-tagged capability
+would not do.
+
+Going to `claim-auditor` before this enters ISSUES.md or any report.

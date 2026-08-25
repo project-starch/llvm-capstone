@@ -1203,6 +1203,32 @@ def main():
                     log("  [tracer] NO `SQ: tracearm=` in this arm's output -- either the "
                         "host was built without CAPSTONE_TRACE_ARM or it died before the "
                         "csrw. Arming UNMEASURED; treat any dump as uninterpretable.")
+                # THE DBAS GUARD. The watchpoint address is compiled into the host from a
+                # PREVIOUS boot's wedge, but DBAS is not stable across boots or arm positions
+                # -- this run alone shows 0x82400000 for arm 1 and 0x82800000 for arm 2. If
+                # the domain landed somewhere else, the armed address points into another
+                # allocation, group 9 fires on nothing, and an EMPTY RESULT READS AS "the
+                # subject store never happened" -- manufacturing exactly the software-NULL
+                # conclusion this experiment exists to test. So compare the DBAS actually
+                # observed against the one the address was derived from, and if they differ,
+                # refuse to interpret the dump rather than reporting a clean-looking zero.
+                _wp_assumed = os.environ.get("WEDGE_WP_DBAS")
+                if _wp_assumed:
+                    _dm = re.findall(r"DBAS:([0-9A-Fa-f]{8})", text)
+                    if not _dm:
+                        log("  [tracer] NO DBAS in this arm's output -- cannot check the "
+                            "watchpoint address against it. Group 9 is UNINTERPRETABLE here.")
+                    else:
+                        _dbas = int(_dm[-1], 16)
+                        _want = int(_wp_assumed, 0)
+                        if _dbas == _want:
+                            log(f"  [tracer] DBAS 0x{_dbas:08x} matches the address's basis -- "
+                                f"the watchpoint is aimed at this domain's allocation")
+                        else:
+                            log(f"  [tracer] !! DBAS 0x{_dbas:08x} but the watchpoint address "
+                                f"was derived from 0x{_want:08x}. The armed address is in a "
+                                f"DIFFERENT allocation, so an empty group 9 means NOTHING about "
+                                f"whether the store happened. Re-derive and re-run.")
                 tr = tracer_dump(console, C, f"arm{dom_idx}{'-WEDGED' if wedged else ''}")
                 if tr:
                     OUT_TR = f"{RAW_OUT.rsplit('.', 1)[0]}-trace-arm{dom_idx}.txt"

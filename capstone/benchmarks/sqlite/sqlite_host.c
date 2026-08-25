@@ -154,6 +154,39 @@ int main(int argc, char **argv) {
     mark_u("SQ: tracearm=", _tb);
   }
 #endif
+#ifdef CAPSTONE_TRACE_WP
+  /* ARM THE STORE WATCHPOINT (CSR 0x811) at the subject stack slot.
+   *
+   * Group 9 logs the 64-bit value a committed store WROTE to the watched address. That is
+   * the half `tval` cannot give: tval says the reload RETURNED zero, this says what the
+   * spill PUT there. Non-zero here with zero there means the value was lost in between.
+   *
+   * Selective by ADDRESS rather than by opcode class, which is why it works where group 2
+   * cannot: the monitor's trap-entry LDC fires on every timer tick and scavenges a
+   * 256-entry ring within the interval between the domain stopping and the dump -- measured,
+   * and identical on a wedging and a non-wedging arm. Nothing the monitor does touches this
+   * address, so the ring holds only subject stores.
+   *
+   * THE ADDRESS MUST BE A GRANULE BASE. The comparator is word-granular
+   * (st_commit_paddr[PLEN-1:3]) and a capability store presents ONE queue entry carrying the
+   * granule base, so an address in the granule's upper half compares word 1 against word 0
+   * and silently never fires -- returning empty, which would read as "no store happened".
+   * The slot is s0-0x70 and capability stores are 16-byte aligned, so it is a granule base;
+   * the assert below is here because that is a load-bearing coincidence, not a guarantee.
+   *
+   * Compiled in rather than passed as an argument: this value is derived from a previous
+   * boot's wedge and is specific to one experiment, so binding it to the binary keeps the
+   * two from drifting apart silently. 0x811 is U-mode accessible (bits[9:8] == 00) exactly
+   * as 0x810 is, so no monitor or debugger is involved. */
+  {
+    unsigned long _wp = (unsigned long)(CAPSTONE_TRACE_WP), _wb = 0;
+    if (_wp & 0xFUL)
+      mark("SQ: tracewp=MISALIGNED -- not a granule base, the watchpoint cannot match\n");
+    __asm__ volatile("csrw 0x811, %0" :: "r"(_wp));
+    __asm__ volatile("csrr %0, 0x811" : "=r"(_wb));
+    mark_u("SQ: tracewp=", _wb);
+  }
+#endif
   mark_u("SQ: libc=", (unsigned long)(void *)&printf);
   mark_u("SQ: self=", (unsigned long)(void *)&main);
   mark("SQ: B/mkregion1\n");
