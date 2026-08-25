@@ -1213,3 +1213,38 @@ once is not established.
 the fault site). That moves `WhereCodeOneLoopStart`'s address while leaving its body
 **byte-identical**. Wedges → the instructions inside the function are what matter. Completes →
 the address/layout shift is, and the instructions are incidental.
+
+## The cure does NOT require touching the fault function's instructions
+
+The discriminator ran: probe injected into `sqlite3WhereMalloc`, which sits *before*
+`WhereCodeOneLoopStart` in the layout, so the fault function's address moves while its
+instruction stream stays the same. Verified rather than assumed — same 2866 instructions in the
+same order, the only body difference being one immediate (`addi a2,a2,-0x3d0` → `-0x3d4`), a
+globals-offset adjustment that changes no timing or scheduling.
+
+| build | size | `WhereCodeOneLoopStart` | body | result |
+|---|---|---|---|---|
+| un-probed | 1624152 | `0x104788` | baseline | **WEDGES** at `+0x8c` |
+| probe **in** WhereCode | 1624904 | `0x104b48` | + probe instructions | completes |
+| probe in **WhereMalloc** | 1624904 | `0x104c0c` | same stream, 1 immediate | **completes** |
+
+Both probed builds complete, and their `SLT-SUMMARY` matches QEMU and native record for record —
+they are running correctly, not failing differently.
+
+**What is established:** the fault survives or vanishes according to the *surrounding layout*, not
+according to the content of `WhereCodeOneLoopStart`. Adding instructions inside that function is
+not necessary to cure it.
+
+**What is NOT established, and must not be written as though it were:** *which* layout property
+matters. Address, image size, and globals offset all moved together in both probed builds, so
+"it is the address" is one candidate among three. Isolating it needs a build that shifts the
+address while holding size and globals fixed, which the two-pass link does not currently offer as
+a knob.
+
+**The N=1 problem, being fixed before anything is built on this.** The wedge itself has been
+observed **once**. On a system with known per-image nondeterminism — R-16's entry stall is
+explicitly per-image, and the standing rule is to REDRAW rather than retry — a single observation
+is not enough to carry the "layout decides it" reading. A repeat of the identical un-probed image
+is running. If it wedges again the foundation is sound; if it does not, S-12 may be an
+alignment/layout **lottery** of the same class as R-16, and every arm above needs re-reading in
+that light.
