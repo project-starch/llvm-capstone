@@ -728,14 +728,30 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   MachineFrameInfo &MFI = MF->getFrameInfo();
 
   unsigned Opcode;
+  // The register actually stored, and how many bytes reach memory. Both differ
+  // from the defaults only for the gp-free `ra` below.
+  Register StoreReg = SrcReg;
+  uint64_t StoreSize = MFI.getObjectSize(FI);
   // A capability spills with STC, an integer with SD/SW. That used to be decided
   // by asking how wide GPR is -- 128, so use STC -- which is the same question
   // the register class now answers directly.
   if (Capstone::GPCRRegClass.hasSubClassEq(RC)) {
-    // gp-free keeps ra as a plain integer return address.
-    Opcode = (capstoneGpFreeAbiActive() && SrcReg == Capstone::C1)
-                 ? Capstone::SD
-                 : Capstone::STC;
+    // gp-free keeps ra as a plain integer return address: calls are jal/jalr
+    // within PCC, so there is no tag to preserve and 8 bytes is the whole value.
+    //
+    // STORE THE X HALF, not the C register. An SD naming $c1 is machine code the
+    // verifier rejects -- SD takes GPR -- and its memory operand claimed s128
+    // while the instruction wrote 8 bytes. It assembled and ran, because c1 and
+    // x1 print the same and the reload matched, which is exactly why nothing
+    // noticed: -verify-machineinstrs is not run on this ABI anywhere, and the
+    // default ABI never takes this arm. Found by running the verifier over musl.
+    if (capstoneGpFreeAbiActive() && SrcReg == Capstone::C1) {
+      Opcode = Capstone::SD;
+      StoreReg = TRI->getSubReg(SrcReg, Capstone::sub_cap_addr);
+      StoreSize = 8;
+    } else {
+      Opcode = Capstone::STC;
+    }
   } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     // An integer register, so an integer store. It used to be necessary to ask
     // how wide GPR was and reach for STC when the answer was 128; the class is
@@ -802,10 +818,10 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   } else {
     MachineMemOperand *MMO = MF->getMachineMemOperand(
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
-        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+        StoreSize, MFI.getObjectAlign(FI));
 
     BuildMI(MBB, I, DebugLoc(), get(Opcode))
-        .addReg(SrcReg, getKillRegState(IsKill))
+        .addReg(StoreReg, getKillRegState(IsKill))
         .addFrameIndex(FI)
         .addImm(0)
         .addMemOperand(MMO)
@@ -823,11 +839,18 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
       Flags & MachineInstr::FrameDestroy ? MBB.findDebugLoc(I) : DebugLoc();
 
   unsigned Opcode;
-  // Mirror of storeRegToStackSlot: the class decides.
+  Register LoadReg = DstReg;
+  uint64_t LoadSize = MFI.getObjectSize(FI);
+  // Mirror of storeRegToStackSlot: the class decides, and gp-free's `ra` is
+  // reloaded into the X half with an 8-byte LD for the reasons given there.
   if (Capstone::GPCRRegClass.hasSubClassEq(RC)) {
-    Opcode = (capstoneGpFreeAbiActive() && DstReg == Capstone::C1)
-                 ? Capstone::LD
-                 : Capstone::LDC;
+    if (capstoneGpFreeAbiActive() && DstReg == Capstone::C1) {
+      Opcode = Capstone::LD;
+      LoadReg = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
+      LoadSize = 8;
+    } else {
+      Opcode = Capstone::LDC;
+    }
   } else if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     // An integer register, so an integer load -- see storeRegToStackSlot.
     Opcode = TRI->getRegSizeInBits(Capstone::GPRRegClass) == 32 ? Capstone::LW
@@ -883,7 +906,7 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
         TypeSize::getScalable(MFI.getObjectSize(FI)), MFI.getObjectAlign(FI));
 
     MFI.setStackID(FI, TargetStackID::ScalableVector);
-    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+    BuildMI(MBB, I, DL, get(Opcode), LoadReg)
         .addFrameIndex(FI)
         .addMemOperand(MMO)
         .setMIFlag(Flags);
@@ -891,9 +914,9 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
   } else {
     MachineMemOperand *MMO = MF->getMachineMemOperand(
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+        LoadSize, MFI.getObjectAlign(FI));
 
-    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+    BuildMI(MBB, I, DL, get(Opcode), LoadReg)
         .addFrameIndex(FI)
         .addImm(0)
         .addMemOperand(MMO)

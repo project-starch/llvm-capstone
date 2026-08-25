@@ -596,7 +596,18 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     if (MI.getOpcode() == Capstone::ADDI)
       DestReg = MI.getOperand(0).getReg();
     else
-      DestReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
+      // The scratch must be in the class adjustReg will WRITE. It decides by
+      // asking whether the frame register is a capability, and if it is, emits
+      // CIncOffset/CIncOffsetImm/MOVC, all of which define a GPCR. Creating it
+      // in GPR regardless produced `$x12 = CIncOffset $c8, $x12` followed by
+      // `$c12 = CIncOffsetImm $x12, 1808` -- a cincoffset writing the address
+      // half, which clears the tag, and then a cincoffsetimm on the untagged
+      // result, which faults with UNEXP_OP_TYPE. Found by running
+      // -verify-machineinstrs over musl; no test covered the gp-captable ABI
+      // and the verifier together.
+      DestReg = MRI.createVirtualRegister(isCapabilityFrameReg(FrameReg)
+                                              ? &Capstone::GPCRRegClass
+                                              : &Capstone::GPRRegClass);
     adjustReg(*II->getParent(), II, DL, DestReg, FrameReg, Offset,
               MachineInstr::NoFlags, std::nullopt);
     MI.getOperand(FIOperandNum).ChangeToRegister(DestReg, /*IsDef*/false,
