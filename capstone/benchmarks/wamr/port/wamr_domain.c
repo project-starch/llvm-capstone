@@ -232,6 +232,16 @@ domain_main(unsigned *res, unsigned func)
 #endif /* 10 */
 
 #else
+    /* Same anchor as the 2x rungs: call 1 reports where this image is loaded so a
+       trap pc can be mapped, call 2 does the work. */
+    {
+        static unsigned nth_main;
+        if (nth_main++ == 0) {
+            *res = (unsigned)(uintptr_t)&domain_main;
+            return;
+        }
+    }
+
     RuntimeInitArgs init;
     memset(&init, 0, sizeof(init));
     init.mem_alloc_type = Alloc_With_Pool;

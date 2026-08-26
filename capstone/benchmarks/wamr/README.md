@@ -118,6 +118,19 @@ stage  4  wasm_runtime_call_wasm             capability fault
 The runtime initialises, loads a module and instantiates it. What is left is the
 call itself.
 
+### Where stage 4 stops
+
+`wasm_interp_call_wasm`, at `stc s5, 0x0(s2)` -- a capability store through the
+interpreter FRAME pointer. Located with the same anchor instrument: ELF 0x16484,
+inside a function whose ELF address the image itself reports.
+
+The shape is familiar. `WASMInterpFrame` carries pointers (`function`, `ip`, `sp`,
+`prev_frame`), and the interpreter carves frames out of its stack in units of
+4-byte cells. A structure with pointer fields placed on a 4-byte grid is the same
+defect the free-tree node had, one layer up. That is a hypothesis from the shape
+and NOT yet measured; it is written here as the next thing to test, not as a
+finding.
+
 ### The instrument that made this tractable
 
 A trap reports a RUNTIME pc, and nothing prints the load base, so a fault used to
