@@ -2617,7 +2617,7 @@ def main():
                             # fetching from a garbage trap vector looks like, and matches the gp-free smoke
                             # wedge exactly. If mtvec is ~0 that is branch A confirmed at the source rather
                             # than inferred from the consequence.
-                            for _e in ("$mcause", "$mepc", "$mtval", "$mtvec", "$x8", "$sp", "$x14", "$x10"):
+                            for _e in ("$mcause", "$mepc", "$mtval", "$mtvec", "$x8", "$sp", "$x14", "$x10", "$x3"):
                                 _s = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"p/x {_e}\n")
                                 try:
@@ -2803,7 +2803,67 @@ def main():
                             # A DRAM read is not the L1 tag the load consumed -- that conflation
                             # is what forced an earlier retraction -- so this settles the CONTENT
                             # question only, and the tag question stays open.
-                            if _s0 is not None:
+                            # WEDGE_COUNTER_VA=<elf-va> -- read one global at the wedge.
+                            #
+                            # For an in-domain counter on a WEDGING image: the domain never
+                            # returns, so nothing can be reported through the host, but GDB can
+                            # read the global directly. The ELF VA is translated with the same
+                            # DBAS mapping the loader prints (`Virtual address = 10000`), so
+                            # phys = DBAS + (VA - 0x10000).
+                            # WEDGE_COUNTER_GPIDX=<hex byte offset into the gp cap table>
+                            #
+                            # DO NOT READ THE GLOBAL AT ITS ELF VA. Under the gp-captable ABI the
+                            # domain's globals are a CARVED COPY -- the glue splits a storage
+                            # capability out of sp and the monitor's copy lives in dom_data
+                            # (start-gp-captable-interp.S:106; the build's budget line shows a
+                            # separate `storage` region). The ELF VA holds only the TEMPLATE,
+                            # which for .bss is zero. Reading it returns 0 no matter what the
+                            # program did -- measured: a counter provably incremented before the
+                            # fault read back as 0x0 from its ELF VA.
+                            #
+                            # So follow the same path the code follows: gp holds the cap table,
+                            # the entry at gp+IDX is the global's capability, and its cursor (the
+                            # first 8 bytes) is the LIVE address.
+                            # GATE THE DOMAIN READS ON THE DOMAIN HAVING ENTERED.
+                            #
+                            # The wedge path runs on ANY no-return, including an entry stall where
+                            # the domain never ran and Linux is still healthy. Then gp, s0 and the
+                            # trap latch are the KERNEL's, and reading them as domain state
+                            # produces confident nonsense -- measured: a boot with no ENT markers
+                            # reported gp=0x80082290 (a kernel address) and a rolling latch of
+                            # mcause 15 from ordinary kernel traffic, alongside a "LIVE counter
+                            # @0x0" that was pure fiction.
+                            #
+                            # ENT1 is the monitor's own evidence that control left M-mode and the
+                            # domain owns the wedge (sbi_capstone.c:924-926). Without it these
+                            # reads are not merely uncertain, they are about a different program.
+                            _ent_seen = re.findall(r"ENT1:([0-9A-Fa-f]{8})", console.uart_text)
+                            _dom_owns = bool(_ent_seen)
+                            if not _dom_owns:
+                                print("  [wedge] NO ENT1 -- the domain never took control, so gp/s0/"
+                                      "latch belong to the KERNEL, not the domain. Skipping the "
+                                      "domain-state reads: this boot is VOID, not a measurement.",
+                                      flush=True)
+                            _cidx = os.environ.get("WEDGE_COUNTER_GPIDX", "") if _dom_owns else ""
+                            _gpv = _csr.get("$x3")
+                            if _cidx:
+                                if _gpv is None:
+                                    print("  [wedge] counter: gp UNREAD -- cannot reach the live "
+                                          "copy, and the ELF VA would read the template", flush=True)
+                                else:
+                                    _ent = _rd(f"0x{_gpv + int(_cidx, 16):x}", "2gx")
+                                    print(f"  [wedge] gp=0x{_gpv:x} cap-table entry @+{_cidx}: "
+                                          f"{_ent if _ent else 'READ FAILED'}", flush=True)
+                                    _mm = re.findall(r"0x([0-9a-f]+)", _ent or "")
+                                    if len(_mm) >= 2:
+                                        _live = int(_mm[1], 16)      # word0 after the addr echo
+                                        _cv = _rd(f"0x{_live:x}", "1gx")
+                                        print(f"  [wedge] LIVE counter @0x{_live:x}: "
+                                              f"{_cv if _cv else 'READ FAILED'}", flush=True)
+                                        print("          (entries to the probed function before "
+                                              "the fault; 1 = the FIRST call faulted, >1 = a "
+                                              "later one)", flush=True)
+                            if _s0 is not None and _dom_owns:
                                 for _lbl, _off in (("slot   s0-0x70 ", 0x70),
                                                    ("zerost s0-0x120", 0x120)):
                                     _a = _s0 - _off

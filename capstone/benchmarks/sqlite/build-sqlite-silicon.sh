@@ -500,6 +500,39 @@ fi
 # everything and reintroduce exactly the confound this knob exists to remove.
 #
 # `volatile` and address-taken so they cannot be optimised away and must each take a carve.
+# CAPSTONE_CALL_COUNT=<fn> -- count entries to <fn> with ONE global and nothing else.
+#
+# WHY A SECOND, SMALLER PROBE. CAPSTONE_ARG_PROBE adds FOUR unsigned long globals = 32 bytes,
+# which takes .bss from 0x409c0 to 0x409e0 -- and 0x409e0 is independently measured as a value
+# that CURES the fault (bss32, dead padding, no instrumentation at all). So "the probe cures it"
+# and ".bss 0x409e0 cures it" are very likely one fact seen twice, and the standing belief that
+# in-domain instrumentation is inherently self-defeating here may be an artifact of probe SIZE.
+#
+# ONE global is 8 bytes: .bss 0x409c0 -> 0x409c8, which sits between two MEASURED WEDGING values
+# (0x409c0 and 0x409d0). If this build still wedges, we have an instrumented image that faults,
+# and the counter answers the question the where-loop-level finding made central: does the fault
+# happen on the FIRST entry to the function, or a later one?
+#
+# Read it at the wedge over GDB from the global's address -- the domain never returns, so nothing
+# can be reported through the host.
+if [[ -n "${CAPSTONE_CALL_COUNT:-}" ]]; then
+  echo "== CALL COUNT: one global, counting entries to ${CAPSTONE_CALL_COUNT}"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_CALL_COUNT" <<'PYCC'
+import sys, re, pathlib
+path, fn = sys.argv[1], sys.argv[2]
+s = pathlib.Path(path).read_text()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"CALL_COUNT: {fn} definition not found -- patch shape changed")
+# volatile + uninitialised -> .bss, 8 bytes, cannot be elided
+decl = "\nvolatile unsigned long capstone_call_count;\n"
+body = m.group(0) + "\n  capstone_call_count++;\n"
+s = s[:m.start()] + body + s[m.end():]
+pathlib.Path(path).write_text(decl + s)
+print(f"   counter injected into {fn} (1 global, 8 bytes of .bss)")
+PYCC
+fi
+
 # CAPSTONE_BSS_PAD=N -- append N bytes of UNINITIALISED global, growing .bss and nothing else.
 #
 # This is the sharp one. Across six images, .bss SIZE is the only property that separates the
