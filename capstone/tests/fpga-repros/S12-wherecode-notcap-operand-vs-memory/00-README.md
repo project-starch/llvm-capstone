@@ -2077,3 +2077,48 @@ Independently, the caller window turns out to be nearly empty, which removes a w
   0x30-byte frame — no overlap with the spill slot at `SP−0x70`.
 * Pass-vs-fail heap delta is nil in the way that matters: `WhereInfo` is 1488 vs 1648 bytes, and
   **both round to the same 2048-byte MEMSYS5 bucket**.
+
+---
+
+## One reading REMOVED: a plain ALU write DOES clear a register's capability shadow
+
+**This closes a route that the stale-operand account could have rested on, so it belongs here
+rather than in a lane message.**
+
+The question arose from a compiler change, not from S-12: the Capstone backend now reads a
+pointer's address with a plain `mv` instead of `lcc rd, rs, 2`, because the cursor query is not
+total and traps on NULL. A reading of the RTL suggested that could be silently wrong on silicon —
+QEMU's `gen_set_gpr` clears the tag on **every** integer write, whereas here the metadata shadow's
+write-enable is gated on `cap_result.valid`, which is 0 for a plain ALU op. If the shadow were
+left **stale**, an integer would keep looking like a capability to anything that checks
+`cap_type`, and a register's metadata could outlive the value it described — which is exactly the
+shape a "the operand carried the wrong metadata" account of S-12 needs.
+
+**It is not stale. Measured in simulation, not argued.**
+`capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S`, commit `eb43f5d09`.
+
+`CINCOFFSET` is the detector because its rs2 check *is* the question —
+`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` when `cap_rs2.metadata.cap_type` is not
+`NOT_CAP`. Three arms, ordered with the expected-to-trap one last so a trap could not cost an
+answer:
+
+| arm | rs2 | result |
+|---|---|---|
+| A | never held a capability (`li a5, 8`) | retired, `x12 = 0x80003008` |
+| C | held one, then overwritten by a plain `addi` | **retired**, `x13 = 0x80003008` — the answer |
+| B | holds one right now (positive control) | **exception: UNEXPECTED_OPERAND** |
+
+**Arm B is why arm C means anything.** Without it, "C did not trap" is equally consistent with a
+check that never fires in this configuration; with it, the check is proven able to fire on the
+very next instruction pair. Arm A rules out the other direction — that `CINCOFFSET` simply cannot
+take an integer rs2.
+
+**What this does and does not remove.** It removes *register-shadow staleness* as a mechanism: a
+register that held a capability and was then overwritten by ordinary arithmetic does not carry its
+old metadata forward. It says nothing about the **memory** path, where the slot's contents are
+what they are, and nothing about the load itself — which is still the unmeasured step.
+
+**Scope note, deliberately narrow:** this was run in bare M-mode simulation, not inside a
+capability domain on a monitor-carved stack. Per the standing caveat on directed tests, a clean
+simulation of a synthetic sequence is not exoneration of the production path; it is a specific
+mechanism ruled out, not the bug.
