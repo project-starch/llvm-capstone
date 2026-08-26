@@ -2122,3 +2122,70 @@ what they are, and nothing about the load itself — which is still the unmeasur
 capability domain on a monitor-carved stack. Per the standing caveat on directed tests, a clean
 simulation of a synthetic sequence is not exoneration of the production path; it is a specific
 mechanism ruled out, not the bug.
+
+---
+
+## BOARD, 2026-08-27: `-O1` does NOT route around it — two distinct images, two wedges
+
+**Two boots on the resident `caplifive_s07clear_84ed6eafb.bit`. No reflash.** The control passed
+in both, so both boots carry a verdict.
+
+| boot | arm | image | query | outcome |
+|---|---|---|---|---|
+| 1 | control | `sqctl.dom` `-O0` | `q_one` (1 level) | **returned**, `H/return`, `completed=1`, rc=0 |
+| 1 | subject | `sqo1a.dom` `-O1` | `qj2` (2 levels) | `G/enter` + `ENT1`, no return — **WEDGED** |
+| 2 | control | `sqctl.dom` `-O0` | `q_one` (1 level) | **returned**, rc=0 |
+| 2 | subject | `sqo1b.dom` `-O1` | `qj2` (2 levels) | `G/enter` + `ENT1`, no return — **WEDGED** |
+
+Arms after each wedge are collateral and carry no verdict. The third draw (`sqo1c`) has not run.
+
+**The images are genuinely distinct draws**, not repeated boots of one image: redrawn via
+`CAPSTONE_TEXT_PAD` 0/64/128, sha256 verified 4-of-4 unique before staging, and
+`sqlite3WhereCodeOneLoopStart` sits at a different address in each.
+
+**Every draw carries the property under test, verified in the artifact:** zero
+`ldc a?,0x0(a0)` + `cincoffsetimm ?,?,0xb0` pairs, and the surviving `0xb0` consumer is
+`cincoffsetimm a0, s2, 0xb0` — `pWInfo` register-resident in callee-saved `s2`, no stack
+round-trip. **So the S-12 fault site is absent from these images and they wedge anyway.**
+
+### What this refutes
+
+**The strong form of the `-O0`-spill account is dead.** "Removing the stack round-trip removes the
+wedge" is false: the round-trip is gone at the fault site and two independent draws still wedged.
+
+### What it does NOT establish, and this is the half that matters
+
+**2 of 2 is p = 0.29 at the `-O0` base rate of 54%.** That is not evidence that `-O1` is WORSE, or
+even that its rate differs at all. It establishes only that `-O1` is NOT IMMUNE. Six distinct
+images would be needed for p ~ 0.01, and four of those draws have not been spent.
+
+### The wedge signature is NOT S-12's
+
+Both wedges read aperture 225 = **`0xd5`**, identically. Against the two signatures already on
+file:
+
+    0x80   the six S-12 wedges -- core NOT stalled, only trace_buf_empty
+    0x95   dyn unit blocked in get_node_query_validity while the rev-node unit waits on the
+           node-table memory read (capstone_dyn_unit.anvil:106-112, capstone_rev_node.anvil:36-41)
+    0xd5   MEASURED HERE = 0x95 plus wstore
+
+So these are the **rev-node/dyn-blocked class, not the S-12 class**. Whether that means `-O1`
+removed S-12 and exposed a different pre-existing wedge, or that the classes are related, is NOT
+settled by two draws.
+
+### RETRACTED BEFORE PUBLICATION: the commit-pc localization
+
+The wedge read `commit pc = 0x82c1c3fc` in both boots, which maps to image VA `0x1c3fc` and
+tempted a localization to `sqlite3_result_double`. **That is not supported and the check that
+killed it is the point:** the two images hold DIFFERENT INSTRUCTIONS at that address —
+`lui a3, 0x9` in `sqlite3_result_double` in one, `sw a1, 0x44(a0)` in `sqlite3_result_blob64` in
+the other. An identical PC from two images whose code at that address differs means **the
+commit-pc aperture is not tracking the domain**, exactly like the trap latch the driver already
+refuses (`mcause 9`, kernel `mepc 0xffffffff800072cc` — ordinary traffic from earlier).
+
+Apertures 224/225/255 were also byte-identical across the two boots, which is consistent with
+them describing the WEDGED-SYSTEM state rather than the faulting domain. Read 225 as "which wedge
+class", never as "where".
+
+**Next:** the four unspent draws. Until then the honest summary is *`-O1` is not immune, at an
+unmeasured rate, with a wedge signature that is not S-12's.*
