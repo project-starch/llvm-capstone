@@ -2189,3 +2189,43 @@ class", never as "where".
 
 **Next:** the four unspent draws. Until then the honest summary is *`-O1` is not immune, at an
 unmeasured rate, with a wedge signature that is not S-12's.*
+
+### Boot 3 closes the confound: `-O0` still gives S-12, `-O1` gives something else
+
+The `0x80` signature on file was measured on `-O0` images built with the **old** compiler; the
+`0xd5` above was measured on `-O1` images built with **today's**. Compiler version was therefore a
+second variable, and the comparison was not yet single-variable. Boot 3 removes it.
+
+Same boot, same bitstream, same query, same compiler — only the optimisation level differs:
+
+| arm | image | 225 | mcause | tval | commit pc |
+|---|---|---|---|---|---|
+| control | `-O0`, 1 level | — | — | — | **returned**, rc=0 |
+| subject | `-O0`, 2 levels | **`0x80`** | **25** (real capability fault) | **0** | `0x2` |
+| — | `-O1`, 2 levels (boots 1-2) | **`0xd5`** | 9 (stale kernel) | stale | frozen |
+
+**So the signature difference is attributable to `-O1`, not to the compiler changes.** And the
+S-12 reproducer is INTACT on the current compiler: mcause 25 with `tval = 0` and `commit pc = 2` is
+the documented shape — a real capability fault, then the M-1 loop at pc 0 with `mtvec = 0`.
+
+**Aperture 225 decoded** (`cva6.sv:1189-1199`, verified in source, MSB→LSB): `trace_buf_empty`,
+`dyn_wait_store_syncer`, `dyn_wait_load_syncer`, `dyn_wait_rev_res`, `dom_switch_busy`,
+`stall_issue`, `mem_write_flag`, `mem_wait_flag`.
+
+    0x80  trace_buf_empty ONLY -- NOTHING is waiting. The core has simply stopped committing,
+          the shape of an exception stuck at the head of in-order commit.
+    0xd5  trace_buf_empty + dyn_wait_store_syncer + dyn_wait_rev_res + stall_issue + mem_wait
+          -- THREE wait conditions asserted at once: a unit blocked on responses that never
+          arrive. A DYN/rev-node deadlock, not a stall at commit.
+
+**A wedge where nothing is waiting and a wedge where three things are waiting are different
+failure modes.** That is decode, not interpretation.
+
+**The `-O0` fault SITE has moved**, which is expected and worth recording so nobody reads the old
+address as gospel: `mepc = 0x828f4814` → image VA `0xf4814`, in **`sqlite3WhereEnd`**, at
+`lw a1, 0x0(a0)` with `a0 = cincoffsetimm s0, -0x114`. Not the historical
+`sqlite3WhereCodeOneLoopStart+0x8c`. Same class, different site — today's codegen differs.
+`tval = 0` again, so the operand's cursor was zero at ingestion.
+
+**Running tally: `-O1` 2 wedged of 2 draws; the third (`sqo1c`) has still not run** — boot 3's
+`-O0` subject wedged first and took the core. Controls returned in all three boots.
