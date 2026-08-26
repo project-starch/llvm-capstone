@@ -126,6 +126,8 @@ DESTRUCTIVE_SWITCHES = frozenset({220})
 # The driver's "PROBE ALREADY SPENT / carries NO weight" messages were written for the one-shot
 # design and are FALSE here. They caused boot 4 (2026-08-18) to dismiss its own 208 readings.
 # ldc0_valid=1 means only "at least one untagged LDC has happened since reset", which is routine
+# (ON s07clear AND EARLIER. From s12-ldc-rolling-min it means "an LDC was recorded at all" and
+#  the tag is a separate bit on switch 219 -- see decode_s07_verdict.)
 # -- boot software produces them from miss refills. It does NOT mean the probe is used up.
 #
 # What is TRUE, and is the real limit on this bitstream: gen 1 has no 193/194 register-level
@@ -426,7 +428,13 @@ def decode_s07_verdict(v):
     Layout, verified against capstone-ariane 618f4ce36 core/cva6.sv (bank 3'b110 block opens
     at :1277, this leg at reg 5'b10000), MSB first:
 
-        [7]   ldc0_valid      an LDC came back untagged and was recorded (one-shot)
+        [7]   ldc0_valid      SEMANTICS DEPEND ON THE RESIDENT BITSTREAM -- see S07_ROLLING below
+                              s07clear_84ed6eafb and earlier: an LDC came back UNTAGGED and was
+                                recorded (one-shot; first-wins)
+                              s12-ldc-rolling-min (27a19c0af) and later: an LDC was recorded AT
+                                ALL, tagged or not, rolling. THE TAG MOVED TO SWITCH 219 bit[3].
+                              Reading bit[7] as "untagged" on the newer bitstream silently
+                              converts every recorded load into a claimed tag loss.
         [6:5] ldc0_src        0 = L1 hit, 1 = miss refill (tag memory), 2 = write-buffer fwd
         [4]   stc_valid       a capability-granule store was recorded
         [3]   stc_ctag        the tag that store WROTE
@@ -469,7 +477,20 @@ def decode_s07_verdict(v):
     # resident before this instruction: genuine-hit vs replayed-after-refill is not in this bit.
     srcname = {0: "tag from L1 array (incl. replay after refill)",
                1: "miss refill (tag memory)", 2: "write-buffer forward", 3: "UNDEFINED"}[src]
-    bits = (f"ldc0_valid={ldc_valid} src={src} ({srcname}) stc_valid={stc_valid} "
+    # BITSTREAM-DEPENDENT WORDING. The RTL lane changed this aperture's meaning in
+    # 27a19c0af: the capture enable lost both `!s07_ldc0_valid_q` and `!req_port_i.data_rtag`,
+    # so `valid` no longer implies untagged and the tag is a separate bit on switch 219.
+    # Updating this decode unconditionally would be the mirror of the stale-table bug -- the
+    # RESIDENT bitstream still has the old meaning, so a blanket rewrite would mislabel every
+    # reading taken before the reflash. Name the bitstream instead of guessing.
+    _bs = os.environ.get("FPGA_BITSTREAM", "")
+    if "rolling-min" in _bs or "27a19c0a" in _bs:
+        _vsense = "ldc0_valid(=an LDC was recorded; tag is on sw219 bit3, NOT here)"
+    elif "s07clear" in _bs or "s07only" in _bs or not _bs:
+        _vsense = "ldc0_valid(=an UNTAGGED LDC was recorded)"
+    else:
+        _vsense = "ldc0_valid(=UNKNOWN SEMANTICS for this bitstream -- do not read as untagged)"
+    bits = (f"{_vsense}={ldc_valid} src={src} ({srcname}) stc_valid={stc_valid} "
             f"stc_ctag={stc_ctag} gran_match={match} clobbered={clobbered} "
             f"selftest_seen={selftest}")
 
