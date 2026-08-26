@@ -95,3 +95,75 @@ flash. Worth recording honestly beside that: the currently resident bitstream is
 -13.516, so this design has never met that criterion and the project has knowingly used debug
 instruments that fail it. Arm A is not categorically different, and the census is a stronger
 argument for usability than WNS is against it. The decision is the project lead's either way.
+
+---
+
+# ADDENDUM: arm B completed on the stock flow, and gives the FIRST unconfounded cost figure
+
+    bitstream  11,443,722 bytes
+    sha256     d86f73dc637ccccac33fd87e1676f12e36c21cecc4da22b1bec4419e61b31d6a
+    commit     52fa06b9d, retiming ON (stock flow, variable unset), LIMIT_GB=100
+    routing    LEGAL, zero unroutable nets. DRC LUTLP-1 count 0 against 44 DRC mentions.
+    phases     synthesis 213 min | placement 18 | routing ~110 | bitgen ~3
+
+## Retracted: "retiming-ON does not complete with this RTL"
+
+FALSE, and backwards. That claim came from arm B's first attempt dying at a 51.43 GB ceiling,
+which was the guard counting a sibling run's collector — see
+[[27-08-2026_00-30-00_a-guard-that-worked-and-lied-twice]]. Retiming-ON completes the entire flow
+and does synthesis **41 minutes FASTER** than retiming-OFF (213 vs 254). It reached two peer lanes,
+the project lead, and a commit message before the arithmetic caught it, and it was used to justify
+a synthesis-flow deviation as *necessary*. It was neither necessary nor true.
+
+## The clean pair — retiming ON on both sides, the 14 lines of RTL as the only variable
+
+                          WNS         failing endpoints    placed LUTs
+    84ed6eafb  base      -13.516      103,197              171,460  84.13%
+    52fa06b9d  arm B     -14.832      104,457              170,792  83.80%
+    ---------------------------------------------------------------------
+    COST OF THE CHANGE   -1.316 ns    +1,260 (+1.2%)         -668 LUTs
+
+For contrast, arm A (retiming OFF, confounded): -14.125, 104,238, 170,726.
+
+Two things worth keeping:
+
+**Arm B is WORSE on timing than arm A** (-14.832 vs -14.125), so retiming-OFF produced the
+better-timed design while synthesising slower. Both facts are the opposite of what was believed
+for most of this investigation.
+
+**The stage reversal survives the clean pair.** The change ADDS 1,512 LUTs at synthesis and
+REMOVES 668 at placement. That is now measured on two independent pairs, so on this design a LUT
+figure without a stage attached can carry the wrong SIGN, not merely the wrong magnitude.
+
+## NOT YET USABLE — the census is the gate, and it does not exist
+
+Everything that makes these bitstreams trustworthy despite negative slack is the launch census:
+all failing endpoints launching from `dom_switcher/cur_idx_q_reg`, inert while a domain body
+executes. **Proven for `84ed6eafb` and for arm A. NOT proven for arm B**, which carries 1,260
+failing endpoints the base does not. If any land in the LSU or recorder cone, the usability
+argument fails for arm B specifically — and fails for the paths doing the measuring.
+
+Ordering pre-registered with the synthesis lane BEFORE the data exists, and agreed by both:
+
+    1. arm B's census runs.
+    2. all-dom_switcher            -> arm B is the candidate: stock flow, one variable, proven inert.
+    3. distributed, OR any launch point in the LSU/recorder cone
+                                   -> arm B NOT flashable regardless of provenance. Arm A becomes
+                                      the candidate despite its confound, because arm A's
+                                      inertness is PROVEN and arm B's would not be.
+    4. neither clean               -> nothing is flashed, and we say so.
+
+Census discipline required before any of it is trusted: by-STARTPOINT and by-ENDPOINT sums must
+both equal arm B's own 104,457, or it is a SAMPLE and cannot answer the question; and the
+`dom_switcher` positive control runs in the same command as the `s07_ldc0` / `load_unit` / `lsu_i`
+queries, because a zero from that grep is worth nothing without it.
+
+**Arm A's census survived by luck.** Its enumeration was killed at `exit=143` mid-section-4;
+section 3 had already been written. Twenty minutes earlier and there would be no census at all,
+and step 4 would already be the answer. These censuses are not guaranteed outputs.
+
+## Standing
+
+Still not flashed. WNS is negative and MORE negative than the image it would replace. Better
+provenance does not make arm B flashable — it makes it the better candidate if the project lead
+overrides the criterion, which is theirs to do.
