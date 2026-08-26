@@ -309,9 +309,16 @@ Before committing an RTL change to synthesis, ask the auditors two questions the
 Then batch: every RTL change the investigation needs goes into ONE bitstream. Discovering the
 second one afterwards costs another full cycle.
 
-**Keep an observation-only change a strict reduction where it can be**, and turn `RETIMING`
-off for debug bitstreams. An instrument rich enough to be interesting is rich enough to be
-unsynthesizable; the minimal version is the one that ships.
+**Keep an observation-only change a strict reduction where it can be.** An instrument rich
+enough to be interesting is rich enough to be unsynthesizable; the minimal version is the one
+that ships.
+
+**Do not change the synthesis flow.** It produces working bitstreams in 1.5-3 hours; leave its
+settings alone, `RETIMING` included. On 2026-08-26 a lane turned retiming off for a debug build,
+citing a comment in `run.tcl` that disagreed with the code beside it, and synthesis passed two
+hours without leaving `synth_design` where the same flow had finished it in 41-46 minutes.
+A comment that disagrees with code which has been producing good bitstreams for months is
+evidence about the comment, not the code.
 
 The simulation suite is a **functional** gate and says nothing about synthesizability: the
 build suppresses exactly these warnings, and a non-blocking assignment in a combinational
