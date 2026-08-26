@@ -167,3 +167,88 @@ and step 4 would already be the answer. These censuses are not guaranteed output
 Still not flashed. WNS is negative and MORE negative than the image it would replace. Better
 provenance does not make arm B flashable — it makes it the better candidate if the project lead
 overrides the criterion, which is theirs to do.
+
+---
+
+# ADDENDUM: arm B's census is CLEAN — the gate passes. And one volunteered claim retracted.
+
+## The census
+
+Verified as a census BEFORE being read, per the pre-registered discipline:
+
+    by-STARTPOINT sum                     104,457
+    by-ENDPOINT   sum                     104,457
+    arm B failing endpoints (own report)  104,457
+
+Exact on both axes. Not a sample.
+
+    ALL 104,457 launch from  i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[0]
+
+    s07_ldc0 0   recorder 0   load_unit 0   lsu_i 0   dom_switcher 104,457  <- positive control
+
+**Every one of the 1,260 failing endpoints arm B adds over the base went into the dom-switcher
+cone.** Same shape as `84ed6eafb` and arm A, established on arm B's own evidence rather than
+inherited. `cur_idx` toggles only during a domain switch with the frontend flushed, so arm B's
+failing paths cannot be active while a domain body executes.
+
+**Pre-registered step 2 is reached: arm B is the candidate** — stock flow, one variable against the
+resident image, proven-inert failing set, bitstream `d86f73dc...31d6a` extant.
+
+    artifact  synth-52fa06b9d-exit0.tar.gz (retimingON dir), 407,010,879 B
+    guard     exit=0, 4h44m47s, peak 21.15 GB
+
+## RETRACTED: "the instrument's own nets are 3.478 ns better than the critical path"
+
+Section 5 of the forensics is headed "IS THE S-07 FIX ON THE CRITICAL PATH", and it was read as
+answering that question for the S-12 recorder. **It does not measure the recorder at all.** Its
+match patterns are `*gran_*` (17 nets), `*wbuffer_hit_oh*` (24), `*wbuffer_q*` (2,860),
+`*req_wtag*`, `*word_ne*`, `*ni_conflict*` (0 each) — the **S-07 DCACHE FIX's** nets, part of the
+base.
+
+The recorder's actual nets at `52fa06b9d` are `cap_clear_addr_d/_q`, `s07_ldc0_clear_i`,
+`s07_ldc0_paddr_o/_q`, `s07_ldc0_src_o/_q`, `s07_ldc0_tag_o`. Every section-5 pattern checked
+against all eight: **zero matches on all six patterns**, with `*s07_ldc0*` matching 6 of 8 in the
+same check as a positive control, so the zeros are real.
+
+The cause is worth recording: **two unrelated work items share the `s07` prefix.** The dcache fix
+and the recorder are different things, and the recorder's signals are named `s07_ldc0_*` because
+they began as an S-07 probe. A section header naming one was read as covering the other.
+
+So the stronger claim — that the recorder is nowhere near being the limiter — has **no evidence
+either way** and is withdrawn rather than softened.
+
+## The consistency question, and why there is no contradiction
+
+The census (104,457 failing ENDPOINTS) and section 5 (3,817 failing PATHS) are not in the same
+units: one endpoint is reached by many paths. And because the census is COMPLETE and says every
+failing path in the design launches from `cur_idx_q_reg[0]`, those 3,817 necessarily launch there
+too. A subset view, inert like the rest. Step 2 is unaffected.
+
+## What is still unanswered, and why it does not block
+
+The `-through` question **for the recorder** — the worst path passing through `cap_clear_addr_d` or
+the `s07_ldc0_*` nets — is not answered by any artifact we hold. It does not block usability: the
+census shows nothing LAUNCHES from the recorder, and the only launch point that toggles is inert
+during body execution, so a path merely passing through recorder cells cannot be exercised while
+the code under test runs.
+
+If it is ever wanted it needs the routed checkpoint opened with a `-through` query on `*s07_ldc0*`
+and `*cap_clear_addr*`; the `.dcp` is retained in arm B's artifact, so it costs a Vivado open
+(~38 GB, tens of minutes) and no resynthesis.
+
+## The collector exposure, now measured under a guard for the first time
+
+    arm B synthesis peak   21.15 GB
+    arm B collector peak   38.05 GB    <- 80% higher than synthesis
+    arm A collector peak   33.35 GB    (measured, unguarded at the time)
+
+**Against the 40 GB default that stood until today, arm B's collection came within 2 GB of
+tripping a ceiling that would have killed the collector mid-write and destroyed the artifact it
+was producing.** Every successful build this project has produced ran that phase unguarded.
+
+## Standing
+
+Still not flashed. WNS -14.832, negative and 1.316 ns worse than the image it would replace. What
+the census changes is the REASON behind the rule — the hazard it guards against, an instrument
+failing in the same shape as the subject, is now excluded by measurement for this build. That is
+an argument for deliberately overriding the criterion. It is not the criterion being met.
