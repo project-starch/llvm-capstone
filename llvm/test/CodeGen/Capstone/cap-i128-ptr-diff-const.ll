@@ -1,110 +1,79 @@
-; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; A pointer DIFFERENCE with a constant element offset on one side, e.g.
+; `p - (q + 1)`. DAGCombine reassociates it to `add(sub(p, q), -elemsize)`, where
+; `sub(p, q)` is a SCALAR byte count. The `cincoffset` must land on the capability
+; that the offset actually belongs to, never on the scalar difference:
+; cscincoffsetimm faults on an untagged rs1.
 ;
-; Regression: a pointer DIFFERENCE with a constant element offset on one side,
-; e.g. `p - (q + 1)`, was mis-lowered. DAGCombine correctly reassociates it to
-; `add(sub(p, q), -elemsize)`, where `sub(p, q)` is a pointer difference (a
-; SCALAR byte count). But lowerADD treated every i128 add as capability+offset and
-; emitted `CIncOffset(<scalar>, -elemsize)` -- a cincoffsetimm on an untagged
-; scalar -- which faults at runtime (cscincoffsetimm rs1->tag).
+; The file keeps its i128 name for the history that references it; the arithmetic
+; is i64, which is what the front end emits. It used to be i128, and that is where
+; the original bug lived: lowerADD treated every i128 add as capability+offset and
+; could not tell the two apart, because one register class held both. It cannot
+; arise now -- an offset applies to a c128 or it is integer arithmetic, and the
+; type says which. That lowering is gone; this file is the lock on the property.
 ;
-; This is exactly Lua 5.4's lua_gettop: `L->top.p - (L->ci->func.p + 1)`, where
-; both pointers are LOADED from the lua_State. Every C-API / base-library call runs
-; through it, so the interpreter trapped on the first `print()` (and any other base
-; function) even though pure-core chunks ran fine.
-;
-; Fix: when neither operand of the i128 add is a capability base -- the offset is
-; an integer offset and the base is a ptr-ptr SUB of two capability values (or an
-; already-lowered sign-extended difference) -- lower the add in the XLen domain
-; (scalar `addi`) and sign-extend back. The element adjustment must be a scalar
-; add, never a cincoffset on the difference.
+; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s \
+; RUN:   | FileCheck %s --implicit-check-not=__divti3
 
-target triple = "capstone64-unknown-elf"
+target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
 %struct.SV = type { [4 x i64] }   ; 32-byte element, like Lua's StackValue
 
-; p - (q + 1): loaded capabilities, difference is a scalar; the -32 element
-; adjustment must be a scalar `addi`, never a cincoffset on the difference.
+; The offset is on q, so q is loaded as a CAPABILITY (ldc) and cincoffsetimm
+; applies to it. p is only ever read as an address, so a plain ld suffices.
 ; CHECK-LABEL: ptr_diff_q1:
-; CHECK:      sub [[D:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NEXT: addi [[D]], [[D]], -32
-; CHECK-NOT:  cincoffset
+; CHECK-DAG: ldc [[Q:a[0-9]+]], 16(a0)
+; CHECK-DAG: ld [[P:a[0-9]+]], 0(a0)
+; CHECK: cincoffsetimm [[Q]], [[Q]], 32
+; CHECK: sub a0, [[P]], [[Q]]
+; CHECK: srai a0, a0, 5
 define i64 @ptr_diff_q1(ptr addrspace(200) %slots) addrspace(200) {
 entry:
-  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1
+  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i64 1
   %p = load ptr addrspace(200), ptr addrspace(200) %slots
   %q = load ptr addrspace(200), ptr addrspace(200) %qp
-  %add.ptr = getelementptr %struct.SV, ptr addrspace(200) %q, i128 1
-  %lhs = ptrtoint ptr addrspace(200) %p to i128
-  %rhs = ptrtoint ptr addrspace(200) %add.ptr to i128
-  %sub = sub i128 %lhs, %rhs
-  %div = sdiv exact i128 %sub, 32
-  %r = trunc i128 %div to i64
-  ret i64 %r
+  %add.ptr = getelementptr %struct.SV, ptr addrspace(200) %q, i64 1
+  %lhs = ptrtoint ptr addrspace(200) %p to i64
+  %rhs = ptrtoint ptr addrspace(200) %add.ptr to i64
+  %sub = sub i64 %lhs, %rhs
+  %div = sdiv exact i64 %sub, 32
+  ret i64 %div
 }
 
-; (p + 1) - q: same, with a +32 adjustment.
+; The mirror image: the offset is on p this time.
 ; CHECK-LABEL: ptr_diff_p1:
-; CHECK:      sub [[E:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NEXT: addi [[E]], [[E]], 32
-; CHECK-NOT:  cincoffset
+; CHECK: cincoffsetimm {{a[0-9]+}}, {{a[0-9]+}}, 32
+; CHECK: sub a0,
+; CHECK: srai a0, a0, 5
 define i64 @ptr_diff_p1(ptr addrspace(200) %slots) addrspace(200) {
 entry:
-  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1
+  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i64 1
   %p = load ptr addrspace(200), ptr addrspace(200) %slots
   %q = load ptr addrspace(200), ptr addrspace(200) %qp
-  %add.ptr = getelementptr %struct.SV, ptr addrspace(200) %p, i128 1
-  %lhs = ptrtoint ptr addrspace(200) %add.ptr to i128
-  %rhs = ptrtoint ptr addrspace(200) %q to i128
-  %sub = sub i128 %lhs, %rhs
-  %div = sdiv exact i128 %sub, 32
-  %r = trunc i128 %div to i64
-  ret i64 %r
+  %add.ptr = getelementptr %struct.SV, ptr addrspace(200) %p, i64 1
+  %lhs = ptrtoint ptr addrspace(200) %add.ptr to i64
+  %rhs = ptrtoint ptr addrspace(200) %q to i64
+  %sub = sub i64 %lhs, %rhs
+  %div = sdiv exact i64 %sub, 32
+  ret i64 %div
 }
 
-; Plain p - q stays a clean cursor difference + arithmetic shift (control).
+; The control that keeps the two above honest: with NO constant offset there is
+; nothing for a cincoffset to be, so neither pointer need be loaded as a
+; capability at all. If this one grew a cincoffset, the checks above would be
+; matching something incidental.
 ; CHECK-LABEL: ptr_diff_plain:
-; CHECK:      sub [[F:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NOT:  cincoffset
-; CHECK:      srai
+; CHECK-NOT: cincoffset
+; CHECK: sub a0,
+; CHECK: srai a0, a0, 5
+; CHECK: cjalr zero, 0(ra)
 define i64 @ptr_diff_plain(ptr addrspace(200) %slots) addrspace(200) {
 entry:
-  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i128 1
+  %qp = getelementptr ptr addrspace(200), ptr addrspace(200) %slots, i64 1
   %p = load ptr addrspace(200), ptr addrspace(200) %slots
   %q = load ptr addrspace(200), ptr addrspace(200) %qp
-  %lhs = ptrtoint ptr addrspace(200) %p to i128
-  %rhs = ptrtoint ptr addrspace(200) %q to i128
-  %sub = sub i128 %lhs, %rhs
-  %div = sdiv exact i128 %sub, 32
-  %r = trunc i128 %div to i64
-  ret i64 %r
-}
-
-; The same defect one predicate further out: a difference whose operands are an
-; incoming POINTER PARAMETER and a GlobalAddress. isCapstoneCapabilityValue
-; deliberately excludes CopyFromReg i128, so neither operand was "recognised" as a
-; capability and the constant adjustment fell through to cincoffset on an untagged
-; register again.
-;
-; This is JerryScript's jmem_heap_alloc:
-;     prev_p->next_offset = (uint32_t) ((uint8_t *) remaining_p - heap.area)
-; where `area` is a member at offset 8, so it reassociates to (p - &heap) - 8. The
-; domain faulted with cause 24 on its first allocation, before running any JS.
-%struct.free_t = type { i32, i32 }
-%struct.heap_t = type { %struct.free_t, [512 x i8] }
-@heap = dso_local addrspace(200) global %struct.heap_t zeroinitializer, align 4
-
-; CHECK-LABEL: ptr_diff_param_minus_member:
-; CHECK:      sub [[G:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
-; CHECK-NEXT: addi [[G]], [[G]], -8
-; CHECK-NOT:  cincoffset
-define void @ptr_diff_param_minus_member(ptr addrspace(200) %prev_p,
-                                         ptr addrspace(200) %p) addrspace(200) {
-entry:
-  %lhs = ptrtoint ptr addrspace(200) %p to i128
-  %rhs = ptrtoint ptr addrspace(200) getelementptr inbounds (%struct.heap_t, ptr addrspace(200) @heap, i32 0, i32 1) to i128
-  %sub = sub i128 %lhs, %rhs
-  %conv = trunc i128 %sub to i32
-  %next = getelementptr inbounds %struct.free_t, ptr addrspace(200) %prev_p, i32 0, i32 1
-  store i32 %conv, ptr addrspace(200) %next, align 4
-  ret void
+  %lhs = ptrtoint ptr addrspace(200) %p to i64
+  %rhs = ptrtoint ptr addrspace(200) %q to i64
+  %sub = sub i64 %lhs, %rhs
+  %div = sdiv exact i64 %sub, 32
+  ret i64 %div
 }
