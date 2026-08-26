@@ -1894,3 +1894,51 @@ last OpenSBI banner picked up the previous boot's replayed content — for up23 
 arm's own region as empty. **Use the driver's `[stages] <-- TEST …` verdict lines.** They are what
 the driver actually observed, they are one line per arm, and they cannot splice two boots
 together. The UART reassembly is for reading detail INSIDE an arm already identified that way.
+
+## Sharper constraint: `tval = 0` means the DATA was zero, not merely detagged
+
+Hypothesis generation produced a tag-desync account (a same-word merge into an already-issued
+capability-store transaction, leaving DRAM `ctag=1` and L1 `ctag=0` — the write-buffer residual
+that `wt_dcache_wbuffer.sv:604-619` documents as pre-existing and deliberately un-fixed). It does
+not survive the measurement, and the reason narrows the search:
+
+**`decompress_cap_tagged` (`ariane_pkg.sv:766-782`) passes the CURSOR THROUGH unchanged on an
+untagged read.** A pure tag loss therefore delivers cursor `0x827e4cd0` and `tval` reads
+`0x827e4cd0`. The latched `tval` is **0**. So the load was not served correct data with a lost
+tag — **it was served all-zero 128 bits.**
+
+That is a much tighter constraint than "the operand was NOT_CAP", and it excludes every
+tag-only mechanism at this site, not just the move-clear.
+
+**And the window contains exactly such a value, two instructions earlier:**
+
+```
+104804  cincoffsetimm a5, s0, -0x120
+104808  movc a4, zero          <- a4 := create_cnull, ALL ZERO
+10480c  stc  a4, 0x0(a5)       <- stores it to s0-0x120     ... this is `Index *pIdx = 0;`
+104810  ldc  a4, 0x0(a0)       <- reloads pWInfo from s0-0x70
+104814  cincoffsetimm a4, a4, 0xb0    FAULTS with all-zero
+```
+
+The cnull store is the compiler initialising the local `Index *pIdx = 0;` — a capability-width
+store of bit-for-bit `create_cnull`, issued two instructions before the reload that fails, into a
+*different* granule of the same frame.
+
+**So the shape to explain is: a zero capability stored to one stack granule, and the very next
+capability load from a different granule of the same frame returning that zero.** That is
+squarely the write-buffer/forwarding family, and it is the first account consistent with every
+measurement at once — memory intact (the entry converges and drains correctly, which is why the
+post-wedge read shows the right capability), `tval = 0` and NOT_CAP (the forwarded value is
+literally `create_cnull`), and no stall anywhere.
+
+**What is NOT yet explained**, and must not be glossed: the two granules differ. At the wedge
+`s0 = 0x82b9f480`, so the zero store is at `0x82b9f360` and the reload at `0x82b9f410` — different
+16-byte granules, and different D-cache indices under `paddr[11:4]` (`0x36` vs `0x41`). A
+legitimate forward requires a granule match, so this needs an address-comparison defect, not merely
+a timing window.
+
+**Instrument note.** The proposed test — arm CSR `0x811` to filter the LDC recorder onto the
+subject granule — is **not runnable on resident silicon**: `s07_ldc0_filter_addr_i` does not exist
+at `84ed6eafb` (0 occurrences), it belongs to the design that failed to route. The *store*
+watchpoint at `cva6.sv:905-906` **is** resident and CSR-`0x811`-armed, which is a different
+instrument and can see stores landing on a chosen granule.
