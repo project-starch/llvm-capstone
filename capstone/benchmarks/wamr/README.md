@@ -118,18 +118,41 @@ stage  4  wasm_runtime_call_wasm             capability fault
 The runtime initialises, loads a module and instantiates it. What is left is the
 call itself.
 
-### Where stage 4 stops
+### Where stage 4 stops, and the two fixes the hypothesis produced
 
-`wasm_interp_call_wasm`, at `stc s5, 0x0(s2)` -- a capability store through the
-interpreter FRAME pointer. Located with the same anchor instrument: ELF 0x16484,
-inside a function whose ELF address the image itself reports.
+The frame hypothesis was tested, not assumed, with a static-assert probe over the
+real struct layouts. Two of the three assertions passed and the third named the
+defect:
 
-The shape is familiar. `WASMInterpFrame` carries pointers (`function`, `ip`, `sp`,
-`prev_frame`), and the interpreter carves frames out of its stack in units of
-4-byte cells. A structure with pointer fields placed on a 4-byte grid is the same
-defect the free-tree node had, one layer up. That is a hypothesis from the shape
-and NOT yet measured; it is written here as the next thing to test, not as a
-finding.
+```
+offsetof(WASMInterpFrame, prev_frame) == 0        passes
+offsetof(WASMInterpFrame, lp) % 16 == 0           passes
+offsetof(WASMExecEnv, wasm_stack_u) % 16 == 0     FAILS -- it is 8
+```
+
+And upstream says why in the field's own name:
+
+```c
+union { uint64 __make_it_8_byte_aligned_; uint8 bottom[1]; } wasm_stack_u;
+```
+
+Eight is the pointer's alignment on the targets WAMR was written for. A frame is
+placed at `bottom` and its first field is a pointer, so the first
+`frame->prev_frame = ...` stores across an unaligned boundary -- which was exactly
+the `stc s5, 0x0(s2)` the trap named.
+
+The second half is `wasm_interp_interp_frame_size`, which rounds to 4. Frames come
+from bumping `wasm_stack.top` by that size, so a 4-aligned size unaligns the next
+frame however well the base is placed.
+
+Both are patch 0003, and both moved the fault forward: 0x16484 to 0x1BE90 to
+0x1BF24. The remaining one is inside `memset` called from the interpreter's local
+initialisation, with a frame pointer that is untagged for a reason not yet found.
+Written as a location, not a theory.
+
+Same root as patch 0002 either way: a constant that encodes the pointer's width
+without saying so. There it was `UINTPTR_MAX == UINT64_MAX`; here the literals
+8 and 4.
 
 ### The instrument that made this tractable
 

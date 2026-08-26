@@ -1,0 +1,69 @@
+Align the interpreter stack and its frames to the POINTER, not to 8 and 4.
+
+Two places, one cause, and the first of them says what it is doing out loud:
+
+    union {
+        uint64 __make_it_8_byte_aligned_;
+        uint8  bottom[1];
+    } wasm_stack_u;
+
+Eight is the pointer's alignment on the targets WAMR was written for. A frame is
+placed at `bottom` and its FIRST field is a pointer -- WASMInterpFrame::prev_frame,
+at offset 0 -- so on a target where a pointer wants 16 the very first
+`frame->prev_frame = prev_frame` stores across an unaligned boundary. Adding a
+`void *` member to the union rather than changing the existing one keeps every
+other target byte-identical.
+
+The second is wasm_interp_interp_frame_size, which ends `return align_uint(frame_size, 4)`.
+Frames are handed out by bumping exec_env->wasm_stack.top by exactly that size, so
+a 4-aligned size leaves the NEXT frame unaligned however well the base is placed.
+Rounding to sizeof(void *) is a no-op where a pointer is 4 or 8 bytes.
+
+MEASURED, not reasoned. A static-assert probe over the real struct layouts put the
+fault exactly here: offsetof(WASMInterpFrame, prev_frame) == 0 passes,
+offsetof(WASMInterpFrame, lp) % 16 == 0 passes, and
+offsetof(WASMExecEnv, wasm_stack_u) % 16 == 0 FAILS -- it is 8. The faulting
+instruction the trap named was `stc s5, 0x0(s2)`, a capability store at offset 0
+of a frame, which is that field and nothing else.
+
+Same root as patch 0002: a constant that encodes the pointer's width without
+saying so. There it was `UINTPTR_MAX == UINT64_MAX`; here it is the literals 8
+and 4.
+
+diff --git i/core/iwasm/common/wasm_exec_env.h w/core/iwasm/common/wasm_exec_env.h
+index 5d80312..ea5e9e3 100644
+--- i/core/iwasm/common/wasm_exec_env.h
++++ w/core/iwasm/common/wasm_exec_env.h
+@@ -168,6 +168,14 @@ typedef struct WASMExecEnv {
+     /* The WASM stack of current thread */
+     union {
+         uint64 __make_it_8_byte_aligned_;
++        /* A frame starts at bottom and its FIRST field is a pointer
++           (WASMInterpFrame::prev_frame, at offset 0), so this union must carry
++           the pointer's alignment and not a fixed 8. On a target where a pointer
++           is wider than uint64 the name above stops describing what is needed,
++           and the first `frame->prev_frame = ...` stores across an unaligned
++           boundary. Adding the member rather than changing the one above keeps
++           every existing target byte-identical. */
++        void *__make_it_pointer_aligned_;
+         /* The WASM stack. */
+         uint8 bottom[1];
+     } wasm_stack_u;
+diff --git i/core/iwasm/interpreter/wasm_interp.h w/core/iwasm/interpreter/wasm_interp.h
+index 1416405..8f774ea 100644
+--- i/core/iwasm/interpreter/wasm_interp.h
++++ w/core/iwasm/interpreter/wasm_interp.h
+@@ -98,7 +98,12 @@ wasm_interp_interp_frame_size(unsigned all_cell_num)
+ #else
+     frame_size = (uint32)offsetof(WASMInterpFrame, operand) + all_cell_num * 4;
+ #endif
+-    return align_uint(frame_size, 4);
++    /* Aligned to the POINTER, not to 4. Frames are handed out by bumping
++       exec_env->wasm_stack.top by exactly this size, so a size that is only
++       4-aligned leaves the NEXT frame unaligned however well the base is placed,
++       and a frame's first field is a pointer (prev_frame, at offset 0). On a
++       target where a pointer is 4 or 8 bytes this changes nothing. */
++    return align_uint(frame_size, (unsigned)sizeof(void *));
+ }
+ 
+ void
