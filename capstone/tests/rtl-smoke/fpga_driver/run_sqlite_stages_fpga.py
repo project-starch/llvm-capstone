@@ -2612,7 +2612,12 @@ def main():
                             # read discriminates them on its own -- `movc a4, zero` leaves cursor
                             # 0, a real capability leaves ~0x82be4cf0. $x10 = a0 comes along as
                             # context: it is the slot pointer and should still be sane.
-                            for _e in ("$mcause", "$mepc", "$mtval", "$x8", "$sp", "$x14", "$x10"):
+                            # $mtvec added 2026-08-26: it decides the RTL lane's A/B fork. Every S-12 wedge reads
+                            # gdb mcause/mepc = 2/2 -- illegal instruction AT ADDRESS 2 -- which is what
+                            # fetching from a garbage trap vector looks like, and matches the gp-free smoke
+                            # wedge exactly. If mtvec is ~0 that is branch A confirmed at the source rather
+                            # than inferred from the consequence.
+                            for _e in ("$mcause", "$mepc", "$mtval", "$mtvec", "$x8", "$sp", "$x14", "$x10"):
                                 _s = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"p/x {_e}\n")
                                 try:
@@ -2962,7 +2967,12 @@ def main():
                             # rather than as an error.
                             try:
                                 _pa = {}
-                                for _ap in (209, 205, 206, 207):
+                                # 219 APPENDED LAST ON PURPOSE. 219 = 0b11011011, so bit0=1
+                                # (routes TX) and bit1=1 (arms the dump) -- the same
+                                # arms-and-routes combination as 207, per the table above. It
+                                # therefore belongs at the END of the walk, after both granule
+                                # addresses are already captured, never before them.
+                                for _ap in (209, 205, 206, 207, 219):
                                     _pa[_ap] = settled_halted_read(console, C, _ap)
                                 set_switch_value(console, 0)
 
@@ -2974,9 +2984,66 @@ def main():
                                 _ldc_a = _mk(_pa[205], _pa[206])
                                 _stc_a = _mk(_pa[207], _pa[209])
                                 _fmt = lambda _x: "VOID" if _x is None else f"0x{_x:05x}"
+                                # SWITCH 219 + THE HARD SUBJECT GATE (rolling-min bitstreams).
+                                #
+                                # 219 = {4'b0, tag, valid, src[1:0]}. Under the rolling unfiltered
+                                # recorder the record is whatever LDC responded LAST before the
+                                # freeze, so `valid` alone says nothing about WHICH load it was.
+                                # The granule is what identifies it, and the comparison must be
+                                # against the subject computed from the s0 read AT THIS HALT --
+                                # never a constant. Measured s0 varies by build AND boot position:
+                                # 0x82b9f480, 0x8279f480, 0x82b9f350 are all real values from this
+                                # session, so a hardcoded granule would mismatch every time and
+                                # "confirm" delivery-failure by construction.
+                                #
+                                # THIS GATE IS HARD, not a judgement call at read time. A foreign
+                                # granule means a post-fault shadow load won the race against the
+                                # flush and overwrote the record; the reading is then VOID, NOT
+                                # evidence for delivery-failure. Degrading to "no verdict" instead
+                                # of to a wrong verdict is the whole reason the gate exists.
+                                # _mk returns a BYTE address ([19:4] << 4), so the subject must be masked the
+                                # same way -- comparing it against a >>4 granule index would
+                                # never match and would read as VOID every time.
+                                _sub_gran = None if _s0 is None else (_s0 - 0x70) & 0xFFFF0
+                                # Only the rolling-min family exposes 219; on older bitstreams
+                                # that aperture is unused and would read as noise.
+                                _bs219 = os.environ.get("FPGA_BITSTREAM", "")
+                                _t219 = (_pa.get(219)
+                                         if ("rolling-min" in _bs219 or "27a19c0a" in _bs219)
+                                         else None)
+                                if _t219 is not None:
+                                    _tag = (_t219 >> 3) & 1
+                                    _val = (_t219 >> 2) & 1
+                                    _src = _t219 & 3
+                                    _srcn = {0: "L1 hit", 1: "miss refill", 2: "wbuf fwd",
+                                             3: "UNDEFINED"}[_src]
+                                    if not _val:
+                                        _v = ("VOID -- recorder never fired")
+                                    elif _sub_gran is None or _ldc_a is None:
+                                        _v = ("VOID -- cannot identify the recorded load (s0 or "
+                                              "granule unread)")
+                                    elif _ldc_a != _sub_gran:
+                                        _v = (f"VOID -- record is a FOREIGN granule "
+                                              f"(0x{_ldc_a:05x} != subject 0x{_sub_gran:05x}): a "
+                                              f"post-fault load beat the flush. NOT evidence for "
+                                              f"delivery-failure.")
+                                    elif _tag:
+                                        _v = (f"SUBJECT, TAGGED -> the load returned a good "
+                                              f"capability and the FLU still got NOT_CAP: "
+                                              f"DELIVERY FAILURE, and src={_src} ({_srcn}) names "
+                                              f"the leg it came back on.")
+                                    else:
+                                        _v = (f"SUBJECT, UNTAGGED -> TAG LOSS on src={_src} "
+                                              f"({_srcn}); the delivery-failure reading is "
+                                              f"REFUTED.")
+                                    print(f"  [wedge] sw219 record: tag={_tag} valid={_val} "
+                                          f"src={_src} ({_srcn})", flush=True)
+                                    print(f"  [wedge] SUBJECT GATE: {_v}", flush=True)
                                 _msg = (f"  [wedge] GRANULE ADDRESSES (bits [19:4], 1 MB window, "
                                         f"halted read): untagged-LDC={_fmt(_ldc_a)}  "
-                                        f"last-cap-STC={_fmt(_stc_a)}")
+                                        f"last-cap-STC={_fmt(_stc_a)}"
+                                        + (f"  subject(s0-0x70)=0x{_sub_gran:05x}"
+                                           if _sub_gran is not None else "  subject=UNREAD"))
                                 if _ldc_a is not None and _stc_a is not None:
                                     if _ldc_a == _stc_a:
                                         _msg += ("   SAME GRANULE -- the load that came back "
