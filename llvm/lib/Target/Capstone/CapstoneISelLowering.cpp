@@ -2888,9 +2888,24 @@ bool CapstoneTargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
                                              const MachineFunction &MF) const {
   // See the header comment: i128 is the capability carrier here, so a merged
   // 128-bit store is a capability store. Found by building the SQLite
-  // amalgamation at -O1, where sqlite3Pragma merged four adjacent i32 stores
-  // into `store i128 0x3000000020000000400000070` -- four small integers, not
-  // an address and certainly not a capability.
+  // amalgamation at -O1, which reported 24 of these.
+  //
+  // The VERIFIED reduced shape is sqlite3FinishCoding's VdbeOp initialiser: six
+  // adjacent constant stores (i8, i16, i32, i32, i32, i8) over 16 aligned bytes,
+  // merged into `store i128 0x10000000000000009`. That is the one pinned by
+  // cap-store-merge-i128.ll. sqlite3Pragma produced merges of four i32 stores in
+  // the same run (e.g. 0x3000000020000000400000070, which is 0x00000003,
+  // 0x00000002, 0x00000004, 0x00000070 -- the printed form just omits leading
+  // zeros). Both are the same defect; only the mixed-width one was reduced, and a
+  // hand-written four-i32 struct in C does NOT reproduce it, so start from the
+  // lit test rather than from the sqlite3Pragma values.
+  //
+  // NOT SUFFICIENT ON ITS OWN. memset still reaches the same forge by a different
+  // route: findOptimalMemOpLowering guards every i128-avoidance branch on
+  // Op.isMemcpy() (see :26131, :26157, :26179), so a memset falls through to the
+  // generic picker, which picks i128 because i128 is a legal type, and never
+  // consults this hook. A 16-byte llvm.memset with a non-zero fill still fails.
+  // SQLite happens not to contain one. See ISSUES.md C-17.
   if (MemVT == MVT::i128)
     return false;
   return TargetLoweringBase::canMergeStoresTo(AS, MemVT, MF);

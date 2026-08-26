@@ -2364,7 +2364,7 @@ real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because
 metadata regfile shares its write-enable with the integer regfile
 (`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
 
-### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — RECURRENCE`
+### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — LATENT; and it was NOT the -O1 blocker`
 
     fatal error: error in backend: Cannot select:
       t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
@@ -2385,6 +2385,127 @@ masked result is exactly what forms `select_cc` on a capability at `-O1`.
 
 **Why it matters beyond the crash:** `-O1` is the cheapest available shot at the R-17 blocker
 (see below), and this is what blocks it.
+
+---
+
+**UPDATED 2026-08-26. SQLite builds at `-O1`. But C-17 is NOT closed, and an earlier version
+of this very update said it was -- see the retraction below.**
+
+**1. C-17's RECORDED REPRODUCER no longer fires. C-17 itself is LATENT, not fixed.**
+
+`char *pick(int n, char *a, char *b){ return n == 10 ? a : b; }` compiles clean at `-O1` AND
+`-O2`, as do five harder select shapes (long compare, pointer-as-condition, struct-field
+condition, nested select). **RETRACTED: I first recorded that as "C-17 is closed."** It is not.
+The matcher gap the entry names is still live and still reproducible on the current `llc`:
+
+```llvm
+define ptr addrspace(200) @wide_arm(i64 %n, ptr addrspace(200) %b) {
+  %c = icmp eq i64 %n, 10
+  %w = inttoptr i128 18446744073709551625 to ptr addrspace(200)
+  %r = select i1 %c, ptr addrspace(200) %w, ptr addrspace(200) %b
+  ret ptr addrspace(200) %r
+}
+```
+    LLVM ERROR: Cannot select: t18: i128 = CapstoneISD::SELECT_CC t2, Constant:i64<10>,
+                setne:ch, t4, Constant:i128<18446744073709551625>
+
+`Select_GPRCAP_Using_CC_GPR` is still emitted under `!is64Bit()` -- the guard is visible in the
+built matcher (`CapstoneGenDAGISel.inc`, `OPC_CheckPatternPredicate ... !((Subtarget->is64Bit()))`
+immediately before both entries), and the prose is already in-tree at
+`CapstoneInstrInfo.td:1748-1755`. What keeps the node from being FORMED in ordinary code is the
+custom `lowerCapabilitySelect()` (`CapstoneISelLowering.cpp:10725-10834`), which bails at
+`:10746-10747` when a constant arm has more than XLen active bits and falls through to
+`lowerBranchSelect()`, which forms the unselectable i128 `SELECT_CC`.
+
+So the surviving trigger is specifically **a select whose constant arm needs more than 64 bits**.
+UNRESOLVED: whether that shape is reachable from C. The author's own comment at
+`CapstoneISelLowering.cpp:10729-10731` asserts it is ("an offset that GlobalMerge + DAGCombine
+sank into an i128 select"), which is a reason to treat this as latent rather than theoretical.
+
+**The lesson is the same either way, and it is why the retraction is recorded rather than
+quietly fixed:** "the reproducer stopped firing" and "the bug is fixed" are different claims, and
+I collapsed them. Re-running one reproducer tells you about that reproducer.
+
+**2. C-17 was NOT what blocked the `-O1` build.** This is the part worth reading. Once C-17
+stopped reproducing, the amalgamation still failed, with a DIFFERENT backend error:
+
+    fatal error: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as
+    capabilities; capabilities are unforgeable
+
+Root cause: DAGCombiner merges runs of adjacent constant stores. On this target i128 is the
+CAPABILITY carrier, so a merged 128-bit store is `stc` -- it writes a TAGGED CAPABILITY.
+Reduced from `sqlite3FinishCoding`, the shape is SQLite's `VdbeOp` initialiser: six adjacent
+constant stores (i8, i16, i32, i32, i32, i8) over 16 aligned bytes, merged into one i128 whose
+bits are capability metadata the program never had authority to name. `0x10000000000000009`
+decomposes to the four small integers 0, 1, 0, 9.
+
+So the fatal error was the backend correctly catching a would-be FORGED CAPABILITY, not a gap
+to fill in. Fixed at the merge decision (`CapstoneTargetLowering::canMergeStoresTo` refuses
+i128), commit `d1fd1d33b905`. Merging up to 64 bits still happens and should.
+
+**Evidence, A/B on the real module rather than inferred:** with the hook disabled the
+amalgamation reports 24 of these errors; with it enabled, zero. lit 58/58. Pinned by
+`llvm/test/CodeGen/Capstone/cap-store-merge-i128.ll`.
+
+**RESIDUAL, found by audit and confirmed directly: `memset` still reaches the same forge.**
+`findOptimalMemOpLowering` (`CapstoneISelLowering.cpp:26100`) guards every i128-avoidance
+branch on `Op.isMemcpy()` (`:26131`, `:26157`, `:26179`), so a **memset** falls through to the
+generic picker at `:26204`, which chooses i128 because i128 is a legal type. `canMergeStoresTo`
+is never consulted. A 16-byte `llvm.memset` with a non-zero fill still produces
+`Cannot materialize ... (value 0x7070707070707070707070707070707)`; reproduced at sizes 16, 17,
+24, 32 and 48. **So "the i128 forge path is fixed" would be too strong -- what is fixed is the
+store-merging route.** It does not affect the `-O1` result: the amalgamation has 30 `llvm.memset`
+sites and NONE with size >= 16 and a non-zero fill, which is consistent with the zero-error run.
+Other routes were attacked and are clean: `store <2 x i64>`, `store <4 x i32>`, a `bitcast
+<2 x i64> to i128`, and a 16-byte `llvm.memcpy` all avoid it.
+
+**THE PROCESS LESSON, which is the reusable part.** This entry asserted a blocking reason for
+months and was never re-tested. Acting on it directly would have meant writing an i128
+`SELECT_CC` pattern -- correct-looking work on a bug that no longer existed, which would not
+have unblocked the build, because the actual blocker was somewhere else entirely. A recorded
+blocker is a claim with a date on it; re-run the reproducer before building on it.
+
+**What this does and does not do for S-12.**
+
+The FAULT SITE is genuinely gone, and this part is solid. In `sqlite3WhereCodeOneLoopStart`,
+`pWInfo` stays in callee-saved `s2` for the whole body, so the fault pair
+`ldc a4, 0x0(a0)` + `cincoffsetimm a4, a4, 0xb0` becomes `cincoffsetimm a0, s2, 0xb0` with no
+reload. Verified by full enumeration rather than by reading one site: `s2` is written exactly
+three times in the function -- `stc s2, 0x3b0(sp)` (prologue save), `movc s2, a2` (the only body
+definition), `ldc s2, 0x3b0(sp)` at `c5410`, which sits inside the contiguous restore block
+`c5404`..`c543c` and is therefore the epilogue, not a cold-path reload.
+
+**The IMAGE-WIDE count is metric-dependent, and the headline number oversold it.** "1043 -> 305"
+counts an `ldc rX` with the consuming `cincoffsetimm rX` STRICTLY ADJACENT. Widening the window
+(stopping at a redefinition of rX) shows -O0 barely moves while -O1 grows sharply -- the -O1
+scheduler separates the pair rather than removing it:
+
+| window | ratio |
+|---|---|
+| 1 (adjacent) | ~2.7-3.4x |
+| 2 | ~2.0x |
+| 4 | ~1.4-2.0x |
+| 8 | ~1.3-1.9x |
+
+Per-instruction density gives ~2.6x, and part of even that is the program simply being smaller.
+Two further corrections to what was first written here: `.text` goes **1,305,384 -> 989,496
+bytes (1.32x)**, NOT "2.2 MB -> 989 KB" -- the 2.2 MB was a figure quoted from a build-script
+comment, never a measurement of this artifact. And the phrase "an `ldc` from a FRAME SLOT" is
+the exemplar, not the metric: the counter is base-register-agnostic, and only ~9 of the 305 have
+an `sp`/`s0` base.
+
+**So: the specific fault site is removed; the population is reduced by somewhere between ~1.3x
+and ~3.4x depending on how you count.** At a 54% per-draw wedge rate that lowers the draw rate
+and nothing more. **A completing `-O1` board run MUST NOT be reported as S-12 resolved**, and
+S-12's mechanism is still OPEN, so "strict adjacency is the operative property" is an assumption
+and not a finding. `OPT` stays defaulted to `-O0` until `-O1` is validated end to end; flipping
+the silicon build default is a lead decision, not a side effect of this fix.
+
+**Baseline provenance, UNRESOLVED:** the `-O0` disassembly counted here has
+`sqlite3WhereCodeOneLoopStart` at `0x104248`, while the binary that produced the 2026-08-25
+fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE claim survives --
+the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
+numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 

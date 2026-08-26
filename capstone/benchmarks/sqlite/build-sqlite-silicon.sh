@@ -2272,12 +2272,29 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # QEMU executes the -O0 form happily, so the board is the only oracle -- but it is the one
 # construct at the frozen pc that -O1 removes.
 #
-# Why not raise $OPT itself: the amalgamation does not compile above -O0. `cond ? capA :
-# capB` reaches ISel as an i128 CapstoneISD::SELECT_CC, and the only patterns for it
-# (Select_GPRCAP_Using_CC_GPR) are emitted under !is64Bit(), so on capstone64 there is no
-# i128 select pattern and the backend aborts with "Cannot select". Reproducer:
-# `char *pick(int n, char *a, char *b) { return n == 10 ? a : b; }` at -O1. The n==0 form
-# compiles because SelectCC_GPR_rrirr adds a separate explicit Pat for a zero rhs.
+# Why $OPT is still -O0, CORRECTED 2026-08-26. The reason recorded here for months -- that
+# the amalgamation "does not compile above -O0" because of C-17 (i128 CapstoneISD::SELECT_CC
+# has no pattern on capstone64) -- was not what blocked the build. C-17's own reproducer,
+# `char *pick(int n, char *a, char *b){ return n == 10 ? a : b; }`, compiles clean at -O1 and
+# -O2. What actually failed was a merged 128-bit constant store: DAGCombiner packing SQLite's
+# VdbeOp initialiser into one i128, which on this target is `stc` -- a forged capability.
+# Fixed in the backend at canMergeStoresTo.
+#
+# C-17 IS STILL OPEN, just latent -- do not read the above as "C-17 is gone". The matcher gap
+# is live and reproducible; a select with a >64-bit constant arm still hits it. That was
+# retracted here once already; see ISSUES.md C-17 for the reproducer.
+#
+# THE AMALGAMATION NOW COMPILES AT -O1. Verified end to end: SQLITE_OPT_LEVEL=-O1 links a full
+# image, and .text falls from 1,305,384 to 989,496 bytes (1.32x). The S-12 fault site in
+# sqlite3WhereCodeOneLoopStart is gone -- pWInfo stays in callee-saved s2 for the whole
+# function instead of being reloaded. Image-wide the S-12 shape is reduced by somewhere between
+# ~1.3x and ~3.4x depending on how the pair is counted (strict adjacency flatters it; the -O1
+# scheduler separates many pairs rather than removing them). ISSUES.md C-17 has the table.
+#
+# The default stays -O0 anyway, because the reduction is not an elimination and because an -O1
+# image has not been validated end to end on QEMU or the board. Raising it is a deliberate
+# decision with its own validation, not a consequence of the compiler fix. Set
+# SQLITE_OPT_LEVEL=-O1 to try it.
 # The string primitives default to -O1, NOT to $OPT. Board-measured 2026-08-05: at -O0
 # `strlen` re-loads its string capability from a stack slot with `ldc` on EVERY iteration, and
 # on silicon that sporadically yields 1 instead of the true length -- stage 13 returned 15, then
@@ -2285,9 +2302,11 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # the pointer stays in a register (zero `ldc` in the loop) and stage 13 returns 36 on silicon,
 # twice. This is a real wrong-answer defect, not a workaround, so it is the default.
 #
-# It does NOT fix the stage-10 hang -- that was measured separately and is independent. And it
-# cannot be raised to a whole-image -O1: that hits C-17 (`Cannot select: i128 =
-# CapstoneISD::SELECT_CC`), which is why this knob is scoped to the support files.
+# It does NOT fix the stage-10 hang -- that was measured separately and is independent. The
+# knob stays scoped to the support files, but the reason has changed: it used to be that a
+# whole-image -O1 could not compile at all (see the corrected note above -- that was C-17, and
+# it was both stale and not the real blocker). A whole-image -O1 now compiles; scoping is now
+# a validation choice rather than a compiler limitation.
 SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}
 # BEEBS_STRING_LINEAR_SAFE: index instead of walking, so the string primitives never copy
 # or advance a capability that may be LINEAR. SQLite is the first thing here to call strlen
