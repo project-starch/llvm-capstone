@@ -1778,3 +1778,47 @@ succeeded, the artifact looked plausible, the domain would have entered and retu
 it would have read as "the cold load does not matter". Nothing reported an absence. Only
 disassembling the artifact before spending the boot distinguished it. That is the third time today
 that check has caught a test which would have measured nothing.
+
+## The slot's capability, decoded — NONLIN confirmed a third way, and the core is not stalled
+
+Two readings that were already in the wedge dumps and had not been extracted.
+
+**1. The capability in the faulting slot, decoded from its raw metadata word.**
+
+```
+cursor      0x827e4cd0
+metadata    0x000003c7a7462d16
+  revnode_id  241
+  perm        7  (rwx)
+  cap_type    2  ->  NONLIN
+  bounds      0x7462d16, cursorless=0
+```
+
+Layout is `revnode_id[29:0], perm[2:0], cap_type[2:0], bounds[27:0]`, MSB-first
+(`ariane_pkg.sv:636-642`), so `cap_type` is bits [30:28] — independently confirmed by the S-06
+comment about "raw data whose bits [30:28] decoded as LINEAR/NONLIN".
+
+**This is a third independent confirmation of NONLIN**, after the silicon arg probe and QEMU, and
+the first taken from the faulting granule itself rather than from a sibling argument or a
+completing build. NONLIN is absent from the LDC clear set (`load_unit.sv:227-229`), so the
+move-clear account stays dead.
+
+**Watch the numbering — it has caused one retraction already.** My first decode used a name table
+with `LINEAR=0` and printed `cap_type 2 -> REVOKE`, which would have *revived* the move-clear
+hypothesis, since REVOKE **is** in the clear set. The RTL enum (`ariane_pkg.sv:654-663`) is
+`NOT_CAP=0, LINEAR=1, NONLIN=2, REVOKE=3, …`, identical to `asm_insn.h:76-83`. Caught before it
+was recorded. **Three numberings are in play in this investigation** — the RTL enum, `asm_insn.h`,
+and `lcc` selector 1's post-shift form (`cap_type - 1`, NOT_CAP special-cased to 7) — and two of
+them differ by one.
+
+**2. The core is not stalled anywhere at the wedge.** Aperture 225 is
+`{trace_buf_empty, dyn_wait_store_syncer, dyn_wait_load_syncer, dyn_wait_rev_res, dom_switch_busy,
+stall_issue, mem_write_flag, mem_wait_flag}` (`cva6.sv:1189-1199`). All six wedges read **`0x80`**
+— only `trace_buf_empty`. No syncer wait, no rev-node wait, no memory wait, no issue stall.
+
+That kills a hypothesis before it was built: the driver's own comment at that aperture says "every
+wedge so far reads sw=225 = 0x95, i.e. wrev=1 AND memwait=1: the dyn unit is blocked in
+`get_node_query_validity` while the rev-node unit waits on the node-table memory read". **That
+comment is stale relative to these wedges** — it describes an older wedge class. The rev-node
+blockage story does not apply here, and the quiescent core is instead consistent with the
+trap-loop-at-`mtvec=0` picture the `mcause=2 / mepc=2` readings already showed.
