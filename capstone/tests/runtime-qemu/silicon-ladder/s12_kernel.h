@@ -224,6 +224,9 @@ static unsigned s12_compute(void)
 
   for (unsigned r = 0; r < S12_REPS; r++) {
     void *v = (void *)&s12_subject;      /* any tagged capability; its identity is irrelevant */
+#if S12_ARM == 7
+    void *volatile _c7;
+#endif
 
     /* THE SUBJECT STORE, HOISTED ABOVE THE ARM CHAIN ON PURPOSE.
      *
@@ -320,6 +323,48 @@ static unsigned s12_compute(void)
     { void *back2 = *slot;
       if (s12_type(back2) == S12_NOT_CAP) bad++;
       s12_sink[4] = (unsigned long)(__UINTPTR_TYPE__)back2; }
+#endif
+
+#if S12_ARM == 7
+    /* THE STALE-OPERAND SHAPE, AT PRODUCTION SPACING. This is the first arm built from a
+     * MECHANISM rather than from the instruction list.
+     *
+     * WHAT THE BOARD ACTUALLY SHOWS, six wedges for six:
+     *   - the granule holds a LIVE capability (cursor 0x827e4cd0, non-zero metadata)
+     *   - the LATCHED tval is 0 and cap_type is NOT_CAP, i.e. bit-for-bit create_cnull
+     *   - a4 at the halt holds the slot's cursor exactly, so THE LOAD DID WRITE IT
+     * The driver's own pre-registered discriminator calls that "STALE-OPERAND CONFIRMED": the
+     * load landed, and the consumer read something else.
+     *
+     * WHAT THAT SOMETHING ELSE IS. Production runs
+     *     movc a4, zero      <- a4 := create_cnull, ALL ZERO
+     *     stc  a4, 0(a5)
+     *     ldc  a4, 0(a0)     <- same register, two instructions later
+     *     cincoffsetimm a4, a4, 0xb0
+     * so a4's PRE-LOAD value is exactly the operand observed at the fault. A consumer reading
+     * the stale destination register instead of the load's result reproduces every measured
+     * fact, including the bit pattern, with memory untouched.
+     *
+     * WHY ARMS 0-4 CANNOT REPRODUCE IT. They contain the same register reuse but the compiler
+     * places `movc` NINE instructions before the reload; production places it TWO. The window
+     * is the variable, and no C-level arm controls instruction spacing. Hence raw asm: one
+     * block, four instructions, nothing schedulable between them.
+     *
+     * The consumer RAISES, as production does, so this arm reports by wedging or returning --
+     * it cannot count. Returns the sentinel if it survives. */
+    {
+      void *volatile *_sp = slot;
+      unsigned char volatile *_scr = fp - 0x120;
+      __asm__ volatile(
+          ".insn r 0x5b, 0x1, 0xa, %[t], x0, x0\n"          /* movc          t, zero      */
+          ".insn s 0x5b, 0x4, %[t], 0(%[scr])\n"            /* stc           t, 0(scr)    */
+          ".insn i 0x5b, 0x3, %[t], 0(%[sp])\n"             /* ldc           t, 0(sp)     */
+          ".insn i 0x5b, 0x2, %[t], 0xb0(%[t])\n"           /* cincoffsetimm t, t, 0xb0   */
+          : [t] "=&r"(_c7)
+          : [scr] "r"(_scr), [sp] "r"(_sp)
+          : "memory");
+      s12_sink[5] = (unsigned long)(__UINTPTR_TYPE__)_c7;
+    }
 #endif
 
     /* ACCEPTANCE CRITERION, and it FAILS THE BUILD rather than the run.
