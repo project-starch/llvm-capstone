@@ -2507,7 +2507,7 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
-### C-19 — at `-O1` the backend applies `lcc` (cursor query) to an INTEGER, and the SQLite domain dies on it `OPEN — OURS, BLOCKS -O1`
+### C-19 — partial capability operations applied speculatively; SQLite could not run at `-O1` `RESOLVED 2026-08-26 — three distinct faults`
 
 **This is what now blocks `-O1`, after C-17 turned out not to be (see C-17).** The amalgamation
 compiles and links at `-O1`; the image then enters the domain and dies immediately:
@@ -2553,6 +2553,58 @@ an integer op.
 
 **Do not read a `-O1` board result before this is fixed** -- the image does not survive domain
 entry on QEMU, so any board run of it measures this, not S-12.
+
+---
+
+**RESOLVED 2026-08-26. The `-O1` SQLite domain now passes the QEMU silicon run end to end
+(`__CAPSTONE_SQLITE_SILICON_PASSED__`).** It took THREE separate fixes, and the shared theme is
+worth stating because it will recur:
+
+> **Operations that are TOTAL on an ordinary target are PARTIAL here, and every optimiser in
+> LLVM assumes they are total.** `-O0` never exposed this because it neither folds nor
+> speculates.
+
+1. **`lcc rd, rs, 2` on an untagged operand** (fixed `2c1f5eae412a`). The cursor query is not
+   total; a NULL pointer is untagged. DAGCombiner folds `p != 0 || q != 0` into
+   `(addr(p)|addr(q)) != 0`, both operands got `lcc`, and the first null killed the domain.
+   Reading the register with a plain integer move gives the SAME value and cannot trap --
+   confirmed in RTL (`issue_read_operands.sv:298`, `:1653,1656-1657`; `ex_stage.sv:463-479`
+   commits `cap_result.cursor`) and in QEMU (`cap.h:59-63,79-83`, the union aliases `scalar`
+   onto `bounds.cursor`). The intrinsic is kept because it is also a DAGCombine BARRIER --
+   lowering it straight to `ISD::TRUNCATE` makes `cap-i128-and-capability-mask.ll` spin forever.
+
+2. **`isCapstoneIntegerOffset` recognised only `SHL`** (same commit). `zext i32 -> i128` is
+   legalised into `and (anyext x), 0xffffffff` before `lowerSUB` asks, so neither operand looked
+   like an integer, the capability-minus-capability path was taken, and `p - (unsigned)n` came
+   back DETAGGED as well as trapping. Now stated from the ISA property -- a bitwise or shift
+   result is always untagged, hence always an integer -- because enumerating shapes had already
+   missed twice.
+
+3. **GEP speculated onto a NULL pointer** (fixed `0a38985df142`). `cincoffset` raises
+   `UNEXPECTED_OPERAND` on a base with no capability (`capstone_flu_unit.anvil:29-33,57-60`;
+   QEMU agrees), and LICM hoists `&p->field` into a loop preheader above the `p != NULL` guard.
+   Two such GEPs in `selectExpander`. Fixed in generic LLVM: a GEP whose base is in a
+   NON-INTEGRAL address space and is NOT known non-null is no longer speculatable. Narrow on
+   purpose -- allocas, globals and post-null-check pointers still hoist -- and the cost is
+   measured, not assumed: **+328 instructions in 247k (+0.13%), `.text` +1008 bytes (+0.10%)**
+   on the SQLite image.
+
+**METHOD NOTE, the reusable part.** Each of these aborts QEMU, so the default loop is ONE site
+per emulator rebuild. Adding `CAPSTONE_LCC_UNTAGGED_SURVIVE` / `CAPSTONE_CINC_UNTAGGED_SURVIVE`
+(env-gated, log-and-continue) turned that into ONE RUN PER CLASS: three `lcc` sites before the
+fix and none after, then exactly two `cincoffsetimm` sites. Knowing it was two and not five
+hundred is what justified writing the narrow fix instead of the blanket one. The flags cannot
+manufacture a clean run -- every occurrence prints before being tolerated.
+
+**Validation:** lit 1662 tests across `CodeGen/Capstone`, `Analysis` and `Transforms/LICM`, no
+failures; nightly 15/16 (the one failure, `static-cap-globals`, is a pre-existing
+expect-the-bug-to-reproduce probe reporting that its bug is gone, and its domain is
+BYTE-IDENTICAL built with and without these changes).
+
+**What this does NOT settle.** `$OPT` stays `-O0`. The `-O1` image has passed a functional QEMU
+run, not the benchmarks and not the board. And the S-12 caveat in C-17 stands unchanged: the
+fault site is gone but the image-wide shape count is a reduction whose size depends on how it is
+counted, so **a completing `-O1` board run must not be reported as S-12 resolved.**
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
