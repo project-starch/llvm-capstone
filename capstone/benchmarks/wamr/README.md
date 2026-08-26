@@ -28,27 +28,40 @@ from `uintptr_t`, against JerryScript's ninety-three.
 
 ```
 WAMR census at f73410e
-  compiled 15, failed 14
-failures by cause:
-    5  freestanding libc: snprintf
-    2  freestanding libc: isnan
-    1  other: unexpected BH_MALLOC
-    1  other: must use 'struct' tag to refer to type 'WASMModuleInstance'
-    1  freestanding libc: wasm_runtime_malloc
-    1  freestanding libc: vsnprintf
-    1  freestanding libc: labs
-    1  freestanding libc: bsearch
-    1  freestanding libc: abort
+  compiled 27, failed 0
 ```
 
-**Not one capability-related failure.** No `Cannot select`, no i128, no pointer or
-tag diagnostic. Every one is either a libc declaration `-ffreestanding` does not
-provide, or a config combination. That is the answer the census existed to give,
-and it is the difference between weeks of work and months.
+The whole interpreter core compiles for capstone64: `core/iwasm/{interpreter,common}`,
+`core/shared/{mem-alloc,utils}`, in one coherent configuration (classic interpreter,
+no AOT, no WASI, no threads, global heap pool).
+
+Getting there took a freestanding libc shim, a platform layer, and exactly ONE
+upstream patch. The route is worth recording because it is the answer to "is this
+worth finishing":
+
+| | compiled | what moved |
+|---|---:|---|
+| platform layer only | 15 / 29 | every failure a missing libc declaration |
+| headers pulled through the platform layer | 22 | WAMR relies on it to include stdio/math, as the RTOS ports do |
+| `static_assert` | 23 | |
+| one coherent config | 24 / 27 | classic and fast interpreter exclude each other; compiling both was the "no member named 'operand'" failures |
+| `BH_MALLOC`, `strtof`, `strtok_r`, `strtoull` | 26 | |
+| patch 0001 | **27 / 27** | |
+
+**Not one capability failure at any step.** No `Cannot select`, no i128, no tag
+diagnostic. The single upstream patch is a function pointer routed through
+`uintptr_t` in a static initialiser, which is the same shape as SQLite's
+`SQLITE_INT_TO_PTR` and MicroPython's `atexit.c`, and it is three characters per
+site.
+
+`-nostdinc` is load-bearing in the census. Without it the driver still searches
+`/usr/include`, the host `stdio.h` wins over `adapted/include/`, and the census
+reports libc failures that are really include-order failures. It did exactly that
+on the first run with the shim in place.
 
 The census asserts its baseline rather than printing it, the way the musl survey
-does, and the gate is negative-tested: with the baseline set one higher it exits 1
-and says so.
+does, and the gate is negative-tested: with the baseline one higher it exits 1 and
+names the regression.
 
 ## The platform layer, and what is deliberate in it
 

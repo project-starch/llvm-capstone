@@ -19,11 +19,20 @@
 #ifndef _PLATFORM_INTERNAL_H
 #define _PLATFORM_INTERNAL_H
 
+/* The vmcore uses snprintf, isnan, abort and friends WITHOUT including their
+   headers: it relies on the platform layer pulling them in, which is what every
+   RTOS port here does. Pulling them here rather than patching call sites keeps
+   upstream untouched. */
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <errno.h>
+#include <inttypes.h>
 
 #define BH_PLATFORM_CAPSTONE
 

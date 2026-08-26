@@ -16,4 +16,20 @@ fi
 git -C "$WAMR_SRC_DIR" fetch -q origin "$WAMR_COMMIT" 2>/dev/null || git -C "$WAMR_SRC_DIR" fetch -q origin
 git -C "$WAMR_SRC_DIR" checkout -q "$WAMR_COMMIT"
 git -C "$WAMR_SRC_DIR" checkout -q -- .
+for pf in "$SCRIPT_DIR"/patches/*.patch; do
+  [[ -e "$pf" ]] || continue
+  name=$(basename "$pf")
+  if git -C "$WAMR_SRC_DIR" apply --check "$pf" 2>/dev/null; then
+    git -C "$WAMR_SRC_DIR" apply "$pf"; echo "== applied $name"
+  elif git -C "$WAMR_SRC_DIR" apply --reverse --check "$pf" 2>/dev/null; then
+    echo "== already present: $name"
+  else
+    # "does not apply" alone would hide a patch gone stale against a newer pin,
+    # and a fetch that silently drops a portability fix produces a build that
+    # looks fine and is not.
+    echo "ERROR: $name neither applies nor is already present -- stale against $WAMR_COMMIT?" >&2
+    exit 1
+  fi
+done
+
 echo "WAMR at $WAMR_SRC_DIR ($(git -C "$WAMR_SRC_DIR" rev-parse --short HEAD))"

@@ -1,0 +1,90 @@
+Keep invokeNative a function POINTER instead of routing it through uintptr_t.
+
+Sixteen initialisers reinterpret invokeNative, which returns void, as functions
+returning float64/float32/int64/int32/v128. The (uintptr_t) in between is there
+only to silence the incompatible-function-pointer-type warning; the cast to the
+target type performs the same reinterpretation on its own.
+
+On a target whose pointers carry out-of-band metadata that detour is not merely
+unnecessary, it is impossible. A capability cannot be built from an integer at
+link time, so the initialiser is rejected outright:
+
+    error: initializer element is not a compile-time constant
+        (Float64FuncPtr)(uintptr_t)invokeNative;
+
+and were it accepted the result would be an untagged code capability that faults
+at the first call. Same shape as SQLite's SQLITE_INT_TO_PTR in a static
+initialiser and MicroPython's atexit.c.
+
+diff --git i/core/iwasm/common/wasm_runtime_common.c w/core/iwasm/common/wasm_runtime_common.c
+index 6590684..2cb9471 100644
+--- i/core/iwasm/common/wasm_runtime_common.c
++++ w/core/iwasm/common/wasm_runtime_common.c
+@@ -5169,15 +5169,15 @@ typedef int32 (*Int32FuncPtr)(GenericFunctionPointer, uint32 *, uint32);
+ typedef void (*VoidFuncPtr)(GenericFunctionPointer, uint32 *, uint32);
+ 
+ static volatile Float64FuncPtr invokeNative_Float64 =
+-    (Float64FuncPtr)(uintptr_t)invokeNative;
++    (Float64FuncPtr)invokeNative;
+ static volatile Float32FuncPtr invokeNative_Float32 =
+-    (Float32FuncPtr)(uintptr_t)invokeNative;
++    (Float32FuncPtr)invokeNative;
+ static volatile Int64FuncPtr invokeNative_Int64 =
+-    (Int64FuncPtr)(uintptr_t)invokeNative;
++    (Int64FuncPtr)invokeNative;
+ static volatile Int32FuncPtr invokeNative_Int32 =
+-    (Int32FuncPtr)(uintptr_t)invokeNative;
++    (Int32FuncPtr)invokeNative;
+ static volatile VoidFuncPtr invokeNative_Void =
+-    (VoidFuncPtr)(uintptr_t)invokeNative;
++    (VoidFuncPtr)invokeNative;
+ 
+ #if defined(BUILD_TARGET_ARM_VFP) || defined(BUILD_TARGET_THUMB_VFP)
+ #define MAX_REG_INTS 4
+@@ -5734,15 +5734,15 @@ typedef int32 (*Int32FuncPtr)(GenericFunctionPointer f, uint32 *, uint32);
+ typedef void (*VoidFuncPtr)(GenericFunctionPointer f, uint32 *, uint32);
+ 
+ static volatile Int64FuncPtr invokeNative_Int64 =
+-    (Int64FuncPtr)(uintptr_t)invokeNative;
++    (Int64FuncPtr)invokeNative;
+ static volatile Int32FuncPtr invokeNative_Int32 =
+-    (Int32FuncPtr)(uintptr_t)invokeNative;
++    (Int32FuncPtr)invokeNative;
+ static volatile Float64FuncPtr invokeNative_Float64 =
+-    (Float64FuncPtr)(uintptr_t)invokeNative;
++    (Float64FuncPtr)invokeNative;
+ static volatile Float32FuncPtr invokeNative_Float32 =
+-    (Float32FuncPtr)(uintptr_t)invokeNative;
++    (Float32FuncPtr)invokeNative;
+ static volatile VoidFuncPtr invokeNative_Void =
+-    (VoidFuncPtr)(uintptr_t)invokeNative;
++    (VoidFuncPtr)invokeNative;
+ 
+ static inline void
+ word_copy(uint32 *dest, uint32 *src, unsigned num)
+@@ -6020,19 +6020,19 @@ typedef void (*VoidFuncPtr)(GenericFunctionPointer, uint64 *, uint64);
+ 
+ /* NOLINTBEGIN */
+ static volatile Float64FuncPtr invokeNative_Float64 =
+-    (Float64FuncPtr)(uintptr_t)invokeNative;
++    (Float64FuncPtr)invokeNative;
+ static volatile Float32FuncPtr invokeNative_Float32 =
+-    (Float32FuncPtr)(uintptr_t)invokeNative;
++    (Float32FuncPtr)invokeNative;
+ static volatile Int64FuncPtr invokeNative_Int64 =
+-    (Int64FuncPtr)(uintptr_t)invokeNative;
++    (Int64FuncPtr)invokeNative;
+ static volatile Int32FuncPtr invokeNative_Int32 =
+-    (Int32FuncPtr)(uintptr_t)invokeNative;
++    (Int32FuncPtr)invokeNative;
+ static volatile VoidFuncPtr invokeNative_Void =
+-    (VoidFuncPtr)(uintptr_t)invokeNative;
++    (VoidFuncPtr)invokeNative;
+ 
+ #if WASM_ENABLE_SIMD != 0
+ typedef v128 (*V128FuncPtr)(GenericFunctionPointer, uint64 *, uint64);
+-static V128FuncPtr invokeNative_V128 = (V128FuncPtr)(uintptr_t)invokeNative;
++static V128FuncPtr invokeNative_V128 = (V128FuncPtr)invokeNative;
+ #endif
+ /* NOLINTEND */
+ 

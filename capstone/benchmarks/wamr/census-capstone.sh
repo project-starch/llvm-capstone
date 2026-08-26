@@ -17,12 +17,11 @@ source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 SRC=${WAMR_SRC_DIR:-$CAPSTONE_TMP_ROOT/wamr-src/wasm-micro-runtime}
 [[ -d "$SRC/core" ]] || { echo "no WAMR source at $SRC -- run fetch-wamr.sh" >&2; exit 2; }
 
-# 15 of 29 at f73410e2, with every failure a missing libc declaration and none of
-# them capability-related. Raise this when the libc shim lands; never lower it to
-# make a run pass.
-BASELINE_OK=${WAMR_BASELINE_OK:-15}
+# 27 of 27 at f73410e2: the whole interpreter core, with the freestanding shim in
+# adapted/include and one upstream patch. Never lower it to make a run pass.
+BASELINE_OK=${WAMR_BASELINE_OK:-27}
 
-INC=(-I"$SCRIPT_DIR/port"
+INC=(-I"$SCRIPT_DIR/port" -I"$SCRIPT_DIR/adapted/include"
      -I"$SRC/core/shared/utils" -I"$SRC/core/shared/platform/include"
      -I"$SRC/core/shared/mem-alloc" -I"$SRC/core/iwasm/include"
      -I"$SRC/core/iwasm/common" -I"$SRC/core/iwasm/interpreter" -I"$SRC/core")
@@ -30,14 +29,37 @@ INC=(-I"$SCRIPT_DIR/port"
 # BUILD_TARGET_RISCV64_LP64 explicitly: WAMR's config.h detects the target from
 # __riscv, and this toolchain defines __capstone instead, so autodetection fails
 # with "Build target isn't set" rather than picking something wrong.
+# -nostdinc is LOAD-BEARING. Without it the driver still searches /usr/include,
+# the host stdio.h wins over adapted/include/, and the census reports libc failures
+# that are really include-order failures -- which is what it did on the first run
+# with the shim in place.
+RESOURCE_DIR=$("$CAPSTONE_LLVM_BIN/clang" -print-resource-dir)
 FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-       -ffreestanding -fno-builtin -O1 -w -DBUILD_TARGET_RISCV64_LP64)
+       -ffreestanding -fno-builtin -nostdinc -isystem "$RESOURCE_DIR/include"
+       -O1 -w -DBUILD_TARGET_RISCV64_LP64
+       # ONE coherent configuration, not the union of all of them. Compiling every
+       # file meant compiling the classic AND the fast interpreter, which exclude
+       # each other -- the "no member named 'operand'" and "block_addr_cache"
+       # failures were that, not a port problem. Classic interpreter only, no AOT,
+       # no WASI, no threads: the smallest thing that can run a module.
+       -DWASM_ENABLE_INTERP=1 -DWASM_ENABLE_FAST_INTERP=0
+       -DWASM_ENABLE_AOT=0 -DWASM_ENABLE_JIT=0
+       -DWASM_ENABLE_LIBC_WASI=0 -DWASM_ENABLE_LIBC_BUILTIN=1
+       -DWASM_ENABLE_MULTI_MODULE=0 -DWASM_ENABLE_SHARED_MEMORY=0
+       -DWASM_ENABLE_THREAD_MGR=0 -DWASM_ENABLE_MEMORY_PROFILING=0
+       -DWASM_ENABLE_GLOBAL_HEAP_POOL=1
+       # The runtime build asserts these two are exactly these names
+       # (wasm_runtime_common.c:45-56), so the CMake normally sets them.
+       -DBH_MALLOC=wasm_runtime_malloc -DBH_FREE=wasm_runtime_free)
 
 declare -A CAUSE
 ok=0; bad=0
 for f in "$SRC"/core/shared/mem-alloc/*.c "$SRC"/core/shared/mem-alloc/ems/*.c \
          "$SRC"/core/shared/utils/*.c "$SRC"/core/iwasm/common/*.c \
          "$SRC"/core/iwasm/interpreter/*.c; do
+  case "$(basename "$f")" in
+    wasm_interp_fast.c|wasm_mini_loader.c) continue ;;   # nicht in dieser Konfiguration
+  esac
   [[ -e "$f" ]] || continue
   if "$CAPSTONE_LLVM_BIN/clang" "${FLAGS[@]}" "${INC[@]}" -c "$f" -o /dev/null >/tmp/wamr-census.err 2>&1; then
     ok=$((ok+1)); continue
