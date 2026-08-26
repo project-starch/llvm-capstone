@@ -41,6 +41,17 @@ size with `lw a4, 0x34(s1)` and assembled the pointers by hand; after, it is
 `ldc a2, 0x10(s1)` and `ldc s1, 0x20(s1)` -- capability loads at the natural
 offsets of an unpacked node.
 
+AND THE ALIGNMENT HAS TWO MASTERS, which the first attempt got wrong. A free TREE
+NODE sits at the START of a chunk -- gc_init_internal does
+`q = (hmu_tree_node_t *)heap->base_addr` -- so chunks must be pointer-aligned. An
+OBJECT sits at hmu + HMU_SIZE + OBJ_PREFIX_SIZE, and with HMU_SIZE 4 and no prefix
+those two demands are 4 bytes apart and cannot both hold.
+
+Padding the CHUNK to fix the object side aligns objects and misaligns every tree
+node, which is strictly worse: nodes are written during heap init, before anything
+is allocated. So the padding is 0 and the gap is closed on the object side, by
+giving OBJ_PREFIX_SIZE a value on this target. Both then land on sizeof(void *).
+
 diff --git i/core/shared/mem-alloc/ems/ems_alloc.c w/core/shared/mem-alloc/ems/ems_alloc.c
 index 0a3e086..fbef318 100644
 --- i/core/shared/mem-alloc/ems/ems_alloc.c
@@ -80,20 +91,30 @@ index 0a3e086..fbef318 100644
      /* Verify we have enough space */
      bh_assert((gc_uint8 *)ret + size + OBJ_SUFFIX_SIZE
 diff --git i/core/shared/mem-alloc/ems/ems_gc.h w/core/shared/mem-alloc/ems/ems_gc.h
-index f42bdb0..5b19ee2 100644
+index f42bdb0..a036a32 100644
 --- i/core/shared/mem-alloc/ems/ems_gc.h
 +++ w/core/shared/mem-alloc/ems/ems_gc.h
-@@ -35,7 +35,16 @@ extern "C" {
+@@ -35,7 +35,26 @@ extern "C" {
  #define GC_MANUALLY 0
  #endif
  
 +#if defined(__SIZEOF_POINTER__) && (__SIZEOF_POINTER__ > 8)
-+/* hmu_to_obj() is hmu + HMU_SIZE, and HMU_SIZE is 4, so the padding decides where
-+   the OBJECT lands rather than where the chunk does. The upstream 4 exists to make
-+   a packed tree node's 8-byte pointer fields 8-aligned; with pointers wider than
-+   that the useful property is instead that every object handed to a caller is
-+   aligned for the pointers it will hold. sizeof(void *) - HMU_SIZE does that. */
-+#define GC_HEAD_PADDING ((int)sizeof(void *) - 4)
++/* ZERO, and the reasoning took a wrong turn first, so it is written down.
++ *
++ * Two things must be aligned and they are at different offsets. A free TREE NODE
++ * sits at the start of a chunk -- gc_init_internal does
++ * `q = (hmu_tree_node_t *)heap->base_addr` -- so a chunk must be pointer-aligned.
++ * An OBJECT sits at hmu + HMU_SIZE + OBJ_PREFIX_SIZE. With HMU_SIZE 4 and no
++ * prefix those two demands are 4 apart and cannot both hold.
++ *
++ * Padding the CHUNK to make objects land right (the first attempt: 12) aligns the
++ * object and misaligns every tree node, which is worse: nodes are written during
++ * heap init, before anything is allocated at all.
++ *
++ * So the padding is 0 and the gap is closed on the object side instead, by giving
++ * the object prefix a size on this target -- see OBJ_PREFIX_SIZE in
++ * ems_gc_internal.h. Both then land on sizeof(void *). */
++#define GC_HEAD_PADDING 0
 +#else
  #define GC_HEAD_PADDING 4
 +#endif
@@ -101,7 +122,7 @@ index f42bdb0..5b19ee2 100644
  #ifndef NULL_REF
  #define NULL_REF ((gc_object_t)NULL)
 diff --git i/core/shared/mem-alloc/ems/ems_gc_internal.h w/core/shared/mem-alloc/ems/ems_gc_internal.h
-index 01ab254..2f966de 100644
+index 01ab254..3f0b921 100644
 --- i/core/shared/mem-alloc/ems/ems_gc_internal.h
 +++ w/core/shared/mem-alloc/ems/ems_gc_internal.h
 @@ -27,6 +27,17 @@ typedef struct hmu_struct {
@@ -122,7 +143,23 @@ index 01ab254..2f966de 100644
  #if BH_ENABLE_GC_VERIFY != 0
  
  #if UINTPTR_MAX > UINT32_MAX
-@@ -79,12 +90,23 @@ hmu_verify(void *vheap, hmu_t *hmu);
+@@ -67,7 +78,15 @@ hmu_verify(void *vheap, hmu_t *hmu);
+ 
+ #else /* else of BH_ENABLE_GC_VERIFY */
+ 
++#if GC_PTR_WIDER_THAN_UINTPTR
++/* Pads hmu + HMU_SIZE up to the pointer's alignment, so an object handed to a
++   caller is aligned for the pointers it will hold while the CHUNK it starts in
++   stays aligned for a free tree node. Not a debug prefix: it carries nothing, it
++   only closes the gap that HMU_SIZE 4 leaves. */
++#define OBJ_PREFIX_SIZE ((uint32)sizeof(void *) - HMU_SIZE)
++#else
+ #define OBJ_PREFIX_SIZE 0
++#endif
+ #define OBJ_SUFFIX_SIZE 0
+ 
+ #define SKIP_OBJ_PREFIX(p) ((void *)((gc_uint8 *)(p) + OBJ_PREFIX_SIZE))
+@@ -79,12 +98,23 @@ hmu_verify(void *vheap, hmu_t *hmu);
  
  #define hmu_obj_size(s) ((s) - OBJ_EXTRA_SIZE)
  
@@ -146,7 +183,7 @@ index 01ab254..2f966de 100644
  
  /* Smallest allocation size for normal allocations
   * The +8 ensures minimum allocation size for tree node structure */
-@@ -400,7 +422,7 @@ set_hmu_normal_node_next(hmu_normal_node_t *node, hmu_normal_node_t *next)
+@@ -400,7 +430,7 @@ set_hmu_normal_node_next(hmu_normal_node_t *node, hmu_normal_node_t *next)
   * the left/right/parent fields will be at 8-byte aligned address,
   * we can access them directly.
   */
@@ -155,7 +192,7 @@ index 01ab254..2f966de 100644
  #if defined(_MSC_VER)
  __pragma(pack(push, 1));
  #define __attr_packed
-@@ -424,14 +446,23 @@ typedef struct hmu_tree_node {
+@@ -424,14 +454,23 @@ typedef struct hmu_tree_node {
      gc_size_t size;
  } __attr_packed __attr_aligned(4) hmu_tree_node_t;
  
@@ -180,7 +217,7 @@ index 01ab254..2f966de 100644
  
  #define ASSERT_TREE_NODE_ALIGNED_ACCESS(tree_node)                          \
      do {                                                                    \
-@@ -450,7 +481,7 @@ typedef struct gc_heap_struct {
+@@ -450,7 +489,7 @@ typedef struct gc_heap_struct {
  
      hmu_normal_list_t kfc_normal_list[HMU_NORMAL_NODE_CNT];
  

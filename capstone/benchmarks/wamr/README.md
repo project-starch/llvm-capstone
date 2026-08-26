@@ -104,14 +104,19 @@ candidate assessed, and it fits a single region even before declaring anything.
 stage  0  return at once                     OK
 stage 10  os_malloc from the port's arena    OK
 stage 11  static mutex + counter (gp carve)  OK
+stage 12  wasm_runtime_memory_init           OK
 stage 13  set_default_running_mode           OK
-stage 14  wasm_native_init                   OK    needs QUICK_AOT_ENTRY=0
-stage  1  wasm_runtime_full_init             OK    the whole of it
-stage 20  get_package_type (the magic)       OK
-stage 21  a load that MUST fail: size 3      OK    error path and set_error_buf
-stage 12  gc_init_with_pool                  fault after patch 0002 (see below)
-stage 22  the real wasm_runtime_load         blocked behind 12
+stage 14  wasm_native_init                   OK
+stage  1  wasm_runtime_full_init             OK
+stage 20  get_package_type                   OK
+stage 21  a load that MUST fail: size 3      OK
+stage 22  wasm_runtime_load                  OK   the module parses
+stage  3  wasm_runtime_instantiate           OK
+stage  4  wasm_runtime_call_wasm             capability fault
 ```
+
+The runtime initialises, loads a module and instantiates it. What is left is the
+call itself.
 
 ### The instrument that made this tractable
 
