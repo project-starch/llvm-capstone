@@ -1822,7 +1822,14 @@ void CapstoneFrameLowering::processFunctionBeforeFrameFinalized(
       MF.getSubtarget<CapstoneSubtarget>().getRegisterInfo();
   const CapstoneInstrInfo *TII = MF.getSubtarget<CapstoneSubtarget>().getInstrInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const TargetRegisterClass *RC = &Capstone::GPRRegClass;
+  // THE EMERGENCY SPILL SLOT MUST FIT A CAPABILITY, not just an XLen scalar.
+  // Sized from GPR it is 8 bytes at 8-byte alignment, and the scavenger then has
+  // nowhere to put a GPCR: "Error while trying to spill C12 from class GPCR:
+  // Cannot scavenge register without an emergency spill slot!", a hard backend
+  // error rather than a diagnostic. One 16-byte, 16-aligned slot serves BOTH
+  // classes, because the scavenger takes any slot at least as large and as
+  // aligned as the class it is spilling.
+  const TargetRegisterClass *RC = &Capstone::GPCRRegClass;
   auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   int64_t RVVStackSize;
