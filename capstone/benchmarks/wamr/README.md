@@ -104,17 +104,43 @@ candidate assessed, and it fits a single region even before declaring anything.
 stage  0  return at once                     OK
 stage 10  os_malloc from the port's arena    OK
 stage 11  static mutex + counter (gp carve)  OK
-stage 12  wasm_runtime_memory_init           OK   needs patch 0002
-stage 13  wasm_runtime_set_default_running_mode  OK
-stage 14  wasm_native_init                   OK   needs QUICK_AOT_ENTRY=0
-stage  1  wasm_runtime_full_init             OK   the whole of it
-stage 20  get_package_type (the magic)      OK
-stage 21  a load that MUST fail: size 3      OK   the error path and set_error_buf
-stage  2  wasm_runtime_load (the parser)     capability fault, cause 24
+stage 13  set_default_running_mode           OK
+stage 14  wasm_native_init                   OK    needs QUICK_AOT_ENTRY=0
+stage  1  wasm_runtime_full_init             OK    the whole of it
+stage 20  get_package_type (the magic)       OK
+stage 21  a load that MUST fail: size 3      OK    error path and set_error_buf
+stage 12  gc_init_with_pool                  fault after patch 0002 (see below)
+stage 22  the real wasm_runtime_load         blocked behind 12
 ```
 
-Every rung does what the one below it did and one step more, so the first that
-fails to return IS the step. The ladder runs in ONE boot, ascending.
+### The instrument that made this tractable
+
+A trap reports a RUNTIME pc, and nothing prints the load base, so a fault used to
+say "cause 24, somewhere". Guessing the base from the region's 512 KiB alignment
+put the offset outside .text, which is how we know guessing does not work.
+
+So the base is MEASURED, and from inside the same image: the first call to the
+domain returns the runtime address of `domain_main`, whose ELF address is in the
+same file; the second call does the work that faults. The entry glue does not
+re-run initialisers between calls, so a static counter survives. One boot, and any
+pc maps to a line.
+
+That instrument is what turned "cause 24" into `lw a4, 0x34(s1)` inside
+`alloc_hmu_ex`, and 0x34 is where `size` sits in a PACKED node with 16-byte
+pointers. The offset was the diagnosis.
+
+### Patch 0002 is right and it is not yet enough
+
+The generated code proves the layout changed: `lw a4, 0x34(s1)` became
+`ldc a2, 0x10(s1)` and `ldc s1, 0x20(s1)`, capability loads at the natural offsets
+of an unpacked node. Static assertions confirm the node is 80 bytes, `left` is at
+16, and the embedded root buffer is 16-aligned.
+
+The fault then moved EARLIER, into `gc_init_with_pool`, at `movc a0, s1`
+immediately after an indirect call. Stage 12 passed before the patch and does not
+now, so this is a regression the patch surfaced or caused, and it is the next
+thing to settle. Recorded as a fault site rather than a theory: no explanation is
+offered here because none has been tested.
 
 ### What the ladder has already bought
 

@@ -81,8 +81,42 @@ domain_main(unsigned *res, unsigned func)
 #if WD_STAGE == 0
     WD_MARK(WD_OK);   /* touches nothing: proves entry, cap-init and return */
 
+#elif WD_STAGE == 30
+    /* WHERE IS THIS IMAGE LOADED? Not a bring-up rung: an instrument.
+     *
+     * A trap reports its PC as a RUNTIME address, and mapping that back to a
+     * function needs the load base, which nothing prints. Guessing it from the
+     * region's alignment gave an offset outside .text, so it is measured instead.
+     *
+     * The loader calls a domain repeatedly and prints every return value, and the
+     * entry glue does NOT re-run initialisers between calls, so a static counter
+     * survives. Two calls give two anchors, and two anchors prove the mapping is a
+     * constant offset rather than assuming it. */
+    {
+        static unsigned nth;
+        const void *anchors[] = { (const void *)&domain_main,
+                                  (const void *)&wasm_runtime_load };
+        *res = (unsigned)(uintptr_t)anchors[nth & 1u];
+        nth++;
+        return;
+    }
+
 #elif WD_STAGE >= 20 && WD_STAGE <= 22
     {
+        /* FIRST CALL REPORTS WHERE THIS IMAGE IS LOADED, and it must be in THIS
+         * image rather than a separate one: a trap's PC is a runtime address, the
+         * load base is not printed anywhere, and two different images are not
+         * loaded at the same place. So call 1 hands back the runtime address of a
+         * symbol whose ELF address we can read from the same file, and call 2 does
+         * the work that faults. One boot, and the mapping is measured rather than
+         * guessed -- guessing it from the region's alignment put the offset outside
+         * .text, which is how we know guessing does not work here. */
+        static unsigned nth;
+        if (nth++ == 0) {
+            *res = (unsigned)(uintptr_t)&domain_main;
+            return;
+        }
+
         MemAllocOption po;
         memset(&po, 0, sizeof(po));
         po.pool.heap_buf = wd_heap;

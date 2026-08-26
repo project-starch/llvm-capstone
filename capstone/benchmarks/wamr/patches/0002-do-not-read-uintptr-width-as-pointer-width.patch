@@ -1,0 +1,240 @@
+Stop reading `UINTPTR_MAX == UINT64_MAX` as "a pointer is 8 bytes".
+
+The EMS allocator decides its entire heap layout from that predicate. It is used
+as a stand-in for the pointer's width, and on a target where a pointer carries
+base, cursor, end and a tag while uintptr_t holds only the address, it is true and
+wrong at the same time. Everything downstream then takes the 8-byte-pointer
+branch:
+
+  * hmu_tree_node_t is declared __attribute__((packed)) so that a 4-byte header
+    plus three pointers leaves the pointer fields 8-aligned. With 16-byte pointers
+    they land at 4, 20 and 36, none of them aligned, and `packed` additionally
+    declares them align-1. A capability cannot survive an align-1 access.
+  * gc_heap_t carries a uint32 __padding whose only job is to push the embedded
+    root node off 8-alignment, for the same arithmetic.
+  * GC_ALIGN_8 and GC_MIN_ALIGNMENT step the heap in units of 8.
+  * GC_HEAD_PADDING is 4 so that hmu + HMU_SIZE is 8-aligned.
+
+None of this can be caught by the guards that are there. bh_static_assert(sizeof
+== 8 + 3 * sizeof(void *)) evaluates 56 == 56 and passes; offsetof(left) == 4
+passes; ASSERT_TREE_NODE_ALIGNED_ACCESS checks & (sizeof(uintptr_t) - 1), which is
+& 7 on this target, so it waves a 16-byte access through.
+
+The fix asks the question the code means, using __SIZEOF_POINTER__, and lets the
+layout follow: the node is not packed, the padding is gone, the heap steps in
+units of sizeof(void *), and GC_HEAD_PADDING becomes sizeof(void *) - HMU_SIZE so
+that every OBJECT handed to a caller is aligned for the pointers it will hold.
+The static assert is replaced by one that checks what actually matters, that each
+pointer field is naturally aligned.
+
+Also here, and separately real: alloc_hmu returned its tree-path result through a
+uintptr_t local, which keeps the address and drops the rest. On a fresh heap the
+normal free lists are empty, so the scan falls through to the tree and EVERY
+allocation takes that path. The small-block path a few lines above already returns
+the pointer directly.
+
+And gc_init_with_pool aligned its pool to 8 rather than to the pointer's
+alignment, which everything carved out of it inherits.
+
+VERIFIED IN THE GENERATED CODE, not inferred: before, alloc_hmu_ex read the node's
+size with `lw a4, 0x34(s1)` and assembled the pointers by hand; after, it is
+`ldc a2, 0x10(s1)` and `ldc s1, 0x20(s1)` -- capability loads at the natural
+offsets of an unpacked node.
+
+diff --git i/core/shared/mem-alloc/ems/ems_alloc.c w/core/shared/mem-alloc/ems/ems_alloc.c
+index 0a3e086..fbef318 100644
+--- i/core/shared/mem-alloc/ems/ems_alloc.c
++++ w/core/shared/mem-alloc/ems/ems_alloc.c
+@@ -348,7 +348,6 @@ alloc_hmu(gc_heap_t *heap, gc_size_t size)
+     uint32 node_idx = 0, init_node_idx = 0;
+     hmu_tree_node_t *root = NULL, *tp = NULL, *last_tp = NULL;
+     hmu_t *next, *rest;
+-    uintptr_t tp_ret;
+ 
+     bh_assert(gci_is_heap_valid(heap));
+     bh_assert(size > 0 && !(size & 7));
+@@ -473,8 +472,12 @@ alloc_hmu(gc_heap_t *heap, gc_size_t size)
+             heap->highmark_size = heap->current_size - heap->total_free_size;
+ 
+         hmu_set_size((hmu_t *)last_tp, size);
+-        tp_ret = (uintptr_t)last_tp;
+-        return (hmu_t *)tp_ret;
++        /* Return the POINTER. Going through uintptr_t here keeps the address and
++           drops everything else, and this is the path EVERY allocation takes on a
++           fresh heap: the normal free lists start empty, so the scan above finds
++           nothing and falls through to the tree. The small-block path a few lines
++           up already returns the pointer directly. */
++        return (hmu_t *)last_tp;
+     }
+ 
+     return NULL;
+@@ -710,7 +713,9 @@ gc_alloc_vo_aligned_internal(void *vheap, gc_size_t size, gc_size_t alignment,
+     aligned_addr =
+         (((uintptr_t)base_obj + ALIGNED_ALLOC_METADATA_SIZE + alignment - 1)
+          & ~(uintptr_t)(alignment - 1));
+-    ret = (gc_object_t)aligned_addr;
++    /* base_obj + delta, not (gc_object_t)aligned_addr: the second discards the
++       pointer and keeps only its address. */
++    ret = (gc_object_t)(base_obj + (aligned_addr - (uintptr_t)base_obj));
+ 
+     /* Verify we have enough space */
+     bh_assert((gc_uint8 *)ret + size + OBJ_SUFFIX_SIZE
+diff --git i/core/shared/mem-alloc/ems/ems_gc.h w/core/shared/mem-alloc/ems/ems_gc.h
+index f42bdb0..5b19ee2 100644
+--- i/core/shared/mem-alloc/ems/ems_gc.h
++++ w/core/shared/mem-alloc/ems/ems_gc.h
+@@ -35,7 +35,16 @@ extern "C" {
+ #define GC_MANUALLY 0
+ #endif
+ 
++#if defined(__SIZEOF_POINTER__) && (__SIZEOF_POINTER__ > 8)
++/* hmu_to_obj() is hmu + HMU_SIZE, and HMU_SIZE is 4, so the padding decides where
++   the OBJECT lands rather than where the chunk does. The upstream 4 exists to make
++   a packed tree node's 8-byte pointer fields 8-aligned; with pointers wider than
++   that the useful property is instead that every object handed to a caller is
++   aligned for the pointers it will hold. sizeof(void *) - HMU_SIZE does that. */
++#define GC_HEAD_PADDING ((int)sizeof(void *) - 4)
++#else
+ #define GC_HEAD_PADDING 4
++#endif
+ 
+ #ifndef NULL_REF
+ #define NULL_REF ((gc_object_t)NULL)
+diff --git i/core/shared/mem-alloc/ems/ems_gc_internal.h w/core/shared/mem-alloc/ems/ems_gc_internal.h
+index 01ab254..2f966de 100644
+--- i/core/shared/mem-alloc/ems/ems_gc_internal.h
++++ w/core/shared/mem-alloc/ems/ems_gc_internal.h
+@@ -27,6 +27,17 @@ typedef struct hmu_struct {
+     gc_uint32 header;
+ } hmu_t;
+ 
++/* IS A POINTER WIDER THAN uintptr_t? On a capability target it is: a pointer
++   carries base, cursor, end and a tag, while uintptr_t holds only the address.
++   Every `UINTPTR_MAX == UINT64_MAX` in this file was written as a stand-in for
++   "a pointer is 8 bytes" and silently takes the wrong branch there. __SIZEOF_POINTER__
++   asks the question the code actually means. */
++#if defined(__SIZEOF_POINTER__) && (__SIZEOF_POINTER__ > 8)
++#define GC_PTR_WIDER_THAN_UINTPTR 1
++#else
++#define GC_PTR_WIDER_THAN_UINTPTR 0
++#endif
++
+ #if BH_ENABLE_GC_VERIFY != 0
+ 
+ #if UINTPTR_MAX > UINT32_MAX
+@@ -79,12 +90,23 @@ hmu_verify(void *vheap, hmu_t *hmu);
+ 
+ #define hmu_obj_size(s) ((s) - OBJ_EXTRA_SIZE)
+ 
++#if GC_PTR_WIDER_THAN_UINTPTR
++/* Chunks must step in units of the pointer's alignment, or every second object
++   lands misaligned for the capability fields it contains. */
++#define GC_ALIGN_8(s) \
++    (((uint32)(s) + (uint32)sizeof(void *) - 1) & ~((uint32)sizeof(void *) - 1))
++#else
+ #define GC_ALIGN_8(s) (((uint32)(s) + 7) & (uint32)~7)
++#endif
+ 
+ /* Minimum alignment for allocations */
+ #ifndef GC_MIN_ALIGNMENT
++#if GC_PTR_WIDER_THAN_UINTPTR
++#define GC_MIN_ALIGNMENT ((uint32)sizeof(void *))
++#else
+ #define GC_MIN_ALIGNMENT 8
+ #endif
++#endif
+ 
+ /* Smallest allocation size for normal allocations
+  * The +8 ensures minimum allocation size for tree node structure */
+@@ -400,7 +422,7 @@ set_hmu_normal_node_next(hmu_normal_node_t *node, hmu_normal_node_t *next)
+  * the left/right/parent fields will be at 8-byte aligned address,
+  * we can access them directly.
+  */
+-#if UINTPTR_MAX == UINT64_MAX
++#if UINTPTR_MAX == UINT64_MAX && !GC_PTR_WIDER_THAN_UINTPTR
+ #if defined(_MSC_VER)
+ __pragma(pack(push, 1));
+ #define __attr_packed
+@@ -424,14 +446,23 @@ typedef struct hmu_tree_node {
+     gc_size_t size;
+ } __attr_packed __attr_aligned(4) hmu_tree_node_t;
+ 
+-#if UINTPTR_MAX == UINT64_MAX
++#if UINTPTR_MAX == UINT64_MAX && !GC_PTR_WIDER_THAN_UINTPTR
+ #if defined(_MSC_VER)
+ __pragma(pack(pop));
+ #endif
+ #endif
+ 
++#if GC_PTR_WIDER_THAN_UINTPTR
++/* Unpacked: what matters is that every pointer field is NATURALLY aligned, which
++   is the property the packed layout deliberately gives up. Asserting the size
++   here would only re-state the compiler's padding. */
++bh_static_assert(offsetof(hmu_tree_node_t, left) % sizeof(void *) == 0);
++bh_static_assert(offsetof(hmu_tree_node_t, right) % sizeof(void *) == 0);
++bh_static_assert(offsetof(hmu_tree_node_t, parent) % sizeof(void *) == 0);
++#else
+ bh_static_assert(sizeof(hmu_tree_node_t) == 8 + 3 * sizeof(void *));
+ bh_static_assert(offsetof(hmu_tree_node_t, left) == 4);
++#endif
+ 
+ #define ASSERT_TREE_NODE_ALIGNED_ACCESS(tree_node)                          \
+     do {                                                                    \
+@@ -450,7 +481,7 @@ typedef struct gc_heap_struct {
+ 
+     hmu_normal_list_t kfc_normal_list[HMU_NORMAL_NODE_CNT];
+ 
+-#if UINTPTR_MAX == UINT64_MAX
++#if UINTPTR_MAX == UINT64_MAX && !GC_PTR_WIDER_THAN_UINTPTR
+     /* make kfc_tree_root_buf 4-byte aligned and not 8-byte aligned,
+        so kfc_tree_root's left/right/parent fields are 8-byte aligned
+        and we can access them directly */
+diff --git i/core/shared/mem-alloc/ems/ems_kfc.c w/core/shared/mem-alloc/ems/ems_kfc.c
+index e761cb6..ddf5f5d 100644
+--- i/core/shared/mem-alloc/ems/ems_kfc.c
++++ w/core/shared/mem-alloc/ems/ems_kfc.c
+@@ -60,7 +60,17 @@ gc_handle_t
+ gc_init_with_pool(char *buf, gc_size_t buf_size)
+ {
+     char *buf_end = buf + buf_size;
+-    char *buf_aligned = (char *)(((uintptr_t)buf + 7) & (uintptr_t)~7);
++    /* Derive from buf, do not rebuild from its address: masking through
++       uintptr_t yields a plain integer, and the pointer made from it carries no
++       metadata on a target where pointers have some. Same value, kept
++       provenance. */
++    /* Aligned to the POINTER's alignment, not to 8: everything carved out of this
++       pool inherits its residue, and a capability field in a heap object needs the
++       wider one. */
++    char *buf_aligned =
++        buf
++        + (((uintptr_t)buf + sizeof(void *) - 1) & ~((uintptr_t)sizeof(void *) - 1))
++        - (uintptr_t)buf;
+     char *base_addr = buf_aligned + sizeof(gc_heap_t);
+     gc_heap_t *heap = (gc_heap_t *)buf_aligned;
+     gc_size_t heap_max_size;
+@@ -71,8 +81,9 @@ gc_init_with_pool(char *buf, gc_size_t buf_size)
+         return NULL;
+     }
+ 
+-    base_addr =
+-        (char *)(((uintptr_t)base_addr + 7) & (uintptr_t)~7) + GC_HEAD_PADDING;
++    base_addr = base_addr
++                + (((uintptr_t)base_addr + 7) & (uintptr_t)~7) - (uintptr_t)base_addr
++                + GC_HEAD_PADDING;
+     heap_max_size = (uint32)(buf_end - base_addr) & (uint32)~7;
+ 
+ #if WASM_ENABLE_MEMORY_TRACING != 0
+diff --git i/core/shared/mem-alloc/mem_alloc.c w/core/shared/mem-alloc/mem_alloc.c
+index c17a69e..f125f73 100644
+--- i/core/shared/mem-alloc/mem_alloc.c
++++ w/core/shared/mem-alloc/mem_alloc.c
+@@ -170,7 +170,8 @@ mem_allocator_create(void *mem, uint32_t size)
+ {
+     mem_allocator_tlsf *allocator_tlsf;
+     tlsf_t tlsf;
+-    char *mem_aligned = (char *)(((uintptr_t)mem + 3) & ~3);
++    char *mem_aligned =
++        (char *)mem + (((uintptr_t)mem + 3) & ~(uintptr_t)3) - (uintptr_t)mem;
+ 
+     if (size < 1024) {
+         printf("Create mem allocator failed: pool size must be "
