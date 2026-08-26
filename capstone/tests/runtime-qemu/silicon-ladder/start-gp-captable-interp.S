@@ -867,7 +867,8 @@ test:
 #endif
   /* ROUTE A rationale (the install itself now happens BEFORE cap-init, above):
      the monitor never writes dom_seal[1] (sbi_capstone.c:760,782-784) and slot 1 IS
-     {ctvec,mtvec} (csr_regfile.sv:399), so a domain runs with mtvec=0: any fault vectors to
+     {ctvec,mtvec} (csr_regfile.sv:407 -- was cited as :399, which is
+     dom_switch_mstatus_set_o and unrelated; re-derived 2026-08-26), so a domain runs with mtvec=0: any fault vectors to
      pc=0, lands outside PCC and re-faults forever, silently. That is why a fault and a hung
      core are indistinguishable, and why every wedge so far has been unrepeatable (a wedge
      ends the board session).

@@ -22,6 +22,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
 source "$SCRIPT_DIR/infra-retry.sh"
+source "$SCRIPT_DIR/../select.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -43,6 +44,7 @@ smoke() { # $1=probe  rest: extra harness args
 }
 
 run_ok() { # $1=probe  $2=expected retval
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" retval="$2"
   local marker="hier-revoke-probe: call retval = $retval"
   local log="$SHARE/$name.log"
@@ -68,6 +70,7 @@ run_ok() { # $1=probe  $2=expected retval
 }
 
 run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
+  capstone_selected "$1" || { echo "SKIP  $1"; return 0; }
   local name="$1" msg="$2" want="$3"
   local log="$SHARE/$name.log"
   local attempt=0 cause
@@ -92,6 +95,8 @@ run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
     echo "FAIL  $name  (no fault after $attempt attempts; see $log)" >&2; return 1
   done
 }
+
+capstone_select_banner hier-revoke
 
 fail=0 flaked=0
 
@@ -119,6 +124,8 @@ for opt in $OPT_LEVELS; do
   run_ok   hier_no_close_ok 0x0872005e || record $?
   run_ok   hier_sibling_conn_survives_ok 0x0873003c || record $?
 done
+
+capstone_select_verify || exit 2
 
 if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2
