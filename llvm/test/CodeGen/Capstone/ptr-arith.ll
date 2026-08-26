@@ -2,6 +2,12 @@
 ; checks pointer-arithmetic lowering, not stack narrowing (the narrowed path is
 ; covered by cap-shrink-{stack,dynalloca}.ll).
 ; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 ; CHECK-LABEL: test_imm:
 ; CHECK: cincoffsetimm a0, a0, 1
@@ -139,8 +145,8 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
 ; C pointer subtraction returns an integer difference between two capability
 ; cursors. Do not select this as full-width i128 scalar subtraction.
 ; CHECK-LABEL: test_ptrdiff:
-; CHECK-DAG: lcc [[CUR0:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[CUR1:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[CUR0:a[0-9]+]], a0
+; CHECK-DAG: mv [[CUR1:a[0-9]+]], a1
 ; CHECK: sub a0, [[CUR0]], [[CUR1]]
 ; CHECK: cjalr zero, 0(ra)
 define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {

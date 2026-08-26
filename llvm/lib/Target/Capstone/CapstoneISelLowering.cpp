@@ -7839,13 +7839,33 @@ bool llvm::isCapstoneIntegerOffset(SDValue V) {
       isa<ConstantSDNode>(V.getNode()))
     return true;
 
-  // A left-shift producing an i128 is a scaled integer offset: a capability is
-  // never the operand of a shift, so an `shl i128` is always an offset, not a
-  // pointer. Recognising only shl(extend,...) missed shapes like shl(load,...)
-  // and the shl(sub(0,ext),...) that `p - (n+1)` lowers to, which then wrongly
-  // took the ptr-ptr cursor-difference path in lowerSUB and dropped the
-  // capability's tag (untagged cincoffset -> miscompiled pointer arithmetic).
-  if (Opc == ISD::SHL && V.getValueType() == MVT::i128)
+  // A BITWISE OR SHIFT RESULT IS ALWAYS AN INTEGER, never a capability.
+  //
+  // These are integer instructions on this target: they read the scalar and
+  // produce an UNTAGGED result, even when an operand was a capability. That is
+  // stated by cap-i128-and-capability-mask.ll, which aligns a pointer down with
+  // `and` and documents "the result is untagged -- which is what the source
+  // asked for, since a value built out of uintptr_t bits cannot carry a tag."
+  // So whatever the operands were, the value here is an integer.
+  //
+  // This started as SHL only, on the narrower argument that a capability is
+  // never the OPERAND of a shift. Restricting it to SHL missed the shape that
+  // C-19 turned out to be: `zext i32 -> i128` is legalised into
+  // `and (anyext x), 0xffffffff` before this runs, so by the time lowerSUB asks,
+  // the ZERO_EXTEND above is gone and the node is an AND. Neither operand of the
+  // enclosing `sub` then looked like an integer, so lowerSUB took the
+  // capability-minus-capability path and emitted `lcc rd, rs, 2` -- the CURSOR
+  // query, which is NOT total -- against an untagged value. On QEMU that aborts
+  // the emulator (`helper_cslcc: Assertion rs1_v->tag failed`); on silicon it
+  // raises. It also miscompiled: the ptr-diff path returns an untagged integer,
+  // so `p - (unsigned)n` came back detagged.
+  //
+  // Enumerating shapes has now missed twice (shl(load,...) then this), which is
+  // why the rule is stated from the ISA property rather than from a list of
+  // patterns that produce it.
+  if (V.getValueType() == MVT::i128 &&
+      (Opc == ISD::AND || Opc == ISD::OR || Opc == ISD::XOR ||
+       Opc == ISD::SHL || Opc == ISD::SRL || Opc == ISD::SRA))
     return true;
 
   if (const auto *Ld = dyn_cast<LoadSDNode>(V)) {
@@ -7873,6 +7893,36 @@ bool llvm::isCapstoneCapabilityValue(SDValue V) {
   return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
 }
 
+// Read a capability's ADDRESS as an integer.
+//
+// This is a PLAIN INTEGER READ, deliberately NOT `lcc rd, rs, 2`.
+//
+// `lcc` selector 2 is the cursor query and it is NOT TOTAL: it traps on an
+// untagged operand. A NULL pointer is untagged, so every `lcc`-based address
+// read was a trap waiting for a null -- which is what C-19 was. In
+// sqlite3CreateFunc, DAGCombiner folds `if (p != 0 || q != 0)` into
+// `(addr(p) | addr(q)) != 0`; both operands got `lcc`, and the first null
+// argument killed the domain at entry.
+//
+// A plain integer read gives the same value and cannot trap. Verified on BOTH
+// implementations, because they have disagreed before:
+//
+//   RTL: for an ordinary ALU op the metadata shadow file is not even read --
+//        issue_read_operands.sv:298 decides `not_capstone` from the OPCODE, and
+//        :1653,1656-1657 force cap_raddr to 0 -- so the operand comes from the
+//        flat 64-bit regfile with no tag-dependent behaviour and no exception
+//        path. What that slot holds for a capability is the cursor:
+//        ex_stage.sv:463-479 commits `capstone_flu_res.cap_result.cursor`.
+//        And lcc does trap: capstone_dyn_unit.anvil:195-198 raises
+//        UNEXPECTED_OPERAND when cap_type == NOT_CAP for any selector but 1.
+//
+//   QEMU: get_gpr reads gpr[i].val (translate.c:1331-1332), and `val` is a
+//        union whose `scalar` member aliases `cap.bounds.cursor` -- cursor is
+//        the first field of the first field (cap.h:59-63, 79-83). helper_cslcc
+//        asserts rs1_v->tag (op_helper.c:762).
+//
+// Selector 1 (the type query) is the only total selector, and it answers the
+// TYPE, not the address -- so there is no `lcc` form that would do here.
 static SDValue getCapstoneCapabilityCursor(SDValue Cap, SelectionDAG &DAG,
                                            const SDLoc &DL, MVT XLenVT) {
   SDValue IntrinsicID =

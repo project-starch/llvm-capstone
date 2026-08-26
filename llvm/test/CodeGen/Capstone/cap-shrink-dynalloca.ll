@@ -14,6 +14,12 @@
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,SHRINK
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=false < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,NOSHRINK
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
@@ -23,7 +29,7 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S
 ; CHECK-LABEL: dynalloca:
 ; The freshly allocated base is formed by offsetting sp by -size.
 ; CHECK: cincoffset [[BASE:a[0-9]+]], sp, {{a[0-9]+}}
-; SHRINK: lcc {{a[0-9]+}}, [[BASE]], 2
+; SHRINK: mv {{a[0-9]+}}, [[BASE]]
 ; SHRINK: shrink
 ; The real stack pointer keeps the un-narrowed (broad) base capability.
 ; SHRINK: movc sp, [[BASE]]

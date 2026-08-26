@@ -2442,7 +2442,6 @@ def LCC : RVInstRI<0b0000100, 0b001, OPC_CAP_OP,
 // get_tag, get_type, get_cursor, get_base, get_end, get_perm
 // Field 1 answers cap_type-1, so a NON-capability reads 7 (NOT_CAP(0)-1 wraps in 3 bits).
 def : Pat<(int_capstone_cap_get_tag GPR:$src),    (LCC GPR:$src, 0)>;
-def : Pat<(int_capstone_cap_get_cursor GPR:$src), (LCC GPR:$src, 2)>;
 def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
 def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;
 def : Pat<(int_capstone_cap_get_perm GPR:$src),   (LCC GPR:$src, 5)>;
@@ -2487,6 +2486,35 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
                       PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+
+// THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
+//
+// `lcc` selector 2 is NOT TOTAL: it traps on an untagged operand, and a NULL
+// pointer is untagged. So every address read through it was a trap waiting for
+// a null, which is what C-19 was -- DAGCombiner folds `if (p != 0 || q != 0)`
+// into `(addr(p) | addr(q)) != 0`, both operands got `lcc`, and the first null
+// argument killed the SQLite domain at entry.
+//
+// Reading the register with an ordinary integer instruction yields the SAME
+// value and cannot trap. Confirmed on both implementations, which have
+// disagreed before:
+//   RTL  -- for an ALU op the metadata shadow is not even read
+//           (issue_read_operands.sv:298 keys `not_capstone` off the OPCODE;
+//           :1653,1656-1657 force cap_raddr to 0), and the flat regfile slot
+//           holds the cursor (ex_stage.sv:463-479 commits cap_result.cursor).
+//           lcc really does trap: capstone_dyn_unit.anvil:195-198 raises
+//           UNEXPECTED_OPERAND for cap_type == NOT_CAP on any selector but 1.
+//   QEMU -- get_gpr reads gpr[i].val, whose `scalar` member aliases
+//           cap.bounds.cursor (cap.h:59-63,79-83); helper_cslcc asserts the tag.
+//
+// The INTRINSIC is kept rather than lowering straight to an ISD::TRUNCATE,
+// because it is also a DAGCombine BARRIER. With a plain truncate, the combiner
+// folds `zext(op(trunc a, trunc b))` back into `and i128`, which is re-lowered,
+// which folds again -- cap-i128-and-capability-mask.ll hangs. That test's own
+// comment already warned the combiner rebuilds this shape.
+//
+// Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.
+def : Pat<(int_capstone_cap_get_cursor GPR:$src), (PseudoTRUNC_CAP GPR:$src)>;
 
 //===----------------------------------------------------------------------===//
 // Capability Manipulation Instructions (1)

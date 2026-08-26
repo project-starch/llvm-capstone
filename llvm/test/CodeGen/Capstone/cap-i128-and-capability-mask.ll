@@ -1,8 +1,14 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 ; Bitwise arithmetic on a CAPABILITY, which is what C that goes through uintptr_t and back turns
 ; into: align a pointer down, steal a low bit as a flag, hash two pointers. The address is read
-; with the same `lcc rd, rs, 2` that a pointer difference uses (ptr-arith.ll), the operation happens
+; with the same plain `mv` that a pointer difference uses (ptr-arith.ll), the operation happens
 ; at XLen, and the result is untagged -- which is what the source asked for, since a value built out
 ; of uintptr_t bits cannot carry a tag.
 ;
@@ -12,7 +18,7 @@
 ; MicroPython: gc_init, pairheap.c's NEXT_GET_RIGHTMOST_PARENT, and bound_meth_unary_op.
 
 ; CHECK-LABEL: align_down:
-; CHECK:      lcc a0, a0, 2
+; CHECK:      mv a0, a0
 ; CHECK-NEXT: andi a0, a0, -32
 define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
@@ -23,7 +29,7 @@ define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
 }
 
 ; CHECK-LABEL: clear_flag_bit:
-; CHECK:      lcc a0, a0, 2
+; CHECK:      mv a0, a0
 ; CHECK-NEXT: andi a0, a0, -2
 define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
@@ -35,8 +41,8 @@ define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) 
 
 ; Two capabilities, no constant: both cursors are read.
 ; CHECK-LABEL: hash_two:
-; CHECK-DAG:  lcc a0, a0, 2
-; CHECK-DAG:  lcc a1, a1, 2
+; CHECK-DAG:  mv a0, a0
+; CHECK-DAG:  mv a1, a1
 ; CHECK:      xor a0, a0, a1
 define i64 @hash_two(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) {
   %x = ptrtoint ptr addrspace(200) %a to i64

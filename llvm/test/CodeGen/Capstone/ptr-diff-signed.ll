@@ -5,12 +5,18 @@
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
 ; CHECK-LABEL: ptrdiff_signed_positive:
-; CHECK-DAG: lcc [[POS_LHS:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[POS_RHS:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[POS_LHS:a[0-9]+]], a0
+; CHECK-DAG: mv [[POS_RHS:a[0-9]+]], a1
 ; CHECK: sub [[POS_DIFF:a[0-9]+]], [[POS_LHS]], [[POS_RHS]]
 ; CHECK-NEXT: srai a0, [[POS_DIFF]], 2
 ; CHECK-NOT: srli
@@ -27,8 +33,8 @@ define i64 @ptrdiff_signed_positive(ptr addrspace(200) %high,
 
 ; Reverse the subtraction operands to represent the negative-result path.
 ; CHECK-LABEL: ptrdiff_signed_negative:
-; CHECK-DAG: lcc [[NEG_HIGH:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[NEG_LOW:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[NEG_HIGH:a[0-9]+]], a0
+; CHECK-DAG: mv [[NEG_LOW:a[0-9]+]], a1
 ; CHECK: sub [[NEG_DIFF:a[0-9]+]], [[NEG_LOW]], [[NEG_HIGH]]
 ; CHECK-NEXT: srai a0, [[NEG_DIFF]], 2
 ; CHECK-NOT: srli

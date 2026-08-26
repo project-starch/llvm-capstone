@@ -1,4 +1,10 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 ; --- Field reads (LCC) ---
 declare i64 @llvm.capstone.cap.get.tag.p200(ptr addrspace(200))
@@ -35,7 +41,7 @@ entry:
 }
 
 ; CHECK-LABEL: test_get_cursor:
-; CHECK: lcc a0, a0, 2
+; CHECK: mv a0, a0
 define i64 @test_get_cursor(ptr addrspace(200) %p) {
 entry:
   %0 = call i64 @llvm.capstone.cap.get.cursor.p200(ptr addrspace(200) %p)
