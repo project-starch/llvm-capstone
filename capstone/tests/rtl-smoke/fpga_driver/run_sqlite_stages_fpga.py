@@ -3051,7 +3051,37 @@ def main():
                                               + f") raw=0x{_t219:02x}. An OR-contaminated read "
                                                 f"cannot be un-corrupted; this is not a verdict.")
                                     elif _nval:
-                                        _v = "VOID -- armed, but the recorder never fired"
+                                        # UNDER THE TAG FILTER, 0x20 IS EVIDENCE, NOT A NULL --
+                                        # and this is the ONLY code that can positively support
+                                        # delivery-failure, so it must not be labelled VOID.
+                                        #
+                                        # Filtered capture records untagged LDCs only. So "armed,
+                                        # no record" means NO UNTAGGED LDC OCCURRED AT ALL in the
+                                        # scoped window -- including the subject. A subject that
+                                        # came back TAGGED is exactly the delivery-failure case.
+                                        #
+                                        # BUT IT ONLY MEANS THAT IF THE WINDOW IS SCOPED. With
+                                        # rolling capture and no clear, the window is "since
+                                        # reset", and boot software produces untagged LDCs
+                                        # routinely (miss refills over scalar data), so 0x20 would
+                                        # be unreachable and its appearance would indicate a dead
+                                        # aperture rather than a clean arm. WEDGE_S07_CLEAR_PERARM
+                                        # is what makes it mean "this arm".
+                                        if os.environ.get("WEDGE_S07_CLEAR_PERARM") == "1":
+                                            _v = ("NO UNTAGGED LDC IN THIS ARM (recorder cleared "
+                                                  "before it, then armed and never fired). Under "
+                                                  "the tag-filtered recorder that INCLUDES the "
+                                                  "subject, so the subject came back TAGGED: "
+                                                  "consistent with DELIVERY FAILURE. This is the "
+                                                  "only code that positively supports it.")
+                                        else:
+                                            _v = ("VOID -- armed, no record, but the recorder was "
+                                                  "NOT cleared for this arm, so the window is "
+                                                  "'since reset' and boot software's routine "
+                                                  "untagged LDCs should have filled it. An empty "
+                                                  "record here means the aperture is not working, "
+                                                  "not that the arm was clean. Re-run with "
+                                                  "WEDGE_S07_CLEAR_PERARM=1.")
                                     elif _sub_gran is None or _ldc_a is None:
                                         _v = ("VOID -- cannot identify the recorded load (s0 or "
                                               "granule unread)")
