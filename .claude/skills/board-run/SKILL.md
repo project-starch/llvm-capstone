@@ -267,6 +267,27 @@ rebuild with a harmless constant varied (e.g. a different compiled-in default st
 code under test is byte-identical across draws. Always `sha256sum` the set and abort if any
 two match.
 
+## 4b. Waiting for a run to finish
+
+**Do not spawn a second task to poll for something the runner already reports.** The background
+run notifies on its own completion; a separate waiter duplicates that and can fail in ways the
+runner cannot. Five such waiters ran 7-11 minutes each and never exited.
+
+If you do need to wait (polling something outside the harness), use
+`bash capstone/tests/wait-run.sh <logfile> [max_s] [stall_s]`, which cannot hang. Hand-rolled
+`until grep ...; do sleep; done` loops have failed twice over, both worth naming:
+
+* **The terminal pattern assumed the run reaches its LAST arm.** `<-- TEST 3/3` never appears
+  when arm 1 wedges — and the driver stopping there is *correct*, "everything after this is
+  lost". So the waiter hung precisely on the runs that carried the most information.
+* **It grepped for a string never written to that file.** `EXIT=$?` goes to the task's stdout,
+  not into the driver log being polled, so the pattern could not match at all.
+
+Key on markers the driver emits on EVERY exit path — `BOARD_RELEASED`, `preflight BLOCKED`,
+`Traceback`, `GUEST_RC` — and bound the wait two independent ways (no log growth for N seconds,
+plus a hard cap), so a future pattern mistake degrades into an early exit rather than a hang.
+Watch **log growth**, not process exit: a hung driver never exits.
+
 ## 5. Release the board, always
 
 Lock → power-cycle → run → **power off + unlock in `finally`**. The drivers do this via
