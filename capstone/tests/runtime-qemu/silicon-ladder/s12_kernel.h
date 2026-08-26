@@ -93,6 +93,13 @@ static unsigned long volatile s12_draw_seed = 0xD2A0000UL + S12_DRAW;
  * 4096 swamps the inter-arm drift, so the frame -- and therefore the slot -- lands identically.
  * VERIFY IT rather than assume it: the addresses are compared across arms before any run. */
 static unsigned char volatile s12_frame[0x800] __attribute__((aligned(4096)));
+#if S12_ARM == 8
+/* EVICTION BUFFER. The D-cache is 32 KiB / 8-way with a 16-byte line
+ * (capstone_cv64a6_imafdc_sv39_config_pkg.sv:48-50), so walking 40 KiB of distinct lines
+ * evicts everything, the subject granule included. Sized past 32 KiB rather than exactly to
+ * it, so the eviction does not depend on replacement policy. */
+static unsigned char volatile s12_evict[40960] __attribute__((aligned(4096)));
+#endif
 static void *volatile s12_subject;
 static unsigned long volatile s12_sink[8];
 
@@ -227,6 +234,9 @@ static unsigned s12_compute(void)
 #if S12_ARM == 7
     void *volatile _c7;
 #endif
+#if S12_ARM == 8
+    void *volatile _c8;
+#endif
 
     /* THE SUBJECT STORE, HOISTED ABOVE THE ARM CHAIN ON PURPOSE.
      *
@@ -323,6 +333,44 @@ static unsigned s12_compute(void)
     { void *back2 = *slot;
       if (s12_type(back2) == S12_NOT_CAP) bad++;
       s12_sink[4] = (unsigned long)(__UINTPTR_TYPE__)back2; }
+#endif
+
+#if S12_ARM == 8
+    /* ARM 7 WITH A COLD LOAD -- the one remaining difference I can control between my clean
+     * repro and the faulting vehicle.
+     *
+     * Arm 7 runs production's exact four-instruction shape and RETURNS clean (0xC12A7000,
+     * board-measured). So the shape is not sufficient. But arm 7's `ldc` HITS: the slot was
+     * written moments earlier by the same loop, so its line is resident. Production's `ldc`
+     * almost certainly MISSES -- SQLite's working set dwarfs a 32 KiB L1 and the fault site
+     * sits deep inside sqlite3_prepare_v2.
+     *
+     * It also fits every simulation result to date: four testbench configurations measured
+     * HAZARDS=0 and init-while-pending=0, and none exceeded ~8 cycles of LDC latency, because
+     * the bench uses axi_pkg::NO_LATENCY with MaxMstTrans=1. A window that opens only under a
+     * real miss is invisible to all of them -- and to arm 7.
+     *
+     * THE EVICTION RUNS BEFORE THE `movc`, so the four-instruction tail stays BYTE-IDENTICAL
+     * to arm 7's. The only variable is whether the subject line is resident: one difference,
+     * and it is the one under test. */
+    {
+      unsigned long _acc = 0;
+      for (unsigned _i = 0; _i < sizeof(s12_evict); _i += 16)
+        _acc += s12_evict[_i];
+      s12_sink[6] = _acc;              /* keep the walk -- a dead loop evicts nothing */
+
+      void *volatile *_sp8 = slot;
+      unsigned char volatile *_scr8 = fp - 0x120;
+      __asm__ volatile(
+          ".insn r 0x5b, 0x1, 0xa, %[t], x0, x0\n"          /* movc          t, zero    */
+          ".insn s 0x5b, 0x4, %[t], 0(%[scr])\n"            /* stc           t, 0(scr)  */
+          ".insn i 0x5b, 0x3, %[t], 0(%[sp])\n"             /* ldc  t, 0(sp)  <- COLD   */
+          ".insn i 0x5b, 0x2, %[t], 0xb0(%[t])\n"           /* cincoffsetimm t, t, 0xb0 */
+          : [t] "=&r"(_c8)
+          : [scr] "r"(_scr8), [sp] "r"(_sp8)
+          : "memory");
+      s12_sink[7] = (unsigned long)(__UINTPTR_TYPE__)_c8;
+    }
 #endif
 
 #if S12_ARM == 7

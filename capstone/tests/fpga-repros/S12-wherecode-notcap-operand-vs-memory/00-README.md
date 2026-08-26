@@ -1732,3 +1732,49 @@ downstream of writeback, where the recorder has no observation point. That is fl
 lane, with a narrow 7-bit alternative (latch `rs1`, whether `rd_clobber_gpr[rs1]` was non-NONE, and
 the selected entry's valid bit, at FLU issue) that follows the precedent already set by
 `cap_wb_displaced_o` (`scoreboard.sv:345-353`).
+
+## Arm 8: a COLD load does not do it either — the shape family is exhausted
+
+Arm 7 established that production's four-instruction shape at production spacing runs clean. The
+one controllable difference left was cache residency: arm 7's `ldc` HITS (the slot was written
+moments earlier), while production's almost certainly MISSES — SQLite's working set dwarfs a
+32 KiB L1 and the fault sits deep inside `sqlite3_prepare_v2`. That also fit every simulation
+result, none of which exceeded ~8 cycles of LDC latency.
+
+Arm 8 is arm 7 with the subject line evicted first. The eviction runs **before** the `movc`, so
+the four-instruction tail is byte-identical and residency is the only variable — the matched-pair
+discipline, one difference.
+
+**Verified in the artifact before the boot, not in intent:**
+
+```
+s12_evict  @0x13000, 40960 bytes          > 32 KiB L1, so the walk cannot fit
+loop 0x1044c..0x1049c, byte load, 16-byte stride   -> 2560 distinct lines
+tail 0x104dc: movc a3,zero / stc a3,0(a1) / ldc a3,0(a4) / cincoffsetimm a3,a3,0xb0
+```
+
+**Result: `0xC12A8000`, clean, 245623 cycles** (against arm 7's 1924 — the walk demonstrably ran).
+Control returned.
+
+### The plain statement, since it was pre-registered
+
+**Shape, spacing and miss latency TOGETHER are insufficient.** The instruction-window approach to
+reproducing S-12 is exhausted: every controllable property of the four-instruction window has now
+been reproduced exactly and none of it faults. The trigger needs something the window does not
+carry — execution history, the specific capability's provenance, i-cache/code-volume effects, or
+a code path in SQLite that differs from the one modelled here.
+
+That is a narrowing, not a failure. What it retires is a whole family of hypotheses: anything of
+the form "these instructions in this order at this spacing on a cold line". The next move is
+SQLite-side bisection between `q_one` (passes on silicon) and `q_two` (wedges), which differ by
+exactly `, t1 AS y` with both tables EMPTY — not a ninth arm of this kernel.
+
+### A near-miss worth recording, because every gate was green
+
+The first arm-8 build contained **neither** the eviction loop nor the four-instruction tail, and
+was byte-size identical to arm 7. Cause: the block was inserted at an anchor that sits inside
+`#if S12_ARM == 7`, so arm 8's code was nested in arm 7's guard and never compiled. The build
+succeeded, the artifact looked plausible, the domain would have entered and returned clean — and
+it would have read as "the cold load does not matter". Nothing reported an absence. Only
+disassembling the artifact before spending the boot distinguished it. That is the third time today
+that check has caught a test which would have measured nothing.
