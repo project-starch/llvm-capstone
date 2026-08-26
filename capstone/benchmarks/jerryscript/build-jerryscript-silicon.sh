@@ -188,6 +188,13 @@ link "$GOFF" "$OUT_DIR/$DOM_NAME.dom"
 # A third pass, because the declaration depends on the carve and the carve depends on the
 # link. domreq.S is non-alloc, so it must not move a loaded byte; that is checked here
 # rather than assumed.
+# DEFAULTED, not optional. Left unset this block was skipped and the build produced
+# an image the module cannot load at all: at code_len 2965656 the inference asks the
+# buddy allocator for order 12 against a maximum of 10, and domdata-budget.py says so
+# ("DOES NOT FIT ... this image is 2.15x that") into a log nobody reads. A build whose
+# output cannot be loaded should not be the default. 2 MiB matches what the SQLite
+# silicon domain declares; override JS_STACK to change it.
+JS_STACK=${JS_STACK:-$((2 * 1024 * 1024))}
 if [[ -n "${JS_STACK:-}" ]]; then
   _carve=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" --carve)
   [[ "$_carve" =~ ^[0-9]+$ ]] || { echo "--carve gave '$_carve'" >&2; exit 1; }
