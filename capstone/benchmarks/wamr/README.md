@@ -84,11 +84,35 @@ and skips its stack guard. A made-up boundary would be worse than none.
 through it reads zero, so a profile is void rather than wrong-by-a-little. Wire
 the cycle counter before quoting any timing number.
 
+## Size, which is what decided the other candidates
+
+Every object built and totalled:
+
+    .text  259 901      .data  3 156      .bss  1 048 804
+
+254 KiB of code. The `.bss` is almost entirely `CAPSTONE_WAMR_ARENA_BYTES`, a
+number this port chooses, so the image size is not upstream's problem to solve.
+
+For scale, from this week: SQLite at 3.3 MB and JerryScript at 2.9 MB both
+exceeded the single-region ceiling of 1 376 256 bytes and needed a declared
+two-region budget. MicroPython is 321 KiB of `.text`. WAMR is the smallest
+candidate assessed, and it fits a single region even before declaring anything.
+
 ## Next
 
-1. A freestanding libc shim in `adapted/include/`, the way micropython and sqlite
-   have one. Nine distinct functions from the census above.
-2. Re-run the census and raise `BASELINE_OK`.
-3. Then, and only then, a link and a size measurement. SQLite at 3.3 MB and
-   JerryScript at 2.9 MB both hit the single-region ceiling this week, so the
-   image size decides feasibility more than the line count does.
+Compiling is not running, and the gap is domain glue rather than porting:
+
+1. A domain entry -- the equivalent of `micropython/port/mpy_domain.c`: a
+   `domain_main(unsigned *res, unsigned func)` that initialises the runtime over
+   the arena, instantiates a module and returns a marker.
+2. A link: these objects plus `beebs_freestanding_string.o` for the string
+   routines and `lua_libc.o` for snprintf/vsnprintf, under the gp-captable
+   linker script.
+3. A `.wasm` module to execute, baked in as a byte array so the domain needs no
+   filesystem.
+4. `domreq.S` with a declared budget. Not optional -- both SQLite and JerryScript
+   silently produced unloadable images this week without it, and at 254 KiB this
+   one would fit anyway, which is exactly when the mistake goes unnoticed.
+
+Only after all four does a corpus make sense, and it should be read from fix
+commits rather than issue titles.
