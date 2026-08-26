@@ -39,7 +39,13 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
   TAIL_MARKERS=(--success-marker '__CAPSTONE_MRBTEST_COMPLETED__')
   # 43 interpreters opened and torn down in sequence, each loading assert.rb, on
   # a first-fit allocator under TCG. The probe's budget is for one.
-  TIMEOUT_MULTIPLIER=${TIMEOUT_MULTIPLIER:-90}
+  #
+  # The WORKLOAD budget, not the multiplier. Raising the multiplier to 90 was
+  # tried first and cost 45 minutes: it scales every timeout, so a boot that hung
+  # at the login prompt sat there for the full 45 before being called a flake,
+  # having produced nothing. Setup keeps the default multiplier and fails fast;
+  # only this one command is allowed to take an hour.
+  export CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-3600}
 elif [[ ${MRUBY_WITH_PARSER:-0} == 1 ]]; then
   OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-mruby-parser}
   PARSER_MARKERS=(--success-marker 'MRUBY S6: parsing Ruby source'

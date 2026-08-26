@@ -88,6 +88,8 @@ else
 
 fi
 
+fi
+
 "$GUEST_CC" -O2 -o "$OUT_HOST" "$SCRIPT_DIR/yield_probe_host.c" "$LIBCAPSTONE_C"
 
 printf 'built %s\nbuilt %s\n' "$OUT_DOM" "$OUT_HOST"
