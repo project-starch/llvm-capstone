@@ -349,32 +349,16 @@ print("   instrumented pagerFreeMapHdrs with a raw-slot probe")
 PY
 fi
 
-if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
-  echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
-  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
-import sys, re, pathlib
-p = pathlib.Path(sys.argv[1]); s = p.read_text()
-before = s
-# 1. undo the de-static: the stack array becomes the real static again.
-s = s.replace("  FuncDef capstoneBuiltinFunc[] = {",
-              "  static FuncDef aBuiltinFunc[] = {", 1)
-# 2. drop the separate zero-init static that the patch introduced.
-s = s.replace("  static FuncDef aBuiltinFunc[ArraySize(capstoneBuiltinFunc)];\n", "", 1)
-# 3. drop the element-wise copy loop -- there is nothing to copy from any more.
-s = re.sub(r"  for\(int capstoneI=0; capstoneI<[^\n]*ArraySize\(capstoneBuiltinFunc\)[^\n]*\)\{\n"
-           r"    aBuiltinFunc\[capstoneI\] = capstoneBuiltinFunc\[capstoneI\];\n  \}\n",
-           "", s, count=1)
-# 4. any surviving reference to the removed name now means the static.
-s = s.replace("ArraySize(capstoneBuiltinFunc)", "ArraySize(aBuiltinFunc)")
-s = s.replace("capstoneBuiltinFunc", "aBuiltinFunc")
-if s == before:
-    sys.exit("SQLITE_STATIC_BUILTINS: nothing was rewritten -- the patch shape changed")
-if "capstoneBuiltinFunc" in s:
-    sys.exit("SQLITE_STATIC_BUILTINS: stale references remain")
-p.write_text(s)
-print("   rewrote aBuiltinFunc to a static initialiser; copy loop removed")
-PY
-fi
+# R-14's WORKAROUND IS GONE WITH THE PATCH IT UNDID. It rewrote aBuiltinFunc back
+# into a compile-time-initialised static, because build-sqlite-capstone.sh had
+# turned it into a stack array filled by a runtime loop -- itself a workaround, for
+# a compiler that could not put SQLITE_INT_TO_PTR in an initialiser. That compiler
+# defect is fixed, the original patch is retired, and a workaround for a retired
+# workaround is just dead code. Its own guard is what caught this: it exits with
+# "the patch shape changed" rather than silently rewriting nothing.
+#
+# SQLITE_STATIC_BUILTINS no longer does anything; the builtins ARE static now.
+
 
 if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
   echo "== DIAGNOSTIC: clamping builtin-function registration to $BUILTIN_LIMIT entries"
@@ -2339,8 +2323,9 @@ link() {  # $1 = globals offset literal, $2 = output
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
   "$CAPSTONE_LD_LLD" -T "$lds" -o "$2" \
     "$OBJ_DIR/start.o" "$OBJ_DIR/amalgam.o" "$OBJ_DIR/libc.o" \
-    "$OBJ_DIR/beebs_string.o" "${BUILTIN_OBJS[@]}"
+    "$OBJ_DIR/beebs_string.o" "${BUILTIN_OBJS[@]}" "${EXTRA_LINK_OBJS[@]}"
 }
+EXTRA_LINK_OBJS=()
 
 # Pass 1 uses a deliberately OVERSIZED provisional offset. Linking at the 0x1000
 # default cannot work -- SQLite's .text is ~1.3 MB and would overlap the globals
@@ -2391,6 +2376,39 @@ echo "   cjalr=$(grep -cE '\bcjalr\b' <<<"$DIS" || true)  ldc-gp=$(grep -cE 'ldc
 NHDR=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/sqlite_silicon.dom" | grep -c "capstone_gp_table" || true)
 echo "   .capstone_gp_table sections: $NHDR (must be 1 -- more means a multi-TU index collision)"
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/sqlite_silicon.dom" || true
+
+# PASS 3: DECLARE WHAT THIS DOMAIN NEEDS. Undeclared, the module sizes headroom as
+# max(2 * code_len, 512K), and this image is 1444840 bytes -- past the 1376256 that
+# still fits in one allocation. domdata-budget.py says so in as many words ("order 11
+# exceeds the kernel's maximum 10") and then the DOM_CREATE ioctl fails before an
+# instruction runs. Same cause as the in-memory domain, same fix.
+#
+# The carve (globals blob + cap table + per-global storage) is MEASURED from the linked
+# image by the same script that does the verdict, so the declaration and the check
+# cannot drift. Only the stack is a choice: the old rule handed this domain 6,541,376
+# bytes of it by accident, which is what pushed the allocation past the ceiling.
+SQLITE_SILICON_STACK=${SQLITE_SILICON_STACK:-$((2 * 1024 * 1024))}
+CARVE=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/sqlite_silicon.dom" --carve)
+[[ "$CARVE" -gt 0 ]] || { echo "could not measure the dom_data carve" >&2; exit 1; }
+SQLITE_SILICON_DATA=$(( CARVE + SQLITE_SILICON_STACK ))
+echo "== pass 3: declare dom_data >= $SQLITE_SILICON_DATA (carve $CARVE + stack $SQLITE_SILICON_STACK)"
+_segs() { "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$OUT_DIR/sqlite_silicon.dom" | grep -E '^\s+LOAD'; }
+_before=$(_segs)
+"$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -DCAPSTONE_DOMREQ_DATA=$SQLITE_SILICON_DATA \
+  -DCAPSTONE_DOMREQ_STACK=$SQLITE_SILICON_STACK \
+  -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
+EXTRA_LINK_OBJS=("$OBJ_DIR/domreq.o")
+link "$(printf '0x%x' $GOFF)" "$OUT_DIR/sqlite_silicon.dom"
+# The section is non-alloc, so NOTHING LOADED MAY MOVE. This image is the one where a
+# changed global set entry-stalled the domain 3/3 without executing an instruction, so
+# the check is not a formality.
+if [[ "$(_segs)" != "$_before" ]]; then
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
+  exit 2
+fi
+python3 "$LADDER/domdata-budget.py" "$OUT_DIR/sqlite_silicon.dom" || {
+  echo "the declared budget still does not fit" >&2; exit 1; }
 echo "Built $OUT_DIR/sqlite_silicon.dom"
 
 # DESCRIPTOR-IDENTITY GATE. This image's behaviour depends on its GLOBAL SET: adding globals
