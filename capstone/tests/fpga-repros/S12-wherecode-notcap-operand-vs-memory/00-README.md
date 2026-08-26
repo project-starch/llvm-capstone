@@ -1822,3 +1822,50 @@ wedge so far reads sw=225 = 0x95, i.e. wrev=1 AND memwait=1: the dyn unit is blo
 comment is stale relative to these wedges** — it describes an older wedge class. The rev-node
 blockage story does not apply here, and the quiescent core is instead consistent with the
 trap-loop-at-`mtvec=0` picture the `mcause=2 / mepc=2` readings already showed.
+
+## THE TRIGGER IS THE SECOND WHERE-LOOP LEVEL, not the self-join
+
+The instruction-window family was exhausted, so the remaining variable was the one that flips the
+outcome **inside a single image**: the SQL. The domain reads its `.test` from the shared region at
+RUN TIME, so these arms share one binary — no rebuild, and layout, `.bss` size, cap-table geometry
+and code are all held fixed *by construction*.
+
+| case | SQL | where-loop levels | silicon |
+|---|---|---|---|
+| `q_one` | `SELECT t1.a FROM t1` | 1 | **passes** (3×) |
+| `q_two` | `SELECT t1.a FROM t1, t1 AS y` | 2 | **wedges**, `mcause 25`, `mepc 0x828f4814` = `+0x8c` |
+| **`qj2`** | **`SELECT t1.a FROM t1, t2`** | **2** | **wedges**, same cause, **same `mepc`** |
+
+`qj2` joins two **distinct** tables — no alias, no self-reference, no shared cursor. It wedges
+identically, at the same instruction. **So the self-join is irrelevant; the second where-loop level
+is the trigger.** All four cases agree with the native baseline, so the divergence is silicon.
+
+**Why this matters more than another exclusion.** `sqlite3WhereCodeOneLoopStart` is called once per
+loop level. One level passes; two levels fault, at the same PC. The natural reading is that **call
+#1 succeeds and call #2 faults** — which makes the target the state built *between* the two calls,
+not the function's code, and not anything about the image. That is a far narrower object than "all
+of SQLite", and it is the first hypothesis in this investigation that predicts the SQL-sensitivity
+directly instead of accommodating it.
+
+## And the arg probe's "cure" is probably the `.bss` effect in disguise
+
+The probe was assumed to perturb execution and thereby hide the fault. Look at what it actually
+does to the image:
+
+```
+un-probed   WEDGES     .bss = 0x409c0
+probed      completes  .bss = 0x409e0     <- +0x20, exactly 4 unsigned long globals
+bss32       completes  .bss = 0x409e0     <- same value, reached with dead padding
+bss16       WEDGES     .bss = 0x409d0
+```
+
+The probe adds **four `unsigned long` globals = 32 bytes**, taking `.bss` from `0x409c0` to
+`0x409e0` — precisely the value independently shown to cure the fault with *no* instrumentation at
+all. So "probing cures it" and "`.bss` 0x409e0 cures it" are not two facts; they are very likely
+one fact seen twice.
+
+**That is testable and it matters, because it would give back an instrumented image that still
+faults.** A probe carrying only **two** globals lands `.bss` on `0x409d0`, which is a measured
+WEDGING value. If such a build still wedges *and* still reports, the "any in-domain instrument
+cures the bug" constraint — which has shaped this whole investigation — is lifted, and the arg
+probe becomes usable on a faulting image to report which invocation faults.

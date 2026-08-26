@@ -1,0 +1,16 @@
+# IS IT THE SELF-JOIN, OR ANY TWO-LEVEL JOIN?
+# q_two joins t1 with ITSELF (t1, t1 AS y) and wedges on silicon; q_one is one table and
+# passes. This joins two DISTINCT tables, so the where-loop still has two levels but no
+# alias and no shared table. Both empty, so no data is involved either way.
+#   wedges  -> any 2-level join triggers it; the alias/self-reference is irrelevant
+#   passes  -> the self-join specifically matters, which is a much narrower target
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE t2(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1, t2
+----
+0
