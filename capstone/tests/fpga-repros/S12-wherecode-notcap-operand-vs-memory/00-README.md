@@ -1632,3 +1632,46 @@ pairing, the forwarding/bypass network, or write-back arbitration. The RTL revie
 that the syncer's "one op in flight" gating is weaker than the 96-LDC overlap test proved — that
 test likely never forced a cache miss, so the long-latency window it was built to open may never
 have opened. That is the next thing to attack, and it is a simulation question, not a board one.
+
+## The load-syncer overlap lead, re-tested under forced misses — and it holds up
+
+The board result (memory intact, latched `tval = 0`, NOT_CAP) matches one specific hypothesis
+already on file. `s12-ldc-overlap.S`'s own header says the load-syncer mispair produces "a coupled
+substitution … the only shape consistent with the board's `tval == 0` AND `cap_type == NOT_CAP`".
+That test measured `init-while-pending = 0` and the lead was recorded as dead by unreachability.
+
+**That test never opened the window it was built to test.** Its four granules sit inside a 64-byte
+span, they are `STC`-written immediately before the loop, and its whole buffer is 1 KiB against a
+32 KiB L1 — every LDC HITS, resolving well inside the one-cycle throttle at `ex_stage.sv:900-904`.
+So its zero was uninformative for the MISS case, which is the case SQLite hits.
+
+`s12-ldc-miss-overlap.S` forces misses by construction: D$ is 32 KiB/8-way with index
+`paddr[11:4]`, so a 4096-byte stride collides in one set — 16 capabilities against 8 ways, an
+eviction walk, then back-to-back pairs. (A 4 KiB stride cannot be an LDC immediate: I/S-type
+immediates are 12-bit signed, so each strided pointer is built with `CINCOFFSET`, which takes a
+register offset. The first version failed to compile for exactly that reason.)
+
+| configuration | cycles | inits | ldc-pending | per init | init-while-pending |
+|---|---|---|---|---|---|
+| hit-only (existing test) | 1480 | 96 | 687 | 7.2 | **0** |
+| miss-forcing | 1880 | 112 | 848 | 7.6 | **0** |
+| miss + `CUT_ALL_PORTS` | 2113 | 108 | 926 | 8.6 | **0** |
+| miss + `CUT_ALL_PORTS` + `MaxMstTrans=8` | 2078 | 112 | 923 | 8.2 | **0** |
+
+**Two testbench fidelity limits found and tested, not assumed.** `ariane_testharness.sv:517` sets
+`LatencyMode: axi_pkg::NO_LATENCY`, and `:514-515` set `MaxMstTrans`/`MaxSlvTrans` to **1** —
+one outstanding transaction — both carrying the upstream comment "Probably requires update". Either
+could have made the overlap unreachable *by construction*, which would have made every
+`init-while-pending = 0` an artifact. **Raising both changes nothing**: latency moves 7.2 → 8.2
+cycles per load and no second init ever lands.
+
+**Reading.** LDCs are issued back-to-back and each takes ~8 cycles, so a second `init` had ample
+room to land if the hardware permitted it. It never does, across four configurations. The DYN unit
+serialises LDCs, and the load-syncer mispair is **not** reachable at these latencies — the original
+verdict was better founded than the fidelity worry suggested.
+
+**What remains untested, stated because it is the whole residual.** The sim's miss costs ~8 cycles;
+a real board miss is far longer. Nothing here tests what happens at 50+ cycles of latency, and the
+crossbar knobs cannot produce that — the D-cache/memory model resolves too fast regardless. If the
+serialisation has any timeout or abort path that only a long miss reaches, this suite cannot see
+it. The testbench was restored to its baseline afterwards so other lanes' timing is unchanged.
