@@ -2001,3 +2001,79 @@ a ladder of N=1 hypotheses would measure the draw, not the hypothesis.
 up24's configuration under up21's name — anyone "re-running up21" would have run a different case
 on a different binary. Renamed to `run-sqlite-arm.sh`, which is what it actually is. **There is no
 surviving script for up21**; its configuration is recoverable only from the log.
+
+## S-12 MATCHES A DEFECT THIS PROJECT ALREADY BOARD-MEASURED — and the fix is a compiler gap
+
+The single most useful thing found this session was already written down, in our own build script,
+on 2026-08-05. `build-sqlite-silicon.sh:2278-2288`:
+
+> "At `-O0` `strlen` re-loads its string capability from a stack slot with `ldc` on EVERY
+> iteration, and on silicon that **sporadically yields** 1 instead of the true length — stage 13
+> returned 15, then 26, then hung across three boots of the same source, where **QEMU returns 36
+> every time**. At `-O1` the pointer stays in a register (zero `ldc` in the loop) and stage 13
+> returns 36 on silicon, twice. **This is a real wrong-answer defect, not a workaround.**"
+
+and, at `:2266-2271`:
+
+> "The board froze at exactly the **`cincoffsetimm`** of that sequence (image VA 0x14d884,
+> ra → sqlite3Strlen30), pc not advancing under stepi with mcause=0."
+
+**Every feature of S-12 is in that description:**
+
+| S-12 | the 2026-08-05 defect |
+|---|---|
+| `ldc` reloading a capability from a stack slot | same |
+| consumed by `cincoffsetimm`, which is where it dies | same, named explicitly |
+| sporadic — 54% across 46 arms | sporadic — 15, then 26, then a hang |
+| QEMU never reproduces | QEMU returns the right answer every time |
+| `-O0` build, every pointer spilled | `-O0`, stated as the cause of the round-trip |
+
+So S-12 is very likely **not a new defect to root-cause from scratch** but an instance of a known,
+already-measured class: **at `-O0`, a capability round-tripped through a stack slot sporadically
+returns wrong data on silicon.**
+
+**It also explains the level dependence without needing a mechanism specific to loop level 2.**
+The SQLite-side analysis (below) shows the two calls are otherwise identical — so two levels simply
+means twice the calls and more stack round-trips, i.e. more draws against a per-round-trip failure
+probability. One level is 0/11; two levels are 54%. (A strictly independent per-call model does not
+fit exactly — p≈0.32 per call would predict ~32% for one level, and 0/11 has probability 0.012
+under that — so the count of round-trips per call matters too, not just the call count.)
+
+### Why the fix has not been applied: a defect in OUR backend
+
+The mitigation is `-O1`, which removes the round-trip entirely. The build script records that the
+amalgamation cannot go above `-O0` because of **C-17**: `Cannot select: i128 =
+CapstoneISD::SELECT_CC`, since `Select_GPRCAP_Using_CC_GPR` is emitted only under `!is64Bit()`.
+
+**C-17 no longer reproduces.** Its recorded reproducer — `char *pick(int n, char *a, char *b)
+{ return n == 10 ? a : b; }` — now compiles clean at `-O1` **and** `-O2` on capstone64, as do
+five harder select shapes (long compare, pointer-as-condition, struct field condition, nested
+select). That blocker has been fixed at some point since the comment was written.
+
+**A different backend limit now blocks it:**
+
+```
+fatal error: error in backend: Capstone PureCap: Cannot materialize arbitrary >64-bit
+constants as capabilities; capabilities are unforgeable
+```
+
+That is the live obstacle to building SQLite at `-O1`, and therefore to removing the stack
+round-trips that S-12 appears to be an instance of. **It is compiler/codegen work, which is in the
+main session's lane rather than the RTL lane's** — and it is a far more tractable target than
+continuing to characterise a sporadic silicon fault through a 6-minute board loop at 54% per draw.
+
+### What the SQLite-side analysis contributed
+
+Independently, the caller window turns out to be nearly empty, which removes a whole class:
+
+* **Exactly one function runs between call #1 and call #2** — `sqlite3VdbeCurrentAddr`, which is
+  `return p->nOp;` — plus three integer stores. `sqlite3WhereExplainOneScan` compiles to `0`
+  (`SQLITE_OMIT_EXPLAIN`), `sqlite3WhereAddScanStatus` to `((void)d)`, and the auto-index and
+  Bloom-filter branches are untaken (no WHERE terms; no ANALYZE). Verified in the disassembly.
+* **No malloc, free, or realloc in the window**, so "a realloc moved a buffer" is out.
+* **`pWInfo` is bit-identical on both calls** — same caller slot, same instruction; only `iLevel`
+  (0→1), `pLevel` (+160) and `notReady` differ.
+* **Call #2's frame lands on exactly call #1's bytes**, and the only intervening callee has a
+  0x30-byte frame — no overlap with the spill slot at `SP−0x70`.
+* Pass-vs-fail heap delta is nil in the way that matters: `WhereInfo` is 1488 vs 1648 bytes, and
+  **both round to the same 2048-byte MEMSYS5 bucket**.
