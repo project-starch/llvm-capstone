@@ -1869,3 +1869,28 @@ faults.** A probe carrying only **two** globals lands `.bss` on `0x409d0`, which
 WEDGING value. If such a build still wedges *and* still reports, the "any in-domain instrument
 cures the bug" constraint — which has shaped this whole investigation — is lifted, and the arg
 probe becomes usable on a faulting image to report which invocation faults.
+
+### CORRECTION to the level-2 claim: it is 3/4, not deterministic — and my log parsing was unsafe
+
+I recorded "two where-loop levels wedge" as though it always does. The driver's own verdict lines,
+which are the authoritative record, say otherwise:
+
+| boot | 1 level (`q_one`) | 2 levels (`qj2`) |
+|---|---|---|
+| up21 (un-instrumented) | returned 6 s | **NO RETURN** |
+| up22 (counter build) | returned 6 s | **NO RETURN** |
+| up23 (counter build) | returned 6 s | **NO RETURN** |
+| up24 (counter build) | returned 22 s | **returned 7 s** |
+
+So `q_one` passes 4/4 and `qj2` wedges **3/4**. The level-2 dependence is real — 3/4 sits well
+above the documented background wedge rate of p̂ ≈ 0.22 — but it is a RATE, not a certainty, and
+"1 level passes" is consistent with both "never wedges" and "wedges rarely". Any single boot on
+either case proves nothing on its own.
+
+**And two of my own readings of these logs disagreed with each other**, which is why this needed
+settling rather than asserting. Reassembling the UART out of the driver log and scoping to the
+last OpenSBI banner picked up the previous boot's replayed content — for up23 it returned
+`ENT=[0,1,0,1,2]`, which is two arms' markers concatenated, while the raw transcript showed the
+arm's own region as empty. **Use the driver's `[stages] <-- TEST …` verdict lines.** They are what
+the driver actually observed, they are one line per arm, and they cannot splice two boots
+together. The UART reassembly is for reading detail INSIDE an arm already identified that way.
