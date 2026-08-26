@@ -7,6 +7,18 @@
  * them in ONE boot, ascending, with the control first.
  *
  *   0  return at once      -- was the domain entered at all?
+ *
+ *   10 + os_malloc from the arena only          -- does the platform layer work?
+ *   11 + the mutex and the ref-count guard      -- what full_init does before it
+ *                                                  reaches anything of WAMR's
+ *   12 + wasm_runtime_memory_init over the pool -- the allocator on our arena
+ *   13 + wasm_runtime_set_default_running_mode
+ *   14 + wasm_runtime_init
+ *
+ *   The 1x rungs open up stage 1, which faulted with cause 24 while stage 0
+ *   returned. They call the pieces full_init calls, in its order, so the first one
+ *   that does not return names the step rather than the function.
+ *
  *   1  + runtime init over the arena
  *   2  + load the module
  *   3  + instantiate
@@ -49,8 +61,67 @@ domain_main(unsigned *res, unsigned func)
 {
     (void)func;
 
+#if WD_STAGE >= 10 && WD_STAGE <= 14
+    MemAllocOption pool_option;
+    memset(&pool_option, 0, sizeof(pool_option));
+    pool_option.pool.heap_buf = wd_heap;
+    pool_option.pool.heap_size = sizeof(wd_heap);
+#endif
+
 #if WD_STAGE == 0
     WD_MARK(WD_OK);   /* touches nothing: proves entry, cap-init and return */
+
+#elif WD_STAGE >= 10 && WD_STAGE <= 14
+    /* The fine ladder inside full_init. Each rung does what the one below it did
+       and one step more, so the first that fails to return IS the step. */
+    {
+        void *p = os_malloc(64);
+        if (!p)
+            WD_MARK(WD_FAIL);
+        ((char *)p)[0] = 0x5A;
+        if (((volatile char *)p)[0] != 0x5A)
+            WD_MARK(WD_FAIL);
+    }
+#if WD_STAGE == 10
+    WD_MARK(WD_OK);
+#else
+    {
+        /* What full_init does before it touches anything of WAMR's: take its
+           static mutex and read its static ref count. Both are file-scope globals,
+           so this rung is really asking whether the gp-captable carve reached
+           them. */
+        static korp_mutex probe_lock = OS_THREAD_MUTEX_INITIALIZER;
+        static int probe_count;
+        os_mutex_lock(&probe_lock);
+        probe_count++;
+        os_mutex_unlock(&probe_lock);
+        if (probe_count != 1)
+            WD_MARK(WD_FAIL);
+    }
+#if WD_STAGE == 11
+    WD_MARK(WD_OK);
+#else
+    if (!wasm_runtime_memory_init(Alloc_With_Pool, &pool_option))
+        WD_MARK(WD_FAIL);
+#if WD_STAGE == 12
+    wasm_runtime_memory_destroy();
+    WD_MARK(WD_OK);
+#else
+    if (!wasm_runtime_set_default_running_mode(Mode_Default))
+        WD_MARK(WD_FAIL);
+#if WD_STAGE == 13
+    wasm_runtime_memory_destroy();
+    WD_MARK(WD_OK);
+#else
+    if (!wasm_runtime_init())
+        WD_MARK(WD_FAIL);
+    wasm_runtime_destroy();
+    WD_MARK(WD_OK);
+#endif /* 13 */
+#endif /* 12 */
+#endif /* 11 */
+#endif /* 10 */
+
 #else
     RuntimeInitArgs init;
     memset(&init, 0, sizeof(init));

@@ -98,24 +98,39 @@ exceeded the single-region ceiling of 1 376 256 bytes and needed a declared
 two-region budget. MicroPython is 321 KiB of `.text`. WAMR is the smallest
 candidate assessed, and it fits a single region even before declaring anything.
 
-## It builds, loads and enters. It faults at the first runtime call.
+## Where the bring-up stands
 
 ```
-build-wamr-silicon.sh   ->  code_len 220296, TWO regions (order 7 + order 9), fits
-                            cap table 31 globals, one TU owns globals
-
-stage 0  (return at once)          retval 0x57410001   the exact marker
-stage 1  (wasm_runtime_full_init)  capability fault, cause 24
+stage  0  return at once                     0x57410001   OK
+stage 10  os_malloc from the port's arena    0x57410A01   OK
+stage 11  static mutex + counter (gp carve)  0x57410B01   OK
+stage 12  wasm_runtime_memory_init           0x57410C01   OK   (needs patch 0002)
+stage 13  wasm_runtime_set_default_running_mode  0x57410D01   OK
+stage 14  wasm_runtime_init                  capability fault, cause 24
 ```
 
-Stage 0 is the control and it passes: the domain is created, entered, cap-init
-completes and it returns. So the image, the linker script, the gp-captable entry
-glue and the declared budget are all sound, and the failure is inside WAMR's own
-initialisation rather than in the port's plumbing.
+Every rung does what the one below it did and one step more, so the first that
+fails to return IS the step. The ladder runs in ONE boot, ascending.
 
-The ladder was run in ONE boot, ascending, stages 1/2/3 in sequence. Exactly one
-domain was created before the fault, which is what localises it: the first stage
-that touches the runtime is the one that breaks.
+### What the ladder has already bought
+
+Stage 12 faulted before patch 0002 and returns after it, which is the whole value
+of a ladder over a single end-to-end run: it named the function, and the function
+named the line.
+
+`gc_init_with_pool` aligned its pool by masking through `uintptr_t`:
+
+    char *buf_aligned = (char *)(((uintptr_t)buf + 7) & (uintptr_t)~7);
+
+On this target that is not rounding, it is a discard. Four sites in the allocator
+do it. The fix computes the same address and moves the ORIGINAL pointer by the
+difference, so the value and the alignment are unchanged and the provenance
+survives; on an ordinary target it compiles to the same code.
+
+**That is the same defect and the same fix as MicroPython's
+`0003-gc-align-down-without-losing-the-pointer`, in a different allocator.** Two
+runtimes, independently written, one pattern -- which is the kind of thing the
+corpus exists to say.
 
 ### Three things had to be right before that verdict was worth anything
 
