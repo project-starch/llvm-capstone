@@ -1,0 +1,28 @@
+Do not do pointer arithmetic on a NULL args pointer.
+
+mp_call_function_0 passes NULL literally as `args`, and mp_setup_code_state_helper computes
+`args + n_args` before looking at n_kw. `NULL + n` is undefined in C even when n is zero; every
+ordinary target folds it to NULL and nobody notices. A target whose pointers are capabilities
+faults on the arithmetic itself, before the result is ever used -- measured here as a fault at
+that instruction with the interpreter otherwise running.
+
+kwargs is only dereferenced when n_kw > 0, which cannot happen when args is NULL, so guarding
+the arithmetic changes nothing else and costs one predictable branch per call.
+diff --git a/py/bc.c b/py/bc.c
+index 7669365ce..87106ed2e 100644
+--- a/py/bc.c
++++ b/py/bc.c
+@@ -147,7 +147,12 @@ static void mp_setup_code_state_helper(mp_code_state_t *code_state, size_t n_arg
+     // zero out the local stack to begin with
+     memset(code_state_state, 0, n_state * sizeof(*code_state->state));
+ 
+-    const mp_obj_t *kwargs = args + n_args;
++    /* args is NULL for a zero-argument call -- mp_call_function_0 passes NULL literally -- and
++       `NULL + n` is undefined in C even when n is 0. Every ordinary target computes NULL and
++       moves on; a target whose pointers are capabilities faults on the arithmetic itself,
++       before the result is ever used. kwargs is only dereferenced when n_kw > 0, which cannot
++       happen when args is NULL, so guarding the arithmetic changes nothing else. */
++    const mp_obj_t *kwargs = (args == NULL) ? NULL : args + n_args;
+ 
+     // var_pos_kw_args points to the stack where the var-args tuple, and var-kw dict, should go (if they are needed)
+     mp_obj_t *var_pos_kw_args = &code_state_state[n_state - 1 - n_pos_args - n_kwonly_args];

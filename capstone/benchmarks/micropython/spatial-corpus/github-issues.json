@@ -1,0 +1,522 @@
+{
+ "data": {
+  "repository": {
+   "i19431": {
+    "number": 19431,
+    "title": "extmod/modframebuf.c: pixel index arithmetic overflows on 16-bit int targets (out-of-bounds writes)",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/19431",
+    "createdAt": "2026-07-04T22:43:51Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i19314": {
+    "number": 19314,
+    "title": "Integer overflow in sequence repeat (`str`/`bytes`/`list`/`tuple` `*`) causes heap buffer overflow (memory corruption / crash)",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/19314",
+    "createdAt": "2026-06-05T16:42:29Z",
+    "closedAt": "2026-07-09T06:35:39Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i18752": {
+    "number": 18752,
+    "title": "py/objstr: Fix str.center() to count unicode characters not bytes",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/pull/18752",
+    "createdAt": "2026-01-30T14:09:34Z",
+    "closedAt": "2026-01-31T02:25:03Z",
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i18637": {
+    "number": 18637,
+    "title": "Dynamic Stack Buffer Overflow (WRITE) in mp_execute_bytecode",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/18637",
+    "createdAt": "2026-01-05T08:25:45Z",
+    "closedAt": "2026-01-05T10:13:36Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i13428": {
+    "number": 13428,
+    "title": "heap-buffer-overflow [micropython@a5bdd39127] ",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13428",
+    "createdAt": "2024-01-15T09:51:53Z",
+    "closedAt": "2026-06-01T11:21:47Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-unix"
+      }
+     ]
+    }
+   },
+   "i13220": {
+    "number": 13220,
+    "title": "heap buffer overflow found at micropython/lib/re1.5/compilecode.c:68 [micropython@a5bdd39127]",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13220",
+    "createdAt": "2023-12-18T10:40:30Z",
+    "closedAt": "2026-06-01T11:30:20Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      },
+      {
+       "name": "lib"
+      }
+     ]
+    }
+   },
+   "i13046": {
+    "number": 13046,
+    "title": "heap-buffer-overflow: from integer overflow at mp_stream_rw",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13046",
+    "createdAt": "2023-11-22T06:11:02Z",
+    "closedAt": "2024-09-26T12:13:20Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i13041": {
+    "number": 13041,
+    "title": "heap-buffer-overflow: from 0 length int_to_bytes",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13041",
+    "createdAt": "2023-11-21T16:51:00Z",
+    "closedAt": "2024-06-24T04:37:55Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i13007": {
+    "number": 13007,
+    "title": "heap-buffer-overflow: mis-interpretation of float as int at slice_indices",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13007",
+    "createdAt": "2023-11-17T09:50:54Z",
+    "closedAt": "2023-11-22T05:15:32Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i13006": {
+    "number": 13006,
+    "title": "heap-buffer-overflow: incorrect length choice on memcpy at vfs unmount",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13006",
+    "createdAt": "2023-11-17T09:50:10Z",
+    "closedAt": "2024-07-23T02:32:29Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i13005": {
+    "number": 13005,
+    "title": "heap-buffer-overflow: inconsistency between bytearray and  uctype.struct ",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13005",
+    "createdAt": "2023-11-17T09:47:21Z",
+    "closedAt": "2023-11-21T06:10:26Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i13004": {
+    "number": 13004,
+    "title": "heap-buffer-overflow(.mpy): no length check on qstr_table",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13004",
+    "createdAt": "2023-11-17T09:45:04Z",
+    "closedAt": "2023-11-21T06:20:40Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i13003": {
+    "number": 13003,
+    "title": "heap-buffer-overflow(.mpy): from relocating  native rodata with invalid information",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13003",
+    "createdAt": "2023-11-17T09:42:39Z",
+    "closedAt": "2023-11-21T06:15:52Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i13002": {
+    "number": 13002,
+    "title": "heap-buffer-over-flow(.mpy): from importing malformed npy module",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/13002",
+    "createdAt": "2023-11-17T09:40:59Z",
+    "closedAt": "2023-11-21T06:18:44Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i12871": {
+    "number": 12871,
+    "title": "Crashes in mp_pairheap_delete",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/12871",
+    "createdAt": "2023-11-03T09:16:40Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i12776": {
+    "number": 12776,
+    "title": "Crashes while pushing to a TaskQueue instance",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/12776",
+    "createdAt": "2023-10-23T11:30:11Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i12702": {
+    "number": 12702,
+    "title": "Various crashes while executing uctypes.sizeof()",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/12702",
+    "createdAt": "2023-10-16T09:17:53Z",
+    "closedAt": "2024-07-22T05:04:13Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i12660": {
+    "number": 12660,
+    "title": "Various crashes in mpz_hash",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/12660",
+    "createdAt": "2023-10-11T10:36:25Z",
+    "closedAt": "2023-10-12T05:07:37Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i12587": {
+    "number": 12587,
+    "title": "Global buffer overflow during umount",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/12587",
+    "createdAt": "2023-10-04T12:54:11Z",
+    "closedAt": "2026-03-29T16:57:17Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i12532": {
+    "number": 12532,
+    "title": "Global buffer overflow in mp_get_stream_raise",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/12532",
+    "createdAt": "2023-09-27T13:19:29Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i12528": {
+    "number": 12528,
+    "title": "Negative \"size\" parameter for memset() via mpz_as_bytes",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/12528",
+    "createdAt": "2023-09-27T09:04:23Z",
+    "closedAt": "2026-05-01T06:12:00Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "proposed-close"
+      }
+     ]
+    }
+   },
+   "i7860": {
+    "number": 7860,
+    "title": "framebuf.FrameBuffer: not secured against silly/wrong/malicious strides",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/7860",
+    "createdAt": "2021-09-26T22:05:22Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i7246": {
+    "number": 7246,
+    "title": "Out-of-bounds read in ff.c:create_name()",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/7246",
+    "createdAt": "2021-05-10T20:41:55Z",
+    "closedAt": "2025-08-20T21:02:27Z",
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i6365": {
+    "number": 6365,
+    "title": "extend framebuf.blit method with parameters to select a rectangle from the source",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/6365",
+    "createdAt": "2020-08-23T14:40:55Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "enhancement"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i3090": {
+    "number": 3090,
+    "title": "py/sequence: Fix bounds checking for negative-step list slices.",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/pull/3090",
+    "createdAt": "2017-05-15T19:21:46Z",
+    "closedAt": "2017-05-20T00:42:17Z",
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i599": {
+    "number": 599,
+    "title": "emit_write_bytecode_byte_int writes out of emit_t's bounds",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/599",
+    "createdAt": "2014-05-10T14:20:28Z",
+    "closedAt": "2014-05-10T17:19:07Z",
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i533": {
+    "number": 533,
+    "title": "Add stray pointer checking to GC",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/issues/533",
+    "createdAt": "2014-04-30T20:10:56Z",
+    "closedAt": "2018-06-20T03:06:50Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "enhancement"
+      }
+     ]
+    }
+   },
+   "i15271": {
+    "number": 15271,
+    "title": "py/objarray.c: Fix buffer overflow in case of memory allocation failure.",
+    "state": "MERGED",
+    "url": "https://github.com/micropython/micropython/pull/15271",
+    "createdAt": "2024-06-13T09:37:12Z",
+    "closedAt": "2024-06-26T04:30:28Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i17852": {
+    "number": 17852,
+    "title": "pin vs stream confusion leads to undefined behavior and Asan diagnostic",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/17852",
+    "createdAt": "2025-08-06T18:33:39Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    }
+   },
+   "i9045": {
+    "number": 9045,
+    "title": "extmod/modframebuf: Add ellipse & poly methods.",
+    "state": "CLOSED",
+    "url": "https://github.com/micropython/micropython/pull/9045",
+    "createdAt": "2022-08-12T15:01:19Z",
+    "closedAt": "2022-08-19T13:40:43Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "extmod"
+      }
+     ]
+    }
+   },
+   "i19129": {
+    "number": 19129,
+    "title": "fun_bc_call: unbounded alloca when heap allocation of VM state fails",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/19129",
+    "createdAt": "2026-04-20T13:15:04Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
+   },
+   "i18617": {
+    "number": 18617,
+    "title": "Buffer overflow in `bytearray` constructor via trusted `__len__` with long iterator",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/18617",
+    "createdAt": "2025-12-30T05:09:45Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i18620": {
+    "number": 18620,
+    "title": "Integer overflow in `array` constructor via `len*itemsize` multiplication",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/18620",
+    "createdAt": "2025-12-30T05:13:18Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": []
+    }
+   }
+  }
+ }
+}

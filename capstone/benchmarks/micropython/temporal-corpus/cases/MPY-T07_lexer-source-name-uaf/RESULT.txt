@@ -1,0 +1,31 @@
+MPY-T07 / upstream 4128
+
+  stock at the fix's PARENT (2018) : "Hello world of easy embedding!", exit 0
+  Capstone domain under QEMU       : returns, retval 0x70000001, no fault
+
+UNTRAPPED. RECONSTRUCTION, NOT THE UPSTREAM PROGRAM.
+
+4128's defect is three lines of caller code, not interpreter code: mp_parse()
+consumes and frees the lexer, and hello-embed.c then read lex->source_name. The
+fix hoisted the qstr into a local.
+
+mp_parse still frees the lexer at our pin, so the same misuse is still available
+and this needed NO parent build. repro-domain-glue.c makes exactly that call
+sequence inside the domain, behind MPY_T07_LEXER_UAF.
+
+  0x70000001 decodes as: the read after the free completed, and the freed block
+  still returned its old source_name. Reaching the return means the hardware did
+  not object to reading a block the collector had released.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped: yes. Corruption or a stale value: no. The
+low nibble would have been 2 had the read come back different, and it did not.
+
+This is a reconstruction: same API misuse against the same interpreter, but our
+glue rather than the upstream binary. It is labelled that way everywhere it is
+quoted, and the production path is byte-identical with the flag off, the whole
+change being 70 added lines and zero deletions.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

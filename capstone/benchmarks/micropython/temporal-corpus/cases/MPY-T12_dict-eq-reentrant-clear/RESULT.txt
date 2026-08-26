@@ -1,0 +1,13 @@
+MPY-T12 / upstream 18619
+
+  stock MicroPython at pin 2e3304a : SIGSEGV
+  Capstone domain under QEMU       : FAULT, cause 24, pc 0x101619b00
+
+FAULTED, BUT NOT FOR TEMPORAL SAFETY. Same reading as MPY-T11, and note the pc is
+identical, so both bugs converge on the same faulting instruction: the
+interpreter dereferencing a word that is not a capability.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

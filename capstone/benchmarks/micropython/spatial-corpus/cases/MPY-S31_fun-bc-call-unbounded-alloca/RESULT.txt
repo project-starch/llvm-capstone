@@ -1,0 +1,50 @@
+MPY-S31 / upstream 19129
+
+  arm A, single large frame : returns, "compiled N 8000 / filled / call exc TypeError"
+  arm B, recursive frames   : returns, "compiled N 3000 / filled / RuntimeError at depth 8"
+
+UNTRAPPED IN ARM A, AND ARM B SETTLES WHY THIS ROW CANNOT GO FURTHER.
+
+THE DEFECT. fun_bc_call checks `state_size > VM_MAX_STATE_ON_STACK` and asks the
+heap through m_new_obj_var_maybe. If that fails it does NOT raise -- it alloca's
+the same size on the C stack. The reporter names MICROPY_ENABLE_PYSTACK=0, which is
+this port's setting, so the domain is affected.
+
+ARM A: THE FALLBACK RUNS, AND NOTHING TRAPS IT. A lambda with n_state around 8000
+is compiled while the heap is free, the heap is then filled to MemoryError, and the
+lambda is called. It reaches a PYTHON-LEVEL TypeError, which means the frame was
+built and bytecode executed with the heap exhausted -- so the VM state came from
+somewhere, and with the heap full the only place left is the alloca. Untrapped.
+
+  The TypeError is an artefact of the probe, not a memory event, and this was
+  checked rather than assumed: `max(0,0,...,0)` raises `'int' object isn't callable`
+  on the HOST too, with a heap two orders of magnitude larger. MicroPython's max
+  reads its second argument as a key function. The probe used max precisely because
+  it returns a small int and allocates nothing on the way out -- an earlier shape
+  returned a list, and its "call MemoryError" could not distinguish "the VM-state
+  allocation raised" from "the alloca succeeded and the RESULT list failed".
+
+ARM B: THE PORT'S OWN GUARD FIRES FIRST, AT DEPTH 8. One alloca of n_state*16 is
+about 128 KB against roughly 800 KB of domain stack, and the heap is far too small
+to compile an n large enough to overflow that in a single frame -- 8000 was the
+largest that fitted. Recursion accumulates them instead, and at depth 8 MicroPython
+raises RuntimeError from mp_cstack_check, which this port enables with a 4096-byte
+margin against MPY_CSTACK_MAX = 393216 (mpconfigport.h:129).
+
+WHAT THAT MEANS, AND IT IS A CONCLUSION RATHER THAN A FAILED ATTEMPT. The stack
+capability's bound is never reached, because a SOFTWARE check inside MicroPython
+stops the descent at 393 KB while the hardware bound sits at roughly 800 KB. So
+MPY-S31 cannot demonstrate the hardware's stack bound in this configuration however
+the test is arranged, and the corpus records it as masked-by-port-guard rather than
+leaving it open as though one more attempt would settle it.
+
+The corpus's `stack` and `static-global` rows predict "trapped", and that half of
+the prediction is STILL untested. This row is not the way to test it. What would be:
+a build with MICROPY_STACK_CHECK off, or MPY_CSTACK_MAX raised above the real stack
+extent, either of which makes the port stop guarding a bound the hardware already
+enforces. Neither was done here -- both change the production configuration, and
+what that configuration does is the thing being measured.
+
+CONTROL. 00_sanity.py PASSED in the same image, retval 0x00077724, and both arms
+printed their "filled" marker, so the heap really was exhausted before each call.
+Ordering: the arm expected to return ran first, the arm that might not ran last.

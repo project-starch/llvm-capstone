@@ -1,0 +1,28 @@
+Reconstruct a block address with pointer arithmetic, not through uintptr_t.
+
+PTR_FROM_BLOCK builds a heap address as `block * BYTES_PER_BLOCK + (uintptr_t)pool_start`,
+i.e. it converts a pointer to an integer, does the arithmetic, and converts back. On a
+capability target the result carries the right ADDRESS and no tag, and all six uses
+dereference it (gc_mark_subtree at :548, the finaliser sweep at :660 and :691, and the
+memset at :735), so the first garbage collection faults.
+
+gc_alloc already computes the very same address the other way, at gc.c:1007:
+
+    void *ret_ptr = (void *)(area->gc_pool_start + start_block * BYTES_PER_BLOCK);
+
+so this makes the macro agree with the function whose result it is supposed to reproduce.
+Verified in the emitted assembly on capstone64: the upstream form lowers to `slli` alone
+and yields an untagged integer, while this form lowers to `slli` + `cincoffset` and keeps
+the tag, at both -O0 and -O1. No behaviour change where a pointer is as wide as uintptr_t.
+
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -93,7 +93,7 @@
+ #define ATB_MARK_TO_HEAD(area, block) do { area->gc_alloc_table_start[(block) / BLOCKS_PER_ATB] &= (~(AT_TAIL << BLOCK_SHIFT(block))); } while (0)
+ 
+ #define BLOCK_FROM_PTR(area, ptr) (((byte *)(ptr) - area->gc_pool_start) / BYTES_PER_BLOCK)
+-#define PTR_FROM_BLOCK(area, block) (((block) * BYTES_PER_BLOCK + (uintptr_t)area->gc_pool_start))
++#define PTR_FROM_BLOCK(area, block) ((void *)(area->gc_pool_start + (block) * BYTES_PER_BLOCK))
+ 
+ // After the ATB, there must be a byte filled with AT_FREE so that gc_mark_tree
+ // cannot erroneously conclude that a block extends past the end of the GC heap

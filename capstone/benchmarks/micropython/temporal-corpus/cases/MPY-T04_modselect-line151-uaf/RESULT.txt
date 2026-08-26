@@ -1,0 +1,35 @@
+MPY-T01 / CVE-2023-7152, and MPY-T04 / issue 12887 is the same defect
+
+  stock at the pin                    : registers 16, polls 16 ready, exit 0
+  stock at the fix's PARENT e9bcd49b3e: registers 16, polls 16 ready, exit 0
+  Capstone domain                     : not run
+
+THE DEFECT IS REAL AND THE MEASUREMENT IS SILENT. Both builds produce identical,
+correct output, so nothing here distinguishes them.
+
+WHAT THE DEFECT IS. The CVE names modselect.c:151, which at the pre-fix commit is
+the m_renew that grows poll_set->pollfds. Line 230 is what makes that dangerous:
+
+  poll_obj->pollfd = poll_set_add_fd(poll_set, fd);
+
+every registered object stores a RAW POINTER into that array, so a later growth
+invalidates every pointer stored before it. repro.py registers 16 descriptors
+against POLL_SET_ALLOC_INCREMENT of 4, which drives the growth path three times
+over, and the earlier objects then hold pointers into the previous allocation.
+
+WHY IT STAYS QUIET, AND WHY THAT IS THE POINT. m_renew runs on MicroPython's own
+GC heap. The old block is not returned to any allocator the machine knows about;
+it stays inside the one region gc_init was handed. So the stale pointers keep
+reading plausible data and every poll still answers correctly. This is the same
+mechanism as ../../evidence/asan-blindness-2026-08-17.txt, observed on a
+published CVE rather than on a model.
+
+NOT CLAIMED: that the array actually moved on this run, or that any specific read
+went through a stale pointer. Neither was instrumented. What is claimed is that
+the documented growth path was driven well past its threshold and produced no
+observable difference between a vulnerable build and a fixed one.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

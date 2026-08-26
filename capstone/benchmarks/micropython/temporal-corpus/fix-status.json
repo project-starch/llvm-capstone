@@ -1,0 +1,174 @@
+{
+ "pin": "2e3304a128b3166d48d6877f4e5c9fbd2e48122f",
+ "pin_date": "2026-08-16",
+ "rows": {
+  "#10402": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#11698": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#11781": {
+   "fix_commit": "d2a3cd7ac428",
+   "fix_date": "2024-02-15",
+   "present_at_pin": "no",
+   "repro_base": "d2a3cd7ac428^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#12543": {
+   "fix_commit": "6db91dfefb1a",
+   "fix_date": "2024-07-22",
+   "present_at_pin": "no",
+   "repro_base": "6db91dfefb1a^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#12670": {
+   "fix_commit": "365913953a4e",
+   "fix_date": "2023-11-09",
+   "present_at_pin": "no",
+   "repro_base": "365913953a4e^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#12887": {
+   "fix_commit": "74fd7b3d32e1",
+   "fix_date": "2023-12-21",
+   "present_at_pin": "no",
+   "repro_base": "74fd7b3d32e1^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#13283": {
+   "fix_commit": "4bed614e707c",
+   "fix_date": "2024-04-22",
+   "present_at_pin": "no",
+   "repro_base": "4bed614e707c^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#17442": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#17848": {
+   "fix_commit": "64f0394d80ca",
+   "fix_date": "2026-05-09",
+   "present_at_pin": "no",
+   "repro_base": "64f0394d80ca^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#17941": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#18168": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#18171": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#18619": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#19060": {
+   "fix_commit": "64f0394d80ca",
+   "fix_date": "2026-05-09",
+   "present_at_pin": "no",
+   "repro_base": "64f0394d80ca^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#19075": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#3627": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#4128": {
+   "fix_commit": "1a2c511e5d08",
+   "fix_date": "2018-09-14",
+   "present_at_pin": "no",
+   "repro_base": "1a2c511e5d08^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#4705": {
+   "fix_commit": "34a7d7ebebc9",
+   "fix_date": "2019-05-01",
+   "present_at_pin": "no",
+   "repro_base": "34a7d7ebebc9^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#5226": {
+   "fix_commit": "f34e16dbc664",
+   "fix_date": "2019-10-22",
+   "present_at_pin": "no",
+   "repro_base": "f34e16dbc664^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#5272": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "#5487": {
+   "fix_commit": "",
+   "fix_date": "",
+   "present_at_pin": "yes",
+   "repro_base": "pin",
+   "why": "open upstream at time of survey; reproduce on the pinned tree directly"
+  },
+  "CVE-2023-7152": {
+   "fix_commit": "8b24aa36ba97",
+   "fix_date": "2023-12-21",
+   "present_at_pin": "no",
+   "repro_base": "8b24aa36ba97^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "CVE-2024-8947": {
+   "fix_commit": "4bed614e707c",
+   "fix_date": "2024-04-22",
+   "present_at_pin": "no",
+   "repro_base": "4bed614e707c^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "CVE-2026-1998": {
+   "fix_commit": "570744d06c5b",
+   "fix_date": "2026-02-05",
+   "present_at_pin": "no",
+   "repro_base": "570744d06c5b^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  }
+ }
+}

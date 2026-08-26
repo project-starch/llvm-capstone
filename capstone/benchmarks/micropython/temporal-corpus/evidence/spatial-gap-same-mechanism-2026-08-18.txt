@@ -1,0 +1,164 @@
+The nested-allocator gap is not specifically TEMPORAL. Measured 2026-08-18.
+
+THE QUESTION. The corpus is 30 rows of lifetime defects and exactly ONE spatial
+one, MPY-T03 / CVE-2026-1998 (CWE-119, CWE-787), which the temporal audit
+excluded. So the corpus says nothing about spatial safety. It was put to this
+session that it should not need to: if a sub-allocated block INHERITS the bounds
+of the region the allocator was handed, then an overflow from one block into the
+next is invisible for the same reason a use-after-free is.
+
+That is now measured rather than argued.
+
+THE PAIR. capstone/tests/runtime-qemu/silicon-ladder/nestspat_{app,host}.c, one
+file per role, both arms selected by NEST_SPATIAL_OFFSET on the command line so
+they differ in exactly one constant. nest_spatial_run() in nestalloc_kernel.h has
+NO lifetime component at all -- two blocks, both alive for the whole run, nothing
+freed, nest_free never called. It is a plain buffer overflow:
+
+    a = nest_alloc(64);  b = nest_alloc(64);     /* both live */
+    a[0] = 0x11;  b[0] = 0x22;
+    a[NEST_SPATIAL_OFFSET] = 0xAA;               /* walks out of a */
+    return b[0];
+
+ARM A, offset 64, one past a's end and into b:
+
+    oracle: nestspat_in = 170   (host flags: -DNEST_SPATIAL_OFFSET=64)
+    __CAPSTONE_LADDER_NESTSPAT_PASSED__ (retval = 170)
+
+170 is 0xAA. The domain returned exactly what a NATIVE build of the same source
+returns, and the native build has no capability hardware at all. The write left
+one live object and landed in another live object, and nothing objected.
+
+ARM B, offset 1088, past the region itself. The positive control:
+
+    [CAPSTONE] Cap mem access OOB: pc = 101600258, rs1 = x12,
+               cursor = 101700020, imm = 0, addr = 101700020, size = 1,
+               bounds = (1016ffbe0, 1016fffe0)
+    [CAPSTONE] domain halted by capability fault: cause = 7
+
+bounds is 0x400, exactly 1024 bytes, exactly the whole region. The faulting cursor
+is 0x440 past base, exactly the offset the arm sets. So checking is live in this
+build, and arm A's silence is a measurement rather than a dead domain.
+
+WHAT IT MEANS. The two arms bracket the boundary the hardware can actually see,
+and it is the REGION, not the block. Sub-object bounds would be needed to tell a
+and b apart, and a nested allocator carves its blocks in software where no
+bounds-setting instruction is ever emitted -- gc_alloc returns an offset, not a
+narrowed capability.
+
+So the finding recorded for the temporal pair generalises: it is not that Capstone
+lacks temporal protection for nested allocators specifically. It is that the
+hardware's notion of "object" is the region the allocator was given, and
+everything the allocator does inside that region -- allocating, freeing, reusing,
+running off the end of one block into the next -- happens below the granularity
+the hardware can observe. Temporal and spatial blindness are one mechanism, not
+two.
+
+CONSEQUENCE FOR THE CORPUS. It stays a temporal corpus; this is a separate result
+and is filed as one. But the conclusion drawn from those 16 cases should be
+stated at the width the evidence supports, which is wider than "temporal".
+
+WHAT THIS DOES NOT SHOW. That an instrumented allocator would catch either kind.
+gc_alloc narrowing per block would give the hardware something to check, and
+neither this pair nor the temporal one says whether that is affordable.
+
+===========================================================================
+THE SAME PAIR ON THE REAL ALLOCATOR, NOT THE MODEL. Measured the same day.
+
+The pair above uses a bump allocator over a 1 KiB array, which is a model of what
+MicroPython does. This one IS MicroPython: py/gc.c, the 384 KiB mpy_heap, m_new.
+Behind MPY_SPATIAL_OVERFLOW in port/mpy_domain.c, so the production glue is
+byte-identical with the flag off, and the two arms differ only in that macro's
+value. Built at EXTRA feature level; the two images differ (md5 6e56fd9691c8 vs
+67c29a8f55aa), which is checked rather than assumed -- a -D that fails to reach
+the compiler gives two identical images and a sweep that measures one thing twice.
+
+    a = m_new(byte, 64);  b = m_new(byte, 64);   /* both live, nothing freed */
+    a[0] = 0x11;  b[0] = 0x22;
+    dist = (uintptr_t)b - (uintptr_t)a;          /* measured, not assumed */
+    a[off] = 0xAA;                               /* off = dist, or past the heap */
+
+ARM 1, off = dist:
+
+    Called dom (1-th time) retval = 1509965825      /* 0x5A004001 */
+
+  dist  = 0x0040 = 64. Two 64-byte allocations landed exactly 64 bytes apart, so
+          a[64] is genuinely one past a's end and is b's first byte. The distance
+          is carried in the retval on purpose: with a hardcoded 64 a changed block
+          size would quietly turn this into an in-bounds write to a's own tail and
+          the run would look identical.
+  tag   = 1, meaning b[0] read back 0xAA.
+
+  So a write through a's pointer, past a's end, modified a DIFFERENT LIVE OBJECT,
+  and the domain returned normally.
+
+ARM 2, off = sizeof(mpy_heap) + 64. The positive control:
+
+    [CAPSTONE] Cap mem access OOB: pc = 101c4a4a4, rs1 = x12,
+               cursor = 101df7560, addr = 101df7560, size = 1,
+               bounds = (101d967e0, 101df67e0)
+    [CAPSTONE] domain halted by capability fault: cause = 7
+
+  0x101df67e0 - 0x101d967e0 = 0x60000 = 393216 = 384 KiB = MPY_HEAP_SIZE exactly.
+
+That last line is the whole finding stated by the hardware itself. The capability
+through which MicroPython reaches a 64-byte object spans the entire 384 KiB heap.
+Every one of the thousands of blocks gc_alloc hands out is the same capability at
+a different offset, so no arrangement of them can be out of bounds with respect to
+each other. Both arms ran from ONE boot, ordered so the arm expected to return
+came first and the arm expected to fault last.
+
+===========================================================================
+THE CONTROL THE OTHER TWO PAIRS NEEDED: a global overflow IS trapped.
+
+Both pairs above are untrapped, and a reader is entitled to ask whether that says
+anything about allocators or just that bounds checking is weak here. The two
+out-of-region control arms answer half of it -- checking is live -- but they trap at
+the REGION boundary, which is the same coarse bound the finding is about. What was
+missing was an object of ordinary linker-assigned scope, overflowed by exactly the
+same code shape.
+
+nestglob_{app,host}.c, third kernel in nestalloc_kernel.h. Identical to
+nest_spatial_run with ONE variable changed: the two 64-byte objects are file-scope
+globals rather than blocks carved from nest_heap. Nothing is freed, both are live.
+
+    nest_glob_a[NEST_GLOBAL_OFFSET] = 0xAA;  return nest_glob_b[0];
+
+ARM A, offset 0, in bounds:
+
+    oracle: nestglob_in = 34
+    __CAPSTONE_LADDER_NESTGLOB_PASSED__ (retval = 34)
+
+ARM B, offset 64, one past glob_a's end and into glob_b:
+
+    [CAPSTONE] Cap mem access OOB: cursor = 1016fffe0, size = 1,
+               bounds = (1016fffa0, 1016fffe0)
+    [CAPSTONE] domain halted by capability fault: cause = 7
+
+0x1016fffe0 - 0x1016fffa0 = 0x40 = 64 bytes = sizeof(nest_glob_a) EXACTLY.
+
+THE WHOLE THESIS IN THREE NUMBERS. Same source shape, same build flags, same
+domain, one variable changed each time -- where the two objects come from:
+
+    scope                          bounds width              outcome
+    gc-heap, MicroPython m_new     0x60000 = 384 KiB         untrapped
+    gc-heap, model bump allocator  0x400   =   1 KiB         untrapped
+    static-global, linker          0x40    =      64 B       TRAPPED
+
+The hardware is not weak and the checking is not off. It bounds an object to the
+byte when the LINKER tells it what the object is, and it bounds the whole region
+when an ALLOCATOR carves the object in software, because no bounds-setting
+instruction is emitted for a sub-allocation. The gap is exactly the allocator.
+
+THE PREDICTION WAS NOT SAFE, WHICH IS WHY THIS WAS WORTH RUNNING. This build passes
+-capstone-shrink-globals=false, and so does the MicroPython build, so whether a
+global carries its own bounds was an open question rather than a formality. Had arm
+B returned 170, six rows of the spatial corpus would have needed rewriting.
+
+It also supplies what that corpus could not get any other way. Its two `stack` rows
+and four `static-global` rows all predict `trapped` and none of them is measured:
+the static rows are blocked on a VFS or on absent modules, and MPY-S31 showed the
+stack rows cannot test it either, because MicroPython's own mp_cstack_check stops
+the descent at 393 KB while the stack capability's bound sits near 800 KB. This
+pair tests the prediction directly instead of waiting for an upstream defect to
+become reachable.

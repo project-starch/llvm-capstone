@@ -1,0 +1,3 @@
+index	name	status	got	want	oracle
+0	00_sanity.py	PASS	0x00077724	0x00077724	host python
+1	01_example.py	FAULT	-	-	host python exits non-zero

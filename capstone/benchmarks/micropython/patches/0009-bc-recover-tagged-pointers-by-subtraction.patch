@@ -1,0 +1,43 @@
+Recover a tagged pointer by subtracting its tag, not by masking the address.
+
+The exception stack stores two bits of state in a pointer's spare low bits. Reading those bits
+through uintptr_t is an inspection and stays as it was. RECOVERING the pointer must not go
+through an integer: on a target whose pointers carry out-of-band metadata, masking the address
+yields a value without it, and the saved stack pointer it produces is unusable -- which is the
+`try`/`except` path.
+
+Subtracting the low bits keeps the value a pointer throughout. The volatile is load-bearing and
+not decoration: without it the optimizer folds `p - (p & 3)` straight back into `p & ~3` and the
+result is an integer again. Same address on every target; the macros become inline functions so
+the temporary has somewhere to live.
+diff --git a/py/bc.h b/py/bc.h
+index 8caac6d4e..9d5d4c798 100644
+--- a/py/bc.h
++++ b/py/bc.h
+@@ -288,10 +288,24 @@ const byte *mp_bytecode_print_str(const mp_print_t *print, const byte *ip_start,
+ #define mp_bytecode_print_inst(print, code, x_table) mp_bytecode_print2(print, code, 1, x_table)
+ 
+ // Helper macros to access pointer with least significant bits holding flags
+-#define MP_TAGPTR_PTR(x) ((void *)((uintptr_t)(x) & ~((uintptr_t)3)))
++/* Two bits of state stored in a pointer's spare low bits. READING the bits through uintptr_t
++   is fine -- it is an inspection. RECOVERING the pointer must not go through an integer: on a
++   target whose pointers carry metadata that yields an address without it, and the exception
++   stack's saved sp is then unusable. Subtracting the low bits keeps it a pointer the whole way,
++   and the volatile stops the optimizer folding the subtraction back into a mask. Same address
++   on every target. */
+ #define MP_TAGPTR_TAG0(x) ((uintptr_t)(x) & 1)
+ #define MP_TAGPTR_TAG1(x) ((uintptr_t)(x) & 2)
+-#define MP_TAGPTR_MAKE(ptr, tag) ((void *)((uintptr_t)(ptr) | (tag)))
++static inline void *mp_tagptr_ptr(void *x) {
++    volatile uintptr_t tag = (uintptr_t)x & 3;
++    return (void *)((char *)x - tag);
++}
++static inline void *mp_tagptr_make(void *ptr, unsigned tag) {
++    volatile uintptr_t t = tag;
++    return (void *)((char *)ptr + t);
++}
++#define MP_TAGPTR_PTR(x) mp_tagptr_ptr((void *)(x))
++#define MP_TAGPTR_MAKE(ptr, tag) mp_tagptr_make((void *)(ptr), (tag))
+ 
+ static inline void mp_module_context_alloc_tables(mp_module_context_t *context, size_t n_qstr, size_t n_obj) {
+     #if MICROPY_EMIT_BYTECODE_USES_QSTR_TABLE
