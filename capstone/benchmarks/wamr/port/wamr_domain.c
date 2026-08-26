@@ -13,7 +13,7 @@
  *                                                  reaches anything of WAMR's
  *   12 + wasm_runtime_memory_init over the pool -- the allocator on our arena
  *   13 + wasm_runtime_set_default_running_mode
- *   14 + wasm_runtime_init
+ *   14 + wasm_native_init  (the live half of wasm_runtime_env_init)
  *
  *   The 1x rungs open up stage 1, which faulted with cause 24 while stage 0
  *   returned. They call the pieces full_init calls, in its order, so the first one
@@ -30,6 +30,7 @@
  */
 #include "platform_internal.h"
 #include "wasm_export.h"
+#include "wasm_native.h"   /* wasm_native_init, for rung 14 */
 #include "wamr_test_module.h"
 
 #ifndef WD_STAGE
@@ -113,9 +114,20 @@ domain_main(unsigned *res, unsigned func)
     wasm_runtime_memory_destroy();
     WD_MARK(WD_OK);
 #else
-    if (!wasm_runtime_init())
+    /* The only step of wasm_runtime_env_init that is not compiled out in this
+       configuration. env_init itself is static and cannot be called from here;
+       bh_platform_init is this port's own and rung 10 already covered it.
+
+       NOTE, and it is a correction to this ladder rather than a finding: rung 14
+       used to call wasm_runtime_init(), which faulted. That was MY error, not
+       WAMR's -- wasm_runtime_init is an ALTERNATIVE entry that initialises the
+       memory subsystem with Alloc_With_System_Allocator, a malloc this domain
+       does not have. The full_init path never calls it. A rung that tests a path
+       the program does not take produces a clean, monotone, entirely void
+       result. */
+    if (!wasm_native_init())
         WD_MARK(WD_FAIL);
-    wasm_runtime_destroy();
+    wasm_runtime_memory_destroy();
     WD_MARK(WD_OK);
 #endif /* 13 */
 #endif /* 12 */

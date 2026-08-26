@@ -101,12 +101,14 @@ candidate assessed, and it fits a single region even before declaring anything.
 ## Where the bring-up stands
 
 ```
-stage  0  return at once                     0x57410001   OK
-stage 10  os_malloc from the port's arena    0x57410A01   OK
-stage 11  static mutex + counter (gp carve)  0x57410B01   OK
-stage 12  wasm_runtime_memory_init           0x57410C01   OK   (needs patch 0002)
-stage 13  wasm_runtime_set_default_running_mode  0x57410D01   OK
-stage 14  wasm_runtime_init                  capability fault, cause 24
+stage  0  return at once                     OK
+stage 10  os_malloc from the port's arena    OK
+stage 11  static mutex + counter (gp carve)  OK
+stage 12  wasm_runtime_memory_init           OK   needs patch 0002
+stage 13  wasm_runtime_set_default_running_mode  OK
+stage 14  wasm_native_init                   OK   needs QUICK_AOT_ENTRY=0
+stage  1  wasm_runtime_full_init             OK   the whole of it
+stage  2  wasm_runtime_load                  capability fault, cause 24
 ```
 
 Every rung does what the one below it did and one step more, so the first that

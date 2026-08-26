@@ -44,6 +44,9 @@ FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
        # no WASI, no threads: the smallest thing that can run a module.
        -DWASM_ENABLE_INTERP=1 -DWASM_ENABLE_FAST_INTERP=0
        -DWASM_ENABLE_AOT=0 -DWASM_ENABLE_JIT=0
+        # Defaults to 1 in core/config.h even with AOT off, and its init builds an
+        # entry table for a path this configuration does not have.
+        -DWASM_ENABLE_QUICK_AOT_ENTRY=0
        -DWASM_ENABLE_LIBC_WASI=0 -DWASM_ENABLE_LIBC_BUILTIN=1
        -DWASM_ENABLE_MULTI_MODULE=0 -DWASM_ENABLE_SHARED_MEMORY=0
        -DWASM_ENABLE_THREAD_MGR=0 -DWASM_ENABLE_MEMORY_PROFILING=0
