@@ -2,7 +2,7 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-08-16 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
+## 2026-08-17 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
 
 * **Bitstream: `caplifive_s07diag.bit`** (S-06 fix `25035c4c0` + S-08 fix `9fd5507b` + the mtval
   diagnostic `45bd5a3ee`). Every silicon number taken before it is baseline-invalid. All five
@@ -16,6 +16,41 @@ Minimal snapshot. Read first in every session.
   the SQLite workload runs **3/3**, control green. The fix is **exonerated by measurement** as a
   cause of that bitstream's timing failure (-6.196 ns through its own nets against a design WNS of
   -10.629). Pushed. Caveat and the full trail: `ref/RATE-RULE.md`.
+* **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
+  917 direct tests in upstream's default base directories: `598 PASS / 86 FAIL / 0 FAULT /
+  0 HANG / 233 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
+  `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 151 FAIL / 0 FAULT / 0 HANG /
+  22 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
+  `void *`, preserving seek capabilities and changing exactly `io_bytesio_ext.py`,
+  `io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS. Patch 0013 avoids undefined
+  NULL-table pointer arithmetic in an empty ordered map: four tests change from FAULT to PASS and
+  `builtin_help.py` reaches its ordinary semantic mismatch. A full 1,117-file rerun changed exactly
+  those five map cases. Patch 0014 gives an empty array one real spare element instead of leaving
+  `items=NULL`; generic `items + 0` paths are then capability-valid. The next full rerun changed
+  exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
+  `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
+  is `625 PASS / 237 FAIL / 0 FAULT / 255 UNSCORED`. Patch 0016 lets an explicit
+  `sys.print_exception` stream work without global sys stdfiles. The EXTRA profile now consistently
+  enables detailed errors, warnings, emergency exceptions and memory statistics. Exact output
+  capture plus upstream-compatible regex `.exp` scoring changes eleven standard tests from FAIL to
+  PASS. The runner now recognises MicroPython's `print("SKIP"); raise SystemExit` target-skip
+  convention from captured output. This changes 241 FAIL statuses to UNSCORED; one previously
+  unscored case is also relabelled, for 242 target skips at that stage. Patch 0017 allows an
+  explicit `print(..., file=stream)` without global sys stdfiles; the EXTRA profile also enables
+  `sys.path`, `sys.argv`, and `sys.modules`. Exactly five standard cases then become PASS, including
+  one former target skip. The EXTRA profile now also enables template strings, while Patch 0018
+  lets the reduced no-filesystem importer resolve built-in subpackages such as
+  `string.templatelib`. Six more standard cases become PASS. The runner also recognises upstream's
+  `SKIP-TOO-LARGE` plus `SystemExit` form; exactly `micropython/viper_large_jump.py` changes from
+  FAIL to target-skip. Of the remaining 86 standard FAILs, 85 are exception returns and one is an
+  output mismatch. Across all direct files, 224 of 237
+  FAILs are exception returns and the other 13 are output mismatches.
+  Of 255 UNSCORED files, 242 are explicit target skips and 13 returned but lack a host-Python
+  oracle.
+  The resumable chunk runner gets past domain-fatal faults without changing tests.
+  The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
+  require multi-instance, network, hardware, port, or architecture-specific harnesses; they are
+  not ordinary one-source interpreter cases. See `plans/micropython-domain-compilation.md`.
 * The invariant, the "no software probe can fire" result, and the "mtval unreadable by every
   channel" measurement are in `state/current-next-step.md` §0 — read that before planning any
   S-07 work.

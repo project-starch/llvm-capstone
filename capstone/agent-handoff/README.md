@@ -84,6 +84,9 @@ agent-handoff/
 - working baseline and split `null_blk` regressions
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
+- MicroPython EXTRA+MPZ executes all 917 direct tests in the upstream default base directories
+  under QEMU via resumable chunks (`598 PASS / 86 FAIL / 0 FAULT / 233 UNSCORED`); all 200 direct
+  optional single-interpreter files were also attempted, for 1,117 executed files total
 - 78 validated BEEBS benchmarks on the split host/domain runtime path; the
   newest are `matmult-float` and `whetstone` (added `atan` to the shared libm),
   completing the soft-float/libm-only FP class

@@ -1,5 +1,42 @@
 # Next step
 
+## 0-2026-08-24 — COMPILER LANE: i128 is no longer the capability carrier.
+
+**This is the COMPILER lane. The silicon/board state is the 2026-08-20 section
+below, which is still current for that lane -- this section does not supersede it.**
+
+A capability is `MVT::c128` in its own register class `GPCR`; `i128` is an ordinary
+illegal type on RV64. Net **-1300 lines** in the backend, because nearly everything
+removed existed to guess whether a register held an integer or a capability. Six
+commits on `capstone-gpcr`. Full write-up:
+`history/24-08-2026_14-03-58_drop-i128-capability-carrier.md`.
+
+**Four latent tag-loss or crash bugs fell out of it, none of which lit could see:**
+
+* `DROP`/`CAPEXIT`/`CCSRRW` declared GPR operands while building c128 nodes, so
+  `__builtin_capstone_cap_drop` untagged the handle it exists to consume. Caught by
+  `linear_drop_use_fault`, which checks the fault's REASON -- both the right and the
+  wrong behaviour are cause 24.
+* `"r"` inline asm returned GPR for a capability -> CoreMark failed to build.
+* the clang builtins zero-extended bounds to i128 against an i64 intrinsic signature
+  -> every rv8/beebs benchmark failed to build.
+* `fixupDestructiveCopies` (the C-14 pass) had become actively wrong and is deleted.
+
+**Measured, all green:** Capstone lit 57/57; LLVM RISCV+X86+TableGen 6/7898
+(pre-existing emutls/TLS); clang 2/48072 (pre-existing AMDGPU nullptr, baseline-proven);
+QEMU core tier 13/16 with the three failures re-verified -- two boot flakes that pass
+standalone, one real and fixed. Tag scanner clean over 25 fresh domains, with a
+positive control.
+
+**Codegen is strictly better**: `ptrtoint` is free (EXTRACT_SUBREG), `p - q` is one
+`sub`, `(uintptr_t)p & ~31` is one `andi`, and real C pointer subtraction no longer
+emits `__divti3`.
+
+**Open, not blocking:** a mixed-signedness widening multiply is four instructions where
+upstream riscv64 picks one `mulhsu` -- same value, a missed selection.
+
+
+||||||| 3787496fb730
 ## 0. CURRENT — 2026-08-25. S-12 HAS NO MINIMAL REPRODUCER, and the reason was our own bug.
 
 **This supersedes section 0 below, which is now history.**
@@ -138,6 +175,84 @@ while the instrument caveat is the binding limit.
 
 **The next step is not ours: it is with the RTL lane, and it is one register.**
 
+The independent MicroPython QEMU lane completed its direct-file census on 2026-08-17. It does not
+change the S-07 silicon priority: 917 standard-base and 200 optional single-interpreter files were
+attempted with resumable chunks. Patch 0012 fixed the three stream-seek faults by keeping ioctl
+pointer arguments capability-wide. Patch 0013 fixed all five `mp_map_lookup` faults: an empty
+ordered map computed `NULL + 0`, rather than losing a valid capability tag. The full rerun now has
+no capability faults. Patch 0014 fixed the four bytearray cases as one cluster: empty arrays had
+`items=NULL`, while generic paths formed `items + 0`. Patch 0015 fixed the final three big-integer
+cases at their common `mpz_as_int_checked` site: MPZ zero had `dig=NULL` and `len=0`, while the
+conversion formed `dig + len`. The remaining results are classified and cluster in disabled
+feature families. That classification led to Patch 0016, a consistent EXTRA profile, and
+exact/regex output scoring. Eleven standard tests changed from FAIL to PASS. Captured-output
+recognition of MicroPython's explicit `SKIP` plus `SystemExit` convention then reclassified 241
+FAILs as UNSCORED without changing a test or the port. At that stage, all 97 standard FAILs were
+uncaught-exception returns; there are no ordinary output mismatches left in the standard set.
+Patch 0017 then made `print(..., file=stream)` independent of global sys stdfiles, and the EXTRA
+profile enabled `sys.path`, `sys.argv`, and `sys.modules`. Five standard tests became PASS. The
+then-current 93 standard FAILs were all exception returns. EXTRA now also enables upstream
+template strings, and Patch 0018 resolves built-in subpackages in the reduced no-filesystem
+importer. Six T-string tests become PASS without a status regression. The then-current 87 standard
+FAILs comprised 86 exception returns and one ordinary output mismatch. The runner now also
+recognises upstream's `SKIP-TOO-LARGE` form, changing exactly `viper_large_jump.py` from FAIL to
+UNSCORED. The current 86 standard FAILs comprise 85 exception returns and one output mismatch.
+Across all direct files, 224 of 237 FAILs are exception returns and the remaining 13 are output
+mismatches. The 255 UNSCORED results comprise 242 target skips and 13 tests whose host-oracle
+generation failed. Heap probes at 128, 192, and 256 KiB were not adopted: they make two or three
+allocation-heavy tests pass but suppress the valid `viper_large_jump.py` size skip and expose the
+disabled-Viper failure instead.
+
+**The float and extmod families are closed (2026-08-17).** `MPY_FLOAT_CORE=1` gives the port
+double-precision floats, `MPY_FLOAT_MATH=1` adds `math`, `cmath` and complex from MicroPython's own
+`lib/libm_dbl`, and nine self-contained extmod modules are now compiled in. The all-1117 census is
+**764 PASS / 143 FAIL / 16 FAULT / 194 UNSCORED**, from 625 / 237 / 255 at the start of the day.
+`float/` is 69 PASS and nothing else. Two defects accounted for most of it. Float: MicroPython's
+APPROX format *and* parse both scale by `pow(5, n)` (`py/parsenum.c:275`), so the BEEBS soft-float
+`pow` — `exp(y*log(x))`, relative error -1.3014e-12 on `pow(5,16)` — made `repr(1.0)` print
+`0.9999999999986986`, the same 1.3e-12 digit for digit. Extmod: the modules' C sources were simply
+never in the amalgam, and `MP_REGISTER_MODULE` only reaches `moduledefs.h` through the qstr pass.
+The GC heap then went 96 KiB -> **384 KiB**, which is a measured knee and not a guess: 512 KiB
+produced not one status different while costing another 131 KB of C stack. That is ten more passes
+(`stress/` is now 13 for 13) against one honest reclassification, `viper_large_jump.py`, which
+stops reporting "too large for this target" and starts reporting the disabled Viper emitter.
+Note that GC-heavy tests got much slower — `basics/memoryview_gc.py` takes ~6 minutes now — so a
+census chunk can approach the runner's 600 s per-command timeout.
+
+**Two live threads came out of that, both cheap and both QEMU-only:**
+
+* **An image can link, print `VERDICT: fits`, and then fault on every call.** A chunk that grew
+  past a 2 MiB domain allocation did exactly that — 200 tests, 200 reboots. The same tests and
+  modules in a smaller image ran clean, so it is the allocation edge, not the content. The standard
+  set is six chunks now, and the build warns above 2 MiB.
+* **`MICROPY_PY_UCTYPES=0` did not boot — ROOT-CAUSED AND FIXED 2026-08-17, and it was not a
+  MicroPython bug at all.** The shared domain-entry glue
+  (`tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S`, macro `RUN_CAP_INIT`) kept its
+  `.capstone_cap_init` table cursor in **`a7` across the `jalr`** to each initializer. `a7` is
+  caller-saved and the initializer is compiled C that writes it 36 times, so the loop's
+  termination test compared a garbage cursor against the end marker and ran an extra iteration
+  into a garbage target. Fixed by parking `a7` in the frame exactly as the `a6` cursor already
+  was. Full trail, evidence and method notes:
+  `history/17-08-2026_18-50-00_capinit-loop-cursor-clobbered-across-call.md`.
+
+  **This glue is shared by every gp-captable domain**, so SQLite and BEEBS were equally exposed;
+  the symptom is a silent hang before `domain_main`, with no fault, that moves whenever anything
+  about the image moves. It does **NOT** explain `fpga-repros/S01-image-perturbation-hang`, and
+  that was checked rather than assumed: both S01 images were rebuilt with the pre-fix glue and the
+  cursor replayed over their descriptors. In each, the initializer's last `a7` write is a
+  blob-derived capability, and the monitor places the blob above the image
+  (`sbi_capstone.c:302`), so `bltu` is false and the loop exits correctly. **S01 stays open and
+  unexplained.**
+
+Of the 353 tests not passing, essentially all are absent features rather than defects: 189 target
+skips (asyncio 32, time 16, os/vfs 12, machine 11, socket/ssl/cryptolib 23, ...), 54 native/Viper,
+33 `thread`, 27 `cmdline`, 24 filesystem `import`, 16 `uctypes` (architectural), 3 needing
+micropython-lib's `unittest`. That leaves **7** ordinary failures: 2 t-string cases, and 5 `io`
+tests wanting a filesystem, `sys.stdin` or `os`. The largest reachable family left is `asyncio`
+(32), which needs frozen Python modules plus a clock; `time` (16) needs a clock the domain does not
+have, and stubbing one would make `time.time()` confidently wrong. Do not change tests or re-run
+the old 422-test stop. Details are in `plans/micropython-domain-compilation.md`.
+
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and
 committed at `tests/fpga-repros/S07-capability-untagged-on-reload/` (entry `00-README.md`, ask in
@@ -226,6 +341,35 @@ commits that exist.
 to push to instead. Until then the fix is validated but unpublished, and the buildroot gitlink is
 dangling.
 
+**2026-08-20 — `caplifive-buildroot` ITSELF now rejects the push too**, which is a change from the
+paragraph above: `1e0be51` really is on `origin/capstone-bootstrap`, so the access existed when
+that was written, and it does not now.
+
+```
+project-starch/caplifive-buildroot.git   403  (dry-run push, so nothing was attempted for real)
+```
+
+What is stranded by it, on branch `xlang-gp-captable-delivery`, four commits:
+
+```
+34281b1  Let a domain declare what it needs, and give it two regions instead of one
+577bf92  Raise the buddy allocator's maximum order so interpreter images fit a domain
+af3c165  Scale the domain region with the image, so an interpreter has room to recurse
+8c7b973  modcapstone: deliver the gp-captable init descriptor into dom_data
+```
+
+`34281b1` is the one that matters and it is validated: mruby runs a full open/execute/close cycle
+against it, and it is what let the MAX_ORDER kernel change in `577bf92` be REVERTED -- the config
+is back to stock, so no Linux patch is needed after all. Every parent branch still records the
+older buildroot (`6912474`), and the gitlink is deliberately NOT bumped: pointing at `34281b1`
+would make every clone reference a commit that does not exist remotely, which is the failure this
+same section already describes one level down.
+
+Practical consequence for anyone else: a fresh clone gets the OLD module, whose fallback rule sizes
+one region as `code_len + 64 KiB + max(2*code_len, 512 KiB)`. At mruby's 1.39 MB image that is
+4,247,440 bytes, rounds to order 11, and `__get_free_pages` returns NULL -- surfacing only as
+`create_dom failed (-1)`, because the reason goes to a `pr_alert` the driver has already muted.
+
 ---
 
 ## 0-PRE. HISTORICAL (2026-08-12) — written while the current bitstream was in synthesis
@@ -234,6 +378,177 @@ Kept for the reasoning, not as instructions. The bitstream described here, `capl
 has been resident since 2026-08-12 and the first-boot sequence below was carried out long ago. The
 `FPGA_BITSTREAM` note at the end is also stale: the drivers now default to the resident bitstream,
 so no override is needed.
+
+## MUSL / INTERPRETER LANE — mruby's own TEST SUITE runs, 2026-08-20
+
+**678 assertions from all 43 files of mruby's `test/t/`, executed inside a pure-capability
+domain: 674 OK, 2 skipped, 2 KO, 0 crashes.** The host build of the same suite reports
+1468/1460/0/0 -- larger because it links 39 gems' tests as well as the core ones this domain
+carries. The count is self-checked: assert.rb prints one character per assertion and the
+progress line holds exactly 674 dots, 2 `?` and 2 `F`.
+
+How to reproduce it, both parts required:
+
+```
+OUT_DIR=/tmp/capstone/musl-capstone-build-bigheap CAPSTONE_LIBC_HEAP_BYTES=$((2*1024*1024)) \
+  bash capstone/musl-capstone/build-musl-capstone.sh
+MRUBY_PROBE_MRBTEST=1 ARCHIVE=/tmp/capstone/musl-capstone-build-bigheap/libc-capstone.a \
+  bash capstone/musl-capstone/mruby-probe/run-mruby-probe.sh
+```
+
+The big heap is not optional and the build now refuses without it: the suite's sub-interpreters
+are opened with `mrb_open_core(mrb_default_allocf, ...)`, i.e. through libc malloc, which the
+probe's arena knob does not reach. A separate archive because the heap is `.bss` and `.bss` sits
+inside the loaded image, so every other domain would otherwise grow with it.
+
+**THE TWO FAILURES ARE FLOAT ACCURACY, NOT CAPABILITIES.** `Integer#quo` (`6.quo(5)` against the
+literal `1.2`) and `String#to_f` (`'12345.6789'.to_f` against the literal, plus six more). Both
+compare a value the DOMAIN computed against a literal `mrbc` compiled on the HOST, so the two
+sides come from different float implementations by construction, and neither fails on the host.
+That splits the difference in two: soft-float division (compiler-rt `__divdf3`) and decimal
+parsing (musl `strtod`, whose accumulation wants the long double this target does not have,
+ISSUES.md C-20). **Not yet measured** -- compute `6.0/5.0` in a domain and compare its bits with
+the host's before calling either a root cause.
+
+The domain also had to start declaring its resource requirement (`.capstone_domreq`); without it
+the module's fallback rule asks for order 11 at mruby's image size and the run dies as
+`create_dom failed (-1)`. See the commit; note it needs the buildroot module that is currently
+stranded by the access blocker above.
+
+### Earlier: mruby runs completely, 2026-08-15
+
+**Reference mruby executes Ruby in a pure-capability domain**: mrblib loads, precompiled
+bytecode runs, `mrb_load_string` parses and evaluates SOURCE at runtime, and the GC tears
+everything down without a fault. 755 allocations, 179 KB peak.
+Trail: `history/15-08-2026_12-00-00_ruby-executes-in-a-capstone-domain.md`.
+Harnesses: `musl-capstone/mruby-probe/run-mruby-probe.sh` (full) and `run-mruby-stages.sh`
+(staged arms, for bisecting a fault).
+
+**Six defects were found and fixed getting there, all ours**, and three of them affect every
+domain, not just mruby:
+
+* **C-25** a pointer difference required tagged operands, so `NULL - NULL` faulted.
+* **C-26** `va_arg` of a by-reference struct fetched the reference with an 8-byte `ld`.
+* `jmp_buf` was 208 bytes and 8-byte aligned where `capstone_setjmp.S` writes 224 and needs 16
+  — the Lua probe had been silently overrunning it on every protected call.
+* the libc archive was built without `-fno-jump-tables` (ISSUES.md C-4a), 15 members affected.
+* `.bss` sat inside the loaded segment, so a domain shipped its whole static heap as zeros.
+* QEMU's `helper_cslcc` aborted the machine where the spec says raise; without fixing that,
+  no fault in this lane could be localised past a function name.
+
+**TWO SYSTEM PROPERTIES THAT ARE NOT WRITTEN DOWN ANYWHERE ELSE, and both cost a run before
+they were understood:**
+
+1. **A domain image is capped near 4 MB.** Not by hardware, and not by the monitor, which asks
+   only for 16-byte alignment: the module allocates the domain with
+   `__get_free_pages(GFP_HIGHUSER, dom_pages_log2)`, and `MAX_ORDER` cuts in at order 10. Over
+   that it fails SILENTLY — `pr_alert` into a ring buffer the driver has already muted with
+   `dmesg -n 1`, and `dom_id` left unset, so the run looks like it did nothing.
+2. **Never load a `.dom` straight off the 9p share.** The guest loader mmaps it and memcpys out
+   of it, so every 4 KiB page is an RPC under TCG with `cache=none`. A 1.35 MB image did not
+   finish in 1800 s. `cp` it to `/tmp` first and it loads in under a second. Every run script in
+   this lane now does that and stamps T0/T1/T2 so the phases stay separable.
+
+**Next, in this lane:**
+
+**C-29, found and fixed later the same day, is the one to read first.** Our `memcpy`,
+`memmove` and `realloc` copied byte at a time, which STRIPS THE CAPABILITY TAG off every
+pointer they move. mruby grows its VM stack with `memcpy`, so after any growth every object
+pointer on the stack was untagged and the interpreter died in `mrb_class`. It was separated
+from the allocator by being identical under three of them, and it invalidated a conclusion
+already written down — see the retraction in the history note. Fixed in `libc-ext/cap-copy.c`;
+the regression check is printf-probe **S4**, whose positive control (`-DPRINTF_PROBE_BYTE_COPY`)
+is measured to fault.
+
+**The arena IS the blocker for the revoking arms, and now there is a number for it.** Row 10's
+trigger recurses 151 levels and pushes two objects per level, so `$arr.size == 302` is a direct
+readout of how far it got:
+
+| arm | $arr.size | carved | outcome |
+|---|---|---|---|
+| libc allocator (coalesces, reuses) | **302** | — | the full run |
+| rof, revocation OFF, 4 MiB | **104** | 4,122,752 of 4,194,304 | `SystemStackError`, 52 levels |
+
+`stack_extend_alloc` gets NULL from `mrb_realloc_simple` and raises `mrb->stack_err`, which has
+no message — so it prints as `<no message>` and, without this readout, as nothing at all. **Every
+earlier rof run reported "trigger COMPLETED" while having run a third of the workload.** A
+completion marker that cannot distinguish "finished" from "gave up" is not a result.
+
+mruby's stack growth is LINEAR by default (`MRB_STACK_EXTEND_DOUBLING` is the non-default branch,
+vm.c:165), which makes the cumulative carve quadratic in the number of extensions — the mruby
+default optimises the live set on the assumption that the allocator reclaims.
+`MRUBY_PROBE_STACK_DOUBLING=1` turns on the upstream option and the carve drops from 4,122,752 to
+**1,556,800**, which fits.
+
+**RECYCLING WOULD NOT HAVE FIXED THIS, and the reason is architectural.** `SPLIT` has no inverse:
+it is in `insn-list.adoc:31` and there is no join, merge, coalesce or combine anywhere in the
+specification. An allocator that makes each allocation independently revocable by SPLITting it
+off a linear arena carves that arena irreversibly — dead blocks can be handed out again, but two
+adjacent dead blocks can never become one. mruby's stack grows monotonically, so every freed
+stack is smaller than the next request and a non-coalescing free list matches none of them.
+Recycling is still worth building for workloads that free and reallocate SIMILAR sizes (SQLite,
+the shims); it is not the fix for this one.
+
+## FIVE CORPUS ROWS MEASURED on the real interpreter
+
+| row | our fault site | corpus says | control | revoke |
+|---|---|---|---|---|
+| 4 | `mrb_vm_exec + 0x3d9c` (`const_missing` return) | `mrb_vm_exec` | 302 | fault |
+| 5 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604 | fault |
+| 8 | `hash_values_at + 0x1c0` | `hash_values_at` | 604 | fault |
+| 10 | `mrb_vm_exec + 0x198e0` (`OP_RANGE_INC`) | `mrb_vm_exec`, vm.c:2822 | 302 | fault |
+| 13 | `hash_slice + 0x180` | `hash_slice` | 1208 | fault |
+
+Five independent pinned trees, five different functions, each the one the corpus names.
+
+Taking row 10 as the worked example: same build, same workload, one call to
+`xlang_set_no_revoke()` between control and revoke. Its fault is
+at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, the return from `mrb_range_new` in
+`OP_RANGE_INC` — CVE-2022-1106's own instruction — and it reproduces across two independent
+builds and boots. Harness: `musl-capstone/mruby-probe/run-corpus-rows.sh`, trail in the history note.
+
+**ROWS 4 AND 5 measure the same way**, and each faults at the site the corpus documents:
+
+| row | fault site | corpus says | control | revoke |
+|---|---|---|---|---|
+| 10 | `mrb_vm_exec + 0x198e0` (`OP_RANGE_INC`) | `mrb_vm_exec`, vm.c:2822 | 302 | fault |
+| 4 | `mrb_vm_exec + 0x3d9c` (`const_missing` return) | `mrb_vm_exec` | 302 | fault |
+| 5 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604 | fault |
+
+Row 5's libc arm reports 302 where its control reports 604 -- the callback fires per hash-key
+comparison and that depends on addresses, so a different allocator plausibly compares a different
+number of times. Hypothesis, not verified. It does not touch the verdict: the load-bearing pair
+is control against revoke, which share the allocator and whose arena statistics are identical to
+the byte across two boots.
+
+**Porting a row to another pinned tree is ONE line**, `MRB_STR_EMBED_LEN_BIT 5 -> 6`, which
+`build-mruby-probe.sh` now shadows into the build directory (the corpus trees stay
+byte-identical). Six of the nine pinned trees need it. Run any row with
+
+    ROWS="<n> <m>" bash run-corpus-rows.sh
+
+after one `rake` in that tree to produce `build/host`. Rows still blocked: the five pre-3.0
+trees hit **C-20** in `src/fmt_fp.c`, which uses `long double` and crashes the compiler with an
+APInt assertion rather than a diagnostic; the same narrowing `gen-vfprintf-double.py` does for
+musl is what they need.
+
+**Carry the caveat:** taken with `MRB_STACK_EXTEND_DOUBLING`, which is not mruby's default. Both
+arms carry it so the comparison is sound, but a claim about "mruby as shipped" is not.
+
+1. ~~**The revoke arena under mruby.**~~ DONE. `xlang/common/revoke_arena_domain.c` is wired in
+   under `MRUBY_PROBE_REVOKE=1`, the host grants a third region, and the whole of mruby runs on
+   it: 755 allocations, 179 KB peak for the plain probe; 4.07 MB carved / 364 KB live for row 10.
+2. ~~`fstat` and `lseek`~~ DONE, and C-27 (errno) fell out of the first deliberate syscall failure.
+3. The corpus pins **nine** mruby versions spanning 2017-2026 and our configuration is
+   validated on **one**.
+4. **C-22 is still open** and still blocks `-O1` for mruby: 3 TUs fail to compile and
+   `libc-ext/scan-cap-base.py` finds 26 integer-as-capability-base sites in the rest. `-O0`
+   images are ~3.5x larger, which matters much less now that the load path is fixed.
+
+---
+
+
+## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
 
 Synthesis was started 2026-08-12 from `capstone-ariane` `fpga-testing-dev` = `7e4dc440f` (pushed).
 That RTL is **not** what any existing board result was taken on.

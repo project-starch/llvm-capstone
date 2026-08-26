@@ -1,0 +1,441 @@
+# mruby in the silicon-shaped ABI (gp-captable)
+
+## The problem this solves
+
+mruby runs today only because QEMU FABRICATES gp. Measured on 2026-08-20: at
+least 6000 fabrications in a single probe run, identical with and without that
+day's glue changes, so it is not a regression but the standing state.
+
+The chain, established from sources rather than inferred:
+
+- `gp` has no architectural role. The spec names `x3`/`gp` once, in the register
+  table (`prog-model.adoc:234`), and nothing establishes it.
+- The monitor does not set it: no reference to gp anywhere in `sbi_capstone.c`.
+- Our backend nonetheless reaches every global through it. 9,688 of the 9,690
+  `delin` in the mruby image follow a `cincoffset ..., gp, ...`.
+- QEMU papers over the gap with what the other line's own commit calls "our
+  non-canonical patch": `gp = PCC(cursor 0)`, fabricated AT EVERY USE SITE,
+  because "the RTL never establishes gp that way" and those bounds are not
+  representable under capability compression.
+- WHY at every use site, which the measurement adds: `C_GEN_CAP` (the monitor's
+  mint) and `gencap` are the same opcode and produce LINEAR capabilities, and PCC
+  is type 0. A linear capability is not copyable, so
+  `cincoffset rd, gp, ...` with `rd != gp` NULLs the source
+  (`op_helper.c`: `*rs1_v = CAPREGVAL_NULL`). The fabricated gp destroys itself
+  on first use and is fabricated again by the next global access.
+
+So mruby as built today cannot run on the board. Not "might fault": it depends on
+a capability that cannot exist there.
+
+## Why gp-captable and not the gp-free cscratch experiment
+
+All three silicon-shaped workloads already use the SAME configuration:
+
+```
+-mllvm -capstone-gp-captable
+tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S
+tests/runtime-qemu/gp-free-domain/link-gpfree.ld  +  gct-section-end.S
+```
+
+SQLite (`build-sqlite-silicon.sh`), micropython (`:149,:293`) and jerryscript.
+The glue is mature: 1015 lines, descriptor-driven, O(1) `.text` regardless of
+global count, and `cjalr` count zero. The kernel module already delivers the
+`.capstone_gp_initdesc` descriptor into the front of dom_data.
+
+`gp-free-domain/README.md` calls the cscratch route "Experiment A" and it needs a
+`create_domain` change that the README itself keeps as a local experiment, not
+committed to submodule source. It would also need either that monitor rebuild or
+`CAPSTONE_GP_STANDIN=1`, which lives on the other QEMU line. Both of those are
+blocked on decisions that are not this lane's. gp-captable is blocked on nothing.
+
+## What mruby uniquely adds
+
+It is the only workload with a REAL LIBC and HOSTCALL SYSCALLS. SQLite uses a
+hand-written libc subset (`capstone_sqlite_libc.c`) and a VFS skeleton;
+micropython and jerryscript are freestanding. None of them yields.
+
+So the new ground is exactly the resumable yield, and that is where the work is.
+
+## Steps
+
+Each step either costs no boot or answers one question.
+
+- [x] **1. Compile musl and mruby with `-capstone-gp-captable`. No boot. DONE.**
+      **The flag costs nothing at compile time.** A/B over the same file set,
+      because comparing against the survey's 40 would have compared different
+      sets:
+
+          musl   1393 sources   1343 ok / 50 fail   both arms, IDENTICAL files
+          mruby    33 sources     32 ok /  1 fail   both arms
+
+      The one mruby failure is `hash.c`, and it is the sweep's omission rather
+      than the flag's doing: the real build compiles that file with `-U__GNUC__`.
+      Identical in both arms either way.
+
+      `scan-cap-base.py` over the gp-captable assembly: no findings, with its
+      self-test passing first, so the zero is a measurement and not a silent
+      instrument.
+
+      So the "hours or weeks" question answers HOURS for the compile stage. This
+      says nothing about whether the code is CORRECT, nor about the gct and glue
+      side; that is steps 2 to 5.
+
+- [x] **2. Transplant the yield into the gp-captable glue. No boot. DONE 2026-08-20.**
+      **The plan as written above was wrong in its central assumption and the
+      correction is the useful part of this step.** It said to add a
+      `__capstone_dom_ret` slot, copying `start-musl.S`, which reaches that slot
+      by gp-relative addressing. In gp-captable `gp` is the cap TABLE, so that
+      addressing mode is not available, and three successive designs for a
+      replacement slot each died on a detail: end-relative and frame-relative
+      offsets do not alias, the exit path does not reset `sp` to the region end,
+      and after the carve `sp` no longer covers the descriptor blob at all.
+
+      The exit from that loop was to stop designing and read how the glue itself
+      already parks a capability. **It has the whole mechanism already:** `test:`
+      does `stc(ra, sp, 48)` -- the entry return capability, in its own frame --
+      and `.Ldomain_returned` reads exactly that slot to `domreturn` through.
+      Under `INTERP_DOMAIN_MTVEC` it also publishes the frame in `cscratch`. So
+      no new slot exists in the final change; the yield reads `cscratch` to reach
+      the frame, takes the capability from `+48`, and refreshes that same slot on
+      resume. One stash location, so there are no two copies that can disagree.
+
+      The edit is three hunks: the `ccsrrw(x0, cscratch, sp)` frame publish moves
+      out of the `INTERP_DOMAIN_MTVEC` guard into
+      `INTERP_DOMAIN_MTVEC || CAPSTONE_GLUE_YIELD` (both gates want the identical
+      store, for reasons that compose); the matching zeroing before
+      `.Ldomain_returned` gets the same condition; and `__capstone_yield` is added
+      under `#ifdef CAPSTONE_GLUE_YIELD`.
+
+      Also learned, from the experiment that ended the design loop: linking the
+      probe against the unmodified glue reports **exactly one** undefined symbol,
+      `__capstone_yield`. `domain_main` and the cap-init range already resolve.
+      One link settled what three rounds of source reading had not.
+
+      Checks run, all before any boot:
+      * the glue object is **byte-identical** to the pre-edit one at
+        `(no flags)`, `INTERP_DOMAIN_MTVEC`, `INTERP_PEEK_SP` and
+        `INTERP_RETURN_PRECALL`, so SQLite, micropython and jerryscript are
+        untouched including in layout. Positive control: the same comparison run
+        **with** `CAPSTONE_GLUE_YIELD` reports a difference, so it can fire.
+      * with the define: links, `__capstone_yield` defined, `cjalr` 0. The
+        `cjalr` count was itself controlled -- the disassembly was confirmed to
+        cover the new routine (47 instructions, one `<unknown>` = `domreturn`)
+        rather than silently rendering nothing there.
+      * the built probe image makes 9 `ldc`-through-`gp` and 2 `cincoffset gp`
+        accesses and carries exactly one `.capstone_gp_table`, so it really does
+        exercise the cap table rather than merely link against the glue.
+      * 6172 loadable bytes, above the 0x1000 the monitor SPLIT needs.
+
+      `YIELD_PROBE_GPCT=1` on `build-yield-probe.sh` selects this variant. The
+      probe source, host program, run script and success markers are shared with
+      the musl-glue build on purpose: a difference in the result is then a
+      difference between the two glues and nothing else.
+
+- [x] **3. yield-probe on the new glue. One boot. DONE 2026-08-20. PASSES.**
+      Run twice, the second time after `link-gpfree.ld` gained the init/fini
+      markers (see step 4). Both runs identical and all three discriminators say
+      resume rather than restart:
+
+          yield-probe: round 1 before yield
+          yield-probe: round 2 AFTER RESUME, stack intact
+          yield-probe: DONE after 2 serviced request(s), domain entered domain_main 1 time(s)
+          __CAPSTONE_YIELD_PROBE_PASSED__
+
+      Message 1 once, message 2 once, entry counter 1, no MARKER-LOST. So the C
+      frame, the local variable set before the yield, and the cap table all
+      survive a domain round trip on the gp-captable glue.
+
+- [x] **4. mruby probe, gp-captable. The blocker below was REAL and is now
+      SOLVED by LTO -- see 4b. Kept in full because the diagnosis is what made the
+      solution findable, and because the limitation it describes still governs any
+      non-LTO multi-object domain.** Everything needed to BUILD the image existed
+      and worked; the image could not run, for a reason belonging to the ABI.
+
+      **What was built and verified:**
+      * `MUSL_CAPSTONE_EXTRA_CFLAGS` on the musl survey, appended to the flag list
+        rather than replacing it, and a strict no-op when unset (checked against
+        `HEAD`'s `--print-flags`).
+      * The archive under the gp-captable ABI: **1321 of 1361 compiled, exactly
+        the default-ABI baseline**, so at archive scale the flag still costs
+        nothing. Controlled: 392 `.capstone_gp_initdesc` sections in the
+        gp-captable archive against 0 in the default one, and `heap_fallback`
+        0x100000 against 0x40000, so both switches demonstrably took effect.
+      * `MRUBY_GPCT=1` on `build-mruby-probe.sh`: the flag, the gp-captable glue
+        with `CAPSTONE_GLUE_YIELD`, `gct.o`, and the provisional-link pass that
+        measures `.text` to place the globals region. The default path still
+        produces a **byte-identical** `.dom`.
+      * No malloc change was needed. `malloc.c` already picks its heap at RUNTIME
+        on the tag of `__capstone_dom_data`; the gp-captable glue never publishes
+        it, so the static `heap_fallback` is chosen -- and under `link-gpfree.ld`
+        that array is exactly what the glue carves out of dom_data. The
+        dom_data-heap mechanism is the *non*-gp-captable workaround.
+      * One real defect found and fixed on the way: `stack_reserve.o` was linked
+        only into the SECOND link. Under the default ABI that is invisible (it
+        overrides a weak archive definition), but under gp-captable it is a new
+        global, a new descriptor record, and the descriptor is the first thing in
+        the globals region -- so everything behind it shifted and the
+        no-loaded-byte-moved check failed naming `domreq.S`, which had done
+        nothing. It is now in both links, so the two differ by exactly the one
+        thing the check is about.
+
+      **THE BLOCKER: the descriptor is per translation unit, and the glue reads
+      exactly one of them.** Source, `start-gp-captable-interp.S`:
+      `cincoffsetimm(t0, s1, 32)` puts record 0 immediately after the header at
+      offset 0, and the record count comes from that same header. There is no
+      concept of a second fragment.
+
+      Measured in the built images:
+
+          micropython (runs)   1 fragment,  count 232
+          yield-probe (runs)   1 fragment,  count   7
+          mruby                39 fragments, first count 5, total 2670
+
+      So mruby gets storage for **5 of 2670 globals** and the rest are silently
+      uninitialized -- no fault, which is precisely the failure mode
+      `domdata-budget.py` was written for, and it is why that script reports
+      "VERDICT: fits" on this image. The budget line "cap table 80 (5 globals)"
+      is the blocker printing itself, correctly, for anyone who reads it.
+
+      Every gp-captable workload that runs today is a single amalgamated object
+      with globals; mruby plus a 1346-member archive is not, and that difference
+      has not been exercised before.
+
+      **Stated as open, not as known:** which fragment lands first is a link-order
+      accident. Whether the compiler numbers cap-table slots globally or per TU
+      was NOT established -- the obvious measurement, "max slot index", returns
+      127 for micropython and mruby alike because 127 is what the load's immediate
+      field holds (2032/16), not what the code asks for. My earlier reading of 127
+      as evidence about numbering was wrong and is withdrawn. That question
+      decides whether the fix is "make the glue walk all fragments" or "make the
+      linker renumber slots", which is a much larger, compiler-side change.
+
+      Also noted, separately and smaller: 10 sites in the image still use the old
+      `scc <rd>, gp, <rs>` data-base addressing, all under `.Lpcrel_hi*` labels,
+      so a few objects are not being compiled with the flag. Latent faults, not
+      the blocker.
+
+      **The open question is now CLOSED, and the answer is the expensive one.**
+      `tests/runtime-qemu/gp-free-domain/multi-tu-slot-collision.sh` reproduces it
+      in two files: two TUs with three globals each, and after linking BOTH
+      address slots 0,1,2. The objects carry **no relocation at all** for the gp
+      offsets -- the slot index is an immediate baked in at compile time -- so the
+      linker has nothing to renumber. Merging the descriptor fragments alone
+      therefore fixes nothing; every TU would still address the same low slots.
+      A relocation for the slot index is needed, which is compiler and linker work.
+
+      **THE FIX IS LTO, and it works. The line that stood here saying otherwise was
+      wrong and is withdrawn.** The descriptor is emitted per MODULE by
+      `CapstoneAsmPrinter::emitGpCaptableInitDesc`, so a full-LTO link presents one
+      module, one descriptor, and globally unique slots. No relocation, no compiler
+      change. Measured at two files:
+
+          reada  reads cap-table slots [0, 1, 2]
+          readb  reads cap-table slots [3, 4, 5]     one descriptor, count 6
+
+      The first trial reported no cap-table access at all and was read as "the pass
+      did not run". The test case was at fault: three never-written globals, which
+      LTO internalizes, proves all-zero, and folds to `movc a0, zero`. With
+      `volatile` globals and `noinline` functions it works. `multi-tu-slot-collision.sh`
+      now runs both arms and documents that trap at the top, because the failure mode
+      is indistinguishable from a broken pass.
+
+      **mruby builds this way: 1 fragment, 2661 globals, 0 old-ABI `scc gp`
+      accesses, budget "fits" with 698 KB of stack left.** `MRUBY_GPCT=lto`.
+
+      Two things had to change besides the flag:
+
+      * **dom_data cannot be declared as heap + stack.** Under gp-captable the heap
+        IS a global, carved from dom_data with the other 2660. The old formula
+        under-declared by ~350 KB; the declaration now comes from
+        `domdata-budget.py`, and a parse that finds nothing is an error, not a zero.
+      * **The archive must be 100% codegen-clean**, which is the real cost of this
+        route. Without LTO an unselectable member is harmless: pulled only if
+        referenced, and `--gc-sections` drops the unreachable AFTER codegen. With
+        LTO codegen runs first, in the linker, over everything lld keeps -- and lld
+        keeps every standard libm name unconditionally in case the backend emits a
+        libcall. `ld.lld -y acosl` answers `<internal>: reference to acosl`: nothing
+        in mruby or musl asks for it. One bad member kills the whole link, as a bare
+        `LLVM ERROR` with no function named.
+
+        The LTO archive build now verifies each member by running codegen and drops
+        the failures by name with the reason. **32 of 1377 today; 27 are the long
+        double family** and go with `long double` at 64 bits. That count is the
+        honest measure of the backend gap and should reach zero.
+
+      Dead ends, so they are not retried: `--defsym fmodl=fmod` does not stop the
+      cluster being pulled, because the reference is lld's and not floatscan's; and a
+      native `-O0` rescue object reintroduces the collision, since 224 of the 1346
+      members carry their own descriptor.
+
+- [x] **4b. mruby probe, gp-captable + LTO. DONE 2026-08-21. S1 TO S5 PASS.**
+
+          MRUBY S1: entered
+          MRUBY S2: mrb_open ok
+          MRUBY S3: irep executed
+          MRUBY S4: t[19] == 400
+          MRUBY S5: state closed
+          __CAPSTONE_MRUBY_PROBE_PASSED__
+          MEM at-exit: requested=158270 peak=158270 calls=755 fails=0
+          LIBCHEAP at-exit: used=157232 of=1048576
+
+      Every stage, the right number out of the interpreter, and a clean GC
+      teardown. **The acceptance criterion is met: ZERO gp fabrications**, against
+      >=6000 per run under the default ABI. The detector is known to fire -- three
+      earlier logs (`capstone-delin.log`, `capstone-delin2.log`,
+      `capstone-oldglue.log`) carry `gp FABRICATED ... pcc.type = 0` lines from the
+      same QEMU build, so the zero is a measurement and not a silent instrument.
+
+      Not over-read: the companion `CINCOFFSET rs1=gp` print is capped at 8 in the
+      helper (`if (++cn <= 8)`), so those 8 lines are an output limit, not an access
+      count. What they do say is that gp was a tagged, non-linear capability every
+      time it was sampled.
+
+      **ONE CAVEAT, and it is the whole remaining gap: `-DMRB_NO_METHOD_CACHE`.**
+      With mruby's method cache compiled in, the domain reaches S1 and runs 256
+      ticks before halting with cause 24. Localized to `mrb_method_search_vm` +0x464,
+      instruction `stc a1, 0x10(a0)` with `a0` untagged, which is the cache fill
+
+          struct mrb_cache_entry *mc = &mrb->cache[h];
+          mc->c = oc; mc->c0 = c; mc->mid = mid; mc->m = m;
+
+      The reported pc (0x2f2ac) is a branch target, i.e. the TB start, not the
+      faulting instruction -- the real one is 0x98 further on. `a0` is live-in to
+      that block, so the untagged value is produced upstream.
+
+      The same C code runs fine in the default-ABI build (678 assertions), and the
+      function's codegen is near-identical between the two (37 `shrink` and 37 `lcc`
+      in both), so the difference is not in this function. The matched pair that
+      would settle it is default ABI **with** LTO: same everything, one variable.
+
+- [x] **4c. Matched pair: default ABI + LTO. DONE 2026-08-21. THE FAULT IS LTO'S,
+      NOT THE ABI'S.**
+
+          default ABI, no LTO         PASSES (678 assertions)
+          default ABI, LTO            FAILS  mrb_method_search_vm +0x3d0
+          gp-captable, LTO            FAILS  mrb_method_search_vm +0x464
+          gp-captable, LTO, no cache  PASSES (S1-S5)
+
+      Same function, same signature -- `rs1 = x10`, `imm = 16`, cause 24 -- and both
+      stop at exactly TICK 256. The offsets differ only because the two ABIs emit
+      different code sizes. **gp-captable is exonerated for the largest remaining
+      mruby failure; LTO is the variable.**
+
+      The pair was built to be a pair: the first attempt put the image in a 4 MiB
+      allocation (2168496 bytes) purely because the 1 MiB `heap_fallback` is dead
+      weight in `.bss` under `link.ld`, and that is the size class documented to
+      fault on every call. Rebuilt with the stock heap it lands at 1382064, code
+      order 9 and data order 8 -- the same class as the known-good default-ABI
+      image at 1394480 -- so `-flto` is the only difference that remains.
+
+      Incidental confirmation from the same run: the default ABI fabricated gp more
+      than 6000 times, against zero under gp-captable. Both numbers measured in this
+      session, with the same instrumented QEMU.
+
+      **Hypothesis, NOT established:** the mrbtest wild jump (cause 2, step 5) is
+      the same story. It has not been run under default ABI + LTO, so it is a guess
+      until it is.
+
+- [x] **4d. Reduce and FIX the fault. DONE 2026-08-21.** It reduced all the way
+      out of LTO: `llc -O1` on the one extracted function reproduces it, `-O0` does
+      not, and `-O1 -regalloc=fast` does not either -- so the variable is the
+      register allocator, and LTO merely stopped hiding it by deferring codegen
+      past the `-O0` everything is built with.
+
+      Root cause and fix in
+      `history/21-08-2026_09-30-00_c14-reaching-def-misclassifies-a-capability.md`:
+      `isScalarByReachingDef` proved a live capability scalar by closing a cycle
+      over an incomplete def set, because a live-in has no defining MachineInstr.
+      One guard, mirroring the one its sibling rule already had. Lit test in MIR
+      (an `.ll` version was written first and passed with the fix reverted, i.e.
+      never reproduced), negative-tested both ways, plus a positive control so
+      disabling the rule also fails the file. 60/60 Capstone lit pass.
+
+      NOT YET VALIDATED: the QEMU suites, and the run that matters -- mruby WITH
+      the method cache. Nothing pushed until both.
+
+- [~] **5. Core mrbtest suite, gp-captable + LTO. RUN 2026-08-21. Gets in, then
+      makes a wild jump.** Reached S1, S2 and T1 through T3 -- driver installed,
+      `assert.rb` loaded, core tests started -- ran **16 assertions**, then:
+
+          [CAPSTONE] domain halted by capability fault: cause = 2,
+                     pc = 0x2033f5978, tval = 0x0, badaddr = 0x101442000
+
+      **A DIFFERENT FAILURE FROM THE METHOD-CACHE ONE.** cause 2 is an illegal
+      instruction, not a capability type error, and the pc is nowhere near the
+      image: code sits around 0x1016xxxxx and dom_data around 0x101aa2000, while
+      0x2033f5978 is outside both. badaddr 0x101442000 is below both regions too.
+      That is a wild control transfer, i.e. a corrupted return address or function
+      pointer, not a bad access through a known-bad pointer.
+
+      Ruled out, cheaply:
+      * **Heap exhaustion.** `fails=0` at every checkpoint, and the last reading is
+        `LIBCHEAP after-assert: used=197168 of=1048576`.
+      * **Stack.** The budget gives this image 280768 bytes of stack after the
+        carve. The default-ABI build passes this same suite with 262144, i.e. LESS.
+        A shortage that only bites the larger allowance is not a shortage.
+
+      gp fabrications: zero again.
+
+      So two distinct failures now sit under gp-captable + LTO on a workload that
+      passes under the default ABI, and **one experiment discriminates for both**:
+      default ABI **with** LTO. If it fails the same ways, the fault is LTO's
+      codegen and gp-captable is exonerated; if it passes, the ABI is implicated.
+      That is step 4c, and it is now the highest-value next run rather than one of
+      several options.
+
+- [x] **5b. mrbtest after the C-14 fix. RUN 2026-08-21. THE HYPOTHESIS WAS WRONG.**
+      Step 5 recorded, as a guess and not a finding, that the wild jump was
+      probably the same story as the method cache. It is not.
+
+          gp-captable + LTO, no cache, no C-14 fix   16 assertions, cause 2
+          gp-captable + LTO, cache, WITH C-14 fix    16 assertions, cause 2
+
+      Three variables changed, the result identical to the character. The count
+      stops at exactly 16 both times while the heap differs (197168 vs 217648
+      bytes used), so it is not a memory boundary.
+
+- [x] **5c. Matched pair for the suite: default ABI + LTO. THE ANSWER IS THE
+      OPPOSITE OF 4c.**
+
+          default ABI, no LTO    678 / 674 OK / 2 KO      (recorded reference)
+          default ABI, LTO       678 / 674 OK / 2 KO / 0 crash, T1-T4, COMPLETED
+          gp-captable, LTO       dies after 16 assertions
+
+      LTO changes the suite result not at all -- it reproduces the reference
+      figure exactly. **So for the suite, gp-captable is the variable, where for
+      the method cache it was LTO.** Two failures that looked alike had opposite
+      causes, which is the reason the pair is worth running each time rather than
+      generalising from the last one.
+
+      Size class checked BEFORE reading the result, because the default-ABI build
+      needs MRUBY_DOMAIN_HEAP at 1 MiB and that could have pushed it into the
+      4 MiB allocation class that is documented to fault on every call. It did
+      not: both images are code region 2097152 and data region 2097152, so the
+      comparison is valid.
+
+- [ ] **5d. Localize the gp-captable suite failure.** A wild control transfer
+      (cause 2, pc outside both regions) at a deterministic point. The probe image
+      has 2661 globals and works; the suite image has 2761 and does not. mruby's
+      VM dispatches through function pointers, and a function pointer read from a
+      wrong cap-table slot would land exactly here. First thing to check, and it
+      needs no boot: whether the descriptor records are sane at the high indices.
+      678 assertions, comparable against today's 674 OK / 2 skipped / 2 KO.
+
+## Acceptance criterion
+
+**The gp fabrication counter reads zero.**
+
+The instrument already exists (`capstone_note_gp_fabricated` in `op_helper.c`,
+uncommitted). It prints the first few and every thousandth. Today it reports 6000
+per run; on success it reports nothing at all. That single number is the
+difference between "mruby runs" and "mruby runs on a platform that lies about
+gp".
+
+## Risks, named
+
+- Step 2 is assembly at the entry/return edge. The mitigation is step 3, and the
+  symbol and `cjalr` checks that precede any boot.
+- Step 1 will surface codegen cases. That is its purpose, and it costs no boot.
+- The descriptor delivery depends on the buildroot module commit, which is local
+  only: `caplifive-buildroot` refuses this account's push with 403. We can build
+  it; we cannot share it.

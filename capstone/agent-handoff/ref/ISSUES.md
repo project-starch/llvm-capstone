@@ -8,7 +8,828 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-08-09.
+Last updated 2026-08-15.
+
+---
+
+## C-30 — `printf` with MANY conversions corrupts the last arguments · `OBSERVED 2026-08-16, not root-caused`
+
+**It produces wrong NUMBERS, silently**, which is worse than failing. Measured on one line with
+eight conversions (`%s` plus seven `%lu`), printed from a domain:
+
+```
+MRUBY ARENA ...: carved=739792 live_bytes=335504 live=1603 peak_slots=1807 \
+                 frees=824 big=404288 freed_bytes=4294967295
+```
+
+`big` counts frees of at least 1 KiB and cannot exceed `frees`; 404288 is the BYTE total, and
+`4294967295` is `0xFFFFFFFF`. Splitting the same values across two calls of four conversions
+each prints them correctly and consistently:
+
+```
+MRUBY ARENA ...: carved=739792 live_bytes=335504 live=1603 peak_slots=1807
+MRUBY FREES ...: calls=824 big=31 bytes=404288
+```
+
+**Whether the trigger is the argument COUNT or the `va_arg` handling is not established.** The
+first attempt also mixed `%u` and `%lu`; making every conversion `%lu` did NOT fix it, which
+rules out width mixing alone. This target already has form here -- C-26 was `va_arg` of a
+by-reference struct fetching the reference with an 8-byte `ld`.
+
+**Until it is root-caused: keep formatted lines short.** Four conversions are known good, eight
+are known bad, and the boundary is unmeasured. A long line does not fail, it lies -- the value
+that gave this away was one that could not be true, and a plausible wrong number would have gone
+straight into a result.
+
+---
+
+## C-29 — our libc's `memcpy`, `memmove` and `realloc` STRIPPED CAPABILITY TAGS · `FIXED 2026-08-15`
+
+**Silent data corruption, and the only symptom was a fault somewhere else entirely.**
+
+`libc-ext/memcpy.c` copied byte at a time, and so did the hand-written loop inside
+`libc-ext/malloc.c`'s `realloc`. A capability is 16 bytes plus a TAG held beside the memory;
+sixteen byte moves deliver every byte correctly with the tag CLEARED. Nothing faults at the
+copy. The pointer arrives looking right and faults on the first dereference, arbitrarily far
+away, as a bare `cause = 24` in a function that did nothing wrong.
+
+**How it presented.** mruby grows its VM stack by memcpying the old stack into a larger
+allocation (`stack_copy`, `src/vm.c`). Every object pointer on the stack lost its tag, so the
+interpreter faulted in `mrb_class + 0x254` on the next method call, and in `mrb_gc_mark + 0x50`
+on the next collection. Small chunks never extend the stack, which is why the whole bytecode
+ladder and `mrb_load_string` passed for two days.
+
+**How it was told apart from the allocator**, which is the part worth keeping: the fault was
+IDENTICAL under three allocators — revoke-on-free, the same with revocation disabled, and the
+plain libc one. An allocator-shaped symptom that does not move when the allocator changes is
+not an allocator problem. Before that arm was run, the leading hypothesis was that the revoking
+allocator's exact per-allocation bounds made the CONTROL arm unusable; that hypothesis was
+wrong and is retracted.
+
+**Ironically the lesson was already written down** in `benchmarks/sqlite/revoke_on_free_alloc.h`,
+whose `rof_copy_caps` carries the comment "a byte loop would strip the tag off any capability
+the block holds". The libc never got it.
+
+**Fixed:** `libc-ext/cap-copy.c` copies capability-wide (`*(void **)`, which dispatches on the
+memory tag, so scalars still move as scalars) whenever source and destination are congruent
+mod 16, and byte-wise otherwise — when they are not congruent no copy of any shape could
+preserve a tag. `memcpy`, `memmove` and `realloc` all route through it. It is a separate
+archive member with internal names on purpose: a program that brings its own `memcpy` (the
+BEEBS freestanding string file does) would otherwise put the byte version back under `realloc`.
+
+**Regression check:** `printf-probe` stage S4 copies a struct holding a pointer and then
+DEREFERENCES it, through both `memcpy` and `realloc`. Its positive control is
+`-DPRINTF_PROBE_BYTE_COPY`, which makes the same function use a byte loop and must fault.
+There is no assert on the tag itself because `lcc` raises Unexpected operand type on a clear
+tag, so querying a tag is not a way to ask the question without faulting.
+
+**Still byte at a time, correctly:** the string functions in `libc-ext/string.c`
+(`memccpy`, `__stpcpy`, `__stpncpy`, `strlcpy`). A NUL-terminated string cannot contain a
+capability, so those are unaffected.
+
+---
+
+## C-28 — InstCombine re-widens a POINTER ALIGNMENT TEST to i128, which ISel cannot select · `WORKED AROUND 2026-08-15`
+
+**Any C code that asks whether a pointer is 16-byte aligned crashes the compiler at -O1.**
+
+```c
+if (((uintptr_t)d & 15u) == ((uintptr_t)s & 15u)) { ... }
+```
+
+`uintptr_t` is 64-bit on this target and the **frontend gets it right** — at `-O0` the IR reads
+`ptrtoint ptr addrspace(200) %d to i64`, `and i64`, `icmp eq i64`. At `-O1` InstCombine
+canonicalises the pair and re-widens it to the POINTER's own width:
+
+```llvm
+%0 = ptrtoint ptr addrspace(200) %dest to i128
+%1 = ptrtoint ptr addrspace(200) %src  to i128
+%3 = and i128 %2, 15
+```
+
+and the backend dies outright:
+
+```
+fatal error: error in backend: Cannot select: t9: i128 = and t7, Constant:i128<15>
+```
+
+**Four spellings were tried and all four crash**, which is what makes this a backend gap rather
+than an expression problem: xor of the two addresses; each address masked separately; aligning
+one pointer and testing only the other against zero; and clang's own `__builtin_is_aligned`.
+The same expression **compiles cleanly in a one-line function** (`mv` + `andi`), so it is the
+fold and not the cast.
+
+**This is the real reason musl's nine word-at-a-time `src/string` files "do not compile for this
+target".** The note in `libc-ext/malloc.c` blamed the source line `(uintptr_t)s % ALIGN`; that
+is where it appears, not why it fails. Every one of those files opens with an alignment test.
+
+**Why it mattered.** Without an alignment test there is no way to write a **tag-preserving
+memcpy**, and a byte-at-a-time memcpy silently strips the tag off every capability it moves.
+That defect is what made mruby fault in `mrb_class` after any VM stack growth — see
+`history/15-08-2026_12-00-00_ruby-executes-in-a-capstone-domain.md`.
+
+**Workaround:** `libc-ext/cap-copy.c` is built at `-O0`, alone; `memcpy.c`, `memmove.c` and
+`malloc.c` call into it and stay at `-O1`. That is why the copy has its own translation unit.
+`build-musl-capstone.sh` enforces the level and the comment there explains it.
+
+**Attributed to one pass, in isolation, not inferred from -O0 vs -O1.** `opt -passes=mem2reg`
+leaves the IR at i64; adding `instcombine` alone produces the i128 form above. Two-line
+reproducer:
+
+```c
+typedef __UINTPTR_TYPE__ uptr;
+int f(void *a, const void *b) { return ((uptr)a & 15u) == ((uptr)b & 15u); }
+```
+
+**The mechanism**, `InstCombineCasts.cpp`, `visitPtrToInt`:
+
+```c
+unsigned PtrSize = DL.getPointerSizeInBits(AS);          // 128 for AS200
+if (TySize != PtrSize) {                                  // 64 != 128
+  Type *IntPtrTy = SrcTy->getWithNewType(DL.getIntPtrType(CI.getContext(), AS));
+  Value *P = Builder.CreatePtrToInt(SrcOp, IntPtrTy);     // -> i128
+  return CastInst::CreateIntegerCast(P, Ty, /*isSigned=*/false);
+}
+```
+
+Every `ptrtoint` to anything narrower than the pointer is rewritten to pointer width plus a
+`trunc`, and later folds then sink the `and`/`xor` into the wide side and drop the trunc. It is
+unconditional, which is why no spelling escapes it.
+
+**A tempting root cause that is REFUTED.** Our DataLayout declares `p200:128:128:128` with no
+fourth field, so the INDEX size defaults to the pointer size; CHERI's LLVM writes
+`p200:128:128:128:64`. Editing that field into the `.ll` by hand and re-running
+`opt -passes=mem2reg,instcombine` changes NOTHING — the widening is identical. The code above
+reads `getPointerSizeInBits` and `getIntPtrType`, neither of which consults the index size. So
+a DataLayout-only fix does not work; it would take that field AND `visitPtrToInt` switching to
+the index width, which is what the field is for.
+
+**SECOND INSTANCE, and this one is in third-party code, 2026-08-15.** Corpus row 6's pinned
+mruby (3.4.0-1476, `cda2567c`) does not compile at all:
+
+```
+fatal error: error in backend: Cannot select: t88: i128 = xor t92, Constant:i128<-1>
+In function: find_visibility_scope        (src/class.c)
+```
+
+A bitwise NOT on a pointer-derived value, at capability width. There is no `-O0` escape here
+the way there was for our own copy routine: the file is mruby's and the whole tree fails with
+it. **Rows 6 and 7-old-sortbang are the only two corpus rows blocked by this**, and they are
+also the only two that are not memory-safety rows (row 6 is "REPRODUCED but NOT as a
+use-after-free" -- bytecode corruption in the pattern-matching optimiser; 7-old-sortbang is
+"NOT REPRODUCED, the row as specified does not appear to exist"). The other eight Ruby rows
+build. That is why the backend fix has not been forced yet, not because it would not pay.
+
+**Two candidate fixes, neither made yet**, both shared-compiler changes needing lit and the
+QEMU suites: (a) the pair above, which is the root cause and would also let musl's own
+word-at-a-time string files compile; (b) making i128 `and`/`or`/`xor` selectable the way C-25
+did for i128 `sub`, which is a band-aid but a narrow one. Note that (b) needs care about
+GENUINE 128-bit integer arithmetic: truncating to XLen is right for a pointer-derived value and
+silently wrong for an `unsigned __int128`, which is a hazard C-25 already introduced for `sub`.
+
+---
+
+## C-27 — musl's TLS round-trips the thread pointer through `uintptr_t`, so ERRNO faulted · `WORKED AROUND 2026-08-15`
+
+**Every error path in the libc was broken, and no passing run could have shown it.**
+
+musl reaches `errno` through the thread pointer, and its riscv64 arch layer moves that pointer
+through an integer (`arch/riscv64/pthread_arch.h`):
+
+```c
+static inline uintptr_t __get_tp(void) { uintptr_t tp; __asm__("mv %0, tp" : "=r"(tp)); return tp; }
+#define __pthread_self() ((pthread_t)(__get_tp() - sizeof(struct __pthread)))
+```
+
+`uintptr_t` is 8 bytes here and a pointer is a 128-bit capability, so the cast back FORGES one
+from an integer. It is untagged, and `->errno_val` then faults:
+
+```
+[CAPSTONE] Cap mem access requires capability: pc = 101561c30, rs1 = x10, imm = 0
+```
+
+**Our tp setup is not the problem** and was already correct: `start-musl.S` points tp into the
+middle of a 1024-byte block derived from `gp`, with room below it for `errno_val`. No setup
+survives the round trip.
+
+**Why it surfaced only on 2026-08-15.** errno is written only when a syscall FAILS, and until
+then every syscall in every probe here had succeeded. It appeared on the first deliberate
+failure -- `lseek` to a negative position, added the same hour. A libc whose error path has
+never been exercised is a libc whose error path is untested, and this one had been green for
+two days.
+
+**Workaround:** `libc-ext/errno.c` defines `__errno_location` over a single static int, correct
+for a single-threaded domain (the same assumption `locks.c` records). `build-musl-capstone.sh`
+now DELETES musl's `src/errno/__errno_location.o` from the archive rather than leaving two
+definitions -- the archive check caught exactly that, and which one a program got would
+otherwise have depended on archive order.
+
+**Not fixed generally.** Anything else in musl that round-trips a pointer through `uintptr_t`
+has the same defect and has simply not been reached yet. `grep -rn "uintptr_t" musl/src` is the
+work list.
+
+---
+
+## I-4 — a domain's STACK is the rounding slack of a power-of-two allocation · `CHARACTERISED 2026-08-15, fix ATTEMPTED AND REVERTED`
+
+**Nobody chose how much stack a domain gets.** The module allocates
+`code_len + DOMAIN_DATA_SIZE` rounded up to a power-of-two page count, and the monitor lays the
+region out as `[code][DOMAIN_DATA_SIZE, the monitor's own sealed region][the rest]`. "The rest"
+is the domain's stack and `.bss`, and it is purely how far the image happens to sit below the
+next power of two. `DOMAIN_DATA_SIZE` is 64 KiB and belongs to the MONITOR, not to the domain.
+
+Measured, corpus rows on the revoking allocator:
+
+| image (MemSiz) | tot_size | stack + .bss |
+|---|---|---|
+| 1.74 MB | 2 MB | 292 KB |
+| 1.90 MB | 2 MB | **130 KB** |
+| 3.47 MB | 4 MB | 658 KB |
+
+**A slightly larger program silently gets a smaller stack.** That is how corpus row 11 came to
+overflow inside mruby's recursive code generator (`codegen`, a 2 KB frame per level, 109-line
+trigger) and present as `cause = 7` at a page-aligned address in all three allocator arms --
+which read exactly like "every configuration blocks this row's over-read" and would have been
+recorded as a security result if the pc had not been mapped.
+
+**THE OBVIOUS FIX DOES NOT WORK, and the controls are in.** Raising the order until the remainder
+reaches a 512 KiB floor makes the domain fail to run at all: the userspace loader reports "Ok,
+good file / Found 1 segments" and then nothing. Established by matched pair --
+
+| module | same reload path, same arm | outcome |
+|---|---|---|
+| unchanged | `__MODULE_RELOADED__` | domain runs, faults at `codegen` as before |
+| with the floor | `__MODULE_RELOADED__` | loader stops, nothing runs |
+
+so the change is implicated and the reload mechanism is not. **The mechanism is still unknown**,
+and two instruments failed to narrow it:
+
+* a `pr_emerg` placed BEFORE `__get_free_pages` never appeared, which should mean the ioctl was
+  never reached -- but the failure point in the loader VARIED between runs, so "never reached" is
+  not safe to conclude;
+* `dmesg -n 8` before the arm produced NO kernel output at all, not even the module's existing
+  `pr_info` lines. The `__DMESG_OPEN__` marker proved the command RAN and proved nothing about
+  its effect. **That was the harness's own doing and is now FIXED**: the kernel command line
+  carried no `console=` at all, and this lane added `loglevel=1` on top of it. With
+  `console=ttyS0 loglevel=8 ignore_loglevel` the same boot yields 1104 timestamped kernel lines
+  including the module's own, and the control arm behaves identically, so the change does not
+  perturb a measurement. `KERNEL_APPEND` in `run-corpus-rows.sh` sets it.
+
+  **With the console open the answer is still not there.** No Oops, no BUG, and no `capstone:`
+  line from the module at all, while the servicer produces nothing whatever -- not even the
+  loader's first "Ok, good file". So it hangs before the create ioctl is reached. The module
+  registers through `miscdevice`, so a stale device node is not the explanation. Validating a
+  module change needs a real buildroot image rather than rmmod/insmod: the control shows the
+  reload path works for the SAME module, which is not evidence that it works for a different
+  one.
+
+Getting further needs a kernel console that actually carries printk, which is a boot-parameter
+question, not a domain question. The module change is reverted rather than left in the tree.
+
+The `pr_alert` -> `pr_emerg` half is worth keeping separately: the driver runs `dmesg -n 1`, so
+only `KERN_EMERG` reaches the console and an allocation failure was previously invisible -- no
+fault, no message, no exit code, indistinguishable from a wedge.
+
+---
+
+## I-3 — QEMU ASSERTS where the spec says RAISE, so a program defect kills the emulator · `TWO INSTANCES FIXED 2026-08-15, four remain`
+
+**An abort is the worst possible way to report a capability fault**, because the monitor never
+runs: no `cause`, no `pc`, no `badaddr`, and a defect in the program under test is
+indistinguishable from a defect in the emulator. Both instances so far were found by a program
+doing exactly what it was supposed to do.
+
+| helper | found by | spec conditions |
+|---|---|---|
+| `helper_cslcc` | mruby bring-up; the fault was localizable only to "somewhere in `mrb_top_run`" | 24 |
+| `helper_cscincoffset` / `...offsetimm` | corpus row 5's revoke arm offsetting a REVOKED pointer, which is the arm working | 24, 26 |
+
+```
+qemu-system-riscv64: target/riscv/op_helper.c:626:
+    helper_cscincoffsetimm: Assertion `rs1_v->tag' failed.
+```
+
+Both now raise the architectural exception. The codes are read out of
+`capstone-spec/parts/cap-man-insn.adoc` per instruction, never carried across from a sibling:
+CINCOFFSET and CINCOFFSETIMM list *Unexpected operand type (24)* for a non-capability `rs1` and
+*Unexpected capability type (26)* for `type` 3 (uninitialised) or 4 (sealed). The `gp`
+materialisation stays ahead of the check so a legitimate privileged use is not turned into a
+fault.
+
+**FOUR SIBLING `assert(rs1_v->tag)` REMAIN** in `op_helper.c` (around lines 733, 794, 834, 873)
+and are deliberately untouched: each needs its own condition read out of the spec. Assuming they
+all raise 24 is precisely the mistake that cost three investigations when 25 was mislabelled.
+Expect to meet them one at a time, each as a dead emulator rather than a fault line.
+
+---
+
+## I-2 — the monitor faults when a shared region is large · `OBSERVED 2026-08-15, not root-caused`
+
+Sharing a **32 MiB** region makes OpenSBI fault while mapping it, before the domain runs:
+
+```
+[CAPSTONE] Cap mem access OOB: pc = 8001b76a, rs1 = x13, cursor = 8004f808,
+           imm = 0, addr = 8004f808, size = 8, bounds = (8004f810, 8004fa10)
+[CAPSTONE] domain halted by capability fault: cause = 5, pc = 0x8001b76a
+```
+
+`pc` is in the monitor (0x8000_0000 upward), not in the domain. The access is 8 bytes **below**
+the base of a 512-byte structure, which reads more like an index going negative than like a size
+check. 4 MiB works; the threshold between them has not been bisected and the structure has not
+been identified, so this is an OBSERVATION and nothing more.
+
+**16 MiB is also broken, and it fails DIFFERENTLY: it WEDGES, silently.** Measured 2026-08-15.
+The arm printed its `===ARM_===` banner and then nothing at all — not even the host servicer's
+`hc-host: dom created`, which every working arm prints before the domain starts. So the hang is
+at region creation, ahead of any domain code, and it produces no fault line to classify. That
+makes a large-region arm the single most expensive thing to put early in a batch: it takes the
+core and every arm after it, which is exactly what happened here, costing four staged arms and a
+boot. **An arm using a large region belongs LAST, or in its own boot.**
+
+**Why it matters.** It is the fourth ceiling found in one day while trying to run one corpus row,
+and together they bound what can be measured:
+
+| ceiling | where | value |
+|---|---|---|
+| domain image | kernel module, `__get_free_pages` | ~4 MiB |
+| capability tag map | QEMU (**I-1**, fixed: it grows now) | was 2 MiB |
+| arena must hold every byte ever allocated | the revoking allocator, by design | workload-dependent |
+| shared region size | the monitor (**this**) | somewhere under 32 MiB |
+
+None of them is a property of Capstone the architecture. All four are properties of the
+apparatus, and the corpus shims -- a 64 KiB arena and a handful of allocations -- sit far enough
+below every one of them that none had ever been seen.
+
+---
+
+## I-1 — QEMU can track capability tags across at most 2 MiB, with a LINEAR lookup · `CHARACTERISED 2026-08-15, not fixed`
+
+```
+qemu-system-riscv64: target/riscv/cap_mem_map.c:55: add_entry:
+    Assertion `cm_map->n < CAP_MEM_MAP_ENTRY_N' failed.
+```
+
+**The arithmetic.** `cap_mem_map.h` fixes `CAP_MEM_MAP_ENTRY_N` at **512**, and each entry covers
+one 4096-byte page (`addr_get_entry_base` masks off the low 12 bits). So the emulator can hold
+tag state for **2 MiB** of capability-bearing memory, and `find_entry` walks the array
+**linearly** on the way to every capability memory access.
+
+**Not a constant to raise.** Each entry carries `capboundsfat_t bounds[256]`, so the table is
+already megabytes; quadrupling it quadruples the scan on the emulator's hottest path, under TCG.
+The fix is a different data structure, not a bigger array.
+
+**What hits it.** Running mruby with the revoking allocator over a 4 MiB arena: every allocation
+is its own SPLIT capability, so capability-bearing pages accumulate until the table overflows.
+Reached while trying to run xlang corpus row 10's own trigger, after a 512 KiB arena had been
+ruled out by exhausting instead (its control arm faulted in `mrb_gc_mark`).
+
+**Why nothing hit it before.** The corpus shims run against a 64 KiB arena -- 16 pages against a
+512-page table. A real interpreter is the first workload anywhere near it.
+
+**Consequence, stated plainly.** A real interpreter plus per-allocation revocation over a
+multi-megabyte heap is currently beyond what this emulator can run, for reasons that have
+nothing to do with the compiler, the monitor or mruby. Anything measured this way needs either a
+smaller arena (which then exhausts, since the allocator never reclaims) or an emulator change.
+Silicon is not subject to this at all.
+
+---
+
+## C-26 — `va_arg` of a struct passed BY REFERENCE loads the reference with `ld` · `OPEN 2026-08-15`
+
+**Ten lines reproduce it, and the matched pair is inside them:**
+
+```c
+struct val { union { long i; double f; void *p; } u; int tt; };   /* 32 bytes */
+
+static long va_sum(struct val self, int mid, int argc, ...) {
+  struct val argv[16];
+  va_list ap;
+  va_start(ap, argc);
+  for (int i = 0; i < argc; i++)
+    argv[i] = va_arg(ap, struct val);      /* argc=0 returns; argc=1 FAULTS */
+  ...
+}
+```
+
+Measured in a domain: `argc = 0` returns the right answer, `argc = 1` takes a capability
+fault, `cause = 24`. The only difference is whether the loop body runs.
+
+**The emitted sequence, at `va_sum+0x10c`:**
+
+```
+ldc           a0, 0x0(a3)     ; ap
+cincoffsetimm a2, a0, 0x10    ; ap += 16
+stc           a2, 0x0(a3)
+ld            a0, 0x0(a0)     ; <-- 8-byte load of what is a POINTER
+ldc           a2, 0x0(a0)     ; <-- dereference through it: cause 24
+addi          a0, a0, 0x10    ; <-- and integer arithmetic on it
+```
+
+A struct larger than 2*XLEN is passed in varargs **by reference**. On this target that
+reference is a 128-bit capability, but the va_arg lowering fetches it with an XLen-sized `ld`
+and then advances it with `addi`. The tag is gone before the first dereference, so **any
+variadic function receiving a struct larger than 16 bytes faults.**
+
+**Why it did not show up earlier.** The va_arg check recorded on 2026-08-14 covered `int`,
+`long`, `void *` and `double` -- all register-sized, none passed by reference. Structs were
+never tested.
+
+**Found via** mruby: `mrb_funcall_id(mrb, self, mid, argc, ...)` reads `va_arg(ap, mrb_value)`,
+and `mrb_value` is 32 bytes under `MRB_NO_BOXING`. The in-domain matched pair was
+`mrb_funcall_id` with argc 0 (returns) against argc 1 (faults), before the reproducer was cut
+down to the ten lines above.
+
+**Blocks:** loading mrblib, so mruby runs bytecode but has no Ruby-level standard library. The VM
+itself is fine -- six Ruby constructs execute correctly (see the history note).
+
+**Not fixed.** The lowering to change is the by-reference vararg case, which must use `ldc` and
+`cincoffsetimm` rather than `ld` and `addi`.
+
+**A caveat about reading fault addresses, learned here.** The monitor's reported `pc` pointed at
+`cincoffsetimm a0, s0, -0x24c`, whose `rs1` is the frame pointer and is demonstrably tagged four
+instructions earlier. The real fault is later in the same basic block. Treat the reported pc as
+locating a BLOCK, not an instruction, until someone establishes otherwise -- and note that the
+C-23 diagnosis was reached with the same assumption, where it happened not to matter.
+
+---
+
+## C-25 — a POINTER DIFFERENCE required both operands to be tagged · `FIXED 2026-08-15`
+
+**Three lines reproduce it**, and the two shapes disagreed with each other:
+
+```c
+long addr(void *p)          { return (long)(uintptr_t)p; }   /* -> mv  a0, a0    */
+long diff(char *a, char *b) { return a - b; }                /* -> lcc a1, a1, 2 */
+                                                             /*    lcc a0, a0, 2 */
+```
+
+Same IR node (`ptrtoint` -> `TRUNCATE i128 -> i64`), two lowerings. Only one of them
+requires a tag.
+
+**Why that is wrong, from the spec rather than from taste.**
+`capstone-spec/parts/cap-man-insn.adoc:164-168` gives LCC exactly one exception condition:
+*"Unexpected operand type (24) - x[rs1] is not a capability"*, with no `imm` qualifier. And the
+opening paragraph of `parts/existing-insn.adoc` says an ordinary RISC-V instruction reading a
+capability register uses its `cursor`. So the address is obtainable **without** a tag, and
+`lcc` was the wrong instrument for a pointer difference.
+
+**What it broke.** `NULL - NULL`, which is ordinary C and 0 on every real implementation.
+mruby's VM entry does it:
+
+```c
+struct mrb_context *c = mrb->c;
+ptrdiff_t cioff = c->ci - c->cibase;   /* vm.c:1120, both null on the first call */
+if (!c->stbase) stack_init(mrb);       /* they are initialised HERE */
+```
+
+so `mrb_top_run` faulted before a single Ruby instruction executed. Any C program with the same
+shape would have hit it.
+
+**Fix:** `CapstoneISelLowering.cpp` `lowerSUB`, capability-minus-capability branch, now narrows
+both operands with `ISD::TRUNCATE` (selects to `PseudoTRUNC_CAP` = `addi rd, rs, 0`) instead of
+`cap_get_cursor`. Capability-minus-integer is untouched and still uses `cincoffset` -- that one
+produces a capability and must keep its tag.
+
+**Deliberate difference from lcc, for a case C cannot reach:** on a SEALED capability the integer
+path reads `base` where `lcc(2)` reads `cursor`. A pointer difference over sealed capabilities is
+not a meaningful C operation.
+
+**Tests:** new `cap-ptrdiff-untagged.ll`, four cases including a guard that capability-minus-integer
+still emits `cincoffset`. `ptr-arith.ll` and `ptr-diff-signed.ll` had pinned `lcc` incidentally --
+their stated subjects are "not a full-width i128 subtraction" and "signed scaling uses srai", both
+unchanged -- and were updated with the reason recorded in each. Capstone lit **49/49**.
+
+**Found by** the mruby bring-up, and only after `helper_cslcc` was changed to raise the
+architectural exception instead of `assert()`-ing: while it aborted QEMU the monitor never
+reported a pc, and the fault could not be localised past "somewhere in mrb_top_run".
+
+---
+
+## C-24 — `__builtin_ctz` crashes the backend, because CTTZ expands to a TABLE · `CHARACTERISED 2026-08-15, not fixed`
+
+**One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf -mattr=+m`:
+
+```c
+unsigned f(unsigned x) { return __builtin_ctz(x); }
+```
+
+```
+Assertion `(Res.getValueType() == Node->getValueType(0) || ...) &&
+           "Type mismatch for custom legalized operation"' failed.
+```
+
+**Which builtins, measured:**
+
+| builtin | 32-bit | 64-bit |
+|---|---|---|
+| `__builtin_ctz` / `ctzl` | **FAILS** | **FAILS** |
+| `__builtin_ffs` | **FAILS** | — |
+| `__builtin_clz` / `clzl` | OK | OK |
+| `__builtin_popcount` / `popcountl` | OK | OK |
+
+**Mechanism, from the legalizer's own trace** (`llc -debug-only=legalizedag`), which names
+the node it dies on:
+
+```
+Legalizing: t28: i64 = ConstantPool<[32 x i8] c"\00\01\1C\02\1D\0E\18\03..."> 0
+Trying custom legalization
+<assert>
+```
+
+Without Zbb, `CTTZ` is expanded by generic code into a **de Bruijn multiply indexing a 32-byte
+table**, and that table is a `ConstantPool` node of type **i64**. `lowerConstantPool`
+(`CapstoneISelLowering.cpp:10119`) returns `LGA:i128` **unconditionally** — a capability — so a
+custom lowering hands back a different type than the node it was asked to lower, and generic
+`LegalizeOp` asserts. `CTLZ` and `CTPOP` survive because their expansions are pure arithmetic with
+no table. The i128 path is fine and is not in question; it is the i64-typed pool that has no
+correct answer today.
+
+**Why it never showed up before:** nothing we compile had used `__builtin_ctz`. It was found by
+compiling mruby, whose hash table calls it (`src/hash.c`, `ib_capa_to_bit`).
+
+**Workaround in the meantime**, no source change: compile that one file with `-U__GNUC__`, which
+selects mruby's own de Bruijn fallback, written for compilers without the builtin. Verified.
+
+**A fix is NOT attempted here and the shape is not obvious.** Returning `LLA:<node type>` for the
+non-i128 case is type-correct, but it produces an integer address whose load must then add `gp`,
+and whether ISel has a pattern for that is unverified. Note the current i64 branch **always
+crashes**, so no working code can regress — whatever is done here is strictly an improvement.
+
+---
+
+## C-23 — the address of an UNDEFINED WEAK symbol is not null · `CHARACTERISED 2026-08-14, worked around by not using the idiom`
+
+**The C idiom that does not work here:**
+
+```c
+extern void f(void) __attribute__((weak));
+if (f) f();          /* on this target: the branch is taken and f() is CALLED */
+```
+
+**Emitted for an undefined `__stdio_exit`, from `file_probe.dom`:**
+
+```
+   10c5c: auipc a1, 0xfffef        <- pc-relative, so NOT zero
+   10c60: addi  a1, a1, 0x3a4
+   10c64: cincoffset a2, gp, a1
+   10c74: beqz  a2, 0x10c80        <- never taken
+   10c7c: cjalr ra, 0(a0)          <- calls a symbol that does not exist
+```
+
+The symbol really is undefined in the image (`llvm-nm` shows `w __stdio_exit`, weak with no
+address), so the null test is the only thing standing between the program and the call, and it
+does not fire. Elsewhere a linker relaxes an undefined-weak `auipc`/`addi` pair to materialise 0;
+here the pair survives and the pc-relative value is whatever it is.
+
+**How it presented**, which is the part worth remembering: `file-probe` printed
+`__CAPSTONE_FILE_PROBE_PASSED__` and *then* took a capability fault (`cause = 2, pc =
+0x101590000`). Everything the probe tested had already succeeded; the fault was in the runtime's
+exit path, added the same day. A marker-based verdict that stops reading at PASSED would have
+called that run green.
+
+**Workaround:** do not test a weak function pointer. `runtime/hostcall.c` now calls
+`__stdio_exit()` unconditionally and relies on musl's own weak *definition* (a no-op in
+`src/exit/exit.c`, overridden by the real one in `__stdio_exit.o` when a FILE is used) — a weak
+DEFINITION behaves correctly; it is the undefined-weak ADDRESS that does not.
+
+**Not investigated:** whether this is lld's relaxation or the backend's pc-relative lowering, and
+whether an undefined weak *data* symbol behaves the same way. Both are worth knowing before anyone
+relies on the idiom again.
+
+---
+
+## C-22 — at `-O1` an integer is selected as a `cincoffsetimm` BASE · `WORKED AROUND 2026-08-14 by building vfprintf at -O0`
+
+**Symptom:** `qemu-system-riscv64: op_helper.c:626: helper_cscincoffsetimm: Assertion 'rs1_v->tag'
+failed.` The domain dies; on silicon this would be a capability fault.
+
+**Where it comes from.** musl's `fmt_u` (the `*--s = '0' + y%10` digit loop) inlined into
+`fmt_fp`, over the local `char ebuf0[3*sizeof(int)], *ebuf=&ebuf0[12]`. The optimiser splits the
+pointer into a capability base and an integer index; the index is i128 — the same width as a
+capability on this target — and its decrement is then selected as capability arithmetic:
+
+```
+2582:  li             a1, 12          <- the index, an INTEGER
+2584: .LBB1_325:
+2589:  cincoffsetimm  a1, a1, -1      <- capability arithmetic on it
+2598:  cincoffset     a5, a1, s7      <- and the capability ends up in the OFFSET position
+2599:  sb             a4, 0(a5)
+```
+
+`a1` has exactly two reaching definitions — `li a1, 12` in the preheader and the
+`cincoffsetimm` on the back edge — so no path brings a tagged capability into it. That much is
+settled by the listing. **Which pass introduces the split is NOT established**, and the entry
+claims nothing about it.
+
+**Counts, from `libc-ext/scan-cap-base.py` over musl's vfprintf:** `-O0` **0** sites, `-O1` **6**,
+`-O2` **3**. Hence the workaround: `build-musl-capstone.sh` builds the generated vfprintf at `-O0`
+and the scanner runs as a build gate (with its own self-test, so a zero means something).
+
+**Localised by, and reproducible with:** `musl-capstone/printf-probe`, which reaches
+`%d %u %x %o %c %s` and faults on the first `%08.3f`.
+
+**Reduction attempts FAILED.** The obvious two-line digit loop, and the same loop over a local
+buffer with a constant end offset, both compile clean at `-O0/-O1/-O2`. Whatever the trigger is,
+it needs more of `fmt_fp` than that, so there is no small test case yet and the lit suite cannot
+lock this down.
+
+**Related and already handled elsewhere:** the backend does canonicalise `cap + int` so the
+capability lands in `rs1` — `llvm/test/CodeGen/Capstone/cap-cincoffset-base.ll`,
+`isCapstoneCapabilityValue`. This is a gap in that classifier, not its absence.
+
+---
+
+## C-21 — casting a NEGATIVE integer constant to a capability crashed clang's constant evaluator · `FIXED 2026-08-14`
+
+**One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf`:
+
+```c
+void *f(void) { return (void *)-100; }
+```
+
+```
+Assertion `getActiveBits() <= 64 && "Too many bits for uint64_t"' failed.
+```
+
+**It is specifically a negative CONSTANT.** Measured, same flags, same file:
+
+| expression | result |
+|---|---|
+| `(void *)1` | **OK** |
+| `(void *)-100` | **FAILS** |
+| `(void *)(long)-100` | **FAILS** |
+| `(void *)(long)x` for a runtime `x` | **OK** |
+| passing `(void *)-100` as an argument | **FAILS** |
+
+Sign-extending a negative constant to i128 sets every high bit, and the backend
+then reads it with `getZExtValue()`, which asserts.
+
+**Why it matters more than a one-liner suggests: `AT_FDCWD` is `-100`.** musl
+marshals syscall arguments with `__scc(X)`, which under this port is a cast to
+`void *` (see C-20's neighbour, `musl-capstone/arch-capstone64/syscall_arch.h`),
+so **every `*at()` wrapper performs exactly this cast**. That is why
+`src/fcntl/open.c` and `src/stdio/fopen.c` do not compile, and it is not the
+long-double family they were first attributed to — same assertion text, different
+cause.
+
+**19 of the 119 musl files that fail to compile name `AT_FDCWD`.** That is an
+indicator, not an apportionment: the 119 have not been split between C-20 and
+C-21, and some files may hit both.
+
+**FIXED 2026-08-14** in `clang/lib/AST/ExprConstant.cpp`, `CK_IntegralToPointer`:
+clamp the extension width to 64 bits, which is what `getZExtValue()` requires.
+
+```c
+unsigned Size = std::min<unsigned>(Info.Ctx.getTypeSize(E->getType()), 64);
+```
+
+A clamp rather than "use the address width" on purpose: every upstream target
+has pointers of at most 64 bits, so the branch is unreachable for them and their
+behaviour is *provably* unchanged. Substituting `uintptr_t`'s width would not be
+-- targets exist with a 32-bit pointer in one address space and a 64-bit
+`uintptr_t`, and there the extension width would silently move.
+
+**Validated.** `(void *)-100` compiles; Capstone lit 54/54; upstream
+`clang/test/SemaCXX` + `clang/test/Sema` 2411 passed, 0 failures. The musl port
+went from **1242 to 1280** of 1361 files (91.3 % -> 94.0 %), **38 recovered**,
+and the `getActiveBits() <= 64` bucket fell from 51 to 9. `src/fcntl/open.c`,
+`src/stdio/fopen.c`, `src/stat/fstatat.c`, `src/unistd/lchown.c` and
+`src/stat/mkdir.c` all compile again, and `musl-capstone/runtime/musl_gaps.c` --
+which existed only to work around this -- has been **deleted**: file I/O from a
+domain now runs through musl's own `open()` and `fsync()`
+(`musl-capstone/file-probe/`, re-run green after the fix).
+
+**The fix belongs in the backend** and looks small: the constant path needs to
+stop assuming the materialised value fits in 64 bits. Unlike C-20 this is not a
+representation conflict — the cursor value genuinely fits, it is the
+sign-extension to capability width that is being read back wrongly.
+
+**Reproducer:** the one-liner above.
+Trail: `history/14-08-2026_23-00-00_file-io-from-a-domain-through-musl.md`.
+
+
+---
+
+## C-20 — `long double` is unusable on `capstone64`: every 128-bit float builtin fails to compile · `CHARACTERISED 2026-08-14, no fix, avoidable`
+
+**`long double` is binary128 on this target, and so is a capability.** The backend
+conflates the two, so nothing that touches a 128-bit float compiles — not in musl, and not
+in our own compiler-rt.
+
+**It can also CRASH the compiler outright, not merely fail to link** (measured 2026-08-15 on
+mruby 491d68bb, corpus row 14, `src/fmt_fp.c`, which uses `long double` five times):
+
+```
+clang: llvm/include/llvm/ADT/APInt.h:1565: int64_t llvm::APInt::getSExtValue() const:
+       Assertion `getSignificantBits() <= 64 && "Too many bits for int64_t"' failed.
+```
+
+An assertion, not a diagnostic, so there is no source location in the message and the file is
+only identifiable from the driver's `-c` argument. Upstream mruby dropped `long double` from
+`fmt_fp.c` by 2022 (bf5bbf0a has none), which is why this surfaced only when reaching for an
+older pinned tree. The existing narrowing transform (`libc-ext/gen-vfprintf-double.py`, written
+for musl's `vfprintf`) is the same substitution these files need.
+
+**Measured.** Every 128-bit builtin, `-O0`, `-target capstone64-unknown-elf`:
+
+```
+comparetf2.c   addtf3.c   subtf3.c   multf3.c   divtf3.c
+extenddftf2.c  extendsftf2.c  floatsitf.c  floatunsitf.c
+trunctfdf2.c   trunctfsf2.c                       -- ALL FAIL
+```
+
+with four distinct signatures, all the same cause:
+
+```
+Assertion `getActiveBits() <= 64 && "Too many bits for uint64_t"' failed.
+Assertion `getSignificantBits() <= 64 && "Too many bits for int64_t"' failed.
+Assertion `VT.isVector() && "Unable to legalize non-vector shift"' failed.
+error in backend: Capstone PureCap: Cannot materialize arbitrary >64-bit constants
+```
+
+musl shows the same family from the other side: **39 of its files** (31 `src/math/*l.c`,
+8 `src/complex/*l.c`) fail identically. This is 39 of the 119 files that do not compile in
+the musl port — the single largest group.
+
+**Why it bites programs that never mention `long double`.** musl's `strtod` converts
+through `long double` (`src/internal/floatscan.c`), so *any* string-to-float conversion
+pulls the whole family in. Linking reference Lua against musl produced **15 undefined
+symbols** from that one path — `__addtf3`, `__multf3`, `__getf2`, `fabsl`, `copysignl`,
+`fmodl` and the rest — none of which can be supplied, because their sources do not
+compile. `printf` of a float is the same story via `vfprintf`, which is likewise absent.
+
+**Two non-fixes, both tried:**
+
+- `-mlong-double-64` is **rejected by the target**: `unsupported option '-mlong-double-64'
+  for target 'capstone64-unknown-unknown-elf'`.
+- Setting `LDBL_MANT_DIG` to 53 in musl's `bits/float.h` compiles 39 more files and is
+  **unsound** — the compiler still has `long double` at 128 bits. musl catches the lie
+  itself: `src/stdio/vfprintf.c` fails with
+  `'compiler_defines_long_double_incorrectly' declared as an array with a negative size`.
+
+**Avoidance, which is what `musl-capstone/lua-probe/` does.** Supply your own `strtod`
+so `floatscan.o` is never pulled, and do not format floats. That removed all 15 symbols at
+once. It is avoidance, not a fix: the stubs are loud on purpose, because a silent partial
+`strtod` would let a program compute a wrong number and still report success.
+
+**The fix belongs in the backend** — either support `-mlong-double-64` for this target, or
+separate integer-i128 from capability-i128 so 128-bit float lowering can proceed. Until
+then, treat `long double`, `strtod`, `strtof`, `strtold` and float formatting as
+unavailable in a domain.
+
+**Reproducer:** any of the files above, one `clang -c` each.
+Trail: `history/14-08-2026_21-30-00_reference-lua-runs-on-musl-in-a-domain.md`.
+
+
+---
+
+## C-19 — a call in RETURN POSITION loses its epilogue and its return · `WORKED AROUND 2026-08-14 with -fno-optimize-sibling-calls`
+
+**`return callee(...)` is compiled to a call WITH LINK followed by nothing.** No epilogue, no
+return: control falls through into whatever basic block the linker placed next. Callee-saved
+registers stashed by the prologue are never restored, and `ra` still points at the fall-through
+instruction, so the eventual `cjalr zero, 0(ra)` jumps to itself.
+
+**Minimal reproducer** (no musl, no Capstone runtime, reproduces at `-O0`, `-O1` and `-O2`):
+
+```c
+long callee(long a);
+long c_only(long x) { return callee(x); }
+```
+
+emits
+
+```
+  cincoffsetimm sp, sp, -0x20
+  stc  ra, 0x10(sp)
+  stc  s0, 0x0(sp)
+  ...
+  cjalr ra, 0x0(a1)     <-- call WITH link
+                        <-- and that is the end of the function
+```
+
+With `-fno-optimize-sibling-calls` the same source emits the call followed by
+`ldc ra` / `ldc s0` / `cincoffsetimm sp` — a correct epilogue. So the defect is on the
+sibling-call path: the backend decides to tail-call, then emits a linking call and drops the
+return.
+
+**How it presented**, before the shape was known: musl's `write()` inside a domain performed its
+write correctly and the caller then executed its own `default:` case and returned `-ENOSYS`,
+because `return __capstone_hc_write(...)` fell through into the next case. The wrong answer was
+delivered with no fault and no diagnostic; a host-side trace of every hostcall entry showed the
+same syscall number arriving twice, once handled and once refused, which is what localised it.
+
+**Scope, and why this is worth a registry entry rather than a note.** `build-sqlite-capstone.sh`
+already carries `-fno-optimize-sibling-calls` in `COMMON_FLAGS`, undocumented, so the workaround
+predates this analysis and its reason was not written down anywhere. **Any domain built without
+that flag is potentially miscompiled**, and it takes only one `return f(...)` to trigger. The
+freestanding benchmark builds and any new probe are exposed unless they carry it.
+
+**Not fixed**, only worked around. The backend fix belongs in the Capstone sibling-call lowering.
+
+**Reproducer:** `capstone/musl-capstone/` builds carry the flag with a comment pointing here;
+the three-line case above is the smallest form.
+
 
 ---
 
