@@ -2507,6 +2507,53 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
+### C-19 — at `-O1` the backend applies `lcc` (cursor query) to an INTEGER, and the SQLite domain dies on it `OPEN — OURS, BLOCKS -O1`
+
+**This is what now blocks `-O1`, after C-17 turned out not to be (see C-17).** The amalgamation
+compiles and links at `-O1`; the image then enters the domain and dies immediately:
+
+    SQ: G/enter
+    qemu-system-riscv64: ../target/riscv/op_helper.c:762:
+        helper_cslcc: Assertion `rs1_v->tag' failed.
+
+`lcc` with selector 2 is the CURSOR query and is NOT total -- it requires a tagged capability in
+rs1. At `-O1` two sites apply it to a value that is plainly an integer. Both are in
+`sqlite3_str_vappendf`, and both have the same shape (`sqlite-o1.dis`, image VA `0x13800`):
+
+    137f4: ldc  a3, -0x1b0(s0)
+    137f8: and  a0, a0, a3      <- INTEGER and; the result carries no tag
+    137fc: mv   a0, a0
+    13800: lcc  a0, a0, 0x2     <- cursor query on that integer  => fault
+
+The second is identical at `0x1387c`. **Statically detected and matched-pair controlled:** an
+`lcc` selector-2 whose producing instruction is an integer op occurs **2 times at `-O1` and 0
+times at `-O0`**, over the same source. `-O0` also has 192 `lcc ...,0x2` against `-O1`'s 212.
+
+**Matched-pair evidence, one variable.** Same source, same flags, opt level only:
+
+| build | QEMU |
+|---|---|
+| `-O0` | PASSES -- `__CAPSTONE_SQLITE_SILICON_PASSED__` |
+| `-O1` | enters the domain, then the `helper_cslcc` tag assertion |
+
+**Root cause is structural, not a stray pattern.** On this target there is no capability `MVT`,
+so the backend uses `MVT::i128` as the machine type for capabilities
+(`CapstoneISelDAGToDAG.cpp` `MVT PtrVT = MVT::i128`, `CapstoneISelLowering.cpp:192`
+`addRegisterClass(MVT::i128, &Capstone::GPRRegClass)`). Genuine integers and capabilities are
+told apart by heuristics (`isCapstoneIntegerOffset` / `isCapstoneCapabilityValue`) that
+recognise definitely-integer and definitely-capability shapes and **default to capability**. A
+value that is neither -- here the result of an `and` on two cursors, which is an ordinary
+integer -- falls through to the capability path and gets an `lcc`.
+
+**Why this matters beyond SQLite:** the default is toward *emitting a capability operation on an
+integer*, which faults loudly here but is the same mechanism that makes source-level `__int128`
+silently miscompile. The durable fix is a dedicated capability `MVT` (CHERI-LLVM's `c128`), which
+is large and invasive; the cheap fix is to stop `lcc` being emitted on a value whose producer is
+an integer op.
+
+**Do not read a `-O1` board result before this is fixed** -- the image does not survive domain
+entry on QEMU, so any board run of it measures this, not S-12.
+
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
 **A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
