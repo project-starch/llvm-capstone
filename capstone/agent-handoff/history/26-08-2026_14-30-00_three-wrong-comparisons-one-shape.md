@@ -72,3 +72,53 @@ machinery than the problem needs and would not have covered #2 or #3.
 - [[26-08-2026_11-05-00_fabricated-lut-figures-retracted]] -- incident #1 and its un-retraction.
 - [[26-08-2026_12-40-00_waw-refutation-is-structural-not-measured]] -- same session, different
   shape: a measurement that could not fire at all.
+
+---
+
+# ADDENDUM: the delta REVERSES SIGN between stages, measured
+
+The strongest single reason to stage-qualify a LUT figure on this design is not an argument, it
+is this measurement. Same two commits, same flow, two stages:
+
+    post-SYNTHESIS   base 171,497  ->  arm A 172,962    +1,465
+    post-PLACEMENT   base 171,460  ->  arm A 170,726      -734
+
+**The synthesis-stage excess does not survive placement, and the sign flips.** A change that looks
+like it costs 1,465 LUTs after synthesis is 734 LUTs *smaller* than its base after placement.
+
+So an unqualified "this change costs N LUTs" is not merely imprecise here, it can carry the wrong
+SIGN, and the routing-risk conclusion drawn from it inverts with it: +1,465 reads as "approaching
+the congestion cliff that killed 1cb22e30a at 85.05%", while -734 reads as "placed less densely
+than a build that routed in 92 minutes". Those are opposite decisions from the same pair of
+commits.
+
+Caveat kept attached, because it is the very error this note is about: arm A is retiming-OFF
+against a retiming-ON base, so neither figure is the cost of the RTL change alone. Both are
+your-RTL-plus-retiming-off. The clean measurement is arm B, retiming ON, RTL the only variable.
+
+# ADDENDUM 2: a fourth instance, and it belongs to a second family
+
+The milestone ladder tracking these builds pointed its 50/75/100 markers at `work-fpga/`. The
+Makefile only populates that directory by a `cp` AFTER `run.tcl` returns, so all three markers
+would have fired at once at the very end and reported nothing during the run. During a run the
+reports live in `ariane.runs/impl_1/`. Found because a build was visibly routing while the
+tracker still said 25%.
+
+That is not a comparison error, so it does not extend the list above. It is the SECOND family
+this session produced, and the two are worth naming apart:
+
+* **Family A -- compared two things that are not the same kind of thing.** Incidents 1-3 above.
+* **Family B -- looked for the right thing in the wrong place.** This ladder; and the grep in
+  incident 1 that searched one machine and could not see inside `.tar.gz` archives, which is what
+  produced the false retraction.
+
+Family B is the more dangerous of the two, because its failure output is an ABSENCE — an empty
+grep, a marker that never fires — and an absence reads as a clean result. Family A at least
+produces a number somebody may sanity-check.
+
+The proposed rule above addresses Family A only. If the lead wants Family B covered too, the
+smallest wording that would have caught both instances is:
+
+> **A check that finds nothing must state where it looked.** An empty result is only evidence if
+> the search covered the places the subject could actually be — other machines, inside archives,
+> directories not yet populated at that point in the flow.
