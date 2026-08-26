@@ -1,0 +1,5 @@
+index	name	status	got	want	oracle
+0	00_sanity.py	PASS	0x00077724	0x00077724	host python
+1	01_s01_bytes_repeat.py	FAULT	-	-	host python exits non-zero
+2	02_s01_list_repeat.py	FAULT	-	-	host python exits non-zero
+3	03_s01_tuple_repeat.py	FAULT	-	-	host python exits non-zero

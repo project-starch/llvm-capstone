@@ -1,0 +1,30 @@
+MPY-T03 / CVE-2026-1998
+
+  stock at the pin                    : fixed, prints "T03 survived", exit 0
+  stock at the fix's PARENT c9f747cccf: SIGSEGV, exit 139
+  Capstone domain                     : not run
+
+REPRODUCED AT THE PARENT. The fix commit explains the trigger outright:
+mp_import_all() assumed its argument was exactly a native module instance, so
+anything else crashes it, "eg a user class via a custom __import__
+implementation or by writing to sys.modules".
+
+repro.py takes the sys.modules route, which is three lines of ordinary Python:
+
+  sys.modules["fakemod"] = NotAModule()
+  from fakemod import *
+
+At the parent this segfaults with nothing on stdout or stderr. At the pin it
+completes normally, because mp_import_all now goes through mp_load_method_maybe
+and __dict__/__all__ instead of reaching straight into a module's globals map.
+
+NOTE ON THE CLASS. NVD records this as CWE-119/787, not CWE-416, and that is
+right: it is a type confusion reached through the import machinery rather than a
+use-after-free. It sits in this corpus because it is a lifetime-adjacent defect
+on collector-managed memory, and it is one of the few rows where the defect is
+loud on stock.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

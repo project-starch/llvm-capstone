@@ -1,0 +1,34 @@
+MPY-T28 / upstream 322
+
+  stock MicroPython at pin 2e3304a : DOES NOT REPRODUCE
+  Capstone domain under QEMU       : not run, and there is nothing to run
+
+MEASURED, AND THE ANSWER IS NEGATIVE. This row was originally filed as blocked on
+a C-level harness, because the published reproduction calls gc_alloc and
+gc_realloc directly. That was too pessimistic: the defect is "gc_realloc fails
+while the heap still has room", and bytearray.extend goes through m_renew and so
+through gc_realloc, which makes the same question askable from Python.
+
+repro.py grows a bytearray until growth fails and reports how much heap was still
+free at that moment. At the pin:
+
+  T28 grew_to 1242100  free_at_failure 827808  free_at_start 2071296
+
+At first reading that looks like the reported defect: growth failed with 827 KB
+free. It is not. Growing a 1.24 MB block in place requires 1.24 MB of CONTIGUOUS
+space, and only 827 KB remained. A non-compacting allocator refusing that is
+correct, not broken.
+
+UPSTREAM AGREES, AND SAID SO FIRST. Issue 322 is closed COMPLETED, and the
+reporter's own last comment is "I tried the same test again, and it didn't fail
+this time". The thread also contains the fix that was implemented: extend in
+place when the following blocks are free, using the logic gc_nbytes already had.
+
+So the row is resolved as not-reproducible at the pin rather than as blocked, and
+no parent build is warranted for it: the interesting version of this defect no
+longer exists in the source we compile.
+
+WHY THIS IS RECORDED AS A NEGATIVE RESULT RATHER THAN QUIETLY DROPPED. A corpus
+that only keeps the rows which confirm the thesis is not a corpus. This one was
+run, it came back clean, and the clean result was then checked against upstream
+instead of being read as evidence of anything about Capstone.

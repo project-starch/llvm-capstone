@@ -1,0 +1,69 @@
+The filesystem stack runs in a capability domain. MPY-T14/MPY-T15 are now a parent
+build and nothing else. Measured 2026-08-18.
+
+WHAT WAS CLAIMED BEFORE. REMAINING.md listed these two under work that includes
+"a block device for the domain to mount, which is where the actual design question
+sits". That was reading the ISSUES rather than their PoCs: both reproductions
+define their block device in PYTHON --
+
+    class RAMBDevSparse:
+        def readblocks(self, n, buf): ...
+        def ioctl(self, op, arg): ...
+    vfs.VfsFat.mkfs(bdev)
+
+-- so there is no host filesystem, no device and no design question. The work was
+build plumbing, and it is done.
+
+MEASURED, in a pure-capability domain under QEMU:
+
+    0000-00_sanity.py.actual     SANE 2
+    0001-01_vfs_smoke.py.actual  VFS hello 32768
+
+The second line is a FAT filesystem formatted with f_mkfs, mounted, written to and
+read back, over a 32 KiB RAM block device implemented in Python. `hello` came back
+out of the file. PASS=1 FAIL=0 FAULT=0 HANG=0.
+
+WHAT IT TOOK, in the order the build reported it. None of this was visible from
+the outside, which is why the earlier estimate was wrong in both directions.
+
+ 1. extmod/vfs*.c into port/Makefile's EXTMOD_SRC_C, which the amalgamation reads,
+    so header generation and the amalgam cannot disagree about the module set.
+    modvfs.c is a SEPARATE file from vfs.c and carries the
+    MP_REGISTER_MODULE(MP_QSTR_vfs, ...); without it everything links and the
+    domain answers `ImportError: no module named 'vfs'`.
+ 2. lib/oofatfs had no mechanism at all -- lib/ sources beyond libm were not a
+    thing this build could express. OOFATFS_UNITS is the same shape as LIBM_UNITS.
+ 3. The header generator preprocesses ff.h too, so it needs FFCONF_H and the
+    oofatfs include path, not just the compile step.
+ 4. MICROPY_ENABLE_FINALISER, demanded by extmod/vfs_fat.c:32 and not chosen. It
+    adds a finaliser table to the heap, so it stays behind MPY_VFS.
+ 5. MICROPY_FATFS_RPATH=2, because vfs_fat.c calls f_chdir and f_getcwd
+    unconditionally and ff.c only compiles them when FF_FS_RPATH is set.
+ 6. get_fattime, in the port glue. The domain has no clock, so it returns a FIXED
+    date rather than an invented one; every file carries the same mtime, which is
+    visible and constant rather than plausible and wrong.
+ 7. shared/timeutils/timeutils.c, for vfs_fat.c's stat().
+ 8. A CAPABILITY BUG, and the only item here that is not plumbing. Patch 0021:
+    extmod/vfs_fat_file.c declares its stream ioctl argument as uintptr_t and then
+    casts it back to a pointer -- `(struct mp_stream_seek_t *)(uintptr_t)arg`.
+    On this target that strips the tag and hands MP_STREAM_SEEK an untagged word,
+    which is a capability fault at the first dereference, not a diagnostic. Patches
+    0012 and 0020 did this sweep for py/ and moddeflate; vfs_fat_file.c was outside
+    both because nothing reached it until MICROPY_VFS was on.
+ 9. A TYPEDEF COLLISION the amalgamation makes possible and a per-file build would
+    not: lib/crypto-algorithms/sha256.h says `typedef unsigned int WORD`, ff.h says
+    `typedef uint16_t WORD`, one translation unit. Resolved with the EXTMOD_STATICS
+    renaming mechanism that already existed for statics. The first attempt DROPPED
+    modhashlib instead, which left a dangling mp_module_hashlib in the module table
+    genhdr had already emitted -- a link error that reads as unrelated.
+
+CONTROL. Built at EXTRA feature level with and without every change above,
+MPY_VFS unset both times: md5 bc1f806a8179ca94 either way, byte-identical. So the
+default image carries none of this.
+
+WHAT REMAINS FOR MPY-T14/MPY-T15. Both are FIXED at the pin -- `present_at_pin=no`,
+both by 64f0394d80ca -- and the pin raises `ValueError: lhs and rhs should be
+compatible` on the reproduction, verified on the host. So they need the domain
+built from the fix's PARENT, 4e6dc0b569 (2026-05-09), which is the procedure
+backport-2024/ already established for MPY-T02 and MPY-T05. Three months before
+the pin, against the 2024 backport's much larger gap.

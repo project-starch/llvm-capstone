@@ -1,0 +1,57 @@
+Domain round 2, QEMU, 2026-08-17. Six corpus rows measured, one of them diagnosed.
+Image: EXTRA feature level, pin 2e3304a. Driver: run-resumable-suite.py --capture-output.
+Scripts: ../repros/domain/. Raw table: domain-round2-results.tsv.
+
+row  issue   stock            domain               domain output
+---- ------- ---------------- -------------------- ---------------
+T09  18168   silent corrupt   untrapped-identical  "T09 1 1"
+T10  18171   silent corrupt   untrapped-identical  "T10 1 1"
+T13  19075   SIGSEGV          untrapped-no-crash   "T13 survived"
+T12  18619   SIGSEGV          fault cause 24       -
+T11  17941   SIGSEGV          fault cause 24       -
+T25  10402   SIGSEGV          fault cause 24       -
+
+UNTRAPPED, AND CORRUPTION VERIFIED: T09 and T10.
+  Both return a retval whose output hash equals a value computed from stock
+  MicroPython's output BEFORE the domain run, not rationalised after it. Their
+  scripts do not merely survive, they report the divergence: the memoryview
+  addresses storage the container no longer owns, and a write through it does
+  not reach the container. T10 is an adaptation, because upstream 18171 uses
+  open() plus readinto() as the write vehicle and this domain has no
+  filesystem; the defect under test is unchanged, and the unmodified original
+  also runs silently on stock, printing OK.
+
+UNTRAPPED, CORRUPTION NOT VERIFIED: T13.
+  Stock segfaults, the domain prints "T13 survived". That looked like a test
+  that never fired, so it was diagnosed instead of recorded. A separate probe
+  reports the domain hands write() a BYTEARRAY, exactly as stock does, so the
+  in-place mutation does happen and does reallocate under the caller. The
+  trigger is created and the domain does not fault.
+
+  What is NOT established is that memory was corrupted. Only survival was
+  measured. The row therefore says untrapped-no-crash, which is deliberately a
+  weaker claim than T09 and T10, and it should not be quoted as if it were the
+  same result.
+
+FAULTED, BUT NOT FOR TEMPORAL SAFETY: T12, T11, T25.
+  All three halt with cause 24, an untagged word used as a pointer. T12 and T11
+  fault at the same pc, 0x101619b00; T25 at 0x10166007c. Different instructions,
+  same class. That is the tag check catching a wild pointer, which is what the
+  MMU catches on stock, where all three SIGSEGV. Nothing here shows Capstone
+  determining that an object was dead, and any pointer-integrity mechanism stops
+  these three. They are not evidence of temporal protection.
+
+IN-IMAGE CONTROL.
+  idx 0 returns its expected value in every image, so the interpreter runs, and
+  three tests fault, so capability checking is live in these exact images. A
+  quiet return is therefore not explainable by a domain that never started or by
+  checks that were switched off.
+
+WHAT THE ROUND COST, AND WHY IT IS WORTH RECORDING.
+  The first image of round 1 was built at CORE_FEATURES, where memoryview does
+  not exist. The test died with "NameError: name not defined" AND STILL RETURNED
+  A RETVAL, which is indistinguishable from an untrapped run unless the captured
+  output is read. Round 2 repeated the same lesson in a different shape with
+  T13: a clean return that turned out to need a diagnosis before it meant
+  anything. Both were caught only because --capture-output was on. Do not run
+  this harness without it.

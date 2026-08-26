@@ -1,0 +1,29 @@
+Is AddressSanitizer blind to a nested-allocator use-after-free? Measured 2026-08-17.
+
+Build both with the same toolchain and flags:
+  cc -fsanitize=address -g -o control asan-control-plain-malloc.c
+  cc -fsanitize=address -g -o nested  asan-nested-allocator.c
+
+== CONTROL: an ordinary malloc use-after-free ==
+  AddressSanitizer: heap-use-after-free ... WRITE of size 1
+  ASan reports it. The tool works in this toolchain.
+
+== NESTED: the identical defect inside ONE malloc'd region ==
+  nested UAF completed, b[0] = 0xaa (0xaa means it corrupted b)
+  ASan reports NOTHING. The program exits 0.
+
+WHY. ASan tracks the allocations IT services. A runtime that takes one region
+and sub-allocates inside it in software performs its frees in its own
+bookkeeping, and ASan never sees a free to poison or a pointer to invalidate.
+The dead block stays inside a live, legitimately-allocated region.
+
+This is the same reason Capstone does not trap the defect, arrived at from a
+different direction: the hardware sees one capability over the whole region,
+ASan sees one malloc over the whole region. Neither has an object boundary to
+enforce, because the runtime never told either of them there was one.
+
+CORROBORATION FROM UPSTREAM. The author of the fix for MPY-T02/MPY-T05
+(commit 4bed614e707c) wrote that in default configurations the bug 'exists but
+has no impact', and that reproducing it required 'running the unix port under
+valgrind with GC-aware extensions'. A stock sanitizer was not enough for them
+either.

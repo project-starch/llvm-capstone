@@ -1,0 +1,62 @@
+Honor an explicit print stream without sys stdfiles.
+
+The file keyword of print was only available when both MICROPY_PY_IO and
+MICROPY_PY_SYS_STDFILES were enabled. A small embedded port can provide writable stream objects
+while deliberately omitting the global stdin/stdout/stderr objects, just like the explicit stream
+case for sys.print_exception.
+
+Expose the file keyword whenever MICROPY_PY_IO is enabled. Use a NULL default to retain the
+platform printer when sys stdfiles are absent, and otherwise route all output through either that
+printer or the explicitly supplied stream.
+
+diff --git i/py/modbuiltins.c w/py/modbuiltins.c
+index caa8c28dc..28f8885a5 100644
+--- i/py/modbuiltins.c
++++ w/py/modbuiltins.c
+@@ -391,4 +391,8 @@ static mp_obj_t mp_builtin_print(size_t n_args, const mp_obj_t *pos_args, mp_map
+         { MP_QSTR_end, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_QSTR(MP_QSTR__0x0a_)} },
+-        #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
++        #if MICROPY_PY_IO
++        #if MICROPY_PY_SYS_STDFILES
+         { MP_QSTR_file, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(&mp_sys_stdout_obj)} },
++        #else
++        { MP_QSTR_file, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_rom_obj = MP_ROM_PTR(NULL)} },
++        #endif
+         #endif
+@@ -404,4 +408,10 @@ static mp_obj_t mp_builtin_print(size_t n_args, const mp_obj_t *pos_args, mp_map
+-    #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+-    mp_get_stream_raise(u.args[ARG_file].u_obj, MP_STREAM_OP_WRITE);
+-    mp_print_t print = {MP_OBJ_TO_PTR(u.args[ARG_file].u_obj), mp_stream_write_adaptor};
++    const mp_print_t *print = &mp_plat_print;
++    #if MICROPY_PY_IO
++    mp_print_t stream_print;
++    if (u.args[ARG_file].u_obj != MP_OBJ_NULL) {
++        mp_get_stream_raise(u.args[ARG_file].u_obj, MP_STREAM_OP_WRITE);
++        stream_print.data = MP_OBJ_TO_PTR(u.args[ARG_file].u_obj);
++        stream_print.print_strn = mp_stream_write_adaptor;
++        print = &stream_print;
++    }
+     #endif
+@@ -416,19 +426,7 @@ static mp_obj_t mp_builtin_print(size_t n_args, const mp_obj_t *pos_args, mp_map
+         if (i > 0) {
+-            #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+-            mp_stream_write_adaptor(print.data, sep_data, u.len[0]);
+-            #else
+-            mp_print_strn(&mp_plat_print, sep_data, u.len[0], 0, 0, 0);
+-            #endif
++            mp_print_strn(print, sep_data, u.len[0], 0, 0, 0);
+         }
+-        #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+-        mp_obj_print_helper(&print, pos_args[i], PRINT_STR);
+-        #else
+-        mp_obj_print_helper(&mp_plat_print, pos_args[i], PRINT_STR);
+-        #endif
++        mp_obj_print_helper(print, pos_args[i], PRINT_STR);
+     }
+-    #if MICROPY_PY_IO && MICROPY_PY_SYS_STDFILES
+-    mp_stream_write_adaptor(print.data, end_data, u.len[1]);
+-    #else
+-    mp_print_strn(&mp_plat_print, end_data, u.len[1], 0, 0, 0);
+-    #endif
++    mp_print_strn(print, end_data, u.len[1], 0, 0, 0);
+     return mp_const_none;
