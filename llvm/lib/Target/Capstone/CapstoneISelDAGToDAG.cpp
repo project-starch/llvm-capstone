@@ -19,6 +19,7 @@
 #include "CapstoneSelectionDAGInfo.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/SDPatternMatch.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/IR/Module.h"
@@ -408,13 +409,35 @@ static SDValue selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
 // What stays refused is a constant with bits ABOVE the low 64: that would
 // fabricate capability metadata rather than an address, and the boundary case
 // (2^64 exactly) is pinned in cap-constants-invalid.ll.
-static int64_t getI128NumericValueOrFatal(const ConstantSDNode *ConstNode,
+//
+// WHY THIS DIAGNOSES RATHER THAN report_fatal_error()s. Same reasoning as the
+// 128-bit shift in CapstoneISelLowering: a fatal error reaches the user through
+// clang's crash handler, so a plain target limitation is printed as "PLEASE
+// submit a bug report" with a full stack dump, and the lit tests (which run llc)
+// cannot observe the thing the user actually sees. diagnose() reports at the
+// source location and lets code generation finish.
+//
+// The message names the FUNCTION and prints the offending value, because the
+// caller of this is inside ISel and there is otherwise nothing in the output to
+// say where in a 350k-line translation unit the constant came from -- which cost
+// a reduction run over a 17 MB module to answer once already.
+static int64_t getI128NumericValueOrFatal(SelectionDAG *DAG,
+                                          const ConstantSDNode *ConstNode,
                                           StringRef Context) {
   const APInt &Val = ConstNode->getAPIntValue();
   if (Val.getBitWidth() <= 64)
     return Val.getSExtValue();
-  if (!Val.isIntN(64) && !Val.isSignedIntN(64))
-    report_fatal_error(Twine("Capstone PureCap: ") + Context);
+  if (!Val.isIntN(64) && !Val.isSignedIntN(64)) {
+    SmallString<48> HexVal;
+    Val.toString(HexVal, 16, /*Signed=*/false, /*formatAsCLiteral=*/true);
+    DAG->getContext()->diagnose(DiagnosticInfoUnsupported(
+        DAG->getMachineFunction().getFunction(),
+        Twine("Capstone PureCap: ") + Context + " (value " + HexVal + ")",
+        SDLoc(ConstNode).getDebugLoc()));
+    // A DEFINED value, so codegen completes and the diagnostic above is what the
+    // user sees rather than a crash trace.
+    return 0;
+  }
   return Val.trunc(64).getSExtValue();
 }
 
@@ -1289,7 +1312,7 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   if (BasePtr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(BasePtr.getOperand(1))) {
       BaseOffset = getI128NumericValueOrFatal(
-          C, "Folded load/store displacement must fit in 64 bits");
+          CurDAG, C, "Folded load/store displacement must fit in 64 bits");
       BasePtr = BasePtr.getOperand(0);
     }
   }
@@ -1327,7 +1350,7 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
       return false;
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
     int64_t OffsetVal = getI128NumericValueOrFatal(
-        C, "Folded load/store displacement must fit in 64 bits");
+        CurDAG, C, "Folded load/store displacement must fit in 64 bits");
     int64_t TotalOffset;
     if (AddOverflow(OffsetVal, BaseOffset, TotalOffset))
       report_fatal_error(
@@ -1459,7 +1482,7 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
     int64_t ImmVal = getI128NumericValueOrFatal(
-        C, "CIncOffset displacement must fit in 64 bits");
+        CurDAG, C, "CIncOffset displacement must fit in 64 bits");
     // Check if it fits in 12 bits
     if (isInt<12>(ImmVal)) {
       // Create TargetConstant of type i64 (critical for simm12_i64_op!)
@@ -2095,7 +2118,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       // semantically represent a signed 64-bit numeric address/offset value.
       // Arbitrary 128-bit capability forging is forbidden.
       int64_t Imm = getI128NumericValueOrFatal(
-          ConstNode,
+          CurDAG, ConstNode,
           "Cannot materialize arbitrary >64-bit constants as capabilities; "
           "capabilities are unforgeable");
       ReplaceNode(Node, selectImm(CurDAG, DL, VT, Imm, *Subtarget).getNode());
@@ -4270,7 +4293,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
   if (Addr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
       int64_t CVal = getI128NumericValueOrFatal(
-          C, "Address displacement must fit in 64 bits");
+          CurDAG, C, "Address displacement must fit in 64 bits");
       if (isInt<12>(CVal)) {
         Base = Addr.getOperand(0);
         if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))

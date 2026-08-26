@@ -2884,6 +2884,18 @@ bool CapstoneTargetLowering::mergeStoresAfterLegalization(EVT VT) const {
          (VT.isFixedLengthVector() && VT.getVectorElementType() == MVT::i1);
 }
 
+bool CapstoneTargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
+                                             const MachineFunction &MF) const {
+  // See the header comment: i128 is the capability carrier here, so a merged
+  // 128-bit store is a capability store. Found by building the SQLite
+  // amalgamation at -O1, where sqlite3Pragma merged four adjacent i32 stores
+  // into `store i128 0x3000000020000000400000070` -- four small integers, not
+  // an address and certainly not a capability.
+  if (MemVT == MVT::i128)
+    return false;
+  return TargetLoweringBase::canMergeStoresTo(AS, MemVT, MF);
+}
+
 bool CapstoneTargetLowering::isLegalElementTypeForRVV(EVT ScalarTy) const {
   if (!ScalarTy.isSimple())
     return false;

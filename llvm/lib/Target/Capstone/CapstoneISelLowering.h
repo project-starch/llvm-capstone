@@ -627,6 +627,18 @@ private:
   /// this override can be removed.
   bool mergeStoresAfterLegalization(EVT VT) const override;
 
+  /// Refuse to widen a run of adjacent integer stores into a 128-bit one.
+  ///
+  /// On this target i128 is the CAPABILITY carrier, not a 128-bit integer, so a
+  /// 128-bit store is `stc` -- it writes a tagged capability. Four adjacent i32
+  /// stores of small constants are an ordinary struct initialisation; merging
+  /// them produces a single i128 whose bits are metadata the program never had
+  /// authority to name, which is precisely the forgery the ISel constant path
+  /// refuses. Refusing the merge here keeps the four integer stores instead of
+  /// letting the combine build something that cannot be selected.
+  bool canMergeStoresTo(unsigned AS, EVT MemVT,
+                        const MachineFunction &MF) const override;
+
   /// Disable normalizing
   /// select(N0&N1, X, Y) => select(N0, select(N1, X, Y), Y) and
   /// select(N0|N1, X, Y) => select(N0, select(N1, X, Y, Y))
