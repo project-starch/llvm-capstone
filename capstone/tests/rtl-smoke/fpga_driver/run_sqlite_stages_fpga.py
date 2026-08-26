@@ -3012,13 +3012,46 @@ def main():
                                          if ("rolling-min" in _bs219 or "27a19c0a" in _bs219)
                                          else None)
                                 if _t219 is not None:
-                                    _tag = (_t219 >> 3) & 1
-                                    _val = (_t219 >> 2) & 1
+                                    # REDUNDANT ENCODING (RTL lane 68bcd0860). The old
+                                    # {4'b0,tag,valid,src} was a live silent-failure path:
+                                    # ariane_xilinx.sv stretches each LED bit ~42 ms, so a read
+                                    # ORs across apertures and CONTAMINATION CAN ONLY SET BITS.
+                                    # A stray 1 on the tag bit would have read out as "record
+                                    # exists, came back TAGGED" = delivery-failure -- manufacturing
+                                    # exactly the conclusion under test. Park aperture 224 bit3 is
+                                    # capstone_dyn_ready_ex_id, plausibly 1 on a halted core, and
+                                    # src=3 has already been read off this mechanism once.
+                                    #
+                                    #   [7:6] 00        canary
+                                    #   [5] !valid  [4] valid    exactly one
+                                    #   [3] tag     [2] !tag     exactly one WHEN valid
+                                    #   [1:0] src                3 impossible
+                                    #
+                                    # Anything not matching the grammar is DISCARDED. A set bit can
+                                    # no longer promote "no record" into a verdict, because every
+                                    # verdict now requires a bit that contamination cannot clear.
+                                    _canary = (_t219 >> 6) & 3
+                                    _nval, _val = (_t219 >> 5) & 1, (_t219 >> 4) & 1
+                                    _tag, _ntag = (_t219 >> 3) & 1, (_t219 >> 2) & 1
                                     _src = _t219 & 3
                                     _srcn = {0: "L1 hit", 1: "miss refill", 2: "wbuf fwd",
-                                             3: "UNDEFINED"}[_src]
-                                    if not _val:
-                                        _v = ("VOID -- recorder never fired")
+                                             3: "IMPOSSIBLE"}[_src]
+                                    _bad = []
+                                    if _canary: _bad.append(f"canary [7:6]={_canary:02b}, must be 00")
+                                    if _nval + _val != 1: _bad.append("valid/!valid not one-hot")
+                                    if _val and _tag + _ntag != 1: _bad.append("tag/!tag not one-hot")
+                                    if _val and _src == 3: _bad.append("src=3 is impossible")
+                                    if _nval and (_tag or _ntag): _bad.append("tag bits set while !valid")
+
+                                    if _t219 == 0x00:
+                                        _v = ("this bitstream does not decode aperture 219 -- no "
+                                              "record, and NOT a null result")
+                                    elif _bad:
+                                        _v = ("CONTAMINATED, DISCARDED (" + "; ".join(_bad)
+                                              + f") raw=0x{_t219:02x}. An OR-contaminated read "
+                                                f"cannot be un-corrupted; this is not a verdict.")
+                                    elif _nval:
+                                        _v = "VOID -- armed, but the recorder never fired"
                                     elif _sub_gran is None or _ldc_a is None:
                                         _v = ("VOID -- cannot identify the recorded load (s0 or "
                                               "granule unread)")
@@ -3036,8 +3069,8 @@ def main():
                                         _v = (f"SUBJECT, UNTAGGED -> TAG LOSS on src={_src} "
                                               f"({_srcn}); the delivery-failure reading is "
                                               f"REFUTED.")
-                                    print(f"  [wedge] sw219 record: tag={_tag} valid={_val} "
-                                          f"src={_src} ({_srcn})", flush=True)
+                                    print(f"  [wedge] sw219 raw=0x{_t219:02x} "
+                                          f"(valid={_val} tag={_tag} src={_src})", flush=True)
                                     print(f"  [wedge] SUBJECT GATE: {_v}", flush=True)
                                 _msg = (f"  [wedge] GRANULE ADDRESSES (bits [19:4], 1 MB window, "
                                         f"halted read): untagged-LDC={_fmt(_ldc_a)}  "

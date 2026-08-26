@@ -1,3 +1,20 @@
+> ## ⚠ SUPERSEDED 2026-08-26 — THE GRANULE FILTER WAS DROPPED
+>
+> This table was written for a bitstream that filtered the LDC recorder on CSR `0x811`, so that
+> only the subject granule could be recorded. **That design failed to route** (8 h 38 m, a 56-bit
+> granule bus plus a 52-bit comparator across four module levels, at <1% LUT margin) and was
+> abandoned. The instrument now going to synthesis is **`s12-ldc-rolling-min`**: rolling,
+> unfiltered, with the tag on switch 219 and **no address filter at all**.
+>
+> What that changes, row by row: every row below that assumes "should not occur once the filter
+> is in" is void, because there is no filter. Identifying the recorded load is now the
+> **driver's** job — it compares the recorded granule against the subject computed from the `s0`
+> GDB read at the wedge, and a foreign granule is a **hard VOID**, never evidence. See
+> `00-README.md` and the driver's subject gate.
+>
+> Kept rather than deleted because the reasoning about positive controls still applies, and
+> because a decision table that quietly vanished would be worse than one marked superseded.
+
 # S-12 — the decision table for the pending bitstream, written BEFORE the run
 
 This exists because "a decision table shipped with the bitstream is what makes it the last one".

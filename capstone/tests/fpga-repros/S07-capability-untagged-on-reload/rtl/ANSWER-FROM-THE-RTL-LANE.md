@@ -124,10 +124,23 @@ Verdict byte at **switch 208** (UART-safe, readable mid-run):
 
 | bit | meaning |
 |---|---|
-| 7 | `ldc0_valid` — an LDC came back untagged and was recorded (one-shot) |
+| 7 | `ldc0_valid` — **bitstream-dependent, see the note below the table** |
 | 6:5 | `ldc0_src` — 0 = L1 hit, 1 = miss refill (tag memory), 2 = write-buffer forward |
 | 4 | `stc_valid` — a capability-granule store was recorded |
 | 3 | `stc_ctag` — the tag that store WROTE |
+
+> **NOTE ADDED 2026-08-26 — bit 7 changes meaning with the bitstream, and the table above was
+> written for the older one.**
+>
+> * On **`s07clear_84ed6eafb` and earlier** — which is what is resident today, and what every
+>   reading in this document was taken on — bit 7 means *an LDC came back **untagged** and was
+>   recorded*, first-wins/one-shot. **Everything in this document remains correct as written.**
+> * On **`s12-ldc-rolling-min` and later**, the recorder's capture enable loses both the
+>   first-wins term and the untagged filter, so bit 7 means only *an LDC was recorded at all*,
+>   rolling — and **the tag moved to a separate aperture (switch 219)**. Reading bit 7 as
+>   "untagged" there turns every recorded load into a claimed tag loss.
+>
+> The date this matters is the reflash, not today. Nothing above is retracted; it is scoped.
 | 2 | `gran_match` — both records are the same 16-byte granule (computed in hardware) |
 | 1 | `stc_clobbered` — a plain store later overwrote that granule |
 | 0 | 0 |
