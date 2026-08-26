@@ -1675,3 +1675,60 @@ a real board miss is far longer. Nothing here tests what happens at 50+ cycles o
 crossbar knobs cannot produce that — the D-cache/memory model resolves too fast regardless. If the
 serialisation has any timeout or abort path that only a long miss reaches, this suite cannot see
 it. The testbench was restored to its baseline afterwards so other lanes' timing is unchanged.
+
+## Arm 7: the exact production shape is NOT sufficient — and the hypothesis was already on file
+
+**The measurement that motivated it.** The driver has carried a pre-registered discriminator since
+before any of this session's runs (`run_sqlite_stages_fpga.py:2637-2644`): `a4 == 0` at the wedge
+means the load never wrote it and the stale-operand account is WRONG; `a4 != 0` means the load did
+write it and the consumer read something else. **Six wedges, six CONFIRMED**, with `a4` holding the
+slot's cursor exactly (`0x827e4cd0`).
+
+Production's window makes the candidate obvious:
+
+```
+104808  movc a4, zero              a4 := create_cnull, ALL ZERO
+10480c  stc  a4, 0x0(a5)
+104810  ldc  a4, 0x0(a0)           same register, two instructions later
+104814  cincoffsetimm a4, a4       faults with exactly a4's PRE-LOAD value
+```
+
+**Arm 7 reproduces that shape exactly** — one asm block, four instructions, nothing schedulable
+between them, verified in the artifact (`movc a2,zero / stc a2 / ldc a2 / cincoffsetimm a2` at
+`0x1041c`). Arms 0–4 have the same register reuse but the compiler places `movc` **nine**
+instructions before the reload where production places it **two**, so none of them could have hit
+the window even in principle.
+
+**Result: `retval = 0xC12A7000`, 1924 cycles, clean.** Control (`k800`) returned. The shape is not
+sufficient, and that was the pre-registered reading for a return.
+
+### The hypothesis was not new, and searching prior art first would have found it
+
+`capstone-ariane` commit **`4c0def314`**, *"Refute the wrong-producer-forwarding lead by measuring
+its precondition"*, proposes this exact mechanism — it names `movc a4,zero` followed by `ldc a4`
+and states that `{cursor 0, NOT_CAP}` "is the board signature exactly" — and then refutes it by
+measuring the precondition: **duplicate live-`rd` cycles zero throughout**, with a proven heartbeat
+and peak occupancy 2 of 8. That is prior art in this tree, and CLAUDE.md's rule to search the
+registry, the repro folders and the commit history before investigating exists for precisely this.
+
+**What survives of it.** The refuting test is **scalar-only by its own commit message** (div, rem,
+add), so it establishes that the generic scoreboard mechanism is unreachable, not that a real
+`movc`/`ldc` pair with a capability writeback is. Re-running that checker with Capstone ops instead
+of scalars is board-free and closes the one gap the refutation left open — the cheapest remaining
+step, and it needs no bitstream.
+
+### What this leaves
+
+`a4` holding the slot's cursor 6/6 still says the load wrote it and the consumer received something
+else. So an operand-delivery failure stands — but it is **not** reproducible from the instruction
+shape alone, which means the trigger needs context the four instructions do not carry: cache state,
+the specific capability loaded, surrounding code volume, or execution history.
+
+**And the instrument now going to synthesis cannot see this mechanism.** A stale-operand read
+leaves the LOAD perfectly normal — right data, correctly tagged, on whatever leg it used. The
+rolling recorder captures the load's memory-side response, so under the tag filter it records
+nothing and unfiltered it records a normal tagged load. The fault is in the operand-select mux
+downstream of writeback, where the recorder has no observation point. That is flagged to the RTL
+lane, with a narrow 7-bit alternative (latch `rs1`, whether `rd_clobber_gpr[rs1]` was non-NONE, and
+the selected entry's valid bit, at FLU issue) that follows the precedent already set by
+`cap_wb_displaced_o` (`scoreboard.sv:345-353`).
