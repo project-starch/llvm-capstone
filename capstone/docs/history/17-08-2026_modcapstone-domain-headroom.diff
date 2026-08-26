@@ -1,0 +1,98 @@
+Subject: Scale the domain region with the image, so an interpreter has room to recurse
+
+Committed in the caplifive-buildroot submodule as af3c165, on branch
+xlang-gp-captable-delivery, on top of 8c7b973 ("modcapstone: deliver the gp-captable
+init descriptor into dom_data").
+
+WHY THIS FILE EXISTS. That submodule commit CANNOT BE PUSHED: this workstation's
+GitHub account is not a collaborator on project-starch/caplifive-buildroot, and
+`git push` returns 403. So the commit lives in a local clone only, and the parent
+gitlink was deliberately NOT bumped to it -- bumping it would add a third pointer to
+a commit that does not exist on any remote, joining the two the repo already carries
+(caplifive-system 099b954, capstone-qemu 62bf0f1, both unresolvable for the same
+access reason). This parent repo is the only pushable store the change has.
+
+TO RESTORE, from the caplifive-buildroot checkout:
+
+    git apply capstone/agent-handoff/history/17-08-2026_modcapstone-domain-headroom.diff
+
+The commit message body follows, then the diff.
+
+----------------------------------------------------------------------------------
+The buddy allocator rounds the domain up to a power-of-two page count, so an image
+landing just under a boundary gets an allocation with almost nothing left over for
+dom_data -- which is where the gp cap table, every global's carved storage and the
+domain stack live. A gp-captable domain with a few hundred globals then has no room
+and dies before it runs.
+
+Step the order up until the allocation clears a headroom requirement. The headroom is
+PROPORTIONAL to the image, floored at 512 KiB, rather than a flat constant. A flat
+4 MiB was tried first and broke a 4 KiB control domain, which the rule inflated to an
+8 MiB region: small domains do not want a huge region, and one of them faulted
+(cause 5) where it had been passing. Scaling with code_len leaves every domain under
+256 KiB exactly where it was -- the floor dominates for them -- while an
+interpreter-scale image gets room to recurse.
+
+Why an interpreter needs it: at -O0 with 16-byte pointers a stack frame is roughly
+twice the size it is on an ordinary target, and a recursive-descent compiler walking a
+nested scope exhausted a 522 KB stack. The fault was the FIRST instruction of a
+callee, its `cincoffsetimm sp, sp, -0x80` -- a frame that no longer fits.
+
+This edit lived only in a working tree until now. An earlier variant of it was lost
+once already, on 2026-08-16, when a rebuild treated it as a build/ -only edit and
+SQLite regressed from "creates a domain, faults in the entry glue" to "never creates a
+domain at all". Committing it in package/ is what stops the next rebuild dropping it.
+
+
+----------------------------------------------------------------------------------
+
+diff --git a/package/modcapstone/module/capstone.c b/package/modcapstone/module/capstone.c
+index 272f89e..c9e9f4c 100644
+--- a/package/modcapstone/module/capstone.c
++++ b/package/modcapstone/module/capstone.c
+@@ -22,6 +22,17 @@
+ #define DEVICE_FILE_NAME "capstone"
+ 
+ #define DOMAIN_DATA_SIZE (4096 * 16)
++/* Headroom the domain's allocation must leave beyond the image and DOMAIN_DATA_SIZE.
++ *
++ * The buddy allocator rounds up to a power-of-two page count, so an image landing just under
++ * a boundary gets an allocation with almost nothing left for dom_data -- which is where the gp
++ * cap table, every global's carved storage and the domain stack live. A gp-captable domain
++ * with a few hundred globals then has no room and dies before it runs.
++ *
++ * Restored into package/ on 2026-08-16 after a rebuild discarded it as a build/build-only edit
++ * and SQLite regressed from "creates a domain, faults in the entry glue" to "never creates a
++ * domain at all". Keeping it here is what stops the next rebuild dropping it again. */
++#define DOMAIN_MIN_FREE (512 * 1024)
+ /* The monitor (sbi_capstone.c) reserves a smaller "seal" region between the code and
+  * dom_data: DOMAIN_DATA_SIZE there is 16 * DOMAIN_DATA_N (96) = 1536. dom_data.base is
+  * therefore at align16(code_len) + 1536 from the region base. This must track the
+@@ -89,6 +100,27 @@ static void ioctl_create_dom(struct ioctl_dom_create_args* __user args) {
+ 	unsigned long dom_pages = (dom_tot_size - 1) / PAGE_SIZE + 1;
+ 	unsigned long dom_pages_log2 = dom_pages == 1 ? 0 : (ilog2(dom_pages - 1) + 1);
+ 
++	/* Step the order up until the allocation clears the headroom this domain needs.
++	 *
++	 * The headroom is PROPORTIONAL to the image, floored at DOMAIN_MIN_FREE, rather than a flat
++	 * constant. A flat 4 MiB was tried on 2026-08-16 and broke a 4 KB control domain, which the
++	 * rule then inflated to an 8 MiB region: small domains do not want a huge region and one of
++	 * them faulted (cause 5) where it had been passing. Scaling with code_len leaves every
++	 * domain under 256 KB exactly where it was -- the floor dominates for them -- while an
++	 * interpreter-scale image gets room to recurse.
++	 *
++	 * Why an interpreter needs it: at -O0 with 16-byte pointers a stack frame is roughly twice
++	 * the size it is on an ordinary target, and a recursive-descent compiler walking a nested
++	 * scope exhausted a 522 KB stack. The fault was the FIRST instruction of a callee, its
++	 * `cincoffsetimm sp, sp, -0x80` -- a frame that no longer fits. */
++	unsigned long dom_min_free = 2 * m_args.code_len;
++	if (dom_min_free < DOMAIN_MIN_FREE) {
++		dom_min_free = DOMAIN_MIN_FREE;
++	}
++	while (((1UL << dom_pages_log2) * PAGE_SIZE) <
++	       m_args.code_len + DOMAIN_DATA_SIZE + dom_min_free) {
++		dom_pages_log2 += 1;
++	}
+ 	unsigned long dom_vaddr = (unsigned long)__get_free_pages(GFP_HIGHUSER, dom_pages_log2);
+ 	if (!dom_vaddr) {
+ 		pr_alert("Failed to allocate memory for domain.\n");

@@ -320,6 +320,21 @@ instead of the old per-domain assembly entry.
 Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 (instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
 
+### MicroPython resumable suite
+
+The current full result is built from four standard-base EXTRA+MPZ chunks (400, 200, 200, 117)
+and one 200-file optional chunk. `tools/run-resumable-suite.py` reboots after a domain-fatal fault,
+marks exactly that next test, and resumes at its successor. `tools/merge-suite-results.py` validates
+global indices and produces the consolidated/non-pass TSV files. Read
+`plans/micropython-domain-compilation.md` for the exact build variables, partition, expected counts,
+and guest-helper compile command before re-running this long gate. Current verified totals are
+`598 PASS / 86 FAIL / 0 FAULT / 0 HANG / 233 UNSCORED` for the 917 standard files and
+`625 PASS / 237 FAIL / 0 FAULT / 0 HANG / 255 UNSCORED` across all 1,117 direct files. Use
+`--capture-output` for the canonical census: regex `.exp` tests require captured output, of which
+the runner stores up to 4095 bytes under `actual-output/`, and are deliberately UNSCORED without a
+complete captured value. Captured `SKIP` or `SKIP-TOO-LARGE` followed by an uncaught `SystemExit`
+is an explicit target skip and is also UNSCORED.
+
 ### Full BEEBS regression sweep
 
 ```bash
