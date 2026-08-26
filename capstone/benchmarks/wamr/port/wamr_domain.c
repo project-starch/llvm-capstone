@@ -19,6 +19,15 @@
  *   returned. They call the pieces full_init calls, in its order, so the first one
  *   that does not return names the step rather than the function.
  *
+ *   20 + read the module's magic (get_package_type)
+ *   21 + a load that must FAIL EARLY: size 3, so it returns through
+ *        set_error_buf without the parser ever running
+ *   22 + the real load
+ *
+ *   The 2x rungs open up stage 2. Rung 21 is the useful one: it exercises the
+ *   error path and the caller's buffer without touching the loader, so a fault
+ *   there and a fault at 22 mean different things.
+ *
  *   1  + runtime init over the arena
  *   2  + load the module
  *   3  + instantiate
@@ -71,6 +80,60 @@ domain_main(unsigned *res, unsigned func)
 
 #if WD_STAGE == 0
     WD_MARK(WD_OK);   /* touches nothing: proves entry, cap-init and return */
+
+#elif WD_STAGE >= 20 && WD_STAGE <= 22
+    {
+        MemAllocOption po;
+        memset(&po, 0, sizeof(po));
+        po.pool.heap_buf = wd_heap;
+        po.pool.heap_size = sizeof(wd_heap);
+        RuntimeInitArgs ia;
+        memset(&ia, 0, sizeof(ia));
+        ia.mem_alloc_type = Alloc_With_Pool;
+        ia.mem_alloc_option = po;
+        if (!wasm_runtime_full_init(&ia))
+            WD_MARK(WD_FAIL);
+
+        if (get_package_type(wamr_test_module, (uint32_t)sizeof(wamr_test_module))
+            != Wasm_Module_Bytecode) {
+            wasm_runtime_destroy();
+            WD_MARK(WD_FAIL);
+        }
+#if WD_STAGE == 20
+        wasm_runtime_destroy();
+        WD_MARK(WD_OK);
+#else
+        char e[96];
+        e[0] = 0;
+        /* MUST fail: three bytes is below the four the header needs, so this
+           returns through set_error_buf and writes into e. A null module here is
+           the CORRECT outcome, and a non-null one would mean the size check did
+           not run. */
+        if (wasm_runtime_load(wamr_test_module, 3, e, (uint32_t)sizeof(e))) {
+            wasm_runtime_destroy();
+            WD_MARK(WD_FAIL);
+        }
+        if (e[0] == 0) {          /* the error path must have written something */
+            wasm_runtime_destroy();
+            WD_MARK(0xE1);
+        }
+#if WD_STAGE == 21
+        wasm_runtime_destroy();
+        WD_MARK(WD_OK);
+#else
+        wasm_module_t m = wasm_runtime_load(wamr_test_module,
+                                            (uint32_t)sizeof(wamr_test_module),
+                                            e, (uint32_t)sizeof(e));
+        if (!m) {
+            wasm_runtime_destroy();
+            WD_MARK(WD_FAIL);
+        }
+        wasm_runtime_unload(m);
+        wasm_runtime_destroy();
+        WD_MARK(WD_OK);
+#endif /* 21 */
+#endif /* 20 */
+    }
 
 #elif WD_STAGE >= 10 && WD_STAGE <= 14
     /* The fine ladder inside full_init. Each rung does what the one below it did

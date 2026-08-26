@@ -108,7 +108,9 @@ stage 12  wasm_runtime_memory_init           OK   needs patch 0002
 stage 13  wasm_runtime_set_default_running_mode  OK
 stage 14  wasm_native_init                   OK   needs QUICK_AOT_ENTRY=0
 stage  1  wasm_runtime_full_init             OK   the whole of it
-stage  2  wasm_runtime_load                  capability fault, cause 24
+stage 20  get_package_type (the magic)      OK
+stage 21  a load that MUST fail: size 3      OK   the error path and set_error_buf
+stage  2  wasm_runtime_load (the parser)     capability fault, cause 24
 ```
 
 Every rung does what the one below it did and one step more, so the first that
