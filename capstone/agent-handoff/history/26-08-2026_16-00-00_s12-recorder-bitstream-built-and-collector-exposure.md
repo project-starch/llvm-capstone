@@ -28,7 +28,14 @@ image store and is applied at upload time.
     post-synth LUTs      171,497 / 84.15%   172,962 / 84.87%    UNKNOWN
     post-place  LUTs     171,460 / 84.13%   170,726 / 83.77%    UNKNOWN
     WNS clk_out1            -13.516            -14.125          UNKNOWN
-    failing endpoints        93,241            104,238          UNKNOWN
+    failing endpoints       103,197 [*]        104,238          UNKNOWN
+
+[*] CORRECTED 2026-08-27. This cell read 93,241 until now -- that is 76b7f2afc's
+design-wide figure, mis-filed into 84ed6eafb's column at the source and published from
+there. The base's own routed report gives 103,197. The clean-pair table below always had
+the right value; the stale one survived here, at the top, where it is read first.
+Consequence: the arm A delta is +1,041 (~1%), NOT the ~11,000 computed from 93,241.
+Recompute any delta that used 93,241 for 84ed6eafb.
 
 Arm B's UNKNOWNs are because it never left synthesis, not because anything was lost. The base's
 phase splits are UNKNOWN because its artifact carries no top-level run logs.

@@ -941,3 +941,42 @@ than `0xa5…`, so something wrote the zero rather than leaving it uninitialised
 allocation failed or a stray plain store zeroed a live capability slot is **open**; an earlier
 "allocation failure" root cause was recorded and retracted the same day after audit. Full trail
 in `plans/sqlite-regression-suite-proposal.md`.
+
+---
+
+## §7 — Timing closure across every routed build (2026-08-27)
+
+**No bitstream this project has ever produced has closed timing.** Five distinct commits, six
+routed builds, every one negative; best **−10.629 ns** against a **40.000 ns** period (25 MHz,
+confirmed from the report's own clock definition and from the MMCM's
+`CLKOUT1_REQUESTED_OUT_FREQ` of 25).
+
+Every figure read from that build's own post-route report,
+`work-fpga/ariane_xilinx_timing_summary_routed.rpt` inside its archived tarball, **Intra Clock
+Table row `clk_out1_xlnx_clk_gen`**.
+
+| build | WNS (ns) | failing / total endpoints | tarball bytes |
+|---|---:|---:|---:|
+| `39b21639d` | −10.629 | 96,727 / 174,481 | 407,871,086 |
+| `76b7f2afc` | −12.084 | 93,200 / 174,275 | 405,677,186 |
+| `84ed6eafb` | −13.516 | 103,197 / 175,200 | 407,837,655 |
+| `52fa06b9d` | −14.125 | 104,238 / 174,461 | 392,443,910 *(arm A, retiming OFF)* |
+| `52fa06b9d` | −14.832 | 104,457 / 174,785 | 407,010,879 *(arm B, retiming ON)* |
+| `80843404c` | −16.400 | 102,769 / 174,275 | 405,480,965 |
+
+**Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
+reads healthy while the CPU clock fails. That trap has caught this project before.
+
+**Deliberately absent, not counted as zero:** `1cb22e30a`, `c2211c9a8`, `eaa4e7984`, and the
+killed retiming-ON attempt produced **no routed report** — they never routed, so they are outside
+the claim rather than scored in it.
+
+Provenance: read from the archived artifacts by the synthesis lane, 2026-08-27; artifacts
+retained on that machine. Any figure can be re-verified against its source.
+
+**Related correction, same date.** "Retiming-ON does not complete with this RTL" is **refuted**:
+the run that appeared to die was killed by a memory ceiling that had counted a *second concurrent
+run's* collector against it. Rerun with correct process scoping it peaked at **21.15 GB**,
+completed the full flow, and did synthesis **41 min faster** than retiming-OFF (213 vs 254). The
+flow deviation was never necessary — and it produced the worse-timed build. This strengthens
+CLAUDE.md's "do not change the synthesis flow"; nothing there needs changing.
