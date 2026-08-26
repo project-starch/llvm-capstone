@@ -2507,6 +2507,18 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
 //   QEMU -- get_gpr reads gpr[i].val, whose `scalar` member aliases
 //           cap.bounds.cursor (cap.h:59-63,79-83); helper_cslcc asserts the tag.
 //
+// The READ path is what the above establishes. The WRITE path is where the two
+// could still have diverged, and it was checked separately rather than assumed:
+// QEMU's gen_set_gpr clears the tag on every integer write, whereas in RTL the
+// metadata shadow's write-enable is gated on cap_result.valid, which is 0 for a
+// plain ALU op -- so the shadow might have been left STALE, and an integer
+// produced by this `mv` would still have looked like a capability to any
+// consumer that checks cap_type. That is REFUTED by simulation, not by reading:
+// verif/tests/custom/capstone/alu-write-clears-shadow.S feeds such a register to
+// CINCOFFSET, whose rs2 check is exactly that question, and it does NOT trap --
+// while the same test's live-capability arm DOES, so the check is proven able to
+// fire. See the test for the three-arm layout.
+//
 // The INTRINSIC is kept rather than lowering straight to an ISD::TRUNCATE,
 // because it is also a DAGCombine BARRIER. With a plain truncate, the combiner
 // folds `zext(op(trunc a, trunc b))` back into `and i128`, which is re-lowered,

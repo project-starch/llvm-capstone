@@ -2601,6 +2601,40 @@ failures; nightly 15/16 (the one failure, `static-cap-globals`, is a pre-existin
 expect-the-bug-to-reproduce probe reporting that its bug is gone, and its domain is
 BYTE-IDENTICAL built with and without these changes).
 
+**THE SILICON-SAFETY QUESTION THE QEMU RUNS COULD NOT SEE, now answered.** Swapping `lcc` for a
+plain `mv` has a failure mode invisible to every green QEMU run: QEMU's `gen_set_gpr` clears the
+tag on EVERY integer write, but in RTL the metadata shadow's write-enable is gated on
+`cap_result.valid`, which is 0 for a plain ALU op. If the shadow were left STALE, an integer
+produced by the new `mv` into a register that had held a capability would still look like a
+capability to any consumer that checks `cap_type` -- trapping on silicon and never on QEMU.
+
+**Measured in RTL simulation, not argued:**
+`capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S` (commit `eb43f5d09`).
+`CINCOFFSET` is the detector because its rs2 check IS that question
+(`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` when `cap_rs2` is not `NOT_CAP`).
+Three arms, the expected-to-trap one last:
+
+| arm | rs2 | result |
+|---|---|---|
+| A | never held a capability | retired, `x12 = 0x80003008` |
+| C | held one, then a plain `addi` | **retired**, `x13 = 0x80003008` -- the answer |
+| B | holds one now (positive control) | **exception: UNEXPECTED_OPERAND** |
+
+Arm B is why arm C means anything: without it, "C did not trap" is equally consistent with a
+check that never fires here. **So an ALU write does clear the shadow, and the mv-for-lcc
+lowering is safe on silicon.** The stale-shadow reading of the writeback path is refuted for
+this case.
+
+**`-O0` REVALIDATED UNDER THE FINAL COMPILER.** The intrinsic-selection change applies at every
+opt level, so the `-O0` image's ~192 `lcc ...,0x2` sites became `mv` too, and the `-O0` control
+quoted above had been built with the PRE-fix compiler. Rebuilt and rerun: still
+`__CAPSTONE_SQLITE_SILICON_PASSED__`. **And S-12 still reproduces structurally** -- the fault
+pair `ldc a4, 0x0(a0)` + `cincoffsetimm a4, a4, 0xb0` is intact in
+`sqlite3WhereCodeOneLoopStart`, now at `0x104438` with the function at `0x1043b0` (it was
+`0x1042d0` / `0x104248`). **Every `-O0` image built after `2c1f5eae412a` differs in codegen from
+the builds behind the 25-wedged/21-returned corpus**, so those draws do not carry over -- which
+per-image clustering already implied, but now the instruction stream has moved as well.
+
 **What this does NOT settle.** `$OPT` stays `-O0`. The `-O1` image has passed a functional QEMU
 run, not the benchmarks and not the board. And the S-12 caveat in C-17 stands unchanged: the
 fault site is gone but the image-wide shape count is a reduction whose size depends on how it is
