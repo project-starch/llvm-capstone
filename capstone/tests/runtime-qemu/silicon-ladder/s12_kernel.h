@@ -93,7 +93,7 @@ static unsigned long volatile s12_draw_seed = 0xD2A0000UL + S12_DRAW;
  * 4096 swamps the inter-arm drift, so the frame -- and therefore the slot -- lands identically.
  * VERIFY IT rather than assume it: the addresses are compared across arms before any run. */
 static unsigned char volatile s12_frame[0x800] __attribute__((aligned(4096)));
-#if S12_ARM == 8
+#if S12_ARM == 8 || S12_ARM == 10
 /* EVICTION BUFFER. The D-cache is 32 KiB / 8-way with a 16-byte line
  * (capstone_cv64a6_imafdc_sv39_config_pkg.sv:48-50), so walking 40 KiB of distinct lines
  * evicts everything, the subject granule included. Sized past 32 KiB rather than exactly to
@@ -237,6 +237,9 @@ static unsigned s12_compute(void)
 #if S12_ARM == 8
     void *volatile _c8;
 #endif
+#if S12_ARM == 9 || S12_ARM == 10
+    void *volatile _cp;
+#endif
 
     /* THE SUBJECT STORE, HOISTED ABOVE THE ARM CHAIN ON PURPOSE.
      *
@@ -370,6 +373,74 @@ static unsigned s12_compute(void)
           : [scr] "r"(_scr8), [sp] "r"(_sp8)
           : "memory");
       s12_sink[7] = (unsigned long)(__UINTPTR_TYPE__)_c8;
+    }
+#endif
+
+#if S12_ARM == 9 || S12_ARM == 10
+    /* ARMING POSITIVE CONTROL FOR THE UNTAGGED-LDC RECORDER. These arms are NOT about S-12.
+     * They exist so that an EMPTY record at the subject can be read at all.
+     *
+     * The recorder captures untagged LDCs. Its predicted reading at the subject is EMPTY --
+     * the granule mechanism is excluded structurally and the surviving account says the null
+     * comes from the register file, not the load. But a broken capture path ALSO reads empty,
+     * and the per-arm switch-160 clear only proves the aperture is writable and readable, not
+     * that anything can be captured into it. So an empty subject is uninterpretable unless
+     * something in the SAME boot proves the recorder armed AND fired.
+     *
+     * These arms do an untagged LDC on purpose: `movc t,zero` makes t bit-for-bit create_cnull,
+     * `stc` writes that untagged 16 bytes to the scratch granule, and the `ldc` reads it back.
+     * The load is untagged BY CONSTRUCTION, so the recorder MUST produce a record. No capability
+     * consumer follows, so the arm cannot fault and is expected to RETURN.
+     *
+     * TWO LEGS, because one is not enough -- this is the instrument-blindness shape one level in.
+     *   ARM 9  (P1) HIT   the line was written moments ago and is resident. Proves capture on
+     *                     the L1-hit leg. Expect a record with src = 0.
+     *   ARM 10 (P2) MISS  arm 8's 40960-byte eviction walk runs BETWEEN the stc and the ldc, so
+     *                     the line is gone and the load takes the refill leg. Expect src = 1.
+     *
+     * WHY P1 ALONE WOULD NOT DO. The subject probably MISSES: SQLite's working set dwarfs a
+     * 32 KiB L1 and the fault sits deep inside prepare. A capture path that works on hits and
+     * is broken on refills would let P1 pass, the subject read empty, and us call that a real
+     * empty on the strength of an arming proof that never exercised the leg the subject used.
+     *
+     * P1 AND P2 TOGETHER ALSO CHECK THAT src DISCRIMINATES. Same shape, different residency,
+     * so they must report DIFFERENT src. If both report the same value, src is not measuring
+     * the leg, and leg attribution -- the recorder's entire remaining value -- is void.
+     *
+     * READING, fixed before the boot:
+     *   both present, different src -> capture proven on both legs; a later empty IS a real empty
+     *   either absent               -> BOOT VOID for the recorder question
+     *   both present, same src      -> src does not discriminate; leg reading UNUSABLE
+     *
+     * The scratch granule is fp - 0x120, the same one arms 7 and 8 use, and is DISTINCT from the
+     * subject slot at fp - 0x70 -- so these arms never write the subject and cannot perturb it. */
+    {
+      unsigned char volatile *_scrp = fp - 0x120;
+#if S12_ARM == 10
+      unsigned long _accp = 0;
+#endif
+      /* store the untagged 16 bytes first, so the eviction below has something to evict */
+      __asm__ volatile(
+          ".insn r 0x5b, 0x1, 0xa, %[t], x0, x0\n"          /* movc t, zero   -> create_cnull */
+          ".insn s 0x5b, 0x4, %[t], 0(%[scr])\n"            /* stc  t, 0(scr) -> UNTAGGED 16B */
+          : [t] "=&r"(_cp)
+          : [scr] "r"(_scrp)
+          : "memory");
+#if S12_ARM == 10
+      /* EVICT between the store and the load. 40960 > 32 KiB, 16-byte stride, so every line
+       * including the scratch granule goes. The accumulator is kept in a volatile sink because
+       * a dead walk evicts nothing -- that exact mistake produced a byte-identical artifact
+       * once already. */
+      for (unsigned _i = 0; _i < sizeof(s12_evict); _i += 16)
+        _accp += s12_evict[_i];
+      s12_sink[5] = _accp;
+#endif
+      __asm__ volatile(
+          ".insn i 0x5b, 0x3, %[t], 0(%[scr])\n"            /* ldc  t, 0(scr) <- UNTAGGED LOAD */
+          : [t] "=&r"(_cp)
+          : [scr] "r"(_scrp)
+          : "memory");
+      s12_sink[6] = (unsigned long)(__UINTPTR_TYPE__)_cp;
     }
 #endif
 
