@@ -183,3 +183,51 @@ os_getpagesize_impl(void)
 {
     return 4096;
 }
+
+void *
+os_mremap(void *old_addr, size_t old_size, size_t new_size)
+{
+    if (new_size <= old_size)
+        return old_addr;
+    void *p = os_mmap(NULL, new_size, 0, 0, os_get_invalid_handle());
+    if (p && old_addr)
+        memcpy(p, old_addr, old_size);
+    return p;
+}
+
+/* ponytail: output is dropped. WAMR uses os_printf only for loader and trap
+   messages, and a domain has no console -- the loader reads a RETURN VALUE, which
+   is why every stage in wamr_domain.c returns a marker instead of printing one.
+   Ceiling: a load failure says so through its marker and not through its text.
+   Upgrade path is the shared-region write the SQLite host uses, which needs the
+   region threaded in here. Returning 0 rather than the character count is
+   deliberate: nothing in WAMR checks it, and a fabricated count would be a lie
+   with no upside. */
+int
+capstone_wamr_printf(const char *fmt, ...)
+{
+    (void)fmt;
+    return 0;
+}
+
+int
+capstone_wamr_vprintf(const char *fmt, va_list ap)
+{
+    (void)fmt;
+    (void)ap;
+    return 0;
+}
+
+/* WAMR references invokeNative from its native-call path even when no native
+   function is registered, because the dispatch table is built unconditionally.
+   Trapping rather than returning silently: reaching it means a module called an
+   import this domain never provided, and a silent return would hand the
+   interpreter an uninitialised result. */
+void
+invokeNative(GenericFunctionPointer f, uint64 *args, uint64 n_stacks)
+{
+    (void)f;
+    (void)args;
+    (void)n_stacks;
+    __builtin_trap();
+}

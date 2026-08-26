@@ -98,6 +98,41 @@ exceeded the single-region ceiling of 1 376 256 bytes and needed a declared
 two-region budget. MicroPython is 321 KiB of `.text`. WAMR is the smallest
 candidate assessed, and it fits a single region even before declaring anything.
 
+## It builds, loads and enters. It faults at the first runtime call.
+
+```
+build-wamr-silicon.sh   ->  code_len 220296, TWO regions (order 7 + order 9), fits
+                            cap table 31 globals, one TU owns globals
+
+stage 0  (return at once)          retval 0x57410001   the exact marker
+stage 1  (wasm_runtime_full_init)  capability fault, cause 24
+```
+
+Stage 0 is the control and it passes: the domain is created, entered, cap-init
+completes and it returns. So the image, the linker script, the gp-captable entry
+glue and the declared budget are all sound, and the failure is inside WAMR's own
+initialisation rather than in the port's plumbing.
+
+The ladder was run in ONE boot, ascending, stages 1/2/3 in sequence. Exactly one
+domain was created before the fault, which is what localises it: the first stage
+that touches the runtime is the one that breaks.
+
+### Three things had to be right before that verdict was worth anything
+
+**One translation unit.** `getGpCaptableIndex` numbers globals per module, so 28
+separate objects each start at zero and collide. Built separately the image linked
+and reported `cap table 1 (1 global)` for a runtime with its own heap: it built
+and could not work. `tools/gen-amalgam.py` concatenates the sources and renames
+the fifteen file-local statics that collide, and the build gates on exactly one TU
+owning globals.
+
+**The gp-captable ABI flags.** `start-gp-captable-interp.S` loops over
+`.capstone_gp_initdesc`; without `-mllvm -capstone-gp-captable` that table is
+empty and the glue hands the runtime globals that were never carved.
+
+**A declared budget**, even though 208 KiB fits a single region. An image that
+fits anyway is exactly when a missing declaration goes unnoticed.
+
 ## Next
 
 Compiling is not running, and the gap is domain glue rather than porting:
