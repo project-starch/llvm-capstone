@@ -17,8 +17,12 @@
 
 define void @vdbeop_init(ptr addrspace(200) %op) {
 ; CHECK-LABEL: vdbeop_init:
-; The stores stay separate and stay INTEGER stores. No capability store, and no
-; 128-bit constant to forge.
+; The stores stay INTEGER stores. Merging up to 64 bits still happens and SHOULD:
+; only the 128-bit forge is refused. Pinning the two `sd` positively as well as
+; the absent `stc` keeps this test from drifting vacuous -- a CHECK-NOT alone
+; still passes if the function stops being emitted at all.
+; CHECK:      sd zero, 0(a0)
+; CHECK-NEXT: sd a1, 8(a0)
 ; CHECK-NOT:  stc {{[a-z0-9]+}}, {{[0-9]+}}(a0)
 entry:
   store i8 0, ptr addrspace(200) %op, align 16
