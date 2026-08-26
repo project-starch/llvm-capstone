@@ -1942,3 +1942,62 @@ subject granule — is **not runnable on resident silicon**: `s07_ldc0_filter_ad
 at `84ed6eafb` (0 occurrences), it belongs to the design that failed to route. The *store*
 watchpoint at `cva6.sv:905-906` **is** resident and CSR-`0x811`-armed, which is a different
 instrument and can see stores landing on a chosen granule.
+
+## RETRACTED: "two levels wedge" is a RATE (54%), and `q_two` never ran in those boots
+
+An adversarial audit refuted the level-2 finding as I stated it. Verified independently before
+retracting.
+
+**1. `q_two.test` was never executed in up21–up24.** Every one of those boots' preflight lists it
+as an unused file. My statement that the result was "measured with `q_one`, `q_two` and `qj2`, all
+from the same binary" is **false** — only `q_one` and `qj2` ran. The only boot that ever ran
+`q_one` and `q_two` from one binary is up14, whose runner voided that arm itself (`SPLB`, no
+`SQ: G/enter`). **N for "same binary, q_one vs q_two" = 0.**
+
+**2. I filed the strongest disconfirming observation under "void".** up24 is not void: it is a
+clean completion of the two-level join — `records=3 stmt_pass=2 query_fail=1 parse_err=0
+completed=1`, same image, same case, same bitstream as up22 which wedged. (I corrected the rate to
+3/4 in `04afe159f074`, but the brief I handed the auditor still said "both void".)
+
+**3. Across the whole corpus the level-2 wedge is a coin flip, and the IMAGE predicts it better
+than the level count.** Tallying every 2-level arm ever run:
+
+```
+sqrt 8/0   sqslt 6/0   sqem 1/7   sqrtw 0/3   sqcc 2/1   sqpad10 2/1   (+14 images, 6/6)
+TOTAL: 25 wedged, 21 returned  ->  54%
+```
+
+**Twenty-one boots have a two-level join completing on silicon.** "Two levels wedge" is refuted as
+a property.
+
+### What survives, and it is still a real effect
+
+`q_one` (one level): **11 returned, 0 wedged**, and three of those ran in slot 2 of 3, so it is not
+just "the first arm always survives". Position is controlled the other way too — up17 ran a 2-level
+case as TEST 1/2 and it wedged.
+
+If one level wedged at the two-level rate of 54%, P(0 wedges in 11) ≈ **0.0002**. So the level
+dependence is real and significant; what is wrong is the word "wedge" as a certainty. The correct
+statement is: **one level has never wedged in 11 draws; two levels wedge about half the time, with
+strong per-image clustering.** Any single-draw arm on a 2-level case is therefore uninterpretable —
+a ladder of N=1 hypotheses would measure the draw, not the hypothesis.
+
+### Three corrections to the fault-site description
+
+* **`+0x8c` is a build-specific label, not an instruction identity.** up22 latched `0x828f4838` =
+  fn+**0x9c** on the counter build — the *same instruction* (`cincoffsetimm a4, a4, 0xb0`), shifted
+  by injected code. Name the instruction; an offset silently breaks across builds.
+* **`+0x8c` is NOT the function's first executable statement.** Three initialised declarations
+  precede it (`iRowidReg = 0`, `iReleaseReg = 0`, `Index *pIdx = 0`), emitting `1047ec`–`10480c`.
+  My "the fault is on the first statement" was wrong — and the `movc a4, zero` at `104808` that the
+  zero-data hypothesis rests on is precisely one of those preceding instructions.
+* **"Memory holds the correct capability" overstates.** A GDB read at T+seconds is predicted by
+  *both* arms of the fork — a write-buffer entry that converges and drains correctly shows the same
+  thing. This folder already withdrew that reasoning once; it must not be re-asserted.
+
+### Instrument hazard fixed
+
+`/tmp/capstone/up21.sh` had been edited in place across every experiment, so by the end it carried
+up24's configuration under up21's name — anyone "re-running up21" would have run a different case
+on a different binary. Renamed to `run-sqlite-arm.sh`, which is what it actually is. **There is no
+surviving script for up21**; its configuration is recoverable only from the log.
