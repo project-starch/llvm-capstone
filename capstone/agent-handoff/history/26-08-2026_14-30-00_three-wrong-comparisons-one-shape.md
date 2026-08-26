@@ -122,3 +122,49 @@ smallest wording that would have caught both instances is:
 > **A check that finds nothing must state where it looked.** An empty result is only evidence if
 > the search covered the places the subject could actually be — other machines, inside archives,
 > directories not yet populated at that point in the flow.
+
+---
+
+# ADDENDUM 3: a fifth instance, and the family now has a name that fits all of them
+
+Counting `found timing loop` to decide whether an RTL change had added combinational loops, the
+first search returned **200 for the base against 100 for both arms**. That reads as "the change
+halved the loops", which is nonsense, or as "the base is a different design", which would have
+sent the investigation somewhere else entirely.
+
+Neither. The base archive contains `logs/synthesis.log` **and**
+`logs/vivado_1745782.backup.log` — a backup copy of the same log, 100 in each — and the search
+ran over the whole archive stream while the arms' counts came from a single file. The matcher was
+correct. The **population** was not. Corrected before it was sent, and the true answer is 100
+everywhere: the change added no timing loops.
+
+## The family, restated now that there are five
+
+Every one of these had a working instrument returning correct numbers:
+
+1. placed vs synthesized — matched on "utilization report", differed on stage
+2. entire-flow vs synthesis-phase — matched on "elapsed time", differed on scope
+3. stage-matched vs condition-matched — matched on report stage, differed on build conditions
+4. milestone markers in `work-fpga/` vs `ariane.runs/impl_1/` — right artifact, wrong place
+5. one file vs a whole archive stream containing a backup copy — right matcher, wrong population
+
+The unifying description is not "wrong comparison". It is:
+
+> **The quantity measured was not the quantity intended, and the check that ran came back clean.**
+
+Stage, scope, conditions, location, population — five different ways for the thing measured to
+drift from the thing meant, none of them visible in the result. This is why the existing
+detector rules do not help: they all assume the failure is a check that cannot fire. Here every
+check fired, correctly, on the wrong thing.
+
+## Consolidated proposed rule — replaces the two drafted above
+
+Offered for the project lead, as one rule rather than two:
+
+> **Before believing a number, say what population it came from and on what axes it could differ
+> from the thing you are comparing it to.** Stage, scope, build conditions, location, and file
+> set are all axes on which two individually-correct numbers become an incorrect delta. A check
+> that fires cleanly on the wrong population looks exactly like a check that fires cleanly.
+
+Five instances in one session, four of them caught only because someone re-derived the number
+rather than reading it.
