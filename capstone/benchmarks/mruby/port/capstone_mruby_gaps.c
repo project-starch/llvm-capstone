@@ -54,3 +54,46 @@ abort(void)
     for (;;)
         *(volatile unsigned long *)0 = 0;
 }
+
+/* --- three libm functions mruby's CORE float arithmetic needs ---------------
+ * flodivmod and flo_remainder are in numeric.c, not in the math gem, so dropping
+ * mruby-math does not remove them. Built on beebs' floor and ceil rather than
+ * written from scratch: those two already handle the infinities, the NaNs and the
+ * values too large to have a fractional part, and repeating that here would be
+ * three more chances to get it wrong.
+ */
+
+double floor(double x);
+double ceil(double x);
+
+double
+trunc(double x)
+{
+    return x < 0.0 ? ceil(x) : floor(x);
+}
+
+double
+round(double x)
+{
+    /* C's round is half-away-from-zero, not half-to-even. */
+    return x < 0.0 ? ceil(x - 0.5) : floor(x + 0.5);
+}
+
+double
+fmod(double x, double y)
+{
+    /* NaN for every case the identity below would get wrong: y == 0, either
+       operand NaN, or x infinite. `x - x` is non-zero exactly when x is not
+       finite, which is the cheapest finite test available without <math.h>, and
+       0.0 / 0.0 is the portable way to produce a NaN here. */
+    if (y == 0.0 || x != x || y != y || x - x != 0.0)
+        return 0.0 / 0.0;
+
+    /* ponytail: the textbook identity, not an exact-remainder algorithm.
+       Ceiling: x / y is rounded to 53 bits before it is truncated, so once |x/y|
+       exceeds 2^53 this is not the exact IEEE remainder fmod promises -- it can be
+       off by a multiple of y, or zero where it must not be. Fine for this corpus,
+       which computes no floats at all; NOT fine for a numeric benchmark. Upgrade
+       path: repeated subtraction on the exponent, the way musl's fmod does it. */
+    return x - trunc(x / y) * y;
+}

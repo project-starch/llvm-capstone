@@ -47,7 +47,7 @@ narrowing before trusting any verdict.
 
 | # | software | usable cases | with a script | harness state | file |
 |---|---|---|---|---|---|
-| 1 | **mruby** | **36** (26 A + 10 B) | 21 | CHERI port RUNS; Capstone port ~11 census errors | [mruby.md](mruby.md) |
+| 1 | **mruby** | **36** (26 A + 10 B) | 21 | CHERI port RUNS; Capstone port BUILDS (`benchmarks/mruby/`) -- 85k-line amalgamation compiles clean, link being closed | [mruby.md](mruby.md) |
 | 2 | MicroPython | ~22 | few | **runs today** on both | to write |
 | 3 | standalone allocators (TLSF, umm, tinyalloc, dlmalloc, Contiki, Zephyr) | ~14 | some | no harness yet, but they ARE the pool, so it is small | to write |
 | 4 | WAMR EMS | 5 | 1 in-tree C reproducer | **runs today**, stage 40 built | to write |
@@ -61,6 +61,25 @@ as a compressed offset and rebuilding addresses arithmetically at 93 sites acros
 functions, and `uintptr_t` cannot be made capability-wide on this target. **The
 design that hides an allocator from CHERI is the design Capstone's tag model refuses
 outright.** Worth a paragraph in the paper; useless for measuring.
+
+## What the mruby bring-up cost, since it sets the expectation for the rest
+
+Two real compiler defects, both found by mruby and neither by anything before it:
+
+* a **segfault in the Greedy register allocator** on `mrb_vm_exec`, from a missing
+  null check in `SplitKit.cpp` where two register classes are disjoint -- which on
+  this target is the ordinary case whenever a capability class meets an integer
+  class. Fixed.
+* an **assertion in the legalizer** on `mpz_gcd`, because mruby's bignum is built on
+  `unsigned __int128` and i128 here IS the capability width. Recorded, not fixed;
+  the gem was dropped, since no specimen computes a bignum.
+
+Plus the four flags from `xlang/cheri/mruby-port`, three of which fail silently, and
+an amalgamation ordering constraint: `mruby.c` defines `malloc` as a macro, so
+anything with its own `malloc` must precede it.
+
+Expect the same shape elsewhere: the port cost is not the language runtime, it is
+the two or three places where a constant encodes the pointer's width.
 
 ## Status vocabulary
 
