@@ -1,12 +1,38 @@
-diff --git i/core/iwasm/interpreter/wasm_interp_classic.c w/core/iwasm/interpreter/wasm_interp_classic.c
-index 5d23142..91a8569 100644
---- i/core/iwasm/interpreter/wasm_interp_classic.c
-+++ w/core/iwasm/interpreter/wasm_interp_classic.c
-@@ -6787,6 +6787,20 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
+Align the LABEL stack to the pointer, not to the cell.
+
+The operand stack is uint32-granular, and the label stack is built by casting its
+end:
+
+    frame_csp = frame->csp_bottom = (WASMBranchBlock *)frame->sp_boundary;
+
+A WASMBranchBlock is made of pointers. Where a pointer is wider than a cell -- 16
+bytes on Capstone, needing 16-byte alignment -- that cast lands under-aligned and
+the first store into the label stack faults. For a function with no parameters, no
+locals and two stack cells the misalignment is exactly 8, which is what three runs
+measured.
+
+Pad the operand stack so the cast is aligned. The padding cells flow into
+all_cell_num, which is what sizes the frame and what the stack-headroom check uses,
+so nothing is undersized; the loader caps every input at UINT16_MAX and the pad is
+at most three cells. Exactly one site performs the cast, so this is one fix.
+
+WAMR_LABEL_STACK_PAD is a knob rather than a constant so the four-arm experiment
+that attributes the fault to this pad can be built from ONE tree with one variable
+changing. It defaults to on.
+
+Guarded by __SIZEOF_POINTER__ > 8, so it is a no-op everywhere upstream runs.
+diff --git a/core/iwasm/interpreter/wasm_interp_classic.c b/core/iwasm/interpreter/wasm_interp_classic.c
+index 5d23142..ede538f 100644
+--- a/core/iwasm/interpreter/wasm_interp_classic.c
++++ b/core/iwasm/interpreter/wasm_interp_classic.c
+@@ -6787,6 +6787,23 @@ wasm_interp_call_func_bytecode(WASMModuleInstance *module,
              max_stack_cell_num += eh_size;
  #endif
  
-+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ > 8
++#ifndef WAMR_LABEL_STACK_PAD
++#define WAMR_LABEL_STACK_PAD 1
++#endif
++#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ > 8 && WAMR_LABEL_STACK_PAD
 +            /* csp_bottom is (WASMBranchBlock *)frame->sp_boundary, and a branch
 +               block is made of pointers. sp_boundary is uint32-granular, so where
 +               a pointer is wider than a cell the label stack starts under-aligned

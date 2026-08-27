@@ -119,7 +119,8 @@ stage  4  wasm_runtime_call_wasm             OK   returns what the module comput
 The runtime initialises, loads a module, instantiates it and **runs it**: stage 4
 returns `0x5741002A`, and 0x2A is the 42 that `i32.const 7; i32.const 35; i32.add`
 computes. Two things had to be right at once, and neither alone is enough -- see
-the 2x2 below.
+the 2x2 below. This is one module with no imports; the residual section below says
+what that qualification is doing there.
 
 ### Where stage 4 stops, and the two fixes the hypothesis produced
 
@@ -154,13 +155,32 @@ of it was wrong, and the pc was again not naming the instruction that faulted.
 
 ### What 0x1BF24 actually was: the label stack, and the dispatch table
 
-Two independent defects, and the 2x2 is what separates them. All four are stage 4
-under QEMU:
+Two independent defects, and the 2x2 is what separates them. All four arms are
+stage 4 under QEMU, built from ONE tree with one variable changing, via the
+`WAMR_LABEL_STACK_PAD` and `WAMR_LABELS_AS_VALUES` knobs:
 
 | | computed goto | switch dispatch |
 |---|---|---|
-| **no align fix** | cause 24 | cause 4 |
-| **align fix** | cause 1 at an unrelocated pc | **42** |
+| **no pad** | cause 4, `addr = 0x1022d1e08` | cause 4, `addr = 0x1022d1e28` |
+| **pad** | cause 1 at an unrelocated pc | **42** |
+
+Both no-pad arms give the SAME fault whatever the dispatch, which is what attributes
+it to the pad rather than to the knob next to it. Both addresses are congruent to 8
+mod 16, and 8 is exactly what the layout predicts for this module: `param = 0`,
+`local = 0`, `max_stack = 2`, so `sp_boundary = lp + 8` with `lp` 16-aligned.
+
+Each knob has its own positive control in the artifact: `handle_table` is a symbol in
+both `labels=1` images and absent from both `labels=0` ones, and the pad's
+`neg`/`sub`/`andi 0x3`/`add` sequence appears only in the padded pair. The two
+dispatch modes differ by one captable global (`handle_table` itself); the padded and
+unpadded arms have identical global counts.
+
+**RETRACTED (2026-08-27).** An earlier version of this table gave cause 24 for the
+top-left cell. That number came from a log written the previous day, from a binary
+built before patches 0002 and 0003. The image of that name on disk gives cause 4, and
+the corrected table is the stronger one: without the pad, dispatch makes no
+difference at all. The mistake was reading a log by filename instead of checking that
+it belonged to the artifact under test.
 
 *The alignment.* `wasm_interp_classic.c` builds the label stack by casting the
 operand stack's end:
@@ -176,12 +196,20 @@ capability store into the label stack is misaligned. Patch 0004 pads
 pointer-sized cells. The padding is counted in `all_cell_num`, which is what sizes
 the frame, so nothing overflows. One site casts that pointer, so there is one fix.
 
-Reading the pc would NOT have found this. At 0x1BF24 stands `lhu a0, 0x6(s5)`, a
-two-byte load, and `op_helper.c:1250` raises cause 4 **only** inside
-`if (size == 16)`, for loads and stores alike. So the two-byte load cannot be the
-instruction that faulted; the `stc` after it can. The cause code identified the
-instruction, the pc did not -- the third time on this project that a trap pc named
-the wrong instruction.
+Reading the pc would NOT have found this, and the reason generalises to every
+capability fault this emulator reports. `_helper_access_with_cap` is `static` and is
+not inlined, so `GETPC()` inside it returns an address outside the code-gen buffer,
+`cpu_restore_state` takes its early exit, and `env->pc` is never restored: the
+printed pc is the translation block's ENTRY, which in all three runs was the return
+address of a `jalr`. The real faulting instruction was +4 in two of them and +12 in
+the third, so "the next instruction" is not a rule either.
+
+What identified it was the cause code, which narrows by WIDTH: `op_helper.c` raises
+cause 4 from the capability path only inside `if (size == 16)`, for loads and stores
+alike, so the two-byte `lhu` at the reported pc cannot be what faulted and the `stc`
+after it can. `badaddr` is stale on this path and must not be used. The
+`[CAPSTONE] Unaligned cap access (addr = ...)` line is the only one carrying the real
+address. This is written up in `agent-handoff/ref/HOW-TO-RUN-ON-QEMU.md`.
 
 *The dispatch table.* `core/config.h` turns `WASM_ENABLE_LABELS_AS_VALUES` on for
 any GCC or Clang, which compiles the interpreter to a computed goto over a static
@@ -199,6 +227,23 @@ byte, and one byte 0x58 means -40 rather than 88. 11 + -40 = -29 -- the interpre
 had computed exactly what the module said, including the mistake. The encoder is
 fixed and the summands now round-trip. That miss is worth more than a clean pass
 would have been: nothing that returns a constant can produce -29 from those bytes.
+
+### The residual, which is why this says "runs this module"
+
+The dispatch table was the largest instance of an un-relocated pointer, not the only
+one. Scanning the working image's data segment for 8-byte words landing inside
+`.text`:
+
+```
+.data 0x41b10  ->  0x23aa4 (invokeNative)   5 times
+relocation sections in the image: 0
+```
+
+Five untagged words holding `invokeNative`'s LINK-TIME address, in an image with no
+relocations. They never fire here because a 39-byte module with no imports never
+reaches `wasm_interp_call_func_native`. So the honest claim is that WAMR executes
+THIS module, and the first module with an import is expected to hit the same hazard
+somewhere else. That is the next thing to test, and it is a cheap test.
 
 Same root as patch 0002 either way: a constant that encodes the pointer's width
 without saying so. There it was `UINTPTR_MAX == UINT64_MAX`; here the literals

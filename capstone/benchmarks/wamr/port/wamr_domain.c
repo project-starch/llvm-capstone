@@ -301,6 +301,9 @@ domain_main(unsigned *res, unsigned func)
        module's locals, since "run" has no parameters and no locals.
        Needs BEEBS_TAGCHECK=1; bit 23 carries the selftest, so a reading of all zeros
        is distinguishable from an instrument that was never compiled in. */
+#if !defined(BEEBS_MEMCPY_TAGCHECK) || !BEEBS_MEMCPY_TAGCHECK
+#error "stage 6 reads the tag-check counters; build it with BEEBS_TAGCHECK=1"
+#endif
     {
         extern unsigned long capstone_mcp_hits, capstone_mcp_selftest_seen;
         extern unsigned long capstone_mcp_where, capstone_mcp_ety, capstone_mcp_n;
@@ -323,7 +326,12 @@ domain_main(unsigned *res, unsigned func)
     /* The COMPUTED value, tagged so a zero from a failed call cannot be mistaken
        for a legitimate result. 0x5741_0000 | 42 is what a working interpreter
        returns; anything else is the failure it says it is. */
-    *res = ok ? (0x57410000u | (unsigned)argv[0]) : (0x57410000u | 0x0400u | WD_FAIL);
+    /* MASKED to 16 bits. Unmasked, a result with high bits set overwrites the
+       0x5741 tag and the answer reads as a crash: 11 + -40 came back as
+       0xFFFFFFE3 and was taken for one. Sixteen bits is all the marker protocol
+       has, so say so rather than let the tag be the thing that gives way. */
+    *res = ok ? (0x57410000u | ((unsigned)argv[0] & 0xFFFFu))
+              : (0x57410000u | 0x0400u | WD_FAIL);
 #endif /* 3 */
 #endif /* 2 */
 #endif /* 1 */

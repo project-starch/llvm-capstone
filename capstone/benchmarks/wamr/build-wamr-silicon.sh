@@ -55,6 +55,11 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         # The default is the one that works; 1 stays reachable because the pair is
         # the A/B test for anything that looks like a spill bug.
         -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-0}
+        # The label-stack pad (patch 0004). A knob, not a constant, so the 2x2 that
+        # attributes the fault to it can be built from ONE tree with one variable
+        # changing. Built as separate trees the arms differed in their global count
+        # too, which is not an experiment.
+        -DWAMR_LABEL_STACK_PAD=${WAMR_LABEL_STACK_PAD:-1}
         # beebs' memcpy/memset check the destination's tag and RETURN instead of
         # faulting, recording n. Off by default: it changes the primitives the whole
         # image runs on, so it is a diagnostic build, never the measured one.

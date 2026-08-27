@@ -122,6 +122,39 @@ independently revocable copy and revokes it at the right moment.
 
 plus the control's clean return. Quote both in your write-up.
 
+### How to read that line, because two of its three numbers lie
+
+**`pc` is the entry PC of the translation block, NOT the faulting instruction.**
+Capability faults are raised from `_helper_access_with_cap` in
+`capstone-qemu/target/riscv/op_helper.c`, which is `static` and is not inlined
+(`nm build/qemu-system-riscv64 | grep with_cap` shows it as a local `t` symbol). So
+`GETPC()` there returns an address inside `helper_load_with_cap` /
+`helper_store_with_cap`, which is not in the code-gen buffer, and `cpu_restore_state`
+takes its documented early exit without ever restoring `env->pc`. What gets printed
+is whatever TCG last wrote to `cpu_pc`.
+
+In practice the reported pc has landed on the return address of a `jalr` three times
+running, with the real faulting instruction +4 and +12 further on. **There is no fixed
+offset.** Read forward from the reported pc to the first access whose width matches the
+cause, and treat the pc as a starting line, not an answer. This project has retracted
+three conclusions drawn from that number.
+
+**`badaddr` / `tval` are stale for capability faults.** The raise sites in
+`op_helper.c` never assign `env->badaddr`, while `cpu_helper.c` reports
+`tval = env->badaddr`. In one run the emulator printed `addr = 0x1022d1e28` while the
+fault line said `badaddr = 0x1018ad346`, which is not even 4-aligned and therefore
+cannot be the address of a 16-byte access.
+
+**The `[CAPSTONE] Unaligned cap access (addr = ...)` line is the one that tells the
+truth**, and it is also what distinguishes a capability misalignment from an ordinary
+one: cause 4 is `LOAD_ADDR_MIS`, and the capability path raises it only inside
+`if (size == 16)`, for loads and stores alike, while `riscv_cpu_do_unaligned_access`
+raises the same code for plain loads and *does* set `badaddr`.
+
+The cause code is the reliable part. It narrows the instruction by WIDTH, which is
+often enough on its own: a two-byte load cannot raise a cause that only a 16-byte
+access can.
+
 A smaller, purely synthetic example to start from:
 `capstone/tests/runtime-qemu/build-borrow-revoke-uaf-probe.sh` and its `run-` sibling.
 

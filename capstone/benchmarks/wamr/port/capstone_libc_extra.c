@@ -372,6 +372,7 @@ int main(void)
    Die Selbsttest-Notiz (where 0xAB) wird GETRENNT gehalten. Sonst belegt sie den
    einzigen Datensatz, und die Messung sieht aus wie "nie ausgeloest" -- also
    genau wie ein sauberes Ergebnis, obwohl nichts gemessen wurde. */
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
 unsigned long capstone_mcp_hits, capstone_mcp_selftest_seen;
 unsigned long capstone_mcp_where, capstone_mcp_ety, capstone_mcp_n;
 
@@ -384,3 +385,4 @@ void capstone_mcp_note(unsigned long where, unsigned long entry_ty, unsigned lon
     }
     capstone_mcp_hits++;
 }
+#endif

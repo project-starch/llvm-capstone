@@ -10,13 +10,35 @@ Branch `capstone-wamr`. Nothing on `capstone-bootstrap`.
 
 ## Two defects, and neither fix alone is enough
 
-All four cells are stage 4 under QEMU, same source, same flags apart from the one
-variable:
+All four arms are stage 4 under QEMU, built back to back from ONE tree with one
+variable changing, through the `WAMR_LABEL_STACK_PAD` and `WAMR_LABELS_AS_VALUES`
+knobs:
 
 | | computed goto | switch dispatch |
 |---|---|---|
-| **no align fix** | cause 24 | cause 4 |
-| **align fix** | cause 1 at an unrelocated pc | **42** |
+| **no pad** | cause 4, `addr = 0x1022d1e08` | cause 4, `addr = 0x1022d1e28` |
+| **pad** | cause 1 at an unrelocated pc | **42** |
+
+Both no-pad arms give the same fault whatever the dispatch, which is what attributes
+it to the pad. Both addresses are congruent to 8 mod 16, and 8 is what the layout
+predicts here: `param = 0, local = 0, max_stack = 2`, so `sp_boundary = lp + 8` with
+`lp` 16-aligned. Each knob has a positive control in the artifact -- `handle_table`
+is a symbol in exactly the two `labels=1` images, and the pad's
+`neg`/`sub`/`andi 0x3`/`add` sequence appears in exactly the two padded ones. The
+padded and unpadded arms have identical captable global counts.
+
+**RETRACTED.** The first version of this table gave cause 24 for the top-left cell.
+That came from a log written the previous day by a binary built before patches 0002
+and 0003; the image of that name on disk gives cause 4. Read by filename instead of
+checked against the artifact under test. An adversarial audit caught it after the
+claim had already been committed and pushed.
+
+**Also retracted:** the first run of this 2x2 was not single-variable. The four
+images had been built from different working trees and differed by five captable
+globals, because `capstone_mcp_*` in `port/capstone_libc_extra.c` were defined
+UNGUARDED and landed in every build regardless of `BEEBS_MEMCPY_TAGCHECK`. They are
+now behind the same `#if` as their use, and the pad is a build knob so the arms can
+come from one tree.
 
 ### 1. The label stack is under-aligned (patch 0004)
 
@@ -45,11 +67,28 @@ the pair is the A/B test for anything that looks like a spill bug.
 
 ## The pc named the wrong instruction, for the third time
 
-At the reported 0x1BF24 stands `lhu a0, 0x6(s5)`, a two-byte load.
-`capstone-qemu/target/riscv/op_helper.c:1250` raises cause 4 **only** inside
-`if (size == 16)`, and for loads and stores alike. A two-byte load therefore
-cannot be what faulted, and the `stc` after it can. The cause code identified the
-instruction; the pc named its neighbour.
+The mechanism is now understood and it applies to EVERY capability fault this
+emulator reports. `_helper_access_with_cap` in `op_helper.c` is `static` and is not
+inlined -- `nm build/qemu-system-riscv64 | grep with_cap` shows it as a local `t`
+symbol -- so `GETPC()` inside it returns an address outside the code-gen buffer,
+`cpu_restore_state` takes its documented early exit, and `env->pc` is never
+restored. The printed pc is the translation block's ENTRY, which in all three runs
+happened to be the return address of a `jalr`. The real faulting instruction was +4
+in two runs and +12 in the third, so "the next instruction" is not a rule either.
+
+`badaddr`/`tval` are stale on this path: the raise sites never assign `env->badaddr`
+while the reporter prints it. One run printed `addr = 0x1022d1e28` alongside
+`badaddr = 0x1018ad346`, which is not 4-aligned and so cannot be a 16-byte access.
+The `[CAPSTONE] Unaligned cap access (addr = ...)` line is the only trustworthy
+address.
+
+What identified the instruction was the cause code, which narrows by WIDTH:
+`op_helper.c:1250` raises cause 4 from the capability path only inside
+`if (size == 16)`, for loads and stores alike, so the two-byte `lhu` at the reported
+pc cannot be what faulted and the `stc` after it can.
+
+Written up for everyone in `ref/HOW-TO-RUN-ON-QEMU.md`. This plausibly explains the
+project's two earlier retracted trap-pc conclusions as well.
 
 **RETRACTED:** the earlier reading of this same address as "an untagged frame
 pointer inside `memset`". `memset` here is beebs' plain byte loop, and the test
@@ -100,6 +139,22 @@ gate with them. Registered in `run-nightly.sh` as `wamr`.
 The default build with no environment variables produces an image **byte-identical**
 to the one that returned 42, which is what verifies the default flip.
 
-Open: the ladder still has stage 6 and the `BEEBS_TAGCHECK` knob as diagnostics
-rather than tests; nothing exercises WAMR's EMS allocator under load yet, which is
-the reason WAMR is in the study at all.
+## The residual, which is why this says "runs this module"
+
+The dispatch table was the largest un-relocated pointer, not the only one. The
+working image's data segment holds five untagged 8-byte words containing
+`invokeNative`'s LINK-TIME address (`.data 0x41b10 -> 0x23aa4`), in an image with
+zero relocation sections. They never fire because a 39-byte module with no imports
+never reaches `wasm_interp_call_func_native`. A module WITH an import is expected to
+hit the same hazard, and that is the cheapest next test.
+
+Two defects introduced by this session's own instrumentation, both now fixed:
+`capstone_mcp_*` were unguarded (above), and `*res = 0x57410000u | argv[0]` in
+`wamr_domain.c` lost the 0x5741 tag whenever the result had high bits set. That is
+exactly what made the -29 control read like a crash. The value is masked to 16 bits
+now, which is all the marker protocol has.
+
+Open: stage 6 and the `BEEBS_TAGCHECK` knob are diagnostics rather than tests;
+nothing exercises WAMR's EMS allocator under load yet, which is the reason WAMR is
+in the study at all. Every cell of the 2x2 is still N=1, though the alignment
+mechanism reproduces across three separate builds.
