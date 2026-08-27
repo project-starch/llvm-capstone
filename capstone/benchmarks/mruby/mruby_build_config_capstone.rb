@@ -34,7 +34,12 @@ MRuby::Build.new do |conf|
   # for every specimen. Dropping the gem is the honest small change; fixing i128
   # arithmetic on a capability-width integer type is a different piece of work.
   conf.gembox "stdlib"
-  conf.gem core: "mruby-math"
+  # mruby-math is dropped for the same reason as mruby-bigint and by the same
+  # standard: it needs fifteen libm functions beebs does not carry (acosh, asinh,
+  # atanh, cbrt, cosh, expm1, log1p, log2, log10, sinh, tan, tanh, trunc, asin,
+  # atan2), and no specimen in this corpus computes a hyperbolic. Writing fifteen
+  # soft-float implementations to satisfy a linker would be work in service of
+  # nothing being measured.
 
   conf.cc.defines << "MRB_NO_STDIO"
 

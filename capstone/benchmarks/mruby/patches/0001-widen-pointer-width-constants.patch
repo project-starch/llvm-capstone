@@ -1,0 +1,74 @@
+Two constants that encode the pointer's width, and one alignment that does.
+
+MRB_STR_EMBED_LEN_BITS is 5, so an embedded string's length must fit in 31. The
+space available is sizeof(void*)*3 + sizeof(void*) - 5, which is 59 once a pointer
+is 16 bytes, and the static assertion in string.c fires. Six bits is the smallest
+value that fits and costs one bit of the flags word.
+
+mrb_alignas(8) on a `static const struct RProc` asks for less alignment than the
+type requires once its members are capabilities, which clang rejects outright.
+sizeof(void*) is the honest expression of what the original 8 meant.
+
+Both are no-ops anywhere a pointer is 8 bytes.
+
+diff --git i/include/mruby/string.h w/include/mruby/string.h
+index a68b959..f851b4e 100644
+--- i/include/mruby/string.h
++++ w/include/mruby/string.h
+@@ -66,7 +66,7 @@ struct RStringEmbed {
+    to 16: RSTRING_EMBED_LEN_MAX is 11 on 32-bit and 27 on 64-bit, both of which
+    five bits hold. */
+ #define MRB_STR_EMBED_LEN_SHIFT 4
+-#define MRB_STR_EMBED_LEN_BITS 5
++#define MRB_STR_EMBED_LEN_BITS 6
+ #define MRB_STR_EMBED_LEN_MASK (((1 << MRB_STR_EMBED_LEN_BITS) - 1) << MRB_STR_EMBED_LEN_SHIFT)
+ 
+ /* Where in the flags word the coderange sits. Its four answers are exclusive,
+diff --git i/mrbgems/mruby-catch/src/catch.c w/mrbgems/mruby-catch/src/catch.c
+index 90916eb..9d737cb 100644
+--- i/mrbgems/mruby-catch/src/catch.c
++++ w/mrbgems/mruby-catch/src/catch.c
+@@ -46,7 +46,7 @@ static const mrb_irep catch_irep = {
+ };
+ 
+ /* Procedure object for catch method - used to identify catch blocks in call stack */
+-mrb_alignas(8)
++mrb_alignas(sizeof(void*))
+ static const struct RProc catch_proc = {
+   NULL, MRB_TT_PROC, MRB_GC_RED, MRB_OBJ_IS_FROZEN, MRB_PROC_SCOPE | MRB_PROC_STRICT,
+   { &catch_irep }, NULL, { NULL }
+diff --git i/src/class.c w/src/class.c
+index 1dd3930..3a1324f 100644
+--- i/src/class.c
++++ w/src/class.c
+@@ -4609,7 +4609,7 @@ static const mrb_irep new_irep = {
+   sizeof(new_iseq), 0, 2, 0, 0,
+ };
+ 
+-mrb_alignas(8)
++mrb_alignas(sizeof(void*))
+ static const struct RProc new_proc = {
+   NULL, MRB_TT_PROC, MRB_GC_RED, MRB_OBJ_IS_FROZEN, MRB_PROC_SCOPE | MRB_PROC_STRICT,
+   { &new_irep }, NULL, { NULL }
+@@ -4641,7 +4641,7 @@ static const mrb_irep neq_irep = {
+   sizeof(neq_iseq), 0, 2, 0, 0,
+ };
+ 
+-mrb_alignas(8)
++mrb_alignas(sizeof(void*))
+ static const struct RProc neq_proc = {
+   NULL, MRB_TT_PROC, MRB_GC_RED, MRB_OBJ_IS_FROZEN, MRB_PROC_SCOPE | MRB_PROC_STRICT,
+   { &neq_irep }, NULL, { NULL }
+diff --git i/src/proc.c w/src/proc.c
+index 4c4649d..8628eb9 100644
+--- i/src/proc.c
++++ w/src/proc.c
+@@ -35,7 +35,7 @@ static const mrb_irep call_irep = {
+   0,                                   /* refcnt */
+ };
+ 
+-mrb_alignas(8)
++mrb_alignas(sizeof(void*))
+ static const struct RProc call_proc = {
+   NULL, MRB_TT_PROC, MRB_GC_RED, MRB_OBJ_IS_FROZEN, MRB_PROC_SCOPE | MRB_PROC_STRICT,
+   { &call_irep }, NULL, { NULL }
