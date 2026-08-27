@@ -1062,3 +1062,50 @@ both forms under the QEMU reference model.
 monitor's `split_out_cap` spins (`SPLB`) — the same image that returned at slot 1 was created
 (`SQ: A/dom-ok`) and never entered (`SQ: G/enter` = 0) at slot 3. That is infrastructure, not a
 domain result, and conflating the two produced a false localization on 2026-08-06.
+
+## SLT RUNS FULLY ON SILICON — and the S-12 trigger is narrowed to an unindexed nested SCAN
+
+**The plans were READ, not inferred** — the rule this project learned the hard way, since
+`sqlite3WhereCodeOneLoopStart` is the where-loop CODE GENERATOR and the wedge is at PREPARE time.
+`EXPLAIN QUERY PLAN` is compiled out of the domain (`SQLITE_OMIT_EXPLAIN=1`), so this was read from
+a native build with the domain's planner-relevant defines:
+
+| query | plan | silicon |
+|---|---|---|
+| extended workload `JOIN … ON` | `SCAN nums` + `SEARCH link USING AUTOMATIC COVERING INDEX` | **14/14 clean** |
+| **`qj4`** (new, indexed) | `SCAN t1` + `SEARCH t3 USING COVERING INDEX idx_t3a` | **RETURNS** |
+| `qj2` cartesian | `SCAN t1` + **`SCAN t2`** | wedges |
+| `q_two` self-join | `SCAN t1` + **`SCAN y`** | wedges |
+| `q_one` | `SCAN t1` | returns |
+
+**"Two where-loop levels" is the wrong characterisation.** `qj4` and `qj2` are both two-level
+joins, both on empty tables, run from the SAME domain image in back-to-back boots — the only
+difference is whether the inner level is an indexed SEARCH or a repeated SCAN. One returns, the
+other wedges.
+
+**So the trigger is generating code for an UNINDEXED NESTED SCAN at level 2.** That is far narrower
+than the working characterisation this investigation has used since the level-2 finding, and it is
+consistent with everything on file: `4534e1d0f302` established the wedge is at PREPARE time, and
+its refutation of the automatic-index theory said `q_two` gets no automatic index and wedges
+anyway — which is exactly what the plan above shows.
+
+### SLT on silicon: WORKS, fully
+
+`qj4` on the board: `SLT-SUMMARY records=4 stmt_pass=3 stmt_fail=0 query_pass=1 query_fail=0
+skip_big=0 oom=0 parse_err=0 completed=1`. Three statements and a **passing query**, including a
+two-table join. This is the first SLT run on silicon to pass its query rather than merely complete.
+
+**OPERATIONAL LIMIT, measured: exactly ONE SLT domain per boot.** Each SLT domain carves a 1 MiB
+region (`SLT_REGION_SIZE`), and the SECOND `create_dom` fails — `SQ: A/dom-ok` absent, so the
+domain is never created and NOTHING in it runs. This is not the `SPLB` monitor spin (`SPLB` = 0).
+
+**A near-miss worth recording.** The first attempt ran `q_one`, `qj4`, `qj2` in one boot. `qj4` was
+arm 2, did not return, and would have read as "the prediction is refuted" — but `A/dom-ok` was
+absent, so its domain was never created and the arm carried NO verdict about the query. Re-run
+alone in slot 1, `qj4` returned and passed. The driver's own comment names this exact trap: absence
+of `A/dom-ok` means blaming that arm produces "a confident, entirely false localization", as it did
+on 2026-08-06.
+
+**Weight, stated honestly:** `qj4` is **N = 1**, and at the 54% per-draw rate a single return is
+p = 0.46 by chance. The account does not rest on it alone — the extended workload is the same
+indexed-inner shape at 14/14 — but `qj4` itself needs redraws before the pairing is quantitative.

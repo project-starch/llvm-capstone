@@ -1,0 +1,35 @@
+# MATCHED PAIR AGAINST qj2 -- ONE VARIABLE: is the inner where-loop level a SCAN or a SEARCH?
+#
+# qj2 is `SELECT t1.a FROM t1, t2` and its plan is SCAN t1 + SCAN t2. It WEDGES on silicon.
+# This is the same two-level where-loop with the inner side INDEXED, so the plan is
+# SCAN t1 + SEARCH t3 USING COVERING INDEX idx_t3a (a=?)  -- verified by reading the plan,
+# not inferred from the SQL text, which is the rule this project learned the hard way.
+#
+# WHY THIS IS THE RIGHT PAIR. "Two levels wedge" is too coarse: the built-in extended workload's
+# `JOIN ... ON nums.label = link.label` is ALSO two levels and ran 14/14 clean on silicon, and its
+# plan is SCAN nums + SEARCH link USING AUTOMATIC COVERING INDEX. So the variable is not the
+# nesting -- it is whether the inner level is a repeated unindexed SCAN.
+#
+# TABLES ARE EMPTY, exactly as in qj2, because the fault is at PREPARE time: it lives in
+# sqlite3WhereCodeOneLoopStart, which is the where-loop CODE GENERATOR, and qj2 wedges with empty
+# tables. Keeping both empty means data volume is not a second variable.
+#
+# PREDICTION, pre-registered before the boot:
+#   qj4 RETURNS and qj2 WEDGES  -> the trigger is generating code for an unindexed nested SCAN,
+#                                  which is far narrower than "a second where-loop level"
+#   both WEDGE                  -> the plan is NOT the variable and this whole account is wrong
+#   qj4 WEDGES and qj2 RETURNS  -> the pairing is inverted; treat the run as VOID and re-read
+
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE t3(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE INDEX idx_t3a ON t3(a)
+
+query I nosort
+SELECT COUNT(*) FROM t1 JOIN t3 ON t1.a = t3.a
+----
+0
