@@ -138,7 +138,7 @@ md_snap(unsigned long *w, void *sp, void *stbase, long nregs, long stack_keep)
     }
 }
 
-long md_probe_stack(void *ctx, long nregs, long stack_keep);
+long md_probe_stack(void *ci, void *stbase, long nregs, long stack_keep);
 
 /* POSITIVE CONTROL for the predicate below. Hands it a capability deliberately too
    small for the frame it describes and returns 1 if the predicate noticed. Without
@@ -157,11 +157,10 @@ md_probe_selftest(void *heap_ptr)
     /* A fake context: slot 1 = stbase, slot 3 = ci; and a fake callinfo whose
        slot 3 is the deliberately tiny capability. Built on the stack so the
        control needs nothing from mruby and can run before it. */
-    void *fake_ci[4] = { 0, 0, 0, tiny };
-    void *fake_ctx[4] = { 0, heap_ptr, 0, fake_ci };
+    void *fake_ci[4] = { 0, 0, 0, tiny };   /* slot 3 = ci->stack */
 
     md_escape_armed = 0;              /* must not jump out of the control itself */
-    md_probe_stack(fake_ctx, 100, 0); /* 100 * 32 bytes into 16: must be bad */
+    md_probe_stack(fake_ci, heap_ptr, 100, 0); /* 100 * 32 into 16: must be bad */
     fired = (md_probe_violations > saved_viol);
 
     md_probe_calls = saved_calls;
@@ -188,23 +187,19 @@ md_probe_selftest(void *heap_ptr)
  * from -Xclang -fdump-record-layouts, not from reading the struct.
  */
 long
-md_probe_stack(void *ctx, long nregs, long stack_keep)
+md_probe_stack(void *ci, void *stbase, long nregs, long stack_keep)
 {
-    void **cx = (void **)ctx;
-    void *ci, *sp, *sp2, *stbase;
+    void **cip = (void **)ci;
+    void *sp, *sp2;
     unsigned long b, e, c;
     long avail;
     int bad, moved;
 
     md_probe_calls++;
 
-    if (!ctx)
-        return nregs;
-    ci = cx[3];
-    stbase = cx[1];
     if (!ci)
         return nregs;
-    sp = ((void **)ci)[3];
+    sp = cip[3];                       /* mrb_callinfo.stack is 0x30 = slot 3 */
     if (!sp)
         return nregs;
 
@@ -226,9 +221,8 @@ md_probe_stack(void *ctx, long nregs, long stack_keep)
         avail = (c < b || c >= e) ? 0 : (long)((e - c) / MD_VALUE_SIZE);
     }
 
-    /* THE SECOND READ. Same two loads the clear is about to do, as late as this
-       function can do them. */
-    sp2 = ((void **)cx[3])[3];
+    /* The second read, as late as this function can do it. */
+    sp2 = cip[3];
     moved = (md_base(sp2) != b) || (md_end(sp2) != e) || (md_cur(sp2) != c);
     if (moved) {
         md_reread_differs++;
@@ -248,10 +242,10 @@ md_probe_stack(void *ctx, long nregs, long stack_keep)
     if (stbase) {
         long room = (long)((md_end(stbase) - md_cur(stbase)) / MD_VALUE_SIZE);
 
-        ((void **)cx[3])[3] = stbase;          /* c->ci->stack = c->stbase */
-        stack_keep = 0;
-        nregs = (room < 1) ? 0 : (room > 4 ? 4 : room);
-        md_snap(md_viol, stbase, stbase, nregs, stack_keep);
+        cip[3] = stbase;
+        nregs = (room < 1) ? stack_keep : (room > 4 ? 4 : room);
+        if (nregs < stack_keep)
+            nregs = stack_keep;
     }
 #endif
 

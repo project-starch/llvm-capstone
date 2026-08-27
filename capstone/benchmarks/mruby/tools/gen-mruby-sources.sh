@@ -49,7 +49,7 @@ hdr = (d / "mruby.h").read_text(encoding="utf8", errors="replace")
 checks = [
     ("0001 embedded-string width", hdr.count("#define MRB_STR_EMBED_LEN_BITS 6"), 1),
     ("0001 capability alignment",  src.count("mrb_alignas(sizeof(void*))"),        4),
-    ("0003 stack-bounds probe",    src.count("md_probe_stack"),                    2),
+    ("0003 stack-bounds probe",    src.count("md_probe_stack"),                    3)  # one extern, two call sites,
 ]
 bad = []
 for name, got, want in checks:

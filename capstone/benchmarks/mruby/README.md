@@ -173,29 +173,38 @@ The builtins the probe reads were checked against the backend rather than assume
 `CapstoneISelDAGToDAG.cpp` selects LCC field 0 for the tag, 2 for the cursor, 3 for
 the base and 4 for the end.
 
-**Three probe versions were wrong before one was right, and each was wrong
-silently.** They are documented in the file because the class recurs: a check keyed
-to the wrong quantity, arithmetic that wraps for exactly the input under
-investigation, and an instrument that mutates what it measures.
+**RETRACTED: the fault is not established to be in `mrb_vm_run`'s clear.** That
+attribution rested entirely on the reported trap pc, and the pc is the translation
+block's ENTRY rather than the faulting instruction (see
+`ref/HOW-TO-RUN-ON-QEMU.md`). Everything downstream of that assumption has now been
+measured and is consistent; the assumption itself is the only thing that is not.
 
-1. it recorded only on a violation it judged with `end - cursor` in unsigned
-   arithmetic. The capability being investigated is precisely the one whose cursor
-   can sit outside its bounds, so the subtraction wrapped: eight zeros,
-   indistinguishable from a finding.
-2. the predicate did not mirror the loop. mruby derives the count as
-   `nregs - stack_keep`, so the danger is `nregs` BELOW `stack_keep`, which puts the
-   limit under the start; the check asked whether `nregs` elements fit and could
-   not see that case at all.
-3. it called `malloc` to find the arena base, and `mrb_vm_run` RE-LOADS
-   `c->ci->stack` after the probe returns -- an allocation and a free sat between
-   the capability measured and the capability used.
+The measurements, each with its control:
 
-The escape no longer depends on the probe's judgement: `MD_ESCAPE_AFTER` leaves
-after a fixed number of frames whatever they look like, and `MD_PROBE_SKIP_CLEAR`
-removes the clear entirely, which is the arm that decides whether the probe is in
-the faulting path at all without any predicate being involved.
+| | |
+|---|---|
+| the probe's predicate fires on a frame it must reject | ladder rung 4, a fake context with a deliberately tiny capability |
+| the probe is in the faulting path | `MD_PROBE_SKIP_CLEAR` forces the count to zero; the fault becomes a HANG |
+| the first frame is healthy | 4096-byte `ci->stack`, cursor at base, `nregs` 4, `stack_keep` 0, 143360 bytes inside the arena |
+| reading `ci->stack` twice inside the probe gives the same capability | `md_reread_differs` stays 0 |
+| the domain stack does not overlap the heap | probe stack address is 183076 bytes BELOW the arena, growing away |
+| the probe preserves the caller's registers | it saves and restores s0-s3 and touches no other callee-saved register; `mrb_vm_run` holds the context in s7 |
+| the LCC field indices are right | `CapstoneISelDAGToDAG.cpp` selects 0 tag, 2 cursor, 3 base, 4 end |
+| both `vm.c` clears are instrumented | `mrb_vm_run` and `exec_irep`, which caches `ci` before `stack_extend` runs |
 
-Before that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
+With all of that, the probe still reports a healthy frame and the run still faults
+on an 80-byte capability. **Four instructions in the image match what the monitor
+decodes** (`rs1 = x10, imm = -16, size = 8`): in `mrb_hash_new_capa`, `exec_irep`,
+`mrb_vm_run` and `__capstone_cap_init`. Two are now guarded and the other two are
+not, so the fault may simply not be where the pc suggests.
+
+**The next step is therefore to stop trusting the pc.** Give each of the four sites
+a distinguishable signature -- a different clamp, a different sentinel value, or a
+staged early return -- so the run itself says which one it is, the way this
+project's ladder rule prescribes: build variants that RETURN a marker instead of
+observing a fault.
+
+**Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
 reaches the host. Stages 1 to 4 are the next step; no case has been scored.
 
