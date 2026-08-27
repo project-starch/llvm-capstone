@@ -24,7 +24,7 @@ label string.
 
 | | S-12 | S-13 |
 |---|---|---|
-| `ex_commit.valid` (224 bit 7) | **1** — an exception is stuck at commit | **0** — no exception |
+| `ex_commit.valid` (224 bit 7) | 1 in **45 of 52** — see the weakening below | 0 in **7 of 8** — see below |
 | aperture 225 | `0x80` — **nothing** is waiting | `0xd5` — **three** wait conditions |
 | `mcause` | 25, a real capability fault, `tval = 0` | none; the latch holds stale kernel traffic |
 | fault site | present in the image | **verified absent** from every draw artifact |
@@ -133,3 +133,35 @@ interlock EXISTS), the data merely says the machine does not appear to use that 
 hardware is a concurrent event machine over independent registers. Any conclusion in this
 investigation that rests on an `.anvil` sequence CONSTRAINING ordering — the store-buffer FIFO
 argument that excluded the S-12 granule row among them — may want re-examining on those grounds.
+
+
+## Aperture 224 paired with 225 across 63 boots — one result clean, one weakening
+
+| 225 | 224 | n | `store_syncer_req` | `ex_commit.valid` |
+|---|---|---|---|---|
+| `0x80` | `0x9f` | 45 | 0 | 1 |
+| `0x80` | `0x1d` | **7** | 0 | **0** |
+| `0xd5` | `0x7f` | 7 | 1 | 0 |
+| `0xd5` | `0xff` | 1 | 1 | 1 — but see caveat |
+| `0x00` | `0x9f` | 3 | — | — (225 all-zeros, void) |
+
+**CLEAN RESULT: the DYN wait flag and the store-side indicator never separate.** `store_syncer_req`
+is 0 in **all 52** `0x80` boots and 1 in **all 8** `0xd5` boots. Across 63 boots there is no case of
+one without the other. On the reading the RTL lane pre-registered, that points at the **store path
+as the shared resource** and makes *"one stuck thing blocks both"* the better account — and it is
+consistent with the `0xc5` absence rather than in tension with it.
+
+**WEAKENING: `ex_commit.valid` is a poorer discriminator than this folder claimed.** **Seven of the
+52** `0x80` boots have `ex_commit.valid = 0` (`224 = 0x1d`). So "S-12 means an exception stuck at
+the head of commit" holds for 45 of 52, not for all. `0x1d` is neither all-ones nor all-zeros and
+does not look like a dead read — `flush=0`, `privM=1`, where `0x9f` has `flush=1`. **There is no
+account for it here and one should not be invented.**
+
+**The one `0xd5` boot with `ex_commit.valid = 1` is NOT counted against the split**, because
+`224 = 0xff` is ALL ONES — the same dead-aperture value that `0xFFFF` turned out to be for the
+rev-node head hours earlier. Same shape, same lesson: flagged as suspect, not reported as a
+counterexample.
+
+**So the surviving clean statement is the syncer one, not the exception one.** The `225`-based
+two-class split still looks solid; the `ex_commit.valid` bit should not be quoted as separating
+them cleanly.
