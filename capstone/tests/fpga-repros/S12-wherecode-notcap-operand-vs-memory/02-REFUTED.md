@@ -121,6 +121,45 @@ stop someone re-deriving a dead end.
 | "**The S-07 fix renders the S-10 forwarding defect unreachable**" | *"the stall is an ALLOCATION-time check between two write-buffer ENTRIES. The residual needs only ONE entry"*. Matched pair: 8 traps/16 legs vs 16/16 | `capstone-ariane 6175ea654235` |
 | "**S-07 is silicon-validated**" | Downgraded: `P(3 clean | defect live) = 0.875³ = 0.670`, *"nearly uninformative"*; and the pre-registered WNS criterion *"came back negative and was never applied"* | `ISSUES.md:321-330` |
 
+## Dead: the LDC move-clear family (2026-08-27) — all four, each with the clear PROVEN to fire
+
+This family was the strongest surviving one, because it is the only mechanism that produces the
+observed operand *exactly*: the clear payload is `store_unit.sv:462-469` driving data 0, user 0,
+ctag 0, which is bit-for-bit `create_cnull()` and therefore bit-for-bit `{cursor 0, NOT_CAP}`,
+`tval = 0` included. All four routes are now closed.
+
+| Hypothesis | How it was refuted | What that does NOT cover | Evidence |
+|---|---|---|---|
+| The **value's TYPE** gates the fault, and every earlier sim was blind because it used NONLIN | All six types run through the real window. Clear demonstrably FIRED in all five clear-set arms (granule zeroed) and demonstrably did NOT in the NONLIN control; positive control prints the board's exact NOT_CAP/0 signature. **In all five the load still returned a correct tagged capability** | The window at bare-metal fidelity. Says nothing about a domain after `capenter` under real pressure | `capstone-ariane 7fb91b5c7`, `s12-value-type-sweep.S` |
+| The reload **races the clear IT triggers** | Structural: `load_unit.sv:706-712` holds `valid_o` off until the clear issues and delivers a **SNAPSHOT** (`:846-851`), not a re-read of the post-clear granule. Confirmed independently by the sweep above | Only self-observation. A clear from a *different, earlier* LDC is a separate question | `load_unit.sv:706-712`, `:846-851` |
+| The clear **races the NEXT store** to the same granule under write-buffer pressure | Matched pair, 16 iterations each: LINEAR arm's granule zeroes every time (clear fires), NONLIN control's survives (clear correctly absent), and every following load returns a correct capability — so each store landed after the previous clear | 16 iterations of bare-metal pressure. Not SQLite's after millions of instructions. Read-back sits between load and next store, so ordering is inferred from the following iteration rather than observed | `capstone-ariane d835e0c00`, `s12-linear-clear.S` |
+| A **clear-set capability in a DOUBLE-LOADED slot** — silicon-fatal, QEMU-invisible | Whole-program address-keyed QEMU sweep over 16-byte granules, modelling the RTL condition: **0 hits on all four arms** (qj2, q_two, q_one, built-in). The domain makes only 3 clear-set stores at all, all `SEALEDRET` from the entry glue, none re-loaded. Every hit is monitor-side and the counts run BACKWARDS — the silicon-passing built-in arm has 24 against the wedging arms' 18 | QEMU-visible paths. Three positive controls fired (forced-NONLIN 144,425 hits; type filter a proper subset; disarm guard 38/85) and the blind-spot meter reads 0, but silicon-side divergence is by definition outside it | `/tmp/capstone/s12-slot/RESULTS.md`, parent `aec276114ffd` |
+
+**And the premise the whole family rested on is itself dead:** the stored value is **NONLIN**,
+measured 16/16 at the exact `stc` pc with a positive control, and independently the slot is loaded
+**three times per call**, so a clear-set type there would wedge one-level plans — which never wedge
+in 11 draws. The old "the stored value is REVOKE-typed" section was retracted on **2026-08-25** and
+**the retraction never reached this folder until 2026-08-27**, which is why the folder spent two
+days contradicting the state doc. *A retraction recorded in the state doc but not in the artifact
+folder is not a retraction.*
+
+## Dead: register, forwarding and syncer paths (2026-08-27) — refuted at 10x the previous occupancy
+
+Three of these were already "refuted" on occupancy of 2, 8, and *never ran at all*. Those were
+unproven zeros; these are refutations.
+
+| Hypothesis | How it was refuted | What that does NOT cover | Evidence |
+|---|---|---|---|
+| **Load-syncer mispair** — a second LDC's `init` overwrites a pending `cap_trans_id`, diverting the first response and substituting a whole `fat_cap_t`. *The only shape proposed that yields BOTH `tval = 0` and NOT_CAP from one event* | **192 inits** under designed maximum pressure (8 independent cache-missing LDCs after an eviction sweep), `init-while-pending` = **0**, against 7-8 inits in ordinary tests. Structural reason: `func LDC` blocks on `recv cap_load_ri.res` | Bare metal. If the DYN thread's blocking behaviour differs inside a domain, this does not transfer | `capstone-ariane 7fb91b5c7`, `s12-ldc-pressure.S` |
+| **Wrong-producer forwarding** — the fixed-priority arbiter hands a consumer an older live entry's result | Occupancy raised from 2 to **5 of 8** with capability producers in the exact `movc → ldc → cincoffsetimm` shape, behind a cold-miss shadow that pins commit; **duplicate-live-rd = 0**. Structural reason: `gen_check_waw_dependencies` stalls issue while a clobberer is live | Occupancy 5, not 8. The prior refutation used a **scalar-only** test at occupancy 2 and was much weaker than it read | `capstone-ariane 36eed41f3`, `s12-cap-waw-pressure.S` |
+| **Stale-regfile read** — the consumer bypasses forwarding and reads the regfile before commit | Same run: window (b) occupancy **8 → 80** with **64 real consumers**, `NO-FORWARD` = 0; window (a) 365 FLU issues / 560 LDC-pending cycles, window (c) 1605 — all zero | Its own author flagged occupancy 8 as bounding the rate "only loosely". At 80 it no longer does, but this is still bare metal | same run, `RAW-DBG2` counters |
+| **S-10b granule hazard** — a missed `[11:3]` stall gives a stale read | Structural and stronger than the store list: S-10b can only stale the granule half the load does **not** present, so it predicts `tval` = the stored cursor. Measured `tval` is **0**. (`load_unit.sv:316` — a load presents ONE offset, its own base vaddr) | **The STALL hazard only.** S-10 itself (`wt_dcache_mem.sv:280`, still word-granular), S-07, and write-buffer forwarding are NOT cleared by this | auditor-verified; `store_buffer.sv:279,287,293` |
+
+**Scope warning for this whole family:** `git diff 84ed6eafb HEAD -- core/` shows the only
+differences in `issue_read_operands.sv` are inside `` `ifndef SYNTHESIS `` — sim-only — so these
+results DO transfer to the resident bitstream. That was checked rather than assumed; the opposite
+would have voided every one of them.
+
 ## Instruments known to be broken — do not build on their output
 
 | Instrument | Status |
