@@ -255,3 +255,100 @@ entries that were read rather than reproduced; TLSF issues 36 and 9.
 4. **Entry 28**, Contiki-NG `IN_HEAP`. Not a subject we run, but it is the cleanest
    write-anywhere-from-a-foreign-pointer specimen in the whole set and would port to
    a shim in an afternoon.
+
+---
+
+# mruby: 36 usable specimens, and the oracle is a wrong answer
+
+Enumerated 2026-08-28. Structure re-checked at the line in current upstream.
+
+## The methodological finding, which outranks the list
+
+**ASAN's blind spot is identical to CHERI's blind spot here.** ASAN only ever sees
+`malloc` and `free`, and mruby never `malloc`s an RVALUE: `init_heap_page` threads a
+free list through the objects themselves, and `incremental_sweep_phase` returns a
+swept slot to `page->freelist`. So the bugs we want -- a live reference to a swept
+slot in a page that is still live -- **produce no sanitizer report at all**. They
+surface as one of:
+
+1. `Assertion failed: ((obj)->tt != MRB_TT_FREE)` in `mrb_gc_mark`;
+2. `heap-use-after-free READ 4` where the 4 bytes are `obj->tt`, the RVALUE header;
+3. **a wrong answer handed back to Ruby**, because the slot came back as another type.
+
+Issue 3596 has the proof under a debugger: a live `mrb_value` tagged
+`MRB_TT_STRING` whose target's header reads `MRB_TT_FREE`. Tagged, in bounds, no
+`free()` ever issued.
+
+**So build the oracle around the wrong answer, not around a sanitizer.** A sanitizer
+cannot see the case the corpus exists to measure.
+
+## The lever: `mrb_gc_add_region`
+
+Public API, verified at `include/mruby/gc.h:118`:
+
+    MRB_API int mrb_gc_add_region(mrb_state *mrb, void *start, size_t size);
+
+It carves a caller-supplied buffer into heap pages. And `src/gc.c:1508` reads
+
+    if (dead_slot && !page->region) {   /* ... mrb_free(mrb, page) */
+
+so **region pages are never returned to the allocator.** With a region-backed heap
+the whole engine heap is one capability, no GC page ever reaches `free()`, and
+revocation has nothing to sweep. That converts the ten bugs below whose page WAS
+freed into the same permanently-invisible class as the rest.
+
+Caveat with teeth: when the region fills, mruby falls back to `malloc` for new
+pages. Size it so it cannot, and assert on the page count it returns, or the
+fallback silently reintroduces malloc'd pages and the measurement changes underneath.
+
+## Counts
+
+| class | where the bad access lands | purecap | + revocation | count | with a script |
+|---|---|---|---|---|---|
+| **A** | live GC page, slot on the page free list | blind | **blind** | 26 | 13 |
+| **B** | whole page freed to `malloc` | blind | catches, unless region-backed | 10 | 8 |
+| C | standalone `malloc` buffer (VM stack, `ary`/`str` data, khash, irep) | catches | catches | ~45 | rejected |
+
+**36 usable, 21 with a pasteable script.**
+
+## The best specimen, and it needs no sanitizer at all
+
+Issue 6339, `Array#delete`, fixed by `0955539cf9bb` and `0972c8477 33e`:
+
+```ruby
+$i = 0
+class C
+  def ==(other)
+    GC.start
+    ($i += 1) == 3
+  end
+end
+a = 5.times.map { C.new }
+x = a.delete(C.new)
+GC.start
+p x   # a String appears where a C instance must be
+p x   # and printed differently the second time
+```
+
+The returned object was swept, its slot came back off the page free list as a
+`String`, and the interpreter hands the wrong object to Ruby. Nothing leaves the
+page.
+
+## Prior art that was already here
+
+`xlang/cheri/mruby-port/README.md`: **purecap mruby already RUNS under CheriBSD**
+(2026-08-01), on four changes -- `MRB_STR_EMBED_LEN_BIT` 5 to 6, TLS ABI flags,
+`-DMRB_USE_METHOD_T_STRUCT` (otherwise `proc.h` packs a C function pointer as
+`(uintptr_t)fn << 2 | flag` and clears the tag), and `-DPOOL_ALIGNMENT=16`. Its
+closing paragraph already names the thesis: mruby "recycles dead objects on a
+per-page free list without returning them to the allocator, which is exactly the
+case revocation cannot observe."
+
+Also required and easy to miss: `include/mrbconf.h:62-65` defaults to
+`MRB_WORD_BOXING` when nothing is chosen, which compresses pointers into an integer
+word. `-DMRB_NO_BOXING` is mandatory, and a static size assertion is what catches it.
+
+The Capstone side has only `xlang/capstone/mock_mruby_capstone.c`, a mock. The
+freestanding port is the work that remains; the census in
+`history/28-08-2026_00-30-00_mruby-is-portable-jerryscript-is-not.md` puts it at
+eleven errors, most of which are the four knobs above.
