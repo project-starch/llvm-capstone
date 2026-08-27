@@ -980,3 +980,43 @@ run's* collector against it. Rerun with correct process scoping it peaked at **2
 completed the full flow, and did synthesis **41 min faster** than retiming-OFF (213 vs 254). The
 flow deviation was never necessary — and it produced the worse-timed build. This strengthens
 CLAUDE.md's "do not change the synthesis flow"; nothing there needs changing.
+
+## Rate ladder for SQLite on silicon — started 2026-08-27, current compiler
+
+**Why this exists.** The standing claim is "SQLite passes its correctness workload on silicon,
+3/3". Two things make that insufficient. The rate was never established — three reps only — and
+the extended workload **contains a two-table join**
+(`sqlite_capstone_domain.c:1439`, `SELECT COUNT(*) FROM nums JOIN link ON nums.label = link.label`),
+which is the construct S-12 triggers on at a measured **54% per draw**. If that rate applied here,
+3/3 clean has probability ≈ 0.10. Either the 3/3 was luck, or the join SHAPE matters
+(`JOIN ... ON` over an indexed column vs `qj2`'s cartesian `FROM t1, t2`).
+
+**And the 3/3 was measured on the OLD compiler.** The `lcc`→`mv` change rewrites ~192 sites in the
+`-O0` image, so nothing currently validates SQLite-on-silicon for the shipping toolchain.
+
+### Boot 1 — resident `caplifive_s07clear_84ed6eafb.bit`, no reflash
+
+Four DISTINCT draws (`CAPSTONE_TEXT_PAD` 0/32/64/96, sha256 verified 4-of-4 unique), extended
+workload, no `--slt`.
+
+| draw | outcome |
+|---|---|
+| `sqr0` | **returned** — `EXTENDED_PASSED`, `MEMORY_PASSED`, rc=0 |
+| `sqr32` | **returned** — `EXTENDED_PASSED`, `MEMORY_PASSED`, rc=0 |
+| `sqr64` | **INFRASTRUCTURE WEDGE**, monitor tag `SPLB:0000E010` — NO VERDICT |
+| `sqr96` | never ran — collateral |
+
+**`SPLB` is a MONITOR spin tag, not a domain result:** `split_out_cap`'s unimplemented exact-fit
+case, an M-mode `while(1)`, which the monitor's own comment records as wedging runs 5-7 in 4 of 4
+boots and as the source of a large share of this campaign's random wedges. Conflating it with a
+domain wedge produced a confident false localization on 2026-08-06; the driver now separates them.
+
+**Two clean draws on the current compiler.** That is the first board evidence that today's
+toolchain changes did not break SQLite on silicon — nothing else covered it.
+
+**Practical yield is ~2 big domains per boot**, because `split_out_cap` spins on the third. So
+n ≈ 30 needs on the order of 15 boots, not the 8 a 4-slot budget would suggest. Worth knowing
+before committing to the ladder.
+
+**Running total on the current compiler: 2 clean, 0 domain wedges.** Says nothing yet — at 54%
+per draw, 2/2 clean is p = 0.21.
