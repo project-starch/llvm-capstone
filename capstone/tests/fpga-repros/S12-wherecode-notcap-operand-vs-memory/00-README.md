@@ -355,6 +355,39 @@ loaded from an untracked granule" meter reads 0 everywhere.
 > `caplifive-system` fpga/ariane tree. The domain verdict does not depend on it: it rests on there
 > being zero double-loads in the domain at all.
 
+## THE REFLASH HAPPENED, AND S-12 SURVIVED IT. S-10 is EXCLUDED as the cause
+
+The board was reflashed to `caplifive_s10fix_80843404c.bit` on 2026-08-27 (non-volatile;
+`flash_state: done`, `nv_bitstream_name` confirmed). The same two images were then re-run through
+the same harness, alternating, so the ONLY variable is the silicon:
+
+    image     BEFORE (caplifive_s07clear_84ed6eafb)   AFTER (caplifive_s10fix_80843404c)
+    pad48     wedged 3/3                              wedged 2/2
+    pad144    wedged 2/2                              RETURNED once, wedged once
+
+**`pad48` wedges 5 of 5 across both bitstreams.** `pad144`'s single return is unremarkable — it was
+2/2 on N=2 before, and one return in two draws is expected at any plausible per-image rate, let
+alone the ~54% population rate.
+
+**So the S-10 write-buffer fix does not address S-12, and S-10 is excluded as its cause.** This was
+the pre-registered reading, written before the runs: *both still wedge → S-10 is excluded, and
+either one of the ten exclusions is wrong or the trigger is outside every model we have.*
+
+**This was worth the reflash.** S-10 was the last live "the silicon has a known unfixed defect"
+explanation, and it is now a measurement rather than an open question. What it does NOT clear:
+S-07, write-buffer forwarding generally, and anything else divergent between the two trees — the
+bitstreams are DIVERGENT, not sequential, and `s10fix` also lacks the S-07 LDC recorder (an
+instrument, not a fix), which is why switch-208 readings in the after-runs carry the "UNKNOWN
+SEMANTICS for this bitstream" caveat and must not be read as tag verdicts.
+
+> **Note on how the flash was finally performed**, since our own docs are wrong about it. The
+> documented tool `board_reflash_only.py` **has never existed in git**. The working sequence is:
+> power ON, **let the board settle** (~30 s — flashing within a second of power-on returns `error`),
+> then `POST /api/flash-bitstream {filename}` and **wait for a FRESH `flash_state` event**. Two
+> apparent failures were our own instrument errors: reading the *cached* `flash_state` from a prior
+> attempt, and a presence check that iterated `{"files": [...]}` as a dict and so enumerated the
+> single key `'files'` instead of the filenames. The board was never at fault for either.
+
 ## BASELINE PINNED for a future reflash: two images that wedge REPEATEDLY, not once
 
 The S-10 fix is synthesis-proven (`80843404c`) and **not flashed**; the exclusions in this folder
