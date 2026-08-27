@@ -88,3 +88,48 @@ and it belongs to the RTL lane.
 - **The commit-pc aperture is stale by construction at a wedge** and must not be used to localise
   this. Both boots reported an identical `commit pc = 0x82c1c3fc` from two images holding different
   instructions at that address. Read 225/224 for *which class*, never for *where*.
+
+## The two wait flags are never observed APART — 60 boots, no intermediate state
+
+**The structural question is settled, and it went the other way from the first reading.** The RTL
+lane's initial argument — both flags are driven from the SAME `always_ff`, therefore not two
+independent FSMs — is **retracted by its own author** after reading the generated code.
+`capstone_dyn_unit.anvil.sv`'s `_thread_1_st_transition` is not a linear state machine but a flat
+series of INDEPENDENT event guards over two SEPARATE registers, driven by different events
+(`EVENTS1[26,28,…]` for the store flag, `EVENTS1[20,23,…]` for the rev flag), with no mutual
+exclusion. **A state with both flags set is directly representable and needs no nesting path.**
+
+So `0xd5` is not anomalous and never needed explaining away. The question became: *which clearing
+event failed to fire?*
+
+**That produced a falsifiable prediction, and it fails.** If the store path is the stuck one while
+a rev query proceeds and clears independently, a wedge with **store SET and rev CLEAR** — `0xc5`
+shaped — should occur. Mined from every wedge on record, scoped per boot:
+
+    0x00    3 boots   void / dead reads
+    0x80   52 boots   trace_buf_empty ONLY -- nothing waiting          (the S-12 class)
+    0xd5    8 boots   trace_buf_empty + store_syncer + rev_res + stall_issue + mem_wait
+    0xc5    0 boots   <-- PREDICTED, NEVER SEEN
+
+P(0 store-only in 8 both-set boots | equally reachable) = 3.9e-3. On 8 samples that weakens the
+account rather than killing it.
+
+**The sharper observation is the absence of ANY intermediate state.** Across 60 boots the flags are
+always both-clear or both-set, never one without the other — even though the hardware provides no
+interlock forcing that. Independence predicts separable states; we see none.
+
+**CAVEAT, and it is load-bearing:** these are all WEDGE-TIME samples. The flags may take
+intermediate values in normal operation and we only look when the machine has stopped. So this is
+a statement about the WEDGED state, not about the flags in general.
+
+**Where that leaves the account:** "two memory clients, no interlock, one stuck" predicted a
+separable state that 8 samples do not show. An account in which both waits are entered as part of
+ONE sequence, or in which a single stuck resource blocks both, fits better. Note this is closer to
+the *retracted* structural instinct than to the correction — the FSM finding still stands (no
+interlock EXISTS), the data merely says the machine does not appear to use that freedom.
+
+**GENERAL HAZARD WORTH CARRYING BEYOND S-13:** the `.anvil` reads as a sequential program
+(`set := 1 >> send >> recv >> set := 0`) and invites being reasoned about as one; the generated
+hardware is a concurrent event machine over independent registers. Any conclusion in this
+investigation that rests on an `.anvil` sequence CONSTRAINING ordering — the store-buffer FIFO
+argument that excluded the S-12 granule row among them — may want re-examining on those grounds.
