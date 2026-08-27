@@ -269,7 +269,39 @@ only. It does NOT clear S-10 (`wt_dcache_mem.sv:280`, still word-granular in the
 S-07, or write-buffer forwarding. Neither S-10 nor S-10b is in the flashed tree —
 `git merge-base --is-ancestor` returns false for both against `84ed6eafb`.
 
-> **UNRESOLVED, AND IT IS THIS FOLDER CONTRADICTING ITSELF.** Two measurements of "the value's type"
+> ### RESOLVED, SAME DAY — the value is NONLIN, and the subject slot is EXONERATED on two legs
+>
+> The contradiction below is settled, and not by preferring one instrument. A translate-time probe
+> on the `stc` at `+0x40`, reading `cap_type` out of QEMU's register file at that exact pc, measures
+> **NONLIN 16/16** — qj2 7/7, q_one 4/4, q_two 5/5, with `LIN=REV=UNINIT=SEALED=SEALEDRET=untagged=0`
+> in every run. The pc match is unique in the image (`pc & 0xfff == 0x7c8` plus operands
+> `rs1=x10, rs2=x12, imm=0`, exactly one match). **The instrument has a positive control**: the same
+> reporting path emits `LIN`, `SEALED` and `SEALEDRET` for OpenSBI's own boot stores, so it can name
+> clear-set types and simply does not see one here. The value is argument 3, `pWInfo` — a
+> `WhereInfo*` whose measured bounds span exactly the 256 KiB memsys5 arena.
+>
+> **And a structural leg that needs no type measurement at all.** The slot is stored ONCE and loaded
+> **three times per call** in a straight-line entry block with no intervening store — `+0x88`,
+> `+0xb8`, `+0xf4`, with `a0` not redefined between them and no branch in `0x104788..0x1048b0`
+> (12 loads, 1 store across the whole function). If the type here were clear-set, load #1 would zero
+> the granule and load #2 at `+0xb8` would raise off a NOT_CAP base **on every call, one-level plans
+> included**. One-level has never wedged in 11 draws. So the type at this site cannot be clear-set,
+> whatever any single probe reported.
+>
+> The board reading of REVOKE (`retval 0xC12A5200`) therefore does not survive as a statement about
+> THIS value. It is N=1 against a positive-controlled 16/16, and the structural leg rules it out
+> independently. What it might still be a true statement about — some other object, or a genuine
+> type corruption on silicon that QEMU cannot see — is **not established either way** and should not
+> be quoted in either direction.
+>
+> **The mechanism CLASS is untouched by this and remains live.** QEMU's `csldc` performs no source
+> clear, so a clear-set capability in a slot that is loaded twice is invisible under QEMU and fatal
+> on silicon — cursor 0, NOT_CAP, `tval = 0`. The `-O0` codegen makes store-then-reload-the-same-slot
+> pervasive (`0x10485c`: `cincoffsetimm a1,s0,-0x100; stc a3,0x0(a1); ldc a1,0x0(a1)`). The open
+> question is now narrow and answerable: **which `stc` sites store clear-set types, and is any of
+> those slots loaded more than once?**
+
+> **THE CONTRADICTION AS IT STOOD, kept because the reasoning matters.** Two measurements of "the value's type"
 > are recorded here and they disagree, because they are measurements of DIFFERENT OBJECTS:
 >
 > * above, on the board, of **the stored value**: `retval 0xC12A5200` → `lcc` selector 1 = 2, and
