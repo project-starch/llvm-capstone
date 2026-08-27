@@ -1,3 +1,26 @@
+/* --- BUILD-TIME GATE on the outer heap's size -------------------------------
+ * umm indexes blocks with a 15-bit field, so a heap of more than 32767 blocks
+ * cannot be represented. umm_multi_init_heap does not fail loudly when that is
+ * exceeded: it RETURNS with heap->pheap still NULL, and the first malloc then
+ * dereferences it. On this target that surfaces as `cause = 24` deep inside
+ * umm_malloc_core with no hint of the cause, which is where an afternoon went.
+ *
+ * That is umm's documented 15-bit block-index limitation -- the same defect this
+ * corpus catalogues as entry 31 -- biting the corpus itself. So the combination is
+ * checked here, at build time, where it can only be wrong loudly.
+ */
+#include "umm/umm_malloc_cfg.h"
+
+#ifndef CAPSTONE_HEAP_SIZE
+#define CAPSTONE_HEAP_SIZE 65536
+#endif
+
+_Static_assert(CAPSTONE_HEAP_SIZE / UMM_BLOCK_BODY_SIZE <= 32767,
+               "outer heap exceeds umm's 15-bit block index: raise "
+               "UMM_BLOCK_BODY_SIZE or lower CAPSTONE_HEAP_SIZE");
+_Static_assert(CAPSTONE_HEAP_SIZE / UMM_BLOCK_BODY_SIZE >= 8,
+               "outer heap is below umm's minimum block count");
+
 /* The three libc functions mruby links that neither beebs' string file nor its
  * libm carries. Nothing more: an unused definition here would be a silent claim
  * that something works, and this file exists precisely to keep that claim honest.

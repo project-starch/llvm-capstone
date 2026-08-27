@@ -31,13 +31,21 @@ AMALGAM_DIR="$SRC/build/host/amalgam"
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/mruby-silicon}
 OBJ_DIR=$OUT_DIR/obj
 DOM_NAME=${DOM_NAME:-mruby}
-MD_STAGE=${MD_STAGE:-3}
 # The GC region, and the domain stack. The region is what makes mruby's heap ONE
 # capability; size it so mruby never falls back to malloc for a page, because that
 # fallback is silent and would change what is being measured.
 MRUBY_REGION=${MRUBY_REGION:-$((512 * 1024))}
-MRUBY_HEAP=${MRUBY_HEAP:-$((1024 * 1024))}
-MRUBY_STACK=${MRUBY_STACK:-$((1024 * 1024))}
+# The OUTER heap. umm indexes blocks with 15 bits, so this divided by
+# UMM_BLOCK_BODY_SIZE must stay under 32767 -- and umm does NOT fail loudly when it
+# does not: it leaves pheap NULL and the first malloc dereferences it. A
+# _Static_assert in the port checks the pair, so the mistake cannot be silent twice.
+MRUBY_HEAP=${MRUBY_HEAP:-$((2 * 1024 * 1024))}
+MRUBY_UMM_BLOCK=${MRUBY_UMM_BLOCK:-256}
+# The kernel's buddy allocator caps a region at order 10, i.e. 4 MiB, and the
+# domain's data region must hold the carve AND the stack. These three numbers
+# therefore have a hard ceiling between them; pass 3 refuses the build if they
+# exceed it, which is how the first attempt at 4 MiB was caught.
+MRUBY_STACK=${MRUBY_STACK:-$((512 * 1024))}
 
 LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
 GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
@@ -86,6 +94,7 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -DMRB_HEAP_PAGE_SIZE=169
 
         -DCAPSTONE_HEAP_SIZE="$MRUBY_HEAP"
+        -DUMM_BLOCK_BODY_SIZE="$MRUBY_UMM_BLOCK"
         -DMD_REGION_BYTES="$MRUBY_REGION"
         -include "$SCRIPT_DIR/port/capstone_mruby_libc.h"
         -I"$AMALGAM_DIR" -I"$SCRIPT_DIR/port" -I"$RV8"
@@ -102,7 +111,7 @@ python3 "$SCRIPT_DIR/tools/gen-amalgam.py" "$AMALGAM_DIR" "$SCRIPT_DIR/port" "$A
   "$RV8/umm/umm_malloc.c" "$RV8/cap_heap.c" "$BEEBS_LIBM"
 
 OBJS=()
-"$CLANG" "${COMMON[@]}" -DMD_STAGE="$MD_STAGE" -c "$ALL" -o "$OBJ_DIR/mruby_all.o"
+"$CLANG" "${COMMON[@]}" -c "$ALL" -o "$OBJ_DIR/mruby_all.o"
 OBJS+=("$OBJ_DIR/mruby_all.o")
 
 echo "== compiling the shared freestanding pieces"
@@ -158,15 +167,26 @@ echo "== pass 2: link with the real globals offset"
 link "$(printf '0x%x' $GOFF)" "$OUT_DIR/$DOM_NAME.dom"
 
 echo "== pass 3: declare the domain budget"
+# NOT optional and NOT allowed to fail quietly. The first version of this step used
+# the wrong path for domreq.S and swallowed the error with `2>/dev/null || true`,
+# so the build reported success on an image whose own budget check said
+# "DOES NOT FIT". An image that cannot load, built by a green build, is the worst
+# outcome available here -- so every part of this fails loudly.
+_segs() { "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$1" | grep -E '^\s+LOAD'; }
+BEFORE=$(_segs "$OUT_DIR/$DOM_NAME.dom")
 CARVE=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" --carve)
 [[ "$CARVE" =~ ^[0-9]+$ ]] || { echo "--carve gave '$CARVE'" >&2; exit 1; }
-DOM_DATA=$(( CARVE + MRUBY_STACK ))
-"$CLANG" -target capstone64-unknown-elf -ffreestanding \
-  -DCAPSTONE_DOMREQ_DATA="$DOM_DATA" -DCAPSTONE_DOMREQ_STACK="$MRUBY_STACK" \
-  -c "$LADDER/domreq.S" -o "$OBJ_DIR/domreq.o" 2>/dev/null || true
-if [[ -f "$OBJ_DIR/domreq.o" ]]; then
-  link "$(printf '0x%x' $GOFF)" "$OUT_DIR/$DOM_NAME.dom" "$OBJ_DIR/domreq.o"
-fi
-python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || true
 
-echo "== built $OUT_DIR/$DOM_NAME.dom (stage $MD_STAGE)"
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -DCAPSTONE_DOMREQ_DATA=$(( CARVE + MRUBY_STACK )) -DCAPSTONE_DOMREQ_STACK=$MRUBY_STACK \
+  -c "$LADDER/../domreq.S" -o "$OBJ_DIR/domreq.o"
+link "$(printf '0x%x' $GOFF)" "$OUT_DIR/$DOM_NAME.dom" "$OBJ_DIR/domreq.o"
+
+# Non-alloc, so nothing loaded may move. Verified rather than asserted.
+[[ "$BEFORE" == "$(_segs "$OUT_DIR/$DOM_NAME.dom")" ]] || {
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2; exit 2; }
+echo "   declared dom_data >= $(( CARVE + MRUBY_STACK )) (carve $CARVE + stack $MRUBY_STACK)"
+python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || {
+  echo "the declared budget does not fit" >&2; exit 1; }
+
+echo "== built $OUT_DIR/$DOM_NAME.dom -- one image, all stages, selected at run time"
