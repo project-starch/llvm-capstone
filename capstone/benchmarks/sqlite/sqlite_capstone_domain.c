@@ -449,12 +449,21 @@ void capstone_oob_report(void) {
 unsigned long capstone_arg_calls, capstone_arg_ty1, capstone_arg_ty2, capstone_arg_ra;
 
 void capstone_arg_report(void) {
-  /* APPEND ONCE -- see capstone_oob_report for why resetting `length` destroyed the result.
-     The records are sticky on the first call, so reporting on the first call loses nothing. */
+  /* REPORT THE FIRST N CALLS, not just the first.
+     It used to append exactly once, on the grounds that "the records are sticky on the first
+     call, so reporting on the first call loses nothing". That is true of ty1/ty2/ra -- and
+     FALSE of capstone_arg_calls, which is a real counter incremented on EVERY call. Because
+     the report ran after the increment and then latched, the single line always read
+     `calls=1` regardless of how many times the function actually ran. That artifact was
+     recorded as an open question for days -- "only one ARGP line appears for a two-table
+     self-join ... whether the report is first-call-sticky or the function is genuinely
+     entered once is not established" -- and it was the report, not the function.
+     A per-call line makes the call COUNT observable, which is the whole point of a counter.
+     Bounded so a large workload cannot flood the payload region. */
   static int reported_;
-  if (reported_ || !hostcall_metadata || !hostcall_payload)
+  if (reported_ >= 16 || !hostcall_metadata || !hostcall_payload)
     return;
-  reported_ = 1;
+  reported_++;
   output_text("ARGP calls="); output_hex64(capstone_arg_calls);
   output_text(" ty1=");       output_hex64(capstone_arg_ty1);
   output_text(" ty2=");       output_hex64(capstone_arg_ty2);
