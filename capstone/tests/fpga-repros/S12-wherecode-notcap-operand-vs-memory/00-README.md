@@ -1,5 +1,12 @@
 # S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c`: the operand is zero, and it is not software
 
+> **ARRIVED WITH A HANG RATHER THAN A FAULT?** If the domain stopped with **no exception**
+> (`ex_commit.valid = 0` on aperture 224) and aperture 225 reads **`0xd5`** — three wait conditions
+> asserted, a store genuinely outstanding — that is **[S-13](../S13-o1-dyn-rev-node-hang/)**, a
+> different defect, not this one. S-12 is the case where a capability fault STICKS at commit:
+> `mcause 25`, `tval = 0`, aperture 225 reading `0x80` with nothing waiting. At `-O1` the S-12
+> fault site is verifiably absent and the machine hangs as S-13 instead.
+
 **Sibling issues, so a reader who arrived with the wrong symptom can leave now.** If your symptom is
 an **untagged capability surviving a store/reload pair**, that is **S-07**, not this. If it is a
 **write-buffer tag forgery**, that is **S-09**; a **write-buffer forwarding residual**, **S-10**; a

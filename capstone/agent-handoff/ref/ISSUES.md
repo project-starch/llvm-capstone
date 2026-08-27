@@ -2507,6 +2507,27 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
+### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON`
+
+**Not S-12, and the distinction is the point.** S-12 is a capability fault that STICKS at commit
+(`mcause 25`, `tval = 0`, aperture 225 = `0x80`, nothing waiting). S-13 has **no exception at all**
+(`ex_commit.valid = 0`) and aperture 225 = `0xd5` — `dyn_wait_store_syncer` + `dyn_wait_rev_res` +
+`stall_issue` + `mem_wait_flag`, with `store_syncer_req_set = 1` confirming a store really is
+outstanding. Both aperture packings verified in `cva6.sv:1177-1186` and `:1189-1199`.
+
+Measured in one boot series, same bitstream, query and compiler, with optimisation level the only
+variable: the `-O0` arm gave S-12, two distinct `-O1` arms gave S-13. **So `-O1` converts a stuck
+capability fault into a non-exception hang** — consistent with the S-12 fault site being verifiably
+absent from the `-O1` artifacts.
+
+Already excluded: instruction-stream density or coupling (`-O1` does FEWER and more widely spaced
+DYN ops and still hangs there), a stale store-syncer flag, a transitive nesting path in the
+`.anvil`, and two independent FSMs in the generated SV. The open question is the SEQUENCE that
+reaches a state the source does not obviously express.
+
+N = 2, so this says nothing about a rate. Full evidence, caveats and next step:
+`tests/fpga-repros/S13-o1-dyn-rev-node-hang/`.
+
 ### C-19 — partial capability operations applied speculatively; SQLite could not run at `-O1` `RESOLVED 2026-08-26 — three distinct faults`
 
 **This is what now blocks `-O1`, after C-17 turned out not to be (see C-17).** The amalgamation
