@@ -65,10 +65,29 @@ static inline void *cap_rewiden(void *user_p) {
   return (void *)(cap_arena + (addr - abase));
 }
 
-/* Narrow a wide arena pointer to exactly [p, p+n). */
+/* Narrow a wide arena pointer to exactly [p, p+n).
+ *
+ * CAPSTONE_HEAP_NO_NARROW=1 turns this into a no-op, and that is a MEASUREMENT
+ * KNOB, not a debug hack. A purecap malloc rounds an allocation's bounds up for
+ * representability, so a small overrun past a buffer is invisible there; narrowing
+ * to the exact request makes it visible. Running the same program both ways is the
+ * only way to tell "this program overruns by a little" from "our bounds are
+ * wrong" -- the two look identical from a single arm.
+ *
+ * Default is to narrow. Never ship a measured result from the no-narrow arm without
+ * saying which arm it is. */
+#ifndef CAPSTONE_HEAP_NO_NARROW
+#define CAPSTONE_HEAP_NO_NARROW 0
+#endif
+
 static inline void *cap_narrow(void *p, size_t n) {
+#if CAPSTONE_HEAP_NO_NARROW
+  (void)n;
+  return p;
+#else
   unsigned long c = __builtin_capstone_cap_get_cursor((char *)p);
   return __builtin_capstone_cap_shrink(p, c, c + n);
+#endif
 }
 
 void *malloc(size_t n) {

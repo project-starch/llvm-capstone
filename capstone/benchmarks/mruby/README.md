@@ -99,25 +99,61 @@ control first.
 | 4 | `mrb_gc_add_region` | not reached |
 | 5 | run bytecode | not reached |
 
-**The stage-3 fault may be a result rather than a port defect, and that has to be
-settled before it is called either.** It is in `mrb_vm_run`'s `stack_clear` after
-`stack_extend`:
+**RETRACTED, and the retraction is the useful part.** This file previously said the
+store landed "one element past a buffer of `nregs` elements", and that our exact
+narrowing was what made a purecap-invisible overrun visible. Both were wrong, and
+both came from reading three instructions instead of the whole block.
+
+Read as a block, the loop is IN BOUNDS with respect to `nregs`:
 
 ```
-37cec:  addi       s4, s4, 0x10       ; s4 = nregs*32 + 16
-37cf0:  cincoffset a0, a1, s4
-37cf8:  sd         zero, -0x10(a0)    ; address = a1 + nregs*32
+37cc8:  ldc        a0, 0x30(s7)     ; a0 = c->ci          (offsetof ci = 0x30)
+37ccc:  ldc        a1, 0x30(a0)     ; a1 = ci->stack      (offsetof stack = 0x30)
+37cdc:  cincoffset a0, a1, s4       ; cursor = stack + stack_keep*32 + 16
+37ce0:  cincoffset a1, a1, s8       ; limit  = stack + nregs*32 + 16
+37ce4:  sd         zero, -0x10(a0)  ; element k at k*32
+37ce8:  sw         zero, 0x0(a0)    ; and at k*32 + 16
+37cec:  cincoffsetimm a0, a0, 0x20
+37cf0:  bne        a0, a1, 0x37ce4
 ```
 
-`slli s4, s4, 0x5` upstream confirms `sizeof(mrb_value) == 32` here, against 24 on
-stock 64-bit. The store lands one element past a buffer of `nregs` elements.
+`a0` is a cursor and `a1` the limit, so the last write is to element `nregs-1`. The
+offsets are the compiler's, not a guess: `-Xclang -fdump-record-layouts` gives
+`mrb_context.ci` = 0x30, `mrb_callinfo.stack` = 0x30, `sizeof(mrb_value)` = 32, and
+`llvm-nm` puts 0x37cc8 inside `mrb_vm_run` (0x37ac8-0x37d64). The faulting
+instruction is 0x37ce4 and not the reported pc, which is the translation block's
+entry; the monitor's own `rs1 = x10, imm = -16, size = 8` identifies it exactly.
 
-Why this target sees it and CheriBSD does not is the interesting part: `cap_heap`
-narrows every allocation to the **exact** request, while a purecap `malloc` rounds
-bounds up for representability. A one-element overrun is therefore invisible there
-and visible here. That is the narrowing discipline this file argues for, doing its
-job -- but it could equally be our own sizing, so the next step is to read
-`stack_extend` against the emitted code rather than assume either.
+What is actually wrong is the CAPABILITY, not the count:
+
+```
+Cap mem access OOB: rs1 = x10, cursor = 102172670, imm = -16, addr = 102172660,
+                    size = 8, bounds = (10216e460, 10216e4b0)
+```
+
+`ci->stack` carries **80 bytes** of bounds and the store is 0x4200 past its base.
+That is not an off-by-one; it is a pointer that never had room for the frame.
+
+**The narrowing hypothesis is refuted, by an arm that differs in exactly one
+thing.** `MRUBY_NO_NARROW=1` makes `cap_narrow` a no-op, so every capability
+carries the whole 2 MiB arena, and the fault reproduces identically -- same
+function, same instruction, same 80-byte bounds. The knob is real and not a
+no-op: the narrowed image contains two `shrink` instructions and the wide one
+contains none. So whatever produces an 80-byte capability, it is not our
+allocator, which has no way to make one.
+
+`envadjust` is the obvious suspect and is also NOT it, for the same reason -- with
+wide bounds a stale capability would still cover everything. The patch for it is
+real and is held, unapplied, in `patches/held/` with the argument written out; it
+is a genuine capability-portability defect that a moving `realloc` hides, but it is
+not this fault.
+
+**The next step is an instrument, not another hypothesis.** `port/md_probe.c` plus
+patch 0003 clamp the clear so it cannot fault and report the geometry through the
+ladder: the length and cursor of `ci->stack` and of `stbase`, `nregs`,
+`stack_keep`, and the distance from the heap -- which separates "a malloc'd buffer
+with the wrong length" from "a pointer that never came from malloc at all". Build
+it with `MRUBY_PROBE=1`.
 
 Before that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker

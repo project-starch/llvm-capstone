@@ -95,12 +95,27 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 
         -DCAPSTONE_HEAP_SIZE="$MRUBY_HEAP"
         -DUMM_BLOCK_BODY_SIZE="$MRUBY_UMM_BLOCK"
+        # The measurement knob, not a debug hack: 1 makes the outer allocator hand
+        # back WIDE arena capabilities instead of narrowing to the request, which is
+        # what a purecap malloc effectively does when it rounds bounds up for
+        # representability. Running both arms is the only way to tell a program that
+        # overruns by a little from bounds of ours that are wrong.
+        -DCAPSTONE_HEAP_NO_NARROW=${MRUBY_NO_NARROW:-0}
         -DMD_REGION_BYTES="$MRUBY_REGION"
         -include "$SCRIPT_DIR/port/capstone_mruby_libc.h"
         -I"$AMALGAM_DIR" -I"$SCRIPT_DIR/port" -I"$RV8"
         -I"$REPO_ROOT/capstone/benchmarks/micropython/adapted/include"
         -I"$REPO_ROOT/capstone/benchmarks/micropython/port"
         -I"$REPO_ROOT/capstone/benchmarks/wamr/adapted/include")
+
+# The stack-bounds probe in mrb_vm_run (patch 0003 + port/md_probe.c). Off by
+# default and added as a flag rather than as -D...=0, because the patch tests it
+# with #ifdef -- defining it to zero would switch it ON, which is exactly the kind
+# of knob that reads as "off" in a build log and is not.
+if [[ ${MRUBY_PROBE:-0} == 1 ]]; then
+  COMMON+=(-DMD_PROBE_STACK)
+  echo "== MD_PROBE_STACK is ON: mrb_vm_run clamps its stack clear and reports"
+fi
 
 # ONE TRANSLATION UNIT, which the gp-captable ABI requires rather than prefers.
 # cap_heap.c and umm_malloc.c go INSIDE it, not beside it: both own file-scope

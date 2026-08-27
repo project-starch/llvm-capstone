@@ -153,8 +153,16 @@ def expect_prompt(
     try:
         qemu.expect(r"# ", timeout=timeout)
     except (pexpect.EOF, pexpect.TIMEOUT) as exc:
+        # NAME WHICH ONE. These are different diagnoses -- EOF means the guest or
+        # QEMU died, TIMEOUT means it is still alive and simply slower than the
+        # budget -- and reporting both as "stopped" sent one investigation looking
+        # for a crash that had not happened.
+        if isinstance(exc, pexpect.TIMEOUT):
+            what = f"QEMU was STILL RUNNING but produced no prompt within {timeout:.0f}s"
+        else:
+            what = "QEMU EXITED before the prompt"
         message = (
-            f"QEMU stopped before the shell prompt while {action}.\n"
+            f"{what} while {action}.\n"
             f"Recent serial output:\n{serial_tail(qemu)}"
         )
         if infra_phase is not None:
