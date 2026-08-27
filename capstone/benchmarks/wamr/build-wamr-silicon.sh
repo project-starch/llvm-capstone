@@ -60,6 +60,11 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         # changing. Built as separate trees the arms differed in their global count
         # too, which is not an experiment.
         -DWAMR_LABEL_STACK_PAD=${WAMR_LABEL_STACK_PAD:-1}
+        # Re-introduces PR 2279's missing pinuse bit, for the allocator specimen in
+        # stage 40. A knob rather than a patch so the vulnerable arm and the fixed
+        # control come from ONE tree, differing in exactly one line. Never 1 in a
+        # measured build.
+        -DWAMR_EMS_PINUSE_BUG=${WAMR_EMS_PINUSE_BUG:-0}
         # beebs' memcpy/memset check the destination's tag and RETURN instead of
         # faulting, recording n. Off by default: it changes the primitives the whole
         # image runs on, so it is a diagnostic build, never the measured one.

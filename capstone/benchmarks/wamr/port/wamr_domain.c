@@ -40,6 +40,7 @@
  */
 #include "platform_internal.h"
 #include "wasm_export.h"
+#include "mem_alloc.h"
 #include "wasm_native.h"   /* wasm_native_init, for rung 14 */
 #include "wamr_test_module.h"
 
@@ -81,6 +82,75 @@ domain_main(unsigned *res, unsigned func)
 
 #if WD_STAGE == 0
     WD_MARK(WD_OK);   /* touches nothing: proves entry, cap-init and return */
+
+#elif WD_STAGE == 40
+    /* SPECIMEN: WAMR's EMS allocator, the missing pinuse bit (PR 2279).
+     *
+     * gc_realloc_vo_internal grows in place by absorbing part of the next free
+     * block and re-adds the remainder with gci_add_fc(), but never sets pinuse on
+     * the new hmu_next. A later free then coalesces BACKWARDS into the live object
+     * and the allocator hands the same memory out twice.
+     *
+     * The verdict is NOT "does it fault". The forged header is written INSIDE p's
+     * own allocation, a legal write no bounds check can object to. The detectable
+     * event is one step later: a second pointer that ALIASES the first. This
+     * measures whether the machine can see an allocator hand out overlapping
+     * memory, which a pure bounds model cannot.
+     *
+     * THE GROWTH IS SWEPT, NOT GUESSED. Upstream's reproducer hard-codes a 1000-byte
+     * arena and a 12-byte growth, tuned to an 8-byte-pointer layout. Patch 0002 put
+     * this target's GC alignment on the POINTER, so headers and tree nodes are
+     * wider. Measured here: a 12-byte growth reallocs IN PLACE and leaves no
+     * remainder, so the vulnerable branch is never entered and both arms agree --
+     * a clean result that says nothing. The bug needs a growth big enough to split
+     * the next free block and small enough to leave a remainder, so the stage tries
+     * every one and reports the first that aliases.
+     *
+     * Report: bit 15 set means an aliasing growth was FOUND, low bits carry it.
+     * Bit 15 clear means none in the swept range, and the low bits are the count of
+     * growths that completed the sequence -- zero there would mean the sweep never
+     * ran and must not be read as "no bug".
+     */
+    {
+        enum { EMS_ARENA = 4096, EMS_FIRST = 256, GROW_MAX = 1024 };
+        static char ems_store[EMS_ARENA];
+        unsigned g, ran = 0u;
+
+        for (g = 4u; g <= GROW_MAX; g += 4u) {
+            mem_allocator_t a;
+            uint8_t *p, *p2;
+            unsigned i;
+
+            for (i = 0; i < (unsigned)sizeof(ems_store); i++)
+                ems_store[i] = 0;
+            a = mem_allocator_create(ems_store, (uint32_t)sizeof(ems_store));
+            if (!a)
+                continue;
+            p = mem_allocator_malloc(a, EMS_FIRST);
+            if (p)
+                p = mem_allocator_realloc(a, p, EMS_FIRST + g);
+            if (!p)
+                continue;
+            ran++;
+            /* Legal writes inside p, shaped like a free HMU header. */
+            *(uint32_t *)(p + EMS_FIRST) = (1u << 30) | 0x20u;
+            if (g >= 8u)
+                *(uint32_t *)(p + EMS_FIRST + g - 4) = g;
+
+            p2 = mem_allocator_malloc(a, EMS_FIRST);
+            if (p2) {
+                uintptr_t up = (uintptr_t)p, up2 = (uintptr_t)p2;
+                if (up2 >= up && up2 < up + EMS_FIRST + g) {
+                    *res = 0x57410000u | 0x8000u | (g & 0x1FFFu);
+                    return;
+                }
+                mem_allocator_free(a, p2);
+            }
+            mem_allocator_free(a, p);
+        }
+        *res = 0x57410000u | (ran & 0x1FFFu);
+        return;
+    }
 
 #elif WD_STAGE == 30
     /* WHERE IS THIS IMAGE LOADED? Not a bring-up rung: an instrument.
