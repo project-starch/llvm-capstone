@@ -355,6 +355,55 @@ loaded from an untracked granule" meter reads 0 everywhere.
 > `caplifive-system` fpga/ariane tree. The domain verdict does not depend on it: it rests on there
 > being zero double-loads in the domain at all.
 
+## BASELINE PINNED for a future reflash: two images that wedge REPEATEDLY, not once
+
+The S-10 fix is synthesis-proven (`80843404c`) and **not flashed**; the exclusions in this folder
+cover the store-buffer STALL hazard only, so S-10 itself, S-07 and write-buffer forwarding remain
+live on the resident silicon. The obvious experiment is to reflash and re-run — but at the ~54%
+population wedge rate a single clean draw afterwards would mean almost nothing (P ≈ 0.46 by chance).
+
+So the per-image rates were pinned FIRST, on the resident `caplifive_s07clear_84ed6eafb.bit`, using
+two images that had each wedged exactly once (N=1 apiece). Runs alternated between the two images
+rather than repeating one, so board or firmware drift cannot masquerade as an image property.
+
+    run        enter  return   verdict
+    pad48        2      0      real wedge
+    pad144       0      0      VOID -- entry stall (R-16), the domain never ran
+    pad48        2      0      real wedge
+    pad144       2      0      real wedge
+
+**One of four is VOID and must not be counted.** `SQ: G/enter` present with no `H/return` is the
+documented signature of a genuine wedge; `enter = 0` means the domain never started, which says
+nothing about the code. Counting it would have inflated the baseline with a boot that ran nothing.
+
+**Admissible: `pad48` wedges 3/3 and `pad144` wedges 2/2**, each including its original draw — five
+real draws, five wedges. Under the 54% population rate P(5 of 5) = 0.046, so these are plausibly
+higher-rate images, consistent with this folder's per-image clustering finding.
+
+**Why this matters for the reflash.** These two images are now matched before/after subjects where
+the ONLY variable is the silicon. If either returns repeatedly after a reflash, that is a per-image
+reversal rather than a lucky draw from a population. Budget roughly four clean returns per image to
+be decisive; two would not be.
+
+> **METHOD CAVEAT, stated because it weakens the runs slightly.** These boots ran the SLT domain
+> ALONE, with no known-good control first — the standing rule is that a boot whose control fails is
+> VOID, and without one a "no return" could in principle be a boot failure rather than a wedge. What
+> carries the verdict instead is internal: `enter = 2` and `dom-ok = 2` show the monitor created the
+> domain and the domain entered, so the boot was healthy up to the point of the test. That is
+> weaker than a real control and is why the VOID row above was caught at all.
+
+> **The reflash could not be performed from this side.** `POST /api/flash-bitstream` returns
+> `200 {"state":"loading"}` and then transitions to `error` for BOTH server-side registrations
+> (`caplifive_s10fix_80843404c.bit` and `caplifive_s10fix.bit`), leaving `nv_bitstream_name`
+> unchanged — the board still holds the resident bitstream, and no damage was done. The API exposes
+> no failure reason. Note also that `board_reflash_only.py`, cited in `HOW-TO-LAUNCH-ON-FPGA.md` as
+> the reflash tool, **has never existed in git**, so this path was never proven from our side. The
+> flash needs GUI access or the server-side log.
+>
+> Checked before attempting, and worth recording: the two bitstreams are **DIVERGENT, not
+> sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
+> loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
