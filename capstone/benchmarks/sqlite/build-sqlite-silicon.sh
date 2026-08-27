@@ -947,10 +947,31 @@ SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-ca
 
 # CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
 #
-# The entry glue performs one `split` per global to carve its capability, and every split
-# allocates a revocation node. The RTL allocator's head is 10 bits starting at 3
-# (capstone_rev_node.anvil:160,168), so allocation ~#1022 wraps to id 0 and reuses LIVE
-# ids. Reuse can splice a node into the `next` chain twice, and REVOKE_NODE (:13-32) has
+# CORRECTED 2026-08-27 -- THE LIMIT THIS TRIM EXISTS FOR HAS NOT EXISTED SINCE 2026-08-03.
+# The claim below ("head is 10 bits ... wraps at ~#1022") is NOT supported by the RTL, at the
+# cited lines or anywhere else. Verified against the RESIDENT bitstream's own source, not just
+# against HEAD:
+#   ariane_pkg.sv:587            "Revocation-node pool: 65536 nodes * 16 bytes/node"
+#   CAP_REVNODE_MEM_BASE 0xBFF00000 + 65536*16 = 0xC0000000, exactly abutting the tag region
+#   capstone_rev_node.anvil:74,79 16-bit head, REVNODE_SENTINEL = 16'd65535
+#   node ids are 30 bits (#{14'd0, head}); no 10'd literal or 1021/1022 constant remains
+#   91ea10837 "made rev node count configurable" (2026-08-03) IS an ancestor of 84ed6eafb
+# So the pool is 65536, not ~1021, and it is 64x larger than this trim assumes.
+#
+# WHERE THE NUMBER CAME FROM: a 2026-07-21 probe used BORROW_COST_ITERS = 1024; a domain running
+# 1024 borrow iterations could not exit; that was INTERPRETED as "~1024 revocations exhaust the
+# revocation-tree nodes". The pool size was inferred from the test's own iteration count and then
+# quoted as an RTL constant here, in gp-carve-count.py and in four handoff documents. The
+# 1024-ITERATION FAILURE IS REAL AND STILL UNEXPLAINED -- it is simply not pool exhaustion.
+#
+# CONSEQUENCE, NOT YET ACTED ON: this trim OMITS SQLITE FEATURES to get under a limit that is not
+# there, and the build script itself says the deviation "must be reported alongside any board
+# number". Removing it needs a carve-count check, a QEMU run and board validation, so it is left
+# in place deliberately rather than dropped in the same commit that found the error.
+#
+# The original reasoning, kept because the FAILURE MODE it describes is real if the pool ever does
+# wrap: the entry glue performs one `split` per global to carve its capability, and every split
+# allocates a revocation node. If allocation wrapped to id 0 it would reuse LIVE ids. Reuse can splice a node into the `next` chain twice, and REVOKE_NODE (:13-32) has
 # no visit bound and no cycle detection -- it then walks forever and never answers another
 # query. Since every `stc` blocks on a revocation-node query with no timeout
 # (capstone_dyn_unit.anvil:395-404), the next capability store hangs with no trap.

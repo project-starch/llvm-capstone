@@ -167,7 +167,22 @@ def main():
     if len(sys.argv) < 2:
         raise SystemExit(f"usage: {sys.argv[0]} <domain.dom> [budget]")
     path = sys.argv[1]
-    budget = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
+    # CORRECTED 2026-08-27: was 1000, wrong by ~64x. The rev-node pool is 65536 nodes
+    # (ariane_pkg.sv:587 "65536 nodes * 16 bytes/node"; CAP_REVNODE_MEM_BASE 0xBFF00000 +
+    # 65536*16 = 0xC0000000, exactly abutting the tag region). The head is 16 bits with
+    # REVNODE_SENTINEL = 16'd65535 (capstone_rev_node.anvil:74,79), and node ids are 30 bits
+    # (#{14'd0, head}). No 10-bit head or ~1021 wrap exists anywhere in that file.
+    #
+    # WHERE 1000 CAME FROM, since the number was confident and wrong: a 2026-07-21 probe used
+    # BORROW_COST_ITERS = 1024, a domain running 1024 borrow iterations could not exit, and that
+    # was INTERPRETED as "~1024 revocations exhaust the revocation-tree nodes". The pool size was
+    # inferred from the TEST'S OWN ITERATION COUNT and then quoted as an RTL constant in five
+    # documents and in this gate. Whatever breaks at 1024 iterations is still unexplained -- it is
+    # simply not pool exhaustion.
+    #
+    # The 16-bit head predates the resident bitstream: 91ea10837 "made rev node count
+    # configurable" (2026-08-03) is an ancestor of 84ed6eafb, verified with merge-base.
+    budget = int(sys.argv[2]) if len(sys.argv) > 2 else 65000
     # Never hardcode an absolute build path: it embeds a username in a committed file
     # (which the pre-commit name scan blocks, correctly) and breaks on any other machine.
     # capstone-test-env.sh exports CAPSTONE_LLVM_BIN; fall back to the repo-relative build
@@ -205,7 +220,7 @@ def main():
         bad = True
     if count > budget:
         print(f"FAIL: {count} carves exceeds the {budget}-allocation budget; the rev-node "
-              f"pool wraps at ~1021 and reuse can hang the next stc.")
+              f"pool holds 65536 nodes (16-bit head, sentinel 65535); reuse would hang the next stc.")
         bad = True
     if built:
         print(f"WARN: built_flag is {built}, expected 0 in the image.")
