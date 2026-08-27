@@ -437,6 +437,40 @@ be decisive; two would not be.
 > sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
 > loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
 
+## SETTLED: it is NESTING, not repetition — two levels inside ONE prepare
+
+The sharpest result of the delta-debug, and it retires the "the codegen path runs twice" framing
+that every mechanism proposal has rested on.
+
+**The invocation count was measured** (after repairing a probe that had latched its own counter and
+reported `calls=1` forever): `WhereCodeOneLoopStart` runs **3 + plan depth** times, exactly. So a
+2-level plan enters it 5 times and a 1-level plan 4 times.
+
+**`dd6_twostmt` reaches 5 too** — two ONE-level queries in one file — and it does not wedge. Run as
+a matched pair in the SAME boots, `dd6` first so it always gets a verdict and `dd2_join` last as the
+positive control:
+
+    arm            invocations   levels per prepare   result
+    dd6_twostmt         5          1  (x2 statements)   0 wedges / 5 draws
+    dd2_join            5          2                    6 wedges / 6 draws
+
+The control fired in all four boots. Same call count, same domain binary, same boot, opposite
+outcome. Fisher exact on 6/6 vs 0/5 = **0.002**.
+
+**So cumulative invocation count is NOT the variable, and "it runs twice" is dead.** Running the
+function twice across two separate prepares is SAFE. What distinguishes the wedging case is that the
+second level's code is generated **while the first level's codegen state is still live** — the
+levels NEST. That is a different thing from repetition and it is a much smaller target.
+
+**Current statement of S-12, every clause measured:** it requires **two scan levels within a single
+query's code generation**; it fires at **PREPARE time** (all tables empty, no rows ever processed);
+it is not join-specific (`IN (SELECT ...)` qualifies, a flattened subquery does not); and it is not
+a function of how many times the codegen path runs.
+
+**The next delta is the `iLevel` parameter.** `sqlite3WhereCodeOneLoopStart` takes the level index,
+so the natural next bisection is what it does differently when `iLevel > 0` — inside the function,
+not in the SQL.
+
 ## CORRECTED, SAME NIGHT: it is PLAN DEPTH >= 2, not a join — and it happens at PREPARE time
 
 **"It is a JOIN" is RETRACTED.** `dd5_inselect` — `WHERE a IN (SELECT a FROM t1)`, which is not a
