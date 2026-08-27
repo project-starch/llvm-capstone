@@ -363,3 +363,24 @@ int main(void)
     return 0;
 }
 #endif
+
+/* --- Senke fuer die Tag-Pruefung in beebs' memcpy/memset -------------------
+   Uebernommen aus der SQLite-Domain, auf das reduziert, was hier gebraucht wird.
+   Der Sinn ist, aus einem Fault eine ZAHL zu machen: memset kehrt zurueck statt
+   die Domain anzuhalten, und `n` sagt dann, wie lang der Aufruf ueberhaupt war.
+
+   Die Selbsttest-Notiz (where 0xAB) wird GETRENNT gehalten. Sonst belegt sie den
+   einzigen Datensatz, und die Messung sieht aus wie "nie ausgeloest" -- also
+   genau wie ein sauberes Ergebnis, obwohl nichts gemessen wurde. */
+unsigned long capstone_mcp_hits, capstone_mcp_selftest_seen;
+unsigned long capstone_mcp_where, capstone_mcp_ety, capstone_mcp_n;
+
+void capstone_mcp_note(unsigned long where, unsigned long entry_ty, unsigned long off,
+                       unsigned long n, unsigned long al) {
+    (void)off; (void)al;
+    if (where == 0xABul) { capstone_mcp_selftest_seen = entry_ty + 1ul; return; }
+    if (capstone_mcp_hits == 0ul) {
+        capstone_mcp_where = where; capstone_mcp_ety = entry_ty; capstone_mcp_n = n;
+    }
+    capstone_mcp_hits++;
+}

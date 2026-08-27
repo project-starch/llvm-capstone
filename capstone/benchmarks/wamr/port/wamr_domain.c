@@ -295,6 +295,25 @@ domain_main(unsigned *res, unsigned func)
 
     uint32_t argv[1] = { 0 };
     bool ok = wasm_runtime_call_wasm(env, fn, 0, argv);
+#if WD_STAGE == 6
+    /* Was the memset that halts stage 4 handed an untagged destination, and how long
+       was it? A length of zero would mean the call cannot be the one clearing this
+       module's locals, since "run" has no parameters and no locals.
+       Needs BEEBS_TAGCHECK=1; bit 23 carries the selftest, so a reading of all zeros
+       is distinguishable from an instrument that was never compiled in. */
+    {
+        extern unsigned long capstone_mcp_hits, capstone_mcp_selftest_seen;
+        extern unsigned long capstone_mcp_where, capstone_mcp_ety, capstone_mcp_n;
+        unsigned h = capstone_mcp_hits > 7ul ? 7u : (unsigned)capstone_mcp_hits;
+        *res = 0x6D000000u
+             | ((capstone_mcp_selftest_seen ? 1u : 0u) << 23)
+             | (h << 20)
+             | (((unsigned)capstone_mcp_where & 0xFu) << 16)
+             | (((unsigned)capstone_mcp_ety & 0xFu) << 12)
+             | ((unsigned)capstone_mcp_n & 0xFFFu);
+        return;
+    }
+#endif
 
     wasm_runtime_destroy_exec_env(env);
     wasm_runtime_deinstantiate(inst);

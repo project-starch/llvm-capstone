@@ -48,6 +48,16 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-merge-string-constants=true
         -DCAPSTONE_GP_CAPTABLE_ABI=1
         -DWASM_ENABLE_INTERP=1 -DWASM_ENABLE_FAST_INTERP=0
+        # core/config.h turns computed-goto dispatch on for any GCC/Clang, which makes
+        # the interpreter ONE 6k-instruction function and leans hard on stack-slot
+        # reuse. Set to 0 for the portable switch dispatch. Kept as a knob because
+        # the two builds are the A/B test for anything that looks like a spill bug.
+        -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-1}
+        # beebs' memcpy/memset check the destination's tag and RETURN instead of
+        # faulting, recording n. Off by default: it changes the primitives the whole
+        # image runs on, so it is a diagnostic build, never the measured one.
+        -DBEEBS_MEMCPY_TAGCHECK=${BEEBS_TAGCHECK:-0}
+        -DBEEBS_MCP_SELFTEST=${BEEBS_TAGCHECK:-0}
         -DWASM_ENABLE_AOT=0 -DWASM_ENABLE_JIT=0
         # Defaults to 1 in core/config.h even with AOT off, and its init builds an
         # entry table for a path this configuration does not have.

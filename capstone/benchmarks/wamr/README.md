@@ -112,12 +112,14 @@ stage 20  get_package_type                   OK
 stage 21  a load that MUST fail: size 3      OK
 stage 22  wasm_runtime_load                  OK   the module parses
 stage  3  wasm_runtime_instantiate           OK
-stage  5  lookup + create_exec_env         OK
-stage  4  wasm_runtime_call_wasm             capability fault
+stage  5  lookup + create_exec_env           OK
+stage  4  wasm_runtime_call_wasm             OK   returns what the module computes
 ```
 
-The runtime initialises, loads a module and instantiates it. What is left is the
-call itself.
+The runtime initialises, loads a module, instantiates it and **runs it**: stage 4
+returns `0x5741002A`, and 0x2A is the 42 that `i32.const 7; i32.const 35; i32.add`
+computes. Two things had to be right at once, and neither alone is enough -- see
+the 2x2 below.
 
 ### Where stage 4 stops, and the two fixes the hypothesis produced
 
@@ -147,9 +149,56 @@ from bumping `wasm_stack.top` by that size, so a 4-aligned size unaligns the nex
 frame however well the base is placed.
 
 Both are patch 0003, and both moved the fault forward: 0x16484 to 0x1BE90 to
-0x1BF24. The remaining one is inside `memset` called from the interpreter's local
-initialisation, with a frame pointer that is untagged for a reason not yet found.
-Written as a location, not a theory.
+0x1BF24. What sat at 0x1BF24 is resolved below; the "untagged frame pointer" read
+of it was wrong, and the pc was again not naming the instruction that faulted.
+
+### What 0x1BF24 actually was: the label stack, and the dispatch table
+
+Two independent defects, and the 2x2 is what separates them. All four are stage 4
+under QEMU:
+
+| | computed goto | switch dispatch |
+|---|---|---|
+| **no align fix** | cause 24 | cause 4 |
+| **align fix** | cause 1 at an unrelocated pc | **42** |
+
+*The alignment.* `wasm_interp_classic.c` builds the label stack by casting the
+operand stack's end:
+
+```c
+frame_csp = frame->csp_bottom = (WASMBranchBlock *)frame->sp_boundary;
+```
+
+`sp_boundary` is a `uint32 *`, so it is 4-byte granular. A `WASMBranchBlock` is
+made of pointers, which here are 16 bytes and need 16-byte alignment, so the first
+capability store into the label stack is misaligned. Patch 0004 pads
+`max_stack_cell_num` until `param + local + max_stack` is a whole number of
+pointer-sized cells. The padding is counted in `all_cell_num`, which is what sizes
+the frame, so nothing overflows. One site casts that pointer, so there is one fix.
+
+Reading the pc would NOT have found this. At 0x1BF24 stands `lhu a0, 0x6(s5)`, a
+two-byte load, and `op_helper.c:1250` raises cause 4 **only** inside
+`if (size == 16)`, for loads and stores alike. So the two-byte load cannot be the
+instruction that faulted; the `stc` after it can. The cause code identified the
+instruction, the pc did not -- the third time on this project that a trap pc named
+the wrong instruction.
+
+*The dispatch table.* `core/config.h` turns `WASM_ENABLE_LABELS_AS_VALUES` on for
+any GCC or Clang, which compiles the interpreter to a computed goto over a static
+table of `&&label` addresses. Those addresses are not relocated for the domain's
+load slide, so the first table-driven dispatch jumps to a link-time address:
+cause 1 at pc 0x190ac, a value with no slide applied. Building with
+`-DWASM_ENABLE_LABELS_AS_VALUES=0` selects the portable `switch`, which has no
+address table. `WAMR_LABELS_AS_VALUES=1` restores the original for A/B work.
+
+*The control.* A domain that reports a number proves nothing until the number is
+shown to follow its input, so `gen-test-module.py` takes `--a` and `--b`. Changing
+the module to 11 + 88 returned **-29**, which looked like a failure and was not:
+`i32.const` takes SIGNED LEB128, the generator was writing the operand as a raw
+byte, and one byte 0x58 means -40 rather than 88. 11 + -40 = -29 -- the interpreter
+had computed exactly what the module said, including the mistake. The encoder is
+fixed and the summands now round-trip. That miss is worth more than a clean pass
+would have been: nothing that returns a constant can produce -29 from those bytes.
 
 Same root as patch 0002 either way: a constant that encodes the pointer's width
 without saying so. There it was `UINTPTR_MAX == UINT64_MAX`; here the literals
