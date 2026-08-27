@@ -24,13 +24,20 @@ label string.
 
 | | S-12 | S-13 |
 |---|---|---|
-| `ex_commit.valid` (224 bit 7) | 1 in **45 of 52** — see the weakening below | 0 in **7 of 8** — see below |
+| **`store_syncer_req` + `dyn_wait_store_syncer`** — THE DISCRIMINATOR | **both 0**, all 52 boots | **both 1**, all 8 boots |
 | aperture 225 | `0x80` — **nothing** is waiting | `0xd5` — **three** wait conditions |
+| `ex_commit.valid` (224 bit 7) | 1 in 45 of 52 — **weak, do not quote as separating them** | 0 in 7 of 8 |
 | `mcause` | 25, a real capability fault, `tval = 0` | none; the latch holds stale kernel traffic |
 | fault site | present in the image | **verified absent** from every draw artifact |
 
 Measured in the SAME boot series, same bitstream, same query, same compiler — an `-O0` arm gave the
 S-12 column and the `-O1` arms gave the S-13 column, so optimisation level is the only variable.
+
+**THE DISCRIMINATOR IS THE SYNCER PAIR, NOT `ex_commit.valid`.** Two signals from different
+apertures and different parts of the design agree **perfectly across 63 boots** — `store_syncer_req`
+(224 bit 5) is 0 in every one of the 52 `0x80` boots and 1 in every one of the 8 `0xd5` boots, never
+separating from `dyn_wait_store_syncer` (225 bit 6). `ex_commit.valid` is 45 of 52 on one aperture.
+Quote the first; do not quote the second as separating the classes.
 
 **The one-sentence statement: `-O1` converts a stuck capability fault into a non-exception hang.**
 That is consistent with the S-12 fault site being gone — `pWInfo` stays in callee-saved `s2`, zero
@@ -153,14 +160,20 @@ consistent with the `0xc5` absence rather than in tension with it.
 
 **WEAKENING: `ex_commit.valid` is a poorer discriminator than this folder claimed.** **Seven of the
 52** `0x80` boots have `ex_commit.valid = 0` (`224 = 0x1d`). So "S-12 means an exception stuck at
-the head of commit" holds for 45 of 52, not for all. `0x1d` is neither all-ones nor all-zeros and
-does not look like a dead read — `flush=0`, `privM=1`, where `0x9f` has `flush=1`. **There is no
-account for it here and one should not be invented.**
+the head of commit" holds for 45 of 52, not for all. **`0x1d` NOW HAS AN ACCOUNT and is not an anomaly.** It differs from `0x9f` in exactly two bits,
+`ex_commit.valid` and `flush_ctrl_if`, and those are CAUSALLY LINKED: `controller.sv:232` asserts
+`flush_if_o = 1'b1` on `ex_valid_i || eret_i || set_debug_pc_i`. So `0x9f` is "exception valid,
+hence flushing" and `0x1d` is "no exception valid, hence not flushing", with every other bit
+identical. Both are internally consistent, and `0x1d` is a coherent SUB-POPULATION of the `0x80`
+class rather than a corrupt read. Since `ex_commit.valid` is LIVE, the honest reading is that in
+those 7 the exception was not valid AT THE MOMENT THE SWITCHES WERE READ — whether that is a third
+wedge class or the same wedge sampled differently is NOT determined by these bits.
 
-**The one `0xd5` boot with `ex_commit.valid = 1` is NOT counted against the split**, because
-`224 = 0xff` is ALL ONES — the same dead-aperture value that `0xFFFF` turned out to be for the
-rev-node head hours earlier. Same shape, same lesson: flagged as suspect, not reported as a
-counterexample.
+**The one `0xd5` boot with `ex_commit.valid = 1` is SUSPECT, and the reason is sharper than
+"all-ones looks dead":** `0xff` differs from the population mode `0x7f` in EXACTLY ONE BIT, with
+the other seven identical to all seven other `0xd5` boots. A single-bit difference from the mode is
+far likelier to be a stuck bit than a distinct state. **Recorded as suspect rather than discarded —
+if a second `0xff` ever appears it stops looking like a stuck bit.**
 
 **So the surviving clean statement is the syncer one, not the exception one.** The `225`-based
 two-class split still looks solid; the `ex_commit.valid` bit should not be quoted as separating
