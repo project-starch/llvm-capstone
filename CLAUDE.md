@@ -297,7 +297,7 @@ anywhere else.
 **A bitstream costs ~90 minutes plus a reflash. Audit for SUFFICIENCY, not just correctness — and
 BATCH.**
 
-Before committing an RTL change to synthesis, ask the auditors two questions the lint gate cannot:
+Before committing an RTL change to synthesis, ask the auditors three questions the lint gate cannot:
 
 - **Is it enough?** A change that is correct but insufficient costs the same cycle as one that is
   wrong. Write down every question the resulting bitstream must answer, and check the change
@@ -305,6 +305,15 @@ Before committing an RTL change to synthesis, ask the auditors two questions the
 - **Can the instrument fail SILENTLY?** An observation-only change that never fires leaves you
   worse off than before, because the absent signal reads as a clean result. Ask specifically what
   would stop it firing.
+- **What will it READ if the current best hypothesis is TRUE?** Write the predicted reading down
+  BEFORE synthesis. **If that reading would be uninformative, the build does not go.** A cycle
+  spent confirming what the evidence already implies is a different trade from one spent
+  discovering something, and it has to be made deliberately rather than by default. The S-12
+  untagged-LDC recorder cost 6+ hours of synthesis for a reading that was already derivable from
+  `tval = 0` plus a decode sitting in its own repro folder — and the folder SAID SO. The failure
+  was not that nobody wrote the prediction down; it was that nobody used it as a go/no-go input,
+  which is why this question has to bind the DECISION and not just the documentation. Note that
+  the two questions above do not catch this: that recorder passes both.
 
 Then batch: every RTL change the investigation needs goes into ONE bitstream. Discovering the
 second one afterwards costs another full cycle.
