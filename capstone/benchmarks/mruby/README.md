@@ -88,6 +88,28 @@ control first.
 
 ## Status
 
-Bring-up in progress. The census that preceded it is in
-`agent-handoff/history/28-08-2026_00-30-00_mruby-is-portable-jerryscript-is-not.md`;
-nothing here has been measured yet, and no case has been scored.
+**Stage 0 returns `0x6D520001`.** The 1.4 MB image loads, the domain is created and
+entered, `__capstone_cap_init` materialises the capability globals, and the marker
+reaches the host. Stages 1 to 4 are the next step; no case has been scored.
+
+Getting there took five build iterations and turned up two real compiler defects,
+which is the part worth carrying to the next subject:
+
+| | what stopped it | how it was closed |
+|---|---|---|
+| 1 | 20 compile errors | the libc header, `mrb_alignas`, `MRB_STR_EMBED_LEN_BITS` |
+| 2 | `mruby.c` `#define`s `malloc` | the allocator moved ahead of it in the amalgamation |
+| 3 | **segfault in the register allocator** | `SplitKit.cpp` null check where two register classes are disjoint -- the ordinary case here whenever a capability class meets an integer class |
+| 4 | **assertion in the legalizer** | mruby's bignum is `unsigned __int128`, and i128 here IS the capability width; recorded, gem dropped |
+| 5 | 20 undefined symbols | `mruby-math` dropped, setjmp from the micropython port, `memchr`/`strchr`/`abort`/`trunc`/`round`/`fmod` written |
+
+`trunc`, `round` and `fmod` are built on beebs' `floor` and `ceil` rather than from
+scratch, because those already handle the infinities and the NaNs. `fmod` carries a
+`ponytail:` note naming its ceiling: it is the textbook identity, so beyond |x/y| of
+2^53 it is not the exact IEEE remainder. Fine here, where no specimen computes a
+float; not fine for a numeric benchmark.
+
+The census that preceded all of this is in
+`agent-handoff/history/28-08-2026_00-30-00_mruby-is-portable-jerryscript-is-not.md`.
+It predicted eleven errors from a syntax pass and was a lower bound, as it said it
+was: it could not see the link, and it could not see the compiler.
