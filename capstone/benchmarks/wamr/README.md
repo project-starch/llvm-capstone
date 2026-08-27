@@ -119,8 +119,7 @@ stage  4  wasm_runtime_call_wasm             OK   returns what the module comput
 The runtime initialises, loads a module, instantiates it and **runs it**: stage 4
 returns `0x5741002A`, and 0x2A is the 42 that `i32.const 7; i32.const 35; i32.add`
 computes. Two things had to be right at once, and neither alone is enough -- see
-the 2x2 below. This is one module with no imports; the residual section below says
-what that qualification is doing there.
+the 2x2 below.
 
 ### Where stage 4 stops, and the two fixes the hypothesis produced
 
@@ -228,26 +227,43 @@ had computed exactly what the module said, including the mistake. The encoder is
 fixed and the summands now round-trip. That miss is worth more than a clean pass
 would have been: nothing that returns a constant can produce -29 from those bytes.
 
-### The residual, which is why this says "runs this module"
+### There is no residual: how a static pointer becomes a capability
 
-The dispatch table was the largest instance of an un-relocated pointer, not the only
-one. Scanning the working image's data segment for 8-byte words landing inside
-`.text`:
+**RETRACTED (2026-08-27).** An earlier version of this section reported five
+un-relocated pointers to `invokeNative` in `.data` and concluded that WAMR "runs
+this module" rather than runs. That was wrong, and the mistake was reading the FILE
+as if it were the runtime state.
 
-```
-.data 0x41b10  ->  0x23aa4 (invokeNative)   5 times
-relocation sections in the image: 0
-```
+A tag cannot live in an ELF image, so on this ABI no pointer in static data is
+correct on disk -- it holds its link-time address, untagged, by construction. The
+compiler synthesizes one `__capstone_cap_init` per module, records it in
+`.capstone_cap_init`, and the entry glue runs it before `main`. That is the same
+job CHERI's `__cap_relocs` table does through `crt_init_globals`, with the
+difference that theirs is a data table a loader loop interprets and ours is
+compiled code.
 
-Five untagged words holding `invokeNative`'s LINK-TIME address, in an image with no
-relocations. They never fire here because a 39-byte module with no imports never
-reaches `wasm_interp_call_func_native`. So the honest claim is that WAMR executes
-THIS module, and the first module with an import is expected to hit the same hazard
-somewhere else. That is the next thing to test, and it is a cheap test.
+Counted against what each image needs:
 
-Same root as patch 0002 either way: a constant that encodes the pointer's width
-without saying so. There it was `UINTPTR_MAX == UINT64_MAX`; here the literals
-8 and 4.
+| | pointers in static data | stores in `__capstone_cap_init` |
+|---|---|---|
+| switch dispatch (works) | 34 `exception_msgs` + 5 `invokeNative_*` = **39** | **39** |
+| computed goto | + 256 `handle_table` = **295** | 39 |
+
+The working image is fully covered. What is NOT covered is the 256-entry table of
+`&&label` block addresses, and that is exactly the cause-1 fault: the compiler emits
+initializers for function pointers, data pointers and string tables, and emits
+nothing for a block address.
+
+So the reason computed-goto dispatch fails is **a gap in the cap-init synthesis, not
+a limit of the ABI**. Closing it in the backend would make `handle_table` work like
+`exception_msgs` does, and would remove the need for the
+`WASM_ENABLE_LABELS_AS_VALUES=0` knob. Until then the knob is the fix.
+
+`capstone/tests/probe-cap-init-coverage.sh` pins both halves and is its own control:
+the same counting function returns 6 for a file of pointer-valued globals and 0 for
+a five-line `static void *tbl[] = { &&one, &&two };`. That second number IS the bug,
+in the smallest form it takes. The probe FAILS if the gap is ever closed, which is
+the signal to retire the dispatch knob.
 
 ### The instrument that made this tractable
 

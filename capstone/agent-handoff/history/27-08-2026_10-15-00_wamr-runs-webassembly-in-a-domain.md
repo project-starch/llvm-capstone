@@ -139,20 +139,39 @@ gate with them. Registered in `run-nightly.sh` as `wamr`.
 The default build with no environment variables produces an image **byte-identical**
 to the one that returned 42, which is what verifies the default flip.
 
-## The residual, which is why this says "runs this module"
+## RETRACTED: there was no residual
 
-The dispatch table was the largest un-relocated pointer, not the only one. The
-working image's data segment holds five untagged 8-byte words containing
-`invokeNative`'s LINK-TIME address (`.data 0x41b10 -> 0x23aa4`), in an image with
-zero relocation sections. They never fire because a 39-byte module with no imports
-never reaches `wasm_interp_call_func_native`. A module WITH an import is expected to
-hit the same hazard, and that is the cheapest next test.
+An earlier version of this note reported five un-relocated pointers to
+`invokeNative` in `.data` and downgraded the claim to "runs this module". Wrong, and
+the mistake was reading the FILE as if it were the runtime state. A tag cannot live
+in an ELF image, so NO pointer in static data is correct on disk on this ABI; the
+compiler synthesizes `__capstone_cap_init` per module and the entry glue runs it
+before main. Same job as CHERI's `__cap_relocs` plus `crt_init_globals`, except
+theirs is a data table a loader interprets and ours is compiled code.
 
-Two defects introduced by this session's own instrumentation, both now fixed:
-`capstone_mcp_*` were unguarded (above), and `*res = 0x57410000u | argv[0]` in
-`wamr_domain.c` lost the 0x5741 tag whenever the result had high bits set. That is
-exactly what made the -29 control read like a crash. The value is masked to 16 bits
-now, which is all the marker protocol has.
+Counted:
+
+| | pointers in static data | stores in `__capstone_cap_init` |
+|---|---|---|
+| switch dispatch (works) | 34 `exception_msgs` + 5 `invokeNative_*` = **39** | **39** |
+| computed goto | + 256 `handle_table` = **295** | 39 |
+
+Fully covered in the working image. The 256 missing entries are the `&&label` block
+addresses, which IS the cause-1 fault. So computed-goto dispatch fails because of a
+gap in the cap-init synthesis, not a limit of the ABI: the backend emits
+initializers for function pointers, data pointers and string tables, and nothing for
+a block address. Closing that would retire the `WASM_ENABLE_LABELS_AS_VALUES=0`
+knob.
+
+Third retraction of the day, and the first two share a shape with this one: a stale
+log read as current, a trap pc read as an instruction, a file read as memory. In
+each case the artifact was real and I asked it the wrong question.
+
+Two defects introduced by this session's own instrumentation, both fixed:
+`capstone_mcp_*` were unguarded, and `*res = 0x57410000u | argv[0]` lost the 0x5741
+tag whenever the result had high bits set, which is what made the -29 control read
+like a crash.
+
 
 Open: stage 6 and the `BEEBS_TAGCHECK` knob are diagnostics rather than tests;
 nothing exercises WAMR's EMS allocator under load yet, which is the reason WAMR is
