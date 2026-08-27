@@ -1110,6 +1110,43 @@ folder. If SQLite's value is in the clear set {LINEAR, REVOKE, UNINIT, SEALED, S
 repro has never exercised the mechanism it was built to test, and an arm with a matching-type `v`
 is the first variant that could reproduce.
 
+**That escape hatch is now closed by measurement, not by the type argument below.** The sections
+that follow establish, on two independent legs, that SQLite's value here is NONLIN and therefore
+cannot clear at all. That is a claim about *production*. It leaves open a claim about *the repro*:
+that the window is clean only because the repro's type was wrong. `s12-value-type-sweep.S`
+(`capstone-ariane 7fb91b5c7`) settles it by running the identical window six times, varying only
+the subject store's value type, with a separate always-NONLIN filler for the intervening stores so
+a linear-family subject cannot perturb them as a second difference:
+
+    arm   type          load returned          source granule word 0
+    A0    NONLIN        capability, type 2     INTACT (0x80003000)   <- clear correctly did not fire
+    A1    LINEAR        capability, type 1     ZEROED                <- clear fired
+    A3    REVOKE        capability, type 3     ZEROED
+    A4    UNINIT        capability, type 4     ZEROED
+    A5    SEALED        capability, type 5     ZEROED
+    A6    SEALEDRET     capability, type 6     ZEROED
+    AF    positive ctl  NOT_CAP, value 0       (slot scribbled scalar-wise before the reload)
+
+**Each clean arm carries its own proof the condition held**, which is what makes it admissible: the
+clear demonstrably fired in all five clear-set arms and demonstrably did not in the NONLIN control,
+so no arm is void. **And the detector demonstrably produces the failing reading** — the positive
+control prints the board's exact signature, the NOT_CAP form with value 0. 1744 cycles against a
+2000000 timeout, so the pass is a real pass rather than a hang reported as one.
+
+In all five arms where the clear fired, **the load still returned a correct, tagged capability of
+the right type.** So the load does not observe its own side effect, and "the reload races the clear
+it triggers" is refuted at the real window for every type that can trigger it. The window is clean
+for every type it could have been, not merely for the one it had.
+
+**A related mechanism this rules out for SQLite but which is worth knowing about generally.** If a
+clear-set capability is loaded out of a slot and then loaded from that slot AGAIN without an
+intervening store, the second load reads the zeroed granule and yields cursor 0 / NOT_CAP — S-12's
+signature exactly. That cannot be what happens here, because NONLIN does not clear. It is recorded
+because **QEMU cannot see that class of bug at all**: `csldc`
+(`capstone-qemu target/riscv/insn_trans/trans_capstone.c.inc:146-169`) loads two words and sets the
+register, with no source clear, while the RTL clears at `load_unit.sv:225-230`. Any software that
+double-loads a linear-family capability runs clean under QEMU and dies on silicon.
+
 ## The discriminating unknown is answered: SQLite's value is NONLIN too
 
 The open question above — is SQLite's stored value at the fault site in the LDC clear set? — is
