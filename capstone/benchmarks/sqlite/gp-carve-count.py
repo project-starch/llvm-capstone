@@ -173,12 +173,11 @@ def main():
     # REVNODE_SENTINEL = 16'd65535 (capstone_rev_node.anvil:74,79), and node ids are 30 bits
     # (#{14'd0, head}). No 10-bit head or ~1021 wrap exists anywhere in that file.
     #
-    # WHERE 1000 CAME FROM, since the number was confident and wrong: a 2026-07-21 probe used
-    # BORROW_COST_ITERS = 1024, a domain running 1024 borrow iterations could not exit, and that
-    # was INTERPRETED as "~1024 revocations exhaust the revocation-tree nodes". The pool size was
-    # inferred from the TEST'S OWN ITERATION COUNT and then quoted as an RTL constant in five
-    # documents and in this gate. Whatever breaks at 1024 iterations is still unexplained -- it is
-    # simply not pool exhaustion.
+    # WHERE 1000 CAME FROM: it was RIGHT, and then the RTL changed under it. An overflow was
+    # MEASURED on 2026-07-31 -- untrimmed SQLite at 1059 carves, overflow flag set -- against the
+    # pool as it then was. 91ea10837 (2026-08-03) made the node count configurable and it became
+    # 65536. So this gate was correct when written and has been stale since, which is the more
+    # common and more dangerous shape than a fabricated constant: nothing was ever wrong to find.
     #
     # The 16-bit head predates the resident bitstream: 91ea10837 "made rev node count
     # configurable" (2026-08-03) is an ancestor of 84ed6eafb, verified with merge-base.

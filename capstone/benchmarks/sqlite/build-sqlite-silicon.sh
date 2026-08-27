@@ -958,11 +958,14 @@ SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-ca
 #   91ea10837 "made rev node count configurable" (2026-08-03) IS an ancestor of 84ed6eafb
 # So the pool is 65536, not ~1021, and it is 64x larger than this trim assumes.
 #
-# WHERE THE NUMBER CAME FROM: a 2026-07-21 probe used BORROW_COST_ITERS = 1024; a domain running
-# 1024 borrow iterations could not exit; that was INTERPRETED as "~1024 revocations exhaust the
-# revocation-tree nodes". The pool size was inferred from the test's own iteration count and then
-# quoted as an RTL constant here, in gp-carve-count.py and in four handoff documents. The
-# 1024-ITERATION FAILURE IS REAL AND STILL UNEXPLAINED -- it is simply not pool exhaustion.
+# CORRECTION TO THE CORRECTION, same day: the limit was REAL AND THEN FIXED, not fabricated.
+# The line below records a MEASURED overflow -- "measured 2026-07-31, head=74 with the overflow
+# flag set" -- and 2026-07-31 PREDATES 91ea10837 (2026-08-03), which made the node count
+# configurable. So the small pool existed, the overflow was observed with its own flag, and the
+# commit enlarged it. What is wrong is not the original measurement but every copy of the number
+# taken after 2026-08-03. I first wrote that the size had been inferred from a 2026-07-21 probe's
+# BORROW_COST_ITERS = 1024; that is NOT supported and is withdrawn. The separate 1024-ITERATION
+# domreturn failure is still unexplained, but it is a different observation from this one.
 #
 # CONSEQUENCE, NOT YET ACTED ON: this trim OMITS SQLITE FEATURES to get under a limit that is not
 # there, and the build script itself says the deviation "must be reported alongside any board
