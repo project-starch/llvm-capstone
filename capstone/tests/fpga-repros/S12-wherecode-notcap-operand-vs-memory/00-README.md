@@ -1,5 +1,29 @@
 # S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c`: the operand is zero, and it is not software
 
+> ## WHAT S-12 ACTUALLY BLOCKS — read this before calling it "the SQLite blocker"
+>
+> **It has never blocked SQLite's built-in correctness workload.** That workload passed on silicon
+> 3/3 on 2026-08-20, days BEFORE this folder existed, and 14/14 on 2026-08-27 on the current
+> compiler. S-12 was found in the **SLT** path, running `q_two` — a test written to push past what
+> the built-in workload covers.
+>
+> **The distinction is the query PLAN, not the SQL text.** The built-in workload does contain a
+> two-table join, and that fact was used on 2026-08-27 to argue S-12 could reach it. **That was
+> wrong**, and it is the error this project already has a rule about: *same shape of SQL is not
+> same execution plan, and the plan must be READ rather than inferred*. Read, the plans are:
+>
+>     built-in workload   SCAN nums + SEARCH link USING AUTOMATIC COVERING INDEX   14/14 clean
+>     qj4                 SCAN t1   + SEARCH t3 USING COVERING INDEX               RETURNS
+>     qj2 / q_two         SCAN ...  + SCAN ...                                     WEDGE
+>
+> **What it DOES block: SLT COVERAGE.** The runner itself works on silicon — `qj4` passed its query
+> outright (`query_pass=1 query_fail=0 completed=1`). Any test whose inner where-loop level is an
+> unindexed nested SCAN wedges. The real sqllogictest corpus is full of those, so **S-12 is what
+> stops the corpus running on silicon**, which is the standing "SLT on silicon" goal.
+>
+> Three claims that must not be merged: *the built-in workload runs* (true, never blocked by S-12);
+> *SLT runs* (true, one domain per boot, indexed joins pass); *the SLT CORPUS runs* (false).
+
 > **ARRIVED WITH A HANG RATHER THAN A FAULT?** If the domain stopped with **no exception**
 > (`ex_commit.valid = 0` on aperture 224) and aperture 225 reads **`0xd5`** — three wait conditions
 > asserted, a store genuinely outstanding — that is **[S-13](../S13-o1-dyn-rev-node-hang/)**, a
