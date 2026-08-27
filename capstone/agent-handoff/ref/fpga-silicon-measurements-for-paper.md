@@ -1018,5 +1018,47 @@ toolchain changes did not break SQLite on silicon — nothing else covered it.
 n ≈ 30 needs on the order of 15 boots, not the 8 a 4-slot budget would suggest. Worth knowing
 before committing to the ladder.
 
-**Running total on the current compiler: 2 clean, 0 domain wedges.** Says nothing yet — at 54%
-per draw, 2/2 clean is p = 0.21.
+### Boots 2-7 — completed 2026-08-27
+
+Twelve further draws, every one a DISTINCT image (`CAPSTONE_TEXT_PAD` 32…416, sha256 checked
+2-of-2 unique per boot before staging), extended workload, resident bitstream, no reflash.
+
+**RESULT: 14 clean draws, 0 domain wedges.** Every boot: `EXTENDED_PASSED`, `MEMORY_PASSED`,
+`rc=0`. Verified per boot with zero `SPLB`, zero infrastructure classifications and zero wedges,
+so none of the fourteen is a mis-attributed monitor spin.
+
+| if the extended workload's join behaved like `qj2` (54% wedge/draw) | probability |
+|---|---|
+| 4 clean | 4.5e-2 |
+| 8 clean | 2.0e-3 |
+| **14 clean** | **1.9e-5** |
+
+**So it does not.** The extended workload's `JOIN ... ON nums.label = link.label` and `qj2`'s
+cartesian `FROM t1, t2` are both two-level where-loops and they behave completely differently on
+silicon. **The variable is not "two levels" — it is something that differs between these two join
+forms.**
+
+**What NOT to conclude, because it was already killed once.** The obvious guess is that SQLite
+builds an automatic index for the equijoin, turning a repeated inner SCAN into a SEARCH. That
+theory is on file and was refuted: `02eda1190ca4` found `p11_smalljoin` doing
+`SCAN t1` + `SEARCH y USING AUTOMATIC COVERING INDEX`, but `4534e1d0f302` then killed it —
+`q_two` has no WHERE clause, so the planner builds no automatic index and no bloom filter, **and it
+wedges regardless**. Do not re-derive it.
+
+**The rule that survives from that trail is the one to apply here:** *on a query engine, same shape
+of SQL is not same execution plan, and the plan must be READ rather than inferred from the text*.
+Neither plan has been read. That is the next step, and it is board-free — `EXPLAIN QUERY PLAN` on
+both forms under the QEMU reference model.
+
+### What this settles for the paper
+
+* **SQLite's correctness workload runs reliably on silicon on the CURRENT toolchain: 14/14.**
+  This also revalidates the 2026-08-27 compiler changes (128-bit store merging, `lcc`→`mv`,
+  GEP speculation), which nothing else covered — the previous 3/3 was measured on the old compiler.
+* **S-12 does not block it.** S-12 is specific to a query shape the workload does not use.
+* Still **correctness, not performance**: no admissible timing number comes from these runs.
+
+**Planning fact, measured:** only TWO large SQLite domains per boot carry a verdict. At slot 3 the
+monitor's `split_out_cap` spins (`SPLB`) — the same image that returned at slot 1 was created
+(`SQ: A/dom-ok`) and never entered (`SQ: G/enter` = 0) at slot 3. That is infrastructure, not a
+domain result, and conflating the two produced a false localization on 2026-08-06.
