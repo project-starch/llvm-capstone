@@ -437,6 +437,39 @@ be decisive; two would not be.
 > sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
 > loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
 
+## WEAK, AND RECORDED AS WEAK: clamping the 5th call reduces the wedge but does not remove it
+
+`WhereCodeOneLoopStart` runs 3 + plan depth times, so `dd2_join` makes five calls and the fifth is
+the one the extra plan level adds. A build that returns early from call 5 onward
+(`CAPSTONE_WCLAMP=sqlite3WhereCodeOneLoopStart:5`), run against the unclamped build in the SAME
+boots, clamped first:
+
+    draw   clamped (5th call suppressed)   unclamped control
+    k1     *** WEDGED ***                  collateral
+    k2     returned                        *** WEDGED ***
+    k3     returned                        *** WEDGED ***
+
+Clamped 1 wedge / 3; unclamped 8 / 8 across the session. Fisher ~0.02.
+
+**This is suggestive and NOT decisive, for two reasons that are part of the result rather than
+caveats bolted on:**
+
+* **The clamp changes the PROGRAM, not just the call count.** It returns a wrong `notReady`, which
+  corrupts the generated code, so the clamped build differs from the unclamped one in more than the
+  thing under test. Part of any rate difference measures that corruption.
+* **k1's wedge may not be S-12 at all.** With codegen deliberately corrupted a fault can arise
+  anywhere, and a wedge reports no `mcause`/`mepc`, so an S-12 wedge is indistinguishable from one
+  the clamp itself created.
+
+**More draws would not fix this** — they would only sharpen a confounded comparison. What would fix
+it is an intervention that removes the fifth call WITHOUT corrupting codegen, and no such
+intervention is currently known.
+
+**So the load-bearing evidence for the nesting result stays the UNCONFOUNDED pair** — `dd6_twostmt`
+0/5 against `dd2_join` 6/6 at equal call counts, same binary, same boots, no perturbation. The clamp
+neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
+expecting a verdict.
+
 ## SETTLED: it is NESTING, not repetition — two levels inside ONE prepare
 
 The sharpest result of the delta-debug, and it retires the "the codegen path runs twice" framing

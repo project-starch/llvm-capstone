@@ -1162,6 +1162,54 @@ fi
 # The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
 # on entry means the caller handed over plain data; anything else means the tag was alive at the
 # boundary and the spill/reload lost it.
+# CAPSTONE_WCLAMP=<fn>:<n> -- make <fn> RETURN EARLY from its <n>th call onward.
+#
+# WHY A CLAMP AND NOT AN OBSERVER. The probe cannot report from a wedge: its output goes to a
+# shared payload the HOST prints after the domain returns, and a wedged domain takes the core, so
+# nothing is printed exactly when it matters. The standing rule is to prefer a diagnostic that
+# converts a hang into a wrong answer over one that only observes the hang -- so instead of asking
+# "which call faulted", suppress calls from N onward and ask whether the wedge survives.
+#
+# WhereCodeOneLoopStart runs 3 + plan-depth times (measured), so dd2_join makes 5 calls.
+#   clamp 5 => the 5th call does nothing.  Wedge GONE  -> the 5th call is implicated.
+#                                          Wedge STAYS -> the wedge lives in calls 1-4, i.e. the
+#                                                         nesting changes an EARLIER call.
+# That is a real fork: the second branch would mean the extra level poisons work that happens
+# before it, which no mechanism proposed so far predicts.
+#
+# THE RETURN VALUE IS THE CALLER'S "notReady" MASK, passed straight back. Returning a wrong mask
+# corrupts the generated program -- which is fine and intended, because the question is wedge vs
+# return, not whether the query answers correctly. What matters is that the clamp stops the FLOW:
+# the caller loops over levels and uses the return value, so a clamped call visibly changes what
+# the caller does next rather than being a leaf that the program ignores.
+if [[ -n "${CAPSTONE_WCLAMP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "${CAPSTONE_WCLAMP%%:*}" "${CAPSTONE_WCLAMP##*:}" <<'PYCLAMP'
+import sys, re
+path, fn, n = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"WCLAMP: {fn} definition not found -- patch shape changed")
+# STRIP C COMMENTS FIRST. Each parameter here carries a trailing /* ... */ that sits AFTER the
+# comma, so a naive split leaves the LAST element ending in "*/" -- args[0]/args[1] survive that
+# (which is why the ARG probe works) but args[-1] parses as "/" and the injected `return /;`
+# fails to compile. Seen exactly once, here.
+arglist = re.sub(r'/\*.*?\*/', ' ', m.group(1), flags=re.S)
+args = [a.strip().split()[-1].lstrip('*') for a in arglist.split(',') if a.strip()]
+last = args[-1]
+body = m.group(0) + """
+  /* CAPSTONE WCLAMP -- suppress this call from the Nth onward, and RETURN so the run reports. */
+  {
+    static unsigned long wclamp_calls_;
+    if (++wclamp_calls_ >= """ + n + """UL) return """ + last + """;
+  }
+"""
+s = s.replace(m.group(0), body, 1)
+open(path, "w").write(s)
+print(f"   WCLAMP injected into {fn}: returns {last} from call {n} onward")
+PYCLAMP
+fi
+
 if [[ -n "${CAPSTONE_ARG_PROBE:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_ARG_PROBE" <<'PYARG'
 import sys, re
