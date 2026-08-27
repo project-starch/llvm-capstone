@@ -2229,3 +2229,49 @@ address as gospel: `mepc = 0x828f4814` → image VA `0xf4814`, in **`sqlite3Wher
 
 **Running tally: `-O1` 2 wedged of 2 draws; the third (`sqo1c`) has still not run** — boot 3's
 `-O0` subject wedged first and took the core. Controls returned in all three boots.
+
+### The new site's mechanism, tested: FLU -> LSU adjacency is NOT the trigger
+
+Boot 3's `-O0` fault is a **producer/consumer pair one instruction apart**, the same shape as the
+original site but a different pair:
+
+    original   ldc           a4, 0x0(a0)      DYN producer
+               cincoffsetimm a4, a4, 0xb0     FLU consumer, rd == rs1
+
+    boot 3     cincoffsetimm a0, s0, -0x114   FLU producer, rd != rs1
+               lw            a1, 0x0(a0)      LSU consumer, IMMEDIATELY next
+
+The `lw` took mcause 25 with `tval = 0`, i.e. it read `a0` as `{cursor 0, NOT_CAP}` — bit-for-bit
+`create_cnull` — while the `cincoffsetimm` that wrote `a0` did not itself fault. Both readings are
+sound at this site: `mepc` is `pc_commit` latched at the trap (`cva6.sv:1138`), and `tval` carries
+the rs1 cursor for capability causes (`ex_stage.sv:490`, `:917,925`).
+
+**`s12-flu-raw.S` covers DYN -> FLU and found HAZARDS = 0. Nothing covered FLU -> LSU.**
+
+`s12-flu-lsu-raw.S` (new) does. Result: **the adjacency is not the trigger.**
+
+    walk proven to have run   2560 lbu, exactly 40960/16
+    cycles                    33,677 (warm variant: 373) -- and NOT the 2000013 timeout,
+                              so a genuine pass rather than a hang reported as SUCCESS
+    exceptions                NONE -- the `lw` did not fault
+    a5                        0x80003020, the correct cursor
+    lcc selector 1 on a5      1 = NONLIN, a valid capability, NOT 7 = NOT_CAP
+
+The first version of this test ran the load WARM and passed in 373 cycles. That would have been
+the void shape its sibling fell into — `s12-flu-raw.S` reported `ldc-pending-cycles = 0` on its
+first run because every load hit, so its zero tested nothing. The eviction is what makes this
+negative admissible.
+
+**Scope, kept narrow:** bare M-mode, not inside a capability domain on a monitor-carved stack, and
+the producer's own operand was not itself pending. So this removes FLU -> LSU adjacency as the
+mechanism; it is not exoneration of the pipeline.
+
+**The other candidate was excluded by prior art rather than re-tested.** A LINEAR rs1 with
+rd != rs1 nulls rs1 and gives rd the capability (`capstone_flu_unit.anvil:29-53`); a swapped pack
+would yield exactly the observed `{0, NOT_CAP}`. But `cincoffset-linear-clear.S` is a passing
+regression test asserting precisely that rd is the valid cap and rs1 is the cleared one — and it
+cannot explain the original site anyway, where `rd == rs1 == a4` and the LINEAR path does not
+apply.
+
+**So both named mechanisms for the new site are now excluded, and the adjacency shape shared by
+the two board sites is not sufficient on its own.**
