@@ -272,6 +272,17 @@ if [ "$BUILD_OK" -eq 1 ]; then
   # the prompt to drop the marker.
   run_one "lit-generic" "$LIT --xfail=CodeGen/RISCV/emutls.ll llvm/test/CodeGen/RISCV/ llvm/test/CodeGen/Generic/"
 
+  # ---- stage 2c: what the capability initializer covers ----------------------
+  # A tag cannot live in an ELF image, so CapstoneCapGlobalInit materializes every
+  # pointer in static data at startup. When it MISSES one, nothing complains: the
+  # build is clean, the image is well-formed, and the fault lands far away with
+  # nothing pointing back at the cause. Block addresses were missed that way for as
+  # long as the pass existed, and it took an investigation to find out.
+  #
+  # Fast, deterministic, no QEMU, so it belongs here rather than in stage 3. It
+  # asserts both directions: what must get a store, and what must not.
+  run_one "cap-init-coverage" "bash $SCRIPT_DIR/probe-cap-init-coverage.sh"
+
   # ---- stage 3: QEMU suites (SERIAL, rootfs lock guarded) ---------------------
   # flock guards against a second nightly; a manual concurrent QEMU run must
   # still be avoided by convention (the suites must be SERIALIZED (never two at once)).
