@@ -78,3 +78,56 @@ claim propagates further than a refuted hypothesis.
 - **Per-image clustering** — real, unexplained, and the reason redraws must be distinct images.
 - **The rate** for the extended workload, which contains a two-table join (`sqlite_capstone_domain.c:1439`)
   and passed 3/3 — where a 54% per-draw rate would predict ≈0.10 for that outcome.
+
+---
+
+# Part 2 — mined from git history, 2026-08-27
+
+Everything above was written from the current investigation. This part was recovered by reading
+the commit history, because the reasoning on this project lives in commit MESSAGES and had not been
+indexed anywhere. **Every hash below was verified to exist with a matching subject, and a sample of
+the quotes was checked verbatim against the commit.** Rows are ordered by how likely they are to
+stop someone re-deriving a dead end.
+
+## Contradictions between live sources — read these first
+
+| # | The contradiction | Why it matters |
+|---|---|---|
+| **C1** | `c49ed6041ae8` (2026-08-25) declares the load-syncer lead dead. `64662c9583cb` (2026-08-26) says of that same test: *"THAT TEST NEVER OPENED ITS WINDOW… every LDC HITS… Its zero was uninformative for the MISS case, which is the case SQLite hits."* The re-test then re-establishes the verdict | **Both commits are live and only the second one's residual is correct.** Reading the first alone gives a sound conclusion resting on a void experiment |
+| **C2** | An auditor's report says the arm-position confound is unbroken; boot 26 shows the un-probed build wedging at arm 2. Recorded in `8a4003c7ab5f`: *"The report read the retraction without the later refutation"* | Reading `b25c056e84c0` without `0e9c74faf482` re-derives the auditor's error |
+| **C3** | `4ecdc350b6a1` files the site under S-07's tag-loss family; `1b52fc0c674d`, later the same day, says *"the family is tag-loss and this measurement says the value was zero… That displaces the tag-loss reading which has framed this investigation from the start"* | The filing and the measurement point different ways, and the folder says so |
+
+## Dead — and not listed in Part 1
+
+| Hypothesis | How it was refuted | What it does NOT cover | Evidence |
+|---|---|---|---|
+| **Load-syncer / DYN-unit LDC mispair** — a second LDC init landing while the first is outstanding | 96 back-to-back LDCs: init-while-pending = 0 with the counter proven to move. Then forced misses by construction (4096-byte stride, 16 caps against 8 ways) across four configs: 96/112/108/112 inits, **overlap 0 in all four**. Testbench limits tested rather than assumed (`ariane_testharness.sv:517`, `:514-515`) | Verbatim: *"the sim's miss costs ~8 cycles and a real board miss is far longer. Nothing here tests 50+ cycle latency… If the serialisation has a timeout or abort path only a long miss reaches, this suite cannot see it"* | `c49ed6041ae8`, `64662c9583cb` |
+| **The whole ACCUMULATION family** — rev-node consumption, cache-set rotation, write-buffer phase | The **single-iteration** build does not return, and is confirmed the same fault rather than assumed (mcause 25, mepc−DBAS = `0x460` = the subject consumer, distinguishable from the arming `lcc` at `0x39c`). Also kills move-clear a second way: *"with one iteration there is no previous clear to read back"* | The commit states a surviving tension, not a residual: the stale-operand account is the only named mechanism that works at one iteration **and** the one the RAW sim says should not happen | `15f12feed573cb` |
+| **Six more sufficient causes** — granule count / write-buffer pressure; untagged-capability entry class; load→store→load chain; monitor-carved stack region; the subject's own derivation; revocation-tree depth | 5 arms × 16384 trials, each on a control-passing boot, **each with an in-arm positive control** so these are *"meaningful zeros rather than unproven ones"*. Rev-node depth retired by reading, not a boot | Verbatim: *"What remains untested is scale: the real workload runs about a hundred thousand instructions with a working set that thrashes the caches and takes timer interrupts, where the microbenchmark loop stays resident in four kilobytes"* | `734dbbfa0519`, `86d960b53df4` |
+| **S-06, AMO I-4, S-10b, and S-10's `gran_clr`** as the cause | All four killed on static reading, no board time. S-06 **is** in `80843404c`. AMO I-4 is *"the opposite polarity"*. S-10b needs the pair to disagree at `[11:3]`; they share an address. S-10's `gran_clr` needs a second entry with `ctag=0`; a capability store is ONE entry. **Both rested on a granule-sharing plain store that does not exist** — verified per basic block | The narrow survivor is stated: the tag comes from the write buffer or L1, never the store buffer, *"That is the observed polarity."* Also: a first pass used a control-flow-blind linear scan and *"returned a confident WRONG answer"* | `311d5293471c`, `192099a140bf` |
+| **Write-buffer DEPTH/contention** | Not refuted — **the clean sweep is VOID.** Counting the buffer's own occupancy gives *"a peak of ONE simultaneous entry across sixty stores and six arms, out of a depth of eight"*. Nine granule STORES ≠ nine CO-RESIDENT entries | *"the depth hypothesis is NOT TESTABLE in this simulation environment as configured"* — needs the memory slowed (`axi_delayer` is already vendored) or the board | `capstone-ariane 0a45ec2018e2` voided by `4c4224afbd6d` |
+| **Four bare-metal directed sims** reproducing the window | All clean. Weighting stated in the commit: two carry **proven-firing** detectors, two do not *"and should be weighted lower"* | Fidelity gaps enumerated in the test headers: M-mode not a domain, register-resident not cap-table, `.data` frame not monitor-carved stack, cold cache | `capstone-ariane b1afedb37696`, `2d0c26b2723a`, `1594ca6a0b34`, `68232f84a940` |
+
+## Retracted — and not listed in Part 1
+
+| Claim | Why it fell | Evidence |
+|---|---|---|
+| "**The SQLite wedge is a NULL dereference in software**" (filed RESOLVED) | Retracted for want of a fired instrument — *"A zero from an unfired instrument reads exactly like a finding"* — then **partially re-supported** once a `0xBEEF` control fired. Carry the hedge: two mechanisms remain and tval alone does not separate them. A second error in the same chain: *"'25 not 29, therefore tag not bounds' excluded nothing, because CINCOFFSETIMM has no bounds arm and 29 was never reachable"* | `a223ac4fb264`, `b25c056e84c0`, `1b52fc0c674d` |
+| "**Arm position is a perfect confound, 5 for 5**" | Broken in both directions by control-passing boots 26/28. *"the previous commit's retraction is itself partly withdrawn"* | `b25c056e84c0` → `0e9c74faf482` |
+| "**Writeback-port displacement**" as the localization | Switch 204 reads `0x00` at the wedge on all six (later eight) boots with the selftest firing each time — a controlled negative | `e7816935b34b` → `1d046a5d013c` → `a1036c56709b` |
+| "**The reload of that same slot produced zero**" | An auditor found the skipped instruction: `movc a4, zero` at `+0x80`, so a4's prior value is exactly `{cursor 0, NOT_CAP}`. *"What is established is that the FLU received {cursor 0, NOT_CAP}, not that the load returned zero"* | `98b17ce22de7` |
+| "**Memory is intact, so the fault is in delivery**" (the inference, distinct from Part 1's row about the evidence) | *"That is only true of a PERSISTENT loss."* Every documented memory-path defect here is transient and self-heals long before a debugger read. So an intact granule at T+seconds *"is predicted by both arms of the fork and separates nothing"* | `d4c78aa6d4b5` → `037a9eef96fe` |
+| "**`pad600` proves a store-to-load drain-latency window**" | Delay-dependence stands; the mechanism does not — *"DRAM refresh phase, a periodic interrupt, or another AXI master's traffic"* scale with a 619-instruction gap equally well. Threshold bracketed only as 10 < T ≤ 600 | `c56679fb175e` → `e7d92b488d08` |
+| "**The S-07 fix renders the S-10 forwarding defect unreachable**" | *"the stall is an ALLOCATION-time check between two write-buffer ENTRIES. The residual needs only ONE entry"*. Matched pair: 8 traps/16 legs vs 16/16 | `capstone-ariane 6175ea654235` |
+| "**S-07 is silicon-validated**" | Downgraded: `P(3 clean | defect live) = 0.875³ = 0.670`, *"nearly uninformative"*; and the pre-registered WNS criterion *"came back negative and was never applied"* | `ISSUES.md:321-330` |
+
+## Instruments known to be broken — do not build on their output
+
+| Instrument | Status |
+|---|---|
+| **Switch 208, S-07 tag history** | Structurally unusable: one-shot, no clear, and boot software consumes the slot before any arm runs (*"the pre-run baseline already reads 0xb8 with ldc0_valid set"*). Recorded granules were neither the subject's. `2e37646fb54a` |
+| **The wrong-producer-forwarding checker** | The conclusion survives structurally, but *"the checker counts a condition the hardware cannot enter. A positive control for it is unsatisfiable, a future zero from it is not evidence"* — so the capability-pair re-run two lanes wanted is unnecessary. `450be8638f88` |
+| **The S-12 repro's arm 4** (and arm 6) | Every measurement void — arm 4 matched no `#if` branch, so no store was emitted and the reload read zero BSS. A `S12_SLOT_WRITTEN` build guard now `#error`s this, negative-tested both ways. `d9ccb82438fd` |
+| **The VDBE clamp ladder** | PROVISIONAL — *"a wedged arm prints no ops=/lastop=, so 'clamp 8 wedges' is indistinguishable from 'the clamp value never arrived'"*. `4b348e348d2a` |
+| **`s07evict`** | VOID, not negative: assumed 64-byte lines against a real 16-byte geometry, so *"Its eviction never happened"* |
+| **Slot 3+ for large SQLite domains** | The monitor's `split_out_cap` spins (`SPLB`). Measured 2026-08-27: the same image returned at slot 1 and, at slot 3, was created (`A/dom-ok`) but never entered (`G/enter` = 0) with an `SPLB` tag. **Only 2 big domains per boot carry a verdict** |
