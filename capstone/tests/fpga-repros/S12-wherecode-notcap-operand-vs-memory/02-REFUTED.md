@@ -201,6 +201,50 @@ re-testing. And it exposed a real gap in a neighbouring row: **`s12-cap-waw-pres
 `movc → ldc → consumer`, omitting the `stc`**, so its `duplicate-live-rd = 0` was never evidence
 about any STC-producer mechanism. That row's scope is narrower than it read.
 
+## RETRACTED WITHIN THE HOUR: "S-12 reproduced in simulation" (2026-08-27)
+
+**Claimed:** `s12-stc-producer-cold.S` reproduced S-12 in ~150 lines of bare metal — an `ldc` from
+a valid base returning `{cursor 0, NOT_CAP}`, the consumer raising `UNEXPECTED_OPERAND`, cycle-for-
+cycle deterministic across two runs at the same address.
+
+**It was a test bug, and the trap was architecturally correct.** `a5` was a FIXED address,
+`s1 + 0x120`, while the subject slot WALKED as `a0 = s1 + s4*16`. At `s4 = 18`, `a0 == a5 ==
+0x80003120`. So the loop did:
+
+    STC(a5, a4, 0)     # writes {cursor 0, NOT_CAP} to 0x80003120
+    LDC(a4, a0, 0)     # at s4=18 this IS 0x80003120 -- reads it straight back
+
+A same-address store-then-load returning the stored value is the only correct outcome. The 18
+non-colliding iterations returned the planted capability; the one colliding iteration returned the
+zero. **And it INVERTS S-12's precondition**: on the board a VALID capability is stored and zero is
+read back (`a0 = s0-0x70`, `a5 = s0-0x120`, different addresses 0xb0 apart). Here zero was stored
+and zero read back. The run's own counters said so too — `escape=59 hazard=0`, which by the test's
+own stated key refutes the mechanism rather than confirming it.
+
+**How the bug was introduced, because this is the reusable part.** The original test had `a0` fixed
+at `0x100` and `a5` at `0x120` — genuinely unrelated, and commented as such. A later edit made `a0`
+WALK, sweeping it through `0x120`. The edit invalidated the invariant; **the comment asserting it
+stayed, and was then used as evidence.** The load-bearing claim in the audit brief — "planted with a
+valid capability and never overwritten" — was copied from that comment, not derived from the
+arithmetic.
+
+**The near-miss was worse than the false positive.** The `fixedslot` A/B variant would have come
+back CLEAN, because with no walk there is no collision — and the conclusion drawn would have been
+"walking the subject slot is the S-12 trigger". A confidently wrong characterisation resting on a
+test bug, which would have redirected the investigation. What caught it was auditing the claim
+before building on it, not the experiment that followed.
+
+**Fix:** `a5` is now derived FROM `a0` (`a5 = a0 + 0x200`, past the whole `32*16 = 0x200` walk), so
+non-collision is structural rather than a property of the loop bound — and it matches the board,
+where `a5` tracks `a0` at a fixed offset rather than sitting at a fixed address.
+
+**The rule this earns, and it is the fourth instance today of the same shape:** *resolve every
+address in the window to a NUMBER before reading a trap as a defect, and treat an invariant asserted
+in a comment as unverified — an edit that changes an address relationship silently falsifies every
+comment about addresses.*
+
+**Net: S-12 still has no minimal reproducer.** The only reproducer remains the full SQLite domain.
+
 ## Instruments known to be broken — do not build on their output
 
 | **Every eviction sweep in this tree that strides by 64 or 128** | The D-cache line is **16 BYTES** — `CVA6ConfigDcacheLineWidth = 128` BITS (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:50`), giving 2048 lines over 256 sets in a 32 KiB 8-way cache. A stride-64 sweep touches every FOURTH line and a quarter of the sets; stride-128 every EIGHTH. Affected: `s07evict` (already recorded VOID for exactly this), the eviction claims in `s12-ldc-pressure.S` and `s13-stc-pressure.S` (stride 64 over 8 KiB = 128 of 2048 lines, so their post-"eviction" loads HIT and they are not refill-path evidence), `s12-stc-producer-cold` v1, and **`cap-tag-cache.S` case 3** — which is written expressly to prove tags survive refill and whose PASS is consistent with the target line never leaving L1. **Read cache geometry from the config; never assume it.** This error has now broken four separate tests |
