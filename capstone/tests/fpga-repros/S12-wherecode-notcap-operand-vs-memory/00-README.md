@@ -2364,3 +2364,44 @@ apply.
 
 **So both named mechanisms for the new site are now excluded, and the adjacency shape shared by
 the two board sites is not sufficient on its own.**
+
+## Rev-node allocation EXCLUDED as the SLT-vs-built-in discriminator — measured, with a control
+
+The RTL lane proposed `rev_node_head` as the one RTL-visible discriminator between the two
+workloads: monotonic, no reclamation, one number, already on the debug mux. Measured, it does not
+discriminate.
+
+| workload | head | entry carves | runtime allocations |
+|---|---|---|---|
+| built-in extended (no `--slt`) | **250** | 211 | **39** |
+| SLT + `q_one` | **254** | 215 | **39** |
+
+**Runtime allocation is identical.** The SLT harness does not consume more revocation nodes than
+the built-in path, so allocation volume is not the difference between an arm that is 0/14 and one
+that wedges.
+
+**THE APERTURE HAS A POSITIVE CONTROL FOR THE FIRST TIME, and it is arithmetic rather than a
+second instrument:** head minus the domain's static carve count (from `gp-carve-count.py`) must be
+the runtime component, and it lands at 39 for both. A reading that did not track carve count would
+mean the aperture is not measuring what it claims.
+
+That control retroactively classifies the earlier readings:
+
+    421     ~2 domains x 215 carves = 430          PLAUSIBLE, a real head
+    62496   would need ~290 domains of carving     JUNK -- and it appeared BYTE-IDENTICAL
+                                                   from two different images, the same
+                                                   frozen-aperture signature as commit-pc
+
+**Two instrument facts worth carrying:**
+
+* **Only SLOT 1 yields a halted read.** With `HALT_MUX_READS=1`, the halt succeeds for arm 1 and
+  fails with `ActionTimeout` for arm 2, in both boots and in both orderings. The driver correctly
+  voids the running reads rather than printing `0xFFFF` as a head — which is exactly the failure
+  the sentinel fix was written for. Any head comparison must put its subject in slot 1.
+* `0xFFFF` is `REVNODE_SENTINEL`, not a count, and is indistinguishable from an all-ones dead
+  aperture. Never read it as a full pool.
+
+**WHAT THIS DOES NOT SETTLE.** Both arms here RETURN, and the SLT arm is `q_one` — ONE level. So
+this excludes the *harness* as an allocation difference; it says nothing about whether a TWO-level
+query allocates differently. That needs a head reading from a two-level SLT run that returned,
+which is a ~46% draw in slot 1.
