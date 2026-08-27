@@ -48,10 +48,39 @@
 > changes INDIRECTLY — how much codegen runs before the second call, heap and cache state, timing —
 > rather than through which instructions execute.
 >
-> **And the `qj4` side of that correlation is N = 1**, which at the 54% per-draw rate is p = 0.46
-> by chance. The 14/14 built-in workload is the same indexed-inner shape but a different query, so
-> it supports the correlation without pinning it. Redraws of `qj4` are what would make the pairing
-> quantitative; until then this is a lead, not a finding.
+> ### RETRACTED THE SAME DAY — `qj4` WEDGES. The plan is not the variable at all.
+>
+> The redraws were run rather than assumed, and they kill it. Five further DISTINCT `qj4` images
+> (`TEXT_PAD` 0/48/96/144/192, sha256 5-of-5 unique), one SLT domain per boot:
+>
+>     pad 0    returned      pad 48   NO RETURN      pad 96   returned
+>     pad 144  NO RETURN     pad 192  returned
+>
+> With the original pass that is **4 returned / 2 wedged in 6 draws**. Against the `qj2` rate of
+> 54%, P(<= 2 wedges in 6) = **0.27** — statistically indistinguishable. **An indexed two-level
+> join wedges too.**
+>
+> So "the trigger is generating code for an unindexed nested SCAN" is **RETRACTED**. It was stated
+> twice today — first as a mechanism, then weakened to a correlation — and the correlation is now
+> gone as well. Both rested on `qj4` = 1 clean draw at p = 0.46.
+>
+> **What the numbers now say, and it is a different shape of question:**
+>
+> | workload | wedges / draws | vs a 54% rate |
+> |---|---|---|
+> | built-in extended (no `--slt`) | **0 / 14** | p = 1.9e-5 — genuinely different |
+> | SLT `qj4`, two levels, INDEXED | 2 / 6 | p = 0.27 — indistinguishable |
+> | SLT `qj2` / `q_two`, two levels, unindexed | wedges | the baseline |
+> | SLT `q_one`, one level | returns (3/3 as controls) | — |
+>
+> The only arm statistically distinguishable is the **built-in workload**, which is also the only
+> one that does not go through the SLT harness. So the live question is no longer the query plan —
+> it is what differs between the SLT path and the built-in path, with one level versus two still
+> unexplained inside SLT.
+>
+> **Method note, because this is the second self-refutation of the same account in one day:** both
+> versions rested on a single clean draw, and both were written before the redraws were run. The
+> redraws cost five boots and would have cost the same five boots before the claim as after it.
 
 > **ARRIVED WITH A HANG RATHER THAN A FAULT?** If the domain stopped with **no exception**
 > (`ex_commit.valid = 0` on aperture 224) and aperture 225 reads **`0xd5`** — three wait conditions
