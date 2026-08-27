@@ -1027,9 +1027,28 @@ can read that with `lcc` BEFORE performing the load that hangs, and return it as
 
 * sane id, `3 <= id < head` -> the capability is well-formed and the hardware failed to answer
   a legitimate query => RTL defect.
-* `id == 0` or `id >= 1024` -> the capability carries a bogus revnode_id => our side produced
+* `id == 0` or `id >= 65535` -> the capability carries a bogus revnode_id => our side produced
   it (cap-init, a stale/uninitialised slot, or a load of untagged memory), and the RTL's only
   fault is hanging instead of erroring.
+
+  **The bound was `1024` until 2026-08-27 and that was CORRECT WHEN WRITTEN.** The pool was
+  1024 nodes x 16 B at `CAP_REVNODE_MEM_BASE = 0xBFFF_C000` with a 10-bit head; `91ea10837`
+  ("made rev node count configurable", 2026-08-03) moved it to **65536 nodes x 16 B at
+  0xBFF0_0000 with a 16-bit head**, verified in `ariane_pkg.sv:586-591` and
+  `capstone_rev_node.anvil:74,79` (`REVNODE_SENTINEL = 16'd65535`), and the map closes exactly:
+  the tag region ends at `0xBFEFFFFF` and the rev region runs `0xBFF00000`..`0xC0000000`.
+  `91ea10837` IS an ancestor of `84ed6eafb`, so the large pool is in the resident silicon.
+
+  Left as a warning rather than a silent edit, because the failure shape is worth more than the
+  number: **a rule can be traced to a real measurement and still be stale.** Anyone auditing this
+  bound in mid-August would have found the 2026-07-31 overflow measurement behind it and stopped.
+  Only the measurement's date against the RTL change's date exposes it, and neither date was in
+  the rule. As written it would have classified every legitimate id in 1024..65534 as bogus --
+  a confident wrong verdict on a board session, from a check that was right when it was made.
+
+  65535 is the SENTINEL, not a count. A driver reading it as a head produces the spurious
+  "rev-node head went BACKWARDS, delta = -65517" warning; that is a sentinel read, not a
+  wrapping allocator.
 
 Note `lcc` encoding: funct7 is **0x04** with the zimm in the rs2 field (0x08 was wrong and cost
 a build). Prefer a C-level read if one exists before hand-rolling `.insn`.
