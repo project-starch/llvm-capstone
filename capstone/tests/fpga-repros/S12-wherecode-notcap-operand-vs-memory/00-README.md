@@ -437,7 +437,43 @@ be decisive; two would not be.
 > sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
 > loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
 
-## FIRST POSITIVE CHARACTERISATION: it is a JOIN, and it happens at PREPARE time
+## CORRECTED, SAME NIGHT: it is PLAN DEPTH >= 2, not a join — and it happens at PREPARE time
+
+**"It is a JOIN" is RETRACTED.** `dd5_inselect` — `WHERE a IN (SELECT a FROM t1)`, which is not a
+join — WEDGED on its third draw. And the rung that motivated the join framing, `dd3_subq`, turns out
+not to be a two-level query at all: **SQLite FLATTENS it**. Plans read rather than inferred:
+
+    dd1_one       `--SCAN t1                                 1 level
+    dd3_subq      `--SCAN t1                                 1 level   <- FLATTENED, identical to the control
+    dd2_join      |--SCAN t1   `--SCAN y                      2 levels
+    dd5_inselect  |--SCAN t1   `--LIST SUBQUERY `--SCAN t1    2 levels
+    dd4_three     |--SCAN t1  |--SCAN y  `--SCAN z            3 levels
+
+That is this folder's own standing rule biting the person who wrote it down: *same shape of SQL is
+not same execution plan, and the plan must be READ rather than inferred.* `dd3_subq` was classified
+as "two levels, no join" from the SQL text; it is one level, so it was never a counterexample.
+
+**With plans read, the split is exact — on PLAN DEPTH:**
+
+    plan depth   rungs                                    wedged / draws
+    1 level      dd1_one, dd3_subq                        0 / 11
+    >= 2 levels  dd2_join, dd4_three, dd5_inselect        4 / 8   (~50%)
+
+P(0 wedges in 11 one-level draws | the ~54% rate) = 0.46^11 = **1.6e-4**. The positive control
+(`dd2_join`) wedged in both of its draws, so the set is not a dead harness.
+
+**So S-12 requires a query plan with at least two scan levels — by ANY route, join or list-subquery
+— and fires while COMPILING it.** Both tables are empty throughout, so no rows are ever processed
+and the whole effect lives in `sqlite3_prepare_v2`, which matches the fault site
+(`sqlite3WhereCodeOneLoopStart` is a codegen function). The ~50% rate on qualifying plans matches
+the long-recorded per-draw rate.
+
+**What this does NOT say.** It does not identify the mechanism, and it does not distinguish "the
+codegen path runs twice" from "the second level's codegen differs from the first". The next delta is
+inside that function rather than in the SQL.
+
+## SUPERSEDED — the join framing, kept for the reasoning
+
 
 Everything else in this folder is an exclusion. This is the first statement of what S-12 *is*, and
 it came from the SQLite-side delta-debug this folder recommended three times (`:1482`, `:1589`,
