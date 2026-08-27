@@ -31,6 +31,7 @@
  *   1  + runtime init over the arena
  *   2  + load the module
  *   3  + instantiate
+ *   5  + look the function up and create an exec_env, but do NOT call
  *   4  + call "run" and return WHAT IT COMPUTED   (the default)
  *
  * Stage 4 returns the value, not a pass marker. 7 + 35 = 42 comes back as 42 or
@@ -280,6 +281,17 @@ domain_main(unsigned *res, unsigned func)
     wasm_exec_env_t env = wasm_runtime_create_exec_env(inst, WD_STACK_BYTES);
     if (!fn || !env)
         WD_MARK(WD_FAIL);
+#if WD_STAGE == 5
+    /* Everything the call needs, EXCEPT the call. Splits stage 4 in two: an
+       exec_env is a fresh allocation carrying the interpreter stack, and looking a
+       function up walks the instance's export table, so a fault here and a fault in
+       the call itself mean different things. */
+    wasm_runtime_destroy_exec_env(env);
+    wasm_runtime_deinstantiate(inst);
+    wasm_runtime_unload(mod);
+    wasm_runtime_destroy();
+    WD_MARK(WD_OK);
+#endif
 
     uint32_t argv[1] = { 0 };
     bool ok = wasm_runtime_call_wasm(env, fn, 0, argv);

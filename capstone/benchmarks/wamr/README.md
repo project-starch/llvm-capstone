@@ -112,6 +112,7 @@ stage 20  get_package_type                   OK
 stage 21  a load that MUST fail: size 3      OK
 stage 22  wasm_runtime_load                  OK   the module parses
 stage  3  wasm_runtime_instantiate           OK
+stage  5  lookup + create_exec_env         OK
 stage  4  wasm_runtime_call_wasm             capability fault
 ```
 
