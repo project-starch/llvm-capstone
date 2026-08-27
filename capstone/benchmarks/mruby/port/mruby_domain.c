@@ -86,6 +86,9 @@ extern void md_probe_set_heap(void *);
 extern unsigned long md_first[8];
 extern unsigned long md_last[8];
 extern unsigned long md_reread_differs;
+extern unsigned long md_site_first;
+extern unsigned long md_site_last;
+extern unsigned long md_knobs;
 extern int md_probe_selftest(void *);
 extern unsigned long md_viol[8];
 extern unsigned long md_probe_calls;
@@ -228,6 +231,13 @@ domain_main(unsigned *res, unsigned func)
            zero that means zero -- NOT a probe that failed to fire. Zero calls means
            mrb_vm_run was never reached, which is a different result entirely. */
         *res = (unsigned)md_probe_violations;
+        return;
+
+    case 59:
+        /* WHICH clear the recorded frames came from: 1 = mrb_vm_run, 2 = exec_irep.
+           The probe counts both together, so without this "frame 1" names a
+           different loop depending on which sites are instrumented. */
+        *res = (unsigned)((md_knobs << 16) | (md_site_first << 8) | md_site_last);
         return;
 
     case 56:

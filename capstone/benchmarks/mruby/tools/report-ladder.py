@@ -37,6 +37,7 @@ FIXED = {
     56: "RE-READ DIFFERED (frames where c->ci->stack changed)",
     57: "mrb_gc_add_region",
     58: "run bytecode",
+    59: "knobs<<16 | site(md_first)<<8 | site(md_last); knob 1=SKIP_CLEAR 2=FORCE_STACK; site 1=mrb_vm_run 2=exec_irep",
 }
 
 ARRAYS = [("md_first", 6, "the first call"),

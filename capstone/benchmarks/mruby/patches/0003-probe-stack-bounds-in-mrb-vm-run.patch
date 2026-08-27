@@ -1,5 +1,5 @@
 diff --git i/src/vm.c w/src/vm.c
-index 148332bd0..f81d7ee7e 100644
+index 148332bd0..e28bf8220 100644
 --- i/src/vm.c
 +++ w/src/vm.c
 @@ -184,6 +184,15 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
@@ -12,7 +12,7 @@ index 148332bd0..f81d7ee7e 100644
 +   stack_extend ran. BOTH clears are wrapped: instrumenting only mrb_vm_run's
 +   produced a healthy reading and a fault four instructions later, and the reason
 +   was that the other one exists. */
-+extern long md_probe_stack(void *ci, void *stbase, long nregs, long keep);
++extern long md_probe_stack(long site, void *ci, void *stbase, long nregs, long keep);
 +#endif
 +
  static void
@@ -24,7 +24,7 @@ index 148332bd0..f81d7ee7e 100644
      stack_extend(mrb, nregs);
 +#ifdef MD_PROBE_STACK
 +    /* ci was cached at the top of this function, BEFORE stack_extend ran. */
-+    nregs = (mrb_int)md_probe_stack(ci, mrb->c->stbase, (long)nregs, (long)keep);
++    nregs = (mrb_int)md_probe_stack(2, ci, mrb->c->stbase, (long)nregs, (long)keep);
 +#endif
      stack_clear(ci->stack+keep, nregs-keep);
    }
@@ -34,7 +34,7 @@ index 148332bd0..f81d7ee7e 100644
    }
    stack_extend(mrb, nregs);
 +#ifdef MD_PROBE_STACK
-+  nregs = (mrb_int)md_probe_stack(c->ci, c->stbase, (long)nregs, (long)stack_keep);
++  nregs = (mrb_int)md_probe_stack(1, c->ci, c->stbase, (long)nregs, (long)stack_keep);
 +#endif
    stack_clear(c->ci->stack + stack_keep, nregs - stack_keep);
    c->ci->stack[0] = self;

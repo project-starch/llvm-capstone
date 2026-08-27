@@ -79,6 +79,18 @@ unsigned long md_viol[MD_W];       /* the first call whose clear would not fit *
 unsigned long md_probe_calls;      /* how many times mrb_vm_run reached the clear */
 unsigned long md_probe_violations; /* how many of those would have stored OOB */
 unsigned long md_reread_differs;   /* frames where reading c->ci->stack TWICE differed */
+/* WHICH of the two clears each recorded frame came from: 1 = mrb_vm_run,
+   2 = exec_irep. The probe counts both sites together, so without this "frame 1"
+   names a different clear depending on which sites are instrumented -- and the
+   healthy frame-1 reading was taken when only one of them was. */
+unsigned long md_site_first;
+unsigned long md_site_last;
+
+/* The build's own knob settings, reported through the ladder. A knob that silently
+   did not take is this project's most expensive recurring mistake, and it has now
+   happened to MD_PROBE_SKIP_CLEAR. */
+unsigned long md_knobs = (MD_PROBE_SKIP_CLEAR ? 1u : 0u)
+                       | (MD_PROBE_FORCE_STACK ? 2u : 0u);
 
 static unsigned long md_arena_base;
 
@@ -138,7 +150,7 @@ md_snap(unsigned long *w, void *sp, void *stbase, long nregs, long stack_keep)
     }
 }
 
-long md_probe_stack(void *ci, void *stbase, long nregs, long stack_keep);
+long md_probe_stack(long site, void *ci, void *stbase, long nregs, long stack_keep);
 
 /* POSITIVE CONTROL for the predicate below. Hands it a capability deliberately too
    small for the frame it describes and returns 1 if the predicate noticed. Without
@@ -160,7 +172,7 @@ md_probe_selftest(void *heap_ptr)
     void *fake_ci[4] = { 0, 0, 0, tiny };   /* slot 3 = ci->stack */
 
     md_escape_armed = 0;              /* must not jump out of the control itself */
-    md_probe_stack(fake_ci, heap_ptr, 100, 0); /* 100 * 32 into 16: must be bad */
+    md_probe_stack(0, fake_ci, heap_ptr, 100, 0); /* 100 * 32 into 16: must be bad */
     fired = (md_probe_violations > saved_viol);
 
     md_probe_calls = saved_calls;
@@ -187,7 +199,7 @@ md_probe_selftest(void *heap_ptr)
  * from -Xclang -fdump-record-layouts, not from reading the struct.
  */
 long
-md_probe_stack(void *ci, void *stbase, long nregs, long stack_keep)
+md_probe_stack(long site, void *ci, void *stbase, long nregs, long stack_keep)
 {
     void **cip = (void **)ci;
     void *sp, *sp2;
@@ -199,13 +211,30 @@ md_probe_stack(void *ci, void *stbase, long nregs, long stack_keep)
 
     if (!ci)
         return nregs;
+
+#if MD_PROBE_SKIP_CLEAR
+    /* Return stack_keep, so mrb_vm_run's count is zero and the clear cannot run at
+       all. No judgement involved: if the fault survives this, the store is not in
+       this loop.
+       THIS BLOCK WAS SILENTLY LOST ONCE, when the function was rewritten around it,
+       leaving only the #define. The build still accepted MRUBY_SKIP_CLEAR=1, the
+       image still faulted, and the run read as "disabling the clear does not help"
+       when nothing had been disabled. md_knobs below reports the flag back through
+       the ladder so that cannot happen quietly again. */
+    if (((void **)ci)[3])
+        md_snap(md_last, ((void **)ci)[3], stbase, nregs, stack_keep);
+    return stack_keep;
+#endif
     sp = cip[3];                       /* mrb_callinfo.stack is 0x30 = slot 3 */
     if (!sp)
         return nregs;
 
-    if (md_probe_calls == 1)
+    if (md_probe_calls == 1) {
         md_snap(md_first, sp, stbase, nregs, stack_keep);
+        md_site_first = (unsigned long)site;
+    }
     md_snap(md_last, sp, stbase, nregs, stack_keep);
+    md_site_last = (unsigned long)site;
 
     b = md_base(sp);
     e = md_end(sp);

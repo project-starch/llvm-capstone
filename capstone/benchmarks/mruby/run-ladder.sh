@@ -19,7 +19,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
 
-CALLS=${CALLS:-59}
+CALLS=${CALLS:-60}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/mruby-silicon}
 SHARE=${SHARE_DIR:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share}
 LOG=${LOG_FILE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-mruby.log}
