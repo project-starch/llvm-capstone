@@ -32,8 +32,12 @@
    time the result was no numbers at all rather than numbers that disagreed with
    me. Escaping on call 1 regardless guarantees a reading; raise it to walk further
    in once the first frame is understood. */
+#ifndef MD_PROBE_SKIP_CLEAR
+#define MD_PROBE_SKIP_CLEAR 0
+#endif
+
 #ifndef MD_ESCAPE_AFTER
-#define MD_ESCAPE_AFTER 1
+#define MD_ESCAPE_AFTER 1000000
 #endif
 
 /* THE MEASUREMENT HAS TO COME BACK, and clamping was not enough to make it.
@@ -115,6 +119,18 @@ md_probe_stack(void *sp, void *stbase, long nregs, long stack_keep)
 
     md_probe_calls++;
 
+    /* MD_PROBE_SKIP_CLEAR: return stack_keep, so mrb_vm_run's count is zero and the
+       clear loop cannot execute at all. No judgement is involved, which is the
+       point -- three predicates in a row said a frame was fine while the very next
+       instructions faulted on it. If the run still faults at that store with this
+       on, the probe is provably not in that path and the whole line of reasoning
+       about it is wrong. If it faults somewhere else, it is. */
+#if MD_PROBE_SKIP_CLEAR
+    if (sp)
+        md_snap(md_viol, sp, stbase, nregs, stack_keep);   /* rolling: last frame seen */
+    return stack_keep;
+#endif
+
     if (!sp)
         return nregs;
 
@@ -139,7 +155,16 @@ md_probe_stack(void *sp, void *stbase, long nregs, long stack_keep)
         int bad = (nregs < stack_keep)          /* limit below start: runs away */
                || (nregs < 0) || (stack_keep < 0)
                || (c < b) || (c > e)            /* cursor outside its own bounds */
-               || (lo < b) || (hi > e);
+               || (lo < b) || (hi > e)
+               /* AND THE INVARIANT, which catches the corruption a frame or more
+                  before the clear does: ci->stack is always derived from stbase --
+                  stack_init assigns it, cipush offsets it, envadjust rebases it --
+                  so it must stay a sub-range of stbase. The first measured frame
+                  satisfies this exactly (same base, both 4096). A frame that does
+                  not is already wrong even if its clear happens to fit, and a
+                  capability with 80 bytes of bounds cannot possibly satisfy it. */
+               || (stbase && (md_base(sp) < md_base(stbase)
+                              || md_end(sp) > md_end(stbase)));
 
         avail = (c < b || c >= e) ? 0 : (long)((e - c) / MD_VALUE_SIZE);
 

@@ -148,12 +148,52 @@ real and is held, unapplied, in `patches/held/` with the argument written out; i
 is a genuine capability-portability defect that a moving `realloc` hides, but it is
 not this fault.
 
-**The next step is an instrument, not another hypothesis.** `port/md_probe.c` plus
-patch 0003 clamp the clear so it cannot fault and report the geometry through the
-ladder: the length and cursor of `ci->stack` and of `stbase`, `nregs`,
-`stack_keep`, and the distance from the heap -- which separates "a malloc'd buffer
-with the wrong length" from "a pointer that never came from malloc at all". Build
-it with `MRUBY_PROBE=1`.
+**The instrument reports, and the first frame is HEALTHY.** `port/md_probe.c` plus
+patch 0003 hand `mrb_vm_run` its stack geometry back through the ladder. The first
+frame mruby ever clears:
+
+| | |
+|---|---|
+| `ci->stack` length | **4096** = `STACK_INIT_SIZE` 128 x `sizeof(mrb_value)` 32 |
+| cursor - base | 0 |
+| `nregs` / `stack_keep` | 4 / 0 |
+| `stbase` length | 4096, and `ci->stack` starts exactly there |
+| `ci->stack` base - heap base | 143360, so it IS inside the arena |
+| tag | 1 |
+
+So `stack_init` does the right thing and the corruption is later. The fault's own
+capability is 80 bytes with the store 512 past its base, and `sizeof(struct RProc)`
+is exactly 80 -- the image holds 29 of them (`mrblib_proc`, `neq_proc`, the gem
+procs). `mrb_callinfo` puts `proc` at 0x10 and `stack` at 0x30 with a 96-byte
+stride, so a `ci` reading 32 bytes low turns `ci->stack` into the real `ci->proc`.
+That is a hypothesis, not a result; what is measured is the 80 bytes and the
+healthy first frame.
+
+The builtins the probe reads were checked against the backend rather than assumed:
+`CapstoneISelDAGToDAG.cpp` selects LCC field 0 for the tag, 2 for the cursor, 3 for
+the base and 4 for the end.
+
+**Three probe versions were wrong before one was right, and each was wrong
+silently.** They are documented in the file because the class recurs: a check keyed
+to the wrong quantity, arithmetic that wraps for exactly the input under
+investigation, and an instrument that mutates what it measures.
+
+1. it recorded only on a violation it judged with `end - cursor` in unsigned
+   arithmetic. The capability being investigated is precisely the one whose cursor
+   can sit outside its bounds, so the subtraction wrapped: eight zeros,
+   indistinguishable from a finding.
+2. the predicate did not mirror the loop. mruby derives the count as
+   `nregs - stack_keep`, so the danger is `nregs` BELOW `stack_keep`, which puts the
+   limit under the start; the check asked whether `nregs` elements fit and could
+   not see that case at all.
+3. it called `malloc` to find the arena base, and `mrb_vm_run` RE-LOADS
+   `c->ci->stack` after the probe returns -- an allocation and a free sat between
+   the capability measured and the capability used.
+
+The escape no longer depends on the probe's judgement: `MD_ESCAPE_AFTER` leaves
+after a fixed number of frames whatever they look like, and `MD_PROBE_SKIP_CLEAR`
+removes the clear entirely, which is the arm that decides whether the probe is in
+the faulting path at all without any predicate being involved.
 
 Before that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
