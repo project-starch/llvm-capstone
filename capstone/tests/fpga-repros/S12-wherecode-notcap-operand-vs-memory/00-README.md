@@ -791,6 +791,36 @@ pressure.
 
 ---
 
+# ~~THE STORED VALUE IS REVOKE-TYPED~~ — **RETRACTED 2026-08-25, and the retraction never reached this file until 2026-08-27**
+
+> **DO NOT READ THE SECTION BELOW AS CURRENT.** It is kept because the reasoning from the encoding
+> onwards is still correct and useful; only its premise is wrong.
+>
+> **The value is NONLIN, not REVOKE.** The board arm that produced `retval 0xC12A5200` packed the
+> type into bits 8-11 of the same word as its NOT_CAP counter, so `0x200` had two readings — and
+> the arm read a subject slot **it never wrote**, so the value it reported was never stored. The
+> never-written slot selects NONLIN. Rebuilt *with* the store, the same arm returns `0xC12A5100`.
+> That retraction was recorded in `state/current-next-step.md` on 2026-08-25 and **was never
+> propagated into this folder**, which is why this file spent two days asserting REVOKE while the
+> state doc asserted NONLIN.
+>
+> **Independently confirmed 2026-08-27**, so this does not rest on the retraction alone: a probe
+> reading `cap_type` out of the register file at the exact `stc` pc measures **NONLIN 16/16**
+> (qj2 7/7, q_one 4/4, q_two 5/5), with a positive control showing the same path does emit
+> clear-set names. And structurally, the slot is loaded **three times per call**, so a clear-set
+> type here would wedge one-level plans too — and one-level has never wedged in 11 draws.
+>
+> **Consequence: the LDC move-clear does NOT fire at the S-12 fault site.** Everything below that
+> depends on it firing is void as an account of S-12. The clear-set mechanisms are separately
+> refuted on their own evidence (the six-type sweep and the linear-clear matched pair), so those
+> refutations stand regardless.
+>
+> **The lesson, which is why this header is this long:** a retraction recorded in the state doc but
+> not in the artifact folder is not a retraction. The folder is what gets read, and it kept a
+> withdrawn claim alive in a document written to be handed to the hardware side.
+
+## Superseded original section
+
 # THE STORED VALUE IS **REVOKE**-TYPED — so the LDC MOVE-CLEAR FIRES, and every earlier sim was blind to it
 
 Measured on the board with a type-probe arm: `retval 0xC12A5200` → `lcc` selector 1 returned **2**,

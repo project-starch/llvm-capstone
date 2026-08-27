@@ -1,5 +1,52 @@
 # Next step
 
+## 0. CURRENT — 2026-08-27. S-12: every model-side mechanism is EXCLUDED. The next step is silicon.
+
+**This supersedes section 0 below, whose "discriminating unknown" is now ANSWERED.**
+
+That section asked what cap type SQLite's value has at the fault site, and said an arm with a
+matching-type `v` would be the first variant that could reproduce. Both halves are now settled:
+
+* **The type is NONLIN**, measured 16/16 (qj2 7/7, q_one 4/4, q_two 5/5) by a probe reading
+  `cap_type` out of the register file at the exact `stc` pc, with a positive control proving the
+  instrument emits clear-set names. Independently, the slot is loaded **three times per call**, so a
+  clear-set type there would wedge one-level plans — and one-level has never wedged in 11 draws.
+* **The matching-type arm was built and run anyway** (`s12-value-type-sweep.S`): all six types
+  through the real window, clear demonstrably fired in all five clear-set arms, granule zeroed, and
+  the load still returned a correct tagged capability every time.
+
+**TEN mechanisms are now excluded, each with its instrument proven to fire:** value type gates it ·
+clear races its own load · clear races the next store · double-loaded clear-set slot · load-syncer
+mispair · wrong-producer forwarding · stale-regfile read · S-10b granule hazard · tag-only
+corruption · `movc`-NULL aliasing. Three previously rested on occupancy of 2, 8, and "never ran at
+all"; they are now 5-of-8, 80, and 32 LDC inits.
+
+**The partition that constrains everything:** `tval = fu_data_i[0].operand_a` (`ex_stage.sv:490`) is
+the rs1 cursor as the FLU ingested it, so `tval = 0` excludes every "right data, wrong tag" account.
+
+**NEXT STEP — the only experiment left, and it is on the board.** Reflash to `caplifive_s10fix.bit`
+(md5-verified identical to the `80843404c` synthesis output) and re-run the wedging two-level SLT
+case across several DISTINCT images. Rationale:
+
+* the resident bitstream carries a live, synthesis-proven-but-unshipped write-buffer defect; the
+  exclusions above cover the store-buffer **stall** hazard only — S-10 itself, S-07 and
+  write-buffer forwarding are **not** cleared;
+* the two bitstreams are **DIVERGENT, not sequential**. `s10fix` KEEPS apertures 224/225 and the
+  syncer bits used for classification, and LOSES only the S-07 LDC recorder and its switch-160
+  clear, which this experiment does not use;
+* at ~54% wedge per draw the arm must be several distinct images — one clean draw means nothing
+  (P ≈ 0.46). Six clean draws would be p < 0.01.
+
+If S-12 survives the reflash, an excluded premise is wrong. If it disappears, S-12 was a
+write-buffer defect all along.
+
+**S-13 is parked, not closed** — the store syncer is exonerated on three mechanisms (no RTL change
+indicated), the cause is still unlocated, and it only appears at `-O1` while the standing goal runs
+at `-O0`. See `ref/ISSUES.md` and `tests/fpga-repros/S13-o1-dyn-rev-node-hang/`.
+
+---
+
+
 ## 0. CURRENT — 2026-08-25. S-12 HAS NO MINIMAL REPRODUCER, and the reason was our own bug.
 
 **This supersedes section 0 below, which is now history.**

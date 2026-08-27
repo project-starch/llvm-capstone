@@ -270,6 +270,14 @@ Cheap habits that catch all of the above:
   where it looked, never print an empty result that renders like a finding.
 * **`pgrep -f <pattern>` matches your own shell.** Match on a verified PID or a distinctive
   substring that cannot appear in your own command line.
+* **A POSITIVE finding from a narrowed view is the mirror of a clean zero, and needs the same
+  suspicion.** Confirm it against the UNFILTERED artifact — whether the filter is a grep you wrote
+  or a bit-range you assumed — because a view narrowed by the query will show you exactly the thing
+  you were looking for. On 2026-08-27 a grep matching `flush|req_set_q|_init_0` showed a flush block
+  clearing only those two registers, which *was* the asymmetry being hypothesised; it clears six.
+  The same day a `trans_id` read at `[2:0]`, taken from the field's position in the struct
+  declaration, would have counted events on arbitrary capability cursor bits — the generated code
+  reads it at `[255 +: 3]`.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 
 ## Simulation green is not synthesis clean

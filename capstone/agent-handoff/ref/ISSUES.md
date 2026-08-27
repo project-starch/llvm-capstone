@@ -2507,7 +2507,38 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
-### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON`
+### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON, syncer EXONERATED`
+
+> **THE STORE SYNCER IS CLOSED (2026-08-27). No RTL change is indicated.** The single-entry
+> `capstone_store_syncer` sets `cap_trans_id`/`req_set` on a new `init` with **no guard** on
+> `req_set`, and that visible missing guard has now generated three hypotheses, all closed on
+> structure rather than on absent counters:
+>
+> * **Overlapping inits — unreachable.** `func STC` blocks on `recv cap_store_ri.res` (`:391`,
+>   `:436`/`:452`), so the round trip completes before another init is reachable. Measured:
+>   **192 inits, `init-while-pending` = 0** under eight independent cache-missing stores after an
+>   eviction sweep, against 7-8 inits in ordinary tests — the positive control climbed 24-fold. The
+>   load side (`s12-ldc-pressure.S`) gives the same 192 / 0.
+> * **Trans-id aliasing — NO VERDICT, not a refutation.** A response-match checker reports
+>   `wraps = 0`, and the rule agreed in advance was to refuse the zero unless wraps are non-zero. It
+>   showed the precondition unreachable for the same reason as above; it did not test aliasing.
+> * **Flush desync — impossible.** The flush block is byte-for-byte symmetric with reset (all five
+>   registers plus the event counter), and is last-assignment-wins over the `EVENTS0[4]` assignment
+>   in the same `always_ff`.
+>
+> **So the single-entry design is SAFE by protocol — a positive result, not a null one.** It is not
+> a latent defect awaiting the right pressure, and anyone who later reads the missing guard and
+> reaches for these hypotheses should read this first.
+>
+> **What remains is a cause, not a fix.** Thread 1 owns BOTH wait flags and blocks on its own
+> recvs, so it should not reach a rev-set event while holding the store flag — yet 8 wedge boots
+> show exactly both set. Locating that needs a **new observable inside a real domain after
+> `capenter`**, which is where every bare-metal negative stops transferring. That is a board
+> question, not an RTL edit.
+>
+> **Priority note:** S-13 appears at **`-O1`**. SQLite/SLT runs at `-O0`, where the blocker is
+> S-12. S-13 is not blocking the standing "SLT on silicon" goal, and is parked with this record
+> rather than closed.
 
 **Not S-12, and the distinction is the point.** S-12 is a capability fault that STICKS at commit
 (`mcause 25`, `tval = 0`, aperture 225 = `0x80`, nothing waiting). S-13 has **no exception at all**
