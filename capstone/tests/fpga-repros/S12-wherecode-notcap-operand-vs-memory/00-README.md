@@ -437,6 +437,48 @@ be decisive; two would not be.
 > sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
 > loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
 
+## FIRST POSITIVE CHARACTERISATION: it is a JOIN, and it happens at PREPARE time
+
+Everything else in this folder is an exclusion. This is the first statement of what S-12 *is*, and
+it came from the SQLite-side delta-debug this folder recommended three times (`:1482`, `:1589`,
+`:2188`) and that was never run until 2026-08-28.
+
+**Two facts reframe the target before any board result.** `q_one` and `q_two` differ by exactly
+`, t1 AS y`, and **both tables are EMPTY** — so no rows are ever processed and the entire difference
+lives in `sqlite3_prepare_v2`. **S-12 is a fault while COMPILING the query, not while running it.**
+That fits the fault site exactly: `sqlite3WhereCodeOneLoopStart` is a code-generation function.
+Every mechanism hunted on 2026-08-27 assumed a data-path event.
+
+**The ladder.** One build, six `.test` files staged together and driven as a runtime argument, two
+domains per boot, so every rung executes from the BYTE-IDENTICAL domain binary — image-to-image
+variance is removed from the comparison entirely. The control (`dd1_one`, one level) completed in
+all five boots.
+
+    rung          shape                                    result
+    dd2_join      FROM t1, t1 AS y        2-table JOIN     *** WEDGED ***
+    dd4_three     FROM t1, y, z           3-table JOIN     *** WEDGED ***
+    dd3_subq      FROM (SELECT a FROM t1) 2 levels, NO join   completed
+    dd5_inselect  WHERE a IN (SELECT ..)  2nd loop via IN     completed
+    dd6_twostmt   two separate 1-level queries                completed
+
+**Both JOINs wedged; neither non-join route to a second level did.** So the trigger is a
+**multi-table FROM clause**, NOT "two levels of where-codegen" in general — a subquery reaches a
+second level and survives, and so does `IN (SELECT ...)`.
+
+**WEIGHT, stated rather than implied.** The two wedges are strong: a wedge is a wedge at any N. The
+three clean rungs are WEAK at N=1 — at the ~54% per-draw rate, P(all three clean | all three can
+wedge) = 0.46^3 = **0.10**. So this is roughly 90% confidence, not settled. **What would settle it:
+three to four repeat draws on `dd3_subq` and `dd5_inselect`.** If they stay clean, join-specificity
+is solid; if either wedges, the characterisation narrows to "a second where-codegen level" after all.
+
+> **A PARSING TRAP THAT PRODUCED TWO WRONG TABLES BEFORE THIS ONE.** The UART truncates markers
+> mid-line (`### TEST 1/2 END'` with no filename), and the driver ECHOES the whole command including
+> its own `END` markers before running it. A parser that requires the filename after `END` reports
+> completed arms as WEDGED; one that counts `END` markers anywhere counts the echo. **Count
+> `SLT-SUMMARY records=` occurrences in the run-scoped section instead** — one per completed arm.
+> A first pass also mixed logs from an aborted earlier attempt with live ones, and nearly produced a
+> "the board degrades after a wedge" conclusion from stale files. Check log mtimes against the run.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
