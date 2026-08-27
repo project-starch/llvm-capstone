@@ -22,7 +22,7 @@ WORDS = [
     "stbase length",
     "ci->stack base - stbase base",
     "ci->stack base - heap base",
-    "ci->stack tag",
+    "probe stack addr - heap base",
 ]
 
 FIXED = {
@@ -30,21 +30,27 @@ FIXED = {
     1: "entry + cap-init",
     2: "outer allocator",
     3: "malloc(64) capability LENGTH",
-    4: "mrb_open_core",
-    37: "probe calls (mrb_vm_run reached the clear)",
-    38: "probe violations",
-    39: "mrb_gc_add_region",
-    40: "run bytecode",
+    4: "PROBE SELF-TEST (1 = the predicate fires)",
+    5: "mrb_open_core",
+    54: "probe calls (mrb_vm_run reached the clear)",
+    55: "probe violations",
+    56: "RE-READ DIFFERED (frames where c->ci->stack changed)",
+    57: "mrb_gc_add_region",
+    58: "run bytecode",
 }
+
+ARRAYS = [("md_first", 6, "the first call"),
+          ("md_last", 22, "the most recent call seen"),
+          ("md_viol", 38, "the frame that changed under the probe, or the first bad one")]
 
 
 def label(i):
     if i in FIXED:
         return FIXED[i]
-    if 5 <= i <= 36:
-        which = "first" if i <= 20 else "viol "
-        w, half = divmod((i - 5) % 16, 2)
-        return "%s[%d] %s %s" % (which, w, WORDS[w], "high" if half else "low")
+    if 6 <= i <= 53:
+        name = ARRAYS[(i - 6) // 16][0]
+        w, half = divmod((i - 6) % 16, 2)
+        return "%-8s[%d] %s %s" % (name, w, WORDS[w], "high" if half else "low")
     return "call %d" % i
 
 
@@ -91,21 +97,23 @@ def main(path):
                 note += "  <- the probe JUMPED OUT; md_viol below is the frame"
         print("  %3d  0x%08X  %-12d  %s%s" % (i, v, v, label(i), note))
 
-    for name, first in (("md_first", 5), ("md_viol", 21)):
+    if len(vals) > 4:
+        print("\n    probe self-test: %s" % (
+            "PASSES, the predicate fires on a frame it must reject" if vals[4] == 1
+            else "DOES NOT FIRE (%d) -- every verdict below is void" % vals[4]))
+
+    for name, first, what in ARRAYS:
         if len(vals) < first + 16:
             continue
-        print("\n    %s -- %s" % (
-            name,
-            "the first call, whatever it looked like" if first == 5
-            else "the first call whose clear would not fit"))
+        print("\n    %s -- %s" % (name, what))
         for w in range(8):
             lo, hi = vals[first + 2 * w], vals[first + 1 + 2 * w]
             full = (hi << 32) | lo
             signed = full - (1 << 64) if full >= (1 << 63) else full
             print("      [%d] %-30s = %d  (0x%X)" % (w, WORDS[w], signed, full))
 
-    if len(vals) >= 39:
-        calls, viol = vals[37], vals[38]
+    if len(vals) >= 56:
+        calls, viol = vals[54], vals[55]
         print("\n    mrb_vm_run reached the clear %d times, %d of them out of bounds"
               % (calls, viol))
         # The instrument's own honesty check. Both of these read as a clean result

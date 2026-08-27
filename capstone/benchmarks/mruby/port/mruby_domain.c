@@ -84,6 +84,9 @@ extern jmp_buf md_escape;
 extern int md_escape_armed;
 extern void md_probe_set_heap(void *);
 extern unsigned long md_first[8];
+extern unsigned long md_last[8];
+extern unsigned long md_reread_differs;
+extern int md_probe_selftest(void *);
 extern unsigned long md_viol[8];
 extern unsigned long md_probe_calls;
 extern unsigned long md_probe_violations;
@@ -153,7 +156,27 @@ domain_main(unsigned *res, unsigned func)
         return;
     }
 
-    case 4:
+    case 4: {
+        /* POSITIVE CONTROL FOR THE PROBE, before any mruby code runs. It hands the
+           predicate a capability deliberately too small for the frame it describes
+           and returns 1 if the predicate noticed. Three predicates in a row have
+           now judged a frame healthy that the very next instructions faulted on, so
+           "no violation" has to be distinguishable from "cannot see one". A 0 here
+           invalidates every verdict the probe makes below. */
+        void *p = malloc(64);
+        int fires;
+
+        if (!p) {
+            *res = 0xFFFFFFFFu;
+            return;
+        }
+        fires = md_probe_selftest(p);
+        free(p);
+        *res = (unsigned)fires;
+        return;
+    }
+
+    case 5:
         /* A VM on the outer allocator alone. mrb_open_core builds the whole class
            hierarchy, runs mrblib through mrb_vm_run, and is thousands of
            allocations -- the first place a pointer-model defect has room to show.
@@ -181,22 +204,25 @@ domain_main(unsigned *res, unsigned func)
        heap" when it is nowhere near it. BOTH arrays are reported because the first
        version of this probe recorded only on a violation it could fail to detect,
        and came back with eight zeros that were indistinguishable from a finding. */
-    case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12:
-    case 13: case 14: case 15: case 16: case 17: case 18: case 19: case 20:
-    case 21: case 22: case 23: case 24: case 25: case 26: case 27: case 28:
-    case 29: case 30: case 31: case 32: case 33: case 34: case 35: case 36: {
-        unsigned i = call - 5;
-        unsigned long w = (i < 16 ? md_first : md_viol)[(i % 16) / 2];
+    case  6: case  7: case  8: case  9: case 10: case 11: case 12: case 13:
+    case 14: case 15: case 16: case 17: case 18: case 19: case 20: case 21:
+    case 22: case 23: case 24: case 25: case 26: case 27: case 28: case 29:
+    case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37:
+    case 38: case 39: case 40: case 41: case 42: case 43: case 44: case 45:
+    case 46: case 47: case 48: case 49: case 50: case 51: case 52: case 53: {
+        unsigned i = call - 6;
+        unsigned long *a = (i < 16) ? md_first : (i < 32) ? md_last : md_viol;
 
-        *res = (i & 1) ? (unsigned)(w >> 32) : (unsigned)w;
+        *res = (i & 1) ? (unsigned)(a[(i % 16) / 2] >> 32)
+                       : (unsigned)a[(i % 16) / 2];
         return;
     }
 
-    case 37:
+    case 54:
         *res = (unsigned)md_probe_calls;
         return;
 
-    case 38:
+    case 55:
         /* The instrument's own honesty check. Zero violations with a nonzero call
            count means the clear never went out of bounds and every word above is a
            zero that means zero -- NOT a probe that failed to fire. Zero calls means
@@ -204,7 +230,14 @@ domain_main(unsigned *res, unsigned func)
         *res = (unsigned)md_probe_violations;
         return;
 
-    case 39: {
+    case 56:
+        /* THE MEASUREMENT THIS BUILD EXISTS FOR: how many frames read
+           c->ci->stack twice inside the probe and got two different
+           capabilities. Nonzero turns an inference into an observation. */
+        *res = (unsigned)md_reread_differs;
+        return;
+
+    case 57: {
         /* The GC heap becomes ONE region we own. Reports the PAGE COUNT rather than
            OK: a region that yielded fewer pages than expected still "works" and
            silently sends later allocations to malloc, which would change what is
@@ -218,7 +251,7 @@ domain_main(unsigned *res, unsigned func)
         return;
     }
 
-    case 40: {
+    case 58: {
         /* Run the embedded bytecode and return WHAT RUBY COMPUTED, so a zero from a
            failed run cannot be mistaken for a legitimate result. */
         mrb_value v;

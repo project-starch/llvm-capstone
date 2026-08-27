@@ -113,7 +113,7 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 # with #ifdef -- defining it to zero would switch it ON, which is exactly the kind
 # of knob that reads as "off" in a build log and is not.
 if [[ ${MRUBY_PROBE:-0} == 1 ]]; then
-  COMMON+=(-DMD_PROBE_STACK -DMD_ESCAPE_AFTER=${MRUBY_ESCAPE_AFTER:-1000000} -DMD_PROBE_SKIP_CLEAR=${MRUBY_SKIP_CLEAR:-0})
+  COMMON+=(-DMD_PROBE_STACK -DMD_ESCAPE_AFTER=${MRUBY_ESCAPE_AFTER:-1000000} -DMD_PROBE_SKIP_CLEAR=${MRUBY_SKIP_CLEAR:-0} -DMD_PROBE_FORCE_STACK=${MRUBY_FORCE_STACK:-0})
   echo "== MD_PROBE_STACK is ON: mrb_vm_run clamps its stack clear and reports"
 fi
 

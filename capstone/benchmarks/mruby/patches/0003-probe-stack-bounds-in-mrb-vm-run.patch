@@ -1,5 +1,5 @@
 diff --git i/src/vm.c w/src/vm.c
-index 148332b..9ed0128 100644
+index 148332bd0..3ed7b9a6b 100644
 --- i/src/vm.c
 +++ w/src/vm.c
 @@ -184,6 +184,10 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
@@ -7,22 +7,23 @@ index 148332b..9ed0128 100644
  }
  
 +#ifdef MD_PROBE_STACK
-+extern long md_probe_stack(void *sp, void *stbase, long nregs, long stack_keep);
++extern long md_probe_stack(void *ctx, long nregs, long stack_keep);
 +#endif
 +
  static void
  stack_extend_alloc(mrb_state *mrb, mrb_int room)
  {
-@@ -1772,6 +1776,13 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
+@@ -1772,6 +1776,14 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
      }
    }
    stack_extend(mrb, nregs);
 +#ifdef MD_PROBE_STACK
-+  /* Capstone bring-up instrument, inert unless MD_PROBE_STACK is defined. It
-+     records the geometry of ci->stack and CLAMPS nregs so an out-of-bounds clear
-+     becomes a wrong answer that returns rather than a fault that does not.
-+     port/md_probe.c. */
-+  nregs = (mrb_int)md_probe_stack(c->ci->stack, c->stbase, (long)nregs, (long)stack_keep);
++  /* Capstone bring-up instrument, inert unless MD_PROBE_STACK is defined.
++     It is handed the CONTEXT, not ci->stack, deliberately: the probe measured a
++     healthy 4096-byte capability here and the clear four instructions later
++     faulted on an 80-byte one, so the probe must load the same field the clear
++     loads, as late as it can. port/md_probe.c. */
++  nregs = (mrb_int)md_probe_stack(c, (long)nregs, (long)stack_keep);
 +#endif
    stack_clear(c->ci->stack + stack_keep, nregs - stack_keep);
    c->ci->stack[0] = self;
