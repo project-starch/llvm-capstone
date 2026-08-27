@@ -2065,16 +2065,39 @@ def main():
                 if _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
+                elif ((_hh << 8) | _hl) == 0xFFFF:
+                    # 65535 IS THE SENTINEL, NOT A COUNT. capstone_rev_node.anvil:74,79 gate
+                    # allocation on `*head != 16'd65535` -- REVNODE_SENTINEL = (2^16)-1. So 0xFFFF
+                    # means "no valid head", and it is ALSO what a dead aperture returns (all
+                    # ones). Both readings mean the same thing here: not a datum.
+                    #
+                    # This used to be reported as `rev-node head = 65535`, i.e. a pool 99.998%
+                    # consumed, and the delta line then printed "the head went BACKWARDS,
+                    # delta=-65517" on the next real sample -- an artefact of differencing against
+                    # a sentinel, which reads exactly like an allocator anomaly. On 2026-08-27 a
+                    # workload comparison nearly rested on it: every RETURNING run reported 65535
+                    # and every WEDGING run a real value, which looks like a perfect
+                    # wedge-vs-return discriminator and is actually reading-vs-no-reading.
+                    _rev_head_prev[0] = None      # never difference against a sentinel
+                    _line = (f"  [s07] after {label}: rev-node head VOID -- 0xFFFF is "
+                             f"REVNODE_SENTINEL (capstone_rev_node.anvil:74), not a count, and is "
+                             f"indistinguishable from an all-ones dead aperture. NO consumption "
+                             f"datum for this rep, and NOT evidence of a full pool.")
                 else:
                     _head = (_hh << 8) | _hl
                     _prev = _rev_head_prev[0]
                     _rev_head_prev[0] = _head
+                    # Pool is 65536 nodes (ariane_pkg.sv:587; 0xBFF00000 + 65536*16 = 0xC0000000).
+                    # Allocation stops at the sentinel, so 65535 ids are reachable. The old
+                    # "65532-entry pool" figure had no basis in the RTL.
+                    _POOL = 65535
+                    _pct = 100.0 * _head / _POOL
                     if _prev is None:
-                        _tail = "   (first sample -- no rate yet)"
+                        _tail = "   (first valid sample -- no rate yet)"
                     elif _head > _prev:
                         _d = _head - _prev
-                        _tail = (f"   delta=+{_d} ids this rep; at this rate exhaustion of the "
-                                 f"65532-entry pool is {(65532 - _head) // _d} reps away")
+                        _tail = (f"   delta=+{_d} ids this rep; at this rate the sentinel is "
+                                 f"{(_POOL - _head) // _d} reps away")
                     elif _head == _prev:
                         _tail = "   delta=0 -- this rep consumed NO rev-node ids"
                     else:
@@ -2082,7 +2105,7 @@ def main():
                                  f"the monotonic bump allocator cannot do. Suspect the read, not "
                                  f"the pool.")
                     _line = (f"  [s07] after {label}: rev-node head = {_head} "
-                             f"(0x{_head:04x}){_tail}")
+                             f"(0x{_head:04x}, {_pct:.1f}% of {_POOL}){_tail}")
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
             except Exception as exc:
