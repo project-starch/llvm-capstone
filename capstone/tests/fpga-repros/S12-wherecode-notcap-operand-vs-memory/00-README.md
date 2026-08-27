@@ -2401,7 +2401,28 @@ That control retroactively classifies the earlier readings:
 * `0xFFFF` is `REVNODE_SENTINEL`, not a count, and is indistinguishable from an all-ones dead
   aperture. Never read it as a full pool.
 
-**WHAT THIS DOES NOT SETTLE.** Both arms here RETURN, and the SLT arm is `q_one` — ONE level. So
-this excludes the *harness* as an allocation difference; it says nothing about whether a TWO-level
-query allocates differently. That needs a head reading from a two-level SLT run that returned,
-which is a ~46% draw in slot 1.
+### Closed in both directions: a WEDGING two-level run consumed exactly the same
+
+The gap above is filled, and the answer is stronger than expected — the reading came from a run
+that **wedged**, so it covers the case that mattered:
+
+| workload | outcome | head | entry carves | runtime allocations |
+|---|---|---|---|---|
+| built-in extended | returned | 250 | 211 | **39** |
+| SLT + `q_one` (1 level) | returned | 254 | 215 | **39** |
+| SLT + `qj2` (2 levels) | **WEDGED** | **254** | 215 | **39** |
+
+**Runtime allocation is 39 in all three — wedging and returning alike.** Rev-node consumption is
+excluded as a discriminator in BOTH directions: not between harnesses, not between one and two
+levels, and not between a wedge and a return.
+
+**Cross-validated from two independent paths in the same boot**, which is what makes a
+byte-identical repeat of 254 a measurement rather than the frozen-aperture pattern that has
+already caught us twice: the `[s07] after` read reports 254, and the wedge path's raw bytes read
+`sw=249 = 0xfe`, `sw=250 = 0x00` = 254. The halt succeeded (slot 1) with no `ActionTimeout`.
+
+**And it says something about WHERE the wedge sits.** The wedging run had done exactly the same
+allocation work as the returning ones — 39 runtime nodes, not fewer. So it did not die partway
+through setup; it got as far in allocation terms as a run that completed. That is consistent with
+the recorded PREPARE-time locus and inconsistent with any account in which the wedge follows from
+having done more, or less, capability-lifetime work.
