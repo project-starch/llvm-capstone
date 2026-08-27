@@ -48,11 +48,13 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-merge-string-constants=true
         -DCAPSTONE_GP_CAPTABLE_ABI=1
         -DWASM_ENABLE_INTERP=1 -DWASM_ENABLE_FAST_INTERP=0
-        # core/config.h turns computed-goto dispatch on for any GCC/Clang, which makes
-        # the interpreter ONE 6k-instruction function and leans hard on stack-slot
-        # reuse. Set to 0 for the portable switch dispatch. Kept as a knob because
-        # the two builds are the A/B test for anything that looks like a spill bug.
-        -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-1}
+        # core/config.h turns computed-goto dispatch on for any GCC/Clang, and the
+        # resulting table of &&label addresses is NOT relocated for the domain's load
+        # slide -- the first table dispatch jumps to a link-time address (cause 1 at
+        # an unslid pc). 0 selects the portable switch, which has no address table.
+        # The default is the one that works; 1 stays reachable because the pair is
+        # the A/B test for anything that looks like a spill bug.
+        -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-0}
         # beebs' memcpy/memset check the destination's tag and RETURN instead of
         # faulting, recording n. Off by default: it changes the primitives the whole
         # image runs on, so it is a diagnostic build, never the measured one.

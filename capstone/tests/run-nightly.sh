@@ -70,6 +70,14 @@ CORE_SUITES=(
   # the worst observed. A cold run rebuilds the amalgamation and costs a few
   # minutes more, still well inside it.
   "sqlite-memory|bash $BENCH_DIR/sqlite/run-sqlite-memory.sh"
+  # wamr gates the third nested allocator: a WebAssembly interpreter with its own
+  # heap, running a module inside a domain. It passes only if the value the module
+  # COMPUTES comes back, and the runner derives that value from the generated
+  # module rather than hard-coding it, so changing the summands moves the gate too.
+  # Two upstream defects have to stay fixed for this to pass -- the label stack's
+  # alignment (patch 0004) and the computed-goto dispatch table -- and both were
+  # silent failures that only an end-to-end run catches.
+  "wamr|bash $BENCH_DIR/wamr/run-wamr.sh"
   "rv8|bash $BENCH_DIR/rv8/run-all-rv8.sh|3600"
   "beebs|bash $BENCH_DIR/beebs/run-all-beebs.sh|10800"
   "revoke-matrix|bash $RUNTIME_DIR/run-revoke-matrix-probe.sh"
