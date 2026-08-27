@@ -3,6 +3,69 @@
 *Bugs in the METADATA HANDLING of allocators that sit on top of malloc, or that are
 the malloc. Compiled 2026-08-27 on branch `capstone-nested-allocator-bugs`.*
 
+## THE SELECTION CRITERION
+
+A bug earns a place here only if **standard CHERI purecap cannot catch it, because
+of how the nested allocator is structured.** Not "is it a memory-safety bug".
+
+CHERI narrows a capability at `malloc()`. A nested allocator calls `malloc` once for
+a pool or page and then carves every object out of it by pointer arithmetic, with no
+`csetbounds` per object. So, for anything inside that region:
+
+* an overflow from one sub-object into the next is **in bounds** for the pool's
+  capability, and nothing is raised;
+* a use-after-free yields a pointer that is still **tagged and in bounds**, and no
+  `free()` ever reached the system allocator, so revocation (Cornucopia-style) has
+  nothing to revoke either;
+* the allocator's own metadata usually lives in the same region, so corrupting it
+  is in bounds as well.
+
+**The test is therefore: does the bad access stay inside the region the nested
+allocator owns?** A bug that overflows a freshly malloc'd standalone buffer is the
+opposite of what this file is for, because CHERI catches those trivially.
+
+This criterion cuts the list hard, and the entries it removes are not bad bugs:
+the WAMR and wasm3 loader bugs overflow the module buffer, a real malloc object;
+SQLite's lookaside overflow runs past a caller-supplied buffer; and all six Lua
+entries fall out because Lua allocates every object through `realloc` individually,
+so it has no pool at all. Read those rows as "good bug, wrong class".
+
+## WHERE MANY OF THEM ARE, which is the question that matters
+
+Individual CVEs are scarce; what is not scarce is an engine with ONE heap, because
+then every heap bug is intra-pool by construction. Structure checked in source,
+counts from the issue trackers:
+
+| source | one pool? | runs on Capstone? | heap issues | PoCs |
+|---|---|---|---|---|
+| **mruby** | yes: `RVALUE objects[MRB_HEAP_PAGE_SIZE]` per page, and the free list runs THROUGH the objects (`p = freelist; freelist = p->as.free.next`) | **yes** -- `boxing_no.h` keeps a real pointer in `mrb_value.value.p`, no integer round trip | 90 overflow + 82 UAF | OSS-Fuzz project |
+| **JerryScript** | yes: `struct jmem_heap_t { jmem_heap_free_t first; uint8_t area[]; }`, everything carved from one `area[]` | **NO** | 58 + 30 + 4 | OSS-Fuzz project |
+| **MicroPython** | yes: allocation-table bitmap plus `gc_pool_start`, one area | **yes, runs today** | 13 + 9 + 20 | fewer |
+| **WAMR EMS** | yes, the global heap pool | yes, runs today | ~10 | some |
+| standalone allocators | they ARE the pool | trivial to drive | ~20 | few |
+
+**JerryScript is the sharpest specimen source and it does not run, for a reason that
+is itself a result.** Its object model stores references as compressed offsets and
+rebuilds addresses arithmetically, at 93 sites across 60 functions:
+
+```c
+const uintptr_t heap_start = (uintptr_t) &JERRY_HEAP_CONTEXT (first);
+uint_ptr <<= JMEM_ALIGNMENT_LOG; uint_ptr += heap_start;
+return (void *) uint_ptr;      /* untagged -> cause 24 */
+```
+
+`uintptr_t` is 64-bit on this target and cannot be made capability-wide (clang's
+`TargetInfo::IntType` has no 128-bit member), so the reconstructed pointer carries no
+tag. The design that makes an allocator invisible to CHERI -- everything is an offset
+into one region -- is exactly the design Capstone's tag model refuses outright. That
+is worth stating in the paper, but it means JerryScript cannot be used to MEASURE.
+Details: `history/19-08-2026_20-15-00_jerryscript-carve-and-uintptr.md`.
+
+**mruby is therefore the density source**: the same intra-pool structure, real
+pointers so it survives on our target, an OSS-Fuzz history with scripts attached, and
+`mrb_heap_region` ("from contiguous region, not malloc") lets the whole heap be one
+caller-supplied buffer, i.e. exactly one capability.
+
 ## How this differs from `paper-bug-inventory.md`
 
 That file is organised by the **sharing** taxonomy: a host lends an object to a
