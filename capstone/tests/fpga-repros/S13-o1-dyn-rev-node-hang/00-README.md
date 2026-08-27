@@ -1,5 +1,53 @@
 # S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception
 
+## THE STORE SYNCER IS CLOSED — three mechanisms, all on structure rather than absent counters
+
+The single-entry `capstone_store_syncer` holds ONE pending trans id and sets it on a new `init`
+with **no guard** on `req_set`. That missing guard is visible in the source and anyone reading it
+later will reach for the same hypotheses; this section is why they should not.
+
+**1. Overlapping inits — unreachable.** `func STC` sends `cap_store_ri.init` at `:391`, then at
+`:436`/`:452` sends the req and does `let _ = recv cap_store_ri.res >>`. The `recv` BLOCKS the
+issuing thread, so the round trip completes before another init can be reached. Measured on top of
+that reading: `s13-stc-pressure.S`, eight independent capability stores one per cache line after an
+eviction sweep, repeated — **192 inits, `init-while-pending` = 0**, against 7-8 inits in ordinary
+tests, so the positive control climbed 24-fold. The identical experiment on the load side
+(`s12-ldc-pressure.S`) gives the same 192 / 0.
+
+**2. Trans-id aliasing — precondition unreachable, and reported as NO VERDICT.** `cap_trans_id` is
+3 bits against an 8-entry scoreboard, so ids wrap, and a stale response matching a new
+`cap_trans_id` would clear `req_set` for a store that never completed its check — a MISSED CHECK
+rather than a hang, invisible to counters that fire on init. A checker on the response match reports
+`wraps=0 ambiguous-matches=0`. **The rule was "refuse the zero unless wraps are non-zero", so this
+did not test aliasing** — it showed the precondition is unreachable, for the same reason as (1): no
+trans id can have two outstanding uses, so no wrap is constructible.
+
+**3. Flush desync — impossible.** If a flush cleared `req_set` but left `lsu_msg_set`/`lsu_reg` set,
+the next store's check would run against a PRE-FLUSH LSU result. The flush block is byte-for-byte
+symmetric with reset — `_init_0`, `cap_trans_id_q`, `lsu_msg_set_q`, `lsu_reg_q`, `req_set_q` and
+the event counter all cleared in both. It is also **last-assignment-wins**: the flush `if` sits
+after the `EVENTS0[4]` assignment in the same `always_ff`, so a flush beats an event setting
+`lsu_msg_set_q` in the same cycle.
+
+**So the single-entry design is SAFE, and that is a positive result rather than a null one.** It is
+not a latent defect awaiting the right pressure: the protocol guarantees at most one outstanding
+transaction.
+
+> **THE CONSTRAINT THIS LEAVES IS TIGHTER, NOT LOOSER.** Thread 1 owns BOTH wait flags, blocks on
+> its own recvs, and should not be able to reach a rev-set event while holding the store flag — yet
+> 8 wedge boots show exactly both-set. Something in that chain is wrong and it is **no longer the
+> syncer**.
+>
+> **A METHOD NOTE THAT ALMOST COST THIS RESULT.** The flush asymmetry was first "found" via a
+> filtered view — a grep matching only `flush`, `req_set_q` and `_init_0` — which showed the flush
+> block containing just two clears and hid the other four. That is precisely the hypothesised
+> asymmetry, produced by a filter narrowed by the query rather than by the data. It was caught by
+> printing the block unfiltered before writing it up. Paired with a bit-slice bug the same day
+> (`trans_id` read at `[2:0]` when the generated code reads `[255 +: 3]`), the lesson is one rule
+> from two ends: **confirm against the UNFILTERED artifact, whether the filter is a bit-range you
+> assumed or a grep you wrote.**
+
+
 **If you arrived here with a capability fault that STICKS at commit — `mcause 25`, `tval = 0`,
 aperture 225 reading `0x80` — that is [S-12](../S12-wherecode-notcap-operand-vs-memory/), not this.
 This folder is the OTHER failure: no exception at all, and the machine stopped because two syncer
