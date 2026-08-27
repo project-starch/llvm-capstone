@@ -260,7 +260,11 @@ Cheap habits that catch all of the above:
   tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
   faulting instruction rather than the one that produced its operand.
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
-  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe.
+  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
+  gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
+  and passed. `precommit-scan.sh` did that on 2026-08-27 — called from a subdirectory, exit 127,
+  reported as "scan-rc" alongside a commit. Treat any exit status the gate does not itself define
+  as BLOCKED, not as a pass.
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.
