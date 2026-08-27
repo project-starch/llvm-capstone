@@ -203,6 +203,22 @@ about any STC-producer mechanism. That row's scope is narrower than it read.
 
 ## Instruments known to be broken — do not build on their output
 
+| **Every eviction sweep in this tree that strides by 64 or 128** | The D-cache line is **16 BYTES** — `CVA6ConfigDcacheLineWidth = 128` BITS (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:50`), giving 2048 lines over 256 sets in a 32 KiB 8-way cache. A stride-64 sweep touches every FOURTH line and a quarter of the sets; stride-128 every EIGHTH. Affected: `s07evict` (already recorded VOID for exactly this), the eviction claims in `s12-ldc-pressure.S` and `s13-stc-pressure.S` (stride 64 over 8 KiB = 128 of 2048 lines, so their post-"eviction" loads HIT and they are not refill-path evidence), `s12-stc-producer-cold` v1, and **`cap-tag-cache.S` case 3** — which is written expressly to prove tags survive refill and whose PASS is consistent with the target line never leaving L1. **Read cache geometry from the config; never assume it.** This error has now broken four separate tests |
+| **`LDC` latency as a cache-miss detector** | Does not work, and cannot. Measured over batches of 64 loads: **16.2 cycles/load warm vs 16.4 cycles/load after a 128 KiB stride-16 sweep** — indistinguishable, and far too slow for an L1 hit either way. An `LDC`'s cost is dominated by the DYN-unit `init`/`req`/`res` round trip, not by the cache, so hit-vs-miss is invisible in its timing. Six successive attempts to build a miss control on this basis all failed. If a future test needs to prove a capability load missed, it needs a cache-side counter, not a timer |
+
+> **CONSEQUENCE, and it is an open gap rather than a finding: whether a capability tag
+> survives a genuine eviction and refill is NOT ESTABLISHED anywhere in this tree.** The
+> tag came back valid in every arm of `cap-tag-refill-survival.S`, but no arm could be
+> shown to have actually missed, so by the test's own pre-registered rule none of them
+> carries a verdict. The question matters because `s12-stc-producer-cold` (with the
+> geometry corrected) **faults with the exact S-12 consumer signature** —
+> `UNEXPECTED_OPERAND` on `cincoffsetimm a4` — on a load the recorder reports as
+> `src=1`, a miss refill. **That fault is currently uninterpreted**, and it will stay
+> that way until someone builds a cache-side miss counter. It is the most concrete
+> unexplained observation left in this folder.
+
+
+
 | Instrument | Status |
 |---|---|
 | **Switch 208, S-07 tag history** | Structurally unusable: one-shot, no clear, and boot software consumes the slot before any arm runs (*"the pre-run baseline already reads 0xb8 with ldc0_valid set"*). Recorded granules were neither the subject's. `2e37646fb54a` |
