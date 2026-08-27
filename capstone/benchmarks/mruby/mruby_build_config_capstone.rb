@@ -25,7 +25,16 @@ MRuby::Build.new do |conf|
   # No mrbc, no mirb, no mruby binary in the target set. mrbc IS still built for
   # the host, because it is what turns a .rb specimen into the bytecode the domain
   # runs; it just does not go into the image.
-  conf.gembox "default-no-stdio"
+  # stdlib, but NOT the math gembox as a whole: it pulls mruby-bigint, whose
+  # bigint.c is built on `unsigned __int128`. On this target i128 IS the capability
+  # width, and the backend's custom BITCAST/i128 legalisation returns a mismatched
+  # type there -- clang asserts in LegalizeOp on mpz_gcd. That is a real codegen
+  # defect and it is recorded separately; it is not this corpus's problem, because
+  # what we measure is the GC and the object heap, and 64-bit integers are enough
+  # for every specimen. Dropping the gem is the honest small change; fixing i128
+  # arithmetic on a capability-width integer type is a different piece of work.
+  conf.gembox "stdlib"
+  conf.gem core: "mruby-math"
 
   conf.cc.defines << "MRB_NO_STDIO"
 
