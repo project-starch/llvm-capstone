@@ -9,13 +9,15 @@
 # table a loader interprets and ours is compiled code.
 #
 # This probe pins BOTH halves of the current behaviour:
-#   covered      function pointers, pointer arrays, string pointers
-#   NOT covered  block addresses (&&label), i.e. computed-goto dispatch tables
+#   covered      function pointers, pointer arrays, string pointers, aliases,
+#                and block addresses (&&label), i.e. computed-goto dispatch tables
+#   never        null slots and absolute addresses, which cannot carry a tag
 #
-# The second half is not a wish, it is what makes WAMR need
-# WASM_ENABLE_LABELS_AS_VALUES=0: its 256-entry handle_table gets no initializer and
-# the first dispatch jumps to a link-time address. If someone closes that gap in the
-# backend, THIS SCRIPT FAILS, which is the point -- the knob can then be retired.
+# Block addresses were NOT covered until 2026-08-27, and that omission is what made
+# WAMR's interpreter jump to a link-time address on its first dispatch: 224 live
+# slots in one table, all silently untagged. Every arm here fails LOUDLY, because
+# the failure it guards against is silent at build time and only shows up as a
+# capability fault far from its cause.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -56,7 +58,11 @@ want=6                                # g_void, g_int32, g_table[0..2], g_str
 echo "  pointer-valued globals: $got stores, expected $want"
 [ "$got" = "$want" ] || { echo "FAIL: the initializer does not cover what it used to" >&2; exit 1; }
 
-# --- half 2: block addresses are NOT covered (the known gap) ----------------
+# --- half 2: block addresses, the case that used to be missed ----------------
+# A computed-goto dispatch table is an array of these. They were skipped because
+# needsMaterialization() accepted only GlobalVariable and Function, so the table
+# kept its link-time bytes and the first `goto *tbl[i]` left the image. Found the
+# expensive way: WAMR's interpreter has 224 live slots in one table.
 cat > "$TMP/labels.c" <<'EOF'
 int dispatch(int n)
 {
@@ -68,12 +74,29 @@ two:  return 2;
 EOF
 "$CL" "${FLAGS[@]}" -c "$TMP/labels.c" -o "$TMP/labels.o"
 got=$(stores_in_cap_init "$TMP/labels.o")
-echo "  block addresses:        $got stores, expected 0 (the documented gap)"
-if [ "$got" != "0" ]; then
-  echo "GAP CLOSED: block addresses now get initializers." >&2
-  echo "Retire WASM_ENABLE_LABELS_AS_VALUES=0 in benchmarks/wamr/build-wamr-silicon.sh," >&2
-  echo "re-run benchmarks/wamr/run-wamr.sh, and update this probe." >&2
+want=2
+echo "  block addresses:        $got stores, expected $want"
+[ "$got" = "$want" ] || {
+  echo "FAIL: block addresses are no longer materialized." >&2
+  echo "That regression is SILENT at build time and shows up as a jump to a" >&2
+  echo "link-time address at run time. See llvm/test/CodeGen/Capstone/" >&2
+  echo "static-cap-global-init-blockaddress.ll and CapstoneCapGlobalInit.cpp." >&2
   exit 1
-fi
+}
+
+# --- half 3: what must still NOT get a store --------------------------------
+# A null slot needs no tag, and an absolute address cannot carry one. If either
+# started producing stores, the pass would be writing over a deliberate value.
+# MP_ROM_INT in MicroPython is the inttoptr case and is why this arm exists.
+cat > "$TMP/none.c" <<'EOF'
+typedef void (*fp_t)(void);
+fp_t g_null = 0;
+fp_t g_abs  = (fp_t)0x1234;
+int  g_int  = 7;
+EOF
+"$CL" "${FLAGS[@]}" -c "$TMP/none.c" -o "$TMP/none.o"
+got=$(stores_in_cap_init "$TMP/none.o")
+echo "  null / absolute / int:  $got stores, expected 0"
+[ "$got" = "0" ] || { echo "FAIL: the pass is materializing something it must not" >&2; exit 1; }
 
 echo "__CAPSTONE_CAP_INIT_COVERAGE_AS_DOCUMENTED__"

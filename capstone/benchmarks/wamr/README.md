@@ -161,7 +161,8 @@ stage 4 under QEMU, built from ONE tree with one variable changing, via the
 | | computed goto | switch dispatch |
 |---|---|---|
 | **no pad** | cause 4, `addr = 0x1022d1e08` | cause 4, `addr = 0x1022d1e28` |
-| **pad** | cause 1 at an unrelocated pc | **42** |
+| **pad**, before the backend fix | cause 1 at an unrelocated pc | **42** |
+| **pad**, after the backend fix | **42** | **42** |
 
 Both no-pad arms give the SAME fault whatever the dispatch, which is what attributes
 it to the pad rather than to the knob next to it. Both addresses are congruent to 8
@@ -227,43 +228,53 @@ had computed exactly what the module said, including the mistake. The encoder is
 fixed and the summands now round-trip. That miss is worth more than a clean pass
 would have been: nothing that returns a constant can produce -29 from those bytes.
 
-### There is no residual: how a static pointer becomes a capability
+### How a static pointer becomes a capability, and the gap that is now closed
 
 **RETRACTED (2026-08-27).** An earlier version of this section reported five
-un-relocated pointers to `invokeNative` in `.data` and concluded that WAMR "runs
-this module" rather than runs. That was wrong, and the mistake was reading the FILE
-as if it were the runtime state.
+un-relocated pointers to `invokeNative` in `.data` and concluded WAMR "runs this
+module" rather than runs. Wrong: it read the FILE as if it were the runtime state.
 
 A tag cannot live in an ELF image, so on this ABI no pointer in static data is
-correct on disk -- it holds its link-time address, untagged, by construction. The
-compiler synthesizes one `__capstone_cap_init` per module, records it in
-`.capstone_cap_init`, and the entry glue runs it before `main`. That is the same
-job CHERI's `__cap_relocs` table does through `crt_init_globals`, with the
-difference that theirs is a data table a loader loop interprets and ours is
-compiled code.
+correct on disk. The compiler synthesizes one `__capstone_cap_init` per module,
+records it in `.capstone_cap_init`, and the entry glue runs it before `main`. Same
+job as CHERI's `__cap_relocs` plus `crt_init_globals`; theirs is a data table a
+loader interprets, ours is compiled code.
 
-Counted against what each image needs:
+That mechanism used to accept only a `GlobalVariable` or a `Function` as a leaf. A
+**block address is neither**, so the 224 live entries of
+`wasm_interp_call_func_bytecode.handle_table` kept their link-time addresses and the
+first dispatch left the image. It read like an ABI limit and was a missing `isa<>`:
+
+```cpp
+- return isa<GlobalVariable>(C) || isa<Function>(C);
++ return isa<GlobalValue>(C) || isa<BlockAddress>(C);
+```
+
+`GlobalValue` also picks up **aliases**, skipped for the same reason. Nothing was
+needed in the backend proper: `lowerBlockAddress` already produces the same `LGA`
+node `lowerGlobalAddress` does.
 
 | | pointers in static data | stores in `__capstone_cap_init` |
 |---|---|---|
-| switch dispatch (works) | 34 `exception_msgs` + 5 `invokeNative_*` = **39** | **39** |
-| computed goto | + 256 `handle_table` = **295** | 39 |
+| switch dispatch | 34 `exception_msgs` + 5 `invokeNative_*` = 39 | 39 |
+| computed goto, before | + 224 `handle_table` = 263 | 39 |
+| computed goto, after | 263 | **263** |
 
-The working image is fully covered. What is NOT covered is the 256-entry table of
-`&&label` block addresses, and that is exactly the cause-1 fault: the compiler emits
-initializers for function pointers, data pointers and string tables, and emits
-nothing for a block address.
+So `WASM_ENABLE_LABELS_AS_VALUES` is back to upstream's default of 1. The knob
+stays as the A/B arm and as a fallback. Image cost: 264896 to 282112 bytes, +6.5%.
 
-So the reason computed-goto dispatch fails is **a gap in the cap-init synthesis, not
-a limit of the ABI**. Closing it in the backend would make `handle_table` work like
-`exception_msgs` does, and would remove the need for the
-`WASM_ENABLE_LABELS_AS_VALUES=0` knob. Until then the knob is the fix.
+The part worth keeping is not the fix but what let it hide: the pass skipped a
+capability leaf **silently**, and a silent skip produces a clean build, a
+well-formed image, and a fault far from its cause. It now warns per leaf, naming
+the holder, exempting only null and `inttoptr` (an absolute address cannot carry a
+tag; MicroPython's `MP_ROM_INT` is the deliberate case).
 
-`capstone/tests/probe-cap-init-coverage.sh` pins both halves and is its own control:
-the same counting function returns 6 for a file of pointer-valued globals and 0 for
-a five-line `static void *tbl[] = { &&one, &&two };`. That second number IS the bug,
-in the smallest form it takes. The probe FAILS if the gap is ever closed, which is
-the signal to retire the dispatch knob.
+`capstone/tests/probe-cap-init-coverage.sh` pins all three behaviours: 6 stores for
+pointer-valued globals, 2 for block addresses, 0 for null/absolute/int. It was
+written the day before with the middle arm inverted, so that it would FAIL if the
+gap were ever closed, and it fired on exactly the build that closed it.
+
+Full account: `agent-handoff/history/27-08-2026_16-30-00_block-addresses-in-the-capability-initializer.md`.
 
 ### The instrument that made this tractable
 

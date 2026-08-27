@@ -28,8 +28,13 @@
 // so a capability-pointer slot at any depth is materialized: a bare pointer
 // global, a one-field struct, a flat pointer array, and — the case SQLite's
 // builtin-function table needs — an array of structs / arbitrarily nested
-// aggregates. Only leaves whose target is a GlobalVariable or Function are
-// materialized; null elements need no tag.
+// aggregates. A leaf is materialized when it names a GlobalValue (variable,
+// function or ALIAS) or a BLOCK ADDRESS -- the latter being what a computed-goto
+// dispatch table is made of, and what this pass walked past for as long as it
+// existed. Null needs no tag, and an `inttoptr` absolute address cannot carry one;
+// both are left alone deliberately. Anything else reaching a capability slot is
+// WARNED about rather than skipped quietly, because a silent skip produces a clean
+// build, a well-formed image, and a fault far from its cause.
 //
 // Design note + rationale (constructor-codegen vs a GCT runtime consumer):
 // capstone/agent-handoff/design/capability-globals-init-decision.md.
@@ -122,13 +127,56 @@ static bool needsMaterialization(Constant *FieldInit) {
       break;
     C = CE->getOperand(0);
   }
-  return isa<GlobalVariable>(C) || isa<Function>(C);
+  // GlobalValue rather than GlobalVariable||Function: an alias is neither, and a
+  // slot initialized through one was silently left untagged.
+  //
+  // BlockAddress is the case a computed-goto dispatch table is made of. LLVM's
+  // labels-as-values tables (`static void *tbl[] = { &&one, &&two }; goto *tbl[i];`)
+  // are arrays of exactly this, and lowerBlockAddress already materializes one as
+  // an LGA capability, the same node lowerGlobalAddress produces -- so the store
+  // costs nothing new in the backend, only the decision to emit it.
+  //
+  // Leaving it out cost a full investigation: WAMR's interpreter has 224 of them in
+  // one table, they kept their link-time addresses, and the first dispatch jumped
+  // outside the image. It looked like an ABI limit and was a missing isa<>.
+  return isa<GlobalValue>(C) || isa<BlockAddress>(C);
+}
+
+// A capability slot that will be left UNTAGGED, and is not a null that needs no
+// tag. Every one of these is a fault waiting for its first use, so the pass says
+// so instead of skipping quietly: silence is what let the blockaddress case survive
+// as long as it did.
+static bool isUnhandledCapLeaf(Constant *FieldInit) {
+  if (!FieldInit || isa<ConstantPointerNull>(FieldInit) ||
+      isa<UndefValue>(FieldInit))
+    return false;
+  if (needsMaterialization(FieldInit))
+    return false;
+  // An absolute address cast from an integer cannot carry a tag and is not
+  // something this pass could fix; it is the programmer's statement, not an
+  // oversight.
+  const Constant *C = FieldInit;
+  while (auto *CE = dyn_cast<ConstantExpr>(C)) {
+    if (CE->getOpcode() == Instruction::IntToPtr)
+      return false;
+    if (CE->getNumOperands() == 0)
+      break;
+    C = CE->getOperand(0);
+  }
+  return true;
 }
 
 namespace {
 // A capability-pointer leaf inside a (possibly nested) global initializer that
 // must be materialized at runtime, identified by the GEP index path from the
 // holder global down to the slot.
+// A capability slot this pass will NOT materialize, kept so the module can say so
+// once rather than fail silently at first use.
+struct UnhandledLeaf {
+  GlobalVariable *Holder;
+  const char *Why;
+};
+
 struct StoreItem {
   GlobalVariable *Holder;
   Type *AggTy;                   // holder's value type, for the GEP base
@@ -143,13 +191,14 @@ struct StoreItem {
 // structs and other nested aggregates are now covered.
 static void collectCapInits(GlobalVariable *Holder, Type *AggTy, Constant *C,
                             SmallVectorImpl<uint64_t> &Path,
-                            SmallVectorImpl<StoreItem> &Items) {
+                            SmallVectorImpl<StoreItem> &Items,
+                            SmallVectorImpl<UnhandledLeaf> &Unhandled) {
   if (!C || isa<ConstantAggregateZero>(C) || isa<UndefValue>(C))
     return;
   if (auto *CS = dyn_cast<ConstantStruct>(C)) {
     for (unsigned I = 0, E = CS->getNumOperands(); I != E; ++I) {
       Path.push_back(I);
-      collectCapInits(Holder, AggTy, CS->getOperand(I), Path, Items);
+      collectCapInits(Holder, AggTy, CS->getOperand(I), Path, Items, Unhandled);
       Path.pop_back();
     }
     return;
@@ -157,15 +206,29 @@ static void collectCapInits(GlobalVariable *Holder, Type *AggTy, Constant *C,
   if (auto *CA = dyn_cast<ConstantArray>(C)) {
     for (unsigned I = 0, E = CA->getNumOperands(); I != E; ++I) {
       Path.push_back(I);
-      collectCapInits(Holder, AggTy, CA->getOperand(I), Path, Items);
+      collectCapInits(Holder, AggTy, CA->getOperand(I), Path, Items, Unhandled);
       Path.pop_back();
     }
     return;
   }
-  // Leaf: only a capability-pointer slot referencing a global/function gets a tag.
-  if (isCapPtr(C->getType()) && needsMaterialization(C))
-    Items.push_back(
-        {Holder, AggTy, SmallVector<uint64_t, 4>(Path.begin(), Path.end()), C});
+  // A vector of capabilities cannot be reached with the GEP path this pass builds
+  // (an element needs insertelement, not getelementptr), so it is reported rather
+  // than walked. No target configuration here generates one; if that changes, the
+  // warning is the notice.
+  if (auto *CV = dyn_cast<ConstantVector>(C)) {
+    if (isCapPtr(CV->getType()->getElementType()))
+      Unhandled.push_back({Holder, "vector of capabilities"});
+    return;
+  }
+  // Leaf: a capability-pointer slot referencing a global, a function or a basic
+  // block gets a tag; anything else that is not null gets a warning.
+  if (isCapPtr(C->getType())) {
+    if (needsMaterialization(C))
+      Items.push_back(
+          {Holder, AggTy, SmallVector<uint64_t, 4>(Path.begin(), Path.end()), C});
+    else if (isUnhandledCapLeaf(C))
+      Unhandled.push_back({Holder, "unrecognized constant"});
+  }
 }
 
 bool CapstoneCapGlobalInit::runOnModule(Module &M) {
@@ -175,6 +238,7 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   // Collect work items first, so we only create the init function when there is
   // something to materialize.
   SmallVector<StoreItem, 16> Items;
+  SmallVector<UnhandledLeaf, 4> Unhandled;
 
   for (GlobalVariable &GV : M.globals()) {
     if (!GV.hasInitializer())
@@ -187,8 +251,18 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
         GV.getSection() == "llvm.metadata")
       continue;
     SmallVector<uint64_t, 4> Path;
-    collectCapInits(&GV, GV.getValueType(), GV.getInitializer(), Path, Items);
+    collectCapInits(&GV, GV.getValueType(), GV.getInitializer(), Path, Items,
+                    Unhandled);
   }
+
+  // Say it out loud. A capability slot that keeps its link-time bytes faults on
+  // first use, and the fault lands far from here with nothing pointing back --
+  // which is precisely how 224 blockaddress slots survived undetected in an
+  // interpreter dispatch table.
+  for (const UnhandledLeaf &U : Unhandled)
+    errs() << "warning: capstone-cap-init: " << U.Holder->getName()
+           << " holds a capability this pass does not materialize ("
+           << U.Why << "); it will be untagged at run time\n";
 
   if (Items.empty())
     return false;

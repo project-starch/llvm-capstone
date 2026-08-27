@@ -48,13 +48,13 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-merge-string-constants=true
         -DCAPSTONE_GP_CAPTABLE_ABI=1
         -DWASM_ENABLE_INTERP=1 -DWASM_ENABLE_FAST_INTERP=0
-        # core/config.h turns computed-goto dispatch on for any GCC/Clang, and the
-        # resulting table of &&label addresses is NOT relocated for the domain's load
-        # slide -- the first table dispatch jumps to a link-time address (cause 1 at
-        # an unslid pc). 0 selects the portable switch, which has no address table.
-        # The default is the one that works; 1 stays reachable because the pair is
-        # the A/B test for anything that looks like a spill bug.
-        -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-0}
+        # Upstream's own default for any GCC/Clang, and it works again as of the
+        # backend fix that made CapstoneCapGlobalInit materialize block addresses:
+        # the 224-entry dispatch table used to keep its link-time addresses and the
+        # first dispatch left the image. Measure the stock configuration, so the
+        # default is 1; 0 selects the portable switch and stays reachable as the A/B
+        # arm and as a fallback if the initializer ever regresses.
+        -DWASM_ENABLE_LABELS_AS_VALUES=${WAMR_LABELS_AS_VALUES:-1}
         # The label-stack pad (patch 0004). A knob, not a constant, so the 2x2 that
         # attributes the fault to it can be built from ONE tree with one variable
         # changing. Built as separate trees the arms differed in their global count
