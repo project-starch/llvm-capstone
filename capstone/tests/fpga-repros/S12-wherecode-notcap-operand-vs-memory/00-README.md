@@ -315,6 +315,46 @@ S-07, or write-buffer forwarding. Neither S-10 nor S-10b is in the flashed tree 
 > mechanisms are refuted here on their own evidence — the six-type sweep and the matched pair above —
 > rather than on the type argument, so those refutations stand either way.
 
+## REFUTED: the double-loaded clear-set slot. Zero such slots exist, on any arm
+
+The mechanism was: a clear-set capability stored into a slot that is then loaded TWICE. On silicon
+the first load is a MOVE and zeroes the granule, so the second reads cursor 0 / NOT_CAP and the
+consumer raises with `tval = 0`. Under QEMU it is harmless forever, because `csldc` performs no
+clear. Silicon-only by construction, which is S-12's most distinctive property — and the `-O0`
+codegen makes store-then-reload-the-same-slot pervasive, so the shape is abundant.
+
+A whole-program, address-keyed sweep over 16-byte granules, modelling the RTL condition
+(`result_tag_o && type in clear-set && rs1_perm_write`, `load_unit.sv:224-230`):
+
+    arm                   domain stc   tagged    CLEAR-SET   DOMAIN HITS   monitor hits
+    qj2      (two-level)      72823    58223         3           0             18
+    q_two    (two-level)      49483    39143         3           0             18
+    q_one    (one-level)      48361    38208         3           0             18
+    builtin  (no --slt)      187231   155414         3           0             24
+
+**Zero, on every arm.** The domain's only three clear-set stores are all `SEALEDRET`, all from one
+pc — the domain entry glue — one per `call_dom` entry, each to a different stack granule, and none
+is loaded again before the next store to it. That is the intended move.
+
+**Every hit is monitor-side, and the counts run the WRONG WAY.** The built-in arm, which passes
+14/14 on silicon, has MORE of them (24) than the two-level SLT arms that wedge ~54% (18). So they
+cannot be the trigger, and there is no discriminator between one-level and two-level anywhere in
+this data.
+
+**Three positive controls, all fired**, which is what makes the zeros admissible: forcing NONLIN
+into the clear set yields 144,425 hits on qj2 (so the detector works); the unforced type filter
+reports clear-set stores as a proper SUBSET of tagged stores, naming `LIN` and `SEALEDRET`; and the
+plain-store disarm path fired 38/85 times in controls and 0 in real arms. Coverage is structural
+rather than hopeful — all three `cap_mem_map_add` call sites plus the context save/restore path were
+hooked, closing the QEMU analogue of the dom-switch LDC blind spot, and the "tagged capability
+loaded from an untracked granule" meter reads 0 everywhere.
+
+> **An anomaly worth carrying, not chased here.** The model says the monitor-side hits should be
+> fatal on silicon, yet the board boots. The likely explanation is the known two-monitor-copies
+> gotcha — QEMU boots `caplifive-buildroot`'s `fw_jump` while the board's firmware is built from the
+> `caplifive-system` fpga/ariane tree. The domain verdict does not depend on it: it rests on there
+> being zero double-loads in the domain at all.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
