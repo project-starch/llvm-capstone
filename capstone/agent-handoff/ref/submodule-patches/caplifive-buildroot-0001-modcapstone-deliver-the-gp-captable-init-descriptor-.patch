@@ -1,0 +1,145 @@
+From 8c7b973fa4c906933fb82bc5e7b4d94f7af8c67a Mon Sep 17 00:00:00 2001
+Date: Wed, 5 Aug 2026 05:51:58 +0800
+Subject: [caplifive-buildroot PATCH 1/4] modcapstone: deliver the gp-captable
+ init descriptor into dom_data
+
+The -capstone-gp-captable ("interpreter-scale") entry glue reads its cap-table
+init descriptor from the front of dom_data, but no monitor in this tree copies
+the globals template there (it sits in the code image, which the domain cannot
+read -- the domain holds no capability over its own image). The glue then reads
+count==0, skips the cap-table build, and the domain underflows sp on its first
+frame push. This is the runtime half of the C-13 blocker; it fails identically
+for the SQLite gp-captable domain, so it is build-independent.
+
+Deliver it from the kernel module, which has wide access to the freshly-loaded
+image and knows the dom_data layout the monitor carves:
+- libcapstone computes gp_offset (the .capstone_gp_initdesc section offset) from
+  the ELF and passes it in a new ioctl_dom_create_args field.
+- ioctl_create_dom copies the globals template [gp_offset, code_len) into
+  dom_data.base (= align16(code_len) + the monitor seal size) right after loading
+  the image. Gated on gp_offset != 0, so non-gp-captable domains are unaffected.
+
+Unblocks gp-captable domains on QEMU without a firmware rebuild: the real-Lua
+domain now reaches luaL_newstate + luaL_loadbufferx(LUA_OK).
+---
+ package/modcapstone/include/capstone.h        |  7 ++++++
+ package/modcapstone/module/capstone.c         | 23 +++++++++++++++++
+ .../modcapstone/userspace/lib/libcapstone.c   | 25 ++++++++++++++++++-
+ 3 files changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/package/modcapstone/include/capstone.h b/package/modcapstone/include/capstone.h
+index 26dfb29..c7be6eb 100644
+--- a/package/modcapstone/include/capstone.h
++++ b/package/modcapstone/include/capstone.h
+@@ -15,6 +15,13 @@ struct ioctl_dom_create_args {
+     void *code_begin;
+     size_t code_len;
+     size_t entry_offset;
++    // gp-captable ("interpreter-scale") domains reach every global through a cap
++    // table the entry glue builds from a descriptor at the front of dom_data. The
++    // monitor does not copy that descriptor into dom_data on this build, so the
++    // module does it: gp_offset is the byte offset of the globals template
++    // (.capstone_gp_initdesc onward) inside the loaded image. 0 for a domain that
++    // owns no gp-captable globals (nothing to copy).
++    size_t gp_offset;
+     void *s_load_begin;
+     size_t s_load_len;
+     size_t s_entry_offset;
+diff --git a/package/modcapstone/module/capstone.c b/package/modcapstone/module/capstone.c
+index 86e82b5..272f89e 100644
+--- a/package/modcapstone/module/capstone.c
++++ b/package/modcapstone/module/capstone.c
+@@ -22,6 +22,11 @@
+ #define DEVICE_FILE_NAME "capstone"
+ 
+ #define DOMAIN_DATA_SIZE (4096 * 16)
++/* The monitor (sbi_capstone.c) reserves a smaller "seal" region between the code and
++ * dom_data: DOMAIN_DATA_SIZE there is 16 * DOMAIN_DATA_N (96) = 1536. dom_data.base is
++ * therefore at align16(code_len) + 1536 from the region base. This must track the
++ * monitor's value, not this module's (larger) allocation-slack constant above. */
++#define MONITOR_SEAL_SIZE (16 * 96)
+ #define MAP_SIZE_LIMIT 0x10000000
+ 
+ #define SUCCESS 0
+@@ -97,6 +102,24 @@ static void ioctl_create_dom(struct ioctl_dom_create_args* __user args) {
+ 
+ 	copy_from_user((void*)dom_vaddr, m_args.code_begin, m_args.code_len);
+ 
++	/* gp-captable ("interpreter-scale") domains reach every global through a cap table
++	 * the entry glue builds from a descriptor at the FRONT OF dom_data. The monitor
++	 * copies the code image but NOT that descriptor, so the glue reads count==0 from an
++	 * uninitialised dom_data and faults. Deliver it here: copy the globals template
++	 * [gp_offset, code_len) of the freshly-copied image to dom_data.base, which the
++	 * monitor carves at align16(code_len) + MONITOR_SEAL_SIZE. Source and destination
++	 * never overlap (dst starts past code_len; src ends at code_len). Skipped when
++	 * gp_offset==0 (non-gp-captable domain), so all existing domains are unaffected. */
++	if (m_args.gp_offset > 0 && m_args.gp_offset < m_args.code_len) {
++		unsigned long code_size = (((m_args.code_len - 1) >> 4) + 1) << 4;
++		unsigned long dom_data_off = code_size + MONITOR_SEAL_SIZE;
++		unsigned long tmpl_len = m_args.code_len - m_args.gp_offset;
++		memcpy((void*)(dom_vaddr + dom_data_off),
++		       (void*)(dom_vaddr + m_args.gp_offset), tmpl_len);
++		pr_info("gp-captable: copied %lu-byte globals template from +%lx to dom_data +%lx\n",
++			tmpl_len, m_args.gp_offset, dom_data_off);
++	}
++
+ 	struct sbiret sbi_res = sbi_ecall(SBI_EXT_CAPSTONE, SBI_EXT_CAPSTONE_DOM_CREATE,
+ 		/* base paddr = */ dom_paddr,
+ 		/* code size = */ m_args.code_len,
+diff --git a/package/modcapstone/userspace/lib/libcapstone.c b/package/modcapstone/userspace/lib/libcapstone.c
+index 34abcf5..6b693db 100644
+--- a/package/modcapstone/userspace/lib/libcapstone.c
++++ b/package/modcapstone/userspace/lib/libcapstone.c
+@@ -29,6 +29,7 @@ struct ElfCode {
+     unsigned long code_start, code_len;
+     unsigned long loadable_size;
+     off_t size, entry_offset;
++    size_t gp_offset;   /* offset of the gp-captable globals template in the image; 0 if none */
+ };
+ 
+ static int dev_fd;
+@@ -186,6 +187,26 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+                phdrs[ph_idx].p_filesz);
+     }
+ 
++    /* gp-captable domains carry a .capstone_gp_initdesc descriptor at the front of
++     * their globals template; find its image offset so the kernel module can copy
++     * that template into dom_data (the monitor on this build does not). 0 => the
++     * domain owns no gp-captable globals, so there is nothing to copy. MUST run before
++     * the munmap below -- it reads the section headers from the mapped ELF. */
++    res->gp_offset = 0;
++    {
++        Elf64_Shdr *shdrs = (Elf64_Shdr *)(((void *)elf_header) + elf_header->e_shoff);
++        Elf64_Half shnum = elf_header->e_shnum;
++        const char *shstr = (const char *)elf_header
++                          + shdrs[elf_header->e_shstrndx].sh_offset;
++        int si;
++        for (si = 0; si < shnum; si++) {
++            if (strcmp(shstr + shdrs[si].sh_name, ".capstone_gp_initdesc") == 0) {
++                res->gp_offset = (size_t)(shdrs[si].sh_addr - loadable_start);
++                break;
++            }
++        }
++    }
++
+     munmap(elf_header, file_stat.st_size);
+     close(elf_fd);
+ 
+@@ -198,7 +219,8 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+     res->entry_offset = entry_addr - loadable_start;
+     res->loadable_size = image_size;
+ 
+-    printf("Loadable size = %lu\n", res->loadable_size);
++    printf("Loadable size = %lu, gp_offset = %lx\n", res->loadable_size,
++           (unsigned long)res->gp_offset);
+ 
+     return 0;
+ 
+@@ -338,6 +360,7 @@ static dom_id_t create_dom_from_elf(const struct ElfCode *c_code,
+         .code_begin = (void *)c_code->code_start,
+         .code_len = c_code->code_len,
+         .entry_offset = c_code->entry_offset,
++        .gp_offset = c_code->gp_offset,
+         .dom_id = -1
+     };
+     

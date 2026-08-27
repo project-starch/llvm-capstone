@@ -1,0 +1,53 @@
+From 577bf92c88eae86d7dfff02df3606dbd6657bab8 Mon Sep 17 00:00:00 2001
+Date: Wed, 19 Aug 2026 15:37:30 +0800
+Subject: [caplifive-buildroot PATCH 3/4] Raise the buddy allocator's maximum
+ order so interpreter images fit a domain
+
+A domain region is one __get_free_pages() allocation covering the code image,
+DOMAIN_DATA_SIZE and headroom of max(2 * code_len, 512 KiB), so the buddy
+allocator's maximum order is a hard ceiling on domain image size. At the default
+MAX_ORDER of 11 the largest region is 4 MiB and code_len cannot exceed
+1,376,256 bytes. Setting 13 gives a 16 MiB largest block and lifts that to
+5,570,560 bytes.
+
+This is what a JerryScript domain needs: its image is 2,965,680 bytes, so the
+region has to be order 12, two orders above what the default allows. MicroPython
+already sits close to the old ceiling.
+
+The kernel side of this is a companion commit on components/linux, which adds
+the ARCH_FORCE_MAX_ORDER symbol to arch/riscv -- without it this line is silently
+dropped by olddefconfig instead of taking effect. Both directions were checked,
+and the running kernel now shows 13 order columns in /proc/buddyinfo with free
+blocks at order 12.
+
+Blast radius is small: pageblock_order comes from HUGETLB_PAGE_ORDER (9) rather
+than MAX_ORDER-1 here, so it is unchanged, and the memory model is FLATMEM, which
+has no section-size interaction to violate. A small control domain still runs
+after the change.
+---
+ components/linux      | 2 +-
+ configs/kernel.config | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/components/linux b/components/linux
+index 830b3c6..5a07050 160000
+--- a/components/linux
++++ b/components/linux
+@@ -1 +1 @@
+-Subproject commit 830b3c68c1fb1e9176028d02ef86f3cf76aa2476
++Subproject commit 5a07050d2228ba7ae71100081284474d809561e8
+diff --git a/configs/kernel.config b/configs/kernel.config
+index 086587c..dd43704 100644
+--- a/configs/kernel.config
++++ b/configs/kernel.config
+@@ -30,6 +30,10 @@ CONFIG_SOC_SIFIVE=y
+ CONFIG_SOC_STARFIVE=y
+ CONFIG_SOC_VIRT=y
+ CONFIG_SMP=y
++# Domain regions are one __get_free_pages() allocation, so the buddy allocator
++# caps the domain image size. 13 => largest block 2^12 pages = 16 MiB, which
++# lifts the maximum domain code_len from 1,376,256 to 5,570,560 bytes.
++CONFIG_ARCH_FORCE_MAX_ORDER=13
+ CONFIG_HOTPLUG_CPU=y
+ CONFIG_PM=y
+ CONFIG_CPU_IDLE=y
