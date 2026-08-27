@@ -1,0 +1,239 @@
+# mruby: 36 blind-spot cases
+
+The most fruitful source. Criterion and class definitions: [README.md](README.md).
+
+## Why every heap bug here is a candidate by construction
+
+Read at the line in current upstream `src/gc.c`:
+
+```c
+/* init_heap_page: the free list is threaded THROUGH the objects */
+for (p = page->objects, e = p+MRB_HEAP_PAGE_SIZE; p<e; p++) {
+  p->as.free.tt = MRB_TT_FREE;
+  p->as.free.next = prev;
+  prev = p;
+}
+page->freelist = prev;
+
+/* incremental_sweep_phase: a swept slot goes straight back to the page */
+p->as.free.next = page->freelist;
+page->freelist = p;
+```
+
+No `malloc` and no `free` happens per object. A dangling reference to a swept RVALUE
+therefore points at memory that is tagged, in bounds, and never returned to the
+system allocator.
+
+**Consequence for the harness: a sanitizer cannot see it.** ASAN observes only
+`malloc`/`free`. The signatures that DO show are: an assertion that a marked object
+is `MRB_TT_FREE`; a 4-byte read of `obj->tt`; or **a wrong answer handed back to
+Ruby**. Issue 3596 has it under a debugger -- a live `mrb_value` tagged
+`MRB_TT_STRING` whose target's header reads `MRB_TT_FREE`.
+
+## The lever that makes class B permanent
+
+`MRB_API int mrb_gc_add_region(mrb_state *mrb, void *start, size_t size);`
+(`include/mruby/gc.h:118`, verified) carves a caller-supplied buffer into heap pages.
+And `src/gc.c:1508` reads:
+
+```c
+if (dead_slot && !page->region) {   /* ... mrb_free(mrb, page) */
+```
+
+**Region pages are never returned to the allocator.** With a region-backed heap the
+whole engine heap is one capability, no page ever reaches `free()`, and every class
+B case below becomes class A.
+
+*Caveat with teeth:* when the region fills, mruby falls back to `malloc` for new
+pages. Size it so it cannot, and assert on the page count `mrb_gc_add_region`
+returns, or the fallback silently reintroduces malloc'd pages and the measurement
+changes underneath.
+
+## Port prerequisites
+
+`xlang/cheri/mruby-port/` already runs purecap mruby under CheriBSD (2026-08-01).
+Required everywhere:
+
+| flag | why |
+|---|---|
+| `-DMRB_NO_BOXING` | `include/mrbconf.h:62-65` defaults to `MRB_WORD_BOXING`, which packs a pointer into an integer word. A static size assertion catches it, which is the good case. |
+| `-DMRB_USE_METHOD_T_STRUCT` | otherwise `proc.h` packs a C function pointer as `(uintptr_t)fn << 2 \| flag` and clears the tag |
+| `-DPOOL_ALIGNMENT=16` | `src/pool.c` picks 8; the parser's AST cons cells hold capabilities |
+| `MRB_STR_EMBED_LEN_BIT` 5 -> 6 | one-line source edit; the embedded-string length field is too narrow for a 16-byte pointer |
+
+For reproduction, steal the configuration from case B8: `MRB_HEAP_PAGE_SIZE=169`
+plus `MRB_GC_STRESS`. The small page makes whole-page frees frequent, which is how
+latent cases become observable.
+
+---
+
+## Class A: the bad access stays inside a live GC page
+
+Invisible to purecap **and** to revocation, as-is.
+
+| # | issue | fix commit | affected | component | class | script |
+|---|---|---|---|---|---|---|
+| A1 | 6339 | `0955539cf9bb`, `0972c8477 33e` | <= 3.3.0 | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **yes, the best oracle** |
+| A2 | 5534 | `e323cd0c6ebd` | 3.0.0 | `class.c` `mrb_alias_method` | **type confusion `REnv*` -> `RProc*`** via free-list reuse | no |
+| A3 | 3542 | UNKNOWN | ~1.2-1.3 | `gc.c` `mrb_gc_mark` | GC lifetime, `tt == MRB_TT_FREE` | yes |
+| A4 | 3550 | `15fba69710c7` (UNVERIFIED) | ~1.2-1.3 | `gc.c`, Fiber | GC lifetime | yes |
+| A5 | 3720 | `b200c7475ae6` | <= 1.3.0 | `gc.c` `mrb_gc_mark` | terminated-fiber stacks | yes |
+| A6 | 4000 | `135b4773e3e5` | <= 1.4.1 | `gc.c` | generational GC lifetime | yes |
+| A7 | 3699 | `c6736357a720` (UNVERIFIED) | <= 1.3.0 | `gc.c` `mrb_gc_mark` | GC lifetime | yes |
+| A8 | 3385 | UNKNOWN | ~1.2 | `gc.c` `mrb_gc_mark` | GC lifetime | yes, 4 lines |
+| A9 | 3689 | `c9a4f8a63bef` | <= 1.3.0 | `gc.c` `mrb_write_barrier` | write barrier | yes, 3 lines |
+| A10 | 3596 = **CVE-2017-9527** | `5c114c91d4ff` | <= 1.2.0 | `gc.c` `mark_context_stack` | UAF on the RVALUE header | yes |
+| A11 | 6316 | doc-only `322642364af2` | 3.3.0+ | `gc.c` `obj_free` twice on one RVALUE | **double free / free-list corruption** | no, C-side `dfree` |
+| A12 | 6317 | `3324773f5696` | <= 3.3.0 | `gc.c` `mrb_gc_register` | GC lifetime | no |
+| A13 | 4164 | `0925a3281033` | <= 2.0.0 | `hash.c` `sg_shift` | GC lifetime -> freed RVALUE | yes, 3 lines |
+| A14 | 2525 | `1114a9042ebc` (UNVERIFIED) | ~1.0 | `gc.c` `atomic_gray_list` | write barrier | partial |
+| A15 | 2996 | `9bb552fdb022` (UNVERIFIED) | ~1.2 | `gc.c` `mrb_field_write_barrier` | write-barrier assertion | no |
+| A16 | 506 | UNKNOWN | 2012 | `gc.c` `mrb_obj_alloc` | **RVALUE type confusion by construction** | no |
+| A17 | 6870 | `036ab85df6f4`, `be36b67a128e` | master 2026 | `mruby-task`, `gc.c` | GC lifetime | no |
+| A18 | 6886 | `456a8687af65` | master 2026 | `task.c` `mrb_task_mark_all` | GC lifetime | no |
+| A19 | 6872 | UNKNOWN | master 2026 | `gc.c` `mrb_gc_mark` | corrupt RVALUE from the gray stack | no |
+| A20 | OSS-Fuzz 56406 | endpoint is a **bisection point, not a fix** | 3.2.0 | `mrb_gc_mark_iv` | UAF read of `obj->tt` | restricted |
+| A21 | OSS-Fuzz 56991 | `8d1192f8` | 3.2.0 | `mrb_gc_mark` | UAF read 4 | restricted |
+| A22 | OSS-Fuzz 57703 | `b47c8b738ae3` | post-3.2 | `mrb_gc_mark_iv` | UAF read 4 | restricted |
+| A23 | OSS-Fuzz 58577 | `b47c8b738ae3` | 3.2.0 | `gc_mark_children` | UAF read 4 | restricted |
+| A24 | OSS-Fuzz 59931 | endpoint is a **bisection point, not a fix** | post-3.2 | `obj_free` | UAF read 4 | restricted |
+| A25 | OSS-Fuzz 57108 / 57672 / 58723 | `93648fc9` for one of them | 3.2 era | `mrb_str_hash_m` on a swept `RString` | UAF read 4 | restricted |
+| A26 | 1301 | UNKNOWN | ~1.0 | `gc.c` | write barrier | no |
+
+## Class B: the whole page was freed to `malloc`
+
+Blind to plain purecap now; **also blind to revocation once the heap is
+region-backed**. The ASAN freed-region size is the tell that it was a whole page.
+
+| # | issue | fix commit | component | region | script |
+|---|---|---|---|---|---|
+| B1 | 3486 = **CVE-2017-9527** | `5c114c91d4ff` | `gc.c` `mark_context_stack` | 49200 | no |
+| B2 | 3616 | `51e0e690c270` | `gc.c` `gc_each_objects` | 49200 | yes, 1 line |
+| B3 | 3681 | `51e0e690c270` | `gc.c` `gc_each_objects` | 49200 | yes, 1 line |
+| B4 | 3674 | `a6a4b76393fa` | `gc.c` `mrb_gc_mark` | 49200 | yes |
+| B5 | 4154 | `0fc6b563602d`, `d68da042b366` | `gc.c` `obj_free` | 49200 | yes |
+| B6 | 3793 | `15d48efa4bf6`, `c08224983867` | `gc.c` `mrb_gc_mark` | 57392 | yes |
+| B7 | 3804 | `3acaa44a70a4` | `gc.c` `mrb_gc_mark` | 57392 | yes |
+| B8 | 6326 | `1c5839fb01bc` and two more | `gc.c:782` `obj_free`; `array.c` `sort_cmp` | 8144 | build config |
+| B9 | 6662 | `2135088ada98` | `mruby-array-ext` `ary_intersect_p` | 49184 | yes |
+| B10 | 3829 | `e4662d77e75d` | `gc.c` `mrb_gc_mark` | 48 | no |
+
+## Class C: rejected, and why that matters
+
+About 45 further mruby bugs were enumerated and **rejected**: they overflow a
+standalone `malloc` buffer -- the VM stack `stbase`, `ary->as.heap.ptr`,
+`str->as.heap.ptr`, khash tables, irep -- which CHERI catches trivially. Among them
+are most of mruby's CVEs (2018-10191, 2018-10199, 2020-6838/6839/6840, 2020-15866,
+2021-46020/46023, 2022-0080/0570/0631/1071/1106/1212/1934, 2025-7207, 2025-12875,
+2025-13120, 2026-1979, 2020-36401).
+
+**CVE-2022-1071 in particular already has a full case study in-tree** at
+`/home/diego/cheribsd-26.07/cases/mruby-regs/`, which correctly calls itself a
+window case rather than an invisible one: the VM stack is a plain `realloc`'d array,
+so revocation closes it. Do not re-derive it.
+
+## The lead case, and it needs no sanitizer
+
+**A1, issue 6339.** The returned object is swept mid-`delete`, its slot comes back
+off the page free list as a `String`, and the interpreter hands the wrong object to
+Ruby.
+
+```ruby
+$i = 0
+class C
+  def ==(other)
+    GC.start
+    ($i += 1) == 3
+  end
+end
+
+a = 5.times.map { C.new }
+x = a.delete(C.new)
+GC.start
+
+p x   # a String appears where a C instance must be
+p x   # and prints differently the second time
+```
+
+Other short ones, verbatim from their issues:
+
+```ruby
+# A13, issue 4164
+a = {'a' => 'A'}
+b = a.shift
+printf b[1]
+
+# A9, issue 3689
+GC.start
+ObjectSpace.each_object{ GC.generational_mode = nil }
+a
+
+# A8, issue 3385
+a = []
+a[0] = a
+a.to_s
+b
+
+# A6, issue 4000
+b=*'$'..'0000'
+
+# A3, issue 3542   (needs MRB_GC_STRESS)
+def foo(*)
+end
+puts foo('a', 'b', 'c', 'd', 'e')
+
+# A10, issue 3596 = CVE-2017-9527   (needs MRB_GC_STRESS)
+i = 0
+hash = {}
+while i < 256
+  hash['%d' % i] = i.to_s
+  i += 1
+end
+
+# A4, issue 3550
+f = Fiber.new do
+    m = Fiber.current
+    Fiber.yield Proc.new {}
+end
+f = f.resume
+GC.start
+
+# A5 (issue 3720) and A7 (issue 3699) have scripts too, but they are long
+# fuzzer-derived listings. Copy them from the issue text rather than from here:
+# a transcribed script that does not reproduce costs more than a missing one.
+
+# B2, issue 3616
+ObjectSpace.each_object { GC.start }
+
+# B3, issue 3681
+ObjectSpace.each_object { GC.generational_mode = nil }
+
+# B9, issue 6662
+$a = Array.new(50) { Object.new }
+$b = Array.new(40) { Object.new }
+class << $b.last
+  def eql?(o)
+    $b.map! { nil }
+    GC.start
+    super
+  end
+end
+$a.intersect?($b)
+```
+
+## What is verified and what is not
+
+Fix commits were re-fetched and their subjects read back. **Not verified:** A3, A8,
+A16, A19, A26 have no linked commit at all; A4, A7, A14, A15 have referenced commits
+whose subjects do not say "fix N". Three OSV "fixed" fields are **bisection
+endpoints, not fixes** and must not be cited as such. Affected-version ranges are
+derived from fix-commit dates against release-tag dates, not read off an advisory.
+OSS-Fuzz testcases for A20-A25 are view-restricted, so those have no recoverable
+PoC; their value is that they name the call site and show the class is live and
+recurring in 3.2 and 3.3.
+
+## Next
+
+The cases are collected; nothing has been run on Capstone. The port is the gate, and
+`history/28-08-2026_00-30-00_mruby-is-portable-jerryscript-is-not.md` puts it at
+eleven census errors, most of them the four flags above.
