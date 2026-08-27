@@ -616,6 +616,15 @@ bool SplitEditor::rematWillIncreaseRestriction(const MachineInstr *DefMI,
   const TargetRegisterClass *UseConstrainRC =
       UseMI->getRegClassConstraintEffectForVReg(DefReg, SuperRC, &TII, &TRI,
                                                 /*ExploreBundle=*/true);
+  // Null for the same reason DefConstrainRC can be, and checked for the same
+  // reason: getRegClassConstraintEffect ends in getCommonSubClass, which returns
+  // null when the two classes have no common subclass. A target whose register
+  // classes are genuinely disjoint -- a capability class meeting an integer class,
+  // here -- reaches that, and the dereference below is then a segfault in the
+  // register allocator rather than a diagnostic.
+  if (!UseConstrainRC)
+    return false;
+
   return UseConstrainRC->hasSubClass(DefConstrainRC);
 }
 
