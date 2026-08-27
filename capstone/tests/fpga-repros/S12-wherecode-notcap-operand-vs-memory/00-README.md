@@ -23,6 +23,35 @@
 >
 > Three claims that must not be merged: *the built-in workload runs* (true, never blocked by S-12);
 > *SLT runs* (true, one domain per boot, indexed joins pass); *the SLT CORPUS runs* (false).
+>
+> ### WEAKENED SAME DAY — the plan is a CORRELATE, not a mechanism
+>
+> The table above is measured and stands. The **explanation** attached to it does not, and the
+> check that broke it is one instruction lookup:
+>
+> **The S-12 fault pair sits at `sqlite3WhereCodeOneLoopStart+0x88`** — near the top of a
+> 4,606-instruction function, on the path taken on EVERY call, whatever the plan. Verified in the
+> SLT image that ran both queries (`fn` at `0x104788`, the same address as the historically
+> faulting binary), with the documented sequence intact:
+>
+>     +0x80  movc a4, zero
+>            stc  a4, 0x0(a5)
+>     +0x88  ldc  a4, 0x0(a0)
+>            cincoffsetimm a4, a4, 0xb0
+>
+> `qj4` is a two-level plan, so it called that function **twice** and executed `+0x88` twice —
+> and returned. **So the plan does not gate whether the vulnerable code runs.** "Indexed joins are
+> safe because they avoid the failing path" is therefore NOT available as a mechanism.
+>
+> What survives is a correlation: unindexed nested SCAN plans have wedged repeatedly, indexed ones
+> have not. A mechanism consistent with both facts would have to work through something the plan
+> changes INDIRECTLY — how much codegen runs before the second call, heap and cache state, timing —
+> rather than through which instructions execute.
+>
+> **And the `qj4` side of that correlation is N = 1**, which at the 54% per-draw rate is p = 0.46
+> by chance. The 14/14 built-in workload is the same indexed-inner shape but a different query, so
+> it supports the correlation without pinning it. Redraws of `qj4` are what would make the pairing
+> quantitative; until then this is a lead, not a finding.
 
 > **ARRIVED WITH A HANG RATHER THAN A FAULT?** If the domain stopped with **no exception**
 > (`ex_commit.valid = 0` on aperture 224) and aperture 225 reads **`0xd5`** — three wait conditions
