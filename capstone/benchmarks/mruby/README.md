@@ -88,7 +88,38 @@ control first.
 
 ## Status
 
-**Stage 0 returns `0x6D520001`.** The 1.4 MB image loads, the domain is created and
+**The ladder reaches mruby's own VM.** One image, six calls:
+
+| call | what | result |
+|---|---|---|
+| 0 | anchor, `&domain_main` | returns the load base |
+| 1 | entry, cap-init, return channel | **OK** |
+| 2 | the outer allocator, narrowed | **OK** |
+| 3 | `mrb_open_core` | **cause 7**, a bounds fault on a store |
+| 4 | `mrb_gc_add_region` | not reached |
+| 5 | run bytecode | not reached |
+
+**The stage-3 fault may be a result rather than a port defect, and that has to be
+settled before it is called either.** It is in `mrb_vm_run`'s `stack_clear` after
+`stack_extend`:
+
+```
+37cec:  addi       s4, s4, 0x10       ; s4 = nregs*32 + 16
+37cf0:  cincoffset a0, a1, s4
+37cf8:  sd         zero, -0x10(a0)    ; address = a1 + nregs*32
+```
+
+`slli s4, s4, 0x5` upstream confirms `sizeof(mrb_value) == 32` here, against 24 on
+stock 64-bit. The store lands one element past a buffer of `nregs` elements.
+
+Why this target sees it and CheriBSD does not is the interesting part: `cap_heap`
+narrows every allocation to the **exact** request, while a purecap `malloc` rounds
+bounds up for representability. A one-element overrun is therefore invisible there
+and visible here. That is the narrowing discipline this file argues for, doing its
+job -- but it could equally be our own sizing, so the next step is to read
+`stack_extend` against the emitted code rather than assume either.
+
+Before that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
 reaches the host. Stages 1 to 4 are the next step; no case has been scored.
 
