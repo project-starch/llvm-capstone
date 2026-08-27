@@ -174,6 +174,115 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## REFUTED: the load-syncer mispair. The precondition is unreachable under maximum pressure
+
+This was the strongest surviving mechanism, and the only one so far proposed that produces BOTH
+`tval == 0` and `cap_type == NOT_CAP` from a single event. `capstone_load_syncer` holds ONE pending
+trans id and sets it on a new `init` with **no guard** on `req_set`. If a second LDC's init landed
+while the first was outstanding, the first LDC's response would fail the trans-id match, be diverted
+onto the scalar return path, and `check_load_data` would pair whatever DID match against whatever
+`cap_msg` it dequeued — substituting a whole `fat_cap_t`, cursor and metadata together. One coupled
+substitution, both halves of the signature.
+
+**It does not happen, and the reason is structural rather than statistical.**
+
+The sim-only checker in the generated `capstone_dyn_unit.anvil.sv` counts the PRECONDITION
+(`init-while-pending`) separately from the OUTCOME (`clobbers`), precisely so a clean run can
+distinguish "unreachable" from "not caught". Every earlier run reported zero — but those tests issue
+7–8 LDCs across ~1700 cycles, widely spaced and hitting in cache. **A zero there measures the test,
+not the syncer**, and reading it as a refutation would have been this project's most-repeated
+mistake.
+
+`s12-ldc-pressure.S` was built to create the condition: capabilities planted one per 64-byte cache
+line, a sweep to evict them so the loads genuinely miss and stay outstanding, then bursts of EIGHT
+independent LDCs into eight different destination registers with no data dependency — eight because
+`trans_id` is 3 bits and the scoreboard has 8 entries, so that is the most that can be outstanding
+at once.
+
+    S12-SYNC: ALIVE (load-syncer checker compiled in)
+    S12-SYNC: tick 4600  inits=192  init-while-pending=0  clobbers=0
+
+**192 inits against 7–8 in the ordinary tests**, so the pressure materialised — that counter is the
+positive control and it climbed 24-fold. And `init-while-pending` is still **0**: across 192 inits
+under the heaviest load the machine can carry, a second init never arrived while one was pending.
+
+The source says why. `func LDC` (`capstone_dyn_unit.anvil:317-378`) does
+`send cap_load_ri.init(...)` and then `send cap_load_ri.req(result) >> let msg1 = recv
+cap_load_ri.res >>` — the `recv` **blocks the thread**, so the round trip completes before another
+LDC can reach its own init. The usual caveat that the generated Anvil hardware is a flat concurrent
+machine, and that sequential `.anvil` reading does not constrain ordering, is why this is recorded
+as **measurement first and source-reading second**: the count is the evidence, the structure is the
+explanation for it.
+
+**Neither leg alone would be enough.** A source argument on a concurrent machine is not binding, and
+a zero without occupancy is not a result. Together they are, and the mispair is dead.
+
+## The LDC clear does not race the NEXT store either — matched pair, clear proven to fire
+
+`s12-linear-clear.S` was drafted to test the one write-ordering question left: an LDC of a
+clear-class capability zeroes the source granule, and that clear write and the FOLLOWING `stc` to
+the same granule share an 8-entry write buffer. If a merge ever landed the clear after the store,
+the granule would read back as the literal clear payload — `store_unit.sv:462-469` drives data 0,
+user 0, ctag 0, which is bit-for-bit `create_cnull()` and bit-for-bit the observed operand, `tval`
+included.
+
+    arm   value type   load returned            granule word 0 after the load
+    A     LINEAR       correct cap, Type 1  16/16   0            <- clear FIRED
+    B     NONLIN       correct cap, Type 2  16/16   0x80004000   <- clear correctly did NOT fire
+
+The arms differ in exactly one thing and the gate is shown to discriminate rather than to be stuck
+on: the clear fires throughout A and never in B. **No misordering occurs.** Each iteration's store
+lands after the previous iteration's clear — otherwise iteration N+1's `ldc` would have returned the
+null payload, and all 16 returned correct capabilities.
+
+**Two honest limits.** The granule read-back sits between the load and the next store, so it proves
+the clear fired but does not itself observe the ordering; the ordering is answered by the following
+iteration's load result, which is a weaker instrument than intended. And 16 iterations of bare-metal
+write pressure is not SQLite's after millions of instructions.
+
+> ### THE PREVIOUS VERSION OF THIS TEST FAILED IN A WAY THAT LOOKED EXACTLY LIKE S-12
+>
+> It raised `UNEXPECTED_OPERAND` — mcause 25, the S-12 exception — and by exception name alone that
+> reads as "S-12 reproduced in simulation". It is nothing of the kind. The test made its BASE
+> capability LINEAR and then did `MOVC(a0, s1)`; a linear capability is move-only, so that consumed
+> `s1`, and the next `cincoffsetimm` on the result raised correctly. Correct hardware, broken test.
+>
+> **What settles it is `ldc-inits=0` and `dyn-dispatches=0` in the same log — NO LDC EVER ISSUED**,
+> at cycle 533, during setup. A mechanism that begins with a load cannot be under test in a run that
+> never reached one. The lesson is not "check the exception name" but that the counter proving the
+> construct actually executed is what makes any verdict readable, and it is the reason the rewritten
+> version treats `ldc-inits` as its positive control.
+
+## S-10b excluded for this window — the STALL hazard only, and not on the store list
+
+S-10b's mechanism can only stale the METADATA HALF OR TAG of a granule-aligned LDC: a pending store
+to word 0 shares the load's `[11:3]` and does stall (`store_buffer.sv:279,287,293`), so only a
+word-1 store can be missed. S-10b therefore predicts `tval` = the stored cursor
+(`ariane_pkg.sv:766-784` passes the cursor through untagged; `ex_stage.sv:490` reports it as
+`fu_data_i[0].operand_a`). The latched `tval` is **0**. That is the argument, and it holds without
+enumerating a single store — which matters, because a store list cannot cover stores OLDER than the
+window that are still resident in the queues, and a resident older store to `s0-0x68` is exactly the
+S-10b case.
+
+**Scope, because the wider wording would be false.** This excludes the store-buffer STALL hazard
+only. It does NOT clear S-10 (`wt_dcache_mem.sv:280`, still word-granular in the resident bitstream),
+S-07, or write-buffer forwarding. Neither S-10 nor S-10b is in the flashed tree —
+`git merge-base --is-ancestor` returns false for both against `84ed6eafb`.
+
+> **UNRESOLVED, AND IT IS THIS FOLDER CONTRADICTING ITSELF.** Two measurements of "the value's type"
+> are recorded here and they disagree, because they are measurements of DIFFERENT OBJECTS:
+>
+> * above, on the board, of **the stored value**: `retval 0xC12A5200` → `lcc` selector 1 = 2, and
+>   that selector reports `cap_type - 1`, so raw type **3 = REVOKE** — which IS in the clear set;
+> * later, under QEMU, via `ARGP`: `ty1=1 ty2=1` → **NONLIN** — but `ARGP` reports the function's
+>   INCOMING ARGUMENTS, not the value `a2` that `stc` writes at `+0x40`.
+>
+> The section headed "The discriminating unknown is answered: SQLite's value is NONLIN too" treats
+> the second as having settled the first. **It does not.** Until this is resolved, no claim in this
+> folder that rests on "the clear cannot fire at the S-12 site" should be quoted. The clear-set
+> mechanisms are refuted here on their own evidence — the six-type sweep and the matched pair above —
+> rather than on the type argument, so those refutations stand either way.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
