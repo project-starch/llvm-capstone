@@ -470,6 +470,57 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## MECHANISM: a STORE-TO-LOAD DRAIN HAZARD. Closing the window eliminates the wedge, 0/4 vs 4/4
+
+Fencing immediately before the reload removes the failure entirely, and the three conditions form a
+monotone dose-response with a **semantically neutral** intervention throughout — no value, control
+flow or generated program changes, only the timing of the store path:
+
+    write path between the spill (+0x40) and the reload (+0x88)      wedges
+    NOT drained          (unmodified)                                15 / 15
+    PARTIALLY drained    (fence at function entry; 3 stores remain)   1 / 4
+    FULLY drained        (fence immediately before the reload)        0 / 4
+
+The final arm ran the fenced and unmodified builds in the SAME four boots, fenced first: fenced
+returned 4/4, unmodified wedged 4/4. Placement verified in the disassembly —
+
+    10480c  stc a4, 0x0(a5)               last store in the window
+    104810  fence rw, rw                  the drain
+    104814  ldc a4, 0x0(a0)        +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0    the fault site
+
+**STATEMENT OF THE MECHANISM.** The capability spilled by the `stc` at `+0x40` is reloaded by the
+`ldc` at `+0x88` **while that store is still in flight in the write path**, and the load returns
+`{cursor 0, NOT_CAP}` rather than the stored capability. The consumer then raises
+`UNEXPECTED_OPERAND` with `tval = 0`. Draining the write path before the reload prevents it.
+
+**IT ACCOUNTS FOR EVERY PROPERTY THIS FOLDER HAS RECORDED**, which is why it is worth more than the
+statistics alone:
+
+* the 36 instructions to the fault are **identical on every call** — the difference is timing, not
+  instructions, so no instruction-level repro was ever possible;
+* **nine bare-metal reconstructions came back clean** — they reproduced the instructions faithfully
+  and had none of the write pressure;
+* **nesting, not repetition** — the extra where-codegen level fills the write path; two separate
+  one-level prepares (`dd6_twostmt`, same 5 invocations) do not and never wedge;
+* **silicon-only** — QEMU models no write buffer, so the window cannot exist there;
+* **layout- and timing-sensitive with per-image clustering** — the window is a drain race;
+* **one level never wedges** (0/11) — less write pressure ahead of the reload;
+* **`tval = 0` with DRAM intact** — the store had not landed when the load read, and had landed by
+  the time a debugger looked.
+
+**WEIGHT AND LIMITS, stated rather than implied.** N=4 for the full fence. Because the control
+wedged 4/4 in the same boots and the unfenced rate is 15/15, the paired comparison is strong, but
+0/4 is not 0/20 — the residual rate is bounded, not measured. And a fence is a *sufficient*
+mitigation, which does not by itself identify WHICH hardware structure mishandles the in-flight
+store. It points hard at the write/store-buffer forwarding path, and notably the S-10 reflash did
+**not** clear that family: S-07 and the word-granular `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`,
+still word-granular against a 16-byte capability) both remain live on this silicon.
+
+**MITIGATION AVAILABLE NOW.** One `fence rw,rw` before this reload removes the failure at zero
+semantic cost. That is a workaround, not a fix, and must not be described as a fix while the
+hardware structure is unidentified.
+
 ## A SEMANTICALLY NEUTRAL FENCE CUTS THE RATE FROM 11/11 TO 1/4 — the strongest mechanism evidence yet
 
 Given the path to the fault is 36 branch-free instructions identical on every call, the trigger is
