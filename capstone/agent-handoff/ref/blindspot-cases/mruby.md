@@ -189,6 +189,34 @@ badly. **Scripted is not usable.**
 | A8, A9, B3 | `NoMethodError` on one or both builds | script does not run as transcribed |
 | B9 | identical result on both builds | no oracle (below) |
 
+## The selection rule these failures teach
+
+A4, B9 and A2 were each pursued to a build and a trigger, and each is a real defect
+that produced NOTHING observable from Ruby:
+
+* **A4** marks a freed RVALUE -- `mrb_gc_mark: Assertion (obj)->tt != MRB_TT_FREE`
+  fires on a build that carries the assertion. With assertions compiled out the
+  marking happens silently and the Proc the script can reach survives intact.
+* **B9** iterates a hash set over objects being freed underneath it. The trigger
+  fires (5 `eql?` calls, 2780 with hashes forced to collide) and the answer is the
+  same on both sides.
+* **A2** omits a write barrier when `mrb_alias_method` hangs a fresh `REnv` on an
+  already-black `RProc`. Reached via `super`, with `step_ratio` and
+  `interval_ratio` driven to 1 to hold the GC in incremental marking across the
+  alias, the answer is `:from_base` either way.
+
+**What A1 has and these do not: the corrupted object is RETURNED to Ruby.**
+`Array#delete` hands back the very object whose slot was recycled, so a script can
+ask it what it is and get a `String`. A4's freed object lives in a fiber's saved
+stack, B9's in a temporary set, A2's in a proc's env -- all interpreter-internal,
+all invisible to a script no matter how the GC is driven.
+
+So the rule for picking the next case out of the remaining 26, before spending a
+build on it: **does the defect put the reused slot somewhere a Ruby expression can
+name?** A UAF on a return value, on an array element, on a hash value or on an ivar
+qualifies. One on a callinfo, an env, a fiber stack or a temporary set does not,
+and no amount of GC coaxing will change that.
+
 Three traps, each caught by a control, each of which would otherwise have produced
 a published number:
 
