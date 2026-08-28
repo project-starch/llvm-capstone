@@ -173,36 +173,38 @@ The builtins the probe reads were checked against the backend rather than assume
 `CapstoneISelDAGToDAG.cpp` selects LCC field 0 for the tag, 2 for the cursor, 3 for
 the base and 4 for the end.
 
-**RETRACTED: the fault is not established to be in `mrb_vm_run`'s clear.** That
-attribution rested entirely on the reported trap pc, and the pc is the translation
-block's ENTRY rather than the faulting instruction (see
-`ref/HOW-TO-RUN-ON-QEMU.md`). Everything downstream of that assumption has now been
-measured and is consistent; the assumption itself is the only thing that is not.
-
-The measurements, each with its control:
+**Where it stands: an irreducible contradiction, measured from every reachable
+side.** The probe measures the frame `mrb_vm_run` is about to clear as healthy, and
+the next four instructions fault on an 80-byte capability. Each line below is a
+measurement with a control, not an inference:
 
 | | |
 |---|---|
-| the probe's predicate fires on a frame it must reject | ladder rung 4, a fake context with a deliberately tiny capability |
-| the probe is in the faulting path | `MD_PROBE_SKIP_CLEAR` forces the count to zero; the fault becomes a HANG |
-| the first frame is healthy | 4096-byte `ci->stack`, cursor at base, `nregs` 4, `stack_keep` 0, 143360 bytes inside the arena |
-| reading `ci->stack` twice inside the probe gives the same capability | `md_reread_differs` stays 0 |
-| the domain stack does not overlap the heap | probe stack address is 183076 bytes BELOW the arena, growing away |
-| the probe preserves the caller's registers | it saves and restores s0-s3 and touches no other callee-saved register; `mrb_vm_run` holds the context in s7 |
-| the LCC field indices are right | `CapstoneISelDAGToDAG.cpp` selects 0 tag, 2 cursor, 3 base, 4 end |
-| both `vm.c` clears are instrumented | `mrb_vm_run` and `exec_irep`, which caches `ci` before `stack_extend` runs |
+| frame 1 is healthy | `ci->stack` 4096 bytes, cursor at base, `nregs` 4, `stack_keep` 0, `stbase` the same 4096 at the same address, 143360 bytes inside the arena |
+| the frame is `mrb_vm_run`'s | the probe reports its call site: 1, not `exec_irep` |
+| escaping BEFORE frame 1's clear | no fault; the full 60-rung ladder completes |
+| letting frame 1's clear run | fault, before frame 2 is reached |
+| disabling BOTH clears | no fault; it hangs instead, on a stack mruby believes it cleared |
+| the predicate can fire | ladder rung 4, a fake context carrying a deliberately tiny capability |
+| the knobs are really compiled in | `md_knobs` is read back through the ladder, and out of the image itself |
+| reading `ci->stack` twice inside the probe | identical, `md_reread_differs` = 0 |
+| the probe does not touch the heap | the `malloc` it used to do for the arena base is gone; the domain hands it in |
+| the probe preserves the caller | it saves and restores s0-s3 and touches nothing else callee-saved; `mrb_vm_run` holds the context in s7 |
+| the domain stack does not overlap the heap | probe stack address is 183059 bytes BELOW the arena, growing away |
+| the LCC field indices are right | `CapstoneISelDAGToDAG.cpp`: 0 tag, 2 cursor, 3 base, 4 end |
 
-With all of that, the probe still reports a healthy frame and the run still faults
-on an 80-byte capability. **Four instructions in the image match what the monitor
-decodes** (`rs1 = x10, imm = -16, size = 8`): in `mrb_hash_new_capa`, `exec_irep`,
-`mrb_vm_run` and `__capstone_cap_init`. Two are now guarded and the other two are
-not, so the fault may simply not be where the pc suggests.
+The probe now takes the context and does the same two loads the clear does --
+`c->ci` at slot 3, then `ci->stack` at slot 3 -- so the two are reading the same
+words through the same register. **What is left is the four instructions between
+`md_probe_stack`'s `ret` and the store, and that is no longer an mruby question.**
 
-**The next step is therefore to stop trusting the pc.** Give each of the four sites
-a distinguishable signature -- a different clamp, a different sentinel value, or a
-staged early return -- so the run itself says which one it is, the way this
-project's ladder rule prescribes: build variants that RETURN a marker instead of
-observing a fault.
+Two earlier readings are retracted along the way, and both were retracted by a
+knob rather than by an argument. "Disabling the clears does not help" was measured
+on a build where `MD_PROBE_SKIP_CLEAR`'s body had been deleted by a rewrite,
+leaving only its `#define`; the flag was accepted and did nothing. "The fault is
+not in a `vm.c` clear" followed from that and falls with it. `md_knobs` reports the
+compiled flags back through the ladder now, because a knob that did not take is
+not visible from outside the image.
 
 **Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
