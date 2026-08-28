@@ -1636,8 +1636,16 @@ The two candidate sites in the self-arming build:
     arming lcc         VA 0x103bc   DBAS + 0x3bc   db 96 26 08   lcc a3, a3, 0x2
     subject consumer   VA 0x10484   DBAS + 0x484   5b 27 07 0b   cincoffsetimm a4, a4, 0xb0
 
-**PRECONDITION: a wedge whose latched `mepc` is not `DBAS + 0x484` is NOT the subject fault.**
-It is an arming failure or something else, and that arm is VOID.
+**PRECONDITION: a wedge whose latched `mepc` is not the subject consumer's OWN offset for the arm
+being run is NOT the subject fault.** It is an arming failure or something else, and that arm is
+VOID.
+
+> **The offset is PER-ARM, not `DBAS + 0x484`, and taking it as a constant would have thrown away
+> real results.** `scalar` moves the fault site 8 bytes: `s1-scalar-2/4/7` each latched
+> `mepc = 0x828f480c`, and each is a genuine signature-confirmed S-12 wedge. Applied literally,
+> the rule below would have voided all three. Re-derive the offset from the arm's OWN disassembly
+> before applying the precondition — the section that follows says exactly this for a change of
+> BUILD, and it holds just as much for a change of ARM.
 
 **MEASURED, on the build that will actually run:**
 
