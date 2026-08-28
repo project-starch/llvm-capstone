@@ -470,7 +470,52 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
-## THE CORRELATE IS A REGISTER PAIRING, NOT THE STORE — exceptionless across 6 builds, 38 draws
+## RETRACTED: the register-pairing claim. The correlate is the CONTIGUOUS TRIPLE, and it does not discriminate
+
+**"Exceptionless" is false.** `li-pidx` — the headline cure at 0/8 — CONTAINS the pairing, at the
+identical reload and consumer:
+
+    1047f0  movc a4, zero               BEFORE the reload
+    1047f4  stc  a4, -0x5a0(s0)
+    104804  ldc  a4, 0x0(a0)            same register, same source pointer
+    104808  cincoffsetimm a4, a4, 0xb0  the identical consumer
+
+That was in disassembly already printed and read; the `movc` at `104818` (which had moved after) was
+matched and the one at `1047f0` two instructions above the reload was not. `dc-tagged` is the same.
+
+**Baseline is NOT 15/15.** `li-pidx-3` records the BASELINE returning (`rc=0`, past the replay blob):
+14 confirmed + 1 unconfirmed wedge + **1 return in 16**. Behaviour is therefore **not** a
+deterministic function of the image; the per-draw rate is ~0.94.
+
+**`dc-null` and `dc-tagged` are built ON TOP of the `pidx` code motion** — the build script says so
+and the binaries confirm it — so their 0/4 and 0/3 inherit an already-established cure.
+
+**The `tval = 0` argument was backwards.** The null `movc` writes is *immediately* `stc`'d, so a
+false forwarding hit delivering that just-stored null derives `tval = 0` exactly as well as a lost
+writeback does. The memory side is not weakened and the "NOT the write-buffer forwarding family"
+steer is withdrawn.
+
+**DISTANCE co-varies perfectly** with the claimed pairing (2 instructions in baseline, 5 in both
+`pidx` and `dc-tagged`), and `c56679fb175e` already established distance as a variable.
+
+**WHAT SURVIVES.** Across **four** independent build lineages (three share one source manipulation),
+every signature-confirmed wedge occurs in a build containing the **contiguous triple**
+`movc rD,zero ; stc rD,0(rX) ; ldc rD,0(rY)` immediately upstream of the consumer, and no curing
+build contains that exact contiguous triple. The same-register relation WITHOUT the adjacent store
+appears in curing builds, so the register pairing alone is not the correlate. The triple bundles
+register match, null value and store adjacency; nothing here varies exactly one of them, so it does
+**not** discriminate a register-writeback hazard from write-buffer forwarding.
+
+**One sub-claim survives:** the destination register's IDENTITY is not the variable — `scalar` wedges
+on `a5` (confirmed at its own consumer `0x828f480c`) and `dc-null` cures with a reload into `a5`.
+
+**THE DECISIVE MISSING EXPERIMENT:** a register-field-only change —
+`movc a6,zero ; stc a6,0x0(a5) ; ldc a4,0x0(a0)` — with every address, instruction count and
+distance byte-identical to baseline. Wedge refutes the register pairing outright; cure establishes
+it with the store held constant. At baseline's ~0.94 rate, 4 draws give p ≈ 1e-5.
+
+## SUPERSEDED — the register-pairing claim as originally written
+ — exceptionless across 6 builds, 38 draws
 
 **The address hypothesis is refuted and the store is incidental.** `pf64` keeps the null capability
 store in the window but moves its target from `s0-0x120` to `s0-0x160`, leaving the reload at
