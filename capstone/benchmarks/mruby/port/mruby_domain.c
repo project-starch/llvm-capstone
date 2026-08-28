@@ -89,6 +89,7 @@ extern unsigned long md_reread_differs;
 extern unsigned long md_site_first;
 extern unsigned long md_site_last;
 extern unsigned long md_knobs;
+extern unsigned long md_cleared_by_probe;
 extern int md_probe_selftest(void *);
 extern unsigned long md_viol[8];
 extern unsigned long md_probe_calls;
@@ -237,7 +238,8 @@ domain_main(unsigned *res, unsigned func)
         /* WHICH clear the recorded frames came from: 1 = mrb_vm_run, 2 = exec_irep.
            The probe counts both together, so without this "frame 1" names a
            different loop depending on which sites are instrumented. */
-        *res = (unsigned)((md_knobs << 16) | (md_site_first << 8) | md_site_last);
+        *res = (unsigned)((md_knobs << 24) | ((md_cleared_by_probe & 0xFF) << 16)
+                          | (md_site_first << 8) | md_site_last);
         return;
 
     case 56:

@@ -236,6 +236,24 @@ something wrong" and with "the code is simply different now". What it does
 establish is that the contradiction sits on a shape this project has already found
 trouble in twice, which is where to look next.
 
+**The clear is past, and the next blocker is characterised.**
+`MD_PROBE_DO_CLEAR` has the probe perform the clear itself, in C, over the same
+capability and the same addresses, and return `stack_keep` so mruby's inlined loop
+is skipped. Two results:
+
+* **No fault.** The probe writes the very elements mruby's loop faults on, through
+  the capability the probe measured as 4096 bytes, and nothing traps. Same data,
+  same addresses, same semantic operation, different instruction sequence -- so the
+  data is sound and the emitted loop is not.
+* **`mrb_open_core` then HANGS.** Thirty minutes at that rung with no progress, so
+  there is a second problem behind the first.
+
+The hang is **not** the VM spinning through frames. Built with the escape set to
+fire after 2000 `mrb_vm_run` frames, it never fires in fifteen minutes, so mruby is
+stuck in one place rather than looping through the call machinery. That narrows the
+next instrument: it has to observe inside a single stuck computation, not count
+frames.
+
 **Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
 reaches the host. Stages 1 to 4 are the next step; no case has been scored.

@@ -51,6 +51,18 @@
 #define MD_PROBE_FORCE_STACK 0
 #endif
 
+/* MD_PROBE_DO_CLEAR: the probe performs the clear ITSELF and returns stack_keep so
+   mruby's own loop is skipped. Same capability, same addresses, same semantic
+   operation -- a different instruction sequence.
+   This is the sharpest question left. The probe measures the frame as healthy
+   (4096-byte ci->stack, nregs 4, stack_keep 0) and mruby's inlined loop faults on
+   an 80-byte capability four instructions later, with the two loads identical and
+   the caller's registers provably preserved. If the probe's own loop writes those
+   same elements without faulting, the data is fine and the emitted loop is not. */
+#ifndef MD_PROBE_DO_CLEAR
+#define MD_PROBE_DO_CLEAR 0
+#endif
+
 #ifndef MD_ESCAPE_AFTER
 #define MD_ESCAPE_AFTER 1000000
 #endif
@@ -79,6 +91,7 @@ unsigned long md_viol[MD_W];       /* the first call whose clear would not fit *
 unsigned long md_probe_calls;      /* how many times mrb_vm_run reached the clear */
 unsigned long md_probe_violations; /* how many of those would have stored OOB */
 unsigned long md_reread_differs;   /* frames where reading c->ci->stack TWICE differed */
+unsigned long md_cleared_by_probe; /* frames the probe cleared instead of mruby */
 /* WHICH of the two clears each recorded frame came from: 1 = mrb_vm_run,
    2 = exec_irep. The probe counts both sites together, so without this "frame 1"
    names a different clear depending on which sites are instrumented -- and the
@@ -90,7 +103,8 @@ unsigned long md_site_last;
    did not take is this project's most expensive recurring mistake, and it has now
    happened to MD_PROBE_SKIP_CLEAR. */
 unsigned long md_knobs = (MD_PROBE_SKIP_CLEAR ? 1u : 0u)
-                       | (MD_PROBE_FORCE_STACK ? 2u : 0u);
+                       | (MD_PROBE_FORCE_STACK ? 2u : 0u)
+                       | (MD_PROBE_DO_CLEAR ? 4u : 0u);
 
 static unsigned long md_arena_base;
 
@@ -266,6 +280,22 @@ md_probe_stack(long site, void *ci, void *stbase, long nregs, long stack_keep)
 
     if (bad || moved)
         nregs = (avail < stack_keep) ? stack_keep : avail;
+
+#if MD_PROBE_DO_CLEAR
+    {
+        /* mrb_value is 32 bytes: an 8-byte value slot at +0 and a 4-byte type tag
+           at +16, which is exactly what the emitted loop writes. */
+        char *q = (char *)sp;
+        long k;
+
+        for (k = stack_keep; k < nregs; k++) {
+            *(volatile unsigned long *)(q + k * MD_VALUE_SIZE) = 0;
+            *(volatile unsigned int *)(q + k * MD_VALUE_SIZE + 16) = 0;
+        }
+        md_cleared_by_probe++;
+        return stack_keep;          /* mruby's own loop must not run */
+    }
+#endif
 
 #if MD_PROBE_FORCE_STACK
     if (stbase) {
