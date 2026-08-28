@@ -63,6 +63,23 @@
 #define MD_PROBE_DO_CLEAR 0
 #endif
 
+/* MD_VM_WATCHDOG: make the HANG return.
+ *
+ * Past the stack clear, mrb_open_core hangs, and the ladder cannot see it because
+ * the domain reports only between calls. Counting mrb_vm_run frames answered one
+ * question -- it is not spinning through the call machinery, since an escape armed
+ * for 2000 frames never fired in fifteen minutes -- and could not answer the next.
+ *
+ * mruby's own MRB_USE_DEBUG_HOOK calls mrb->code_fetch_hook on every instruction
+ * fetch. That is an upstream switch, so the dispatch loop needs no patch. The hook
+ * counts, remembers the bytecode address, and longjmps out after N fetches. If it
+ * escapes, the VM is executing and the recorded pc says on what; if it never
+ * escapes, the hang is BELOW the VM in a C function, which is the other half of
+ * the discrimination. */
+#ifndef MD_VM_WATCHDOG
+#define MD_VM_WATCHDOG 0
+#endif
+
 #ifndef MD_ESCAPE_AFTER
 #define MD_ESCAPE_AFTER 1000000
 #endif
@@ -92,6 +109,9 @@ unsigned long md_probe_calls;      /* how many times mrb_vm_run reached the clea
 unsigned long md_probe_violations; /* how many of those would have stored OOB */
 unsigned long md_reread_differs;   /* frames where reading c->ci->stack TWICE differed */
 unsigned long md_cleared_by_probe; /* frames the probe cleared instead of mruby */
+unsigned long md_vm_fetches;       /* instruction fetches seen by the watchdog */
+unsigned long md_vm_repeats;       /* consecutive fetches at the SAME bytecode pc */
+static unsigned long md_vm_lastpc;
 /* WHICH of the two clears each recorded frame came from: 1 = mrb_vm_run,
    2 = exec_irep. The probe counts both sites together, so without this "frame 1"
    names a different clear depending on which sites are instrumented -- and the
@@ -104,7 +124,8 @@ unsigned long md_site_last;
    happened to MD_PROBE_SKIP_CLEAR. */
 unsigned long md_knobs = (MD_PROBE_SKIP_CLEAR ? 1u : 0u)
                        | (MD_PROBE_FORCE_STACK ? 2u : 0u)
-                       | (MD_PROBE_DO_CLEAR ? 4u : 0u);
+                       | (MD_PROBE_DO_CLEAR ? 4u : 0u)
+                       | (MD_VM_WATCHDOG ? 8u : 0u);
 
 static unsigned long md_arena_base;
 
@@ -212,6 +233,37 @@ md_probe_selftest(void *heap_ptr)
  * .ci is 0x30 (slot 3); mrb_callinfo.stack is 0x30 (slot 3). All four were taken
  * from -Xclang -fdump-record-layouts, not from reading the struct.
  */
+#if MD_VM_WATCHDOG
+/* Signature-erased on purpose; vm.c casts it to mruby's hook type at the one
+   place it is installed, where the real types are in scope. */
+void
+md_fetch_hook(void *mrb, const void *irep, const void *pc, void *regs)
+{
+    unsigned long here = (unsigned long)pc;
+
+    (void)mrb; (void)irep; (void)regs;
+    md_vm_fetches++;
+    if (here == md_vm_lastpc)
+        md_vm_repeats++;
+    else {
+        md_vm_repeats = 0;
+        md_vm_lastpc = here;
+    }
+
+    if (md_vm_fetches >= (unsigned long)MD_VM_WATCHDOG && md_escape_armed) {
+        /* The one thing worth carrying out: WHICH instruction, and whether the VM
+           was sitting on it. A high repeat count is a tight bytecode loop; a low
+           one with a huge fetch count is progress that is simply slow. */
+        md_viol[0] = md_vm_fetches;
+        md_viol[1] = md_vm_repeats;
+        md_viol[2] = here;
+        md_viol[3] = *(const unsigned char *)pc;    /* the opcode itself */
+        md_escape_armed = 0;
+        longjmp(md_escape, 4);
+    }
+}
+#endif
+
 long
 md_probe_stack(long site, void *ci, void *stbase, long nregs, long stack_keep)
 {

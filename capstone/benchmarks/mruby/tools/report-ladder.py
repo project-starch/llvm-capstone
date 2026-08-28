@@ -42,7 +42,8 @@ FIXED = {
 
 ARRAYS = [("md_first", 6, "the first call"),
           ("md_last", 22, "the most recent call seen"),
-          ("md_viol", 38, "the frame that changed under the probe, or the first bad one")]
+          ("md_viol", 38, "the frame that changed under the probe, the first bad one, "
+           "or -- under the VM watchdog -- fetches / repeats / pc / opcode")]
 
 
 def label(i):

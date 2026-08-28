@@ -125,6 +125,14 @@ fi
 
 if [[ ${MRUBY_PROBE:-0} == 1 ]]; then
   COMMON+=(-DMD_PROBE_STACK -DMD_ESCAPE_AFTER=${MRUBY_ESCAPE_AFTER:-1000000} -DMD_PROBE_SKIP_CLEAR=${MRUBY_SKIP_CLEAR:-0} -DMD_PROBE_FORCE_STACK=${MRUBY_FORCE_STACK:-0} -DMD_PROBE_DO_CLEAR=${MRUBY_DO_CLEAR:-0})
+  # The VM watchdog needs mruby's own hook compiled in, and a second define so
+  # vm.c installs it. Two defines rather than one because MRB_USE_DEBUG_HOOK is
+  # upstream's switch and must keep its upstream meaning.
+  if [[ ${MRUBY_VM_WATCHDOG:-0} != 0 ]]; then
+    COMMON+=(-DMRB_USE_DEBUG_HOOK -DMD_VM_WATCHDOG_ON
+             -DMD_VM_WATCHDOG="$MRUBY_VM_WATCHDOG")
+    echo "== VM watchdog ON: escaping after $MRUBY_VM_WATCHDOG instruction fetches"
+  fi
   echo "== MD_PROBE_STACK is ON: mrb_vm_run clamps its stack clear and reports"
 fi
 
