@@ -47,7 +47,7 @@ narrowing before trusting any verdict.
 
 | # | software | usable cases | with a script | harness state | file |
 |---|---|---|---|---|---|
-| 1 | **mruby** | **36** (26 A + 10 B) | 21 | CHERI port RUNS; Capstone port BUILDS (`benchmarks/mruby/`) -- 85k-line amalgamation compiles clean, link being closed | [mruby.md](mruby.md) |
+| 1 | **mruby** | **36** (26 A + 10 B) | 17, of which 11 transcribed | CHERI port RUNS (`/home/diego/cheri/mruby-purecap/bin/mruby`); Capstone port BUILDS and ENTERS its VM, blocked in `mrb_open_core` | [mruby.md](mruby.md) |
 | 2 | MicroPython | ~22 | few | **runs today** on both | to write |
 | 3 | standalone allocators (TLSF, umm, tinyalloc, dlmalloc, Contiki, Zephyr) | ~14 | some | no harness yet, but they ARE the pool, so it is small | to write |
 | 4 | WAMR EMS | 5 | 1 in-tree C reproducer | **runs today**, stage 40 built | to write |
@@ -80,6 +80,24 @@ anything with its own `malloc` must precede it.
 
 Expect the same shape elsewhere: the port cost is not the language runtime, it is
 the two or three places where a constant encodes the pointer's width.
+
+## Scored so far: NONE
+
+36 catalogued is not 36 measured, and the gap is the whole remaining job. Two of
+the 36 exist as runnable specimens (`benchmarks/mruby/cases/`), and neither has a
+verdict, because the Capstone harness does not reach Ruby yet.
+
+The two columns are independent and only one is blocked:
+
+| column | state |
+|---|---|
+| CHERI | **measurable now.** A purecap mruby binary is built and the CheriBSD vehicle is provisioned; `xlang/cheri/mruby-port` ran arithmetic, `puts`, blocks and a corpus trigger on 2026-08-01 |
+| Capstone | **blocked.** The domain enters, cap-init runs, the outer allocator is clean, `mrb_open_core` faults. See `benchmarks/mruby/README.md` |
+
+So the first scored case does not have to wait for the compiler. What it does have
+to wait for is an ORACLE, which is the harder half and is not blocked either: a
+sanitizer cannot see class A, so each case needs a wrong ANSWER rather than a
+crash. `cases/a1-6339.rb` is written that way and returns 1 or 2.
 
 ## Status vocabulary
 
