@@ -206,6 +206,36 @@ not in a `vm.c` clear" followed from that and falls with it. `md_knobs` reports 
 compiled flags back through the ladder now, because a knob that did not take is
 not visible from outside the image.
 
+**The four instructions are a KNOWN SHAPE on this project, and doubling every
+`ldc` moves the fault.** The reload is
+
+```
+ldc a1, 0x30(s7)     ; rd = a1
+ldc a1, 0x30(a1)     ; rs1 = a1, the previous rd
+```
+
+which is, byte for byte, the pair `llvm/lib/Target/Capstone/CapstoneLdcRetry.cpp`
+was written for: "two ADJACENT `ldc`s where the second's rs1 is the first's rd",
+the shape shared by four S-07 wedges in four unrelated functions in four builds.
+S-07 itself is a silicon defect in the load path and does not exist under QEMU, so
+this is a shape match, not a mechanism match.
+
+Built with `-mllvm -capstone-double-ldc` (MRUBY_DOUBLE_LDC=1), which re-issues every
+`ldc` and takes the second result -- and unlike the type-query retry puts nothing
+between the pair, so it does not serialise the overlap under test. The knob is
+verified in the image rather than assumed: 22410 `ldc` become 38632.
+
+The stack-clear fault is GONE in that build. `mrb_vm_run` runs past it and dies
+later in the same function, on a CAPABILITY store (`size = 16`, `imm = 160`) rather
+than the 8-byte store of the clear.
+
+**That is a lead, not a verdict, and the pass's own header says why:** an instrument
+rich enough to change this shape also perturbs register allocation and scheduling,
+so a fault that moves is consistent both with "the first read was delivering
+something wrong" and with "the code is simply different now". What it does
+establish is that the contradiction sits on a shape this project has already found
+trouble in twice, which is where to look next.
+
 **Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
 reaches the host. Stages 1 to 4 are the next step; no case has been scored.

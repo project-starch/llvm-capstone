@@ -112,6 +112,17 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 # default and added as a flag rather than as -D...=0, because the patch tests it
 # with #ifdef -- defining it to zero would switch it ON, which is exactly the kind
 # of knob that reads as "off" in a build log and is not.
+# S-07's shape, tested here because the stage-3 fault sits on it: the clear reloads
+# c->ci->stack with two ADJACENT ldc where the second's rs1 is the first's rd, which
+# is the instruction pair CapstoneLdcRetry.cpp was written for. -capstone-double-ldc
+# re-issues every ldc and uses the second result, and unlike the type-query retry it
+# puts nothing between the pair, so it does not serialise the very overlap under
+# test. If the fault goes away, the first read is delivering something wrong.
+if [[ ${MRUBY_DOUBLE_LDC:-0} == 1 ]]; then
+  COMMON+=(-mllvm -capstone-double-ldc)
+  echo "== -capstone-double-ldc is ON: every ldc is issued twice"
+fi
+
 if [[ ${MRUBY_PROBE:-0} == 1 ]]; then
   COMMON+=(-DMD_PROBE_STACK -DMD_ESCAPE_AFTER=${MRUBY_ESCAPE_AFTER:-1000000} -DMD_PROBE_SKIP_CLEAR=${MRUBY_SKIP_CLEAR:-0} -DMD_PROBE_FORCE_STACK=${MRUBY_FORCE_STACK:-0})
   echo "== MD_PROBE_STACK is ON: mrb_vm_run clamps its stack clear and reports"
