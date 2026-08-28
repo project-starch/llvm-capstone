@@ -470,6 +470,40 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## WHY THIS CANNOT BE REDUCED TO AN INSTRUCTION SEQUENCE — measured, and it explains nine clean repros
+
+The natural question for a hardware report is "which instructions?". For S-12 that question has a
+definite answer and it is **not the one anyone wants**: the instructions are IDENTICAL between the
+calls that are safe and the call that faults.
+
+Disassembled from the running image, function entry `0x104788` to the faulting
+`cincoffsetimm a4, a4, 0xb0` at `0x104814`:
+
+* **36 instructions.**
+* **ZERO branches and ZERO calls** — the path is entirely straight-line.
+* **`iLevel` is never TESTED on that path.** It arrives in `a3` and is spilled once
+  (`1047d4: sw a3, 0x0(a2)`); nothing reads it again before the fault.
+
+So every invocation — the four safe ones and the wedging one — executes the same 36 branch-free
+instructions, in the same order, with the same frame layout. **There is no instruction-level
+difference to find.**
+
+**That is the explanation for this folder's most puzzling row.** Nine directed reconstructions
+reproduced the window — the four-instruction shape, the offset-for-offset 40-line window, the
+intervening-store sweep, the adjacent-granule scalar, all six capability types, store-buffer
+pressure, cache pressure — and every one came back clean. They were not missing an instruction. The
+instructions were never the variable.
+
+**What the trigger therefore is: MACHINE STATE**, produced by a prior nested codegen level, arriving
+at an instruction sequence that is correct and unchanging. That is a statement about
+microarchitecture — cache occupancy, write/store buffer contents, scoreboard state — and NOT about
+decode or execution of any sequence.
+
+**For the hardware side, the report should read:** *these 36 branch-free instructions are correct
+and execute identically on every call; they fault only when a prior, nested where-codegen level has
+run within the same prepare. Look for state that level leaves behind, not for an instruction
+pattern.*
+
 ## SETTLED: it is NESTING, not repetition — two levels inside ONE prepare
 
 The sharpest result of the delta-debug, and it retires the "the codegen path runs twice" framing
