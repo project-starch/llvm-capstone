@@ -470,7 +470,55 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
-## REGISTER MATCH IS CAUSAL — a THREE-BYTE patch cures S-12, p ~ 1e-5
+## RETRACTED: "register match is causal". The CURING binary contains the pairing — same address as the last retraction
+
+**The observation stands; the variable and the statistics do not.**
+
+**The patched build still satisfies the condition declared required.** `movc a4, zero` at `0x1047f0`
+writes `a4`, and `a4` is not redefined before `ldc a4` at `0x104810` — `0x1047f4`, `0x1047f8`,
+`0x104800` are *uses*; `0x1047fc`, `0x104804`, `0x10480c` write `a5`/`a6`. So the curing binary pairs
+a `movc`'s destination with the reload's, at distance 8. Both `a4` and `a6` carry a null at
+`0x10480c`.
+
+**This is the same error as the retraction one commit earlier, at the same instruction address.**
+`769c8ef20a51` retracted the register-pairing claim *because* `li-pidx` contained the pairing at
+`0x1047f0`. The sentence written to justify this patch — *"`a4` still holds 0 from `0x1047f0`, so
+semantics are unchanged"* — states the refuting fact, and was read only for the purpose it served.
+
+**The p-value is wrong by ~80x.** `0.06^4` treats an estimate as known. Fisher exact for 0/4 vs
+15/16 is **1.0e-3**. Worse, **no baseline draw exists in the configuration actually run**: every 0.94
+draw had a *variant* in slot 0, while regpatch had a returning `dd1_one` filler. Against the two
+known-wedging images in the SAME configuration (`pf64` 4/4, `scalar` 3/5), p ≈ **2.4e-3**; against
+this folder's own 54% population rate, **0.045**. A one-sided 95% bound leaves the patched image's
+wedge rate as high as **0.53** — "cured" is not established.
+
+**The patch severs TWO relations at once** — the `movc`'s adjacency to the `ldc` (2 instructions → 8)
+and the source register of the `stc` immediately preceding it. Nothing separates them.
+
+**WHAT SURVIVES:** *the store's presence is not sufficient.* A `stc` of the same null capability, to
+the same address, same position, same distance, sourced from a different register, did not wedge in
+4/4 valid draws.
+
+**A correlate that fits every build (PLAUSIBLE, UNPROVEN):** an adjacent `stc rD` carrying a
+null/NOT_CAP value immediately before `ldc rD`. Wedging: baseline, `pf64`, `scalar`. Curing:
+`regpatch`, `dc-null`, `pin4`, `li-pidx`. **`dc-tagged` breaks it on value alone** — register match,
+*tagged* value, cures 0/3 — so the null-value ingredient is forced into any surviving wording. This
+is the shape R-20 (`stc`/rs1 cursor forwarding) would predict.
+
+**CONTAMINATION, self-inflicted:** `s12pass.sh` staged over `sqli.dom` and rebuilt firmware
+mid-sequence while `regpatch2.sh` was still drawing. `regpatch` draws 7+ booted `4b751cbd` (the
+compiler-pass build), not `c20279a4` (regpatch). Those draws are VOID. **Board runs must be
+serialised; only off-board work parallelises.**
+
+**THE TWO CONTROLS THAT WOULD SETTLE IT, neither of which exists yet:**
+1. the UNMODIFIED baseline as the slot-1 arm with the `dd1_one` filler — the only draw putting the
+   baseline in the configuration actually used. If it does not wedge ~4/4, the null is wrong and the
+   whole comparison collapses;
+2. an **all-`a6`** patch restoring the full triple on `a6` with `a4` unused — separating the
+   adjacency half from the `stc`-source half.
+
+## SUPERSEDED — the causal claim as originally written
+
 
 The experiment the audit specified as decisive has been run, and it is the first result in this
 investigation with **no confound available**.
