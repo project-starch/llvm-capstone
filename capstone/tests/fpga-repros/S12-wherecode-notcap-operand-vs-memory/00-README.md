@@ -174,6 +174,102 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-08-29 — READ THIS BEFORE ANY TABLE BELOW. Three wedges in this folder never ran a domain, and the freshness gate was blind
+
+Everything below this section was tallied with the wedge counts named here. They are wrong, they
+are wrong in one direction, and two recorded conclusions invert when they are corrected.
+
+### 1. The gate that was supposed to prove which binary booted was checking a text file
+
+`run_sqlite_stages_fpga.py` verifies that the firmware's initramfs contains the artifacts the run
+is about to use, and printed `firmware carries the current binaries ... verified by decompressed
+content` on every draw in this folder. It selected which artifacts to check by splitting the spec
+on its last colon and taking the LAST half that names a staged file. For
+
+    /test-domains/sqli.dom:--slt /test-domains/dd1_one.test
+
+both halves resolve -- `Path("--slt /test-domains/dd1_one.test").name` is `dd1_one.test`, a real
+overlay file -- so the check ran against the .test and **the .dom was never compared to the image
+at all.** Every candidate domain here is exactly 1624152 bytes and the initramfs byte count is
+identical across all of them, so no other line in any log could have caught a stale one.
+
+Consequence, stated plainly: **no draw in the 2026-08-28/29 series has a verified binary identity.**
+`mepc` cannot recover it either -- the faulting instruction word `0b07275b` at VA 0x104814 is
+byte-identical in the baseline, the 3-byte variant and the compiler-pass build. Fixed and
+negative-tested in both directions (a deliberately stale .dom now raises STALE FIRMWARE; the
+correct one passes), and every verified artifact's sha256 is now printed per run.
+
+### 2. Three "wedges" are INFRASTRUCTURE VOIDS -- `create_dom` never returned
+
+Four scripts (`dd-board.sh`, `dd-confirm.sh`, `dd6.sh`, `clamp.sh`) hand-counted `SLT-SUMMARY
+records=` instead of reading the driver's own `=== STAGED BISECTION ===` block. Re-classified with
+`verdict.py`, which is the sanctioned reader:
+
+    ddc-c3   dd5_inselect   INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d1   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d3   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+
+The driver had already said so in the log: *"THIS RUN CARRIES NO VERDICT ABOUT ... no `SQ: A/dom-ok`
+-- create_dom never returned, so the domain was never created and NOTHING in it executed. Do NOT
+attribute this to the code under test."* This is the fifth hand-rolled classifier in this
+investigation and the fifth to be wrong; the rule is already written and was not followed.
+
+### 3. "PLAN DEPTH >= 2, BY ANY ROUTE" IS REFUTED BY ITS OWN DATA. It is a JOIN after all
+
+`dd5_inselect` is the only non-JOIN arm that reaches depth 2, and it is the sole evidence for the
+depth framing. Its one recorded wedge is `ddc-c3`, in which nothing executed. Corrected:
+
+    dd2_join      2-table JOIN         4 wedges / 4 valid   (p1, c5, d2, d4)
+    dd4_three     3-table JOIN         1 wedge  / 1 valid   (p3)
+    dd5_inselect  LIST SUBQUERY, d=2   0 wedges / 4 valid   (p4, c1, c2, c4)
+    dd3_subq      flattens to d=1      0 wedges / 5 valid
+    dd1_one       d=1                  0 wedges / many
+
+JOIN arms 5/5, non-JOIN depth-2 arm 0/4: Fisher p = 0.0079. **The superseded "it is a JOIN"
+framing is reinstated and the depth framing is withdrawn.** This narrows the trigger rather than
+widening it, and it is the one place where the correction moves the investigation forward.
+
+### 4. "NESTING, NOT REPETITION" loses its control -- it is slot-confounded
+
+`dd6_twostmt` 0/5 vs `dd2_join` 6/6 was quoted at Fisher p = 0.002. In `dd6.sh` the two arms are
+not interchangeable: **`dd6_twostmt` is in SLOT 0 and `dd2_join` is in SLOT 1**, which is exactly
+the slot/role confound this folder already retracted the fence and nop series over. Slot-matched,
+`dd6_twostmt` has ONE slot-1 draw (`ddb-p5`, returned) against `dd2_join` 4/4: p = 0.20. Whether
+slot placement is itself a variable is unproven at this N (depth>=2 arms are 5/7 in slot 1 and 0/2
+in slot 0, p = 0.44), which is precisely why it cannot be assumed away.
+
+### 5. The null control was not the missing null, and the arm comparison is weaker than recorded
+
+The claim at the head of the "arm in SLOT 1" section -- that no baseline draw existed in the
+configuration the arms were run in -- was false when written. `ddb-p1` and `ddc-c5`, from the day
+before, are that configuration (`sqslt.dom` + `dd1_one` in slot 0, the same bytes as `sqli.dom` in
+slot 1), and both wedged. Adding the 2026-08-29 null control (nc-1 returned, nc-2 wedged with the
+signature; nc-3/4/5 void on a server-side `[GDB] Start failed: Too many open files`, before Linux,
+so they carry nothing) the arm-configuration baseline is **3 wedges / 4**, not the ~0.94 taken from
+draws that all had a VARIANT in slot 0.
+
+Against that, the register-patch arm is **0 wedges / 4** -- not the 7/7 quoted, because `rp-6` is an
+infrastructure void and `rp-7/8/9` booted a different image entirely, which this folder had already
+recorded and then re-imported. Fisher on 0/4 vs 3/4 is **p = 0.143**.
+
+**So the three-byte `movc`/`stc` a4->a6 change is a CANDIDATE cure, not an established one**, and
+the earlier p ~ 1e-5 is withdrawn. Its own binary identity is unverified for the same reason as
+everything else in the series.
+
+### What is actually being done about it
+
+More one-bit draws cannot fix this -- at a 3-in-4 baseline, four arm draws are the best case above.
+`slt/s12stress.test` puts 120 distinct bare two-table joins in ONE domain invocation, and
+`CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the shared region, which survives a
+wedge and which the driver already reads over JTAG. That separates the two models a wedge RATE
+cannot distinguish at any N: a per-prepare hazard stops at a varying index, per-boot state stops at
+the first prepare of every wedging boot. The instrumented build leaves
+`sqlite3WhereCodeOneLoopStart` byte-identical -- 2866 instructions, same encodings, same address --
+which the pre-existing `CAPSTONE_ENTRY_MARK` does not: rebuilt with that one, the register match
+under test is gone from the faulting function altogether.
+
+---
+
 ## REFUTED: the load-syncer mispair. The precondition is unreachable under maximum pressure
 
 This was the strongest surviving mechanism, and the only one so far proposed that produces BOTH
