@@ -76,7 +76,7 @@ Invisible to purecap **and** to revocation, as-is.
 | A1 | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **CHERI: MISS, all 3 configs** |
 | A2 | 5534 | `e323cd0c6ebd` | 3.0.0 | `class.c` `mrb_alias_method` | **type confusion `REnv*` -> `RProc*`** via free-list reuse | no |
 | A3 | 3542 | UNKNOWN | ~1.2-1.3 | `gc.c` `mrb_gc_mark` | GC lifetime, `tt == MRB_TT_FREE` | yes |
-| A4 | 3550 | `15fba69710c7` (UNVERIFIED) | ~1.2-1.3 | `gc.c`, Fiber | GC lifetime | yes |
+| A4 | 3550 | **UNKNOWN, `15fba69710c7` REFUTED** | unknown | `gc.c`, Fiber | GC lifetime | yes |
 | A5 | 3720 | `b200c7475ae6` | <= 1.3.0 | `gc.c` `mrb_gc_mark` | terminated-fiber stacks | yes |
 | A6 | 4000 | `135b4773e3e5` | <= 1.4.1 | `gc.c` | generational GC lifetime | yes |
 | A7 | 3699 | `c6736357a720` (UNVERIFIED) | <= 1.3.0 | `gc.c` `mrb_gc_mark` | GC lifetime | yes |
@@ -174,6 +174,48 @@ fixed    (master)       1111111111     x.class is C
 
 `is_a?`, `x.class == C` and `x.class.to_s` still answer 1 on both even with the
 burst, and must not be used.
+
+## What the scripts are actually worth, measured
+
+Eleven of the 36 carry a transcribed script. Running them on builds from their own
+era against a reference is cheap, and it says the count overstates the yield
+badly. **Scripted is not usable.**
+
+| case | on an affected build | verdict |
+|---|---|---|
+| **A1** | wrong answer, `class=String` | **usable, and MEASURED under CHERI** |
+| A4 | `mrb_gc_mark: Assertion (obj)->tt != MRB_TT_FREE` | fires, but its FIX ATTRIBUTION IS WRONG (below) |
+| A3, A5, A10, B2 | no observable difference from the reference | no oracle as transcribed |
+| A8, A9, B3 | `NoMethodError` on one or both builds | script does not run as transcribed |
+| B9 | identical result on both builds | no oracle (below) |
+
+Three traps, each caught by a control, each of which would otherwise have produced
+a published number:
+
+**The reference build cannot fail the way the old one does.** `mrb_assert` is
+`((void)0)` without `MRB_DEBUG`, and the modern builds are compiled without it --
+`strings` finds `tt != MRB_TT_FREE` in the 2017 binary and NOT in the modern ones.
+So "the reference build printed nothing" says only that it could not print that.
+Every era comparison has to be built the same way, which is why A4 was re-run
+against `15fba69710c7` rather than against master.
+
+**A4's fix commit in this table is refuted.** `15fba69710c7` is "Revert ae4217e81;
+fix #3619" -- issue 3619, not 3550 -- and the assertion still fires on a build AT
+that commit, with the assertion verified present in the binary. A4's real fix is
+unknown, and so is its affected range.
+
+**B9 has no oracle.** Our 2024-09 build is not even affected: `Array#intersect?`
+is still Ruby-level there and the C `ary_set_t` machinery arrives later. Built at
+`2135088ada98^` (2026-03-21) instead, the transcribed script answers `false` on
+both sides. The trigger does fire -- instrumenting `eql?` counts 5 calls, and 2780
+once hashes are forced to collide -- so this is not a case of the condition never
+being created. The defect simply does not change the answer, which is the one
+thing the criterion says an oracle must do.
+
+**Building anything from 2017 needs a one-line patch first.** Modern Ruby rejects
+`FileUtils.mkdir_p path, { :verbose => $verbose }`, a positional hash where
+keywords are now required, and mruby's Rakefile fails at load. One substitution in
+one file, and it is build-system only, so it cannot affect what is being measured.
 
 Other short ones, verbatim from their issues:
 

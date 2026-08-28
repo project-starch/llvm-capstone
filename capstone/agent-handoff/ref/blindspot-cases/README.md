@@ -89,8 +89,17 @@ instance must be, `rc=0` throughout, so it is a wrong answer and not a suppresse
 crash. Harness, result table and the four controls:
 `tests/cheri-baseline/blindspot-a1/`.
 
-That is 1 of 36. The remaining 35 are catalogued and unmeasured, and the Capstone
-column is missing for all 36 because that harness does not reach Ruby yet.
+That is 1 of 36, and the other 35 are worth less than the count suggests.
+**Scripted is not usable.** Of the eleven cases carrying a transcribed script, run
+on builds from their own era against a matched reference: one is usable and
+measured (A1), one fires but has a refuted fix attribution (A4), four produce no
+observable difference, three do not run as transcribed, and one produces the same
+answer on both sides. The table in [mruby.md](mruby.md) has the per-case verdicts
+and the three controls that caught it.
+
+Treat "36 usable cases" as an upper bound on candidates, not a forecast of
+measurements. The Capstone column is additionally missing for all 36, because that
+harness does not reach Ruby yet.
 
 The two columns are independent and only one is blocked:
 
