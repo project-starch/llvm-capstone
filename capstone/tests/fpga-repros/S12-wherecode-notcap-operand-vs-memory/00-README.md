@@ -256,6 +256,78 @@ recorded and then re-imported. Fisher on 0/4 vs 3/4 is **p = 0.143**.
 the earlier p ~ 1e-5 is withdrawn. Its own binary identity is unverified for the same reason as
 everything else in the series.
 
+### The whole arm series, re-tallied on ONE classifier — data, with the pooling disclaimed
+
+Re-classifying every board log with `verdict.py` and keeping only draws in the identical slot
+configuration (slot 0 = `dd1_one` filler, slot 1 = the arm with `dd2_join`) puts all eight arms on
+one footing for the first time. Groupings verified by DISASSEMBLING the arm binaries, not from the
+build scripts' descriptions:
+
+    arm         wedges/valid   window immediately before the subject ldc          group
+    baseline       3 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    pf64           4 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    scalar         3 / 5       movc a5,zero ; stc a5,0(a6) ; ldc a5,0(a0)         PRESERVED
+    regpatch       0 / 4       movc a6,zero ; stc a6,0(a5) ; ldc a4,0(a0)         BROKEN
+    dc-tagged      0 / 3       ldc a4,0(a0) ... stc a4,0(a5) ; ldc a4,0(a0)       BROKEN (value)
+    dc-null        0 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a5,0(a0)         BROKEN
+    li-pidx        0 / 3       sw   a4,0(a5)               ; ldc a4,0(a0)         BROKEN
+    pin4           0 / 2       movc a4,0 ; stc ; +6 insns  ; ldc a5,0(a0)         BROKEN
+
+**QUOTE THE IMAGE-LEVEL NUMBER, NEVER THE DRAW-LEVEL ONE.** The driver states the rule itself:
+*"R-16 and the S-12 wedge clustering are both per-IMAGE, so three boots of one image is ONE draw."*
+Under that rule there are eight units, not thirty:
+
+    3 PRESERVED images all wedge vs 5 BROKEN images all clean   p = 0.018
+    regpatch alone vs baseline alone                            p = 0.143
+    (draw-level 10/13 vs 0/16 gives p = 1.4e-05 and MUST NOT be quoted -- it is the same
+     result with N inflated ~4x by repeat boots of the same binary)
+
+### And it is not yet a finding, for a reason that no amount of re-tallying fixes
+
+* **The entire BROKEN column is unauthenticated returns.** A wedge latches an `mepc` that
+  identifies its image; a return latches nothing. Every draw supporting the cure is a return.
+* **`regpatch.sh` and `nullctl.sh` stage nothing and rebuild nothing** — no `cp -f`, no
+  `make build` — unlike `pin.sh`, `deadcap.sh`, `padframe.sh` and `slot1.sh`, which all do. Those
+  series depend entirely on unrecorded manual staging, and this folder's own exclusion of
+  `rp-7/8/9` proves at least one unrecorded image swap happened inside them.
+* **The one in-configuration baseline wedge cannot be attributed.** `nc-2` latched
+  `mepc = 0x828f4814`. The three-byte patch touches `0x104808` and `0x10480c` and leaves
+  `0x104814` byte-identical — `5b 27 07 0b` in both images, checked in the disassembly — so `nc-2`
+  is equally consistent with **the regpatched image having wedged**, which would turn the headline
+  arm from a 0/4 cure into a wedger and kill the result outright.
+* **`verdict.py` cannot catch this class.** Its infra rule is a whole-log test that can only ever
+  convert `WEDGED` into `VOID`; a void that RETURNS — a stale image running a curing binary —
+  passes through as a valid return. That is the exact column the signal lives in.
+
+### Two corrections to the grouping itself
+
+* **The grouping is well-defined only under a window of fewer than 8 instructions.** A
+  `movc a4, zero` sits 8 instructions before the subject `ldc a4` in EVERY arm including
+  `regpatch`, whose own docstring concedes it. At a window of 8 or more, every arm is "preserved"
+  and the split vanishes. The natural reading — the source of the *immediately preceding*
+  capability store — is the one used, and it was never written down before.
+* **`dc-tagged` does not break the register match; it breaks the VALUE.** Its window stores from
+  `a4` and reloads into `a4`. What changed is that the stored value came from a tagged capability
+  rather than from `movc rD, zero`. Filing it under "register broken" conflates two variables.
+
+### What the eight arms actually identify
+
+Every single-variable account is falsified by one arm:
+
+    store TARGET ADDRESS   s0-0x120 appears in a wedger and in a curer
+    fault-site VA/layout   wedgers at 0x104810/0x104810/0x104808, curers span 0x104804..0x104828
+    store ADJACENCY        adjacent in baseline, pf64, scalar (wedge) AND regpatch, dc-null (cure)
+    a null store PRESENT   present in regpatch and dc-null, both cure
+    register match ALONE   present in dc-tagged, which cures
+
+**Only the CONJUNCTION separates all eight: the capability store immediately before the reload
+stores a `movc`-produced null AND its source register is the reload's destination.** Nothing in
+the set dissociates the null-value half from the register half, so "the register pairing" — the
+phrase this folder has already retracted twice — is still not what the data supports.
+
+Not excluded: `.bss` size, the firmware rebuild that every arm except `regpatch` and the null
+control received, and heap/cache/timing state.
+
 ### What is actually being done about it
 
 More one-bit draws cannot fix this -- at a 3-in-4 baseline, four arm draws are the best case above.
