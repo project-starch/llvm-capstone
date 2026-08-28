@@ -470,7 +470,62 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
-## MECHANISM: a STORE-TO-LOAD DRAIN HAZARD. Closing the window eliminates the wedge, 0/4 vs 4/4
+## RETRACTED: the "store-to-load drain hazard" mechanism, and the dose-response that supported it
+
+**The cure is real. The mechanism is not established, and one of the three data points was
+fabricated by an instrument error.**
+
+**1. The middle rung never ran.** `f3`, the only wedge in the entry-fence arm, was an **R-16 entry
+stall**, and the driver said so in the log: *"INFRASTRUCTURE WEDGE ... NO VERDICT ... no `SQ:
+G/enter` -- the domain was CREATED but never ENTERED ... Do NOT attribute this to the code under
+test."* The classifier counted `SLT-SUMMARY` lines behind a `booted` guard testing `Linux version`
+or `SQ: A/dom-ok` — **an entry stall emits both**. A gate whose condition the failure mode always
+satisfies, which is the exact class this project keeps paying for. It needed `SQ: G/enter` per arm.
+
+    CORRECTED:  not drained          wedged 4/4 in the paired boots
+                fence at entry       0 / 3   + 1 VOID
+                fence before reload  0 / 4
+
+**Flat. There is no dose-response**, and "Fisher = 0.004" and "the residual is the three trailing
+stores" both go with it.
+
+**2. The fence is NOT layout-neutral, and layout now fits BETTER than drain.** It shifts the reload
+and its consumer by +4 (`0x104810/0x104814` → `0x104814/0x104818`) and moves **1165 of 3633
+symbols**. Codegen is otherwise neutral — 2866 instructions, same order, same registers — so
+*semantically* neutral was true and *layout*-neutral was never checked. Decisively: the two fence
+placements have **byte-identical symbol tables**. They are the SAME layout perturbation but
+DIFFERENT drain doses (3 stores remaining vs 0). Drain predicts they differ; layout predicts they
+match. **They match.**
+
+**3. N=4 cannot bear the weight.** This folder's own finding is that behaviour is a deterministic
+function of the image and layout selects it, so the fenced boots are **one image draw**, not four.
+Layout-null probability is ~0.21–0.46, not 0.045. Pairing controls boot state; it does not control
+image identity, which is the confounded variable.
+
+**4. Drain does not predict `tval = 0`.** An unforwarded in-flight store yields the STALE prior
+content, and here that is non-zero (`0x82be4cd0` in the halted read). A surviving alternative
+predicts `{cursor 0, NOT_CAP}` exactly: a **wrong-address forward** of the null capability stored
+one instruction earlier by `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` — the S-10/R-19/R-20
+family this folder already lists as live. **A fence cures both; this experiment cannot separate
+them.**
+
+**Also corrected:** the fenced reload was labelled `+0x88`; from `0x104788` it is `+0x8c`. The
+address shift went unnoticed at the moment the mechanism was written — which is itself the tell.
+
+**WHAT SURVIVES, and it is worth having:** a `fence rw,rw` immediately before the reload eliminates
+the wedge, 0/4 against 4/4 unmodified in the same boots (3 of the 4 signature-confirmed `mcause 25`
+/ `mepc 0x828f4814` / `tval 0`; `g4` was a genuine wedge with a non-capability `mcause 3` and is not
+an S-12 confirmation). A fence at entry gives the same 0/3. **Usable as a mitigation. Not a
+mechanism.**
+
+**THE DISCRIMINATOR, one boot:** rebuild with a **4-byte `nop`** at the identical injection point,
+verified to produce a symbol table identical to the fenced build modulo one opcode. `nop` returns →
+the +4 displacement is the operative variable and drain is refuted as the cure's mechanism. `nop`
+wedges while `fence` returns → the fence's SEMANTICS do the work, and drain or the null-store
+forward survives as a class.
+
+## SUPERSEDED — the drain mechanism as originally written
+ Closing the window eliminates the wedge, 0/4 vs 4/4
 
 Fencing immediately before the reload removes the failure entirely, and the three conditions form a
 monotone dose-response with a **semantically neutral** intervention throughout — no value, control
