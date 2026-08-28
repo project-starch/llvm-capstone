@@ -1188,6 +1188,51 @@ fi
 #                   any drain / forwarding mechanism is refuted as its explanation.
 #   nop WEDGES   -> the fence's SEMANTICS do the work, not its bytes, and a memory-ordering
 #                   mechanism survives as a class.
+# CAPSTONE_LATE_INIT=pidx|scalar -- move one initialiser from BEFORE the reload to AFTER it.
+#
+# SEPARATES the two surviving memory-ordering accounts. Both are cured by a fence, so the fence
+# cannot tell them apart:
+#   (a) store-to-load DRAIN of the subject stc at +0x40 -- predicts a STALE value, which here is a
+#       NON-ZERO cursor, so it does not explain tval = 0;
+#   (b) WRONG-ADDRESS FORWARD of the null capability written one instruction before the reload by
+#       `movc a4, zero; stc a4, 0x0(a5)` -- predicts {cursor 0, NOT_CAP} EXACTLY, as observed.
+#
+# `pidx` moves `Index *pIdx = 0;` (a CAPABILITY null store) to after `pWC = &pWInfo->sWC;`, taking
+# the null store out of the window. It is not read in between, so semantics are unchanged.
+#
+# `scalar` is the LAYOUT-MATCHED CONTROL: it moves `int iReleaseReg = 0;` instead -- a comparable
+# code motion that leaves the null CAPABILITY store where it is. Without this arm, a cure from
+# `pidx` could not be told from an ordinary layout effect, which is precisely the confound that
+# forced a retraction earlier in this investigation.
+#
+#   pidx cures, scalar does not -> (b): the null capability store is the forwarded value.
+#   both cure                   -> not specific to the capability store; store COUNT or position.
+#   neither cures               -> (a) survives; the null store is not involved.
+if [[ -n "${CAPSTONE_LATE_INIT:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_LATE_INIT" <<'PYLI'
+import sys
+path, which = sys.argv[1], sys.argv[2]
+s = open(path).read()
+# The bare `pWC = &pWInfo->sWC;` line occurs 3 times; anchor on the UNIQUE preceding
+# declaration so the insertion point cannot be guessed wrong.
+PWC = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(PWC) != 1:
+    sys.exit(f"LATE_INIT: pWC anchor is not unique ({s.count(PWC)}) -- refusing to guess")
+if which == "pidx":
+    old, new, late = "  Index *pIdx = 0;          /* Index used by loop (if any) */",                      "  Index *pIdx;              /* Index used by loop (if any) */", "  pIdx = 0;"
+elif which == "scalar":
+    old, new, late = "  int iReleaseReg = 0;      /* Temp register to free before returning */",                      "  int iReleaseReg;          /* Temp register to free before returning */", "  iReleaseReg = 0;"
+else:
+    sys.exit(f"LATE_INIT: unknown mode {which!r}")
+if s.count(old) != 1:
+    sys.exit(f"LATE_INIT: declaration anchor is not unique ({s.count(old)}) -- refusing to guess")
+s = s.replace(old, new, 1)
+s = s.replace(PWC, PWC + "\n" + late, 1)
+open(path, "w").write(s)
+print(f"   LATE_INIT[{which}]: initialiser moved to after the pWC assignment")
+PYLI
+fi
+
 if [[ -n "${CAPSTONE_WNOP_BEFORE:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WNOP_BEFORE" <<'PYNB'
 import sys

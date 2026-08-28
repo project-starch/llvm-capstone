@@ -470,6 +470,45 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## THE NULL CAPABILITY STORE IS IMPLICATED: moving it out cures 0/5, a layout-matched control does not (4/5)
+
+The two surviving memory-ordering accounts are now separated, and the separation is layout-controlled.
+
+`CAPSTONE_LATE_INIT` moves ONE initialiser from before the reload to after it, keeping semantics
+identical (neither variable is read in between):
+
+* **`pidx`** moves `Index *pIdx = 0;` — the **capability** null store, `movc a4, zero; stc a4, 0x0(a5)`,
+  written one instruction before the reload. Verified in the disassembly: the pair now sits at
+  `0x104818`, AFTER the reload at `0x104804` and its consumer at `0x104808`.
+* **`scalar`** moves `int iReleaseReg = 0;` instead — a comparable code motion that LEAVES the null
+  capability store in the window. This arm exists so a cure from `pidx` cannot be dismissed as
+  "some instructions moved", which is the confound that forced the earlier retraction.
+
+    arm      what left the window            wedged / draws
+    pidx     the null CAPABILITY store       0 / 5
+    scalar   a scalar initialiser            4 / 5
+
+Fisher exact (hypergeometric, 4 wedges in 10 draws) = **0.024**.
+
+**MECHANISM.** Taken with the two prior controls — a fence cures (so the cure is SEMANTIC), and a
+`nop` at byte-identical layout wedges 4/4 (so it is NOT layout) — the wedge requires the **null
+capability store to be in flight in the window before the reload**. That is a **wrong-address
+forward**: the `{cursor 0, NOT_CAP}` written by `movc a4, zero; stc a4, 0x0(a5)` to `s0-0x120` is
+delivered to an `ldc` addressed at `s0-0x70`. It is the only surviving account that predicts
+`tval = 0` EXACTLY; a store-to-load drain of the subject `stc` predicts a STALE value, which here is
+a non-zero cursor.
+
+**This is the S-10 / R-19 / R-20 write-buffer forwarding family**, which this folder already lists
+as live and which the S-10 reflash did NOT clear — `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`) is
+still word-granular against a 16-byte capability on the resident bitstream.
+
+**LIMITS, stated.** N=5 per arm; p = 0.024 is significant but not overwhelming. One `pidx` boot
+(draw 3) had a control that did not wedge and is a weak boot, though `pidx` returned in it anyway.
+In `scalar` draws 2-5 the variant wedged first, so the paired control was collateral — the scalar
+wedges are the data points, and they are consistent with the unmodified ~100% rate. And this
+identifies the store whose VALUE is delivered; it does not yet identify the RTL structure that
+misroutes it.
+
 ## LAYOUT REFUTED: a NOP at the identical point wedges 4/4 where a FENCE returns 0/7
 
 The objection that killed the previous mechanism claim — that the fence's +4 displacement, not its
