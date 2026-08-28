@@ -1,0 +1,535 @@
+# S-12 HIGH-POWER BASELINE PROBE.  NOT a delta-debug rung -- an INSTRUMENT.
+#
+# Why this file exists: every S-12 arm-vs-baseline comparison so far scored a 1-bit,
+# ~8-minute draw (wedge or return) against a baseline whose wedge rate in the SAME slot
+# configuration is measured at 1 wedge in 2 valid draws, not the 0.94 that was borrowed
+# from a DIFFERENT slot configuration.  At that rate five draws cannot separate a cured
+# arm from a lucky one: 7/7 returns against a 1-in-2 baseline is Fisher p ~= 0.22.
+#
+# The fix is not more draws, it is more prepares per draw.  If the per-prepare wedge
+# probability is p, a file with N independent depth-2 prepares wedges with probability
+# 1-(1-p)^N -- ~0.998 at N=120 even for p as low as 0.05.  So a boot that COMPLETES this
+# file is strong evidence the arm is cured, and a boot that wedges is the expected
+# baseline behaviour rather than a coin flip.
+#
+# Design constraints, each of which has burned a run before:
+#   * Every table is EMPTY.  S-12 fires in sqlite3WhereCodeOneLoopStart at PREPARE time,
+#     with no rows processed -- adding rows would test the wrong path and cost runtime.
+#   * Every query is a BARE two-table cartesian join, byte-for-byte the shape of the
+#     dd2_join rung that wedges, and NOT the WHERE-qualified shape: an equality predicate
+#     makes the planner build an automatic covering index and a Bloom filter, which is a
+#     DIFFERENT codegen path.  Checked with EXPLAIN QUERY PLAN -- the bare join gives the
+#     two plain SCANs that dd2_join gives, the qualified one does not.
+#   * Every query TEXT is distinct.  sqlite3_prepare_v2 has no cross-call statement cache,
+#     so this is belt-and-braces, but a shared text is exactly the kind of silent
+#     deduplication that would turn 120 prepares into 1 and make a clean run meaningless.
+#   * Expected result sets are EMPTY, so a completed run reports query_pass=120 and any
+#     nonzero query_fail means the instrument, not the silicon, needs looking at.
+#
+# POSITIVE CONTROL: this file must wedge the unmodified baseline on silicon.  If it does
+# not, it is not a probe for anything and no arm result taken with it may be believed.
+
+statement ok
+CREATE TABLE s0(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s2(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s3(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s4(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s5(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s6(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+CREATE TABLE s7(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT x0.a FROM s0 AS x0, s1 AS y0
+----
+
+query I nosort
+SELECT x1.b FROM s1 AS x1, s1 AS y1
+----
+
+query I nosort
+SELECT x2.c FROM s2 AS x2, s1 AS y2
+----
+
+query I nosort
+SELECT x3.d FROM s3 AS x3, s1 AS y3
+----
+
+query I nosort
+SELECT x4.e FROM s4 AS x4, s1 AS y4
+----
+
+query I nosort
+SELECT x5.a FROM s5 AS x5, s1 AS y5
+----
+
+query I nosort
+SELECT x6.b FROM s6 AS x6, s1 AS y6
+----
+
+query I nosort
+SELECT x7.c FROM s7 AS x7, s1 AS y7
+----
+
+query I nosort
+SELECT x8.d FROM s0 AS x8, s2 AS y8
+----
+
+query I nosort
+SELECT x9.e FROM s1 AS x9, s2 AS y9
+----
+
+query I nosort
+SELECT x10.a FROM s2 AS x10, s2 AS y10
+----
+
+query I nosort
+SELECT x11.b FROM s3 AS x11, s2 AS y11
+----
+
+query I nosort
+SELECT x12.c FROM s4 AS x12, s2 AS y12
+----
+
+query I nosort
+SELECT x13.d FROM s5 AS x13, s2 AS y13
+----
+
+query I nosort
+SELECT x14.e FROM s6 AS x14, s2 AS y14
+----
+
+query I nosort
+SELECT x15.a FROM s7 AS x15, s2 AS y15
+----
+
+query I nosort
+SELECT x16.b FROM s0 AS x16, s3 AS y16
+----
+
+query I nosort
+SELECT x17.c FROM s1 AS x17, s3 AS y17
+----
+
+query I nosort
+SELECT x18.d FROM s2 AS x18, s3 AS y18
+----
+
+query I nosort
+SELECT x19.e FROM s3 AS x19, s3 AS y19
+----
+
+query I nosort
+SELECT x20.a FROM s4 AS x20, s3 AS y20
+----
+
+query I nosort
+SELECT x21.b FROM s5 AS x21, s3 AS y21
+----
+
+query I nosort
+SELECT x22.c FROM s6 AS x22, s3 AS y22
+----
+
+query I nosort
+SELECT x23.d FROM s7 AS x23, s3 AS y23
+----
+
+query I nosort
+SELECT x24.e FROM s0 AS x24, s4 AS y24
+----
+
+query I nosort
+SELECT x25.a FROM s1 AS x25, s4 AS y25
+----
+
+query I nosort
+SELECT x26.b FROM s2 AS x26, s4 AS y26
+----
+
+query I nosort
+SELECT x27.c FROM s3 AS x27, s4 AS y27
+----
+
+query I nosort
+SELECT x28.d FROM s4 AS x28, s4 AS y28
+----
+
+query I nosort
+SELECT x29.e FROM s5 AS x29, s4 AS y29
+----
+
+query I nosort
+SELECT x30.a FROM s6 AS x30, s4 AS y30
+----
+
+query I nosort
+SELECT x31.b FROM s7 AS x31, s4 AS y31
+----
+
+query I nosort
+SELECT x32.c FROM s0 AS x32, s5 AS y32
+----
+
+query I nosort
+SELECT x33.d FROM s1 AS x33, s5 AS y33
+----
+
+query I nosort
+SELECT x34.e FROM s2 AS x34, s5 AS y34
+----
+
+query I nosort
+SELECT x35.a FROM s3 AS x35, s5 AS y35
+----
+
+query I nosort
+SELECT x36.b FROM s4 AS x36, s5 AS y36
+----
+
+query I nosort
+SELECT x37.c FROM s5 AS x37, s5 AS y37
+----
+
+query I nosort
+SELECT x38.d FROM s6 AS x38, s5 AS y38
+----
+
+query I nosort
+SELECT x39.e FROM s7 AS x39, s5 AS y39
+----
+
+query I nosort
+SELECT x40.a FROM s0 AS x40, s6 AS y40
+----
+
+query I nosort
+SELECT x41.b FROM s1 AS x41, s6 AS y41
+----
+
+query I nosort
+SELECT x42.c FROM s2 AS x42, s6 AS y42
+----
+
+query I nosort
+SELECT x43.d FROM s3 AS x43, s6 AS y43
+----
+
+query I nosort
+SELECT x44.e FROM s4 AS x44, s6 AS y44
+----
+
+query I nosort
+SELECT x45.a FROM s5 AS x45, s6 AS y45
+----
+
+query I nosort
+SELECT x46.b FROM s6 AS x46, s6 AS y46
+----
+
+query I nosort
+SELECT x47.c FROM s7 AS x47, s6 AS y47
+----
+
+query I nosort
+SELECT x48.d FROM s0 AS x48, s7 AS y48
+----
+
+query I nosort
+SELECT x49.e FROM s1 AS x49, s7 AS y49
+----
+
+query I nosort
+SELECT x50.a FROM s2 AS x50, s7 AS y50
+----
+
+query I nosort
+SELECT x51.b FROM s3 AS x51, s7 AS y51
+----
+
+query I nosort
+SELECT x52.c FROM s4 AS x52, s7 AS y52
+----
+
+query I nosort
+SELECT x53.d FROM s5 AS x53, s7 AS y53
+----
+
+query I nosort
+SELECT x54.e FROM s6 AS x54, s7 AS y54
+----
+
+query I nosort
+SELECT x55.a FROM s7 AS x55, s7 AS y55
+----
+
+query I nosort
+SELECT x56.b FROM s0 AS x56, s0 AS y56
+----
+
+query I nosort
+SELECT x57.c FROM s1 AS x57, s0 AS y57
+----
+
+query I nosort
+SELECT x58.d FROM s2 AS x58, s0 AS y58
+----
+
+query I nosort
+SELECT x59.e FROM s3 AS x59, s0 AS y59
+----
+
+query I nosort
+SELECT x60.a FROM s4 AS x60, s0 AS y60
+----
+
+query I nosort
+SELECT x61.b FROM s5 AS x61, s0 AS y61
+----
+
+query I nosort
+SELECT x62.c FROM s6 AS x62, s0 AS y62
+----
+
+query I nosort
+SELECT x63.d FROM s7 AS x63, s0 AS y63
+----
+
+query I nosort
+SELECT x64.e FROM s0 AS x64, s1 AS y64
+----
+
+query I nosort
+SELECT x65.a FROM s1 AS x65, s1 AS y65
+----
+
+query I nosort
+SELECT x66.b FROM s2 AS x66, s1 AS y66
+----
+
+query I nosort
+SELECT x67.c FROM s3 AS x67, s1 AS y67
+----
+
+query I nosort
+SELECT x68.d FROM s4 AS x68, s1 AS y68
+----
+
+query I nosort
+SELECT x69.e FROM s5 AS x69, s1 AS y69
+----
+
+query I nosort
+SELECT x70.a FROM s6 AS x70, s1 AS y70
+----
+
+query I nosort
+SELECT x71.b FROM s7 AS x71, s1 AS y71
+----
+
+query I nosort
+SELECT x72.c FROM s0 AS x72, s2 AS y72
+----
+
+query I nosort
+SELECT x73.d FROM s1 AS x73, s2 AS y73
+----
+
+query I nosort
+SELECT x74.e FROM s2 AS x74, s2 AS y74
+----
+
+query I nosort
+SELECT x75.a FROM s3 AS x75, s2 AS y75
+----
+
+query I nosort
+SELECT x76.b FROM s4 AS x76, s2 AS y76
+----
+
+query I nosort
+SELECT x77.c FROM s5 AS x77, s2 AS y77
+----
+
+query I nosort
+SELECT x78.d FROM s6 AS x78, s2 AS y78
+----
+
+query I nosort
+SELECT x79.e FROM s7 AS x79, s2 AS y79
+----
+
+query I nosort
+SELECT x80.a FROM s0 AS x80, s3 AS y80
+----
+
+query I nosort
+SELECT x81.b FROM s1 AS x81, s3 AS y81
+----
+
+query I nosort
+SELECT x82.c FROM s2 AS x82, s3 AS y82
+----
+
+query I nosort
+SELECT x83.d FROM s3 AS x83, s3 AS y83
+----
+
+query I nosort
+SELECT x84.e FROM s4 AS x84, s3 AS y84
+----
+
+query I nosort
+SELECT x85.a FROM s5 AS x85, s3 AS y85
+----
+
+query I nosort
+SELECT x86.b FROM s6 AS x86, s3 AS y86
+----
+
+query I nosort
+SELECT x87.c FROM s7 AS x87, s3 AS y87
+----
+
+query I nosort
+SELECT x88.d FROM s0 AS x88, s4 AS y88
+----
+
+query I nosort
+SELECT x89.e FROM s1 AS x89, s4 AS y89
+----
+
+query I nosort
+SELECT x90.a FROM s2 AS x90, s4 AS y90
+----
+
+query I nosort
+SELECT x91.b FROM s3 AS x91, s4 AS y91
+----
+
+query I nosort
+SELECT x92.c FROM s4 AS x92, s4 AS y92
+----
+
+query I nosort
+SELECT x93.d FROM s5 AS x93, s4 AS y93
+----
+
+query I nosort
+SELECT x94.e FROM s6 AS x94, s4 AS y94
+----
+
+query I nosort
+SELECT x95.a FROM s7 AS x95, s4 AS y95
+----
+
+query I nosort
+SELECT x96.b FROM s0 AS x96, s5 AS y96
+----
+
+query I nosort
+SELECT x97.c FROM s1 AS x97, s5 AS y97
+----
+
+query I nosort
+SELECT x98.d FROM s2 AS x98, s5 AS y98
+----
+
+query I nosort
+SELECT x99.e FROM s3 AS x99, s5 AS y99
+----
+
+query I nosort
+SELECT x100.a FROM s4 AS x100, s5 AS y100
+----
+
+query I nosort
+SELECT x101.b FROM s5 AS x101, s5 AS y101
+----
+
+query I nosort
+SELECT x102.c FROM s6 AS x102, s5 AS y102
+----
+
+query I nosort
+SELECT x103.d FROM s7 AS x103, s5 AS y103
+----
+
+query I nosort
+SELECT x104.e FROM s0 AS x104, s6 AS y104
+----
+
+query I nosort
+SELECT x105.a FROM s1 AS x105, s6 AS y105
+----
+
+query I nosort
+SELECT x106.b FROM s2 AS x106, s6 AS y106
+----
+
+query I nosort
+SELECT x107.c FROM s3 AS x107, s6 AS y107
+----
+
+query I nosort
+SELECT x108.d FROM s4 AS x108, s6 AS y108
+----
+
+query I nosort
+SELECT x109.e FROM s5 AS x109, s6 AS y109
+----
+
+query I nosort
+SELECT x110.a FROM s6 AS x110, s6 AS y110
+----
+
+query I nosort
+SELECT x111.b FROM s7 AS x111, s6 AS y111
+----
+
+query I nosort
+SELECT x112.c FROM s0 AS x112, s7 AS y112
+----
+
+query I nosort
+SELECT x113.d FROM s1 AS x113, s7 AS y113
+----
+
+query I nosort
+SELECT x114.e FROM s2 AS x114, s7 AS y114
+----
+
+query I nosort
+SELECT x115.a FROM s3 AS x115, s7 AS y115
+----
+
+query I nosort
+SELECT x116.b FROM s4 AS x116, s7 AS y116
+----
+
+query I nosort
+SELECT x117.c FROM s5 AS x117, s7 AS y117
+----
+
+query I nosort
+SELECT x118.d FROM s6 AS x118, s7 AS y118
+----
+
+query I nosort
+SELECT x119.e FROM s7 AS x119, s7 AS y119
+----
+
