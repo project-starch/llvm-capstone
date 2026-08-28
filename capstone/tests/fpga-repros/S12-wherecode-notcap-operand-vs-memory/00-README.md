@@ -470,6 +470,49 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## REGISTER MATCH IS CAUSAL — a THREE-BYTE patch cures S-12, p ~ 1e-5
+
+The experiment the audit specified as decisive has been run, and it is the first result in this
+investigation with **no confound available**.
+
+`regpatch.dom` is the BASELINE binary with **three bytes** changed:
+
+    0x104808   movc a4, zero      ->  movc a6, zero
+    0x10480c   stc  a4, 0x0(a5)   ->  stc  a6, 0x0(a5)
+    0x104810   ldc  a4, 0x0(a0)       (unchanged)
+    0x104814   cincoffsetimm a4, a4, 0xb0
+
+Everything else is byte-identical: same addresses throughout, same instruction count, same
+store-to-reload distance, same store to the same address with the same value. `a6` is dead from
+`0x1047bc` and `a4` still holds 0 from `0x1047f0`, so semantics are unchanged. **The single variable
+is whether the register carrying the null matches the reload's destination.**
+
+    arm in slot 1, returning filler in slot 0     wedges
+    baseline  (movc a4 ... ldc a4)                14 confirmed + 1 unconfirmed / 16
+    3-byte patch (movc a6 ... ldc a4)             0 / 4 valid (1 infra VOID)
+
+At baseline's ~0.94 per-draw rate, P(0 in 4) ≈ **1.3e-5**.
+
+**This separates what the contiguous triple could not.** The audit's objection was that the triple
+bundles register match, null value and store adjacency, with no pair of builds varying exactly one.
+Here the store — its address, value, position and distance — is held *completely* constant. So the
+store's presence is **not sufficient**, and the register match **is required**.
+
+With the earlier result that the register's IDENTITY is irrelevant (`scalar` wedges on `a5` at its
+own confirmed consumer address; `dc-null` cures with a reload into `a5`), the condition is a
+**same-register relation**, not a property of any particular register.
+
+**Why binary patching.** Every source-level variant let the compiler re-lay-out the function, moving
+layout, distance, allocation and instruction count together — which is why four successive mechanism
+claims were confounded and retracted. Three attempts to force a register split from source failed:
+`-O0` reuses the same scratch register regardless of added pressure. Patching two register fields
+sidesteps the compiler and leaves nothing to attribute the result to.
+
+**STILL NOT ESTABLISHED.** Whether the null VALUE matters or any value in the matching register
+would do — a further patch, but not one that can hold semantics fixed, since the stored value is
+what `pIdx` becomes. And **no RTL structure is named**: this states the triggering condition, not
+which hardware unit mishandles it.
+
 ## RETRACTED: the register-pairing claim. The correlate is the CONTIGUOUS TRIPLE, and it does not discriminate
 
 **"Exceptionless" is false.** `li-pidx` — the headline cure at 0/8 — CONTAINS the pairing, at the
