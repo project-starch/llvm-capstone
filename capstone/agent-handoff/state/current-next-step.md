@@ -55,7 +55,16 @@ verified in the artifact (`lui a0,0xc; addi a1,a0,-0x111`, faulting insn `5b 25 
                        be a PC-capability revocation failure, which nobody has been looking for.
     EXCX present    -> M-mode trap entry works, and a firmware-only change can turn every S-12
                        wedge into a returned fault code -- the biggest instrument win available.
-    EXCX absent     -> M-mode entry itself is failing; no monitor-side fix is possible.
+    EXCX absent
+      AND it wedged -> M-mode trap entry itself is failing, and that is the ONE branch in which
+                       the directed Verilator sim (capmode_q / npc_metadata_q / pc_cap_ex_valid,
+                       does anything commit at mtvec) becomes the right instrument rather than a
+                       detour away from the blocker.
+    returns clean,
+      no fault      -> the run's premise is broken, not confirmed: the probe is unconditional at
+                       SLT entry, so either the wrong image booted -- check the per-run sha256 the
+                       fixed freshness gate now prints -- or this silicon is permissive on
+                       cincoffsetimm over an integer, which S-12's existence argues against.
 
 **Boot 2 — the high-power probe.** `slt/s12stress.test` puts 120 distinct bare two-table joins in
 one domain invocation, and `CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the
