@@ -470,6 +470,51 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## THE CORRELATE IS A REGISTER PAIRING, NOT THE STORE — exceptionless across 6 builds, 38 draws
+
+**The address hypothesis is refuted and the store is incidental.** `pf64` keeps the null capability
+store in the window but moves its target from `s0-0x120` to `s0-0x160`, leaving the reload at
+`0x104810` and the consumer at `0x104814` — the SAME addresses as baseline, so no layout shift of
+the fault site at all. It wedges **4/4**, signature-confirmed (`tval 0`, `mepc 0x828f4814`).
+
+Cross-checking register allocation across every variant built this session:
+
+    variant         movc rD,zero before ldc rD (SAME register)?     wedges
+    baseline        movc a4 -> ldc a4      YES                      15 / 15
+    scalar          movc a5 -> ldc a5      YES                       3 / 5
+    pf64            movc a4 -> ldc a4      YES                       4 / 4
+    pidx            movc moved AFTER the ldc                         0 / 8
+    deadcap-null    movc a4 -> ldc a5      DIFFERENT REGISTER        0 / 4
+    deadcap-tagged  no movc zero before the ldc                      0 / 3
+
+**Every wedging build pairs `movc rD, zero` with an `ldc` into the SAME register; every curing build
+breaks that pairing** — by moving the `movc` after the reload, by storing a tagged value instead of
+null, or by the reload landing in a different register. The store's address, value and presence all
+varied freely across the cures and none of them tracks the outcome.
+
+**It predicts `tval = 0` EXACTLY rather than approximately.** `movc rD, zero` writes
+`{cursor 0, NOT_CAP}` into rD. If the `ldc`'s writeback to rD is lost or late, the consumer reads
+back precisely movc's own value — the observed faulting operand IS movc's output. No memory-side
+account reaches `tval = 0` without an extra assumption; every one of them predicts a STALE value,
+which here is a non-zero cursor.
+
+It also explains **why a fence cures** (it perturbs the timing between two writes to rD) and why
+`deadcap-null` cured **while keeping a null capability store in the window** — its reload targeted
+`a5` while the `movc` wrote `a4`.
+
+**LIMITS, and they matter.** This is a correlation across builds, not a demonstrated mechanism. The
+pairing is necessary in every case observed, but **bare-metal tests reproducing `movc`/`stc`/`ldc` on
+one register did NOT wedge** (`s12-cap-waw-pressure.S`, `s12-stc-producer.S`), so an additional
+ingredient supplied by the nested codegen context is still required — which is consistent with
+everything else in this folder, since the instruction sequence alone was never sufficient. The six
+variants are also six binaries with differing layout; `pf64` is the tightest control, holding the
+reload and consumer at baseline addresses, and it wedges.
+
+**WHERE THIS POINTS:** a register writeback / WAW hazard on rD between `movc rD, zero` and a
+subsequent `ldc rD`, NOT the write-buffer forwarding family. That is a different structure from the
+one the previous three accounts pointed at, and it is the first account that derives `tval = 0`
+rather than assuming it.
+
 ## RE-ESTABLISHED with the arm in SLOT 1: the null capability store's PRESENCE is required
 
 The retraction below was about instrumentation, not about the effect. Re-run with the arm under test
