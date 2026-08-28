@@ -470,6 +470,45 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## LAYOUT REFUTED: a NOP at the identical point wedges 4/4 where a FENCE returns 0/7
+
+The objection that killed the previous mechanism claim — that the fence's +4 displacement, not its
+semantics, might be the cure, since S-12 is layout-sensitive — is now tested and **refuted**.
+
+`CAPSTONE_WNOP_BEFORE` puts a 4-byte `nop` (`addi x0, x0, 0`) at the *identical* injection point.
+**The two builds have BYTE-IDENTICAL SYMBOL TABLES** — verified by diffing `llvm-objdump -t`, whose
+only difference was the filename in objdump's own header line; stripped, both hash to
+`a6174d6e9d1b90a7e24a`. Same four bytes, same displacement of the reload (`0x104814`) and its
+consumer (`0x104818`), same addresses throughout. The sole difference is whether the inserted
+instruction carries memory semantics.
+
+    build    layout                  inserted instruction        result
+    nop      identical symbol table  addi x0, x0, 0  (inert)     WEDGED 4 / 4
+    fence    identical symbol table  fence rw,rw     (ordering)  0 wedges / 7
+
+**So the cure is SEMANTIC, not positional.** Layout is excluded as the explanation, and a
+memory-ordering mechanism is reinstated on evidence rather than on assumption. The `nop` arm also
+supplies something the fence arm could not: a same-layout POSITIVE control, wedging 4/4, which
+proves the comparison can produce a wedge at that exact geometry.
+
+**WHAT IS STILL NOT SEPARATED.** Two memory-ordering accounts remain, and a fence cures both:
+
+* **(a) store-to-load drain** — the subject `stc` at `+0x40` has not landed when the `ldc` at
+  `+0x88` reads. Predicts a STALE value, which here is a non-zero cursor, so it does not by itself
+  explain `tval = 0`.
+* **(b) wrong-address forward** — the null capability written one instruction earlier by
+  `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` is forwarded to the reload. Predicts
+  `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed.
+
+**(b) fits `tval = 0` and (a) does not**, so (b) is currently the better-supported of the two — and
+it is the S-10 / R-19 / R-20 write-buffer forwarding family this folder already lists as live, which
+the S-10 reflash did NOT clear.
+
+**THE NEXT DISCRIMINATOR:** move the null-capability store out of the window. `Index *pIdx = 0;`
+compiles to that `movc`/`stc` pair; relocating the initialiser to after `pWC = &pWInfo->sWC;` keeps
+semantics identical (it is not read in between) and removes the null store from the window.
+Wedge disappears → **(b)**, the null store is the forwarded value. Wedge persists → **(a)**.
+
 ## RETRACTED: the "store-to-load drain hazard" mechanism, and the dose-response that supported it
 
 **The cure is real. The mechanism is not established, and one of the three data points was

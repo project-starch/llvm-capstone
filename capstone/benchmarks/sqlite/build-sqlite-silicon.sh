@@ -1162,6 +1162,62 @@ fi
 # The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
 # on entry means the caller handed over plain data; anything else means the tag was alive at the
 # boundary and the spill/reload lost it.
+# CAPSTONE_WFENCE_BEFORE=<literal source text> -- put a fence immediately before that statement.
+#
+# WHY A SECOND POSITION. CAPSTONE_WFENCE injects at the top of the body, which lands AFTER the
+# -O0 argument spills but BEFORE the local `= 0` initialisers -- so three stores still execute
+# between it and the reload, one of them immediately prior. That is the leading candidate for the
+# residual 1-in-4 wedge rate the entry fence leaves behind.
+#
+# Anchoring on the statement itself puts the drain AFTER those initialisers and immediately before
+# the reload, closing the window completely. For S-12 the anchor is `pWC = &pWInfo->sWC;`, which is
+# the source of the faulting `ldc` + `cincoffsetimm a4, a4, 0xb0` pair.
+#
+#   rate goes to 0 -> the store-to-load drain window IS the mechanism, not merely a contributor.
+#   rate unchanged -> the residual is NOT the trailing stores, and the entry fence's effect needs
+#                     a different explanation.
+# Still semantically neutral: a fence changes no value and no control flow.
+# CAPSTONE_WNOP_BEFORE=<literal source text> -- a 4-byte NOP at the same point a fence would go.
+#
+# THE DISCRIMINATOR for the fence result. A fence before the reload eliminates the S-12 wedge
+# (0/7 fenced against 7/7 unmodified), but it is NOT layout-neutral: it shifts the reload and its
+# consumer by +4 and moves 1165 of 3633 symbols, and S-12 is documented here as layout-sensitive.
+# A `nop` is the SAME four bytes and the SAME displacement with NO memory semantics.
+#
+#   nop RETURNS  -> the +4 displacement is the operative variable. The cure is a LAYOUT effect and
+#                   any drain / forwarding mechanism is refuted as its explanation.
+#   nop WEDGES   -> the fence's SEMANTICS do the work, not its bytes, and a memory-ordering
+#                   mechanism survives as a class.
+if [[ -n "${CAPSTONE_WNOP_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WNOP_BEFORE" <<'PYNB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0: sys.exit(f"WNOP_BEFORE: anchor not found: {anchor!r}")
+if n > 1:  sys.exit(f"WNOP_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess")
+s = s.replace(anchor, '__asm__ volatile("addi x0, x0, 0" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WNOP_BEFORE injected ahead of: {anchor}")
+PYNB
+fi
+
+if [[ -n "${CAPSTONE_WFENCE_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE_BEFORE" <<'PYFB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0:
+    sys.exit(f"WFENCE_BEFORE: anchor not found: {anchor!r}")
+if n > 1:
+    sys.exit(f"WFENCE_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess: {anchor!r}")
+s = s.replace(anchor, '__asm__ volatile("fence rw,rw" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WFENCE_BEFORE injected ahead of: {anchor}")
+PYFB
+fi
+
 # CAPSTONE_WFENCE=<fn> -- put a full memory fence at the top of <fn>.
 #
 # WHY. The path from this function's entry to its fault site is 36 instructions, branch-free and
