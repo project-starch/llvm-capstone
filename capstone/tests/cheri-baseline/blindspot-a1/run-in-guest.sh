@@ -32,6 +32,13 @@ sysctl security.cheri.runtime_revocation_every_free_default=$EVERY >/dev/null 2>
   && echo "KNOB every_free=$(sysctl -n security.cheri.runtime_revocation_every_free_default 2>/dev/null)" \
   || echo "KNOB every_free=ABSENT"
 
+# POSITIVE CONTROL FOR THE VEHICLE. A plain heap-buffer-overflow on a malloc'd
+# buffer is the one thing purecap must stop. Without it, every MISS in this table
+# is indistinguishable from a harness that never reports anything.
+# Expect: CONTROL=BEFORE, then a signal (rc>=128), and NO CONTROL=AFTER.
+o=$(timeout 60 ./catch_control 2>&1); rc=$?
+echo "CONTROL rc=$rc out=[$(printf '%s' "$o" | tr '\n\t' ';;' | cut -c1-80)]"
+
 o=$(timeout 60 ./mruby sanity.rb 2>&1); rc=$?
 echo "SANITY rc=$rc out=[$(printf '%s' "$o" | tr '\n\t' ';;' | cut -c1-80)]"
 

@@ -86,8 +86,9 @@ the two or three places where a constant encodes the pointer's width.
 **A1 (mruby 6339): CHERI purecap MISSES it, in all three revocation
 configurations including eager.** The object comes back as a `String` where a `C`
 instance must be, `rc=0` throughout, so it is a wrong answer and not a suppressed
-crash. Harness, result table and the four controls:
-`tests/cheri-baseline/blindspot-a1/`.
+crash. The same harness, in the same boot, CATCHES a plain heap overflow on SIGPROT --
+so this is a measured miss and not a harness that never reports anything. Harness,
+result table and the five controls: `tests/cheri-baseline/blindspot-a1/`.
 
 That is 1 of 36, and the other 35 are worth less than the count suggests.
 **Scripted is not usable.** Of the eleven cases carrying a transcribed script, run
