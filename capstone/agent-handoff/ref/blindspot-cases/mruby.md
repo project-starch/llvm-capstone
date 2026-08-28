@@ -73,7 +73,7 @@ Invisible to purecap **and** to revocation, as-is.
 
 | # | issue | fix commit | affected | component | class | script |
 |---|---|---|---|---|---|---|
-| A1 | 6339 | `0955539cf9bb`, `0972c8477 33e` | <= 3.3.0 | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **yes, the best oracle** |
+| A1 | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **yes, MEASURED both ways** |
 | A2 | 5534 | `e323cd0c6ebd` | 3.0.0 | `class.c` `mrb_alias_method` | **type confusion `REnv*` -> `RProc*`** via free-list reuse | no |
 | A3 | 3542 | UNKNOWN | ~1.2-1.3 | `gc.c` `mrb_gc_mark` | GC lifetime, `tt == MRB_TT_FREE` | yes |
 | A4 | 3550 | `15fba69710c7` (UNVERIFIED) | ~1.2-1.3 | `gc.c`, Fiber | GC lifetime | yes |
@@ -132,28 +132,48 @@ are most of mruby's CVEs (2018-10191, 2018-10199, 2020-6838/6839/6840, 2020-1586
 window case rather than an invisible one: the VM stack is a plain `realloc`'d array,
 so revocation closes it. Do not re-derive it.
 
-## The lead case, and it needs no sanitizer
+## The lead case, MEASURED
 
-**A1, issue 6339.** The returned object is swept mid-`delete`, its slot comes back
-off the page free list as a `String`, and the interpreter hands the wrong object to
-Ruby.
+**A1, issue 6339.** `mrb_ary_delete` keeps the removed element in a local `ret`
+the GC does not know about. The element's `==` runs Ruby, which runs the GC, the
+object is swept while `delete` is still running, and its slot comes back off the
+page free list as a `String`.
 
-```ruby
-$i = 0
-class C
-  def ==(other)
-    GC.start
-    ($i += 1) == 3
-  end
-end
+The runnable specimen is `benchmarks/mruby/cases/a1-6339.rb`. Two things about it
+were learned by building both sides and running them, and neither was obvious:
 
-a = 5.times.map { C.new }
-x = a.delete(C.new)
-GC.start
+**The version range in this table used to say `<= 3.3.0`, and that was wrong in the
+most misleading direction.** No release carries the C `mrb_ary_delete` at all --
+3.2.0, 3.3.0 and 3.4.0 all still have the Ruby-level `Array#delete`. The bug lives
+only in a master window ending at `0972c8477` (2024-09-09). Building the purecap
+tree that was already on disk, mruby 3.0.0, and running the script produced a clean
+answer that meant nothing: the function under test did not exist there.
 
-p x   # a String appears where a C instance must be
-p x   # and prints differently the second time
+**The oracle needs an allocation burst, and without it there is no oracle.** After
+`delete` and `GC.start` the freed slot has not been recycled yet, and
+
+| oracle | affected | fixed |
+|---|---|---|
+| `x.is_a?(C)` | 1 | 1 |
+| `x.class == C` | 1 | 1 |
+| `x.class.to_s == "C"` | 1 | 1 |
+| `x.instance_of?(C)` | 1 | 1 |
+
+every one of them answers 1 on both builds. An earlier version of the specimen
+appeared to work only because it evaluated five oracle expressions in a row, and
+their own string building allocated enough to recycle the slot between them -- so
+the later ones separated and the earlier ones did not. **An oracle that depends on
+its own evaluation order is not an oracle.** With `200.times { |k| "filler#{k}" }`
+and a second `GC.start` inserted, `instance_of?` and `inspect` separate 10 runs out
+of 10:
+
 ```
+affected (0972c8477^)   2222222222     x.class is String, x.inspect is "1"
+fixed    (master)       1111111111     x.class is C
+```
+
+`is_a?`, `x.class == C` and `x.class.to_s` still answer 1 on both even with the
+burst, and must not be used.
 
 Other short ones, verbatim from their issues:
 
