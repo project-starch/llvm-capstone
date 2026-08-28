@@ -470,6 +470,43 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## RE-ESTABLISHED with the arm in SLOT 1: the null capability store's PRESENCE is required
+
+The retraction below was about instrumentation, not about the effect. Re-run with the arm under test
+in **slot 1** — the slot where the trap latch demonstrably reports — every wedge is now
+signature-checked:
+
+    arm      what left the window        wedged / valid draws   signature
+    pidx     the null CAPABILITY store   0 / 8                  --
+    scalar   a scalar initialiser        3 / 5                  ALL THREE: tval 0, mepc 0x828f480c
+
+`0x828f480c - 0x827F0000 = 0x10480c` — the **`scalar` build's own consumer**, immediately after its
+relocated reload at `0x104808`. So these are genuine S-12 faults at the moved site, which is the
+confirmation slot 0 was structurally incapable of producing. Two further draws were VOID (domain
+never created) and are excluded rather than counted either way.
+
+Fisher exact (3 wedges in 13 draws) = **0.035**.
+
+**WHAT THIS ESTABLISHES:** S-12 requires the **null capability store to be present in the window
+before the reload**. Moving it out cures; a layout-matched code motion that leaves it in does not.
+
+**WHAT IT DOES NOT ESTABLISH** — and the distinction matters for a hardware report:
+
+* It shows the store's **PRESENCE** matters, not that its **VALUE** is what reaches the consumer.
+  Equally consistent: store-buffer OCCUPANCY (any additional 16-byte capability store would do), or
+  its ADDRESS (`s0-0x120`) aliasing the reload's (`s0-0x70`) in a word-granular hit function
+  independent of the value stored.
+* "Layout-matched" means **identical outside a 32-byte window** — `llvm-nm` identical across 3890
+  symbols, 9 instructions differing — with two residuals: the two arms' reloads sit 4 bytes apart
+  (`+0x7c` vs `+0x80`, same 16-byte fetch block), and `scalar` reallocates registers (a5/a6 rather
+  than a4/a5). `pidx` is the arm closer to baseline.
+
+**THE SHARP NEXT ARM, which tests the VALUE directly:** initialise `pIdx` to a live TAGGED
+capability instead of null, leaving the store in the window. A wrong-address forward of the value
+then delivers a *tagged* capability, which cannot raise `UNEXPECTED_OPERAND` with `tval = 0`;
+occupancy or address-aliasing predicts the fault is unchanged. That separates "this store's value is
+forwarded" from "one more capability store in the window is enough".
+
 ## RETRACTED: the null-store mechanism AND the layout refutation — SLOT IS CONFOUNDED WITH ROLE
 
 **A systematic design error runs through the fence, nop and late-init experiments alike: the arm
