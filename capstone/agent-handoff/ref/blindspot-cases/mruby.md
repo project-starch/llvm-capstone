@@ -73,7 +73,7 @@ Invisible to purecap **and** to revocation, as-is.
 
 | # | issue | fix commit | affected | component | class | script |
 |---|---|---|---|---|---|---|
-| A1 | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **yes, MEASURED both ways** |
+| A1 | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **CHERI: MISS, all 3 configs** |
 | A2 | 5534 | `e323cd0c6ebd` | 3.0.0 | `class.c` `mrb_alias_method` | **type confusion `REnv*` -> `RProc*`** via free-list reuse | no |
 | A3 | 3542 | UNKNOWN | ~1.2-1.3 | `gc.c` `mrb_gc_mark` | GC lifetime, `tt == MRB_TT_FREE` | yes |
 | A4 | 3550 | `15fba69710c7` (UNVERIFIED) | ~1.2-1.3 | `gc.c`, Fiber | GC lifetime | yes |

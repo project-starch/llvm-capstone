@@ -81,11 +81,16 @@ anything with its own `malloc` must precede it.
 Expect the same shape elsewhere: the port cost is not the language runtime, it is
 the two or three places where a constant encodes the pointer's width.
 
-## Scored so far: NONE
+## Scored so far: ONE
 
-36 catalogued is not 36 measured, and the gap is the whole remaining job. Two of
-the 36 exist as runnable specimens (`benchmarks/mruby/cases/`), and neither has a
-verdict, because the Capstone harness does not reach Ruby yet.
+**A1 (mruby 6339): CHERI purecap MISSES it, in all three revocation
+configurations including eager.** The object comes back as a `String` where a `C`
+instance must be, `rc=0` throughout, so it is a wrong answer and not a suppressed
+crash. Harness, result table and the four controls:
+`tests/cheri-baseline/blindspot-a1/`.
+
+That is 1 of 36. The remaining 35 are catalogued and unmeasured, and the Capstone
+column is missing for all 36 because that harness does not reach Ruby yet.
 
 The two columns are independent and only one is blocked:
 
