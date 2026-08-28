@@ -1162,6 +1162,42 @@ fi
 # The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
 # on entry means the caller handed over plain data; anything else means the tag was alive at the
 # boundary and the spill/reload lost it.
+# CAPSTONE_WFENCE=<fn> -- put a full memory fence at the top of <fn>.
+#
+# WHY. The path from this function's entry to its fault site is 36 instructions, branch-free and
+# byte-identical on every call, so the trigger is machine STATE and not an instruction pattern.
+# The state this folder already has evidence for is a store-to-load DRAIN window: the `stc` that
+# spills pWInfo at +0x40 is reloaded by the `ldc` at +0x88 only 18 instructions later, and
+# delay-dependence is recorded (bracketed 10 < T <= 600 instructions) even though the mechanism
+# attached to it was retracted.
+#
+# A fence at entry drains the write path BEFORE that window opens. Unlike CAPSTONE_WCLAMP this is
+# SEMANTICALLY NEUTRAL -- it changes no values, no control flow and no generated SQL program, so a
+# rate change cannot be explained by the intervention having broken the query. That is exactly the
+# property the clamp lacked, which is why the clamp result had to be recorded as weak.
+#
+#   wedge rate collapses -> the drain state IS the trigger, and this is also a WORKAROUND.
+#   wedge rate unchanged -> drain state is excluded, and the search moves to state a fence does
+#                           not touch (cache occupancy, scoreboard, TLB).
+if [[ -n "${CAPSTONE_WFENCE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE" <<'PYFENCE'
+import sys, re
+path, fn = sys.argv[1], sys.argv[2]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"WFENCE: {fn} definition not found -- patch shape changed")
+body = m.group(0) + """
+  /* CAPSTONE WFENCE -- drain the write path before the spill/reload window. Neutral: no value,
+     no control flow and no generated code changes; only the timing of the store path does. */
+  __asm__ volatile("fence rw,rw" ::: "memory");
+"""
+s = s.replace(m.group(0), body, 1)
+open(path, "w").write(s)
+print(f"   WFENCE injected at the top of {fn}")
+PYFENCE
+fi
+
 # CAPSTONE_WCLAMP=<fn>:<n> -- make <fn> RETURN EARLY from its <n>th call onward.
 #
 # WHY A CLAMP AND NOT AN OBSERVER. The probe cannot report from a wedge: its output goes to a

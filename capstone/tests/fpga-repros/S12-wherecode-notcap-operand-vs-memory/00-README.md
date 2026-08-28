@@ -470,6 +470,53 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## A SEMANTICALLY NEUTRAL FENCE CUTS THE RATE FROM 11/11 TO 1/4 — the strongest mechanism evidence yet
+
+Given the path to the fault is 36 branch-free instructions identical on every call, the trigger is
+STATE. The state with prior evidence is a store-to-load drain window: the `stc` spilling `pWInfo` at
+`+0x40` is reloaded by the `ldc` at `+0x88` eighteen instructions later.
+
+`CAPSTONE_WFENCE` puts `fence rw,rw` at the top of the function. **It is semantically neutral** — no
+value, control-flow or generated-program change, only the timing of the store path — which is
+exactly what the `WCLAMP` experiment lacked and why that one had to be recorded as weak.
+
+**Verified by disassembly, the fence lands INSIDE the window:**
+
+    1047c8  stc a2, 0x0(a0)      +0x40  the subject store
+    1047ec  fence rw, rw                the injected drain
+    1047f8  stc a4, -0x5a0(s0)          three stores still follow ...
+    104810  stc a4, 0x0(a5)             ... one immediately before the reload
+    104814  ldc a4, 0x0(a0)      +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0  faults
+
+    draw   fenced        unmodified control
+    f1     returned      *** WEDGED ***
+    f2     returned      *** WEDGED ***
+    f3     *** WEDGED ***  (collateral)
+    f4     returned      *** WEDGED ***
+
+**Fenced 1 wedge / 4; unmodified 11 / 11 this session. Fisher = 0.004.**
+
+**Reading.** Draining the write path between the spill and the reload removes most of the failure
+but not all of it. That is direct support for the store-to-load drain window as a MAJOR contributor,
+obtained without perturbing the program — and it is consistent with the delay-dependence recorded
+earlier (bracketed 10 < T <= 600) whose mechanism had been retracted.
+
+**The residual has an obvious candidate rather than being mysterious:** three stores execute AFTER
+the fence and before the reload, one of them immediately prior. The fence closes most of the window,
+not all of it. A fence placed immediately before the reload would test that, but the reload is
+compiler-generated `-O0` spill code and there is no source point that maps there.
+
+**WEIGHT: N=4, and 1/4 is one draw from 0/4 or 2/4.** The direction is significant against 11/11,
+but the residual rate is not usefully estimated at this N. More draws would sharpen it, and unlike
+the clamp they would sharpen an UNCONFOUNDED comparison.
+
+**Practical consequence:** a fence in this one function cuts the SQLite failure rate roughly
+fourfold at zero semantic cost. That is not a fix, and it must not be presented as one while the
+mechanism is unidentified — but it is a usable mitigation and a strong pointer for the hardware side
+toward the write/store buffer path, which the S-10 reflash did NOT clear (S-07 and the
+word-granular `wbuffer_hit_oh` at `wt_dcache_mem.sv:280` both remain live).
+
 ## WHY THIS CANNOT BE REDUCED TO AN INSTRUCTION SEQUENCE — measured, and it explains nine clean repros
 
 The natural question for a hardware report is "which instructions?". For S-12 that question has a
