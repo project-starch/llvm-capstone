@@ -189,6 +189,39 @@ badly. **Scripted is not usable.**
 | A8, A9, B3 | `NoMethodError` on one or both builds | script does not run as transcribed |
 | B9 | identical result on both builds | no oracle (below) |
 
+## Why A1 is the only usable one, and it is structural
+
+The rule below said to pick cases whose corrupted slot comes back to Ruby. **A13
+satisfies it and still produced nothing** -- `Hash#shift` returns the pair, and at
+1, 4, 20 and 64 entries the pair is intact on 2.0.0, 3.0.0 and master alike. So the
+rule is necessary and not sufficient, and guessing per case is a poor use of a
+build.
+
+Scanning instead is better. The A1 fix is `mrb_gc_arena_save` / `mrb_gc_protect` /
+`mrb_gc_arena_restore` around a loop that calls `mrb_equal`, so the hunt is: a C
+function that calls the equality family inside a loop over elements and returns
+one, without that protection. In current master that is
+
+| file | function | returns |
+|---|---|---|
+| `src/array.c` | `mrb_ary_index_m`, `mrb_ary_rindex_m` | an index |
+| `src/array.c` | `mrb_ary_splat` | a new array |
+| `src/hash.c` | `obj_eql`, `mrb_hash_has_value`, `mrb_hash_equal` | a boolean |
+| `src/range.c` | `range_eq` | a boolean |
+| `mrbgems/mruby-array-ext` | `ary_include` | a boolean |
+
+**Not one of them returns the element.** That is the whole answer to why A1 stands
+alone: upstream has protected every site that hands an element back, and what is
+left returns integers and booleans, which cannot carry a type confusion into a Ruby
+expression. `Array#index` was tested against an array cleared underneath it by a
+`==` override, on master and on 2.0.0, and both answer `nil` with the array empty.
+
+The implication for the corpus is not comfortable. A usable class-A specimen needs
+a defect that is BOTH invisible to the allocator AND able to hand the recycled slot
+back as a value, and mruby's maintainers fix that second half promptly because it
+is the half users notice. The blind spot is real; the supply of Ruby-visible
+instances of it is small.
+
 ## The selection rule these failures teach
 
 A4, B9 and A2 were each pursued to a build and a trigger, and each is a real defect
