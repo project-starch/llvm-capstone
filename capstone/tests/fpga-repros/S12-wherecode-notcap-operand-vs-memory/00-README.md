@@ -470,6 +470,56 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## RETRACTED: the null-store mechanism AND the layout refutation — SLOT IS CONFOUNDED WITH ROLE
+
+**A systematic design error runs through the fence, nop and late-init experiments alike: the arm
+under test was ALWAYS in slot 0 and the control ALWAYS in slot 1 — and the trap latch only reports
+from slot 1.**
+
+Latched traps across the whole series:
+
+    nop-n1..n4      slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-scalar-2..5  slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-pidx-1,2,4,5 slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence-f1,f2,f4  slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence2-g1..g3   slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+
+**Every "the variant still wedges" data point is UNCONFIRMED; every "the control wedged" data point
+is CONFIRMED — and that asymmetry is purely an artifact of slot placement.** The predicted S-12
+`mepc` for a slot-0 arm (`0x824F480C` / `0x824F4818`) was never observed once.
+
+**Consequences:**
+
+* **"The null capability store is implicated" is UNSUPPORTED.** The `scalar` arm's 4/5 wedges were
+  never shown to still be S-12, so the matched pair is unearned and no mechanism follows from it.
+* **"LAYOUT REFUTED: a nop wedges 4/4" is UNSUPPORTED** on the same grounds. The nop/fence *layout*
+  match is genuine (`llvm-nm` diff = 0), but the 4/4 is four unconfirmed wedges set against a 0/7
+  measured on a signature-confirmed control.
+
+**This is NOT a refutation in the other direction either.** The unmodified binary in slot 0 also
+latches `0x368` in 6 of 8 wedges, so `0x368` does not prove "not S-12" — it proves the latch did not
+capture a capability trap. The instrument as deployed cannot un-void these arms.
+
+**WHAT SURVIVES, and it is worth keeping:** `pidx` returned **5/5**, and in 4 of those boots the
+same-boot unmodified control wedged with the confirmed S-12 signature — so the boots were
+demonstrably S-12-hot and the code motion changed the slot-0 outcome. The layout match is also
+genuine and better than claimed: `li-pidx` and `li-scalar` have **identical `llvm-nm` output** (3890
+symbols) and differ by exactly nine instructions in `0x1047fc-0x10481c`. Two residuals to state:
+the reloads differ by 4 bytes (`+0x7c` vs `+0x80`, same 16-byte fetch block) and `scalar` — not
+`pidx` — reallocates registers (a5/a6 rather than a4/a5).
+
+**THE FIX, and it costs no reflash:** put the ARM UNDER TEST IN SLOT 1, with a known-good filler in
+slot 0, so the arm occupies the slot where the latch demonstrably captures `mcause 25 / tval 0`.
+Every comparison in this series needs redoing that way before any of it means anything.
+
+**Also broken, and it matters for reading any of these logs:** the driver's wedge probe hardcodes a
+read of `a4`, but the `scalar` build reallocates the reload target to **a5** — so it printed the
+wrong register (`/tmp/capstone/li-scalar-3.log`: `a4(x14)=0x0`).
+
+**Standing rule this cost us, already in the folder at `:1203`:** *a wedge whose latched `mepc` is
+not `DBAS + 0x484` is NOT the subject fault; that arm is VOID.* It was applied to `g4` and then not
+applied to eight later arms.
+
 ## THE NULL CAPABILITY STORE IS IMPLICATED: moving it out cures 0/5, a layout-matched control does not (4/5)
 
 The two surviving memory-ordering accounts are now separated, and the separation is layout-controlled.
