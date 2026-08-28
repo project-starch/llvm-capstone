@@ -1236,6 +1236,67 @@ fi
 #                       comparison (e.g. the word-granular wbuffer_hit_oh at wt_dcache_mem.sv:280).
 #   wedge PERSISTS   -> the address is not the variable and the deadcap result needs another
 #                       explanation.
+# CAPSTONE_REGSPLIT=1 -- keep the real `pIdx = 0` in the window, but add a DEAD capability local
+# ahead of it so register allocation puts the reload in a DIFFERENT register from the movc.
+#
+# THE CAUSAL TEST for the register-pairing correlation. Across six builds the wedge tracks exactly
+# one thing: a `movc rD, zero` shortly before an `ldc rD` targeting the SAME register. But every
+# curing build so far ALSO changed something else -- the movc moved, its value changed, or a store
+# left the window. This arm changes ONLY the register allocation: the null store stays where it is,
+# at its own address, with its own value, in its own position.
+#
+#   cures  -> the PAIRING is causal, not merely correlated. That is a register writeback / WAW
+#             hazard on rD, and it derives tval = 0 directly from movc's own output.
+#   wedges -> the pairing is incidental and the correlation across the six builds was coincidence;
+#             the real variable is still unidentified.
+#
+# NOTE this may not achieve the split -- -O0 allocation is mechanical and may keep the same
+# register. The build MUST be inspected before it is run: if the reload still targets the movc's
+# register, this variant tests nothing and must not be spent on a boot.
+# CAPSTONE_PINREG=<reg> -- pin a named register live across the reload, forcing the allocator to
+# put the `ldc` somewhere else.
+#
+# Adding dead locals does NOT split the pairing: -O0 reuses the same scratch register regardless
+# (REGSPLIT=1,2,3 all keep `movc a4` and `ldc a4`). That is itself a finding -- the pairing is
+# near-automatic in this codegen, so its presence in every wedging build is partly trivial, and
+# every cure except deadcap-null ALSO changed something else. An explicit register variable held
+# live across the statement is the only remaining way to break the pairing while changing nothing
+# else: same store, same address, same value, same position.
+#
+#   cures  -> the pairing is CAUSAL, and the account derives tval = 0 from movc's own output.
+#   wedges -> the pairing is incidental; the six-build correlation was an artifact of -O0 reusing
+#             one scratch register, and the real variable is still unidentified.
+if [[ -n "${CAPSTONE_PINREG:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PINREG" <<'PYPR'
+import sys
+path, reg = sys.argv[1], sys.argv[2]
+s = open(path).read()
+ANCH = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(ANCH) != 1:
+    sys.exit(f"PINREG: anchor is not unique ({s.count(ANCH)}) -- refusing to guess")
+pin = ('  register void *pinreg_ asm("%s") = (void *)pWInfo;\n'
+       '  __asm__ volatile("" :: "r"(pinreg_));\n') % reg
+tail = ('  __asm__ volatile("" :: "r"(pinreg_));\n')
+s = s.replace(ANCH, ANCH.split("\n\n")[0] + "\n\n" + pin + "  pWC = &pWInfo->sWC;\n" + tail, 1)
+open(path, "w").write(s)
+print(f"   PINREG: {reg} pinned live across the reload")
+PYPR
+fi
+
+if [[ -n "${CAPSTONE_REGSPLIT:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYRS'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"REGSPLIT: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+s = s.replace(DECL, "  volatile Index *pregsplit_ = 0; (void)pregsplit_;\n" + DECL, 1)
+open(path, "w").write(s)
+print("   REGSPLIT: dead capability local inserted ahead of pIdx")
+PYRS
+fi
+
 if [[ -n "${CAPSTONE_PADFRAME:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PADFRAME" <<'PYPF'
 import sys
@@ -2402,6 +2463,18 @@ fi
 # the one path that matters. Stages ascend, so the whole ladder goes into ONE boot and the first
 # arm that fails to return is the bisection point. n >= 4 runs the whole statement and falls
 # through to the rest of the workload.
+# CAPSTONE_SLT_PROGRESS=1 -- record WHICH prepare is in flight in the shared region, where it
+# survives a wedge and the driver already reads it over JTAG. This is what separates the two
+# models a wedge RATE cannot: a per-prepare hazard stops at a varying index, a per-boot one stops
+# at the first prepare of every wedging boot. The hook lives in slt_runner.h, i.e. in the DOMAIN
+# translation unit and not in the amalgamation, precisely so the faulting function's codegen is
+# untouched -- CAPSTONE_ENTRY_MARK injects into sqlite3WhereCodeOneLoopStart itself and was found
+# to change its register allocation enough to remove the movc/stc/ldc pattern under test, which
+# makes it the wrong instrument for asking whether that pattern is causal.
+if [[ "${CAPSTONE_SLT_PROGRESS:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SLT_PROGRESS=1"
+fi
+
 if [[ -n "${CAPSTONE_CREATE_LADDER:-}" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_CREATE_LADDER=${CAPSTONE_CREATE_LADDER}"
 fi
