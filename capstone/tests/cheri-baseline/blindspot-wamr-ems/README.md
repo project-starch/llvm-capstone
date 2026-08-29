@@ -21,7 +21,51 @@ case 1 of the EMS set.
 * **A host control that separates the arms 7 times out of 7**, at second-allocation
   sizes 8, 16, 32, 64, 128, 192 and 256.
 
-## What is NOT ready, and why it must not be measured yet
+## The oracle is finished, and the answer is that this case is not a blind spot
+
+The oracle works and is positively controlled: the overlap predicate reports 1 on
+two ranges that do overlap, and the two arms separate 7 times out of 7. What it
+reports about the defect is this:
+
+| | fixed | vulnerable |
+|---|---|---|
+| second allocation, sizes 8..256 | succeeds | **NULL** |
+| 16 further allocations of 32 B | all succeed, none near the live block | **none succeed** |
+| any allocation landing inside the live block | no | **no** |
+| the live block's payload after the corrupting free | unchanged | **unchanged** |
+| forged-chunk sizes 0x20..0x100 x asks 16..128, 24 combinations | -- | **0 overlaps, 0 clobbers** |
+
+Without the forged header the two arms are byte-for-byte identical, so the forgery
+is part of the trigger rather than decoration; it stands for data a wasm module
+writes into its own block.
+
+**So the consequence of PR 2279, as reproduced here, is DENIAL: the backward
+coalesce destroys the free list and the allocator stops serving. It is not a
+memory-safety violation.** No access goes out of any bounds, nothing is handed out
+twice, and the live object is never written. There is therefore nothing for CHERI
+to miss, and running it under CheriBSD would produce a true statement about
+nothing.
+
+That is a result, not a failure to reproduce: **EMS case 1 is a robustness bug, not
+a blind-spot case.** The inventory lists it as "[V] a self-contained C reproducer is
+already in our tree", which is accurate -- the reproducer reproduces. What it
+produces is not what this study measures.
+
+## Where to go instead, within the same allocator
+
+Case 3 of the EMS set (PR 428, `remove_tree_node` missing its `hmu_is_in_heap`
+check) is described as a **write-anywhere primitive** from a corrupted free-tree
+node. A write-anywhere that stays inside the pool is exactly the blind spot, and
+unlike case 1 it has a memory-safety consequence by construction. Case 4
+(`gc_migrate` walking the heap on an attacker-influenced size) is the second
+candidate for the same reason.
+
+The apparatus here carries over unchanged: the knob patch, the stubs, the
+build recipe and the overlap oracle all apply to any EMS case.
+
+## What was ready before that
+
+
 
 The separation is real and deterministic, but the consequence it shows is the
 **allocator failing**, not the defect's documented one:
