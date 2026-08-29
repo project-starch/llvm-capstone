@@ -93,6 +93,7 @@
  * vm.c asks whether to leave at its stage. Stage 0 means run to the end. */
 unsigned long md_vm_stage;
 unsigned long md_vm_reached;       /* bitmask of stages whose gate was evaluated */
+unsigned long md_vm_retries;       /* arrivals at RETRY_TRY_BLOCK; a spinning setjmp shows here */
 
 #ifndef MD_ESCAPE_AFTER
 #define MD_ESCAPE_AFTER 1000000
@@ -212,6 +213,11 @@ md_probe_selftest(void *heap_ptr)
     unsigned long cur = md_cur(heap_ptr);
     void *tiny = __builtin_capstone_cap_shrink(heap_ptr, cur, cur + 16);
     unsigned long saved_calls = md_probe_calls, saved_viol = md_probe_violations;
+    /* And the clear counter: under MD_PROBE_DO_CLEAR this control's own fake frame
+       is cleared like any other, so leaving it out made rung 59 report two frames
+       cleared against rung 54's one probe call. Both counters were right; the
+       control was not putting back everything it disturbed. */
+    unsigned long saved_cleared = md_cleared_by_probe;
     int armed = md_escape_armed;
     int fired;
 
@@ -226,6 +232,7 @@ md_probe_selftest(void *heap_ptr)
 
     md_probe_calls = saved_calls;
     md_probe_violations = saved_viol;
+    md_cleared_by_probe = saved_cleared;
     md_escape_armed = armed;
     md_viol[0] = 0;                   /* the control must not leave its own frame behind */
     return fired;

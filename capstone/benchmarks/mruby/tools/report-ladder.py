@@ -38,8 +38,11 @@ FIXED = {
     57: "mrb_gc_add_region",
     58: "run bytecode",
     60: "STAGE 2: return after stack[0]=self",
-    61: "STAGE 0: full run, may hang",
-    62: "gates evaluated, bitmask",
+    61: "STAGE 3: top of mrb_vm_exec, before MRB_TRY",
+    62: "STAGE 4: inside MRB_TRY, before dispatch",
+    63: "gates evaluated, bitmask",
+    64: "arrivals at RETRY_TRY_BLOCK",
+    65: "STAGE 0: full run, may hang",
     59: "knobs<<16 | site(md_first)<<8 | site(md_last); knob 1=SKIP_CLEAR 2=FORCE_STACK; site 1=mrb_vm_run 2=exec_irep",
 }
 

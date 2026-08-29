@@ -1,8 +1,8 @@
 diff --git i/src/vm.c w/src/vm.c
-index 148332bd0..3e8d06bd6 100644
+index 148332bd0..6a559fb0f 100644
 --- i/src/vm.c
 +++ w/src/vm.c
-@@ -184,6 +184,26 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
+@@ -184,6 +184,27 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
    return p;
  }
  
@@ -23,13 +23,14 @@ index 148332bd0..3e8d06bd6 100644
 +/* 1 = leave right after the clear, 2 = after stack[0] = self. Returns nonzero
 +   when the caller should leave at that stage. */
 +extern int md_vm_stage_gate(int stage);
++extern unsigned long md_vm_retries;
 +#endif
 +#endif
 +
  static void
  stack_extend_alloc(mrb_state *mrb, mrb_int room)
  {
-@@ -994,6 +1014,10 @@ exec_irep(mrb_state *mrb, mrb_value self, const struct RProc *p)
+@@ -994,6 +1015,10 @@ exec_irep(mrb_state *mrb, mrb_value self, const struct RProc *p)
    }
    else {
      stack_extend(mrb, nregs);
@@ -40,7 +41,7 @@ index 148332bd0..3e8d06bd6 100644
      stack_clear(ci->stack+keep, nregs-keep);
    }
  
-@@ -1772,8 +1796,27 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
+@@ -1772,8 +1797,27 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
      }
    }
    stack_extend(mrb, nregs);
@@ -68,3 +69,33 @@ index 148332bd0..3e8d06bd6 100644
    mrb_value result = mrb_vm_exec(mrb, proc, irep->iseq);
    mrb_assert(mrb->c == c);      /* do not switch fibers via mrb_vm_run(), unlike mrb_vm_exec() */
    mrb_assert(c->ci == c->cibase || (c->ci - c->cibase) == cioff - 1);
+@@ -2473,10 +2517,29 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq
+   CI_PROC_SET(ci, begin_proc);
+   ci->pc = iseq;
+ 
++#ifdef MD_VM_STAGES
++  /* Stage 3: leave before MRB_TRY. Everything above is plain setup plus the
++     optable of block addresses; everything below goes through our own setjmp. */
++  if (md_vm_stage_gate(3)) return mrb_nil_value();
++#endif
++
+ RETRY_TRY_BLOCK:
+ 
++#ifdef MD_VM_STAGES
++  /* Counts arrivals at the retry label. MRB_TRY is setjmp, and this port supplies
++     its own; a setjmp that returns more than it should would spin here without
++     executing a single bytecode instruction, which is exactly the shape observed:
++     a hang with fewer than a thousand instruction fetches. */
++  md_vm_retries++;
++#endif
++
+   MRB_TRY(&c_jmp) {
+ 
++#ifdef MD_VM_STAGES
++  /* Stage 4: inside MRB_TRY, before the dispatch loop. */
++  if (md_vm_stage_gate(4)) return mrb_nil_value();
++#endif
++
+   if (mrb_unlikely(mrb->exc)) {
+     mrb_gc_arena_restore(mrb, ai);
+     if (mrb->exc->tt == MRB_TT_BREAK)

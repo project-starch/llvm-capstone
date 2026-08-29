@@ -92,6 +92,7 @@ extern unsigned long md_knobs;
 extern unsigned long md_cleared_by_probe;
 extern unsigned long md_vm_stage;
 extern unsigned long md_vm_reached;
+extern unsigned long md_vm_retries;
 extern int md_probe_selftest(void *);
 extern unsigned long md_viol[8];
 extern unsigned long md_probe_calls;
@@ -312,6 +313,38 @@ domain_main(unsigned *res, unsigned func)
         return;
 
     case 61:
+        /* Stage 3: leave at the top of mrb_vm_exec, before MRB_TRY. */
+#ifdef MD_VM_STAGES
+        md_vm_stage = 3;
+        mrb = mrb_open_core();
+        *res = 0x6D520000u | (5u << 8) | 0x03u;
+#else
+        *res = 0x6D520000u | (5u << 8) | 0xEEu;
+#endif
+        return;
+
+    case 62:
+        /* Stage 4: inside MRB_TRY, before the dispatch loop. */
+#ifdef MD_VM_STAGES
+        md_vm_stage = 4;
+        mrb = mrb_open_core();
+        *res = 0x6D520000u | (5u << 8) | 0x04u;
+#else
+        *res = 0x6D520000u | (5u << 8) | 0xEEu;
+#endif
+        return;
+
+    case 63:
+        *res = (unsigned)md_vm_reached;
+        return;
+
+    case 64:
+        /* Arrivals at RETRY_TRY_BLOCK. A number far above the stage count means
+           our setjmp is returning more than once and the VM is spinning there. */
+        *res = (unsigned)md_vm_retries;
+        return;
+
+    case 65:
         /* Stage 0: no early return at all. THIS IS THE ONE THAT MAY HANG, and it
            is last for that reason. Reaching rung 62 means the region is clean. */
 #ifdef MD_VM_STAGES
@@ -321,12 +354,6 @@ domain_main(unsigned *res, unsigned func)
 #else
         *res = 0x6D520000u | (5u << 8) | 0xEEu;
 #endif
-        return;
-
-    case 62:
-        /* Which gates were evaluated at all, as a bitmask. Distinguishes "the
-           stage returned" from "the gate was never reached". */
-        *res = (unsigned)md_vm_reached;
         return;
 
     default:
