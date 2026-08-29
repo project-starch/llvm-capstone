@@ -1,8 +1,8 @@
 diff --git i/src/vm.c w/src/vm.c
-index 148332bd0..8eb277978 100644
+index 148332bd0..3e8d06bd6 100644
 --- i/src/vm.c
 +++ w/src/vm.c
-@@ -184,6 +184,21 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
+@@ -184,6 +184,26 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
    return p;
  }
  
@@ -19,12 +19,17 @@ index 148332bd0..8eb277978 100644
 +   here, where mruby's own types are in scope. */
 +extern void md_fetch_hook(void *, const void *, const void *, void *);
 +#endif
++#ifdef MD_VM_STAGES
++/* 1 = leave right after the clear, 2 = after stack[0] = self. Returns nonzero
++   when the caller should leave at that stage. */
++extern int md_vm_stage_gate(int stage);
++#endif
 +#endif
 +
  static void
  stack_extend_alloc(mrb_state *mrb, mrb_int room)
  {
-@@ -994,6 +1009,10 @@ exec_irep(mrb_state *mrb, mrb_value self, const struct RProc *p)
+@@ -994,6 +1014,10 @@ exec_irep(mrb_state *mrb, mrb_value self, const struct RProc *p)
    }
    else {
      stack_extend(mrb, nregs);
@@ -35,7 +40,7 @@ index 148332bd0..8eb277978 100644
      stack_clear(ci->stack+keep, nregs-keep);
    }
  
-@@ -1772,6 +1791,14 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
+@@ -1772,8 +1796,27 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
      }
    }
    stack_extend(mrb, nregs);
@@ -48,5 +53,18 @@ index 148332bd0..8eb277978 100644
 +#endif
 +#endif
    stack_clear(c->ci->stack + stack_keep, nregs - stack_keep);
++#ifdef MD_VM_STAGES
++  /* STAGED RETURN POINTS through the bracketed region. The hang sits in C between
++     the clear and the first thousand bytecode instructions, and the ladder cannot
++     see inside a call that never returns -- so each stage LEAVES here instead,
++     ascending, and the first one that fails to return IS the bisection point.
++     md_vm_stage_gate is set by the domain before each mrb_open_core attempt. */
++  if (md_vm_stage_gate(1)) return mrb_nil_value();
++#endif
    c->ci->stack[0] = self;
++#ifdef MD_VM_STAGES
++  if (md_vm_stage_gate(2)) return mrb_nil_value();
++#endif
    mrb_value result = mrb_vm_exec(mrb, proc, irep->iseq);
+   mrb_assert(mrb->c == c);      /* do not switch fibers via mrb_vm_run(), unlike mrb_vm_exec() */
+   mrb_assert(c->ci == c->cibase || (c->ci - c->cibase) == cioff - 1);

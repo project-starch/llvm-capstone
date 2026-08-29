@@ -90,6 +90,8 @@ extern unsigned long md_site_first;
 extern unsigned long md_site_last;
 extern unsigned long md_knobs;
 extern unsigned long md_cleared_by_probe;
+extern unsigned long md_vm_stage;
+extern unsigned long md_vm_reached;
 extern int md_probe_selftest(void *);
 extern unsigned long md_viol[8];
 extern unsigned long md_probe_calls;
@@ -181,7 +183,11 @@ domain_main(unsigned *res, unsigned func)
     }
 
     case 5:
-        /* A VM on the outer allocator alone. mrb_open_core builds the whole class
+        /* With MD_VM_STAGES this runs the EARLIEST stage: mrb_vm_run returns right
+           after the stack clear. The later stages are rungs 60 and 61, ascending,
+           with the one that may hang last -- so a hang costs only what follows it,
+           and everything before it has already reported.
+           A VM on the outer allocator alone. mrb_open_core builds the whole class
            hierarchy, runs mrblib through mrb_vm_run, and is thousands of
            allocations -- the first place a pointer-model defect has room to show.
            With MD_PROBE_STACK the probe ESCAPES here rather than letting the fault
@@ -193,6 +199,9 @@ domain_main(unsigned *res, unsigned func)
         if (setjmp(md_escape) != 0)
             MD_MARK(2, 0x77u);   /* the probe jumped out; read calls 21-36 */
         md_escape_armed = 1;
+#endif
+#ifdef MD_VM_STAGES
+        md_vm_stage = 1;
 #endif
         mrb = mrb_open_core();
 #ifdef MD_PROBE_STACK
@@ -250,7 +259,13 @@ domain_main(unsigned *res, unsigned func)
         return;
 
     case 57: {
-        /* The GC heap becomes ONE region we own. Reports the PAGE COUNT rather than
+        /* SKIPPED under MD_VM_STAGES. With a staged early return mrb_open_core
+           hands back a half-built VM -- mrblib never ran -- and touching it here
+           faults with cause 24 and takes the stage rungs at 60 and 61 with it.
+           That is this project's own ordering rule, violated once and then obeyed:
+           everything expected to RETURN goes first, and at most one thing expected
+           to die goes last.
+           The GC heap becomes ONE region we own. Reports the PAGE COUNT rather than
            OK: a region that yielded fewer pages than expected still "works" and
            silently sends later allocations to malloc, which would change what is
            being measured without saying so. Zero pages means it did not take. */
@@ -258,6 +273,9 @@ domain_main(unsigned *res, unsigned func)
 
         if (!mrb)
             MD_MARK(3, MD_FAIL);
+#ifdef MD_VM_STAGES
+        MD_MARK(3, 0x77u);      /* skipped: the VM is staged, not complete */
+#endif
         pages = mrb_gc_add_region(mrb, md_region, sizeof(md_region));
         *res = 0x6D520000u | (3u << 8) | ((unsigned)(pages < 0 ? 0 : pages) & 0xFFu);
         return;
@@ -271,6 +289,9 @@ domain_main(unsigned *res, unsigned func)
 
         if (!mrb)
             MD_MARK(4, MD_FAIL);
+#ifdef MD_VM_STAGES
+        MD_MARK(4, 0x77u);      /* skipped for the same reason */
+#endif
         v = mrb_load_irep(mrb, md_specimen);
         if (mrb->exc)
             MD_MARK(4, 0x03u);   /* Ruby raised */
@@ -278,6 +299,35 @@ domain_main(unsigned *res, unsigned func)
         *res = 0x6D520000u | (4u << 8) | (out & 0xFFu);
         return;
     }
+
+    case 60:
+        /* Stage 2: return after `c->ci->stack[0] = self`, before mrb_vm_exec. */
+#ifdef MD_VM_STAGES
+        md_vm_stage = 2;
+        mrb = mrb_open_core();
+        *res = 0x6D520000u | (5u << 8) | 0x02u;
+#else
+        *res = 0x6D520000u | (5u << 8) | 0xEEu;
+#endif
+        return;
+
+    case 61:
+        /* Stage 0: no early return at all. THIS IS THE ONE THAT MAY HANG, and it
+           is last for that reason. Reaching rung 62 means the region is clean. */
+#ifdef MD_VM_STAGES
+        md_vm_stage = 0;
+        mrb = mrb_open_core();
+        *res = 0x6D520000u | (5u << 8) | 0x00u;
+#else
+        *res = 0x6D520000u | (5u << 8) | 0xEEu;
+#endif
+        return;
+
+    case 62:
+        /* Which gates were evaluated at all, as a bitmask. Distinguishes "the
+           stage returned" from "the gate was never reached". */
+        *res = (unsigned)md_vm_reached;
+        return;
 
     default:
         if (mrb)

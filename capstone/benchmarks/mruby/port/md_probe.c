@@ -80,6 +80,20 @@
 #define MD_VM_WATCHDOG 0
 #endif
 
+/* MD_VM_STAGES: staged return points through the bracketed C region.
+ *
+ * The hang is between the stack clear and the first thousand bytecode
+ * instructions, which is a handful of C: the stack[0] = self store, the call into
+ * mrb_vm_exec, and that function's entry setup. A watchdog cannot see inside a
+ * call that never returns, so the region is walked with EARLY RETURNS instead --
+ * ascending, all in ONE image, driven from one ladder rung, and the first stage
+ * that fails to come back is the bisection point.
+ *
+ * md_vm_stage is set by the domain before each mrb_open_core attempt; the gate in
+ * vm.c asks whether to leave at its stage. Stage 0 means run to the end. */
+unsigned long md_vm_stage;
+unsigned long md_vm_reached;       /* bitmask of stages whose gate was evaluated */
+
 #ifndef MD_ESCAPE_AFTER
 #define MD_ESCAPE_AFTER 1000000
 #endif
@@ -233,6 +247,13 @@ md_probe_selftest(void *heap_ptr)
  * .ci is 0x30 (slot 3); mrb_callinfo.stack is 0x30 (slot 3). All four were taken
  * from -Xclang -fdump-record-layouts, not from reading the struct.
  */
+int
+md_vm_stage_gate(int stage)
+{
+    md_vm_reached |= 1u << stage;
+    return md_vm_stage == (unsigned long)stage;
+}
+
 #if MD_VM_WATCHDOG
 /* Signature-erased on purpose; vm.c casts it to mruby's hook type at the one
    place it is installed, where the real types are in scope. */

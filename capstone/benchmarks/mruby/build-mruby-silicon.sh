@@ -128,6 +128,10 @@ if [[ ${MRUBY_PROBE:-0} == 1 ]]; then
   # The VM watchdog needs mruby's own hook compiled in, and a second define so
   # vm.c installs it. Two defines rather than one because MRB_USE_DEBUG_HOOK is
   # upstream's switch and must keep its upstream meaning.
+  if [[ ${MRUBY_VM_STAGES:-0} == 1 ]]; then
+    COMMON+=(-DMD_VM_STAGES)
+    echo "== VM stages ON: mrb_vm_run can return early at stage 1 or 2"
+  fi
   if [[ ${MRUBY_VM_WATCHDOG:-0} != 0 ]]; then
     COMMON+=(-DMRB_USE_DEBUG_HOOK -DMD_VM_WATCHDOG_ON
              -DMD_VM_WATCHDOG="$MRUBY_VM_WATCHDOG")

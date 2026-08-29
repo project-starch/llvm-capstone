@@ -263,10 +263,33 @@ installed from `mrb_vm_run`, immediately after the probe call, and `mrb_vm_run` 
 provably reached: it is where every non-`DO_CLEAR` build faults. So the hook IS
 installed, and fewer than a thousand bytecode instructions are fetched afterwards.
 
-That brackets the hang tightly. It sits in C, between the stack clear and the first
-thousand instructions of `mrb_vm_exec` -- which is `c->ci->stack[0] = self`, the
-call itself, and the interpreter's entry setup. Everything after that executes
-bytecode and would have moved the counter.
+That brackets the hang, and staged return points then close it. `MD_VM_STAGES`
+puts early returns in `mrb_vm_run` and drives them from ascending ladder rungs, so
+each stage reports before the next is tried and the first that fails to come back
+is the answer:
+
+| rung | stage | result |
+|---|---|---|
+| 5 | 1, return right after the clear | **returns** |
+| 60 | 2, return after `c->ci->stack[0] = self` | **returns** |
+| 61 | 0, no early return: into `mrb_vm_exec` | **does not return** |
+
+**The hang is inside `mrb_vm_exec`**, and with the watchdog's silence at a
+threshold of 1000, before it fetches a thousand instructions. `mrb_open_core`
+itself, the allocator, the clear and the self store are all clean.
+
+Getting there cost one ordering mistake worth recording. The first staged run put
+`mrb_gc_add_region` at rung 57, ahead of the stage rungs, and a staged VM is
+half-built -- mrblib never ran -- so it faulted with cause 24 and took rungs 60 and
+61 with it. That is this project's own rule: everything expected to RETURN goes
+first, and at most one thing expected to die goes last. Rungs 57 and 58 now skip
+themselves under `MD_VM_STAGES` and say so with code 0x77.
+
+One number does not add up and is recorded rather than explained away: rung 54
+reports one probe call while rung 59 reports two frames cleared by the probe, and
+nothing runs mruby between them. Both counters are incremented once per call on
+paths that cannot diverge, so one of the two readings is wrong and it is worth a
+check before either is quoted.
 
 The control matters here as much as the measurement: in the same boot that produced
 the 200000-fetch result, a known-good image completed all six of its rungs and
