@@ -248,11 +248,29 @@ is skipped. Two results:
 * **`mrb_open_core` then HANGS.** Thirty minutes at that rung with no progress, so
   there is a second problem behind the first.
 
-The hang is **not** the VM spinning through frames. Built with the escape set to
-fire after 2000 `mrb_vm_run` frames, it never fires in fifteen minutes, so mruby is
-stuck in one place rather than looping through the call machinery. That narrows the
-next instrument: it has to observe inside a single stuck computation, not count
-frames.
+The hang is **not** the VM spinning through frames, and it is **not in bytecode at
+all**. Two instruments say so, and the second was built to close a hole in the
+first:
+
+| instrument | armed at | result |
+|---|---|---|
+| escape after N `mrb_vm_run` frames | 2000 | never fires in 15 minutes |
+| VM watchdog on `MRB_USE_DEBUG_HOOK` | 200000 fetches | never fires in 20 minutes |
+| the same watchdog | **1000 fetches** | never fires in 20 minutes |
+
+"Never fires" has two readings and the low threshold settles which. The hook is
+installed from `mrb_vm_run`, immediately after the probe call, and `mrb_vm_run` is
+provably reached: it is where every non-`DO_CLEAR` build faults. So the hook IS
+installed, and fewer than a thousand bytecode instructions are fetched afterwards.
+
+That brackets the hang tightly. It sits in C, between the stack clear and the first
+thousand instructions of `mrb_vm_exec` -- which is `c->ci->stack[0] = self`, the
+call itself, and the interpreter's entry setup. Everything after that executes
+bytecode and would have moved the counter.
+
+The control matters here as much as the measurement: in the same boot that produced
+the 200000-fetch result, a known-good image completed all six of its rungs and
+returned its escape marker, so the silence was the subject and not the vehicle.
 
 **Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
