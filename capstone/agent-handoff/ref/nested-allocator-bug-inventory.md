@@ -40,7 +40,7 @@ counts from the issue trackers:
 |---|---|---|---|---|
 | **mruby** | yes: `RVALUE objects[MRB_HEAP_PAGE_SIZE]` per page, and the free list runs THROUGH the objects (`p = freelist; freelist = p->as.free.next`) | **yes** -- `boxing_no.h` keeps a real pointer in `mrb_value.value.p`, no integer round trip | 90 overflow + 82 UAF | OSS-Fuzz project |
 | **JerryScript** | yes: `struct jmem_heap_t { jmem_heap_free_t first; uint8_t area[]; }`, everything carved from one `area[]` | **NO** | 58 + 30 + 4 | OSS-Fuzz project |
-| **MicroPython** | yes: allocation-table bitmap plus `gc_pool_start`, one area | **yes, runs today** | 13 + 9 + 20 | fewer |
+| **MicroPython** | yes: allocation-table bitmap plus `gc_pool_start`, one area | **NO -- compiles as one TU, never linked or run** (`benchmarks/micropython/README.md`) | 13 + 9 + 20 | fewer |
 | **WAMR EMS** | yes, the global heap pool | yes, runs today | ~10 | some |
 | standalone allocators | they ARE the pool | trivial to drive | ~20 | few |
 
