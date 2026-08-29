@@ -278,6 +278,34 @@ is the answer:
 threshold of 1000, before it fetches a thousand instructions. `mrb_open_core`
 itself, the allocator, the clear and the self store are all clean.
 
+Going a level deeper works and hits a design limit of the rung layout:
+
+| rung | stage | result |
+|---|---|---|
+| 5 | 1, after the clear | returns |
+| 60 | 2, after `c->ci->stack[0] = self` | returns |
+| 61 | 3, top of `mrb_vm_exec`, before `MRB_TRY` | **returns** |
+| 62 | 4, inside `MRB_TRY`, before dispatch | faults |
+
+**Rung 62's fault is not established as a property of stage 4, and is most likely
+the rung layout.** Two things say so. Restoring `mrb->jmp = prev_jmp` before the
+stage-4 return -- which is genuinely required, since returning out of `MRB_TRY`
+otherwise leaves it pointing at a dead `c_jmp` -- changed nothing. And the faulting
+instruction is `stc` at `+16` with `size = 16`, the second half of
+`c->ci->stack[0] = self`, on what is the FOURTH `mrb_open_core` in one domain: rungs
+5, 60, 61 and 62 each build a VM and none is freed, on a 2 MiB arena.
+
+The fix is the pattern this project already uses for staged bisection: **one stage
+per domain image**, several `.dom` files in one boot, each with a fresh heap. Rungs
+sharing a heap across attempts is what makes the last attempt untrustworthy.
+
+An earlier reading of that rung was retracted for a different reason and is worth
+keeping as a warning: the first stage-4 build returned straight out of `MRB_TRY`,
+and the resulting fault read as "the trouble is in MRB_TRY". Mapping the pc to a
+TEXT symbol rather than the nearest symbol of any kind put it in `mrb_vm_run`
+instead -- `llvm-nm` without a type filter had offered `__gpfree_globals_tmpl_len`,
+a data symbol, as the enclosing function.
+
 Getting there cost one ordering mistake worth recording. The first staged run put
 `mrb_gc_add_region` at rung 57, ahead of the stage rungs, and a staged VM is
 half-built -- mrblib never ran -- so it faulted with cause 24 and took rungs 60 and
