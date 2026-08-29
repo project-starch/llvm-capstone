@@ -1,5 +1,5 @@
 diff --git i/src/vm.c w/src/vm.c
-index 148332bd0..6a559fb0f 100644
+index 148332bd0..51d1b9b5e 100644
 --- i/src/vm.c
 +++ w/src/vm.c
 @@ -184,6 +184,27 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
@@ -69,7 +69,7 @@ index 148332bd0..6a559fb0f 100644
    mrb_value result = mrb_vm_exec(mrb, proc, irep->iseq);
    mrb_assert(mrb->c == c);      /* do not switch fibers via mrb_vm_run(), unlike mrb_vm_exec() */
    mrb_assert(c->ci == c->cibase || (c->ci - c->cibase) == cioff - 1);
-@@ -2473,10 +2517,29 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq
+@@ -2473,10 +2517,34 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq
    CI_PROC_SET(ci, begin_proc);
    ci->pc = iseq;
  
@@ -92,8 +92,13 @@ index 148332bd0..6a559fb0f 100644
    MRB_TRY(&c_jmp) {
  
 +#ifdef MD_VM_STAGES
-+  /* Stage 4: inside MRB_TRY, before the dispatch loop. */
-+  if (md_vm_stage_gate(4)) return mrb_nil_value();
++  /* Stage 4: inside MRB_TRY, before the dispatch loop.
++     mrb->jmp MUST be put back first. Returning straight out of MRB_TRY leaves it
++     pointing at this frame's dead c_jmp, and the first thing upstream to raise then
++     longjmps into a stack frame that no longer exists -- which is what the first
++     version of this stage did, faulting in mrb_vm_run and reading exactly like a
++     finding about mruby. A variant has to stop the FLOW, not a leaf. */
++  if (md_vm_stage_gate(4)) { mrb->jmp = prev_jmp; return mrb_nil_value(); }
 +#endif
 +
    if (mrb_unlikely(mrb->exc)) {
