@@ -1,0 +1,19 @@
+--- a/core/shared/mem-alloc/ems/ems_alloc.c
++++ b/core/shared/mem-alloc/ems/ems_alloc.c
+@@ -826,7 +826,16 @@
+                         UNLOCK_HEAP(heap);
+                         return NULL;
+                     }
++#ifndef WAMR_EMS_PINUSE_BUG
++#define WAMR_EMS_PINUSE_BUG 0
++#endif
++#if !WAMR_EMS_PINUSE_BUG
++                    /* PR 2279. Without this, a later free coalesces BACKWARDS into
++                       the live object and the allocator hands the same memory out
++                       twice. Made a knob, not deleted, so the vulnerable and the
++                       fixed arm come from ONE tree differing in exactly this. */
+                     hmu_mark_pinuse(hmu_next);
++#endif
+                 }
+                 UNLOCK_HEAP(heap);
+                 heap->total_free_size -= (tot_size - tot_size_old);
