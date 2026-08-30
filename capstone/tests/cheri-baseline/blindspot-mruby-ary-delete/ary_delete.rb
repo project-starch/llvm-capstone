@@ -1,4 +1,4 @@
-# A1 -- mruby issue 6339, Array#delete.
+# ary-delete (formerly A1) -- mruby issue 6339, Array#delete.
 #
 # THE BLIND SPOT, in one script. mrb_ary_delete keeps the removed element in a
 # local `ret` that the GC does not know about ("protect return value" is what the
@@ -50,7 +50,7 @@ GC.start
 # therefore reported NoMethodError as rc=1, which is indistinguishable from
 # "the answer was correct". The sanity file caught that; without it three clean
 # rc=1 lines would have read as "CHERI misses nothing" in all three configs.
-#   A1RESULT=1  the object survived as a C instance  -> correct
-#   A1RESULT=2  the slot came back as something else -> WRONG ANSWER, a MISS
+#   ARYDEL=1  the object survived as a C instance  -> correct
+#   ARYDEL=2  the slot came back as something else -> WRONG ANSWER, a MISS
 #   no marker + rc>=128                              -> CHERI caught it
-puts "A1RESULT=#{x.instance_of?(C) ? 1 : 2} class=#{x.class}"
+puts "ARYDEL=#{x.instance_of?(C) ? 1 : 2} class=#{x.class}"

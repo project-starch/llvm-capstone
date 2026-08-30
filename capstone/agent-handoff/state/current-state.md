@@ -13,7 +13,7 @@ misses it in all three revocation configurations, returning a `String` where a `
 instance must be, `rc=0` with no signal. The same harness in the same boot CATCHES
 a plain heap overflow on SIGPROT, which is what makes the miss a measurement rather
 than an assertion. Harness and five controls:
-`tests/cheri-baseline/blindspot-a1/`.
+`tests/cheri-baseline/blindspot-mruby-ary-delete/`.
 
 **The catalogue is worth less than its count.** Of the eleven mruby cases carrying a
 transcribed script, one is usable, one fires without an oracle, four show no

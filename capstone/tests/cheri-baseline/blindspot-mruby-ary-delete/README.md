@@ -1,4 +1,8 @@
-# A1 under CHERI purecap: MEASURED, and CHERI misses it
+# ary-delete under CHERI purecap: MEASURED, and CHERI misses it
+
+(The case was catalogued as "A1" -- class A, case 1; renamed to what it is. The
+recorded transcripts below predate the rename and print `A1RESULT`; the marker
+in `ary_delete.rb` is now `ARYDEL`, same values.)
 
 The first scored blind-spot case. mruby issue 6339: `mrb_ary_delete` keeps the
 removed element in a local the GC does not know about, the element's `==` runs
@@ -11,20 +15,20 @@ the ANSWER, not a crash.
 
 ## Result
 
-| cfg | revocation | every_free | vehicle control | sanity | A1 | A1 rc |
+| cfg | revocation | every_free | vehicle control | sanity | ary-delete | rc |
 |---|---|---|---|---|---|---|
 | spatial | 0 | 0 | `rc=162 SIGPROT`, only `CONTROL=BEFORE` | `SANITY_OK=7` | `A1RESULT=2 class=String` | 0 |
 | temporal | 1 | 0 | `rc=162 SIGPROT`, only `CONTROL=BEFORE` | `SANITY_OK=7` | `A1RESULT=2 class=String` | 0 |
 | eager | 1 | 1 | `rc=162 SIGPROT`, only `CONTROL=BEFORE` | `SANITY_OK=7` | `A1RESULT=2 class=String` | 0 |
 
-`rc=0` on A1 throughout, so no signal: a wrong answer, not a suppressed crash.
+`rc=0` on ary-delete throughout, so no signal: a wrong answer, not a suppressed crash.
 **CHERI purecap misses it in all three configurations, eager revocation
 included.**
 
 **And the same harness, in the same boot, CATCHES a plain heap overflow.**
 `catch_control.c` mallocs 64 bytes and walks 4096. It dies on SIGPROT (162 =
 128+34) after `CONTROL=BEFORE` and never reaches `CONTROL=AFTER`. Without that
-row, "CHERI misses A1" could not be told from "this harness never reports
+row, "CHERI misses ary-delete" could not be told from "this harness never reports
 anything" -- every verdict it had produced up to that point was a MISS. The
 control is a vehicle check, not a corpus case, and it is the difference between a
 result and an assertion.
@@ -59,18 +63,18 @@ The purecap binary is not committed; build it:
 
 ```sh
 SHA=$(git -C <mruby-clone> rev-parse 0972c8477^)
-CHERI_ROOT=$HOME/cheri MRUBY_SRC=$HOME/cheri/mruby-a1-purecap MRUBY_REV=$SHA \
+CHERI_ROOT=$HOME/cheri MRUBY_SRC=$HOME/cheri/mruby-ary-delete-purecap MRUBY_REV=$SHA \
   bash xlang/cheri/mruby-port/build-purecap-mruby.sh
 ```
 
-Then stage this directory plus `build/purecap/bin/mruby` as `/root/a1-6339` in the
+Then stage this directory plus `build/purecap/bin/mruby` as `/root/ary-delete-6339` in the
 guest image and drive it:
 
 ```sh
-fakeroot -s $FR -- sh -c "mkdir -p $ROOTFS/root/a1-6339 && cp -a <this dir>/. $ROOTFS/root/a1-6339/"
+fakeroot -s $FR -- sh -c "mkdir -p $ROOTFS/root/ary-delete-6339 && cp -a <this dir>/. $ROOTFS/root/ary-delete-6339/"
 fakeroot -i $FR -- $MAKEFS -t ffs -B little -s 1600m \
   -o version=1,bsize=32768,fsize=4096 <img> $ROOTFS
-python3 capstone/tests/cheri-baseline/cheri-run.py <qemu-argv.txt> serial.log /root/a1-6339
+python3 capstone/tests/cheri-baseline/cheri-run.py <qemu-argv.txt> serial.log /root/ary-delete-6339
 ```
 
 The vehicle used was `~/cheri-clean` (SDK, bbl, kernel and a 1.6 GB UFS1 image);

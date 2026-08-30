@@ -83,17 +83,17 @@ the two or three places where a constant encodes the pointer's width.
 
 ## Scored so far: ONE
 
-**A1 (mruby 6339): CHERI purecap MISSES it, in all three revocation
+**ary-delete (mruby 6339, catalogue row A1): CHERI purecap MISSES it, in all three revocation
 configurations including eager.** The object comes back as a `String` where a `C`
 instance must be, `rc=0` throughout, so it is a wrong answer and not a suppressed
 crash. The same harness, in the same boot, CATCHES a plain heap overflow on SIGPROT --
 so this is a measured miss and not a harness that never reports anything. Harness,
-result table and the five controls: `tests/cheri-baseline/blindspot-a1/`.
+result table and the five controls: `tests/cheri-baseline/blindspot-mruby-ary-delete/`.
 
 That is 1 of 36, and the other 35 are worth less than the count suggests.
 **Scripted is not usable.** Of the eleven cases carrying a transcribed script, run
 on builds from their own era against a matched reference: one is usable and
-measured (A1), one fires but has a refuted fix attribution (A4), four produce no
+measured (ary-delete, row A1), one fires but has a refuted fix attribution (A4), four produce no
 observable difference, three do not run as transcribed, and one produces the same
 answer on both sides. The table in [mruby.md](mruby.md) has the per-case verdicts
 and the three controls that caught it.
@@ -112,7 +112,7 @@ The two columns are independent and only one is blocked:
 So the first scored case does not have to wait for the compiler. What it does have
 to wait for is an ORACLE, which is the harder half and is not blocked either: a
 sanitizer cannot see class A, so each case needs a wrong ANSWER rather than a
-crash. `cases/a1-6339.rb` is written that way and returns 1 or 2.
+crash. `cases/ary-delete-6339.rb` is written that way and returns 1 or 2.
 
 ## This is not the only mruby harness, and it was not the first
 

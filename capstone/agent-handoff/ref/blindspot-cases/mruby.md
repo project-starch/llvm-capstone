@@ -73,7 +73,7 @@ Invisible to purecap **and** to revocation, as-is.
 
 | # | issue | fix commit | affected | component | class | script |
 |---|---|---|---|---|---|---|
-| A1 | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **CHERI: MISS, all 3 configs** |
+| A1 = **ary-delete** | 6339 | `0972c8477` (2024-09-09), `0955539cf` | **master only, NO release** | `array.c` `mrb_ary_delete` | UAF -> slot reuse as another type | **CHERI: MISS, all 3 configs** |
 | A2 | 5534 | `e323cd0c6ebd` | 3.0.0 | `class.c` `mrb_alias_method` | **type confusion `REnv*` -> `RProc*`** via free-list reuse | no |
 | A3 | 3542 | UNKNOWN | ~1.2-1.3 | `gc.c` `mrb_gc_mark` | GC lifetime, `tt == MRB_TT_FREE` | yes |
 | A4 | 3550 | **UNKNOWN, `15fba69710c7` REFUTED** | unknown | `gc.c`, Fiber | GC lifetime | yes |
@@ -134,12 +134,12 @@ so revocation closes it. Do not re-derive it.
 
 ## The lead case, MEASURED
 
-**A1, issue 6339.** `mrb_ary_delete` keeps the removed element in a local `ret`
+**ary-delete (row A1), issue 6339.** `mrb_ary_delete` keeps the removed element in a local `ret`
 the GC does not know about. The element's `==` runs Ruby, which runs the GC, the
 object is swept while `delete` is still running, and its slot comes back off the
 page free list as a `String`.
 
-The runnable specimen is `benchmarks/mruby/cases/a1-6339.rb`. Two things about it
+The runnable specimen is `benchmarks/mruby/cases/ary-delete-6339.rb`. Two things about it
 were learned by building both sides and running them, and neither was obvious:
 
 **The version range in this table used to say `<= 3.3.0`, and that was wrong in the
@@ -183,13 +183,13 @@ badly. **Scripted is not usable.**
 
 | case | on an affected build | verdict |
 |---|---|---|
-| **A1** | wrong answer, `class=String` | **usable, and MEASURED under CHERI** |
+| **A1 (ary-delete)** | wrong answer, `class=String` | **usable, and MEASURED under CHERI** |
 | A4 | `mrb_gc_mark: Assertion (obj)->tt != MRB_TT_FREE` | fires, but its FIX ATTRIBUTION IS WRONG (below) |
 | A3, A5, A10, B2 | no observable difference from the reference | no oracle as transcribed |
 | A8, A9, B3 | `NoMethodError` on one or both builds | script does not run as transcribed |
 | B9 | identical result on both builds | no oracle (below) |
 
-## Why A1 is the only usable one, and it is structural
+## Why ary-delete is the only usable one, and it is structural
 
 The rule below said to pick cases whose corrupted slot comes back to Ruby. **A13
 satisfies it and still produced nothing** -- `Hash#shift` returns the pair, and at
@@ -197,7 +197,7 @@ satisfies it and still produced nothing** -- `Hash#shift` returns the pair, and 
 rule is necessary and not sufficient, and guessing per case is a poor use of a
 build.
 
-Scanning instead is better. The A1 fix is `mrb_gc_arena_save` / `mrb_gc_protect` /
+Scanning instead is better. The ary-delete fix is `mrb_gc_arena_save` / `mrb_gc_protect` /
 `mrb_gc_arena_restore` around a loop that calls `mrb_equal`, so the hunt is: a C
 function that calls the equality family inside a loop over elements and returns
 one, without that protection. In current master that is
@@ -210,7 +210,7 @@ one, without that protection. In current master that is
 | `src/range.c` | `range_eq` | a boolean |
 | `mrbgems/mruby-array-ext` | `ary_include` | a boolean |
 
-**Not one of them returns the element.** That is the whole answer to why A1 stands
+**Not one of them returns the element.** That is the whole answer to why ary-delete stands
 alone: upstream has protected every site that hands an element back, and what is
 left returns integers and booleans, which cannot carry a type confusion into a Ruby
 expression. `Array#index` was tested against an array cleared underneath it by a
@@ -238,7 +238,7 @@ that produced NOTHING observable from Ruby:
   `interval_ratio` driven to 1 to hold the GC in incremental marking across the
   alias, the answer is `:from_base` either way.
 
-**What A1 has and these do not: the corrupted object is RETURNED to Ruby.**
+**What ary-delete has and these do not: the corrupted object is RETURNED to Ruby.**
 `Array#delete` hands back the very object whose slot was recycled, so a script can
 ask it what it is and get a `String`. A4's freed object lives in a fiber's saved
 stack, B9's in a temporary set, A2's in a proc's env -- all interpreter-internal,

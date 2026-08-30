@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Turn a Ruby specimen into port/md_specimen.h, a C array of mruby bytecode.
 #
-#     tools/gen-specimen.sh cases/a1-6339.rb
+#     tools/gen-specimen.sh cases/ary-delete-6339.rb
 #
 # The domain has no parser: the gembox is default-no-stdio, so mruby-compiler is
 # not in the image and there is no file system to read from either. Bytecode is

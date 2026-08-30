@@ -22,7 +22,7 @@ them are usable specimens. The catalogue is
 
 **A sanitizer cannot see this class either**, for exactly the same reason: ASAN
 observes only `malloc` and `free`. So the oracle is a **wrong answer**, not a crash
-report. `cases/a1-6339.rb` returns 1 or 2 rather than printing.
+report. `cases/ary-delete-6339.rb` returns 1 or 2 rather than printing.
 
 ## Two allocators, deliberately
 
