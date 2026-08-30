@@ -114,6 +114,25 @@ to wait for is an ORACLE, which is the harder half and is not blocked either: a
 sanitizer cannot see class A, so each case needs a wrong ANSWER rather than a
 crash. `cases/a1-6339.rb` is written that way and returns 1 or 2.
 
+## This is not the only mruby harness, and it was not the first
+
+`musl-capstone/mruby-probe/run-corpus-rows.sh` predates this collection and runs
+corpus rows on the REAL interpreter in a pure-capability domain, three arms per row:
+`libc` (no bounds, no revocation), `ctl` (exact bounds, revocation off) and `rev`
+(the shipped configuration). Each row builds against its OWN pinned mruby under
+`xlang/repro/<n>/mruby`, eight of which exist, because the corpus pins a different
+vulnerable commit per row.
+
+That solves two problems this collection spent a session rediscovering: the version
+window has to be pinned per case, and a measurement needs a control arm that proves
+the trigger armed. Read that script's header before designing anything here.
+
+The two efforts are not redundant. That harness measures corpus rows on Capstone;
+this collection is about which mruby defects are blind spots at all, and its CHERI
+column runs on CheriBSD. But a case that needs a Capstone number should go through
+the musl harness rather than through `benchmarks/mruby/`, whose freestanding domain
+port is a separate question.
+
 ## Status vocabulary
 
 Reused from `../paper-bug-inventory.md` so the two files can be read together.

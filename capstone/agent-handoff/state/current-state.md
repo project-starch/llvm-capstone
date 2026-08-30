@@ -2,6 +2,44 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-08-29 — NESTED-ALLOCATOR LANE, `capstone-nested-allocator-bugs`
+
+**A different lane from the silicon sections below; it does not supersede them.**
+43 commits. What it established, and what it duplicated by not reading this file
+first.
+
+**Measured: ONE blind-spot case.** mruby issue 6339, `Array#delete`: CHERI purecap
+misses it in all three revocation configurations, returning a `String` where a `C`
+instance must be, `rc=0` with no signal. The same harness in the same boot CATCHES
+a plain heap overflow on SIGPROT, which is what makes the miss a measurement rather
+than an assertion. Harness and five controls:
+`tests/cheri-baseline/blindspot-a1/`.
+
+**The catalogue is worth less than its count.** Of the eleven mruby cases carrying a
+transcribed script, one is usable, one fires without an oracle, four show no
+observable difference and three do not run. A source scan says why structurally:
+no function in current master returns an element without GC protection, because
+upstream fixes the returners promptly. `ref/blindspot-cases/mruby.md`.
+
+**The freestanding mruby domain port advanced but does not finish.** The stack-clear
+fault is characterised -- the probe's own clear over the same capability does not
+fault where mruby's inlined loop does -- and the hang behind it is localised to
+`mrb_vm_exec`, before a thousand instruction fetches. `benchmarks/mruby/README.md`.
+
+**WHAT I SHOULD HAVE READ FIRST, and the cost of not.** This file's companion
+`current-next-step.md` records that **mruby's own test suite already runs in a
+pure-capability domain** through the musl lane -- 678 assertions, 674 OK, 0 crashes,
+2026-08-20 -- and that `musl-capstone/mruby-probe/run-corpus-rows.sh` is a
+three-arm corpus harness with per-row pinned trees under `xlang/repro/<n>/mruby`,
+eight of which exist. Its header states the same control discipline this lane
+re-derived from scratch.
+
+So "mruby's Capstone column is blocked" was true only of the FREESTANDING DOMAIN
+port. It is not true of mruby on Capstone. Anyone continuing should start from the
+musl harness, not from `benchmarks/mruby/`, and the freestanding port should be
+treated as what it is: a separate question about the domain ABI, not the blocker
+for measuring cases.
+
 ## 2026-08-17 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
 
 * **Bitstream: `caplifive_s07diag.bit`** (S-06 fix `25035c4c0` + S-08 fix `9fd5507b` + the mtval
