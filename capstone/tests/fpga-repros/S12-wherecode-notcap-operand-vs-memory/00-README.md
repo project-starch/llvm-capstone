@@ -174,6 +174,59 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-08-31 — S-12 IS TWO DEFECTS, AND THE ONE THAT KILLS THE BOARD IS NOT SPECIFIC TO S-12
+
+**A deliberate, trivial capability fault raised from inside a domain wedges the whole board in
+exactly the same way S-12 does.** Same latch, same architectural end-state, same silence from the
+monitor. The wedge was never a property of `sqlite3WhereCodeOneLoopStart`.
+
+The control that shows it is the `0xBEEF` probe: a domain materialises a plain integer and executes
+`cincoffsetimm` on it, which is the most boring capability fault available. Compare it against the
+real thing:
+
+    probe                       latch (hw debug mux)              architectural CSRs (gdb)
+    0xBEEF, tvnh-1              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    0xBEEF, tvnh-2              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    real S-12, s12t-1           mcause 25  tval 0  @0x828f4814    mcause=2  mepc=2  mtval=0
+
+`EXCX` is 0 in all three. The monitor's unhandled-exception arm — which reports EXCX/MCAU/MEPC/MTVL
+and then calls `fault_return_from_domain` to terminate the domain and return a code — is present in
+the deployed firmware (`nm` shows `T fault_return_from_domain` at 0x800239ac) and does not run.
+
+### So S-12 decomposes
+
+**(A) Why does a capability fault occur at `cincoffsetimm a4, a4, 0xb0`?** The stale-operand
+question. At the wedge the register file holds `a4 = 0x82be4cd0`, exactly the cursor sitting in the
+slot the `ldc` read (`0x82b9f410` → `0x82be4cd0 / 0x0000073fa7462d16`), so **the load did write the
+right value and the consumer ingested something else** — `tval`, which is the rs1 cursor as the FLU
+took it, is 0. The driver already prints this conclusion at the wedge.
+
+**(B) Why does ANY domain capability fault kill the board instead of trapping to the monitor?**
+This is the defect that turns a recoverable fault into a dead board, it is universal rather than
+S-12-specific, and it is almost certainly the same defect as the historical `gp-free` wedge, whose
+recorded signature is character-for-character `pc=0 / mepc=2 / mcause=2 / mtval=0 / MPP=M`.
+
+**(B) is the blocker.** The standing goal is running the SLT corpus on silicon; with (B) in place,
+*any* capability fault anywhere in the corpus takes the board down and yields no diagnosis. Fixing
+(A) alone removes one fault site out of an unknown number.
+
+### Why nobody saw it
+
+The hardware trap latch filters `cause != 2` (`cva6.sv:1126-1137`), so the cause-2 storm the core
+actually ends in is invisible to it — it faithfully preserves the *first* nontrivial trap and hides
+everything after. The architectural CSRs tell the other half of the story and were being read all
+along, on the line directly below. Both halves were in every log.
+
+**Not yet established:** why the trap ends at `pc = 2`. A pending RTL question, with one standing
+candidate: `capmode_q` is sticky (`csr_regfile.sv:295`) and `npc_metadata_q` is not cleared when the
+core takes an exception (`frontend.sv:425-427` redirects the PC alone; `:443-444` holds the
+metadata), so the first instruction fetched at `mtvec` can be PC-capability-checked against stale
+domain bounds. That predicts cause 26/27/28, which would have overwritten the latch and did not —
+so the candidate does not fit as stated, and the residual is exactly the cause-2 path the latch
+cannot see.
+
+---
+
 ## 2026-08-31 — THE `mtval` INSTRUMENT WORKS. It was the GDB HALT destroying the reading
 
 `tval = 0xBEEF`, twice out of two, with `mcause = 25`.
