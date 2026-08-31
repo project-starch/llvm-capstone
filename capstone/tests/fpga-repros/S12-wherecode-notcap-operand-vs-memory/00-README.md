@@ -193,6 +193,52 @@ real thing:
 and then calls `fault_return_from_domain` to terminate the domain and return a code — is present in
 the deployed firmware (`nm` shows `T fault_return_from_domain` at 0x800239ac) and does not run.
 
+### (A) narrowed to one mechanism, with three alternatives structurally excluded
+
+RTL-verified at the bitstream commit `80843404c` (not HEAD; the two differ in `ex_stage.sv`,
+`issue_read_operands.sv`, `load_unit.sv`, `load_store_unit.sv`, `cva6.sv`):
+
+**`operand_a` IS the rs1 cursor**, and it is not a reporting artifact. Cursor and metadata come from
+two physically separate register files (`issue_read_operands.sv:201-204`, `:1683-1704`), and
+`ex_stage.sv:796-797` feeds that same wire into `decompress_cap_tagged` to build `cap_rs1` — the
+object the FLU actually inspects. So `tval` and the FLU's own decision read the SAME signal in the
+SAME cycle.
+
+**The exception nulling does not reach `tval`.** `raise_exception`
+(`capstone_unit.anvilh:448-452`) nulls the OUTPUT-side result pack; `tval` (`ex_stage.sv:488`) reads
+the INPUT-side `fu_data_i[0].operand_a`. Different wires, different pipeline stages. The "every
+capability exception reports tval=0 regardless" escape is refuted structurally, not by comment.
+
+**Therefore `tval = 0` means the FLU genuinely ingested cursor = 0** — while the architectural `a4`
+afterwards holds `0x82be4cd0`, the correct value from the slot. The load wrote the right thing; the
+consumer received something else.
+
+**Three of the four mcause-25 producers are excluded for this trap.** `pc_cap` sets
+`tval = commit_instr_i[0].pc` (`commit_stage.sv:604`), so it would give `tval == mepc != 0`, and it
+cannot coexist with an FLU-attached exception anyway (`:210`, `:611-614`). `DYN` would name the
+`ldc` at VA 0x104810 in `mepc`, not the `cincoffsetimm` at 0x104814. The LSU cannot see this
+instruction at all: `decoder.sv:1164-1166` makes the whole `OpcodeCustom2` block FLU by default and
+`CINCOFFSETIMM` never overrides it, while `LDC` explicitly sets `CAPSTONE_DYN`.
+
+**The surviving mechanism is load-to-use forwarding timing.** `fu_data_q` is captured ONCE, at
+issue-accept (`issue_read_operands.sv:1885-1888`) — there is no re-latch while an instruction waits.
+The `cincoffsetimm` reads `a4` the instruction immediately after the `ldc` writes it, so the only
+path that can satisfy `rs1_valid` in time is the forwarding network. If that grant can fire on a
+cycle where the LDC's result has not genuinely landed in the forwarding structure, the consumer
+captures a zero cursor permanently while the LDC still writes back correctly afterwards — which is
+exactly the observed signature.
+
+**Structurally excluded within that mechanism:** a cursor/metadata mismatch from two different
+producers. The two arbiters share one request vector (`issue_read_operands.sv:789-849`), so they
+always select the same winner.
+
+**Not yet closed, and it needs simulation rather than the board:** whether `rs1_available` /
+`rs1_cap_avail` can both be granted before the load's result is populated — this needs
+`scoreboard.sv` and the D$ response timing, and it is expected to depend on HIT versus MISS. Note
+the previously refuted "stale-regfile read" and "wrong-producer forwarding" hypotheses do NOT cover
+this: both were refuted in bare metal, with their own scope warnings, and neither tested a grant
+racing an unlanded load result.
+
 ### So S-12 decomposes
 
 **(A) Why does a capability fault occur at `cincoffsetimm a4, a4, 0xb0`?** The stale-operand
