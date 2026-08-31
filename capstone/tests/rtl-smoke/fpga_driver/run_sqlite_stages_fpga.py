@@ -837,7 +837,23 @@ def main():
         install_release_on_signal(console)
         rb = nvbit(console)
         if rb != BITSTREAM:
-            raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
+            # NARROW override, for one situation only: the console reports nv_bitstream_name as
+            # None. That happens after the backend restarts -- it appears to learn the name by
+            # performing a flash itself, so a restart loses it while the FPGA keeps its bitstream.
+            # On 2026-08-31 that cost two boots to a HARD STOP, and a power-on showed the SD
+            # bootloader banner immediately, i.e. silicon resident and only the NAME unknown.
+            #
+            # The override does NOT tolerate a genuine mismatch: a console reporting SOME OTHER
+            # name still hard-stops, because that is the case the gate exists for. It covers only
+            # "the console does not know", and it says so in the transcript rather than passing
+            # quietly -- an unverified run has to be visible in its own log, since the whole point
+            # of naming the silicon is that a verdict is worthless without it.
+            if rb is None and os.environ.get("FPGA_BITSTREAM_UNVERIFIED") == "1":
+                log(f"!! BITSTREAM IDENTITY UNVERIFIED: the console reports no resident name. "
+                    f"Proceeding on the ASSUMPTION it is {BITSTREAM!r}, which is NOT confirmed.")
+                log("!! Any result from this boot must be recorded as bitstream-unverified.")
+            else:
+                raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
         # BOOT AN IMAGE ALREADY ON THE SERVER, without uploading and without a local copy.
         #
         # The console stores boot images under a CONTENT-HASH name (sha256[:12]), so a name can
