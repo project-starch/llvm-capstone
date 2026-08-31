@@ -2512,6 +2512,7 @@ fi
 # to produce a wrong answer.
 if [[ -n "${CAPSTONE_WTRUNC:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WTRUNC" <<'PYWT'
+import os
 import sys
 path, n = sys.argv[1], int(sys.argv[2])
 s = open(path).read()
@@ -2532,7 +2533,16 @@ PREFIX = "  int iLoop;                /* Iteration of constraint generator loop 
 anchor = PREFIX + "\n".join(STMTS[:n])
 if s.count(anchor) != 1:
     sys.exit(f"WTRUNC: anchor for n={n} occurs {s.count(anchor)} times -- refusing to guess")
-s = s.replace(anchor, anchor + "\n  return (Bitmask)(unsigned long)pWC;  /* CAPSTONE_WTRUNC */", 1)
+# RETURN VALUE. `0` is a VALID Bitmask, so SQLite may survive the truncation and keep a clean
+# return-vs-wedge observable; the cursor of pWC is not, and a domain that dies on the garbage makes
+# a board wedge ambiguous between S-12 and the truncation's own crash. Default to 0 and let
+# CAPSTONE_WTRUNC_RET=cursor ask for the other, because the risk `cursor` was guarding against --
+# the compiler deleting the assignment under test as dead -- cannot arise at the -O0 the domain is
+# built with, and the window gate confirms the instruction survived either way rather than either
+# choice being trusted.
+ret = ("(Bitmask)(unsigned long)pWC" if os.environ.get("CAPSTONE_WTRUNC_RET") == "cursor"
+       else "0")
+s = s.replace(anchor, anchor + f"\n  return {ret};  /* CAPSTONE_WTRUNC */", 1)
 open(path, "w").write(s)
 print(f"   WTRUNC: sqlite3WhereCodeOneLoopStart truncated after statement {n}")
 PYWT

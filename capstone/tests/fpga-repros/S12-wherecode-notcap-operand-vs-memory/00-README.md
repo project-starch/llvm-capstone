@@ -174,6 +174,60 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-08-31 — THE `mtval` INSTRUMENT WORKS. It was the GDB HALT destroying the reading
+
+`tval = 0xBEEF`, twice out of two, with `mcause = 25`.
+
+The positive control that had been written months ago and never run finally ran. A domain executes
+`cincoffsetimm` on a plain integer 0xBEEF — verified in the artifact, `lui a0,0xc; addi a1,a0,-0x111`
+and the faulting instruction encoded `5b 25 85 00` — and the latch reads:
+
+    HALT_MUX_READS=1   mcause 3    tval 0x00100073 (the ebreak insn word)   mepc 0x368
+    HALT_MUX_READS=0   mcause 25   tval 0x000000000000beef                  mepc 0x828233a0
+
+Same binary, same boot sequence, one variable. **The `monitor halt` the driver issues before reading
+the debug mux was overwriting the trap latch**, and the trap latch is what every `tval` reading in
+this investigation was taken from.
+
+### What this settles
+
+**`mtval` is a live instrument on this silicon.** The standing note in `sqlite_capstone_domain.c` —
+*"every latched tval at a capability wedge reads 0x00 ... so EVERY tval == 0 in this investigation
+is NO DATA"* — is now half wrong. The path works; the reading was being destroyed downstream.
+
+**It resolves the `mcause 25` aliasing for S-12, in the direction the folder always assumed.**
+Cause 25 has two sources (`RTL-cap-mcause-off-by-one/`): the data-path `UNEXPECTED_OPERAND`, shifted
+into 25 by the off-by-one, and the PC-capability `INVALID_CAPABILITY`, which lands there correctly.
+They differ in `tval` — `ex_stage.sv:490` gives the rs1 cursor, `commit_stage.sv:604` gives the
+faulting PC, which is never zero. A working `tval` therefore discriminates them, and `tval = 0` at
+an S-12 wedge means the data path with a null/integer operand.
+
+### What it does NOT settle, and this is the part to act on
+
+**Every historical S-12 `tval = 0` was read through the destroying path.** `HALT_MUX_READS=1` is set
+in `o1-board-run.sh` and in every arm script derived from it. Those readings are not evidence of
+anything until re-taken without the halt. That is one boot and it is the next one.
+
+**`EXCX` did not fire — and now that absence MEANS something.** Both draws show `EXCX count: 0`.
+The monitor's unhandled-exception arm reports EXCX/MCAU/MEPC/MTVL/MSTA and then calls
+`fault_return_from_domain`, and `nm` confirms both are in the deployed firmware. This run is the
+positive control that path never had: a deliberate, confirmed `mcause 25` raised from inside a
+domain, which is exactly its trigger condition. It did not run.
+
+So **M-mode trap entry does not reach the monitor's handler for a domain capability fault**, and the
+pre-registered consequence stands: a monitor-side change cannot convert S-12 wedges into returned
+fault codes, and the directed Verilator simulation over `capmode_q` / `npc_metadata_q` /
+`pc_cap_ex_valid` is now the indicated instrument rather than a detour.
+
+### Caveat carried with all four draws
+
+The console lost `nv_bitstream_name` when its backend restarted, and these boots ran under
+`FPGA_BITSTREAM_UNVERIFIED=1`. A power-on showed the SD bootloader banner, so silicon is resident,
+but it cannot be NAMED. The `0xBEEF` result is a property of the FLU trap-value path and is not
+plausibly bitstream-version-specific, but the caveat travels with the number.
+
+---
+
 ## 2026-08-29 — READ THIS BEFORE ANY TABLE BELOW. Three wedges in this folder never ran a domain, and the freshness gate was blind
 
 Everything below this section was tallied with the wedge counts named here. They are wrong, they
