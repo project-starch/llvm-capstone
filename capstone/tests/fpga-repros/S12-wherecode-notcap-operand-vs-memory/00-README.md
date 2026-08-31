@@ -191,22 +191,57 @@ this investigation was taken from.
 
 ### What this settles
 
-**`mtval` is a live instrument on this silicon.** The standing note in `sqlite_capstone_domain.c` —
-*"every latched tval at a capability wedge reads 0x00 ... so EVERY tval == 0 in this investigation
-is NO DATA"* — is now half wrong. The path works; the reading was being destroyed downstream.
+**`mtval` is a live instrument on this silicon** — and it was already known to be, a week before
+this run. `tval-ctl3.log`, 2026-08-24, on a console-NAMED `caplifive_s10fix_80843404c.bit`, latched
+`trap tval = 0x000000000000beef`. The control had been run, its result was sitting in
+`/tmp/capstone/`, and it was re-run on 2026-08-31 because nobody looked. That is the second
+prior-art failure in this investigation and it cost a board session.
 
-**It resolves the `mcause 25` aliasing for S-12, in the direction the folder always assumed.**
-Cause 25 has two sources (`RTL-cap-mcause-off-by-one/`): the data-path `UNEXPECTED_OPERAND`, shifted
-into 25 by the off-by-one, and the PC-capability `INVALID_CAPABILITY`, which lands there correctly.
-They differ in `tval` — `ex_stage.sv:490` gives the rs1 cursor, `commit_stage.sv:604` gives the
-faulting PC, which is never zero. A working `tval` therefore discriminates them, and `tval = 0` at
-an S-12 wedge means the data path with a null/integer operand.
+Consequently the caveat the driver hard-codes — *"the FLU tval path has never been shown to produce
+a NON-zero value on this bitstream ... treat tval==0 as NO DATA"* — has been printing a FALSE
+warning under every `tval == 0` since 2026-08-24. Fixed.
 
-### What it does NOT settle, and this is the part to act on
+**The S-12 reading is `tval = 0` at `mcause 25`, `mepc = 0x828f4814` (VA 0x104814, the documented
+`cincoffsetimm a4,a4,0xb0`), and it is NOT N=1.**
 
-**Every historical S-12 `tval = 0` was read through the destroying path.** `HALT_MUX_READS=1` is set
-in `o1-board-run.sh` and in every arm script derived from it. Those readings are not evidence of
-anything until re-taken without the halt. That is one boot and it is the next one.
+    nc-2      2026-08-29   named silicon, pre-read halt FAILED (so un-clobbered)   identical triple
+    s12t-1    2026-08-31   named silicon, no halt requested                        identical triple
+
+plus roughly twenty further draws on this bitstream carrying the same triple. The earlier write-up
+called this N=1; that understated the evidence, and `nc-2` is the strongest single draw in the file.
+
+**It excludes the PC-capability producer of cause 25.** That producer sets `tval` to the faulting PC
+(`commit_stage.sv:604`), so a pc_cap fault would give `tval == mepc == 0x828f4814` — `0x14` on
+aperture 210 and `0x48` on 211. Those two apertures are PROVEN LIVE: they returned `0xef`/`0xbe`
+in the 0xBEEF draws. They read `0x00`. The exclusion rests on `tval != mepc` alone and is airtight.
+
+### What is NOT established
+
+**"The operand was exactly null" is NOT established — only that it was a non-capability whose low
+half-word is zero.** The 0xBEEF control exercises apertures 210 and 211, i.e. `tval[15:0]`.
+Apertures 213-218 (`tval[63:16]`) have never returned a non-zero value on this silicon. An operand
+that is a non-zero integer with a zero low half-word — an address-like value such as `0x82800000`,
+which is exactly the "address-like garbage" shape this project has seen before — would read as
+`tval = 0`. **Closing it costs one arm: a probe materialising `0xDEADBEEF` rather than `0xBEEF`.**
+
+**RETRACTED before it was ever acted on: "every historical `tval = 0` was read through a destroying
+path."** The clobber is SELF-ANNOUNCING. All four latch fields are written in one `always_ff` branch
+(`cva6.sv:1126-1137`), so a clobber necessarily moves `mcause` to 3 or 15 and `mepc` to
+`0x368`/`0x860`. Therefore every historical draw reporting `mcause 25` with a domain-range `mepc`
+was, on its face, NOT clobbered — and that is most of them. The halt-clobber association is real
+(the `0x368`/cause-3 signature appears in 0 of 26 no-halt draws and 17 of 36 halt draws) but it
+invalidates nothing that already reads as a domain capability fault.
+
+**The halt-destroys-the-latch mechanism itself is PLAUSIBLE, not proven.** Its matched pair is
+thinner than it looked: `tv-1` is an INFRASTRUCTURE WEDGE in which the probe never executed at all,
+so the with-halt side is `tv-2` alone. A competing explanation survives — those boots may have
+wedged without ever committing a latchable exception, leaving an earlier ebreak as the only thing
+ever latched, in which case the halt destroyed nothing.
+
+**Provenance, stated per draw rather than blanket.** `tvnh-1`/`tvnh-2` report
+`nv_bitstream_name: None` — they ran under `FPGA_BITSTREAM_UNVERIFIED=1` and are NOT on named
+silicon; the preflight line naming the bitstream there is echoing the env var, not a readback.
+`tval-ctl3`, `nc-2`, `s12t-1` and `s12t-2` ARE named.
 
 **`EXCX` did not fire — and now that absence MEANS something.** Both draws show `EXCX count: 0`.
 The monitor's unhandled-exception arm reports EXCX/MCAU/MEPC/MTVL/MSTA and then calls

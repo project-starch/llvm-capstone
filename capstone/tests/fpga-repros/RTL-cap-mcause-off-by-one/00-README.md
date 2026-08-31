@@ -52,8 +52,29 @@ paths and are NOT affected.
 
 ## Why it matters more than an off-by-one usually does
 
-**`mcause = 25` has two sources that mean different things, and nothing in `mcause` separates
-them.** A data-path `UNEXPECTED_OPERAND` — an operand that is not a capability — arrives as 25
+**`mcause = 25` has FOUR sources that mean different things, and nothing in `mcause` separates
+them.** An earlier version of this file said two; that was wrong, and the two it missed are not
+theoretical:
+
+    1  core/ex_stage.sv:479,488          FLU     24 + code   tval = fu_data_i[0].operand_a
+    2  core/commit_stage.sv:226,604      pc_cap  23 + 2      tval = commit_instr_i[0].pc
+    3  core/cva6.sv:1516,1521            DYN     24 + code   tval = capstone_dyn_ftval
+    4  core/load_store_unit.sv:1005-1009 LSU     hardcoded `cap_exception.cause = 64'd25`
+
+Source 4 is the worst of them: it is the LSU's **bounds** check — `lsu_ea_full < bound_start ||
+lsu_ea_full + access_sz > bound_end` — reporting cause 25, where the reference number for
+`CAP_OOB` is 28 and for `INVALID_CAP` is 25. So an out-of-bounds access on this silicon is
+indistinguishable by `mcause` from a revocation failure and from a not-a-capability operand.
+
+Source 3 carries a further hazard for anyone reading `tval`: `capstone_dyn_ftval` is a LATCHED
+register, so it reads zero when it was never armed. A `tval == 0` from the DYN path is genuinely
+no data, whereas the same value from the FLU path is a reading. The 2026-08-31 positive control
+(`tval = 0xBEEF`) proves only the **FLU** path live and says nothing about the DYN latch or the
+LSU's `lsu_ea_full`.
+
+For the rest of this document, "the two paths" means sources 1 and 2 — the pair that the S-12
+investigation actually has to tell apart, because `mepc` there names a `cincoffsetimm`, which
+`core/decoder.sv:1167,1294-1299` shows is FLU-only. A data-path `UNEXPECTED_OPERAND` — an operand that is not a capability — arrives as 25
 because of the offset. A PC-capability `INVALID_CAPABILITY` — a revocation-node validity failure on
 the fetched instruction — arrives as 25 correctly. These are unrelated defects with unrelated fixes.
 
@@ -66,9 +87,13 @@ and on this silicon `mtval` has never been shown to carry a non-zero value for a
 so it is not currently able to make that distinction. A positive control for it is built and
 staged; until it reports, any `mcause 25` on this platform is ambiguous between the two.
 
-Note also that the PC-capability check is gated on `priv_lvl_i == PRIV_LVL_M && capmode_i`
-(`core/commit_stage.sv:208`), so it can only fire on an M-mode PC — which is a second, independent
-discriminator wherever the faulting PC is known to be outside the monitor's address range.
+**Do NOT try to use privilege or address range as a second discriminator.** An earlier version of
+this file argued that because the PC-capability check is gated on `priv_lvl_i == PRIV_LVL_M`
+(`core/commit_stage.sv:208`), a faulting PC outside the monitor's range could not be a pc_cap
+fault. That is wrong twice over: capability domains on this platform run **in M-mode** (the
+documented S-12 wedge state is `MPP=M`), so the gate is satisfied *by* the domain; and the
+`0x80000000`–`0x80800000` pair at `:200-201` is a constructed capability's bounds, not a gating
+range. `tval` is the only discriminator, and it is sufficient on its own.
 
 ## What would fix it
 

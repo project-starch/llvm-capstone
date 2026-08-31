@@ -2557,15 +2557,22 @@ def main():
                                       "The instruction's OPERAND is innocent; PCC's revocation "
                                       "node was invalidated.", flush=True)
                             elif tval == 0:
-                                print("          <== tval == 0. DO NOT read this as "
-                                      "'the operand was NULL, therefore a software bug' -- that "
-                                      "reading was RETRACTED. The FLU tval path has never been "
-                                      "shown to produce a NON-zero value on this bitstream, so a "
-                                      "zero here is equally consistent with the instrument never "
-                                      "populating it. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8` "
-                                      "traps with tval==0xBEEF, treat tval==0 as NO DATA. The "
-                                      "cause code alone already gives cap_type==NOT_CAP for "
-                                      "cincoffsetimm.", flush=True)
+                                print("          <== tval == 0. THE CONTROL THIS LINE DEMANDED HAS "
+                                      "RUN AND PASSED: a domain executing `cincoffsetimm` on a "
+                                      "plain 0xBEEF latches tval==0xBEEF -- tval-ctl3 (2026-08-24, "
+                                      "console-named bitstream) and tvnh-1/tvnh-2 (2026-08-31). "
+                                      "The FLU tval path is LIVE, so a zero here is a READING, not "
+                                      "an unpopulated instrument. It also EXCLUDES the "
+                                      "pc-capability producer of cause 25, which sets tval to the "
+                                      "faulting PC (commit_stage.sv:604) and can never be zero.",
+                                      flush=True)
+                                print("          <== BUT the control only exercised tval[15:0]. "
+                                      "Apertures 213-218 (tval[63:16]) have never returned a "
+                                      "non-zero value here, so an operand that is a non-zero "
+                                      "integer with a zero low half-word -- an address-like value "
+                                      "such as 0x82800000 -- would still read as 0. What is "
+                                      "established is `non-capability with [15:0]==0`; `exactly "
+                                      "null` needs a 0xDEADBEEF-class probe.", flush=True)
                             else:
                                 print("          <== tval is pointer-like: a real capability that "
                                       "LOST ITS TAG (ex_stage.sv:481-487 puts the rs1 cursor "
