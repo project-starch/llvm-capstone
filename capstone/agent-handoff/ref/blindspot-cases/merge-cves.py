@@ -25,6 +25,22 @@ def norm_id(i):
     return f"CVE-{m.group(2)}-{m.group(3)}" if m else i
 
 
+# Entries that are NOT SQLite memory-safety bugs. They keep coming back from the
+# fragments on every re-merge -- six of them are CVE ids sqlite.org itself calls
+# AI hallucinations -- so the filter belongs IN the pipeline, not in a one-off
+# pass someone forgets to repeat.
+NOTBUG = re.compile(
+    r"not a bug in sqlite|ai hallucin|hallucinat|unreproducible|misinformation|"
+    r"bug in (the )?(third-party|application|jdbc|node\.js|php|luxcal)|"
+    r"never appeared in|not a true vulnerability|fabricat", re.I)
+
+
+def is_notbug(r):
+    return bool(NOTBUG.search(" ".join([r.get("sqlite_assessment", ""),
+                                        r.get("notes", ""),
+                                        r.get("rationale", "")])))
+
+
 def merge_field(a, b):
     a, b = (a or "").strip(), (b or "").strip()
     if not a:
@@ -46,13 +62,17 @@ def main():
     seed_path = os.path.join(BASE, "sqlite-cves.csv")
     if os.path.exists(seed_path):
         for r in csv.DictReader(open(seed_path, encoding="utf-8")):
-            rid = norm_id(r.get("cve", ""))
+            # the seed used a "cve" column; once the master is fed back in it is
+            # "id". Accept either, or the seed silently contributes ZERO rows and
+            # every arena classification is lost on the next merge.
+            rid = norm_id(r.get("id") or r.get("cve", ""))
             if not rid:
                 continue
             rows[rid] = {c: (r.get(c) or "").strip() for c in COLS if c in r}
             rows[rid]["id"] = rid
-            rows[rid]["affected_function"] = r.get("affected_site", "")
-            rows[rid]["source"] = "seed:sqlite.org+nvd"
+            if r.get("affected_site"):
+                rows[rid]["affected_function"] = r["affected_site"]
+            rows[rid].setdefault("source", "seed")
         per_source["seed"] = len(rows)
 
     # 2. research fragments. ONLY the agreed per-stream outputs: the agents also
@@ -101,7 +121,17 @@ def main():
         m = re.match(r"CVE-(\d{4})-(\d+)", r["id"])
         return (0, -int(m.group(1)), -int(m.group(2))) if m else (1, 0, hash(r["id"]) % 997)
 
-    out = sorted(rows.values(), key=sort_key)
+    keep = [r for r in rows.values() if not is_notbug(r)]
+    excl = [r for r in rows.values() if is_notbug(r)]
+    out = sorted(keep, key=sort_key)
+    if excl:
+        ex_path = os.path.join(BASE, "sqlite-bugs-excluded.csv")
+        with open(ex_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
+            w.writeheader()
+            for r in sorted(excl, key=sort_key):
+                w.writerow({c: r.get(c, "") for c in COLS})
+        print(f"excluded as non-bugs: {len(excl)}  ->  {ex_path}")
     csv_path = os.path.join(BASE, "sqlite-bugs-master.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLS, extrasaction="ignore")
