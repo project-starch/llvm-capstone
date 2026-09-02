@@ -43,6 +43,11 @@ def read(path, dom, sha):
     entered = "SQ: G/enter" in guest
     m = re.findall(rf"verifying {re.escape(dom)}\s+sha256=([0-9a-f]{{16}})", raw)
     got = m[-1] if m else None
+    # THE CONTROL SLOT MUST HAVE PASSED. A boot whose known-good control fails carries no verdict
+    # about anything -- it separates "this image failed" from "the board, firmware or boot failed",
+    # and the control fails often enough that this is not a formality. Checked here rather than by
+    # hand, because a check performed by hand is a check that will eventually be skipped.
+    ctl_ok = bool(re.search(r"sqslt\.dom:--slt \S*dd1_one\S*\s+returned in \d+s", raw))
     wedged = "NO RETURN within" in raw
     returned = "Every domain returned" in raw
     slt = re.findall(r"SLT-SUMMARY [^\n]*completed=1", guest)
@@ -57,7 +62,7 @@ def read(path, dom, sha):
     except Exception:
         pass
     return dict(entered=entered, sha=got, wedged=wedged, returned=returned,
-                completed=bool(slt), **fields)
+                completed=bool(slt), ctl_ok=ctl_ok, **fields)
 
 
 def main():
@@ -78,6 +83,8 @@ def main():
             if r is None:
                 continue
             bad = []
+            if not r["ctl_ok"]:
+                bad.append("control slot did not pass -- boot carries no verdict")
             if not r["entered"]:
                 bad.append("no G/enter (entry stall)")
             if r["sha"] is None:
