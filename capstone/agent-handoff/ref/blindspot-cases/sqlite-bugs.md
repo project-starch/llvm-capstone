@@ -18,9 +18,12 @@ sources, classified by the one property that decides whether CHERI can see it:
 | NVD / MITRE / cvedetails | 92 CVEs total | pre-2019 coverage, incl. 13 Apple-assigned 2017 CVEs that keyword search does not return |
 | OSS-Fuzz + dbsqlfuzz | 16 | ASAN crash states and downloadable testcase ids |
 | Vendor advisories (Talos, Magellan) | 12 | root cause and PoCs; Magellan 2.0 split per bug |
-| Component survey | 55 | per-subsystem coverage, including negative results |
+| Component survey | 58 | per-subsystem coverage, including negative results |
+| Distro trackers (Debian/RH/Ubuntu/SUSE) | 64 | fix commits, introducing commits, and reachability verdicts |
 
-328 of 396 entries carry a fix commit.
+348 of 396 entries carry a fix commit, and 29 also name the commit that
+INTRODUCED the bug -- a version window that makes building an affected tree
+straightforward rather than a bisect.
 
 ## The headline result
 
@@ -28,10 +31,10 @@ sources, classified by the one property that decides whether CHERI can see it:
 |---|---|---|
 | `direct-malloc` (fts3/5, rtree, session, rbu, zipfile) | 123 | ordinary coverage — bounds and revocation apply |
 | `lookaside` (verified) | 41 | **blind** — freed slots never reach `free()` |
-| `lookaside?` (core, file not yet pinned) | 108 | almost certainly blind, needs per-row tracing |
+| `lookaside?` (core, file not yet pinned) | 109 | almost certainly blind, needs per-row tracing |
 | `btree-scratch` | 6 | spatially blind inside the block |
 | `n/a` (NULL deref, CLI, logic) | 24 | no memory-safety differential |
-| `UNKNOWN` (source names no site) | 89 | deliberately unclassified |
+| `UNKNOWN` (source names no site) | 88 | deliberately unclassified |
 
 **The pattern: the bugs CHERI catches in SQLite are the extension bugs, and the
 ones it misses are the core-engine bugs.** Not because the core is worse code —
@@ -83,6 +86,12 @@ Two observations that change how the table should be read:
 
 ## Honest limits
 
+- **Reachability is recorded where a distro established it**, in `notes`, for 9
+  rows: Debian marks CVE-2022-35737 unimportant because its builds omit
+  `-DSQLITE_ENABLE_STAT4`, CVE-2025-70873 because the zipfile extension is not
+  built, and CVE-2019-8457 "ignored" because the code is present but unused.
+  That signal decides whether a row is reachable in OUR build at all, and it
+  should be checked against the Capstone build flags before any repro work.
 - **`verification` says how each row was reached.** `arena-verified-by-component`
   and `arena-inferred-from-file` are inferences from the allocator survey, not
   from tracing that specific object. No row here has had its object traced
@@ -92,6 +101,10 @@ Two observations that change how the table should be read:
   over, and reproducers largely live in the proprietary TH3 suite or are folded
   anonymously into `test/fuzzdata*.db`. Most fossil rows will need a repro
   reconstructed from the fix diff.
+- **Two incomplete-fix chains are flagged**: CVE-2019-19926 exists only because
+  the CVE-2019-19880 fix was partial, and CVE-2020-13871's first fix was
+  superseded by `44a58d6cb135a104`. A repro built against the first fix would
+  measure the wrong thing.
 - **Enumeration was partly blocked.** The OSS-Fuzz list/search API silently
   ignores queries, so only individually-resolved issues are present. A
   brute-force scan of the buganizer id range (~75k ids, ~25 min) is feasible and
