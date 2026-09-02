@@ -59,7 +59,22 @@ DTB_ADDR = 0x82200000
 # Seconds to wait after a cold power-on before attaching JTAG/GDB. The FPGA's
 # RISC-V DTM is not responsive the instant the board powers up; attaching too
 # soon yields OpenOCD "JTAG scan chain ... all ones" / "Examination failed".
-POWER_ON_SETTLE = 15.0
+#
+# 15 -> 25 on 2026-09-02. The workbench operator measured FPGA configuration from SPI flash
+# directly: openocd at 1 s after power-on reports `IR capture error, Unsupported DTM version: 15`;
+# at 25 s it reports `Examined RISC-V core, XLEN=64, Examination succeed`. So 15 s was inside the
+# configuration window, and the JTAG bridge enumerating ~1 s after power-on means POWERED, not
+# READY -- a distinction three of their own verification attempts failed on.
+#
+# NOT claimed as the cause of anything here. Every OpenOCD startup failure in this project's logs
+# carries `Unsupported DTM version: -1`, never 15, and -1 is a DIFFERENT fault: the adapter never
+# opened, downstream of `LIBUSB_ERROR_BUSY` from an orphaned openocd. The two are worth telling
+# apart by that number:
+#     version 15  -> adapter fine, FPGA still configuring   (raise this constant)
+#     version -1  -> adapter held by another process        (reap the orphan)
+# Runs at 15 s were in fact succeeding, so this is insurance against a latent race, not a fix for
+# an observed one.
+POWER_ON_SETTLE = 25.0
 # Seconds to hold the board off during a --power-cycle, so a wedged/reset-looping
 # core is fully cleared before the cold power-on (and its POWER_ON_SETTLE).
 POWER_CYCLE_OFF = 8.0

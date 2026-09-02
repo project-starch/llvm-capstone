@@ -174,6 +174,41 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-09-02 — THE TRUNCATION LADDER CANNOT WORK. It crashes before reaching the reduced site
+
+`CAPSTONE_WTRUNC` truncates `sqlite3WhereCodeOneLoopStart` after its n-th leading statement,
+giving a 58-instruction function (from 2866) that still contains the window with the register
+match preserved. Gated before staging. On silicon it faults -- but not at the reduced site:
+
+    predicted (n=4)   mepc 0x828f4848   VA 0x104848
+    observed          mepc 0x8293a15c   VA 0x14a15c   = memcpy
+
+and the shape at that address looks like S-12, which is exactly the trap:
+
+    14a150  ldc  a0, 0x0(a0)          reload a capability from a spill slot
+    14a15c  cincoffset a0, a0, a1     FAULTS, mcause 25, tval 0
+
+The slot contents settle it, and they are the same discriminator that established S-12:
+
+    real S-12 (s12t-1)   a4 = 0x82be4cd0   slot = 0x82be4cd0 / 0x0000073fa7462d16
+                         -> slot holds a VALID capability, consumer still ingested 0
+    ladder    (lad-1)    a0 = 0x0          slot = 0 / 0
+                         -> slot genuinely holds NULL; tval = 0 is CORRECT
+
+So this is an ordinary software null-dereference, not the hardware defect. The truncated function
+returns a garbage `Bitmask`, downstream code derives a null from it, and `memcpy` faults on it long
+before control reaches the reduced window.
+
+**The ladder's premise is refuted, not just this arm.** Truncation breaks the function's contract
+with its callers, and the resulting garbage kills the program earlier than the site under test.
+Returning `0` instead of the cursor did not help (both were tried; QEMU stops before the shell
+prompt either way). Any reduction that changes what the function RETURNS has this problem.
+
+What survives: reduction has to preserve the contract. Remove code that does not affect the return
+value, or reduce the PROGRAM -- which SQLite features are compiled in -- rather than the function.
+The 58-instruction artifact stays committed because the gate proves the window survives truncation,
+which is still useful evidence about codegen; it is just not a repro.
+
 ## 2026-08-31 — S-12 IS TWO DEFECTS, AND THE ONE THAT KILLS THE BOARD IS NOT SPECIFIC TO S-12
 
 **A deliberate, trivial capability fault raised from inside a domain wedges the whole board in
