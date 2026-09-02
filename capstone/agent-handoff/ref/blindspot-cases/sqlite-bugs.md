@@ -8,8 +8,26 @@ mechanism this table tests is documented, with file:line evidence, in
 ## What the table is
 
 Every SQLite memory-safety defect that could be found from public primary
-sources, classified by the one property that decides whether CHERI can see it:
-**which allocator the affected object came from**.
+sources, classified by two properties: **which allocator the affected object
+came from** (`alloc_arena`) and **what kind of code it lives in**
+(`code_category`).
+
+**Read `code_category` first — 396 rows is not 396 SQLite library bugs.**
+
+| `code_category` | Rows | What it means |
+|---|---|---|
+| `core` | 227 | `src/` — the library every consumer links. The real target. |
+| `extension` | 120 | `ext/` — needs a `-DSQLITE_ENABLE_*` flag; shipped, but optional |
+| `cli` | 15 | the `sqlite3` shell, a separate program, not the library |
+| `not-sqlite` | 10 | filed against SQLite, actually a third party's defect |
+| `c-api` | 8 | only reachable by a C caller passing bad arguments |
+| `duplicate` | 7 | a second CVE id for a bug already in the table |
+| `survey` | 5 | **not bugs** — recorded negative results |
+| `demo` | 2 | `ext/misc` demo code, built for the test suite only |
+| `sqlite2` | 2 | the SQLite 2 codebase, unrelated to 3.x |
+
+**374 distinct SQLite defects** once survey, duplicate and not-sqlite rows are
+taken out; **227 of them in the core library**.
 
 | Source | Entries | What it contributes |
 |---|---|---|
@@ -27,18 +45,18 @@ straightforward rather than a bisect.
 
 ## The headline result
 
-| Arena | Entries | CHERI verdict |
-|---|---|---|
-| `direct-malloc` (fts3/5, rtree, session, rbu, zipfile) | 123 | ordinary coverage — bounds and revocation apply |
-| `lookaside` (verified) | 41 | **blind** — freed slots never reach `free()` |
-| `lookaside?` (core, file not yet pinned) | 109 | almost certainly blind, needs per-row tracing |
-| `btree-scratch` | 6 | spatially blind inside the block |
-| `n/a` (NULL deref, CLI, logic) | 24 | no memory-safety differential |
-| `UNKNOWN` (source names no site) | 88 | deliberately unclassified |
+Crossing the two columns is the result, and the separation is almost total:
 
-**The pattern: the bugs CHERI catches in SQLite are the extension bugs, and the
-ones it misses are the core-engine bugs.** Not because the core is worse code —
-because the core allocates from a pool and the extensions call malloc.
+| | lookaside (blind) | direct-malloc (covered) | other |
+|---|---|---|---|
+| **core library** (227) | **134** (37 verified + 97 probable) | 2 | 91 |
+| **extensions** (120) | 2 | **109** | 9 |
+
+**The bugs CHERI catches in SQLite are the extension bugs; the ones it misses
+are the core-engine bugs.** Not because the core is worse code — because the
+core allocates from a pool and the extensions call malloc. The 91 "other" core
+rows are mostly `UNKNOWN`: fossil check-ins whose one-line message names no
+file. They are unclassified on purpose, not silently assumed.
 
 ## Bug classes, and why two of them matter more than their count
 
