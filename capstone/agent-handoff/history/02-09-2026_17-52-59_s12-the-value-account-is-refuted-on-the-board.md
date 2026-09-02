@@ -1,3 +1,57 @@
+# RETRACTED THE SAME EVENING — the title of this note is WRONG
+
+**"The stale-VALUE account is refuted" is WITHDRAWN.** The sentinel arm cannot refute it, and this
+file's own tooling said so before the boot. `probes/s12-sentinel.py` pre-registered:
+
+> `no fault` — weakest outcome. The perturbation cured it; uninformative alone, and must NOT be
+> read as support for anything.
+
+That is the branch that occurred. The rescue argument below — that SENT and CTRL differ by exactly
+one instruction — does not work: **a matched pair licenses attributing a DIFFERENCE, and there is
+no difference.** Both are 0/4.
+
+Worse, the two halves of this note contradict each other. Section (B) accepts that the `t0`
+substitution suppresses the wedge. The sentinel **contains that substitution**. If it closes the
+window, the value account — which predicts a fault only when the window opens — predicts exactly
+0/4 for the sentinel. The arm inherited a cure and never created the condition it was built to
+label: a directed test coming back clean without ever creating the triggering condition, which is a
+named failure shape in CLAUDE.md.
+
+The only contrast bearing on the value account against a wedging baseline is SENT vs ANCHOR, and
+that is a **six**-instruction difference — the exact confound this note correctly refuses to accept
+for ANCHOR vs CTRL, applied to itself.
+
+Evidence points the other way, in fact. `anchor-2.log`, from the WEDGING arm, with the mepc guard
+satisfied at the canonical site:
+
+    [wedge] a4(x14)=0x82be4cd0  a0(x10)=0x82b9f410
+            => a4 holds a NON-ZERO cursor: the load DID write it, so the consumer read something
+               else -- the STALE-OPERAND ACCOUNT IS CONFIRMED
+
+**Correct status: the value account is OPEN.** What today's board work established is only what
+section (B) says.
+
+**Also corrected here:** `anchor-1` was NOT "a real 8-minute board session whose log was destroyed".
+The whole 2905-byte file is a preflight block and a `flock` refusal — `another board session holds
+/tmp/capstone/.board.lock`. The draw that wrote it never reached the board. The exclusion is
+legitimate and cannot select for wedges, but "a lost draw" and "not a draw at all" are different
+claims and only one is true.
+
+**And the simulation weight below is overstated.** `b-NOFORWARD` has never been shown able to
+increment: `b-occupancy=1024` proves the WINDOW existed, not that the comparator at
+`issue_read_operands.sv:1296-1304` can fire. Occupancy is a positive control for the window, not
+for the detector. Those zeros are sim-structural evidence, not board evidence, on an FPGA-only
+fault.
+
+**The experiment that would settle it:** the base with ONLY `[32] movc a4,zero` -> `li a4,0x5a5`,
+leaving `[33] stc a4, 0x0(a5)` and all of `[26] [27] [28] [30]` untouched — one instruction from an
+arm now attested at 5/5 wedges (3 today plus s12t-1/s12t-2 on 2026-08-31). It must be QEMU-gated
+first: `[33]` would then store an untagged `0x5a5` where the program stored a null capability, which
+is plausibly the same downstream break the `{33}` and `{32,33}` cuts already hit. If it cannot be
+gated, the honest record stays "value account OPEN".
+
+---
+
 # S-12: the stale-VALUE account is refuted on the board, and the cure is somewhere in five instructions
 
 ## The ladder
