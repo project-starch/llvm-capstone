@@ -52,6 +52,11 @@ def read(path, dom, sha):
     # about anything -- it separates "this image failed" from "the board, firmware or boot failed",
     # and the control fails often enough that this is not a formality. Checked here rather than by
     # hand, because a check performed by hand is a check that will eventually be skipped.
+    # IN PROGRESS IS NOT THE SAME AS FAILED. A log still being written has no entry marker and no
+    # control-slot line yet, so it scores VOID with the same words a genuinely failed boot gets --
+    # and a reader glancing at a mid-run tally sees phantom failures. The driver prints
+    # BOARD_RELEASED when it lets go of the board, so its absence means the run has not finished.
+    finished = "BOARD_RELEASED" in raw
     ctl_ok = bool(re.search(r"sqslt\.dom:--slt \S*dd1_one\S*\s+returned in \d+s", raw))
     wedged = "NO RETURN within" in raw
     returned = "Every domain returned" in raw
@@ -67,7 +72,7 @@ def read(path, dom, sha):
     except Exception:
         pass
     return dict(entered=entered, sha=got, wedged=wedged, returned=returned,
-                completed=bool(slt), ctl_ok=ctl_ok, **fields)
+                completed=bool(slt), ctl_ok=ctl_ok, finished=finished, **fields)
 
 
 def main():
@@ -86,6 +91,9 @@ def main():
         for f in logs:
             r = read(os.path.join(a.dir, f), dom, sha)
             if r is None:
+                continue
+            if not r["finished"]:
+                print(f"    {f:16s} IN PROGRESS -- no BOARD_RELEASED yet; not a verdict either way")
                 continue
             bad = []
             if not r["ctl_ok"]:
