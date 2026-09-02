@@ -76,6 +76,37 @@ def window(path):
     sys.exit(f"fault site 0x{FAULT_VA:x} not reached in {FUNC}")
 
 
+def whole_function(path):
+    """Every instruction in the function, not just the window.
+
+    Needed because a deletion inside the window is USED OUTSIDE it. Cluster D removed
+    `[23] cincoffsetimm a2, s0, -0x98`, and `ld a2, 0x0(a2)` twenty-four instructions later then
+    loaded through the incoming argument instead: mcause 4, load address misaligned,
+    deterministically, on two board draws. The in-window closure check passed it. The window is
+    not a closed unit and treating it as one costs boots.
+    """
+    out = subprocess.run([OBJDUMP, "-d", f"--triple={TRIPLE}", path],
+                         capture_output=True, text=True, timeout=600)
+    started, rows = False, []
+    for line in out.stdout.splitlines():
+        if re.match(rf"^([0-9a-f]+)\s+<{FUNC}>:", line):
+            started = True
+            continue
+        # Stop only at a REAL function symbol. `.Lpcrel_hi8047` sits at 0x107450, INSIDE this
+        # function -- breaking on it truncated the analysis at 2866 of the function's 4600
+        # instructions, so a use in the last 38% was invisible to the closure gate. That is the
+        # same defect as the window-vs-function one, one level out.
+        m_sym = re.match(r"^[0-9a-f]+\s+<(\S+)>:", line)
+        if started and m_sym and not m_sym.group(1).startswith(".L"):
+            break
+        if not started:
+            continue
+        m = re.match(r"\s+([0-9a-f]+):\s+((?:[0-9a-f]{2} ){4})\s*(.*)", line)
+        if m:
+            rows.append((len(rows), int(m.group(1), 16), m.group(3).strip()))
+    return rows
+
+
 def def_use(text):
     """(defined_register or None, [used registers]) for one disassembled instruction.
 
@@ -99,6 +130,98 @@ def def_use(text):
     if m:
         return None, [m.group(1), m.group(2)]
     return None, []
+
+
+# Callee-saved spills. NOPing these does not corrupt data, it corrupts the RETURN PATH: the
+# function restores them on exit, and with the store gone the caller resumes with this function's
+# values. [1] `sd ra` was already known to run away (exposure 41,700,295 -- it destroys the return
+# address). [2] `stc s0, 0x7d0(sp)` is the same class and was NOT refused: it went to the board in
+# the EJF cut and all three draws faulted deterministically outside the function.
+CALLEE_SAVE = {1, 2}
+
+
+def frame_slots(rows):
+    """[(index, 'store'|'load', slot_offset)] for frame-relative accesses through s0.
+
+    The register closure gate models REGISTERS. Every instruction in this window is the
+    initialisation of a LOCAL, and a local is consumed through MEMORY -- so the gate could not see
+    the dependency that actually matters. Removing `[27] stc a4(=null), -0x5a0(s0)` leaves that
+    capability slot holding whatever the frame held; an `ldc` of it later in the function then
+    reads an untagged word and faults with mcause 25 at a wrong address, which is indistinguishable
+    from a result until you read the address.
+
+    Offsets are tracked only where they are UNAMBIGUOUS: a base register defined by
+    `cincoffsetimm rX, s0, OFF`, or s0 itself. Anything else drops the register from tracking. The
+    scan is linear and ignores control flow, which over-approximates USES -- the safe direction,
+    since an over-approximation only refuses more cuts.
+    """
+    # SEEDING s0 IS THE WHOLE GAME. The prologue is
+    #     [3] movc s0, sp   [4] cincoffsetimm s0, s0, 0x7f0
+    # so a naive scan starting from {"s0": 0} has s0 REDEFINED out of the tracked set by [3]
+    # (`sp` is not tracked) and never recovers -- it then follows nothing and reports zero
+    # accesses across a 4600-instruction function, which reads exactly like "this cut is safe".
+    # It did, for E, F and G. So: assert the prologue shape, skip it, and start with s0 as the
+    # frame base.
+    if len(rows) < 5 or "movc" not in rows[3][2] or "cincoffsetimm" not in rows[4][2]:
+        raise SystemExit("frame_slots: prologue is not the expected movc/cincoffsetimm pair; "
+                         "the s0 seed would be wrong and every slot check silently vacuous")
+    known = {"s0": 0}
+    acc = []
+    for i, _va, txt in rows[5:]:
+        t = txt.strip()
+        m = re.match(r"cincoffsetimm\s+(\w+),\s*(\w+),\s*(-?0x[0-9a-f]+|-?\d+)$", t)
+        if m:
+            d, b, off = m.group(1), m.group(2), int(m.group(3), 16 if "x" in m.group(3) else 10)
+            if b in known:
+                known[d] = known[b] + off
+            else:
+                known.pop(d, None)
+            continue
+        m = re.match(r"movc\s+(\w+),\s*(\w+)$", t)
+        if m:
+            d, b = m.group(1), m.group(2)
+            if b in known:
+                known[d] = known[b]
+            else:
+                known.pop(d, None)
+            continue
+        m = re.match(r"(stc|sd|sw|sh|sb|ldc|ld|lw|lwu|lh|lhu|lb|lbu)\s+(\w+),\s*(-?0x[0-9a-f]+|-?\d+)\((\w+)\)", t)
+        if m:
+            op, reg, imm, base = m.group(1), m.group(2), m.group(3), m.group(4)
+            imm = int(imm, 16 if "x" in imm else 10)
+            if base in known:
+                acc.append((i, "store" if op[0] == "s" else "load", known[base] + imm))
+            if op[0] == "l":              # a load DEFINES its destination
+                known.pop(reg, None)
+            continue
+        # any other instruction: whatever it writes, we no longer know. Conservatively forget the
+        # first operand if it looks like a destination register.
+        m = re.match(r"\w[\w.]*\s+(\w+),", t)
+        if m:
+            known.pop(m.group(1), None)
+    if not acc:
+        raise SystemExit("frame_slots: tracked ZERO frame-relative accesses in a function that "
+                         "is built entirely out of them. That is an instrument failure, not a "
+                         "clean cut -- refusing to report it as one.")
+    return acc
+
+
+def slot_violations(rows, nopped):
+    """NOPed stores whose frame slot is READ later with no surviving store in between."""
+    acc = frame_slots(rows)
+    bad = []
+    for k, (i, kind, slot) in enumerate(acc):
+        if kind != "store" or i not in nopped:
+            continue
+        for j, kind2, slot2 in acc[k + 1:]:
+            if slot2 != slot:
+                continue
+            if kind2 == "store" and j not in nopped:
+                break                      # re-initialised by surviving code; harmless
+            if kind2 == "load":
+                bad.append((i, slot, j, rows[j][2]))
+                break
+    return bad
 
 
 def closure_violations(rows, nopped):
@@ -172,10 +295,31 @@ def main():
     if bad:
         sys.exit(f"REFUSING: {bad} is the faulting pair itself; removing it removes the bug, "
                  f"not the cause")
+    cs = [i for i in idx if i in CALLEE_SAVE]
+    if cs and not a.allow_open:
+        sys.exit(f"REFUSING: {cs} is a callee-saved spill. Removing it corrupts the RETURN PATH, "
+                 f"not the data -- the caller resumes with this function's register values and "
+                 f"faults somewhere unrelated. Verified in the disassembly: [1] is restored by "
+                 f"[4596] `ld ra, 0x7e0(sp)` and [2] by [4597] `ldc s0, 0x7d0(sp)`, immediately "
+                 f"before the function's single `ret` at [4599].")
     if any(i < 0 or i >= len(rows) for i in idx):
         sys.exit(f"REFUSING: index out of range 0..{len(rows)-1}")
 
-    viol = closure_violations(rows, set(idx))
+    # Closure over the WHOLE FUNCTION, not the window. The window is a prefix of the function so
+    # indices mean the same instruction in both.
+    fn = whole_function(a.src)
+    sviol = slot_violations(fn, set(idx))
+    if sviol and not a.allow_open:
+        print("REFUSING: the cut is not FRAME-SLOT closed. A removed store leaves a local "
+              "uninitialised and it is read later in the function:", file=sys.stderr)
+        for i, slot, j, txt in sviol:
+            print(f"    [{i:2d}] writes s0{slot:+#x}, read back by [{j}] {txt}", file=sys.stderr)
+        print("  The reader then gets whatever the frame held. An `ldc` of a stale slot is "
+              "untagged and traps with mcause 25 at an address that is NOT the fault site -- "
+              "which reads like a result and is not one.", file=sys.stderr)
+        return 2
+
+    viol = closure_violations(fn, set(idx))
     if viol and not a.allow_open:
         print("REFUSING: the cut is not def-use closed. Surviving instructions read a register "
               "whose only in-window definition was removed:", file=sys.stderr)
