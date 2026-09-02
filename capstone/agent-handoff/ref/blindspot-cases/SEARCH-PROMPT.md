@@ -4,13 +4,19 @@ Replace `<PROGRAM>` and `<OUTPUT_PATH>`. Nothing else changes between runs.
 
 ---
 
-Find **use-after-free and uninitialised-read bugs in `<PROGRAM>` whose memory came
-from the program's own allocator rather than from `malloc`.**
+Find **memory-safety bugs in `<PROGRAM>` whose memory came from the program's own
+allocator rather than from `malloc`.**
 
-CHERI revokes authority when memory is handed to `free`. A program that recycles
-memory internally never calls `free`, so the hardware never learns the object
-died. The defect itself can sit anywhere in the code — only the origin of the
-memory it touched decides whether CHERI can see it.
+CHERI bounds memory when it is allocated and revokes authority when it is handed
+to `free`. A program that carves objects out of its own pool and recycles them
+internally triggers neither event, so the hardware sees one long-lived block
+instead of the objects inside it. The defect itself can sit anywhere in the code
+— only the origin of the memory it touched decides whether CHERI can see it.
+
+Every class counts: use after free, uninitialised read, an overflow from one
+object into its neighbour inside the same block, a slot reused as the wrong
+type. What does not count is a bug that leaves the block entirely, since bounds
+still apply at that edge.
 
 **Step 1 — the allocator, from source.** Does `<PROGRAM>` keep its own pool,
 freelist, region or GC heap? If not, say so and stop; that is a useful answer.
