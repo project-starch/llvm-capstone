@@ -1,6 +1,7 @@
 # Nested-allocator blind spots: the taxonomy, and how to search with it
 
-*The classification scheme for the corpus. `sqlite-bugs.csv` is its first filled
+*The classification scheme for the corpus. `SEARCH-PROMPT.md` is the reusable
+prompt that fills it, one program at a time. `sqlite-bugs.csv` is its first filled
 cell; `mruby.md` is the second. The mechanism it rests on, measured, is in
 `sqlite-arenas.md`. This file is the search plan, not a result.*
 
