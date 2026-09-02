@@ -174,6 +174,34 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-09-02 — THE SIGNATURE APPEARS WITH NO RELOAD, on a different instruction
+
+Third draw of the truncated n=4 build:
+
+    mcause 25, tval 0x0000000000000000, mepc 0x828f4830  ->  VA 0x104830
+    instruction:  cincoffsetimm a4, s0, -0x100
+    slot s0-0x70: 0x0000000082be64d0 / 0x0000073fa7462d16
+
+A capability-typed source consumed as if it were zero, on a **frame-relative address computation
+from `s0`, with no `ldc` anywhere before it**, inside `sqlite3WhereCodeOneLoopStart`. The slot's
+metadata word is the same one the real S-12 slot read returned, so the object is of the same kind.
+
+**The reload is not necessary.** Every account of this bug has been built around `ldc` followed by
+`cincoffsetimm` on the reloaded register, and all twelve clean reconstructions reproduced that
+pair. This instance contains no reload, which makes the pair a feature of where the bug was first
+observed rather than a requirement of it. The load-syncer and load-to-use-forwarding families both
+assume a load is involved; neither can explain this one.
+
+The other two draws of the same build faulted in `memcpy` with the slot genuinely `0/0` — ordinary
+null-dereferences from the truncation's garbage return. **Only the slot read separates the two
+classes**, and the address does not: one is at `0x14a15c`, one at `0x104830`, neither at the
+canonical `0x104814`.
+
+**Caveat, recorded rather than resolved.** The GDB register read happens after the core has stormed
+at address 0 (this firmware has the domain trap vector off), so a register value read post-hoc is
+not proof of what it held at fault time. The slot read is memory and is stronger. A claim resting
+only on a register value is weaker than one resting on slot contents.
+
 ## 2026-09-02 — THE TRUNCATION LADDER CANNOT WORK. It crashes before reaching the reduced site
 
 `CAPSTONE_WTRUNC` truncates `sqlite3WhereCodeOneLoopStart` after its n-th leading statement,
