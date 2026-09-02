@@ -1,7 +1,6 @@
-# Search prompt: one program per run
+# Search prompt
 
-Replace `<PROGRAM>` and `<OUTPUT_PATH>`. Fills the scheme in `TAXONOMY.md`;
-`sqlite-arenas.md` is a worked example of step 1.
+Replace `<PROGRAM>` and `<OUTPUT_PATH>`. Nothing else changes between runs.
 
 ---
 
@@ -20,11 +19,11 @@ arena when …". Quote `file:line`. Say roughly what share of allocations go
 through it — a program where nearly everything does is worth far more than one
 where it is a side path.
 
-Read the allocation and free paths, do not count call sites. A single `malloc`
+Read the allocation and free paths; do not count call sites. A single `malloc`
 for a bulk block that is then carved into objects is an arena, and counting
 would call it ordinary heap.
 
-**Step 2 — apply the test to the bug history.** CVEs, vendor advisories, the
+**Step 2 — apply that test to the bug history.** CVEs, vendor advisories, the
 project's commit history, its bug tracker, fuzzing infrastructure. Record bugs on
 **both** sides: the ones on ordinary `malloc` memory are the control group, and
 without them nobody can tell a blind spot from a broken instrument.
