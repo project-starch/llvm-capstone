@@ -22,6 +22,11 @@ ARMS = [
     ("ANCHOR", "anchor", "sqbase.dom", "69fe70b767e76b2b", "a4=0, null store uses a4"),
     ("CTRL",   "ctrl",   "sqctl.dom",  "145beaef6a426abe", "a4=0, null store uses t0"),
     ("SENT",   "sent",   "sqli.dom",   "d0245dae79df868c", "a4=0x5a5, null store uses t0"),
+    # The TIGHT arm exists because ANCHOR vs CTRL changes five instructions and therefore cannot
+    # attribute. This one changes two: [28] sw a4 -> movc t0, zero and [33] stc a4 -> stc t0, with
+    # [26] [27] [30] [32] left on a4. The only property that moves is which register supplies the
+    # null the store writes.
+    ("TIGHT",  "tight",  "sqtight.dom", "a6e853e25888958c", "a4=0, null store uses t0 (2-instr)"),
 ]
 
 
