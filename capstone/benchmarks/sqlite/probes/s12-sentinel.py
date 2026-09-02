@@ -79,6 +79,15 @@ def main():
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--sentinel", default="0x5a5")
+    ap.add_argument("--control", action="store_true",
+                    help="MATCHED CONTROL: do everything except the sentinel. [32] stays "
+                         "`movc a4, zero`, so a4 enters the load holding zero exactly as in the "
+                         "base, while the layout, the instruction count, the register pressure "
+                         "and the t0 substitution are all identical to the sentinel arm. The two "
+                         "then differ by EXACTLY ONE THING -- the value a4 holds -- which is what "
+                         "makes a difference between them attributable. Without it, a sentinel "
+                         "arm that stops wedging is indistinguishable from plain perturbation, "
+                         "and the register-patch arm already cured 0/4 that way.")
     a = ap.parse_args()
 
     sent = int(a.sentinel, 0)
@@ -126,8 +135,11 @@ def main():
             put(i, (w & ~(0x1f << 7)) | (T0 << 7))
         else:
             put(i, (w & ~(0x1f << 20)) | (T0 << 20))
-    # [32] becomes `addi a4, zero, SENTINEL`: imm[11:0] | rs1=x0 | funct3=0 | rd=a4 | opcode 0x13
-    put(32, ((sent & 0xfff) << 20) | (0 << 15) | (0 << 12) | (A4 << 7) | 0x13)
+    if a.control:
+        print("  MATCHED CONTROL: [32] left as `movc a4, zero`; a4 enters the load holding zero")
+    else:
+        # [32] -> `addi a4, zero, SENTINEL`: imm[11:0] | rs1=x0 | funct3=0 | rd=a4 | opcode 0x13
+        put(32, ((sent & 0xfff) << 20) | (0 << 15) | (0 << 12) | (A4 << 7) | 0x13)
 
     open(a.dst, "wb").write(blob)
     after = disas(a.dst)
