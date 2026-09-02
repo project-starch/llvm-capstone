@@ -28,6 +28,10 @@ That is the S-12 window, and the fault site is now **reported by the domain itse
 reconstructed from a last-writer-wins debug latch and a hand-computed DBAS subtraction — the step
 that produced a retraction earlier in this campaign.
 
+Three draws for three reports is worth noting against the trap-OFF baseline's 3/3 and 3/4 wedge
+rates: the handler does not appear to reduce the fault rate, it just stops it being fatal. At n=3
+that is an observation, not a measured rate.
+
 ## Why this matters more than the datum
 
 Until now a capability fault inside a domain took the core with it: one boot yielded one bit, which
