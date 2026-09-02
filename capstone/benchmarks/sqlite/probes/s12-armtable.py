@@ -30,12 +30,22 @@ def read(path, dom, sha):
         raw = open(path, errors="replace").read().replace("\r", "")
     except OSError:
         return None
-    entered = "SQ: G/enter" in raw
+    # SCOPE THE GUEST-DERIVED FACTS TO THIS RUN'S OWN TEST STAGE. The console replays a few
+    # hundred KB of the PREVIOUS boot on connect, so `SQ: G/enter` and the SLT-SUMMARY of the
+    # previous draw are both present in a log whose own domain never ran. Read over the whole
+    # file, an entry-stalled draw inherits the previous draw's markers and scores clean -- which
+    # is the same replay hazard that produced today's retraction, one level up.
+    #
+    # The driver's own lines (staging, sha verification, the wedge/return summary) are NOT
+    # replayed, so those stay whole-file.
+    _cut = raw.rfind("--> TEST")
+    guest = raw[_cut:] if _cut != -1 else ""
+    entered = "SQ: G/enter" in guest
     m = re.findall(rf"verifying {re.escape(dom)}\s+sha256=([0-9a-f]{{16}})", raw)
     got = m[-1] if m else None
     wedged = "NO RETURN within" in raw
     returned = "Every domain returned" in raw
-    slt = re.findall(r"SLT-SUMMARY [^\n]*completed=1", raw)
+    slt = re.findall(r"SLT-SUMMARY [^\n]*completed=1", guest)
     fields = {}
     try:
         out = subprocess.run(["python3", VERDICT, path], capture_output=True, text=True,
