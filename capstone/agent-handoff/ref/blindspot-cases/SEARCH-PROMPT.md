@@ -10,8 +10,15 @@ allocator rather than from `malloc`.**
 CHERI bounds memory when it is allocated and revokes authority when it is handed
 to `free`. A program that carves objects out of its own pool and recycles them
 internally triggers neither event, so the hardware sees one long-lived block
-instead of the objects inside it. The defect itself can sit anywhere in the code
-— only the origin of the memory it touched decides whether CHERI can see it.
+instead of the objects inside it.
+
+**The bug is not in the allocator.** You are not auditing the pool code, just as
+nobody looking for heap bugs audits `malloc` and `free` themselves. You are
+looking at ordinary code — parsers, request handlers, callbacks, whatever the
+program does — that mishandles memory the pool handed it. The allocator is
+healthy and behaving as designed; it is the reason the mistake stays invisible,
+not the mistake. So the defect can sit anywhere in the codebase, and the only
+question that decides a case is: where did the memory it touched come from?
 
 Every class counts: use after free, uninitialised read, an overflow from one
 object into its neighbour inside the same block, a slot reused as the wrong
