@@ -26,6 +26,11 @@
  * core and "no return" cannot be told from "no fault" -- the exact ambiguity that made every
  * earlier reconstruction unreadable.
  *
+ * res[1] and res[2] are written only when S12SHAPE_RES0_ONLY is undefined. The QEMU-side app
+ * defines it: the ladder convention gives QEMU a 4-byte region, and writing res[1] there is a
+ * capability OOB (cause 7) that halts the domain before it reaches the loop. The board app leaves
+ * it undefined and gets the progress counter and the final value.
+ *
  * VERDICT, read from res[0], each written BEFORE the step it labels:
  *   0x5120  entered, nothing else reached -- wedged before the shape ran.
  *   0x5121  the capability was created and stored; the loop is about to run.
@@ -36,13 +41,13 @@
  *           IS S-12 REPRODUCED IN A 10 KB DOMAIN.
  *   NO RETURN AT ALL  the handler did not fire; the run is VOID, not a negative. Check trapctl.
  *
- * STATUS 2026-09-03: NOT YET RUNNING. The QEMU verify step faults before reaching the loop --
- * `cause = 7` (capability OOB) on the domain prologue's own `stc ra, 0x30(sp)` at VA 0x10254. The
- * cause is this file, not the hardware: `region` is passed as `(void *)res`, but in the ladder
- * convention `res` is a PLAIN POINTER into the shared payload, not a capability, so using it as an
- * STC/LDC base is wrong and the frame/stack assumptions do not hold. The fix is to obtain a proper
- * region capability the way the other rungs do rather than casting `res`. Everything above this
- * line is analysis and still stands; the rung itself must not be boarded until it runs under QEMU.
+ * FIXED 2026-09-03. The first version passed `(void *)res` as the capability base and faulted in
+ * the domain prologue with cause 7 before reaching the loop: in the ladder convention `res` is a
+ * PLAIN POINTER into the shared payload, not a capability. The working pattern, taken from
+ * trapctl_kernel.h, is a 16-byte-aligned STATIC buffer -- in a gp-captable domain a pointer to a
+ * global is materialised through the cap table and IS a capability, whereas an argument pointer is
+ * not. It must be static and not a local: a 16-byte-aligned local forces dynamic stack realignment
+ * this backend cannot legalize.
  *
  * The value stored is a NULL capability, deliberately: that is what makes the STC's forwarded
  * result {cursor 0, NOT_CAP} under the mechanism, and it is what the SQLite window does at [32].
@@ -64,31 +69,40 @@
       ".insn i 0x5b, 0x2, %0, 0xb0(%0)"          /* cincoffsetimm %0, %0, 0xb0  */ \
       : "=&r"(scratch) : "r"(store_slot), "r"(load_slot))
 
-#define S12_CINCI(out, in)  __asm__ volatile(".insn i 0x5b, 0x2, %0, 0xb0(%1)" : "=r"(out) : "r"(in))
+#define S12_CINC80(out, in) __asm__ volatile(".insn i 0x5b, 0x2, %0, 0x80(%1)" : "=r"(out) : "r"(in))
 #define S12_STC(base, val)  __asm__ volatile(".insn s 0x5b, 0x4, %1, 0(%0)" :: "r"(base), "r"(val))
 
 #ifndef S12SHAPE_REPS
 #define S12SHAPE_REPS 4096
 #endif
 
-static inline void s12shape_run(volatile unsigned long *res, void *region)
+/* 16-byte aligned static, not a local, and not the `res` argument -- see the note above. */
+__attribute__((aligned(16))) static unsigned char s12shape_buf[256];
+
+static void s12shape_run(volatile unsigned long *res)
 {
-  unsigned long slot_cap, store_slot, scratch;
+  /* POINTER TYPES, NOT unsigned long. Casting the buffer to an integer STRIPS THE TAG: the
+     first attempt used `unsigned long` and QEMU asserted "cincoffsetimm with an UNTAGGED rs1",
+     with the compiler having warned about the cast. A capability must stay in a pointer type all
+     the way to the asm operand for the backend to materialise it through the cap table. */
+  void *slot_cap, *store_slot, *scratch;
   unsigned long i;
 
   res[0] = 0x5120;
 
-  /* region is the shared payload capability the glue hands us. Two distinct slots inside it:
-     one the LDC reads from, one the STC writes to -- kept apart so a scalar clobber of the
-     loaded capability can never be mistaken for the mechanism (the S-06 confound). */
-  slot_cap   = (unsigned long)region;
-  S12_CINCI(store_slot, slot_cap);      /* store target, +0xb0 clear of the load slot */
+  /* Two distinct slots in the same static buffer: one the LDC reads from at +0, one the STC
+     writes to at +128 -- far enough apart that a store can never clobber the capability the load
+     reads, which would be the S-06 confound rather than this mechanism. */
+  slot_cap = (void *)s12shape_buf;
+  S12_CINC80(store_slot, slot_cap);
 
   /* Seed the load slot with a real capability: store the region cap into itself. */
   S12_STC(slot_cap, slot_cap);
 
   res[0] = 0x5121;
+#ifndef S12SHAPE_RES0_ONLY
   res[1] = 0;
+#endif
 
   for (i = 0; i < S12SHAPE_REPS; i++) {
     /* THE SHAPE, in the order the SQLite window has it:
@@ -97,10 +111,14 @@ static inline void s12shape_run(volatile unsigned long *res, void *region)
          ldc  a4, 0(a0)     -> the load that also claims a4
          cincoffsetimm a4   -> the consumer that reads a4 and faults if mis-forwarded          */
     S12_SHAPE(scratch, store_slot, slot_cap);
-    res[1] = i + 1;
+#ifndef S12SHAPE_RES0_ONLY
+    res[1] = i + 1;          /* progress counter -- board only; the QEMU region is 4 bytes */
+#endif
   }
 
-  res[2] = scratch;
+#ifndef S12SHAPE_RES0_ONLY
+  res[2] = (unsigned long)scratch;
+#endif
   res[0] = 0x5122;
 }
 
