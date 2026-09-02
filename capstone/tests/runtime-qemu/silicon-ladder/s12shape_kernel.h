@@ -76,8 +76,34 @@
 #define S12SHAPE_REPS 4096
 #endif
 
+/* PRESSURE KNOBS. The baseline rung ran 12,288 executions of the shape in a domain on silicon with
+   zero faults, so shape + registers + domain is not sufficient. The mechanism needs the STC to be
+   STALLED on a full store buffer -- a four-instruction loop plausibly never fills one, however
+   often it runs -- and SQLite's window sits in a 4600-instruction function with entirely different
+   surrounding traffic. These knobs add that traffic one variable at a time.
+
+   S12SHAPE_BURST   scalar stores to distinct conflicting lines, issued immediately before the
+                    shape so the buffer is still draining when the STC arrives. 4096-byte stride
+                    puts every one on the same L1D set (32 KiB, 8-way, 16-byte lines), so each must
+                    go to memory.
+   S12SHAPE_CAPBURST  the same, but capability stores -- an STC occupies the DYN unit, which a
+                    scalar store does not, and the DYN unit serialises one op in flight.
+   The burst writes at +4096 and beyond, clear of the load slot at +0 and the store slot at +128,
+   so a scalar store can never clobber the capability the LDC reads. That confound looked exactly
+   like a 100% hit rate when a bare-metal version of this test tripped over it. */
+#ifndef S12SHAPE_BURST
+#define S12SHAPE_BURST 0
+#endif
+#ifndef S12SHAPE_CAPBURST
+#define S12SHAPE_CAPBURST 0
+#endif
+
 /* 16-byte aligned static, not a local, and not the `res` argument -- see the note above. */
 __attribute__((aligned(16))) static unsigned char s12shape_buf[256];
+#if S12SHAPE_BURST || S12SHAPE_CAPBURST
+/* Separate buffer for the pressure traffic, so it cannot touch the two slots above. */
+__attribute__((aligned(16))) static unsigned char s12shape_press[65536];
+#endif
 
 static void s12shape_run(volatile unsigned long *res)
 {
@@ -104,7 +130,32 @@ static void s12shape_run(volatile unsigned long *res)
   res[1] = 0;
 #endif
 
+#if S12SHAPE_BURST || S12SHAPE_CAPBURST
+  {
+    void *pb = (void *)s12shape_press;
+    (void)pb;
+  }
+#endif
+
   for (i = 0; i < S12SHAPE_REPS; i++) {
+#if S12SHAPE_BURST
+    {
+      volatile unsigned long *p = (volatile unsigned long *)s12shape_press;
+      int b;
+      /* WRAP AT 16. p[] is unsigned long, so index b*512 is byte offset b*4096, and the buffer
+         is 65536 -- a burst of 32 would reach 126,976 and run off the end. QEMU caught that as a
+         capability OOB before it cost a boot. Sixteen distinct lines all land on the same L1D set
+         (8-way), so they still all miss; reusing them costs nothing for store pressure. */
+      for (b = 0; b < S12SHAPE_BURST; b++) p[((unsigned)b & 15u) * 512] = (unsigned long)b;
+    }
+#endif
+#if S12SHAPE_CAPBURST
+    {
+      void *cp = (void *)s12shape_press;
+      int b;
+      for (b = 0; b < S12SHAPE_CAPBURST; b++) { S12_STC(cp, slot_cap); S12_CINC80(cp, cp); }
+    }
+#endif
     /* THE SHAPE, in the order the SQLite window has it:
          movc a4, zero      -> the null the STC will carry as its forwarded result
          stc  a4, 0(a5)     -> decoder makes a4 this store's scoreboard rd
