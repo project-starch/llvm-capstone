@@ -92,6 +92,15 @@ def main():
                          "times later, so it may well break the program -- gate it under QEMU "
                          "before boarding, and if it cannot be gated the value account stays OPEN "
                          "rather than becoming refuted.")
+    ap.add_argument("--only28", action="store_true",
+                    help="ONE instruction: [28] `sw a4, 0x0(a5)` -> `movc t0, zero`, with [33] "
+                         "`stc a4, 0x0(a5)` LEFT ALONE. Exists to finish the attribution: --tight "
+                         "changes [28] AND [33], so a clean --tight cannot say which of the two "
+                         "matters. This arm differs from --tight in [33] ALONE, so the pair is a "
+                         "true one-instruction contrast against a baseline attested at 5/5 "
+                         "wedges. If this wedges and --tight does not, the store at [33] reading "
+                         "a4 is the cause; if this is clean too, [28] alone suffices and [33] is "
+                         "not implicated.")
     ap.add_argument("--tight", action="store_true",
                     help="TIGHT CONTROL for the store-register question, TWO instructions instead "
                          "of five. [28] `sw a4, 0x0(a5)` becomes `movc t0, zero` and [33] "
@@ -150,6 +159,23 @@ def main():
         if got != A4:
             sys.exit(f"REFUSING: [{i}] {rows[i][2]!r} has {kind}=x{got}, expected a4 (x{A4}). "
                      f"The window has drifted; patching it would hit the wrong operand.")
+
+    if a.only28:
+        w26 = word(26)
+        put(28, (w26 & ~(0x1f << 7)) | (T0 << 7))       # [28] -> movc t0, zero; [33] untouched
+        blob4 = bytes(blob)
+        open(a.dst, "wb").write(blob4)
+        after = disas(a.dst)
+        print(f"  ONLY-28 arm, 1 instruction changed")
+        print(f"  out sha256 {hashlib.sha256(blob4).hexdigest()[:16]}")
+        for i in (26, 27, 28, 30, 32, 33, 34, 35):
+            print(f"  [{i:2d}] {rows[i][2]:34s} ->  {after[i][2]}")
+        if after[33][2] != rows[33][2]:
+            sys.exit("REFUSING: [33] changed; this arm exists to leave it alone")
+        if after[34][2] != rows[34][2] or after[35][2] != rows[35][2]:
+            sys.exit("REFUSING: the fault pair changed")
+        print("  [33] and the fault pair intact")
+        return 0
 
     if a.value_only:
         put(32, ((sent & 0xfff) << 20) | (0 << 15) | (0 << 12) | (A4 << 7) | 0x13)

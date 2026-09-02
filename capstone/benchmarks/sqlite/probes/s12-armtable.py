@@ -27,6 +27,8 @@ ARMS = [
     # [26] [27] [30] [32] left on a4. The only property that moves is which register supplies the
     # null the store writes.
     ("TIGHT",  "tight",  "sqtight.dom", "a6e853e25888958c", "a4=0, null store uses t0 (2-instr)"),
+    # ONLY28 differs from TIGHT in [33] ALONE, so the pair is a true one-instruction contrast.
+    ("ONLY28", "only28", "sq28.dom",    "fa690e843115cad5", "[28] only; [33] still stores a4"),
 ]
 
 
