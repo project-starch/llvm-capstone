@@ -1,7 +1,7 @@
 # Nested-allocator bug inventory
 
 *Bugs in the METADATA HANDLING of allocators that sit on top of malloc, or that are
-the malloc. Compiled 2026-08-27 on branch `capstone-nested-allocator-bugs`.*
+the malloc. Compiled 2026-08-27 on branch `c128/9-nested-allocators`.*
 
 ## THE SELECTION CRITERION
 

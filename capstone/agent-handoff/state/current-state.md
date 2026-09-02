@@ -2,7 +2,7 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-08-29 — NESTED-ALLOCATOR LANE, `capstone-nested-allocator-bugs`
+## 2026-08-29 — NESTED-ALLOCATOR LANE, `c128/9-nested-allocators`
 
 **A different lane from the silicon sections below; it does not supersede them.**
 43 commits. What it established, and what it duplicated by not reading this file
