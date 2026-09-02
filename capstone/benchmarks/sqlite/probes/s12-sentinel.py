@@ -79,6 +79,15 @@ def main():
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--sentinel", default="0x5a5")
+    ap.add_argument("--tight", action="store_true",
+                    help="TIGHT CONTROL for the store-register question, TWO instructions instead "
+                         "of five. [28] `sw a4, 0x0(a5)` becomes `movc t0, zero` and [33] "
+                         "`stc a4` becomes `stc t0`; [26], [27] and [30] stay on a4. The full t0 "
+                         "substitution changes five instructions, so a difference between it and "
+                         "the base cannot be attributed to the store-register match rather than "
+                         "to any of the other four. [28] is available as the scratch slot because "
+                         "the QEMU functional gate already showed removing its zero-init is "
+                         "behaviour-preserving -- its slot s0-0x10c is re-stored at [755].")
     ap.add_argument("--control", action="store_true",
                     help="MATCHED CONTROL: do everything except the sentinel. [32] stays "
                          "`movc a4, zero`, so a4 enters the load holding zero exactly as in the "
@@ -128,6 +137,23 @@ def main():
         if got != A4:
             sys.exit(f"REFUSING: [{i}] {rows[i][2]!r} has {kind}=x{got}, expected a4 (x{A4}). "
                      f"The window has drifted; patching it would hit the wrong operand.")
+
+    if a.tight:
+        w26 = word(26)                       # `movc a4, zero`, borrowed for its encoding
+        put(28, (w26 & ~(0x1f << 7)) | (T0 << 7))       # [28] -> movc t0, zero
+        w33 = word(33)
+        put(33, (w33 & ~(0x1f << 20)) | (T0 << 20))     # [33] -> stc t0, 0x0(a5)
+        blob2 = bytes(blob)
+        open(a.dst, "wb").write(blob2)
+        after = disas(a.dst)
+        print(f"  TIGHT control, 2 instructions changed")
+        print(f"  out sha256 {hashlib.sha256(blob2).hexdigest()[:16]}")
+        for i in (26, 27, 28, 30, 32, 33, 34, 35):
+            print(f"  [{i:2d}] {rows[i][2]:34s} ->  {after[i][2]}")
+        if after[34][2] != rows[34][2] or after[35][2] != rows[35][2]:
+            sys.exit("REFUSING: the fault pair changed")
+        print("  fault pair intact")
+        return 0
 
     for i, kind in ((26, "rd"), (27, "rs2"), (28, "rs2"), (30, "rs2"), (33, "rs2")):
         w = word(i)
