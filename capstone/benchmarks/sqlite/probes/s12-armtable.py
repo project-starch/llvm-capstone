@@ -56,6 +56,14 @@ def read(path, dom, sha):
     # control-slot line yet, so it scores VOID with the same words a genuinely failed boot gets --
     # and a reader glancing at a mid-run tally sees phantom failures. The driver prints
     # BOARD_RELEASED when it lets go of the board, so its absence means the run has not finished.
+    # THREE NON-RESULTS, AND THEY ARE NOT THE SAME CLAIM.
+    #   never_ran   the board lock was held, or preflight blocked -- the process never reached the
+    #               board, so no boot was spent and nothing was risked.
+    #   unfinished  the run is still going; no verdict yet, in either direction.
+    #   failed      it booted and something went wrong -- a real boot, genuinely void.
+    # Collapsing these reads a refusal that cost nothing as a failure that cost a boot, which is
+    # how a campaign's boot budget gets misreported.
+    never_ran = ("another board session holds" in raw) or ("preflight BLOCKED" in raw)
     finished = "BOARD_RELEASED" in raw
     ctl_ok = bool(re.search(r"sqslt\.dom:--slt \S*dd1_one\S*\s+returned in \d+s", raw))
     wedged = "NO RETURN within" in raw
@@ -72,7 +80,8 @@ def read(path, dom, sha):
     except Exception:
         pass
     return dict(entered=entered, sha=got, wedged=wedged, returned=returned,
-                completed=bool(slt), ctl_ok=ctl_ok, finished=finished, **fields)
+                completed=bool(slt), ctl_ok=ctl_ok, finished=finished,
+                never_ran=never_ran, **fields)
 
 
 def main():
@@ -91,6 +100,9 @@ def main():
         for f in logs:
             r = read(os.path.join(a.dir, f), dom, sha)
             if r is None:
+                continue
+            if r["never_ran"]:
+                print(f"    {f:16s} NOT A DRAW -- board lock held or preflight blocked; no boot spent")
                 continue
             if not r["finished"]:
                 print(f"    {f:16s} IN PROGRESS -- no BOARD_RELEASED yet; not a verdict either way")
