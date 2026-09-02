@@ -79,6 +79,19 @@ def main():
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--sentinel", default="0x5a5")
+    ap.add_argument("--value-only", action="store_true",
+                    help="THE ARM THAT CAN ACTUALLY TEST THE VALUE ACCOUNT. Base with ONLY [32] "
+                         "`movc a4, zero` -> `li a4, 0x5a5`; [33] `stc a4, 0x0(a5)` and all of "
+                         "[26] [27] [28] [30] are left alone. One instruction from a baseline "
+                         "attested at 5/5 wedges. The earlier sentinel arm carried the t0 "
+                         "substitution as well, and that substitution by itself suppresses the "
+                         "wedge -- so its clean result was predicted by the cure it inherited and "
+                         "said nothing about a4's value. THIS arm keeps the wedging configuration "
+                         "and changes only the value. WARNING: [33] will now store an untagged "
+                         "0x5a5 where the program stored a null capability, into a slot read 14 "
+                         "times later, so it may well break the program -- gate it under QEMU "
+                         "before boarding, and if it cannot be gated the value account stays OPEN "
+                         "rather than becoming refuted.")
     ap.add_argument("--tight", action="store_true",
                     help="TIGHT CONTROL for the store-register question, TWO instructions instead "
                          "of five. [28] `sw a4, 0x0(a5)` becomes `movc t0, zero` and [33] "
@@ -137,6 +150,20 @@ def main():
         if got != A4:
             sys.exit(f"REFUSING: [{i}] {rows[i][2]!r} has {kind}=x{got}, expected a4 (x{A4}). "
                      f"The window has drifted; patching it would hit the wrong operand.")
+
+    if a.value_only:
+        put(32, ((sent & 0xfff) << 20) | (0 << 15) | (0 << 12) | (A4 << 7) | 0x13)
+        blob3 = bytes(blob)
+        open(a.dst, "wb").write(blob3)
+        after = disas(a.dst)
+        print(f"  VALUE-ONLY arm, 1 instruction changed")
+        print(f"  out sha256 {hashlib.sha256(blob3).hexdigest()[:16]}")
+        for i in (26, 27, 28, 30, 32, 33, 34, 35):
+            print(f"  [{i:2d}] {rows[i][2]:34s} ->  {after[i][2]}")
+        if after[34][2] != rows[34][2] or after[35][2] != rows[35][2]:
+            sys.exit("REFUSING: the fault pair changed")
+        print("  fault pair intact")
+        return 0
 
     if a.tight:
         w26 = word(26)                       # `movc a4, zero`, borrowed for its encoding
