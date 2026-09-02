@@ -18,9 +18,19 @@ a call-site count put on the safe side turned out to be an arena as well.
 
     pStart = sqlite3Malloc( szAlloc );          /* szAlloc = sz*cnt */
 
-Default size, `src/global.c:220`:
+Default size, `src/global.c:218-224`. **Read the right arm of the #ifdef** — an
+earlier draft of this file quoted the `1200,100` line, which is gated behind
+`SQLITE_OMIT_TWOSIZE_LOOKASIDE` and is NOT what a default build takes:
 
-    #define SQLITE_DEFAULT_LOOKASIDE 1200,100   /* 120KB of memory */
+    #ifdef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+    #   define SQLITE_DEFAULT_LOOKASIDE 1200,100  /* 120KB */   <- NOT the default
+    #else
+    #   define SQLITE_DEFAULT_LOOKASIDE 1200,40   /* 48KB  */   <- the default
+    #endif
+
+The comment above it spells out the resulting geometry: "30 1200-byte slots and
+93 128-byte slots". Measured on purecap: `nSlot=124`, pool capability length
+49152.
 
 **Slots are carved by pointer arithmetic from that one pointer**, same function:
 
@@ -36,9 +46,12 @@ slots and small slots at `lookaside.pMiddle`.
 if `n <= db->lookaside.sz`, the result is popped off `pSmallFree` / `pSmallInit`
 / `pFree` / `pInit`.
 
-**Free never reaches free().** `sqlite3DbNNFreeNN()`, `src/malloc.c:458ff`: if the
-pointer lies inside the pool it is pushed back onto a freelist and the function
-returns:
+**Freeing an OBJECT never reaches free().** `sqlite3DbNNFreeNN()`,
+`src/malloc.c:458ff`: if the pointer lies inside the pool it is pushed back onto
+a freelist and the function returns. (The *pool* is properly freed, at
+`src/main.c:1482-1484` when the connection closes and at `:791-793` on
+reconfiguration — so the right statement is "not revocable at the granularity of
+the object's lifetime", not "never freed".)
 
     pBuf->pNext = db->lookaside.pSmallFree;
     db->lookaside.pSmallFree = pBuf;
@@ -48,10 +61,32 @@ returns:
 so there is no `cheri_bounds_set`/`__builtin_cheri_bounds_set` narrowing anywhere
 in the carve path.
 
-**What lives there.** The core parse and query machinery, because it allocates
-through the connection allocator: `Expr` (`src/expr.c:941,982,1050`), `Window`
-(`src/window.c:1222,2385`), and the same pattern throughout `select.c`,
+**What lives there, measured on purecap** (where pointers are 16 bytes, so every
+struct is bigger than the x86-64 figure you might assume):
+
+| object | purecap sizeof | pool |
+|---|---|---|
+| `Expr` without token | **128** — exactly `LOOKASIDE_SMALL` | small (128B), zero slack |
+| `Expr` with token (`sizeof+nExtra`, `src/expr.c:941`) | 137+ | big (1200B) |
+| `Window` (`src/window.c:1222,2385`) | 256 | big |
+| `EXPR_REDUCEDSIZE` / `EXPR_TOKENONLYSIZE` dups | 84 / 32 | small |
+
+The same object type therefore lands in a different pool depending on whether it
+carries a token. Same pattern of Db-allocator use throughout `select.c`,
 `build.c`, `vdbe.c`, `json.c`.
+
+**Four things that take an allocation OUT of lookaside**, all of which weaken any
+blanket statement and must be controlled for in a measurement:
+
+1. **Pool exhaustion.** `src/malloc.c:643-687`: with `pFree` and `pInit` empty it
+   increments `anStat[2]` and falls through to `sqlite3Malloc`. A small request
+   whose small lists are empty falls to the big list first, then to the heap.
+2. **`bDisable`** sets `sz=0` (`src/sqliteInt.h:1628`) so everything goes to the
+   heap for whole phases — live at `src/parse.y:139`, `build.c:3154`,
+   `prepare.c:720`, `fkey.c:1354`, `analyze.c:1994`.
+3. **Growth past the slot size**, via `dbReallocFinish` (below).
+4. **Measurement mode** sets `lookaside.pEnd = pStart` (`src/status.c:298,343`,
+   `src/vdbeapi.c:2129`), which routes frees to the heap path.
 
 ## Arena 2: the page cache — verified, and it was nearly missed
 
@@ -88,17 +123,36 @@ allocation path, not counted.
 
 For an object inside either arena:
 
-- **Temporal.** The memory is recycled without `free()` ever being called, so a
-  revocation scheme that sweeps regions passed to the allocator has nothing to
-  quarantine. A stale pointer to a freed `Expr`/`Window`/page stays usable, and
-  the slot is handed straight to the next request.
-- **Spatial.** The derived pointer's bounds are whatever the carve path gave it.
-  Since SQLite narrows nothing, the expectation is that a slot capability spans
-  the whole pool, making slot-to-slot access legal. **This half is under audit**
-  — whether a purecap CHERI-LLVM build narrows bounds implicitly anywhere in
-  this path is exactly the step most likely to be wrong, and the answer decides
-  whether the spatial half of the claim survives. Treat the temporal half as the
-  load-bearing one until that lands.
+- **Temporal. MEASURED** under CheriBSD's shipping revoker in all three configs
+  (`spatial`/`temporal`/`eager`), each with a reference control in the same run:
+  a genuinely `free()`d capability comes back with tag 0, while a capability
+  freed through `sqlite3DbFree` and reissued to a new object keeps its tag and a
+  write through it succeeds (`UAF_WRITE_THROUGH_STALE_LOOKASIDE_SURVIVED=1`,
+  `REUSE_SAME_SLOT=1`). Scope this to **allocator-driven quarantine schemes**
+  (CHERIvoke/Cornucopia-style). CHERIoT, PICASSO-style colored capabilities and
+  MTE-style versioning are UNRESOLVED here — a versioning scheme a pool
+  allocator opted into could catch it, and SQLite opts into nothing.
+
+  Probe note worth keeping: the first two attempts at that control did NOT fire,
+  because the victim pointer stayed register-resident at `-O2` and the sweep
+  does not reach registers. It only fired once forced into a
+  `static void * volatile` global. A register-resident control reads exactly
+  like "revocation does nothing" — the false-clean shape.
+- **Spatial. MEASURED, not argued.** On CheriBSD 26.07 purecap riscv64c, every
+  lookaside slot pointer carries `base` and `len` identical to the pool
+  capability (`base=0x40c48000 len=49152`), while the control — a request above
+  `lookaside.sz`, which goes to real malloc — reads `len=2048`. So the
+  instrument demonstrably produces the opposite reading. A 256-byte write
+  crossing a slot boundary completed without a trap
+  (`SPATIAL_SLOT_TO_SLOT_WRITE_SURVIVED`). The `pMiddle` split does not change
+  this: small and big slots measure the same base and length.
+
+  Statically, `sqlite3DbMallocRawNN` contains **zero** `csetbounds` at default,
+  `conservative` and `subobject-safe` (the three that appear at subobject-safe
+  bound `anStat`, not the slot). At `-cheri-bounds=aggressive` and above the
+  compiler DOES narrow the carve loop's pointer to length 1 — and at those
+  levels **SQLite does not run at all**, faulting during `sqlite3_open` even
+  with lookaside configured off, so that is not an available mitigation.
 
 ## The size-dependent case, which makes a clean experiment
 
@@ -136,6 +190,13 @@ The shape of that table is the study's central claim in one line: **the bugs
 CHERI catches in SQLite are the extension bugs, and the ones it misses are the
 core-engine bugs** — not because the core is worse code, but because the core
 allocates from a pool and the extensions call malloc.
+
+**How to frame this, and how not to.** A pool allocator defeating allocator-driven
+temporal safety is a *documented, known* limitation, not a new category; claiming
+novelty would not survive review. What is defensible and specific: SQLite
+instantiates that limitation in a hot, attacker-reachable parser path, the
+objects concerned are the ones CVEs actually land on, and the compiler settings
+that would narrow the bounds make SQLite unrunnable.
 
 ## Arena 3: the b-tree balance scratch — spatial only, and the CHERI port already tripped on it
 

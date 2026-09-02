@@ -105,6 +105,13 @@ Two observations that change how the table should be read:
   the CVE-2019-19880 fix was partial, and CVE-2020-13871's first fix was
   superseded by `44a58d6cb135a104`. A repro built against the first fix would
   measure the wrong thing.
+- **OSS-Fuzz is structurally blind to everything under `ext/`.** `test/ossfuzz.c`
+  includes only `sqlite3.h` and registers no extension, and the target is built
+  with a plain `configure --shared=0`, so nothing in `ext/misc`, `ext/expert`,
+  `ext/session` or `ext/rbu` is linked in. Corroborated by check-in counts:
+  `ossfuzz` matches 94, `ossfuzz rtree` and `ossfuzz geopoly` match 0. So "no
+  OSS-Fuzz issue for component X" is worth NOTHING as evidence for any
+  extension, and must not be read as reassurance.
 - **Enumeration was partly blocked.** The OSS-Fuzz list/search API silently
   ignores queries, so only individually-resolved issues are present. A
   brute-force scan of the buganizer id range (~75k ids, ~25 min) is feasible and
@@ -113,6 +120,12 @@ Two observations that change how the table should be read:
 - **`blade.tencent.com` refused connections**, so the two Magellan advisories are
   cited but unfetched; the cluster was reconstructed from Red Hat and upstream
   commits instead.
+- Two claims that arrived without evidence were **rejected rather than recorded**:
+  an alleged carray overflow whose offered fix hash returns "No Such Object" at
+  sqlite.org, and an RBU claim with no hash, URL or CVE. Both rejections are
+  noted in-table so nobody re-litigates them from memory.
+- CVE-2019-19880 is a **type confusion**, not the null-deref it is usually filed
+  as, which makes it the single most relevant entry here for a capability study.
 - 16 entries were **excluded as non-bugs** — six AI-hallucinated 2026 CVE ids that
   sqlite.org calls unreproducible, plus third-party/application bugs filed
   against SQLite's name. They are in `sqlite-bugs-excluded.csv` with the reason.
