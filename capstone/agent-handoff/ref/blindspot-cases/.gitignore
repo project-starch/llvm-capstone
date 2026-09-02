@@ -1,0 +1,3 @@
+# Derived view of the CSV, lives in Google Drive (KISP Shared/Capstone).
+# Regenerate with make-xlsx.sh; never let the binary become the source of truth.
+*.xlsx
