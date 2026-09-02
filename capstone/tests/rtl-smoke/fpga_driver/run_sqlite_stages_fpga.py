@@ -2703,7 +2703,21 @@ def main():
                                   + ("UNREAD" if _a4 is None else f"0x{_a4:x}")
                                   + "   a0(x10)=" + ("UNREAD" if _a0 is None else f"0x{_a0:x}"),
                                   flush=True)
-                            if _a4 is not None:
+                            # THE mepc GUARD IS NOT OPTIONAL. Until 2026-09-02 the two verdicts
+                            # below were emitted on `_a4 != 0` ALONE, with no reference to WHERE
+                            # the core actually trapped. That is a check that cannot fail in the
+                            # informative direction: any wedge whatever, in any function, in any
+                            # image, prints "STALE-OPERAND ACCOUNT IS CONFIRMED" as long as x14
+                            # happens to be non-zero. It duly fired on a draw that wedged on a
+                            # DIFFERENT instruction in a DIFFERENT image, and that reading became
+                            # a recorded finding which had to be retracted.
+                            #
+                            # a4 is only the stale-operand account's operand when the trap is at
+                            # the site where a4 IS the operand. Anywhere else the register is
+                            # unrelated to the fault and says nothing.
+                            _site = globals().get("S12_FAULT_MEPC", 0x828f4814)
+                            _at_site = (mepc is not None and mepc == _site)
+                            if _a4 is not None and _at_site:
                                 print("          => a4 cursor is ZERO: it never received a good "
                                       "value, so the load did not deliver one and the "
                                       "STALE-OPERAND ACCOUNT IS WRONG"
@@ -2711,6 +2725,12 @@ def main():
                                       "          => a4 holds a NON-ZERO cursor: the load DID "
                                       "write it, so the consumer read something else -- the "
                                       "STALE-OPERAND ACCOUNT IS CONFIRMED", flush=True)
+                            elif _a4 is not None:
+                                _where = ("UNREAD" if mepc is None else f"0x{mepc:016x}")
+                                print(f"          => NO VERDICT on the stale-operand account: the "
+                                      f"trap latched at {_where}, not the site 0x{_site:x} where "
+                                      f"a4 is the faulting operand. x14 here is an unrelated "
+                                      f"register.", flush=True)
                             _s0 = _csr.get("$x8")
                             _spv = _csr.get("$sp")
                             print(f"  [wedge] gdb frame: s0(x8)="

@@ -28,20 +28,28 @@ HOST = "/tmp/capstone/sqlite-slt2/sqlite_host.user"
 TEST = f"{ROOT}/capstone/benchmarks/sqlite/slt/dd2_join.test"
 
 
-def run(dom, timeout):
+def run(dom, timeout, tag):
+    """Run one image and return its GUEST SERIAL LOG.
+
+    The serial log, not the runner's stdout. The runner reports pass/fail; the log carries the
+    guest's own markers (`SQ: G/enter`, `SQ: H/return`, the SLT-SUMMARY counters), which is what
+    "did this variant behave like the base" actually means. Passing --log-file also matches the
+    invocation in benchmarks/sqlite/run-sqlite-slt.sh, which is the one known to work.
+    """
     share = tempfile.mkdtemp(prefix="s12fg-")
+    log = f"/tmp/capstone/funcgate-{tag}.log"
     try:
         shutil.copy(dom, os.path.join(share, "sqlite_silicon.dom"))
         shutil.copy(HOST, os.path.join(share, "sqlite_host.user"))
         shutil.copy(TEST, os.path.join(share, "case.test"))
-        cmd = ["python3", SMOKE, "--share-dir", share, "--guest-command",
+        cmd = ["python3", SMOKE, "--share-dir", share, "--log-file", log,
+               "--timeout-multiplier", "12", "--guest-command",
                "cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && "
-               "/tmp/h.user /mnt/host/sqlite_silicon.dom --slt /mnt/host/case.test",
-               "--timeout-multiplier", "12"]
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return p.stdout + p.stderr
+               "/tmp/h.user /mnt/host/sqlite_silicon.dom --slt /mnt/host/case.test"]
+        subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     finally:
         shutil.rmtree(share, ignore_errors=True)
+    return open(log, errors="replace").read() if os.path.exists(log) else ""
 
 
 def signature(out):
@@ -68,7 +76,7 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800)
     a = ap.parse_args()
 
-    ref_raw = run(a.base, a.timeout)
+    ref_raw = run(a.base, a.timeout, "base")
     ref = signature(ref_raw)
     if not ref:
         print("ERROR: the BASE produced no recognisable result lines. The harness did not work; "
@@ -82,7 +90,7 @@ def main():
 
     rc = 0
     for v in a.variants:
-        out = run(v, a.timeout)
+        out = run(v, a.timeout, os.path.basename(v).replace(".dom", ""))
         sig = signature(out)
         tag = hashlib.sha256(open(v, "rb").read()).hexdigest()[:12]
         if not sig:
