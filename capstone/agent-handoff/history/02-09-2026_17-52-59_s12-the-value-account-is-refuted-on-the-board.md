@@ -136,3 +136,30 @@ board candidates; boarding them would have bought unreadable verdicts at three d
 by hash is VOID rather than clean. Both are enforced by the classifier now, and both were
 negative-tested, because a stalled or mis-staged draw counted as clean inflates exactly the cure
 this ladder exists to detect.
+
+---
+
+## UPDATE, same evening — the cure narrows to TWO instructions
+
+| arm | changes from base | `[33]` stores | wedges |
+|---|---|---|---|
+| **anchor** | none | `a4` | **3 / 3** |
+| **tight** | `[28]`, `[33]` | `t0` | 0 / 4 |
+| **control** | `[26] [27] [28] [30] [33]` | `t0` | 0 / 4 |
+| **sentinel** | the above plus `[32]` | `t0` | 0 / 4 |
+
+Every wedge falls in the anchor's three draws and none in the twelve modified draws: one-sided
+exact p = 2.2e-03, or 1.6e-04 counting the two hash-attested base wedges of 2026-08-31, which ran
+the same binary under the sentinel's own filename *and* initramfs size.
+
+**`[26]`, `[27]`, `[30]` and `[32]` are therefore NOT required for the fault.** All four are present
+in the tight arm, which does not wedge. The cure lives in `[28] sw a4, 0x0(a5)` and/or
+`[33] stc a4, 0x0(a5)`.
+
+Every draw is validated identically: domain entered, per-run `.dom` sha256 matched, known-good
+control slot returned, `SLT-SUMMARY` byte-identical to the base. Draws still running, draws that
+never reached the board, and draws whose control failed are reported as three distinct non-results
+and excluded from both numerator and denominator.
+
+`--only28` is on the board to finish it: `[28]` changed, `[33]` left storing `a4`, differing from
+the tight arm in `[33]` **alone**.
