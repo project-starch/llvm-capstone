@@ -1,8 +1,9 @@
 # A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 
-**Status: ROOT-CAUSED on both sides in source, with a silicon positive control. The FIX IS NOT
-firmware-only — the RTL text predicts a firmware-only fix converts one storm into another. See
-"The fix" below.**
+**Status: ROOT-CAUSED, and the firmware half is now CONFIRMED ON SILICON (2026-09-02). Writing
+`dom_seal[1]` moves the failure from "no vector at all, storm at address 0" to "the handler's own
+prologue faults in the wrong capability context". The fix is NOT firmware-only; the remaining half
+is that a trap does not switch domains. See the acceptance-test section.**
 
 Sibling issues, so a reader arriving with the wrong symptom is redirected immediately:
 `../S12-wherecode-notcap-operand-vs-memory/` is where this was found and is the separate question of
@@ -107,6 +108,61 @@ The design intent visible in `interrupt.S:67` is that slot 1 holds a trap-vector
 cursor into `mtvec`, metadata into `ctvec`. The RTL saves and restores `ctvec` but never installs it
 as the PC capability on a trap. That is half a feature missing in hardware, so the complete fix is
 likely firmware **and** RTL.
+
+## 2026-09-02 — ACCEPTANCE TEST RUN. The vector took; the handler faults on its own third instruction
+
+Firmware with `dom_seal[1]` written, 3 draws, all agreeing:
+
+    mtvec      = 0x80020060      = _cap_trap_entry, exactly
+    mcause     = 25              (NOT 2 -- the storm is gone)
+    mepc       = 0x80020068      = _cap_trap_entry + 8
+    EXCX       = 0
+
+**The firmware half is CONFIRMED.** Before this, a domain ran with `mtvec = 0` and any exception
+vectored to address 0 and died in an illegal-instruction storm (`mcause=2, mepc=2`). With slot 1
+written, `mtvec` holds the handler and the trap arrives there. The pre-registered falsifier --
+`mcause 2` with `mtvec` still 0 -- did not occur.
+
+**The remaining half is NOT what was predicted, and the prediction should be corrected rather
+than reinterpreted.** The audit expected `mcause 28` (OUT_OF_BOUNDS) from the PC-capability check
+firing on a handler address outside the domain's PC-capability bounds. Instead:
+
+    _cap_trap_entry:
+        fence.i                          +0
+        CCSRRW(sp, CCSR_CSCRATCH, sp)    +4
+        CINCOFFSETIMM(sp, sp, -32 * 8)   +8   <- mepc, mcause 25 UNEXPECTED_OPERAND
+
+The handler runs its first two instructions and faults on the third, because **`sp` is not a
+capability**. The underlying reason is the one the audit did identify structurally: **a trap does
+not switch domains.** The only producer of `dom_switch_en` is `commit_stage.sv:352`, inside the
+`else` of `if (commit_instr_i[0].ex.valid)` at `:305`, so an exception cannot initiate a switch.
+The handler therefore executes in the DOMAIN's capability context -- the domain's `cscratch`, the
+domain's PC capability -- while it is written for the monitor's. The cscratch swap at +4 hands it
+whatever the domain had, and `cincoffsetimm` on that is an unexpected operand.
+
+So the fault moved from "address 0, no vector at all" to "the handler's own prologue, wrong
+capability context". That is progress of exactly one layer, and it names the next fix precisely:
+either the trap path must restore the monitor's capability context (RTL), or the handler's
+prologue must not assume one (firmware).
+
+### Two readings in these draws that must NOT be used
+
+`EXCX = 0` is now fully explained and is no longer evidence about anything: the handler faults at
++8, long before reaching any C code that could report.
+
+The latched `tval` values are **junk**: `0xca11ab005cffff1e` and `0x0011ab005cefff1e` across two
+draws. That is the documented AXI error-slave pattern (`0xca11ab1ebadcab1e`) which the debug
+register path has returned before. The `mcause`/`mepc`/`mtvec` values above come from GDB and are
+mutually consistent across all three draws; the mux-read `tval` in these particular draws is not
+data.
+
+### Provenance
+
+Run 07:55, 08:03, 08:11 on 2026-09-02, outside both windows in which the workbench operator held
+the board. `nv_bitstream_name` had been lost by the day's service restarts, so these ran under
+`FPGA_BITSTREAM_UNVERIFIED=1`: the board boots, so silicon is resident, but it cannot be NAMED.
+The result is a property of the monitor's trap path and is not plausibly bitstream-specific, but
+the caveat travels with it.
 
 ## Acceptance criterion — written to FAIL if this is wrong
 
