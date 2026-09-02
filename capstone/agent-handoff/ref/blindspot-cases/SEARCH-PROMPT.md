@@ -43,24 +43,28 @@ without them nobody can tell a blind spot from a broken instrument.
 
 Rules:
 
+- **Only definitive entries.** A bug goes in the table when you can say where its
+  memory came from and point at the evidence. If the record does not establish
+  that, leave the bug out entirely — do not park it as unknown or probable. A
+  short table that is right is the deliverable; a long one that is half guesses
+  is worse than nothing.
 - Every entry needs a source URL you actually fetched.
-- Never invent a CVE id or a commit hash. Leave the field empty instead.
-- `UNKNOWN` is a correct answer when the record does not say where the memory
-  came from. A wrong classification is worse than a missing one.
+- Never invent a CVE id or a commit hash. Leave that field empty.
 - Do not assume an uninitialised read traps: where an arena does not scrub on
   free, the stale bytes can still be a valid pointer.
 - No personal names anywhere in the output.
 
-**Output** — a JSON array at `<OUTPUT_PATH>`, one object per bug:
+**Output** — a CSV at `<OUTPUT_PATH>`, ready to open in Excel. Write it with a
+CSV writer, not by hand, so commas and quotes in the text cannot break it.
+One row per bug, these columns:
 
-    {"id","year","component","bug_class","affected_function","trigger","poc",
-     "fix_commit","fixed_in","alloc_arena","cheri_expectation","rationale",
-     "verification","source","notes"}
+    id, year, component, bug_class, affected_function, trigger, poc,
+    fix_commit, fixed_in, alloc_arena, verdict, evidence, source, notes
 
-`alloc_arena`: the arena's name, `system-malloc` for a control, or `UNKNOWN`.
-`cheri_expectation`: `BLINDSPOT-candidate` | `CAUGHT-candidate` | `ARENA-DECIDES`.
-`verification`: how you know — `read-the-source` > `named-in-advisory` >
-`inferred-from-file` > `unverified`.
+- `alloc_arena` — the arena's name, or `system-malloc` for a control-group bug.
+- `verdict` — `blind` or `caught`.
+- `evidence` — what makes it definitive: `read-the-source` or `named-in-advisory`.
 
-**Reply with**: the step 1 test, the share estimate, counts per verdict, and the
-three most reproducible cases. The data goes in the file.
+**Reply with**: the step 1 test, the share estimate, how many rows are `blind`
+against `caught`, the three most reproducible cases, and how many bugs you had
+to drop for lack of definitive evidence. The data goes in the file.
