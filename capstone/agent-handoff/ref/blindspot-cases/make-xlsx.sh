@@ -13,8 +13,8 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-CSV="$HERE/sqlite-cves.csv"
-OUT="${TMPDIR:-/tmp}/sqlite-cves.xlsx"
+CSV="$HERE/sqlite-bugs.csv"
+OUT="${TMPDIR:-/tmp}/sqlite-bugs.xlsx"
 VENV="$HOME/.venvs/xlsx/bin/python"
 REMOTE="gdrive:KISP Shared/Capstone/"
 

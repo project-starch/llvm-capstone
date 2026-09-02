@@ -1,13 +1,13 @@
 # SQLite's internal arenas, read out of the source
 
-*Evidence for the column that decides every row of `sqlite-cves.csv`. Source
+*Evidence for the column that decides every row of `sqlite-bugs.csv`. Source
 read: `sqlite-src-3530400` (SQLite 3.53.4, full source, not the amalgamation).
 Every claim below carries a file:line you can re-read. Companion: `mruby.md`.*
 
 ## Why this file exists
 
 The blind-spot thesis only holds if SQLite really does sub-allocate behind the
-malloc boundary. That was assumed when `sqlite-cves.csv` was seeded, and the
+malloc boundary. That was assumed when `sqlite-bugs.csv` was seeded, and the
 arena column was marked `-CANDIDATE` throughout. This file replaces the
 assumption with source. Two arenas are now **verified**, and one component that
 a call-site count put on the safe side turned out to be an arena as well.
@@ -169,6 +169,35 @@ Someone had to raise the alignment from 8 to 16 to make this work on CHERI,
 which is what a 128-bit capability needs. So the "no CHERI awareness" statement
 above is a claim about UPSTREAM; the tree actually measured is patched, and this
 is the patch.
+
+## A second blind-spot axis: in-bounds uninitialised reads
+
+The arena argument is about *where* an object lives. This one is orthogonal and
+covers 21 of the table's rows: CHERI checks that an access is **in bounds** and
+that the capability is **valid**. It does not check that the bytes were ever
+**written**. An uninitialised read inside your own allocation is, to the
+hardware, a perfectly legal load.
+
+Two source facts make this worse in SQLite specifically, and both are verified:
+
+1. **A freed lookaside slot is not scrubbed in a release build.** The trashing
+   memset in `sqlite3DbNNFreeNN` is `#ifdef SQLITE_DEBUG`
+   (`src/malloc.c:429` and `:468`). So a recycled slot still holds the previous
+   occupant's bytes — and on purecap those bytes can include a **still-tagged,
+   still-valid capability**. The comfortable assumption that "uninitialised
+   memory holds junk, junk has no tag, the load traps" does not hold for an
+   arena slot: the load may quietly succeed and hand out a live pointer to
+   somebody else's object.
+2. The same shape shows up outside lookaside. CVE-2019-13751 (Magellan 2.0)
+   reads allocated-but-unwritten bytes in FTS3; the region is a real malloc, so
+   bounds are correct and the read is in-bounds. Nothing traps.
+
+This is why the five "uninitialised pointer read" CVEs from 2019-2020 —
+`sqlite3WindowRewrite`, `multiSelect`, `selectExpander`,
+`isAuxiliaryVtabOperator`, `AggInfo` init — were **downgraded** in the table from
+`CAUGHT-tag-candidate` to `ARENA-DECIDES`. The first reading assumed the tag
+check saves us; it only does when the stale bytes are not themselves a valid
+capability, and in a lookaside slot they very often are.
 
 ## Turning a table row into a measurement
 
