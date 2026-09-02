@@ -43,11 +43,20 @@ without them nobody can tell a blind spot from a broken instrument.
 
 Rules:
 
-- **Only definitive entries.** A bug goes in the table when you can say where its
-  memory came from and point at the evidence. If the record does not establish
-  that, leave the bug out entirely — do not park it as unknown or probable. A
-  short table that is right is the deliverable; a long one that is half guesses
-  is worse than nothing.
+- **Collect as many candidates as you can, each as fully filled in as you can.**
+  Volume and detail are the goal of this pass.
+- **No unknown origins.** A bug goes in when you can say where its memory came
+  from; if you cannot establish that, leave it out. But establishing it means
+  **reading the allocation site in the source** — find the fix diff, see which
+  object the bug touched, follow that object to the call that allocated it. It
+  does **not** mean building the program or running a proof of concept. Do not
+  narrow the table to cases you were able to execute.
+- **Read diffs through `github.com/sqlite/sqlite`-style git mirrors** where a
+  project's own web interface blocks automated access. The affected function and
+  file come out of the diff, and without them most rows cannot be placed.
+- Fill every column you can: the fix commit, the commit that introduced the bug
+  if the record names one, the affected version range, whether a proof of
+  concept exists publicly and where. Leave a field empty rather than guess it.
 - Every entry needs a source URL you actually fetched.
 - Never invent a CVE id or a commit hash. Leave that field empty.
 - Do not assume an uninitialised read traps: where an arena does not scrub on
@@ -63,8 +72,11 @@ One row per bug, these columns:
 
 - `alloc_arena` — the arena's name, or `system-malloc` for a control-group bug.
 - `verdict` — `blind` or `caught`.
-- `evidence` — what makes it definitive: `read-the-source` or `named-in-advisory`.
+- `evidence` — `read-the-source` (you followed the object to its allocation
+  site), `named-in-advisory` (the advisory says where the memory came from), or
+  `measured` (you ran it). `read-the-source` is the normal case and is enough.
 
 **Reply with**: the step 1 test, the share estimate, how many rows are `blind`
 against `caught`, the three most reproducible cases, and how many bugs you had
-to drop for lack of definitive evidence. The data goes in the file.
+to leave out because their allocation site could not be established. The data
+goes in the file.
