@@ -163,3 +163,49 @@ and excluded from both numerator and denominator.
 
 `--only28` is on the board to finish it: `[28]` changed, `[33]` left storing `a4`, differing from
 the tight arm in `[33]` **alone**.
+
+---
+
+## FINAL, same evening — it is `[33]`, and specifically its SOURCE REGISTER
+
+| arm | `[28] sw a4` | `[33] stc` source | wedges |
+|---|---|---|---|
+| **anchor** (unmodified) | present | **`a4`** | **3 / 3** |
+| **`[28]`-only** | removed | **`a4`** | **3 / 4** |
+| **tight** | removed | `t0` | 0 / 4 |
+| **control** | removed | `t0` | 0 / 4 |
+| **sentinel** | removed | `t0` | 0 / 4 |
+
+**`[28]` is NOT required.** Anchor and `[28]`-only differ in `[28]` alone and both wedge, 3/3 and
+3/4.
+
+**`[33]` IS required.** `[28]`-only and tight differ in `[33]` **alone** — `stc a4, 0x0(a5)` against
+`stc t0, 0x0(a5)`, the same null value into the same slot from a different register — and one
+wedges 3/4 while the other is clean 0/4.
+
+    direct, differing in [33] alone     3/4 vs 0/4     p = 0.071
+    pooled by [33]'s source register    6/7 vs 0/12    p = 2.6e-04
+    anchor against all t0-store arms    3/3 vs 0/12    p = 2.2e-03
+
+The direct pair is suggestive rather than conclusive by itself. The pooling is what carries it, and
+it is justified BY THE LADDER rather than assumed: the tight arm shows `[26] [27] [30] [32]` are not
+required, the anchor/`[28]`-only pair shows `[28]` is not required, so the only property still
+varying across the pooled arms is `[33]`'s source register.
+
+**What this localises S-12 to.** Not a value, not an address, not the null store's presence: the
+faulting configuration needs the capability STORE at `[33]` to read `a4` — the same architectural
+register the LOAD at `[34]` immediately writes. Substituting an equally-null `t0` for that operand,
+leaving the stored value, the store address and every other instruction identical, removes the
+fault. This is the register-match correlate that has been retracted twice in this folder, now
+established by substitution inside a wedging baseline rather than by correlation across
+differently-built arms — which is exactly why the earlier attempts failed.
+
+**What it does NOT establish.** Why the pairing matters. `stc-then-ldc-same-reg.S` reproduces the
+shape in bare-metal simulation — `stc a4` then `ldc a4` then the consumer, 1024 times — and shows
+nothing: `b-consumers 1024`, `b-NOFORWARD 0`, `HAZARDS 0`. That gap is the next thing to attack,
+and the first move is a positive control for `b-NOFORWARD`, which **has never been shown able to
+increment**. Until it can, those zeros bound nothing.
+
+The value account also remains OPEN, for the structural reason recorded above: `[33]` stores `a4`
+and `[34]` overwrites it with no slot between, so a4's value entering the load cannot be varied
+without changing what is stored.
