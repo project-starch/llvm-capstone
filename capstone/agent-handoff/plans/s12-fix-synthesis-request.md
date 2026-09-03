@@ -92,12 +92,25 @@ the consumer behind it; and by the cycle the `ldc` does issue, the store's entry
 forwarding candidacy, so it cannot be the consumer's source. The fix removes the mechanism, not
 merely the timing that exposes it.
 
-**Empirical, and honestly weak on its own.** 255 traps -> 1 is ONE configuration measured once per
-arm: 256 identical iterations of one shape in one deterministic simulation is not N=255, and a
-systematic timing shift would produce exactly the same flip. The cheap control is a DELAY SWEEP —
-run the reproducer on both arms at several `S12_MEM_DELAY` values (10 / 20 / 40 / 80). A real fix
-gives: base traps across the range, fix traps nowhere. A knife-edge timing coincidence gives a
-base that only traps near 40, or a fix that starts trapping again at some other delay.
+**Empirical.** A single 255 -> 1 would have been weak: 256 iterations of one shape in one
+deterministic simulation is one configuration, and a systematic timing shift produces the same
+flip. So the delay sweep was run, both arms, same worktree:
+
+| delay | base repro | fix repro | base control | fix control |
+|---|---|---|---|---|
+| 10 | **255** | 1 | 1 | 1 |
+| 20 | **127** | 1 | 1 | 1 |
+| 40 | **255** | 1 | 1 | 1 |
+| 80 | 1 | 1 | 1 | 1 |
+
+(1 = the ARM P positive control only.) The base fires at 3 of 4 delays, the fix at 0 of 4. So
+`delay = 40` is not a knife-edge: the defect reproduces across a 4x latency span, and at varying
+rates, which is what an occupancy-dependent mechanism should look like and what a fixed timing
+artifact should not.
+
+**Stated precisely, because the 80 row supports nothing:** at delay 80 the base does not fire
+either, so that row is uninformative rather than confirming. What the sweep licenses is "at every
+latency where the defect occurs, the fix removes it" — not "the fix works at every latency".
 
 A sham-signal control was considered and rejected as dishonest: the obvious candidate,
 `commit_lsu_ready_i`, is the stall condition itself, so gating on it blocks issue for the same
