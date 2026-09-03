@@ -138,6 +138,66 @@ No new loop is expected on the face of it — `commit_ack_o` depends on the comm
 synthesis exists to decide. If `synth_design` runs long or blows up memory, that is the answer,
 and the fallback is the codegen mitigation in `s12-codegen-mitigation-proposal.md`.
 
+## TWO VARIANTS EXIST. Build A first. The CENSUS decides, not WNS.
+
+| | A — `s12-fix-for-synthesis` `b9dd83249` | B — `s12-fix-variant-b` `b34a54caa` |
+|---|---|---|
+| change | adds `commit_ack_i` to both WAW-clearing clauses (+ port, + pass-down) | DELETES the commit-write escape entirely; one file, no port |
+| reproducer | 255 → 1 | 255 → 1 |
+| delay sweep 10/20/40/80 | 0/4 | 0/4 |
+| in-regime suite | 72/13/3 | 72/13/3, identical non-passing sets |
+| UNOPTFLAT signal set | 40, identical to base | 40, identical to base |
+| cycle cost | **83/85 rows identical to base** | **31/85 rows slower, up to +8.95%** on store-heavy tests |
+
+Functionally equivalent on every instrument available here. The only measured difference is cost.
+
+**Why B is possible at all:** the correct invariant is already computed one clause above —
+`rd_clobber_gpr` is built from `still_issued = issued & ~cancelled`, exactly the bits forwarding
+candidacy is made of. The deleted clause existed only to release one cycle earlier, because
+`still_issued` arrives via `mem_q` and lags the ack. A makes that clause approximate what the
+module already has exactly; B defers to it.
+
+**A claim about B that must NOT be repeated as measured:** that it "removes a path from the
+combinational cone while A adds one". It may be true at the netlist level; nothing here can check
+it. Verilator's UNOPTFLAT reports which SIGNALS are circular, not cone fan-in, and the signal sets
+are byte-identical across base, A and B.
+
+**WHY THE CENSUS IS THE DISCRIMINATOR.** What makes these timing-failing bitstreams usable is not
+that WNS −16.400 is survivable in general — it is that *every* failing endpoint originates from
+`dom_switcher/cur_idx_q_reg` (102,769/102,769 on 80843404c; 103,197/103,197 on 84ed6eafb;
+104,457/104,457 on 52fa06b9d). That register toggles only during a domain switch with the frontend
+flushed, so every failing path is **inert while a domain body executes**. It is a structural
+property, not a margin.
+
+A imports `commit_ack_i` — store-buffer ready, `no_st_pending_i`, `dom_switch_ack_i` out of an
+anvil unit with lint-invisible internal loops, `amo_resp_i.ack` — into a stall driving
+`issue_ack_o`. If that produces failing endpoints originating in the **issue** cone, those are NOT
+inert during body execution, and the bitstream would still build, route and boot with the reason
+its measurements are trustworthy silently gone. A timing-marginal path inside issue logic is
+indistinguishable from the defect class this whole investigation chased.
+
+B adds no signal, so whatever it does to the cone, it cannot import a new originating register.
+
+**PRE-REGISTERED READING, so it decides rather than gets interpreted:**
+
+* A's census still **100% `dom_switcher`** → **ship A.** Validated, performance-neutral, and the
+  usability argument survives intact.
+* A's census gains **any** non-`dom_switcher` originating register → **ship B**, and the ~9% on
+  store-heavy rows is the price of a bitstream whose results can still be believed.
+* B's census also moves → neither is safe on this base, and the problem is larger than this fix.
+
+Note this reading does not depend on WNS at all. Absolute timing on this design is already
+meaningless.
+
+**IF ONLY ONE BUILD IS AUTHORISED, BUILD A.** Its specific risk is measurable in one run; B's
+advantage is not measurable here at all. One A build either clears A or tells us to switch. One B
+build leaves A's question open and spends ~9% against a risk nobody has measured.
+
+**A cost that is not only a core cost:** the ~9% falls on store-heavy workloads, which are where
+the paper's silicon numbers come from. If the census forces B, someone has to decide deliberately
+whether the affected figures are re-measured or caveated — that is a project-lead call, and it
+should not be discovered later in a table.
+
 ## What the synthesis lane must REPORT
 
 Not "synth_design completed". Specifically:
