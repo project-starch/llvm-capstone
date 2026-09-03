@@ -69,6 +69,7 @@
       ".insn i 0x5b, 0x2, %0, 0xb0(%0)"          /* cincoffsetimm %0, %0, 0xb0  */ \
       : "=&r"(scratch) : "r"(store_slot), "r"(load_slot))
 
+#define S12_CINC40(out, in) __asm__ volatile(".insn i 0x5b, 0x2, %0, 0x40(%1)" : "=r"(out) : "r"(in))
 #define S12_CINC80(out, in) __asm__ volatile(".insn i 0x5b, 0x2, %0, 0x80(%1)" : "=r"(out) : "r"(in))
 #define S12_STC(base, val)  __asm__ volatile(".insn s 0x5b, 0x4, %1, 0(%0)" :: "r"(base), "r"(val))
 
@@ -97,6 +98,9 @@
 #ifndef S12SHAPE_CAPBURST
 #define S12SHAPE_CAPBURST 0
 #endif
+#ifndef S12SHAPE_STACK_SLOT
+#define S12SHAPE_STACK_SLOT 0
+#endif
 
 /* 16-byte aligned static, not a local, and not the `res` argument -- see the note above. */
 __attribute__((aligned(16))) static unsigned char s12shape_buf[256];
@@ -113,14 +117,47 @@ static void s12shape_run(volatile unsigned long *res)
      the way to the asm operand for the backend to materialise it through the cap table. */
   void *slot_cap, *store_slot, *scratch;
   unsigned long i;
+#if S12SHAPE_STACK_SLOT
+  /* 24 longs = 192 bytes: enough for a 16-byte-aligned slot at +0 and the store slot at +128,
+     and no more. The domain stack is SMALL -- at 40 longs the frame pushed sp 96 bytes below the
+     stack capability's base and the prologue's own `stc ra, 0x30(sp)` faulted with cause 7 before
+     domain_main was even reached -- and 24 longs still did. The domain stack is genuinely tight:
+     the interp glue already takes 96 bytes at entry, and the capability's base sits only just
+     below that. 12 longs = 96 bytes, with the store slot moved to +64 so both slots fit. */
+  unsigned long stackbuf[12];       /* naturally aligned local -> a stack-derived capability */
+#endif
 
   res[0] = 0x5120;
 
   /* Two distinct slots in the same static buffer: one the LDC reads from at +0, one the STC
      writes to at +128 -- far enough apart that a store can never clobber the capability the load
      reads, which would be the S-06 confound rather than this mechanism. */
+#if S12SHAPE_STACK_SLOT
+  /* SLOT PROVENANCE VARIANT. SQLite's window uses frame offsets on the MONITOR-CARVED STACK
+     (`cincoffsetimm a0, s0, -0x70` / `a5, s0, -0x120`), where this rung's default slots are a
+     static buffer reached through the cap table. Those are capabilities of different origin, and
+     nothing has tested whether that matters.
+
+     The alignment is done by POINTER arithmetic, never by casting the pointer to an integer and
+     back: the cast is used only to compute how far to advance. Casting a capability to
+     `unsigned long` STRIPS THE TAG -- an earlier version of this file did exactly that and QEMU
+     asserted "cincoffsetimm with an UNTAGGED rs1". A 16-byte-aligned LOCAL is also avoided,
+     because it forces dynamic stack realignment this backend cannot legalize; the array is
+     naturally aligned and advanced by hand. */
+  {
+    char *p = (char *)stackbuf;
+    unsigned long mis = ((unsigned long)p) & 15UL;
+    if (mis) p += (16UL - mis);
+    slot_cap = (void *)p;
+  }
+#else
   slot_cap = (void *)s12shape_buf;
+#endif
+#if S12SHAPE_STACK_SLOT
+  S12_CINC40(store_slot, slot_cap);   /* +64: the stack frame has no room for +128 */
+#else
   S12_CINC80(store_slot, slot_cap);
+#endif
 
   /* Seed the load slot with a real capability: store the region cap into itself. */
   S12_STC(slot_cap, slot_cap);

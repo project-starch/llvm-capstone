@@ -12,5 +12,5 @@
 void domain_main(unsigned long *res, unsigned func)
 {
   (void)func;
-  s12shape_run((volatile unsigned long *)res, (void *)res);
+  s12shape_run((volatile unsigned long *)res);
 }

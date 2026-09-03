@@ -33,6 +33,16 @@ ARMS = [
     # "[33]'s producer is one instruction back", which co-vary perfectly across every arm above.
     ("D1",     "d1",     "sqd1.dom",    "597097f603c4d40d", "stc t0, producer dist 1, NO reg match"),
     ("D2",     "d2",     "sqd2.dom",    "8c25fb91dd00f7c7", "stc a4, producer dist 7, reg match YES"),
+    # D3/D4 separate "[33].rs2 matches the LOAD'S DESTINATION" from "[33].rs2 is x14". Over the
+    # seven arms above those are the SAME predicate, because [34] and [35] were never varied.
+    # Here the load writes t0 in BOTH, so the relation and the register identity come apart.
+    ("D3",     "d3",     "sqd3.dom",    "86463d0451008aae", "stc t0 / ldc t0: MATCH yes, reg x5"),
+    ("D4",     "d4",     "sqd4.dom",    "595167b1cd2dc040", "stc a4 / ldc t0: MATCH no,  reg x14"),
+    # D5 splits the two readings the 2x2 cannot: the store still sources a4 and the load still
+    # writes a4, but the FAULTING instruction reads t0 (pre-loaded from the same slot at [28]).
+    #   wedges -> the relation is store-source == LOAD DESTINATION
+    #   clean  -> the relation is store-source == what the FAULTING INSTRUCTION READS (R-20 family)
+    ("D5",     "d5",     "sqd5.dom",    "da878c44d664abe5", "stc a4 / ldc a4 / consumer reads t0"),
 ]
 
 
