@@ -54,15 +54,54 @@ same bitstream; a second cycle costs another ~90 minutes plus a reflash.
 | reproducer `stc-ldc-sbpressure` @ `S12_MEM_DELAY=40` | 254 in-loop traps -> **0** (only ARM P remains) |
 | `hazard` / `duplicate-live-rd` | 254 -> **0**, 64285 cyc -> **0** |
 | matched control `-norel` | unchanged at 0 |
-| capstone regression suite | pass=99 fail=15 err=3; **all 18 non-passing baselined against pre-fix RTL and IDENTICAL** — zero regressions |
-| `rtl-lint-gate.sh` | PASS. LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 39, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 719, ANVIL_UNOPTFLAT 0 |
+| capstone regression suite (zero-latency build) | base 72/13/3 vs fix 72/13/3 on THIS base, non-passing sets identical — but see the caveat below, this is OUT OF REGIME |
+| `rtl-lint-gate.sh` | **FAILS — and fails IDENTICALLY on the unmodified base**, reporting `REGRESSION: UNOPTFLAT 39 -> 40`. The 39 is the gate's stored baseline, from a different lineage; this base genuinely has 40, consistent with `4fee13b2d` ("S-10 FIX ... costs a combinational loop") being in its history. Compared as SIGNAL SETS rather than counts, base and fix are **byte-identical**: zero loops added, zero removed. Tell the synthesis lane this explicitly or they will attribute the 40th loop to the fix and refuse the hash. The baseline file is deliberately NOT rebaselined — weakening a gate to make it pass is not this change's business. |
 | synthesis | **NOT RUN — this request** |
 
-The baseline was taken in a git worktree at the pre-fix commit, and it is worth knowing that the
-first attempt at it was VOID: the worktree lacked the gitignored `core/anvil.Flist`, so nothing
-elaborated and all 11 tests "failed" identically to the fixed run — a false confirmation that
-looked exactly like the answer wanted. The numbers above are from the re-run, where the model is
-confirmed built and the failure modes match line for line.
+**Numbers previously quoted here were from the WRONG TREE and have been removed.** A
+`pass=99 fail=15 err=3` figure over 117 tests came from the main tree at `6e8a5aa17`, which differs
+from this base by 427 insertions across 9 core files; this base's testlist has 88 entries and does
+not even contain `s12min-noburst`. Nothing measured on that tree may be cited as evidence about
+this hash.
+
+**The regression above is OUT OF REGIME and must not be read as "no regressions".** The harness
+passes no `isscomp_opts`, so it builds with `S12_MEM_DELAY_VAL 0`, and the proof that this matters
+is in the artifacts themselves: the same base build shows `PASS stc-ldc-sbpressure` in the
+regression and 255 traps in the reproducer. So that suite is a check which provably cannot fire on
+this defect, run in the one regime where the fix is close to a no-op. It excludes gross breakage —
+72 rows pass, and a wedged issue stage would time out everything — and little else. Sharpening the
+concern: all 13 base failures are timeouts at exactly 2,000,013 cycles, and a stall-adding change
+under memory pressure is exactly what would push further rows over that cliff.
+
+An IN-REGIME comparison (the same 88 tests, both arms, built with `+define+S12_MEM_DELAY=40`, and
+recording each row's cycle count so proximity to the timeout cliff is visible) is the control that
+settles this, and it is the gating item before this hash ships.
+
+The out-of-regime baseline was taken in this same worktree. Worth knowing: the first attempt at a
+baseline, in a different worktree, was VOID — it lacked the gitignored `core/anvil.Flist`, so
+nothing elaborated and every test "failed" identically to the fixed run, a false confirmation
+shaped exactly like the wanted answer.
+
+## Is it a FIX, or a timing perturbation?
+
+This bug is documented as perturbation-sensitive, so "the reproducer stopped firing" is not on its
+own an argument. Two things answer it, and the STRUCTURAL one should lead:
+
+**Structural.** The config has `NrIssuePorts = 1` and issue is in-order. Blocking the `ldc` blocks
+the consumer behind it; and by the cycle the `ldc` does issue, the store's entry has left
+forwarding candidacy, so it cannot be the consumer's source. The fix removes the mechanism, not
+merely the timing that exposes it.
+
+**Empirical, and honestly weak on its own.** 255 traps -> 1 is ONE configuration measured once per
+arm: 256 identical iterations of one shape in one deterministic simulation is not N=255, and a
+systematic timing shift would produce exactly the same flip. The cheap control is a DELAY SWEEP —
+run the reproducer on both arms at several `S12_MEM_DELAY` values (10 / 20 / 40 / 80). A real fix
+gives: base traps across the range, fix traps nowhere. A knife-edge timing coincidence gives a
+base that only traps near 40, or a fix that starts trapping again at some other delay.
+
+A sham-signal control was considered and rejected as dishonest: the obvious candidate,
+`commit_lsu_ready_i`, is the stall condition itself, so gating on it blocks issue for the same
+causal reason and proves nothing. The delay sweep tests the same worry without that confound.
 
 ## The risk this build exists to settle
 
@@ -85,6 +124,19 @@ No new loop is expected on the face of it — `commit_ack_o` depends on the comm
 `commit_lsu_ready_i`, neither of which depends on `issue_ack` — but "not expected" is what
 synthesis exists to decide. If `synth_design` runs long or blows up memory, that is the answer,
 and the fallback is the codegen mitigation in `s12-codegen-mitigation-proposal.md`.
+
+## What the synthesis lane must REPORT
+
+Not "synth_design completed". Specifically:
+
+* **WNS, against the S-10 build as the reference**, not against an abstract target. The resident
+  bitstream exists *because of* a timing fix, so the margin it left is the number that matters.
+* **Any "found timing loop" critical warnings.** `commit_ack_o[0]` is a deep signal — store-buffer
+  ready, `no_st_pending`, `dom_switch_ack_i` out of an anvil unit whose internal loops are
+  invisible to lint (every `.anvil.sv` opens with `lint_off UNOPTFLAT`), `amo_resp_i.ack` — and it
+  now feeds `issue_ack_o` for the first time.
+* **Runtime of `synth_design`.** The flow finishes in 41-46 minutes when healthy; a build that runs
+  far past that is telling you something before it finishes.
 
 ## Do not change the flow
 
