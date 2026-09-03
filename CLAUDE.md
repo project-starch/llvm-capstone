@@ -335,11 +335,12 @@ enough to be interesting is rich enough to be unsynthesizable; the minimal versi
 that ships.
 
 **Do not change the synthesis flow.** It produces working bitstreams in 1.5-3 hours; leave its
-settings alone, `RETIMING` included. On 2026-08-26 a lane turned retiming off for a debug build,
-citing a comment in `run.tcl` that disagreed with the code beside it, and synthesis passed two
-hours without leaving `synth_design` where the same flow had finished it in 41-46 minutes.
-A comment that disagrees with code which has been producing good bitstreams for months is
-evidence about the comment, not the code.
+settings alone. A comment that disagrees with code which has been producing good bitstreams for
+months is evidence about the comment, not the code — on 2026-08-26 a lane turned `RETIMING` off on
+the strength of such a comment, having been asked for a bitstream rather than a flow change.
+**Attribute a cost before writing a rule about it:** that build's two-hour overrun was later
+measured to be ~170 minutes of RTL change and ~40 of the setting, and retiming-off proved *better*-
+timed, so the original version of this rule named the wrong cause.
 
 The simulation suite is a **functional** gate and says nothing about synthesizability: the
 build suppresses exactly these warnings, and a non-blocking assignment in a combinational
