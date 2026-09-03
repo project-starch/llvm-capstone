@@ -1,7 +1,12 @@
 # S-12 ROOT-CAUSED — 2026-09-03
 
 **Read this section first. It supersedes everything below, including the section immediately
-following it, which was the previous "read this first".** The reduction to one byte recorded there
+following it, which was the previous "read this first".**
+
+> **If you want the defect EXPLAINED rather than evidenced, read `S12-explanation.md` instead** —
+> diagrams, step by step, in the same idiom as `../S07-capability-untagged-on-reload/S07-explanation.md`.
+> This file is the evidence trail and the measurement provenance; that one is the mechanism.
+> Keep the two in step: a change to the root cause or to the fix status belongs in BOTH. The reduction to one byte recorded there
 still stands as measurement; what changes is the explanation, and one account this folder
 previously called better-supported is now REFUTED.
 
