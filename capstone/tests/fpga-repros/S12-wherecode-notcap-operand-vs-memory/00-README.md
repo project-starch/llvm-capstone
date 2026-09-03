@@ -1,3 +1,98 @@
+# S-12 ROOT-CAUSED — 2026-09-03
+
+**Read this section first. It supersedes everything below, including the section immediately
+following it, which was the previous "read this first".** The reduction to one byte recorded there
+still stands as measurement; what changes is the explanation, and one account this folder
+previously called better-supported is now REFUTED.
+
+## The defect
+
+A capability store's scoreboard destination is aliased to its own store-data register
+(`decoder.sv:1313`, `rd := instr.rtype.rs2`; a plain integer store has `rd = x0`). That aliasing
+is INTENTIONAL and must not be removed — `capstone_dyn_unit.anvil:458-462` clears rs2 to `cnull`
+when the stored capability is linear-family, so a capability store has to null its source register.
+
+When such a store stalls on a full store buffer, `commit_stage.sv` asserts `we_gpr_o[0]` (:323) and
+then clears **only** `commit_ack_o[0]` (:346). `we_gpr` is never retracted, so
+`we_gpr = 1 / waddr = rX / ack = 0` persists for the whole stall while the entry stays live and
+unretired. That signal reaches the issue stage (`cva6.sv:1993 -> 1728`), where the WAW guard is
+cleared by `we_gpr_i[c] && waddr_i[c] == rd` (`issue_read_operands.sv:1637`) — a clause whose own
+comment says it tests that the register "will be written in this cycle by the commit stage", which
+is exactly what is false during the stall.
+
+So the younger `ldc rX` issues while the older store still claims `rX`. Forwarding candidacy needs
+`still_issued & sbe.valid` (`issue_read_operands.sv:719-726`): the written-back store entry
+qualifies, the not-yet-produced load does not. The consumer is handed the store's result, which for
+a null source is `{cursor 0, cap_type 0}`, and the FLU rejects that as UNEXPECTED_OPERAND with
+`tval = 0`.
+
+**The null never passes through memory and never reaches the register file. It reaches the consumer
+alone, through forwarding.**
+
+## What this REFUTES in this folder
+
+The section "Two memory-ordering accounts remain" below states that "(b) wrong-address forward ...
+predicts `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed" and is therefore
+"the better-supported of the two". **That is wrong, and it is wrong for an instructive reason.**
+
+`tval` reports the operand **as the execution unit ingested it**, not what the load returned. Those
+are the same value in every ordinary case and differ precisely when the operand is forwarded — which
+is this case. So `tval = 0` never distinguished the two accounts at all.
+
+Two independent measurements now show the load LANDING:
+
+* **Simulation.** `stc-ldc-sbpressure-a4.S` prints a4 at every trap. At all 254 traps it held a real
+  capability — cursor `0x80004000`, revnode 2, type 2, perm 7 — identical every time. The one trap
+  where a4 is genuinely null (the test's ARM P control) prints nothing, so the instrument can give
+  both answers.
+* **Silicon.** A SQLite domain whose in-domain handler folds the answer into its report word
+  returned `obs=0xE643D221` — marker `0xE`, `mcause 25`, `_start+0xF4884`. Both words were
+  pre-registered before the boot: `0xF...` would have meant the load returned the null.
+
+This folder's own objection to (b) was already on the page — the store and load in this window are
+**176 bytes apart** — and the register-relation 2x2 it ships never fitted an address-keyed
+mechanism. The relation it measured is a *scoreboard* relation, not an address one.
+
+## Reproducer
+
+S-12 no longer needs a board or a 1.6 MB domain. In `capstone-ariane`, branch
+`s12-ldc-rolling-filter`:
+
+    verif/tests/custom/capstone/stc-ldc-sbpressure.S        254 traps
+    verif/tests/custom/capstone/stc-ldc-sbpressure-norel.S  0 traps, matched control
+    verif/tests/custom/capstone/stc-ldc-sbpressure-a4.S     prints a4 at each trap
+
+run with `+define+S12_MEM_DELAY=40`. The delay is essential and is why this went unreproduced: the
+testbench default is ZERO memory latency, where the store buffer cannot fill, so the test could
+never create its own triggering condition. At delay 0 the identical ELF produces **0** traps.
+
+| arm | delay | flu-issues | ldc-pending-cycles | hazard | in-loop traps |
+|---|---|---|---|---|---|
+| `stc-ldc-sbpressure` | 0 | 529 | 1800 | 0 | 0 |
+| `stc-ldc-sbpressure` | 40 | 529 | 64279 | **254** | **254** |
+| `stc-ldc-sbpressure-norel` | 40 | 529 | 64256 | 0 | 0 |
+
+Rows 2 and 3 are the comparison: identical FLU issue counts, LDC-unproduced windows agreeing to
+0.04%, opposite outcomes. **Do not use the `escape` counter as the precondition** — `hazard` is
+incremented inside its if-body, so it is a strict superset of the outcome and is pinned at
+once-per-iteration by the loop shape.
+
+## Why it surfaces at one address
+
+Over the built SQLite domain (331,808 instructions): the bare `stc rX` / `ldc rX` alias appears
+**2832** times (12.8% of stores) and is harmless, because with no immediate capability consumer
+nothing type-checks the stale operand. The full exploitable triple — store, load, and a capability
+consumer reading that register — appears **68** times, and exactly one is on `a4`: the S-12 site.
+
+## Status of a fix
+
+A candidate exists (require the acknowledgement in both WAW-clearing clauses) and takes the
+reproducer from 254 traps to 0. It is **NOT synthesised**, so it is not ready for a board, and
+`issue_read_operands.sv` sits inside the standing combinational-loop cone at `scoreboard.sv:129`,
+which lint cannot see through. Do not spend a bitstream on it on the strength of this section.
+
+---
+
 # S-12 REDUCED TO ONE BYTE — 2026-09-02
 
 **Read this section first; everything below it predates the reduction.** Sibling packages that are
@@ -1484,9 +1579,15 @@ proves the comparison can produce a wedge at that exact geometry.
   `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` is forwarded to the reload. Predicts
   `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed.
 
-**(b) fits `tval = 0` and (a) does not**, so (b) is currently the better-supported of the two — and
+**REFUTED 2026-09-03 — see the root-cause section at the top of this file.** Neither (a) nor (b) is
+the mechanism. `tval` reports the operand as the execution unit INGESTED it, not what the load
+returned, so `tval = 0` never separated these two; and both simulation and silicon now show the
+load landing correctly, with the null reaching the consumer through scoreboard forwarding. The
+paragraph below is retained as it stood.
+
+~~**(b) fits `tval = 0` and (a) does not**, so (b) is currently the better-supported of the two — and
 it is the S-10 / R-19 / R-20 write-buffer forwarding family this folder already lists as live, which
-the S-10 reflash did NOT clear.
+the S-10 reflash did NOT clear.~~
 
 **THE NEXT DISCRIMINATOR:** move the null-capability store out of the window. `Index *pIdx = 0;`
 compiles to that `movc`/`stc` pair; relocating the initialiser to after `pWC = &pWInfo->sWC;` keeps
