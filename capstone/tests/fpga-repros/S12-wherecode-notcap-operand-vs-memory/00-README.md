@@ -16,9 +16,18 @@ When such a store stalls on a full store buffer, `commit_stage.sv` asserts `we_g
 then clears **only** `commit_ack_o[0]` (:346). `we_gpr` is never retracted, so
 `we_gpr = 1 / waddr = rX / ack = 0` persists for the whole stall while the entry stays live and
 unretired. That signal reaches the issue stage (`cva6.sv:1993 -> 1728`), where the WAW guard is
-cleared by `we_gpr_i[c] && waddr_i[c] == rd` (`issue_read_operands.sv:1637`) — a clause whose own
-comment says it tests that the register "will be written in this cycle by the commit stage", which
-is exactly what is false during the stall.
+cleared by `we_gpr_i[c] && waddr_i[c] == rd` (`issue_read_operands.sv:1637`).
+
+**Precisely what is wrong, corrected 2026-09-03:** the clause's comment says the register "will be
+written in this cycle by the commit stage", and that is TRUE — `we_pack[i] = we_gpr_i[i]`
+(`issue_read_operands.sv:1793`) drives the regfile write with no dependence on the ack, so the
+write really does happen, repeatedly, throughout the stall. What is false is the INFERENCE. Clearing
+the guard on that basis assumes the older producer is finishing and a younger writer to the same
+register is therefore safe to issue. With the ack withheld the producer does not RETIRE:
+`commit_ack_i` is exactly what clears `issued` and `sbe.valid` (`scoreboard.sv:273-278`), which are
+exactly the two bits forwarding candidacy is built from (`still_issued = issued & ~cancelled`,
+`scoreboard.sv:135`). So the old entry remains a candidate and can be selected ahead of the
+younger, not-yet-produced load.
 
 So the younger `ldc rX` issues while the older store still claims `rX`. Forwarding candidacy needs
 `still_issued & sbe.valid` (`issue_read_operands.sv:719-726`): the written-back store entry
