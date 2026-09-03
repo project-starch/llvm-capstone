@@ -1,6 +1,20 @@
 # Proposal: break the S-12 alias in codegen, so the SQLite corpus can run on the current bitstream
 
-**Status: PROPOSAL, not started. Needs a go-ahead before implementation.**
+**Status: PROPOSAL, NOT STARTED, and DEPRIORITISED 2026-09-03 — kept only as a fallback.**
+
+The project lead's call, and it is the right one: fix the hardware rather than work around it in
+the compiler. Three reasons this should not be built while the RTL fix is live:
+
+* it **contaminates every measurement** taken with it — performance numbers would come from a
+  compiler dodging a hardware defect, which the paper would have to caveat permanently;
+* it is **not even a complete unblock** — it covers only binaries this compiler builds, leaving the
+  monitor, hand-written assembly and everything else exposed. 68 sites is SQLite's share of a
+  machine-wide defect;
+* it is **throwaway if the RTL fix lands** — a reflash is needed either way, and afterwards this is
+  dead code plus a flag to maintain.
+
+Build it ONLY if synthesis shows the RTL fix is unsynthesizable AND corpus numbers are needed
+before that is resolved. See `s12-fix-synthesis-request.md`.
 
 ## Why this exists
 
