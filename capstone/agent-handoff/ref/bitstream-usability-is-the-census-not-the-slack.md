@@ -1,0 +1,110 @@
+# What makes a timing-failing bitstream usable here: the census, not the slack
+
+**Status:** the acceptance criterion actually in force on this design, replacing the one
+`run.tcl` states. Derived 2026-08 to 2026-09 across five routed builds.
+
+## The problem with the stated criterion
+
+`run.tcl` says: negative post-route WNS means DO NOT FLASH. **No bitstream this project has ever
+produced meets it.** Five routed builds, five negative, each from its own post-route report on
+`clk_out1_xlnx_clk_gen`:
+
+    39b21639d  -10.629 ns   96,727 failing     <- least bad
+    76b7f2afc  -12.084       93,200
+    84ed6eafb  -13.516      103,197
+    52fa06b9d  -14.125      104,238
+    80843404c  -16.400      102,769            <- worst, and it is the RESIDENT image on which
+                                                  every S-12 board result rests
+
+A criterion that forbids every flash already performed is a mis-stated premise, not a rule. And
+"restore retiming" is not the remedy it names: retiming-ON builds are negative too.
+
+## What actually licenses these bitstreams
+
+**Every failing endpoint originates from `dom_switcher/cur_idx_q_reg`.** Verified as a CENSUS —
+by-startpoint and by-endpoint sums each equal to the design's own failing-endpoint count, with
+`dom_switcher` as a positive control in the same query as the `s07_ldc0` / `load_unit` / `lsu_i`
+ones:
+
+    84ed6eafb   103,197 / 103,197   (103,193 on bit [5], 4 on [4], 2 DDR)
+    52fa06b9d   104,457 / 104,457   (all on bit [0]) -- every one of the +1,260 over base landed
+                                     in the same cone
+    80843404c   102,769 / 102,769   (bit [3])
+
+`cur_idx` toggles **only** during a domain switch, and `commit_stage.sv:494` forces
+`flush_commit_o` high for the whole of one while the controller flushes the frontend throughout.
+So switcher activity and domain-body execution are mutually exclusive: **every failing path in
+the design is inert while the code under test runs.**
+
+That is a STRUCTURAL property, not a margin. It is why WNS -16.400 is tolerable, and it is the
+reason board results on these images mean anything.
+
+## Why this is the criterion to gate on
+
+`run.tcl`'s own warning is that a timing-failing bitstream "behaves intermittently and
+data-dependently — the exact signature of the defect under investigation, with no way to separate
+the two afterwards." That hazard is real. The census is what excludes it, and nothing else does:
+
+* per-image clustering, ~54% wedge rates and data-dependence are ALSO what a timing-marginal
+  design produces. The clustering alone could never have separated instrument from subject.
+* the census can. It settled that question for the entire 46-draw S-12 corpus, not just the next
+  boot, and it settled it by measurement rather than argument.
+
+## The gate, for any future bitstream on this design
+
+**Run the launch census before trusting a build, and verify it IS a census before reading it.**
+
+    census is 100% dom_switcher-originating     -> usable. Negative WNS is not disqualifying.
+    ANY originating register outside that cone  -> NOT usable, regardless of WNS or routability.
+                                                   The build routes, the board boots, and the
+                                                   reason its measurements meant anything is gone
+                                                   SILENTLY.
+
+The second branch is the dangerous one and it has no other detector. A timing-marginal path inside
+issue or LSU logic is indistinguishable from the defect class under investigation.
+
+Discipline that makes the reading valid, each of which has failed here at least once:
+
+* **verify it is a census, not a sample** — both axis sums against the design's own count, BEFORE
+  reading anything from it. A worst-N tail cannot answer "is any failing path in cone X".
+* **positive control in the same command** — a zero for `s07_ldc0` means nothing without
+  `dom_switcher` returning six figures alongside it.
+* **invert the query where you can** — asking for the worst path THROUGH a cone answers with n=1
+  and full power; searching a failing set for that cone leaves the remainder unexamined.
+
+## Worked application: the S-12 fix, 2026-09-04
+
+Two functionally equivalent fixes for the same defect, both validated on `80843404c`:
+
+    A  add commit_ack_i to the two stall_waw clauses   83/85 rows cycle-identical to base;
+                                                       imports a deep cross-module signal into the
+                                                       scoreboard:129 cone for the first time
+    B  delete the clause entirely, defer to clause 1   functionally identical (suite 72/13/3, sweep
+                                                       0/4, UNOPTFLAT set unchanged); costs up to
+                                                       +8.95% on 31 store-heavy rows
+
+Neither WNS nor routability discriminates them. **The census does**: A's risk is precisely that
+its new path adds failing endpoints originating in the ISSUE cone, which would break the property
+above. B adds no signal and cannot.
+
+Pre-registered reading, agreed before the build:
+
+    A census still 100% dom_switcher      -> ship A; validated and performance-neutral
+    A census gains a non-dom_switcher
+      originating register                -> ship B; the ~9% is the price of believable results
+    B census also moves                   -> neither is safe on this base
+
+Build A first: **A's risk is measurable in one run; B's advantage is not measurable here at all.**
+One A build either clears it or says switch. One B build leaves A's question open and spends 9%
+against a risk nobody measured.
+
+Note also that the 9% falls on store-heavy workloads, which are where the paper's silicon figures
+come from. If the census forces B, whether the affected figures are re-measured or caveated is a
+project-lead decision and should be made deliberately rather than discovered in a table later.
+
+## Related
+
+- `plans/s12-fix-synthesis-request.md` — the fix, its validation table, and what its in-code
+  comment deliberately does not overclaim.
+- `history/26-08-2026_16-00-00_s12-recorder-bitstream-built-and-collector-exposure.md` — the census
+  that first established this for 84ed6eafb and 52fa06b9d.
