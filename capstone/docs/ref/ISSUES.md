@@ -2761,10 +2761,25 @@ BYTE-IDENTICAL built with and without these changes).
 
 **THE SILICON-SAFETY QUESTION THE QEMU RUNS COULD NOT SEE, now answered.** Swapping `lcc` for a
 plain `mv` has a failure mode invisible to every green QEMU run: QEMU's `gen_set_gpr` clears the
-tag on EVERY integer write, but in RTL the metadata shadow's write-enable is gated on
-`cap_result.valid`, which is 0 for a plain ALU op. If the shadow were left STALE, an integer
+tag on EVERY integer write. The concern was that the shadow might be left STALE: an integer
 produced by the new `mv` into a register that had held a capability would still look like a
 capability to any consumer that checks `cap_type` -- trapping on silicon and never on QEMU.
+
+> **CORRECTED 2026-09-05 — right conclusion, wrong signal.** This paragraph used to say the
+> shadow's write-enable is "gated on `cap_result.valid` (`commit_stage.sv:322-325`)". That is the
+> **second** write port: `cap_we_o` drives `we_i_rs` (`issue_read_operands.sv:1876/1897/1919/1940`),
+> not the shadow on an ordinary integer writeback. The clear actually comes from the **main** port,
+> which writes the metadata with data `'0` whenever the result is not a capability --
+> `cap_wmetadata_o[0] = commit_instr_i[0].cap_result.valid ? ...result_metadata : '0`
+> (`commit_stage.sv:279`), enabled by `we_pack` (`issue_read_operands.sv:1789-1799`).
+>
+> The difference matters even though the conclusion does not change. The old reading said the
+> shadow is **not written**, which leaves "is it stale?" genuinely open and makes the simulation
+> below the only evidence. The correct reading says it **is written, with zero** — so the clear is
+> structural, and the simulation confirms a mechanism rather than substituting for one.
+>
+> `capstone-ariane verif/tests/custom/capstone/cincoffset-stale-metadata.S` carries the same
+> misreading in its header comment and needs the same correction (RTL lane's file).
 
 **Measured in RTL simulation, not argued:**
 `capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S` (commit `eb43f5d09`).
@@ -3737,8 +3752,19 @@ seven CSRs only — **no general register is saved, restored or scrubbed by hard
 (`capstone_dom_switcher.anvil:9-22`, `csr_regfile.sv:1901-1918`, and QEMU `capstone_helper.c:190-220`
 agree). The reference compiler zeroes non-argument registers and saves `ra`/`gp` itself. **Anything
 in a caller's registers crosses a domain boundary unless software scrubs it.** The compiler-side
-gap — register scrub and `gp` save/restore around a domain call — remains OPEN as C-36b with the
-compiler lane.
+gap remains OPEN as **C-36b** with the compiler lane, and it is wider than "scrub the registers":
+
+- **`gp` AND `tp`** are both reserved and unspillable, and neither is saved around a domain call.
+- **`sp` is UNRESOLVED, not "preserved by convention".** The compiler's epilogue after `call a0, a0`
+  reloads `ra` and `s0`-`s11` **through `sp`**, so it depends on the callee domain returning with
+  the caller's `sp` — and **nothing in the tree states or implements that convention.** The only
+  in-tree domain exit, the ladder glue, **scrubs `sp` to 0** before returning. So the compiler's
+  epilogue and the one real callee disagree, and the compiler's assumption is currently false
+  against the only implementation we have.
+
+  ("preserved by convention" was written in a commit message and then withdrawn by the compiler
+  lane as unsupported. Recorded here in the withdrawn form as well as the corrected one, because
+  the plausible-sounding version is what a later reader will otherwise re-derive.)
 
 
 ### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for `OPEN — COVERAGE GAP, not a miscompile`
