@@ -17,6 +17,7 @@ clang/include/clang/Basic/capstone_vector.td | +1963 -0 | //==--- capstone_vecto
 clang/include/clang/Basic/capstone_vector_common.td | +781 -0 | //==------ capstone_vector_common.td - Capstone V-ext builtin class ------------===//
 clang/include/clang/Driver/Options.td | +9 -0 | defm capstone_subobject_bounds : BoolFOption<"capstone-subobject-bounds",
 clang/include/clang/Sema/Sema.h | +7 -0 | class SemaCapstone;
+clang/include/clang/Sema/SemaCapstone.h | +43 -0 | //===----- SemaCapstone.h ---- Capstone target-specific routines ---*- C++ -*-===//
 clang/lib/AST/ExprConstant.cpp | +32 -12 | // The pointer TYPE's size is the representation width, and on a capability
 clang/lib/AST/ItaniumMangle.cpp | +17 -0 | case CC_CapstoneVectorCall:
 clang/lib/AST/Type.cpp | +16 -0 | case CC_CapstoneVectorCall: return "capstone_vector_cc";
@@ -37,6 +38,7 @@ clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
 clang/lib/Sema/CMakeLists.txt | +1 -0 | SemaCapstone.cpp
 clang/lib/Sema/Sema.cpp | +2 -0 | #include "clang/Sema/SemaCapstone.h"
+clang/lib/Sema/SemaCapstone.cpp | +114 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaChecking.cpp | +4 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
