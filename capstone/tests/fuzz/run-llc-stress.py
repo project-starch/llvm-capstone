@@ -121,8 +121,11 @@ def one_seed(a, seed):
         if verdict != "OK":
             keep(a, seed, lvl, sig, ll, err)
     if a.opt:
-        bc = ll + ".opt.bc"
-        rc, err, to, dt = run([a.bin + "/opt", "-O2", ll, "-o", bc], a.timeout)
+        # Always under --out: in --files mode `ll` is someone else's file.
+        bc = os.path.join(out, os.path.basename(ll) + ".opt.bc")
+        # -mtriple so a module without a datalayout gets the target's (functions and
+        # globals in address space 200), as llc gives it.
+        rc, err, to, dt = run([a.bin + "/opt", "-mtriple=capstone64", "-O2", ll, "-o", bc], a.timeout)
         if rc != 0 or to:
             verdict, sig = classify(rc, err, to)
             results.append((seed, "opt-O2", verdict, sig))
