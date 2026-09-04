@@ -50,6 +50,58 @@ the two afterwards." That hazard is real. The census is what excludes it, and no
 * the census can. It settled that question for the entire 46-draw S-12 corpus, not just the next
   boot, and it settled it by measurement rather than argument.
 
+## AMENDED 2026-09-04: name the PROPERTY, not the module
+
+The criterion below was written as "every failing endpoint originates from
+`dom_switcher/cur_idx_q_reg`". That conflated two things which had coincided on every build up to
+that point:
+
+    what it SAID    the launch register is in the dom_switcher module
+    what it MEANT   the launch register is INERT while a domain body executes
+
+`cur_idx` satisfied both, so nothing separated them. **Arm 1 of the S-12 fix separated them.** Its
+census is 100% within `dom_switcher` — the criterion as written is literally satisfied — but the
+registers are not `cur_idx`:
+
+    101,573   dom_switcher/_thread_0_event_reg_87_q_reg[0]
+        209   dom_switcher/_init_0_reg
+
+`_thread_0_event_reg_87_q` does not appear in the `.anvil` source at all. It is a
+compiler-generated event-join register in the switcher's thread machinery, a rendezvous flag for
+two predecessor events, and the `cur_idx` argument says nothing about it.
+
+**Both are inert, established by DIFFERENT methods, neither of them inheritance:**
+
+* `_init_0_reg` — RTL: set at reset, cleared once when `EVENTS0[4]` first fires, static
+  thereafter. Inert by construction.
+* `_thread_0_event_reg_87_q_reg` — MEASURED. It can only change via
+  `_q ^ {EVENTS0[86], EVENTS0[80]} ^ {EVENTS0[87], EVENTS0[87]}`, and across a 1057-timestamp
+  domain-body trace each of those three events shows exactly **one** transition, the settle to 0
+  at t=0. Every driving term constant, so the register cannot toggle.
+
+**A source reading gave the OPPOSITE answer and was wrong.** The idle path at
+`capstone_dom_switcher.anvil:99-107` is `try recv … else { cycle 1 }`, which reads as "cycles every
+cycle while idle" and would make 99.8% of the failing endpoints live during execution. Measured,
+106 of 106 dom-switcher events toggled a combined 112 times across the run, about two apiece — the
+Anvil scheduler parks the thread rather than spinning. **This is the second time reading Anvil
+control flow as if it were software produced the opposite of the hardware's behaviour** (the first
+being "separate `.anvil` registers imply mutual exclusion", also wrong). Treat that source as
+non-authoritative for timing and activity questions; measure instead.
+
+**LIMIT ON THE MEASUREMENT, stated because it is load-bearing:** taken on a run where the switcher
+stays IDLE throughout. It establishes inertness for the case that matters — body execution with no
+switch in progress — but does not show the thread returning to the static state *after* a
+completed switch. A trace of a workload that performs a `capenter`/`domcall` and then keeps
+executing would close that, and should be run before this is relied on for a flash.
+
+### The criterion, restated
+
+> **The launch register of every failing endpoint must be shown INERT while a domain body
+> executes.** Membership of `dom_switcher` is evidence toward that, not the test itself. When a
+> build's failing paths launch from a register no previous build used, the inertness argument does
+> not transfer — it has to be made again for that register, by RTL for a structurally static
+> signal or by measurement for anything else.
+
 ## The gate, for any future bitstream on this design
 
 **Run the launch census before trusting a build, and verify it IS a census before reading it.**
