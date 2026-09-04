@@ -946,8 +946,9 @@ in `plans/sqlite-regression-suite-proposal.md`.
 
 ## §7 — Timing closure across every routed build (2026-08-27)
 
-**No bitstream this project has ever produced has closed timing.** Five distinct commits, six
-routed builds, every one negative; best **−10.629 ns** against a **40.000 ns** period (25 MHz,
+**No bitstream this project has ever produced has closed timing.** Six distinct commits, **eight
+routed builds**, every one negative; range **−10.629 to −16.400 ns**, best **−10.629 ns** against a
+**40.000 ns** period (25 MHz,
 confirmed from the report's own clock definition and from the MMCM's
 `CLKOUT1_REQUESTED_OUT_FREQ` of 25).
 
@@ -963,6 +964,8 @@ Table row `clk_out1_xlnx_clk_gen`**.
 | `52fa06b9d` | −14.125 | 104,238 / 174,461 | 392,443,910 *(arm A, retiming OFF)* |
 | `52fa06b9d` | −14.832 | 104,457 / 174,785 | 407,010,879 *(arm B, retiming ON)* |
 | `80843404c` | −16.400 | 102,769 / 174,275 | 405,480,965 |
+| `6f8345fdb` | −13.491 | 99,879 / 173,789 | ~396 MB *(S-12 fix, debug tree TIED OFF)* |
+| `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
 
 **Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
 reads healthy while the CPU clock fails. That trap has caught this project before.
@@ -1109,3 +1112,21 @@ on 2026-08-06.
 **Weight, stated honestly:** `qj4` is **N = 1**, and at the 54% per-draw rate a single return is
 p = 0.46 by chance. The account does not rest on it alone — the extended workload is the same
 indexed-inner shape at 14/14 — but `qj4` itself needs redraws before the pairing is quantitative.
+
+### §7a — The price of on-chip observability, measured (2026-09-04)
+
+`5097eb166` and `6f8345fdb` are the same S-12 fix from the same base (`80843404c`) differing
+**only** by whether the debug tree is tied off. First clean single-variable measurement of
+instrumentation cost on this design:
+
+| | cost of the debug tree |
+|---|---|
+| placed LUTs | **+750** (0.37% of the 203,800-LUT device) |
+| failing endpoints | **+1,903** |
+| WNS | **−1.820 ns** |
+
+**The timing cost is disproportionate to the area.** 0.37% of the device costs 1.82 ns out of an
+already-failing 40 ns budget. Anyone proposing added on-chip observability on this design should
+price it against this pair, not against LUT count.
+
+Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identical to the base.

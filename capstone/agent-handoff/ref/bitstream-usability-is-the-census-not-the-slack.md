@@ -108,3 +108,50 @@ project-lead decision and should be made deliberately rather than discovered in 
   comment deliberately does not overclaim.
 - `history/26-08-2026_16-00-00_s12-recorder-bitstream-built-and-collector-exposure.md` — the census
   that first established this for 84ed6eafb and 52fa06b9d.
+
+---
+
+## QUALIFIED 2026-09-04: the census is partly a property of the INSTRUMENT
+
+**What changed.** `6f8345fdb` is the first build ever synthesised on this project **without the
+debug instrumentation** (same S-12 fix as `5097eb166`, debug tree tied off, same base
+`80843404c`). Its census is the **mirror image** of every build above:
+
+    6f8345fdb   99,879 / 99,879 launching from `issue_read_operands`
+                dom_switcher: ZERO
+
+**The mechanism, verified in the base's own source, not inferred.** The debug mux consumes
+dom-switch state heavily — all five `dom_switch_*_log_q` logging registers are present in
+`cva6.sv` — and the instrumented and tied-off builds have **identical RTL**, 200 `dom_switch`
+references each. The removal happens in **synthesis**, via a single `debug_led_o` tie-off. So a
+large share of the failing paths counted as "inert" above were paths **into the debug mux**.
+Remove it and the design's real critical cone is exposed — and it sits in **issue logic, which is
+NOT inert during body execution**.
+
+**What survives.** Every census recorded above is still correct for the build it was taken on, and
+the inertness argument still licenses those specific bitstreams and the board results resting on
+them. What does not survive is the word **"STRUCTURAL"** in §"What actually licenses these
+bitstreams": the property holds for **instrumented** builds, and the instrument is part of why. An
+instrument-free configuration needs the case made afresh.
+
+**The gate below needs restating, because as written it misclassifies the better build.**
+`6f8345fdb` has an originating register outside the `dom_switcher` cone, so the gate as phrased
+says NOT usable — yet it is the *cleaner* build (−13.491 vs the base's −16.400, 750 fewer LUTs,
+closer to a production configuration). The gate encodes an **instance** where it means a
+**principle**:
+
+    AS WRITTEN:  census is 100% dom_switcher-originating   -> usable
+    AS MEANT:    every failing path is provably INERT during body execution -> usable
+
+`dom_switcher` satisfies the principle because `cur_idx` toggles only during a switch with the
+frontend flushed. `issue_read_operands` does not satisfy it at all — so the gate reaches the right
+verdict on `6f8345fdb` for the wrong stated reason. Restate it as the principle, and keep
+`dom_switcher` as the one cone known to satisfy it.
+
+**Consequence for any write-up.** If the census is used to argue that timing failure is benign on
+this processor, that argument is about the **debug configuration**, not about the CVA6-Capstone
+design as such. Do not carry it into a paper unqualified.
+
+Source: synthesis lane, 2026-09-04; artifacts retained on that machine (13 tarballs, three
+directories). See `fpga-silicon-measurements-for-paper.md` §7/§7a for the routed-build table and
+the measured cost of the instrumentation itself.
