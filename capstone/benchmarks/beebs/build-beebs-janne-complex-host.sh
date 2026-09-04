@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-BEEBS_BENCHMARK=janne_complex
-source "$SCRIPT_DIR/build-beebs-simple-host-common.sh"
+# Forwarder: see build-beebs-janne-complex-capstone.sh for why two spellings
+# of this benchmark's scripts exist.  The implementation is the underscore one.
+exec bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/build-beebs-janne_complex-host.sh" "$@"
