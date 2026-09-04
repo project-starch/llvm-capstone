@@ -1,5 +1,45 @@
 # OPEN: gp-captable domains miscompute a global-array store+accumulate loop on silicon (correct on QEMU)
 
+> ## BOARD RESULT 2026-09-05 — DOES NOT REPRODUCE on the resident bitstream. Not yet attributed.
+>
+> B4 of the cycle-2 regression sweep, control-valid boot (`k800` retval 4), firmware
+> `4a5677c73b0eedd8`, bitstream `caplifive_s12fix_5097eb166.bit`, cycle-2 compiler, `-O0`
+> silicon config, positions 2 and 3 ahead of the risky arm:
+>
+> ```
+> rc_const0   2016   (oracle 2016)   the matched control, as in July
+> rc_p1       2080   (oracle 2080)   the July FAILING arm — now returns the correct value
+> ```
+>
+> **The July signature — an address-like value unless the stored value equals the loop index —
+> did not appear.** `rc_p1` returned exactly the native answer.
+>
+> **What this is evidence FOR: the bug is not live in this configuration.** What it is NOT evidence
+> for, and must not be quoted as: "the bug is fixed", or "the S-12 fix fixed it". Four things
+> changed between July and this run and this single reading cannot separate them:
+>
+> 1. the bitstream — `s12fix` carries the S-12 forwarding fix and **lacks** the R-20 fix
+>    (`2efb3604f`, verified by `merge-base`);
+> 2. the compiler — cycle 2, though the `rc` pair's codegen was diffed against the July claim and
+>    is the same shape (one `addiw`, same store/reload pair, same registers);
+> 3. the reproducer — a **reconstruction** from this document's description; the July `.c` is
+>    gone, so "same test" is by design rather than by bytes;
+> 4. the R-20 path itself — the rebuilt R-20 repro read `0xD0000000` in B1 of the same session,
+>    which points the same way but was pre-ruled inconclusive on a rebuilt draw.
+>
+> **The deciding reading is B6:** the FROZEN `sbx8.dom`, byte-exact, on this bitstream, with the
+> control relinked to `0x20000` to avoid the R-3 collision. If the frozen R-20 repro also reads
+> `0xD0000000`, the `s12fix` lineage cures the x10 forwarding path by a route other than
+> `2efb3604f`, and R-20 — whose signature is *exactly* this bug's — is the probable cause of what
+> was measured in July. If it reads `0xD0000001`, R-20 is live and this bug was something else
+> that has since gone.
+>
+> Either way the status moves from OPEN to **NOT REPRODUCED — attribution pending B6**, and the
+> blocks it carried (silicon-compatibility claim, branch merge, app-level silicon perf) are no
+> longer supported by a live failure. They should not be lifted on this reading alone; they
+> should be lifted when B6 says which fix did it.
+
+
 > ## UPDATE 2026-09-05 — this may already be FIXED, and the test is cheap
 >
 > This document's own conclusion is that the signature is **"a microarchitectural store/forwarding
