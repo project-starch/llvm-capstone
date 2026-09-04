@@ -441,6 +441,15 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >
 > **`run-sqlite-memory.sh` remains broken and that is now a low-priority cleanup**, not a blocker:
 > it is the older, non-silicon build, it is not in the nightly, and the arm we actually want works.
+>
+> **UPDATE 2026-09-04 — it IS in the nightly now, and it is the suite's only red row.** The
+> 2026-09-04 run (the first after the c128 merge) is 16 PASS / 1 FAIL, and the single FAIL is this
+> script, failing exactly as described below: `SQ: X/fail`, `obs=18446744073709551615` (= -1),
+> `create_dom failed`, on a 3,330,848-byte loadable segment. **It is NOT a c128 regression** --
+> checked rather than assumed: no earlier nightly report contains a `sqlite-memory` row at all, so
+> the suite has never had a passing baseline to regress from. Anyone reading "Overall: FAIL" on a
+> nightly should stop here rather than start a bisect. It stays low priority, but it now costs a
+> red nightly every night, which raises the value of retiring or rebuilding it.
 > Either rebuild it at silicon config or retire it — but `ref/HOW-TO-RUN-ON-QEMU.md` cites it as
 > the shape to copy, so it cannot simply be left rotting.
 
