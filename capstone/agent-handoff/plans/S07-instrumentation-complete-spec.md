@@ -323,6 +323,9 @@ still stands. Halted zeros do not, because a halted read has no fresh event behi
   `ldc_result_back`. Gen 3 did, and that is the readable difference between it and the
   rolling record that survived.
 * **`RETIMING` off for debug bitstreams.**
+  > **NOTE 2026-09-04:** measured, retiming-OFF is SLOWER (254 min vs 213) though
+  > better-timed (WNS -14.125 vs -14.832). Neither setting is the remedy the old rule
+  > claimed. Do not change the flow without a measurement.
 * **Never add a term to a cone on the `UNOPTFLAT` list.** If a change does, it goes to synthesis
   before it goes anywhere else.
 * **Run `synth-guard.sh`** (`c5043e8a8`) — hard memory ceiling, memory trace, timing.

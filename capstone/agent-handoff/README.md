@@ -26,7 +26,10 @@ Everything else should be loaded only when the task needs it.
 
 UPDATED 2026-08-18: **there is no lane B.** The two-lane coordination set (`COORDINATION.md`, `MULTI-AGENT-WORKFLOW.md`, `AGENT-B-SETUP.md`, and lane B's own state files) is archived under `history/18-08-2026_ARCHIVED_*`. Anything below describing a second lane is historical.
 
-Work is split across two peer agent lanes plus, when needed, an external collaborator:
+Work is split across peer agent lanes plus, when needed, an external collaborator. **The
+lane structure below is historical in its two-lane form** — see the 2026-08-18 note above. As of
+2026-09-04 the live lanes are: this one (compiler/board/docs), an RTL lane, a synthesis lane on a
+separate machine, and a paper lane. Read the roles, not the lane count:
 
 - **Lane A** → commits to `capstone-bootstrap`. **Lane B** → commits to
   `capstone-bootstrap-b`. Both branch off the shared mainline; sync via
@@ -35,7 +38,7 @@ Work is split across two peer agent lanes plus, when needed, an external collabo
   **`ref/SUBAGENTS.md`** (read it before delegating). The old A↔B peer-lane guide is
   archived at `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`.
 - **External collaborators** using their own coding agent get a **self-contained,
-  stock-toolchain** task doc under `plans/` (e.g. `plans/xlang-repro-task.md`, the
+  stock-toolchain** task doc under `plans/` (e.g. `plans/archived/xlang-repro-task.md`, the
   cross-language reproduction task) that does *not* depend on our in-flux compiler/ABI. The
   ONBOARDING callout covers pasting `CLAUDE.md` as context for non-Claude agents.
 

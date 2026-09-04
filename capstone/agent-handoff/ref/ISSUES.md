@@ -8,11 +8,41 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-08-09.
+Last updated 2026-09-04.
 
 ---
 
-## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `OPEN — reproduced on silicon 2026-08-25, does NOT reproduce under QEMU`
+## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — verification is CONSISTENT WITH FIXED, not proven (2026-09-04)`
+
+> **STATUS 2026-09-04.** Root cause found, fix synthesised and flashed; the SQLite domain that
+> trapped now completes. Full mechanism and evidence:
+> `capstone/tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/S12-explanation.md`.
+>
+> **Root cause.** A capability store's scoreboard destination is aliased to its own store-data
+> register (`decoder.sv`, `rd := rtype.rs2`) — deliberate, because such a store must null its
+> source for linearity. When it stalls on a full store buffer, `commit_stage.sv` keeps `we_gpr`
+> asserted while withholding `commit_ack`. The issue stage's WAW guard clears on that write, a
+> younger `ldc` to the same register issues, and forwarding hands the consumer the *store's*
+> value — `create_cnull()` = `{cursor 0, cap_type 0}` — which is `mcause 25` with `tval 0`.
+> **The write happens; the RETIREMENT does not**, and retirement is what ends a producer's role
+> as a forwarding source.
+>
+> **Fix.** Require `commit_ack_i` in both WAW-clearing clauses. Four lines.
+> `capstone-ariane` branch `s12-fix-for-synthesis`. Reproducer 255 traps → 1 (the ARM P control),
+> delay sweep 0/4 against a base firing 3/4, in-regime suite regressing nothing.
+>
+> **Synthesised and flashed.** `caplifive_s12fix_5097eb166.bit`, sha256 `7a97ccd0…62999b0`, is the
+> RESIDENT bitstream. It IMPROVED timing: WNS −16.400 → −15.311, 987 fewer failing endpoints, and
+> the timing census shows `issue_read_operands` contributing zero failing endpoints.
+>
+> **Why "consistent with fixed" and not "fixed".** Post-fix 4 draws of 4 complete; the pre-fix arm
+> trapped 3 of 4. Fisher exact p = 0.071; against this project's own ~54% per-draw rate,
+> P(4 clean) = 0.045 — a bound **this registry has already ruled insufficient** for a cure claim
+> elsewhere. Two more clean draws would give 0.0095 and settle it. Do not upgrade the wording
+> without them.
+>
+> Everything below this box is the investigation as it stood while S-12 was open, and is retained
+> as the evidence trail.
 
 A pure-capability SQLite domain running a **two-table self-join** wedges with `mcause 25`
 (UNEXPECTED_OPERAND) at a fixed instruction. Confirmed live on the resident bitstream

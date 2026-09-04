@@ -213,6 +213,19 @@ Not "synth_design completed". Specifically:
 
 ## Do not change the flow
 
-Leave `run.tcl` alone, `RETIMING` included. A lane once turned retiming off for a debug build and
-synthesis passed two hours without leaving `synth_design` where the same flow finishes in 41-46
-minutes.
+Leave `run.tcl` alone.
+
+**The RETIMING half of this rule NAMED THE WRONG CAUSE and is corrected here.** It used to say a
+lane turned retiming off and synthesis then ran two hours without leaving `synth_design`. Two
+independent measurements refute the causal claim:
+
+* retiming-ON completed in **213 minutes against retiming-OFF's 254** — ON is the FASTER setting
+  (`history/27-08-2026_00-30-00_a-guard-that-worked-and-lied-twice.md`);
+* and on timing, retiming-OFF produced the BETTER build — **WNS −14.125 against ON's −14.832**
+  (`history/26-08-2026_16-00-00_s12-recorder-bitstream-built-and-collector-exposure.md`, in a
+  section headed "Retracted").
+
+So retiming-OFF is *slower and better-timed*, and the original overrun was an RTL change, not the
+setting. The standing advice remains "do not change the flow" — because the flow is known to
+produce working bitstreams, which is a reason on its own — but not for the reason previously
+given, and anyone citing that story should stop.

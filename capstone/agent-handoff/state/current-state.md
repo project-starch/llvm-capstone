@@ -2,7 +2,41 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-08-16 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
+## 2026-09-04 — CURRENT
+
+* **Bitstream: `caplifive_s12fix_5097eb166.bit`** (sha256 `7a97ccd0…62999b0`) — the S-12 fix,
+  synthesised and flashed 2026-09-04. It IMPROVED timing over its predecessor: WNS −16.400 →
+  −15.311, 987 fewer failing endpoints. Every silicon number taken before it should name the
+  bitstream it was taken on.
+* **S-12: ROOT-CAUSED, FIXED IN RTL, FLASHED — "consistent with fixed", NOT proven.** A capability
+  store's scoreboard rd is aliased to its own store-data register; when it stalls on a full store
+  buffer the commit stage holds `we_gpr` while withholding `commit_ack`, the WAW guard clears on
+  that write, and forwarding hands the consumer `create_cnull()`. The write happens; the
+  RETIREMENT does not. Fix = require `commit_ack_i` in both WAW-clearing clauses, four lines.
+  Post-fix the SQLite domain completes 4 draws of 4 against a pre-fix arm that trapped 3 of 4 —
+  Fisher p = 0.071. **Two more draws would settle it; until then do not write "fixed" unqualified.**
+  Full mechanism: `capstone/tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/S12-explanation.md`.
+* **SQLite logic tests RUN ON SILICON.** The full corpus executes in a capability domain;
+  `s12stress` passes 120/120, identical to the native x86 baseline. 15/15 of the corpus matches
+  native under QEMU on the current compiler.
+* **C-19: RESOLVED.** Reading a capability's address now uses a plain move, never `lcc rd, rs, 2`,
+  which is not total and traps on an untagged (NULL) operand.
+* **The c128 capability value type is MERGED** (external collaborator's branch, 2026-09-04).
+  `MVT::c128` replaces i128 as the carrier. Merging it silently reverted C-19 and three header
+  declarations; all repaired — see the merge commit. One known coverage gap remains in
+  `ptr-diff-signed.ll`.
+* **S-06, S-07, S-08: fixed and verified on silicon** (see the 2026-08-16 section below).
+* **The debug instrumentation is STALE and expensive.** Every mux reading across the S-12 campaign
+  was weak, void or faulted — its own decoder says "UNKNOWN SEMANTICS for this bitstream" — while
+  costing 1.820 ns, more than the S-12 fix gained. Every verdict came from software instead.
+  `plans/instrumentation-cleanup.md` is now unblocked.
+
+**Next steps are in `state/current-next-step.md` §0.** Sections below this one are retained as the
+historical trail; the newest of them is dated 2026-08-16 and predates all of the above.
+
+---
+
+## 2026-08-16 — superseded by the section above. Anything below dated earlier predates two RTL fixes and a reflash.
 
 * **Bitstream: `caplifive_s07diag.bit`** (S-06 fix `25035c4c0` + S-08 fix `9fd5507b` + the mtval
   diagnostic `45bd5a3ee`). Every silicon number taken before it is baseline-invalid. All five
