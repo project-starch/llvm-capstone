@@ -435,6 +435,42 @@ yet be attributed:
 Until that arm exists, "the fix is safe in an instrument-free configuration" is unproven in both
 directions. It does not block flashing arm 1, which is instrumented.
 
+### 9.2b The licence names one register; the census names another
+
+The inertness argument has always been stated about **`cur_idx_q_reg`** — "it toggles only during
+a domain switch with the frontend flushed, so every failing path is inert while a domain body
+runs." Arm 1's census does not name that register:
+
+```text
+   101,573  dom_switcher/_thread_0_event_reg_87_q_reg[0]     ← 99.8% of the failing endpoints
+       209  dom_switcher/_init_0_reg
+```
+
+`_thread_0_event_reg_87_q` is not `cur_idx`. It does not appear in the Anvil source at all — it is
+a **compiler-generated event-join register** in the switcher's thread machinery:
+
+```text
+   EVENTS0[87].event_current = (EVENTS0[86] & q[0]) | (EVENTS0[80] & q[1])
+                             | (EVENTS0[86] & EVENTS0[80])
+   _thread_0_event_reg_87_n  = q ^ {EVENTS0[86], EVENTS0[80]} ^ {EVENTS0[87], EVENTS0[87]}
+```
+
+a rendezvous flag recording which of two predecessor events has fired. It changes only when those
+events fire, so its activity is **event-driven**, and the events come from counters
+(`_thread_0_event_counter_{86,80}_1_q`) on a thread that loops
+(`EVENTS0[0] = _init_0 || EVENTS0[102]`).
+
+**Consequence, stated carefully.** The pre-registered criterion is *literally* satisfied: the
+census is 100% within `dom_switcher`, and `issue_read_operands` contributes zero. That part
+stands. But the *reason* dom-switcher-originating paths were believed inert was a toggle argument
+about `cur_idx`, and 99.8% of the failing endpoints launch from a different register whose toggle
+behaviour is **unestablished**. Static timing analysis cannot settle it — it is
+activity-independent by construction.
+
+So this is the familiar shape one level up: **the check fired, and whether satisfying it means
+what we wanted is a separate question.** Whether the switcher's event thread idles between
+domain switches, or advances during body execution, is an RTL question and is open.
+
 ### 9.3 Why the instrument-free question is not academic
 
 The debug instrumentation appears to be **stale**, and it is expensive. Across the entire S-12
@@ -454,6 +490,21 @@ by default in any case.
 **Every S-12 verdict came from software instead:** the in-domain trap handler packs `mcause`,
 `mepc` and `a4`'s zero/non-zero into the domain's return word (`SQ: obs=`). That is what produced
 `obs=0xE643D221`. It needs no bitstream support at all.
+
+**The tree is cheap in area and expensive in timing**, which is only a paradox until you see
+where the endpoints launch from:
+
+```text
+   post-placement        arm 1      arm 2     delta
+   Slice LUTs          169,694    168,944      +750     0.37% of the part
+   Slice Registers      93,257     92,618      +639     0.16%
+   BRAM / DSP               54/27     54/27       0
+
+   101,573 endpoints launch from ONE BIT with enormous fanout.
+   The tree does not CONTAIN those paths — it gives them somewhere
+   distant and timing-poor to END. Remove it and they do not move,
+   they cease to exist, and the next-worst cone is exposed.
+```
 
 Meanwhile the instrumentation costs, on the synthesis numbers:
 
