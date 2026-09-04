@@ -414,6 +414,15 @@ between the two arms *is* the variable. When arms differ in more than one respec
 return value, path taken on the way out — the ladder measures whichever difference you did not
 intend.
 
+**8. Reduce until the bug fits a DIRECTED TEST, then LEAVE THE BOARD.** The board gives ~one bit
+per boot; simulation gives a full instruction+memory trace in 14 s but cannot run a 1.6 MB
+program. So minimise for a **shape small enough to rewrite as a synthetic `.S`** — that changes
+the instrument, and it is what cracked S-12 after weeks of board sessions had only ever said
+"faults ~54% of draws". **The synthetic test must CREATE the triggering condition, not merely
+contain the shape:** S-12's reproducer read zero for a day because the testbench defaults to ZERO
+memory latency, so its store buffer could never fill. Same ELF — delay 0 → 0 traps, delay 40 →
+254.
+
 Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
 answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.
 Observation of a wedged core is unreliable here — the debug register path has twice
