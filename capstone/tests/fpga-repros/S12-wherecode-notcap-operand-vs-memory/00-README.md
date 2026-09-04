@@ -174,6 +174,86 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## RETRACTED, 2026-09-02 — "the signature appears with no reload". The instruction was never read out of the image that ran
+
+**Withdrawn the same day it was written. The reload IS present in every attested instance; this
+one was an artifact of our own patch.** The section that stood here claimed a third draw of a
+truncated build faulted at `cincoffsetimm a4, s0, -0x100` with no `ldc` in its dependence chain,
+and concluded that the load-adjacent mechanism families — load-to-use forwarding and the load
+syncer — could not explain the bug. **That conclusion is void.**
+
+What the artifacts say, all re-derivable:
+
+* The three draws were **not one build**. Draw 3 ran sha256 `e6effb53…` (`min-aggressive.dom`);
+  draws 1 and 2 ran sha256 `7e6c33c7…` (`wrongbase.dom`). Each log prints its own
+  `verifying sqli.dom sha256=` line and they disagree. They were recorded as three draws of the
+  n=4 truncated build; none of them was.
+* Draw 3's own `DBAS` is `0x82800000` and its latched `mepc` is `0x828f4830`, so
+  **VA = `0x104830`** — that part was right.
+* The instruction at VA `0x104830` **in the image draw 3 actually ran** is
+
+      [42] ldc  a1, 0x0(a3)
+
+  an ordinary capability load. It is not a `cincoffsetimm`, and `cincoffsetimm a4, s0, -0x100`
+  does not appear at that address in any image involved.
+* `min-aggressive.dom` has `[20] cincoffsetimm a3, s0, -0x90` replaced by NOP. `a3` therefore had
+  no definition in that call and held an arbitrary entry value. The fault is a **load through an
+  undefined base register** — a def-use-open cut in our own experiment, faulting on our own
+  garbage.
+
+**Consequences, because this claim was load-bearing.**
+
+1. The POS rule for the minimisation campaign was widened away from a single fault address on the
+   strength of this observation. That widening is withdrawn with it.
+2. Exactly **one** attested S-12 signature remains: `cincoffsetimm a4, a4, 0xb0` at VA `0x104814`,
+   consuming `a4` written by `ldc a4, 0x0(a0)` **one instruction earlier**, with the register file
+   and the source slot both holding a valid capability at the wedge.
+3. **The load-adjacent families are not refuted.** Nothing on the table requires two mechanisms.
+   The twelve clean reconstructions all reproduced the `ldc` → `cincoffsetimm` pair, and that pair
+   is still the shape to explain.
+
+**What would have caught it.** The claim named an instruction, and the instruction was never read
+back out of the image the draw ran — the address was mapped, then matched against a *different*
+disassembly. Each log already printed a per-draw sha256 that would have shown the three draws were
+three different images; nothing compared them. The check is now mechanical: `probes/s12-verdict.py`
+extracts `DBAS`/`mepc` scoped to the test stage, and the instruction is disassembled out of the
+image named by that draw's own sha, never out of the base.
+
+## 2026-09-02 — THE TRUNCATION LADDER CANNOT WORK. It crashes before reaching the reduced site
+
+`CAPSTONE_WTRUNC` truncates `sqlite3WhereCodeOneLoopStart` after its n-th leading statement,
+giving a 58-instruction function (from 2866) that still contains the window with the register
+match preserved. Gated before staging. On silicon it faults -- but not at the reduced site:
+
+    predicted (n=4)   mepc 0x828f4848   VA 0x104848
+    observed          mepc 0x8293a15c   VA 0x14a15c   = memcpy
+
+and the shape at that address looks like S-12, which is exactly the trap:
+
+    14a150  ldc  a0, 0x0(a0)          reload a capability from a spill slot
+    14a15c  cincoffset a0, a0, a1     FAULTS, mcause 25, tval 0
+
+The slot contents settle it, and they are the same discriminator that established S-12:
+
+    real S-12 (s12t-1)   a4 = 0x82be4cd0   slot = 0x82be4cd0 / 0x0000073fa7462d16
+                         -> slot holds a VALID capability, consumer still ingested 0
+    ladder    (lad-1)    a0 = 0x0          slot = 0 / 0
+                         -> slot genuinely holds NULL; tval = 0 is CORRECT
+
+So this is an ordinary software null-dereference, not the hardware defect. The truncated function
+returns a garbage `Bitmask`, downstream code derives a null from it, and `memcpy` faults on it long
+before control reaches the reduced window.
+
+**The ladder's premise is refuted, not just this arm.** Truncation breaks the function's contract
+with its callers, and the resulting garbage kills the program earlier than the site under test.
+Returning `0` instead of the cursor did not help (both were tried; QEMU stops before the shell
+prompt either way). Any reduction that changes what the function RETURNS has this problem.
+
+What survives: reduction has to preserve the contract. Remove code that does not affect the return
+value, or reduce the PROGRAM -- which SQLite features are compiled in -- rather than the function.
+The 58-instruction artifact stays committed because the gate proves the window survives truncation,
+which is still useful evidence about codegen; it is just not a repro.
+
 ## 2026-08-31 — S-12 IS TWO DEFECTS, AND THE ONE THAT KILLS THE BOARD IS NOT SPECIFIC TO S-12
 
 **A deliberate, trivial capability fault raised from inside a domain wedges the whole board in
