@@ -156,6 +156,47 @@ instruction reads", not either alone.
 So the register identity, the ABI class (argument vs temporary) and `x14` specifically are all
 ruled out, in both directions at once.
 
+### RESOLVED by a further arm: all THREE operands must be the same register
+
+The ambiguity below is settled. Arm **D5** keeps the store-to-load relation fully intact --
+`stc a4` / `ldc a4` -- and changes ONLY what the faulting instruction reads, to a `t0` pre-loaded
+from the same slot so the program is unchanged. It does not fault: **0 wedges / 4 valid draws.**
+
+| arm | `stc` source | `ldc` dest | faulting insn reads | wedges |
+|---|---|---|---|---|
+| base / `[28]`-only / D2 | `a4` | `a4` | `a4` | 3/3, 3/4, 3/4 |
+| D3 | `t0` | `t0` | `t0` | 3/4 |
+| D4 | `a4` | `t0` | `t0` | 0/4 |
+| **D5** | `a4` | `a4` | **`t0`** | **0/4** |
+
+So the fault requires the capability store's source, the load's destination, AND the faulting
+instruction's operand to be **the same architectural register**. Store-to-load alone is not
+sufficient (D5); consumer-to-load alone is not sufficient (D4).
+
+**A mechanism in the RTL predicts exactly this, and its legs are verified at source:**
+
+* `decoder.sv:1313` — STC decodes `rd := rs2`, so `stc a4, 0(a5)` makes `a4` a genuine scoreboard
+  PRODUCER, not merely a source. (LDC by contrast sets `rd := instr.itype.rd`.)
+* `capstone_unit.anvilh:395` — `create_cnull()` is cursor 0 **and** `cap_type` 0. Both halves zero
+  by construction, which is `mcause 25` with `tval 0` exactly — and is what distinguishes this from
+  S-07/A-1, which forwards a real cursor with the tag dropped and would show non-zero `tval`.
+* `commit_stage.sv:331` — a store-buffer-full stall on an STC clears only `commit_ack_o[0]`;
+  `we_gpr_o[0]` is never retracted, so the STC stays a live claimant for the whole stall.
+* `issue_read_operands.sv:719` — forwarding candidacy needs `still_issued & sbe.valid`, so a
+  written-back STC entry is a candidate while an unproduced LDC is not.
+
+Two producers claim the register; the consumer reading that register is handed the STC's null.
+D5 breaks the chain at the victim, and the fault disappears.
+
+**This is a mechanism consistent with every arm, NOT a confirmed root cause.** In bare-metal
+Verilator the outcome does not occur: the tree's own `S12-ESC` instrumentation counts precondition
+and outcome separately, and across `stc-then-ldc-same-reg.S` and `ldc-consumer-stale-rs1.S` the
+precondition (ESCAPE, which is also its positive control) fires 1026 times while the outcome
+(HAZARD) stays 0. So the mechanism is structurally permitted and demonstrably not triggered by the
+shape alone in bare metal; what remains unexplained is what the real workload adds.
+
+### Superseded — the ambiguity as originally written
+
 **What the fault tracks is a relation, and TWO readings of that relation remain
 indistinguishable.** In all nine arms the load's destination and the faulting instruction's source
 are the same register, so these are one predicate over the whole dataset:
