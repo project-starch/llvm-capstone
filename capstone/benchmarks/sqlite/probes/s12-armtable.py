@@ -27,6 +27,12 @@ ARMS = [
     # [26] [27] [30] [32] left on a4. The only property that moves is which register supplies the
     # null the store writes.
     ("TIGHT",  "tight",  "sqtight.dom", "a6e853e25888958c", "a4=0, null store uses t0 (2-instr)"),
+    # ONLY28 differs from TIGHT in [33] ALONE, so the pair is a true one-instruction contrast.
+    ("ONLY28", "only28", "sq28.dom",    "fa690e843115cad5", "[28] only; [33] still stores a4"),
+    # D1/D2 break the three-way tie between "[33].rs2 == [34].rd", "[33].rs2 == [32].rd" and
+    # "[33]'s producer is one instruction back", which co-vary perfectly across every arm above.
+    ("D1",     "d1",     "sqd1.dom",    "597097f603c4d40d", "stc t0, producer dist 1, NO reg match"),
+    ("D2",     "d2",     "sqd2.dom",    "8c25fb91dd00f7c7", "stc a4, producer dist 7, reg match YES"),
 ]
 
 

@@ -136,3 +136,140 @@ board candidates; boarding them would have bought unreadable verdicts at three d
 by hash is VOID rather than clean. Both are enforced by the classifier now, and both were
 negative-tested, because a stalled or mis-staged draw counted as clean inflates exactly the cure
 this ladder exists to detect.
+
+---
+
+## UPDATE, same evening — the cure narrows to TWO instructions
+
+| arm | changes from base | `[33]` stores | wedges |
+|---|---|---|---|
+| **anchor** | none | `a4` | **3 / 3** |
+| **tight** | `[28]`, `[33]` | `t0` | 0 / 4 |
+| **control** | `[26] [27] [28] [30] [33]` | `t0` | 0 / 4 |
+| **sentinel** | the above plus `[32]` | `t0` | 0 / 4 |
+
+Every wedge falls in the anchor's three draws and none in the twelve modified draws: one-sided
+exact p = 2.2e-03, or 1.6e-04 counting the two hash-attested base wedges of 2026-08-31, which ran
+the same binary under the sentinel's own filename *and* initramfs size.
+
+**`[26]`, `[27]`, `[30]` and `[32]` are therefore NOT required for the fault.** All four are present
+in the tight arm, which does not wedge. The cure lives in `[28] sw a4, 0x0(a5)` and/or
+`[33] stc a4, 0x0(a5)`.
+
+Every draw is validated identically: domain entered, per-run `.dom` sha256 matched, known-good
+control slot returned, `SLT-SUMMARY` byte-identical to the base. Draws still running, draws that
+never reached the board, and draws whose control failed are reported as three distinct non-results
+and excluded from both numerator and denominator.
+
+`--only28` is on the board to finish it: `[28]` changed, `[33]` left storing `a4`, differing from
+the tight arm in `[33]` **alone**.
+
+---
+
+## FINAL, same evening — it is `[33]`, and specifically its SOURCE REGISTER
+
+| arm | `[28] sw a4` | `[33] stc` source | wedges |
+|---|---|---|---|
+| **anchor** (unmodified) | present | **`a4`** | **3 / 3** |
+| **`[28]`-only** | removed | **`a4`** | **3 / 4** |
+| **tight** | removed | `t0` | 0 / 4 |
+| **control** | removed | `t0` | 0 / 4 |
+| **sentinel** | removed | `t0` | 0 / 4 |
+
+**`[28]` is NOT required.** Anchor and `[28]`-only differ in `[28]` alone and both wedge, 3/3 and
+3/4.
+
+**`[33]` IS required.** `[28]`-only and tight differ in `[33]` **alone** — `stc a4, 0x0(a5)` against
+`stc t0, 0x0(a5)`, the same null value into the same slot from a different register — and one
+wedges 3/4 while the other is clean 0/4.
+
+    direct, differing in [33] alone     3/4 vs 0/4     p = 0.071
+    pooled by [33]'s source register    6/7 vs 0/12    p = 2.6e-04
+    anchor against all t0-store arms    3/3 vs 0/12    p = 2.2e-03
+
+The direct pair is suggestive rather than conclusive by itself. The pooling is what carries it, and
+it is justified BY THE LADDER rather than assumed: the tight arm shows `[26] [27] [30] [32]` are not
+required, the anchor/`[28]`-only pair shows `[28]` is not required, so the only property still
+varying across the pooled arms is `[33]`'s source register.
+
+**What this localises S-12 to.** Not a value, not an address, not the null store's presence: the
+faulting configuration needs the capability STORE at `[33]` to read `a4` — the same architectural
+register the LOAD at `[34]` immediately writes. Substituting an equally-null `t0` for that operand,
+leaving the stored value, the store address and every other instruction identical, removes the
+fault. This is the register-match correlate that has been retracted twice in this folder, now
+established by substitution inside a wedging baseline rather than by correlation across
+differently-built arms — which is exactly why the earlier attempts failed.
+
+**What it does NOT establish.** Why the pairing matters. `stc-then-ldc-same-reg.S` reproduces the
+shape in bare-metal simulation — `stc a4` then `ldc a4` then the consumer, 1024 times — and shows
+nothing: `b-consumers 1024`, `b-NOFORWARD 0`, `HAZARDS 0`. That gap is the next thing to attack,
+and the first move is a positive control for `b-NOFORWARD`, which **has never been shown able to
+increment**. Until it can, those zeros bound nothing.
+
+The value account also remains OPEN, for the structural reason recorded above: `[33]` stores `a4`
+and `[34]` overwrites it with no slot between, so a4's value entering the load cannot be varied
+without changing what is stored.
+
+---
+
+## CORRECTION to the section above, within the hour
+
+**Three things in it are wrong, and one of them is the same mistake this file retracted earlier
+the same evening.**
+
+**1. The pooled statistic 6/7 vs 0/12, p = 2.6e-04, is NOT licensed. Use p = 0.015.**
+The pool folds ctrl and sent into the "`[33]` stores t0" cell, but in BOTH of those arms `[33]`
+already stores `t0` — so if `[33]` is the cure they are cured regardless, and their 0/8 is equally
+explained by their own extra changes. Folding them in attributes those eight draws to `[33]`
+without warrant. The defensible figures:
+
+    direct, only28 3/4 vs tight 0/4                       p = 0.071   (pre-registered contrast)
+    anchor pooled in via the verified [28]-only byte diff  p = 0.015   <- THE NUMBER TO QUOTE
+    anchor 3/3 vs all t0-store arms 0/12                   p = 0.0022  (about the SUBSTITUTION,
+                                                                        not about [33])
+
+**2. "`[26]`, `[27]`, `[30]` and `[32]` are therefore NOT required" is a non-sequitur.** They are
+present in the tight arm, which does not wedge — that shows they are not SUFFICIENT, not that they
+are not required. Demonstrating not-required needs an arm LACKING them that wedges, and every
+wedging arm has all four in their `a4` form. Withdrawn.
+
+**3. "because `[33]` must read the register `[34]` writes" is UNPROVEN.** Three properties co-vary
+perfectly across all five arms:
+
+| arm | `[33].rs2 == [34].rd` | `[33].rs2 == [32].rd` | distance to `[33]`'s producer |
+|---|---|---|---|
+| anchor (3/3) | yes | yes | 1 |
+| only28 (3/4) | yes | yes | 1 |
+| tight (0/4) | no | no | 5 |
+| control (0/4) | no | no | 7 |
+| sentinel (0/4) | no | no | 7 |
+
+The one-byte pair localises to **`[33]`'s rs2 operand** and nothing finer. It cannot separate
+"same register as the load's destination" from "the store's source was produced one instruction
+earlier". Picking one and stating it as the finding is exactly how the register-match correlate got
+retracted twice before.
+
+**What survives, and it is still the campaign's result:** substituting an equally-null `t0` for
+`a4` at `[33]` — **one byte** in a 1.6 MB image, same address register, same offset, same stored
+null, every other byte identical — removes the fault. 3/4 against 0/4 on the pre-registered pair,
+p = 0.015 with the anchor pooled in through the verified single-byte `[28]` diff.
+
+**Honest note on the statistic:** the reading DIRECTION was pre-registered (committed 18:16:57;
+first only28 draw 18:38), and N=4 is the runner's default for every arm, so no optional stopping.
+But the pooling RULE was not pre-registered — before only28 wedged, the grouping in use was
+"unmodified vs modified", which that wedge made untenable. Direction pre-registered, magnitude
+chosen after the data. That is why 0.015 is quoted rather than anything smaller.
+
+**The confound checks that DID hold:** initramfs sizes are crossed with outcome (7352320 gives both
+a wedge and a clean; 7351808 likewise), guest load addresses are identical in all five arms
+(`DBAS 82800000` for the arm slot), the bake logs for tight and only28 are byte-identical, and the
+clean tight arm ran BETWEEN the two wedging arms in wall-clock order, so no monotone board drift
+produces this pattern.
+
+**Two one-byte arms discriminate the remaining three-way tie**, both patching `[32]`'s rd field and
+both leaving the stored value null so they can be QEMU-gated:
+
+* from TIGHT, `[32] movc a4,zero` → `movc t0,zero`: `[33] stc t0` then has a distance-1 producer
+  with NO match to `[34].rd`. Wedge ⇒ producer distance; clean ⇒ register match survives.
+* from ONLY28, the same patch: `[33] stc a4` then has a distance-7 producer while STILL matching
+  `[34].rd`. Wedge ⇒ register match; clean ⇒ producer distance.

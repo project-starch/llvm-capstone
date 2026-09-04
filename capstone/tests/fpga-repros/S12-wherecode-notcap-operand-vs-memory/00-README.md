@@ -1,3 +1,203 @@
+# S-12 REDUCED TO ONE BYTE — 2026-09-02
+
+**Read this section first; everything below it predates the reduction.** Sibling packages that are
+NOT this one:
+
+* `../R20-stc-rs1-cursor-forward-x10/` — **the nearest mechanism neighbour, read it alongside
+  this.** Also a capability store followed immediately by a load, also wrong data delivered to only
+  the next instruction, also silent under QEMU. It differs in four ways: R-20 is specific to
+  **x10/a0**, S-12 is register-agnostic (shown here on both `a4`/x14 and `t0`/x5); R-20's load is a
+  plain `ld`, S-12's is `ldc`; R-20 delivers the **store's base address** and corrupts nothing,
+  S-12 traps `mcause 25`; R-20 was measured on `caplifive_65536_r18_fix.bit`, everything here is
+  `caplifive_s10fix_80843404c.bit` and nothing here says anything about R-20's status on that
+  bitstream. Whether they are one defect is open and we do not claim either way.
+* `../RTL-domain-trap-vector-unset/` — why any domain capability fault kills the whole board.
+  Root-caused, but read its own status line: the fix is not firmware-only and half of it is open.
+* `../RTL-cap-mcause-off-by-one/` — four producers of `mcause 25` with inconsistent numbering.
+
+If your symptom is a dead board rather than a specific faulting instruction, you want the second.
+
+## The reduction
+
+S-12 wedges the SQLite domain on the Capstone CVA6 with `mcause 25` (UNEXPECTED_OPERAND) and
+`tval = 0` at VA `0x104814`, inside `sqlite3WhereCodeOneLoopStart`.
+
+**Whether the fault occurs is decided by one byte: the rs2 field of the `stc` at `0x10480c`.**
+(Which *value* of that byte wedges is not fixed — it depends on the following load's destination.
+`stc a4` wedges in `01` and is clean in `04`.)
+This is the window as it appears in the two shipped images — disassemble them and you will see
+exactly this, which is not the same as the original unmodified base (the two `movc t0, zero`
+at `0x1047f8` / `0x104808` are `sw a4, 0x0(a5)` and `movc a4, zero` there):
+
+    01-wedges-stc-a4.dom              02-clean-stc-t0.dom
+    ------------------------------    ------------------------------
+    1047f8  movc t0, zero             1047f8  movc t0, zero
+    1047fc  cincoffsetimm a5,s0,-0x110 1047fc  cincoffsetimm a5,s0,-0x110
+    104800  sw   a4, 0x0(a5)          104800  sw   a4, 0x0(a5)
+    104804  cincoffsetimm a5,s0,-0x120 104804  cincoffsetimm a5,s0,-0x120
+    104808  movc t0, zero             104808  movc t0, zero
+    10480c  stc  a4, 0x0(a5)   <---   10480c  stc  t0, 0x0(a5)   <--- THE ONLY DIFFERENCE
+    104810  ldc  a4, 0x0(a0)          104810  ldc  a4, 0x0(a0)
+    104814  cincoffsetimm a4,a4,0xb0  104814  cincoffsetimm a4,a4,0xb0     <-- faults, mcause 25
+
+The two files differ at file offset `0xf580e` and nowhere else — **1 byte in 1,624,152**, verified
+by whole-file comparison. Same address register, same offset, same stored value (`t0` and `a4` both
+hold a null capability at that point), same instruction count, same layout. Both produce the same
+guest result lines under QEMU emulation, so this is not a program-behaviour difference.
+
+`a4` at `0x10480c` is also the register the `ldc` at `0x104810` writes — **and, in every arm we
+ran, the register the faulting `cincoffsetimm` reads.** A RELATION between the store's operand and
+what follows is the variable, not the register's identity: an arm that keeps `a4` as the store's
+source but has the load write `t0` does NOT fault, and an arm using `t0` for both store and load
+DOES. Which relation it is, is not settled here — see "Which property" below.
+
+## Evidence
+
+Seven arms, all patched from one pinned base, all gated to identical guest result lines before
+boarding, all run in slot 2 behind the same known-good control in slot 1, all on bitstream
+`caplifive_s10fix_80843404c.bit`. Worth knowing: that control is the **same binary** as
+`00-unmodified-base.dom`, run under the simpler `dd1_one.test` — so in a wedging boot the identical
+image returns normally in slot 1 and wedges in slot 2, which is a within-boot control on the image
+itself:
+
+| arm | `stc` source | == the `ldc`'s dest | producer distance | wedges |
+|---|---|---|---|---|
+| unmodified base | `a4` | yes | 1 | 3/3 |
+| `[28]` removed | `a4` | yes | 1 | 3/4 |
+| **D2** = `01-wedges` | `a4` | **yes** | **7** | 3/4 |
+| `[28]`+`stc` changed | `t0` | no | 5 | 0/4 |
+| 5-instruction subst. | `t0` | no | 7 | 0/4 |
+| 6-instruction subst. | `t0` | no | 7 | 0/4 |
+| **D1** = `02-clean` | `t0` | no | **1** | 0/4 |
+
+In these seven arms: 9 wedges in 11 draws with `a4` at the store, 0 in 16 with `t0`. (That is
+these arms only — arm D3 below sources `t0` and wedges 3/4, because there the load writes `t0` too.)
+
+**Ruled out as the cause.** Producer distance: D2 wedges with the producer 7 instructions back, D1
+is clean with it 1 back. A match to the preceding `movc`'s destination: D2 has none and wedges. The
+stored value: null in every arm. The store's presence: present in every arm, including all four
+clean ones. The contiguous `movc rD / stc rD / ldc rD` triple: absent in D2, which wedges.
+
+**Statistics, stated conservatively.** The controlled contrast is D2 vs D1 — one byte, same
+firmware overlay, same initramfs size: 3/4 against 0/4, one-sided Fisher **p = 0.071**. The same
+byte flipped on a second background gives the same 3/4 vs 0/4, but those two boots ran overlays
+differing by six files, so that one is a replicate on an uncontrolled background rather than an
+independent experiment. The clean way to combine is over the two FULLY MATCHED single-byte pairs
+below — `01`/`02` and `03`/`04`, identical overlay count and initramfs size within each — which
+gives a stratified exact p = 0.005 with no uncontrolled-background caveat. `0/4` supports "does
+not wedge here"; at N=4 it does not establish "removes the fault" (P(0 of 4 | true rate 0.30) =
+0.24).
+
+## Reproduction
+
+Everything needed is in `minimal-repro/`. The images are xz-compressed to keep the folder near the
+size of everything else here; `SHA256SUMS` lists the **decompressed** files, so:
+
+    cd minimal-repro && xz -d *.xz && sha256sum -c SHA256SUMS
+    sqlite_host.user <image>.dom --slt repro.test
+
+`repro.test` is 13 lines: one `CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e
+INTEGER)` and one two-way self-join
+`SELECT t1.a FROM t1, t1 AS y` on an EMPTY table. No rows are processed, so the whole difference
+lives in `sqlite3_prepare_v2` — in code generation.
+
+Every wedge reported here carries the same signature and nothing else: `mepc 0x828f4814`,
+`tval 0`, trap-log `0x99` (= seen-bit plus `mcause` 25), `SQ: G/enter` present in the run's own
+output, no return, per-run image sha256 verified inside the boot, control slot returning normally.
+
+`mcause 25` has four producers on this core with inconsistent numbering (see
+`../RTL-cap-mcause-off-by-one/`), so the label is argued rather than assumed: `tval = 0` excludes
+the pc-capability producer, which sets `tval` to the faulting PC, and `cincoffsetimm` decodes to
+the FLU only, which excludes the DYN and LSU producers. What is left is FLU UNEXPECTED_OPERAND.
+
+## Which property: it is the RELATION, not the register
+
+The seven arms above cannot rank "the store's source is the load's destination" against "the
+store's source is `x14`", because in all of them the load writes `a4`. Two further arms separate
+them. Both change the `ldc` at `0x104810` to write `t0` and the faulting `cincoffsetimm` to read
+`t0`; they differ from each other in one byte, the same `stc` rs2 field, and ran on matched
+firmware (173-file overlay, initramfs 7 351 808, same bitstream):
+
+| arm | `stc` source | `ldc` dest | relation | register | wedges |
+|---|---|---|---|---|---|
+| **D3** = `03-wedges-relation-on-t0.dom` | `t0` | `t0` | **yes** | x5 | **3 / 4** |
+| **D4** = `04-clean-a4-no-relation.dom` | `a4` | `t0` | **no** | x14 | **0 / 4** |
+
+Their window, which differs from the one shown at the top of this file — disassemble `03`/`04` and
+you will see `ldc t0`, not `ldc a4`:
+
+    03-wedges-relation-on-t0.dom      04-clean-a4-no-relation.dom
+    ------------------------------    ------------------------------
+    10480c  stc  t0, 0x0(a5)   <---   10480c  stc  a4, 0x0(a5)   <--- THE ONLY DIFFERENCE
+    104810  ldc  t0, 0x0(a0)          104810  ldc  t0, 0x0(a0)
+    104814  cincoffsetimm a4,t0,0xb0  104814  cincoffsetimm a4,t0,0xb0     <-- faults in 03 only
+
+`03` and `04` differ at file offset `0xf580e` — the same single byte as `01` vs `02`.
+
+D4 keeps `a4`/x14 — the register present in every wedge before it — and loses the relation: clean
+across four draws. D3 keeps the relation on `t0`/x5, a register that had never wedged: three
+wedges, canonical signature. One-sided Fisher on the pair, p = 0.071.
+
+The four shipped images are a 2x2 in which each register appears on both sides, so neither
+register can explain the outcome:
+
+                        ldc writes a4          ldc writes t0
+    stc sources a4      01  WEDGES  3/4        04  clean   0/4
+    stc sources t0      02  clean   0/4        03  WEDGES  3/4
+
+The diagonal wedges and the off-diagonal does not. `a4` appears once in each column, `t0` likewise;
+the only thing constant down the wedging diagonal is that the two operands are the same register.
+
+**The column variable is compound.** Rows `03`/`04` change the `ldc`'s destination AND the faulting
+`cincoffsetimm`'s source register together, because the second must read what the first writes for
+the program to stay correct. So the column is "what the load writes AND what the faulting
+instruction reads", not either alone.
+
+So the register identity, the ABI class (argument vs temporary) and `x14` specifically are all
+ruled out, in both directions at once.
+
+**What the fault tracks is a relation, and TWO readings of that relation remain
+indistinguishable.** In all nine arms the load's destination and the faulting instruction's source
+are the same register, so these are one predicate over the whole dataset:
+
+* the store's source is the register the immediately following **`ldc` writes**; or
+* the store's source is the register the **faulting instruction reads**.
+
+**This report does not pick one.** The distinction matters because the second reading is the
+store-to-consumer family that `../R20-stc-rs1-cursor-forward-x10/` documents as a measured defect
+on this silicon.
+
+The cheapest discriminator, not yet run: keep `stc a4` / `ldc a4` but point the faulting
+`cincoffsetimm` at a `t0` pre-loaded from the same slot — the scratch slot at `0x104800` is
+available and already shown behaviour-preserving. If the load-destination reading is right it
+wedges; if the consumer reading is right it does not. One instruction, QEMU-gateable.
+
+Across all nine arms: relation present 12 wedges / 15 valid draws; relation absent 0 / 20.
+
+## What is NOT established
+
+**Why the pairing matters at all.** There is a 14-second RTL testcase that reproduces the exact
+relation and does NOT fault:
+`capstone-ariane/verif/tests/custom/capstone/stc-then-ldc-same-reg.S` — `stc` reading `a4`, `ldc`
+writing `a4`, consumer reading `a4`, 1024 iterations, with the load pending 7176 of 25130 cycles
+(29%). It carries its own controls and they fire: ARM P puts a NOT_CAP operand straight into
+`cincoffsetimm` and must trap `mcause 25` (it does, the run's only exception), ARM C passes a live
+capability through the same instruction and must not (it does not). So this is a real negative, not
+an absent measurement.
+
+**Its scope is narrow and that is the honest reading:** bare M-mode, no monitor, no `capenter`, a
+hot cache, a `.data` buffer and a register-resident base, against silicon that runs inside a
+capability domain on a monitor-carved stack reaching globals through a cap table. Separately, the
+in-RTL `b-NOFORWARD` precondition counter used alongside it reads 0 and **that** zero bounds
+nothing — it counts an event whose occurrence would itself be a reproduction, so it cannot be
+positive-controlled. Do not read the counter; do read the test.
+
+**Whether the operand's VALUE matters**, which is structurally untestable by patching this window:
+the `stc` stores `a4` and the `ldc` overwrites it with no instruction slot between, so the value
+entering the load cannot be varied without changing what is stored.
+
+---
+
 # S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c`: the operand is zero, and it is not software
 
 > ## WHAT S-12 ACTUALLY BLOCKS — read this before calling it "the SQLite blocker"
