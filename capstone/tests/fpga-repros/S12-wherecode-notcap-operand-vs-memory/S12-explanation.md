@@ -435,6 +435,43 @@ yet be attributed:
 Until that arm exists, "the fix is safe in an instrument-free configuration" is unproven in both
 directions. It does not block flashing arm 1, which is instrumented.
 
+### 9.3 Why the instrument-free question is not academic
+
+The debug instrumentation appears to be **stale**, and it is expensive. Across the entire S-12
+board campaign every mux reading was weak, void, or faulted:
+
+```text
+   sw=208  0xb8  "unmatched (WEAK)"   ldc0_valid(=UNKNOWN SEMANTICS for this bitstream)
+   sw=208  0xfe  "INSTRUMENT FAULT: ldc0_src == 3 is not a defined source. Readout is wrong"
+   sw=204        "displacement VOID ... cross-aperture contamination. It is NOT data."
+   rev-node head "VOID ... NO consumption datum for this rep"
+```
+
+Not one usable datum, and the decoder's own text says "UNKNOWN SEMANTICS for this bitstream" — it
+no longer matches what the silicon exposes. `HALT_MUX_READS` defaults to `0`, so the reads are off
+by default in any case.
+
+**Every S-12 verdict came from software instead:** the in-domain trap handler packs `mcause`,
+`mepc` and `a4`'s zero/non-zero into the domain's return word (`SQ: obs=`). That is what produced
+`obs=0xE643D221`. It needs no bitstream support at all.
+
+Meanwhile the instrumentation costs, on the synthesis numbers:
+
+```text
+   base (instrumented)     -16.400
+   arm 1 (fix + instr)     -15.311     the fix buys        1.089 ns
+   arm 2 (fix, no instr)   -13.491     dropping it buys a further 1.820 ns
+```
+
+**Dropping the debug tree is worth more than the fix**, and removes ~100k failing endpoints from
+the switcher. So the missing control in §9.2 decides something larger than S-12: whether this
+project can ship a permanently simpler, ~2.9 ns better bitstream.
+
+* base+tie-off shows ~100k from `issue_read_operands` → pre-existing; **arm 2** is the better
+  vehicle and the debug tree can go.
+* base+tie-off is clean there → the fix created them; **variant B** becomes the instrument-free
+  candidate and arm 1 remains the safe instrumented option.
+
 ---
 
 ## 10. Shortest Possible Explanation
