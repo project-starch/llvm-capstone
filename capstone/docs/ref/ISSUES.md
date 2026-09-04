@@ -131,6 +131,29 @@ it is fixed. **Run it as a second control beside `k800` in the first boot of any
 bitstream.** One small domain, and without it every anomaly in the session is ambiguous between
 two causes with no way to separate them afterwards.
 
+**FIRST BOARD READING, 2026-09-05 — and it does NOT settle it.** A rebuilt R-20 repro ran at
+position 2 of a control-valid boot on this bitstream and read **`0xD0000000`**, all seven arm bits
+clear (control `k800` retval 4; `s06agg` 15 at position 3). The prediction written down beforehand
+was `0xD0000001`, since the bitstream provably lacks `2efb3604f`.
+
+**Status is therefore "not observed by the REBUILT repro on s12fix; FROZEN repro not yet run on
+s12fix" — not "live", and not "fixed".** Two readings remain open and cannot be separated from
+this draw:
+
+- **(a)** the `s12fix` lineage cures the x10 forwarding path by a route other than `2efb3604f`.
+  Not far-fetched: the S-12 fix is in the WAW-escape/forwarding area, which is where R-20 lives.
+- **(b)** the rebuilt draw is a weaker probe. The rebuild replaced a capability spill pair
+  (`stc`/`ldc`) with a scalar one (`sd`/`ld`), so it carries lower capability-store density than the
+  frozen image. It was ruled admissible before the run, with the explicit asymmetry that a
+  **firing** reading would be conclusive and a **clear** reading would not.
+
+**What settles it:** the FROZEN `src/sbx8.dom`, unmodified, on this bitstream. It is linked at
+entry `0x10000` — verified, as are `sbx20` and `sbx36`, all three identical at 10144 bytes, so the
+package README's "three draws at different link offsets" refers to internal padding and not the
+entry VA. That collides with the usual control. **The resolution is to relink the CONTROL to
+`0x20000` and leave the frozen artifact untouched** — `k800` is rebuilt for every image anyway,
+while the frozen repro is the thing that cannot be reproduced.
+
 **Not yet assessed:** whether results already taken on this bitstream are affected. The S-12
 post-fix draws are about *completion* rather than values, so they are probably untouched — but
 "probably" is doing work there and it has not been checked.
