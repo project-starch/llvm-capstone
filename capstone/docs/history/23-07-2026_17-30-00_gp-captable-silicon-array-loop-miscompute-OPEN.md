@@ -17,6 +17,43 @@
 > **This was not connected at the time because S-12 had no mechanism until 2026-09-03.** The
 > connection was suggested by the compiler lane on 2026-09-04 from the signature alone.
 >
+> ### CORRECTION, same day: R-20 fits the symptom BETTER than S-12, and it is a confound
+>
+> **R-20 is "a capability store loses its x10 clobber claim, so a later reader of x10 gets the
+> store's BASE ADDRESS instead of the loaded value"** (`ref/ISSUES.md` under S-03). That is not
+> merely S-12-adjacent — *"gets the store's base address"* **is** the address-like value recorded
+> here. S-12's forwarding delivers `cnull` (cursor 0), which does not match this symptom; R-20
+> delivers an address, which does.
+>
+> **And the R-20 COMPILER workaround landed `30c275b5d781`, 2026-08-10 — eighteen days AFTER these
+> measurements.** So the July binaries did not have it and any rebuild does. That is a confound in
+> the opposite direction from the one noted below: a rebuilt `rc_p1` that passes may be passing
+> because of a *compiler* change from August, not the RTL fix from September, and the bug may have
+> been silently closed for a month.
+>
+> The compiler lane's objection to the S-12 framing was correct and is what led here: a forwarding
+> path returning a register's stale contents predicts the reload reading `i`, not an address.
+>
+> ### The experiment this actually needs — a 2x2, not a single arm
+>
+> The workaround commit says **"TEMPORARY. Revert when a bitstream carrying the RTL fix is
+> resident"**, with revert instructions in
+> `../../tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md`. So both arms are
+> buildable and the hypotheses separate:
+>
+> | | workaround ON (today's default) | workaround REVERTED |
+> |---|---|---|
+> | `rc_p1` passes | the fix is in *one* of them — undetermined | **the resident bitstream fixes R-20 in hardware**, and the workaround can be retired |
+> | `rc_p1` fails | neither fixes it; the July bug is still live and is something else | the workaround is what carries it; keep it |
+>
+> The reverted arm is the informative one, and it answers a standing question worth money on its
+> own: **can the R-20 workaround be retired?** It costs codegen quality on every capability store,
+> and nobody has been able to test the condition its own commit names.
+>
+> **Whether the resident `caplifive_s12fix_5097eb166.bit` carries the R-20 RTL fix (branch
+> `r20-fix`, `2efb3604f`) is NOT established here.** Establish it from the bitstream's lineage
+> before reading the 2x2, or one row is uninterpretable.
+
 > ### The test, and the confound that has to be controlled
 >
 > Rebuild `rc_const0` (`acc[i]=i; s+=acc[i]` — PASS) and `rc_p1` (`acc[i]=i+1` — FAIL) and run both
