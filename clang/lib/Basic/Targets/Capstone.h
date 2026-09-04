@@ -255,11 +255,13 @@ public:
   uint64_t getMaxAddressWidth() const override { return 64; }
 
   bool setABI(const std::string &Name) override {
-    if (Name == "lp64e") {
-      ABI = Name;
-      resetDataLayout("e-m:e-p:64:64-i64:64-i128:128-n32:64-S64");
-      return true;
-    }
+    // No lp64e: the RISCV copy installed a plain 64-bit-pointer datalayout for
+    // it, which is incoherent with a target whose pointers are 128-bit
+    // capabilities in address space 200 (AddrSpaceMap says 200, the layout
+    // would say p:64:64). Rejecting it here makes `-target-abi lp64e` an
+    // "unknown target ABI" error instead of a silently wrong compilation.
+    if (Name == "lp64e")
+      return false;
 
     if (Name == "lp64" || Name == "lp64f" || Name == "lp64d") {
       ABI = Name;

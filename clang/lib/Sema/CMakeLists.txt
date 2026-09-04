@@ -40,6 +40,7 @@ add_clang_library(clangSema
   SemaBase.cpp
   SemaBoundsSafety.cpp
   SemaCXXScopeSpec.cpp
+  SemaCapstone.cpp
   SemaCast.cpp
   SemaChecking.cpp
   SemaCodeComplete.cpp

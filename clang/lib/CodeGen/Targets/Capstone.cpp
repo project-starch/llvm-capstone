@@ -19,6 +19,13 @@ using namespace clang::CodeGen;
 //===----------------------------------------------------------------------===//
 
 namespace {
+// UNREFERENCED. CodeGenModule::createTargetCodeGenInfo has no capstone case, so
+// capstone64 ships on DefaultABIInfo: every aggregate byval/sret, which is
+// tag-correct (a 16-byte {void *} stays a capability in memory). This RISCV-copy
+// classifier would flatten such a struct into [2 x i64] and lose the tag, and
+// would derive XLen from the 128-bit pointer. The validation plan (Tier 4.6,
+// 2026-09-05) keeps DefaultABIInfo and records a register-passing capability
+// ABI as a separate project; the class stays as the starting point for it.
 class CapstoneABIInfo : public DefaultABIInfo {
 private:
   // Size of the integer ('x') registers in bits.

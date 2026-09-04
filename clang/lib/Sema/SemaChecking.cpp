@@ -73,6 +73,7 @@
 #include "clang/Sema/SemaObjC.h"
 #include "clang/Sema/SemaOpenCL.h"
 #include "clang/Sema/SemaPPC.h"
+#include "clang/Sema/SemaCapstone.h"
 #include "clang/Sema/SemaRISCV.h"
 #include "clang/Sema/SemaSPIRV.h"
 #include "clang/Sema/SemaSystemZ.h"
@@ -2096,6 +2097,9 @@ bool Sema::CheckTSBuiltinFunctionCall(const TargetInfo &TI, unsigned BuiltinID,
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64:
     return RISCV().CheckBuiltinFunctionCall(TI, BuiltinID, TheCall);
+  case llvm::Triple::capstone32:
+  case llvm::Triple::capstone64:
+    return Capstone().CheckBuiltinFunctionCall(TI, BuiltinID, TheCall);
   case llvm::Triple::loongarch32:
   case llvm::Triple::loongarch64:
     return LoongArch().CheckLoongArchBuiltinFunctionCall(TI, BuiltinID,

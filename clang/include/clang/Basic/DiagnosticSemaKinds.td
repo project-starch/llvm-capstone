@@ -13088,6 +13088,16 @@ def warn_tcb_enforcement_violation : Warning<
   InGroup<DiagGroup<"tcb-enforcement">>;
 
 // RISC-V builtin required extension warning
+def warn_capstone_pointer_roundtrip : Warning<
+  "%select{casting an integer that was itself converted from a pointer|"
+  "casting a value of type %1}0 to %2 does not restore capability provenance "
+  "on Capstone: the result is untagged and faults when dereferenced">,
+  InGroup<DiagGroup<"capstone-pointer-roundtrip">>;
+def err_capstone_builtin_invalid_ccsr : Error<
+  "capability CSR id %0 is not one of ctvec (0), cih (1), cepc (2), "
+  "cscratch (4) or a cpmp entry (16-31)">;
+def err_capstone_builtin_shrink_bounds : Error<
+  "'__builtin_capstone_cap_shrink' base %0 must be below its end %1">;
 def err_riscv_builtin_requires_extension : Error<
   "builtin requires%select{| at least one of the following extensions}0: %1">;
 def err_riscv_builtin_invalid_lmul : Error<

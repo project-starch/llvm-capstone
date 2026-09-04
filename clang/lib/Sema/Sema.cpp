@@ -61,6 +61,7 @@
 #include "clang/Sema/SemaOpenMP.h"
 #include "clang/Sema/SemaPPC.h"
 #include "clang/Sema/SemaPseudoObject.h"
+#include "clang/Sema/SemaCapstone.h"
 #include "clang/Sema/SemaRISCV.h"
 #include "clang/Sema/SemaSPIRV.h"
 #include "clang/Sema/SemaSYCL.h"
@@ -283,6 +284,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
       ARMPtr(std::make_unique<SemaARM>(*this)),
       AVRPtr(std::make_unique<SemaAVR>(*this)),
       BPFPtr(std::make_unique<SemaBPF>(*this)),
+      CapstonePtr(std::make_unique<SemaCapstone>(*this)),
       CodeCompletionPtr(
           std::make_unique<SemaCodeCompletion>(*this, CodeCompleter)),
       CUDAPtr(std::make_unique<SemaCUDA>(*this)),

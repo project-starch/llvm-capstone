@@ -149,6 +149,12 @@ static unsigned getVersionValue(unsigned MajorVersion, unsigned MinorVersion) {
 void CapstoneTargetInfo::getTargetDefines(const LangOptions &Opts,
                                        MacroBuilder &Builder) const {
   Builder.defineMacro("__capstone");
+  // The conventional target macros, alongside the RISCV-copy `__capstone_*`
+  // names: every Capstone target is the pure-capability model (a pointer is a
+  // 128-bit capability, address space 200), and code that has to know it is
+  // compiling for one asks for these rather than for `__capstone`.
+  Builder.defineMacro("__CAPSTONE__");
+  Builder.defineMacro("__CAPSTONE_PURECAP__");
   bool Is64Bit = getTriple().isCapstone64();
   Builder.defineMacro("__capstone_xlen", Is64Bit ? "64" : "32");
   StringRef CodeModel = getTargetOpts().CodeModel;

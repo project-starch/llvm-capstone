@@ -6,6 +6,7 @@ clang/include/clang/Basic/Attr.td | +54 -1 | def TargetCapstone : TargetArch<["c
 clang/include/clang/Basic/AttrDocs.td | +84 -0 | def CapstoneInterruptDocs : Documentation {
 clang/include/clang/Basic/AttributeCommonInfo.h | +2 -1 | enum class Scope { NONE, CLANG, GNU, MSVC, OMP, HLSL, VK, GSL, RISCV,
 clang/include/clang/Basic/CMakeLists.txt | +31 -0 | clang_tablegen(BuiltinsCapstone.inc -gen-clang-builtins
+clang/include/clang/Basic/DiagnosticSemaKinds.td | +10 -0 | def warn_capstone_pointer_roundtrip : Warning<
 clang/include/clang/Basic/LangOptions.def | +1 -0 | 
 clang/include/clang/Basic/Specifiers.h | +15 -0 | CC_CapstoneVectorCall,    // __attribute__((capstone_vector_cc))
 clang/include/clang/Basic/TargetBuiltins.h | +29 -0 | namespace CapstoneVector {
@@ -15,6 +16,7 @@ clang/include/clang/Basic/capstone_sifive_vector.td | +200 -0 | //==--- capstone
 clang/include/clang/Basic/capstone_vector.td | +1963 -0 | //==--- capstone_vector.td - Capstone V-ext Builtin function list --------------===//
 clang/include/clang/Basic/capstone_vector_common.td | +781 -0 | //==------ capstone_vector_common.td - Capstone V-ext builtin class ------------===//
 clang/include/clang/Driver/Options.td | +9 -0 | defm capstone_subobject_bounds : BoolFOption<"capstone-subobject-bounds",
+clang/include/clang/Sema/Sema.h | +7 -0 | class SemaCapstone;
 clang/lib/AST/ExprConstant.cpp | +32 -12 | // The pointer TYPE's size is the representation width, and on a capability
 clang/lib/AST/ItaniumMangle.cpp | +17 -0 | case CC_CapstoneVectorCall:
 clang/lib/AST/Type.cpp | +16 -0 | case CC_CapstoneVectorCall: return "capstone_vector_cc";
@@ -33,6 +35,10 @@ clang/lib/CodeGen/CodeGenModule.cpp | +6 -1 | // agree everywhere except on a ca
 clang/lib/CodeGen/TargetInfo.h | +4 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
 clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone32:
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
+clang/lib/Sema/CMakeLists.txt | +1 -0 | SemaCapstone.cpp
+clang/lib/Sema/Sema.cpp | +2 -0 | #include "clang/Sema/SemaCapstone.h"
+clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
+clang/lib/Sema/SemaChecking.cpp | +4 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
