@@ -3352,6 +3352,44 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
+### I-02 — an allocated issue ID can be missing from this file, so grepping it is not a safe way to pick one `OPEN — needs an allocation convention`
+
+**Found 2026-09-04** when a lane proposed reusing **C-25** for a newly found defect. C-25 is
+already allocated — on the c128 line, by the external collaborator:
+
+```
+72c7733e2702  Add the mruby probe that found C-25, and record the issue   (2026-08-15)
+738c8c94521f  Fix C-25: a pointer difference must not require its operands to be tagged
+```
+
+**And C-25 does not appear anywhere in this file** — despite a commit whose subject says "record
+the issue". So the registry is missing an ID that the commit history treats as assigned, and the
+obvious allocation method ("grep `ISSUES.md`, take the next free number") silently hands out a
+number that is already in use. The collision was caught by a peer review, not by any check.
+
+That makes it a **process defect, not a bookkeeping slip**: two different defects sharing one ID
+is the kind of thing that survives into a paper, a handover, or a commit message, and it is
+expensive precisely because both entries look correct on their own.
+
+**Until a convention exists, allocate by checking BOTH:**
+
+```
+grep -n 'C-42' capstone/docs/ref/ISSUES.md
+git log --all --oneline --grep='C-42'
+```
+
+The second is what would have caught this one.
+
+**Worth deciding, and deliberately not decided here:** whether IDs should be allocated from a
+single committed list (cheap, one file to lock) or whether a lane owns a numeric range (no
+coordination, but ranges strand). The current state — allocate ad hoc and record where convenient
+— is the only option that demonstrably does not work.
+
+**Also open:** what C-25 actually was is now only reconstructable from two commit messages. It
+should get a proper entry, written by whoever has the mruby context, so the registry stops
+disagreeing with the history.
+
+
 ### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `FIXED 2026-09-04 — three defects; the nightly gap is still OPEN`
 
 **Reported by the compiler lane 2026-09-04, re-verified here before recording.**
