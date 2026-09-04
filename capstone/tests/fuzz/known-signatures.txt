@@ -5,3 +5,5 @@
 Res.getValueType() == Node->getValueType(?) | C-20 | llvm.cttz/ctlz crash the legalizer at every -O (compiler-repros/C20-cttz-i32-crashes-legalizer)
 Cannot materialize arbitrary >?-bit constants as capabilities | C-17 | a >64-bit capability constant is refused with a diagnostic, by design
 Invalid ZERO_EXTEND | C-39 (F-01) | variable-index extract/insert on a wide vector: getVectorSubVecPointer zero-extends the index into the c128 pointer type (fuzz/findings/F01-vector-elt-pointer-zext)
+visitLOAD(SDNode *): Assertion `NewLoad.getNode() == N' | F-02 | variable-index extractelement on a vector after the C-39 fix; DAGCombiner re-creates the temp load with inferred alignment and CSE returns a different node; -O2 only; reduced in findings/F02-vector-elt-load-recreated/
+visitSTORE(SDNode *): Assertion `NewStore.getNode() == N' | F-03 | variable-index insertelement, the store twin of F-02; reduced in findings/F03-vector-elt-store-recreated/

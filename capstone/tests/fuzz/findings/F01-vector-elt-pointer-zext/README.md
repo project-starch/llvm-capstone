@@ -19,7 +19,7 @@ session on 2026-09-04 (free in ISSUES.md and in git log --all).
          N1.getValueType().isInteger() && "Invalid ZERO_EXTEND!"' failed.
 
 Same at -O2, and for `insertelement` with a variable index.  The lit pin is
-`llvm/test/CodeGen/Capstone/fuzz-f01-vector-elt-pointer.ll` (XFAIL until the fix lands).
+`llvm/test/CodeGen/Capstone/fuzz-f01-vector-elt-pointer.ll` (was XFAIL; green since the fix of 2026-09-04, with a value arm pinning the andi/slli/cincoffset/ld shape).
 
 ## Cause
 
@@ -54,6 +54,6 @@ the Tier 4.7 manifest.
 
 ## Status
 
-Pinned (XFAIL).  Fix written, awaiting the rebuild that the running Tier 2a twins must
+FIXED 2026-09-04 (getVectorSubVecPointer computes the index in the pointer type when that is an integer, else in AS0 pointer type). The old status, kept for the record: pinned XFAIL, fix written, awaiting the rebuild that the running Tier 2a twins must
 not see mid-run, then the lit suite, the fuzz rerun, and a claim-auditor pass before the
 commit says "fixed".

@@ -9477,6 +9477,16 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
   const DataLayout &TD = DAG.getDataLayout();
   MachinePointerInfo PtrInfo =
       MachinePointerInfo::getConstantPool(DAG.getMachineFunction());
+  // The table is a constant-pool entry, so its address lives in the DEFAULT
+  // GLOBALS address space. On a fat-pointer target that is a capability type,
+  // not the AS0 integer that getPointerTy(TD) names, and the target's
+  // ConstantPool lowering produces the capability whatever type was asked for
+  // (Capstone C-20: every cttz asserted "Type mismatch for custom legalized
+  // operation" here). The lookup index stays an integer; getMemBasePlusOffset
+  // applies it to the capability, as it does for every other global. Targets
+  // whose globals address space is 0 see no change.
+  EVT CPVT = getPointerTy(TD, TD.getDefaultGlobalsAddressSpace());
+  EVT IdxVT = CPVT.isInteger() ? CPVT : getPointerTy(TD, 0);
   unsigned ShiftAmt = BitWidth - Log2_32(BitWidth);
   SDValue Neg = DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Op);
   SDValue Lookup = DAG.getNode(
@@ -9484,7 +9494,7 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
       DAG.getNode(ISD::MUL, DL, VT, DAG.getNode(ISD::AND, DL, VT, Op, Neg),
                   DAG.getConstant(DeBruijn, DL, VT)),
       DAG.getShiftAmountConstant(ShiftAmt, VT, DL));
-  Lookup = DAG.getSExtOrTrunc(Lookup, DL, getPointerTy(TD));
+  Lookup = DAG.getSExtOrTrunc(Lookup, DL, IdxVT);
 
   SmallVector<uint8_t> Table(BitWidth, 0);
   for (unsigned i = 0; i < BitWidth; i++) {
@@ -9495,7 +9505,7 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
 
   // Create a ConstantArray in Constant Pool
   auto *CA = ConstantDataArray::get(*DAG.getContext(), Table);
-  SDValue CPIdx = DAG.getConstantPool(CA, getPointerTy(TD),
+  SDValue CPIdx = DAG.getConstantPool(CA, CPVT,
                                       TD.getPrefTypeAlign(CA->getType()));
   SDValue ExtLoad = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, DAG.getEntryNode(),
                                    DAG.getMemBasePlusOffset(CPIdx, Lookup, DL),
@@ -10678,7 +10688,18 @@ SDValue TargetLowering::getVectorSubVecPointer(SelectionDAG &DAG,
                                                SDValue Index) const {
   SDLoc dl(Index);
   // Make sure the index type is big enough to compute in.
-  Index = DAG.getZExtOrTrunc(Index, dl, VecPtr.getValueType());
+  //
+  // The pointer to the stack temporary is a CAPABILITY on a fat-pointer target,
+  // not an integer, and an index cannot be zero-extended into it: the offset
+  // arithmetic happens in the index type and getMemBasePlusOffset applies it to
+  // the capability (F-01, found by llvm-stress on every seed: a variable-index
+  // extract/insert on a vector wider than the legal width asserted "Invalid
+  // ZERO_EXTEND!" here).  As in getMemBasePlusOffset, AS0's pointer type stands
+  // in for the index width because the address space is not plumbed through.
+  EVT IdxComputeVT = VecPtr.getValueType();
+  if (!IdxComputeVT.isInteger())
+    IdxComputeVT = getPointerTy(DAG.getDataLayout(), 0);
+  Index = DAG.getZExtOrTrunc(Index, dl, IdxComputeVT);
 
   EVT EltVT = VecVT.getVectorElementType();
 

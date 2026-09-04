@@ -5,11 +5,13 @@
 ; compile (3 of 3 functions emitted in the same measurement), so the control
 ; below is green on its own and the crash is specific to cttz.
 ;
-; XFAIL until the CTTZ legalization actions the RISCV copy lost when GPR became
-; 64-bit-only are restored (Tier 5); then lit reports XPASS and the marker
-; comes off.  The expected shape after the fix is an inline expansion or an
-; `__builtin_ctz`-class sequence -- pinned loosely here as "the function is
-; emitted and returns", which is exactly what a crash cannot satisfy.
+; Fixed 2026-09-04: the cause was not a missing legalization action but the
+; generic de Bruijn table lookup (TargetLowering::CTTZTableLookup) asking for
+; the table's address in address space 0, an i64, while lowerConstantPool
+; always produces the c128 capability -- "Type mismatch for custom legalized
+; operation".  The lookup now uses the default globals address space for the
+; constant-pool pointer, so the expansion is a multiply, a shift and a byte
+; load through a capability, pinned below.
 ;
 ; MUTATION: n/a until the fix lands -- llc produces no output at all today, so
 ; FileCheck sees an empty input; once it passes, the control's `ctlz` check is
@@ -19,7 +21,6 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: %llc_cap -O1 < %s -o /dev/null
-; XFAIL: *
 
 declare i32 @llvm.cttz.i32(i32, i1)
 declare i64 @llvm.cttz.i64(i64, i1)

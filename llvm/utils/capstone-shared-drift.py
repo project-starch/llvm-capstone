@@ -15,6 +15,10 @@ line counts and one distinctive line the patch added -- a marker -- and checks:
   * no shared file outside the manifest differs from the base (a new patch without an
     entry fails loudly: add it with --write).
 
+The comparison is base-vs-WORKING-TREE, not base-vs-HEAD, so an uncommitted edit to a
+shared file already reads as drift, and --write run before the commit records the new
+counts in the same commit as the change.
+
     capstone-shared-drift.py --repo <root> [--manifest FILE] [--base REV]
     capstone-shared-drift.py --repo <root> --write        # (re)generate the manifest
 
@@ -29,7 +33,7 @@ import sys
 
 BASE = "b3a1c7778245"
 SCOPES = [":/llvm/lib", ":/llvm/include", ":/llvm/utils", ":/clang/lib", ":/clang/include"]
-OWN = re.compile(r"(Target/Capstone/|/Capstone[A-Za-z]*\.|BuiltinsCapstone|IntrinsicsCapstone|CapstoneGen)")
+OWN = re.compile(r"(Target/Capstone/|/Capstone[A-Za-z]*\.|BuiltinsCapstone|IntrinsicsCapstone|CapstoneGen|capstone-shared-)")
 MARK = re.compile(r"Capstone|capabilit|c128|CheriCapability|EM_CAPSTONE|addrspace\(200\)|AS200|purecap", re.I)
 
 
@@ -42,7 +46,7 @@ def git(repo, *args):
 
 def numstat(repo, base):
     out = {}
-    for l in git(repo, "diff", "--numstat", base, "HEAD", "--", *SCOPES).splitlines():
+    for l in git(repo, "diff", "--numstat", base, "--", *SCOPES).splitlines():
         a, d, path = l.split("\t", 2)
         if OWN.search(path):
             continue
@@ -51,7 +55,7 @@ def numstat(repo, base):
 
 
 def marker_for(repo, base, path):
-    diff = git(repo, "diff", "-U0", base, "HEAD", "--", path)
+    diff = git(repo, "diff", "-U0", base, "--", path)
     cands = []
     for l in diff.splitlines():
         if l.startswith("+") and not l.startswith("+++"):

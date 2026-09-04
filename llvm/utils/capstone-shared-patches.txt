@@ -55,7 +55,7 @@ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerT
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +99 -13 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +79 -20 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
-llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +27 -6 | // Floating point, a vector, or a capability. Spelled out rather than as
+llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +51 -9 | // GLOBALS address space. On a fat-pointer target that is a capability type,
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
 llvm/lib/IR/Intrinsics.cpp | +1 -0 | #include "llvm/IR/IntrinsicsCapstone.h"
 llvm/lib/Object/ELFObjectFile.cpp | +39 -0 | #include "llvm/Support/CapstoneAttributeParser.h"

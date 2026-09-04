@@ -3,7 +3,9 @@
 # fire on a known input before any fuzz result is read.  No QEMU.
 #
 #   OK      a module that compiles (o1-shapes.ll)
-#   CRASH   the C-20 cttz reproducer, matched to its KNOWN entry
+#   CRASH   a live crasher (F-02's reduced module, -O2), matched to its KNOWN entry.
+#           C-20's cttz reproducer served until its fix landed on 2026-09-04; a
+#           positive control has to be a bug that is still open.
 #   ERROR   the C-17 wide-constant arm, matched to its KNOWN entry
 #   HANG    a compiling module under a 1 ms timeout
 #   UNKNOWN a crash NOT in known-signatures.txt makes the run exit 1
@@ -34,10 +36,10 @@ EOF
 
 echo "== run-llc-stress positive controls"
 expect "OK"      0 "OK, 0 skipped, 0 distinct"  --files "$T/o1-shapes.ll" --levels O0,O2
-expect "CRASH"   0 "KNOWN C-20"   --files "$R/C20-cttz-i32-crashes-legalizer/src/cttz.ll" --levels O0
+expect "CRASH"   0 "KNOWN F-02"   --files "$SCRIPT_DIR/findings/F02-vector-elt-load-recreated/reduced.ll" --levels O2
 expect "ERROR"   0 "KNOWN C-17"   --files "$W/wide.ll" --levels O2
 expect "HANG"    1 "HANG"         --files "$T/o1-shapes.ll" --levels O2 --timeout 0.001
-expect "UNKNOWN" 1 "UNKNOWN"      --files "$R/C20-cttz-i32-crashes-legalizer/src/cttz.ll" --levels O0 --known /dev/null
+expect "UNKNOWN" 1 "UNKNOWN"      --files "$SCRIPT_DIR/findings/F02-vector-elt-load-recreated/reduced.ll" --levels O2 --known /dev/null
 expect "NOTHING" 2 "nothing was tested" --files --levels O0
 
 rm -rf "$W"
