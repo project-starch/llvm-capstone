@@ -27,6 +27,13 @@ class CapstoneSubtarget;
 struct CapstoneRegisterInfo;
 
 
+// True when V is definitely an INTEGER offset rather than a capability. Kept as a
+// free function so the answer (and therefore the choice of cincoffset vs a scalar
+// position) is identical whether an `add` is custom-lowered or reaches ISel
+// directly.
+bool isCapstoneIntegerOffset(SDValue V);
+bool isCapstoneCapabilityValue(SDValue V);
+
 class CapstoneTargetLowering : public TargetLowering {
   const CapstoneSubtarget &Subtarget;
 
@@ -527,6 +534,7 @@ private:
   SDValue getTLSDescAddr(GlobalAddressSDNode *N, SelectionDAG &DAG) const;
 
   SDValue lowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerADD(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;

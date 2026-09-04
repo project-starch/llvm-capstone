@@ -2527,6 +2527,17 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // which folds again -- cap-i128-and-capability-mask.ll hangs. That test's own
 // comment already warned the combiner rebuilds this shape.
 //
+// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
+// This is semantically equivalent to taking the lower 64 bits.
+// We define it as a move, but with different register classes if needed.
+// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
+                      PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+
+// THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
+
 // Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.
 def : Pat<(int_capstone_cap_get_cursor GPR:$src), (PseudoTRUNC_CAP GPR:$src)>;
 

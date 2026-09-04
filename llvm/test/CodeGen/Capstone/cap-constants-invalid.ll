@@ -20,13 +20,13 @@
 ; direct.ll is this file's proof that the refusal machinery still fires.
 
 ; RUN: split-file %s %t
-; RUN: not --crash llc -mtriple=capstone64 -verify-machineinstrs < %t/direct.ll -o /dev/null 2>&1 | FileCheck %s --check-prefix=DIRECT
+; RUN: not llc -mtriple=capstone64 -verify-machineinstrs < %t/direct.ll -o /dev/null 2>&1 | FileCheck %s --check-prefix=DIRECT
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %t/incoffset.ll -o - | FileCheck %s --check-prefix=INCOFFSET
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %t/scalar-load.ll -o - | FileCheck %s --check-prefix=SCALAR-LOAD
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %t/cap-load.ll -o - | FileCheck %s --check-prefix=CAP-LOAD
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %t/gep-truncates.ll -o - | FileCheck %s --check-prefix=GEP
 
-; DIRECT: LLVM ERROR: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as capabilities; capabilities are unforgeable
+; DIRECT: error: {{.*}} in function wide_const {{.*}}: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as capabilities; capabilities are unforgeable (value 0x10000000000000000)
 
 ;--- direct.ll
 define ptr addrspace(200) @wide_const() {

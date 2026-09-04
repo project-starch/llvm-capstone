@@ -2053,7 +2053,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       for (const SDValue &O : {Node->getOperand(0), Node->getOperand(1)})
         if (auto *C = dyn_cast<ConstantSDNode>(O))
           (void)getI128NumericValueOrFatal(
-              C, "Address displacement must fit in 64 bits");
+              CurDAG, C, "Address displacement must fit in 64 bits");
     break;
   default:
     break;
@@ -3302,8 +3302,14 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     // them where every other capability intrinsic already is.
     case Intrinsic::capstone_cap_get_tag:
       return selectLCCField(Node, 0);
-    case Intrinsic::capstone_cap_get_cursor:
-      return selectLCCField(Node, 2);
+    // capstone_cap_get_cursor is DELIBERATELY NOT SELECTED HERE. selectLCCField emits
+    // `lcc rd, rs, 2`, the cursor query, which is NOT TOTAL: it traps on an untagged
+    // operand, and a NULL pointer is untagged. That is C-19 -- DAGCombiner folds
+    // `if (p != 0 || q != 0)` into `(addr(p) | addr(q)) != 0`, both operands get `lcc`,
+    // and the first null argument kills the domain at entry. The cursor is read instead
+    // with a plain integer move via the PseudoTRUNC_CAP pattern in CapstoneInstrInfo.td,
+    // which gives the same value and cannot trap. The other four fields have no such
+    // problem and stay here.
     case Intrinsic::capstone_cap_get_base:
       return selectLCCField(Node, 3);
     case Intrinsic::capstone_cap_get_end:
