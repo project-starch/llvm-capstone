@@ -3352,7 +3352,7 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
-### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `OPEN — every post-merge QEMU verdict is provisional`
+### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `FIXED 2026-09-04 — three defects; the nightly gap is still OPEN`
 
 **Reported by the compiler lane 2026-09-04, re-verified here before recording.**
 
@@ -3390,10 +3390,39 @@ completion. Both cannot be true, so either the reading is wrong or the binary wa
 something other than this branch. **Do not act on this half until it is settled** — establishing
 which commit the 08-27 binary came from settles it, and that is step (c) below.
 
-**What closes this:** (a) make HEAD compile; (b) rebuild; (c) identify the commit the 08-27 binary
-was built from; (d) re-run the SLT corpus and smoke on the rebuilt binary, then re-establish or
-retract the post-merge claims; (e) add a QEMU **build** step to the nightly so a non-compiling
-submodule turns a row red, and find out why the existing relink branch stayed silent.
+**FIXED 2026-09-04 in `capstone-qemu` `f5972c364f`.** Three defects, each hidden behind the one
+before it:
+
+1. `capstone_report_untagged` never closed — the dropped `}`.
+2. `helper_cscincoffset` carried **two stacked `if (...) {` openings**; the merge had interleaved
+   two variants of the gp block. Removed the stray line and restored the
+   `capstone_gp_fabricate() &&` guard it had been carrying. Now structurally identical to
+   `helper_cscincoffsetimm`, which the merge left intact.
+3. **The UNRESOLVED item above was RIGHT.** With 1 and 2 fixed, the smoke test died instantly:
+   `capability fault: cause = 24, pc = 0x80023c1e, tval = 0x0` — `UNEXP_OP_TYPE` raised on a good
+   tagged operand. The three raises were moved inside their `if (!rs1_v->tag)` guards, after the
+   `*_UNTAGGED_SURVIVE` escape. Not a judgement call: **ten other sites in the same file** already
+   put the raise inside its guard; these three were the only ones outside.
+
+**Verified:** builds clean, `run-smoke.sh` exits 0 ("QEMU smoke passed"), and
+`slt/check-negative-control.sh` passes on the rebuilt binary — *"the comparator fails on all six
+wrong arms and skips two"*, so the SLT instrument is proven able to fire on the new QEMU.
+
+**STILL OPEN, and each matters on its own:**
+
+- **(c) what the 2026-08-27 binary was built from is unexplained.** The commits introducing defect
+  3 are dated 08-15..20, so that binary should have exhibited it and did not — it ran SQLite to
+  completion. Something about its provenance is not understood, and until it is, results taken on
+  it are of unknown pedigree rather than merely old.
+- **(d) the "SLT corpus matches native 15/15" claim has no committed harness.**
+  `run-sqlite-slt.sh` is a liveness check that prints `__CAPSTONE_SQLITE_SLT_RAN__`; the
+  case-by-case comparison against `slt_native` was run ad hoc. A claim that cannot be re-run is
+  not re-established by a QEMU fix. Build the harness, then re-assert or drop the number.
+- **(e) the nightly still cannot catch this.** `run-nightly.sh:192-200` relinks only when the
+  binary is older than the source — which it *was* — so that branch should have fired on
+  2026-09-04 and stayed silent. A QEMU **build** step is needed, and the existing branch needs
+  explaining. This is the most valuable of the three: it is why a non-compiling emulator went a
+  day unnoticed.
 
 **Not repaired here.** The damage is not only the missing brace — the merge interleaved two
 variants of the gp-fabrication block in `helper_cscincoffset`, so a brace-only fix would compile
