@@ -25,7 +25,10 @@ OUT="$CAPSTONE_TMP_ROOT/twins/$SUITE$LEVEL"
 rm -rf "$OUT"; mkdir -p "$OUT/logs"
 QID="qemu=$(sha256sum "$QEMU" | cut -c1-12)@$(date -r "$QEMU" +%Y-%m-%dT%H:%M)"
 printf 'suite=%s\nlevel=%s\n%s\ncompiler=%s\nstarted=%s\n' "$SUITE" "$LEVEL" "$QID" "$CAPSTONE_LLVM_BIN" "$(date -Is)" > "$OUT/meta.txt"
-LOCK="$CAPSTONE_TMP_ROOT/nightly-qemu.lock"
+# The rootfs lock is ONE file for the whole machine, whatever CAPSTONE_TMP_ROOT a caller
+# sets (the pair runner gives each arm its own tmp root; deriving the lock from it would
+# have let two QEMU suites run at once -- found 2026-09-05 before it happened).
+LOCK=${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}
 
 case "$SUITE" in
   rv8)      CMD=(env DOMAIN_OPT_LEVEL="$LEVEL" LOG_DIR="$OUT/logs" bash "$BENCH/rv8/run-all-rv8.sh") ;;
@@ -36,9 +39,16 @@ esac
 
 echo "== twin $SUITE $LEVEL ($QID)"
 (
-  flock 9
+  # CAPSTONE_QEMU_LOCK_HELD=1: the caller (the nightly) already holds the rootfs lock on
+  # this path; a nested flock on the same file would wait for it forever.
+  [[ -n "${CAPSTONE_QEMU_LOCK_HELD:-}" ]] || flock 9
   "${CMD[@]}" > "$OUT/summary.txt" 2> "$OUT/stderr.txt"
   echo "exit=$?" >> "$OUT/meta.txt"
+  # run-all-beebs.sh prints PASS on stdout but FAIL and FLAKE on stderr; a summary
+  # made of stdout alone reported an -O2 build failure or a fault that aborted QEMU
+  # as no verdict at all (2026-09-05: sqrt, ctl-stack, ctl-vector read as MISSING).
+  # Bring the verdict lines across so the comparator classifies them.
+  grep -E '^run-all-[a-z0-9]+(\.sh)?: (FAIL|FLAKE)' "$OUT/stderr.txt" >> "$OUT/summary.txt" 2>/dev/null || true
 ) 9>"$LOCK"
 printf 'finished=%s\n' "$(date -Is)" >> "$OUT/meta.txt"
 grep -c . "$OUT/summary.txt" > /dev/null || echo "WARNING: empty summary for $SUITE $LEVEL (see $OUT/stderr.txt)"

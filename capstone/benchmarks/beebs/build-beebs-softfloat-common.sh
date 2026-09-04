@@ -21,6 +21,9 @@ CAPSTONE_SOFTFLOAT_BUILTINS=(
   addsf3 subsf3 mulsf3 divsf3 fixsfsi floatsisf comparesf2
   extendsfdf2 truncdfsf2
   floatdisf floatundisf
+  # floatunsisf: -O2 converts an unsigned int straight to float (sqrt did so on
+  # 2026-09-05 and failed to link); -O0 went through the double conversions.
+  floatunsisf
   floatunsidf floatdidf floatundidf fixdfdi fixunsdfdi fixunsdfsi
   fp_mode
 )

@@ -57,7 +57,14 @@ cp "$CTL_SRC_DIR/vector.h" "$PATCHED_INC/vector.h"
 {
   printf 'typedef unsigned long size_t;\n'
   printf '#ifndef NULL\n#define NULL ((void *)0)\n#endif\n'
-  sed '/^#include <stddef\.h>/d' "$CTL_SRC_DIR/ctl.c"
+  # The BEEBS heap is `static char heap[HEAP_SIZE]`, alignment 1, and the benchmark
+  # stores CAPABILITIES into memory it hands out; a capability store needs 16-byte
+  # alignment.  The -O0 image happened to place the array 16-aligned and the -O2
+  # image 8-mod-16 (2026-09-05: `stc` into heap, "Unaligned cap access", cause 4),
+  # which read as an -O2 failure and was the allocator's.  Align the array.
+  sed -e '/^#include <stddef\.h>/d' \
+      -e 's/^static char heap\[HEAP_SIZE\];/static char heap[HEAP_SIZE] __attribute__((aligned(16)));/' \
+      "$CTL_SRC_DIR/ctl.c"
 } > "$PATCHED_SRC"
 
 COMMON_FLAGS=(

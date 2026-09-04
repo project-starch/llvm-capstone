@@ -2537,9 +2537,10 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // with the GPR write enable and gets '0 whenever the result is not a capability
 // (commit_stage.sv:279, issue_read_operands.sv:1900,1943 -- NOT cap_we, which is
 // the second port), shown for lui/addi by alu-write-clears-shadow.S and
-// cincoffset-stale-metadata.S; the exact shape emitted here, `addi a5, a5, 0`
-// with a5 a live tagged capability and the cincoffset next, is proposed as a
-// further arm of that test and is NOT yet measured. Every c128 -> i64 truncate
+// cincoffset-stale-metadata.S, and for the exact shape emitted here --
+// `addi a5, a5, 0` with a5 a live tagged capability and the cincoffset next --
+// by ARM D of alu-write-clears-shadow.S (RTL lane, 2026-09-05: no trap, with the
+// file's positive control still firing). Every c128 -> i64 truncate
 // selects to this pseudo (CapstoneISelDAGToDAG, the ISD::TRUNCATE case), as
 // does cap_get_cursor below. It stays a pseudo until MC lowering because
 // MachineCopyPropagation (UseCopyInstr, CapstoneTargetMachine addPreEmitPass)

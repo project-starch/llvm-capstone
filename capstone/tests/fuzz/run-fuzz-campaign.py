@@ -122,17 +122,25 @@ def main():
         if a.control and seed == a.start and manifest:
             dom = out / "doms" / f"cs{seed}-{levels[-1]}-xor.dom"
             rc, o, e = sh(["bash", build, str(src), str(dom), f"-{levels[-1]}", "xor"], timeout=600)
-            if rc == 0:
-                manifest.append((f"cs{seed}-{levels[-1]}-xor", str(dom), seed, levels[-1] + "-xor", n0,
-                                 hashlib.sha256(open(dom, "rb").read()).hexdigest()[:12]))
+            if rc != 0:
+                # A positive control that does not build is a harness error, never a skip.
+                print("ERROR: the XOR control did not build:\n" + (o + e)[-1500:], file=sys.stderr)
+                sys.exit(2)
+            manifest.append((f"cs{seed}-{levels[-1]}-xor", str(dom), seed, levels[-1] + "-xor", n0,
+                             hashlib.sha256(open(dom, "rb").read()).hexdigest()[:12]))
 
     if a.control and manifest:
         fdom = out / "doms" / "fault.dom"
-        rc, o, e = sh(["bash", build, str(HERE / "csmith-rt" / "fault_domain.c"), str(fdom), "-O0"], timeout=300)
-        if rc == 0:
-            # Before the LAST item, so the run must survive the fault and still run one more.
-            manifest.insert(len(manifest) - 1, ("fault-control", str(fdom), 0, "control", -1,
-                                                hashlib.sha256(open(fdom, "rb").read()).hexdigest()[:12]))
+        # "bare": fault_domain.c defines domain_main itself; linking the csmith entry as
+        # well was a duplicate-symbol link error that the first campaign skipped SILENTLY
+        # (2026-09-05), so the run had one control instead of two.  Never skip a control.
+        rc, o, e = sh(["bash", build, str(HERE / "csmith-rt" / "fault_domain.c"), str(fdom), "-O0", "bare"], timeout=300)
+        if rc != 0:
+            print("ERROR: the fault control did not build:\n" + (o + e)[-1500:], file=sys.stderr)
+            sys.exit(2)
+        # Before the LAST item, so the run must survive the fault and still run one more.
+        manifest.insert(len(manifest) - 1, ("fault-control", str(fdom), 0, "control", -1,
+                                            hashlib.sha256(open(fdom, "rb").read()).hexdigest()[:12]))
 
     if manifest and not a.no_qemu:
         mpath = out / "manifest.tsv"
@@ -141,10 +149,15 @@ def main():
                 f.write(f"{name}\t{path}\n")
         share = out / "share"
         res = out / "batch-results.tsv"
-        lock = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone")) / "nightly-qemu.lock"
-        cmd = ["flock", str(lock), "python3", str(HERE / "run-domain-batch.py"), "--manifest", str(mpath),
+        # One lock for the machine, independent of CAPSTONE_TMP_ROOT (see run-twin-suite.sh).
+        lock = pathlib.Path(os.environ.get("CAPSTONE_QEMU_LOCK", "/tmp/capstone/nightly-qemu.lock"))
+        cmd = ["python3", str(HERE / "run-domain-batch.py"), "--manifest", str(mpath),
                "--share", str(share), "--log", str(out / "batch.log"), "--out", str(res),
                "--per-item-timeout", str(a.per_item_timeout)]
+        # CAPSTONE_QEMU_LOCK_HELD=1: the caller (the nightly) already holds the rootfs
+        # lock; a nested flock on the same file would wait for it forever.
+        if not os.environ.get("CAPSTONE_QEMU_LOCK_HELD"):
+            cmd = ["flock", str(lock)] + cmd
         rc, o, e = sh(cmd, timeout=None)
         print(o.strip()); print(e.strip()[-2000:] if e.strip() else "", file=sys.stderr)
         got = {}
@@ -177,7 +190,7 @@ def main():
                     rows.append(("control", 0, "fault", "CONTROL-OK" if kind == "FAULT" else "CONTROL-FAILED", "", "", sha, f"fault_domain read {kind}"))
                     continue
                 rows.append(("csmith", seed, lvl, kind, f"{native:X}", "", sha, note))
-                if kind in ("FAULT", "TIMEOUT"):
+                if kind in ("FAULT", "TIMEOUT", "WEDGE"):
                     keep_finding(out, seed, lvl, out / "src" / f"cs{seed}.c", path, f"{kind}: {note}")
     elif manifest:
         for name, path, seed, lvl, native, sha in manifest:
@@ -196,7 +209,7 @@ def main():
           + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) + f"; rows -> {tsv}")
     if not rows:
         print("ERROR: nothing ran", file=sys.stderr); sys.exit(2)
-    bad = sum(counts.get(k, 0) for k in ("MISMATCH", "FAULT", "TIMEOUT", "BUILD-CRASH", "CONTROL-FAILED", "ERROR"))
+    bad = sum(counts.get(k, 0) for k in ("MISMATCH", "FAULT", "TIMEOUT", "WEDGE", "BUILD-CRASH", "CONTROL-FAILED", "ERROR"))
     if a.control and not a.no_qemu:
         if counts.get("CONTROL-OK", 0) < 2:
             print("ERROR: a positive control did not fire (XOR must MISMATCH, fault_domain must FAULT)", file=sys.stderr)

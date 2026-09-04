@@ -1,0 +1,9 @@
+twin coremark off/on W-16 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	AGREE-PASS	
+twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	off-ONLY-FAIL	OFF (jump tables enabled) faults: cause 24 at pc 0x101563bdc, Cap mem access requires capability, rs1 = x10 (the jump-table dispatch loads through an integer register); comparator rerun after the CoreMark parser fix, same summaries
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	aes	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	dhrystone	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	miniz	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	norx	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	primes	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	qsort	AGREE-PASS	
+twin rv8 off/on W-06 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=7	sha512	AGREE-PASS	

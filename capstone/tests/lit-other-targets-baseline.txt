@@ -1,0 +1,42 @@
+# Failures of llvm/test/CodeGen/{X86,RISCV,Generic} on this fork's partial build, recorded
+# 2026-09-05 on the cycle-1 toolchain (7727 tests, 32 failures) as the baseline the
+# regression check diffs against: a run of those suites after a shared-code change must
+# reproduce EXACTLY this list -- fewer is fine, more is a regression to attribute.  The
+# class column says what was verified: `tool` = the RUN line needs a binary the build
+# dir does not contain (lli, llvm-dwarfdump, llvm-as...); `mismatch` = FileCheck
+# differences, not attributed to a cause; a trailing `?` = inferred from the name only.
+# No pre-fork baseline of these suites exists.
+#
+# test | class
+CodeGen/Generic/bswap.ll | tool (lli not built, verified)
+CodeGen/Generic/dwarf-md5.ll | tool?
+CodeGen/Generic/dwarf-source.ll | tool?
+CodeGen/RISCV/emutls.ll | mismatch?
+CodeGen/RISCV/rvv/debug-info-rvv-dbg-value.mir | tool?
+CodeGen/X86/2009-10-19-atomic-cmp-eflags.ll | mismatch?
+CodeGen/X86/2010-01-18-DbgValue.ll | tool?
+CodeGen/X86/2011-01-24-DbgValue-Before-Use.ll | tool?
+CodeGen/X86/GC/badreadproto.ll | tool?
+CodeGen/X86/GC/badrootproto.ll | tool?
+CodeGen/X86/GC/badwriteproto.ll | tool?
+CodeGen/X86/GC/fat.ll | tool?
+CodeGen/X86/GC/outside.ll | tool?
+CodeGen/X86/cfi-basic-block-sections-1.ll | mismatch?
+CodeGen/X86/dbg-baseptr.ll | tool (llvm-dwarfdump not built, verified)
+CodeGen/X86/dbg-distringtype-uint.ll | tool?
+CodeGen/X86/dbg-line-0-no-discriminator.ll | tool?
+CodeGen/X86/debug-loclists.ll | tool?
+CodeGen/X86/debuginfo-locations-dce.ll | tool?
+CodeGen/X86/dwarf-comp-dir.ll | tool?
+CodeGen/X86/dwarf-headers.ll | tool?
+CodeGen/X86/dwarf-split-line-1.ll | tool?
+CodeGen/X86/dwarf-split-line-2.ll | tool?
+CodeGen/X86/emutls-pic.ll | mismatch?
+CodeGen/X86/emutls-pie.ll | mismatch?
+CodeGen/X86/emutls.ll | mismatch (X86-NEXT expected string not found, verified)
+CodeGen/X86/emutls_generic.ll | mismatch?
+CodeGen/X86/fsafdo_probe2.ll | tool?
+CodeGen/X86/fsafdo_test2.ll | tool?
+CodeGen/X86/fsafdo_test3.ll | tool?
+CodeGen/X86/inconsistent_landingpad.ll | mismatch?
+CodeGen/X86/tls-android.ll | mismatch?

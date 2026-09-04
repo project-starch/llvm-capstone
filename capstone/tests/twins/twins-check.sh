@@ -26,6 +26,8 @@ printf 'run-all-beebs.sh: PASS bs (__BEEBS_BS_PASSED__, log=x)\nrun-all-beebs.sh
 printf 'run-all-beebs.sh: PASS bs (log=x)\nrun-all-beebs.sh: PASS (retried) crc32 (log=y)\n' > "$W/bok.txt"
 printf 'run-coremark.sh: CoreMark CRC validated\n__COREMARK_PASSED__\n' > "$W/cm-ok.txt"
 printf 'run-coremark.sh: boot failed\n' > "$W/cm-bad.txt"
+# A domain fault leaves only the build's stdout: still a run, hence FAIL, not "no summary".
+printf 'Built /x/coremark_capstone.dom\nBuilt /x/coremark_host.user\n' > "$W/cm-fault.txt"
 
 fail=0
 arm() {  # label, expected rc, expected verdict substring, args...
@@ -47,6 +49,7 @@ arm "EMPTY summary is an ERROR"              2 "no verdicts"   --suite rv8 --a "
 arm "beebs FLAKE is an ERROR"                2 "FLAKE"         --suite beebs --a "$W/bfl.txt" --b "$W/bok.txt" --label-a O0 --label-b O2
 arm "beebs retried PASS parses"              0 "2/2 AGREE-PASS" --suite beebs --a "$W/bok.txt" --b "$W/bok.txt" --label-a O0 --label-b O2
 arm "coremark marker decides"                1 "O2-ONLY-FAIL"  --suite coremark --a "$W/cm-ok.txt" --b "$W/cm-bad.txt" --label-a O0 --label-b O2
+arm "coremark fault (build lines only) is FAIL" 1 "O2-ONLY-FAIL"  --suite coremark --a "$W/cm-ok.txt" --b "$W/cm-fault.txt" --label-a O0 --label-b O2
 
 rm -rf "$W"
 if [[ "$fail" -eq 0 ]]; then echo "twins-check: ALL ARMS OK"; exit 0; fi

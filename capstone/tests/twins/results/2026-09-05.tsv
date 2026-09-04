@@ -1,0 +1,99 @@
+# cycle 2 (2026-09-05 ~02:00): C-31, C-33, C-36 (incl. the domain-crossing operand models), the init/seal tie (R-25), the lcc-2 retirement, the dead-code deletion and the front-end changes; libLLVMCapstoneCodeGen.so 31573af0ef13, libLLVMCapstoneDesc.so 7991f231a5eb, libclangSema.so a1287972ea67, libLLVMSelectionDAG.so e8d4d239bc0f; rows below are on this toolchain
+slt select1 -O0 dom=4ad79af54e63 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	1031 records, 0 shared failures	native: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt q_two -O0 dom=4ad79af54e63 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt dd2_join -O0 dom=4ad79af54e63 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt select1 -O1 dom=fd9f0b02ef51 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	1031 records, 0 shared failures	native: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt q_two -O1 dom=fd9f0b02ef51 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt dd2_join -O1 dom=fd9f0b02ef51 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt select1 -O2 dom=0a61867bd3e6 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	1031 records, 0 shared failures	native: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt q_two -O2 dom=0a61867bd3e6 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+slt dd2_join -O2 dom=0a61867bd3e6 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	2 records, 0 shared failures	native: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	aes	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	dhrystone	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	miniz	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	norx	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	primes	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	qsort	AGREE-PASS	
+twin rv8 O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	sha512	AGREE-PASS	
+twin coremark O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	coremark	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-aha-compress	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-aha-mont64	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-bs	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-bubblesort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-cnt	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-compress	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-cover	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-crc	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-crc32	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ctl-stack	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ctl-string	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ctl-vector	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-cubic	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-dijkstra	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-dtoa	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-duff	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-edn	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-expint	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-fac	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-fasta	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-fdct	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-fibcall	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-fir	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-frac	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-huffbench	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-insertsort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-janne-complex	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-jfdctint	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-lcdnum	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-levenshtein	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ludcmp	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-matmult	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-matmult-float	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-mergesort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-miniz	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-minver	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nbody	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ndes	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-aes	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-arcfour	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-cast128	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-des	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-md5	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nettle-sha256	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-newlib-exp	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-newlib-log	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-newlib-mod	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-newlib-sqrt	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ns	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-nsichneu	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-picojpeg	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-prime	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-qrduino	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-qsort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-qurt	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-recursion	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-rijndael	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-select	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-arraybinsearch	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-arrayheapsort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-arrayquicksort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-arraysort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-dllist	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-hashtable	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-listinsertsort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-listsort	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-queue	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sglib-rbtree	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-slre	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-sqrt	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-st	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-statemate	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-stb_perlin	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-stringsearch1	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-strstr	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-tarai	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-trio-snprintf	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-trio-sscanf	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ud	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-whetstone	AGREE-PASS	
+twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-wikisort	AGREE-PASS	

@@ -9,6 +9,9 @@ row `name\tverdict\tvalue\tnote`:
   RET      the loader printed "Called dom (1-th time) retval = N": value = N
   FAULT    QEMU died while the domain ran (a capability fault inside a domain aborts
            the emulator); the guest is rebooted and the run continues with the NEXT
+  WEDGE    the shell prompt never came back although QEMU is alive (the domain hung
+           the guest); rebooted like FAULT.  Until 2026-09-05 this was an ERROR with
+           no reboot, and every later item errored in seconds against the dead guest.
            item, so one bad program does not void the batch
   TIMEOUT  the domain did not return within --per-item-timeout; QEMU is killed and
            rebooted, the run continues
@@ -144,7 +147,7 @@ def main():
                     if m:
                         rows.append((name, "RET", m.group(1), "loader exit non-zero"))
                     elif qemu.isalive():
-                        rows.append((name, "ERROR", "", text.strip().splitlines()[0][:200]))
+                        rows.append((name, "WEDGE", "", text.strip().splitlines()[0][:200]))
                     else:
                         rows.append((name, "FAULT", "", "QEMU exited during the domain"))
                 except pexpect.EOF:
@@ -152,7 +155,7 @@ def main():
                 except pexpect.TIMEOUT:
                     rows.append((name, "TIMEOUT", "", f"> {a.per_item_timeout}s"))
                 log.write(f"\n> END {name} {rows[-1][1]} {rows[-1][2]}\n")
-                if rows[-1][1] in ("FAULT", "TIMEOUT") or not qemu.isalive():
+                if rows[-1][1] in ("FAULT", "TIMEOUT", "WEDGE") or not qemu.isalive():
                     qemu.terminate(force=True)
                     reboots += 1
                     if reboots > a.max_reboots:

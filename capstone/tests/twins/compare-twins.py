@@ -53,7 +53,11 @@ def parse(suite, path):
                 v[m.group(2)] = m.group(1)
     elif suite == "coremark":
         text = "\n".join(lines)
-        if "run-coremark.sh" in text or "__COREMARK_PASSED__" in text or "Correct operation" in text:
+        # Any non-empty summary is a run that was attempted: the runner writes its own
+        # failure lines to stderr, so a domain fault leaves only the build's lines on
+        # stdout (W-17's jump-table arm, 2026-09-05, read as "no summary" instead of FAIL).
+        # An EMPTY summary is still no verdict (the suite never ran).
+        if text.strip():
             v["coremark"] = "PASS" if "__COREMARK_PASSED__" in text else "FAIL"
     else:
         raise SystemExit(f"unknown suite {suite}")

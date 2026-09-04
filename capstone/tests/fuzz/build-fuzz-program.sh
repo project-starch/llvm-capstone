@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Build one generated C program into a Capstone domain.
 #
-#   build-fuzz-program.sh <prog.c> <out.dom> <-O0|-O1|-O2|-Os> [xor]
+#   build-fuzz-program.sh <prog.c> <out.dom> <-O0|-O1|-O2|-Os> [xor|bare]
+#   "bare": the source IS the domain (defines domain_main itself, e.g. the fault
+#   control); the fuzz_domain.c entry is not linked.
 #
 # Same start.S/link.ld/gct-tail as tests/runtime-qemu/build-domain.sh, plus the
 # csmith runtime overlay (csmith-rt/), fuzz_domain.c (the entry, returning the
@@ -33,6 +35,7 @@ trap 'rm -rf "$OBJ"' EXIT
 CC=("$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -w -mllvm -verify-machineinstrs)
 DEFS=(-D_GNU_SOURCE)
 [[ "$XOR" == "xor" ]] && DEFS+=(-DFUZZ_XOR=1)
+BARE=0; [[ "$XOR" == "bare" ]] && BARE=1
 
 compile() {  # out.o, args...
   local o=$1; shift
@@ -49,11 +52,16 @@ compile() {  # out.o, args...
 compile "$OBJ/start.o" "$DOMAIN/start.S" || exit $?
 compile "$OBJ/gct.o" "$RUNTIME/gct-section-end.S" || exit $?
 compile "$OBJ/prog.o" "$LEVEL" -I"$RT" -I"$CSMITH_INC" -include "$RT/capstone_platform.h" "${DEFS[@]}" "$SRC" || exit $?
-compile "$OBJ/entry.o" "$LEVEL" "${DEFS[@]}" "$RT/fuzz_domain.c" || exit $?
+ENTRY_OBJ="$OBJ/entry.o"
+if [[ $BARE -eq 1 ]]; then
+  ENTRY_OBJ=""   # the program defines domain_main itself
+else
+  compile "$OBJ/entry.o" "$LEVEL" "${DEFS[@]}" "$RT/fuzz_domain.c" || exit $?
+fi
 compile "$OBJ/string.o" "$LEVEL" "$STRING_SRC" || exit $?
 
 mkdir -p "$(dirname -- "$OUT")"
-err=$("$CAPSTONE_LD_LLD" -T "$DOMAIN/link.ld" -o "$OUT" "$OBJ/start.o" "$OBJ/prog.o" "$OBJ/entry.o" "$OBJ/string.o" "$OBJ/gct.o" 2>&1) \
+err=$("$CAPSTONE_LD_LLD" -T "$DOMAIN/link.ld" -o "$OUT" "$OBJ/start.o" "$OBJ/prog.o" ${ENTRY_OBJ:+"$ENTRY_OBJ"} "$OBJ/string.o" "$OBJ/gct.o" 2>&1) \
   || { echo "LINK-ERROR: $(head -c 300 <<< "$err")"; exit 12; }
 SIZE=$(stat -c%s "$OUT")
 if (( SIZE > CEILING )); then echo "SIZE-SKIP: $SIZE bytes > $CEILING"; rm -f "$OUT"; exit 13; fi

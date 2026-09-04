@@ -22,7 +22,8 @@ LEVEL=${1:?usage: run-slt-twin.sh <-O0|-O1|-O2|-Os> [file.test ...]}
 shift
 case "$LEVEL" in -O0|-O1|-O2|-O3|-Os|-Oz) ;; *) echo "ERROR: level must be -O0/-O1/-O2/-Os, got $LEVEL" >&2; exit 2 ;; esac
 CAP=${SLT_TWIN_CAP:-256}
-LOCK="$CAPSTONE_TMP_ROOT/nightly-qemu.lock"
+# One machine-wide lock, independent of CAPSTONE_TMP_ROOT (see run-twin-suite.sh).
+LOCK=${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}
 
 if [[ $# -eq 0 ]]; then
   CORPUS=$(bash "$SQL/fetch-sqllogictest.sh")
@@ -44,7 +45,9 @@ for T in "$@"; do
   rm -f "$LOG"
   echo "== slt twin $name $LEVEL"
   (
-    flock 9
+    # CAPSTONE_QEMU_LOCK_HELD=1: the caller (the nightly) already holds the rootfs lock on
+  # this path; a nested flock on the same file would wait for it forever.
+  [[ -n "${CAPSTONE_QEMU_LOCK_HELD:-}" ]] || flock 9
     SQLITE_OPT_LEVEL="$LEVEL" DOMAIN_EXTRA_DEFS="-DSLT_MAX_REPORTED=${CAP}u" \
       SLT_TEST="$T" OUT_DIR="$OUT" SLT_LOG_FILE="$LOG" \
       bash "$SQL/run-sqlite-slt.sh" > "$OUT/$name.run.log" 2>&1 \

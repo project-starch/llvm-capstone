@@ -39,7 +39,10 @@ RESULTS=${WORKAROUND_RESULTS:-$SCRIPT_DIR/results/$(date +%Y-%m-%d).tsv}
 mkdir -p "$(dirname "$RESULTS")"
 
 run_arm() {  # off|on, flags-or-env
-  local arm=$1 spec=$2 out="$BASE/$arm"
+  # Two statements: under `set -u` a single `local a=$1 b="$x/$a"` expands $a before it
+  # is assigned ("arm: unbound variable" -- the first real run, 2026-09-05).
+  local arm=$1 spec=$2
+  local out="$BASE/$arm"
   mkdir -p "$out"
   local wrapper="$out/clang"
   case "$MECH" in

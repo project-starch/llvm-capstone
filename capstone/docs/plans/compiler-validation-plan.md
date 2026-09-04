@@ -889,3 +889,290 @@ them rather than rediscovering them:
   RISCV-copy names (`clang/lib/Basic/Targets/Capstone.cpp:151-230`); `__capstone_v_intrinsic`
   is defined unconditionally at `:226`, vector or not. There is no `SemaCapstone.cpp`; the
   RISCV one is the model.
+
+### Execution log — fix cycle 1 landed; cycle 2 prepared while QEMU validates (2026-09-05, small hours)
+
+**Cycle 1** (`c11b8fb6` C-39+C-20, `ffcc7347` C-40+C-28, `3980e9bb` the semantics matrix and the
+C-31 pin) went through the gates before the QEMU twins: Capstone lit 84 CodeGen + 7 MC + 2
+Disassembler + 16 clang with only C-31, C-37 and C-38 still XFAIL; coverage gate 0 gaps;
+fuzz-check ALL OK; llvm-stress 598/600 against 0/600 (F-02, F-03 filed with nine-line
+reductions); the X86/RISCV/Generic suites 7727 tests, 32 failures, all missing-tool or
+debug-info/emutls class, unattributed for want of a baseline, argued identity for AS0 targets.
+
+**What the twins on the cycle-1 compiler say so far:** the -O0 SQLite image is byte-identical
+to the pre-fix one (dom `2880bd1af983`, the control), and `select1` at -O1 AGREES with native
+on all 1031 records (dom `04cc91bce3c7`), where the pre-fix image faulted at its first executed
+zero-base site. `q_two` -O1 agrees; `dd2_join` -O1 running, then -O2, RV8, CoreMark, BEEBS.
+
+**Two comparator lessons, recorded because both had a passing positive control:**
+- compare-twins anchored the RV8 verdict regex on end-of-line while the runner's FAIL lines
+  carry a log pointer, so an all-FAIL side parsed as "no summary". Its check arm had used a
+  bare FAIL line -- a format the runner never emits. The control must use the producer's real
+  output, not a hand-typed imitation (`f19eb1217e7b`).
+- fuzz-check's crash controls were the C-20 reproducer, which the fix turned into an OK; a
+  positive control has to be a bug that is still open, so they now use F-02.
+
+**The rtl-oracle pass (Tier 4.1) changed the compiler's to-do list.** Beyond the DELIN
+divergence already known: RTL raises on a TAGGED rs2 of cincoffset/scc/shrink and QEMU does
+not, and a `ptrtoint` is a bare sub-register read, so `q + (long)p` at -O2 is
+`cincoffset a0, a1, a0` with a0 the untouched capability -- a silicon-only fault in ordinary C
+(**C-31**, pinned, fix in cycle 2: every c128->i64 truncate becomes PseudoTRUNC_CAP, an
+integer write, kept a pseudo until MC lowering so copy propagation cannot delete it). MOVC
+zeroes an UNTAGGED source on RTL (C-32). CAPENTER's funct7 in the `.td` (0100010) is decoded
+by neither RTL nor QEMU (both 0001101) and CAPEXIT exists nowhere (**C-36**). `cap_get_tag`
+traps on untagged on both (**C-33**). ldc of a LINEAR value clears the source granule and stc
+nulls rs2 on RTL only. The hardware-side divergences (REVOKE's UNINIT cursor = start on RTL,
+which RTL's own INIT rejects; INIT writing the LINEAR result to both rs1 and rd; TIGHTEN
+raising on imm > 7 where spec and QEMU clamp, and not nulling rs1; the QEMU asserts; the
+mcause+1 encoding) are in `CapstoneISASemantics.md` for hand-over.
+
+**The C-40 audit** supported the root cause and the fix, refuted the fix's safety wording (a
+ptrtoint-derived offset keeps its tag because the INSERT_SUBREG copy is elided when source and
+destination share a register -- the pre-existing inttoptr hole), and corrected the README's
+site counts (7 and 20, not five and eight) and "first loop" (first EXECUTED site). All applied.
+
+**Cycle 2, written and object-compiled, waiting for the twins to release the toolchain:**
+- Tier 4.5: `lowerSUB`, `lowerADD`, `lowerScalarI128{Shift,Logical,LogicalOnCapability,And,Mul}`
+  and the four helpers only they used, 801 lines, deleted after `-Wunused-function` reported
+  each static one on a solo recompile of the object (the member `lowerADD` had one mention: its
+  definition). The object compiles with zero warnings after the deletion.
+- C-31, C-33 (`lcc rd, rs, 1; sltiu rd, rd, 7`), C-36 (CAPENTER 0001101; CAPEXIT, its intrinsic,
+  builtin, selector and clang lowering removed; the two retired encodings pinned INVALID in the
+  disassembler suite; cap-control-flow.ll re-homed its mutation on `return`).
+- Tier 4.6 Sema: `SemaCapstone.{h,cpp}` plumbed like SemaRISCV (Sema.h, Sema.cpp, CMakeLists,
+  the SemaChecking dispatch for capstone32/64), two diagnostics; ranges: tighten 0..7, ccsrrw
+  id in {0,1,2,4,16..31} (QEMU `helper_csccsrrw` asserts on anything else), shrink constant
+  base < end, the inherited scalar-crypto ranges. Tests `Sema/capstone-builtins-range.c`,
+  `Sema/capstone-inherited-riscv-ranges.c`; `capstone-tighten-range-diagnostic.c` is now a
+  front-end -verify test, the backend route staying pinned by `fatal-tighten-range.ll`.
+- After the build: the MC encodings for capenter re-derived from llvm-mc (predicted
+  `[0x5b,0x95,0x05,0x1a]`), the MIR arm of cap-control-flow.ll updated for PseudoTRUNC_CAP,
+  the c31 control's expectation set from the output, the manifest re-baselined for
+  DiagnosticSemaKinds.td, X86/RISCV as before, llvm-stress, then the twins again.
+
+### Execution log — cycle 2 grows by R-25, and two Tier 4 rows close without a fix (2026-09-05)
+
+- **R-25 (INIT duplicates a LINEAR capability on RTL) is reachable from codegen.** The board
+  lane verified the RTL reading against the other three `rd,rd` writebacks in the file (each
+  guarded by `rs1 == rd`; INIT's is not) and asked whether codegen ever emits `rs1 != rd`.
+  It does: INIT has no tied-operand constraint, so a source kept live after the builtin gets
+  `init a1, a0, a1` at -O1 and -O2 (measured). No in-tree C calls `cap_init`, which is a fact
+  about our programs, not about the silicon. Cycle 2 selects `cap_init` and `cap_seal` through
+  tied pseudos (`PseudoINIT`/`PseudoSEAL`, rd = rs1), the ISA's own consume semantics; the MC
+  instructions stay untied. Pinned by `sem-init-seal-tied.ll`, which fails on today's
+  compiler exactly as the mutation header says.
+- **The remaining `lcc rd, rs, 2` reads are gone**: the stack-shrink and global-shrink base
+  reads and the realignment prologue used the cursor query; all three now use
+  `PseudoTRUNC_CAP`. sp-derived operands are always tagged so none could trap, but Tier 4.2
+  wanted no selector-2 query anywhere, and the pseudo also keeps copy propagation from
+  handing SHRINK a tagged operand.
+- **C-34 closes without a fix**: a zero-size alloca is laid out as one byte and its SHRINK
+  covers one byte (`li a2, 1` in the sequence); a zero-size global gets no SHRINK at all. To
+  be pinned by `sem-shrink-zero-size.ll` once the cycle-2 shapes are known.
+- **Tier 4.3 closes without a fix**: a load through another capability is not moved across a
+  `drop` at -O2 (the second load of the same address is re-issued after it); pinned by
+  `sem-drop-orders-loads.ll` on today's compiler.
+- **The gp-captable lead is dead**: the elided-copy mechanism needs -O1+ and produces a wrong
+  tag, while that bug is present at -O0 and produces a wrong value (board lane, from the
+  23-07 record). Not carried into cycle 2.
+- `capstone/tests/lit-other-targets-baseline.txt` records the 32 X86/RISCV/Generic failures
+  of the cycle-1 run so the next run is a diff, with what was verified marked as such.
+
+### Execution log — RV8 -O2 7/7 on cycle 1; the domain-crossing model was wrong end to end (2026-09-05, ~01:00)
+
+- **Twins on the cycle-1 compiler so far:** SLT AGREE at -O0/-O1/-O2 on all three files; RV8
+  -O0 7/7 and **-O2 7/7 AGREE-PASS against 0/7 before** -- the five hangs and sha512's cause-5
+  fault were C-28 (a sibling call falling off the end of its function) and norx's cause 24 was
+  C-40; CoreMark AGREE. BEEBS -O0/-O2 running. "-O2 correct on QEMU" now holds for every suite
+  that has reported.
+- **The second rtl-oracle pass (CAP_CALL / CAP_RETURN / CAPENTER), all quoted in
+  `CapstoneISASemantics.md`:** the compiler's `return` encoded rd = 0 and typed rs1/rs2 as
+  capabilities, but spec, RTL and QEMU read the sealed-return capability from the rd FIELD and
+  take rs1 as an integer (the re-entry PC) -- so every compiler-emitted return raised
+  UNEXPECTED_OPERAND on the RTL (x0's capability slot is hard-zero) and took a different,
+  trap-return-like branch under QEMU. The board-validated glue's hand-encoded
+  `domreturn(t1, t2, x0)` has always had it right. Hardware saves, restores or scrubs NO general
+  register across a synchronous call/return (PC plus seven CSRs are swapped, same list on both
+  implementations); the compiler's call used an ordinary call's callee-saved mask, promising
+  s0-s11 survive. QEMU asserts rd == rs1 on call and rs1 && rs2 on capenter; the RTL hardwires
+  capenter's destination to a1. Cycle 2 now models all of it: `return rd, rs1, rs2` with the
+  intrinsic `cap_return(cap, pc, code)`; codegen's call through a tied `PseudoDomCall`
+  (`isCall`, `Defs = [C1]`, `getNoPreservedMask`); `capenter rs1, rs2` with fixed a0/a1 and the
+  intrinsic `cap_enter(cap, i64)` returning a1. **OPEN C-36b:** no zeroing of non-argument
+  registers and no gp save/restore around a domain call (the reference compiler does both);
+  no in-tree C calls these builtins, so nothing shipping is affected yet.
+- The tied pseudos have to be defined after the instructions they expand to (TableGen resolves
+  `PseudoInstExpansion` names at that point): the first placement, after INIT but before SEAL,
+  failed to build. Every changed object compiles cleanly; the full relink waits for BEEBS.
+
+### Execution log — cycle 1 fully validated on QEMU; cycle 2 committed (2026-09-05, ~02:30)
+
+- **Cycle-1 twins complete:** BEEBS -O0 81/81, -O2 78/81 AGREE-PASS. The three without an
+  -O2 verdict were not the compiler's: `sqrt` failed to link (-O2 emits `__floatunsisf`,
+  which the freestanding runtime's compiler-rt subset lacked; added to the shared list);
+  `ctl-stack` and `ctl-vector` faulted with "Unaligned cap access" on a `stc` into the
+  benchmark's own `static char heap[HEAP_SIZE]`, alignment 1, which the -O2 image's layout
+  put 8-mod-16 and the -O0 image's 16-aligned -- a bump allocator handing out
+  capability-holding memory without capability alignment; the array is now aligned to 16 in
+  the source patch step. The runner printed no verdict line at all for either kind of
+  failure; the comparator's MISSING (exit 2) is what surfaced them. So on cycle 1, every
+  suite that has a verdict agrees at -O2 on QEMU.
+- **Cycle 2 committed** as `357131bf` (C-31, C-33, C-36 including the domain-crossing
+  operand models, the R-25 tie, the lcc-2 retirement, the gate keyed on messages),
+  `ff5b20a5` (801 lines of dead i128 code), `4e94e3a2` (SemaCapstone,
+  `-Wcapstone-pointer-roundtrip`, target macros, no lp64e, the ABI note; manifest at 71
+  files). Gates on the tree: 103 LLVM-side and 21 clang tests as expected (XFAIL left:
+  C-32, C-37, C-38), coverage 0 gaps, fuzz-check ALL OK, llvm-stress 897/900 with only
+  F-02/F-03. The twins on cycle 2 are running.
+- **What cycle 2 changed in emitted code, for anyone comparing images:** every `ptrtoint`
+  and every pointer compare gains one `mv` (a self-move when the register is reused -- the
+  write is the point; the combiner's re-formed `trunc(xor)` adds a second, harmless one in
+  `hash_two`); the SHRINK sequences and stack realignment read the cursor with `mv`
+  instead of `lcc ..., 2`; `cap_get_tag` is `lcc rd, rs, 1; sltiu rd, rd, 7`; `cap_init`
+  and `cap_seal` overwrite their source register; a function making a domain call saves
+  and reloads ra and s0-s11 around `call a0, a0` (13 spills -- the price of "the hardware
+  preserves nothing" while honouring the C ABI for the caller); `return rd, rs1, rs2`;
+  `capenter rs1, rs2` with fixed a0/a1; no `capexit`. The domain-call cost and the
+  extra `mv`s are correctness-first choices; a use analysis that keeps the bare read for
+  consumers that never check the shadow is a later optimisation.
+- **Two build-order lessons:** a tied pseudo must be defined after the instruction its
+  expansion names; and a virtual result on an instruction whose mask preserves nothing
+  cannot be allocated ("ran out of registers") -- a call's result has to be a fixed
+  physical register, copied out, like any return value.
+- The results table's toolchain-identity lines used the executables' hashes; with shared
+  libraries those never change. Corrected to the commit range and the four shared-library
+  hashes from cycle 2 on.
+
+### Execution log — the cycle-2 audit (2026-09-05, ~03:00)
+
+The claim-auditor attacked the C-31 fix and the domain-crossing model. Outcomes:
+- **C-31 mechanism SUPPORTED, with a matched pair:** the same post-PEI MIR with the truncate
+  as `PseudoTRUNC_CAP` keeps `mv a0, a0` through to the object file; with the truncate as a
+  plain `ADDI $x10, $x10, 0` the pre-emit MachineCopyPropagation (UseCopyInstr, via
+  `isCopyInstrImpl`) deletes it. The auditor's own first control was vacuous --
+  `-run-pass=machine-cp` builds the pass WITHOUT UseCopyInstr, so both variants survived
+  it and read as "the addi is safe too". Only the real pipeline (`-start-after=prologepilog`)
+  exercises the instance that deletes. Recorded here as another instance of the check that
+  cannot fire.
+- **RTL half UNSUPPORTED as cited:** neither `alu-write-clears-shadow.S` (different rs1,
+  three nops) nor `cincoffset-stale-metadata.S` (rs1 already an integer) exercises
+  `addi a5, a5, 0` on a live tagged a5 with the cincoffset next. The reading that it works
+  (an ALU op never reads operand metadata; the shadow is written with the GPR write enable
+  and '0 for a non-capability result -- `commit_stage.sv:279`, `issue_read_operands.sv:1900,1943`,
+  not `cap_we`, which two documents had cited) is a reading. A one-arm addition was sent
+  to the RTL lane; until it runs, C-31's silicon half is a prediction.
+- **The C-31 test's CHECK-NOT was vacuous** (it scanned only the prologue; the fixed output
+  legitimately contains `cincoffset a0, a1, a0` after the write). Removed; the ordering
+  checks are the guard.
+- **CAP_RETURN model SUPPORTED** (assembler and hand encoding agree, `.insn r` order settled
+  by assembling both forms, decoder reads the rd field via the rs3 port).
+- **CAP_CALL: mask, reserved registers and the ra reload SUPPORTED; "sp is preserved by
+  convention" UNSUPPORTED** -- no such convention exists in-tree, and the only domain exit
+  scrubs sp. Reworded as open beside C-36b, which now also names tp.
+- **Residual recorded:** `copyPhysReg` emits nothing for a GPCR->GPR copy whose destination
+  is the source's own address half (`CapstoneInstrInfo.cpp:695-697`) -- a bare read by a
+  route other than the truncate; no IR found that reaches it from a tagged source.
+- The other-targets lit run on cycle 2 reproduces the recorded 32-failure baseline exactly.
+
+### Execution log — a serialization hole in the harness, closed before it fired (2026-09-05, ~03:20)
+
+The twin drivers derived the rootfs lock path from `CAPSTONE_TMP_ROOT`, and the Tier 2b pair
+runner gives each arm its own tmp root -- so a pair launched while the twins run would have
+taken a DIFFERENT lock file and started a second QEMU against the shared rootfs, the exact
+thing the "serialize QEMU suites" rule forbids. Found by reading the lock line before
+launching, not by a collision. The lock is now one machine-wide path
+(`CAPSTONE_QEMU_LOCK`, default `/tmp/capstone/nightly-qemu.lock`) in run-twin-suite.sh
+and the fuzz campaign; run-slt-twin.sh gets the same line once its running instance
+exits. Lesson, in one sentence: a lock that guards a shared resource must not be named
+after a per-run directory. The Tier 2b sequence (W-16, W-17 on CoreMark; W-06, W-07, W-04,
+W-05 on RV8; W-08 on SLT, all at -O2) is queued behind the cycle-2 twins on that lock.
+Two CLASSIFICATION.tsv rows were corrected first: W-16 and W-17's OFF arms were written as
+"(flag removed)", which the wrapper would have passed to clang as two words; they are now
+`-foptimize-sibling-calls` and `-fjump-tables`, appended after the build script's own
+flags so the later one wins.
+
+### Execution log — C-31's silicon half measured (2026-09-05, ~03:40)
+
+The RTL lane ran the proposed arm within the hour: `MOVC(a5, a6); addi a5, a5, 0;
+CINCOFFSET(a7, a1, a5); CAPPRINT(a7)` inserted between ARM C and ARM B of
+`alu-write-clears-shadow.S`. ARM D's CAPPRINT reached the log at cycle 362 and the run's only
+exception is ARM B's UNEXPECTED_OPERAND at cycle 365 -- the positive control fired, so the
+negative means something; the run ends at the +time_out cycle count because ARM B wedges the
+core rather than trapping to mtvec, which the file places last for that reason. Both
+untested mechanisms (an ALU op reading a register whose shadow says capability, and a
+consumer issuing before the write settles) are covered by the one arm, since the cincoffset
+is the very next instruction. C-31's fix is therefore measured on the RTL, not read. The
+arm lands on the RTL lane's branch with the result in its commit message; the matrix and the
+PseudoTRUNC_CAP comment now cite it. Cycle-2 SLT: 9/9 AGREE (dd2_join -O2 in).
+
+### Execution log — the first csmith campaign, and what it found in its own harness (2026-09-05, ~04:00)
+
+Ten seeds with both controls, on the cycle-2 compiler. Seeds 1-5 MATCH the native reference at
+-O0 and -O2 (the first random-program agreement this project has had); seeds 6 and 8 GEN-SLOW
+(native timeout / native link failure); the XOR control fired (CONTROL-OK). Then two harness
+defects, both of the "silent" class:
+- the fault control never ran: `fault_domain.c` defines `domain_main` itself and the build
+  script linked the csmith entry wrapper as well -- a duplicate-symbol link error that the
+  campaign skipped with `if rc == 0`. A positive control that does not build is now an
+  ERROR that ends the run (exit 2); the build script has a `bare` mode for a source that is
+  the whole domain.
+- seed 7 at -O0 hung the guest (QEMU printed a `csdebugprint` of 0x1234: the domain executed
+  bytes that decode as the debug-print instruction, so control left the code; the image has no
+  such opcode, no switch, no indirect jump, and its whole stack demand is under 3 KB). The
+  batch runner recorded ERROR without rebooting because QEMU was alive, and every later item
+  errored in seconds against the dead guest. That is now a WEDGE verdict that reboots like
+  FAULT. Seed 7 is a candidate F-04 and needs a solo run with a trace once QEMU is free; the
+  rerun (queued) will also say whether -O2 wedges too.
+Cycle-2 twins so far: SLT 9/9, RV8 -O2 7/7, CoreMark AGREE; BEEBS running.
+
+### Execution log — the first two Tier 2b pairs (2026-09-05, ~04:20)
+
+Run interleaved with the cycle-2 twins on the shared lock (one QEMU at a time, verified
+with fuser), after the pair runner's first real invocation exposed an `unbound variable`
+in its own `local` line -- the skeleton had never run end to end.
+- **W-16 `-fno-optimize-sibling-calls`, CoreMark -O2: COMPILER-DEBT, retired by C-28.** OFF
+  (sibling calls enabled) and ON both validate the CRC; the images differ. The flag masked
+  the tail-call miscompile since June. Removal from the CoreMark and SQLite build scripts
+  waits for one board rung on the current bitstream, per the plan's retirement rule.
+- **W-17 `-fno-jump-tables`, CoreMark -O2: COMPILER-DEBT, still needed.** With jump tables
+  enabled the domain faults at the dispatch (cause 24, "Cap mem access requires capability",
+  rs1 = x10): the jump-table lowering loads the target through an integer register. The pin
+  stays; the fix (a capability base for the table load, or no-jump-tables as the target
+  default) is a cycle-3 item.
+- The CoreMark comparator read that fault as "no summary": run-coremark.sh writes its failure
+  lines to stderr, so stdout held only the build's lines. Any non-empty CoreMark summary
+  without the marker is now FAIL (an empty one stays no-verdict), with a check arm.
+
+**Cycle-3 design note, jump tables (W-17).** The fault is at the table LOAD, not the jump:
+`lowerJumpTable` returns the table's capability (`getAddr`), but the generic BR_JT expansion
+computes `Table + Index*4` in the AS0 pointer type (i64) and loads the EK_Custom32 entry
+through that integer -- "Cap mem access requires capability, rs1 = x10". The branch itself
+(`PseudoBRIND` -> `jalr x0`) is an integer jump within PCC and is fine. The fix is a custom
+BR_JT lowering: `getMemBasePlusOffset(TableCap, Index*4)` for the entry load (a `cincoffset`
+on the capability, then `lw`), the 32-bit absolute target to `brind`. About thirty lines plus
+a test with a 10-way switch at -O0 and -O2 and the W-17 OFF pair as the QEMU verdict. Worth
+doing rather than defaulting to no-jump-tables: SQLite's VDBE dispatch is one big switch and
+the pin turns it into a compare chain.
+
+### Execution log — the csmith campaign rerun: instrument clean, one real -O0 finding (2026-09-05, ~04:45)
+
+With the bare-mode fault control and the WEDGE-reboot path: 18 items, both positive controls
+fired (the XOR build MISMATCHed, the fault domain FAULTed and the batch rebooted and ran the
+item after it), 15 of 16 program runs MATCH the native reference at -O0 and -O2 (seeds 1-5,
+9, 10 at both levels, seed 7 at -O2), seeds 6 and 8 skipped as GEN-SLOW. The one non-match is
+now attributable: seed 7 WEDGES at -O0 and matches native at -O2 -- an -O0-only defect, the
+class the plan said -O0 has (the CoreMark crcu8 byte-spill tag clear is another). Filed as
+F-04 with the source, image hashes and the trace facts; the next step is a solo run with an
+instruction trace and a per-function optnone bisection run as one batch.
+
+### Execution log — cycle-2 twins: every suite agrees at -O2 on QEMU (2026-09-05, ~05:00)
+
+On the cycle-2 compiler (commits 357131bf..8a155cc7): SQLite SLT AGREE with native at -O0,
+-O1 and -O2 on select1 (1031 records), q_two and dd2_join; RV8 -O0 7/7 and -O2 7/7; CoreMark
+-O0/-O2 AGREE; BEEBS -O0 81/81 and **-O2 81/81 AGREE-PASS**, including ctl-stack,
+ctl-vector and sqrt, which had no verdict in cycle 1 (the heap alignment and the soft-float
+routine were the benchmark's, not the compiler's). That is the plan's bar -- "-O2 correct on
+QEMU" -- met on every execution suite the project has, against a starting point of SQLite
+faulting at -O1 and -O2, RV8 0/7 at -O2, and 60 lit tests none of which ran at -O1.
+Silicon remains the other half of the bar and is the board lane's: the images to compare are
+identified by the shared-library hashes in results/2026-09-05.tsv.
