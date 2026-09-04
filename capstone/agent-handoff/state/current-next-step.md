@@ -1,6 +1,65 @@
 # Next step
 
-## 0. CURRENT — 2026-08-27. S-12: every model-side mechanism is EXCLUDED. The next step is silicon.
+## 0. CURRENT — 2026-08-28. S-12 has a CAUSAL TRIGGER CONDITION. The next step is the COMPILER.
+
+**Supersedes the 2026-08-27 section below, whose "next step" (reflash to the S-10 bitstream) was
+done: the board now runs `caplifive_s10fix_80843404c.bit`, and S-12 SURVIVED it — `pad48` wedged
+5/5 across both bitstreams. S-10 is excluded as the cause.**
+
+### The condition, established by a three-byte single-variable experiment
+
+S-12 requires a **`movc rD, zero` whose register rD is then targeted by the `ldc rD` feeding the
+faulting consumer.** Patching the baseline binary by three bytes —
+
+    0x104808  movc a4, zero    -> movc a6, zero
+    0x10480c  stc  a4, 0x0(a5) -> stc  a6, 0x0(a5)
+    0x104810  ldc  a4, 0x0(a0)     (unchanged)
+
+— cures it: **0 wedges / 4** against a baseline of **14 confirmed + 1 unconfirmed wedge / 16**,
+p ≈ 1.3e-5. Same addresses, instruction count, distance, and the same store to the same address with
+the same value. The store is held completely constant, so **its presence is not sufficient and the
+register match is required**. The register's IDENTITY is irrelevant (`scalar` wedges on `a5`).
+
+Everything else measured: prepare-time only (empty tables, no rows) · plan depth >= 2, by join or
+LIST SUBQUERY · **nesting, not repetition** (`dd6_twostmt` 0/5 at the same 5 invocations vs
+`dd2_join` 6/6) · the 36 instructions to the fault are branch-free and identical on every call ·
+cured by a fence before the reload (0/7 vs 7/7).
+
+### THE NEXT STEP IS A COMPILER CHANGE, and it is the first actionable one
+
+The trigger is a **codegen pattern**, and codegen is ours. A pass that avoids allocating the
+destination of an `ldc` to a register just written by `movc rD, zero` — or that separates them —
+would remove S-12 from SQLite on silicon without any RTL change or reflash. That is a real
+deliverable and it is board-cheap to validate: build, then 4-5 draws with the arm in slot 1.
+
+**Do this before more board archaeology.** Everything since the reflash has been narrowing the
+condition; the condition is now narrow enough to act on.
+
+### What is NOT established
+
+* **No RTL structure is named.** The condition says when the fault fires, not which unit mishandles
+  it. Whether the null VALUE matters, or any value in the matching register would do, is untested —
+  that patch cannot hold semantics fixed, since the stored value becomes `pIdx`.
+* **Four mechanism accounts were retracted on 2026-08-28**, each killed by an instrument or a
+  confound rather than by the hardware: a fabricated dose-response from an R-16 entry stall, a
+  layout confound, slot-vs-role confounding (the arm always sat in slot 0 where the trap latch does
+  not report), and a "register pairing" whose counterexample sat in disassembly already printed.
+  **Read `02-REFUTED.md` before proposing anything; several obvious ideas are already dead.**
+
+### Board discipline this cost, now standing
+
+* **Put the arm under test in SLOT 1.** The trap latch reports `mcause 25 / tval 0` there and
+  `mcause 3 / 0x368 / ebreak` in slot 0, so a slot-0 wedge is unattributable.
+* **Take verdicts from the driver's `=== STAGED BISECTION ===` block**, never a hand-written parser:
+  four hand-rolled classifiers produced four different bugs, one of which fabricated a wedge.
+* **Prefer binary patching to source edits** for single-variable tests. Source edits let the
+  compiler move layout, distance, allocation and instruction count together; that confound caused
+  most of the retractions above.
+
+---
+
+## 0b. SUPERSEDED — 2026-08-27
+
 
 **This supersedes section 0 below, whose "discriminating unknown" is now ANSWERED.**
 

@@ -470,6 +470,187 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## RETRACTED: "register match is causal". The CURING binary contains the pairing — same address as the last retraction
+
+**The observation stands; the variable and the statistics do not.**
+
+**The patched build still satisfies the condition declared required.** `movc a4, zero` at `0x1047f0`
+writes `a4`, and `a4` is not redefined before `ldc a4` at `0x104810` — `0x1047f4`, `0x1047f8`,
+`0x104800` are *uses*; `0x1047fc`, `0x104804`, `0x10480c` write `a5`/`a6`. So the curing binary pairs
+a `movc`'s destination with the reload's, at distance 8. Both `a4` and `a6` carry a null at
+`0x10480c`.
+
+**This is the same error as the retraction one commit earlier, at the same instruction address.**
+`769c8ef20a51` retracted the register-pairing claim *because* `li-pidx` contained the pairing at
+`0x1047f0`. The sentence written to justify this patch — *"`a4` still holds 0 from `0x1047f0`, so
+semantics are unchanged"* — states the refuting fact, and was read only for the purpose it served.
+
+**The p-value is wrong by ~80x.** `0.06^4` treats an estimate as known. Fisher exact for 0/4 vs
+15/16 is **1.0e-3**. Worse, **no baseline draw exists in the configuration actually run**: every 0.94
+draw had a *variant* in slot 0, while regpatch had a returning `dd1_one` filler. Against the two
+known-wedging images in the SAME configuration (`pf64` 4/4, `scalar` 3/5), p ≈ **2.4e-3**; against
+this folder's own 54% population rate, **0.045**. A one-sided 95% bound leaves the patched image's
+wedge rate as high as **0.53** — "cured" is not established.
+
+**The patch severs TWO relations at once** — the `movc`'s adjacency to the `ldc` (2 instructions → 8)
+and the source register of the `stc` immediately preceding it. Nothing separates them.
+
+**WHAT SURVIVES:** *the store's presence is not sufficient.* A `stc` of the same null capability, to
+the same address, same position, same distance, sourced from a different register, did not wedge in
+4/4 valid draws.
+
+**A correlate that fits every build (PLAUSIBLE, UNPROVEN):** an adjacent `stc rD` carrying a
+null/NOT_CAP value immediately before `ldc rD`. Wedging: baseline, `pf64`, `scalar`. Curing:
+`regpatch`, `dc-null`, `pin4`, `li-pidx`. **`dc-tagged` breaks it on value alone** — register match,
+*tagged* value, cures 0/3 — so the null-value ingredient is forced into any surviving wording. This
+is the shape R-20 (`stc`/rs1 cursor forwarding) would predict.
+
+**CONTAMINATION, self-inflicted:** `s12pass.sh` staged over `sqli.dom` and rebuilt firmware
+mid-sequence while `regpatch2.sh` was still drawing. `regpatch` draws 7+ booted `4b751cbd` (the
+compiler-pass build), not `c20279a4` (regpatch). Those draws are VOID. **Board runs must be
+serialised; only off-board work parallelises.**
+
+**THE TWO CONTROLS THAT WOULD SETTLE IT, neither of which exists yet:**
+1. the UNMODIFIED baseline as the slot-1 arm with the `dd1_one` filler — the only draw putting the
+   baseline in the configuration actually used. If it does not wedge ~4/4, the null is wrong and the
+   whole comparison collapses;
+2. an **all-`a6`** patch restoring the full triple on `a6` with `a4` unused — separating the
+   adjacency half from the `stc`-source half.
+
+## SUPERSEDED — the causal claim as originally written
+
+
+The experiment the audit specified as decisive has been run, and it is the first result in this
+investigation with **no confound available**.
+
+`regpatch.dom` is the BASELINE binary with **three bytes** changed:
+
+    0x104808   movc a4, zero      ->  movc a6, zero
+    0x10480c   stc  a4, 0x0(a5)   ->  stc  a6, 0x0(a5)
+    0x104810   ldc  a4, 0x0(a0)       (unchanged)
+    0x104814   cincoffsetimm a4, a4, 0xb0
+
+Everything else is byte-identical: same addresses throughout, same instruction count, same
+store-to-reload distance, same store to the same address with the same value. `a6` is dead from
+`0x1047bc` and `a4` still holds 0 from `0x1047f0`, so semantics are unchanged. **The single variable
+is whether the register carrying the null matches the reload's destination.**
+
+    arm in slot 1, returning filler in slot 0     wedges
+    baseline  (movc a4 ... ldc a4)                14 confirmed + 1 unconfirmed / 16
+    3-byte patch (movc a6 ... ldc a4)             0 / 4 valid (1 infra VOID)
+
+At baseline's ~0.94 per-draw rate, P(0 in 4) ≈ **1.3e-5**.
+
+**This separates what the contiguous triple could not.** The audit's objection was that the triple
+bundles register match, null value and store adjacency, with no pair of builds varying exactly one.
+Here the store — its address, value, position and distance — is held *completely* constant. So the
+store's presence is **not sufficient**, and the register match **is required**.
+
+With the earlier result that the register's IDENTITY is irrelevant (`scalar` wedges on `a5` at its
+own confirmed consumer address; `dc-null` cures with a reload into `a5`), the condition is a
+**same-register relation**, not a property of any particular register.
+
+**Why binary patching.** Every source-level variant let the compiler re-lay-out the function, moving
+layout, distance, allocation and instruction count together — which is why four successive mechanism
+claims were confounded and retracted. Three attempts to force a register split from source failed:
+`-O0` reuses the same scratch register regardless of added pressure. Patching two register fields
+sidesteps the compiler and leaves nothing to attribute the result to.
+
+**STILL NOT ESTABLISHED.** Whether the null VALUE matters or any value in the matching register
+would do — a further patch, but not one that can hold semantics fixed, since the stored value is
+what `pIdx` becomes. And **no RTL structure is named**: this states the triggering condition, not
+which hardware unit mishandles it.
+
+## RETRACTED: the register-pairing claim. The correlate is the CONTIGUOUS TRIPLE, and it does not discriminate
+
+**"Exceptionless" is false.** `li-pidx` — the headline cure at 0/8 — CONTAINS the pairing, at the
+identical reload and consumer:
+
+    1047f0  movc a4, zero               BEFORE the reload
+    1047f4  stc  a4, -0x5a0(s0)
+    104804  ldc  a4, 0x0(a0)            same register, same source pointer
+    104808  cincoffsetimm a4, a4, 0xb0  the identical consumer
+
+That was in disassembly already printed and read; the `movc` at `104818` (which had moved after) was
+matched and the one at `1047f0` two instructions above the reload was not. `dc-tagged` is the same.
+
+**Baseline is NOT 15/15.** `li-pidx-3` records the BASELINE returning (`rc=0`, past the replay blob):
+14 confirmed + 1 unconfirmed wedge + **1 return in 16**. Behaviour is therefore **not** a
+deterministic function of the image; the per-draw rate is ~0.94.
+
+**`dc-null` and `dc-tagged` are built ON TOP of the `pidx` code motion** — the build script says so
+and the binaries confirm it — so their 0/4 and 0/3 inherit an already-established cure.
+
+**The `tval = 0` argument was backwards.** The null `movc` writes is *immediately* `stc`'d, so a
+false forwarding hit delivering that just-stored null derives `tval = 0` exactly as well as a lost
+writeback does. The memory side is not weakened and the "NOT the write-buffer forwarding family"
+steer is withdrawn.
+
+**DISTANCE co-varies perfectly** with the claimed pairing (2 instructions in baseline, 5 in both
+`pidx` and `dc-tagged`), and `c56679fb175e` already established distance as a variable.
+
+**WHAT SURVIVES.** Across **four** independent build lineages (three share one source manipulation),
+every signature-confirmed wedge occurs in a build containing the **contiguous triple**
+`movc rD,zero ; stc rD,0(rX) ; ldc rD,0(rY)` immediately upstream of the consumer, and no curing
+build contains that exact contiguous triple. The same-register relation WITHOUT the adjacent store
+appears in curing builds, so the register pairing alone is not the correlate. The triple bundles
+register match, null value and store adjacency; nothing here varies exactly one of them, so it does
+**not** discriminate a register-writeback hazard from write-buffer forwarding.
+
+**One sub-claim survives:** the destination register's IDENTITY is not the variable — `scalar` wedges
+on `a5` (confirmed at its own consumer `0x828f480c`) and `dc-null` cures with a reload into `a5`.
+
+**THE DECISIVE MISSING EXPERIMENT:** a register-field-only change —
+`movc a6,zero ; stc a6,0x0(a5) ; ldc a4,0x0(a0)` — with every address, instruction count and
+distance byte-identical to baseline. Wedge refutes the register pairing outright; cure establishes
+it with the store held constant. At baseline's ~0.94 rate, 4 draws give p ≈ 1e-5.
+
+## SUPERSEDED — the register-pairing claim as originally written
+ — exceptionless across 6 builds, 38 draws
+
+**The address hypothesis is refuted and the store is incidental.** `pf64` keeps the null capability
+store in the window but moves its target from `s0-0x120` to `s0-0x160`, leaving the reload at
+`0x104810` and the consumer at `0x104814` — the SAME addresses as baseline, so no layout shift of
+the fault site at all. It wedges **4/4**, signature-confirmed (`tval 0`, `mepc 0x828f4814`).
+
+Cross-checking register allocation across every variant built this session:
+
+    variant         movc rD,zero before ldc rD (SAME register)?     wedges
+    baseline        movc a4 -> ldc a4      YES                      15 / 15
+    scalar          movc a5 -> ldc a5      YES                       3 / 5
+    pf64            movc a4 -> ldc a4      YES                       4 / 4
+    pidx            movc moved AFTER the ldc                         0 / 8
+    deadcap-null    movc a4 -> ldc a5      DIFFERENT REGISTER        0 / 4
+    deadcap-tagged  no movc zero before the ldc                      0 / 3
+
+**Every wedging build pairs `movc rD, zero` with an `ldc` into the SAME register; every curing build
+breaks that pairing** — by moving the `movc` after the reload, by storing a tagged value instead of
+null, or by the reload landing in a different register. The store's address, value and presence all
+varied freely across the cures and none of them tracks the outcome.
+
+**It predicts `tval = 0` EXACTLY rather than approximately.** `movc rD, zero` writes
+`{cursor 0, NOT_CAP}` into rD. If the `ldc`'s writeback to rD is lost or late, the consumer reads
+back precisely movc's own value — the observed faulting operand IS movc's output. No memory-side
+account reaches `tval = 0` without an extra assumption; every one of them predicts a STALE value,
+which here is a non-zero cursor.
+
+It also explains **why a fence cures** (it perturbs the timing between two writes to rD) and why
+`deadcap-null` cured **while keeping a null capability store in the window** — its reload targeted
+`a5` while the `movc` wrote `a4`.
+
+**LIMITS, and they matter.** This is a correlation across builds, not a demonstrated mechanism. The
+pairing is necessary in every case observed, but **bare-metal tests reproducing `movc`/`stc`/`ldc` on
+one register did NOT wedge** (`s12-cap-waw-pressure.S`, `s12-stc-producer.S`), so an additional
+ingredient supplied by the nested codegen context is still required — which is consistent with
+everything else in this folder, since the instruction sequence alone was never sufficient. The six
+variants are also six binaries with differing layout; `pf64` is the tightest control, holding the
+reload and consumer at baseline addresses, and it wedges.
+
+**WHERE THIS POINTS:** a register writeback / WAW hazard on rD between `movc rD, zero` and a
+subsequent `ldc rD`, NOT the write-buffer forwarding family. That is a different structure from the
+one the previous three accounts pointed at, and it is the first account that derives `tval = 0`
+rather than assuming it.
+
 ## RE-ESTABLISHED with the arm in SLOT 1: the null capability store's PRESENCE is required
 
 The retraction below was about instrumentation, not about the effect. Re-run with the arm under test

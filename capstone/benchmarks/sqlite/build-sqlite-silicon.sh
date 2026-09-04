@@ -1208,6 +1208,71 @@ fi
 #   pidx cures, scalar does not -> (b): the null capability store is the forwarded value.
 #   both cure                   -> not specific to the capability store; store COUNT or position.
 #   neither cures               -> (a) survives; the null store is not involved.
+# CAPSTONE_DEADCAP=null|tagged -- move the real null store OUT (as LATE_INIT=pidx does) and put a
+# DEAD capability store of the chosen value at that same point instead.
+#
+# SEPARATES the three accounts still consistent with "the null store must be present":
+#   value-forward  -- the {cursor 0, NOT_CAP} VALUE is delivered to the reload's consumer
+#   occupancy      -- any additional 16-byte capability store in the window suffices
+#   address-alias  -- the store's TARGET (s0-0x120) aliases the reload's (s0-0x70) in a
+#                     word-granular hit function, independent of the value stored
+#
+#   null   wedges, tagged does NOT -> the NULL VALUE is what matters => value-forward
+#   BOTH wedge                     -> occupancy: any capability store in the window is enough
+#   NEITHER wedges                 -> neither value nor occupancy; the ORIGINAL store's own
+#                                     address is implicated
+#
+# The dead local is `volatile` so the store is emitted and never read, and the real `pIdx = 0` is
+# still moved after the reload, so program semantics are unchanged in both arms.
+# CAPSTONE_PADFRAME=<bytes> -- insert a dead padding local BEFORE the pIdx declaration, so the
+# null capability store KEEPS its position in the window but lands on a DIFFERENT frame slot.
+#
+# This tests the ADDRESS directly, which is what the deadcap arms pointed at: a dead capability
+# store at s0-0x140, in the same position immediately before the reload, does NOT wedge whether its
+# value is null or tagged -- while the real store at s0-0x120 does. Padding the frame keeps the same
+# instruction, the same value and the same position, and changes only where it writes.
+#
+#   wedge DISAPPEARS -> the store's TARGET ADDRESS is the trigger; the defect is in address
+#                       comparison (e.g. the word-granular wbuffer_hit_oh at wt_dcache_mem.sv:280).
+#   wedge PERSISTS   -> the address is not the variable and the deadcap result needs another
+#                       explanation.
+if [[ -n "${CAPSTONE_PADFRAME:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PADFRAME" <<'PYPF'
+import sys
+path, nbytes = sys.argv[1], sys.argv[2]
+s = open(path).read()
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"PADFRAME: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+pad = "  volatile char pframepad_[%d]; (void)pframepad_;\n" % int(nbytes)
+s = s.replace(DECL, pad + DECL, 1)
+open(path, "w").write(s)
+print(f"   PADFRAME: {nbytes} bytes of frame padding inserted before pIdx")
+PYPF
+fi
+
+if [[ -n "${CAPSTONE_DEADCAP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_DEADCAP" <<'PYDC'
+import sys
+path, mode = sys.argv[1], sys.argv[2]
+s = open(path).read()
+ANCH = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(ANCH) != 1:
+    sys.exit(f"DEADCAP: anchor is not unique ({s.count(ANCH)}) -- refusing to guess")
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"DEADCAP: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+if   mode == "null":   val = "(Index *)0"
+elif mode == "tagged": val = "(Index *)pWInfo"      # a live, TAGGED capability
+else: sys.exit(f"DEADCAP: unknown mode {mode!r}")
+s = s.replace(DECL, "  Index *pIdx;              /* Index used by loop (if any) */", 1)
+dead = "  { volatile Index *pdeadcap_ = " + val + "; (void)pdeadcap_; }\n"
+s = s.replace(ANCH, ANCH.split("\n\n")[0] + "\n\n" + dead + "  pWC = &pWInfo->sWC;\n  pIdx = 0;", 1)
+open(path, "w").write(s)
+print(f"   DEADCAP[{mode}]: real null store moved out; dead {mode} capability store put in the window")
+PYDC
+fi
+
 if [[ -n "${CAPSTONE_LATE_INIT:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_LATE_INIT" <<'PYLI'
 import sys
