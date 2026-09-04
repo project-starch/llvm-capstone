@@ -1,7 +1,10 @@
 # S-12 Explained: How a Stalled Store Hands the Wrong Operand to the Next Instruction
 
-> **STATUS: FIXED ON SILICON. Variant A is synthesised, flashed, and verified — the SQLite domain
-> that trapped now runs the logic test to completion, 4 draws of 4. See §9.4.** The flash was a
+> **STATUS: CONSISTENT WITH FIXED, not proven. Variant A is synthesised and flashed; the SQLite
+> domain that trapped now completes, 4 draws of 4, against an old arm that trapped 3 of 4.
+> Fisher p = 0.071; against this folder's own ~54% per-draw rate, P(4 clean) = 0.045 — a bound
+> this folder has ALREADY ruled insufficient for a "cure" claim (00-README.md:1278). Two more
+> clean draws would take it to 0.0095 and settle it. See §9.4.** The flash was a
 > deliberate lead override: `run.tcl`'s criterion remains unmet on negative slack.** The engineering detail, the variant comparison and the
 > criterion live in `agent-handoff/plans/s12-fix-synthesis-request.md`. Measurements and
 > provenance are in `00-README.md`.
@@ -554,17 +557,59 @@ store, hash-verified on both sides of the transfer, and flashed. The console ind
 it resident via its own `flash_state.nv_bitstream_name`.
 
 The same domain image that produced the trap — `sha 29289cdeeac9`, byte-identical, same test,
-same control — was then re-run. Only the bitstream changed:
+same control — was then re-run. Only the bitstream changed (the two run scripts differ by exactly
+one line, `FPGA_BITSTREAM`).
+
+**Two limits on that, both found by audit rather than by us.** The pre-registered criterion said
+"per-draw image sha verified IN-BOOT"; it was not. The `verifying … sha256=` line is a host-side
+preflight print that never reaches the board. What does hold in its place is the driver's
+STALE-FIRMWARE check, which decompresses the initramfs inside `fw_payload.bin` and searches for
+the actual `.dom` bytes — a real check with a real failure path, but host-side inference rather
+than a board report. And the control (`sqslt.dom`) passes on BOTH bitstreams, so it is a
+**boot-health control, not a fault-positive one**: nothing in the post-fix set was required to
+fail, so a run that silently never reached the trigger would look identical to a fix.
+
+> **CORRECTED 2026-09-04 after audit. The table first published here was WRONG, and so was the
+> lesson drawn from it.** Both are replaced below; the original is described rather than kept,
+> because it misfiled every row of the old arm.
+
+Read from each run's OWN region (everything before `POST images/upload` is the console replaying
+the previous boot):
 
 ```text
-                       OLD bitstream (draw 4)      NEW bitstream (all 4 draws)
-   ENT2                 E643D221  ← trap report     5117600D  ← ordinary result
-   marker               SQ: X/fail                  none
-   SQLite               "slt did not run"           SLT-SUMMARY ... completed=1
-   rc                   1                           0
+   draw   OLD bitstream s10fix_80843404c     NEW bitstream s12fix_5097eb166
+    1     E643D221  X/fail  rc=1             5117600D  completed=1  rc=0
+    2     E643D221  X/fail  rc=1             5117600D  completed=1  rc=0
+    3     E643D221  X/fail  rc=1             5117600D  completed=1  rc=0
+    4     5117600D  completed=1  rc=0        5117600D  completed=1  rc=0
+                    ^^^^^^^^ the old arm PASSED here
+   old arm: 3 of 4 trapped.   new arm: 0 of 4.
 ```
 
-`0x5117600D` decodes as NOT a trap report (top nibble 5; the trap markers are `0xF`/`0xE`). The
+**What the first version got wrong, and why it matters more than the numbers.** It published the
+old arm as 1-of-4 trapping with draw 4 as the trap. In fact draws 1-3 trapped and draw 4 passed —
+every row was misfiled, by a single line in the run script:
+
+```bash
+grep -aoE "obs=[0-9]+" /tmp/capstone/$ARM-$i.log | tail -1     # WRONG: whole log, silent fallback
+```
+
+* Draws 1-3 reported `obs=40465`, which is **not UART output at all** — it is the driver's own help
+  text explaining what that sentinel would mean.
+* Draw 4's current run emitted no `obs=` at all, so `tail -1` fell back to the **replayed previous
+  boot** and reported that draw's trap word.
+
+**So the "reading discipline" lesson published here was INVERTED.** It said the whole-log grep was
+right and the scoped extractor wrong. The opposite is true: the scoped capture was correct — its
+`SQ: self=` values bind it to the current boot — and the whole-log grep read the replay. The rule
+that survives is the ordinary one, stated correctly: **scope every read to the region after
+`POST images/upload`, and treat an absent marker as an ERROR, never as a fallback to `tail -1`.**
+
+`0x5117600D` is **`SQLITE_HC_SLT_RAN`** (`capstone/benchmarks/sqlite/sqlite_hostcall.h:67`) — a
+FIXED CONSTANT meaning "the runner reached its normal exit", not a computed result. That is the
+right reason to trust it, and it explains what would otherwise look suspicious: the same word
+appears for the control, for the arm, and for the old bitstream's one passing draw. Calling it an
+"ordinary result value" was weaker and slightly wrong. The
 `SLT-SUMMARY` is identical to what QEMU emulation produces for this test, so silicon now agrees
 with the reference.
 
@@ -576,6 +621,12 @@ with the reference.
   the trap. It was displaying an earlier run. Here the whole-log grep was correct and the scoped
   extractor was not — the reverse of the usual failure, and it nearly caused a correct result to
   be retracted. Check both, and reconcile them against `rc` before believing either.
+
+**The strongest single observation, which the original write-up did not use.** `s12stress.test`
+completed **128 records / 128 prepares** on the fixed bitstream, against `dd2_join`'s 2 — far more
+exposure to the trigger, passing, with `query_pass=120 query_fail=0` identical to native x86. It
+cannot be scored, because no old-bitstream `s12stress` arm exists, but it is better evidence than
+the arm that was scored.
 
 ---
 
