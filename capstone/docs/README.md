@@ -1,11 +1,16 @@
-# Capstone handoff bundle
+# Capstone project documentation
 
-Persistent context for continuing the Capstone work in a new session.
-Works for human developers and any AI coding assistant.
+Everything durable the project knows about itself: architecture, the issue registry, the test
+matrix, root-cause trails, and the plans in flight. Written for human developers and for any AI
+coding assistant.
+
+> **Renamed 2026-09-04.** This directory was `capstone/agent-handoff/` until it stopped being a
+> handoff channel and became the documentation. `$CAPSTONE_HANDOFF_DIR` still resolves, as an
+> alias for `$CAPSTONE_DOCS_DIR`.
 
 | Path | Default |
 |------|---------|
-| `$CAPSTONE_HANDOFF_DIR` | `capstone/docs` |
+| `$CAPSTONE_DOCS_DIR` | `capstone/docs` |
 | `$CAPSTONE_TMP_ROOT` (scratch) | `/tmp/capstone` |
 | Shared env file | `capstone/tests/capstone-test-env.sh` |
 
@@ -31,9 +36,9 @@ lane structure below is historical in its two-lane form** — see the 2026-08-18
 2026-09-04 the live lanes are: this one (compiler/board/docs), an RTL lane, a synthesis lane on a
 separate machine, and a paper lane. Read the roles, not the lane count:
 
-- **Lane A** → commits to `capstone-bootstrap`. **Lane B** → commits to
-  `capstone-bootstrap-b`. Both branch off the shared mainline; sync via
-  `git merge origin/capstone-bootstrap`. The A↔B split, hand-off rules, and the permanent
+- **Lane A** → commits to `dev` (called `capstone-bootstrap` until 2026-09-04).
+  **Lane B** → committed to `capstone-bootstrap-b`, now `lane-b/capstone-bootstrap-b`. Both branch off the shared mainline; sync via
+  `git merge origin/dev`. The A↔B split, hand-off rules, and the permanent
   repository rules are in **`CLAUDE.md`**; subagent roster and rules in
   **`ref/SUBAGENTS.md`** (read it before delegating). The old A↔B peer-lane guide is
   archived at `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`.
@@ -44,35 +49,37 @@ separate machine, and a paper lane. Read the roles, not the lane count:
 
 ## Directory layout
 
-```
-docs/
-├── ONBOARDING.md          fast-track setup (incl. non-Claude-agent + collaborator callout)
-├── ref/SUBAGENTS.md       subagent roster, inherited rules, how to read their output
-├── new-chat-prompt.md     prompt template for resuming a session
-├── state/                 VOLATILE — rewrite after each milestone
-│   ├── current-state.md   what is verified right now (short)
-│   └── current-next-step.md  next concrete milestone (short)
-├── ref/                   durable quick-reference (rarely changes)
-│   ├── testing-matrix.md
-│   ├── capstone-agent-test-instructions.md
-│   ├── capstone-coding-conventions.md
-│   ├── delegation-guidance.md
-│   ├── beebs-benchmark-bringup-manual.md
-│   ├── project-structure-overview.md
-│   └── runtime-terms-glossary.md
-├── design/                deep architecture and DESIGN DECISIONS only
-│                          (bug-fix investigations/root-cause/audits -> history/)
-│   ├── sqlite-minimal-vfs-path.md
-│   ├── hostcall-file-service-v0-wire-spec.md
-│   ├── stable-file-service-subset.md
-│   ├── split-host-enclave-strategy.md
-│   ├── hosted-libc-os-analysis.md
-│   ├── research-decisions-log.md
-│   └── native-sample-validation.md
-├── plans/                 active WIP plans (committed, portable)
-│   └── backend-compiler-fixes.md
-└── history/               timestamped archival notes + bug-fix/root-cause trails
-```
+**319 markdown files.** Counts are why this index exists: the two `state/` files went two
+weeks stale without anyone noticing, because nothing mapped the tree.
+
+| directory | files | what belongs here | how to read it |
+|---|---|---|---|
+| `state/` | 3 | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
+| `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every known defect and is the authoritative status for all of them. `SUBAGENTS.md` before delegating. |
+| `design/` | 32 | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
+| `plans/` | 24 live, 21 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
+| `history/` | 205 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
+| `patches/` | — | out-of-tree patches | |
+
+### The files worth knowing by name
+
+- **`ref/ISSUES.md`** — every defect, its status and its evidence. The single most load-bearing
+  document in the repo. Silicon defects are `S-nn`, compiler defects `C-nn`, QEMU `Q-nn`,
+  RTL-vs-spec `R-nn`.
+- **`ref/testing-matrix.md`** — what is expected to pass where.
+- **`ref/HOW-TO-LAUNCH-ON-FPGA.md`** — the long form behind the `board-run` skill.
+- **`ref/fpga-silicon-measurements-for-paper.md`** — where measured numbers land. Results can be
+  recorded here without touching the paper, which is deliberate.
+- **`ONBOARDING.md`** — fast-track setup, including the callout for non-Claude agents that do not
+  auto-read `CLAUDE.md`.
+
+### Related trees outside this directory
+
+- `capstone/tests/fpga-repros/` — one folder per silicon defect, each a **self-contained report**
+  that may already be a live link held by the hardware side. See its own `README.md`. These are
+  evidence and are never pruned.
+- `.claude/skills/` — procedures that auto-load when a task matches. `board-run` and `rtl-sim`.
+- `CLAUDE.md` (repo root) — the permanent rules. Read it before the docs, not after.
 
 ## Current verified baseline
 

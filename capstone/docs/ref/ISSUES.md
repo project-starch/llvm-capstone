@@ -2528,7 +2528,16 @@ an `sp`/`s0` base.
 and ~3.4x depending on how you count.** At a 54% per-draw wedge rate that lowers the draw rate
 and nothing more. **A completing `-O1` board run MUST NOT be reported as S-12 resolved**, and
 S-12's mechanism is still OPEN, so "strict adjacency is the operative property" is an assumption
-and not a finding. `OPT` stays defaulted to `-O0` until `-O1` is validated end to end; flipping
+and not a finding.
+
+> **UPDATE 2026-09-04 — the paragraph above is superseded, and is kept because its reasoning was
+> right at the time.** S-12 has since been root-caused (a scoreboard WAW clear that ignores
+> `commit_ack`, letting a written-back-but-unretired STC entry forward `cnull` to a younger
+> `ldc`), fixed in RTL, synthesised and flashed. "Strict adjacency" was indeed not the operative
+> property -- store-buffer back-pressure is. The `-O1` caution still stands on its own terms:
+> the reduced fault population lowered the draw rate without addressing the cause, so a
+> completing `-O1` run was never evidence of a fix. See the S-12 entry above for the current
+> status and for the honest strength of the post-flash verification. `OPT` stays defaulted to `-O0` until `-O1` is validated end to end; flipping
 the silicon build default is a lead decision, not a side effect of this fix.
 
 **Baseline provenance, UNRESOLVED:** the `-O0` disassembly counted here has
