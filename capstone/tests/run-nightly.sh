@@ -172,10 +172,41 @@ log "output   : $OUT"
 log "parent   : $(sha HEAD) ($(git -C "$CAPSTONE_REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null))"
 log "jobs=$JOBS timeout=${TIMEOUT}s clean=$DO_CLEAN skip_build=$SKIP_BUILD extended=$EXTENDED"
 
+# Is qemu-system-riscv64 older than its own tracked source? With "relink" it fixes it;
+# with "check" it only reports, because --skip-build promises not to build anything.
+# Either way it must SPEAK: a stale emulator silently running every suite is what Q-02 was.
+qemu_staleness_guard() {
+  local mode="${1:-check}"
+  local QBUILD="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build"
+  local QBIN="$QBUILD/qemu-system-riscv64"
+  local QSRC="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target"
+  [ -f "$QBIN" ] || { log "[build] no qemu binary at $QBIN -- suites will fail"; return 0; }
+  [ -n "$(find "$QSRC" -type f -newer "$QBIN" -print -quit 2>/dev/null)" ] || return 0
+  if [ "$mode" = "relink" ] && [ -f "$QBUILD/build.ninja" ]; then
+    log "[build] qemu binary older than its source -> incremental ninja relink ..."
+    if ninja -C "$QBUILD" qemu-system-riscv64 >"$OUT/build-qemu-incremental.log" 2>&1; then
+      log "[build] qemu incremental relink ok"
+    else
+      BUILD_OK=0; OVERALL_OK=0; log "[build] qemu incremental relink FAILED"
+    fi
+  else
+    # --skip-build: do not build, but do not stay quiet either. Every QEMU verdict below
+    # is about a binary that does not match its source, and that has to be visible in the
+    # report rather than inferred later from a timestamp.
+    OVERALL_OK=0
+    log "[build] STALE QEMU: binary $(date -r "$QBIN" '+%Y-%m-%d %H:%M') is older than its"
+    log "[build]   source. --skip-build means it was NOT rebuilt. Every QEMU row below is"
+    log "[build]   suspect; re-run without --skip-build, or ninja -C $QBUILD qemu-system-riscv64"
+  fi
+}
+
 # ---- stage 1: build -----------------------------------------------------------
 BUILD_OK=1
 if [ "$SKIP_BUILD" -eq 1 ]; then
   log "[build] skipped (--skip-build)"
+  # The guard runs HERE too. This is the path the nightly actually takes, and it was the
+  # one with no staleness check at all.
+  qemu_staleness_guard check
 else
   # lld too: under LTO the code generator runs inside the linker, and the runtime
   # suites link their domains with $LD_LLD. Nothing in clang's dependency closure
@@ -185,25 +216,14 @@ else
         >"$OUT/build-clang.log" 2>&1; then
     BUILD_OK=0; OVERALL_OK=0; log "[build] clang/lld FAILED (see build-clang.log)"
   fi
-  # QEMU staleness guard: a default (non---clean) nightly does NOT rebuild
-  # qemu-system-riscv64, so a submodule source move (e.g. a new instrumentation op)
-  # can leave the shared binary behind its own pinned source -- the op then decodes
-  # as an illegal instruction in-domain. Cheap fix: if the binary is older than any
-  # tracked qemu source, do an incremental ninja relink (seconds), not a --clean build.
+  # QEMU staleness guard. Hoisted OUT of the build branch on 2026-09-04: it used to live
+  # here inside the `else` of --skip-build, so the nightly that actually runs (--skip-build)
+  # never reached it. Its condition was never evaluated, let alone false. A staleness check
+  # is needed MOST when the build is skipped, which is exactly when the binary can lag its
+  # source -- see ref/ISSUES.md Q-02, where a non-compiling QEMU went a day unnoticed and
+  # every suite ran on a binary eight days old.
   if [ "$BUILD_OK" -eq 1 ] && [ "$DO_CLEAN" -eq 0 ]; then
-    QBUILD="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build"
-    QBIN="$QBUILD/qemu-system-riscv64"
-    QSRC="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target"
-    if [ -f "$QBIN" ] && [ -f "$QBUILD/build.ninja" ] && \
-       [ -n "$(find "$QSRC" -type f -newer "$QBIN" -print -quit 2>/dev/null)" ]; then
-      log "[build] qemu binary older than its source -> incremental ninja relink ..."
-      if ninja -C "$QBUILD" qemu-system-riscv64 \
-            >"$OUT/build-qemu-incremental.log" 2>&1; then
-        log "[build] qemu incremental relink ok"
-      else
-        BUILD_OK=0; OVERALL_OK=0; log "[build] qemu incremental relink FAILED"
-      fi
-    fi
+    qemu_staleness_guard relink
   fi
   if [ "$DO_CLEAN" -eq 1 ] && [ "$BUILD_OK" -eq 1 ]; then
     for bs in "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build-qemu.sh" \

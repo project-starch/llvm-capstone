@@ -71,6 +71,28 @@ spread as it stands: `README.md` vs `00-README.md`; `SHA256SUMS` vs `IMAGE-HASHE
 payload under `src/`, `board/`, `sim/`, `evidence/` or `minimal-repro/`. **Apply the convention to
 new packages; do not retrofit it to sent ones.**
 
+### A measurement package MUST carry its artifacts; a source-level one need not
+
+Audited 2026-09-04: three packages contain no file other than markdown —
+`RTL-cap-mcause-off-by-one/`, `RTL-domain-trap-vector-unset/` and `S13-o1-dyn-rev-node-hang/`.
+**Two of those are fine and one is not**, and the difference is what the package claims.
+
+- A **source-level** finding ("the RTL does X, here is the line, here is the reference model")
+  is fully reproducible from the quoted `file:line` against a named revision. The two `RTL-*`
+  packages are this kind. No binary is needed and adding one would be theatre.
+- A **measurement** ("this image wedged in 8 of 8 boots") is reproducible only against the image
+  that produced it. `S13-o1-dyn-rev-node-hang/` is this kind, and its images are **gone** — no
+  `.dom`, no `SHA256SUMS`, no build command, no compiler revision. 63 boots of unusually strong
+  evidence, and nothing anyone can re-run. A fresh build of "the same" configuration is a
+  **different image** and can only speak about the class, never about the draws on record.
+
+So the rule is not "always commit binaries". It is: **if the claim is about a specific artifact,
+the artifact ships with it — and if it cannot, the package must say so in its first paragraph**,
+because a reader has no other way to discover that the evidence is unrepeatable. S-13 now says so.
+
+This is cheap at the time and unrecoverable afterwards: the images cost one board session to
+produce and are now unobtainable at any price, because the compiler that built them has moved.
+
 ### Three states, not two
 
 A package is **open**, **archived**, or **resolved-but-retained**. The third is real and is why

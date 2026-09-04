@@ -12,7 +12,20 @@ Last updated 2026-09-04.
 
 ---
 
-## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — verification is CONSISTENT WITH FIXED, not proven (2026-09-04)`
+## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — 6 of 6 post-fix draws clean, one-sided Fisher p = 0.033 against 1-of-4 pre-fix (2026-09-05)`
+
+> **STATISTIC UPDATED 2026-09-05.** Two more post-fix draws completed on `caplifive_s12fix_5097eb166.bit`
+> in the cycle-2 regression sweep: B7 `q_two` (the S-12 trigger query, two-level self-join) and B8
+> `select1` (1031 records, 1000 queries), both with `SQ: G/enter` and `SQ: H/return`, valid
+> control first. Post-fix is now **6 of 6** against **1 of 4** on the pre-fix bitstream.
+> **One-sided Fisher p = 0.033** (was 0.071 at 4/4; the check that it moves the right way: a
+> hypothetical 3/4 gives 0.24). Computed from the hypergeometric directly, not quoted.
+>
+> **Caveat that keeps this at "strong evidence", not "proven":** the two new draws are at **`-O1`**,
+> where this entry's own analysis puts the trigger population 1.3-3.4x smaller than at `-O0`, so
+> they are weaker draws than the four they join. Two more **`-O0`** draws would be the clean way
+> to push further, and the earlier projection that two more draws would reach p = 0.0095 was
+> wrong and is withdrawn.
 
 > **STATUS 2026-09-04.** Root cause found, fix synthesised and flashed; the SQLite domain that
 > trapped now completes. Full mechanism and evidence:
@@ -100,6 +113,101 @@ but that is NOT demonstrated and must not be recorded as though it were.
 symptom is gone from the workload that defines it rather than from those images. n=3.
 
 Full trail, including the ruled-out lists that cost many board sessions: **`history/20-08-2026_18-04-33_s02-s05-resolved-archived-from-issues.md`**.
+
+## R-20 STATUS ALERT — RETRACTED 2026-09-05: the fix IS in the resident bitstream, cherry-picked under a different SHA `RETRACTED — R-20 is fixed in hardware; the alert below was an instrument error`
+
+> **RETRACTION, same day.** The claim that the resident bitstream lacks the R-20 RTL fix was
+> **wrong**. The fix is present as **`f623c48a1`** (2026-08-11, *"Fix R-20: keep the CAPENTER x10
+> clobber additive instead of overwriting"*), a cherry-pick of `2efb3604f` with **identical change
+> lines** in `core/issue_read_operands.sv` — verified by diffing the two commits' patches — and it
+> **is** an ancestor of `5097eb166`.
+>
+> **How the error was made, and it was made twice independently.** Both lanes tested
+> `git merge-base --is-ancestor 2efb3604f 5097eb166`, which returned NO and was reported as "the
+> fix is absent". That command answers *"is this SHA an ancestor?"* — and a cherry-pick has a
+> different SHA by construction. The right question was *"is this CHANGE present?"*, answered by
+> `git log --grep='R-20' <range> -- <files>` or by patch-id, and it returns the cherry-pick at once.
+> Two people reaching the same wrong answer by the same method is not corroboration; it is the
+> same instrument read twice.
+>
+> **Consequences, all reversed:**
+> - R-20 is **mitigated in hardware** on `caplifive_s12fix_5097eb166.bit`. The compiler workaround's
+>   revert on 2026-08-10 stands on its own terms and its precondition did **not** expire.
+> - The two board readings of `0xD0000000` — rebuilt draw in B1, **frozen `sbx8.dom` byte-exact
+>   in B6, valid control** — are exactly the expected reading on fixed hardware. They are not
+>   evidence of "another route"; they are evidence of the same fix, present.
+> - The "13 KB control in every boot" advice is withdrawn as a *requirement*. It remains a good
+>   idea for a bitstream of unknown lineage, which this one no longer is.
+> - The gp-captable miscompute not reproducing (B4, `rc_p1` = 2080) now has its cleanest
+>   explanation: R-20's signature *is* that bug's signature, R-20 is fixed on this bitstream, and
+>   the bug is gone. See the trail in `history/23-07-2026_...`.
+>
+> **What would have caught it in five seconds:** `git log --oneline e1b3db6ba..5097eb166 --
+> core/issue_read_operands.sv`, which lists the cherry-pick by name. That command was run — as a
+> follow-up to the board result — and is how the error was found. It should have been the first
+> check, not the last.
+>
+> The original alert text is kept below, unedited, so the reasoning that produced it stays legible.
+
+## ~~R-20 STATUS ALERT — the fix is in NEITHER the resident bitstream NOR the compiler~~ (RETRACTED, see above)
+
+**R-20 is currently unmitigated on the hardware we are running.** Both halves verified
+independently today:
+
+| mitigation | state |
+|---|---|
+| RTL fix `2efb3604f` (branch `r20-fix`) | **ABSENT** from the resident bitstream's commit `5097eb166` — merge-base `e1b3db6ba`, `git merge-base --is-ancestor 2efb3604f 5097eb166` returns NO, and `git log 5097eb166..r20-fix` lists exactly that one commit |
+| compiler workaround `30c275b5d781` | **REVERTED** 2026-08-10 by `cdbb92360e2b`, an ancestor of `dev`; no R-20 markers remain in the backend |
+
+**How this happened, and it is nobody's mistake.** The workaround was retired on 2026-08-10 on
+good evidence — `caplifive_r20.bit` carried the RTL fix and cleared R-20 on hardware (the
+package's 13 KB repro went `0xD0000001` → `0xD0000000`). That reasoning was sound. What nobody
+tracked is that **a later bitstream was flashed from a line that does not contain the R-20 fix**.
+The mitigation was removed against a bitstream that is no longer resident, and the two facts live
+in different places — one in a compiler commit, one in a synthesis lineage — so neither lane sees
+both.
+
+**Consequence for every board result taken on `caplifive_s12fix_5097eb166.bit`:** an
+address-shaped wrong answer or a wedge is consistent with **R-20** as well as with whatever the
+run was testing. R-20's signature is *"a later reader of x10 gets the store's base address instead
+of the loaded value"* — precisely the shape a regression sweep hunts. **A red rung does not
+establish a compiler regression on its own.**
+
+**The discriminator is cheap and already exists.** `tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/`
+ships a standalone **13 KB** repro returning `0xD0000001` when R-20 is live and `0xD0000000` when
+it is fixed. **Run it as a second control beside `k800` in the first boot of any session on this
+bitstream.** One small domain, and without it every anomaly in the session is ambiguous between
+two causes with no way to separate them afterwards.
+
+**FIRST BOARD READING, 2026-09-05 — and it does NOT settle it.** A rebuilt R-20 repro ran at
+position 2 of a control-valid boot on this bitstream and read **`0xD0000000`**, all seven arm bits
+clear (control `k800` retval 4; `s06agg` 15 at position 3). The prediction written down beforehand
+was `0xD0000001`, since the bitstream provably lacks `2efb3604f`.
+
+**Status is therefore "not observed by the REBUILT repro on s12fix; FROZEN repro not yet run on
+s12fix" — not "live", and not "fixed".** Two readings remain open and cannot be separated from
+this draw:
+
+- **(a)** the `s12fix` lineage cures the x10 forwarding path by a route other than `2efb3604f`.
+  Not far-fetched: the S-12 fix is in the WAW-escape/forwarding area, which is where R-20 lives.
+- **(b)** the rebuilt draw is a weaker probe. The rebuild replaced a capability spill pair
+  (`stc`/`ldc`) with a scalar one (`sd`/`ld`), so it carries lower capability-store density than the
+  frozen image. It was ruled admissible before the run, with the explicit asymmetry that a
+  **firing** reading would be conclusive and a **clear** reading would not.
+
+**What settles it:** the FROZEN `src/sbx8.dom`, unmodified, on this bitstream. It is linked at
+entry `0x10000` — verified, as are `sbx20` and `sbx36`, all three identical at 10144 bytes, so the
+package README's "three draws at different link offsets" refers to internal padding and not the
+entry VA. That collides with the usual control. **The resolution is to relink the CONTROL to
+`0x20000` and leave the frozen artifact untouched** — `k800` is rebuilt for every image anyway,
+while the frozen repro is the thing that cannot be reproduced.
+
+**Not yet assessed:** whether results already taken on this bitstream are affected. The S-12
+post-fix draws are about *completion* rather than values, so they are probably untouched — but
+"probably" is doing work there and it has not been checked.
+
+**What would close this:** either resynthesise from a line containing `2efb3604f`, or reinstate the
+compiler workaround until such a bitstream is resident. That is a project-lead call, not a lane's.
 
 ## S-03 — SQLite wedges inside `sqlite3_initialize()` · `RESOLVED 2026-08-10 -- root cause R-20; cleared on silicon by the R-20 compiler workaround`
 
@@ -415,6 +523,53 @@ on those rows and +0.06% across all 85.
 the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause **unattributed**. Only
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
+
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `OPEN — RUNTIME; cheap reproducer, no board needed`
+
+**Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
+result files.** This is a runtime defect, not a codegen one.
+
+The evidence is a matched pair of batches over the same csmith images under QEMU `5dc356547d7f`:
+
+| batch | position | image | verdict |
+|---|---|---|---|
+| B | 5 | `cs2-O2` | **RET** 599932085 |
+| B | 12 | `cs7-O2` | **WEDGE** |
+| C | 1 | `cs7-O0` | **RET** 505522532 — the native checksum |
+| C | 6 | `cs2-O2` | **WEDGE** |
+
+**The same images produce opposite verdicts, and the variable is where they sit in the boot.**
+`cs7` wedges at 12 and passes at 1; `cs2-O2` passes at 5 and wedges at 6. Wedges have been seen at
+positions 5, 8 and 12. The shell prompt never returns; QEMU stays alive. Every wedge is preceded by
+`[CAPSTONE] Print = Scalar(0x1234)` (`helper_csdebugprint`), which also appears in a normal boot —
+so it is the last line printed, **not** the cause.
+
+**Why this matters far beyond the fuzz campaign.** Any result taken from a multi-domain boot is
+suspect in proportion to its position. A domain that wedges late gets blamed on the domain. That is
+exactly the wrong verdict `.claude/skills/board-run/SKILL.md:217-218` already records from the
+board — *"an arm failed at position 4 of a 6-program boot, and positions 5 and 6 were recorded as
+failures. Re-tested one-per-boot, position 5 passed."*
+
+**So the board rule was right, and this is the same phenomenon on the cheap platform.** The
+standing ordering rule (at most one unknown per boot, placed last, known-good control first) was
+derived empirically from board sessions costing minutes each. Here it reproduces in **~0.2 s per
+item**, which means the effect can finally be **root-caused without spending board time** — the
+first time that has been possible.
+
+**Reproducer:** a one-line-per-item manifest for `capstone/tests/fuzz/run-domain-batch.py` with a
+dozen small domains; twenty items shows it inside a minute. Logs at
+`/tmp/capstone/fuzz/f04-position/batch-{A,B,C}.log` with `results-{B,C}.tsv` (scratch — copy
+anything needed before it is cleaned).
+
+**What is NOT yet known:** whether the board exhibits the *same* mechanism or merely the same
+shape; whether the count is domains, capability allocations, or revocation-node consumption;
+and whether one boot in batch A never reaching the login prompt is the same defect earlier or
+ordinary infra flake. The first two are answerable off-board with the reproducer above.
+
+**The method note is the compiler lane's and worth keeping:** they had reported this as an
+`-O0`-only compiler defect, and retracted it after re-running the wedged image first-in-boot. Their
+campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
+Applies equally to board arms.
 
 ## Q-01 — `run-sqlite-memory.sh` cannot create its domain · `RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`
 
@@ -1317,6 +1472,64 @@ and the folder is the report.
   an ldc near an stc" version answered YES for `k800`, which contains no copy at all.
 
 ## RTL / FPGA
+
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, verified in source with a control`
+
+**Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
+than taken on report, including the control that makes it a defect rather than an idiom.**
+
+`core/anvil_build/capstone_flu_unit.anvil:147`, the `INIT` path:
+
+```
+let rd = call create_capability(rd_temp.metadata, new_cursor);
+let result = call create_result_pack(data.trans_id, ex_code::NO_EXCEPTION, rd, rd);
+```
+
+`create_result_pack(id, ex, rs1, rd)` assigns `cap_rs1 = rs1` and `cap_result = rd`
+(`capstone_unit.anvilh:360-364`). Passing `rd` twice therefore writes the **newly created LINEAR
+capability into `rs1` as well as `rd`** — two live LINEAR capabilities over one region, which is
+precisely what linearity exists to prevent.
+
+**THE CONTROL, which is what makes this a defect and not a house idiom.** The `rd,rd` form appears
+four times in this file — `:42`, `:72`, `:106`, `:147`. The first three are each guarded by
+
+```
+if(data.rs1 == data.rd){
+```
+
+i.e. they are the *same-register* case, where writing both is writing one register and is correct.
+**`:147` has no such guard.** Its enclosing conditions are only `rs1.cursor <= rs1.metadata.end`
+(`:139`, raising `ILLEGAL_OPERAND_VALUE`) and the `else` around it. So the codebase demonstrably
+knows the correct idiom and `INIT` omits it, for **any** `rs1 != rd`.
+
+Every sibling in the file passes `rs1` unchanged, `rs1_out` modified, or `rcnull` when the source
+must be consumed (`:173`). None of those apply here.
+
+**QEMU nulls `rs1`**, so this is silicon-only and cannot be reproduced under emulation — the class
+of divergence that has repeatedly cost this project board time.
+
+**Not yet established, and needed before this is handed to the hardware side:**
+
+- ~~whether it is reachable from our codegen~~ **ANSWERED 2026-09-04, and it IS reachable.**
+  `INIT` carries **no tied-operand constraint** in the instruction definition, unlike
+  `SHRINK`/`DELIN`/`DROP`/`REVOKE`. Measured on the cycle-1 compiler: a source pointer that stays
+  live across the builtin produces `init a1, a0, a1` at `-O1` and `-O2`. Where `rd == rs1` does
+  occur it is the register allocator reusing a register, not a constraint — nothing forces it.
+
+  So: **real in the ISA and reachable by construction from any C that calls
+  `__builtin_capstone_cap_init` with a live source.** The mitigation is that no in-tree C outside
+  tests uses `cap_init` today, so no shipping domain hits it — that is a fact about our current
+  programs, not about the hardware, and it expires the moment one does.
+- **whether the duplicated capability is usable**, or whether a later consumer traps on it.
+- a **directed `.S`** in the simulator with `rs1 != rd`, reading both registers afterwards. This
+  needs no board — `rtl-sim` answers it in ~14 s, and it is the natural next step.
+
+**Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
+`cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
+`INIT` requires `cursor > end` (`:139` above) — which would make a post-revoke `UNINIT` capability
+impossible to re-initialise on silicon. If that holds it is a second independent defect in the
+same instruction pair. Verify before recording.
+
 
 ### R-1 — A load through one capability register misses a store through another `CHARACTERISED`
 **The blocker for several of the 13 benchmark rungs.** An intervening store through one capability register
@@ -2555,7 +2768,21 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
-### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON, syncer EXONERATED`
+### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `NOT REPRODUCED 2026-09-05 — on a different bitstream AND a different compiler, so unattributed`
+
+> **2026-09-05: an `-O1` two-level-join domain — the S-13 shape — COMPLETED on silicon.** B7 of the
+> cycle-2 sweep: `q_two` at `-O1`, `SQ: G/enter` → `SQ: H/return`, records = 2, control valid.
+> B8 `select1` at `-O1` likewise, 1031 records. The August measurement was two `-O1` images, both
+> wedged, on `caplifive_s07clear_84ed6eafb.bit`.
+>
+> **Two variables changed at once, so this attributes to neither:** the bitstream (`s07clear` →
+> `s12fix`, which carries the S-12 forwarding fix and the R-20 cherry-pick) **and** the compiler
+> (cycle 2, which fixes C-40 — the `-O1` LSR null-base `cincoffset` that faulted every `-O1`
+> domain at its first executed site under QEMU). Either could have removed the hang. The C-40
+> connection was raised and then judged not to fit S-13's measured signature (syncer waits, not a
+> fault storm); this result does not re-open that, it just says the hang is gone in the only
+> configuration anyone has now. Separating the two costs one boot with the cycle-1 compiler's
+> `-O1` image on `s12fix`. Not done; recorded as the arm that would settle it.
 
 > **THE STORE SYNCER IS CLOSED (2026-08-27). No RTL change is indicated.** The single-entry
 > `capstone_store_syncer` sets `cap_trans_id`/`req_set` on a new `init` with **no guard** on
@@ -2703,10 +2930,25 @@ BYTE-IDENTICAL built with and without these changes).
 
 **THE SILICON-SAFETY QUESTION THE QEMU RUNS COULD NOT SEE, now answered.** Swapping `lcc` for a
 plain `mv` has a failure mode invisible to every green QEMU run: QEMU's `gen_set_gpr` clears the
-tag on EVERY integer write, but in RTL the metadata shadow's write-enable is gated on
-`cap_result.valid`, which is 0 for a plain ALU op. If the shadow were left STALE, an integer
+tag on EVERY integer write. The concern was that the shadow might be left STALE: an integer
 produced by the new `mv` into a register that had held a capability would still look like a
 capability to any consumer that checks `cap_type` -- trapping on silicon and never on QEMU.
+
+> **CORRECTED 2026-09-05 — right conclusion, wrong signal.** This paragraph used to say the
+> shadow's write-enable is "gated on `cap_result.valid` (`commit_stage.sv:322-325`)". That is the
+> **second** write port: `cap_we_o` drives `we_i_rs` (`issue_read_operands.sv:1876/1897/1919/1940`),
+> not the shadow on an ordinary integer writeback. The clear actually comes from the **main** port,
+> which writes the metadata with data `'0` whenever the result is not a capability --
+> `cap_wmetadata_o[0] = commit_instr_i[0].cap_result.valid ? ...result_metadata : '0`
+> (`commit_stage.sv:279`), enabled by `we_pack` (`issue_read_operands.sv:1789-1799`).
+>
+> The difference matters even though the conclusion does not change. The old reading said the
+> shadow is **not written**, which leaves "is it stale?" genuinely open and makes the simulation
+> below the only evidence. The correct reading says it **is written, with zero** — so the clear is
+> structural, and the simulation confirms a mechanism rather than substituting for one.
+>
+> `capstone-ariane verif/tests/custom/capstone/cincoffset-stale-metadata.S` carries the same
+> misreading in its header comment and needs the same correction (RTL lane's file).
 
 **Measured in RTL simulation, not argued:**
 `capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S` (commit `eb43f5d09`).
@@ -3352,6 +3594,89 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
+### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
+
+**Found by the compiler lane 2026-09-05 in BEEBS `ctl-stack`/`ctl-vector`; generalised and
+verified here because it is a hazard for board runs, not a benchmark bug.**
+
+Those probes store capabilities into `static char heap[HEAP_SIZE]` — declared `char`, so
+**alignment 1**. At `-O0` the linker happened to place it 16-aligned and everything passed. At
+`-O2` the layout put it **8-mod-16**, and the domain faulted with **"Unaligned cap access",
+cause 4**. Same source, same compiler, different placement.
+
+**So a passing `-O0` run carries no information about alignment.** The variable is where the
+linker put the array, and that changes with optimisation level, with unrelated edits that move
+symbols, and with any layout perturbation. It also means the *same image* can pass on one build and
+fail on the next for reasons invisible in the diff — which is precisely the shape of
+`S01-image-perturbation-hang`.
+
+**The wider hazard, checked here.** `umm_malloc` — the project's real allocator — **documents** the
+requirement in `umm_malloc_cfg.h:9-12`: block bodies are capability-aligned *"whenever the heap
+array itself is 16-aligned"*, and a capability *"loses its tag if stored to an under-aligned slot"*.
+`:42` then says it will *"rely on natural layout + a 16-aligned heap array"*.
+
+**Nothing enforces it.** There is no `_Static_assert`, no runtime check, no alignment assertion
+anywhere in `umm_malloc.[ch]` — grepped for `static_assert`, `assert`, `& 0xf` and `% 16`, all
+absent. `umm_multi_init_heap(heap, ptr, size)` takes a bare `void *` and trusts it. So every caller
+is one under-aligned array away from silent tag loss, and the allocator that knows the rule is the
+one component that never checks it.
+
+**For anyone running these on the board:** the fault is silicon-real, not a QEMU artefact —
+it is an unaligned *capability* access, which the hardware enforces. A benchmark that passed on
+silicon before can fault after an unrelated change, and the disassembly will look identical
+because the difference is in the link map.
+
+**Cheap fixes, in order of value:**
+
+1. `_Static_assert(_Alignof(x) >= 16, ...)` on every capability-bearing backing array — turns a
+   layout lottery into a compile error.
+2. A runtime check in `umm_multi_init_heap` rejecting an under-aligned `ptr`. It is one `&& (ptr &
+   15)` and it converts silent tag loss into a diagnosable failure.
+3. `__attribute__((aligned(16)))` on the arrays themselves, which is what the compiler lane applied
+   to the two `ctl` probes.
+
+None of this is hypothetical: it already cost two benchmarks their `-O2` verdict, and the reason
+they had no `-O2` verdict at all was read for a while as a compiler defect.
+
+
+### I-02 — an allocated issue ID can be missing from this file, so grepping it is not a safe way to pick one `OPEN — needs an allocation convention`
+
+**Found 2026-09-04** when a lane proposed reusing **C-25** for a newly found defect. C-25 is
+already allocated — on the c128 line, by the external collaborator:
+
+```
+72c7733e2702  Add the mruby probe that found C-25, and record the issue   (2026-08-15)
+738c8c94521f  Fix C-25: a pointer difference must not require its operands to be tagged
+```
+
+**And C-25 does not appear anywhere in this file** — despite a commit whose subject says "record
+the issue". So the registry is missing an ID that the commit history treats as assigned, and the
+obvious allocation method ("grep `ISSUES.md`, take the next free number") silently hands out a
+number that is already in use. The collision was caught by a peer review, not by any check.
+
+That makes it a **process defect, not a bookkeeping slip**: two different defects sharing one ID
+is the kind of thing that survives into a paper, a handover, or a commit message, and it is
+expensive precisely because both entries look correct on their own.
+
+**Until a convention exists, allocate by checking BOTH:**
+
+```
+grep -n 'C-42' capstone/docs/ref/ISSUES.md
+git log --all --oneline --grep='C-42'
+```
+
+The second is what would have caught this one.
+
+**Worth deciding, and deliberately not decided here:** whether IDs should be allocated from a
+single committed list (cheap, one file to lock) or whether a lane owns a numeric range (no
+coordination, but ranges strand). The current state — allocate ad hoc and record where convenient
+— is the only option that demonstrably does not work.
+
+**Also open:** what C-25 actually was is now only reconstructable from two commit messages. It
+should get a proper entry, written by whoever has the mruby context, so the registry stops
+disagreeing with the history.
+
+
 ### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `FIXED 2026-09-04 — three defects; the nightly gap is still OPEN`
 
 **Reported by the compiler lane 2026-09-04, re-verified here before recording.**
@@ -3410,10 +3735,27 @@ wrong arms and skips two"*, so the SLT instrument is proven able to fire on the 
 
 **STILL OPEN, and each matters on its own:**
 
-- **(c) what the 2026-08-27 binary was built from is unexplained.** The commits introducing defect
-  3 are dated 08-15..20, so that binary should have exhibited it and did not — it ran SQLite to
-  completion. Something about its provenance is not understood, and until it is, results taken on
-  it are of unknown pedigree rather than merely old.
+- ~~**(c) what the 2026-08-27 binary was built from is unexplained.**~~ **CLOSED 2026-09-04.**
+  It is a clean **pre-merge build of this same submodule**, and there is nothing mysterious in it.
+
+  The binary is dated **08-27 20:11**; the reflog shows `cb23bf201b` checked out on 08-26 20:54
+  and the next commit at 08-27 20:58 — 47 minutes *after* the build. So it was built from our
+  pre-merge line, where `helper_cslcc`, `helper_cscincoffset` and `helper_cscincoffsetimm` still
+  used **`assert(rs1_v->tag)`** and carried no raise at all. The three raise-introducing commits
+  (`62de48fd8d`, `f546e392fe`, `fb259f5fbf`) are **not ancestors of `cb23bf201b`** — checked
+  individually with `merge-base --is-ancestor`. They arrived from the c128 side, and the merge is
+  what placed them *outside* their guards.
+
+  So the apparent contradiction — "those commits predate the working binary" — dissolved once the
+  question became *which line* rather than *which date*. Dates ordered the commits; ancestry
+  decided whether they were in the build.
+
+  **A sibling-clone explanation was proposed and is REFUTED.** `build/config-host.mak` records
+  `SRC_PATH=<HOME>/dev/capstone/capstone-qemu`, which looks like a parallel working tree.
+  It is not one: `<HOME>/dev/capstone` is a **symlink** to
+  `<REPO-ROOT>/capstone`, and both paths `stat` to the same inode. There is one
+  tree. Anyone reading that `SRC_PATH` should resolve it before drawing conclusions from it — and
+  it does *not* mean the nightly's relink logic compares against a different tree.
 - **(d) the "SLT corpus matches native 15/15" claim has no committed harness.**
   `run-sqlite-slt.sh` is a liveness check that prints `__CAPSTONE_SQLITE_SLT_RAN__`; the
   case-by-case comparison against `slt_native` was run ad hoc. A claim that cannot be re-run is
@@ -3581,6 +3923,63 @@ two board boots.
 seconds of emulation, and R-1's diagnostic family can finally be developed off-board.
 
 ## Compiler / toolchain (ours)
+
+### C-41 — the compiler's `return` encodes `rd = 0`, which faults on silicon every time `FIXED in cycle 2 (compiler lane); the silicon behaviour is VERIFIED here`
+
+**Reported by the compiler lane's rtl-oracle pass 2026-09-05; the silicon half verified here
+against the RTL, because "every compiler-emitted return faults on hardware" is too strong a claim
+to record on report.**
+
+The compiler emitted `return` with `rd = 0` and `rs1`/`rs2` typed as capabilities. The spec
+(`ctrl-flow-insn.adoc:130-168`), the RTL and QEMU all read the **sealed-return capability from the
+`rd` FIELD** and require `rs1` to be an **integer** (the re-entry PC). Both operands were wrong.
+
+**Verified chain, four independent facts:**
+
+| # | fact | source |
+|---|---|---|
+| 1 | `RETURN` reads its capability from the `rd` field — `let rd_in_v = data.cap_rd;` | `capstone_dyn_unit.anvil:284` |
+| 2 | it raises `UNEXPECTED_OPERAND` when that is `NOT_CAP`, **or** when `rs1` IS a capability | `:288-289` |
+| 3 | `NOT_CAP` is the **first** member of `cap_type_t`, i.e. encoding **0** | `capstone_unit.anvilh:278-279` |
+| 4 | x0's register slot is hard-zeroed, so its `cap_type` reads 0 | `ariane_regfile_ff.sv:98-99` (`ZERO_REG_ZERO`) |
+
+So `rd = 0` makes fact 1 read an all-zero slot, which by 3+4 is `NOT_CAP`, which by 2 raises
+`UNEXPECTED_OPERAND`. **Deterministically, on every execution.** The `rs1`-typed-as-capability half
+trips the same check independently.
+
+**Why nothing ever saw it — and this is the useful part.** Two masks, stacked:
+
+- **QEMU takes a separate `rd == 0` branch** (`op_helper.c:1570-1595`), trap-return-like with no
+  context swap. So the emulator does something plausible where the hardware raises.
+- **The glue never used the compiler's form.** `start-gp-captable-generic.S:98` hand-encodes
+  `domreturn(t1, t2, x0)` correctly, and every domain on the board returns through the glue. So the
+  board never executed a compiler-emitted `return`, and the fault has been latent since the
+  instruction was added.
+
+That is the same shape as R-25: **correct in the ISA sense that hardware does what the spec says,
+broken in our compiler, and invisible because no shipping path reaches it.** Both were found by
+reading the RTL against the backend rather than by any test, and neither would have been caught by
+a suite, because the suites run what the glue emits.
+
+**Related, same pass, recorded as fact not defect:** a synchronous CALL/RETURN swaps the PC and
+seven CSRs only — **no general register is saved, restored or scrubbed by hardware**
+(`capstone_dom_switcher.anvil:9-22`, `csr_regfile.sv:1901-1918`, and QEMU `capstone_helper.c:190-220`
+agree). The reference compiler zeroes non-argument registers and saves `ra`/`gp` itself. **Anything
+in a caller's registers crosses a domain boundary unless software scrubs it.** The compiler-side
+gap remains OPEN as **C-36b** with the compiler lane, and it is wider than "scrub the registers":
+
+- **`gp` AND `tp`** are both reserved and unspillable, and neither is saved around a domain call.
+- **`sp` is UNRESOLVED, not "preserved by convention".** The compiler's epilogue after `call a0, a0`
+  reloads `ra` and `s0`-`s11` **through `sp`**, so it depends on the callee domain returning with
+  the caller's `sp` — and **nothing in the tree states or implements that convention.** The only
+  in-tree domain exit, the ladder glue, **scrubs `sp` to 0** before returning. So the compiler's
+  epilogue and the one real callee disagree, and the compiler's assumption is currently false
+  against the only implementation we have.
+
+  ("preserved by convention" was written in a commit message and then withdrawn by the compiler
+  lane as unsupported. Recorded here in the withdrawn form as well as the corrected one, because
+  the plausible-sounding version is what a later reader will otherwise re-derive.)
+
 
 ### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for `OPEN — COVERAGE GAP, not a miscompile`
 

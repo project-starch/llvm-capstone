@@ -1,5 +1,166 @@
 # OPEN: gp-captable domains miscompute a global-array store+accumulate loop on silicon (correct on QEMU)
 
+> ## BOARD RESULT 2026-09-05 — DOES NOT REPRODUCE on the resident bitstream. Not yet attributed.
+>
+> B4 of the cycle-2 regression sweep, control-valid boot (`k800` retval 4), firmware
+> `4a5677c73b0eedd8`, bitstream `caplifive_s12fix_5097eb166.bit`, cycle-2 compiler, `-O0`
+> silicon config, positions 2 and 3 ahead of the risky arm:
+>
+> ```
+> rc_const0   2016   (oracle 2016)   the matched control, as in July
+> rc_p1       2080   (oracle 2080)   the July FAILING arm — now returns the correct value
+> ```
+>
+> **The July signature — an address-like value unless the stored value equals the loop index —
+> did not appear.** `rc_p1` returned exactly the native answer.
+>
+> **What this is evidence FOR: the bug is not live in this configuration.** What it is NOT evidence
+> for, and must not be quoted as: "the bug is fixed", or "the S-12 fix fixed it". Four things
+> changed between July and this run and this single reading cannot separate them:
+>
+> 1. the bitstream — `s12fix` carries the S-12 forwarding fix and **lacks** the R-20 fix
+>    (`2efb3604f`, verified by `merge-base`);
+> 2. the compiler — cycle 2, though the `rc` pair's codegen was diffed against the July claim and
+>    is the same shape (one `addiw`, same store/reload pair, same registers);
+> 3. the reproducer — a **reconstruction** from this document's description; the July `.c` is
+>    gone, so "same test" is by design rather than by bytes;
+> 4. the R-20 path itself — the rebuilt R-20 repro read `0xD0000000` in B1 of the same session,
+>    which points the same way but was pre-ruled inconclusive on a rebuilt draw.
+>
+> **The deciding reading is B6:** the FROZEN `sbx8.dom`, byte-exact, on this bitstream, with the
+> control relinked to `0x20000` to avoid the R-3 collision. If the frozen R-20 repro also reads
+> `0xD0000000`, the `s12fix` lineage cures the x10 forwarding path by a route other than
+> `2efb3604f`, and R-20 — whose signature is *exactly* this bug's — is the probable cause of what
+> was measured in July. If it reads `0xD0000001`, R-20 is live and this bug was something else
+> that has since gone.
+>
+> **B6 LANDED, and then the lineage claim was RETRACTED — which makes the attribution cleaner,
+> not murkier.** The frozen `sbx8.dom`, byte-exact, valid control, read `0xD0000000`. Then both
+> lanes discovered independently that the resident bitstream **does** carry the R-20 fix — as
+> `f623c48a1`, a cherry-pick of `2efb3604f` with identical change lines, which `merge-base
+> --is-ancestor` on the original SHA cannot see. Item 1 above ("lacks the R-20 fix") was wrong.
+>
+> So the picture is now the simplest one available:
+>
+> - R-20's signature — *a later reader gets the store's base address instead of the loaded value* —
+>   **is** this bug's signature;
+> - R-20 was measured live in July, on a bitstream without `f623c48a1`;
+> - R-20 is measured **fixed** now, on the frozen package repro with a valid control, on a
+>   bitstream that carries `f623c48a1`;
+> - and this bug does not reproduce on that same bitstream (`rc_p1` = 2080).
+>
+> **Status: NOT REPRODUCED; probable cause R-20, fixed in hardware by `f623c48a1`.** Still not
+> written as "proven": the July reproducer is a reconstruction, and no one has run it on a
+> bitstream that *lacks* `f623c48a1` to watch it fail — that is the one arm that would make the
+> attribution airtight, and it costs a reflash, so it is not worth doing on its own. The blocks
+> this bug carried (silicon-compatibility claim, branch merge, app-level silicon perf) are no
+> longer supported by a live failure and can be lifted on this evidence.
+
+
+> ## UPDATE 2026-09-05 — this may already be FIXED, and the test is cheap
+>
+> This document's own conclusion is that the signature is **"a microarchitectural store/forwarding
+> race in the RTL LSU, not a deterministic compiler bug"** — non-deterministic address-valued
+> garbage (`0x8B8x…`), well-formed capabilities, codegen provably equivalent between the passing
+> and failing arms, QEMU always correct.
+>
+> **S-12 is a store/forwarding defect in exactly that path, and it was root-caused, fixed in RTL
+> and flashed on 2026-09-04** — six weeks after these measurements. A capability store's
+> scoreboard `rd` is aliased to its own store-data register; under store-buffer back-pressure the
+> commit stage holds `we_gpr` while withholding `commit_ack`, the WAW guard clears, and forwarding
+> hands a younger consumer the wrong value. "An integer accumulator receiving a capability cursor,
+> only in a loop that also stores, only on silicon, non-deterministically" is that shape.
+>
+> **This was not connected at the time because S-12 had no mechanism until 2026-09-03.** The
+> connection was suggested by the compiler lane on 2026-09-04 from the signature alone.
+>
+> ### CORRECTION, same day: R-20 fits the symptom BETTER than S-12, and it is a confound
+>
+> **R-20 is "a capability store loses its x10 clobber claim, so a later reader of x10 gets the
+> store's BASE ADDRESS instead of the loaded value"** (`ref/ISSUES.md` under S-03). That is not
+> merely S-12-adjacent — *"gets the store's base address"* **is** the address-like value recorded
+> here. S-12's forwarding delivers `cnull` (cursor 0), which does not match this symptom; R-20
+> delivers an address, which does.
+>
+> **And the R-20 COMPILER workaround landed `30c275b5d781`, 2026-08-10 — eighteen days AFTER these
+> measurements.** So the July binaries did not have it and any rebuild does. That is a confound in
+> the opposite direction from the one noted below: a rebuilt `rc_p1` that passes may be passing
+> because of a *compiler* change from August, not the RTL fix from September, and the bug may have
+> been silently closed for a month.
+>
+> The compiler lane's objection to the S-12 framing was correct and is what led here: a forwarding
+> path returning a register's stale contents predicts the reload reading `i`, not an address.
+>
+> ### SECOND CORRECTION, same night: there is NO 2x2 — the workaround was already reverted
+>
+> **The R-20 compiler workaround was reverted on 2026-08-10 at 19:39, FOUR HOURS after it landed
+> at 15:22 the same day** (`cdbb92360e2b`, *"the silicon fix makes it unnecessary"*). It is an
+> ancestor of `dev`, and the revert's own post-check was that `git diff 30c275b5d781^ -- llvm/` is
+> **empty**. So it is not in today's compiler, there is nothing to revert, and the claim below —
+> that a rebuild carries the workaround while July's binaries did not — is **false**. Both lack it.
+>
+> **The confound I asserted does not exist.** Struck rather than deleted, because the reasoning
+> that produced it (workaround dated after the measurement → present in any rebuild) is exactly
+> what a later reader will re-derive from the commit dates alone. The date was right; the lifetime
+> was four hours and nobody checks a lifetime.
+>
+> ### What the test actually is: ONE arm, and it is cleaner than the 2x2
+>
+> **R-20 was fixed IN SILICON around 2026-08-10.** The revert commit carries the evidence:
+> `caplifive_r20.bit` holds the RTL fix, the package's own 13 KB repro goes
+> `0xD0000001 → 0xD0000000`, and the SQLite-level site returns where it used to wedge. These
+> measurements were taken **2026-07-23, on a bitstream without that fix.**
+>
+> So: run `rc_p1` (with `rc_const0` as the matched control) on the resident bitstream. If it
+> returns 28 rather than an address, **this bug has been fixed in hardware for about a month and
+> nobody noticed** — and the candidates are the R-20 RTL fix, whose symptom is *literally* "a later
+> reader gets the store's base address", or the S-12 fix.
+>
+> **Establish the lineage first or the result is uninterpretable:** does
+> `caplifive_s12fix_5097eb166.bit` descend from `caplifive_r20.bit`? If NOT, a pass points at S-12
+> and a fail says nothing about R-20. If it does, a pass is consistent with either and a fail
+> refutes both. **Not established here.**
+>
+> ### ~~The experiment this actually needs — a 2x2, not a single arm~~ (WITHDRAWN, see above)
+>
+> The workaround commit says **"TEMPORARY. Revert when a bitstream carrying the RTL fix is
+> resident"**, with revert instructions in
+> `../../tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md`. So both arms are
+> buildable and the hypotheses separate:
+>
+> | | workaround ON (today's default) | workaround REVERTED |
+> |---|---|---|
+> | `rc_p1` passes | the fix is in *one* of them — undetermined | **the resident bitstream fixes R-20 in hardware**, and the workaround can be retired |
+> | `rc_p1` fails | neither fixes it; the July bug is still live and is something else | the workaround is what carries it; keep it |
+>
+> The reverted arm is the informative one, and it answers a standing question worth money on its
+> own: **can the R-20 workaround be retired?** It costs codegen quality on every capability store,
+> and nobody has been able to test the condition its own commit names.
+>
+> **Whether the resident `caplifive_s12fix_5097eb166.bit` carries the R-20 RTL fix (branch
+> `r20-fix`, `2efb3604f`) is NOT established here.** Establish it from the bitstream's lineage
+> before reading the 2x2, or one row is uninterpretable.
+
+> ### The test, and the confound that has to be controlled
+>
+> Rebuild `rc_const0` (`acc[i]=i; s+=acc[i]` — PASS) and `rc_p1` (`acc[i]=i+1` — FAIL) and run both
+> on `caplifive_s12fix_5097eb166.bit`. If `rc_p1` now returns 28 instead of an address, this is
+> closed and with it the block on the silicon-compatibility claim, the branch merge, and app-level
+> silicon perf.
+>
+> **The confound: the reproducers no longer exist.** No `.c`, no `.dom`, no build command survives
+> — only the table in this document. So a rebuild uses **today's compiler**, not July's, and a pass
+> would be consistent with *either* the RTL fix *or* a codegen change. To attribute it, the
+> disassembly of the rebuilt pair must be checked to still be the same shape (store-and-accumulate
+> in one body, the same capability-typed operands); the compiler lane has offered exactly that
+> diff. Without it, a green result is suggestive and not conclusive.
+>
+> This is the third measurement in this repository found on 2026-09-04/05 to be unreproducible from
+> its own record — see `../../tests/fpga-repros/S13-o1-dyn-rev-node-hang/` and the note in
+> `../../tests/fpga-repros/README.md`. The loops here are three lines and rebuildable, which is the
+> only reason this one is recoverable at all.
+
+
 > ## ⚠️ 25-07-2026 — THE ROOT CAUSE BELOW IS REFUTED. READ THIS FIRST.
 >
 > Everything below concluded the cause is an **RTL `shrink`→store forwarding hazard**, with
