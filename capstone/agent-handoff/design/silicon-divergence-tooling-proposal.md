@@ -164,7 +164,7 @@ deficit, and it is bought with a third of a percent of the area. **The timing co
 disproportionate to the area cost**, so a proposal sized in LUTs — as §2.2's "8 probes, 16,384
 deep" implicitly was — is sized on the wrong axis.
 
-**2. Worse: the instrument changes the answer.** The launch census that licenses these bitstreams
+**2. Worse: the instrument may change the answer.** The launch census that licenses these bitstreams
 — 100% of failing endpoints originating in a cone that is inert during body execution — **inverts**
 when the debug tree is removed: `6f8345fdb` shows 99,879/99,879 launching from
 `issue_read_operands`, `dom_switcher` at zero. A large share of the paths counted as inert were
@@ -184,3 +184,16 @@ before trusting a measurement taken on it.
 
 Evidence: `ref/fpga-silicon-measurements-for-paper.md` §7a;
 `ref/bitstream-usability-is-the-census-not-the-slack.md`, qualification of 2026-09-04.
+
+**AMENDED 2026-09-04 (same day).** Two corrections to the above, both narrowing it.
+
+*The census inversion is established on the FIXED design only.* The pair differs by one variable
+there; extending it to pre-fix builds adds a second. The competing reading — that the fix created
+the issue-cone paths and the mux masked them — is not excluded, and the settling control has not
+been run. So read point 2 as *the instrument is a candidate explanation that has not been ruled
+out*, not as a demonstrated effect.
+
+*The 1.82 ns is a measurement, not a coefficient.* It prices **this** debug tree at **this** width
+on **this** design, measured once. An ILA at a different probe width could be cheaper or far
+worse. The transferable lesson is **price it with a matched pair before committing to it** — not
+"expect 1.8 ns".

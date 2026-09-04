@@ -111,7 +111,7 @@ project-lead decision and should be made deliberately rather than discovered in 
 
 ---
 
-## QUALIFIED 2026-09-04: the census is partly a property of the INSTRUMENT
+## QUALIFIED 2026-09-04: the census has only ever been validated on INSTRUMENTED builds
 
 **What changed.** `6f8345fdb` is the first build ever synthesised on this project **without the
 debug instrumentation** (same S-12 fix as `5097eb166`, debug tree tied off, same base
@@ -124,15 +124,29 @@ debug instrumentation** (same S-12 fix as `5097eb166`, debug tree tied off, same
 dom-switch state heavily — all five `dom_switch_*_log_q` logging registers are present in
 `cva6.sv` — and the instrumented and tied-off builds have **identical RTL**, 200 `dom_switch`
 references each. The removal happens in **synthesis**, via a single `debug_led_o` tie-off. So a
-large share of the failing paths counted as "inert" above were paths **into the debug mux**.
-Remove it and the design's real critical cone is exposed — and it sits in **issue logic, which is
-NOT inert during body execution**.
+on the **fixed** design, removing the debug tree moves the cone entirely. The exposed cone sits
+in **issue logic, which is NOT inert during body execution**.
+
+**AMENDED 2026-09-04, same day: the causal half of this is WITHDRAWN.** `5097eb166` vs
+`6f8345fdb` is a one-variable comparison — both carry the fix, they differ only by the tie-off —
+so the inversion is established **on the fixed design**. Extending it to the historical
+pre-fix builds is a **two-variable** inference (fix *and* instrumentation), and the competing
+reading is not excluded: **the fix may have created the issue-cone paths, with the mux merely
+masking them** in the instrumented arm — under which the historical builds' inertness is
+**genuine** and the instrument is not "why" at all. `6f8345fdb` is the **only instrument-free
+build in existence** on this project; the other thirteen all carry the debug tree. The control
+that would settle it — base `80843404c` with the same tie-off and no fix — **has not been
+run**.
 
 **What survives.** Every census recorded above is still correct for the build it was taken on, and
 the inertness argument still licenses those specific bitstreams and the board results resting on
 them. What does not survive is the word **"STRUCTURAL"** in §"What actually licenses these
-bitstreams": the property holds for **instrumented** builds, and the instrument is part of why. An
-instrument-free configuration needs the case made afresh.
+bitstreams". The honest statement is narrower:
+
+> **The inertness argument has only ever been validated on INSTRUMENTED configurations. Whether
+> the property depends on the instrumentation is UNMEASURED — no instrument-free build of any
+> pre-fix commit exists. It should not be inherited by an instrument-free build without being
+> remade.**
 
 **The gate below needs restating, because as written it misclassifies the better build.**
 `6f8345fdb` has an originating register outside the `dom_switcher` cone, so the gate as phrased
