@@ -3464,9 +3464,9 @@ wrong arms and skips two"*, so the SLT instrument is proven able to fire on the 
   decided whether they were in the build.
 
   **A sibling-clone explanation was proposed and is REFUTED.** `build/config-host.mak` records
-  `SRC_PATH=/home/alexey/dev/capstone/capstone-qemu`, which looks like a parallel working tree.
-  It is not one: `/home/alexey/dev/capstone` is a **symlink** to
-  `/home/alexey/dev/llvm-capstone/capstone`, and both paths `stat` to the same inode. There is one
+  `SRC_PATH=<HOME>/dev/capstone/capstone-qemu`, which looks like a parallel working tree.
+  It is not one: `<HOME>/dev/capstone` is a **symlink** to
+  `<REPO-ROOT>/capstone`, and both paths `stat` to the same inode. There is one
   tree. Anyone reading that `SRC_PATH` should resolve it before drawing conclusions from it — and
   it does *not* mean the nightly's relink logic compares against a different tree.
 - **(d) the "SLT corpus matches native 15/15" claim has no committed harness.**
