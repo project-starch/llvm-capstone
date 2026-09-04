@@ -12,8 +12,23 @@
 ; ISel unlowered. There is no such lowering any more -- i128 is an ordinary
 ; illegal type -- and the arithmetic never leaves XLen in the first place.
 ;
+; On the libcall property: with the arithmetic at i64 nothing here could ever
+; have produced __muloti4, so that implicit-check-not was VACUOUS (the C-26
+; class).  The 128-bit multiply helpers are still the right things to forbid --
+; a widening multiply is exactly where a 128-bit reassociation would reach for
+; them -- so three controls follow at the end of the file: a plain i64 multiply
+; and the two widening shapes (high half and low half), each pinned to the
+; single `mul`/`mulhu` it must be.  They prove the backend multiplies inline;
+; the negatives then mean something.
+;
+; MUTATION: drop `-mattr=+m` from the RUN line -> the controls can no longer
+; use mul/mulhu, the multiplies become __muldi3/__multi3 calls, and both the
+; pinned bodies and the implicit-check-nots fail (performed 2026-09-04).
+;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s \
-; RUN:   | FileCheck %s --implicit-check-not=__divti3 --implicit-check-not=__muloti4
+; RUN:   | FileCheck %s --implicit-check-not=__divti3 --implicit-check-not=__muloti4 --implicit-check-not=__multi3 --implicit-check-not=__muldi3
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
@@ -49,4 +64,44 @@ entry:
   %r = trunc i64 %div to i32
   store i32 %r, ptr addrspace(200) %out, align 4
   ret void
+}
+
+; CONTROLS for the libcall negatives: the backend multiplies inline, so a
+; missing helper call above means strength reduction, not an inability to
+; multiply.  Each body is exactly one instruction.
+; CHECK-LABEL: mul_var:
+; CHECK: # %bb.0:
+; CHECK-NEXT: mul a0, a0, a1
+; CHECK-NEXT: cjalr zero, 0(ra)
+define i64 @mul_var(i64 %a, i64 %b) {
+  %m = mul i64 %a, %b
+  ret i64 %m
+}
+
+; The high half of a 64x64->128 product is `mulhu`, never __multi3: this is the
+; one shape in the file that actually reaches 128 bits.
+; CHECK-LABEL: mulhu_widen:
+; CHECK: # %bb.0:
+; CHECK-NEXT: mulhu a0, a0, a1
+; CHECK-NEXT: cjalr zero, 0(ra)
+define i64 @mulhu_widen(i64 %a, i64 %b) {
+  %za = zext i64 %a to i128
+  %zb = zext i64 %b to i128
+  %m = mul i128 %za, %zb
+  %hi = lshr i128 %m, 64
+  %r = trunc i128 %hi to i64
+  ret i64 %r
+}
+
+; The low half of the same product is a plain `mul`; the widening is folded away.
+; CHECK-LABEL: mullo_widen:
+; CHECK: # %bb.0:
+; CHECK-NEXT: mul a0, a0, a1
+; CHECK-NEXT: cjalr zero, 0(ra)
+define i64 @mullo_widen(i64 %a, i64 %b) {
+  %za = zext i64 %a to i128
+  %zb = zext i64 %b to i128
+  %m = mul i128 %za, %zb
+  %r = trunc i128 %m to i64
+  ret i64 %r
 }

@@ -99,6 +99,16 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S
 ; IR: ret void
 
 ; The regression is the absence of scalar capability spills in the emitted initializer.
+; The positive half is the 65 capability stores themselves: without it, an
+; initializer that emitted NOTHING would have satisfied "no sd" (the C-26 class of
+; vacuous negative).  Re-measured 2026-09-04: 65 stc, 0 sd, on the branch toolchain.
+;
+; MUTATION: drop one array element (65 -> 64 leaves) -> the count-of-65 check
+; fails (performed 2026-09-04 on a scratch copy).  Reintroducing a scalar spill
+; would trip the negative check on `sd`, which is now bounded by the return that
+; follows the stores.  (Prose here must not spell a directive with its suffix or
+; colon -- FileCheck reads every line.)
 ; ASM-LABEL: __capstone_cap_init:
+; ASM-COUNT-65: stc
 ; ASM-NOT: sd
 ; ASM: cjalr zero, 0(ra)

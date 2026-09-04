@@ -1,5 +1,28 @@
-; RUN: opt -O2 -S < %s | FileCheck %s --check-prefix=IR
+; RUN: opt -mtriple=capstone64 -O2 -S < %s | FileCheck %s --check-prefix=IR
 ; RUN: llc -mtriple=capstone64 < %s | FileCheck %s --check-prefix=ASM
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
+;
+; The opt arm used to run with no triple at all, i.e. target-blind.  It now
+; names the target, which changes how opt PRINTS a call (the program address
+; space is 200, so calls come out as `tail call addrspace(200) ptr ...`); the
+; patterns below accept either spelling and pin only what matters -- that the
+; call is still there.  Measured 2026-09-04: with the triple, every mrev and
+; delin call in this file survives opt -O2.
+;
+; What the IR arm still cannot do is DISCRIMINATE: no Capstone intrinsic
+; carries IntrWillReturn (they are Intrinsic<>, not DefaultAttrsIntrinsic<>),
+; so the IR optimizer deletes NONE of them -- an unused `seal`, which has no
+; side effect, survives opt -O2 just like an unused `mrev`.  The IR arm
+; therefore proves the calls are not CSE'd, and only the ASM arm proves that
+; the side-effecting ones survive machine DCE while the pure ones do not (that
+; contrast is pinned in intrinsics-unused-result.ll).  Making the IR arm
+; discriminating means giving the intrinsics IntrWillReturn -- a Tier 4 item,
+; not a test-side change.
+;
+; MUTATION: in @mrev_twice pass %a to both operands of @sink and delete the
+; second mrev call -> both count-of-two checks fail (performed 2026-09-04 on a
+; scratch copy).  (Prose here must not spell a directive with its suffix.)
 
 ; MREV and DELIN mutate the revocation tree, so they were wrongly modelled as
 ; IntrNoMem. MREV allocates a node senior to its source and increments the
@@ -18,12 +41,12 @@ declare void @sink(ptr addrspace(200), ptr addrspace(200))
 
 ; The intrinsics read and write hidden state, and nothing else. (The matching
 ; `attributes` line is asserted at the end of the file, where opt prints it.)
-; IR: declare ptr addrspace(200) @llvm.capstone.cap.mrev.p200({{.*}}) #[[ATTR:[0-9]+]]
+; IR: declare ptr addrspace(200) @llvm.capstone.cap.mrev.p200({{.*}}) {{.*}}#[[ATTR:[0-9]+]]
 
 ; An MREV whose result is unused still allocates a revocation node.
 define void @mrev_unused(ptr addrspace(200) %p) {
 ; IR-LABEL: @mrev_unused
-; IR: call ptr addrspace(200) @llvm.capstone.cap.mrev.p200
+; IR: call {{.*}}@llvm.capstone.cap.mrev.p200
 ;
 ; ASM-LABEL: mrev_unused:
 ; ASM: mrev
@@ -39,8 +62,8 @@ define void @mrev_unused(ptr addrspace(200) %p) {
 ; asked for two.
 define void @mrev_twice(ptr addrspace(200) %p) {
 ; IR-LABEL: @mrev_twice
-; IR-COUNT-2: call ptr addrspace(200) @llvm.capstone.cap.mrev.p200
-; IR-NOT: call ptr addrspace(200) @llvm.capstone.cap.mrev.p200
+; IR-COUNT-2: call {{.*}}@llvm.capstone.cap.mrev.p200
+; IR-NOT: call {{.*}}@llvm.capstone.cap.mrev.p200
 ;
 ; ASM-LABEL: mrev_twice:
 ; ASM-COUNT-2: mrev
@@ -53,7 +76,7 @@ define void @mrev_twice(ptr addrspace(200) %p) {
 ; A DELIN whose result is unused still delinearises the node.
 define void @delin_unused(ptr addrspace(200) %p) {
 ; IR-LABEL: @delin_unused
-; IR: call ptr addrspace(200) @llvm.capstone.cap.delin.p200
+; IR: call {{.*}}@llvm.capstone.cap.delin.p200
 ;
 ; ASM-LABEL: delin_unused:
 ; ASM: delin
@@ -64,8 +87,8 @@ define void @delin_unused(ptr addrspace(200) %p) {
 ; Two DELINs of the same capability must likewise both survive.
 define void @delin_twice(ptr addrspace(200) %p) {
 ; IR-LABEL: @delin_twice
-; IR-COUNT-2: call ptr addrspace(200) @llvm.capstone.cap.delin.p200
-; IR-NOT: call ptr addrspace(200) @llvm.capstone.cap.delin.p200
+; IR-COUNT-2: call {{.*}}@llvm.capstone.cap.delin.p200
+; IR-NOT: call {{.*}}@llvm.capstone.cap.delin.p200
 ;
 ; ASM-LABEL: delin_twice:
 ; ASM-COUNT-2: delin
@@ -78,7 +101,7 @@ define void @delin_twice(ptr addrspace(200) %p) {
 ; MREV must not be hoisted out of a loop: each iteration mints its own node.
 define void @mrev_in_loop(ptr addrspace(200) %p, i64 %n) {
 ; IR-LABEL: @mrev_in_loop
-; IR: call ptr addrspace(200) @llvm.capstone.cap.mrev.p200
+; IR: call {{.*}}@llvm.capstone.cap.mrev.p200
 entry:
   br label %loop
 loop:

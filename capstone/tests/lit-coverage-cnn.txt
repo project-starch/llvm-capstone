@@ -14,7 +14,7 @@ C-9  | llvm/test/CodeGen/Capstone/cap-inline-asm-r.ll
 C-14 | TODO: llvm/test/CodeGen/Capstone/c14-copy-class-postra.mir
 C-17 | TODO: llvm/test/CodeGen/Capstone/c17-wide-constant-arm.ll
 C-19 | llvm/test/Transforms/LICM/capstone-no-hoist-gep-maybe-null.ll
-C-20 | TODO: llvm/test/CodeGen/Capstone/c20-cttz.ll
+C-20 | llvm/test/CodeGen/Capstone/c20-cttz.ll
 C-21 | clang/test/CodeGen/capstone-negative-int-to-pointer.c
 C-22 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
 C-23 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll

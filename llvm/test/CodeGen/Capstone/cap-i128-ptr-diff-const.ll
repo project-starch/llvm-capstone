@@ -11,8 +11,22 @@
 ; arise now -- an offset applies to a c128 or it is integer arithmetic, and the
 ; type says which. That lowering is gone; this file is the lock on the property.
 ;
+; On the libcall property: every function here divides an i64 by 32, which is
+; strength-reduced to `srai` and could never have been a libcall, so the
+; implicit-check-not for __divti3 alone was VACUOUS (the C-26 class).  It is
+; kept, widened to the 128-bit multiply helpers a 128-bit reassociation would
+; reach for, and its ability to fire is guarded by the `div` control in
+; ptr-diff-signed.ll on the same toolchain.  The property this file actually
+; locks is the cincoffset placement, and that is controlled by @ptr_diff_plain.
+;
+; MUTATION: make %struct.SV 48 bytes ([6 x i64]) and divide by 48 -> the
+; exact division is no longer a power of two, `srai a0, a0, 5` becomes a
+; multiply-by-inverse sequence, and the srai checks fail (performed 2026-09-04).
+;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s \
-; RUN:   | FileCheck %s --implicit-check-not=__divti3
+; RUN:   | FileCheck %s --implicit-check-not=__divti3 --implicit-check-not=__muloti4 --implicit-check-not=__multi3
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
