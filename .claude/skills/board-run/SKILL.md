@@ -225,6 +225,24 @@ If using `run_ladder_perf_fpga.py` with `LADDER_ONE_BOOT=1`, rungs must be linke
 **distinct entry VAs** (`DOMAIN_BASE_VA`), or R-3 silently hangs a second domain reused at
 the same VA — a hang that looks exactly like a rung result.
 
+**CHECK IT, DO NOT ASSUME IT — the default collides.** `DOMAIN_BASE_VA` defaults to **`0x10000`**,
+so anything built without setting it lands on the same entry. Measured 2026-09-05: **24 of 40
+committed `.dom` files enter at `0x10000`**, including every frozen `R20-*` draw and both SLT
+domains. Two of those in one boot is a silent hang attributed to the second domain.
+
+One line, before every multi-domain bake:
+
+```bash
+for f in <the .dom files for this boot>; do
+  printf '%s %s\n' "$f" "$(llvm/cmake-build-debug/bin/llvm-readelf -h "$f" | awk '/Entry point/{print $NF}')"
+done | sort -k2 | awk '{if($2==p)print "COLLISION: "$1" and "q; p=$2; q=$1}'
+```
+
+**When a frozen artifact collides with the control, RELINK THE CONTROL.** `k800` is rebuilt for
+every image and its VA is irrelevant to its job; a frozen repro is the one thing that cannot be
+rebuilt. On 2026-09-05 this was nearly resolved the other way — as "boot the frozen image with no
+control, or skip it" — and neither was the real choice.
+
 ## 4. Classify — three things are NOT results
 
 Read the **last marker** in the run-scoped transcript, never "did not return":
