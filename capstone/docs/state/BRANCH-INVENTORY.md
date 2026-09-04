@@ -1,8 +1,22 @@
 # Branch inventory — `capstone-ariane`, 2026-08-20
 
+> **RE-CHECKED 2026-09-04 — the alarm below is mostly RESOLVED, and one branch is still exposed.**
+> Of the five branches this file called local-only, **four are now on the remote** with nothing
+> unpushed: `timing-directive-explore`, `s10-merge-candidate`, `s10b-fix`, `s10-fix-wip`.
+>
+> **`timing-multicycle` is still local-only, and it has moved** — head `eaa4e7984` here is stale,
+> it is now `4c4224afb` with **5 unpushed commits**, among them a RETRACTION ("the broad multicycle
+> constraint would have hidden REAL violations") and three measured negative results on the
+> spill/reload loss. Those are exactly the results that are expensive to re-derive and impossible
+> to reconstruct from an artifact. **It is not on the push allowlist**, so it needs the branch
+> owner to push it or to add the line. Until then it is one disk failure from gone.
+>
+> Also note the superproject branch rename: `capstone-bootstrap` → `dev` (2026-09-04). That does
+> not affect the `capstone-ariane` branches named below.
+
 Everything built during the S-07 / S-10 / timing work, what is on it, and what it is waiting for.
 **Five of these eight branches exist only on this machine.** Push them or they are one disk away
-from gone.
+from gone. *(As of 2026-09-04 that count is one — see the note above.)*
 
 ## Ready to run — a synthesis machine can check one out and run `bash synth-guard.sh`
 

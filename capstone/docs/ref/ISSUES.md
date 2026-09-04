@@ -3443,6 +3443,43 @@ seconds of emulation, and R-1's diagnostic family can finally be developed off-b
 
 ## Compiler / toolchain (ours)
 
+### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for `OPEN — COVERAGE GAP, not a miscompile`
+
+**Filed 2026-09-04 as a deliberate, accepted gap** when the c128 branch was merged. The project
+lead's call was "merge as-is, file it" — this entry is that filing, not a request to revisit it.
+
+The test exists to prove that an exact signed division after a pointer difference lowers to `SRA`
+rather than a `__divti3` library call. On the merged branch, `ptrtoint` produces **i64**, so all
+three of its cases compute at address width — and at i64 a divide by 4 was never going to become a
+libcall. **`CHECK-NOT: __divti3` is now a condition that cannot fail.** The case that could fail
+it, `ptrdiff_signed_size12` (i128 width, non-power-of-two divisor), was deleted in the same change.
+
+This is the "a gate whose condition the mandated control always satisfies" shape from `CLAUDE.md`,
+and it is recorded here because a green test that cannot go red is worse than no test: it reads as
+coverage.
+
+**Measured, not inferred (2026-09-04).** The pre-merge version of the file (`git show
+738c8c94521f:llvm/test/CodeGen/Capstone/ptr-diff-signed.ll`, four functions, i128 `ptrtoint`) run
+through the **merged** compiler:
+
+```
+llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < ptrdiff-parent.ll | grep -c __divti3
+3
+```
+
+So the i128 path still reaches `__divti3` in the merged backend. **It is not a live miscompile**:
+clang no longer emits i128 pointer arithmetic for this construct, so no C source reaches it. The
+defect would be a test asserting otherwise, which is why this is filed as coverage and not as C-nn
+correctness.
+
+**What would close it:** restore a case that computes at i128 width, or — better, since the i128
+carrier was deliberately retired — assert the *positive* property directly (an `srai` is emitted
+and no libcall is referenced) so the test fails if the lowering regresses in either direction.
+D's version already carries the right instinct in `addr_logical_shift`, which is an explicit
+control against a backend that simply cannot emit `srli`; the `__divti3` half needs the same
+treatment.
+
+
 ### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `FIXED 2026-07-28`
 **FIXED 2026-07-28. Root cause: a stale object file, not the compiler.**
 

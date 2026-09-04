@@ -984,6 +984,25 @@ completed the full flow, and did synthesis **41 min faster** than retiming-OFF (
 flow deviation was never necessary — and it produced the worse-timed build. This strengthens
 CLAUDE.md's "do not change the synthesis flow"; nothing there needs changing.
 
+> **CORRECTION 2026-09-04 — the last two sentences above are wrong against this document's own
+> table, and the table is the sourced side.** Both arms are `52fa06b9d`, read from their own
+> post-route reports: retiming **OFF** is WNS **−14.125** with **104,238** failing endpoints;
+> retiming **ON** is **−14.832** with **104,457**. Less-negative WNS is better — this document
+> says so itself two paragraphs up ("best −10.629 ns") — so **OFF is the better-timed build on
+> both metrics, not the worse one.**
+>
+> What the measurements actually support is a **trade, not a dominance**: retiming-ON synthesises
+> **41 minutes faster** and retiming-OFF routes **marginally better-timed**. The differences in
+> slack (0.7 ns) and endpoint count (219 of ~174,000) are small enough that the honest reading is
+> "no meaningful timing difference, and ON is faster".
+>
+> **The conclusion survives; its stated cause does not.** "Do not change the synthesis flow" is
+> still right, but not because turning retiming off produces worse timing — it does not. It is
+> right because the deviation bought nothing, cost 41 minutes a build, and was adopted on the
+> strength of a comment that disagreed with working code. Anyone re-deriving the rule from the
+> "worse-timed" claim will find the numbers contradict them and may discard the rule with it,
+> which is the specific harm this correction exists to prevent.
+
 ## Rate ladder for SQLite on silicon — started 2026-08-27, current compiler
 
 **Why this exists.** The standing claim is "SQLite passes its correctness workload on silicon,

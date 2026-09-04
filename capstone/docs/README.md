@@ -83,6 +83,12 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ## Current verified baseline
 
+> **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
+> accurate, but it accumulated before any of the silicon work and says nothing about it. For
+> what is verified **on the board** — the resident bitstream, S-06/S-07/S-08/S-12, and SQLite's
+> logic tests running in a capability domain — read `state/current-state.md`. For the status of
+> any individual defect, `ref/ISSUES.md` outranks both.
+
 - working sample-domain build + runtime validation
 - working OpenSBI/runtime path via `capstone/caplifive-buildroot/build/local.mk`
 - validated shared-region runtime proof
