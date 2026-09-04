@@ -2533,11 +2533,18 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // and leaves the consumer reading the capability's own register, whose metadata
 // shadow is still tagged; RTL raises UNEXPECTED_OPERAND when such a register is
 // the rs2 of cincoffset/scc or an rs of shrink, QEMU does not check (C-31). An
-// ALU write clears the shadow on both (alu-write-clears-shadow.S). Every
-// c128 -> i64 truncate selects to this pseudo (CapstoneISelDAGToDAG, the
-// ISD::TRUNCATE case), as does cap_get_cursor below. It stays a pseudo until MC
-// lowering so that MachineCopyPropagation, which treats `addi rd, rs, 0` as a
-// copy, cannot delete it when rd and rs are allocated to one register.
+// integer writeback clears the shadow on the RTL: the metadata regfile is written
+// with the GPR write enable and gets '0 whenever the result is not a capability
+// (commit_stage.sv:279, issue_read_operands.sv:1900,1943 -- NOT cap_we, which is
+// the second port), shown for lui/addi by alu-write-clears-shadow.S and
+// cincoffset-stale-metadata.S; the exact shape emitted here, `addi a5, a5, 0`
+// with a5 a live tagged capability and the cincoffset next, is proposed as a
+// further arm of that test and is NOT yet measured. Every c128 -> i64 truncate
+// selects to this pseudo (CapstoneISelDAGToDAG, the ISD::TRUNCATE case), as
+// does cap_get_cursor below. It stays a pseudo until MC lowering because
+// MachineCopyPropagation (UseCopyInstr, CapstoneTargetMachine addPreEmitPass)
+// treats `addi rd, rs, 0` as a copy and DELETES it when rd == rs -- measured by
+// the claim-auditor with a matched pair on 2026-09-05.
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
@@ -2692,8 +2699,13 @@ def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 //    (getNoPreservedMask) and the reference compiler additionally zeroes every
 //    non-argument register before the call and saves/restores ra and gp itself.
 //    OPEN (C-36b): this backend does not yet zero non-argument registers or
-//    save/restore gp around a domain call; gp is a reserved register the
-//    allocator cannot spill, so a callee domain that changes it breaks the caller.
+//    save/restore gp and tp around a domain call; both are reserved registers
+//    the allocator cannot spill, so a callee domain that changes them breaks the
+//    caller.  sp: the epilogue after the call reloads ra and s0-s11 THROUGH sp,
+//    so it depends on the callee domain returning with the caller's sp -- and no
+//    convention to that effect exists anywhere in the tree (the only in-tree
+//    domain exit, the ladder glue, scrubs sp to 0 before its return).  Open with
+//    C-36b, not a documented contract.
 //  * RETURN rd, rs1, rs2: rd (a CAPABILITY, the sealed-return cap) is READ from
 //    the rd field and nulled; rs1 is an INTEGER, the re-entry PC written into the
 //    context; rs2 is an integer used only by the asynchronous form. The table

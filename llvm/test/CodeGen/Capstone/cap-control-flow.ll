@@ -34,7 +34,9 @@ declare void @llvm.capstone.cap.return.p200(ptr addrspace(200), i64, i64)
 ; spills, `call a0, a0` (rd == rs1, both fixed to a0), 13 reloads.  Until
 ; 2026-09-05 the call carried an ordinary call's callee-saved mask and none of
 ; this was emitted -- s0-s11 were silently clobbered on both implementations.
-; sp is preserved by convention; gp is NOT saved yet (C-36b, open).
+; The epilogue reloads through sp, so it depends on the callee domain returning
+; with the caller's sp -- no in-tree convention says it does; gp and tp are NOT
+; saved (C-36b, open).
 ; CHECK-LABEL: test_cap_call:
 ; CHECK: # %bb.0:
 ; CHECK: stc ra, {{[0-9]+}}(sp)

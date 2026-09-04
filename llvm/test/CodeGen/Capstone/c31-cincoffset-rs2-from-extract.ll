@@ -15,15 +15,18 @@
 ; coincide (`mv a0, a0`): the write is what clears the shadow, not the move.
 ;
 ; MUTATION: the pre-fix compiler IS the failing case -- `cincoffset a0, a1, a0`
-; with no integer write, which the CHECK-NOT below rejected (measured
-; 2026-09-05 before the rebuild; this file was XFAIL on it).
+; with no integer write, so the `mv [[R]], a0` check finds nothing (measured
+; 2026-09-05 before the rebuild; this file was XFAIL on it).  The guard is the
+; ORDER: an integer write of the register, then the cincoffset reading it.  A
+; negative check for the bare shape cannot be written here, because with rd = rs
+; the fixed output contains the same text after the write (the claim-auditor
+; found the earlier CHECK-NOT vacuous: it scanned only the prologue).
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O1 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 
 ; CHECK-LABEL: use_int_of_ptr:
-; CHECK-NOT: cincoffset a0, a1, a0
 ; CHECK: {{(mv|addi)}} [[R:a[0-9]+]], a0
 ; CHECK: cincoffset a0, a1, [[R]]
 ; CHECK: lb a0, 0(a0)
@@ -36,7 +39,6 @@ define i64 @use_int_of_ptr(ptr addrspace(200) %p, ptr addrspace(200) %q) {
 }
 
 ; CHECK-LABEL: offset_by_ptr:
-; CHECK-NOT: cincoffset a0, a0, a1
 ; CHECK: {{(mv|addi)}} [[R:a[0-9]+]], a1
 ; CHECK: cincoffset a0, a0, [[R]]
 define ptr addrspace(200) @offset_by_ptr(ptr addrspace(200) %base, ptr addrspace(200) %p) {
