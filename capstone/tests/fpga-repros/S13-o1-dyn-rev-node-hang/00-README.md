@@ -1,5 +1,39 @@
 # S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception
 
+> ## THIS MEASUREMENT CANNOT BE REPRODUCED FROM THIS FOLDER (added 2026-09-04)
+>
+> **The two `-O1` images behind all 8 boots are not here and are not reconstructable.** This folder
+> contains one file: this README. No `.dom`, no `SHA256SUMS`, no build command, no image identity,
+> no compiler revision. Everything below is a faithful record of what was *observed*; none of it can
+> be re-run against the artifacts that produced it.
+>
+> That matters more than it looks. The project's convention is that a repro folder **is** the
+> report, and the evidence here is unusually strong — 63 boots, two apertures agreeing perfectly —
+> which makes it exactly the kind of result someone will want to re-test after an RTL or compiler
+> change. They cannot. A fresh `-O1` two-level-join build is a **different image**: it can show
+> whether a given defect appears in that *class* of build, and it can say nothing about the two
+> images that actually wedged.
+>
+> **So: quote the observation, do not claim a re-run.** If you rebuild, say in the record that the
+> image is new.
+>
+> ### A related gap in the reasoning below
+>
+> **This report never considers an unhandled fault.** There is no mention of a trap vector, a fault
+> storm, or address 0 — although `../RTL-domain-trap-vector-unset/` records, root-caused and
+> confirmed on silicon, that a domain enters with **no trap vector**, so a fault inside one storms
+> at address 0 and does not present as an exception. That possibility should have been considered
+> and excluded explicitly rather than left unmentioned.
+>
+> **It was raised on 2026-09-04 as a specific hypothesis — that S-13 is C-40 (an `-O1` LSR-generated
+> `cincoffset` off a null base, cause 24) made invisible by the missing vector — and that mechanism
+> is REFUTED by this document's own data.** A fetch storm gives no account of
+> `dyn_wait_store_syncer` and `store_syncer_req_set` being asserted, and those two signals agree
+> across all 63 boots. The core is WAITING, not faulting. Recorded here so the same hypothesis is
+> not re-derived: the general question (was an unhandled fault excluded?) is open; this particular
+> answer to it is closed.
+
+
 ## THE STORE SYNCER IS CLOSED — three mechanisms, all on structure rather than absent counters
 
 The single-entry `capstone_store_syncer` holds ONE pending trans id and sets it on a new `init`
