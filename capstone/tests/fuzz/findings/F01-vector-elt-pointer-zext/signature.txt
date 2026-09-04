@@ -1,0 +1,1 @@
+llc: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:6606: SDValue llvm::SelectionDAG::getNode(unsigned int, const SDLoc &, EVT, SDValue, const SDNodeFlags): Assertion `VT.isInteger() && N1.getValueType().isInteger() && "Invalid ZERO_EXTEND!"' failed.

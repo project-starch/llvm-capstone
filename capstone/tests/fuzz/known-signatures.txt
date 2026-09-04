@@ -1,0 +1,7 @@
+# Crash/error signatures already filed, one per line:  <substring of the signature> | <ID> | <note>
+# run-llc-stress.py reports a matching failure as KNOWN and does not fail the run on it.
+# Every entry is a claim that the defect is filed and understood; do not add one to make a
+# run green.
+Res.getValueType() == Node->getValueType(?) | C-20 | llvm.cttz/ctlz crash the legalizer at every -O (compiler-repros/C20-cttz-i32-crashes-legalizer)
+Cannot materialize arbitrary >?-bit constants as capabilities | C-17 | a >64-bit capability constant is refused with a diagnostic, by design
+Invalid ZERO_EXTEND | C-39 (F-01) | variable-index extract/insert on a wide vector: getVectorSubVecPointer zero-extends the index into the c128 pointer type (fuzz/findings/F01-vector-elt-pointer-zext)
