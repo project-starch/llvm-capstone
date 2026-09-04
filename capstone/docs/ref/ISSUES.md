@@ -12,7 +12,20 @@ Last updated 2026-09-04.
 
 ---
 
-## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — verification is CONSISTENT WITH FIXED, not proven (2026-09-04)`
+## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — 6 of 6 post-fix draws clean, one-sided Fisher p = 0.033 against 1-of-4 pre-fix (2026-09-05)`
+
+> **STATISTIC UPDATED 2026-09-05.** Two more post-fix draws completed on `caplifive_s12fix_5097eb166.bit`
+> in the cycle-2 regression sweep: B7 `q_two` (the S-12 trigger query, two-level self-join) and B8
+> `select1` (1031 records, 1000 queries), both with `SQ: G/enter` and `SQ: H/return`, valid
+> control first. Post-fix is now **6 of 6** against **1 of 4** on the pre-fix bitstream.
+> **One-sided Fisher p = 0.033** (was 0.071 at 4/4; the check that it moves the right way: a
+> hypothetical 3/4 gives 0.24). Computed from the hypergeometric directly, not quoted.
+>
+> **Caveat that keeps this at "strong evidence", not "proven":** the two new draws are at **`-O1`**,
+> where this entry's own analysis puts the trigger population 1.3-3.4x smaller than at `-O0`, so
+> they are weaker draws than the four they join. Two more **`-O0`** draws would be the clean way
+> to push further, and the earlier projection that two more draws would reach p = 0.0095 was
+> wrong and is withdrawn.
 
 > **STATUS 2026-09-04.** Root cause found, fix synthesised and flashed; the SQLite domain that
 > trapped now completes. Full mechanism and evidence:
@@ -2755,7 +2768,21 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
-### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON, syncer EXONERATED`
+### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `NOT REPRODUCED 2026-09-05 — on a different bitstream AND a different compiler, so unattributed`
+
+> **2026-09-05: an `-O1` two-level-join domain — the S-13 shape — COMPLETED on silicon.** B7 of the
+> cycle-2 sweep: `q_two` at `-O1`, `SQ: G/enter` → `SQ: H/return`, records = 2, control valid.
+> B8 `select1` at `-O1` likewise, 1031 records. The August measurement was two `-O1` images, both
+> wedged, on `caplifive_s07clear_84ed6eafb.bit`.
+>
+> **Two variables changed at once, so this attributes to neither:** the bitstream (`s07clear` →
+> `s12fix`, which carries the S-12 forwarding fix and the R-20 cherry-pick) **and** the compiler
+> (cycle 2, which fixes C-40 — the `-O1` LSR null-base `cincoffset` that faulted every `-O1`
+> domain at its first executed site under QEMU). Either could have removed the hang. The C-40
+> connection was raised and then judged not to fit S-13's measured signature (syncer waits, not a
+> fault storm); this result does not re-open that, it just says the hang is gone in the only
+> configuration anyone has now. Separating the two costs one boot with the cycle-1 compiler's
+> `-O1` image on `s12fix`. Not done; recorded as the arm that would settle it.
 
 > **THE STORE SYNCER IS CLOSED (2026-08-27). No RTL change is indicated.** The single-entry
 > `capstone_store_syncer` sets `cap_trans_id`/`req_set` on a new `init` with **no guard** on

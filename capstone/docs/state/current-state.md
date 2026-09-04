@@ -2,7 +2,30 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-04 — CURRENT
+## 2026-09-05 — CURRENT
+
+* **SQLite passes its logic tests on silicon at `-O1`** — the first validation above `-O0`.
+  `select1` 1031 records / 1000 queries / 0 failures and `q_two` (the S-12 trigger) both completed
+  in a capability domain on `caplifive_s12fix_5097eb166.bit` with the cycle-2 compiler, valid
+  control first. Full sweep: **8 boots, 8 valid controls, 19 rung readings, every rung at its
+  oracle** (`tests/board-results/2026-09-05.tsv`, compiler lane's branch). RV8 `-O2`, CoreMark
+  `-O2` with sibling calls, BEEBS `-O2`, two csmith rungs — all at oracle. C-28's tail-call fix runs
+  on silicon, so `-fno-optimize-sibling-calls` can be retired.
+* **S-12: 6 of 6 post-fix draws clean, p = 0.033** — see ISSUES.md; the two new draws are `-O1`
+  and therefore weaker, so this is strong evidence and still not "proven".
+* **The gp-captable miscompute (OPEN since 2026-07-23) does not reproduce** — `rc_p1` = 2080 at its
+  oracle. Probable cause **R-20, fixed in hardware by `f623c48a1`**, whose signature is exactly
+  that bug's. The blocks it carried (silicon-compatibility claim, branch merge, app-level silicon
+  perf) are no longer supported by a live failure.
+* **R-20 is FIXED in the resident bitstream** — an alert claiming otherwise was filed and
+  **retracted** the same day: the fix is a cherry-pick under a different SHA, and both lanes had
+  tested ancestry by hash. Presence-by-content is the check; see ISSUES.md.
+* **S-13 does not reproduce at `-O1`**, but bitstream and compiler both changed, so it attributes to
+  neither yet.
+* Q-02 (QEMU build break) closed end to end; Q-03 (position-dependent wedge, reproducible off-board),
+  R-25 (INIT linearity break), C-41 (compiler `return` encoding), I-01..I-03 filed and verified.
+
+## 2026-09-04 — superseded by the section above
 
 * **Bitstream: `caplifive_s12fix_5097eb166.bit`** (sha256 `7a97ccd0…62999b0`) — the S-12 fix,
   synthesised and flashed 2026-09-04. It IMPROVED timing over its predecessor: WNS −16.400 →
