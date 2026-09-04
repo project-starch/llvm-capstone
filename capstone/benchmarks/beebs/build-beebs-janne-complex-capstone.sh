@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-BEEBS_BENCHMARK=janne_complex
-BEEBS_SOURCE_FILES_REL=(src/janne_complex/libjanne_complex.c)
-source "$SCRIPT_DIR/build-beebs-simple-capstone-common.sh"
+# Forwarder. The implementation lives under the UNDERSCORE name because
+# run-beebs-simple-common.sh:20-21 computes it from BEEBS_BENCHMARK, which is the
+# BEEBS source-directory name (janne_complex). This hyphenated name is what the
+# docs and the sibling scripts use, so both spellings must keep working.
+exec bash "$(dirname "$0")/build-beebs-janne_complex-capstone.sh" "$@"
