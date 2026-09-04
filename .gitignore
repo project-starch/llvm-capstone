@@ -92,3 +92,9 @@ pythonenv*
 /clang/utils/analyzer/projects/*/RefScanBuildResults
 # automodapi puts generated documentation files here.
 /lldb/docs/python_api/
+
+# A full working clone of the caplifive-system fork, checked out inside the worktree.
+# It is NOT a submodule and is not part of this repository -- clone it yourself from
+# https://github.com/project-starch/caplifive-system-dev if you need it.  Ignored so it
+# cannot be staged by accident; it is ~3.9 GB and holds no content that is not on that remote.
+/capstone/caplifive-system-dev/
