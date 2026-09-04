@@ -858,3 +858,34 @@ them rather than rediscovering them:
   natively without a large code model, let alone fit the 1.3 MB domain ceiling; parked
   behind csmith until its array-size knobs are explored. csmith seeds build cleanly at
   -O0 and -O2 with `+m` (the first dry run's -O0 link failures were a missing `+m`).
+
+### Execution log — Tier 4.7 landed, the semantics skeleton, and what the RV8 -O2 twin is saying (2026-09-04, evening)
+
+- **Tier 4.7 is in** (`86d1cc4957fa`): `llvm/utils/capstone-shared-patches.txt` lists the 65
+  shared files that differ from the drift base, `capstone-shared-drift.py` checks marker,
+  size and unlisted files, and `shared-patches-present.test` runs it under lit. Both negative
+  arms were made to fire on a copy of the manifest: an edited marker ("marker not found") and
+  an edited count ("diff is +32 -1, manifest says +33 -1"). The first attempt at the count arm
+  did not fire because the sed pattern did not match the manifest line -- the check reported
+  clean against an unmutated file. Recorded here because it is the pattern this plan warns
+  about: a negative test whose mutation silently did not apply reads exactly like a pass.
+- **`llvm/lib/Target/Capstone/CapstoneISASemantics.md`** now exists as the Tier 4 closure
+  artifact: one row per emitted instruction, the compiler column cited to `.td` lines, every
+  other cell either cited or marked "not audited". The rtl-oracle rows (running) fill the RTL
+  column next.
+- **The RV8 -O2 twin is not the C-40 signature.** dhrystone, qsort and aes time out (the
+  domain never returns) and sha512 halts with capability-fault cause 5, on both attempts.
+  C-40 shows as cause 24 at the first loop. So RV8 at -O2 carries at least one further
+  defect class; the C-40 fix rerun separates "C-40" from "other", and whatever remains gets
+  its own ID and matched pair. Those images are not kept by the driver (each build overwrites
+  the share dir), so the rerun must capture the doms.
+- **Tier 4.5 by grep:** `lowerADD` (member) and the static `lowerSUB`,
+  `lowerScalarI128Shift/Logical/LogicalOnCapability/And/Mul` each have exactly one mention
+  outside comments -- their definition. Static functions with no caller are what
+  `-Wunused-function` reports, so the deletion is one commit after the next build shows the
+  warnings; it stays out of the fix commits.
+- **Tier 4.6 facts, for the Sema work:** the clang target defines `__capstone`,
+  `__capstone_xlen`, `__capstone_cmodel_*`, `__capstone_float_abi_*` and the rest of the
+  RISCV-copy names (`clang/lib/Basic/Targets/Capstone.cpp:151-230`); `__capstone_v_intrinsic`
+  is defined unconditionally at `:226`, vector or not. There is no `SemaCapstone.cpp`; the
+  RISCV one is the model.

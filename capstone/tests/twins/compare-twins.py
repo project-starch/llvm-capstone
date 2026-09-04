@@ -26,7 +26,11 @@ import os
 import re
 import sys
 
-RV8 = re.compile(r"^(PASS|FAIL|SKIP)\s+(\S+)\s*$")
+# The runner prints "PASS  name" but "FAIL  name   (see <log glob>)": the verdict
+# line may carry a trailing pointer, so the anchor is on the name, not the line end.
+# The first run of the real suite reported an all-FAIL side as "no summary" because
+# this anchored on end-of-line; the positive control had used a bare FAIL line.
+RV8 = re.compile(r"^(PASS|FAIL|SKIP)\s+(\S+)(?:\s.*)?$")
 BEEBS = re.compile(r"^run-all-beebs\.sh: (PASS|FAIL|FLAKE)\S*\s+(\S+)\b")
 
 

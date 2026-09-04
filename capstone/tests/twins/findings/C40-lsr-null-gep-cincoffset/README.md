@@ -2,7 +2,7 @@
 
 **A COMPILER defect, found by the Tier 2a SLT twins on 2026-09-04.** The same SQLite
 domain and the same three SQLLogicTest files AGREE with the native run at -O0 (select1:
-1031 records, 0 failures) and fault at the first loop at -O1 and at -O2, on the rebuilt
+1031 records, 0 failures) and fault at the first EXECUTED zero-base site at -O1 and at -O2, on the rebuilt
 QEMU (5dc356547d7f, 2026-09-04 22:34) with the branch compiler (no codegen change from
 db079043).
 
@@ -23,7 +23,13 @@ The loop walks `WhereTerm a[]` (80 bytes each); `s4` counts the remaining distan
 `aLast`, and the exit test `a == aLast` has become `(null + s4) == null`.  `cincoffset`
 with rs1 = `zero` -- the null capability, untagged -- raises UNEXPECTED_OPERAND (24) on
 the first execution, on QEMU and, by the spec, on the RTL.  The -O0 image has no such
-instruction; the -O1 image has five, the -O2 image eight.
+instruction; the -O1 image has seven, the -O2 image twenty (re-derived by the auditor from
+the images that ran: domain_main 1/10, sqlite3VdbeExec 2/3, sqlite3WhereClauseClear 1/4,
+fail 3/3).  All six failing runs trap at one of the two sqlite3WhereClauseClear sites
+(-O1: pc 0x101cc9d4c, -O2: pc 0x101ccbb80; rd = x10, rs1 = x0), so most sites never
+executed -- "first loop" would overstate what the logs show.  A `-disable-lsr` build of
+the same module has zero such sites against eight in the control, which is the
+no-rebuild experiment that settles whether C-40 is the only -O1 blocker.
 
 ## The pass
 

@@ -16,9 +16,10 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 W=$(mktemp -d "${CAPSTONE_TMP_ROOT:-/tmp}/twins-check.XXXXXX")
 CT="$SCRIPT_DIR/compare-twins.py"
 
-printf 'PASS  dhrystone\nPASS  qsort\nFAIL  sha512\nPASS  aes\nSKIP  norx\nrun-all-rv8: 3 passed, 1 failed.\n' > "$W/a.txt"
+# FAIL lines carry the runner's real trailing log pointer (run-all-rv8.sh:37).
+printf 'PASS  dhrystone\nPASS  qsort\nFAIL  sha512   (see /x/logs/sha512.attempt-*.log)\nPASS  aes\nSKIP  norx\nrun-all-rv8: 3 passed, 1 failed.\n' > "$W/a.txt"
 cp "$W/a.txt" "$W/same.txt"
-sed 's/^PASS  qsort$/FAIL  qsort/' "$W/a.txt" > "$W/flip.txt"
+sed 's|^PASS  qsort$|FAIL  qsort   (see /x/logs/qsort.attempt-*.log)|' "$W/a.txt" > "$W/flip.txt"
 grep -v '^PASS  aes$' "$W/a.txt" > "$W/drop.txt"
 : > "$W/empty.txt"
 printf 'run-all-beebs.sh: PASS bs (__BEEBS_BS_PASSED__, log=x)\nrun-all-beebs.sh: FLAKE crc32 (never booted after 3 attempts)\n' > "$W/bfl.txt"
