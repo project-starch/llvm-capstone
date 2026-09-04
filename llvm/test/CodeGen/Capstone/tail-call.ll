@@ -1,3 +1,4 @@
+; Pins Capstone issue C-28 (the tail-call lowering defect; see the registry entry).
 ; A tail call must be lowered as a JUMP, not as a call.  Today it is not:
 ; CapstoneISD::TAIL is routed into selectCall (CapstoneISelDAGToDAG.cpp, the
 ; CALL/TAIL case), which always builds PseudoCALLIndirect.  The callee is
@@ -20,6 +21,7 @@
 ; RUN: llc < %s -mtriple=capstone64 -mattr=+m -O1 -verify-machineinstrs | FileCheck %s
 ; RUN: llc < %s -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs | FileCheck %s
 ; RUN: llc < %s -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs -capstone-gp-free | FileCheck %s --check-prefix=GPFREE
+; RUN: %llc_cap -O0 < %s -o /dev/null
 ; XFAIL: *
 
 declare i64 @callee(i64)

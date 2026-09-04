@@ -1,7 +1,14 @@
 ; Pinned to -capstone-shrink-stack=false (default on since 2026-07-03): this test
 ; checks pointer-arithmetic lowering, not stack narrowing (the narrowed path is
 ; covered by cap-shrink-{stack,dynalloca}.ll).
+; MUTATION: the mv negative in @test_ptrdiff guards the retired addi read of
+; an address, which no IR shape produces now; demonstrated on the emitted text
+; by inserting 'mv a1, a1' after the label, which the CHECK-NOT catches
+; (performed 2026-09-04).
+;
 ; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
 ; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
 ; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)

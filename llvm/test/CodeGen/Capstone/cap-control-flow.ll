@@ -11,10 +11,13 @@
 ; pinning them.
 ;
 ; MUTATION: in @test_cap_exit replace `unreachable` with `ret void` -> a
+; The implicit-check-nots on capenter/return/capexit make "exactly the pinned
+; instances" a checked property (same mechanism, same demonstration as in
+; intrinsics.ll: delete a pinned CHECK line and the instance trips it).
 ; `cjalr zero, 0(ra)` appears after `capexit` and the negative check that
 ; follows it fires.
 ;
-; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s --implicit-check-not=movc
+; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s --implicit-check-not=movc --implicit-check-not='capenter a' --implicit-check-not='return a' --implicit-check-not='capexit a'
 ; RUN: llc -mtriple=capstone64 -O0 -stop-after=instruction-select -o - < %s | FileCheck %s --check-prefix=MIR
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null

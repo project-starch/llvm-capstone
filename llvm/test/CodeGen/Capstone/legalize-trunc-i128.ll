@@ -1,4 +1,8 @@
+; MUTATION: give @ptr_to_long an integer second argument and return it -> 'mv
+; a0, a1' and the mv negative fires (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ;
 ; Regression test: DAG legalization can introduce `trunc i128 -> xlen` when
 ; comparing capability pointers (ptr addrspace(200)). The backend must be able

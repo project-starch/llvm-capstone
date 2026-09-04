@@ -1,4 +1,8 @@
+; MUTATION: give @cap_ret a second capability argument and return that ->
+; 'movc a0, a1' and the movc negative fires (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; CC_Capstone_FastCC used to have no MVT::i128 case, so a fastcc function taking
 ; or returning a capability fell through to "CC didn't match" and hit

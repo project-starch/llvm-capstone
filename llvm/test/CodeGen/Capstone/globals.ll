@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 @g_val = addrspace(200) global i64 123, align 8
 @g_ptr = addrspace(200) global ptr addrspace(200) null, align 16

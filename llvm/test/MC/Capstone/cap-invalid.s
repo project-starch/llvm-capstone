@@ -2,7 +2,8 @@
 # immediates one past each end of their range, wrong arity, a non-capability
 # register where a capability is required, a symbol modifier where an
 # immediate is required, an unknown CSR name, and the register the encoding
-# forbids (mrev with rd = zero, GPCRNoC0).  Each diagnostic is anchored to its
+# forbids (mrev with rd = zero, GPCRNoC0), and one extra operand on every
+# fixed-arity instruction.  Each diagnostic is anchored to its
 # line and column, so a changed operand class moves the message and this
 # file notices.  Measured 2026-09-04 on the branch llvm-mc.
 #
@@ -30,3 +31,11 @@ ccsrrw a0, nosuchcsr, a1 # CHECK: :[[@LINE]]:12: error: operand must be a valid 
 shrink a0, a1 # CHECK: :[[@LINE]]:1: error: too few operands for instruction
 seal a0 # CHECK: :[[@LINE]]:1: error: too few operands for instruction
 cincoffset a0, a1, 5 # CHECK: :[[@LINE]]:20: error: invalid operand for instruction
+scc a0, a1, 5 # CHECK: :[[@LINE]]:13: error: invalid operand for instruction
+init a0, a1, a2, a3 # CHECK: :[[@LINE]]:18: error: invalid operand for instruction
+drop a0, a1 # CHECK: :[[@LINE]]:10: error: invalid operand for instruction
+revoke a0, a1 # CHECK: :[[@LINE]]:12: error: invalid operand for instruction
+call a0, a1, a2 # CHECK: :[[@LINE]]:14: error: invalid operand for instruction
+capenter a0, a1, a2 # CHECK: :[[@LINE]]:18: error: invalid operand for instruction
+return a0, a1, a2 # CHECK: :[[@LINE]]:16: error: invalid operand for instruction
+capexit a0, a1, a2 # CHECK: :[[@LINE]]:17: error: invalid operand for instruction

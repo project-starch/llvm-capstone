@@ -14,10 +14,12 @@
 ; See CapstoneAsmPrinter.cpp emitInstruction, CapstoneISelDAGToDAG.cpp selectCall,
 ; and plans/compatibility-eval-silicon-app.md §2.
 
-; RUN: llc -mtriple=capstone64 -mattr=+m < %s \
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free=false < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,CAP
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,GPFREE
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

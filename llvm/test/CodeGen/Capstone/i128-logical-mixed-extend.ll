@@ -1,22 +1,27 @@
-; RUN: llc -mtriple=capstone64-unknown-elf -O2 < %s | FileCheck %s
-;
 ; Issue C-2: "Cannot select: i128 = or / = xor" with MIXED extends.
 ;
-; lowerScalarI128Logical computes the operation in XLen and re-extends. That is
-; exact only while the i128 carrier's high half is an extension of its low half.
-; Mixed extends break the invariant: for sext(a) OR zext(b) the true 128-bit high
-; half is sign(a), which is NOT a function of the low-half result, so re-extending
-; the narrow result under either rule would MISCOMPILE. Bailing is correct.
+; While i128 was the capability carrier, lowerScalarI128Logical computed the
+; operation in XLen and re-extended, which is exact only while the high half is
+; an extension of the low half; sext(a) OR zext(b) broke that and the backend
+; had to bail.  Since the c128 split i128 is a plain integer expanded to two
+; i64 by the generic legalizer, so these shapes must produce the exact two-
+; register form: the masked operand's high half is provably zero, so the
+; result's high half is `li a1, 0` and the low half is the plain 64-bit op.
+; Measured 2026-09-04 on the branch tools; the header above records the
+; history that the file name still carries.
 ;
-; The recoverable case, and the only one this widens to: when the sign-extended
-; operand is known non-negative, its sign extension and a zero extension are the
-; same bits, so both operands agree and the invariant holds. Below, the `and`
-; masks make the sign bit provably zero.
-;
-; The genuinely unrepresentable case is NOT covered and must keep bailing -- do
-; not "fix" it by picking an extension rule.
+; RUN: llc -mtriple=capstone64-unknown-elf -O2 < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; CHECK-LABEL: mixed_or_known_nonneg:
+; CHECK: # %bb.0:
+; CHECK-NEXT: lui a2, 524288
+; CHECK-NEXT: addiw a2, a2, -1
+; CHECK-NEXT: and a0, a0, a2
+; CHECK-NEXT: or a0, a0, a1
+; CHECK-NEXT: li a1, 0
+; CHECK-NEXT: cjalr zero, 0(ra)
 define i128 @mixed_or_known_nonneg(i64 %a, i64 %b) {
   %m = and i64 %a, 2147483647
   %sa = sext i64 %m to i128
@@ -26,6 +31,13 @@ define i128 @mixed_or_known_nonneg(i64 %a, i64 %b) {
 }
 
 ; CHECK-LABEL: mixed_xor_known_nonneg:
+; CHECK: # %bb.0:
+; CHECK-NEXT: lui a2, 16
+; CHECK-NEXT: addi a2, a2, -1
+; CHECK-NEXT: and a0, a0, a2
+; CHECK-NEXT: xor a0, a0, a1
+; CHECK-NEXT: li a1, 0
+; CHECK-NEXT: cjalr zero, 0(ra)
 define i128 @mixed_xor_known_nonneg(i64 %a, i64 %b) {
   %m = and i64 %a, 65535
   %sa = sext i64 %m to i128

@@ -1,4 +1,10 @@
+; MUTATION: the cincoffsetimm-from-zero negative guards a lowering the backend
+; no longer has; demonstrated on the emitted text by inserting 'cincoffsetimm
+; a1, zero, 32' after the select_cap_const_arms label, which the CHECK-NOT
+; catches (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs -o - < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 define ptr addrspace(200) @select_cap(i1 %cond,
                                       ptr addrspace(200) %a,

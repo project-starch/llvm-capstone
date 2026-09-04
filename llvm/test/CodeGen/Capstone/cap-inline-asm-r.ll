@@ -1,3 +1,4 @@
+; Pins Capstone issue C-9 (see the registry entry of that name).
 ; An `"r"` inline-asm operand holding a CAPABILITY must get a capability
 ; register, and must reach the asm still TAGGED.
 ;
@@ -12,7 +13,13 @@
 ; encode identically, and `.insn` and hand-written asm only know the X names --
 ; so `a0`, not `c10`, even though the value is a capability.
 ;
+; MUTATION: the mv negatives guard the ADDI-on-the-address-half regression,
+; which the current lowering never emits for this shape; demonstrated on the
+; emitted text by inserting 'mv a0, a0' after the .insn, which the second
+; CHECK-NOT catches (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

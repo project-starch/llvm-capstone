@@ -1,4 +1,9 @@
+; MUTATION: in @ptr_sub_const pass the result through cap.get.base and cap.scc
+; -> 'lcc a1, a0, 3' follows the cincoffsetimm and the lcc negative fires
+; (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ;
 ; Regression: pointer arithmetic with a VARIABLE offset on a capability, e.g.
 ; `p - (n + 1)`, was mis-lowered. lowerSUB treated the (scaled, sign-extended)

@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; CHECK-LABEL: check_eq:
 ; CHECK: xor  a0, a0, a1

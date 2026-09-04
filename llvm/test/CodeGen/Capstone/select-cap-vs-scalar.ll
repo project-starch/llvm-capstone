@@ -1,4 +1,10 @@
+; MUTATION: the or negatives guard a merge of the two arms, which no IR shape
+; produces on this backend; demonstrated on the emitted text by inserting 'or
+; a5, a1, a2' between the beq and the movc of select_cap_eq_ten, which the
+; first CHECK-NOT catches (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ;
 ; Regression (C-2 family): a select whose result is a *capability* (i128) and
 ; whose condition compares against a NON-ZERO constant used to ICE with

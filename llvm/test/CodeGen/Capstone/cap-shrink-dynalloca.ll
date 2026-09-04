@@ -14,6 +14,8 @@
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,SHRINK
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=false < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,NOSHRINK
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
 ; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
 ; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)

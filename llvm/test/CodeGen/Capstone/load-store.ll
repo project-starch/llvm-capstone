@@ -1,4 +1,6 @@
 ; RUN: llc < %s -mtriple=capstone64 | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; CHECK-LABEL: store_cap:
 ; CHECK: stc a1, 0(a0)

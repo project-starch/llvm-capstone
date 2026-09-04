@@ -1,4 +1,8 @@
+; MUTATION: append a 17-byte aligned copy -> its trailing byte is an lbu/sb
+; pair and the negatives fire (performed 2026-09-04).
 ; RUN: llc < %s -mtriple=capstone64 | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; PureCap AS200 copies must preserve capability tags. For aligned 16-byte
 ; memcpy/memmove, lower directly to a single ldc/stc pair rather than generic

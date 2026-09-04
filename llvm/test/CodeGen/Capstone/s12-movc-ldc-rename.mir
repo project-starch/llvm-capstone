@@ -17,6 +17,7 @@
 # check requires the rename and not merely the flag.
 #
 # RUN: llc -mtriple=capstone64 -mattr=+m -x mir -run-pass=capstone-s12-movc-ldc -capstone-s12-movc-ldc-workaround=true -verify-machineinstrs -o - %s | FileCheck %s
+# RUN: llc -mtriple=capstone64 -mattr=+m -x mir -run-pass=capstone-s12-movc-ldc -capstone-s12-movc-ldc-workaround=true -capstone-s12-window=4 -verify-machineinstrs -o - %s | FileCheck %s
 # XFAIL: *
 ---
 name: rename_basic

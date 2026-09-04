@@ -757,3 +757,53 @@ them rather than rediscovering them:
   tests in that directory and the Disassembler `.txt` files carry their own
   `MUTATION:` lines but are not counted by the `mutations` section. Extend
   the scan when the section is next touched (P4).
+
+### 2026-09-04 — Tier 1 P3–P4 landed; the coverage gate is green
+
+- `check-lit-coverage.sh` reports **0 gaps** (271 when it was written): 81 CodeGen
+  tests, each with -O0 and -O1 arms or a recorded exemption; 7 MC + 2 disassembler;
+  16 clang. Every capability instruction has a positive CHECK, a negative control,
+  an assembler line, an invalid-operand diagnostic and a decoder line; every
+  intrinsic a CodeGen and a clang use; all 17 flags at both values; the last three
+  fatal sites pinned (C-17's diagnostic; the scalable-stack error under `+v`; the
+  dynamic-alloca size route recorded unreachable with its pinning test); every
+  open C-nn mapped; every negative check in the tree carries a performed `MUTATION:`.
+- **Six** declared XFAILs at the end of Tier 1 (the plan said five): `tail-call.ll`
+  and `capstone-tail-call.c` (C-28), `s12-movc-ldc-rename.mir` (the S-12 pass is
+  inert on c128), `cap-call-mnemonic.s` (C-25), `reloc-names.s` (C-37),
+  `c20-cttz.ll` (C-20).
+- Observations for Tier 4:
+  - **A direct call target is not delin'd**: `cincoffset a3, gp, a0; cjalr ra, 0(a3)`
+    (calling-conv.ll), whereas `__capstone_cap_init` delins the same function's
+    address before storing it. Both derive a code address from gp's data
+    authority; the `cjalr` linearity row gets this asymmetry.
+  - **RVV is non-functional on capstone64**: a scalable load/store cannot be
+    selected against a c128 pointer ("Cannot select: store (<vscale x 1 x s128>)"),
+    and without `+v` a scalable alloca trips an upstream frame-lowering assertion.
+    Out of scope for the project; only the `reportFatalUsageError` under `+v` is
+    pinned (`fatal-scalable-stack.ll`).
+  - The merge-strings pass header says it stays OFF because container references
+    lowered through the integer `auipc` fallback; on the branch tools a pointer
+    global initialised with a merged literal is minted through the cap table
+    (`ldc`/`stc` in `__capstone_cap_init`). Either the gap closed with c128 or it
+    needs a different shape; the default is untouched and the comment goes on the
+    Tier 4.5 stale-comment list.
+  - `-capstone-lower-memops-via-libcall` is declared as
+    `DEBUG_TYPE "-memops-via-libcall"` in `CapstoneISelLowering.cpp`, so a grep for
+    the flag string finds only the comment that names it; the gate lists it by
+    its full name.
+  - 128-bit `_Atomic` load/store lower to the size-generic `__atomic_load` /
+    `__atomic_store`, the RMWs to the `_16` forms, at every level, with a
+    `-Watomic-alignment` warning each.
+  - Retired: `capstone-builtins.c` (a duplicate of `builtins-capstone.c`, which now
+    covers all 19 builtins) and `capstone-i128-backend-diagnostic.c` (folded into
+    `capstone-atomic-128.c`).
+- Renamed per 1.5: `cap-i128-and-capability-mask` → `cap-addr-bitmask`,
+  `cap-i128-or-undef` → `cap-ptrdiff-nonpow2-div`, `cap-i128-ptr-diff-const` →
+  `cap-ptrdiff-const-offset`, `cap-i128-select-capability` → `select-cap-vs-scalar`.
+- **Nightly rows — hand-off** (`run-nightly.sh` is held by the capstone session).
+  Proposed diff to its lit stage: add `run_one "lit-mc" "$LIT llvm/test/MC/Capstone
+  llvm/test/MC/Disassembler/Capstone"`, add `run_one "lit-coverage" "bash
+  capstone/tests/check-lit-coverage.sh"`, and extend the `lit` row's file set with
+  `clang/test/Sema/capstone*.c`, `clang/test/CodeGen/*capstone*.ll` and
+  `llvm/test/Transforms/LICM/capstone-*.ll`.

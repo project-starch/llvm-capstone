@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; tryShrinkShlLogicImm asked a constant for its int64 value before checking that it has one. On
 ; Capstone the constant can be i128: masking a capability's address with a 64-bit mask and widening

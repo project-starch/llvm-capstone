@@ -5,6 +5,8 @@
 ; pool (ldc) rather than materialized as an unforgeable 128-bit capability.
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; A double divide must become a __divdf3 call (doubles are soft-float here).
 ; CHECK-LABEL: ddiv:

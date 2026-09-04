@@ -1,6 +1,8 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -filetype=obj -verify-machineinstrs < %s -o %t.o
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 @bundle = internal addrspace(200) constant { ptr addrspace(200), ptr addrspace(200) } {
   ptr addrspace(200) @callee,

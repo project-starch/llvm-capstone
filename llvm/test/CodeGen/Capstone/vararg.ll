@@ -9,7 +9,11 @@
 ; cap_mem mode) and advanced by the raw argument size (8 for an i64) instead of
 ; the 16-byte slot stride.
 ;
+; MUTATION: give @va_one an integer argument and spill it before va_start ->
+; an sd precedes the first ldc and the sd negative fires (performed
+; 2026-09-04).
 ; RUN: llc -O0 -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 

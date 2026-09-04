@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; A const pointer table whose entry points at an EXTERN object. collectStaticCapReducedObject
 ; guards the holder against having no initializer but not the target it points at, and a

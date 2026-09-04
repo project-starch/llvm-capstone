@@ -6,18 +6,18 @@
 # until the registry allocates them.
 #
 #   ID | repo-relative test path  -or-  REASON: <text>  -or-  TODO: <planned test>
-C-2  | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-2  | llvm/test/CodeGen/Capstone/i128-logical-mixed-extend.ll
 C-3  | REASON: runtime failure at -O1/-O2 on RV8 with no reduced shape yet; re-measured by the Tier 2a -O2 twins (execution, not lit)
 C-5  | REASON: linker-script code window (link-gpfree.ld forces globals to 0x1000); not a codegen property
-C-6  | TODO: llvm/test/CodeGen/Capstone/c6-negative-offset-sink.ll
+C-6  | llvm/test/CodeGen/Capstone/c6-negative-offset-sink.ll
 C-9  | llvm/test/CodeGen/Capstone/cap-inline-asm-r.ll
-C-14 | TODO: llvm/test/CodeGen/Capstone/c14-copy-class-postra.mir
-C-17 | TODO: llvm/test/CodeGen/Capstone/c17-wide-constant-arm.ll
+C-14 | llvm/test/CodeGen/Capstone/c14-copy-class-postra.mir
+C-17 | llvm/test/CodeGen/Capstone/c17-wide-constant-arm.ll
 C-19 | llvm/test/Transforms/LICM/capstone-no-hoist-gep-maybe-null.ll
 C-20 | llvm/test/CodeGen/Capstone/c20-cttz.ll
 C-21 | clang/test/CodeGen/capstone-negative-int-to-pointer.c
-C-22 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
-C-23 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-22 | llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-23 | llvm/test/CodeGen/Capstone/o1-shapes.ll
 C-25 | llvm/test/CodeGen/Capstone/cap-ptrdiff-untagged.ll
 C-26 | llvm/test/CodeGen/Capstone/ptr-diff-signed.ll
 C-28 | llvm/test/CodeGen/Capstone/tail-call.ll

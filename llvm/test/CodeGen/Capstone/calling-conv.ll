@@ -1,4 +1,11 @@
+; MUTATION: the mv negative guards a regression (the call target copied
+; through an integer register), which no IR shape produces now; demonstrated
+; on the emitted text by inserting 'mv a5, a3' after the cincoffset that forms
+; the target, which the CHECK-NOT catches (performed 2026-09-04).
+;
 ; RUN: llc < %s -mtriple=capstone64  | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 declare void @take_ptr_int(ptr addrspace(200), i64)
 

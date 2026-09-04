@@ -6,7 +6,7 @@
 ; arm pins the uninstrumented sequence, so if the default ever flips or the flag
 ; stops being honoured, this test fails rather than quietly agreeing.
 ;
-; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s \
+; RUN: llc -mtriple=capstone64 -verify-machineinstrs -capstone-retry-untagged-ldc=false -capstone-double-ldc=false < %s \
 ; RUN:   | FileCheck %s --check-prefix=OFF
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs \
 ; RUN:     -capstone-retry-untagged-ldc=true < %s \
@@ -14,6 +14,8 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs \
 ; RUN:     -capstone-double-ldc=true < %s \
 ; RUN:   | FileCheck %s --check-prefix=DBL
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; A dependent chain: the second load's address IS the first load's result. This
 ; is the shape all four silicon S-07 wedges share.

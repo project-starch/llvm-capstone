@@ -15,10 +15,15 @@
 ; operands got `lcc`, and the first null killed the SQLite domain.
 ;
 ; MUTATION: in @test_get_cursor call get.base instead of get.cursor -> the
+; Every occurrence of tighten/mrev/drop/revoke/ccsrrw is consumed by an explicit
+; CHECK line, so the implicit-check-nots make "exactly the pinned instances" a
+; checked property.  MUTATION: delete the pinned `mrev a0, a0` line (relaxing the
+; -NEXT after it so only the negative can fail) -> the
+; unconsumed mrev trips --implicit-check-not (performed 2026-09-04).
 ; -NEXT line expecting `mv a0, a0` fails, which shows each body is pinned to
 ; its own function and not merely present somewhere in the file.
 ;
-; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s --implicit-check-not='lcc {{.*}}, 2'
+; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s --implicit-check-not='lcc {{.*}}, 2' --implicit-check-not='tighten a' --implicit-check-not='mrev a' --implicit-check-not='drop a' --implicit-check-not='revoke a' --implicit-check-not='ccsrrw a'
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null
 

@@ -1,4 +1,8 @@
+; MUTATION: add a capability store to the same object at offset 16 -> an stc
+; follows the two sd and the negative fires (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64-unknown-elf -mattr=+m < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; A run of adjacent constant stores covering 16 aligned bytes must NOT be merged
 ; into a single 128-bit store.

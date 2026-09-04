@@ -16,6 +16,9 @@
 // instructions the wrong lowering used, and no 128-bit libcall may appear either
 // -- a freestanding domain has no compiler-rt.
 //
+// MUTATION: add a signed 128-bit division -> the __divti3 reference and its
+// call frame's cincoffsetimm trip the implicit-check-nots (performed
+// 2026-09-04).
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -target-feature +m -ffreestanding \
 // RUN:   -O2 -mframe-pointer=none -S -o - %s \
 // RUN:   | FileCheck %s --implicit-check-not=cincoffset --implicit-check-not=lcc \

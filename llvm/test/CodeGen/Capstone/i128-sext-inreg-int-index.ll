@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64-unknown-elf -O2 < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ;
 ; Regression test for issue C-1: "Cannot select: i128 = sign_extend_inreg".
 ;

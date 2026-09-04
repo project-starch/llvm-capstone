@@ -1,3 +1,4 @@
+; Pins Capstone issue C-25 (see the registry entry of that name).
 ; A pointer difference must not require its operands to be tagged capabilities.
 ;
 ; `p - q` used to lower through cap_get_cursor on both sides, which selects to
@@ -20,7 +21,11 @@
 ; reading a capability register uses its cursor. That is also what this backend
 ; emits for `(uintptr_t)p`, and the point of this test is that the two agree.
 ;
+; MUTATION: in @addr read the address with cap.get.base instead of ptrtoint ->
+; 'lcc a0, a0, 3' and the lcc negative fires (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

@@ -5,6 +5,9 @@
 // carry the out-of-band tag). See
 // capstone/docs/design/cap-local-aggregate-init-plan.md.
 
+// MUTATION: make the aggregate's members integers -> the initializer is copied
+// from @__const.use.local with llvm.memcpy and the negative fires (performed
+// 2026-09-04).
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -ffreestanding -O0 -emit-llvm \
 // RUN:   -o - %s | FileCheck %s
 

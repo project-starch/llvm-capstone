@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs -o - < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; CHECK-LABEL: test_ptr_pos:
 ; CHECK: lui [[HI:a[0-9]+]], 1

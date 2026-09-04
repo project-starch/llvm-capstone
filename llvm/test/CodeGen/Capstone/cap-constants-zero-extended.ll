@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs -o - < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; The same 64-bit values as cap-constants.ll, written the way the front end widens a C cast of a
 ; negative or unsigned integer to a capability-width pointer: ZERO-extended into the i128 carrier

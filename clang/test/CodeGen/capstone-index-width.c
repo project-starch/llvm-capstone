@@ -2,6 +2,8 @@
 // index width in the datalayout. The pointer itself is unchanged: still a full
 // capability, still 16 bytes.
 
+// MUTATION: widen @diff's result through __int128 -> an i128 appears in its
+// body and the i128 negative fires (performed 2026-09-04).
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -ffreestanding -emit-llvm -o - %s | FileCheck %s
 
 // CHECK: target datalayout = {{.*}}p200:128:128:128:64

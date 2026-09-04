@@ -7,10 +7,14 @@
 ;
 ; See CapstoneISelDAGToDAG.cpp selectLGA and design/capability-bounds-model.md.
 
-; RUN: llc -mtriple=capstone64 -mattr=+m < %s \
+; MUTATION: give @u a size ([16 x i8]) -> the SHRINK arm narrows it and
+; load_unsized's shrink negative fires (performed 2026-09-04).
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-globals=true < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,SHRINK
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-globals=false < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,NOSHRINK
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

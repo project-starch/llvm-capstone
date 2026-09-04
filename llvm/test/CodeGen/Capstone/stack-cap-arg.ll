@@ -5,7 +5,13 @@
 ; pointer capability, which strips the tag and leaves the callee's argument
 ; untagged (faulting on first dereference) -- the RV8 norx failure.
 ;
+; MUTATION: the addi negative guards the integer slot-address regression,
+; which no IR shape produces now; demonstrated on the emitted text by
+; inserting 'addi a2, sp, 0' after the first stc, which the CHECK-NOT catches
+; (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -mattr=+m < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

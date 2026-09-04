@@ -2,6 +2,8 @@
 ; checks the base dynamic-alloca lowering, not stack narrowing; the narrowed path
 ; is covered by cap-shrink-dynalloca.ll.
 ; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target triple = "capstone64"
 

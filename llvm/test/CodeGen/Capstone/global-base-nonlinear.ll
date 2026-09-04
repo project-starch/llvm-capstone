@@ -13,8 +13,12 @@
 ; See CapstoneISelDAGToDAG.cpp selectLGA, CapstoneInstrInfo.td
 ; PseudoCapGlobalBase, and its expander in CapstoneExpandPseudoInsts.cpp.
 
+; MUTATION: add an access to a second, unmerged global in the entry block -> a
+; second delin and the delin negative fires (performed 2026-09-04).
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-globals=false < %s \
 ; RUN:   | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 

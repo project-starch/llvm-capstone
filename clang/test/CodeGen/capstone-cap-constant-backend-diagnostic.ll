@@ -1,3 +1,6 @@
+; MUTATION: add a function using llvm.cttz.i32 (the open C-20 crash) -> the
+; compile ends in a stack dump after the diagnostic and the crash-text
+; negatives fire (performed 2026-09-04).
 ; RUN: not %clang_cc1 -triple capstone64-unknown-elf -target-feature +m \
 ; RUN:     -x ir -S -o /dev/null %s 2>&1 | FileCheck %s
 

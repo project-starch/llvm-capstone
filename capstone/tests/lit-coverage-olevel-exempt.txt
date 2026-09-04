@@ -6,3 +6,7 @@
 #   file | reason
 cap-constants-invalid.ll | not-llc diagnostic test (split-file, five prefixes)
 dynamic-alloca-realign-fail.ll | not-llc diagnostic test
+fatal-ccsrrw-range.ll | not-llc diagnostic test
+fatal-tighten-range.ll | not-llc diagnostic test
+fatal-scalable-stack.ll | not-llc diagnostic test
+unreachable-fatal-routes.ll | not-llc diagnostic test (split-file)

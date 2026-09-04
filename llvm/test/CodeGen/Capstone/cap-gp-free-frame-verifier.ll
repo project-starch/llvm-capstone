@@ -19,9 +19,11 @@
 ; so that ra is saved. cap-gp-captable.ll exists and passes precisely because it
 ; has no call in it.
 ;
-; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s --check-prefix=DEFAULT
+; RUN: llc -mtriple=capstone64 -capstone-gp-captable=false -capstone-gp-free=false -verify-machineinstrs < %s | FileCheck %s --check-prefix=DEFAULT
 ; RUN: llc -mtriple=capstone64 -capstone-gp-captable -verify-machineinstrs < %s | FileCheck %s --check-prefix=GPFREE
 ; RUN: llc -mtriple=capstone64 -capstone-gp-free -verify-machineinstrs < %s | FileCheck %s --check-prefix=GPFREE
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

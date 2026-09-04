@@ -18,6 +18,7 @@
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O1 < %s -o /dev/null
 ; XFAIL: *
 
 declare i32 @llvm.cttz.i32(i32, i1)

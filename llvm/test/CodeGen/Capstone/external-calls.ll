@@ -1,4 +1,6 @@
 ; RUN: llc < %s -mtriple=capstone64 | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; Compiler-generated ExternalSymbol callees now reuse the same capability
 ; materialization path as direct symbol calls: materialize a PC-relative offset,

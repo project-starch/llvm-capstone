@@ -12,8 +12,14 @@
 ;
 ; Pinned to -capstone-shrink-stack=false: this is about capability addressing,
 ; not stack narrowing (cap-shrink-{stack,dynalloca}.ll cover the narrowed path).
+; MUTATION: in @stack_field_addr store the field address plus one as an
+; INTEGER instead of the capability -> 'addi a0, a0, 1' on the slot register
+; and the addi negative fires (performed 2026-09-04).
+;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=false \
 ; RUN:   -verify-machineinstrs < %s | FileCheck %s
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

@@ -1,6 +1,8 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -filetype=obj -verify-machineinstrs < %s -o %t.o
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 target triple = "capstone64-unknown-unknown-elf"
@@ -45,7 +47,7 @@ entry:
 ; OBJ-NEXT: 0x0 {{R_Capstone_64|Unknown}} callee 0x0
 ; OBJ-NEXT: 0x10 {{R_Capstone_64|Unknown}} bundle 0x0
 ; OBJ-NEXT: }
-; MUTATION (for the CHECK-NOT above): make the array an ordinary global --
+; MUTATION: (for the CHECK-NOT above) make the array an ordinary global --
 ; name it @llvm.compiler.used2, drop `appending` and the llvm.metadata
 ; section -- and its symbol reaches the .s, so `CHECK-NOT: llvm.compiler.used`
 ; fires (performed 2026-09-04).

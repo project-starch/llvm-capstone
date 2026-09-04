@@ -21,6 +21,7 @@
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -capstone-shrink-globals=false -print-after=capstone-cap-global-init -o /dev/null < %s 2>&1 | FileCheck %s --check-prefix=IR
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -capstone-shrink-globals=false < %s | FileCheck %s --check-prefix=ASM
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 

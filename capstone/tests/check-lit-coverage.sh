@@ -198,7 +198,7 @@ if "fatal" in sections:
             key = f"{os.path.basename(f)}:{line}"
             if key in seen_fatal: continue
             seen_fatal.add(key)
-            frag = msg[:40]
+            frag = max(lits, key=len)[:40]
             if frag in all_checks: continue
             if key in unreachable:
                 reason, pin = unreachable[key]

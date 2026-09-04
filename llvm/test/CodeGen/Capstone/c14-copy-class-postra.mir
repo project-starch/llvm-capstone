@@ -1,0 +1,29 @@
+# C-14: a register-to-register COPY of a SCALAR must expand to the integer
+# `addi rd, rs, 0`, never to `movc`.  MOVC is a MOVE -- the spec's consumption
+# clause and the silicon both null the source register unless it holds a
+# non-linear capability -- so a scalar copied with movc reached its next use as
+# zero (ISSUES.md C-14, root-caused 2026-07-30).  A capability copy keeps MOVC.
+# Pinned at the post-RA pseudo expansion, which is where copyPhysReg runs.
+# Measured 2026-09-04 on the branch tools.
+#
+# MUTATION: change `$c9 = COPY $c10` to `$x9 = COPY $x10` -> that line expands
+# to `$x9 = ADDI $x10, 0` and the CHECK-NEXT chain fails (performed 2026-09-04).
+#
+# RUN: llc -mtriple=capstone64 -run-pass=postrapseudos -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target triple = "capstone64"
+  define void @copies() { ret void }
+...
+---
+name: copies
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: copies
+    ; CHECK:      $c9 = MOVC $c10
+    ; CHECK-NEXT: $x18 = ADDI $x11, 0
+    ; CHECK-NEXT: PseudoRET
+    $c9 = COPY $c10
+    $x18 = COPY $x11
+    PseudoRET
+...

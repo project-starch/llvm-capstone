@@ -2,6 +2,8 @@
 ; RUN: llc -mtriple=capstone64 -filetype=obj -verify-machineinstrs < %s -o %t.o
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
 ; RUN: llvm-objdump -s -j .rodata %t.o | FileCheck %s --check-prefix=BYTES
+; RUN: %llc_cap -O0 < %s -o /dev/null
+; RUN: %llc_cap -O1 < %s -o /dev/null
 
 ; An INTEGER stored in a capability-sized slot, i.e. the absolute-value sibling of
 ; const-capability-initializer.ll. It reaches AsmPrinter as an inttoptr ConstantExpr rather than a
