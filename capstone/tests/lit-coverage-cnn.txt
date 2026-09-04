@@ -1,0 +1,24 @@
+# Open (or recently closed, still-guarded) compiler defect IDs and the regression
+# test that pins each, or the reason none can.  check-lit-coverage.sh requires a
+# mapped test to EXIST and to MENTION the ID; `TODO` is a gap by design; `REASON:`
+# is accepted only for defects outside codegen's reach.  IDs C-27+ are the
+# 2026-09-04 proposals from the validation plan (Tier 5.1) and are provisional
+# until the registry allocates them.
+#
+#   ID | repo-relative test path  -or-  REASON: <text>  -or-  TODO: <planned test>
+C-2  | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-3  | REASON: runtime failure at -O1/-O2 on RV8 with no reduced shape yet; re-measured by the Tier 2a -O2 twins (execution, not lit)
+C-5  | REASON: linker-script code window (link-gpfree.ld forces globals to 0x1000); not a codegen property
+C-6  | TODO: llvm/test/CodeGen/Capstone/c6-negative-offset-sink.ll
+C-9  | llvm/test/CodeGen/Capstone/cap-inline-asm-r.ll
+C-14 | TODO: llvm/test/CodeGen/Capstone/c14-copy-class-postra.mir
+C-17 | TODO: llvm/test/CodeGen/Capstone/c17-wide-constant-arm.ll
+C-19 | llvm/test/Transforms/LICM/capstone-no-hoist-gep-maybe-null.ll
+C-20 | TODO: llvm/test/CodeGen/Capstone/c20-cttz.ll
+C-21 | clang/test/CodeGen/capstone-negative-int-to-pointer.c
+C-22 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-23 | TODO: llvm/test/CodeGen/Capstone/o1-shapes.ll
+C-25 | llvm/test/CodeGen/Capstone/cap-ptrdiff-untagged.ll
+C-26 | llvm/test/CodeGen/Capstone/ptr-diff-signed.ll
+C-28 | llvm/test/CodeGen/Capstone/tail-call.ll
+S-13 | REASON: silicon hang at -O1 in the DYN/rev-node path; RTL-side, no compiler shape identified

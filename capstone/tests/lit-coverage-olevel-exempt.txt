@@ -1,0 +1,8 @@
+# Tests exempt from the rule "every .ll in llvm/test/CodeGen/Capstone has a RUN
+# line at -O0 and at -O1".  Only diagnostic tests qualify: a `not llc` test
+# exists to pin an error message, and an extra optimisation level would pin the
+# same message twice.  .mir tests are skipped by the gate itself (-run-pass).
+#
+#   file | reason
+cap-constants-invalid.ll | not-llc diagnostic test (split-file, five prefixes)
+dynamic-alloca-realign-fail.ll | not-llc diagnostic test

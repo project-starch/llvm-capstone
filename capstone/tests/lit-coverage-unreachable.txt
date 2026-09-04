@@ -1,0 +1,14 @@
+# Fatal / diagnostic routes in the Capstone backend that are PROVEN unreachable
+# from IR (or from C), so no test can CHECK their message.  Each entry names the
+# test that pins the reason -- the gate treats a missing pinning test as a gap,
+# so an entry here is a promise, not an exemption.
+#
+#   file:line | reason | pinning test (repo-relative path)
+#
+# Line numbers are those of 2026-09-04; the gate matches on file:line, so an
+# edit that moves a route must update this file (that is deliberate -- a route
+# that moves may also have changed).
+CapstoneISelDAGToDAG.cpp:1360 | folded displacement >64-bit: IR truncates a GEP index to the 64-bit index width, so the fold sees an in-range value | TODO: llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:1765 | TIGHTEN immediate non-constant: the intrinsic carries ImmArg and the IR verifier rejects a non-immediate, and the builtin is _Constant in clang | TODO: llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:1913 | CCSRRW CSR non-constant: same ImmArg / _Constant argument | TODO: llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelLowering.cpp:10832 | capability select with SGT/SLE/UGT/ULE: all ten condition codes canonicalise before reaching lowerSELECT (measured 2026-09-04); the SELECT_CC-combine route is probed in Tier 4 | TODO: llvm/test/CodeGen/Capstone/select-cap-condcodes.ll

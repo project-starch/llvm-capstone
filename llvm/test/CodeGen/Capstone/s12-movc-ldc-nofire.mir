@@ -1,0 +1,99 @@
+# CONTROL for s12-movc-ldc-rename.mir: every arm here must leave the body
+# UNCHANGED, today and after the pass is fixed to match $c0.  Each arm removes
+# exactly one precondition of the rename:
+#   OFF     -- the flag is off (the pass must be inert when disabled)
+#   WIN1    -- the ldc lies outside a window of 1
+#   REDEF   -- the destination is redefined by something else before the ldc
+#   CALL    -- a call sits between the movc and the ldc
+#   NOFREE  -- every rename candidate ($c16, $c17, $c28..$c31) is live across it
+# Today the pass fires on nothing, so this file is trivially green; its
+# discriminating power is established together with the sibling's XPASS.
+#
+# MUTATION: in @win1 raise the window back to the default (drop
+# -capstone-s12-window=1 from the WIN1 RUN line) -> once the pass matches $c0
+# that function IS renamed and its CHECK for `$c10 = MOVC $c0` fails.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m -x mir -run-pass=capstone-s12-movc-ldc -capstone-s12-movc-ldc-workaround=false -verify-machineinstrs -o - %s | FileCheck %s
+# RUN: llc -mtriple=capstone64 -mattr=+m -x mir -run-pass=capstone-s12-movc-ldc -capstone-s12-movc-ldc-workaround=true -capstone-s12-window=1 -verify-machineinstrs -o - %s | FileCheck %s
+# RUN: llc -mtriple=capstone64 -mattr=+m -x mir -run-pass=capstone-s12-movc-ldc -capstone-s12-movc-ldc-workaround=true -verify-machineinstrs -o - %s | FileCheck %s --check-prefixes=CHECK,ON
+---
+# OFF and WIN1 arms: the plain pattern, untouched.  Under the ON arm this is the
+# one function the pass is entitled to change, so ON asserts nothing here.
+name: plain
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11
+    ; CHECK-LABEL: name: plain
+    ; CHECK: MOVC $c0
+    $c10 = MOVC $c0
+    STC $c10, $c11, 0
+    $c10 = LDC $c11, 0
+    PseudoRET implicit $c10
+...
+---
+name: win1
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11, $x12
+    ; CHECK-LABEL: name: win1
+    ; CHECK: $c10 = MOVC $c0
+    ; CHECK-NEXT: $x12 = ADDI $x12, 1
+    ; CHECK-NEXT: STC $c10, $c11, 0
+    ; CHECK-NEXT: $c10 = LDC $c11, 0
+    $c10 = MOVC $c0
+    $x12 = ADDI $x12, 1
+    STC $c10, $c11, 0
+    $c10 = LDC $c11, 0
+    PseudoRET implicit $c10, implicit $x12
+...
+---
+name: redef
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11
+    ; CHECK-LABEL: name: redef
+    ; ON: $c10 = MOVC $c0
+    ; ON-NEXT: $c10 = CIncOffsetImm $c11, 16
+    ; ON-NEXT: $c10 = LDC $c11, 0
+    $c10 = MOVC $c0
+    $c10 = CIncOffsetImm $c11, 16
+    $c10 = LDC $c11, 0
+    PseudoRET implicit $c10
+...
+---
+name: call_between
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; Callee-saved registers on both sides of the call: the call's register mask
+    ; clobbers the argument registers, and the verifier (rightly) rejects a use
+    ; of a clobbered register after it.
+    liveins: $c18, $c19, $c12
+    ; CHECK-LABEL: name: call_between
+    ; ON: $c18 = MOVC $c0
+    ; ON-NEXT: PseudoCALLIndirect $c12
+    ; ON: $c18 = LDC $c19, 0
+    $c18 = MOVC $c0
+    PseudoCALLIndirect $c12, csr_ilp32_lp64, implicit-def dead $x1, implicit-def $x2
+    STC $c18, $c19, 0
+    $c18 = LDC $c19, 0
+    PseudoRET implicit $c18
+...
+---
+name: nofree
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11, $c16, $c17, $c28, $c29, $c30, $c31
+    ; CHECK-LABEL: name: nofree
+    ; ON: $c10 = MOVC $c0
+    ; ON-NEXT: STC $c10, $c11, 0
+    ; ON-NEXT: $c10 = LDC $c11, 0
+    $c10 = MOVC $c0
+    STC $c10, $c11, 0
+    $c10 = LDC $c11, 0
+    PseudoRET implicit $c10, implicit $c16, implicit $c17, implicit $c28, implicit $c29, implicit $c30, implicit $c31
+...

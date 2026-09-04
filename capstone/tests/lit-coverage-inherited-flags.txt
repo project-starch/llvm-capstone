@@ -1,0 +1,39 @@
+# cl::opt names in llvm/lib/Target/Capstone that were inherited verbatim from the
+# RISCV copy and carry no Capstone-specific semantics.  check-lit-coverage.sh
+# does not demand test coverage for these; any capstone-* option it finds in the
+# backend that is in NEITHER this list NOR its own Capstone list is reported as
+# "new flag without coverage", which is the point.
+#
+# Generated 2026-09-04 from the backend (47 options total, 16 Capstone-semantic).
+# One name per line; # comments and blank lines ignored.
+capstone-disable-cost-per-use
+capstone-disable-frm-insert-opt
+capstone-disable-regalloc-hints
+capstone-disable-sextw-removal
+capstone-disable-strip-w-suffix
+capstone-disable-using-constant-pool-for-large-ints
+capstone-disable-vector-mask-mutation
+capstone-enable-copy-propagation
+capstone-enable-copyelim
+capstone-enable-dead-defs
+capstone-enable-global-merge
+capstone-enable-loop-data-prefetch
+capstone-enable-machine-combiner
+capstone-enable-pipeliner
+capstone-enable-sink-fold
+capstone-force-machine-combiner-strategy
+capstone-landing-pad-label
+capstone-load-store-scan-limit
+capstone-max-build-ints-cost
+capstone-min-jump-table-entries
+capstone-prefer-whole-register-move
+capstone-reassoc-shl-addi-add
+capstone-rvv-regalloc
+capstone-use-aa
+capstone-use-rematerializable-movimm
+capstone-v-fixed-length-vector-lmul-max
+capstone-v-min-trip-count
+capstone-v-register-bit-width-lmul
+capstone-v-slp-max-vf
+capstone-v-vector-bits-max
+capstone-v-vector-bits-min
