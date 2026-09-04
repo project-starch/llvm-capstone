@@ -381,23 +381,40 @@ The mechanism is that the debug mux consumes dom-switch state extensively (all f
 the mux*. Remove the mux and they cease to exist, exposing whatever was second — which is issue
 logic.
 
+**Stated precisely, because a looser version of this was published first and had to be pulled
+back.** Which comparisons are single-variable decides what may be claimed:
+
 ```text
-   WHAT WE BELIEVED                      WHAT IS ACTUALLY TRUE
-   ─────────────────                     ─────────────────────
-   failing paths are inert because       failing paths are inert because they are
-   they belong to a domain-switch        DEBUG paths read at halt — which happen
-   register that toggles only during     to be fed by domain-switch state
-   a switch with the frontend flushed
-                    │                                     │
-                    ▼                                     ▼
-   the inertness argument is a           it is partly a property of the
-   property of the DESIGN                INSTRUMENTATION
+   arm1 vs arm2   both carry the FIX, differ ONLY by the tie-off      ONE variable   ✓
+   base vs arm1   differ by the fix only                              ONE variable   ✓
+   base vs arm2   differ by fix AND instrumentation                   TWO variables  ✗
 ```
 
-This does **not** endanger arm 1, which carries the instrumentation and whose failing cone is
-demonstrably inert. It does mean the criterion has been validating *a configuration* rather than
-*a design*, and **any instrument-free build needs the inertness argument made afresh rather than
-inherited.**
+**ESTABLISHED** (from the arm1/arm2 pair, which is genuinely single-variable): *on the S-12-fixed
+design*, removing the instrumentation moves the cone entirely — `dom_switcher` 101,782 → 0,
+`issue_read_operands` 0 → 99,879.
+
+**NOT ESTABLISHED:** that the same happens on the **unfixed** design. That is exactly the gap
+reading (b) in §9.2 occupies — under (b) the issue-cone paths are the *fix's*, the mux merely
+masked them in arm 1, and the historical builds' inertness was **genuine** rather than an
+artifact. Nothing measured excludes (b).
+
+The reason no history settles it: **`6f8345fdb` is the only instrument-free build that exists on
+this project.** All thirteen other archived builds carry the debug tree. So there is no evidence
+whatsoever about the instrument-free behaviour of any *pre-fix* commit.
+
+What survives, and it is still the consequential part:
+
+> The inertness argument has only ever been validated on **instrumented** configurations. It
+> should not be inherited by an instrument-free build without being remade.
+
+What does **not** survive is the causal version — "the inertness of every timing-failing bitstream
+in this investigation was an artifact of the instrumentation". That generalises from one build
+which also carries a fix, and it resolves §9.2's open question by assertion. It was published in
+an earlier revision of this file and is retracted here.
+
+None of this endangers arm 1, which carries the instrumentation and whose failing cone is
+demonstrably inert.
 
 ### 9.2 The control that is missing
 
