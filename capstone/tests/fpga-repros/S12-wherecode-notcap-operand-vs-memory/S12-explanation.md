@@ -1,12 +1,13 @@
 # S-12 Explained: How a Stalled Store Hands the Wrong Operand to the Next Instruction
 
-> **STATUS: root cause confirmed in RTL simulation AND on silicon. Two candidate fixes exist,
-> both validated in simulation; NEITHER has been synthesised.** The engineering detail, the
-> variant comparison and the pre-registered criterion that chooses between them live in
-> `agent-handoff/plans/s12-fix-synthesis-request.md` — this document deliberately does not carry
-> them. Measurements and provenance are in `00-README.md`.
+> **STATUS: root cause confirmed in RTL simulation AND on silicon. Variant A is SYNTHESISED and
+> a bitstream exists; it PASSES the pre-registered census criterion and improves timing over the
+> resident image. NOT FLASHED — negative slack means `run.tcl`'s criterion is unmet, so flashing
+> is a deliberate lead override.** The engineering detail, the variant comparison and the
+> criterion live in `agent-handoff/plans/s12-fix-synthesis-request.md`. Measurements and
+> provenance are in `00-README.md`.
 >
-> Last updated 2026-09-04.
+> Last updated 2026-09-04 (synthesis results, §9).
 
 S-12 wedges the SQLite domain with `mcause 25` (UNEXPECTED_OPERAND) and `tval = 0` at a
 `cincoffsetimm`. It is silicon-only — QEMU never reproduces it, because QEMU models neither a
@@ -336,7 +337,90 @@ synthesis request. Variant B cannot import a new originating register, because i
 
 ---
 
-## 9. Shortest Possible Explanation
+## 9. What Synthesis Actually Said
+
+Both arms built. Arm 1 is variant A on the resident base **with** the debug instrumentation, i.e.
+it differs from what is on the board by the fix alone.
+
+```text
+                        WNS          failing endpoints    "found timing loop"
+   base 80843404c      -16.400            102,769                100
+   arm 1 (A + instr)   -15.311            101,782                100
+   arm 2 (A, no instr) -13.491             99,879                100
+```
+
+**The fix IMPROVED timing** — 1.089 ns better than the resident image, with 987 fewer failing
+endpoints. Consistent with gating the escape on `commit_ack` *removing* a release term rather
+than adding one. Both arms routed legally, zero unroutable nets, no `LUTLP-1` DRC. The loop-count
+concern did not materialise: 100 on both arms, identical to base.
+
+**The census — the reading the whole decision hung on:**
+
+```text
+   ARM 1, verified as a census before anything was read from it
+   (by-startpoint and by-endpoint both 101,784 vs arm 1's own 101,782):
+
+        101,573   dom_switcher/_thread_0_event_reg_87_q_reg[0]
+            209   dom_switcher/_init_0_reg
+              2   DDR  (outside the CPU clock; base shows the same)
+   ──────────────────────────────────────────────────────────────
+              0   issue_read_operands   ← ABSENT, not hidden behind a larger cone
+```
+
+The zero is admissible because the control fired: `dom_switcher` returned 101,782 in the *same
+query* that returned 0 for `issue_read_operands`. **By the pre-registered criterion, this is
+"ship A".**
+
+### 9.1 The finding that outlives this build
+
+Arm 2 — the same fix with the debug tree tied off — has the mirror-image census: **99,879 of
+99,879 launching from `issue_read_operands`, with `dom_switcher` at zero.**
+
+The mechanism is that the debug mux consumes dom-switch state extensively (all five
+`dom_switch_*_log_q` registers), so a large share of the base's failing paths were paths *into
+the mux*. Remove the mux and they cease to exist, exposing whatever was second — which is issue
+logic.
+
+```text
+   WHAT WE BELIEVED                      WHAT IS ACTUALLY TRUE
+   ─────────────────                     ─────────────────────
+   failing paths are inert because       failing paths are inert because they are
+   they belong to a domain-switch        DEBUG paths read at halt — which happen
+   register that toggles only during     to be fed by domain-switch state
+   a switch with the frontend flushed
+                    │                                     │
+                    ▼                                     ▼
+   the inertness argument is a           it is partly a property of the
+   property of the DESIGN                INSTRUMENTATION
+```
+
+This does **not** endanger arm 1, which carries the instrumentation and whose failing cone is
+demonstrably inert. It does mean the criterion has been validating *a configuration* rather than
+*a design*, and **any instrument-free build needs the inertness argument made afresh rather than
+inherited.**
+
+### 9.2 The control that is missing
+
+Arm 2 was compared against a base that HAS instrumentation. So arm 2's issue-cone census cannot
+yet be attributed:
+
+```text
+   arm 2  = fix + no instrumentation  →  99,879 endpoints from issue_read_operands
+   base   = no fix + instrumentation  →  102,769 endpoints from dom_switcher
+
+   MISSING:  no fix + NO instrumentation
+             └── if it also shows ~100k from issue_read_operands, the fix is NOT the cause
+                 and this is a pre-existing property of the design
+             └── if it does not, the fix is the cause and variant B becomes the candidate
+                 for any instrument-free build
+```
+
+Until that arm exists, "the fix is safe in an instrument-free configuration" is unproven in both
+directions. It does not block flashing arm 1, which is instrumented.
+
+---
+
+## 10. Shortest Possible Explanation
 
 A capability store must write back to its own source register, so it is a real producer of that
 register. When the store buffer fills, that store keeps asserting "I am writing this register"
@@ -348,15 +432,17 @@ misfed.
 
 ---
 
-## 10. What This Does NOT Cover
+## 11. What This Does NOT Cover
 
 * **Why the board rate is ~54% while simulation is deterministic.** Under a fixed memory latency
   the mechanism fires 254/254 on a 737-cycle period. The board's variability is unexplained and is
   not claimed either way.
 * **The other 67 exploitable triples.** Whether they are reachable, and whether any has ever
   fired, is unknown.
-* **Synthesizability.** Simulation says nothing about it, and the fix touches a module inside a
-  standing combinational-loop cone. Only `synth_design` settles it.
+* ~~**Synthesizability.**~~ **SETTLED 2026-09-04:** arm 1 builds, routes legally, improves WNS by
+  1.089 ns and adds no failing endpoints from the modified module. See §9.
+* **Whether the fix is safe WITHOUT the debug instrumentation.** Unproven in both directions until
+  a no-fix / no-instrumentation arm exists — see §9.2.
 * **A general WAW hole that predates this defect.** Under variant A the repaired clause still
   releases on the acknowledgement of the *oldest* clobberer while a younger in-flight entry claims
   the same `rd`. That hole exists in the base too; A narrows it to the S-12 shape rather than
