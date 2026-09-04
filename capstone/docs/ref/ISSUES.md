@@ -3425,6 +3425,51 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
+### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
+
+**Found by the compiler lane 2026-09-05 in BEEBS `ctl-stack`/`ctl-vector`; generalised and
+verified here because it is a hazard for board runs, not a benchmark bug.**
+
+Those probes store capabilities into `static char heap[HEAP_SIZE]` — declared `char`, so
+**alignment 1**. At `-O0` the linker happened to place it 16-aligned and everything passed. At
+`-O2` the layout put it **8-mod-16**, and the domain faulted with **"Unaligned cap access",
+cause 4**. Same source, same compiler, different placement.
+
+**So a passing `-O0` run carries no information about alignment.** The variable is where the
+linker put the array, and that changes with optimisation level, with unrelated edits that move
+symbols, and with any layout perturbation. It also means the *same image* can pass on one build and
+fail on the next for reasons invisible in the diff — which is precisely the shape of
+`S01-image-perturbation-hang`.
+
+**The wider hazard, checked here.** `umm_malloc` — the project's real allocator — **documents** the
+requirement in `umm_malloc_cfg.h:9-12`: block bodies are capability-aligned *"whenever the heap
+array itself is 16-aligned"*, and a capability *"loses its tag if stored to an under-aligned slot"*.
+`:42` then says it will *"rely on natural layout + a 16-aligned heap array"*.
+
+**Nothing enforces it.** There is no `_Static_assert`, no runtime check, no alignment assertion
+anywhere in `umm_malloc.[ch]` — grepped for `static_assert`, `assert`, `& 0xf` and `% 16`, all
+absent. `umm_multi_init_heap(heap, ptr, size)` takes a bare `void *` and trusts it. So every caller
+is one under-aligned array away from silent tag loss, and the allocator that knows the rule is the
+one component that never checks it.
+
+**For anyone running these on the board:** the fault is silicon-real, not a QEMU artefact —
+it is an unaligned *capability* access, which the hardware enforces. A benchmark that passed on
+silicon before can fault after an unrelated change, and the disassembly will look identical
+because the difference is in the link map.
+
+**Cheap fixes, in order of value:**
+
+1. `_Static_assert(_Alignof(x) >= 16, ...)` on every capability-bearing backing array — turns a
+   layout lottery into a compile error.
+2. A runtime check in `umm_multi_init_heap` rejecting an under-aligned `ptr`. It is one `&& (ptr &
+   15)` and it converts silent tag loss into a diagnosable failure.
+3. `__attribute__((aligned(16)))` on the arrays themselves, which is what the compiler lane applied
+   to the two `ctl` probes.
+
+None of this is hypothetical: it already cost two benchmarks their `-O2` verdict, and the reason
+they had no `-O2` verdict at all was read for a while as a compiler defect.
+
+
 ### I-02 — an allocated issue ID can be missing from this file, so grepping it is not a safe way to pick one `OPEN — needs an allocation convention`
 
 **Found 2026-09-04** when a lane proposed reusing **C-25** for a newly found defect. C-25 is
