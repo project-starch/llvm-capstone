@@ -57,7 +57,7 @@ what this note exists to prevent.
 
 **Our side is worked around:** `-capstone-int-zero-for-zero-copy` emits an integer move for a copy
 from `x0`, so no capability shadow reaches the store. Silicon-confirmed. See
-`../../../agent-handoff/design/R18-workaround-movc-zero.md`.
+`../../../docs/design/R18-workaround-movc-zero.md`.
 
 ## REPRODUCED IN SIMULATION — start here, it costs 13 seconds
 
@@ -621,8 +621,8 @@ splash target was identified. What remains:
    it — a larger result than R-18 alone, and one board boot tests it.
 
 Trail, including all eight retractions and what caused each:
-`capstone/agent-handoff/history/07-08-2026_23-55-00_r18-localized-to-row-mate-traffic.md`.
-Earlier trail: `capstone/agent-handoff/history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
+`capstone/docs/history/07-08-2026_23-55-00_r18-localized-to-row-mate-traffic.md`.
+Earlier trail: `capstone/docs/history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
 A superseded mechanism report is retained at
-`capstone/agent-handoff/history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md` — **do not
+`capstone/docs/history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md` — **do not
 link it**; it is kept only so its conclusions are not re-derived.

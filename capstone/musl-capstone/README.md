@@ -16,7 +16,7 @@ the domain boundary a syscall needs is **proven working under QEMU**:
   on the path of POSIX I/O.
 - `yield-probe/` shows a pure-capability domain making a blocking hostcall and
   resuming with its C frame intact (`__CAPSTONE_YIELD_PROBE_PASSED__`). See
-  `agent-handoff/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
+  `docs/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
 
 Not done: musl's own `write()` has not yet been run through that yield.
 `runtime/hostcall.c` is written but unexercised.

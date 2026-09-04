@@ -3,7 +3,7 @@
 // as element-wise stores, each lowered to a tagged capability store, rather than
 // a memcpy from a private untagged constant template (a bytewise copy cannot
 // carry the out-of-band tag). See
-// capstone/agent-handoff/design/cap-local-aggregate-init-plan.md.
+// capstone/docs/design/cap-local-aggregate-init-plan.md.
 
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -ffreestanding -O0 -emit-llvm \
 // RUN:   -o - %s | FileCheck %s

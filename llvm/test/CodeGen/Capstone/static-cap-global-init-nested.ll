@@ -4,7 +4,7 @@
 ; every capability-pointer leaf in place, not just the two flat shapes (one-field
 ; struct / flat pointer array). Each struct is two 16-byte capabilities (32 bytes),
 ; so element i field j lands at offset i*32 + j*16: stores at 0, 16, 32, 48.
-; See capstone/agent-handoff/design/capability-globals-init-decision.md.
+; See capstone/docs/design/capability-globals-init-decision.md.
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m < %s | FileCheck %s
 

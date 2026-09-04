@@ -1,7 +1,7 @@
 # cheri-perf — CHERI-side temporal-safety overhead microbenchmark
 
 The **CHERI arm** of the QEMU-to-QEMU CHERI-vs-Capstone performance comparison
-(`agent-handoff/plans/perf-cheri-vs-capstone-qemu.md`, PI 2026-07-14). It measures
+(`docs/plans/perf-cheri-vs-capstone-qemu.md`, PI 2026-07-14). It measures
 what temporal safety costs on CHERI-RISC-V purecap and puts it opposite the
 Capstone arm (`tests/runtime-qemu/revoke-cost-probe/`), which runs the identical
 `malloc(64) → touch → free` loop.

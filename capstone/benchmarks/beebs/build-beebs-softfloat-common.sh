@@ -7,7 +7,7 @@
 # COMMON_FLAGS array.  It compiles the builtins into $OBJ_DIR and appends the
 # object paths to the `softfloat_objs` array for the caller to link.
 #
-# See capstone/agent-handoff/design/capstone-softfloat-libm.md.
+# See capstone/docs/design/capstone-softfloat-libm.md.
 
 if [[ -z "${CLANG:-}" || -z "${OBJ_DIR:-}" || -z "${COMPILER_RT:-}" ]]; then
   echo "build-beebs-softfloat-common.sh: CLANG, OBJ_DIR, COMPILER_RT must be set" >&2

@@ -1,7 +1,7 @@
 # FPGA reproducer packages
 
 Self-contained reproducers for the RTL/FPGA issues in
-`capstone/agent-handoff/ref/ISSUES.md`. One directory per issue, named `R<nn>-<slug>` (RTL-level) or `S<nn>-<slug>` (observed on silicon, cause not yet localised to a specific RTL site).
+`capstone/docs/ref/ISSUES.md`. One directory per issue, named `R<nn>-<slug>` (RTL-level) or `S<nn>-<slug>` (observed on silicon, cause not yet localised to a specific RTL site).
 
 These used to live in `/tmp/capstone/*.tar.gz`, which meant every one of them was lost on
 reboot and none could be reviewed, diffed or bisected. ISSUES.md says an issue without a
@@ -73,7 +73,7 @@ The staged-return scaffolding those depend on is in
 Each package has its own `README.md`; `R02`, `R16-entry-stall`,
 `RTL-store-user-metadata` and `S01-image-perturbation-hang` have a `run.sh`. General
 board procedure and the driver contract are in
-`capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`, and the decision procedure is the
+`capstone/docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`, and the decision procedure is the
 `board-run` skill. **Always run a known-entering control FIRST in every boot** — it fails
 roughly 1 in 5, and a boot whose control fails is VOID and carries no verdict. When
 batching several domains into one boot, put a wedging variant **last** — a wedged domain

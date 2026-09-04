@@ -32,7 +32,7 @@
 // materialized; null elements need no tag.
 //
 // Design note + rationale (constructor-codegen vs a GCT runtime consumer):
-// capstone/agent-handoff/design/capability-globals-init-decision.md.
+// capstone/docs/design/capability-globals-init-decision.md.
 //
 //===----------------------------------------------------------------------===//
 

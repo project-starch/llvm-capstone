@@ -61,4 +61,4 @@ Build/run: `../build-sqlite-hier-child-revoke-probe.sh`,
 
 Requires firmware rebuilt with the `share_child_region` op (monitor fid `0xd` +
 `IOCTL_REGION_SHARE_CHILD`); see the dated history note
-`agent-handoff/history/07-07-2026_*_hierarchical-cascade-*`.
+`docs/history/07-07-2026_*_hierarchical-cascade-*`.

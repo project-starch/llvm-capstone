@@ -33,7 +33,7 @@ RUNGS=${BAKED_RUNGS:-}
 DOMS=${SQLITE_STAGE_DOMS:-}
 OVERLAY=${PREFLIGHT_OVERLAY:-capstone/caplifive-system/sw/buildroot/overlay/test-domains}
 ORACLES=${PREFLIGHT_ORACLES:-/tmp/capstone/ladder-fpga}
-CONTROLS=capstone/agent-handoff/ref/known-good-controls.md
+CONTROLS=capstone/docs/ref/known-good-controls.md
 # A run names its rungs EITHER in BAKED_RUNGS or in the ladder-host form inside
 # SQLITE_STAGE_DOMS ("/test-domains/lpc|k800:/test-domains/k800.dom"). Only the first was read,
 # so for every boot that used the second, RUNGS was empty and the per-rung gates below --

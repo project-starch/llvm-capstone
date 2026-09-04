@@ -8,10 +8,10 @@
 set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-CHERI_SDK=${CHERI_SDK:-/home/alexey/cheri/output/sdk}
+CHERI_SDK=${CHERI_SDK:-$HOME/cheri/output/sdk}
 SYSROOT=${SYSROOT:-$CHERI_SDK/sysroot-riscv64-purecap}
 CC="$CHERI_SDK/bin/clang"
-OUT=${OUT:-/home/alexey/cheri-ws/rootfs-overlay/root/cheri-perf}
+OUT=${OUT:-$HOME/cheri-ws/rootfs-overlay/root/cheri-perf}
 
 for p in "$CC" "$SYSROOT"; do
   [ -e "$p" ] || { echo "MISSING: $p" >&2; exit 2; }

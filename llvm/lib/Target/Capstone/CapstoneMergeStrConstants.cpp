@@ -34,7 +34,7 @@
 // is read AND write, not merely overread: the glue's carve is a bare `split` with
 // no permission tightening, so a .rodata capability is read-write today.
 // Rationale, alternatives considered and the decision:
-// capstone/agent-handoff/design/carve-count-vs-revnode-pool-decision.md
+// capstone/docs/design/carve-count-vs-revnode-pool-decision.md
 //
 // WHY NOT THE GENERIC GlobalMerge PASS. It merges the writable and .bss buckets
 // unconditionally (only the constant bucket is gated), so it cannot express

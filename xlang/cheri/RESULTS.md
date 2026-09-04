@@ -9,7 +9,7 @@ system**.
 Method, taxonomy and config definitions are the sqlite corpus's
 (`capstone/tests/cheri-baseline/README.md`) applied unchanged, so the two columns are
 comparable. Plan and design decisions:
-`agent-handoff/plans/cheri-baseline-xlang.md`.
+`docs/plans/cheri-baseline-xlang.md`.
 
 ## Scope: 15 measured rows
 

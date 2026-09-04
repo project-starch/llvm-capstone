@@ -93,7 +93,7 @@ Recording that here so the distinction survives into the write-up:
 **Consequence for the write-up.** State the shim as a *limitation with a mitigation* — "the
 real libraries cannot run on Capstone, so we measure distilled shims; the same source runs on
 both sides, so the comparison remains controlled" — not as a methodological preference. The
-paper-facing doc `capstone/agent-handoff/ref/xlang-security-measurements-for-paper.md` already
+paper-facing doc `capstone/docs/ref/xlang-security-measurements-for-paper.md` already
 phrases it this way (both columns are upper bounds; the symmetry makes the *comparison* fair
 "even though neither absolute is realistic"), and that is the phrasing to keep.
 

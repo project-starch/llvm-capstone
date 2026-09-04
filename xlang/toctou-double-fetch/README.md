@@ -1,6 +1,6 @@
 # TOCTOU / double-fetch at a sharing boundary
 
-*Class 6 of `agent-handoff/design/sharing-bug-taxonomy-and-novelty.md` — previously the one
+*Class 6 of `docs/design/sharing-bug-taxonomy-and-novelty.md` — previously the one
 class with zero evidence. Triaged from a web sweep 2026-08-14. Nothing built yet.*
 
 ## The framing result: callback-expressibility is a property of the BOUNDARY

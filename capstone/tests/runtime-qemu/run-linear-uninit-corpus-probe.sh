@@ -5,7 +5,7 @@ set -euo pipefail
 # use-before-init), as mechanism probes on RTL.
 #
 # Both rows were deferred on 2026-07-08 as "blocked intra-domain"
-# (agent-handoff/history/08-07-2026_13-01-23_linear-uninit-rows-blocked-intra-domain.md).
+# (docs/history/08-07-2026_13-01-23_linear-uninit-rows-blocked-intra-domain.md).
 # Both blockers are gone:
 #   row11 needed csdrop, which the emulator did not implement -- added since.
 #   row14 needed a domain-held LINEAR capability to revoke, which the .smode

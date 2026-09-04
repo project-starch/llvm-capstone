@@ -3,7 +3,7 @@
  *
  * WHAT THIS IS AND IS NOT. It is a translation from Linux syscall numbers to
  * HostCall v0 opcodes, which already exist and are already serviced by host
- * helpers (see agent-handoff/design/syscalls-and-hostcall-abi.md). It is NOT a
+ * helpers (see docs/design/syscalls-and-hostcall-abi.md). It is NOT a
  * kernel: anything without a HostCall v0 opcode returns -ENOSYS, and that is
  * the honest answer rather than a stub that pretends to succeed.
  *

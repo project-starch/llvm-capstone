@@ -17,14 +17,14 @@
 set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-CHERIBUILD=${CHERIBUILD:-/home/alexey/cheri-ws/cheribuild/cheribuild.py}
-OVERLAY=${OVERLAY:-/home/alexey/cheri-ws/rootfs-overlay}
+CHERIBUILD=${CHERIBUILD:-$HOME/cheri-ws/cheribuild/cheribuild.py}
+OVERLAY=${OVERLAY:-$HOME/cheri-ws/rootfs-overlay}
 OUT=${OUT:-$OVERLAY/root/cheri-perf}
-WORK=${WORK:-/home/alexey/cheri-ws/perf-run}
+WORK=${WORK:-$HOME/cheri-ws/perf-run}
 ICOUNT=${ICOUNT:-0}
 mkdir -p "$WORK" "$OUT"
 
-LOCAL=/home/alexey/cheri-ws/local-deps
+LOCAL=${LOCAL:-$HOME/cheri-ws/local-deps}
 export CPATH="$LOCAL/usr/include:${CPATH:-}"
 export LIBRARY_PATH="$LOCAL/usr/lib/x86_64-linux-gnu:${LIBRARY_PATH:-}"
 export PKG_CONFIG_PATH="$LOCAL/usr/lib/x86_64-linux-gnu/pkgconfig:${PKG_CONFIG_PATH:-}"

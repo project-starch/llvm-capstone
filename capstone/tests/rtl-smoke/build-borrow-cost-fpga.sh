@@ -44,7 +44,7 @@ printf 'Built %s\n' "$OUT_DIR/borrow_cost_fpga.user"
 # (-march=rv64imac -mabi=lp64) => emits ZERO FP instructions, so it never hits
 # the fsd the core rejects. Own _start (inits sp + gp), raw Linux syscalls via
 # ecall, integer-only output. Same ioctl protocol as libcapstone. See
-# borrow_cost_fpga_ctl.c and agent-handoff/history for the full root-cause trail.
+# borrow_cost_fpga_ctl.c and docs/history for the full root-cause trail.
 "$GUEST_CC" \
   -Os -static -no-pie -fno-pie -nostdlib -ffreestanding -fno-stack-protector \
   -march=rv64imac -mabi=lp64 \

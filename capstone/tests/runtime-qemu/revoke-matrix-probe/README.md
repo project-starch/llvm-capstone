@@ -1,7 +1,7 @@
 # Revocation enforcement test matrix (cases 2–3)
 
 Extends the M0 `borrow-revoke-uaf-probe` to cover more of the test matrix in
-`agent-handoff/design/revocation-enforcement-proposal.md` §6. Same lender flow
+`docs/design/revocation-enforcement-proposal.md` §6. Same lender flow
 (lend a region as `REV_BORROWED`, revoke between two domain calls); the borrower
 varies how it holds the delegated capability across the revoke.
 

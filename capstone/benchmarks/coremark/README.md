@@ -61,7 +61,7 @@ CoreMark now uses the compiled C `domain_main` wrapper in `coremark_domain.c`;
 longer compiled or linked by `build-coremark-capstone.sh`. The wrapper is kept at
 `-O0` while higher optimization levels still expose the known rd!=rs1 LINEAR-cap
 sink issue. The remaining backend workarounds are documented in
-`capstone/agent-handoff/plans/backend-compiler-fixes.md`.
+`capstone/docs/plans/backend-compiler-fixes.md`.
 
 When `clang` crashes, it emits a preprocessed reproducer and run script under
 `/tmp/`, for example:

@@ -10,7 +10,7 @@ BLOCKED-SWEEP / MISS**.
 toolchain versions, and the caveats that must travel with the numbers.
 **Method definitions:** `capstone/tests/cheri-baseline/README.md` (configs, taxonomy, `-O0`
 rationale) apply here unchanged, so the two columns are comparable.
-**Plan and design decisions:** `agent-handoff/plans/cheri-baseline-xlang.md`.
+**Plan and design decisions:** `docs/plans/cheri-baseline-xlang.md`.
 
 ## Status: complete
 

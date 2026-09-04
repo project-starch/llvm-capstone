@@ -23,7 +23,7 @@
 > two ends of a path and never its interior.
 > **SUPERSEDED 2026-08-20 by the checkpoint enumeration: the fix's own logic IS on 2284 failing
 > paths (`gran_*` has 17 nets in the netlist; the `gran_*`-absence and `data_gnt` arguments below
-> are both RETRACTED — see `agent-handoff/ref/RATE-RULE.md`). Whether it SETS WNS is unmeasured.**
+> are both RETRACTED — see `docs/ref/RATE-RULE.md`). Whether it SETS WNS is unmeasured.**
 > **What was believed at the time — not established either way: whether the fix's logic is on that cone.** The
 > traversed nets are all **read/tag-check side** (`rd_req`, `rd_ack`, `wbuffer_hit_oh`,
 > `data_rdata_q`), while the fix adds logic to the **allocation** side (`gran_hazard` →
@@ -48,7 +48,7 @@
 > constraints, flow, directives and the failing module are unchanged back to at least `618f4ce36`
 > — so this build is not special, and very likely **no** silicon measurement this project has ever
 > taken was made on a timing-clean bitstream. That is a separate finding, tracked in
-> `agent-handoff/ref/RATE-RULE.md`, and it is not S-10.
+> `docs/ref/RATE-RULE.md`, and it is not S-10.
 
 
 > # SEVERITY SETTLED 2026-08-19, MEASURED TWO WAYS: A CAPABILITY SURVIVES THE STORE MEANT TO DESTROY IT

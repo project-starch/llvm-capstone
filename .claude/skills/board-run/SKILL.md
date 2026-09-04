@@ -13,19 +13,19 @@ description: >-
 
 Board time is the scarce resource and most wrong verdicts in this project came from the
 harness, not the hardware. This skill is the decision procedure. Full background:
-`capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
+`capstone/docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 
 ## 0a. FIRST: search the handoff docs for the symptom AND the failing function name
 
-Before designing any experiment, grep `capstone/agent-handoff/` for the symptom and for the name
+Before designing any experiment, grep `capstone/docs/` for the symptom and for the name
 of the function/construct involved. On 2026-08-06 hours went into re-deriving a localization that
 already had a **dedicated design doc** (`design/cap-local-aggregate-init-plan.md`), a **four-variant
 board experiment** that had already isolated the shape (`ref/ISSUES.md` ~:1543), and **two landed
 compiler fixes**. A single grep would have redirected the whole day.
 
 ```bash
-grep -rn "<failing function>" capstone/agent-handoff/ | head
-grep -rln "<symptom phrase>"  capstone/agent-handoff/
+grep -rn "<failing function>" capstone/docs/ | head
+grep -rln "<symptom phrase>"  capstone/docs/
 ```
 
 Prior art also tells you which prior results are trustworthy: several were measured with
@@ -365,7 +365,7 @@ So after any reflash:
 3. Verify the value is in the **built firmware's DTB**, not just the source.
 4. Also update `FPGA_BITSTREAM` — the drivers hard-stop on a mismatch, which is the gate working.
 
-Full recipe: `agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
+Full recipe: `docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 
 ## 6. Before concluding the hardware is broken
 

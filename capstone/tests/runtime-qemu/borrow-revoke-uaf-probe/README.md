@@ -1,7 +1,7 @@
 # M0 borrow → revoke → use-after-revoke probe
 
 First milestone of the capability-mediated SQLite marshalling direction
-(`../../../agent-handoff/design/sqlite-marshalling-feasibility.md`). It tests the
+(`../../../docs/design/sqlite-marshalling-feasibility.md`). It tests the
 proposal's load-bearing claim directly: *after the lender revokes a borrowed
 region, the borrower's later dereference must fault.*
 

@@ -102,7 +102,7 @@ capstone buildroot (`caplifive-buildroot`, the same tree the QEMU flow uses), so
 ### Patched board image (`fw_payload_up_builtin_fence.bin`, sha256 `9c53ffd8...`)
 
 The board image to run the sweep with is the **UP built-in image carrying the
-domain-switch `fence.i` fix** (see `agent-handoff/history/*_fpga-domain-call.md`
+domain-switch `fence.i` fix** (see `docs/history/*_fpga-domain-call.md`
 and `*_fpga-domain-call-rebuild.md`). Two independent fixes are baked in:
 
 - **capstone built into the kernel** (`obj-y`, not a module) — `/dev/capstone`
@@ -121,7 +121,7 @@ BR=capstone/caplifive-buildroot
 CROSS=$BR/build/host/bin/riscv64-buildroot-linux-gnu-
 # 1. apply the monitor patch to the OpenSBI capstone-sbi submodule working tree
 git -C $BR/components/opensbi/lib/sbi/capstone-sbi apply \
-    ../../../../../agent-handoff/patches/opensbi-capstone-sbi-domain-switch-fence-i.patch
+    ../../../../../docs/patches/opensbi-capstone-sbi-domain-switch-fence-i.patch
 # (and mirror it into the rsynced build copy)
 cp $BR/components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.S \
    $BR/build/build/opensbi-custom/lib/sbi/capstone-sbi/sbi_capstone.S

@@ -24,10 +24,10 @@ fix it.
 ## Sources
 
 - **Paper:** `capstone/paper/` (LaTeX).
-- **Measured results:** `capstone/agent-handoff/ref/fpga-silicon-measurements-for-paper.md`
+- **Measured results:** `capstone/docs/ref/fpga-silicon-measurements-for-paper.md`
   — this is the authority for silicon numbers.
-- **Status of blockers:** `capstone/agent-handoff/ref/ISSUES.md`.
-- **Current state:** `capstone/agent-handoff/state/`.
+- **Status of blockers:** `capstone/docs/ref/ISSUES.md`.
+- **Current state:** `capstone/docs/state/`.
 
 ## What to check
 

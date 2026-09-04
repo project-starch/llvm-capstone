@@ -189,6 +189,6 @@ a register. Record the opt level with any stage-4 result.
 
 ## Workaround
 
-Shared with R-18: `capstone/agent-handoff/design/R18-workaround-movc-zero.md` —
+Shared with R-18: `capstone/docs/design/R18-workaround-movc-zero.md` —
 `-capstone-int-zero-for-zero-copy`, default OFF, emits an integer move for a copy from `x0` so no
 null-capability shadow reaches the store. Silicon-confirmed here by `fdp0` vs `fdp0fix`.

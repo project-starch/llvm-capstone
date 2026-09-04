@@ -1,6 +1,6 @@
 # Reuse-not-free: the class no allocator-based defense can see
 
-*Class 3 of `agent-handoff/design/sharing-bug-taxonomy-and-novelty.md`. Started 2026-08-14.*
+*Class 3 of `docs/design/sharing-bug-taxonomy-and-novelty.md`. Started 2026-08-14.*
 
 **The owner recycles a buffer IN PLACE. No `free()` ever happens.** The borrower's pointer
 stays valid, tagged and in bounds; only the *data's identity* changes. Every defense that

@@ -149,7 +149,7 @@ parser, no hand-written cap-derivation asm, in place by construction). The
 compiler-emitted `.gct` metadata is kept as an inspectable description / possible
 data source, but the consumer of record becomes compiler-emitted init code.
 Rationale and remaining productionization steps:
-`capstone/agent-handoff/design/capability-globals-init-decision.md`.
+`capstone/docs/design/capability-globals-init-decision.md`.
 
 This was validated end-to-end by the array-shaped cases below.
 
@@ -189,9 +189,9 @@ emitted relocated symbol reference into a live function capability.
 ## Run
 
 ```bash
-bash /home/alexey/dev/llvm-capstone/capstone/tests/runtime-qemu/static-cap-typed-load-repro/run.sh
+bash <REPO-ROOT>/capstone/tests/runtime-qemu/static-cap-typed-load-repro/run.sh
 
-bash /home/alexey/dev/llvm-capstone/capstone/tests/runtime-qemu/static-cap-typed-load-repro/inspect-gct-emission.sh
+bash <REPO-ROOT>/capstone/tests/runtime-qemu/static-cap-typed-load-repro/inspect-gct-emission.sh
 ```
 
 ## Files

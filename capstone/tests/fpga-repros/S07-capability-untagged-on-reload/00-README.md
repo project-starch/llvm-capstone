@@ -23,7 +23,7 @@
 > two ends of a path and never its interior.
 > **SUPERSEDED 2026-08-20 by the checkpoint enumeration: the fix's own logic IS on 2284 failing
 > paths (`gran_*` has 17 nets in the netlist; the `gran_*`-absence and `data_gnt` arguments below
-> are both RETRACTED — see `agent-handoff/ref/RATE-RULE.md`). Whether it SETS WNS is unmeasured.**
+> are both RETRACTED — see `docs/ref/RATE-RULE.md`). Whether it SETS WNS is unmeasured.**
 > **What was believed at the time — not established either way: whether the fix's logic is on that cone.** The
 > traversed nets are all **read/tag-check side** (`rd_req`, `rd_ack`, `wbuffer_hit_oh`,
 > `data_rdata_q`), while the fix adds logic to the **allocation** side (`gran_hazard` →
@@ -48,7 +48,7 @@
 > constraints, flow, directives and the failing module are unchanged back to at least `618f4ce36`
 > — so this build is not special, and very likely **no** silicon measurement this project has ever
 > taken was made on a timing-clean bitstream. That is a separate finding, tracked in
-> `agent-handoff/ref/RATE-RULE.md`, and it is not S-10.
+> `docs/ref/RATE-RULE.md`, and it is not S-10.
 
 
 > # SECOND SITE FOR THE INSTANCE-1 RESIDUAL — 2026-08-24. The root cause below does NOT cover it.
@@ -115,7 +115,7 @@
 > `tval == 0` here is NO DATA, and "a tag was lost" and "the value was genuinely zero" are
 > undiscriminated. This site is recorded as a **reproduction**, not as a mechanism.
 >
-> Full trail: `agent-handoff/plans/sqlite-wherecode-notcap-plan.md`.
+> Full trail: `docs/plans/sqlite-wherecode-notcap-plan.md`.
 
 > # ROOT CAUSE FOUND AND CONFIRMED ON SILICON — 2026-08-19. THIS SUPERSEDES EVERYTHING BELOW.
 >
@@ -1113,7 +1113,7 @@ previously gave only the instance-1 form:**
   word address (`wt_dcache_mem.sv:276`, `wt_dcache_wbuffer.sv:444`), and the scalar at `s0-0x48` is a
   different word *and* a different 16-byte granule from the capability at `s0-0x40`.
 
-**Ruled out previously — please do not re-run these** (recorded in `agent-handoff/ref/ISSUES.md`):
+**Ruled out previously — please do not re-run these** (recorded in `docs/ref/ISSUES.md`):
 
 * **Rev-node pool exhaustion** — the pool holds 65536; the heads observed at wedges were ~250-600.
 * **Rev-node tag loss zeroing `valid`** — refuted by rung `s06rev` (returns 11, both arms, control
@@ -1228,8 +1228,8 @@ from the sources, and each has an experiment that kills it. The one we would run
 and is named at the end of the mechanisms document.
 
 Full investigation trail:
-`agent-handoff/history/14-08-2026_02-30-00_sqlite-wedge-is-out-of-bounds-on-Mem.md`.
+`docs/history/14-08-2026_02-30-00_sqlite-wedge-is-out-of-bounds-on-Mem.md`.
 
 **This folder is the whole report.** An earlier draft of the same material lived in
-`agent-handoff/ref/RTL-QUESTION-mcause25-tag-loss.md`; it was deleted rather than kept in sync,
+`docs/ref/RTL-QUESTION-mcause25-tag-loss.md`; it was deleted rather than kept in sync,
 because two documents for one issue is precisely how a live page ends up contradicting itself.

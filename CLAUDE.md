@@ -8,11 +8,11 @@ Set up the environment, then read the minimal handoff set:
 source capstone/tests/capstone-test-env.sh
 ```
 
-- `capstone/agent-handoff/README.md`
-- `capstone/agent-handoff/state/current-state.md`
-- `capstone/agent-handoff/state/current-next-step.md`
+- `capstone/docs/README.md`
+- `capstone/docs/state/current-state.md`
+- `capstone/docs/state/current-next-step.md`
 
-New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
+New to the project? See `capstone/docs/ONBOARDING.md`.
 
 ## Hard constraints
 
@@ -62,7 +62,7 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   change happened. `-o/--only` commits just the paths you name and leaves the rest staged. When
   other lanes may be active, check `git show --stat` after committing.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
-- Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
+- Active plans live in `capstone/docs/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
 - **Never name people in committed files.** Do not write the PI, co-PI, any collaborator, or
   any individual's name (or personal build hostnames like `root@<name>`) into any file that
@@ -81,7 +81,7 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   to write the prose. Two reasons this is a hard rule and not a preference: the repo syncs
   with Overleaf, so an unasked-for edit can collide with work in progress there; and the
   paper's framing is the project lead's call, not a lane's. **Reporting** new results into
-  `agent-handoff/ref/fpga-silicon-measurements-for-paper.md` needs no permission and is the
+  `docs/ref/fpga-silicon-measurements-for-paper.md` needs no permission and is the
   right default — that doc exists precisely so results can land without touching the paper.
   When permission *is* given: never `git push` the paper submodule (Overleaf owns the remote),
   and leave the parent's submodule pointer unbumped.
@@ -211,7 +211,7 @@ the loss.
 
 - **One rule at a time**, in the smallest scope that works.
 - **Pick the right home.** A procedure for a recurring task → a skill. A habit that applies
-  everywhere → this file. A fact about one investigation → `agent-handoff/`, not here.
+  everywhere → this file. A fact about one investigation → `docs/`, not here.
 - **Prefer sharpening an existing rule** to adding a new one. This file earns its keep by being
   read; every addition taxes that.
 - **ASK BEFORE EDITING THIS FILE. Always, including additions invited by this very section.**
@@ -225,7 +225,7 @@ the loss.
 ## Search prior art before investigating, and read PAST the root cause
 
 Before spending board time or building an instrument, search the **issue registry, the per-bug
-repro folders including archived ones, and the commit history** — not only `agent-handoff/`. A
+repro folders including archived ones, and the commit history** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
 of a bug believed to be fixed.
 
@@ -253,7 +253,7 @@ takes, each of which has produced a published claim that had to be retracted:
 * a check that **fires correctly and still under-determines** — proven to work, and unable
   to tell apart the two hypotheses actually on the table.
 
-The incident log these were drawn from is in `agent-handoff/`; it is evidence, not rules.
+The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 
 Cheap habits that catch all of the above:
 
@@ -455,7 +455,7 @@ already lost, and that state is not yet in committed docs/memory. In that case s
 in one line, with the specific thing at risk. Otherwise say nothing about compaction.
 
 The durable protection is not compaction, it is committing: land findings in
-`agent-handoff/` and commit messages as you go, so a summary losing detail costs
+`docs/` and commit messages as you go, so a summary losing detail costs
 nothing.
 Never compact unilaterally — you can only recommend; it is the user's call.
 
@@ -471,12 +471,12 @@ to preserve beyond the obvious.
 
 | What | Where |
 |------|-------|
-| Current state + next step | `capstone/agent-handoff/state/` |
-| Test matrix + cookbook | `capstone/agent-handoff/ref/` |
-| Architecture + design docs | `capstone/agent-handoff/design/` |
-| Active WIP plans | `capstone/agent-handoff/plans/` |
-| Bug-fix investigations, root-cause trails, audits | `capstone/agent-handoff/history/` (dated `DD-MM-YYYY_HH-MM-SS_name.md`) |
-| Archived session notes | `capstone/agent-handoff/history/` |
+| Current state + next step | `capstone/docs/state/` |
+| Test matrix + cookbook | `capstone/docs/ref/` |
+| Architecture + design docs | `capstone/docs/design/` |
+| Active WIP plans | `capstone/docs/plans/` |
+| Bug-fix investigations, root-cause trails, audits | `capstone/docs/history/` (dated `DD-MM-YYYY_HH-MM-SS_name.md`) |
+| Archived session notes | `capstone/docs/history/` |
 | Skills (auto-loading procedures) | `.claude/skills/<name>/SKILL.md` |
 
 **`design/` is for design decisions and architecture only.** A bug fix,
@@ -565,7 +565,7 @@ trustworthy as a confident guess by this session, which the history in `ISSUES.m
 is not very. Agents are instructed to quote evidence and to say UNRESOLVED; hold them to
 it, and treat a conclusion with no quoted evidence as unverified.
 
-Full roster, rationale, and prompt patterns: **`agent-handoff/ref/SUBAGENTS.md`**.
+Full roster, rationale, and prompt patterns: **`docs/ref/SUBAGENTS.md`**.
 
 **FPGA/board sessions may be run by EITHER Opus lane (A or B)** — B is explicitly
 **not** prohibited from the board (permanent rule). The board is a single shared
@@ -575,12 +575,12 @@ hand off sequentially. (Built-in **subagents** still never touch the board; the
 corpus-runner is board-free.)
 
 Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
-thing from subagents — see `capstone/agent-handoff/ref/SUBAGENTS.md` (the peer-lane
-guide is archived at `capstone/agent-handoff/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`). A third category
+thing from subagents — see `capstone/docs/ref/SUBAGENTS.md` (the peer-lane
+guide is archived at `capstone/docs/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`). A third category
 is an **external collaborator running their own (non-Claude) coding agent**: give
 them a **self-contained, stock-toolchain** task doc in `plans/` that is **decoupled
 from our in-flux compiler/ABI/board** (so the churn here can't block them), and keep
 the collaborator's real name out of the repo. Non-Claude agents don't auto-read this
-file — the `agent-handoff/ONBOARDING.md` callout covers pasting it as context. The
+file — the `docs/ONBOARDING.md` callout covers pasting it as context. The
 reproduction/repro-artifact half of a new benchmark can go this way; the
 capability/compiler/board half stays in an owning lane.

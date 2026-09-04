@@ -23,7 +23,7 @@ senior-cascade (the paper's H primitive: `close` invalidates every statement /
 value beneath the connection) requires the child capability to be
 **split-derived from the parent** so it is junior in the parent's rev lineage.
 That needs a monitor extension (a "share child split from parent" op); see the
-dated history note `agent-handoff/history/07-07-2026_*_hierarchical-cascade-*`.
+dated history note `docs/history/07-07-2026_*_hierarchical-cascade-*`.
 
 This probe is retained as the negative-result characterization (like the M0
 `borrow-revoke-uaf-probe`); when the derived-child op lands, add a positive probe

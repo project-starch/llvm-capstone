@@ -6,7 +6,7 @@
 > this folder has ALREADY ruled insufficient for a "cure" claim (00-README.md:1278). Two more
 > clean draws would take it to 0.0095 and settle it. See §9.4.** The flash was a
 > deliberate lead override: `run.tcl`'s criterion remains unmet on negative slack.** The engineering detail, the variant comparison and the
-> criterion live in `agent-handoff/plans/s12-fix-synthesis-request.md`. Measurements and
+> criterion live in `docs/plans/s12-fix-synthesis-request.md`. Measurements and
 > provenance are in `00-README.md`.
 >
 > Last updated 2026-09-04 (synthesis results, §9).

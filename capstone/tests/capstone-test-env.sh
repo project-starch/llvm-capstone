@@ -53,7 +53,10 @@ export CAPSTONE_LD_LLD=${CAPSTONE_LD_LLD:-$CAPSTONE_LLVM_BIN/ld.lld}
 export CAPSTONE_LLVM_READOBJ=${CAPSTONE_LLVM_READOBJ:-$CAPSTONE_LLVM_BIN/llvm-readobj}
 export CAPSTONE_BUILDROOT_DIR=${CAPSTONE_BUILDROOT_DIR:-$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot}
 export CAPSTONE_QEMU_BINARY=${CAPSTONE_QEMU_BINARY:-$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build/qemu-system-riscv64}
-export CAPSTONE_HANDOFF_DIR=${CAPSTONE_HANDOFF_DIR:-$CAPSTONE_REPO_ROOT/capstone/agent-handoff}
+export CAPSTONE_DOCS_DIR=${CAPSTONE_DOCS_DIR:-$CAPSTONE_REPO_ROOT/capstone/docs}
+# Back-compat: agent-handoff/ was renamed to docs/ on 2026-08-20. Scripts and prompts still
+# using the old variable keep working.
+export CAPSTONE_HANDOFF_DIR="$CAPSTONE_DOCS_DIR"
 
 # Self-check: a wrong root must be an ERROR, not a set of paths that point nowhere.
 # This is what would have caught the zsh bug above on the day it was introduced.

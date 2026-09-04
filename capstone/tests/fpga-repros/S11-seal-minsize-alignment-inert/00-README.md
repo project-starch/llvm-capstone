@@ -143,7 +143,7 @@ module) returns **7 signature lines in exactly 2 guards**: the line above, and
 `capstone_dom_switcher.anvil:115`, whose guard collapses to `cur_idx == 0`. That
 one is latent (its enclosing branch is unreachable on this RTL) and is **not part of this issue** —
 it is written up separately at
-`capstone/agent-handoff/history/23-08-2026_22-40-00_anvil-relational-precedence-dom-switcher.md`.
+`capstone/docs/history/23-08-2026_22-40-00_anvil-relational-precedence-dom-switcher.md`.
 Everything else in the tree already parenthesises its relationals, which is why the class stayed
 invisible.
 

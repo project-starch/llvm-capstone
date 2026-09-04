@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compile the xlang corpus shims as CHERI-RISC-V *purecap* binaries for the
-# CHERI baseline column (plan: agent-handoff/plans/cheri-baseline-xlang.md).
+# CHERI baseline column (plan: docs/plans/cheri-baseline-xlang.md).
 #
 # Output: $OUT holds one ELF per row named `row<N>` plus a sanity probe. Bake
 # $OUT into the CheriBSD disk image (--disk-image/extra-files) or 9p-share it,

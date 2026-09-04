@@ -127,7 +127,7 @@ PY
 
 ### Running it
 
-See `run.sh`, or `../../agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md` and the `board-run` skill.
+See `run.sh`, or `../../docs/ref/HOW-TO-LAUNCH-ON-FPGA.md` and the `board-run` skill.
 Domains are **baked into the buildroot image** — never shipped over UART.
 
 ```bash
@@ -184,10 +184,10 @@ future explanation:
 
 ## References
 
-- `capstone/agent-handoff/ref/SILICON-BLOCKER.md` — full measurement trail, the retractions,
+- `capstone/docs/ref/SILICON-BLOCKER.md` — full measurement trail, the retractions,
   and the 2026-08-04 bitstream change.
-- `capstone/agent-handoff/ref/ISSUES.md` — R-16 entry.
-- `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md` — board procedure and driver contract.
+- `capstone/docs/ref/ISSUES.md` — R-16 entry.
+- `capstone/docs/ref/HOW-TO-LAUNCH-ON-FPGA.md` — board procedure and driver contract.
 - `.claude/skills/board-run/SKILL.md` — the decision procedure, including this classification.
 - `../ARCHIVED/R14-frame-pad/` — R-14, the same defect reached from the other direction, with
   the ~10 KB one-variable pair that is cheaper to run as a bitstream check.

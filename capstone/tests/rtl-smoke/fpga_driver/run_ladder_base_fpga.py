@@ -9,7 +9,7 @@ with `run_baked_rungs_fpga.py` (ladder rungs) or `run_sqlite_stages_fpga.py` (SQ
 staged probes). Rationale: UART delivery is 16 chars per socket.io emit and each emit is
 an HTTPS round trip, so a ~10 KB domain costs MINUTES; baked, 10 domains run in ONE boot
 in ~5 minutes because the JTAG upload happens anyway. See
-`agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md` s"UART TRANSFER IS RETIRED".
+`docs/ref/HOW-TO-LAUNCH-ON-FPGA.md` s"UART TRANSFER IS RETIRED".
 """
 """Board runner for the silicon-ladder BASELINE sweep (plain RISC-V denominator).
 

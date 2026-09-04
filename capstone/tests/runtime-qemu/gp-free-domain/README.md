@@ -3,7 +3,7 @@
 A real integer app (`gpfree_app.c`: `.rodata`/`.data` globals + a non-inlined
 `helper()` call graph) built and run as a **gp-free / cjalr-free** domain — the
 enabling work for running a real globals-using program on silicon (Experiment A,
-`agent-handoff/plans/compatibility-eval-silicon-app.md` §2).
+`docs/plans/compatibility-eval-silicon-app.md` §2).
 
 ## Why gp-free
 

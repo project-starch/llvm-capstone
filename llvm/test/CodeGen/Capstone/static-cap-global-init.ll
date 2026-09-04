@@ -10,7 +10,7 @@
 ; fixed external name and a standard .init_array of absolute addresses both fail
 ; in multi-module domains -- the former collides, the latter is stale because the
 ; domain processes no load-time relocations.)
-; See capstone/agent-handoff/design/capability-globals-init-decision.md.
+; See capstone/docs/design/capability-globals-init-decision.md.
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m < %s | FileCheck %s
 

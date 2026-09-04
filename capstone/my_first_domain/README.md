@@ -22,7 +22,7 @@ this environment.
 ## Build
 
 ```bash
-cd /home/alexey/dev/llvm-capstone/capstone/my_first_domain
+cd <REPO-ROOT>/capstone/my_first_domain
 chmod +x build.sh
 ./build.sh
 ```

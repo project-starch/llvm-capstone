@@ -2,7 +2,7 @@
 #define CAPSTONE_TESTS_RUNTIME_QEMU_REVOKE_MATRIX_PROBE_H
 
 /* Revocation enforcement test matrix (cases 2 and 3 of
- * agent-handoff/design/revocation-enforcement-proposal.md §6). Extends the M0
+ * docs/design/revocation-enforcement-proposal.md §6). Extends the M0
  * borrow-revoke-uaf-probe with different ways the borrower holds the delegated
  * capability across the revoke:
  *

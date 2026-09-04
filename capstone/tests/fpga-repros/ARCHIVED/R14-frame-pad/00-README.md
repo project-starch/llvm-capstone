@@ -107,7 +107,7 @@ separate ~10 KB domain in `capstone/tests/runtime-qemu/silicon-ladder/`:
 ## Running it
 
 The domains are **baked into the buildroot image** — do not ship them over UART (see
-`capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`, §"UART TRANSFER IS RETIRED").
+`capstone/docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`, §"UART TRANSFER IS RETIRED").
 
 ```bash
 O=capstone/caplifive-system/sw/buildroot/overlay/test-domains
@@ -161,9 +161,9 @@ and the bounds/type being measurably valid that makes the access look legal.
 
 ## References
 
-- `capstone/agent-handoff/ref/SILICON-BLOCKER.md` — full measurement trail, including the
+- `capstone/docs/ref/SILICON-BLOCKER.md` — full measurement trail, including the
   mechanisms that were proposed and then refuted, and the retractions.
-- `capstone/agent-handoff/ref/ISSUES.md` — R-14 entry.
-- `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md` — board procedure, the baked-image
+- `capstone/docs/ref/ISSUES.md` — R-14 entry.
+- `capstone/docs/ref/HOW-TO-LAUNCH-ON-FPGA.md` — board procedure, the baked-image
   workflow, and the driver contract.
 - `../R14-strline-struct/` — the earlier, larger reproducer this one supersedes.

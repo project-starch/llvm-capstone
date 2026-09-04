@@ -358,7 +358,7 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   // its only hypothesis (a tag/eviction divergence between the D-cache's two `ruser` gates)
   // was refuted on 2026-08-11, because the refill gate's eight bits are a shadow-tag byte and
   // not capability metadata, so the two gates are the same predicate over different
-  // encodings. See agent-handoff/ref/ISSUES.md under S-06. The workaround is therefore NOT
+  // encodings. See docs/ref/ISSUES.md under S-06. The workaround is therefore NOT
   // enabled anywhere, and this flag defaults off.
   //
   // Reading first also makes the sequence safe for any overlap inside a chunk, which the

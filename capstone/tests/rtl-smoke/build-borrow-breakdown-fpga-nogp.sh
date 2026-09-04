@@ -11,7 +11,7 @@ set -euo pipefail
 # global-free domain (borrow_breakdown_fpga_nogp.c) and a single-region controller
 # (borrow_breakdown_fpga_nogp_ctl.c): one REV_SHARED region that is both scratch and
 # results, measured entirely inside the one REGION_SHARE entry. See
-# agent-handoff/history 20-07-2026 + the NDSS plan gp section for the full trail.
+# docs/history 20-07-2026 + the NDSS plan gp section for the full trail.
 #
 # Output: $OUT_DIR/borrow_breakdown_fpga_nogp_ctl (soft-float .user controller) and
 # $OUT_DIR/borrow_breakdown_fpga_nogp.dom (Capstone .dom). These two ship in the FPGA

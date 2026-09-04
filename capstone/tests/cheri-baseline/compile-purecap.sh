@@ -15,16 +15,16 @@ REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 REPROS="$REPO_ROOT/capstone/benchmarks/sqlite/cve-repros"
 source "$REPO_ROOT/capstone/tests/capstone-test-env.sh" 2>/dev/null || true
 
-CHERI_SDK=${CHERI_SDK:-/home/alexey/cheri/output/sdk}
+CHERI_SDK=${CHERI_SDK:-$HOME/cheri/output/sdk}
 SYSROOT=${SYSROOT:-$CHERI_SDK/sysroot-riscv64-purecap}
 CC="$CHERI_SDK/bin/clang"
-OUT=${OUT:-/home/alexey/cheri-ws/rootfs-overlay/root/cheri-baseline}
+OUT=${OUT:-$HOME/cheri-ws/rootfs-overlay/root/cheri-baseline}
 # CHERI-CLEAN amalgamation: CheriBSD ships a purecap-patched sqlite3. The vanilla
 # upstream amalgamation is NOT capability-clean (int->ptr casts, unaligned cap
 # stores) and faults during *normal* operation under purecap, which would mask
 # the injected defect. Default to the patched source; keep the vanilla one only
 # to demonstrate that contrast (sanity_vanilla).
-SQLITE_SRC=${SQLITE_SRC_DIR:-/home/alexey/cheri/cheribsd/contrib/sqlite3}
+SQLITE_SRC=${SQLITE_SRC_DIR:-$HOME/cheri/cheribsd/contrib/sqlite3}
 SQLITE_VANILLA=${SQLITE_VANILLA:-$(bash "$REPO_ROOT/capstone/benchmarks/sqlite/fetch-sqlite.sh" 2>/dev/null | tail -1)}
 
 for p in "$CC" "$SYSROOT" "$SQLITE_SRC/sqlite3.c"; do

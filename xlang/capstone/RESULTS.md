@@ -149,7 +149,7 @@ or silicon.
   which a revocation-independent miscompile would also crash — ran to
   completion; and rows 1 and 5 re-run end-to-end on the post-fix compiler
   reproduce FAULT/MISS. Adversarially audited. Full trail and hash manifest:
-  `capstone/agent-handoff/history/03-08-2026_09-42-37_c16-xlang-column-provenance-audit.md`.
+  `capstone/docs/history/03-08-2026_09-42-37_c16-xlang-column-provenance-audit.md`.
 - **Shims, not real software — on both columns.** Real engines recycle objects
   on internal free lists that no revocation scheme observes, so both columns are
   upper bounds. The bias is symmetric because both compile the identical shim

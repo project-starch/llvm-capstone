@@ -3,7 +3,7 @@
 **Start here.** One page: what is done, what is not, where it lives, and how to
 re-run it. Per-column detail is in `cheri/RESULTS.md` and `capstone/RESULTS.md`;
 the paper-facing version is
-`capstone/agent-handoff/ref/xlang-security-measurements-for-paper.md`.
+`capstone/docs/ref/xlang-security-measurements-for-paper.md`.
 
 Last updated 2026-08-02.
 

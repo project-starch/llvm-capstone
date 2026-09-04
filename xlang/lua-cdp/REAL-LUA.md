@@ -79,12 +79,12 @@ CHERI async (default)   :  0/13          (the deployed config does not catch the
 - Getting real Lua onto Capstone needed four i128/capability codegen fixes in the
   LLVM backend — merged into `capstone-bootstrap` (this branch inherits them; the
   fixes are on `CapstoneISelLowering.cpp`, with lit tests `cap-i128-*.ll`).
-- Full trail: `capstone/agent-handoff/history/05-08-2026_06-00-00_gp-captable-lua-bringup.md`
+- Full trail: `capstone/docs/history/05-08-2026_06-00-00_gp-captable-lua-bringup.md`
   (interpreter bring-up) and `…12-00-00_lua-cdp-real-userdata-repro.md` (reproductions
   and both-platform results). **Correction, see below**: that bring-up doc's claim that
   the cjalr ABI's `.capstone_cap_init` under-tags Lua's static tables is wrong (verified
   leaf-by-leaf with `-capstone-cap-init-print`) — cjalr was blocked by two absolute jump
-  tables, not by under-tagging. `capstone/agent-handoff/history/06-08-2026_19-45-00_lua-runs-on-capstone-cjalr-jumptables.md`
+  tables, not by under-tagging. `capstone/docs/history/06-08-2026_19-45-00_lua-runs-on-capstone-cjalr-jumptables.md`
   has the retraction and the fix.
 - CHERI toolchain quirks captured in `cheri/real/build-real-lua-cdp.sh`: `-cheri-tgot-tls`
   (the purecap rtld rejects traditional TLS) and forced sysroot-only includes.

@@ -21,7 +21,7 @@ before booting.
 Both were deferred on 2026-07-08 as blocked intra-domain. Both blockers are gone —
 `csdrop` is implemented, and a domain can now hold a real LINEAR capability. Neither
 row needed a monitor op or a `start.S` change. Trail:
-`agent-handoff/history/10-07-2026_02-30-00_linear-uninit-rows-closed.md`.
+`docs/history/10-07-2026_02-30-00_linear-uninit-rows-closed.md`.
 
 ## Where the capability comes from
 
