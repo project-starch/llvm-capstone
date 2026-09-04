@@ -1,0 +1,43 @@
+# Board regression of the cycle-2 compiler (branch compiler-validation-plan), 2026-09-05.
+# Bitstream: caplifive_s12fix_5097eb166.bit (RTL 5097eb166). It carries the S-12 fix AND the R-20 fix:
+#   RETRACTION 05:15 -- an earlier version of this line said "NOT the r20-fix commit 2efb3604f" from
+#   git merge-base --is-ancestor; the fix is present as the cherry-pick f623c48a1 (committed 2026-08-11, "keep the
+#   CAPENTER x10 clobber additive") and in the code at issue_read_operands.sv:573-580 of 5097eb166.
+#   Ancestry by hash is not presence by content. R-20 is FIXED on this silicon.
+# Compiler: libLLVMCapstoneCodeGen.so 31573af0ef13, libLLVMCapstoneDesc.so 7991f231a5eb (cycle 2).
+# Firmware: nested caplifive-system/sw/buildroot (capstone-bootstrap-dts-65536 @ 80e1dcf); the
+#   fw_payload embeds the 65536-node DTS (marker 0x3c2d2000 present once, 0x3c3c0000 absent, one
+#   FDT) -- preflight prints "unknown bitstream" for the s12fix name, the pairing was checked by hand.
+#   Ladder image sha256 4a5677c73b0eedd8 (15369224 B); the SLT image is baked separately.
+# r20sbx = the R-20 repro (fpga-repros/R20-stc-rs1-cursor-forward-x10) REBUILT at VA 0xb0000 as
+#   a fourth draw: the frozen sbx8.dom is at 0x10000 (collides with k800, R-3). Main-checkout and
+#   cycle-2 compilers build the identical image (e3b38a4429d2); it differs from the frozen one in
+#   19/142 sbx_compute instructions, all outside the arms (frame immediates, and the arm-result
+#   spill stc/ldc -> sd/ld, base s0 not a0). Ruled admissible by the board lane with an asymmetry:
+#   0xD0000001 (R-20 live) is conclusive; 0xD0000000 on this rebuilt draw is NOT conclusive.
+# Every rung is a silicon-config build (gp-captable, shrink off, no jump tables) via
+#   verify-and-stage-rung.sh: QEMU-verified against its native oracle before it cost a boot.
+# Control k800 first in every boot; a boot whose control fails is VOID; read no further than the
+#   first failure in a boot. Result lines only, never captures.
+# rung	base_va	level	window	dom_sha256_16	oracle	boot	position	verdict	retval	cycles	note
+k800	0x10000	-O0	4k	40d765daebec9339	4	B1	1	OK	4	4788	control; boot valid
+r20sbx	0xb0000	-O0	4k	e3b38a4429d2a5b7	3489660928	B1	2	READ	3489660928	1913	control k800=4 OK. R-20 NOT observed (0xD0000000) -- REBUILT draw, weaker probe than the frozen image, NOT conclusive; the predicted reading on a bitstream lacking 2efb3604f was 0xD0000001. RETRACTION 05:15: the bitstream carries the fix (f623c48a1), so this is the package's FIXED reading
+s06agg	0x20000	-O0	4k	32e13a81cf52d4d8	15	B1	3	OK	15	0	control k800=4 OK. S-06 shape returns 15 with no memcpy high-half fixup on the s12fix bitstream (W-04 deletion re-confirmed)
+k800	0x10000	-O0	4k	40d765daebec9339	4	B2	1	OK	4	4727	control; boot valid
+beebs_crc32	0x40000	-O2	4k	bed6504e1c99bcb1	1703161001	B2	2	OK	1703161001	42819	control k800=4 OK. BEEBS crc32 kernel at -O2, silicon config (published rung level is -O1)
+k800	0x10000	-O0	4k	40d765daebec9339	4	B3	1	OK	4	4762	control; boot valid
+rv8_primes	0x50000	-O2	4k	300da57cc40ccabd	99991	B3	2	OK	99991	6319524	control k800=4 OK. RV8 primes at -O2, silicon config (the rung that hung at -O1 on older silicon)
+k800	0x10000	-O0	4k	40d765daebec9339	4	B4	1	OK	4	4728	control; boot valid
+rc_const0	0x70000	-O0	4k	b11f2c46446354bf	2016	B4	2	OK	2016	0	control k800=4 OK. R-20 pair control arm (stores the loop index); board lane's reconstruction
+rc_p1	0x80000	-O0	4k	ff195db407b3af0d	2080	B4	3	OK	2080	0	control k800=4 OK. R-20 pair test arm (stores index+1); the July miscompute shape. RETRACTION 05:15: the bitstream carries the R-20 fix (f623c48a1), so a correct 2080 is the expected reading
+coremark_matrix	0x60000	-O2	32k	b2d072e8cbac2b41	14343	B4	4	OK	14343	29795	control k800=4 OK. CoreMark matrix at -O2 with the 32 KiB window and sibling calls enabled (W-16 rung; C-28 tail calls)
+k800	0x10000	-O0	4k	40d765daebec9339	4	B5	1	OK	4	4726	control; boot valid
+csm4	0x90000	-O2	4k	99c4eded119e626d	2844319735	B5	2	OK	2844319735	15827	control k800=4 OK. csmith seed 4 at -O2 in the silicon ABI (campaign checksum 0xA988DFF7)
+csm7	0xa0000	-O2	32k	ffedb2e78f650c94	505522532	B5	3	OK	505522532	42872	control k800=4 OK. csmith seed 7 at -O2 in the silicon ABI (campaign checksum 0x1E21A964; the F-04 seed)
+beebs_bs	0x30000	-O2	4k	e4084f7167da7239	887447230	B5	4	OK	887447230	2117	control k800=4 OK. BEEBS bs at -O2, silicon config; one QEMU no-retval then 4/4 passes of this image (per-boot guest wedge, not the image); last in its boot on purpose
+k800	0x20000	-O0	4k	589ceee3853c6092	4	B6	1	OK	4	4443	control; boot valid
+sbx8	0x10000	frozen	n/a	91499d57a210b4bc	3489660928	B6	2	READ	3489660928	2006	control k800=4 OK.  R-20 NOT observed (0xD0000000) on the FROZEN sbx8 draw with a valid control -- RETRACTION 05:15: the bitstream carries the R-20 fix as cherry-pick f623c48a1, so this is the package's own FIXED reading (0xD0000000) on the frozen bytes; the struck hypothesis was "cured by another route", and the 0xD0000001 prediction rested on the wrong premise
+k800	0x20000	-O0	4k	589ceee3853c6092	4	B7	1	OK	4	4452	control (0x20000 build); boot valid
+sqslt1:q_two.test	0x10000	-O1	n/a	c01e6b89cad0f17a	records=2	B7	2	OK			control k800=4 OK. SQLite silicon build at -O1 (host a1895d35f768b5d0) on q_two.test: records=2 (expected 2) stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 completed=1; doubles as an S-12 draw on the s12fix bitstream
+k800	0x20000	-O0	4k	589ceee3853c6092	4	B8	1	OK	4	4440	control (0x20000 build); boot valid
+sqslt1:select1.test	0x10000	-O1	n/a	c01e6b89cad0f17a	records=1031	B8	2	OK			control k800=4 OK. SQLite silicon build at -O1 (host a1895d35f768b5d0) on select1.test: records=1031 (expected 1031) stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 completed=1; doubles as an S-12 draw on the s12fix bitstream

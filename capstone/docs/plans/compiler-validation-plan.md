@@ -1208,3 +1208,162 @@ runtime item. What would have caught it earlier: rerunning the wedged image as t
 item of a fresh boot before writing "-O0-only" -- the batch runner makes that a one-line
 manifest. The campaign now states that a WEDGE is not a compiler verdict until reproduced
 first-in-boot.
+
+### Execution log — the board regression session: preparation (2026-09-05, ~04:45)
+
+The project lead's decisions before the session: gp-captable becomes the silicon default and the
+QEMU-default path drops its DELIN (a cycle-3 code change, not made before the board measures the
+cycle-2 images); board stacking is control + at most three unknowns per boot after three clean
+boots, ascending, read no further than the first failure; domain calls scrub and save gp/tp in
+the compiler (cycle 3); jump tables are the first cycle-3 fix; the board lane's R-20 pair is
+included. The board lane then corrected its own request to a SINGLE arm (rc_p1, rc_const0 as the
+matched control): the compiler-side R-20 workaround was reverted on 2026-08-10 (cdbb92360e2b).
+
+**Lineage, answered by git rather than assumed.** The resident bitstream
+`caplifive_s12fix_5097eb166.bit` is RTL commit 5097eb166 ("S-12 fix: gate the FPR arm of the WAW
+escape on commit_ack too", 2026-09-04). The r20-fix branch tip 2efb3604f ("Fix R-20: keep the
+CAPENTER x10 clobber additive", 2026-08-10) is NOT its ancestor; merge-base e1b3db6ba
+(2026-08-08). So the resident silicon carries the S-12 fix and not the R-20 fix, and with the
+compiler workaround retired **R-20 is unmitigated on the board** — the board lane's consequence,
+which neither of us had followed through: an address-shaped wrong answer on any rung now has two
+candidate causes, so the R-20 repro runs as a second control in the first boot.
+
+**The rung set**, all silicon-config builds (`build-ladder-domain.sh`: gp-captable, shrink off,
+no jump tables) with the cycle-2 compiler through `verify-and-stage-rung.sh`, i.e. every image
+was QEMU-verified against its native oracle and carries a `.qemu-pass` marker before it costs a
+boot; every rung at its own `DOMAIN_BASE_VA` (k800 keeps 0x10000, the hash its marker vouches
+for):
+
+| rung | VA | level | oracle | note |
+|---|---|---|---|---|
+| k800 | 0x10000 | -O0 | 4 | the known-good control, image 40d765da… unchanged |
+| r20sbx | 0xb0000 | -O0 | 0xD0000000 | R-20 repro, rebuilt (below) |
+| s06agg | 0x20000 | -O0 | 15 | S-06 confirmation, no memcpy fixup |
+| beebs_bs, beebs_crc32 | 0x30000, 0x40000 | -O2 | 887447230, 1703161001 | published rungs are -O1 |
+| rv8_primes | 0x50000 | -O2 | 99991 | the old -O1 silicon hang |
+| coremark_matrix | 0x60000 | -O2 | 14343 | needs the 32 KiB window (.text 0x2443 B > 4 KiB); the W-16 rung, sibling calls on |
+| rc_const0, rc_p1 | 0x70000, 0x80000 | -O0 | 2016, 2080 | the board lane's reconstruction, rebuilt at distinct VAs |
+| csm4, csm7 | 0x90000, 0xa0000 | -O2 | 0xA988DFF7, 0x1E21A964 | csmith seeds 4 and 7 in the silicon ABI via `csm_ladder.h` (csm7 with the 32 KiB window); both match their campaign checksums under QEMU |
+
+Plus the SLT arm: `sqslt1.dom` = the SQLite silicon build at **-O1** (sha c01e6b89cad0f17a) with
+its host (a1895d35f768b5d0), QEMU-verified on `q_two.test` (records=2, completed=1) and, while
+the board ran, on `select1.test`; it doubles as S-12 draws on the fixed bitstream (the S-12
+compiler pass is inert on c128 code, so "workaround off" needs no flag).
+
+**Two things the preparation found.** (1) `beebs_bs -O2` at 0x30000 produced NO retval on its
+first QEMU verification (the 120 s timeout, only kernel boot lines in the log). Bisection:
+-O1 at the same VA, -O2 at the default VA, -O1 default, -O0 at 0x30000 all pass; the exact
+failing arm then passed 2/2 reruns plus a 0x40000 arm, and the re-verification passed —
+4/4 on the identical image after one no-result. Consistent with the per-boot guest wedge F-04
+documents, not with the image; it stays in the sweep, last in its boot. (2) The R-20 repro's
+frozen `sbx8.dom` is linked at 0x10000, the control's VA (R-3), so it was rebuilt from the
+frozen sources at 0xb0000. The main-checkout and cycle-2 compilers build the IDENTICAL image
+(e3b38a4429d2), which differs from the frozen one in 19 of 142 `sbx_compute` instructions —
+all outside the inline-asm arms: frame immediates, and the arm-result spill `stc/ldc` →
+`sd/ld` (base s0, not a0). The board lane ruled it admissible on the package's own criteria
+(triple opcodes/registers/separation unchanged) with an asymmetry that the result line
+carries: 0xD0000001 (R-20 live) is conclusive; 0xD0000000 on a rebuilt draw is not.
+
+**Images.** The overlay gate (C9) blocks an image carrying a 1.25 MB domain the boot does not
+use, so two images: the ladder image (11 doms, sha 4a5677c73b0eedd8, 15.4 MB, every staged file
+byte-verified inside `rootfs.cpio`) and an SLT image baked after the ladder boots. Firmware
+embeds the 65536-node DTS (marker check by hand; the gate prints "unknown bitstream" for the
+s12fix name). Boot plan: B1 k800 + r20sbx + s06agg; B2 k800 + beebs_crc32; B3 k800 + rv8_primes;
+B4 k800 + rc_const0 + rc_p1 + coremark_matrix (the pair ahead of the riskier 32k-window rung,
+at the board lane's suggestion); B5 k800 + csm4 + csm7 + beebs_bs; then one SLT arm per boot.
+Results: `capstone/tests/board-results/2026-09-05.tsv`.
+
+### Execution log — the board regression session: the ladder boots (2026-09-05, ~05:10)
+
+Five boots on `caplifive_s12fix_5097eb166.bit`, ladder image 4a5677c73b0eedd8, control first
+in every boot and returning 4 every time. **Every rung returned its native oracle.** Result
+lines are in `capstone/tests/board-results/2026-09-05.tsv`; the summary:
+
+| boot | rungs (position order) | readings |
+|---|---|---|
+| B1 | k800, r20sbx, s06agg | 4; **0xD0000000** (R-20 NOT observed on the rebuilt draw — not conclusive, see below); 15 |
+| B2 | k800, beebs_crc32 -O2 | 4; 1703161001 |
+| B3 | k800, rv8_primes -O2 | 4; 99991 (6.32 M cycles) |
+| B4 | k800, rc_const0, rc_p1, coremark_matrix -O2 | 4; 2016; **2080**; 14343 |
+| B5 | k800, csm4 -O2, csm7 -O2, beebs_bs -O2 | 4; 0xA988DFF7; 0x1E21A964; 887447230 |
+
+What that settles for the compiler: the cycle-2 `-O2` images that agreed with `-O0` on QEMU
+also compute correctly on silicon in the silicon configuration — BEEBS bs and crc32, RV8 primes
+(the rung that hung at -O1 on older silicon), CoreMark matrix **with sibling calls enabled**
+(C-28's tail-call fix runs on the board, so W-16's `-fno-optimize-sibling-calls` pin can be
+retired), and two csmith programs whose checksums match the native reference. `s06agg` returns
+15 with no memcpy high-half fixup, re-confirming W-04's deletion. The project lead's bar —
+"-O2 correct on QEMU and silicon" — is met for every rung that was run.
+
+What it says about R-20: the R-20 pair's test arm `rc_p1` (the July "array store + live
+accumulator" shape, the board lane's reconstruction, rebuilt at 0x80000 with the cycle-2
+compiler) computed 2080 on a bitstream that provably lacks the R-20 RTL fix, and the rebuilt
+R-20 repro read 0xD0000000 in B1. Neither is conclusive on its own (the rebuilt repro is a
+weaker probe; the pair is a reconstruction), so the frozen `sbx8.dom` runs next at its own
+0x10000 base with the control relinked to 0x20000 — the board lane's resolution of the R-3
+collision ("relink the control, not the artifact", now in the board-run skill together with
+the entry-point check; that check was run over all three image sets of this session and its
+negative control fired). Prediction written before the boot: 0xD0000001; a 0xD0000000 with a
+valid control would be evidence that the s12fix lineage cures the x10 forwarding path by a
+route other than 2efb3604f.
+
+### RETRACTION — the resident bitstream DOES carry the R-20 fix (2026-09-05, ~05:15)
+
+The two entries above say the resident `caplifive_s12fix_5097eb166.bit` "provably lacks" the
+R-20 RTL fix, on the strength of `git merge-base --is-ancestor 2efb3604f 5097eb166` answering
+no. That answered a question about a HASH. `git log e1b3db6ba..5097eb166 --
+core/issue_read_operands.sv` lists **f623c48a1 "Fix R-20: keep the CAPENTER x10 clobber
+additive instead of overwriting"** (authored 2026-08-10, committed onto the s12 lineage
+2026-08-11 13:44 +0800 — the committer date is when it entered this lineage) — the same fix
+as 2efb3604f, change lines identical (the board lane diffed them) —
+and `git show 5097eb166:core/issue_read_operands.sv` carries the additive form at lines
+573-580 with the old overwrite described as the bug. The board lane had "verified
+independently" by the same ancestry test, which is why the wrong claim looked confirmed twice.
+
+Consequences. R-20 is FIXED on the resident silicon, so the session's three R-20 readings —
+r20sbx 0xD0000000 (B1), rc_p1 = 2080 (B4), the FROZEN sbx8 0xD0000000 with a valid control
+(B6) — are the package's own "fixed" reading and need no new hypothesis; "the s12fix lineage
+cures the x10 path by another route" is struck. The prediction "0xD0000001" was wrong because
+its premise was. Nothing about the compiler changes: the pair and the repro were controls.
+The TSV header and the B1/B4/B6 notes carry the correction beside the original wording.
+
+What would have caught it, and the rule worth keeping: **ancestry by hash is not presence by
+content.** A rebased or cherry-picked fix is present without being an ancestor. Before writing
+"lacks commit X", search the range for the fix by subject (`git log --grep`) or by the cited
+lines (`git show <rev>:<file>`), and quote the line. Recorded as a memory note; not a
+CLAUDE.md change (the "clean result is not evidence" section already covers the shape —
+the instrument answered a different question from the one asked).
+
+### Execution log — the board regression session: the frozen repro and the SLT arm (2026-09-05, ~05:35)
+
+Three more boots, control (the 0x20000 build, 589ceee3853c6092) first and returning 4 in each:
+
+| boot | arm | reading |
+|---|---|---|
+| B6 | frozen `sbx8.dom` (91499d57…, untouched at 0x10000) | **0xD0000000** — the package's "fixed" reading; see the retraction above |
+| B7 | `sqslt1` -O1, `q_two.test` | records=2, stmt_fail=0, query_fail=0, completed=1 |
+| B8 | `sqslt1` -O1, `select1.test` | records=1031 (stmt_pass=31, query_pass=1000), 0 failures, completed=1 |
+
+B8 is the first SQLite validation on silicon above -O0: 1031 SQLLogicTest records at -O1 in
+the silicon configuration, matching the QEMU run of the same image byte for byte (the
+select1 verification rebuilt the image and its hash was unchanged, c01e6b89cad0f17a). It is
+also two S-12 draws on the S-12-fixed bitstream, both clean. The SLT boots needed the
+relinked control because the SQLite domain, like every domain built without
+`DOMAIN_BASE_VA`, enters at 0x10000 — the board lane measured 24 of 40 committed images at
+that address and wrote the rule and a one-line entry-point check into the board-run skill;
+run over this session's three image sets it reported no collision, and its negative control
+(the 0x10000 control beside the frozen image) fired.
+
+**Session totals: 8 boots, 8 valid controls, 19 rung readings, every rung at its oracle**, all
+result lines in `capstone/tests/board-results/2026-09-05.tsv`. The -O2 bar is met on silicon
+for every rung run; the -O1 SQLite domain is silicon-clean; C-28 is confirmed on the board;
+W-04 and W-16 can be retired; R-20 is fixed in the resident hardware and the July gp-captable
+miscompute pair computes correctly. One retraction (the lineage claim), recorded with its
+cause and its rule.
+
+Not run this session, deliberately: the S-04 `sm0`/`sm` memcpy pair (no sources survive; a
+reconstruction is a separate task), and the W-08 SQLite -O2 pair in the silicon
+configuration (the -O2 SQLite domain was not built for the board — the SLT twin at -O2 is
+QEMU-only so far). Next on silicon: the cycle-3 images (jump tables, C-36b, the
+gp-captable-default/DELIN change) through the same rung set, which now has a recorded
+silicon baseline to compare against.
