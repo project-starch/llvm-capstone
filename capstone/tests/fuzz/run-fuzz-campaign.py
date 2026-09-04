@@ -13,6 +13,9 @@ BUILD-CRASH / LINK-ERROR / SIZE-SKIP); then run every domain in ONE QEMU boot
 
   MATCH      the domain returned the native checksum
   MISMATCH   it returned a different value -- a miscompile candidate
+  WEDGE      the guest hung on it; NOT a compiler verdict until the same image wedges as the
+             FIRST domain of a fresh boot (2026-09-05: a nondeterministic per-boot wedge hit
+             any image as early as the fifth domain; F-04 was retracted on that)
   FAULT      the domain faulted (QEMU aborted and was rebooted)
   TIMEOUT    the domain did not return
   ERROR      the loader could not run it

@@ -1,31 +1,36 @@
-# F-04: csmith seed 7 wedges the guest at -O0 and matches native at -O2
+# F-04: RETRACTED as a compiler finding -- a per-boot guest wedge that hits any image
 
-**Found by the csmith differential campaign on 2026-09-05 (cycle-2 compiler, QEMU
-5dc356547d7f).** Not root-caused.
+**Filed 2026-09-05 from the csmith campaign as "seed 7 wedges at -O0 and matches at -O2";
+retracted the same day after a position test.** The wedge follows the guest's state within a
+boot, not the image or the optimisation level. It is a runtime symptom (QEMU, the kernel
+module or the monitor), handed to the board lane; the compiler is not implicated.
 
-| build | result |
-|---|---|
-| native x86 -O0 (the reference) | checksum 0x1E21A964 (505522532) |
-| capstone64 -O2 (`cs7-O2.dom`, sha256 21498ff73a7661a6) | RET 505522532 -- MATCH |
-| capstone64 -O0 (`cs7-O0.dom`, sha256 d1f543e17b0f8da7) | WEDGE: the shell prompt never came back; QEMU stayed alive |
+## What was observed, in order
 
-The only guest output before the wedge is QEMU's `[CAPSTONE] Print = Scalar(0x1234)`:
-`helper_csdebugprint`, the debug-print instruction (funct7 1000011 under OPC_CAP_OP), which
-the compiler never emits and which does not occur in the image (`llvm-objdump -d` shows no
-`<unknown>` encoding). So at -O0 control flow LEFT the code and executed bytes that decode as
-that instruction. The program has no `switch`, no indirect call, no indirect jump, and its
-whole stack demand is under 3 KB (largest frame 704 bytes, 21 frames, 2944 bytes in total),
-so neither a jump table nor a stack overflow explains it. Reproduced twice (the first
-campaign, before the batch runner learned to reboot after a wedge, and this one).
+| run | position in its boot | image | result |
+|---|---|---|---|
+| campaign 1 and 2 | 12th domain | cs7-O0 (`d1f543e17b0f`) | WEDGE |
+| campaign 2, after the reboot | 1st | cs7-O2 | RET 505522532 = native |
+| bisection batch | 2nd | cs7-O0 rebuilt (`143e3d98b7e2`, code byte-identical, symbol table differs) | RET 505522532 = native |
+| position batch B | 12th | cs7-O2 (the very image that passed above) | WEDGE |
+| position batch C | 1st | cs7-O0 (the campaign's image) | RET 505522532 = native |
+| position batch C | 5th | cs2-O2, which had passed in every earlier batch | WEDGE |
+| position batch C, after the reboot | 8th of the second boot | cs7-O0 | WEDGE |
+| position batch A | -- | -- | the boot itself never reached the login prompt (infra flake) |
 
-Reproduce (build then run; `capstone/tests/fuzz/build-fuzz-program.sh`, then
-`capstone/tests/fuzz/run-domain-batch.py` with a one-line manifest, or the smoke runner):
+So the claim "an -O0-only miscompile" was one step past the evidence: it rested on -O0 wedging
+and -O2 passing, and the -O2 pass had been the first item after a reboot. Every wedge is
+preceded by QEMU's `[CAPSTONE] Print = Scalar(0x1234)` (`helper_csdebugprint`), which also
+appears during a normal boot, so it is the last thing printed, not the cause.
 
-    bash capstone/tests/fuzz/build-fuzz-program.sh cs7.c /tmp/cs7-O0.dom -O0
+## What it means for the campaign
 
-Next step, not yet done: a solo run with an instruction trace to see the last in-code pc,
-then a per-function bisection -- build at -O2 with one function at a time marked
-`__attribute__((optnone))` and run the whole set as one batch; the function whose -O0
-codegen wedges is the reducer's starting point. Candidates by shape: a `cjalr zero, 0(ra)`
-returning through a clobbered ra (a spill slot written through the wrong capability), or an
--O0 load/store of a capability through an address computed from a truncated value.
+A WEDGE row is not a compiler verdict until the same image wedges as the FIRST domain of a
+fresh boot; the batch runner reboots and continues, and the campaign counts WEDGE as bad so
+a run with one is not read as clean. The plan's "items-per-boot ceiling" calibration was
+exactly the question this answers: it is not a fixed ceiling but a nondeterministic wedge
+that can hit as early as the fifth domain.
+
+Logs: `/tmp/capstone/fuzz/camp-cycle2/batch.log`, `/tmp/capstone/fuzz/camp-cycle2b/batch.log`,
+`/tmp/capstone/fuzz/f04-position/batch-{A,B,C}.log` (scratch; not committed). `cs7.c` is kept
+here as the program that first showed it.

@@ -1176,3 +1176,35 @@ QEMU" -- met on every execution suite the project has, against a starting point 
 faulting at -O1 and -O2, RV8 0/7 at -O2, and 60 lit tests none of which ran at -O1.
 Silicon remains the other half of the bar and is the board lane's: the images to compare are
 identified by the shared-library hashes in results/2026-09-05.tsv.
+
+### Execution log — the last four pairs, and F-04 is not what it looked like (2026-09-05, ~05:30)
+
+- **W-07 shrink-stack, W-04 memcpy-high-half-fixup, W-05 memops-via-libcall (RV8 -O2): 7/7
+  AGREE each**, images differing. W-07 joins W-06 as a silicon-debt candidate for a board pair;
+  W-04 is silicon-debt whose deletion is already authorised (S-06 fixed in the RTL) pending the
+  one board rung; W-05 is not a workaround and the two lowerings agree on this corpus.
+- **W-08 merge-string-constants (SLT -O2): IDENTICAL IMAGES** -- the knob does not change the
+  QEMU SLT build at all, so the pair runner aborted without a verdict, as designed. The pair
+  belongs in the silicon SQLite config, where the knob is turned on.
+- **F-04 retraction in progress.** The bisection batch's -O0 reference of cs7 RETURNED the native
+  checksum as the second domain of a fresh boot, while the campaign's cs7-O0 wedged twice as the
+  TWELFTH domain of its boot; the two -O0 images also differ in bytes (being checked: code or
+  strings). So "an -O0-only miscompile" was one step past the evidence -- the wedge may be a
+  per-boot state effect (the twelfth domain) rather than the image. A position test is running:
+  the campaign's own cs7-O0.dom first and last in one boot, and cs7-O0 / cs7-O2 each after
+  eleven fillers.
+
+### RETRACTION — F-04 is not a compiler finding (2026-09-05, ~05:45)
+
+The position test: cs7-O2 (which had passed as the first item after a reboot) WEDGED as the
+twelfth domain; the campaign's own cs7-O0 image passed as the FIRST domain of a boot; cs2-O2,
+which had passed in every earlier batch, wedged as the fifth; and a further boot never
+reached its login prompt. The wedge follows the guest's state within a boot, not the image or
+the -O level; every instance ends with QEMU's `Print = Scalar(0x1234)`, which also appears in
+a normal boot. "An -O0-only miscompile" was one step past the evidence -- it rested on one
+-O0 wedge and one -O2 pass, and the pass had been the first item after a reboot. F-04's folder
+now records the retraction with the table of runs; the symptom goes to the board lane as a
+runtime item. What would have caught it earlier: rerunning the wedged image as the first
+item of a fresh boot before writing "-O0-only" -- the batch runner makes that a one-line
+manifest. The campaign now states that a WEDGE is not a compiler verdict until reproduced
+first-in-boot.
