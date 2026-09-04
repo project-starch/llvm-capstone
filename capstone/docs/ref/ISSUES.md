@@ -3352,7 +3352,7 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
-### I-01 — the fail-closed push gate is installed in only 2 of 6 repositories `OPEN — needs the machine owner`
+### I-01 — the fail-closed push gate was installed in only 2 of 6 repositories `RESOLVED 2026-09-04 — all six gated and negative-tested`
 
 **Found 2026-09-04 by negative-testing it, which is the only way this class surfaces.**
 
@@ -3383,13 +3383,34 @@ discipline alone, in the one place the project has decided discipline is not eno
 tested the *superproject's* hook six times and reported "present" for all six. Use
 `git -C "$r" rev-parse --absolute-git-dir`.
 
-**Not fixed here deliberately.** Installing the hook in the other four repositories would block
-pushes for every lane sharing this machine, including branches legitimately pushed today that are
-not on the allowlist. That is the machine owner's call, not a lane's. One symlink per repository:
+**FIXED 2026-09-04, after measuring the disruption instead of assuming it.** The original
+hesitation — that gating the other four would block lanes mid-work — did not survive checking: of
+the four, three have their *current* branch already on the allowlist (`c128-qemu-merge`,
+`capstone-bootstrap` twice), so the gate is a no-op for work in progress. The fourth is
+`capstone/paper`, whose branch `main` is **not** listed — so the gate blocks pushes to the paper,
+which is precisely what `CLAUDE.md` mandates and what nothing was enforcing.
 
-```
-ln -s ~/.claude-c/secrets/pre-push-allowlist.sh <repo>/.git/hooks/pre-push
-```
+All six are now gated and **negative-tested**, per the rule that a gate which has never blocked
+anything is unproven:
+
+| repository | unlisted ref | allowlisted ref |
+|---|---|---|
+| superproject, `capstone-ariane` | BLOCKED | allowed |
+| `capstone-qemu`, `caplifive-buildroot` | BLOCKED (live dry-run) | allowed |
+| `caplifive-system` | BLOCKED (exit 1) | allowed (exit 0) |
+| `capstone/paper` | push to `main` → **BLOCKED** | — |
+
+**Two traps found while testing, both of which produce a false "the gate is not working":**
+
+1. **A submodule's `.git` is a FILE, not a directory**, so `<worktree>/.git/hooks/pre-push` does
+   not resolve and reports `Not a directory`. The hook lives under
+   `<super>/.git/modules/<path>/hooks/`. Ask `git rev-parse --absolute-git-dir`; never build the
+   path by hand.
+2. **A 403 from the remote aborts the push BEFORE `pre-push` runs.** Testing the gate on
+   `caplifive-system` — where this account has no write access — returns the permission error and
+   never reaches the hook. That reads exactly like a gate that failed to fire. It was resolved by
+   invoking the hook directly with git's stdin format rather than inferring from the push.
+
 
 
 ### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED`

@@ -6,7 +6,25 @@ which every lane and every fresh clone is affected by, so it is not a change to 
 Raised by the project lead: **`caplifive-system-dev` is a full replacement for
 `caplifive-system`, and `caplifive-system` should be archived and no longer used.**
 
-## URGENT AND SEPARATE FROM THE MIGRATION — 4 commits exist on one disk only
+> **RESOLVED 2026-09-04 — this section is obsolete, and the framing under it was wrong.**
+> The project lead pushed back on it correctly: *why push `caplifive-system` at all, when the
+> whole point is to replace it?*
+>
+> Two of the three levels were pushed (`caplifive-opensbi` `769939a..460f6e4`, buildroot
+> `f11bf69..80e1dcf`). Checked afterwards what the outer 4 commits still carry, and the answer is
+> **nothing that is not now public**: each one is a `sw/buildroot` gitlink bump, and all four
+> targets — `17e4fb609`, `03f3f2832`, `f11bf691b`, `eae3fff72` — are on
+> `origin/capstone-bootstrap-dts-65536`. The monitor-to-buildroot correspondence they were
+> valuable for now exists on a remote independently of them.
+>
+> So `caplifive-system` **does not need to be pushed**, and its 403 is no longer a blocker for
+> anything. Their history is in `/extra/alexey/caplifive-unreplicated-backup/`.
+>
+> **The one real blocker is different:** `caplifive-system-dev` pins buildroot six commits behind,
+> and making it current requires WRITE ACCESS TO `caplifive-system-dev`, which this account also
+> lacks. That is the single thing the migration waits on.
+
+## OBSOLETE — 4 commits exist on one disk only
 
 **`capstone/caplifive-system` has 4 unpushed commits and its HEAD is on no remote.**
 
