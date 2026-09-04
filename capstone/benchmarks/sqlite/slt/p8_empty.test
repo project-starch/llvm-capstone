@@ -8,5 +8,4 @@ CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
 query I nosort
 SELECT t1.a FROM t1, t1 AS y WHERE y.b < t1.b ORDER BY 1
 ----
-0
 

@@ -13,4 +13,3 @@ CREATE TABLE t2(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
 query I nosort
 SELECT t1.a FROM t1, t2
 ----
-0
