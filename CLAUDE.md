@@ -48,6 +48,11 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   construction — kernel and driver banners carry account names and emails — so scrubbing is
   endless and per-log. Twelve result lines beat 1110, and are better evidence.
 - No `Co-Authored-By:` lines in commits.
+- **No micro-commits.** A commit is a logically complete step, not a keystroke. Do not commit a
+  single markdown edit, a one-line doc correction, or a debugging log on its own — accumulate
+  them into the change they belong to. Debug logs and session scratch stay in local files and are
+  never committed at all. Rare exceptions: a retraction that must land immediately, and a fix that
+  is genuinely one line.
 - **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
   by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
   along under your message. This happened twice on 2026-08-18 — an LLVM merge landed under a
@@ -413,6 +418,15 @@ failure. A single matched pair localises more reliably than a long ladder, becau
 between the two arms *is* the variable. When arms differ in more than one respect — link address,
 return value, path taken on the way out — the ladder measures whichever difference you did not
 intend.
+
+**8. Reduce until the bug fits a DIRECTED TEST, then LEAVE THE BOARD.** The board gives ~one bit
+per boot; simulation gives a full instruction+memory trace in 14 s but cannot run a 1.6 MB
+program. So minimise for a **shape small enough to rewrite as a synthetic `.S`** — that changes
+the instrument, and it is what cracked S-12 after weeks of board sessions had only ever said
+"faults ~54% of draws". **The synthetic test must CREATE the triggering condition, not merely
+contain the shape:** S-12's reproducer read zero for a day because the testbench defaults to ZERO
+memory latency, so its store buffer could never fill. Same ELF — delay 0 → 0 traps, delay 40 →
+254.
 
 Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
 answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.
