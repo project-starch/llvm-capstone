@@ -60,6 +60,25 @@ Note that `caplifive-system` already carries `caplifive-system-dev.git` as a sec
 `fork`. The migration is in effect already half-done by hand, which is the least safe state to
 leave it in: the pointer in `.gitmodules` and the remote people actually push to have diverged.
 
+## Interim protection taken 2026-09-04 — bundles, because pushing is impossible
+
+Since none of the 13 commits can reach a remote, they were bundled instead:
+
+```
+~/caplifive-unreplicated-backup/
+  01-caplifive-opensbi.bundle   3 unpushed
+  02-buildroot.bundle           6 unpushed (incl. 17e4fb609)
+  03-caplifive-system.bundle    4 unpushed
+```
+
+**Verified by restoring, not by exit status** — each bundle was cloned into a fresh repository and
+the named commit confirmed present (`460f6e45e`, `80e1dcfe`, `aa38112`). A `git bundle create`
+that exits 0 is not evidence the commits are in it.
+
+**This is NOT a substitute for pushing.** The bundles sit on the same disk as the repository they
+protect, so they guard against a bad checkout, a deleted branch or a botched migration — not
+against disk loss. They need to be copied off the machine, and the real fix is still write access.
+
 ## Proposed sequence
 
 1. **Replicate first.** Add `capstone-bootstrap` (caplifive-system) to the push allowlist and push
