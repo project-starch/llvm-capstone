@@ -198,8 +198,10 @@ XSA-155/166/197/478) are a codegen lottery.
 | **6 TOCTOU** | **0** | — | **8 triaged; build wasmtime shape** |
 
 **Silicon status, 2026-09-04.** The SQLite logic-test corpus now runs in a capability domain on
-silicon (`s12stress` 120/120, matching native; 15/15 under QEMU). That is a **compatibility**
-result, not a performance one — no cycle counts accompany it. Two caveats travel with it: any SLT
+silicon (`s12stress` 120/120 completing as native does; 15/15 under QEMU). That is a **liveness**
+result — the queries return no rows on both sides, so "matches native" means *did not wedge*, not
+*computed the right answer*. Correctness on silicon needs a corpus with populated tables and has
+**not** been run. No cycle counts accompany it either, so it is not a performance result. Two caveats travel with it: any SLT
 pass rate from before 2026-09-04 is void (12 of 15 files had never-evaluated expectations), and
 S-12 is **"consistent with fixed, not proven"** — do not write "fixed". See
 `fpga-silicon-measurements-for-paper.md` §7b.

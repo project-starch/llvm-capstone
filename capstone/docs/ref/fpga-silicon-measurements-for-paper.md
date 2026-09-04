@@ -981,11 +981,17 @@ retained on that machine. Any figure can be re-verified against its source.
 the run that appeared to die was killed by a memory ceiling that had counted a *second concurrent
 run's* collector against it. Rerun with correct process scoping it peaked at **21.15 GB**,
 completed the full flow, and did synthesis **41 min faster** than retiming-OFF (213 vs 254). The
-flow deviation was never necessary — and it produced the worse-timed build. This strengthens
-CLAUDE.md's "do not change the synthesis flow"; nothing there needs changing.
+flow deviation was never necessary: it bought nothing, cost 41 minutes a build, and was adopted
+on the strength of a comment that disagreed with working code. On timing the two arms are a
+**trade, not a dominance** — OFF routes marginally better (−14.125 vs −14.832, 104,238 vs 104,457
+failing), ON synthesises 41 min faster, and 0.7 ns against ~174,000 endpoints is no meaningful
+difference. This strengthens CLAUDE.md's "do not change the synthesis flow"; nothing there needs
+changing.
 
-> **CORRECTION 2026-09-04 — the last two sentences above are wrong against this document's own
-> table, and the table is the sourced side.** Both arms are `52fa06b9d`, read from their own
+> **CORRECTED 2026-09-04 — retained as the record of what was fixed.** The paragraph above
+> originally read "it produced the worse-timed build", which contradicted this document's own
+> table; the table is the sourced side and the text has been fixed. Both arms are `52fa06b9d`,
+> read from their own
 > post-route reports: retiming **OFF** is WNS **−14.125** with **104,238** failing endpoints;
 > retiming **ON** is **−14.832** with **104,457**. Less-negative WNS is better — this document
 > says so itself two paragraphs up ("best −10.629 ns") — so **OFF is the better-timed build on
@@ -1152,20 +1158,36 @@ Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identi
 
 ### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
 
-**New, citable.** The SQLite logic-test corpus now executes in a capability domain on silicon.
-`s12stress` passes **120/120**, identical to the native x86 baseline; the corpus matches native
-**15/15** under QEMU. Resident bitstream `caplifive_s12fix_5097eb166.bit`.
+**New, citable — and it is a LIVENESS result, not a correctness one.** The SQLite logic-test
+corpus now executes in a capability domain on silicon: `s12stress` completes **120/120** as the
+native x86 baseline does, and the corpus matches native **15/15** under QEMU. Resident bitstream
+`caplifive_s12fix_5097eb166.bit`.
 
-This is the first application-level *correctness* result on capability silicon. It is **not** a
-performance result — no `mcycle`/`minstret` figures accompany it — so it closes the compatibility
-axis, not the cost axis.
+**⚠ "Matches native" means COMPLETED WITHOUT WEDGING, not COMPUTED THE RIGHT ANSWER.** The
+queries return **no rows on both sides**, so the agreement is strong about liveness and nearly
+vacuous about computed results. These files are wedge probes by construction and say so in their
+own opening lines — `p8_trivial.test`: *"WEDGE PROBE, not a correctness test: expected values are
+dummy, the signal is RETURNED vs WEDGED"*; `s12stress.test`: *"NOT a delta-debug rung — an
+INSTRUMENT."* Every table is deliberately empty because S-12 fires at PREPARE time.
+
+**Establishing SQLite correctness on capability silicon requires a corpus with populated tables
+and real expected values. That has not been run.** Do not let this result stand in for it.
+
+It is also **not** a performance result — no `mcycle`/`minstret` figures accompany it. So it
+closes part of the **compatibility** axis, and neither the correctness nor the cost axis.
 
 **⚠ Any SLT pass rate from before 2026-09-04 is VOID.** 12 of the 15 test files declared an
 expected value for queries over **empty tables that return no rows**, so those expectations were
 never evaluated: the files were built as wedge probes where "passes" meant *"did not wedge"*. The
 corpus has been fixed and re-verified against the native baseline. **Re-derive any number that
-rests on a pre-2026-09-04 SLT rate.** This is the house rule — *a clean result is not evidence
-until the check is known to fire* — caught in our own instrument.
+rests on a pre-2026-09-04 SLT rate.**
+
+**RETRACTED 2026-09-04, same day: my characterisation of this as an instrument "silently"
+changing role was wrong.** Each file announces its role in its own opening lines (quoted above),
+and the project lead pushed back on the same grounds. Nothing was silent and no new rule is
+warranted. The actual defect was a *summary sentence* — "identical to the native x86 baseline",
+which reads as correctness when the result is liveness. The lesson is about how a result is
+described downstream, not about the corpus.
 
 **⚠ S-12 must not be described as "fixed" in a paper yet.** `ref/ISSUES.md` now reads
 **"ROOT-CAUSED, FIXED IN RTL, FLASHED — verification is CONSISTENT WITH FIXED, not proven"**. The
