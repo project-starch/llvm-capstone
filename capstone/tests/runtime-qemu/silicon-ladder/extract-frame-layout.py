@@ -1,7 +1,11 @@
+import os
 """Re-derive each measured build's frame layout from its ELF, so the rule search runs on the
 artifacts rather than on hand-transcribed notes (four rules died today from eyeballed patterns)."""
 import subprocess, re, sys, json, os
-OBJ = "/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-objdump"
+OBJ = (os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
+) + "/llvm/cmake-build-debug/bin/llvm-objdump"
 
 def layout(path, fn=None):
     d = subprocess.run([OBJ, "-d", "--triple=capstone64-unknown-elf", path],

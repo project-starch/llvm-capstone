@@ -1,0 +1,13 @@
+# DELTA-DEBUG LADDER between q_one (passes 11/11 on silicon) and q_two (wedges).
+# Both tables are EMPTY in every rung, so NO ROWS are ever processed and the whole
+# difference lives in sqlite3_prepare_v2 -- i.e. in CODE GENERATION, which is where the
+# S-12 fault site (sqlite3WhereCodeOneLoopStart) lives. Each rung varies exactly one
+# thing about how many times, and in what shape, the where-codegen path runs.
+# RUNG 2 -- POSITIVE CONTROL. The known wedging shape (= q_two).
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1, t1 AS y
+----
+0

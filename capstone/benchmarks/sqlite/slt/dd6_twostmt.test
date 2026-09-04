@@ -1,0 +1,14 @@
+# RUNG 6 -- TWO SEPARATE ONE-LEVEL QUERIES. The where-codegen path runs twice, but in
+# two DIFFERENT prepares rather than twice within one. If this wedges, the trigger is
+# cumulative across prepares; if it passes while rung 2 wedges, the second invocation
+# must be inside a single prepare.
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1
+----
+
+query I nosort
+SELECT t1.a FROM t1
+----

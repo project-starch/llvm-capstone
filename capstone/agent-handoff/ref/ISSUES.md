@@ -2364,7 +2364,7 @@ real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because
 metadata regfile shares its write-enable with the integer regfile
 (`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
 
-### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — RECURRENCE`
+### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — LATENT; and it was NOT the -O1 blocker`
 
     fatal error: error in backend: Cannot select:
       t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
@@ -2385,6 +2385,312 @@ masked result is exactly what forms `select_cc` on a capability at `-O1`.
 
 **Why it matters beyond the crash:** `-O1` is the cheapest available shot at the R-17 blocker
 (see below), and this is what blocks it.
+
+---
+
+**UPDATED 2026-08-26. SQLite builds at `-O1`. But C-17 is NOT closed, and an earlier version
+of this very update said it was -- see the retraction below.**
+
+**1. C-17's RECORDED REPRODUCER no longer fires. C-17 itself is LATENT, not fixed.**
+
+`char *pick(int n, char *a, char *b){ return n == 10 ? a : b; }` compiles clean at `-O1` AND
+`-O2`, as do five harder select shapes (long compare, pointer-as-condition, struct-field
+condition, nested select). **RETRACTED: I first recorded that as "C-17 is closed."** It is not.
+The matcher gap the entry names is still live and still reproducible on the current `llc`:
+
+```llvm
+define ptr addrspace(200) @wide_arm(i64 %n, ptr addrspace(200) %b) {
+  %c = icmp eq i64 %n, 10
+  %w = inttoptr i128 18446744073709551625 to ptr addrspace(200)
+  %r = select i1 %c, ptr addrspace(200) %w, ptr addrspace(200) %b
+  ret ptr addrspace(200) %r
+}
+```
+    LLVM ERROR: Cannot select: t18: i128 = CapstoneISD::SELECT_CC t2, Constant:i64<10>,
+                setne:ch, t4, Constant:i128<18446744073709551625>
+
+`Select_GPRCAP_Using_CC_GPR` is still emitted under `!is64Bit()` -- the guard is visible in the
+built matcher (`CapstoneGenDAGISel.inc`, `OPC_CheckPatternPredicate ... !((Subtarget->is64Bit()))`
+immediately before both entries), and the prose is already in-tree at
+`CapstoneInstrInfo.td:1748-1755`. What keeps the node from being FORMED in ordinary code is the
+custom `lowerCapabilitySelect()` (`CapstoneISelLowering.cpp:10725-10834`), which bails at
+`:10746-10747` when a constant arm has more than XLen active bits and falls through to
+`lowerBranchSelect()`, which forms the unselectable i128 `SELECT_CC`.
+
+So the surviving trigger is specifically **a select whose constant arm needs more than 64 bits**.
+UNRESOLVED: whether that shape is reachable from C. The author's own comment at
+`CapstoneISelLowering.cpp:10729-10731` asserts it is ("an offset that GlobalMerge + DAGCombine
+sank into an i128 select"), which is a reason to treat this as latent rather than theoretical.
+
+**The lesson is the same either way, and it is why the retraction is recorded rather than
+quietly fixed:** "the reproducer stopped firing" and "the bug is fixed" are different claims, and
+I collapsed them. Re-running one reproducer tells you about that reproducer.
+
+**2. C-17 was NOT what blocked the `-O1` build.** This is the part worth reading. Once C-17
+stopped reproducing, the amalgamation still failed, with a DIFFERENT backend error:
+
+    fatal error: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as
+    capabilities; capabilities are unforgeable
+
+Root cause: DAGCombiner merges runs of adjacent constant stores. On this target i128 is the
+CAPABILITY carrier, so a merged 128-bit store is `stc` -- it writes a TAGGED CAPABILITY.
+Reduced from `sqlite3FinishCoding`, the shape is SQLite's `VdbeOp` initialiser: six adjacent
+constant stores (i8, i16, i32, i32, i32, i8) over 16 aligned bytes, merged into one i128 whose
+bits are capability metadata the program never had authority to name. `0x10000000000000009`
+decomposes to the four small integers 0, 1, 0, 9.
+
+So the fatal error was the backend correctly catching a would-be FORGED CAPABILITY, not a gap
+to fill in. Fixed at the merge decision (`CapstoneTargetLowering::canMergeStoresTo` refuses
+i128), commit `d1fd1d33b905`. Merging up to 64 bits still happens and should.
+
+**Evidence, A/B on the real module rather than inferred:** with the hook disabled the
+amalgamation reports 24 of these errors; with it enabled, zero. lit 58/58. Pinned by
+`llvm/test/CodeGen/Capstone/cap-store-merge-i128.ll`.
+
+**RESIDUAL, found by audit and confirmed directly: `memset` still reaches the same forge.**
+`findOptimalMemOpLowering` (`CapstoneISelLowering.cpp:26100`) guards every i128-avoidance
+branch on `Op.isMemcpy()` (`:26131`, `:26157`, `:26179`), so a **memset** falls through to the
+generic picker at `:26204`, which chooses i128 because i128 is a legal type. `canMergeStoresTo`
+is never consulted. A 16-byte `llvm.memset` with a non-zero fill still produces
+`Cannot materialize ... (value 0x7070707070707070707070707070707)`; reproduced at sizes 16, 17,
+24, 32 and 48. **So "the i128 forge path is fixed" would be too strong -- what is fixed is the
+store-merging route.** It does not affect the `-O1` result: the amalgamation has 30 `llvm.memset`
+sites and NONE with size >= 16 and a non-zero fill, which is consistent with the zero-error run.
+Other routes were attacked and are clean: `store <2 x i64>`, `store <4 x i32>`, a `bitcast
+<2 x i64> to i128`, and a 16-byte `llvm.memcpy` all avoid it.
+
+**THE PROCESS LESSON, which is the reusable part.** This entry asserted a blocking reason for
+months and was never re-tested. Acting on it directly would have meant writing an i128
+`SELECT_CC` pattern -- correct-looking work on a bug that no longer existed, which would not
+have unblocked the build, because the actual blocker was somewhere else entirely. A recorded
+blocker is a claim with a date on it; re-run the reproducer before building on it.
+
+**What this does and does not do for S-12.**
+
+The FAULT SITE is genuinely gone, and this part is solid. In `sqlite3WhereCodeOneLoopStart`,
+`pWInfo` stays in callee-saved `s2` for the whole body, so the fault pair
+`ldc a4, 0x0(a0)` + `cincoffsetimm a4, a4, 0xb0` becomes `cincoffsetimm a0, s2, 0xb0` with no
+reload. Verified by full enumeration rather than by reading one site: `s2` is written exactly
+three times in the function -- `stc s2, 0x3b0(sp)` (prologue save), `movc s2, a2` (the only body
+definition), `ldc s2, 0x3b0(sp)` at `c5410`, which sits inside the contiguous restore block
+`c5404`..`c543c` and is therefore the epilogue, not a cold-path reload.
+
+**The IMAGE-WIDE count is metric-dependent, and the headline number oversold it.** "1043 -> 305"
+counts an `ldc rX` with the consuming `cincoffsetimm rX` STRICTLY ADJACENT. Widening the window
+(stopping at a redefinition of rX) shows -O0 barely moves while -O1 grows sharply -- the -O1
+scheduler separates the pair rather than removing it:
+
+| window | ratio |
+|---|---|
+| 1 (adjacent) | ~2.7-3.4x |
+| 2 | ~2.0x |
+| 4 | ~1.4-2.0x |
+| 8 | ~1.3-1.9x |
+
+Per-instruction density gives ~2.6x, and part of even that is the program simply being smaller.
+Two further corrections to what was first written here: `.text` goes **1,305,384 -> 989,496
+bytes (1.32x)**, NOT "2.2 MB -> 989 KB" -- the 2.2 MB was a figure quoted from a build-script
+comment, never a measurement of this artifact. And the phrase "an `ldc` from a FRAME SLOT" is
+the exemplar, not the metric: the counter is base-register-agnostic, and only ~9 of the 305 have
+an `sp`/`s0` base.
+
+**So: the specific fault site is removed; the population is reduced by somewhere between ~1.3x
+and ~3.4x depending on how you count.** At a 54% per-draw wedge rate that lowers the draw rate
+and nothing more. **A completing `-O1` board run MUST NOT be reported as S-12 resolved**, and
+S-12's mechanism is still OPEN, so "strict adjacency is the operative property" is an assumption
+and not a finding. `OPT` stays defaulted to `-O0` until `-O1` is validated end to end; flipping
+the silicon build default is a lead decision, not a side effect of this fix.
+
+**Baseline provenance, UNRESOLVED:** the `-O0` disassembly counted here has
+`sqlite3WhereCodeOneLoopStart` at `0x104248`, while the binary that produced the 2026-08-25
+fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE claim survives --
+the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
+numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
+
+### S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception `OPEN — SILICON, syncer EXONERATED`
+
+> **THE STORE SYNCER IS CLOSED (2026-08-27). No RTL change is indicated.** The single-entry
+> `capstone_store_syncer` sets `cap_trans_id`/`req_set` on a new `init` with **no guard** on
+> `req_set`, and that visible missing guard has now generated three hypotheses, all closed on
+> structure rather than on absent counters:
+>
+> * **Overlapping inits — unreachable.** `func STC` blocks on `recv cap_store_ri.res` (`:391`,
+>   `:436`/`:452`), so the round trip completes before another init is reachable. Measured:
+>   **192 inits, `init-while-pending` = 0** under eight independent cache-missing stores after an
+>   eviction sweep, against 7-8 inits in ordinary tests — the positive control climbed 24-fold. The
+>   load side (`s12-ldc-pressure.S`) gives the same 192 / 0.
+> * **Trans-id aliasing — NO VERDICT, not a refutation.** A response-match checker reports
+>   `wraps = 0`, and the rule agreed in advance was to refuse the zero unless wraps are non-zero. It
+>   showed the precondition unreachable for the same reason as above; it did not test aliasing.
+> * **Flush desync — impossible.** The flush block is byte-for-byte symmetric with reset (all five
+>   registers plus the event counter), and is last-assignment-wins over the `EVENTS0[4]` assignment
+>   in the same `always_ff`.
+>
+> **So the single-entry design is SAFE by protocol — a positive result, not a null one.** It is not
+> a latent defect awaiting the right pressure, and anyone who later reads the missing guard and
+> reaches for these hypotheses should read this first.
+>
+> **What remains is a cause, not a fix.** Thread 1 owns BOTH wait flags and blocks on its own
+> recvs, so it should not reach a rev-set event while holding the store flag — yet 8 wedge boots
+> show exactly both set. Locating that needs a **new observable inside a real domain after
+> `capenter`**, which is where every bare-metal negative stops transferring. That is a board
+> question, not an RTL edit.
+>
+> **Priority note:** S-13 appears at **`-O1`**. SQLite/SLT runs at `-O0`, where the blocker is
+> S-12. S-13 is not blocking the standing "SLT on silicon" goal, and is parked with this record
+> rather than closed.
+
+**Not S-12, and the distinction is the point.** S-12 is a capability fault that STICKS at commit
+(`mcause 25`, `tval = 0`, aperture 225 = `0x80`, nothing waiting). S-13 has **no exception at all**
+(`ex_commit.valid = 0`) and aperture 225 = `0xd5` — `dyn_wait_store_syncer` + `dyn_wait_rev_res` +
+`stall_issue` + `mem_wait_flag`, with `store_syncer_req_set = 1` confirming a store really is
+outstanding. Both aperture packings verified in `cva6.sv:1177-1186` and `:1189-1199`.
+
+Measured in one boot series, same bitstream, query and compiler, with optimisation level the only
+variable: the `-O0` arm gave S-12, two distinct `-O1` arms gave S-13. **So `-O1` converts a stuck
+capability fault into a non-exception hang** — consistent with the S-12 fault site being verifiably
+absent from the `-O1` artifacts.
+
+Already excluded: instruction-stream density or coupling (`-O1` does FEWER and more widely spaced
+DYN ops and still hangs there), a stale store-syncer flag, a transitive nesting path in the
+`.anvil`, and two independent FSMs in the generated SV. The open question is the SEQUENCE that
+reaches a state the source does not obviously express.
+
+N = 2, so this says nothing about a rate. Full evidence, caveats and next step:
+`tests/fpga-repros/S13-o1-dyn-rev-node-hang/`.
+
+### C-19 — partial capability operations applied speculatively; SQLite could not run at `-O1` `RESOLVED 2026-08-26 — three distinct faults`
+
+**This is what now blocks `-O1`, after C-17 turned out not to be (see C-17).** The amalgamation
+compiles and links at `-O1`; the image then enters the domain and dies immediately:
+
+    SQ: G/enter
+    qemu-system-riscv64: ../target/riscv/op_helper.c:762:
+        helper_cslcc: Assertion `rs1_v->tag' failed.
+
+`lcc` with selector 2 is the CURSOR query and is NOT total -- it requires a tagged capability in
+rs1. At `-O1` two sites apply it to a value that is plainly an integer. Both are in
+`sqlite3_str_vappendf`, and both have the same shape (`sqlite-o1.dis`, image VA `0x13800`):
+
+    137f4: ldc  a3, -0x1b0(s0)
+    137f8: and  a0, a0, a3      <- INTEGER and; the result carries no tag
+    137fc: mv   a0, a0
+    13800: lcc  a0, a0, 0x2     <- cursor query on that integer  => fault
+
+The second is identical at `0x1387c`. **Statically detected and matched-pair controlled:** an
+`lcc` selector-2 whose producing instruction is an integer op occurs **2 times at `-O1` and 0
+times at `-O0`**, over the same source. `-O0` also has 192 `lcc ...,0x2` against `-O1`'s 212.
+
+**Matched-pair evidence, one variable.** Same source, same flags, opt level only:
+
+| build | QEMU |
+|---|---|
+| `-O0` | PASSES -- `__CAPSTONE_SQLITE_SILICON_PASSED__` |
+| `-O1` | enters the domain, then the `helper_cslcc` tag assertion |
+
+**Root cause is structural, not a stray pattern.** On this target there is no capability `MVT`,
+so the backend uses `MVT::i128` as the machine type for capabilities
+(`CapstoneISelDAGToDAG.cpp` `MVT PtrVT = MVT::i128`, `CapstoneISelLowering.cpp:192`
+`addRegisterClass(MVT::i128, &Capstone::GPRRegClass)`). Genuine integers and capabilities are
+told apart by heuristics (`isCapstoneIntegerOffset` / `isCapstoneCapabilityValue`) that
+recognise definitely-integer and definitely-capability shapes and **default to capability**. A
+value that is neither -- here the result of an `and` on two cursors, which is an ordinary
+integer -- falls through to the capability path and gets an `lcc`.
+
+**Why this matters beyond SQLite:** the default is toward *emitting a capability operation on an
+integer*, which faults loudly here but is the same mechanism that makes source-level `__int128`
+silently miscompile. The durable fix is a dedicated capability `MVT` (CHERI-LLVM's `c128`), which
+is large and invasive; the cheap fix is to stop `lcc` being emitted on a value whose producer is
+an integer op.
+
+**Do not read a `-O1` board result before this is fixed** -- the image does not survive domain
+entry on QEMU, so any board run of it measures this, not S-12.
+
+---
+
+**RESOLVED 2026-08-26. The `-O1` SQLite domain now passes the QEMU silicon run end to end
+(`__CAPSTONE_SQLITE_SILICON_PASSED__`).** It took THREE separate fixes, and the shared theme is
+worth stating because it will recur:
+
+> **Operations that are TOTAL on an ordinary target are PARTIAL here, and every optimiser in
+> LLVM assumes they are total.** `-O0` never exposed this because it neither folds nor
+> speculates.
+
+1. **`lcc rd, rs, 2` on an untagged operand** (fixed `2c1f5eae412a`). The cursor query is not
+   total; a NULL pointer is untagged. DAGCombiner folds `p != 0 || q != 0` into
+   `(addr(p)|addr(q)) != 0`, both operands got `lcc`, and the first null killed the domain.
+   Reading the register with a plain integer move gives the SAME value and cannot trap --
+   confirmed in RTL (`issue_read_operands.sv:298`, `:1653,1656-1657`; `ex_stage.sv:463-479`
+   commits `cap_result.cursor`) and in QEMU (`cap.h:59-63,79-83`, the union aliases `scalar`
+   onto `bounds.cursor`). The intrinsic is kept because it is also a DAGCombine BARRIER --
+   lowering it straight to `ISD::TRUNCATE` makes `cap-i128-and-capability-mask.ll` spin forever.
+
+2. **`isCapstoneIntegerOffset` recognised only `SHL`** (same commit). `zext i32 -> i128` is
+   legalised into `and (anyext x), 0xffffffff` before `lowerSUB` asks, so neither operand looked
+   like an integer, the capability-minus-capability path was taken, and `p - (unsigned)n` came
+   back DETAGGED as well as trapping. Now stated from the ISA property -- a bitwise or shift
+   result is always untagged, hence always an integer -- because enumerating shapes had already
+   missed twice.
+
+3. **GEP speculated onto a NULL pointer** (fixed `0a38985df142`). `cincoffset` raises
+   `UNEXPECTED_OPERAND` on a base with no capability (`capstone_flu_unit.anvil:29-33,57-60`;
+   QEMU agrees), and LICM hoists `&p->field` into a loop preheader above the `p != NULL` guard.
+   Two such GEPs in `selectExpander`. Fixed in generic LLVM: a GEP whose base is in a
+   NON-INTEGRAL address space and is NOT known non-null is no longer speculatable. Narrow on
+   purpose -- allocas, globals and post-null-check pointers still hoist -- and the cost is
+   measured, not assumed: **+328 instructions in 247k (+0.13%), `.text` +1008 bytes (+0.10%)**
+   on the SQLite image.
+
+**METHOD NOTE, the reusable part.** Each of these aborts QEMU, so the default loop is ONE site
+per emulator rebuild. Adding `CAPSTONE_LCC_UNTAGGED_SURVIVE` / `CAPSTONE_CINC_UNTAGGED_SURVIVE`
+(env-gated, log-and-continue) turned that into ONE RUN PER CLASS: three `lcc` sites before the
+fix and none after, then exactly two `cincoffsetimm` sites. Knowing it was two and not five
+hundred is what justified writing the narrow fix instead of the blanket one. The flags cannot
+manufacture a clean run -- every occurrence prints before being tolerated.
+
+**Validation:** lit 1662 tests across `CodeGen/Capstone`, `Analysis` and `Transforms/LICM`, no
+failures; nightly 15/16 (the one failure, `static-cap-globals`, is a pre-existing
+expect-the-bug-to-reproduce probe reporting that its bug is gone, and its domain is
+BYTE-IDENTICAL built with and without these changes).
+
+**THE SILICON-SAFETY QUESTION THE QEMU RUNS COULD NOT SEE, now answered.** Swapping `lcc` for a
+plain `mv` has a failure mode invisible to every green QEMU run: QEMU's `gen_set_gpr` clears the
+tag on EVERY integer write, but in RTL the metadata shadow's write-enable is gated on
+`cap_result.valid`, which is 0 for a plain ALU op. If the shadow were left STALE, an integer
+produced by the new `mv` into a register that had held a capability would still look like a
+capability to any consumer that checks `cap_type` -- trapping on silicon and never on QEMU.
+
+**Measured in RTL simulation, not argued:**
+`capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S` (commit `eb43f5d09`).
+`CINCOFFSET` is the detector because its rs2 check IS that question
+(`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` when `cap_rs2` is not `NOT_CAP`).
+Three arms, the expected-to-trap one last:
+
+| arm | rs2 | result |
+|---|---|---|
+| A | never held a capability | retired, `x12 = 0x80003008` |
+| C | held one, then a plain `addi` | **retired**, `x13 = 0x80003008` -- the answer |
+| B | holds one now (positive control) | **exception: UNEXPECTED_OPERAND** |
+
+Arm B is why arm C means anything: without it, "C did not trap" is equally consistent with a
+check that never fires here. **So an ALU write does clear the shadow, and the mv-for-lcc
+lowering is safe on silicon.** The stale-shadow reading of the writeback path is refuted for
+this case.
+
+**`-O0` REVALIDATED UNDER THE FINAL COMPILER.** The intrinsic-selection change applies at every
+opt level, so the `-O0` image's ~192 `lcc ...,0x2` sites became `mv` too, and the `-O0` control
+quoted above had been built with the PRE-fix compiler. Rebuilt and rerun: still
+`__CAPSTONE_SQLITE_SILICON_PASSED__`. **And S-12 still reproduces structurally** -- the fault
+pair `ldc a4, 0x0(a0)` + `cincoffsetimm a4, a4, 0xb0` is intact in
+`sqlite3WhereCodeOneLoopStart`, now at `0x104438` with the function at `0x1043b0` (it was
+`0x1042d0` / `0x104248`). **Every `-O0` image built after `2c1f5eae412a` differs in codegen from
+the builds behind the 25-wedged/21-returned corpus**, so those draws do not carry over -- which
+per-image clustering already implied, but now the instruction stream has moved as well.
+
+**What this does NOT settle.** `$OPT` stays `-O0`. The `-O1` image has passed a functional QEMU
+run, not the benchmarks and not the board. And the S-12 caveat in C-17 stands unchanged: the
+fault site is gone but the image-wide shape count is a reduction whose size depends on how it is
+counted, so **a completing `-O1` board run must not be reported as S-12 resolved.**
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 

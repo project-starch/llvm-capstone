@@ -6971,6 +6971,36 @@ bool llvm::isSafeToSpeculativelyExecuteWithOpcode(
   switch (Opcode) {
   default:
     return true;
+  case Instruction::GetElementPtr: {
+    // On a target whose pointers are CAPABILITIES, address arithmetic is not a
+    // total operation: Capstone's `cincoffset` raises UNEXPECTED_OPERAND when
+    // its base register holds no capability (capstone_flu_unit.anvil:29-33,
+    // 57-60), and a NULL pointer holds none. So a GEP that a normal target can
+    // hoist for free -- computing `&p->field` in a loop preheader above the
+    // `p != NULL` test -- becomes a TRAP on the null iteration. That is the
+    // second half of Capstone issue C-19: LICM hoisted exactly two such GEPs
+    // out of SQLite's selectExpander and the domain died at loop entry.
+    //
+    // Non-integral address spaces are the right predicate rather than a
+    // hardcoded number: they already mean "this pointer is not just an
+    // integer", which is precisely why the arithmetic can fault. Targets with
+    // ordinary pointers keep the unconditional `true` above.
+    //
+    // Deliberately narrow, because blocking ALL such hoisting would cost real
+    // performance in loops: only a base that is not already known non-null
+    // blocks speculation. Allocas, globals and pointers past a null check are
+    // all known non-null, so the common address computations still hoist.
+    const auto *GEP = dyn_cast<GEPOperator>(Inst);
+    if (!GEP)
+      return true;
+    const Value *Ptr = GEP->getPointerOperand();
+    if (!Inst->getDataLayout().isNonIntegralPointerType(Ptr->getType()))
+      return true;
+    if (!UseVariableInfo)
+      return false;
+    return isKnownNonZero(Ptr, SimplifyQuery(Inst->getDataLayout(), DT, AC,
+                                             CtxI));
+  }
   case Instruction::UDiv:
   case Instruction::URem: {
     // x / y is undefined if y == 0.

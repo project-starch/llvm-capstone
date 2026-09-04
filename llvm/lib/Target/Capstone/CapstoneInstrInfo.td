@@ -2489,6 +2489,47 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // Reading a capability's address is EXTRACT_SUBREG on sub_cap_addr, selected in
 // CapstoneISelDAGToDAG. It needs no instruction: X is the low half of C.
 
+// THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
+//
+// `lcc` selector 2 is NOT TOTAL: it traps on an untagged operand, and a NULL
+// pointer is untagged. So every address read through it was a trap waiting for
+// a null, which is what C-19 was -- DAGCombiner folds `if (p != 0 || q != 0)`
+// into `(addr(p) | addr(q)) != 0`, both operands got `lcc`, and the first null
+// argument killed the SQLite domain at entry.
+//
+// Reading the register with an ordinary integer instruction yields the SAME
+// value and cannot trap. Confirmed on both implementations, which have
+// disagreed before:
+//   RTL  -- for an ALU op the metadata shadow is not even read
+//           (issue_read_operands.sv:298 keys `not_capstone` off the OPCODE;
+//           :1653,1656-1657 force cap_raddr to 0), and the flat regfile slot
+//           holds the cursor (ex_stage.sv:463-479 commits cap_result.cursor).
+//           lcc really does trap: capstone_dyn_unit.anvil:195-198 raises
+//           UNEXPECTED_OPERAND for cap_type == NOT_CAP on any selector but 1.
+//   QEMU -- get_gpr reads gpr[i].val, whose `scalar` member aliases
+//           cap.bounds.cursor (cap.h:59-63,79-83); helper_cslcc asserts the tag.
+//
+// The READ path is what the above establishes. The WRITE path is where the two
+// could still have diverged, and it was checked separately rather than assumed:
+// QEMU's gen_set_gpr clears the tag on every integer write, whereas in RTL the
+// metadata shadow's write-enable is gated on cap_result.valid, which is 0 for a
+// plain ALU op -- so the shadow might have been left STALE, and an integer
+// produced by this `mv` would still have looked like a capability to any
+// consumer that checks cap_type. That is REFUTED by simulation, not by reading:
+// verif/tests/custom/capstone/alu-write-clears-shadow.S feeds such a register to
+// CINCOFFSET, whose rs2 check is exactly that question, and it does NOT trap --
+// while the same test's live-capability arm DOES, so the check is proven able to
+// fire. See the test for the three-arm layout.
+//
+// The INTRINSIC is kept rather than lowering straight to an ISD::TRUNCATE,
+// because it is also a DAGCombine BARRIER. With a plain truncate, the combiner
+// folds `zext(op(trunc a, trunc b))` back into `and i128`, which is re-lowered,
+// which folds again -- cap-i128-and-capability-mask.ll hangs. That test's own
+// comment already warned the combiner rebuilds this shape.
+//
+// Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.
+def : Pat<(int_capstone_cap_get_cursor GPR:$src), (PseudoTRUNC_CAP GPR:$src)>;
+
 //===----------------------------------------------------------------------===//
 // Capability Manipulation Instructions (1)
 //===----------------------------------------------------------------------===//

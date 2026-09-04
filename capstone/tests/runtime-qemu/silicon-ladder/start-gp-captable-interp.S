@@ -1011,6 +1011,21 @@ test:
   slli  t0, t0, 22
   or    t0, t0, t1
   li    t3, 0xF0000000
+#if defined(INTERP_TRAP_A4)
+  /* S-12 DISCRIMINATOR, gated so no other rung's decode changes. Two live accounts of S-12 differ
+     in what a4 holds AT THE FAULT:
+       write-buffer forward  -- the load returned the stored null, so a4 IS {cursor 0, NOT_CAP};
+       ordering escape       -- the load landed correctly, so a4 holds the real capability and
+                                only the CONSUMER saw a stale value.
+     The old wedge evidence showed a4 = 0x82be4cd0 (correct), but that GDB read happened after the
+     core had stormed at address 0, so it never settled anything. This handler runs BEFORE any
+     storm, and a4 is not touched by the sequence above it, so the read is clean.
+       marker 0xF -> a4 cursor is ZERO      (load delivered the null: write-buffer forward)
+       marker 0xE -> a4 cursor is NON-ZERO  (load landed: ordering escape)  */
+  beqz  a4, 1f
+  li    t3, 0xE0000000
+1:
+#endif
   or    t0, t0, t3
   ldc(a0, sp, 80)                    /* the shared region cap saved at entry */
   sw    t0, 0(a0)

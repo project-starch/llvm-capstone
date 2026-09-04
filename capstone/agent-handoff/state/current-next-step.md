@@ -1,5 +1,199 @@
 # Next step
 
+## 0. CURRENT — 2026-08-29. S-12's evidence base was re-audited and MOST OF IT MOVED. Instruments first.
+
+**Supersedes section 0a below in full. Read this before acting on anything further down: the
+tallies that section is built on are wrong, and two of its conclusions invert.**
+
+### What changed, and why none of it is a small correction
+
+An adversarial audit of the arm-versus-baseline scoring found three defects, in ascending order of
+cost.
+
+**The firmware-freshness gate was checking a text file, not the domain.** For a spec
+`sqli.dom:--slt dd1_one.test` both halves resolve to real overlay files, and the gate took the
+last one — so `firmware carries the current binaries` printed on every draw while the `.dom` was
+never compared against the image. Every candidate domain is exactly 1624152 bytes, so nothing else
+could have caught a stale one. **No draw in the 2026-08-28/29 series has a verified binary
+identity**, and `mepc` cannot recover it: the faulting instruction word at VA 0x104814 is
+byte-identical across the baseline, the 3-byte variant and the compiler-pass build. Fixed and
+negative-tested both ways; every verified artifact's sha256 now prints per run.
+
+**Three recorded wedges never ran a domain.** Four per-experiment scripts hand-counted
+`SLT-SUMMARY` lines instead of reading the driver's `=== STAGED BISECTION ===` block. Re-classified
+with `verdict.py`, `ddc-c3`, `dd6-d1` and `dd6-d3` are infrastructure voids in which `create_dom`
+never returned — the driver said so in each log, including *"Do NOT attribute this to the code under
+test."* Fifth hand-rolled classifier, fifth to be wrong.
+
+**Consequently:**
+
+* **"Plan depth >= 2, by any route" is WITHDRAWN; "it is a JOIN" is REINSTATED.** `dd5_inselect`
+  is the only non-JOIN depth-2 arm and the sole basis for the depth framing; its one wedge was a
+  void. Corrected: JOIN arms 5/5, non-JOIN depth-2 arm 0/4, Fisher p = 0.0079 the other way.
+  This is the one correction that *narrows* the trigger.
+* **"Nesting, not repetition" loses its control.** `dd6_twostmt` sat in slot 0 and `dd2_join` in
+  slot 1 — the slot/role confound this investigation has already retracted a series over.
+  Slot-matched it is one returning draw against 4/4, p = 0.20.
+* **The three-byte `movc`/`stc` a4->a6 cure is a CANDIDATE again.** The arm is 0/4 valid, not the
+  7/7 recorded (one void, three draws that booted a different image — already noted in the folder
+  and then re-imported). Against an arm-configuration baseline of 3/4, Fisher gives p = 0.143.
+  The earlier p ~ 1e-5 is withdrawn.
+
+### THE NEXT STEP IS THE BOARD, and the first boot is not about S-12's mechanism at all
+
+**Boot 1 — the `mtval` positive control** (`/tmp/capstone/tvctl-run.sh`, staged, firmware built,
+auto-launching when the console returns). The RTL has two independent sources for `mcause 25` and
+they alias, because the data path adds 24 to the cause enum while the PC-capability path adds 23
+and the reference says 23 — see `tests/fpga-repros/RTL-cap-mcause-off-by-one/`. The only field
+that separates them is `mtval`, which on this silicon has never been shown to carry a non-zero
+value for a capability cause. The arm executes `cincoffsetimm` on a plain 0xBEEF integer,
+verified in the artifact (`lui a0,0xc; addi a1,a0,-0x111`, faulting insn `5b 25 85 00`).
+
+    tval = 0xBEEF   -> the instrument works; every tval = 0 in the S-12 record becomes evidence,
+                       and S-12 is the data-path UNEXPECTED_OPERAND it has always been read as.
+    tval = 0        -> the instrument is dead; "the operand is zero" is unsupported and S-12 may
+                       be a PC-capability revocation failure, which nobody has been looking for.
+    EXCX present    -> M-mode trap entry works, and a firmware-only change can turn every S-12
+                       wedge into a returned fault code -- the biggest instrument win available.
+    EXCX absent
+      AND it wedged -> M-mode trap entry itself is failing, and that is the ONE branch in which
+                       the directed Verilator sim (capmode_q / npc_metadata_q / pc_cap_ex_valid,
+                       does anything commit at mtvec) becomes the right instrument rather than a
+                       detour away from the blocker.
+    returns clean,
+      no fault      -> the run's premise is broken, not confirmed: the probe is unconditional at
+                       SLT entry, so either the wrong image booted -- check the per-run sha256 the
+                       fixed freshness gate now prints -- or this silicon is permissive on
+                       cincoffsetimm over an integer, which S-12's existence argues against.
+
+**Boot 2 — the high-power probe.** `slt/s12stress.test` puts 120 distinct bare two-table joins in
+one domain invocation, and `CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the
+shared region, where it survives a wedge and the driver already reads it. That separates the two
+models a wedge RATE cannot at any N: a per-prepare hazard stops at a varying index, per-boot state
+stops at the first prepare every time. The instrumented build leaves
+`sqlite3WhereCodeOneLoopStart` byte-identical — 2866 instructions, same encodings, same address —
+which the pre-existing `CAPSTONE_ENTRY_MARK` does not.
+
+**Do NOT spend more one-bit draws on arm-versus-baseline.** At a 3-in-4 baseline, four arm draws
+give p = 0.143 in the best case; that is the ceiling, not an accident of this particular run.
+
+### Open, and worth someone's attention
+
+`capmode_q` is sticky (`csr_regfile.sv:295`, set by CAPENTER, cleared only by reset) and
+`npc_metadata_q` is NOT cleared when the core takes an exception (`frontend.sv:425-427` redirects
+the PC alone; `:443-444` holds the metadata). So the first instruction fetched at `mtvec` can be
+PC-capability-checked against stale domain bounds. Not shown to be S-12's mechanism — the latch
+would have recorded the resulting cause and does not — and not filed as an issue for that reason,
+but it is a real gap and the latch is blind to a cause-2 storm.
+
+---
+
+## 0a. SUPERSEDED — 2026-08-28. S-12 has a CAUSAL TRIGGER CONDITION. The next step is the COMPILER.
+
+**Supersedes the 2026-08-27 section below, whose "next step" (reflash to the S-10 bitstream) was
+done: the board now runs `caplifive_s10fix_80843404c.bit`, and S-12 SURVIVED it — `pad48` wedged
+5/5 across both bitstreams. S-10 is excluded as the cause.**
+
+### The condition, established by a three-byte single-variable experiment
+
+S-12 requires a **`movc rD, zero` whose register rD is then targeted by the `ldc rD` feeding the
+faulting consumer.** Patching the baseline binary by three bytes —
+
+    0x104808  movc a4, zero    -> movc a6, zero
+    0x10480c  stc  a4, 0x0(a5) -> stc  a6, 0x0(a5)
+    0x104810  ldc  a4, 0x0(a0)     (unchanged)
+
+— cures it: **0 wedges / 4** against a baseline of **14 confirmed + 1 unconfirmed wedge / 16**,
+p ≈ 1.3e-5. Same addresses, instruction count, distance, and the same store to the same address with
+the same value. The store is held completely constant, so **its presence is not sufficient and the
+register match is required**. The register's IDENTITY is irrelevant (`scalar` wedges on `a5`).
+
+Everything else measured: prepare-time only (empty tables, no rows) · plan depth >= 2, by join or
+LIST SUBQUERY · **nesting, not repetition** (`dd6_twostmt` 0/5 at the same 5 invocations vs
+`dd2_join` 6/6) · the 36 instructions to the fault are branch-free and identical on every call ·
+cured by a fence before the reload (0/7 vs 7/7).
+
+### THE NEXT STEP IS A COMPILER CHANGE, and it is the first actionable one
+
+The trigger is a **codegen pattern**, and codegen is ours. A pass that avoids allocating the
+destination of an `ldc` to a register just written by `movc rD, zero` — or that separates them —
+would remove S-12 from SQLite on silicon without any RTL change or reflash. That is a real
+deliverable and it is board-cheap to validate: build, then 4-5 draws with the arm in slot 1.
+
+**Do this before more board archaeology.** Everything since the reflash has been narrowing the
+condition; the condition is now narrow enough to act on.
+
+### What is NOT established
+
+* **No RTL structure is named.** The condition says when the fault fires, not which unit mishandles
+  it. Whether the null VALUE matters, or any value in the matching register would do, is untested —
+  that patch cannot hold semantics fixed, since the stored value becomes `pIdx`.
+* **Four mechanism accounts were retracted on 2026-08-28**, each killed by an instrument or a
+  confound rather than by the hardware: a fabricated dose-response from an R-16 entry stall, a
+  layout confound, slot-vs-role confounding (the arm always sat in slot 0 where the trap latch does
+  not report), and a "register pairing" whose counterexample sat in disassembly already printed.
+  **Read `02-REFUTED.md` before proposing anything; several obvious ideas are already dead.**
+
+### Board discipline this cost, now standing
+
+* **Put the arm under test in SLOT 1.** The trap latch reports `mcause 25 / tval 0` there and
+  `mcause 3 / 0x368 / ebreak` in slot 0, so a slot-0 wedge is unattributable.
+* **Take verdicts from the driver's `=== STAGED BISECTION ===` block**, never a hand-written parser:
+  four hand-rolled classifiers produced four different bugs, one of which fabricated a wedge.
+* **Prefer binary patching to source edits** for single-variable tests. Source edits let the
+  compiler move layout, distance, allocation and instruction count together; that confound caused
+  most of the retractions above.
+
+---
+
+## 0b. SUPERSEDED — 2026-08-27
+
+
+**This supersedes section 0 below, whose "discriminating unknown" is now ANSWERED.**
+
+That section asked what cap type SQLite's value has at the fault site, and said an arm with a
+matching-type `v` would be the first variant that could reproduce. Both halves are now settled:
+
+* **The type is NONLIN**, measured 16/16 (qj2 7/7, q_one 4/4, q_two 5/5) by a probe reading
+  `cap_type` out of the register file at the exact `stc` pc, with a positive control proving the
+  instrument emits clear-set names. Independently, the slot is loaded **three times per call**, so a
+  clear-set type there would wedge one-level plans — and one-level has never wedged in 11 draws.
+* **The matching-type arm was built and run anyway** (`s12-value-type-sweep.S`): all six types
+  through the real window, clear demonstrably fired in all five clear-set arms, granule zeroed, and
+  the load still returned a correct tagged capability every time.
+
+**TEN mechanisms are now excluded, each with its instrument proven to fire:** value type gates it ·
+clear races its own load · clear races the next store · double-loaded clear-set slot · load-syncer
+mispair · wrong-producer forwarding · stale-regfile read · S-10b granule hazard · tag-only
+corruption · `movc`-NULL aliasing. Three previously rested on occupancy of 2, 8, and "never ran at
+all"; they are now 5-of-8, 80, and 32 LDC inits.
+
+**The partition that constrains everything:** `tval = fu_data_i[0].operand_a` (`ex_stage.sv:490`) is
+the rs1 cursor as the FLU ingested it, so `tval = 0` excludes every "right data, wrong tag" account.
+
+**NEXT STEP — the only experiment left, and it is on the board.** Reflash to `caplifive_s10fix.bit`
+(md5-verified identical to the `80843404c` synthesis output) and re-run the wedging two-level SLT
+case across several DISTINCT images. Rationale:
+
+* the resident bitstream carries a live, synthesis-proven-but-unshipped write-buffer defect; the
+  exclusions above cover the store-buffer **stall** hazard only — S-10 itself, S-07 and
+  write-buffer forwarding are **not** cleared;
+* the two bitstreams are **DIVERGENT, not sequential**. `s10fix` KEEPS apertures 224/225 and the
+  syncer bits used for classification, and LOSES only the S-07 LDC recorder and its switch-160
+  clear, which this experiment does not use;
+* at ~54% wedge per draw the arm must be several distinct images — one clean draw means nothing
+  (P ≈ 0.46). Six clean draws would be p < 0.01.
+
+If S-12 survives the reflash, an excluded premise is wrong. If it disappears, S-12 was a
+write-buffer defect all along.
+
+**S-13 is parked, not closed** — the store syncer is exonerated on three mechanisms (no RTL change
+indicated), the cause is still unlocated, and it only appears at `-O1` while the standing goal runs
+at `-O0`. See `ref/ISSUES.md` and `tests/fpga-repros/S13-o1-dyn-rev-node-hang/`.
+
+---
+
+
 ## 0. CURRENT — 2026-08-25. S-12 HAS NO MINIMAL REPRODUCER, and the reason was our own bug.
 
 **This supersedes section 0 below, which is now history.**
@@ -1027,9 +1221,28 @@ can read that with `lcc` BEFORE performing the load that hangs, and return it as
 
 * sane id, `3 <= id < head` -> the capability is well-formed and the hardware failed to answer
   a legitimate query => RTL defect.
-* `id == 0` or `id >= 1024` -> the capability carries a bogus revnode_id => our side produced
+* `id == 0` or `id >= 65535` -> the capability carries a bogus revnode_id => our side produced
   it (cap-init, a stale/uninitialised slot, or a load of untagged memory), and the RTL's only
   fault is hanging instead of erroring.
+
+  **The bound was `1024` until 2026-08-27 and that was CORRECT WHEN WRITTEN.** The pool was
+  1024 nodes x 16 B at `CAP_REVNODE_MEM_BASE = 0xBFFF_C000` with a 10-bit head; `91ea10837`
+  ("made rev node count configurable", 2026-08-03) moved it to **65536 nodes x 16 B at
+  0xBFF0_0000 with a 16-bit head**, verified in `ariane_pkg.sv:586-591` and
+  `capstone_rev_node.anvil:74,79` (`REVNODE_SENTINEL = 16'd65535`), and the map closes exactly:
+  the tag region ends at `0xBFEFFFFF` and the rev region runs `0xBFF00000`..`0xC0000000`.
+  `91ea10837` IS an ancestor of `84ed6eafb`, so the large pool is in the resident silicon.
+
+  Left as a warning rather than a silent edit, because the failure shape is worth more than the
+  number: **a rule can be traced to a real measurement and still be stale.** Anyone auditing this
+  bound in mid-August would have found the 2026-07-31 overflow measurement behind it and stopped.
+  Only the measurement's date against the RTL change's date exposes it, and neither date was in
+  the rule. As written it would have classified every legitimate id in 1024..65534 as bogus --
+  a confident wrong verdict on a board session, from a check that was right when it was made.
+
+  65535 is the SENTINEL, not a count. A driver reading it as a head produces the spurious
+  "rev-node head went BACKWARDS, delta = -65517" warning; that is a sentinel read, not a
+  wrapping allocator.
 
 Note `lcc` encoding: funct7 is **0x04** with the zimm in the rs2 field (0x08 was wrong and cost
 a build). Prefer a C-level read if one exists before hand-rolling `.insn`.

@@ -941,3 +941,192 @@ than `0xa5…`, so something wrote the zero rather than leaving it uninitialised
 allocation failed or a stray plain store zeroed a live capability slot is **open**; an earlier
 "allocation failure" root cause was recorded and retracted the same day after audit. Full trail
 in `plans/sqlite-regression-suite-proposal.md`.
+
+---
+
+## §7 — Timing closure across every routed build (2026-08-27)
+
+**No bitstream this project has ever produced has closed timing.** Six distinct commits, **eight
+routed builds**, every one negative; range **−10.629 to −16.400 ns**, best **−10.629 ns** against a
+**40.000 ns** period (25 MHz,
+confirmed from the report's own clock definition and from the MMCM's
+`CLKOUT1_REQUESTED_OUT_FREQ` of 25).
+
+Every figure read from that build's own post-route report,
+`work-fpga/ariane_xilinx_timing_summary_routed.rpt` inside its archived tarball, **Intra Clock
+Table row `clk_out1_xlnx_clk_gen`**.
+
+| build | WNS (ns) | failing / total endpoints | tarball bytes |
+|---|---:|---:|---:|
+| `39b21639d` | −10.629 | 96,727 / 174,481 | 407,871,086 |
+| `76b7f2afc` | −12.084 | 93,200 / 174,275 | 405,677,186 |
+| `84ed6eafb` | −13.516 | 103,197 / 175,200 | 407,837,655 |
+| `52fa06b9d` | −14.125 | 104,238 / 174,461 | 392,443,910 *(arm A, retiming OFF)* |
+| `52fa06b9d` | −14.832 | 104,457 / 174,785 | 407,010,879 *(arm B, retiming ON)* |
+| `80843404c` | −16.400 | 102,769 / 174,275 | 405,480,965 |
+| `6f8345fdb` | −13.491 | 99,879 / 173,789 | ~396 MB *(S-12 fix, debug tree TIED OFF)* |
+| `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
+
+**Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
+reads healthy while the CPU clock fails. That trap has caught this project before.
+
+**Deliberately absent, not counted as zero:** `1cb22e30a`, `c2211c9a8`, `eaa4e7984`, and the
+killed retiming-ON attempt produced **no routed report** — they never routed, so they are outside
+the claim rather than scored in it.
+
+Provenance: read from the archived artifacts by the synthesis lane, 2026-08-27; artifacts
+retained on that machine. Any figure can be re-verified against its source.
+
+**Related correction, same date.** "Retiming-ON does not complete with this RTL" is **refuted**:
+the run that appeared to die was killed by a memory ceiling that had counted a *second concurrent
+run's* collector against it. Rerun with correct process scoping it peaked at **21.15 GB**,
+completed the full flow, and did synthesis **41 min faster** than retiming-OFF (213 vs 254). The
+flow deviation was never necessary — and it produced the worse-timed build. This strengthens
+CLAUDE.md's "do not change the synthesis flow"; nothing there needs changing.
+
+## Rate ladder for SQLite on silicon — started 2026-08-27, current compiler
+
+**Why this exists.** The standing claim is "SQLite passes its correctness workload on silicon,
+3/3". Two things make that insufficient. The rate was never established — three reps only — and
+the extended workload **contains a two-table join**
+(`sqlite_capstone_domain.c:1439`, `SELECT COUNT(*) FROM nums JOIN link ON nums.label = link.label`),
+which is the construct S-12 triggers on at a measured **54% per draw**. If that rate applied here,
+3/3 clean has probability ≈ 0.10. Either the 3/3 was luck, or the join SHAPE matters
+(`JOIN ... ON` over an indexed column vs `qj2`'s cartesian `FROM t1, t2`).
+
+**And the 3/3 was measured on the OLD compiler.** The `lcc`→`mv` change rewrites ~192 sites in the
+`-O0` image, so nothing currently validates SQLite-on-silicon for the shipping toolchain.
+
+### Boot 1 — resident `caplifive_s07clear_84ed6eafb.bit`, no reflash
+
+Four DISTINCT draws (`CAPSTONE_TEXT_PAD` 0/32/64/96, sha256 verified 4-of-4 unique), extended
+workload, no `--slt`.
+
+| draw | outcome |
+|---|---|
+| `sqr0` | **returned** — `EXTENDED_PASSED`, `MEMORY_PASSED`, rc=0 |
+| `sqr32` | **returned** — `EXTENDED_PASSED`, `MEMORY_PASSED`, rc=0 |
+| `sqr64` | **INFRASTRUCTURE WEDGE**, monitor tag `SPLB:0000E010` — NO VERDICT |
+| `sqr96` | never ran — collateral |
+
+**`SPLB` is a MONITOR spin tag, not a domain result:** `split_out_cap`'s unimplemented exact-fit
+case, an M-mode `while(1)`, which the monitor's own comment records as wedging runs 5-7 in 4 of 4
+boots and as the source of a large share of this campaign's random wedges. Conflating it with a
+domain wedge produced a confident false localization on 2026-08-06; the driver now separates them.
+
+**Two clean draws on the current compiler.** That is the first board evidence that today's
+toolchain changes did not break SQLite on silicon — nothing else covered it.
+
+**Practical yield is ~2 big domains per boot**, because `split_out_cap` spins on the third. So
+n ≈ 30 needs on the order of 15 boots, not the 8 a 4-slot budget would suggest. Worth knowing
+before committing to the ladder.
+
+### Boots 2-7 — completed 2026-08-27
+
+Twelve further draws, every one a DISTINCT image (`CAPSTONE_TEXT_PAD` 32…416, sha256 checked
+2-of-2 unique per boot before staging), extended workload, resident bitstream, no reflash.
+
+**RESULT: 14 clean draws, 0 domain wedges.** Every boot: `EXTENDED_PASSED`, `MEMORY_PASSED`,
+`rc=0`. Verified per boot with zero `SPLB`, zero infrastructure classifications and zero wedges,
+so none of the fourteen is a mis-attributed monitor spin.
+
+| if the extended workload's join behaved like `qj2` (54% wedge/draw) | probability |
+|---|---|
+| 4 clean | 4.5e-2 |
+| 8 clean | 2.0e-3 |
+| **14 clean** | **1.9e-5** |
+
+**So it does not.** The extended workload's `JOIN ... ON nums.label = link.label` and `qj2`'s
+cartesian `FROM t1, t2` are both two-level where-loops and they behave completely differently on
+silicon. **The variable is not "two levels" — it is something that differs between these two join
+forms.**
+
+**What NOT to conclude, because it was already killed once.** The obvious guess is that SQLite
+builds an automatic index for the equijoin, turning a repeated inner SCAN into a SEARCH. That
+theory is on file and was refuted: `02eda1190ca4` found `p11_smalljoin` doing
+`SCAN t1` + `SEARCH y USING AUTOMATIC COVERING INDEX`, but `4534e1d0f302` then killed it —
+`q_two` has no WHERE clause, so the planner builds no automatic index and no bloom filter, **and it
+wedges regardless**. Do not re-derive it.
+
+**The rule that survives from that trail is the one to apply here:** *on a query engine, same shape
+of SQL is not same execution plan, and the plan must be READ rather than inferred from the text*.
+Neither plan has been read. That is the next step, and it is board-free — `EXPLAIN QUERY PLAN` on
+both forms under the QEMU reference model.
+
+### What this settles for the paper
+
+* **SQLite's correctness workload runs reliably on silicon on the CURRENT toolchain: 14/14.**
+  This also revalidates the 2026-08-27 compiler changes (128-bit store merging, `lcc`→`mv`,
+  GEP speculation), which nothing else covered — the previous 3/3 was measured on the old compiler.
+* **S-12 does not block it.** S-12 is specific to a query shape the workload does not use.
+* Still **correctness, not performance**: no admissible timing number comes from these runs.
+
+**Planning fact, measured:** only TWO large SQLite domains per boot carry a verdict. At slot 3 the
+monitor's `split_out_cap` spins (`SPLB`) — the same image that returned at slot 1 was created
+(`SQ: A/dom-ok`) and never entered (`SQ: G/enter` = 0) at slot 3. That is infrastructure, not a
+domain result, and conflating the two produced a false localization on 2026-08-06.
+
+## SLT RUNS FULLY ON SILICON — and the S-12 trigger is narrowed to an unindexed nested SCAN
+
+**The plans were READ, not inferred** — the rule this project learned the hard way, since
+`sqlite3WhereCodeOneLoopStart` is the where-loop CODE GENERATOR and the wedge is at PREPARE time.
+`EXPLAIN QUERY PLAN` is compiled out of the domain (`SQLITE_OMIT_EXPLAIN=1`), so this was read from
+a native build with the domain's planner-relevant defines:
+
+| query | plan | silicon |
+|---|---|---|
+| extended workload `JOIN … ON` | `SCAN nums` + `SEARCH link USING AUTOMATIC COVERING INDEX` | **14/14 clean** |
+| **`qj4`** (new, indexed) | `SCAN t1` + `SEARCH t3 USING COVERING INDEX idx_t3a` | **RETURNS** |
+| `qj2` cartesian | `SCAN t1` + **`SCAN t2`** | wedges |
+| `q_two` self-join | `SCAN t1` + **`SCAN y`** | wedges |
+| `q_one` | `SCAN t1` | returns |
+
+**"Two where-loop levels" is the wrong characterisation.** `qj4` and `qj2` are both two-level
+joins, both on empty tables, run from the SAME domain image in back-to-back boots — the only
+difference is whether the inner level is an indexed SEARCH or a repeated SCAN. One returns, the
+other wedges.
+
+**So the trigger is generating code for an UNINDEXED NESTED SCAN at level 2.** That is far narrower
+than the working characterisation this investigation has used since the level-2 finding, and it is
+consistent with everything on file: `4534e1d0f302` established the wedge is at PREPARE time, and
+its refutation of the automatic-index theory said `q_two` gets no automatic index and wedges
+anyway — which is exactly what the plan above shows.
+
+### SLT on silicon: WORKS, fully
+
+`qj4` on the board: `SLT-SUMMARY records=4 stmt_pass=3 stmt_fail=0 query_pass=1 query_fail=0
+skip_big=0 oom=0 parse_err=0 completed=1`. Three statements and a **passing query**, including a
+two-table join. This is the first SLT run on silicon to pass its query rather than merely complete.
+
+**OPERATIONAL LIMIT, measured: exactly ONE SLT domain per boot.** Each SLT domain carves a 1 MiB
+region (`SLT_REGION_SIZE`), and the SECOND `create_dom` fails — `SQ: A/dom-ok` absent, so the
+domain is never created and NOTHING in it runs. This is not the `SPLB` monitor spin (`SPLB` = 0).
+
+**A near-miss worth recording.** The first attempt ran `q_one`, `qj4`, `qj2` in one boot. `qj4` was
+arm 2, did not return, and would have read as "the prediction is refuted" — but `A/dom-ok` was
+absent, so its domain was never created and the arm carried NO verdict about the query. Re-run
+alone in slot 1, `qj4` returned and passed. The driver's own comment names this exact trap: absence
+of `A/dom-ok` means blaming that arm produces "a confident, entirely false localization", as it did
+on 2026-08-06.
+
+**Weight, stated honestly:** `qj4` is **N = 1**, and at the 54% per-draw rate a single return is
+p = 0.46 by chance. The account does not rest on it alone — the extended workload is the same
+indexed-inner shape at 14/14 — but `qj4` itself needs redraws before the pairing is quantitative.
+
+### §7a — The price of on-chip observability, measured (2026-09-04)
+
+`5097eb166` and `6f8345fdb` are the same S-12 fix from the same base (`80843404c`) differing
+**only** by whether the debug tree is tied off. First clean single-variable measurement of
+instrumentation cost on this design:
+
+| | cost of the debug tree |
+|---|---|
+| placed LUTs | **+750** (0.37% of the 203,800-LUT device) |
+| failing endpoints | **+1,903** |
+| WNS | **−1.820 ns** |
+
+**The timing cost is disproportionate to the area.** 0.37% of the device costs 1.82 ns out of an
+already-failing 40 ns budget. Anyone proposing added on-chip observability on this design should
+price it against this pair, not against LUT count.
+
+Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identical to the base.

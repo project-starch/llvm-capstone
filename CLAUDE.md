@@ -48,6 +48,11 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   construction — kernel and driver banners carry account names and emails — so scrubbing is
   endless and per-log. Twelve result lines beat 1110, and are better evidence.
 - No `Co-Authored-By:` lines in commits.
+- **No micro-commits.** A commit is a logically complete step, not a keystroke. Do not commit a
+  single markdown edit, a one-line doc correction, or a debugging log on its own — accumulate
+  them into the change they belong to. Debug logs and session scratch stay in local files and are
+  never committed at all. Rare exceptions: a retraction that must land immediately, and a fix that
+  is genuinely one line.
 - **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
   by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
   along under your message. This happened twice on 2026-08-18 — an LLVM merge landed under a
@@ -260,12 +265,24 @@ Cheap habits that catch all of the above:
   tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
   faulting instruction rather than the one that produced its operand.
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
-  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe.
+  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe. And invoke a
+  gate by **ABSOLUTE PATH**: one that fails to START exits 127 and reads exactly like one that ran
+  and passed. `precommit-scan.sh` did that on 2026-08-27 — called from a subdirectory, exit 127,
+  reported as "scan-rc" alongside a commit. Treat any exit status the gate does not itself define
+  as BLOCKED, not as a pass.
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.
 * **`pgrep -f <pattern>` matches your own shell.** Match on a verified PID or a distinctive
   substring that cannot appear in your own command line.
+* **A POSITIVE finding from a narrowed view is the mirror of a clean zero, and needs the same
+  suspicion.** Confirm it against the UNFILTERED artifact — whether the filter is a grep you wrote
+  or a bit-range you assumed — because a view narrowed by the query will show you exactly the thing
+  you were looking for. On 2026-08-27 a grep matching `flush|req_set_q|_init_0` showed a flush block
+  clearing only those two registers, which *was* the asymmetry being hypothesised; it clears six.
+  The same day a `trans_id` read at `[2:0]`, taken from the field's position in the struct
+  declaration, would have counted events on arbitrary capability cursor bits — the generated code
+  reads it at `[255 +: 3]`.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 
 ## Simulation green is not synthesis clean
@@ -297,7 +314,7 @@ anywhere else.
 **A bitstream costs ~90 minutes plus a reflash. Audit for SUFFICIENCY, not just correctness — and
 BATCH.**
 
-Before committing an RTL change to synthesis, ask the auditors two questions the lint gate cannot:
+Before committing an RTL change to synthesis, ask the auditors three questions the lint gate cannot:
 
 - **Is it enough?** A change that is correct but insufficient costs the same cycle as one that is
   wrong. Write down every question the resulting bitstream must answer, and check the change
@@ -305,13 +322,30 @@ Before committing an RTL change to synthesis, ask the auditors two questions the
 - **Can the instrument fail SILENTLY?** An observation-only change that never fires leaves you
   worse off than before, because the absent signal reads as a clean result. Ask specifically what
   would stop it firing.
+- **What will it READ if the current best hypothesis is TRUE?** Write the predicted reading down
+  BEFORE synthesis. **If that reading would be uninformative, the build does not go.** A cycle
+  spent confirming what the evidence already implies is a different trade from one spent
+  discovering something, and it has to be made deliberately rather than by default. The S-12
+  untagged-LDC recorder cost 6+ hours of synthesis for a reading that was already derivable from
+  `tval = 0` plus a decode sitting in its own repro folder — and the folder SAID SO. The failure
+  was not that nobody wrote the prediction down; it was that nobody used it as a go/no-go input,
+  which is why this question has to bind the DECISION and not just the documentation. Note that
+  the two questions above do not catch this: that recorder passes both.
 
 Then batch: every RTL change the investigation needs goes into ONE bitstream. Discovering the
 second one afterwards costs another full cycle.
 
-**Keep an observation-only change a strict reduction where it can be**, and turn `RETIMING`
-off for debug bitstreams. An instrument rich enough to be interesting is rich enough to be
-unsynthesizable; the minimal version is the one that ships.
+**Keep an observation-only change a strict reduction where it can be.** An instrument rich
+enough to be interesting is rich enough to be unsynthesizable; the minimal version is the one
+that ships.
+
+**Do not change the synthesis flow.** It produces working bitstreams in 1.5-3 hours; leave its
+settings alone. A comment that disagrees with code which has been producing good bitstreams for
+months is evidence about the comment, not the code — on 2026-08-26 a lane turned `RETIMING` off on
+the strength of such a comment, having been asked for a bitstream rather than a flow change.
+**Attribute a cost before writing a rule about it:** that build's two-hour overrun was later
+measured to be ~170 minutes of RTL change and ~40 of the setting, and retiming-off proved *better*-
+timed, so the original version of this rule named the wrong cause.
 
 The simulation suite is a **functional** gate and says nothing about synthesizability: the
 build suppresses exactly these warnings, and a non-blocking assignment in a combinational
@@ -384,6 +418,15 @@ failure. A single matched pair localises more reliably than a long ladder, becau
 between the two arms *is* the variable. When arms differ in more than one respect — link address,
 return value, path taken on the way out — the ladder measures whichever difference you did not
 intend.
+
+**8. Reduce until the bug fits a DIRECTED TEST, then LEAVE THE BOARD.** The board gives ~one bit
+per boot; simulation gives a full instruction+memory trace in 14 s but cannot run a 1.6 MB
+program. So minimise for a **shape small enough to rewrite as a synthetic `.S`** — that changes
+the instrument, and it is what cracked S-12 after weeks of board sessions had only ever said
+"faults ~54% of draws". **The synthetic test must CREATE the triggering condition, not merely
+contain the shape:** S-12's reproducer read zero for a day because the testbench defaults to ZERO
+memory latency, so its store buffer could never fill. Same ELF — delay 0 → 0 traps, delay 40 →
+254.
 
 Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
 answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.

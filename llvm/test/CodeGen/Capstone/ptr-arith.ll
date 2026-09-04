@@ -2,6 +2,12 @@
 ; checks pointer-arithmetic lowering, not stack narrowing (the narrowed path is
 ; covered by cap-shrink-{stack,dynalloca}.ll).
 ; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
+; NOTE: reading a capability's ADDRESS is `mv rd, rs` (addi rd, rs, 0), NOT
+; `lcc rd, rs, 2`. Same value -- the plain regfile slot holds the cursor
+; (RTL ex_stage.sv:463-479; QEMU cap.h union aliases scalar onto bounds.cursor)
+; -- but the plain read is TOTAL, whereas lcc selector 2 TRAPS on an untagged
+; operand and a NULL pointer is untagged. That was C-19: `p != 0 || q != 0`
+; folds to `(addr(p)|addr(q)) != 0` and the first null killed the domain.
 
 ; CHECK-LABEL: test_imm:
 ; CHECK: cincoffsetimm a0, a0, 1

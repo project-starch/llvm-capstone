@@ -484,6 +484,39 @@ fi
 # everything and reintroduce exactly the confound this knob exists to remove.
 #
 # `volatile` and address-taken so they cannot be optimised away and must each take a carve.
+# CAPSTONE_CALL_COUNT=<fn> -- count entries to <fn> with ONE global and nothing else.
+#
+# WHY A SECOND, SMALLER PROBE. CAPSTONE_ARG_PROBE adds FOUR unsigned long globals = 32 bytes,
+# which takes .bss from 0x409c0 to 0x409e0 -- and 0x409e0 is independently measured as a value
+# that CURES the fault (bss32, dead padding, no instrumentation at all). So "the probe cures it"
+# and ".bss 0x409e0 cures it" are very likely one fact seen twice, and the standing belief that
+# in-domain instrumentation is inherently self-defeating here may be an artifact of probe SIZE.
+#
+# ONE global is 8 bytes: .bss 0x409c0 -> 0x409c8, which sits between two MEASURED WEDGING values
+# (0x409c0 and 0x409d0). If this build still wedges, we have an instrumented image that faults,
+# and the counter answers the question the where-loop-level finding made central: does the fault
+# happen on the FIRST entry to the function, or a later one?
+#
+# Read it at the wedge over GDB from the global's address -- the domain never returns, so nothing
+# can be reported through the host.
+if [[ -n "${CAPSTONE_CALL_COUNT:-}" ]]; then
+  echo "== CALL COUNT: one global, counting entries to ${CAPSTONE_CALL_COUNT}"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_CALL_COUNT" <<'PYCC'
+import sys, re, pathlib
+path, fn = sys.argv[1], sys.argv[2]
+s = pathlib.Path(path).read_text()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"CALL_COUNT: {fn} definition not found -- patch shape changed")
+# volatile + uninitialised -> .bss, 8 bytes, cannot be elided
+decl = "\nvolatile unsigned long capstone_call_count;\n"
+body = m.group(0) + "\n  capstone_call_count++;\n"
+s = s[:m.start()] + body + s[m.end():]
+pathlib.Path(path).write_text(decl + s)
+print(f"   counter injected into {fn} (1 global, 8 bytes of .bss)")
+PYCC
+fi
+
 # CAPSTONE_BSS_PAD=N -- append N bytes of UNINITIALISED global, growing .bss and nothing else.
 #
 # This is the sharp one. Across six images, .bss SIZE is the only property that separates the
@@ -898,10 +931,34 @@ SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-ca
 
 # CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
 #
-# The entry glue performs one `split` per global to carve its capability, and every split
-# allocates a revocation node. The RTL allocator's head is 10 bits starting at 3
-# (capstone_rev_node.anvil:160,168), so allocation ~#1022 wraps to id 0 and reuses LIVE
-# ids. Reuse can splice a node into the `next` chain twice, and REVOKE_NODE (:13-32) has
+# CORRECTED 2026-08-27 -- THE LIMIT THIS TRIM EXISTS FOR HAS NOT EXISTED SINCE 2026-08-03.
+# The claim below ("head is 10 bits ... wraps at ~#1022") is NOT supported by the RTL, at the
+# cited lines or anywhere else. Verified against the RESIDENT bitstream's own source, not just
+# against HEAD:
+#   ariane_pkg.sv:587            "Revocation-node pool: 65536 nodes * 16 bytes/node"
+#   CAP_REVNODE_MEM_BASE 0xBFF00000 + 65536*16 = 0xC0000000, exactly abutting the tag region
+#   capstone_rev_node.anvil:74,79 16-bit head, REVNODE_SENTINEL = 16'd65535
+#   node ids are 30 bits (#{14'd0, head}); no 10'd literal or 1021/1022 constant remains
+#   91ea10837 "made rev node count configurable" (2026-08-03) IS an ancestor of 84ed6eafb
+# So the pool is 65536, not ~1021, and it is 64x larger than this trim assumes.
+#
+# CORRECTION TO THE CORRECTION, same day: the limit was REAL AND THEN FIXED, not fabricated.
+# The line below records a MEASURED overflow -- "measured 2026-07-31, head=74 with the overflow
+# flag set" -- and 2026-07-31 PREDATES 91ea10837 (2026-08-03), which made the node count
+# configurable. So the small pool existed, the overflow was observed with its own flag, and the
+# commit enlarged it. What is wrong is not the original measurement but every copy of the number
+# taken after 2026-08-03. I first wrote that the size had been inferred from a 2026-07-21 probe's
+# BORROW_COST_ITERS = 1024; that is NOT supported and is withdrawn. The separate 1024-ITERATION
+# domreturn failure is still unexplained, but it is a different observation from this one.
+#
+# CONSEQUENCE, NOT YET ACTED ON: this trim OMITS SQLITE FEATURES to get under a limit that is not
+# there, and the build script itself says the deviation "must be reported alongside any board
+# number". Removing it needs a carve-count check, a QEMU run and board validation, so it is left
+# in place deliberately rather than dropped in the same commit that found the error.
+#
+# The original reasoning, kept because the FAILURE MODE it describes is real if the pool ever does
+# wrap: the entry glue performs one `split` per global to carve its capability, and every split
+# allocates a revocation node. If allocation wrapped to id 0 it would reuse LIVE ids. Reuse can splice a node into the `next` chain twice, and REVOKE_NODE (:13-32) has
 # no visit bound and no cycle detection -- it then walks forever and never answers another
 # query. Since every `stc` blocks on a revocation-node query with no timeout
 # (capstone_dyn_unit.anvil:395-404), the next capability store hangs with no trap.
@@ -1089,6 +1146,317 @@ fi
 # The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
 # on entry means the caller handed over plain data; anything else means the tag was alive at the
 # boundary and the spill/reload lost it.
+# CAPSTONE_WFENCE_BEFORE=<literal source text> -- put a fence immediately before that statement.
+#
+# WHY A SECOND POSITION. CAPSTONE_WFENCE injects at the top of the body, which lands AFTER the
+# -O0 argument spills but BEFORE the local `= 0` initialisers -- so three stores still execute
+# between it and the reload, one of them immediately prior. That is the leading candidate for the
+# residual 1-in-4 wedge rate the entry fence leaves behind.
+#
+# Anchoring on the statement itself puts the drain AFTER those initialisers and immediately before
+# the reload, closing the window completely. For S-12 the anchor is `pWC = &pWInfo->sWC;`, which is
+# the source of the faulting `ldc` + `cincoffsetimm a4, a4, 0xb0` pair.
+#
+#   rate goes to 0 -> the store-to-load drain window IS the mechanism, not merely a contributor.
+#   rate unchanged -> the residual is NOT the trailing stores, and the entry fence's effect needs
+#                     a different explanation.
+# Still semantically neutral: a fence changes no value and no control flow.
+# CAPSTONE_WNOP_BEFORE=<literal source text> -- a 4-byte NOP at the same point a fence would go.
+#
+# THE DISCRIMINATOR for the fence result. A fence before the reload eliminates the S-12 wedge
+# (0/7 fenced against 7/7 unmodified), but it is NOT layout-neutral: it shifts the reload and its
+# consumer by +4 and moves 1165 of 3633 symbols, and S-12 is documented here as layout-sensitive.
+# A `nop` is the SAME four bytes and the SAME displacement with NO memory semantics.
+#
+#   nop RETURNS  -> the +4 displacement is the operative variable. The cure is a LAYOUT effect and
+#                   any drain / forwarding mechanism is refuted as its explanation.
+#   nop WEDGES   -> the fence's SEMANTICS do the work, not its bytes, and a memory-ordering
+#                   mechanism survives as a class.
+# CAPSTONE_LATE_INIT=pidx|scalar -- move one initialiser from BEFORE the reload to AFTER it.
+#
+# SEPARATES the two surviving memory-ordering accounts. Both are cured by a fence, so the fence
+# cannot tell them apart:
+#   (a) store-to-load DRAIN of the subject stc at +0x40 -- predicts a STALE value, which here is a
+#       NON-ZERO cursor, so it does not explain tval = 0;
+#   (b) WRONG-ADDRESS FORWARD of the null capability written one instruction before the reload by
+#       `movc a4, zero; stc a4, 0x0(a5)` -- predicts {cursor 0, NOT_CAP} EXACTLY, as observed.
+#
+# `pidx` moves `Index *pIdx = 0;` (a CAPABILITY null store) to after `pWC = &pWInfo->sWC;`, taking
+# the null store out of the window. It is not read in between, so semantics are unchanged.
+#
+# `scalar` is the LAYOUT-MATCHED CONTROL: it moves `int iReleaseReg = 0;` instead -- a comparable
+# code motion that leaves the null CAPABILITY store where it is. Without this arm, a cure from
+# `pidx` could not be told from an ordinary layout effect, which is precisely the confound that
+# forced a retraction earlier in this investigation.
+#
+#   pidx cures, scalar does not -> (b): the null capability store is the forwarded value.
+#   both cure                   -> not specific to the capability store; store COUNT or position.
+#   neither cures               -> (a) survives; the null store is not involved.
+# CAPSTONE_DEADCAP=null|tagged -- move the real null store OUT (as LATE_INIT=pidx does) and put a
+# DEAD capability store of the chosen value at that same point instead.
+#
+# SEPARATES the three accounts still consistent with "the null store must be present":
+#   value-forward  -- the {cursor 0, NOT_CAP} VALUE is delivered to the reload's consumer
+#   occupancy      -- any additional 16-byte capability store in the window suffices
+#   address-alias  -- the store's TARGET (s0-0x120) aliases the reload's (s0-0x70) in a
+#                     word-granular hit function, independent of the value stored
+#
+#   null   wedges, tagged does NOT -> the NULL VALUE is what matters => value-forward
+#   BOTH wedge                     -> occupancy: any capability store in the window is enough
+#   NEITHER wedges                 -> neither value nor occupancy; the ORIGINAL store's own
+#                                     address is implicated
+#
+# The dead local is `volatile` so the store is emitted and never read, and the real `pIdx = 0` is
+# still moved after the reload, so program semantics are unchanged in both arms.
+# CAPSTONE_PADFRAME=<bytes> -- insert a dead padding local BEFORE the pIdx declaration, so the
+# null capability store KEEPS its position in the window but lands on a DIFFERENT frame slot.
+#
+# This tests the ADDRESS directly, which is what the deadcap arms pointed at: a dead capability
+# store at s0-0x140, in the same position immediately before the reload, does NOT wedge whether its
+# value is null or tagged -- while the real store at s0-0x120 does. Padding the frame keeps the same
+# instruction, the same value and the same position, and changes only where it writes.
+#
+#   wedge DISAPPEARS -> the store's TARGET ADDRESS is the trigger; the defect is in address
+#                       comparison (e.g. the word-granular wbuffer_hit_oh at wt_dcache_mem.sv:280).
+#   wedge PERSISTS   -> the address is not the variable and the deadcap result needs another
+#                       explanation.
+# CAPSTONE_REGSPLIT=1 -- keep the real `pIdx = 0` in the window, but add a DEAD capability local
+# ahead of it so register allocation puts the reload in a DIFFERENT register from the movc.
+#
+# THE CAUSAL TEST for the register-pairing correlation. Across six builds the wedge tracks exactly
+# one thing: a `movc rD, zero` shortly before an `ldc rD` targeting the SAME register. But every
+# curing build so far ALSO changed something else -- the movc moved, its value changed, or a store
+# left the window. This arm changes ONLY the register allocation: the null store stays where it is,
+# at its own address, with its own value, in its own position.
+#
+#   cures  -> the PAIRING is causal, not merely correlated. That is a register writeback / WAW
+#             hazard on rD, and it derives tval = 0 directly from movc's own output.
+#   wedges -> the pairing is incidental and the correlation across the six builds was coincidence;
+#             the real variable is still unidentified.
+#
+# NOTE this may not achieve the split -- -O0 allocation is mechanical and may keep the same
+# register. The build MUST be inspected before it is run: if the reload still targets the movc's
+# register, this variant tests nothing and must not be spent on a boot.
+# CAPSTONE_PINREG=<reg> -- pin a named register live across the reload, forcing the allocator to
+# put the `ldc` somewhere else.
+#
+# Adding dead locals does NOT split the pairing: -O0 reuses the same scratch register regardless
+# (REGSPLIT=1,2,3 all keep `movc a4` and `ldc a4`). That is itself a finding -- the pairing is
+# near-automatic in this codegen, so its presence in every wedging build is partly trivial, and
+# every cure except deadcap-null ALSO changed something else. An explicit register variable held
+# live across the statement is the only remaining way to break the pairing while changing nothing
+# else: same store, same address, same value, same position.
+#
+#   cures  -> the pairing is CAUSAL, and the account derives tval = 0 from movc's own output.
+#   wedges -> the pairing is incidental; the six-build correlation was an artifact of -O0 reusing
+#             one scratch register, and the real variable is still unidentified.
+if [[ -n "${CAPSTONE_PINREG:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PINREG" <<'PYPR'
+import sys
+path, reg = sys.argv[1], sys.argv[2]
+s = open(path).read()
+ANCH = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(ANCH) != 1:
+    sys.exit(f"PINREG: anchor is not unique ({s.count(ANCH)}) -- refusing to guess")
+pin = ('  register void *pinreg_ asm("%s") = (void *)pWInfo;\n'
+       '  __asm__ volatile("" :: "r"(pinreg_));\n') % reg
+tail = ('  __asm__ volatile("" :: "r"(pinreg_));\n')
+s = s.replace(ANCH, ANCH.split("\n\n")[0] + "\n\n" + pin + "  pWC = &pWInfo->sWC;\n" + tail, 1)
+open(path, "w").write(s)
+print(f"   PINREG: {reg} pinned live across the reload")
+PYPR
+fi
+
+if [[ -n "${CAPSTONE_REGSPLIT:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYRS'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"REGSPLIT: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+s = s.replace(DECL, "  volatile Index *pregsplit_ = 0; (void)pregsplit_;\n" + DECL, 1)
+open(path, "w").write(s)
+print("   REGSPLIT: dead capability local inserted ahead of pIdx")
+PYRS
+fi
+
+if [[ -n "${CAPSTONE_PADFRAME:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_PADFRAME" <<'PYPF'
+import sys
+path, nbytes = sys.argv[1], sys.argv[2]
+s = open(path).read()
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"PADFRAME: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+pad = "  volatile char pframepad_[%d]; (void)pframepad_;\n" % int(nbytes)
+s = s.replace(DECL, pad + DECL, 1)
+open(path, "w").write(s)
+print(f"   PADFRAME: {nbytes} bytes of frame padding inserted before pIdx")
+PYPF
+fi
+
+if [[ -n "${CAPSTONE_DEADCAP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_DEADCAP" <<'PYDC'
+import sys
+path, mode = sys.argv[1], sys.argv[2]
+s = open(path).read()
+ANCH = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(ANCH) != 1:
+    sys.exit(f"DEADCAP: anchor is not unique ({s.count(ANCH)}) -- refusing to guess")
+DECL = "  Index *pIdx = 0;          /* Index used by loop (if any) */"
+if s.count(DECL) != 1:
+    sys.exit(f"DEADCAP: pIdx declaration is not unique ({s.count(DECL)}) -- refusing to guess")
+if   mode == "null":   val = "(Index *)0"
+elif mode == "tagged": val = "(Index *)pWInfo"      # a live, TAGGED capability
+else: sys.exit(f"DEADCAP: unknown mode {mode!r}")
+s = s.replace(DECL, "  Index *pIdx;              /* Index used by loop (if any) */", 1)
+dead = "  { volatile Index *pdeadcap_ = " + val + "; (void)pdeadcap_; }\n"
+s = s.replace(ANCH, ANCH.split("\n\n")[0] + "\n\n" + dead + "  pWC = &pWInfo->sWC;\n  pIdx = 0;", 1)
+open(path, "w").write(s)
+print(f"   DEADCAP[{mode}]: real null store moved out; dead {mode} capability store put in the window")
+PYDC
+fi
+
+if [[ -n "${CAPSTONE_LATE_INIT:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_LATE_INIT" <<'PYLI'
+import sys
+path, which = sys.argv[1], sys.argv[2]
+s = open(path).read()
+# The bare `pWC = &pWInfo->sWC;` line occurs 3 times; anchor on the UNIQUE preceding
+# declaration so the insertion point cannot be guessed wrong.
+PWC = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(PWC) != 1:
+    sys.exit(f"LATE_INIT: pWC anchor is not unique ({s.count(PWC)}) -- refusing to guess")
+if which == "pidx":
+    old, new, late = "  Index *pIdx = 0;          /* Index used by loop (if any) */",                      "  Index *pIdx;              /* Index used by loop (if any) */", "  pIdx = 0;"
+elif which == "scalar":
+    old, new, late = "  int iReleaseReg = 0;      /* Temp register to free before returning */",                      "  int iReleaseReg;          /* Temp register to free before returning */", "  iReleaseReg = 0;"
+else:
+    sys.exit(f"LATE_INIT: unknown mode {which!r}")
+if s.count(old) != 1:
+    sys.exit(f"LATE_INIT: declaration anchor is not unique ({s.count(old)}) -- refusing to guess")
+s = s.replace(old, new, 1)
+s = s.replace(PWC, PWC + "\n" + late, 1)
+open(path, "w").write(s)
+print(f"   LATE_INIT[{which}]: initialiser moved to after the pWC assignment")
+PYLI
+fi
+
+if [[ -n "${CAPSTONE_WNOP_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WNOP_BEFORE" <<'PYNB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0: sys.exit(f"WNOP_BEFORE: anchor not found: {anchor!r}")
+if n > 1:  sys.exit(f"WNOP_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess")
+s = s.replace(anchor, '__asm__ volatile("addi x0, x0, 0" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WNOP_BEFORE injected ahead of: {anchor}")
+PYNB
+fi
+
+if [[ -n "${CAPSTONE_WFENCE_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE_BEFORE" <<'PYFB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0:
+    sys.exit(f"WFENCE_BEFORE: anchor not found: {anchor!r}")
+if n > 1:
+    sys.exit(f"WFENCE_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess: {anchor!r}")
+s = s.replace(anchor, '__asm__ volatile("fence rw,rw" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WFENCE_BEFORE injected ahead of: {anchor}")
+PYFB
+fi
+
+# CAPSTONE_WFENCE=<fn> -- put a full memory fence at the top of <fn>.
+#
+# WHY. The path from this function's entry to its fault site is 36 instructions, branch-free and
+# byte-identical on every call, so the trigger is machine STATE and not an instruction pattern.
+# The state this folder already has evidence for is a store-to-load DRAIN window: the `stc` that
+# spills pWInfo at +0x40 is reloaded by the `ldc` at +0x88 only 18 instructions later, and
+# delay-dependence is recorded (bracketed 10 < T <= 600 instructions) even though the mechanism
+# attached to it was retracted.
+#
+# A fence at entry drains the write path BEFORE that window opens. Unlike CAPSTONE_WCLAMP this is
+# SEMANTICALLY NEUTRAL -- it changes no values, no control flow and no generated SQL program, so a
+# rate change cannot be explained by the intervention having broken the query. That is exactly the
+# property the clamp lacked, which is why the clamp result had to be recorded as weak.
+#
+#   wedge rate collapses -> the drain state IS the trigger, and this is also a WORKAROUND.
+#   wedge rate unchanged -> drain state is excluded, and the search moves to state a fence does
+#                           not touch (cache occupancy, scoreboard, TLB).
+if [[ -n "${CAPSTONE_WFENCE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE" <<'PYFENCE'
+import sys, re
+path, fn = sys.argv[1], sys.argv[2]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"WFENCE: {fn} definition not found -- patch shape changed")
+body = m.group(0) + """
+  /* CAPSTONE WFENCE -- drain the write path before the spill/reload window. Neutral: no value,
+     no control flow and no generated code changes; only the timing of the store path does. */
+  __asm__ volatile("fence rw,rw" ::: "memory");
+"""
+s = s.replace(m.group(0), body, 1)
+open(path, "w").write(s)
+print(f"   WFENCE injected at the top of {fn}")
+PYFENCE
+fi
+
+# CAPSTONE_WCLAMP=<fn>:<n> -- make <fn> RETURN EARLY from its <n>th call onward.
+#
+# WHY A CLAMP AND NOT AN OBSERVER. The probe cannot report from a wedge: its output goes to a
+# shared payload the HOST prints after the domain returns, and a wedged domain takes the core, so
+# nothing is printed exactly when it matters. The standing rule is to prefer a diagnostic that
+# converts a hang into a wrong answer over one that only observes the hang -- so instead of asking
+# "which call faulted", suppress calls from N onward and ask whether the wedge survives.
+#
+# WhereCodeOneLoopStart runs 3 + plan-depth times (measured), so dd2_join makes 5 calls.
+#   clamp 5 => the 5th call does nothing.  Wedge GONE  -> the 5th call is implicated.
+#                                          Wedge STAYS -> the wedge lives in calls 1-4, i.e. the
+#                                                         nesting changes an EARLIER call.
+# That is a real fork: the second branch would mean the extra level poisons work that happens
+# before it, which no mechanism proposed so far predicts.
+#
+# THE RETURN VALUE IS THE CALLER'S "notReady" MASK, passed straight back. Returning a wrong mask
+# corrupts the generated program -- which is fine and intended, because the question is wedge vs
+# return, not whether the query answers correctly. What matters is that the clamp stops the FLOW:
+# the caller loops over levels and uses the return value, so a clamped call visibly changes what
+# the caller does next rather than being a leaf that the program ignores.
+if [[ -n "${CAPSTONE_WCLAMP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "${CAPSTONE_WCLAMP%%:*}" "${CAPSTONE_WCLAMP##*:}" <<'PYCLAMP'
+import sys, re
+path, fn, n = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"WCLAMP: {fn} definition not found -- patch shape changed")
+# STRIP C COMMENTS FIRST. Each parameter here carries a trailing /* ... */ that sits AFTER the
+# comma, so a naive split leaves the LAST element ending in "*/" -- args[0]/args[1] survive that
+# (which is why the ARG probe works) but args[-1] parses as "/" and the injected `return /;`
+# fails to compile. Seen exactly once, here.
+arglist = re.sub(r'/\*.*?\*/', ' ', m.group(1), flags=re.S)
+args = [a.strip().split()[-1].lstrip('*') for a in arglist.split(',') if a.strip()]
+last = args[-1]
+body = m.group(0) + """
+  /* CAPSTONE WCLAMP -- suppress this call from the Nth onward, and RETURN so the run reports. */
+  {
+    static unsigned long wclamp_calls_;
+    if (++wclamp_calls_ >= """ + n + """UL) return """ + last + """;
+  }
+"""
+s = s.replace(m.group(0), body, 1)
+open(path, "w").write(s)
+print(f"   WCLAMP injected into {fn}: returns {last} from call {n} onward")
+PYCLAMP
+fi
+
 if [[ -n "${CAPSTONE_ARG_PROBE:-}" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_ARG_PROBE" <<'PYARG'
 import sys, re
@@ -2079,6 +2447,91 @@ fi
 # the one path that matters. Stages ascend, so the whole ladder goes into ONE boot and the first
 # arm that fails to return is the bisection point. n >= 4 runs the whole statement and falls
 # through to the rest of the workload.
+# CAPSTONE_SLT_PROGRESS=1 -- record WHICH prepare is in flight in the shared region, where it
+# survives a wedge and the driver already reads it over JTAG. This is what separates the two
+# models a wedge RATE cannot: a per-prepare hazard stops at a varying index, a per-boot one stops
+# at the first prepare of every wedging boot. The hook lives in slt_runner.h, i.e. in the DOMAIN
+# translation unit and not in the amalgamation, precisely so the faulting function's codegen is
+# untouched -- CAPSTONE_ENTRY_MARK injects into sqlite3WhereCodeOneLoopStart itself and was found
+# to change its register allocation enough to remove the movc/stc/ldc pattern under test, which
+# makes it the wrong instrument for asking whether that pattern is causal.
+if [[ "${CAPSTONE_SLT_PROGRESS:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SLT_PROGRESS=1"
+fi
+
+# CAPSTONE_WTRUNC=<n> -- TRUNCATE sqlite3WhereCodeOneLoopStart after its n-th leading statement.
+#
+# This is the reduction that should have been done first. The SQL was delta-debugged down to a
+# two-table join and then the work jumped to binary-patched single-variable arms -- which answer
+# "is this one thing causal", not "what is the SMALLEST thing that still breaks". Those are
+# different questions, and nine hand-written bare-metal reconstructions coming back clean is an
+# argument FOR reduction rather than against it: a reconstruction guesses what matters and can
+# silently omit the essential ingredient, whereas a reduction removes one thing at a time and
+# reports exactly when it stops reproducing.
+#
+# The mapping from source to the fault is now exact:
+#
+#   Index *pIdx = 0;        ->  movc a4, zero ; stc a4, 0x0(a5)
+#   pWC = &pWInfo->sWC;     ->  ldc  a4, 0x0(a0) ; cincoffsetimm a4, a4, 0xb0   <- FAULTS
+#
+# sWC sits at offset 0xb0 in WhereInfo, which is where the 0xb0 in the faulting instruction comes
+# from. So the whole fault is: reload the caller's pWInfo from its stack slot, then take the
+# address of one of its members. Every other one of the function's 2866 instructions is downstream
+# of that and is a candidate for removal.
+#
+# n=1 truncates immediately after `pWC = &pWInfo->sWC;`. If the fault survives that, the repro
+# collapses from 2866 instructions to a few dozen -- small enough to hand to RTL simulation, where
+# a run is 14 seconds with a full instruction and memory trace instead of one bit per 8-minute
+# boot. That change in economics is the point of the exercise.
+#
+# THE RETURN VALUE IS DELIBERATE. `return 0` would leave pWC unused and invites the compiler to
+# delete the very assignment under test; returning its cursor forces the computation at any -O
+# level. The domain is built -O0, where nothing would be eliminated anyway, but a variant that
+# silently optimises away the instruction it exists to test is exactly the failure this project
+# keeps paying for -- so it is prevented rather than assumed away, and the disassembly gate below
+# confirms the window survived rather than trusting either.
+#
+# The early return leaves the CALLER running, which is what we want: the fault, if it happens,
+# happens before the return, so the wedge is still the observable and the program merely goes on
+# to produce a wrong answer.
+if [[ -n "${CAPSTONE_WTRUNC:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WTRUNC" <<'PYWT'
+import os
+import sys
+path, n = sys.argv[1], int(sys.argv[2])
+s = open(path).read()
+# Leading statements of the function body, in source order. Truncation after the n-th.
+STMTS = [
+    "  pWC = &pWInfo->sWC;",
+    "  db = pParse->db;",
+    "  pLoop = pLevel->pWLoop;",
+    "  pTabItem = &pWInfo->pTabList->a[pLevel->iFrom];",
+    "  iCur = pTabItem->iCursor;",
+]
+if not (1 <= n <= len(STMTS)):
+    sys.exit(f"WTRUNC: n must be 1..{len(STMTS)}, got {n}")
+# `pWC = &pWInfo->sWC;` alone appears THREE times in the amalgamation, so the statements have to
+# be anchored to this function's declaration block to be unique. The refusal that caught that is
+# the reason the count is checked rather than assumed.
+PREFIX = "  int iLoop;                /* Iteration of constraint generator loop */\n\n"
+anchor = PREFIX + "\n".join(STMTS[:n])
+if s.count(anchor) != 1:
+    sys.exit(f"WTRUNC: anchor for n={n} occurs {s.count(anchor)} times -- refusing to guess")
+# RETURN VALUE. `0` is a VALID Bitmask, so SQLite may survive the truncation and keep a clean
+# return-vs-wedge observable; the cursor of pWC is not, and a domain that dies on the garbage makes
+# a board wedge ambiguous between S-12 and the truncation's own crash. Default to 0 and let
+# CAPSTONE_WTRUNC_RET=cursor ask for the other, because the risk `cursor` was guarding against --
+# the compiler deleting the assignment under test as dead -- cannot arise at the -O0 the domain is
+# built with, and the window gate confirms the instruction survived either way rather than either
+# choice being trusted.
+ret = ("(Bitmask)(unsigned long)pWC" if os.environ.get("CAPSTONE_WTRUNC_RET") == "cursor"
+       else "0")
+s = s.replace(anchor, anchor + f"\n  return {ret};  /* CAPSTONE_WTRUNC */", 1)
+open(path, "w").write(s)
+print(f"   WTRUNC: sqlite3WhereCodeOneLoopStart truncated after statement {n}")
+PYWT
+fi
+
 if [[ -n "${CAPSTONE_CREATE_LADDER:-}" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_CREATE_LADDER=${CAPSTONE_CREATE_LADDER}"
 fi
@@ -2223,12 +2676,29 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # QEMU executes the -O0 form happily, so the board is the only oracle -- but it is the one
 # construct at the frozen pc that -O1 removes.
 #
-# Why not raise $OPT itself: the amalgamation does not compile above -O0. `cond ? capA :
-# capB` reaches ISel as an i128 CapstoneISD::SELECT_CC, and the only patterns for it
-# (Select_GPRCAP_Using_CC_GPR) are emitted under !is64Bit(), so on capstone64 there is no
-# i128 select pattern and the backend aborts with "Cannot select". Reproducer:
-# `char *pick(int n, char *a, char *b) { return n == 10 ? a : b; }` at -O1. The n==0 form
-# compiles because SelectCC_GPR_rrirr adds a separate explicit Pat for a zero rhs.
+# Why $OPT is still -O0, CORRECTED 2026-08-26. The reason recorded here for months -- that
+# the amalgamation "does not compile above -O0" because of C-17 (i128 CapstoneISD::SELECT_CC
+# has no pattern on capstone64) -- was not what blocked the build. C-17's own reproducer,
+# `char *pick(int n, char *a, char *b){ return n == 10 ? a : b; }`, compiles clean at -O1 and
+# -O2. What actually failed was a merged 128-bit constant store: DAGCombiner packing SQLite's
+# VdbeOp initialiser into one i128, which on this target is `stc` -- a forged capability.
+# Fixed in the backend at canMergeStoresTo.
+#
+# C-17 IS STILL OPEN, just latent -- do not read the above as "C-17 is gone". The matcher gap
+# is live and reproducible; a select with a >64-bit constant arm still hits it. That was
+# retracted here once already; see ISSUES.md C-17 for the reproducer.
+#
+# THE AMALGAMATION NOW COMPILES AT -O1. Verified end to end: SQLITE_OPT_LEVEL=-O1 links a full
+# image, and .text falls from 1,305,384 to 989,496 bytes (1.32x). The S-12 fault site in
+# sqlite3WhereCodeOneLoopStart is gone -- pWInfo stays in callee-saved s2 for the whole
+# function instead of being reloaded. Image-wide the S-12 shape is reduced by somewhere between
+# ~1.3x and ~3.4x depending on how the pair is counted (strict adjacency flatters it; the -O1
+# scheduler separates many pairs rather than removing them). ISSUES.md C-17 has the table.
+#
+# The default stays -O0 anyway, because the reduction is not an elimination and because an -O1
+# image has not been validated end to end on QEMU or the board. Raising it is a deliberate
+# decision with its own validation, not a consequence of the compiler fix. Set
+# SQLITE_OPT_LEVEL=-O1 to try it.
 # The string primitives default to -O1, NOT to $OPT. Board-measured 2026-08-05: at -O0
 # `strlen` re-loads its string capability from a stack slot with `ldc` on EVERY iteration, and
 # on silicon that sporadically yields 1 instead of the true length -- stage 13 returned 15, then
@@ -2236,9 +2706,11 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # the pointer stays in a register (zero `ldc` in the loop) and stage 13 returns 36 on silicon,
 # twice. This is a real wrong-answer defect, not a workaround, so it is the default.
 #
-# It does NOT fix the stage-10 hang -- that was measured separately and is independent. And it
-# cannot be raised to a whole-image -O1: that hits C-17 (`Cannot select: i128 =
-# CapstoneISD::SELECT_CC`), which is why this knob is scoped to the support files.
+# It does NOT fix the stage-10 hang -- that was measured separately and is independent. The
+# knob stays scoped to the support files, but the reason has changed: it used to be that a
+# whole-image -O1 could not compile at all (see the corrected note above -- that was C-17, and
+# it was both stale and not the real blocker). A whole-image -O1 now compiles; scoping is now
+# a validation choice rather than a compiler limitation.
 SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}
 # BEEBS_STRING_LINEAR_SAFE: index instead of walking, so the string primitives never copy
 # or advance a capability that may be LINEAR. SQLite is the first thing here to call strlen

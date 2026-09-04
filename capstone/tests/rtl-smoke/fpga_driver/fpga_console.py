@@ -149,6 +149,11 @@ class FpgaConsole:
         # reconnect is what stops the server re-injecting its whole (<=512 KB)
         # UART history and duplicating the RESULT lines the parser reads.
         self._last_uart_seq = -1
+        # Server identity and stream integrity, all tolerating a server that does not yet
+        # publish them. None means "never seen", which is distinct from any real value.
+        self._server_epoch: Optional[int] = None
+        self._server_restarted = False
+        self._uart_gap_chunks = 0
 
         self._install_handlers()
 
@@ -306,11 +311,51 @@ class FpgaConsole:
         with self._cond:
             self._events.append((now, event, data))
             self._state[event] = data
+            # SERVER RESTART DETECTION. The server stamps every Socket.IO event with a
+            # server_epoch minted at process start. A restart forces the board OFF
+            # (init_gpio claims the power pin with initial value 0), so a run that spans one
+            # is measuring a board that was power-cycled underneath it -- previously
+            # indistinguishable from a board fault, and the single failure of mine that was
+            # entirely unattributable.
+            #
+            # Recorded, never raised from here: this runs on the Socket.IO background thread,
+            # where an exception would surface as a socket error somewhere unrelated. The run
+            # loop reads `server_restarted` and reports void_reason itself.
+            #
+            # TOLERATES ABSENCE. The field does not exist on the server yet; until the
+            # cutover every event lacks it and this stays inert. `is None` rather than
+            # falsy, because epoch 0 is a legal value.
+            ep = data.get("server_epoch") if isinstance(data, dict) else None
+            if ep is not None:
+                if self._server_epoch is None:
+                    self._server_epoch = ep
+                elif ep != self._server_epoch:
+                    if not self._server_restarted:
+                        self._log(f"!! SERVER RESTARTED mid-session: epoch "
+                                  f"{self._server_epoch} -> {ep}. The board was POWERED OFF "
+                                  f"by the restart; any result spanning this point is void.")
+                    self._server_restarted = True
+                    self._server_epoch = ep
             if event == C.LISTEN["uart_output"]:
                 self._uart += self._extract_uart_text(data)
                 seq = self._extract_uart_seq(data)
-                if seq is not None and seq > self._last_uart_seq:
-                    self._last_uart_seq = seq
+                if seq is not None:
+                    # GAP DETECTION, keyed on (epoch, seq) rather than seq alone. Within an
+                    # epoch the server increments seq by exactly 1 per chunk and never resets
+                    # it -- uart_clear, power cycles and board resets all leave it alone -- so
+                    # a jump of more than 1 means chunks were evicted or dropped between us.
+                    # It returns to 0 only on process restart, which the epoch above announces,
+                    # so a backwards seq is a restart rather than corruption and must not be
+                    # counted as a gap.
+                    if (self._last_uart_seq >= 0 and seq > self._last_uart_seq + 1
+                            and not self._server_restarted):
+                        missed = seq - self._last_uart_seq - 1
+                        self._uart_gap_chunks += missed
+                        self._log(f"!! UART GAP: seq {self._last_uart_seq} -> {seq} "
+                                  f"({missed} chunk(s) never seen). Output is INCOMPLETE; a "
+                                  f"missing marker is now unattributable.")
+                    if seq > self._last_uart_seq:
+                        self._last_uart_seq = seq
             elif event == C.GDB_OUTPUT_EVENT:
                 self._gdb += self._extract_gdb_text(data)
             self._cond.notify_all()
@@ -522,6 +567,83 @@ class FpgaConsole:
     def gdb_text(self) -> str:
         with self._cond:
             return self._gdb
+
+    def get_state(self, timeout: float = 15.0) -> Dict[str, Any]:
+        """One GET /api/state instead of assembling six socket events.
+
+        Also the ONLY way to see three things no event carries: whether UART chunks were
+        dropped server-side, the oldest sequence still retained, and whether the serial port
+        is open at all. Returns {} if the server does not implement it yet, so callers can
+        adopt this before the cutover -- an empty dict is distinguishable from a real answer,
+        which a default-filled dict would not be.
+        """
+        try:
+            r = self._http.get(f"{self._api_base}/state", timeout=timeout)
+            if r.status_code != 200:
+                return {}
+            st = r.json()
+        except Exception as exc:
+            self._log(_redact(f"get_state failed: {exc}", self.url))
+            return {}
+        if not isinstance(st, dict):
+            return {}
+        ep = st.get("server_epoch")
+        if ep is not None:
+            if self._server_epoch is None:
+                self._server_epoch = ep
+            elif ep != self._server_epoch:
+                self._server_restarted = True
+                self._server_epoch = ep
+        return st
+
+    def integrity(self) -> Dict[str, Any]:
+        """Everything that decides whether this run's output can be believed.
+
+        Call it before recording any verdict. A run that spans a server restart measured a
+        board that was power-cycled underneath it; a run with a UART gap or a server-side
+        drop is missing output, and a MISSING MARKER IS A RESULT in this project's
+        classification -- absence of `SQ: G/enter` is how an entry stall is told from a
+        wedge. So an unnoticed drop does not degrade a verdict, it INVERTS one.
+        """
+        st = self.get_state()
+        dropped = (st.get("uart_dropped_chunks") or 0) + (st.get("uart_dropped_bytes") or 0)
+        first = st.get("uart_first_seq")
+        evicted = (first is not None and self._last_uart_seq >= 0
+                   and first > self._last_uart_seq)
+        # `ok` is "no positive evidence of a problem". It is NOT "verified clean", and the
+        # difference is the whole point: with no /api/state the server-side drop counters are
+        # unreadable, so a silent truncation is indistinguishable from a quiet board. Reporting
+        # ok=True there would be an unearned pass -- the exact class this pair of counters
+        # exists to remove -- so `checks_complete` says whether the question could be asked at
+        # all, and a caller that reads `ok` without it is reading a half-answer.
+        ok = not (self._server_restarted or self._uart_gap_chunks or dropped or evicted)
+        return {
+            "ok": ok,
+            "checks_complete": bool(st),
+            "server_restarted": self._server_restarted,
+            "server_epoch": self._server_epoch,
+            "uart_gap_chunks": self._uart_gap_chunks,
+            "uart_dropped_chunks": st.get("uart_dropped_chunks"),
+            "uart_dropped_bytes": st.get("uart_dropped_bytes"),
+            "uart_first_seq": first,
+            "uart_last_seq_seen": self._last_uart_seq,
+            "evicted_before_read": evicted,
+            "void_reason": ("server_restarted" if self._server_restarted else
+                            "uart_gap" if self._uart_gap_chunks else
+                            "uart_dropped_serverside" if dropped else
+                            "uart_evicted_unread" if evicted else None),
+            "state_endpoint_present": bool(st),
+        }
+
+    @property
+    def server_restarted(self) -> bool:
+        """True if server_epoch changed since the first event seen this session."""
+        return self._server_restarted
+
+    @property
+    def uart_gap_chunks(self) -> int:
+        """Count of uart_data chunks whose seq we never observed."""
+        return self._uart_gap_chunks
 
     @property
     def last_uart_seq(self) -> int:

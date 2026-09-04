@@ -1,0 +1,9 @@
+# THREE LOOP LEVELS, same self-join shape as q_two plus one more.
+# If the trigger needs >= 2 levels this should behave like q_two; if it needs EXACTLY the
+# two-level shape, three may differ. Cheap to ask once the vehicle is running.
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1, t1 AS y, t1 AS z
+----

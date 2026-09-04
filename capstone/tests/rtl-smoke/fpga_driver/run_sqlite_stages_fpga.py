@@ -18,6 +18,7 @@ Ordering is load-bearing: stages ascend, and the FIRST one that fails to return 
 bisection point. Everything after it is lost, because a wedged domain takes the core with
 it -- that is not a limitation to work around, it is the answer. Stop there and report.
 """
+import hashlib
 import itertools
 import os
 import pathlib
@@ -788,14 +789,36 @@ def main():
     # boot as "STALE FIRMWARE" over a leftover file the run did not reference -- the gate
     # being right about its question and wrong about its subject, which is precisely the
     # failure its own docstring records. Pick whichever side is actually a staged artifact.
+    # KEEP EVERY HALF THAT NAMES A STAGED FILE, not one of them.
+    #
+    # Taking cands[-1] made this gate VACUOUS for the domain binary on every `--slt` run, which
+    # is every S-12 board draw taken since the delta-debug ladder existed. For the spec
+    # `/test-domains/sqli.dom:--slt /test-domains/dd1_one.test` both halves resolve to real
+    # overlay files -- the second because `pathlib.Path("--slt /test-domains/dd1_one.test").name`
+    # is `dd1_one.test` -- so cands[-1] selected the .test file and the .dom was never checked.
+    # The line `firmware carries the current binaries ... verified by decompressed content` then
+    # printed on every run while verifying only that a 600-byte text file was in the image.
+    # Every candidate .dom in this series is exactly 1624152 bytes, so nothing else in the log
+    # could have caught a stale one either.
+    #
+    # Checking ALL matching halves needs no heuristic about which side is the .dom, so it is
+    # also correct for the ladder's `rung:path` form that the previous fix was written for.
     _want = []
     for spec in DOMS:
         tail = spec.split("|", 1)[-1]
         halves = tail.rsplit(":", 1)
         cands = [h for h in halves if (_overlay / pathlib.Path(h).name).is_file()] or [halves[0]]
-        cand = _overlay / pathlib.Path(cands[-1]).name
-        if cand.is_file():
-            _want.append(cand)
+        for h in cands:
+            cand = _overlay / pathlib.Path(h).name
+            if cand.is_file() and cand not in _want:
+                _want.append(cand)
+    # NAME THE BYTES. A run whose verdict is a single bit is worth nothing if the binary that
+    # produced it cannot be named afterwards: an audit of the 2026-08-28/29 series could not
+    # attribute a wedge to the baseline rather than to a 3-byte variant, because no artifact
+    # recorded which one booted. One hash per file per run closes that permanently.
+    for _w in _want:
+        print(f"[stages] verifying {_w.name}  sha256={hashlib.sha256(_w.read_bytes()).hexdigest()}",
+              file=sys.stderr)
     if os.environ.get("FPGA_IMG_NAME"):
         # The staleness guard compares the LOCAL firmware against the LOCAL domains. When booting
         # a stored server-side image neither side of that comparison is what will run, so the check
@@ -814,7 +837,23 @@ def main():
         install_release_on_signal(console)
         rb = nvbit(console)
         if rb != BITSTREAM:
-            raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
+            # NARROW override, for one situation only: the console reports nv_bitstream_name as
+            # None. That happens after the backend restarts -- it appears to learn the name by
+            # performing a flash itself, so a restart loses it while the FPGA keeps its bitstream.
+            # On 2026-08-31 that cost two boots to a HARD STOP, and a power-on showed the SD
+            # bootloader banner immediately, i.e. silicon resident and only the NAME unknown.
+            #
+            # The override does NOT tolerate a genuine mismatch: a console reporting SOME OTHER
+            # name still hard-stops, because that is the case the gate exists for. It covers only
+            # "the console does not know", and it says so in the transcript rather than passing
+            # quietly -- an unverified run has to be visible in its own log, since the whole point
+            # of naming the silicon is that a verdict is worthless without it.
+            if rb is None and os.environ.get("FPGA_BITSTREAM_UNVERIFIED") == "1":
+                log(f"!! BITSTREAM IDENTITY UNVERIFIED: the console reports no resident name. "
+                    f"Proceeding on the ASSUMPTION it is {BITSTREAM!r}, which is NOT confirmed.")
+                log("!! Any result from this boot must be recorded as bitstream-unverified.")
+            else:
+                raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
         # BOOT AN IMAGE ALREADY ON THE SERVER, without uploading and without a local copy.
         #
         # The console stores boot images under a CONTENT-HASH name (sha256[:12]), so a name can
@@ -2065,16 +2104,39 @@ def main():
                 if _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
+                elif ((_hh << 8) | _hl) == 0xFFFF:
+                    # 65535 IS THE SENTINEL, NOT A COUNT. capstone_rev_node.anvil:74,79 gate
+                    # allocation on `*head != 16'd65535` -- REVNODE_SENTINEL = (2^16)-1. So 0xFFFF
+                    # means "no valid head", and it is ALSO what a dead aperture returns (all
+                    # ones). Both readings mean the same thing here: not a datum.
+                    #
+                    # This used to be reported as `rev-node head = 65535`, i.e. a pool 99.998%
+                    # consumed, and the delta line then printed "the head went BACKWARDS,
+                    # delta=-65517" on the next real sample -- an artefact of differencing against
+                    # a sentinel, which reads exactly like an allocator anomaly. On 2026-08-27 a
+                    # workload comparison nearly rested on it: every RETURNING run reported 65535
+                    # and every WEDGING run a real value, which looks like a perfect
+                    # wedge-vs-return discriminator and is actually reading-vs-no-reading.
+                    _rev_head_prev[0] = None      # never difference against a sentinel
+                    _line = (f"  [s07] after {label}: rev-node head VOID -- 0xFFFF is "
+                             f"REVNODE_SENTINEL (capstone_rev_node.anvil:74), not a count, and is "
+                             f"indistinguishable from an all-ones dead aperture. NO consumption "
+                             f"datum for this rep, and NOT evidence of a full pool.")
                 else:
                     _head = (_hh << 8) | _hl
                     _prev = _rev_head_prev[0]
                     _rev_head_prev[0] = _head
+                    # Pool is 65536 nodes (ariane_pkg.sv:587; 0xBFF00000 + 65536*16 = 0xC0000000).
+                    # Allocation stops at the sentinel, so 65535 ids are reachable. The old
+                    # "65532-entry pool" figure had no basis in the RTL.
+                    _POOL = 65535
+                    _pct = 100.0 * _head / _POOL
                     if _prev is None:
-                        _tail = "   (first sample -- no rate yet)"
+                        _tail = "   (first valid sample -- no rate yet)"
                     elif _head > _prev:
                         _d = _head - _prev
-                        _tail = (f"   delta=+{_d} ids this rep; at this rate exhaustion of the "
-                                 f"65532-entry pool is {(65532 - _head) // _d} reps away")
+                        _tail = (f"   delta=+{_d} ids this rep; at this rate the sentinel is "
+                                 f"{(_POOL - _head) // _d} reps away")
                     elif _head == _prev:
                         _tail = "   delta=0 -- this rep consumed NO rev-node ids"
                     else:
@@ -2082,7 +2144,7 @@ def main():
                                  f"the monotonic bump allocator cannot do. Suspect the read, not "
                                  f"the pool.")
                     _line = (f"  [s07] after {label}: rev-node head = {_head} "
-                             f"(0x{_head:04x}){_tail}")
+                             f"(0x{_head:04x}, {_pct:.1f}% of {_POOL}){_tail}")
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
             except Exception as exc:
@@ -2495,15 +2557,22 @@ def main():
                                       "The instruction's OPERAND is innocent; PCC's revocation "
                                       "node was invalidated.", flush=True)
                             elif tval == 0:
-                                print("          <== tval == 0. DO NOT read this as "
-                                      "'the operand was NULL, therefore a software bug' -- that "
-                                      "reading was RETRACTED. The FLU tval path has never been "
-                                      "shown to produce a NON-zero value on this bitstream, so a "
-                                      "zero here is equally consistent with the instrument never "
-                                      "populating it. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8` "
-                                      "traps with tval==0xBEEF, treat tval==0 as NO DATA. The "
-                                      "cause code alone already gives cap_type==NOT_CAP for "
-                                      "cincoffsetimm.", flush=True)
+                                print("          <== tval == 0. THE CONTROL THIS LINE DEMANDED HAS "
+                                      "RUN AND PASSED: a domain executing `cincoffsetimm` on a "
+                                      "plain 0xBEEF latches tval==0xBEEF -- tval-ctl3 (2026-08-24, "
+                                      "console-named bitstream) and tvnh-1/tvnh-2 (2026-08-31). "
+                                      "The FLU tval path is LIVE, so a zero here is a READING, not "
+                                      "an unpopulated instrument. It also EXCLUDES the "
+                                      "pc-capability producer of cause 25, which sets tval to the "
+                                      "faulting PC (commit_stage.sv:604) and can never be zero.",
+                                      flush=True)
+                                print("          <== BUT the control only exercised tval[15:0]. "
+                                      "Apertures 213-218 (tval[63:16]) have never returned a "
+                                      "non-zero value here, so an operand that is a non-zero "
+                                      "integer with a zero low half-word -- an address-like value "
+                                      "such as 0x82800000 -- would still read as 0. What is "
+                                      "established is `non-capability with [15:0]==0`; `exactly "
+                                      "null` needs a 0xDEADBEEF-class probe.", flush=True)
                             else:
                                 print("          <== tval is pointer-like: a real capability that "
                                       "LOST ITS TAG (ex_stage.sv:481-487 puts the rs1 cursor "
@@ -2617,7 +2686,7 @@ def main():
                             # fetching from a garbage trap vector looks like, and matches the gp-free smoke
                             # wedge exactly. If mtvec is ~0 that is branch A confirmed at the source rather
                             # than inferred from the consequence.
-                            for _e in ("$mcause", "$mepc", "$mtval", "$mtvec", "$x8", "$sp", "$x14", "$x10"):
+                            for _e in ("$mcause", "$mepc", "$mtval", "$mtvec", "$x8", "$sp", "$x14", "$x10", "$x3"):
                                 _s = len(console.gdb_text)
                                 console._emit("gdb_input", text=f"p/x {_e}\n")
                                 try:
@@ -2634,7 +2703,21 @@ def main():
                                   + ("UNREAD" if _a4 is None else f"0x{_a4:x}")
                                   + "   a0(x10)=" + ("UNREAD" if _a0 is None else f"0x{_a0:x}"),
                                   flush=True)
-                            if _a4 is not None:
+                            # THE mepc GUARD IS NOT OPTIONAL. Until 2026-09-02 the two verdicts
+                            # below were emitted on `_a4 != 0` ALONE, with no reference to WHERE
+                            # the core actually trapped. That is a check that cannot fail in the
+                            # informative direction: any wedge whatever, in any function, in any
+                            # image, prints "STALE-OPERAND ACCOUNT IS CONFIRMED" as long as x14
+                            # happens to be non-zero. It duly fired on a draw that wedged on a
+                            # DIFFERENT instruction in a DIFFERENT image, and that reading became
+                            # a recorded finding which had to be retracted.
+                            #
+                            # a4 is only the stale-operand account's operand when the trap is at
+                            # the site where a4 IS the operand. Anywhere else the register is
+                            # unrelated to the fault and says nothing.
+                            _site = globals().get("S12_FAULT_MEPC", 0x828f4814)
+                            _at_site = (mepc is not None and mepc == _site)
+                            if _a4 is not None and _at_site:
                                 print("          => a4 cursor is ZERO: it never received a good "
                                       "value, so the load did not deliver one and the "
                                       "STALE-OPERAND ACCOUNT IS WRONG"
@@ -2642,6 +2725,12 @@ def main():
                                       "          => a4 holds a NON-ZERO cursor: the load DID "
                                       "write it, so the consumer read something else -- the "
                                       "STALE-OPERAND ACCOUNT IS CONFIRMED", flush=True)
+                            elif _a4 is not None:
+                                _where = ("UNREAD" if mepc is None else f"0x{mepc:016x}")
+                                print(f"          => NO VERDICT on the stale-operand account: the "
+                                      f"trap latched at {_where}, not the site 0x{_site:x} where "
+                                      f"a4 is the faulting operand. x14 here is an unrelated "
+                                      f"register.", flush=True)
                             _s0 = _csr.get("$x8")
                             _spv = _csr.get("$sp")
                             print(f"  [wedge] gdb frame: s0(x8)="
@@ -2803,7 +2892,67 @@ def main():
                             # A DRAM read is not the L1 tag the load consumed -- that conflation
                             # is what forced an earlier retraction -- so this settles the CONTENT
                             # question only, and the tag question stays open.
-                            if _s0 is not None:
+                            # WEDGE_COUNTER_VA=<elf-va> -- read one global at the wedge.
+                            #
+                            # For an in-domain counter on a WEDGING image: the domain never
+                            # returns, so nothing can be reported through the host, but GDB can
+                            # read the global directly. The ELF VA is translated with the same
+                            # DBAS mapping the loader prints (`Virtual address = 10000`), so
+                            # phys = DBAS + (VA - 0x10000).
+                            # WEDGE_COUNTER_GPIDX=<hex byte offset into the gp cap table>
+                            #
+                            # DO NOT READ THE GLOBAL AT ITS ELF VA. Under the gp-captable ABI the
+                            # domain's globals are a CARVED COPY -- the glue splits a storage
+                            # capability out of sp and the monitor's copy lives in dom_data
+                            # (start-gp-captable-interp.S:106; the build's budget line shows a
+                            # separate `storage` region). The ELF VA holds only the TEMPLATE,
+                            # which for .bss is zero. Reading it returns 0 no matter what the
+                            # program did -- measured: a counter provably incremented before the
+                            # fault read back as 0x0 from its ELF VA.
+                            #
+                            # So follow the same path the code follows: gp holds the cap table,
+                            # the entry at gp+IDX is the global's capability, and its cursor (the
+                            # first 8 bytes) is the LIVE address.
+                            # GATE THE DOMAIN READS ON THE DOMAIN HAVING ENTERED.
+                            #
+                            # The wedge path runs on ANY no-return, including an entry stall where
+                            # the domain never ran and Linux is still healthy. Then gp, s0 and the
+                            # trap latch are the KERNEL's, and reading them as domain state
+                            # produces confident nonsense -- measured: a boot with no ENT markers
+                            # reported gp=0x80082290 (a kernel address) and a rolling latch of
+                            # mcause 15 from ordinary kernel traffic, alongside a "LIVE counter
+                            # @0x0" that was pure fiction.
+                            #
+                            # ENT1 is the monitor's own evidence that control left M-mode and the
+                            # domain owns the wedge (sbi_capstone.c:924-926). Without it these
+                            # reads are not merely uncertain, they are about a different program.
+                            _ent_seen = re.findall(r"ENT1:([0-9A-Fa-f]{8})", console.uart_text)
+                            _dom_owns = bool(_ent_seen)
+                            if not _dom_owns:
+                                print("  [wedge] NO ENT1 -- the domain never took control, so gp/s0/"
+                                      "latch belong to the KERNEL, not the domain. Skipping the "
+                                      "domain-state reads: this boot is VOID, not a measurement.",
+                                      flush=True)
+                            _cidx = os.environ.get("WEDGE_COUNTER_GPIDX", "") if _dom_owns else ""
+                            _gpv = _csr.get("$x3")
+                            if _cidx:
+                                if _gpv is None:
+                                    print("  [wedge] counter: gp UNREAD -- cannot reach the live "
+                                          "copy, and the ELF VA would read the template", flush=True)
+                                else:
+                                    _ent = _rd(f"0x{_gpv + int(_cidx, 16):x}", "2gx")
+                                    print(f"  [wedge] gp=0x{_gpv:x} cap-table entry @+{_cidx}: "
+                                          f"{_ent if _ent else 'READ FAILED'}", flush=True)
+                                    _mm = re.findall(r"0x([0-9a-f]+)", _ent or "")
+                                    if len(_mm) >= 2:
+                                        _live = int(_mm[1], 16)      # word0 after the addr echo
+                                        _cv = _rd(f"0x{_live:x}", "1gx")
+                                        print(f"  [wedge] LIVE counter @0x{_live:x}: "
+                                              f"{_cv if _cv else 'READ FAILED'}", flush=True)
+                                        print("          (entries to the probed function before "
+                                              "the fault; 1 = the FIRST call faulted, >1 = a "
+                                              "later one)", flush=True)
+                            if _s0 is not None and _dom_owns:
                                 for _lbl, _off in (("slot   s0-0x70 ", 0x70),
                                                    ("zerost s0-0x120", 0x120)):
                                     _a = _s0 - _off

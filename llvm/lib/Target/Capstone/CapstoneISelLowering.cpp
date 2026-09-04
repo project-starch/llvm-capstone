@@ -2883,6 +2883,33 @@ bool CapstoneTargetLowering::mergeStoresAfterLegalization(EVT VT) const {
          (VT.isFixedLengthVector() && VT.getVectorElementType() == MVT::i1);
 }
 
+bool CapstoneTargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
+                                             const MachineFunction &MF) const {
+  // See the header comment: i128 is the capability carrier here, so a merged
+  // 128-bit store is a capability store. Found by building the SQLite
+  // amalgamation at -O1, which reported 24 of these.
+  //
+  // The VERIFIED reduced shape is sqlite3FinishCoding's VdbeOp initialiser: six
+  // adjacent constant stores (i8, i16, i32, i32, i32, i8) over 16 aligned bytes,
+  // merged into `store i128 0x10000000000000009`. That is the one pinned by
+  // cap-store-merge-i128.ll. sqlite3Pragma produced merges of four i32 stores in
+  // the same run (e.g. 0x3000000020000000400000070, which is 0x00000003,
+  // 0x00000002, 0x00000004, 0x00000070 -- the printed form just omits leading
+  // zeros). Both are the same defect; only the mixed-width one was reduced, and a
+  // hand-written four-i32 struct in C does NOT reproduce it, so start from the
+  // lit test rather than from the sqlite3Pragma values.
+  //
+  // NOT SUFFICIENT ON ITS OWN. memset still reaches the same forge by a different
+  // route: findOptimalMemOpLowering guards every i128-avoidance branch on
+  // Op.isMemcpy() (see :26131, :26157, :26179), so a memset falls through to the
+  // generic picker, which picks i128 because i128 is a legal type, and never
+  // consults this hook. A 16-byte llvm.memset with a non-zero fill still fails.
+  // SQLite happens not to contain one. See ISSUES.md C-17.
+  if (MemVT == MVT::i128)
+    return false;
+  return TargetLoweringBase::canMergeStoresTo(AS, MemVT, MF);
+}
+
 bool CapstoneTargetLowering::isLegalElementTypeForRVV(EVT ScalarTy) const {
   if (!ScalarTy.isSimple())
     return false;
@@ -7802,6 +7829,868 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
   }
   return nullptr;
 #undef NODE_NAME_CASE
+}
+
+bool llvm::isCapstoneIntegerOffset(SDValue V) {
+  unsigned Opc = V.getOpcode();
+  if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
+      Opc == ISD::ANY_EXTEND || Opc == ISD::SIGN_EXTEND_INREG ||
+      isa<ConstantSDNode>(V.getNode()))
+    return true;
+
+  // A BITWISE OR SHIFT RESULT IS ALWAYS AN INTEGER, never a capability.
+  //
+  // These are integer instructions on this target: they read the scalar and
+  // produce an UNTAGGED result, even when an operand was a capability. That is
+  // stated by cap-i128-and-capability-mask.ll, which aligns a pointer down with
+  // `and` and documents "the result is untagged -- which is what the source
+  // asked for, since a value built out of uintptr_t bits cannot carry a tag."
+  // So whatever the operands were, the value here is an integer.
+  //
+  // This started as SHL only, on the narrower argument that a capability is
+  // never the OPERAND of a shift. Restricting it to SHL missed the shape that
+  // C-19 turned out to be: `zext i32 -> i128` is legalised into
+  // `and (anyext x), 0xffffffff` before this runs, so by the time lowerSUB asks,
+  // the ZERO_EXTEND above is gone and the node is an AND. Neither operand of the
+  // enclosing `sub` then looked like an integer, so lowerSUB took the
+  // capability-minus-capability path and emitted `lcc rd, rs, 2` -- the CURSOR
+  // query, which is NOT total -- against an untagged value. On QEMU that aborts
+  // the emulator (`helper_cslcc: Assertion rs1_v->tag failed`); on silicon it
+  // raises. It also miscompiled: the ptr-diff path returns an untagged integer,
+  // so `p - (unsigned)n` came back detagged.
+  //
+  // Enumerating shapes has now missed twice (shl(load,...) then this), which is
+  // why the rule is stated from the ISA property rather than from a list of
+  // patterns that produce it.
+  if (V.getValueType() == MVT::i128 &&
+      (Opc == ISD::AND || Opc == ISD::OR || Opc == ISD::XOR ||
+       Opc == ISD::SHL || Opc == ISD::SRL || Opc == ISD::SRA))
+    return true;
+
+  if (const auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    return ExtType != ISD::NON_EXTLOAD && V.getValueType() == MVT::i128 &&
+           MemVT.isScalarInteger() && !MemVT.bitsGT(MVT::i64);
+  }
+
+  return false;
+}
+
+bool llvm::isCapstoneCapabilityValue(SDValue V) {
+  unsigned Opc = V.getOpcode();
+  // A genuine capability load (ldc) is a NON_EXTLOAD of 128 bits.
+  // Sext/zext/anyext loads from a smaller integer (e.g. sext from i64)
+  // have getValueType()==i128 but are NOT capability loads — they are
+  // integers widened to i128, and must not be treated as capabilities here.
+  if (Opc == ISD::LOAD && V.getValueType() == MVT::i128) {
+    const auto *Ld = cast<LoadSDNode>(V.getNode());
+    if (Ld->getExtensionType() == ISD::NON_EXTLOAD &&
+        Ld->getMemoryVT() == MVT::i128)
+      return true;
+  }
+  return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
+}
+
+// Read a capability's ADDRESS as an integer.
+//
+// This is a PLAIN INTEGER READ, deliberately NOT `lcc rd, rs, 2`.
+//
+// `lcc` selector 2 is the cursor query and it is NOT TOTAL: it traps on an
+// untagged operand. A NULL pointer is untagged, so every `lcc`-based address
+// read was a trap waiting for a null -- which is what C-19 was. In
+// sqlite3CreateFunc, DAGCombiner folds `if (p != 0 || q != 0)` into
+// `(addr(p) | addr(q)) != 0`; both operands got `lcc`, and the first null
+// argument killed the domain at entry.
+//
+// A plain integer read gives the same value and cannot trap. Verified on BOTH
+// implementations, because they have disagreed before:
+//
+//   RTL: for an ordinary ALU op the metadata shadow file is not even read --
+//        issue_read_operands.sv:298 decides `not_capstone` from the OPCODE, and
+//        :1653,1656-1657 force cap_raddr to 0 -- so the operand comes from the
+//        flat 64-bit regfile with no tag-dependent behaviour and no exception
+//        path. What that slot holds for a capability is the cursor:
+//        ex_stage.sv:463-479 commits `capstone_flu_res.cap_result.cursor`.
+//        And lcc does trap: capstone_dyn_unit.anvil:195-198 raises
+//        UNEXPECTED_OPERAND when cap_type == NOT_CAP for any selector but 1.
+//
+//   QEMU: get_gpr reads gpr[i].val (translate.c:1331-1332), and `val` is a
+//        union whose `scalar` member aliases `cap.bounds.cursor` -- cursor is
+//        the first field of the first field (cap.h:59-63, 79-83). helper_cslcc
+//        asserts rs1_v->tag (op_helper.c:762).
+//
+// Selector 1 (the type query) is the only total selector, and it answers the
+// TYPE, not the address -- so there is no `lcc` form that would do here.
+static SDValue getCapstoneCapabilityCursor(SDValue Cap, SelectionDAG &DAG,
+                                           const SDLoc &DL, MVT XLenVT) {
+  SDValue IntrinsicID =
+      DAG.getTargetConstant(Intrinsic::capstone_cap_get_cursor, DL, XLenVT);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, XLenVT, IntrinsicID, Cap);
+}
+
+static SDValue narrowOffsetForCIncOffset(SDValue V, SelectionDAG &DAG,
+                                         const CapstoneSubtarget &Subtarget,
+                                         const SDLoc &DL,
+                                         unsigned &ExtOpcode) {
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
+       ExtOpcode == ISD::ANY_EXTEND) &&
+      V.getOperand(0).getValueType().isScalarInteger() &&
+      !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
+    if (ExtOpcode == ISD::SIGN_EXTEND)
+      return DAG.getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (ExtOpcode == ISD::ZERO_EXTEND)
+      return DAG.getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (V.getOperand(0).getSimpleValueType() == XLenVT)
+      return V.getOperand(0);
+    return DAG.getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
+  }
+
+  if (V.getOpcode() == ISD::SIGN_EXTEND_INREG) {
+    SDValue Base = V.getOperand(0);
+    if (Base.getOpcode() == ISD::ANY_EXTEND &&
+        Base.getOperand(0).getValueType().isScalarInteger() &&
+        !Base.getOperand(0).getValueType().bitsGT(XLenVT))
+      Base = Base.getOperand(0);
+    if (Base.getValueType().isScalarInteger() &&
+        !Base.getValueType().bitsGT(XLenVT)) {
+      ExtOpcode = ISD::SIGN_EXTEND;
+      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT,
+                         DAG.getAnyExtOrTrunc(Base, DL, XLenVT),
+                         V.getOperand(1));
+    }
+  }
+
+  if (auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    if (Ld->isSimple() && ExtType != ISD::NON_EXTLOAD &&
+        MemVT.isScalarInteger() && !MemVT.bitsGT(XLenVT)) {
+      if (ExtType == ISD::SEXTLOAD)
+        ExtOpcode = ISD::SIGN_EXTEND;
+      else if (ExtType == ISD::ZEXTLOAD)
+        ExtOpcode = ISD::ZERO_EXTEND;
+      else
+        ExtOpcode = ISD::ANY_EXTEND;
+
+      SDValue NarrowLoad =
+          DAG.getExtLoad(ExtType, DL, XLenVT, Ld->getChain(),
+                         Ld->getBasePtr(), MemVT, Ld->getMemOperand());
+      DAG.makeEquivalentMemoryOrdering(Ld, NarrowLoad);
+      return NarrowLoad;
+    }
+  }
+
+  return SDValue();
+}
+
+static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
+                        const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  SDValue Base = Op.getOperand(0);
+  SDValue Offset = Op.getOperand(1);
+
+  if (!isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) {
+    SDValue BaseCursor =
+        getCapstoneCapabilityCursor(Base, DAG, DL, Subtarget.getXLenVT());
+    SDValue OffsetCursor =
+        getCapstoneCapabilityCursor(Offset, DAG, DL, Subtarget.getXLenVT());
+    SDValue Diff = DAG.getNode(ISD::SUB, DL, Subtarget.getXLenVT(), BaseCursor,
+                               OffsetCursor);
+    return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Diff);
+  }
+
+  if (!isCapstoneIntegerOffset(Offset) || isCapstoneIntegerOffset(Base))
+    return SDValue();
+
+  SDValue NegOffset;
+  if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+    NegOffset = DAG.getConstant(-C->getAPIntValue(), DL, MVT::i128);
+  } else {
+    unsigned ExtOpcode = Offset.getOpcode();
+    SDValue XLenOffset;
+
+    if (Offset.getOpcode() == ISD::SHL &&
+        isa<ConstantSDNode>(Offset.getOperand(1))) {
+      ExtOpcode = Offset.getOperand(0).getOpcode();
+      XLenOffset =
+          narrowOffsetForCIncOffset(Offset.getOperand(0), DAG, Subtarget, DL,
+                                    ExtOpcode);
+      if (XLenOffset) {
+        SDValue ShAmt = DAG.getZExtOrTrunc(Offset.getOperand(1), DL, XLenVT);
+        XLenOffset = DAG.getNode(ISD::SHL, DL, XLenVT, XLenOffset, ShAmt);
+      }
+    } else {
+      XLenOffset =
+          narrowOffsetForCIncOffset(Offset, DAG, Subtarget, DL, ExtOpcode);
+    }
+
+    // Fallback: any other integer-offset shape. Its value lives in the low XLen
+    // bits (byte offsets fit in XLen), so truncate rather than fall through to
+    // the generic i128 expansion, which would ptrtoint(lcc)/scalar-subtract/
+    // cincoffset-a-scalar and drop the base capability's tag.
+    if (!XLenOffset)
+      XLenOffset = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
+
+    SDValue Zero = DAG.getConstant(0, DL, XLenVT);
+    SDValue NegXLen = DAG.getNode(ISD::SUB, DL, XLenVT, Zero, XLenOffset);
+    NegOffset = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, NegXLen);
+  }
+
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, NegOffset);
+}
+
+SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
+  // 1. Check if this is an operation on 128 bits (our pointers/capabilities)
+  MVT VT = Op.getSimpleValueType();
+
+  // If this is not i128, return the operation unchanged to let LLVM handle it
+  // normally
+  if (VT != MVT::i128)
+    return Op; // Changed: return Op instead of SDValue()
+
+  // 2. Get context and operands
+  SDLoc DL(Op);
+  SDValue Base = Op.getOperand(0); // Base (i128)
+  SDValue Offset = Op.getOperand(1); // Offset (i128)
+
+  // ISD::ADD is commutative; DAGCombine may place the integer offset in
+  // operand(0). Restore canonical order: capability in Base, integer in
+  // Offset.
+  //
+  // Two complementary checks are used:
+  //   isIntegerOffset — recognizes values that are definitely integer offsets:
+  //     bare {S,Z,A}_EXTEND, constants, and scaled-index (shl(ext, k)).
+  //   isCapabilityValue — recognizes values that are definitely capabilities:
+  //     i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
+  //
+  // Swap when Base looks like an integer but Offset does not, OR when Offset
+  // looks like a capability but Base does not. This handles the spill-reload
+  // case where the capability comes back as a raw ISD::LOAD i128 and the
+  // integer index has already been scaled (shl) so neither operand is a bare
+  // extend.
+  {
+    // ISD::ADD is commutative; DAGCombine may place the integer offset in
+    // operand(0). Restore canonical order: capability in Base, integer in
+    // Offset.
+    //
+    // isIntegerOffset — recognizes values that are definitely integer offsets:
+    //   bare {S,Z,A}_EXTEND, constants, and scaled-index shl(ext, k).
+    // isCapabilityValue — recognizes values that are definitely capabilities:
+    //   i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
+    //   NOTE: CopyFromReg i128 is intentionally excluded — integers stored in
+    //   i128 registers appear as CopyFromReg i128 and must not be mistaken for
+    //   capabilities. Without this exclusion the swap incorrectly fires when an
+    //   integer (Base=CopyFromReg i128) faces a real capability (Offset=CIncOffset).
+    if ((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
+        (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base)))
+      std::swap(Base, Offset);
+  }
+
+  // Scalar i128 add, NOT capability+offset: when neither operand is a capability
+  // base, there is nothing to CIncOffset and emitting one would cincoffset an
+  // untagged scalar and fault (cscincoffsetimm rs1->tag). This is the shape a
+  // pointer DIFFERENCE plus a constant takes: lua_gettop's
+  // `top.p - (func.p + 1)` DAGCombines to `add(sub(top.p, func.p), -32)`, and the
+  // interpreter faults on the first C-API call through it.
+  //
+  // Offset is an integer offset (the constant/extend); the scalar Base appears in
+  // one of two forms depending on legalization order:
+  //   (a) already an integer offset itself (a sign_extended cursor difference), or
+  //   (b) still a raw ptr-ptr SUB of two capabilities (not yet lowered).
+  // Either way, do the arithmetic in the XLen domain and sign-extend back, exactly
+  // as lowerSUB's ptr-ptr branch does (byte offsets and their sums fit in XLen).
+  if (isCapstoneIntegerOffset(Offset)) {
+    MVT XLenVT = Subtarget.getXLenVT();
+    SDValue BaseScalar;
+    if (isCapstoneIntegerOffset(Base)) {
+      BaseScalar = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base); // form (a)
+    } else if (Base.getOpcode() == ISD::SUB &&
+               isCapstoneCapabilityValue(Base.getOperand(0)) &&
+               isCapstoneCapabilityValue(Base.getOperand(1))) {
+      // form (b): a pointer difference -- (cursor(A) - cursor(B)), scalar.
+      SDValue AC = getCapstoneCapabilityCursor(Base.getOperand(0), DAG, DL, XLenVT);
+      SDValue BC = getCapstoneCapabilityCursor(Base.getOperand(1), DAG, DL, XLenVT);
+      BaseScalar = DAG.getNode(ISD::SUB, DL, XLenVT, AC, BC);
+    }
+    if (BaseScalar) {
+      SDValue O = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
+      SDValue Sum = DAG.getNode(ISD::ADD, DL, XLenVT, BaseScalar, O);
+      return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Sum);
+    }
+  }
+
+  // --- Optimization for GEP scaling (loop_test fix) ---
+  // LLVM often emits: (add Base, (shl (sext i64:Index), ShAmt))
+  // We want:          (CIncOffset Base, (sext (shl i64:Index, ShAmt)))
+  // This moves the shift to 64-bit domain where it is legal (SLLI).
+
+  if (Offset.getOpcode() == ISD::SHL && Offset.getValueType() == MVT::i128) {
+    SDValue ShlVal = Offset.getOperand(0);
+    SDValue ShlAmt = Offset.getOperand(1);
+
+    // Restrict to the common GEP pattern where the shift amount is constant.
+    if (isa<ConstantSDNode>(ShlAmt)) {
+      auto extractShiftIndexToXLen = [&](SDValue V, unsigned &ExtOpcode) {
+        if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND) &&
+            V.getOperand(0).getValueType() == MVT::i64)
+          return V.getOperand(0);
+
+        if (V.getOpcode() == ISD::AND) {
+          auto *MaskC = dyn_cast<ConstantSDNode>(V.getOperand(1));
+          SDValue Ext = V.getOperand(0);
+          if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
+              Ext.getOperand(0).getValueType() == MVT::i64) {
+            APInt Mask = MaskC->getAPIntValue();
+            if (Mask.countl_zero() >= 64) {
+              ExtOpcode = ISD::ZERO_EXTEND;
+              return DAG.getNode(
+                  ISD::AND, DL, MVT::i64, Ext.getOperand(0),
+                  DAG.getConstant(Mask.trunc(64), DL, MVT::i64));
+            }
+          }
+        }
+
+        if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
+            isa<ConstantSDNode>(V.getOperand(1))) {
+          SDValue Inner = V.getOperand(0);
+          auto *InnerShlAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
+          auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
+          if (Inner.getOpcode() == ISD::SHL && InnerShlAmt &&
+              InnerShlAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
+            SDValue Ext = Inner.getOperand(0);
+            if (Ext.getOpcode() == ISD::ANY_EXTEND &&
+                Ext.getOperand(0).getValueType() == MVT::i64) {
+              unsigned NarrowBits = V.getValueType().getSizeInBits() -
+                                    OuterShAmt->getZExtValue();
+              if (NarrowBits > 0 && NarrowBits < 64 &&
+                  isPowerOf2_32(NarrowBits)) {
+                if (V.getOpcode() == ISD::SRA) {
+                  ExtOpcode = ISD::SIGN_EXTEND;
+                  return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, MVT::i64,
+                                     Ext.getOperand(0),
+                                     DAG.getValueType(MVT::getIntegerVT(NarrowBits)));
+                }
+
+                ExtOpcode = ISD::ZERO_EXTEND;
+                return DAG.getNode(
+                    ISD::AND, DL, MVT::i64, Ext.getOperand(0),
+                    DAG.getConstant(APInt::getLowBitsSet(64, NarrowBits), DL,
+                                    MVT::i64));
+              }
+            }
+          }
+        }
+
+        return SDValue();
+      };
+
+      unsigned ExtOpc = ShlVal.getOpcode();
+      SDValue Index64 = extractShiftIndexToXLen(ShlVal, ExtOpc);
+
+      if (Index64) {
+        // Normalize shift amount to i64 (pointer width for arithmetic)
+        SDValue ShAmt64 = DAG.getZExtOrTrunc(ShlAmt, DL, MVT::i64);
+
+        // 1. Perform shift in i64 domain (Standard RISC-V SLLI)
+        SDValue NewShift64 = DAG.getNode(ISD::SHL, DL, MVT::i64, Index64,
+                                         ShAmt64);
+
+        // 2. Extend the result back to i128.
+        Offset = DAG.getNode(ExtOpc, DL, MVT::i128, NewShift64);
+      }
+    }
+  }
+  // ----------------------------------------------------
+
+  // 3. Create a new CIncOffset node
+  // Note: we pass MVT::i128. This matches the .td file definition.
+  // We pass Op1 (offset) as i128, even if it's a constant.
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
+}
+
+static SDValue normalizeScalarI128ShiftOperandToXLen(
+    SDValue V, SelectionDAG &DAG, const CapstoneSubtarget &Subtarget,
+    const SDLoc &DL, unsigned &ExtOpcode) {
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
+       ExtOpcode == ISD::ANY_EXTEND) &&
+      V.getOperand(0).getValueType().isScalarInteger() &&
+      !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
+    if (ExtOpcode == ISD::SIGN_EXTEND)
+      return DAG.getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (ExtOpcode == ISD::ZERO_EXTEND)
+      return DAG.getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (V.getOperand(0).getSimpleValueType() == XLenVT)
+      return V.getOperand(0);
+    return DAG.getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
+  }
+
+  if (V.getOpcode() == ISD::SIGN_EXTEND_INREG) {
+    SDValue Base = V.getOperand(0);
+    if (Base.getOpcode() == ISD::ANY_EXTEND &&
+        Base.getOperand(0).getValueType().isScalarInteger() &&
+        !Base.getOperand(0).getValueType().bitsGT(XLenVT))
+      Base = Base.getOperand(0);
+
+    if (Base.getValueType().isScalarInteger() && !Base.getValueType().bitsGT(XLenVT)) {
+      ExtOpcode = ISD::SIGN_EXTEND;
+      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT,
+                         DAG.getAnyExtOrTrunc(Base, DL, XLenVT), V.getOperand(1));
+    }
+  }
+
+  if (auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    if (Ld->isSimple() && ExtType != ISD::NON_EXTLOAD &&
+        MemVT.isScalarInteger() && !MemVT.bitsGT(XLenVT)) {
+      if (ExtType == ISD::SEXTLOAD)
+        ExtOpcode = ISD::SIGN_EXTEND;
+      else if (ExtType == ISD::ZEXTLOAD)
+        ExtOpcode = ISD::ZERO_EXTEND;
+      else
+        ExtOpcode = ISD::ANY_EXTEND;
+
+      SDValue NarrowLoad =
+          DAG.getExtLoad(ExtType, DL, XLenVT, Ld->getChain(),
+                         Ld->getBasePtr(), MemVT, Ld->getMemOperand());
+      DAG.makeEquivalentMemoryOrdering(Ld, NarrowLoad);
+      return NarrowLoad;
+    }
+  }
+
+  if ((V.getOpcode() == ISD::AssertZext || V.getOpcode() == ISD::AssertSext) &&
+      cast<VTSDNode>(V.getOperand(1))->getVT().isScalarInteger() &&
+      !cast<VTSDNode>(V.getOperand(1))->getVT().bitsGT(XLenVT)) {
+    unsigned AssertedOpc = V.getOpcode();
+    ExtOpcode = AssertedOpc == ISD::AssertZext ? ISD::ZERO_EXTEND : ISD::SIGN_EXTEND;
+    SDValue Base = V.getOperand(0);
+    if (Base.getValueType().bitsGT(XLenVT))
+      Base = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base);
+    else if (Base.getSimpleValueType() != XLenVT)
+      Base = DAG.getAnyExtOrTrunc(Base, DL, XLenVT);
+
+    return DAG.getNode(AssertedOpc, DL, XLenVT, Base, V.getOperand(1));
+  }
+
+  if (V.getOpcode() == ISD::AND) {
+    auto *MaskC = dyn_cast<ConstantSDNode>(V.getOperand(1));
+    SDValue Ext = V.getOperand(0);
+    if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
+        Ext.getOperand(0).getValueType() == XLenVT) {
+      APInt Mask = MaskC->getAPIntValue();
+      if (Mask.countl_zero() >= Mask.getBitWidth() - XLenVT.getSizeInBits()) {
+        ExtOpcode = ISD::ZERO_EXTEND;
+        return DAG.getNode(ISD::AND, DL, XLenVT, Ext.getOperand(0),
+                           DAG.getConstant(Mask.trunc(XLenVT.getSizeInBits()),
+                                           DL, XLenVT));
+      }
+    }
+  }
+
+  if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
+      isa<ConstantSDNode>(V.getOperand(1))) {
+    SDValue Inner = V.getOperand(0);
+    auto *InnerShAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
+    auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
+    if (Inner.getOpcode() == ISD::SHL && InnerShAmt &&
+        InnerShAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
+      SDValue Ext = Inner.getOperand(0);
+      if (Ext.getOpcode() == ISD::ANY_EXTEND &&
+          Ext.getOperand(0).getValueType().isScalarInteger() &&
+          !Ext.getOperand(0).getValueType().bitsGT(XLenVT)) {
+        unsigned NarrowBits =
+            V.getValueType().getSizeInBits() - OuterShAmt->getZExtValue();
+        if (NarrowBits > 0 && NarrowBits < XLenVT.getSizeInBits() &&
+            isPowerOf2_32(NarrowBits)) {
+          SDValue Base = DAG.getAnyExtOrTrunc(Ext.getOperand(0), DL, XLenVT);
+          if (V.getOpcode() == ISD::SRA) {
+            ExtOpcode = ISD::SIGN_EXTEND;
+            return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT, Base,
+                               DAG.getValueType(MVT::getIntegerVT(NarrowBits)));
+          }
+
+          ExtOpcode = ISD::ZERO_EXTEND;
+          return DAG.getNode(
+              ISD::AND, DL, XLenVT, Base,
+              DAG.getConstant(APInt::getLowBitsSet(XLenVT.getSizeInBits(),
+                                                   NarrowBits),
+                              DL, XLenVT));
+        }
+      }
+    }
+  }
+
+  return SDValue();
+}
+
+// Recognise an operand of a widening multiply: a value extended from XLen, or a
+// constant small enough to be one. Returns the XLen-wide operand in Out.
+// IsSigned is set on the first extended operand seen and then required to match,
+// so a mixed zext/sext pair is rejected rather than guessed at.
+static bool matchI128WideningMulOperand(SDValue V, SelectionDAG &DAG, MVT XLenVT,
+                                        SDValue &Out, bool &IsSigned,
+                                        bool &SignednessKnown) {
+  if (V.getOpcode() == ISD::ZERO_EXTEND || V.getOpcode() == ISD::SIGN_EXTEND) {
+    if (V.getOperand(0).getValueType() != XLenVT)
+      return false;
+    bool ThisSigned = V.getOpcode() == ISD::SIGN_EXTEND;
+    if (SignednessKnown && ThisSigned != IsSigned)
+      return false;
+    IsSigned = ThisSigned;
+    SignednessKnown = true;
+    Out = V.getOperand(0);
+    return true;
+  }
+  if (auto *C = dyn_cast<ConstantSDNode>(V)) {
+    const APInt &Val = C->getAPIntValue();
+    unsigned XLen = XLenVT.getSizeInBits();
+    // The constant must mean the SAME number after truncation to XLen that it means
+    // as an i128, under the signedness this multiply is lowered with. Checking only
+    // isIntN was WRONG and miscompiled: 2^64-1 fits XLen unsigned and truncates to
+    // -1, so paired with a SIGN_EXTEND it produced mulh(a, -1) -- the high word of
+    // a * -1 -- for a multiply by a large POSITIVE number. For a = 1 that returns
+    // 0xFFFFFFFFFFFFFFFF where the answer is 0.
+    //   zext side: the i128 constant is its XLen truncation ZERO-extended
+    //   sext side: the i128 constant is its XLen truncation SIGN-extended
+    // A constant matched BEFORE any extend has fixed the signedness has to satisfy
+    // both, i.e. 0 <= Val < 2^(XLen-1). That is conservative and still covers every
+    // magic multiplier a divide-by-constant expansion produces.
+    // Regression test: cap-i128-widening-mul-const-signedness.ll
+    bool FitsUnsigned = Val.isIntN(XLen);
+    bool FitsSigned = Val.isSignedIntN(XLen);
+    if (!(SignednessKnown ? (IsSigned ? FitsSigned : FitsUnsigned)
+                          : (FitsSigned && FitsUnsigned)))
+      return false;
+    Out = DAG.getConstant(Val.trunc(XLen), SDLoc(V), XLenVT);
+    return true;
+  }
+  return false;
+}
+
+static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
+                                    const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+  // A non-constant amount is handled by neither the widening-multiply hook below
+  // (which needs a constant XLen) nor the XLen-domain narrowing (which needs to
+  // know the amount is in range), so leave it alone here. It still reaches
+  // ExpandNode and still asserts; that gap is recorded rather than papered over.
+  if (!isa<ConstantSDNode>(Op.getOperand(1)))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  // srl(mul(ext a, ext b), XLen) is the HIGH HALF of a widening multiply, not a
+  // 128-bit shift anyone wrote. On a target where i128 is illegal, DAGCombiner
+  // rewrites this to MULHU/MULHS while legalising the wide type. Here i128 is
+  // LEGAL, because it is the capability carrier, so that combine never runs and a
+  // genuine 128-bit shift survives to legalisation, where ExpandNode has nothing
+  // for it and asserts "Unable to legalize non-vector shift".
+  //
+  // This is how ordinary code reaches it: division by a constant is strength
+  // reduced to mulhu(x, magic) >> s. lib/oofatfs's f_mkfs does exactly that and
+  // crashed the compiler, which is what MICROPY_VFS in a Capstone domain was
+  // blocked on. Nothing in the C source mentions __int128.
+  if (Op.getOpcode() == ISD::SRL && isa<ConstantSDNode>(Op.getOperand(1)) &&
+      Op.getConstantOperandVal(1) == XLenVT.getSizeInBits() &&
+      Op.getOperand(0).getOpcode() == ISD::MUL &&
+      Subtarget.hasStdExtZmmul()) {
+    SDValue Mul = Op.getOperand(0);
+    SDValue A, B;
+    bool IsSigned = false, SignednessKnown = false;
+    if (matchI128WideningMulOperand(Mul.getOperand(0), DAG, XLenVT, A, IsSigned,
+                                    SignednessKnown) &&
+        matchI128WideningMulOperand(Mul.getOperand(1), DAG, XLenVT, B, IsSigned,
+                                    SignednessKnown) &&
+        SignednessKnown)
+      return DAG.getNode(
+          ISD::ZERO_EXTEND, DL, MVT::i128,
+          DAG.getNode(IsSigned ? ISD::MULHS : ISD::MULHU, DL, XLenVT, A, B));
+  }
+
+  // A constant shift amount >= XLen shifts every meaningful bit out of the low
+  // XLen half.  These i128 values carry an integer only in their low XLen bits
+  // (a capability is never shifted as an integer), and everything below computes
+  // the shift in the XLen domain and re-extends -- a model that cannot see any
+  // bit at position >= XLen.  So handle these amounts here, before that path:
+  //   * SHL by >= XLen: every source bit lands at position >= XLen, so the
+  //     low-XLen result is exactly zero.  Return an i128 zero (a defined value).
+  //   * SRL/SRA by >= XLen: the low-XLen result would come from the discarded
+  //     high half, which the XLen-domain narrowing cannot reconstruct -- bail.
+  // This guard is required, not just an optimization: feeding an i64 shift an
+  // amount >= XLen makes SelectionDAG fold the node to UNDEF, and the
+  // re-extension then propagates that undef.  That is exactly how the
+  // `shl i128 X, 64` high partial product expandMUL synthesises for a `mul i128`
+  // by a full-width constant (the modular inverse an `sdiv exact` lowers to,
+  // e.g. dividing a pointer difference by a non-power-of-two element size)
+  // became `undef`, leaving an unselectable `or(zext(lo), undef)` at isel.
+  if (Op.getConstantOperandVal(1) >= XLenVT.getSizeInBits()) {
+    if (Op.getOpcode() == ISD::SHL)
+      return DAG.getConstant(0, DL, MVT::i128);
+    // Returning SDValue() here used to hand the node to the generic legaliser,
+    // which has no expansion for a non-vector 128-bit shift and asserts
+    // "Unable to legalize non-vector shift" -- a compiler crash on valid IR.
+    // The widening-multiply hook above catches the shape that actually occurs in
+    // ordinary code; anything else reaching here wants a real 128-bit right
+    // shift, which this target cannot express because i128 is the capability
+    // carrier and only its low XLen bits are an integer. Say so instead of
+    // asserting.
+    // A REAL DIAGNOSTIC, NOT report_fatal_error. This used to be
+    // report_fatal_error(..., GenCrashDiag=false), which is clean through `llc`
+    // -- one "LLVM ERROR:" line, exit 1 -- but NOT through clang, where the
+    // driver's own crash handling still prints "PLEASE submit a bug report" and
+    // a full stack dump. Users run clang; the lit tests run llc, so the test
+    // suite could not observe the thing users actually saw.
+    //
+    // WHY THIS MATTERS MORE THAN CLOSING THE ROUTES. Three separate source-level
+    // routes to this point have been found: __int128, _BitInt(65..128), and a
+    // 128-bit _Atomic. The first two are now rejected in the front end
+    // (CapstoneTargetInfo::hasInt128Type / getMaxBitIntWidth); the third is not,
+    // and each time the assumption "no source form reaches this any more" was
+    // recorded it was wrong. There will be a fourth. So the failure mode itself
+    // has to be acceptable rather than merely unreachable.
+    //
+    // diagnose() reports at the source location and lets code generation finish,
+    // so the user gets `error: <message>` like any other compiler error.
+    MachineFunction &MF = DAG.getMachineFunction();
+    DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
+        MF.getFunction(),
+        "Capstone PureCap: cannot lower a 128-bit right shift by >= XLen; only "
+        "the high half of a widening multiply is supported in that form. On "
+        "this target i128 is the capability carrier, so only its low XLen bits "
+        "are an integer -- use two 64-bit halves instead",
+        DL.getDebugLoc()));
+    // A DEFINED value, so codegen completes and the diagnostic above is what the
+    // user sees. Returning SDValue() here would fall back through ExpandNode to
+    // the assertion this replaced.
+    return DAG.getConstant(0, DL, MVT::i128);
+  }
+
+  SDValue ShiftInput = Op.getOperand(0);
+  bool IsPointerDifference =
+      ShiftInput.getOpcode() == ISD::SUB &&
+      !isCapstoneIntegerOffset(ShiftInput.getOperand(0)) &&
+      !isCapstoneIntegerOffset(ShiftInput.getOperand(1));
+  unsigned ExtOpcode = Op.getOperand(0).getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(0), DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal) {
+    // General fallback for an i128 value that the helper above could not prove
+    // narrowable through a recognized extend/load pattern -- most importantly
+    // the arithmetic right shift a power-of-two `sdiv exact` lowers to from a
+    // pointer difference (`(p - q) / sizeof(T)`).  On Capstone an i128 integer
+    // is carried in a capability register and only its low XLen bits are
+    // meaningful as an integer (a pointer difference lands entirely in that low
+    // half), so truncate to XLen, shift there, and re-extend with the kind that
+    // matches the shift's sign semantics.  This path is reached only when the
+    // operand is otherwise unhandled -- i.e. exactly the cases that previously
+    // hit the "Unable to legalize non-vector shift" assertion -- so it cannot
+    // regress any compile that already succeeds.  (Shift amounts >= XLen were
+    // already handled above.)
+    XLenVal = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op.getOperand(0));
+    ExtOpcode = Op.getOpcode() == ISD::SRA || IsPointerDifference
+                    ? ISD::SIGN_EXTEND
+                    : ISD::ZERO_EXTEND;
+  }
+
+  SDValue ShAmt = DAG.getZExtOrTrunc(Op.getOperand(1), DL, XLenVT);
+  unsigned ShiftOpcode = Op.getOpcode();
+  // An exact signed division by a power of two starts as SRA, but demanded-bits
+  // simplification may turn it into SRL when only the low XLEN result is used.
+  // Once we truncate the sign-extended i128 carrier to XLEN, that SRL must be
+  // restored to SRA or negative pointer differences become large positives.
+  // Keep genuine logical shifts (including exact shifts of zero-extended
+  // values) as SRL.
+  if (ShiftOpcode == ISD::SRL && Op->getFlags().hasExact() &&
+      ExtOpcode == ISD::SIGN_EXTEND)
+    ShiftOpcode = ISD::SRA;
+  SDValue Shifted =
+      DAG.getNode(ShiftOpcode, DL, XLenVT, XLenVal, ShAmt);
+  return DAG.getNode(ExtOpcode, DL, MVT::i128, Shifted);
+}
+
+static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
+                                      const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDLoc DL(Op);
+
+  if (Op.getOpcode() == ISD::OR && Op.getNode()->getFlags().hasDisjoint()) {
+    SDValue Base = Op.getOperand(0);
+    SDValue Offset = Op.getOperand(1);
+    if (isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset))
+      std::swap(Base, Offset);
+
+    unsigned BaseOpc = Base.getOpcode();
+    bool BaseIsCapability = BaseOpc == ISD::FrameIndex ||
+                            BaseOpc == CapstoneISD::CIncOffset ||
+                            BaseOpc == CapstoneISD::LGA;
+    if (BaseIsCapability && isCapstoneIntegerOffset(Offset))
+      return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
+  }
+
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned LHSExtOpcode = Op.getOperand(0).getOpcode();
+  unsigned RHSExtOpcode = Op.getOperand(1).getOpcode();
+  SDValue LHS = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(0), DAG, Subtarget, DL, LHSExtOpcode);
+  SDValue RHS = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(1), DAG, Subtarget, DL, RHSExtOpcode);
+  if (!LHS || !RHS)
+    return SDValue();
+
+  auto IsUnsignedExt = [](unsigned Opcode) {
+    return Opcode == ISD::ZERO_EXTEND || Opcode == ISD::ANY_EXTEND;
+  };
+
+  unsigned ResultExtOpcode;
+  if (LHSExtOpcode == ISD::SIGN_EXTEND && RHSExtOpcode == ISD::SIGN_EXTEND)
+    ResultExtOpcode = ISD::SIGN_EXTEND;
+  else if (IsUnsignedExt(LHSExtOpcode) && IsUnsignedExt(RHSExtOpcode))
+    ResultExtOpcode = ISD::ZERO_EXTEND;
+  else {
+    // Mixed extends (issue C-2). This lowering computes the op in XLen and
+    // re-extends, which is exact only while the i128 carrier's high half is an
+    // extension of its low half. Mixed extends break that invariant: for
+    // sign_extend(a) OR zero_extend(b) the true 128-bit high half is sign(a),
+    // and sign(a) is NOT a function of the low-half result -- so re-extending
+    // the narrow result under either rule would MISCOMPILE. Bailing here is
+    // correct, not conservative.
+    //
+    // One case is recoverable rather than guessed at: if the sign-extended
+    // operand is known non-negative, its sign extension and a zero extension
+    // are the same bits, so both operands agree and the invariant holds. That
+    // covers the common shapes (array indices, sizes, anything the optimizer
+    // has already proven >= 0) without assuming anything about what the high
+    // bits "mean".
+    SDValue SignedNarrow = LHSExtOpcode == ISD::SIGN_EXTEND ? LHS : RHS;
+    if (!DAG.SignBitIsZero(SignedNarrow))
+      return SDValue();
+    ResultExtOpcode = ISD::ZERO_EXTEND;
+  }
+
+  SDValue Logical = DAG.getNode(Op.getOpcode(), DL, XLenVT, LHS, RHS);
+  return DAG.getNode(ResultExtOpcode, DL, MVT::i128, Logical);
+}
+
+// A bitwise operation whose operand is a CAPABILITY rather than a widened
+// integer. It comes from C that went through uintptr_t and back:
+//
+//     p = (void *)((uintptr_t)p & ~(N - 1));   // align down
+//     p = (void *)((uintptr_t)p | 1);          // steal a low bit as a flag
+//     h = (mp_uint_t)a ^ (mp_uint_t)b;         // hash two pointers
+//
+// The narrow form is what the source wrote and what DAGCombiner keeps
+// rebuilding: rewriting the align-down as `p - (p & (N-1))` to keep it in the
+// pointer domain does not help, because the combiner folds that straight back
+// into `p & ~(N-1)`. So the target has to lower it.
+//
+// Read the address explicitly with getCapstoneCapabilityCursor (the `lcc rd,
+// rs, 2` that lowerSUB uses for a pointer difference, and that ptr-arith.ll
+// pins), do the operation at XLen, and hand back a ZERO-extended, UNTAGGED
+// value. Untagged is not a compromise, it is what the C asked for: a value
+// built out of uintptr_t bits cannot carry a tag on this machine, and any
+// source that then dereferences the result has a real porting bug that no
+// lowering can hide.
+//
+// Gated on at least one operand not being an integer offset, so genuine
+// arithmetic on a widened 64-bit value still takes the exact path above. It
+// shares one assumption with lowerSUB, deliberately and not silently: an i128
+// that is not recognisably an integer offset is treated as a capability, which
+// is wrong for true `unsigned __int128` logic. That type is already unsupported
+// here -- the path above bails on it -- so this changes no working case.
+static SDValue lowerScalarI128LogicalOnCapability(
+    SDValue Op, SelectionDAG &DAG, const CapstoneSubtarget &Subtarget) {
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isCapstoneIntegerOffset(LHS) && isCapstoneIntegerOffset(RHS))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  auto ToXLen = [&](SDValue V) {
+    return isCapstoneIntegerOffset(V)
+               ? DAG.getNode(ISD::TRUNCATE, DL, XLenVT, V)
+               : getCapstoneCapabilityCursor(V, DAG, DL, XLenVT);
+  };
+
+  SDValue Logical =
+      DAG.getNode(Op.getOpcode(), DL, XLenVT, ToXLen(LHS), ToXLen(RHS));
+  return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, Logical);
+}
+
+static SDValue lowerScalarI128And(SDValue Op, SelectionDAG &DAG,
+                                  const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isa<ConstantSDNode>(LHS))
+    std::swap(LHS, RHS);
+
+  auto *MaskC = dyn_cast<ConstantSDNode>(RHS);
+  if (!MaskC)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned ExtOpcode = LHS.getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      LHS, DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal)
+    return SDValue();
+
+  APInt Mask = MaskC->getAPIntValue();
+  if (Mask.countl_zero() < Mask.getBitWidth() - XLenVT.getSizeInBits())
+    return SDValue();
+
+  SDValue MaskXLen = DAG.getConstant(Mask.trunc(XLenVT.getSizeInBits()), DL, XLenVT);
+  SDValue And = DAG.getNode(ISD::AND, DL, XLenVT, XLenVal, MaskXLen);
+  return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, And);
+}
+
+static SDValue lowerScalarI128Mul(SDValue Op, SelectionDAG &DAG,
+                                  const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isa<ConstantSDNode>(LHS))
+    std::swap(LHS, RHS);
+
+  auto *MulC = dyn_cast<ConstantSDNode>(RHS);
+  if (!MulC)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned ExtOpcode = LHS.getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      LHS, DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal)
+    return SDValue();
+
+  APInt ConstVal = MulC->getAPIntValue();
+  if (ConstVal.getSignificantBits() > XLenVT.getSizeInBits())
+    return SDValue();
+
+  SDValue MulXLen = DAG.getNode(
+      ISD::MUL, DL, XLenVT, XLenVal,
+      DAG.getConstant(ConstVal.trunc(XLenVT.getSizeInBits()), DL, XLenVT));
+  return DAG.getNode(ExtOpcode, DL, MVT::i128, MulXLen);
 }
 
 bool CapstoneTargetLowering::shouldPreservePtrArith(const Function &F,

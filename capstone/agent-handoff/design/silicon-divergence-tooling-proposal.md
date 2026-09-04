@@ -147,3 +147,53 @@ Ordered by value per unit of risk:
    does not start without an explicit go-ahead.
 
 Item 4 is the only one that touches hardware, and it is deliberately last for that reason.
+
+---
+
+## UPDATE 2026-09-04 — §4's recommendation is now priced, and it is worse than "ordinary"
+
+§4 put "scope the ILA + RVFI wiring" last because it needs a bitstream, and called the caveats
+"real but ordinary — BRAM cost, timing closure at the probe width". **Both halves of that are now
+measured, and neither is ordinary.**
+
+**1. It costs timing this design does not have.** A matched pair — `5097eb166` and `6f8345fdb`,
+same fix, same base, differing **only** by whether the debug tree is tied off — prices
+instrumentation at **+750 placed LUTs (0.37% of the device) and −1.820 ns WNS**. On a design whose
+best-ever routed build is −10.629 ns against a 40 ns budget, 1.82 ns is a material fraction of the
+deficit, and it is bought with a third of a percent of the area. **The timing cost is
+disproportionate to the area cost**, so a proposal sized in LUTs — as §2.2's "8 probes, 16,384
+deep" implicitly was — is sized on the wrong axis.
+
+**2. Worse: the instrument may change the answer.** The launch census that licenses these bitstreams
+— 100% of failing endpoints originating in a cone that is inert during body execution — **inverts**
+when the debug tree is removed: `6f8345fdb` shows 99,879/99,879 launching from
+`issue_read_operands`, `dom_switcher` at zero. A large share of the paths counted as inert were
+paths *into the debug mux*.
+
+That is this note's own §1 hazard — *"instruments perturb the fault away"*, listed there as a
+property of **software** witnesses (+32 B sentinel array, +16 B `&qc`) — reappearing at the **RTL**
+level, where it is harder to see and costs a synthesis cycle to discover. An observation-only
+change was assumed to be a strict reduction of risk; it was not.
+
+**What this does not change:** the RVFI probes are still a real port on the core, the ILA wrapper
+still exists unused, and a differential retire-trace is still the right instrument for the
+mechanism half. **What it does change:** it must be treated as a *design modification with a
+measured timing price and a demonstrated effect on what the design's own acceptance gate reports*,
+not as free observability. Budget the 1.82 ns, and re-run the census on any instrumented build
+before trusting a measurement taken on it.
+
+Evidence: `ref/fpga-silicon-measurements-for-paper.md` §7a;
+`ref/bitstream-usability-is-the-census-not-the-slack.md`, qualification of 2026-09-04.
+
+**AMENDED 2026-09-04 (same day).** Two corrections to the above, both narrowing it.
+
+*The census inversion is established on the FIXED design only.* The pair differs by one variable
+there; extending it to pre-fix builds adds a second. The competing reading — that the fix created
+the issue-cone paths and the mux masked them — is not excluded, and the settling control has not
+been run. So read point 2 as *the instrument is a candidate explanation that has not been ruled
+out*, not as a demonstrated effect.
+
+*The 1.82 ns is a measurement, not a coefficient.* It prices **this** debug tree at **this** width
+on **this** design, measured once. An ILA at a different probe width could be cheaper or far
+worse. The transferable lesson is **price it with a matched pair before committing to it** — not
+"expect 1.8 ns".

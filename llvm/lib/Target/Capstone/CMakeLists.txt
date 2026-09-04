@@ -38,6 +38,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneCodeGenPrepare.cpp
   CapstoneConstantPoolValue.cpp
   CapstoneDeadRegisterDefinitions.cpp
+  CapstoneS12MovcLdcHazard.cpp
   CapstoneExpandAtomicPseudoInsts.cpp
   CapstoneExpandPseudoInsts.cpp
   CapstoneFoldMemOffset.cpp

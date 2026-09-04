@@ -1,4 +1,443 @@
+# S-12 ROOT-CAUSED — 2026-09-03
+
+**Read this section first. It supersedes everything below, including the section immediately
+following it, which was the previous "read this first".**
+
+> **If you want the defect EXPLAINED rather than evidenced, read `S12-explanation.md` instead** —
+> diagrams, step by step, in the same idiom as `../S07-capability-untagged-on-reload/S07-explanation.md`.
+> This file is the evidence trail and the measurement provenance; that one is the mechanism.
+> Keep the two in step: a change to the root cause or to the fix status belongs in BOTH. The reduction to one byte recorded there
+still stands as measurement; what changes is the explanation, and one account this folder
+previously called better-supported is now REFUTED.
+
+## The defect
+
+A capability store's scoreboard destination is aliased to its own store-data register
+(`decoder.sv:1313`, `rd := instr.rtype.rs2`; a plain integer store has `rd = x0`). That aliasing
+is INTENTIONAL and must not be removed — `capstone_dyn_unit.anvil:458-462` clears rs2 to `cnull`
+when the stored capability is linear-family, so a capability store has to null its source register.
+
+When such a store stalls on a full store buffer, `commit_stage.sv` asserts `we_gpr_o[0]` (:323) and
+then clears **only** `commit_ack_o[0]` (:346). `we_gpr` is never retracted, so
+`we_gpr = 1 / waddr = rX / ack = 0` persists for the whole stall while the entry stays live and
+unretired. That signal reaches the issue stage (`cva6.sv:1993 -> 1728`), where the WAW guard is
+cleared by `we_gpr_i[c] && waddr_i[c] == rd` (`issue_read_operands.sv:1637`).
+
+**Precisely what is wrong, corrected 2026-09-03:** the clause's comment says the register "will be
+written in this cycle by the commit stage", and that is TRUE — `we_pack[i] = we_gpr_i[i]`
+(`issue_read_operands.sv:1793`) drives the regfile write with no dependence on the ack, so the
+write really does happen, repeatedly, throughout the stall. What is false is the INFERENCE. Clearing
+the guard on that basis assumes the older producer is finishing and a younger writer to the same
+register is therefore safe to issue. With the ack withheld the producer does not RETIRE:
+`commit_ack_i` is exactly what clears `issued` and `sbe.valid` (`scoreboard.sv:273-278`), which are
+exactly the two bits forwarding candidacy is built from (`still_issued = issued & ~cancelled`,
+`scoreboard.sv:135`). So the old entry remains a candidate and can be selected ahead of the
+younger, not-yet-produced load.
+
+So the younger `ldc rX` issues while the older store still claims `rX`. Forwarding candidacy needs
+`still_issued & sbe.valid` (`issue_read_operands.sv:719-726`): the written-back store entry
+qualifies, the not-yet-produced load does not. The consumer is handed the store's result, which for
+a null source is `{cursor 0, cap_type 0}`, and the FLU rejects that as UNEXPECTED_OPERAND with
+`tval = 0`.
+
+**The null never passes through memory and never reaches the register file. It reaches the consumer
+alone, through forwarding.**
+
+## What this REFUTES in this folder
+
+The section "Two memory-ordering accounts remain" below states that "(b) wrong-address forward ...
+predicts `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed" and is therefore
+"the better-supported of the two". **That is wrong, and it is wrong for an instructive reason.**
+
+`tval` reports the operand **as the execution unit ingested it**, not what the load returned. Those
+are the same value in every ordinary case and differ precisely when the operand is forwarded — which
+is this case. So `tval = 0` never distinguished the two accounts at all.
+
+Two independent measurements now show the load LANDING:
+
+* **Simulation.** `stc-ldc-sbpressure-a4.S` prints a4 at every trap. At all 254 traps it held a real
+  capability — cursor `0x80004000`, revnode 2, type 2, perm 7 — identical every time. The one trap
+  where a4 is genuinely null (the test's ARM P control) prints nothing, so the instrument can give
+  both answers.
+* **Silicon.** A SQLite domain whose in-domain handler folds the answer into its report word
+  returned `obs=0xE643D221` — marker `0xE`, `mcause 25`, `_start+0xF4884`. Both words were
+  pre-registered before the boot: `0xF...` would have meant the load returned the null.
+
+This folder's own objection to (b) was already on the page — the store and load in this window are
+**176 bytes apart** — and the register-relation 2x2 it ships never fitted an address-keyed
+mechanism. The relation it measured is a *scoreboard* relation, not an address one.
+
+## Reproducer
+
+S-12 no longer needs a board or a 1.6 MB domain. In `capstone-ariane`, branch
+`s12-ldc-rolling-filter`:
+
+    verif/tests/custom/capstone/stc-ldc-sbpressure.S        254 traps
+    verif/tests/custom/capstone/stc-ldc-sbpressure-norel.S  0 traps, matched control
+    verif/tests/custom/capstone/stc-ldc-sbpressure-a4.S     prints a4 at each trap
+
+run with `+define+S12_MEM_DELAY=40`. The delay is essential and is why this went unreproduced: the
+testbench default is ZERO memory latency, where the store buffer cannot fill, so the test could
+never create its own triggering condition. At delay 0 the identical ELF produces **0** traps.
+
+| arm | delay | flu-issues | ldc-pending-cycles | hazard | in-loop traps |
+|---|---|---|---|---|---|
+| `stc-ldc-sbpressure` | 0 | 529 | 1800 | 0 | 0 |
+| `stc-ldc-sbpressure` | 40 | 529 | 64279 | **254** | **254** |
+| `stc-ldc-sbpressure-norel` | 40 | 529 | 64256 | 0 | 0 |
+
+Rows 2 and 3 are the comparison: identical FLU issue counts, LDC-unproduced windows agreeing to
+0.04%, opposite outcomes. **Do not use the `escape` counter as the precondition** — `hazard` is
+incremented inside its if-body, so it is a strict superset of the outcome and is pinned at
+once-per-iteration by the loop shape.
+
+## Why it surfaces at one address
+
+Over the built SQLite domain (331,808 instructions): the bare `stc rX` / `ldc rX` alias appears
+**2832** times (12.8% of stores) and is harmless, because with no immediate capability consumer
+nothing type-checks the stale operand. The full exploitable triple — store, load, and a capability
+consumer reading that register — appears **68** times, and exactly one is on `a4`: the S-12 site.
+
+## Status of a fix
+
+A candidate exists (require the acknowledgement in both WAW-clearing clauses) and takes the
+reproducer from 254 traps to 0. It is **NOT synthesised**, so it is not ready for a board, and
+`issue_read_operands.sv` sits inside the standing combinational-loop cone at `scoreboard.sv:129`,
+which lint cannot see through. Do not spend a bitstream on it on the strength of this section.
+
+---
+
+# S-12 REDUCED TO ONE BYTE — 2026-09-02
+
+**Read this section first; everything below it predates the reduction.** Sibling packages that are
+NOT this one:
+
+* `../R20-stc-rs1-cursor-forward-x10/` — **the nearest mechanism neighbour, read it alongside
+  this.** Also a capability store followed immediately by a load, also wrong data delivered to only
+  the next instruction, also silent under QEMU. It differs in four ways: R-20 is specific to
+  **x10/a0**, S-12 is register-agnostic (shown here on both `a4`/x14 and `t0`/x5); R-20's load is a
+  plain `ld`, S-12's is `ldc`; R-20 delivers the **store's base address** and corrupts nothing,
+  S-12 traps `mcause 25`; R-20 was measured on `caplifive_65536_r18_fix.bit`, everything here is
+  `caplifive_s10fix_80843404c.bit` and nothing here says anything about R-20's status on that
+  bitstream. Whether they are one defect is open and we do not claim either way.
+* `../RTL-domain-trap-vector-unset/` — why any domain capability fault kills the whole board.
+  Root-caused, but read its own status line: the fix is not firmware-only and half of it is open.
+* `../RTL-cap-mcause-off-by-one/` — four producers of `mcause 25` with inconsistent numbering.
+
+If your symptom is a dead board rather than a specific faulting instruction, you want the second.
+
+## The reduction
+
+S-12 wedges the SQLite domain on the Capstone CVA6 with `mcause 25` (UNEXPECTED_OPERAND) and
+`tval = 0` at VA `0x104814`, inside `sqlite3WhereCodeOneLoopStart`.
+
+**Whether the fault occurs is decided by one byte: the rs2 field of the `stc` at `0x10480c`.**
+(Which *value* of that byte wedges is not fixed — it depends on the following load's destination.
+`stc a4` wedges in `01` and is clean in `04`.)
+This is the window as it appears in the two shipped images — disassemble them and you will see
+exactly this, which is not the same as the original unmodified base (the two `movc t0, zero`
+at `0x1047f8` / `0x104808` are `sw a4, 0x0(a5)` and `movc a4, zero` there):
+
+    01-wedges-stc-a4.dom              02-clean-stc-t0.dom
+    ------------------------------    ------------------------------
+    1047f8  movc t0, zero             1047f8  movc t0, zero
+    1047fc  cincoffsetimm a5,s0,-0x110 1047fc  cincoffsetimm a5,s0,-0x110
+    104800  sw   a4, 0x0(a5)          104800  sw   a4, 0x0(a5)
+    104804  cincoffsetimm a5,s0,-0x120 104804  cincoffsetimm a5,s0,-0x120
+    104808  movc t0, zero             104808  movc t0, zero
+    10480c  stc  a4, 0x0(a5)   <---   10480c  stc  t0, 0x0(a5)   <--- THE ONLY DIFFERENCE
+    104810  ldc  a4, 0x0(a0)          104810  ldc  a4, 0x0(a0)
+    104814  cincoffsetimm a4,a4,0xb0  104814  cincoffsetimm a4,a4,0xb0     <-- faults, mcause 25
+
+The two files differ at file offset `0xf580e` and nowhere else — **1 byte in 1,624,152**, verified
+by whole-file comparison. Same address register, same offset, same stored value (`t0` and `a4` both
+hold a null capability at that point), same instruction count, same layout. Both produce the same
+guest result lines under QEMU emulation, so this is not a program-behaviour difference.
+
+`a4` at `0x10480c` is also the register the `ldc` at `0x104810` writes — **and, in every arm we
+ran, the register the faulting `cincoffsetimm` reads.** A RELATION between the store's operand and
+what follows is the variable, not the register's identity: an arm that keeps `a4` as the store's
+source but has the load write `t0` does NOT fault, and an arm using `t0` for both store and load
+DOES. Which relation it is, is not settled here — see "Which property" below.
+
+## Evidence
+
+Seven arms, all patched from one pinned base, all gated to identical guest result lines before
+boarding, all run in slot 2 behind the same known-good control in slot 1, all on bitstream
+`caplifive_s10fix_80843404c.bit`. Worth knowing: that control is the **same binary** as
+`00-unmodified-base.dom`, run under the simpler `dd1_one.test` — so in a wedging boot the identical
+image returns normally in slot 1 and wedges in slot 2, which is a within-boot control on the image
+itself:
+
+| arm | `stc` source | == the `ldc`'s dest | producer distance | wedges |
+|---|---|---|---|---|
+| unmodified base | `a4` | yes | 1 | 3/3 |
+| `[28]` removed | `a4` | yes | 1 | 3/4 |
+| **D2** = `01-wedges` | `a4` | **yes** | **7** | 3/4 |
+| `[28]`+`stc` changed | `t0` | no | 5 | 0/4 |
+| 5-instruction subst. | `t0` | no | 7 | 0/4 |
+| 6-instruction subst. | `t0` | no | 7 | 0/4 |
+| **D1** = `02-clean` | `t0` | no | **1** | 0/4 |
+
+In these seven arms: 9 wedges in 11 draws with `a4` at the store, 0 in 16 with `t0`. (That is
+these arms only — arm D3 below sources `t0` and wedges 3/4, because there the load writes `t0` too.)
+
+**Ruled out as the cause.** Producer distance: D2 wedges with the producer 7 instructions back, D1
+is clean with it 1 back. A match to the preceding `movc`'s destination: D2 has none and wedges. The
+stored value: null in every arm. The store's presence: present in every arm, including all four
+clean ones. The contiguous `movc rD / stc rD / ldc rD` triple: absent in D2, which wedges.
+
+**Statistics, stated conservatively.** The controlled contrast is D2 vs D1 — one byte, same
+firmware overlay, same initramfs size: 3/4 against 0/4, one-sided Fisher **p = 0.071**. The same
+byte flipped on a second background gives the same 3/4 vs 0/4, but those two boots ran overlays
+differing by six files, so that one is a replicate on an uncontrolled background rather than an
+independent experiment. The clean way to combine is over the two FULLY MATCHED single-byte pairs
+below — `01`/`02` and `03`/`04`, identical overlay count and initramfs size within each — which
+gives a stratified exact p = 0.005 with no uncontrolled-background caveat. `0/4` supports "does
+not wedge here"; at N=4 it does not establish "removes the fault" (P(0 of 4 | true rate 0.30) =
+0.24).
+
+## Reproduction
+
+Everything needed is in `minimal-repro/`. The images are xz-compressed to keep the folder near the
+size of everything else here; `SHA256SUMS` lists the **decompressed** files, so:
+
+    cd minimal-repro && xz -d *.xz && sha256sum -c SHA256SUMS
+    sqlite_host.user <image>.dom --slt repro.test
+
+`repro.test` is 13 lines: one `CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e
+INTEGER)` and one two-way self-join
+`SELECT t1.a FROM t1, t1 AS y` on an EMPTY table. No rows are processed, so the whole difference
+lives in `sqlite3_prepare_v2` — in code generation.
+
+Every wedge reported here carries the same signature and nothing else: `mepc 0x828f4814`,
+`tval 0`, trap-log `0x99` (= seen-bit plus `mcause` 25), `SQ: G/enter` present in the run's own
+output, no return, per-run image sha256 verified inside the boot, control slot returning normally.
+
+`mcause 25` has four producers on this core with inconsistent numbering (see
+`../RTL-cap-mcause-off-by-one/`), so the label is argued rather than assumed: `tval = 0` excludes
+the pc-capability producer, which sets `tval` to the faulting PC, and `cincoffsetimm` decodes to
+the FLU only, which excludes the DYN and LSU producers. What is left is FLU UNEXPECTED_OPERAND.
+
+## Which property: it is the RELATION, not the register
+
+The seven arms above cannot rank "the store's source is the load's destination" against "the
+store's source is `x14`", because in all of them the load writes `a4`. Two further arms separate
+them. Both change the `ldc` at `0x104810` to write `t0` and the faulting `cincoffsetimm` to read
+`t0`; they differ from each other in one byte, the same `stc` rs2 field, and ran on matched
+firmware (173-file overlay, initramfs 7 351 808, same bitstream):
+
+| arm | `stc` source | `ldc` dest | relation | register | wedges |
+|---|---|---|---|---|---|
+| **D3** = `03-wedges-relation-on-t0.dom` | `t0` | `t0` | **yes** | x5 | **3 / 4** |
+| **D4** = `04-clean-a4-no-relation.dom` | `a4` | `t0` | **no** | x14 | **0 / 4** |
+
+Their window, which differs from the one shown at the top of this file — disassemble `03`/`04` and
+you will see `ldc t0`, not `ldc a4`:
+
+    03-wedges-relation-on-t0.dom      04-clean-a4-no-relation.dom
+    ------------------------------    ------------------------------
+    10480c  stc  t0, 0x0(a5)   <---   10480c  stc  a4, 0x0(a5)   <--- THE ONLY DIFFERENCE
+    104810  ldc  t0, 0x0(a0)          104810  ldc  t0, 0x0(a0)
+    104814  cincoffsetimm a4,t0,0xb0  104814  cincoffsetimm a4,t0,0xb0     <-- faults in 03 only
+
+`03` and `04` differ at file offset `0xf580e` — the same single byte as `01` vs `02`.
+
+D4 keeps `a4`/x14 — the register present in every wedge before it — and loses the relation: clean
+across four draws. D3 keeps the relation on `t0`/x5, a register that had never wedged: three
+wedges, canonical signature. One-sided Fisher on the pair, p = 0.071.
+
+The four shipped images are a 2x2 in which each register appears on both sides, so neither
+register can explain the outcome:
+
+                        ldc writes a4          ldc writes t0
+    stc sources a4      01  WEDGES  3/4        04  clean   0/4
+    stc sources t0      02  clean   0/4        03  WEDGES  3/4
+
+The diagonal wedges and the off-diagonal does not. `a4` appears once in each column, `t0` likewise;
+the only thing constant down the wedging diagonal is that the two operands are the same register.
+
+**The column variable is compound.** Rows `03`/`04` change the `ldc`'s destination AND the faulting
+`cincoffsetimm`'s source register together, because the second must read what the first writes for
+the program to stay correct. So the column is "what the load writes AND what the faulting
+instruction reads", not either alone.
+
+So the register identity, the ABI class (argument vs temporary) and `x14` specifically are all
+ruled out, in both directions at once.
+
+### RESOLVED by a further arm: all THREE operands must be the same register
+
+The ambiguity below is settled. Arm **D5** keeps the store-to-load relation fully intact --
+`stc a4` / `ldc a4` -- and changes ONLY what the faulting instruction reads, to a `t0` pre-loaded
+from the same slot so the program is unchanged. It does not fault: **0 wedges / 4 valid draws.**
+
+| arm | `stc` source | `ldc` dest | faulting insn reads | wedges |
+|---|---|---|---|---|
+| base / `[28]`-only / D2 | `a4` | `a4` | `a4` | 3/3, 3/4, 3/4 |
+| D3 | `t0` | `t0` | `t0` | 3/4 |
+| D4 | `a4` | `t0` | `t0` | 0/4 |
+| **D5** | `a4` | `a4` | **`t0`** | **0/4** |
+
+So the fault requires the capability store's source, the load's destination, AND the faulting
+instruction's operand to be **the same architectural register**. Store-to-load alone is not
+sufficient (D5); consumer-to-load alone is not sufficient (D4).
+
+**A mechanism in the RTL predicts exactly this, and its legs are verified at source:**
+
+* `decoder.sv:1313` — STC decodes `rd := rs2`, so `stc a4, 0(a5)` makes `a4` a genuine scoreboard
+  PRODUCER, not merely a source. (LDC by contrast sets `rd := instr.itype.rd`.)
+* `capstone_unit.anvilh:395` — `create_cnull()` is cursor 0 **and** `cap_type` 0. Both halves zero
+  by construction, which is `mcause 25` with `tval 0` exactly — and is what distinguishes this from
+  S-07/A-1, which forwards a real cursor with the tag dropped and would show non-zero `tval`.
+* `commit_stage.sv:331` — a store-buffer-full stall on an STC clears only `commit_ack_o[0]`;
+  `we_gpr_o[0]` is never retracted, so the STC stays a live claimant for the whole stall.
+* `issue_read_operands.sv:719` — forwarding candidacy needs `still_issued & sbe.valid`, so a
+  written-back STC entry is a candidate while an unproduced LDC is not.
+
+Two producers claim the register; the consumer reading that register is handed the STC's null.
+D5 breaks the chain at the victim, and the fault disappears.
+
+**This is a mechanism consistent with every arm, NOT a confirmed root cause.** In bare-metal
+Verilator the outcome does not occur: the tree's own `S12-ESC` instrumentation counts precondition
+and outcome separately, and across `stc-then-ldc-same-reg.S` and `ldc-consumer-stale-rs1.S` the
+precondition (ESCAPE, which is also its positive control) fires 1026 times while the outcome
+(HAZARD) stays 0. So the mechanism is structurally permitted and demonstrably not triggered by the
+shape alone in bare metal; what remains unexplained is what the real workload adds.
+
+### Superseded — the ambiguity as originally written
+
+**What the fault tracks is a relation, and TWO readings of that relation remain
+indistinguishable.** In all nine arms the load's destination and the faulting instruction's source
+are the same register, so these are one predicate over the whole dataset:
+
+* the store's source is the register the immediately following **`ldc` writes**; or
+* the store's source is the register the **faulting instruction reads**.
+
+**This report does not pick one.** The distinction matters because the second reading is the
+store-to-consumer family that `../R20-stc-rs1-cursor-forward-x10/` documents as a measured defect
+on this silicon.
+
+The cheapest discriminator, not yet run: keep `stc a4` / `ldc a4` but point the faulting
+`cincoffsetimm` at a `t0` pre-loaded from the same slot — the scratch slot at `0x104800` is
+available and already shown behaviour-preserving. If the load-destination reading is right it
+wedges; if the consumer reading is right it does not. One instruction, QEMU-gateable.
+
+Across all nine arms: relation present 12 wedges / 15 valid draws; relation absent 0 / 20.
+
+## What is NOT established
+
+**Why the pairing matters at all.** There is a 14-second RTL testcase that reproduces the exact
+relation and does NOT fault:
+`capstone-ariane/verif/tests/custom/capstone/stc-then-ldc-same-reg.S` — `stc` reading `a4`, `ldc`
+writing `a4`, consumer reading `a4`, 1024 iterations, with the load pending 7176 of 25130 cycles
+(29%). It carries its own controls and they fire: ARM P puts a NOT_CAP operand straight into
+`cincoffsetimm` and must trap `mcause 25` (it does, the run's only exception), ARM C passes a live
+capability through the same instruction and must not (it does not). So this is a real negative, not
+an absent measurement.
+
+**Its scope is narrow and that is the honest reading:** bare M-mode, no monitor, no `capenter`, a
+hot cache, a `.data` buffer and a register-resident base, against silicon that runs inside a
+capability domain on a monitor-carved stack reaching globals through a cap table. Separately, the
+in-RTL `b-NOFORWARD` precondition counter used alongside it reads 0 and **that** zero bounds
+nothing — it counts an event whose occurrence would itself be a reproduction, so it cannot be
+positive-controlled. Do not read the counter; do read the test.
+
+**Whether the operand's VALUE matters**, which is structurally untestable by patching this window:
+the `stc` stores `a4` and the `ldc` overwrites it with no instruction slot between, so the value
+entering the load cannot be varied without changing what is stored.
+
+---
+
 # S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c`: the operand is zero, and it is not software
+
+> ## WHAT S-12 ACTUALLY BLOCKS — read this before calling it "the SQLite blocker"
+>
+> **It has never blocked SQLite's built-in correctness workload.** That workload passed on silicon
+> 3/3 on 2026-08-20, days BEFORE this folder existed, and 14/14 on 2026-08-27 on the current
+> compiler. S-12 was found in the **SLT** path, running `q_two` — a test written to push past what
+> the built-in workload covers.
+>
+> **The distinction is the query PLAN, not the SQL text.** The built-in workload does contain a
+> two-table join, and that fact was used on 2026-08-27 to argue S-12 could reach it. **That was
+> wrong**, and it is the error this project already has a rule about: *same shape of SQL is not
+> same execution plan, and the plan must be READ rather than inferred*. Read, the plans are:
+>
+>     built-in workload   SCAN nums + SEARCH link USING AUTOMATIC COVERING INDEX   14/14 clean
+>     qj4                 SCAN t1   + SEARCH t3 USING COVERING INDEX               RETURNS
+>     qj2 / q_two         SCAN ...  + SCAN ...                                     WEDGE
+>
+> **What it DOES block: SLT COVERAGE.** The runner itself works on silicon — `qj4` passed its query
+> outright (`query_pass=1 query_fail=0 completed=1`). Any test whose inner where-loop level is an
+> unindexed nested SCAN wedges. The real sqllogictest corpus is full of those, so **S-12 is what
+> stops the corpus running on silicon**, which is the standing "SLT on silicon" goal.
+>
+> Three claims that must not be merged: *the built-in workload runs* (true, never blocked by S-12);
+> *SLT runs* (true, one domain per boot, indexed joins pass); *the SLT CORPUS runs* (false).
+>
+> ### WEAKENED SAME DAY — the plan is a CORRELATE, not a mechanism
+>
+> The table above is measured and stands. The **explanation** attached to it does not, and the
+> check that broke it is one instruction lookup:
+>
+> **The S-12 fault pair sits at `sqlite3WhereCodeOneLoopStart+0x88`** — near the top of a
+> 4,606-instruction function, on the path taken on EVERY call, whatever the plan. Verified in the
+> SLT image that ran both queries (`fn` at `0x104788`, the same address as the historically
+> faulting binary), with the documented sequence intact:
+>
+>     +0x80  movc a4, zero
+>            stc  a4, 0x0(a5)
+>     +0x88  ldc  a4, 0x0(a0)
+>            cincoffsetimm a4, a4, 0xb0
+>
+> `qj4` is a two-level plan, so it called that function **twice** and executed `+0x88` twice —
+> and returned. **So the plan does not gate whether the vulnerable code runs.** "Indexed joins are
+> safe because they avoid the failing path" is therefore NOT available as a mechanism.
+>
+> What survives is a correlation: unindexed nested SCAN plans have wedged repeatedly, indexed ones
+> have not. A mechanism consistent with both facts would have to work through something the plan
+> changes INDIRECTLY — how much codegen runs before the second call, heap and cache state, timing —
+> rather than through which instructions execute.
+>
+> ### RETRACTED THE SAME DAY — `qj4` WEDGES. The plan is not the variable at all.
+>
+> The redraws were run rather than assumed, and they kill it. Five further DISTINCT `qj4` images
+> (`TEXT_PAD` 0/48/96/144/192, sha256 5-of-5 unique), one SLT domain per boot:
+>
+>     pad 0    returned      pad 48   NO RETURN      pad 96   returned
+>     pad 144  NO RETURN     pad 192  returned
+>
+> With the original pass that is **4 returned / 2 wedged in 6 draws**. Against the `qj2` rate of
+> 54%, P(<= 2 wedges in 6) = **0.27** — statistically indistinguishable. **An indexed two-level
+> join wedges too.**
+>
+> So "the trigger is generating code for an unindexed nested SCAN" is **RETRACTED**. It was stated
+> twice today — first as a mechanism, then weakened to a correlation — and the correlation is now
+> gone as well. Both rested on `qj4` = 1 clean draw at p = 0.46.
+>
+> **What the numbers now say, and it is a different shape of question:**
+>
+> | workload | wedges / draws | vs a 54% rate |
+> |---|---|---|
+> | built-in extended (no `--slt`) | **0 / 14** | p = 1.9e-5 — genuinely different |
+> | SLT `qj4`, two levels, INDEXED | 2 / 6 | p = 0.27 — indistinguishable |
+> | SLT `qj2` / `q_two`, two levels, unindexed | wedges | the baseline |
+> | SLT `q_one`, one level | returns (3/3 as controls) | — |
+>
+> The only arm statistically distinguishable is the **built-in workload**, which is also the only
+> one that does not go through the SLT harness. So the live question is no longer the query plan —
+> it is what differs between the SLT path and the built-in path, with one level versus two still
+> unexplained inside SLT.
+>
+> **Method note, because this is the second self-refutation of the same account in one day:** both
+> versions rested on a single clean draw, and both were written before the redraws were run. The
+> redraws cost five boots and would have cost the same five boots before the claim as after it.
+
+> **ARRIVED WITH A HANG RATHER THAN A FAULT?** If the domain stopped with **no exception**
+> (`ex_commit.valid = 0` on aperture 224) and aperture 225 reads **`0xd5`** — three wait conditions
+> asserted, a store genuinely outstanding — that is **[S-13](../S13-o1-dyn-rev-node-hang/)**, a
+> different defect, not this one. S-12 is the case where a capability fault STICKS at commit:
+> `mcause 25`, `tval = 0`, aperture 225 reading `0x80` with nothing waiting. At `-O1` the S-12
+> fault site is verifiably absent and the machine hangs as S-13 instead.
 
 **Sibling issues, so a reader who arrived with the wrong symptom can leave now.** If your symptom is
 an **untagged capability surviving a store/reload pair**, that is **S-07**, not this. If it is a
@@ -84,6 +523,1389 @@ memory-path and a delivery-path explanation remain live.
 > folder, because type is exactly what gates the clear set at `load_unit.sv:225-226`. If SQLite's
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
+
+## RETRACTED, 2026-09-02 — "the signature appears with no reload". The instruction was never read out of the image that ran
+
+**Withdrawn the same day it was written. The reload IS present in every attested instance; this
+one was an artifact of our own patch.** The section that stood here claimed a third draw of a
+truncated build faulted at `cincoffsetimm a4, s0, -0x100` with no `ldc` in its dependence chain,
+and concluded that the load-adjacent mechanism families — load-to-use forwarding and the load
+syncer — could not explain the bug. **That conclusion is void.**
+
+What the artifacts say, all re-derivable:
+
+* The three draws were **not one build**. Draw 3 ran sha256 `e6effb53…` (`min-aggressive.dom`);
+  draws 1 and 2 ran sha256 `7e6c33c7…` (`wrongbase.dom`). Each log prints its own
+  `verifying sqli.dom sha256=` line and they disagree. They were recorded as three draws of the
+  n=4 truncated build; none of them was.
+* Draw 3's own `DBAS` is `0x82800000` and its latched `mepc` is `0x828f4830`, so
+  **VA = `0x104830`** — that part was right.
+* The instruction at VA `0x104830` **in the image draw 3 actually ran** is
+
+      [42] ldc  a1, 0x0(a3)
+
+  an ordinary capability load. It is not a `cincoffsetimm`, and `cincoffsetimm a4, s0, -0x100`
+  does not appear at that address in any image involved.
+* `min-aggressive.dom` has `[20] cincoffsetimm a3, s0, -0x90` replaced by NOP. `a3` therefore had
+  no definition in that call and held an arbitrary entry value. The fault is a **load through an
+  undefined base register** — a def-use-open cut in our own experiment, faulting on our own
+  garbage.
+
+**Consequences, because this claim was load-bearing.**
+
+1. The POS rule for the minimisation campaign was widened away from a single fault address on the
+   strength of this observation. That widening is withdrawn with it.
+2. Exactly **one** attested S-12 signature remains: `cincoffsetimm a4, a4, 0xb0` at VA `0x104814`,
+   consuming `a4` written by `ldc a4, 0x0(a0)` **one instruction earlier**, with the register file
+   and the source slot both holding a valid capability at the wedge.
+3. **The load-adjacent families are not refuted.** Nothing on the table requires two mechanisms.
+   The twelve clean reconstructions all reproduced the `ldc` → `cincoffsetimm` pair, and that pair
+   is still the shape to explain.
+
+**What would have caught it.** The claim named an instruction, and the instruction was never read
+back out of the image the draw ran — the address was mapped, then matched against a *different*
+disassembly. Each log already printed a per-draw sha256 that would have shown the three draws were
+three different images; nothing compared them. The check is now mechanical: `probes/s12-verdict.py`
+extracts `DBAS`/`mepc` scoped to the test stage, and the instruction is disassembled out of the
+image named by that draw's own sha, never out of the base.
+
+## 2026-09-02 — THE TRUNCATION LADDER CANNOT WORK. It crashes before reaching the reduced site
+
+`CAPSTONE_WTRUNC` truncates `sqlite3WhereCodeOneLoopStart` after its n-th leading statement,
+giving a 58-instruction function (from 2866) that still contains the window with the register
+match preserved. Gated before staging. On silicon it faults -- but not at the reduced site:
+
+    predicted (n=4)   mepc 0x828f4848   VA 0x104848
+    observed          mepc 0x8293a15c   VA 0x14a15c   = memcpy
+
+and the shape at that address looks like S-12, which is exactly the trap:
+
+    14a150  ldc  a0, 0x0(a0)          reload a capability from a spill slot
+    14a15c  cincoffset a0, a0, a1     FAULTS, mcause 25, tval 0
+
+The slot contents settle it, and they are the same discriminator that established S-12:
+
+    real S-12 (s12t-1)   a4 = 0x82be4cd0   slot = 0x82be4cd0 / 0x0000073fa7462d16
+                         -> slot holds a VALID capability, consumer still ingested 0
+    ladder    (lad-1)    a0 = 0x0          slot = 0 / 0
+                         -> slot genuinely holds NULL; tval = 0 is CORRECT
+
+So this is an ordinary software null-dereference, not the hardware defect. The truncated function
+returns a garbage `Bitmask`, downstream code derives a null from it, and `memcpy` faults on it long
+before control reaches the reduced window.
+
+**The ladder's premise is refuted, not just this arm.** Truncation breaks the function's contract
+with its callers, and the resulting garbage kills the program earlier than the site under test.
+Returning `0` instead of the cursor did not help (both were tried; QEMU stops before the shell
+prompt either way). Any reduction that changes what the function RETURNS has this problem.
+
+What survives: reduction has to preserve the contract. Remove code that does not affect the return
+value, or reduce the PROGRAM -- which SQLite features are compiled in -- rather than the function.
+The 58-instruction artifact stays committed because the gate proves the window survives truncation,
+which is still useful evidence about codegen; it is just not a repro.
+
+## 2026-08-31 — S-12 IS TWO DEFECTS, AND THE ONE THAT KILLS THE BOARD IS NOT SPECIFIC TO S-12
+
+**A deliberate, trivial capability fault raised from inside a domain wedges the whole board in
+exactly the same way S-12 does.** Same latch, same architectural end-state, same silence from the
+monitor. The wedge was never a property of `sqlite3WhereCodeOneLoopStart`.
+
+The control that shows it is the `0xBEEF` probe: a domain materialises a plain integer and executes
+`cincoffsetimm` on it, which is the most boring capability fault available. Compare it against the
+real thing:
+
+    probe                       latch (hw debug mux)              architectural CSRs (gdb)
+    0xBEEF, tvnh-1              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    0xBEEF, tvnh-2              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    real S-12, s12t-1           mcause 25  tval 0  @0x828f4814    mcause=2  mepc=2  mtval=0
+
+`EXCX` is 0 in all three. The monitor's unhandled-exception arm — which reports EXCX/MCAU/MEPC/MTVL
+and then calls `fault_return_from_domain` to terminate the domain and return a code — is present in
+the deployed firmware (`nm` shows `T fault_return_from_domain` at 0x800239ac) and does not run.
+
+### (A) narrowed to one mechanism, with three alternatives structurally excluded
+
+RTL-verified at the bitstream commit `80843404c` (not HEAD; the two differ in `ex_stage.sv`,
+`issue_read_operands.sv`, `load_unit.sv`, `load_store_unit.sv`, `cva6.sv`):
+
+**`operand_a` IS the rs1 cursor**, and it is not a reporting artifact. Cursor and metadata come from
+two physically separate register files (`issue_read_operands.sv:201-204`, `:1683-1704`), and
+`ex_stage.sv:796-797` feeds that same wire into `decompress_cap_tagged` to build `cap_rs1` — the
+object the FLU actually inspects. So `tval` and the FLU's own decision read the SAME signal in the
+SAME cycle.
+
+**The exception nulling does not reach `tval`.** `raise_exception`
+(`capstone_unit.anvilh:448-452`) nulls the OUTPUT-side result pack; `tval` (`ex_stage.sv:488`) reads
+the INPUT-side `fu_data_i[0].operand_a`. Different wires, different pipeline stages. The "every
+capability exception reports tval=0 regardless" escape is refuted structurally, not by comment.
+
+**Therefore `tval = 0` means the FLU genuinely ingested cursor = 0** — while the architectural `a4`
+afterwards holds `0x82be4cd0`, the correct value from the slot. The load wrote the right thing; the
+consumer received something else.
+
+**Three of the four mcause-25 producers are excluded for this trap.** `pc_cap` sets
+`tval = commit_instr_i[0].pc` (`commit_stage.sv:604`), so it would give `tval == mepc != 0`, and it
+cannot coexist with an FLU-attached exception anyway (`:210`, `:611-614`). `DYN` would name the
+`ldc` at VA 0x104810 in `mepc`, not the `cincoffsetimm` at 0x104814. The LSU cannot see this
+instruction at all: `decoder.sv:1164-1166` makes the whole `OpcodeCustom2` block FLU by default and
+`CINCOFFSETIMM` never overrides it, while `LDC` explicitly sets `CAPSTONE_DYN`.
+
+**The surviving mechanism is load-to-use forwarding timing.** `fu_data_q` is captured ONCE, at
+issue-accept (`issue_read_operands.sv:1885-1888`) — there is no re-latch while an instruction waits.
+The `cincoffsetimm` reads `a4` the instruction immediately after the `ldc` writes it, so the only
+path that can satisfy `rs1_valid` in time is the forwarding network. If that grant can fire on a
+cycle where the LDC's result has not genuinely landed in the forwarding structure, the consumer
+captures a zero cursor permanently while the LDC still writes back correctly afterwards — which is
+exactly the observed signature.
+
+**Structurally excluded within that mechanism:** a cursor/metadata mismatch from two different
+producers. The two arbiters share one request vector (`issue_read_operands.sv:789-849`), so they
+always select the same winner.
+
+**Not yet closed, and it needs simulation rather than the board:** whether `rs1_available` /
+`rs1_cap_avail` can both be granted before the load's result is populated — this needs
+`scoreboard.sv` and the D$ response timing, and it is expected to depend on HIT versus MISS. Note
+the previously refuted "stale-regfile read" and "wrong-producer forwarding" hypotheses do NOT cover
+this: both were refuted in bare metal, with their own scope warnings, and neither tested a grant
+racing an unlanded load result.
+
+### So S-12 decomposes
+
+**(A) Why does a capability fault occur at `cincoffsetimm a4, a4, 0xb0`?** The stale-operand
+question. At the wedge the register file holds `a4 = 0x82be4cd0`, exactly the cursor sitting in the
+slot the `ldc` read (`0x82b9f410` → `0x82be4cd0 / 0x0000073fa7462d16`), so **the load did write the
+right value and the consumer ingested something else** — `tval`, which is the rs1 cursor as the FLU
+took it, is 0. The driver already prints this conclusion at the wedge.
+
+**(B) Why does ANY domain capability fault kill the board instead of trapping to the monitor?**
+This is the defect that turns a recoverable fault into a dead board, it is universal rather than
+S-12-specific, and it is almost certainly the same defect as the historical `gp-free` wedge, whose
+recorded signature is character-for-character `pc=0 / mepc=2 / mcause=2 / mtval=0 / MPP=M`.
+
+**(B) is the blocker.** The standing goal is running the SLT corpus on silicon; with (B) in place,
+*any* capability fault anywhere in the corpus takes the board down and yields no diagnosis. Fixing
+(A) alone removes one fault site out of an unknown number.
+
+### Why nobody saw it
+
+The hardware trap latch filters `cause != 2` (`cva6.sv:1126-1137`), so the cause-2 storm the core
+actually ends in is invisible to it — it faithfully preserves the *first* nontrivial trap and hides
+everything after. The architectural CSRs tell the other half of the story and were being read all
+along, on the line directly below. Both halves were in every log.
+
+**Not yet established:** why the trap ends at `pc = 2`. A pending RTL question, with one standing
+candidate: `capmode_q` is sticky (`csr_regfile.sv:295`) and `npc_metadata_q` is not cleared when the
+core takes an exception (`frontend.sv:425-427` redirects the PC alone; `:443-444` holds the
+metadata), so the first instruction fetched at `mtvec` can be PC-capability-checked against stale
+domain bounds. That predicts cause 26/27/28, which would have overwritten the latch and did not —
+so the candidate does not fit as stated, and the residual is exactly the cause-2 path the latch
+cannot see.
+
+---
+
+## 2026-08-31 — THE `mtval` INSTRUMENT WORKS. It was the GDB HALT destroying the reading
+
+`tval = 0xBEEF`, twice out of two, with `mcause = 25`.
+
+The positive control that had been written months ago and never run finally ran. A domain executes
+`cincoffsetimm` on a plain integer 0xBEEF — verified in the artifact, `lui a0,0xc; addi a1,a0,-0x111`
+and the faulting instruction encoded `5b 25 85 00` — and the latch reads:
+
+    HALT_MUX_READS=1   mcause 3    tval 0x00100073 (the ebreak insn word)   mepc 0x368
+    HALT_MUX_READS=0   mcause 25   tval 0x000000000000beef                  mepc 0x828233a0
+
+Same binary, same boot sequence, one variable. **The `monitor halt` the driver issues before reading
+the debug mux was overwriting the trap latch**, and the trap latch is what every `tval` reading in
+this investigation was taken from.
+
+### What this settles
+
+**`mtval` is a live instrument on this silicon** — and it was already known to be, a week before
+this run. `tval-ctl3.log`, 2026-08-24, on a console-NAMED `caplifive_s10fix_80843404c.bit`, latched
+`trap tval = 0x000000000000beef`. The control had been run, its result was sitting in
+`/tmp/capstone/`, and it was re-run on 2026-08-31 because nobody looked. That is the second
+prior-art failure in this investigation and it cost a board session.
+
+Consequently the caveat the driver hard-codes — *"the FLU tval path has never been shown to produce
+a NON-zero value on this bitstream ... treat tval==0 as NO DATA"* — has been printing a FALSE
+warning under every `tval == 0` since 2026-08-24. Fixed.
+
+**The S-12 reading is `tval = 0` at `mcause 25`, `mepc = 0x828f4814` (VA 0x104814, the documented
+`cincoffsetimm a4,a4,0xb0`), and it is NOT N=1.**
+
+    nc-2      2026-08-29   named silicon, pre-read halt FAILED (so un-clobbered)   identical triple
+    s12t-1    2026-08-31   named silicon, no halt requested                        identical triple
+
+plus roughly twenty further draws on this bitstream carrying the same triple. The earlier write-up
+called this N=1; that understated the evidence, and `nc-2` is the strongest single draw in the file.
+
+**It excludes the PC-capability producer of cause 25.** That producer sets `tval` to the faulting PC
+(`commit_stage.sv:604`), so a pc_cap fault would give `tval == mepc == 0x828f4814` — `0x14` on
+aperture 210 and `0x48` on 211. Those two apertures are PROVEN LIVE: they returned `0xef`/`0xbe`
+in the 0xBEEF draws. They read `0x00`. The exclusion rests on `tval != mepc` alone and is airtight.
+
+### What is NOT established
+
+**"The operand was exactly null" is NOT established — only that it was a non-capability whose low
+half-word is zero.** The 0xBEEF control exercises apertures 210 and 211, i.e. `tval[15:0]`.
+Apertures 213-218 (`tval[63:16]`) have never returned a non-zero value on this silicon. An operand
+that is a non-zero integer with a zero low half-word — an address-like value such as `0x82800000`,
+which is exactly the "address-like garbage" shape this project has seen before — would read as
+`tval = 0`. **Closing it costs one arm: a probe materialising `0xDEADBEEF` rather than `0xBEEF`.**
+
+**RETRACTED before it was ever acted on: "every historical `tval = 0` was read through a destroying
+path."** The clobber is SELF-ANNOUNCING. All four latch fields are written in one `always_ff` branch
+(`cva6.sv:1126-1137`), so a clobber necessarily moves `mcause` to 3 or 15 and `mepc` to
+`0x368`/`0x860`. Therefore every historical draw reporting `mcause 25` with a domain-range `mepc`
+was, on its face, NOT clobbered — and that is most of them. The halt-clobber association is real
+(the `0x368`/cause-3 signature appears in 0 of 26 no-halt draws and 17 of 36 halt draws) but it
+invalidates nothing that already reads as a domain capability fault.
+
+**The halt-destroys-the-latch mechanism itself is PLAUSIBLE, not proven.** Its matched pair is
+thinner than it looked: `tv-1` is an INFRASTRUCTURE WEDGE in which the probe never executed at all,
+so the with-halt side is `tv-2` alone. A competing explanation survives — those boots may have
+wedged without ever committing a latchable exception, leaving an earlier ebreak as the only thing
+ever latched, in which case the halt destroyed nothing.
+
+**Provenance, stated per draw rather than blanket.** `tvnh-1`/`tvnh-2` report
+`nv_bitstream_name: None` — they ran under `FPGA_BITSTREAM_UNVERIFIED=1` and are NOT on named
+silicon; the preflight line naming the bitstream there is echoing the env var, not a readback.
+`tval-ctl3`, `nc-2`, `s12t-1` and `s12t-2` ARE named.
+
+**`EXCX` did not fire — and now that absence MEANS something.** Both draws show `EXCX count: 0`.
+The monitor's unhandled-exception arm reports EXCX/MCAU/MEPC/MTVL/MSTA and then calls
+`fault_return_from_domain`, and `nm` confirms both are in the deployed firmware. This run is the
+positive control that path never had: a deliberate, confirmed `mcause 25` raised from inside a
+domain, which is exactly its trigger condition. It did not run.
+
+So **M-mode trap entry does not reach the monitor's handler for a domain capability fault**, and the
+pre-registered consequence stands: a monitor-side change cannot convert S-12 wedges into returned
+fault codes, and the directed Verilator simulation over `capmode_q` / `npc_metadata_q` /
+`pc_cap_ex_valid` is now the indicated instrument rather than a detour.
+
+### Caveat carried with all four draws
+
+The console lost `nv_bitstream_name` when its backend restarted, and these boots ran under
+`FPGA_BITSTREAM_UNVERIFIED=1`. A power-on showed the SD bootloader banner, so silicon is resident,
+but it cannot be NAMED. The `0xBEEF` result is a property of the FLU trap-value path and is not
+plausibly bitstream-version-specific, but the caveat travels with the number.
+
+---
+
+## 2026-08-29 — READ THIS BEFORE ANY TABLE BELOW. Three wedges in this folder never ran a domain, and the freshness gate was blind
+
+Everything below this section was tallied with the wedge counts named here. They are wrong, they
+are wrong in one direction, and two recorded conclusions invert when they are corrected.
+
+### 1. The gate that was supposed to prove which binary booted was checking a text file
+
+`run_sqlite_stages_fpga.py` verifies that the firmware's initramfs contains the artifacts the run
+is about to use, and printed `firmware carries the current binaries ... verified by decompressed
+content` on every draw in this folder. It selected which artifacts to check by splitting the spec
+on its last colon and taking the LAST half that names a staged file. For
+
+    /test-domains/sqli.dom:--slt /test-domains/dd1_one.test
+
+both halves resolve -- `Path("--slt /test-domains/dd1_one.test").name` is `dd1_one.test`, a real
+overlay file -- so the check ran against the .test and **the .dom was never compared to the image
+at all.** Every candidate domain here is exactly 1624152 bytes and the initramfs byte count is
+identical across all of them, so no other line in any log could have caught a stale one.
+
+Consequence, stated plainly: **no draw in the 2026-08-28/29 series has a verified binary identity.**
+`mepc` cannot recover it either -- the faulting instruction word `0b07275b` at VA 0x104814 is
+byte-identical in the baseline, the 3-byte variant and the compiler-pass build. Fixed and
+negative-tested in both directions (a deliberately stale .dom now raises STALE FIRMWARE; the
+correct one passes), and every verified artifact's sha256 is now printed per run.
+
+### 2. Three "wedges" are INFRASTRUCTURE VOIDS -- `create_dom` never returned
+
+Four scripts (`dd-board.sh`, `dd-confirm.sh`, `dd6.sh`, `clamp.sh`) hand-counted `SLT-SUMMARY
+records=` instead of reading the driver's own `=== STAGED BISECTION ===` block. Re-classified with
+`verdict.py`, which is the sanctioned reader:
+
+    ddc-c3   dd5_inselect   INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d1   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d3   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+
+The driver had already said so in the log: *"THIS RUN CARRIES NO VERDICT ABOUT ... no `SQ: A/dom-ok`
+-- create_dom never returned, so the domain was never created and NOTHING in it executed. Do NOT
+attribute this to the code under test."* This is the fifth hand-rolled classifier in this
+investigation and the fifth to be wrong; the rule is already written and was not followed.
+
+### 3. "PLAN DEPTH >= 2, BY ANY ROUTE" IS REFUTED BY ITS OWN DATA. It is a JOIN after all
+
+`dd5_inselect` is the only non-JOIN arm that reaches depth 2, and it is the sole evidence for the
+depth framing. Its one recorded wedge is `ddc-c3`, in which nothing executed. Corrected:
+
+    dd2_join      2-table JOIN         4 wedges / 4 valid   (p1, c5, d2, d4)
+    dd4_three     3-table JOIN         1 wedge  / 1 valid   (p3)
+    dd5_inselect  LIST SUBQUERY, d=2   0 wedges / 4 valid   (p4, c1, c2, c4)
+    dd3_subq      flattens to d=1      0 wedges / 5 valid
+    dd1_one       d=1                  0 wedges / many
+
+JOIN arms 5/5, non-JOIN depth-2 arm 0/4: Fisher p = 0.0079. **The superseded "it is a JOIN"
+framing is reinstated and the depth framing is withdrawn.** This narrows the trigger rather than
+widening it, and it is the one place where the correction moves the investigation forward.
+
+### 4. "NESTING, NOT REPETITION" loses its control -- it is slot-confounded
+
+`dd6_twostmt` 0/5 vs `dd2_join` 6/6 was quoted at Fisher p = 0.002. In `dd6.sh` the two arms are
+not interchangeable: **`dd6_twostmt` is in SLOT 0 and `dd2_join` is in SLOT 1**, which is exactly
+the slot/role confound this folder already retracted the fence and nop series over. Slot-matched,
+`dd6_twostmt` has ONE slot-1 draw (`ddb-p5`, returned) against `dd2_join` 4/4: p = 0.20. Whether
+slot placement is itself a variable is unproven at this N (depth>=2 arms are 5/7 in slot 1 and 0/2
+in slot 0, p = 0.44), which is precisely why it cannot be assumed away.
+
+### 5. The null control was not the missing null, and the arm comparison is weaker than recorded
+
+The claim at the head of the "arm in SLOT 1" section -- that no baseline draw existed in the
+configuration the arms were run in -- was false when written. `ddb-p1` and `ddc-c5`, from the day
+before, are that configuration (`sqslt.dom` + `dd1_one` in slot 0, the same bytes as `sqli.dom` in
+slot 1), and both wedged. Adding the 2026-08-29 null control (nc-1 returned, nc-2 wedged with the
+signature; nc-3/4/5 void on a server-side `[GDB] Start failed: Too many open files`, before Linux,
+so they carry nothing) the arm-configuration baseline is **3 wedges / 4**, not the ~0.94 taken from
+draws that all had a VARIANT in slot 0.
+
+Against that, the register-patch arm is **0 wedges / 4** -- not the 7/7 quoted, because `rp-6` is an
+infrastructure void and `rp-7/8/9` booted a different image entirely, which this folder had already
+recorded and then re-imported. Fisher on 0/4 vs 3/4 is **p = 0.143**.
+
+**So the three-byte `movc`/`stc` a4->a6 change is a CANDIDATE cure, not an established one**, and
+the earlier p ~ 1e-5 is withdrawn. Its own binary identity is unverified for the same reason as
+everything else in the series.
+
+### The whole arm series, re-tallied on ONE classifier — data, with the pooling disclaimed
+
+Re-classifying every board log with `verdict.py` and keeping only draws in the identical slot
+configuration (slot 0 = `dd1_one` filler, slot 1 = the arm with `dd2_join`) puts all eight arms on
+one footing for the first time. Groupings verified by DISASSEMBLING the arm binaries, not from the
+build scripts' descriptions:
+
+    arm         wedges/valid   window immediately before the subject ldc          group
+    baseline       3 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    pf64           4 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    scalar         3 / 5       movc a5,zero ; stc a5,0(a6) ; ldc a5,0(a0)         PRESERVED
+    regpatch       0 / 4       movc a6,zero ; stc a6,0(a5) ; ldc a4,0(a0)         BROKEN
+    dc-tagged      0 / 3       ldc a4,0(a0) ... stc a4,0(a5) ; ldc a4,0(a0)       BROKEN (value)
+    dc-null        0 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a5,0(a0)         BROKEN
+    li-pidx        0 / 3       sw   a4,0(a5)               ; ldc a4,0(a0)         BROKEN
+    pin4           0 / 2       movc a4,0 ; stc ; +6 insns  ; ldc a5,0(a0)         BROKEN
+
+**QUOTE THE IMAGE-LEVEL NUMBER, NEVER THE DRAW-LEVEL ONE.** The driver states the rule itself:
+*"R-16 and the S-12 wedge clustering are both per-IMAGE, so three boots of one image is ONE draw."*
+Under that rule there are eight units, not thirty:
+
+    3 PRESERVED images all wedge vs 5 BROKEN images all clean   p = 0.018
+    regpatch alone vs baseline alone                            p = 0.143
+    (draw-level 10/13 vs 0/16 gives p = 1.4e-05 and MUST NOT be quoted -- it is the same
+     result with N inflated ~4x by repeat boots of the same binary)
+
+### And it is not yet a finding, for a reason that no amount of re-tallying fixes
+
+* **The entire BROKEN column is unauthenticated returns.** A wedge latches an `mepc` that
+  identifies its image; a return latches nothing. Every draw supporting the cure is a return.
+* **`regpatch.sh` and `nullctl.sh` stage nothing and rebuild nothing** — no `cp -f`, no
+  `make build` — unlike `pin.sh`, `deadcap.sh`, `padframe.sh` and `slot1.sh`, which all do. Those
+  series depend entirely on unrecorded manual staging, and this folder's own exclusion of
+  `rp-7/8/9` proves at least one unrecorded image swap happened inside them.
+* **The one in-configuration baseline wedge cannot be attributed.** `nc-2` latched
+  `mepc = 0x828f4814`. The three-byte patch touches `0x104808` and `0x10480c` and leaves
+  `0x104814` byte-identical — `5b 27 07 0b` in both images, checked in the disassembly — so `nc-2`
+  is equally consistent with **the regpatched image having wedged**, which would turn the headline
+  arm from a 0/4 cure into a wedger and kill the result outright.
+* **`verdict.py` cannot catch this class.** Its infra rule is a whole-log test that can only ever
+  convert `WEDGED` into `VOID`; a void that RETURNS — a stale image running a curing binary —
+  passes through as a valid return. That is the exact column the signal lives in.
+
+### Two corrections to the grouping itself
+
+* **The grouping is well-defined only under a window of fewer than 8 instructions.** A
+  `movc a4, zero` sits 8 instructions before the subject `ldc a4` in EVERY arm including
+  `regpatch`, whose own docstring concedes it. At a window of 8 or more, every arm is "preserved"
+  and the split vanishes. The natural reading — the source of the *immediately preceding*
+  capability store — is the one used, and it was never written down before.
+* **`dc-tagged` does not break the register match; it breaks the VALUE.** Its window stores from
+  `a4` and reloads into `a4`. What changed is that the stored value came from a tagged capability
+  rather than from `movc rD, zero`. Filing it under "register broken" conflates two variables.
+
+### What the eight arms actually identify
+
+Every single-variable account is falsified by one arm:
+
+    store TARGET ADDRESS   s0-0x120 appears in a wedger and in a curer
+    fault-site VA/layout   wedgers at 0x104810/0x104810/0x104808, curers span 0x104804..0x104828
+    store ADJACENCY        adjacent in baseline, pf64, scalar (wedge) AND regpatch, dc-null (cure)
+    a null store PRESENT   present in regpatch and dc-null, both cure
+    register match ALONE   present in dc-tagged, which cures
+
+**Only the CONJUNCTION separates all eight: the capability store immediately before the reload
+stores a `movc`-produced null AND its source register is the reload's destination.** Nothing in
+the set dissociates the null-value half from the register half, so "the register pairing" — the
+phrase this folder has already retracted twice — is still not what the data supports.
+
+Not excluded: `.bss` size, the firmware rebuild that every arm except `regpatch` and the null
+control received, and heap/cache/timing state.
+
+### What is actually being done about it
+
+More one-bit draws cannot fix this -- at a 3-in-4 baseline, four arm draws are the best case above.
+`slt/s12stress.test` puts 120 distinct bare two-table joins in ONE domain invocation, and
+`CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the shared region, which survives a
+wedge and which the driver already reads over JTAG. That separates the two models a wedge RATE
+cannot distinguish at any N: a per-prepare hazard stops at a varying index, per-boot state stops at
+the first prepare of every wedging boot. The instrumented build leaves
+`sqlite3WhereCodeOneLoopStart` byte-identical -- 2866 instructions, same encodings, same address --
+which the pre-existing `CAPSTONE_ENTRY_MARK` does not: rebuilt with that one, the register match
+under test is gone from the faulting function altogether.
+
+---
+
+## REFUTED: the load-syncer mispair. The precondition is unreachable under maximum pressure
+
+This was the strongest surviving mechanism, and the only one so far proposed that produces BOTH
+`tval == 0` and `cap_type == NOT_CAP` from a single event. `capstone_load_syncer` holds ONE pending
+trans id and sets it on a new `init` with **no guard** on `req_set`. If a second LDC's init landed
+while the first was outstanding, the first LDC's response would fail the trans-id match, be diverted
+onto the scalar return path, and `check_load_data` would pair whatever DID match against whatever
+`cap_msg` it dequeued — substituting a whole `fat_cap_t`, cursor and metadata together. One coupled
+substitution, both halves of the signature.
+
+**It does not happen, and the reason is structural rather than statistical.**
+
+The sim-only checker in the generated `capstone_dyn_unit.anvil.sv` counts the PRECONDITION
+(`init-while-pending`) separately from the OUTCOME (`clobbers`), precisely so a clean run can
+distinguish "unreachable" from "not caught". Every earlier run reported zero — but those tests issue
+7–8 LDCs across ~1700 cycles, widely spaced and hitting in cache. **A zero there measures the test,
+not the syncer**, and reading it as a refutation would have been this project's most-repeated
+mistake.
+
+`s12-ldc-pressure.S` was built to create the condition: capabilities planted one per 64-byte cache
+line, a sweep to evict them so the loads genuinely miss and stay outstanding, then bursts of EIGHT
+independent LDCs into eight different destination registers with no data dependency — eight because
+`trans_id` is 3 bits and the scoreboard has 8 entries, so that is the most that can be outstanding
+at once.
+
+    S12-SYNC: ALIVE (load-syncer checker compiled in)
+    S12-SYNC: tick 4600  inits=192  init-while-pending=0  clobbers=0
+
+**192 inits against 7–8 in the ordinary tests**, so the pressure materialised — that counter is the
+positive control and it climbed 24-fold. And `init-while-pending` is still **0**: across 192 inits
+under the heaviest load the machine can carry, a second init never arrived while one was pending.
+
+The source says why. `func LDC` (`capstone_dyn_unit.anvil:317-378`) does
+`send cap_load_ri.init(...)` and then `send cap_load_ri.req(result) >> let msg1 = recv
+cap_load_ri.res >>` — the `recv` **blocks the thread**, so the round trip completes before another
+LDC can reach its own init. The usual caveat that the generated Anvil hardware is a flat concurrent
+machine, and that sequential `.anvil` reading does not constrain ordering, is why this is recorded
+as **measurement first and source-reading second**: the count is the evidence, the structure is the
+explanation for it.
+
+**Neither leg alone would be enough.** A source argument on a concurrent machine is not binding, and
+a zero without occupancy is not a result. Together they are, and the mispair is dead.
+
+## The LDC clear does not race the NEXT store either — matched pair, clear proven to fire
+
+`s12-linear-clear.S` was drafted to test the one write-ordering question left: an LDC of a
+clear-class capability zeroes the source granule, and that clear write and the FOLLOWING `stc` to
+the same granule share an 8-entry write buffer. If a merge ever landed the clear after the store,
+the granule would read back as the literal clear payload — `store_unit.sv:462-469` drives data 0,
+user 0, ctag 0, which is bit-for-bit `create_cnull()` and bit-for-bit the observed operand, `tval`
+included.
+
+    arm   value type   load returned            granule word 0 after the load
+    A     LINEAR       correct cap, Type 1  16/16   0            <- clear FIRED
+    B     NONLIN       correct cap, Type 2  16/16   0x80004000   <- clear correctly did NOT fire
+
+The arms differ in exactly one thing and the gate is shown to discriminate rather than to be stuck
+on: the clear fires throughout A and never in B. **No misordering occurs.** Each iteration's store
+lands after the previous iteration's clear — otherwise iteration N+1's `ldc` would have returned the
+null payload, and all 16 returned correct capabilities.
+
+**Two honest limits.** The granule read-back sits between the load and the next store, so it proves
+the clear fired but does not itself observe the ordering; the ordering is answered by the following
+iteration's load result, which is a weaker instrument than intended. And 16 iterations of bare-metal
+write pressure is not SQLite's after millions of instructions.
+
+> ### THE PREVIOUS VERSION OF THIS TEST FAILED IN A WAY THAT LOOKED EXACTLY LIKE S-12
+>
+> It raised `UNEXPECTED_OPERAND` — mcause 25, the S-12 exception — and by exception name alone that
+> reads as "S-12 reproduced in simulation". It is nothing of the kind. The test made its BASE
+> capability LINEAR and then did `MOVC(a0, s1)`; a linear capability is move-only, so that consumed
+> `s1`, and the next `cincoffsetimm` on the result raised correctly. Correct hardware, broken test.
+>
+> **What settles it is `ldc-inits=0` and `dyn-dispatches=0` in the same log — NO LDC EVER ISSUED**,
+> at cycle 533, during setup. A mechanism that begins with a load cannot be under test in a run that
+> never reached one. The lesson is not "check the exception name" but that the counter proving the
+> construct actually executed is what makes any verdict readable, and it is the reason the rewritten
+> version treats `ldc-inits` as its positive control.
+
+## S-10b excluded for this window — the STALL hazard only, and not on the store list
+
+S-10b's mechanism can only stale the METADATA HALF OR TAG of a granule-aligned LDC: a pending store
+to word 0 shares the load's `[11:3]` and does stall (`store_buffer.sv:279,287,293`), so only a
+word-1 store can be missed. S-10b therefore predicts `tval` = the stored cursor
+(`ariane_pkg.sv:766-784` passes the cursor through untagged; `ex_stage.sv:490` reports it as
+`fu_data_i[0].operand_a`). The latched `tval` is **0**. That is the argument, and it holds without
+enumerating a single store — which matters, because a store list cannot cover stores OLDER than the
+window that are still resident in the queues, and a resident older store to `s0-0x68` is exactly the
+S-10b case.
+
+**Scope, because the wider wording would be false.** This excludes the store-buffer STALL hazard
+only. It does NOT clear S-10 (`wt_dcache_mem.sv:280`, still word-granular in the resident bitstream),
+S-07, or write-buffer forwarding. Neither S-10 nor S-10b is in the flashed tree —
+`git merge-base --is-ancestor` returns false for both against `84ed6eafb`.
+
+> ### RESOLVED, SAME DAY — the value is NONLIN, and the subject slot is EXONERATED on two legs
+>
+> The contradiction below is settled, and not by preferring one instrument. A translate-time probe
+> on the `stc` at `+0x40`, reading `cap_type` out of QEMU's register file at that exact pc, measures
+> **NONLIN 16/16** — qj2 7/7, q_one 4/4, q_two 5/5, with `LIN=REV=UNINIT=SEALED=SEALEDRET=untagged=0`
+> in every run. The pc match is unique in the image (`pc & 0xfff == 0x7c8` plus operands
+> `rs1=x10, rs2=x12, imm=0`, exactly one match). **The instrument has a positive control**: the same
+> reporting path emits `LIN`, `SEALED` and `SEALEDRET` for OpenSBI's own boot stores, so it can name
+> clear-set types and simply does not see one here. The value is argument 3, `pWInfo` — a
+> `WhereInfo*` whose measured bounds span exactly the 256 KiB memsys5 arena.
+>
+> **And a structural leg that needs no type measurement at all.** The slot is stored ONCE and loaded
+> **three times per call** in a straight-line entry block with no intervening store — `+0x88`,
+> `+0xb8`, `+0xf4`, with `a0` not redefined between them and no branch in `0x104788..0x1048b0`
+> (12 loads, 1 store across the whole function). If the type here were clear-set, load #1 would zero
+> the granule and load #2 at `+0xb8` would raise off a NOT_CAP base **on every call, one-level plans
+> included**. One-level has never wedged in 11 draws. So the type at this site cannot be clear-set,
+> whatever any single probe reported.
+>
+> The board reading of REVOKE (`retval 0xC12A5200`) therefore does not survive as a statement about
+> THIS value. It is N=1 against a positive-controlled 16/16, and the structural leg rules it out
+> independently. What it might still be a true statement about — some other object, or a genuine
+> type corruption on silicon that QEMU cannot see — is **not established either way** and should not
+> be quoted in either direction.
+>
+> **The mechanism CLASS is untouched by this and remains live.** QEMU's `csldc` performs no source
+> clear, so a clear-set capability in a slot that is loaded twice is invisible under QEMU and fatal
+> on silicon — cursor 0, NOT_CAP, `tval = 0`. The `-O0` codegen makes store-then-reload-the-same-slot
+> pervasive (`0x10485c`: `cincoffsetimm a1,s0,-0x100; stc a3,0x0(a1); ldc a1,0x0(a1)`). The open
+> question is now narrow and answerable: **which `stc` sites store clear-set types, and is any of
+> those slots loaded more than once?**
+
+> **THE CONTRADICTION AS IT STOOD, kept because the reasoning matters.** Two measurements of "the value's type"
+> are recorded here and they disagree, because they are measurements of DIFFERENT OBJECTS:
+>
+> * above, on the board, of **the stored value**: `retval 0xC12A5200` → `lcc` selector 1 = 2, and
+>   that selector reports `cap_type - 1`, so raw type **3 = REVOKE** — which IS in the clear set;
+> * later, under QEMU, via `ARGP`: `ty1=1 ty2=1` → **NONLIN** — but `ARGP` reports the function's
+>   INCOMING ARGUMENTS, not the value `a2` that `stc` writes at `+0x40`.
+>
+> The section headed "The discriminating unknown is answered: SQLite's value is NONLIN too" treats
+> the second as having settled the first. **It does not.** Until this is resolved, no claim in this
+> folder that rests on "the clear cannot fire at the S-12 site" should be quoted. The clear-set
+> mechanisms are refuted here on their own evidence — the six-type sweep and the matched pair above —
+> rather than on the type argument, so those refutations stand either way.
+
+## REFUTED: the double-loaded clear-set slot. Zero such slots exist, on any arm
+
+The mechanism was: a clear-set capability stored into a slot that is then loaded TWICE. On silicon
+the first load is a MOVE and zeroes the granule, so the second reads cursor 0 / NOT_CAP and the
+consumer raises with `tval = 0`. Under QEMU it is harmless forever, because `csldc` performs no
+clear. Silicon-only by construction, which is S-12's most distinctive property — and the `-O0`
+codegen makes store-then-reload-the-same-slot pervasive, so the shape is abundant.
+
+A whole-program, address-keyed sweep over 16-byte granules, modelling the RTL condition
+(`result_tag_o && type in clear-set && rs1_perm_write`, `load_unit.sv:224-230`):
+
+    arm                   domain stc   tagged    CLEAR-SET   DOMAIN HITS   monitor hits
+    qj2      (two-level)      72823    58223         3           0             18
+    q_two    (two-level)      49483    39143         3           0             18
+    q_one    (one-level)      48361    38208         3           0             18
+    builtin  (no --slt)      187231   155414         3           0             24
+
+**Zero, on every arm.** The domain's only three clear-set stores are all `SEALEDRET`, all from one
+pc — the domain entry glue — one per `call_dom` entry, each to a different stack granule, and none
+is loaded again before the next store to it. That is the intended move.
+
+**Every hit is monitor-side, and the counts run the WRONG WAY.** The built-in arm, which passes
+14/14 on silicon, has MORE of them (24) than the two-level SLT arms that wedge ~54% (18). So they
+cannot be the trigger, and there is no discriminator between one-level and two-level anywhere in
+this data.
+
+**Three positive controls, all fired**, which is what makes the zeros admissible: forcing NONLIN
+into the clear set yields 144,425 hits on qj2 (so the detector works); the unforced type filter
+reports clear-set stores as a proper SUBSET of tagged stores, naming `LIN` and `SEALEDRET`; and the
+plain-store disarm path fired 38/85 times in controls and 0 in real arms. Coverage is structural
+rather than hopeful — all three `cap_mem_map_add` call sites plus the context save/restore path were
+hooked, closing the QEMU analogue of the dom-switch LDC blind spot, and the "tagged capability
+loaded from an untracked granule" meter reads 0 everywhere.
+
+> **An anomaly worth carrying, not chased here.** The model says the monitor-side hits should be
+> fatal on silicon, yet the board boots. The likely explanation is the known two-monitor-copies
+> gotcha — QEMU boots `caplifive-buildroot`'s `fw_jump` while the board's firmware is built from the
+> `caplifive-system` fpga/ariane tree. The domain verdict does not depend on it: it rests on there
+> being zero double-loads in the domain at all.
+
+## THE REFLASH HAPPENED, AND S-12 SURVIVED IT. S-10 is EXCLUDED as the cause
+
+The board was reflashed to `caplifive_s10fix_80843404c.bit` on 2026-08-27 (non-volatile;
+`flash_state: done`, `nv_bitstream_name` confirmed). The same two images were then re-run through
+the same harness, alternating, so the ONLY variable is the silicon:
+
+    image     BEFORE (caplifive_s07clear_84ed6eafb)   AFTER (caplifive_s10fix_80843404c)
+    pad48     wedged 3/3                              wedged 2/2
+    pad144    wedged 2/2                              RETURNED once, wedged once
+
+**`pad48` wedges 5 of 5 across both bitstreams.** `pad144`'s single return is unremarkable — it was
+2/2 on N=2 before, and one return in two draws is expected at any plausible per-image rate, let
+alone the ~54% population rate.
+
+**So the S-10 write-buffer fix does not address S-12, and S-10 is excluded as its cause.** This was
+the pre-registered reading, written before the runs: *both still wedge → S-10 is excluded, and
+either one of the ten exclusions is wrong or the trigger is outside every model we have.*
+
+**This was worth the reflash.** S-10 was the last live "the silicon has a known unfixed defect"
+explanation, and it is now a measurement rather than an open question. What it does NOT clear:
+S-07, write-buffer forwarding generally, and anything else divergent between the two trees — the
+bitstreams are DIVERGENT, not sequential, and `s10fix` also lacks the S-07 LDC recorder (an
+instrument, not a fix), which is why switch-208 readings in the after-runs carry the "UNKNOWN
+SEMANTICS for this bitstream" caveat and must not be read as tag verdicts.
+
+> **Note on how the flash was finally performed**, since our own docs are wrong about it. The
+> documented tool `board_reflash_only.py` **has never existed in git**. The working sequence is:
+> power ON, **let the board settle** (~30 s — flashing within a second of power-on returns `error`),
+> then `POST /api/flash-bitstream {filename}` and **wait for a FRESH `flash_state` event**. Two
+> apparent failures were our own instrument errors: reading the *cached* `flash_state` from a prior
+> attempt, and a presence check that iterated `{"files": [...]}` as a dict and so enumerated the
+> single key `'files'` instead of the filenames. The board was never at fault for either.
+
+## BASELINE PINNED for a future reflash: two images that wedge REPEATEDLY, not once
+
+The S-10 fix is synthesis-proven (`80843404c`) and **not flashed**; the exclusions in this folder
+cover the store-buffer STALL hazard only, so S-10 itself, S-07 and write-buffer forwarding remain
+live on the resident silicon. The obvious experiment is to reflash and re-run — but at the ~54%
+population wedge rate a single clean draw afterwards would mean almost nothing (P ≈ 0.46 by chance).
+
+So the per-image rates were pinned FIRST, on the resident `caplifive_s07clear_84ed6eafb.bit`, using
+two images that had each wedged exactly once (N=1 apiece). Runs alternated between the two images
+rather than repeating one, so board or firmware drift cannot masquerade as an image property.
+
+    run        enter  return   verdict
+    pad48        2      0      real wedge
+    pad144       0      0      VOID -- entry stall (R-16), the domain never ran
+    pad48        2      0      real wedge
+    pad144       2      0      real wedge
+
+**One of four is VOID and must not be counted.** `SQ: G/enter` present with no `H/return` is the
+documented signature of a genuine wedge; `enter = 0` means the domain never started, which says
+nothing about the code. Counting it would have inflated the baseline with a boot that ran nothing.
+
+**Admissible: `pad48` wedges 3/3 and `pad144` wedges 2/2**, each including its original draw — five
+real draws, five wedges. Under the 54% population rate P(5 of 5) = 0.046, so these are plausibly
+higher-rate images, consistent with this folder's per-image clustering finding.
+
+**Why this matters for the reflash.** These two images are now matched before/after subjects where
+the ONLY variable is the silicon. If either returns repeatedly after a reflash, that is a per-image
+reversal rather than a lucky draw from a population. Budget roughly four clean returns per image to
+be decisive; two would not be.
+
+> **METHOD CAVEAT, stated because it weakens the runs slightly.** These boots ran the SLT domain
+> ALONE, with no known-good control first — the standing rule is that a boot whose control fails is
+> VOID, and without one a "no return" could in principle be a boot failure rather than a wedge. What
+> carries the verdict instead is internal: `enter = 2` and `dom-ok = 2` show the monitor created the
+> domain and the domain entered, so the boot was healthy up to the point of the test. That is
+> weaker than a real control and is why the VOID row above was caught at all.
+
+> **The reflash could not be performed from this side.** `POST /api/flash-bitstream` returns
+> `200 {"state":"loading"}` and then transitions to `error` for BOTH server-side registrations
+> (`caplifive_s10fix_80843404c.bit` and `caplifive_s10fix.bit`), leaving `nv_bitstream_name`
+> unchanged — the board still holds the resident bitstream, and no damage was done. The API exposes
+> no failure reason. Note also that `board_reflash_only.py`, cited in `HOW-TO-LAUNCH-ON-FPGA.md` as
+> the reflash tool, **has never existed in git**, so this path was never proven from our side. The
+> flash needs GUI access or the server-side log.
+>
+> Checked before attempting, and worth recording: the two bitstreams are **DIVERGENT, not
+> sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
+> loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
+
+## WEAK, AND RECORDED AS WEAK: clamping the 5th call reduces the wedge but does not remove it
+
+`WhereCodeOneLoopStart` runs 3 + plan depth times, so `dd2_join` makes five calls and the fifth is
+the one the extra plan level adds. A build that returns early from call 5 onward
+(`CAPSTONE_WCLAMP=sqlite3WhereCodeOneLoopStart:5`), run against the unclamped build in the SAME
+boots, clamped first:
+
+    draw   clamped (5th call suppressed)   unclamped control
+    k1     *** WEDGED ***                  collateral
+    k2     returned                        *** WEDGED ***
+    k3     returned                        *** WEDGED ***
+
+Clamped 1 wedge / 3; unclamped 8 / 8 across the session. Fisher ~0.02.
+
+**This is suggestive and NOT decisive, for two reasons that are part of the result rather than
+caveats bolted on:**
+
+* **The clamp changes the PROGRAM, not just the call count.** It returns a wrong `notReady`, which
+  corrupts the generated code, so the clamped build differs from the unclamped one in more than the
+  thing under test. Part of any rate difference measures that corruption.
+* **k1's wedge may not be S-12 at all.** With codegen deliberately corrupted a fault can arise
+  anywhere, and a wedge reports no `mcause`/`mepc`, so an S-12 wedge is indistinguishable from one
+  the clamp itself created.
+
+**More draws would not fix this** — they would only sharpen a confounded comparison. What would fix
+it is an intervention that removes the fifth call WITHOUT corrupting codegen, and no such
+intervention is currently known.
+
+**So the load-bearing evidence for the nesting result stays the UNCONFOUNDED pair** — `dd6_twostmt`
+0/5 against `dd2_join` 6/6 at equal call counts, same binary, same boots, no perturbation. The clamp
+neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
+expecting a verdict.
+
+## RETRACTED: "register match is causal". The CURING binary contains the pairing — same address as the last retraction
+
+**The observation stands; the variable and the statistics do not.**
+
+**The patched build still satisfies the condition declared required.** `movc a4, zero` at `0x1047f0`
+writes `a4`, and `a4` is not redefined before `ldc a4` at `0x104810` — `0x1047f4`, `0x1047f8`,
+`0x104800` are *uses*; `0x1047fc`, `0x104804`, `0x10480c` write `a5`/`a6`. So the curing binary pairs
+a `movc`'s destination with the reload's, at distance 8. Both `a4` and `a6` carry a null at
+`0x10480c`.
+
+**This is the same error as the retraction one commit earlier, at the same instruction address.**
+`769c8ef20a51` retracted the register-pairing claim *because* `li-pidx` contained the pairing at
+`0x1047f0`. The sentence written to justify this patch — *"`a4` still holds 0 from `0x1047f0`, so
+semantics are unchanged"* — states the refuting fact, and was read only for the purpose it served.
+
+**The p-value is wrong by ~80x.** `0.06^4` treats an estimate as known. Fisher exact for 0/4 vs
+15/16 is **1.0e-3**. Worse, **no baseline draw exists in the configuration actually run**: every 0.94
+draw had a *variant* in slot 0, while regpatch had a returning `dd1_one` filler. Against the two
+known-wedging images in the SAME configuration (`pf64` 4/4, `scalar` 3/5), p ≈ **2.4e-3**; against
+this folder's own 54% population rate, **0.045**. A one-sided 95% bound leaves the patched image's
+wedge rate as high as **0.53** — "cured" is not established.
+
+**The patch severs TWO relations at once** — the `movc`'s adjacency to the `ldc` (2 instructions → 8)
+and the source register of the `stc` immediately preceding it. Nothing separates them.
+
+**WHAT SURVIVES:** *the store's presence is not sufficient.* A `stc` of the same null capability, to
+the same address, same position, same distance, sourced from a different register, did not wedge in
+4/4 valid draws.
+
+**A correlate that fits every build (PLAUSIBLE, UNPROVEN):** an adjacent `stc rD` carrying a
+null/NOT_CAP value immediately before `ldc rD`. Wedging: baseline, `pf64`, `scalar`. Curing:
+`regpatch`, `dc-null`, `pin4`, `li-pidx`. **`dc-tagged` breaks it on value alone** — register match,
+*tagged* value, cures 0/3 — so the null-value ingredient is forced into any surviving wording. This
+is the shape R-20 (`stc`/rs1 cursor forwarding) would predict.
+
+**CONTAMINATION, self-inflicted:** `s12pass.sh` staged over `sqli.dom` and rebuilt firmware
+mid-sequence while `regpatch2.sh` was still drawing. `regpatch` draws 7+ booted `4b751cbd` (the
+compiler-pass build), not `c20279a4` (regpatch). Those draws are VOID. **Board runs must be
+serialised; only off-board work parallelises.**
+
+**THE TWO CONTROLS THAT WOULD SETTLE IT, neither of which exists yet:**
+1. the UNMODIFIED baseline as the slot-1 arm with the `dd1_one` filler — the only draw putting the
+   baseline in the configuration actually used. If it does not wedge ~4/4, the null is wrong and the
+   whole comparison collapses;
+2. an **all-`a6`** patch restoring the full triple on `a6` with `a4` unused — separating the
+   adjacency half from the `stc`-source half.
+
+## SUPERSEDED — the causal claim as originally written
+
+
+The experiment the audit specified as decisive has been run, and it is the first result in this
+investigation with **no confound available**.
+
+`regpatch.dom` is the BASELINE binary with **three bytes** changed:
+
+    0x104808   movc a4, zero      ->  movc a6, zero
+    0x10480c   stc  a4, 0x0(a5)   ->  stc  a6, 0x0(a5)
+    0x104810   ldc  a4, 0x0(a0)       (unchanged)
+    0x104814   cincoffsetimm a4, a4, 0xb0
+
+Everything else is byte-identical: same addresses throughout, same instruction count, same
+store-to-reload distance, same store to the same address with the same value. `a6` is dead from
+`0x1047bc` and `a4` still holds 0 from `0x1047f0`, so semantics are unchanged. **The single variable
+is whether the register carrying the null matches the reload's destination.**
+
+    arm in slot 1, returning filler in slot 0     wedges
+    baseline  (movc a4 ... ldc a4)                14 confirmed + 1 unconfirmed / 16
+    3-byte patch (movc a6 ... ldc a4)             0 / 4 valid (1 infra VOID)
+
+At baseline's ~0.94 per-draw rate, P(0 in 4) ≈ **1.3e-5**.
+
+**This separates what the contiguous triple could not.** The audit's objection was that the triple
+bundles register match, null value and store adjacency, with no pair of builds varying exactly one.
+Here the store — its address, value, position and distance — is held *completely* constant. So the
+store's presence is **not sufficient**, and the register match **is required**.
+
+With the earlier result that the register's IDENTITY is irrelevant (`scalar` wedges on `a5` at its
+own confirmed consumer address; `dc-null` cures with a reload into `a5`), the condition is a
+**same-register relation**, not a property of any particular register.
+
+**Why binary patching.** Every source-level variant let the compiler re-lay-out the function, moving
+layout, distance, allocation and instruction count together — which is why four successive mechanism
+claims were confounded and retracted. Three attempts to force a register split from source failed:
+`-O0` reuses the same scratch register regardless of added pressure. Patching two register fields
+sidesteps the compiler and leaves nothing to attribute the result to.
+
+**STILL NOT ESTABLISHED.** Whether the null VALUE matters or any value in the matching register
+would do — a further patch, but not one that can hold semantics fixed, since the stored value is
+what `pIdx` becomes. And **no RTL structure is named**: this states the triggering condition, not
+which hardware unit mishandles it.
+
+## RETRACTED: the register-pairing claim. The correlate is the CONTIGUOUS TRIPLE, and it does not discriminate
+
+**"Exceptionless" is false.** `li-pidx` — the headline cure at 0/8 — CONTAINS the pairing, at the
+identical reload and consumer:
+
+    1047f0  movc a4, zero               BEFORE the reload
+    1047f4  stc  a4, -0x5a0(s0)
+    104804  ldc  a4, 0x0(a0)            same register, same source pointer
+    104808  cincoffsetimm a4, a4, 0xb0  the identical consumer
+
+That was in disassembly already printed and read; the `movc` at `104818` (which had moved after) was
+matched and the one at `1047f0` two instructions above the reload was not. `dc-tagged` is the same.
+
+**Baseline is NOT 15/15.** `li-pidx-3` records the BASELINE returning (`rc=0`, past the replay blob):
+14 confirmed + 1 unconfirmed wedge + **1 return in 16**. Behaviour is therefore **not** a
+deterministic function of the image; the per-draw rate is ~0.94.
+
+**`dc-null` and `dc-tagged` are built ON TOP of the `pidx` code motion** — the build script says so
+and the binaries confirm it — so their 0/4 and 0/3 inherit an already-established cure.
+
+**The `tval = 0` argument was backwards.** The null `movc` writes is *immediately* `stc`'d, so a
+false forwarding hit delivering that just-stored null derives `tval = 0` exactly as well as a lost
+writeback does. The memory side is not weakened and the "NOT the write-buffer forwarding family"
+steer is withdrawn.
+
+**DISTANCE co-varies perfectly** with the claimed pairing (2 instructions in baseline, 5 in both
+`pidx` and `dc-tagged`), and `c56679fb175e` already established distance as a variable.
+
+**WHAT SURVIVES.** Across **four** independent build lineages (three share one source manipulation),
+every signature-confirmed wedge occurs in a build containing the **contiguous triple**
+`movc rD,zero ; stc rD,0(rX) ; ldc rD,0(rY)` immediately upstream of the consumer, and no curing
+build contains that exact contiguous triple. The same-register relation WITHOUT the adjacent store
+appears in curing builds, so the register pairing alone is not the correlate. The triple bundles
+register match, null value and store adjacency; nothing here varies exactly one of them, so it does
+**not** discriminate a register-writeback hazard from write-buffer forwarding.
+
+**One sub-claim survives:** the destination register's IDENTITY is not the variable — `scalar` wedges
+on `a5` (confirmed at its own consumer `0x828f480c`) and `dc-null` cures with a reload into `a5`.
+
+**THE DECISIVE MISSING EXPERIMENT:** a register-field-only change —
+`movc a6,zero ; stc a6,0x0(a5) ; ldc a4,0x0(a0)` — with every address, instruction count and
+distance byte-identical to baseline. Wedge refutes the register pairing outright; cure establishes
+it with the store held constant. At baseline's ~0.94 rate, 4 draws give p ≈ 1e-5.
+
+## SUPERSEDED — the register-pairing claim as originally written
+ — exceptionless across 6 builds, 38 draws
+
+**The address hypothesis is refuted and the store is incidental.** `pf64` keeps the null capability
+store in the window but moves its target from `s0-0x120` to `s0-0x160`, leaving the reload at
+`0x104810` and the consumer at `0x104814` — the SAME addresses as baseline, so no layout shift of
+the fault site at all. It wedges **4/4**, signature-confirmed (`tval 0`, `mepc 0x828f4814`).
+
+Cross-checking register allocation across every variant built this session:
+
+    variant         movc rD,zero before ldc rD (SAME register)?     wedges
+    baseline        movc a4 -> ldc a4      YES                      15 / 15
+    scalar          movc a5 -> ldc a5      YES                       3 / 5
+    pf64            movc a4 -> ldc a4      YES                       4 / 4
+    pidx            movc moved AFTER the ldc                         0 / 8
+    deadcap-null    movc a4 -> ldc a5      DIFFERENT REGISTER        0 / 4
+    deadcap-tagged  no movc zero before the ldc                      0 / 3
+
+**Every wedging build pairs `movc rD, zero` with an `ldc` into the SAME register; every curing build
+breaks that pairing** — by moving the `movc` after the reload, by storing a tagged value instead of
+null, or by the reload landing in a different register. The store's address, value and presence all
+varied freely across the cures and none of them tracks the outcome.
+
+**It predicts `tval = 0` EXACTLY rather than approximately.** `movc rD, zero` writes
+`{cursor 0, NOT_CAP}` into rD. If the `ldc`'s writeback to rD is lost or late, the consumer reads
+back precisely movc's own value — the observed faulting operand IS movc's output. No memory-side
+account reaches `tval = 0` without an extra assumption; every one of them predicts a STALE value,
+which here is a non-zero cursor.
+
+It also explains **why a fence cures** (it perturbs the timing between two writes to rD) and why
+`deadcap-null` cured **while keeping a null capability store in the window** — its reload targeted
+`a5` while the `movc` wrote `a4`.
+
+**LIMITS, and they matter.** This is a correlation across builds, not a demonstrated mechanism. The
+pairing is necessary in every case observed, but **bare-metal tests reproducing `movc`/`stc`/`ldc` on
+one register did NOT wedge** (`s12-cap-waw-pressure.S`, `s12-stc-producer.S`), so an additional
+ingredient supplied by the nested codegen context is still required — which is consistent with
+everything else in this folder, since the instruction sequence alone was never sufficient. The six
+variants are also six binaries with differing layout; `pf64` is the tightest control, holding the
+reload and consumer at baseline addresses, and it wedges.
+
+**WHERE THIS POINTS:** a register writeback / WAW hazard on rD between `movc rD, zero` and a
+subsequent `ldc rD`, NOT the write-buffer forwarding family. That is a different structure from the
+one the previous three accounts pointed at, and it is the first account that derives `tval = 0`
+rather than assuming it.
+
+## RE-ESTABLISHED with the arm in SLOT 1: the null capability store's PRESENCE is required
+
+The retraction below was about instrumentation, not about the effect. Re-run with the arm under test
+in **slot 1** — the slot where the trap latch demonstrably reports — every wedge is now
+signature-checked:
+
+    arm      what left the window        wedged / valid draws   signature
+    pidx     the null CAPABILITY store   0 / 8                  --
+    scalar   a scalar initialiser        3 / 5                  ALL THREE: tval 0, mepc 0x828f480c
+
+`0x828f480c - 0x827F0000 = 0x10480c` — the **`scalar` build's own consumer**, immediately after its
+relocated reload at `0x104808`. So these are genuine S-12 faults at the moved site, which is the
+confirmation slot 0 was structurally incapable of producing. Two further draws were VOID (domain
+never created) and are excluded rather than counted either way.
+
+Fisher exact (3 wedges in 13 draws) = **0.035**.
+
+**WHAT THIS ESTABLISHES:** S-12 requires the **null capability store to be present in the window
+before the reload**. Moving it out cures; a layout-matched code motion that leaves it in does not.
+
+**WHAT IT DOES NOT ESTABLISH** — and the distinction matters for a hardware report:
+
+* It shows the store's **PRESENCE** matters, not that its **VALUE** is what reaches the consumer.
+  Equally consistent: store-buffer OCCUPANCY (any additional 16-byte capability store would do), or
+  its ADDRESS (`s0-0x120`) aliasing the reload's (`s0-0x70`) in a word-granular hit function
+  independent of the value stored.
+* "Layout-matched" means **identical outside a 32-byte window** — `llvm-nm` identical across 3890
+  symbols, 9 instructions differing — with two residuals: the two arms' reloads sit 4 bytes apart
+  (`+0x7c` vs `+0x80`, same 16-byte fetch block), and `scalar` reallocates registers (a5/a6 rather
+  than a4/a5). `pidx` is the arm closer to baseline.
+
+**THE SHARP NEXT ARM, which tests the VALUE directly:** initialise `pIdx` to a live TAGGED
+capability instead of null, leaving the store in the window. A wrong-address forward of the value
+then delivers a *tagged* capability, which cannot raise `UNEXPECTED_OPERAND` with `tval = 0`;
+occupancy or address-aliasing predicts the fault is unchanged. That separates "this store's value is
+forwarded" from "one more capability store in the window is enough".
+
+## RETRACTED: the null-store mechanism AND the layout refutation — SLOT IS CONFOUNDED WITH ROLE
+
+**A systematic design error runs through the fence, nop and late-init experiments alike: the arm
+under test was ALWAYS in slot 0 and the control ALWAYS in slot 1 — and the trap latch only reports
+from slot 1.**
+
+Latched traps across the whole series:
+
+    nop-n1..n4      slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-scalar-2..5  slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-pidx-1,2,4,5 slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence-f1,f2,f4  slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence2-g1..g3   slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+
+**Every "the variant still wedges" data point is UNCONFIRMED; every "the control wedged" data point
+is CONFIRMED — and that asymmetry is purely an artifact of slot placement.** The predicted S-12
+`mepc` for a slot-0 arm (`0x824F480C` / `0x824F4818`) was never observed once.
+
+**Consequences:**
+
+* **"The null capability store is implicated" is UNSUPPORTED.** The `scalar` arm's 4/5 wedges were
+  never shown to still be S-12, so the matched pair is unearned and no mechanism follows from it.
+* **"LAYOUT REFUTED: a nop wedges 4/4" is UNSUPPORTED** on the same grounds. The nop/fence *layout*
+  match is genuine (`llvm-nm` diff = 0), but the 4/4 is four unconfirmed wedges set against a 0/7
+  measured on a signature-confirmed control.
+
+**This is NOT a refutation in the other direction either.** The unmodified binary in slot 0 also
+latches `0x368` in 6 of 8 wedges, so `0x368` does not prove "not S-12" — it proves the latch did not
+capture a capability trap. The instrument as deployed cannot un-void these arms.
+
+**WHAT SURVIVES, and it is worth keeping:** `pidx` returned **5/5**, and in 4 of those boots the
+same-boot unmodified control wedged with the confirmed S-12 signature — so the boots were
+demonstrably S-12-hot and the code motion changed the slot-0 outcome. The layout match is also
+genuine and better than claimed: `li-pidx` and `li-scalar` have **identical `llvm-nm` output** (3890
+symbols) and differ by exactly nine instructions in `0x1047fc-0x10481c`. Two residuals to state:
+the reloads differ by 4 bytes (`+0x7c` vs `+0x80`, same 16-byte fetch block) and `scalar` — not
+`pidx` — reallocates registers (a5/a6 rather than a4/a5).
+
+**THE FIX, and it costs no reflash:** put the ARM UNDER TEST IN SLOT 1, with a known-good filler in
+slot 0, so the arm occupies the slot where the latch demonstrably captures `mcause 25 / tval 0`.
+Every comparison in this series needs redoing that way before any of it means anything.
+
+**Also broken, and it matters for reading any of these logs:** the driver's wedge probe hardcodes a
+read of `a4`, but the `scalar` build reallocates the reload target to **a5** — so it printed the
+wrong register (`/tmp/capstone/li-scalar-3.log`: `a4(x14)=0x0`).
+
+**Standing rule this cost us, already in the folder at `:1203`:** *a wedge whose latched `mepc` is
+not `DBAS + 0x484` is NOT the subject fault; that arm is VOID.* It was applied to `g4` and then not
+applied to eight later arms.
+
+## THE NULL CAPABILITY STORE IS IMPLICATED: moving it out cures 0/5, a layout-matched control does not (4/5)
+
+The two surviving memory-ordering accounts are now separated, and the separation is layout-controlled.
+
+`CAPSTONE_LATE_INIT` moves ONE initialiser from before the reload to after it, keeping semantics
+identical (neither variable is read in between):
+
+* **`pidx`** moves `Index *pIdx = 0;` — the **capability** null store, `movc a4, zero; stc a4, 0x0(a5)`,
+  written one instruction before the reload. Verified in the disassembly: the pair now sits at
+  `0x104818`, AFTER the reload at `0x104804` and its consumer at `0x104808`.
+* **`scalar`** moves `int iReleaseReg = 0;` instead — a comparable code motion that LEAVES the null
+  capability store in the window. This arm exists so a cure from `pidx` cannot be dismissed as
+  "some instructions moved", which is the confound that forced the earlier retraction.
+
+    arm      what left the window            wedged / draws
+    pidx     the null CAPABILITY store       0 / 5
+    scalar   a scalar initialiser            4 / 5
+
+Fisher exact (hypergeometric, 4 wedges in 10 draws) = **0.024**.
+
+**MECHANISM.** Taken with the two prior controls — a fence cures (so the cure is SEMANTIC), and a
+`nop` at byte-identical layout wedges 4/4 (so it is NOT layout) — the wedge requires the **null
+capability store to be in flight in the window before the reload**. That is a **wrong-address
+forward**: the `{cursor 0, NOT_CAP}` written by `movc a4, zero; stc a4, 0x0(a5)` to `s0-0x120` is
+delivered to an `ldc` addressed at `s0-0x70`. It is the only surviving account that predicts
+`tval = 0` EXACTLY; a store-to-load drain of the subject `stc` predicts a STALE value, which here is
+a non-zero cursor.
+
+**This is the S-10 / R-19 / R-20 write-buffer forwarding family**, which this folder already lists
+as live and which the S-10 reflash did NOT clear — `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`) is
+still word-granular against a 16-byte capability on the resident bitstream.
+
+**LIMITS, stated.** N=5 per arm; p = 0.024 is significant but not overwhelming. One `pidx` boot
+(draw 3) had a control that did not wedge and is a weak boot, though `pidx` returned in it anyway.
+In `scalar` draws 2-5 the variant wedged first, so the paired control was collateral — the scalar
+wedges are the data points, and they are consistent with the unmodified ~100% rate. And this
+identifies the store whose VALUE is delivered; it does not yet identify the RTL structure that
+misroutes it.
+
+## LAYOUT REFUTED: a NOP at the identical point wedges 4/4 where a FENCE returns 0/7
+
+The objection that killed the previous mechanism claim — that the fence's +4 displacement, not its
+semantics, might be the cure, since S-12 is layout-sensitive — is now tested and **refuted**.
+
+`CAPSTONE_WNOP_BEFORE` puts a 4-byte `nop` (`addi x0, x0, 0`) at the *identical* injection point.
+**The two builds have BYTE-IDENTICAL SYMBOL TABLES** — verified by diffing `llvm-objdump -t`, whose
+only difference was the filename in objdump's own header line; stripped, both hash to
+`a6174d6e9d1b90a7e24a`. Same four bytes, same displacement of the reload (`0x104814`) and its
+consumer (`0x104818`), same addresses throughout. The sole difference is whether the inserted
+instruction carries memory semantics.
+
+    build    layout                  inserted instruction        result
+    nop      identical symbol table  addi x0, x0, 0  (inert)     WEDGED 4 / 4
+    fence    identical symbol table  fence rw,rw     (ordering)  0 wedges / 7
+
+**So the cure is SEMANTIC, not positional.** Layout is excluded as the explanation, and a
+memory-ordering mechanism is reinstated on evidence rather than on assumption. The `nop` arm also
+supplies something the fence arm could not: a same-layout POSITIVE control, wedging 4/4, which
+proves the comparison can produce a wedge at that exact geometry.
+
+**WHAT IS STILL NOT SEPARATED.** Two memory-ordering accounts remain, and a fence cures both:
+
+* **(a) store-to-load drain** — the subject `stc` at `+0x40` has not landed when the `ldc` at
+  `+0x88` reads. Predicts a STALE value, which here is a non-zero cursor, so it does not by itself
+  explain `tval = 0`.
+* **(b) wrong-address forward** — the null capability written one instruction earlier by
+  `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` is forwarded to the reload. Predicts
+  `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed.
+
+**REFUTED 2026-09-03 — see the root-cause section at the top of this file.** Neither (a) nor (b) is
+the mechanism. `tval` reports the operand as the execution unit INGESTED it, not what the load
+returned, so `tval = 0` never separated these two; and both simulation and silicon now show the
+load landing correctly, with the null reaching the consumer through scoreboard forwarding. The
+paragraph below is retained as it stood.
+
+~~**(b) fits `tval = 0` and (a) does not**, so (b) is currently the better-supported of the two — and
+it is the S-10 / R-19 / R-20 write-buffer forwarding family this folder already lists as live, which
+the S-10 reflash did NOT clear.~~
+
+**THE NEXT DISCRIMINATOR:** move the null-capability store out of the window. `Index *pIdx = 0;`
+compiles to that `movc`/`stc` pair; relocating the initialiser to after `pWC = &pWInfo->sWC;` keeps
+semantics identical (it is not read in between) and removes the null store from the window.
+Wedge disappears → **(b)**, the null store is the forwarded value. Wedge persists → **(a)**.
+
+## RETRACTED: the "store-to-load drain hazard" mechanism, and the dose-response that supported it
+
+**The cure is real. The mechanism is not established, and one of the three data points was
+fabricated by an instrument error.**
+
+**1. The middle rung never ran.** `f3`, the only wedge in the entry-fence arm, was an **R-16 entry
+stall**, and the driver said so in the log: *"INFRASTRUCTURE WEDGE ... NO VERDICT ... no `SQ:
+G/enter` -- the domain was CREATED but never ENTERED ... Do NOT attribute this to the code under
+test."* The classifier counted `SLT-SUMMARY` lines behind a `booted` guard testing `Linux version`
+or `SQ: A/dom-ok` — **an entry stall emits both**. A gate whose condition the failure mode always
+satisfies, which is the exact class this project keeps paying for. It needed `SQ: G/enter` per arm.
+
+    CORRECTED:  not drained          wedged 4/4 in the paired boots
+                fence at entry       0 / 3   + 1 VOID
+                fence before reload  0 / 4
+
+**Flat. There is no dose-response**, and "Fisher = 0.004" and "the residual is the three trailing
+stores" both go with it.
+
+**2. The fence is NOT layout-neutral, and layout now fits BETTER than drain.** It shifts the reload
+and its consumer by +4 (`0x104810/0x104814` → `0x104814/0x104818`) and moves **1165 of 3633
+symbols**. Codegen is otherwise neutral — 2866 instructions, same order, same registers — so
+*semantically* neutral was true and *layout*-neutral was never checked. Decisively: the two fence
+placements have **byte-identical symbol tables**. They are the SAME layout perturbation but
+DIFFERENT drain doses (3 stores remaining vs 0). Drain predicts they differ; layout predicts they
+match. **They match.**
+
+**3. N=4 cannot bear the weight.** This folder's own finding is that behaviour is a deterministic
+function of the image and layout selects it, so the fenced boots are **one image draw**, not four.
+Layout-null probability is ~0.21–0.46, not 0.045. Pairing controls boot state; it does not control
+image identity, which is the confounded variable.
+
+**4. Drain does not predict `tval = 0`.** An unforwarded in-flight store yields the STALE prior
+content, and here that is non-zero (`0x82be4cd0` in the halted read). A surviving alternative
+predicts `{cursor 0, NOT_CAP}` exactly: a **wrong-address forward** of the null capability stored
+one instruction earlier by `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` — the S-10/R-19/R-20
+family this folder already lists as live. **A fence cures both; this experiment cannot separate
+them.**
+
+**Also corrected:** the fenced reload was labelled `+0x88`; from `0x104788` it is `+0x8c`. The
+address shift went unnoticed at the moment the mechanism was written — which is itself the tell.
+
+**WHAT SURVIVES, and it is worth having:** a `fence rw,rw` immediately before the reload eliminates
+the wedge, 0/4 against 4/4 unmodified in the same boots (3 of the 4 signature-confirmed `mcause 25`
+/ `mepc 0x828f4814` / `tval 0`; `g4` was a genuine wedge with a non-capability `mcause 3` and is not
+an S-12 confirmation). A fence at entry gives the same 0/3. **Usable as a mitigation. Not a
+mechanism.**
+
+**THE DISCRIMINATOR, one boot:** rebuild with a **4-byte `nop`** at the identical injection point,
+verified to produce a symbol table identical to the fenced build modulo one opcode. `nop` returns →
+the +4 displacement is the operative variable and drain is refuted as the cure's mechanism. `nop`
+wedges while `fence` returns → the fence's SEMANTICS do the work, and drain or the null-store
+forward survives as a class.
+
+## SUPERSEDED — the drain mechanism as originally written
+ Closing the window eliminates the wedge, 0/4 vs 4/4
+
+Fencing immediately before the reload removes the failure entirely, and the three conditions form a
+monotone dose-response with a **semantically neutral** intervention throughout — no value, control
+flow or generated program changes, only the timing of the store path:
+
+    write path between the spill (+0x40) and the reload (+0x88)      wedges
+    NOT drained          (unmodified)                                15 / 15
+    PARTIALLY drained    (fence at function entry; 3 stores remain)   1 / 4
+    FULLY drained        (fence immediately before the reload)        0 / 4
+
+The final arm ran the fenced and unmodified builds in the SAME four boots, fenced first: fenced
+returned 4/4, unmodified wedged 4/4. Placement verified in the disassembly —
+
+    10480c  stc a4, 0x0(a5)               last store in the window
+    104810  fence rw, rw                  the drain
+    104814  ldc a4, 0x0(a0)        +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0    the fault site
+
+**STATEMENT OF THE MECHANISM.** The capability spilled by the `stc` at `+0x40` is reloaded by the
+`ldc` at `+0x88` **while that store is still in flight in the write path**, and the load returns
+`{cursor 0, NOT_CAP}` rather than the stored capability. The consumer then raises
+`UNEXPECTED_OPERAND` with `tval = 0`. Draining the write path before the reload prevents it.
+
+**IT ACCOUNTS FOR EVERY PROPERTY THIS FOLDER HAS RECORDED**, which is why it is worth more than the
+statistics alone:
+
+* the 36 instructions to the fault are **identical on every call** — the difference is timing, not
+  instructions, so no instruction-level repro was ever possible;
+* **nine bare-metal reconstructions came back clean** — they reproduced the instructions faithfully
+  and had none of the write pressure;
+* **nesting, not repetition** — the extra where-codegen level fills the write path; two separate
+  one-level prepares (`dd6_twostmt`, same 5 invocations) do not and never wedge;
+* **silicon-only** — QEMU models no write buffer, so the window cannot exist there;
+* **layout- and timing-sensitive with per-image clustering** — the window is a drain race;
+* **one level never wedges** (0/11) — less write pressure ahead of the reload;
+* **`tval = 0` with DRAM intact** — the store had not landed when the load read, and had landed by
+  the time a debugger looked.
+
+**WEIGHT AND LIMITS, stated rather than implied.** N=4 for the full fence. Because the control
+wedged 4/4 in the same boots and the unfenced rate is 15/15, the paired comparison is strong, but
+0/4 is not 0/20 — the residual rate is bounded, not measured. And a fence is a *sufficient*
+mitigation, which does not by itself identify WHICH hardware structure mishandles the in-flight
+store. It points hard at the write/store-buffer forwarding path, and notably the S-10 reflash did
+**not** clear that family: S-07 and the word-granular `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`,
+still word-granular against a 16-byte capability) both remain live on this silicon.
+
+**MITIGATION AVAILABLE NOW.** One `fence rw,rw` before this reload removes the failure at zero
+semantic cost. That is a workaround, not a fix, and must not be described as a fix while the
+hardware structure is unidentified.
+
+## A SEMANTICALLY NEUTRAL FENCE CUTS THE RATE FROM 11/11 TO 1/4 — the strongest mechanism evidence yet
+
+Given the path to the fault is 36 branch-free instructions identical on every call, the trigger is
+STATE. The state with prior evidence is a store-to-load drain window: the `stc` spilling `pWInfo` at
+`+0x40` is reloaded by the `ldc` at `+0x88` eighteen instructions later.
+
+`CAPSTONE_WFENCE` puts `fence rw,rw` at the top of the function. **It is semantically neutral** — no
+value, control-flow or generated-program change, only the timing of the store path — which is
+exactly what the `WCLAMP` experiment lacked and why that one had to be recorded as weak.
+
+**Verified by disassembly, the fence lands INSIDE the window:**
+
+    1047c8  stc a2, 0x0(a0)      +0x40  the subject store
+    1047ec  fence rw, rw                the injected drain
+    1047f8  stc a4, -0x5a0(s0)          three stores still follow ...
+    104810  stc a4, 0x0(a5)             ... one immediately before the reload
+    104814  ldc a4, 0x0(a0)      +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0  faults
+
+    draw   fenced        unmodified control
+    f1     returned      *** WEDGED ***
+    f2     returned      *** WEDGED ***
+    f3     *** WEDGED ***  (collateral)
+    f4     returned      *** WEDGED ***
+
+**Fenced 1 wedge / 4; unmodified 11 / 11 this session. Fisher = 0.004.**
+
+**Reading.** Draining the write path between the spill and the reload removes most of the failure
+but not all of it. That is direct support for the store-to-load drain window as a MAJOR contributor,
+obtained without perturbing the program — and it is consistent with the delay-dependence recorded
+earlier (bracketed 10 < T <= 600) whose mechanism had been retracted.
+
+**The residual has an obvious candidate rather than being mysterious:** three stores execute AFTER
+the fence and before the reload, one of them immediately prior. The fence closes most of the window,
+not all of it. A fence placed immediately before the reload would test that, but the reload is
+compiler-generated `-O0` spill code and there is no source point that maps there.
+
+**WEIGHT: N=4, and 1/4 is one draw from 0/4 or 2/4.** The direction is significant against 11/11,
+but the residual rate is not usefully estimated at this N. More draws would sharpen it, and unlike
+the clamp they would sharpen an UNCONFOUNDED comparison.
+
+**Practical consequence:** a fence in this one function cuts the SQLite failure rate roughly
+fourfold at zero semantic cost. That is not a fix, and it must not be presented as one while the
+mechanism is unidentified — but it is a usable mitigation and a strong pointer for the hardware side
+toward the write/store buffer path, which the S-10 reflash did NOT clear (S-07 and the
+word-granular `wbuffer_hit_oh` at `wt_dcache_mem.sv:280` both remain live).
+
+## WHY THIS CANNOT BE REDUCED TO AN INSTRUCTION SEQUENCE — measured, and it explains nine clean repros
+
+The natural question for a hardware report is "which instructions?". For S-12 that question has a
+definite answer and it is **not the one anyone wants**: the instructions are IDENTICAL between the
+calls that are safe and the call that faults.
+
+Disassembled from the running image, function entry `0x104788` to the faulting
+`cincoffsetimm a4, a4, 0xb0` at `0x104814`:
+
+* **36 instructions.**
+* **ZERO branches and ZERO calls** — the path is entirely straight-line.
+* **`iLevel` is never TESTED on that path.** It arrives in `a3` and is spilled once
+  (`1047d4: sw a3, 0x0(a2)`); nothing reads it again before the fault.
+
+So every invocation — the four safe ones and the wedging one — executes the same 36 branch-free
+instructions, in the same order, with the same frame layout. **There is no instruction-level
+difference to find.**
+
+**That is the explanation for this folder's most puzzling row.** Nine directed reconstructions
+reproduced the window — the four-instruction shape, the offset-for-offset 40-line window, the
+intervening-store sweep, the adjacent-granule scalar, all six capability types, store-buffer
+pressure, cache pressure — and every one came back clean. They were not missing an instruction. The
+instructions were never the variable.
+
+**What the trigger therefore is: MACHINE STATE**, produced by a prior nested codegen level, arriving
+at an instruction sequence that is correct and unchanging. That is a statement about
+microarchitecture — cache occupancy, write/store buffer contents, scoreboard state — and NOT about
+decode or execution of any sequence.
+
+**For the hardware side, the report should read:** *these 36 branch-free instructions are correct
+and execute identically on every call; they fault only when a prior, nested where-codegen level has
+run within the same prepare. Look for state that level leaves behind, not for an instruction
+pattern.*
+
+## SETTLED: it is NESTING, not repetition — two levels inside ONE prepare
+
+The sharpest result of the delta-debug, and it retires the "the codegen path runs twice" framing
+that every mechanism proposal has rested on.
+
+**The invocation count was measured** (after repairing a probe that had latched its own counter and
+reported `calls=1` forever): `WhereCodeOneLoopStart` runs **3 + plan depth** times, exactly. So a
+2-level plan enters it 5 times and a 1-level plan 4 times.
+
+**`dd6_twostmt` reaches 5 too** — two ONE-level queries in one file — and it does not wedge. Run as
+a matched pair in the SAME boots, `dd6` first so it always gets a verdict and `dd2_join` last as the
+positive control:
+
+    arm            invocations   levels per prepare   result
+    dd6_twostmt         5          1  (x2 statements)   0 wedges / 5 draws
+    dd2_join            5          2                    6 wedges / 6 draws
+
+The control fired in all four boots. Same call count, same domain binary, same boot, opposite
+outcome. Fisher exact on 6/6 vs 0/5 = **0.002**.
+
+**So cumulative invocation count is NOT the variable, and "it runs twice" is dead.** Running the
+function twice across two separate prepares is SAFE. What distinguishes the wedging case is that the
+second level's code is generated **while the first level's codegen state is still live** — the
+levels NEST. That is a different thing from repetition and it is a much smaller target.
+
+**Current statement of S-12, every clause measured:** it requires **two scan levels within a single
+query's code generation**; it fires at **PREPARE time** (all tables empty, no rows ever processed);
+it is not join-specific (`IN (SELECT ...)` qualifies, a flattened subquery does not); and it is not
+a function of how many times the codegen path runs.
+
+**The next delta is the `iLevel` parameter.** `sqlite3WhereCodeOneLoopStart` takes the level index,
+so the natural next bisection is what it does differently when `iLevel > 0` — inside the function,
+not in the SQL.
+
+## CORRECTED, SAME NIGHT: it is PLAN DEPTH >= 2, not a join — and it happens at PREPARE time
+
+**"It is a JOIN" is RETRACTED.** `dd5_inselect` — `WHERE a IN (SELECT a FROM t1)`, which is not a
+join — WEDGED on its third draw. And the rung that motivated the join framing, `dd3_subq`, turns out
+not to be a two-level query at all: **SQLite FLATTENS it**. Plans read rather than inferred:
+
+    dd1_one       `--SCAN t1                                 1 level
+    dd3_subq      `--SCAN t1                                 1 level   <- FLATTENED, identical to the control
+    dd2_join      |--SCAN t1   `--SCAN y                      2 levels
+    dd5_inselect  |--SCAN t1   `--LIST SUBQUERY `--SCAN t1    2 levels
+    dd4_three     |--SCAN t1  |--SCAN y  `--SCAN z            3 levels
+
+That is this folder's own standing rule biting the person who wrote it down: *same shape of SQL is
+not same execution plan, and the plan must be READ rather than inferred.* `dd3_subq` was classified
+as "two levels, no join" from the SQL text; it is one level, so it was never a counterexample.
+
+**With plans read, the split is exact — on PLAN DEPTH:**
+
+    plan depth   rungs                                    wedged / draws
+    1 level      dd1_one, dd3_subq                        0 / 11
+    >= 2 levels  dd2_join, dd4_three, dd5_inselect        4 / 8   (~50%)
+
+P(0 wedges in 11 one-level draws | the ~54% rate) = 0.46^11 = **1.6e-4**. The positive control
+(`dd2_join`) wedged in both of its draws, so the set is not a dead harness.
+
+**So S-12 requires a query plan with at least two scan levels — by ANY route, join or list-subquery
+— and fires while COMPILING it.** Both tables are empty throughout, so no rows are ever processed
+and the whole effect lives in `sqlite3_prepare_v2`, which matches the fault site
+(`sqlite3WhereCodeOneLoopStart` is a codegen function). The ~50% rate on qualifying plans matches
+the long-recorded per-draw rate.
+
+**What this does NOT say.** It does not identify the mechanism, and it does not distinguish "the
+codegen path runs twice" from "the second level's codegen differs from the first". The next delta is
+inside that function rather than in the SQL.
+
+## SUPERSEDED — the join framing, kept for the reasoning
+
+
+Everything else in this folder is an exclusion. This is the first statement of what S-12 *is*, and
+it came from the SQLite-side delta-debug this folder recommended three times (`:1482`, `:1589`,
+`:2188`) and that was never run until 2026-08-28.
+
+**Two facts reframe the target before any board result.** `q_one` and `q_two` differ by exactly
+`, t1 AS y`, and **both tables are EMPTY** — so no rows are ever processed and the entire difference
+lives in `sqlite3_prepare_v2`. **S-12 is a fault while COMPILING the query, not while running it.**
+That fits the fault site exactly: `sqlite3WhereCodeOneLoopStart` is a code-generation function.
+Every mechanism hunted on 2026-08-27 assumed a data-path event.
+
+**The ladder.** One build, six `.test` files staged together and driven as a runtime argument, two
+domains per boot, so every rung executes from the BYTE-IDENTICAL domain binary — image-to-image
+variance is removed from the comparison entirely. The control (`dd1_one`, one level) completed in
+all five boots.
+
+    rung          shape                                    result
+    dd2_join      FROM t1, t1 AS y        2-table JOIN     *** WEDGED ***
+    dd4_three     FROM t1, y, z           3-table JOIN     *** WEDGED ***
+    dd3_subq      FROM (SELECT a FROM t1) 2 levels, NO join   completed
+    dd5_inselect  WHERE a IN (SELECT ..)  2nd loop via IN     completed
+    dd6_twostmt   two separate 1-level queries                completed
+
+**Both JOINs wedged; neither non-join route to a second level did.** So the trigger is a
+**multi-table FROM clause**, NOT "two levels of where-codegen" in general — a subquery reaches a
+second level and survives, and so does `IN (SELECT ...)`.
+
+**WEIGHT, stated rather than implied.** The two wedges are strong: a wedge is a wedge at any N. The
+three clean rungs are WEAK at N=1 — at the ~54% per-draw rate, P(all three clean | all three can
+wedge) = 0.46^3 = **0.10**. So this is roughly 90% confidence, not settled. **What would settle it:
+three to four repeat draws on `dd3_subq` and `dd5_inselect`.** If they stay clean, join-specificity
+is solid; if either wedges, the characterisation narrows to "a second where-codegen level" after all.
+
+> **A PARSING TRAP THAT PRODUCED TWO WRONG TABLES BEFORE THIS ONE.** The UART truncates markers
+> mid-line (`### TEST 1/2 END'` with no filename), and the driver ECHOES the whole command including
+> its own `END` markers before running it. A parser that requires the filename after `END` reports
+> completed arms as WEDGED; one that counts `END` markers anywhere counts the echo. **Count
+> `SLT-SUMMARY records=` occurrences in the run-scoped section instead** — one per completed arm.
+> A first pass also mixed logs from an aborted earlier attempt with live ones, and nearly produced a
+> "the board degrades after a wedge" conclusion from stale files. Check log mtimes against the run.
 
 ## The fault
 
@@ -438,8 +2260,16 @@ The two candidate sites in the self-arming build:
     arming lcc         VA 0x103bc   DBAS + 0x3bc   db 96 26 08   lcc a3, a3, 0x2
     subject consumer   VA 0x10484   DBAS + 0x484   5b 27 07 0b   cincoffsetimm a4, a4, 0xb0
 
-**PRECONDITION: a wedge whose latched `mepc` is not `DBAS + 0x484` is NOT the subject fault.**
-It is an arming failure or something else, and that arm is VOID.
+**PRECONDITION: a wedge whose latched `mepc` is not the subject consumer's OWN offset for the arm
+being run is NOT the subject fault.** It is an arming failure or something else, and that arm is
+VOID.
+
+> **The offset is PER-ARM, not `DBAS + 0x484`, and taking it as a constant would have thrown away
+> real results.** `scalar` moves the fault site 8 bytes: `s1-scalar-2/4/7` each latched
+> `mepc = 0x828f480c`, and each is a genuine signature-confirmed S-12 wedge. Applied literally,
+> the rule below would have voided all three. Re-derive the offset from the arm's OWN disassembly
+> before applying the precondition — the section that follows says exactly this for a change of
+> BUILD, and it holds just as much for a change of ARM.
 
 **MEASURED, on the build that will actually run:**
 
@@ -520,6 +2350,36 @@ load-bearing, which is worth knowing before anyone considers dropping one under 
 pressure.
 
 ---
+
+# ~~THE STORED VALUE IS REVOKE-TYPED~~ — **RETRACTED 2026-08-25, and the retraction never reached this file until 2026-08-27**
+
+> **DO NOT READ THE SECTION BELOW AS CURRENT.** It is kept because the reasoning from the encoding
+> onwards is still correct and useful; only its premise is wrong.
+>
+> **The value is NONLIN, not REVOKE.** The board arm that produced `retval 0xC12A5200` packed the
+> type into bits 8-11 of the same word as its NOT_CAP counter, so `0x200` had two readings — and
+> the arm read a subject slot **it never wrote**, so the value it reported was never stored. The
+> never-written slot selects NONLIN. Rebuilt *with* the store, the same arm returns `0xC12A5100`.
+> That retraction was recorded in `state/current-next-step.md` on 2026-08-25 and **was never
+> propagated into this folder**, which is why this file spent two days asserting REVOKE while the
+> state doc asserted NONLIN.
+>
+> **Independently confirmed 2026-08-27**, so this does not rest on the retraction alone: a probe
+> reading `cap_type` out of the register file at the exact `stc` pc measures **NONLIN 16/16**
+> (qj2 7/7, q_one 4/4, q_two 5/5), with a positive control showing the same path does emit
+> clear-set names. And structurally, the slot is loaded **three times per call**, so a clear-set
+> type here would wedge one-level plans too — and one-level has never wedged in 11 draws.
+>
+> **Consequence: the LDC move-clear does NOT fire at the S-12 fault site.** Everything below that
+> depends on it firing is void as an account of S-12. The clear-set mechanisms are separately
+> refuted on their own evidence (the six-type sweep and the linear-clear matched pair), so those
+> refutations stand regardless.
+>
+> **The lesson, which is why this header is this long:** a retraction recorded in the state doc but
+> not in the artifact folder is not a retraction. The folder is what gets read, and it kept a
+> withdrawn claim alive in a document written to be handed to the hardware side.
+
+## Superseded original section
 
 # THE STORED VALUE IS **REVOKE**-TYPED — so the LDC MOVE-CLEAR FIRES, and every earlier sim was blind to it
 
@@ -1020,6 +2880,43 @@ the kernel's "any tagged capability; its identity is irrelevant" is the weakest 
 folder. If SQLite's value is in the clear set {LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET}, this
 repro has never exercised the mechanism it was built to test, and an arm with a matching-type `v`
 is the first variant that could reproduce.
+
+**That escape hatch is now closed by measurement, not by the type argument below.** The sections
+that follow establish, on two independent legs, that SQLite's value here is NONLIN and therefore
+cannot clear at all. That is a claim about *production*. It leaves open a claim about *the repro*:
+that the window is clean only because the repro's type was wrong. `s12-value-type-sweep.S`
+(`capstone-ariane 7fb91b5c7`) settles it by running the identical window six times, varying only
+the subject store's value type, with a separate always-NONLIN filler for the intervening stores so
+a linear-family subject cannot perturb them as a second difference:
+
+    arm   type          load returned          source granule word 0
+    A0    NONLIN        capability, type 2     INTACT (0x80003000)   <- clear correctly did not fire
+    A1    LINEAR        capability, type 1     ZEROED                <- clear fired
+    A3    REVOKE        capability, type 3     ZEROED
+    A4    UNINIT        capability, type 4     ZEROED
+    A5    SEALED        capability, type 5     ZEROED
+    A6    SEALEDRET     capability, type 6     ZEROED
+    AF    positive ctl  NOT_CAP, value 0       (slot scribbled scalar-wise before the reload)
+
+**Each clean arm carries its own proof the condition held**, which is what makes it admissible: the
+clear demonstrably fired in all five clear-set arms and demonstrably did not in the NONLIN control,
+so no arm is void. **And the detector demonstrably produces the failing reading** — the positive
+control prints the board's exact signature, the NOT_CAP form with value 0. 1744 cycles against a
+2000000 timeout, so the pass is a real pass rather than a hang reported as one.
+
+In all five arms where the clear fired, **the load still returned a correct, tagged capability of
+the right type.** So the load does not observe its own side effect, and "the reload races the clear
+it triggers" is refuted at the real window for every type that can trigger it. The window is clean
+for every type it could have been, not merely for the one it had.
+
+**A related mechanism this rules out for SQLite but which is worth knowing about generally.** If a
+clear-set capability is loaded out of a slot and then loaded from that slot AGAIN without an
+intervening store, the second load reads the zeroed granule and yields cursor 0 / NOT_CAP — S-12's
+signature exactly. That cannot be what happens here, because NONLIN does not clear. It is recorded
+because **QEMU cannot see that class of bug at all**: `csldc`
+(`capstone-qemu target/riscv/insn_trans/trans_capstone.c.inc:146-169`) loads two words and sets the
+register, with no source clear, while the RTL clears at `load_unit.sv:225-230`. Any software that
+double-loads a linear-family capability runs clean under QEMU and dies on silicon.
 
 ## The discriminating unknown is answered: SQLite's value is NONLIN too
 
@@ -1778,3 +3675,562 @@ succeeded, the artifact looked plausible, the domain would have entered and retu
 it would have read as "the cold load does not matter". Nothing reported an absence. Only
 disassembling the artifact before spending the boot distinguished it. That is the third time today
 that check has caught a test which would have measured nothing.
+
+## The slot's capability, decoded — NONLIN confirmed a third way, and the core is not stalled
+
+Two readings that were already in the wedge dumps and had not been extracted.
+
+**1. The capability in the faulting slot, decoded from its raw metadata word.**
+
+```
+cursor      0x827e4cd0
+metadata    0x000003c7a7462d16
+  revnode_id  241
+  perm        7  (rwx)
+  cap_type    2  ->  NONLIN
+  bounds      0x7462d16, cursorless=0
+```
+
+Layout is `revnode_id[29:0], perm[2:0], cap_type[2:0], bounds[27:0]`, MSB-first
+(`ariane_pkg.sv:636-642`), so `cap_type` is bits [30:28] — independently confirmed by the S-06
+comment about "raw data whose bits [30:28] decoded as LINEAR/NONLIN".
+
+**This is a third independent confirmation of NONLIN**, after the silicon arg probe and QEMU, and
+the first taken from the faulting granule itself rather than from a sibling argument or a
+completing build. NONLIN is absent from the LDC clear set (`load_unit.sv:227-229`), so the
+move-clear account stays dead.
+
+**Watch the numbering — it has caused one retraction already.** My first decode used a name table
+with `LINEAR=0` and printed `cap_type 2 -> REVOKE`, which would have *revived* the move-clear
+hypothesis, since REVOKE **is** in the clear set. The RTL enum (`ariane_pkg.sv:654-663`) is
+`NOT_CAP=0, LINEAR=1, NONLIN=2, REVOKE=3, …`, identical to `asm_insn.h:76-83`. Caught before it
+was recorded. **Three numberings are in play in this investigation** — the RTL enum, `asm_insn.h`,
+and `lcc` selector 1's post-shift form (`cap_type - 1`, NOT_CAP special-cased to 7) — and two of
+them differ by one.
+
+**2. The core is not stalled anywhere at the wedge.** Aperture 225 is
+`{trace_buf_empty, dyn_wait_store_syncer, dyn_wait_load_syncer, dyn_wait_rev_res, dom_switch_busy,
+stall_issue, mem_write_flag, mem_wait_flag}` (`cva6.sv:1189-1199`). All six wedges read **`0x80`**
+— only `trace_buf_empty`. No syncer wait, no rev-node wait, no memory wait, no issue stall.
+
+That kills a hypothesis before it was built: the driver's own comment at that aperture says "every
+wedge so far reads sw=225 = 0x95, i.e. wrev=1 AND memwait=1: the dyn unit is blocked in
+`get_node_query_validity` while the rev-node unit waits on the node-table memory read". **That
+comment is stale relative to these wedges** — it describes an older wedge class. The rev-node
+blockage story does not apply here, and the quiescent core is instead consistent with the
+trap-loop-at-`mtvec=0` picture the `mcause=2 / mepc=2` readings already showed.
+
+## THE TRIGGER IS THE SECOND WHERE-LOOP LEVEL, not the self-join
+
+The instruction-window family was exhausted, so the remaining variable was the one that flips the
+outcome **inside a single image**: the SQL. The domain reads its `.test` from the shared region at
+RUN TIME, so these arms share one binary — no rebuild, and layout, `.bss` size, cap-table geometry
+and code are all held fixed *by construction*.
+
+| case | SQL | where-loop levels | silicon |
+|---|---|---|---|
+| `q_one` | `SELECT t1.a FROM t1` | 1 | **passes** (3×) |
+| `q_two` | `SELECT t1.a FROM t1, t1 AS y` | 2 | **wedges**, `mcause 25`, `mepc 0x828f4814` = `+0x8c` |
+| **`qj2`** | **`SELECT t1.a FROM t1, t2`** | **2** | **wedges**, same cause, **same `mepc`** |
+
+`qj2` joins two **distinct** tables — no alias, no self-reference, no shared cursor. It wedges
+identically, at the same instruction. **So the self-join is irrelevant; the second where-loop level
+is the trigger.** All four cases agree with the native baseline, so the divergence is silicon.
+
+**Why this matters more than another exclusion.** `sqlite3WhereCodeOneLoopStart` is called once per
+loop level. One level passes; two levels fault, at the same PC. The natural reading is that **call
+#1 succeeds and call #2 faults** — which makes the target the state built *between* the two calls,
+not the function's code, and not anything about the image. That is a far narrower object than "all
+of SQLite", and it is the first hypothesis in this investigation that predicts the SQL-sensitivity
+directly instead of accommodating it.
+
+## And the arg probe's "cure" is probably the `.bss` effect in disguise
+
+The probe was assumed to perturb execution and thereby hide the fault. Look at what it actually
+does to the image:
+
+```
+un-probed   WEDGES     .bss = 0x409c0
+probed      completes  .bss = 0x409e0     <- +0x20, exactly 4 unsigned long globals
+bss32       completes  .bss = 0x409e0     <- same value, reached with dead padding
+bss16       WEDGES     .bss = 0x409d0
+```
+
+The probe adds **four `unsigned long` globals = 32 bytes**, taking `.bss` from `0x409c0` to
+`0x409e0` — precisely the value independently shown to cure the fault with *no* instrumentation at
+all. So "probing cures it" and "`.bss` 0x409e0 cures it" are not two facts; they are very likely
+one fact seen twice.
+
+**That is testable and it matters, because it would give back an instrumented image that still
+faults.** A probe carrying only **two** globals lands `.bss` on `0x409d0`, which is a measured
+WEDGING value. If such a build still wedges *and* still reports, the "any in-domain instrument
+cures the bug" constraint — which has shaped this whole investigation — is lifted, and the arg
+probe becomes usable on a faulting image to report which invocation faults.
+
+### CORRECTION to the level-2 claim: it is 3/4, not deterministic — and my log parsing was unsafe
+
+I recorded "two where-loop levels wedge" as though it always does. The driver's own verdict lines,
+which are the authoritative record, say otherwise:
+
+| boot | 1 level (`q_one`) | 2 levels (`qj2`) |
+|---|---|---|
+| up21 (un-instrumented) | returned 6 s | **NO RETURN** |
+| up22 (counter build) | returned 6 s | **NO RETURN** |
+| up23 (counter build) | returned 6 s | **NO RETURN** |
+| up24 (counter build) | returned 22 s | **returned 7 s** |
+
+So `q_one` passes 4/4 and `qj2` wedges **3/4**. The level-2 dependence is real — 3/4 sits well
+above the documented background wedge rate of p̂ ≈ 0.22 — but it is a RATE, not a certainty, and
+"1 level passes" is consistent with both "never wedges" and "wedges rarely". Any single boot on
+either case proves nothing on its own.
+
+**And two of my own readings of these logs disagreed with each other**, which is why this needed
+settling rather than asserting. Reassembling the UART out of the driver log and scoping to the
+last OpenSBI banner picked up the previous boot's replayed content — for up23 it returned
+`ENT=[0,1,0,1,2]`, which is two arms' markers concatenated, while the raw transcript showed the
+arm's own region as empty. **Use the driver's `[stages] <-- TEST …` verdict lines.** They are what
+the driver actually observed, they are one line per arm, and they cannot splice two boots
+together. The UART reassembly is for reading detail INSIDE an arm already identified that way.
+
+## Sharper constraint: `tval = 0` means the DATA was zero, not merely detagged
+
+Hypothesis generation produced a tag-desync account (a same-word merge into an already-issued
+capability-store transaction, leaving DRAM `ctag=1` and L1 `ctag=0` — the write-buffer residual
+that `wt_dcache_wbuffer.sv:604-619` documents as pre-existing and deliberately un-fixed). It does
+not survive the measurement, and the reason narrows the search:
+
+**`decompress_cap_tagged` (`ariane_pkg.sv:766-782`) passes the CURSOR THROUGH unchanged on an
+untagged read.** A pure tag loss therefore delivers cursor `0x827e4cd0` and `tval` reads
+`0x827e4cd0`. The latched `tval` is **0**. So the load was not served correct data with a lost
+tag — **it was served all-zero 128 bits.**
+
+That is a much tighter constraint than "the operand was NOT_CAP", and it excludes every
+tag-only mechanism at this site, not just the move-clear.
+
+**And the window contains exactly such a value, two instructions earlier:**
+
+```
+104804  cincoffsetimm a5, s0, -0x120
+104808  movc a4, zero          <- a4 := create_cnull, ALL ZERO
+10480c  stc  a4, 0x0(a5)       <- stores it to s0-0x120     ... this is `Index *pIdx = 0;`
+104810  ldc  a4, 0x0(a0)       <- reloads pWInfo from s0-0x70
+104814  cincoffsetimm a4, a4, 0xb0    FAULTS with all-zero
+```
+
+The cnull store is the compiler initialising the local `Index *pIdx = 0;` — a capability-width
+store of bit-for-bit `create_cnull`, issued two instructions before the reload that fails, into a
+*different* granule of the same frame.
+
+**So the shape to explain is: a zero capability stored to one stack granule, and the very next
+capability load from a different granule of the same frame returning that zero.** That is
+squarely the write-buffer/forwarding family, and it is the first account consistent with every
+measurement at once — memory intact (the entry converges and drains correctly, which is why the
+post-wedge read shows the right capability), `tval = 0` and NOT_CAP (the forwarded value is
+literally `create_cnull`), and no stall anywhere.
+
+**What is NOT yet explained**, and must not be glossed: the two granules differ. At the wedge
+`s0 = 0x82b9f480`, so the zero store is at `0x82b9f360` and the reload at `0x82b9f410` — different
+16-byte granules, and different D-cache indices under `paddr[11:4]` (`0x36` vs `0x41`). A
+legitimate forward requires a granule match, so this needs an address-comparison defect, not merely
+a timing window.
+
+**Instrument note.** The proposed test — arm CSR `0x811` to filter the LDC recorder onto the
+subject granule — is **not runnable on resident silicon**: `s07_ldc0_filter_addr_i` does not exist
+at `84ed6eafb` (0 occurrences), it belongs to the design that failed to route. The *store*
+watchpoint at `cva6.sv:905-906` **is** resident and CSR-`0x811`-armed, which is a different
+instrument and can see stores landing on a chosen granule.
+
+## RETRACTED: "two levels wedge" is a RATE (54%), and `q_two` never ran in those boots
+
+An adversarial audit refuted the level-2 finding as I stated it. Verified independently before
+retracting.
+
+**1. `q_two.test` was never executed in up21–up24.** Every one of those boots' preflight lists it
+as an unused file. My statement that the result was "measured with `q_one`, `q_two` and `qj2`, all
+from the same binary" is **false** — only `q_one` and `qj2` ran. The only boot that ever ran
+`q_one` and `q_two` from one binary is up14, whose runner voided that arm itself (`SPLB`, no
+`SQ: G/enter`). **N for "same binary, q_one vs q_two" = 0.**
+
+**2. I filed the strongest disconfirming observation under "void".** up24 is not void: it is a
+clean completion of the two-level join — `records=3 stmt_pass=2 query_fail=1 parse_err=0
+completed=1`, same image, same case, same bitstream as up22 which wedged. (I corrected the rate to
+3/4 in `04afe159f074`, but the brief I handed the auditor still said "both void".)
+
+**3. Across the whole corpus the level-2 wedge is a coin flip, and the IMAGE predicts it better
+than the level count.** Tallying every 2-level arm ever run:
+
+```
+sqrt 8/0   sqslt 6/0   sqem 1/7   sqrtw 0/3   sqcc 2/1   sqpad10 2/1   (+14 images, 6/6)
+TOTAL: 25 wedged, 21 returned  ->  54%
+```
+
+**Twenty-one boots have a two-level join completing on silicon.** "Two levels wedge" is refuted as
+a property.
+
+### What survives, and it is still a real effect
+
+`q_one` (one level): **11 returned, 0 wedged**, and three of those ran in slot 2 of 3, so it is not
+just "the first arm always survives". Position is controlled the other way too — up17 ran a 2-level
+case as TEST 1/2 and it wedged.
+
+If one level wedged at the two-level rate of 54%, P(0 wedges in 11) ≈ **0.0002**. So the level
+dependence is real and significant; what is wrong is the word "wedge" as a certainty. The correct
+statement is: **one level has never wedged in 11 draws; two levels wedge about half the time, with
+strong per-image clustering.** Any single-draw arm on a 2-level case is therefore uninterpretable —
+a ladder of N=1 hypotheses would measure the draw, not the hypothesis.
+
+### Three corrections to the fault-site description
+
+* **`+0x8c` is a build-specific label, not an instruction identity.** up22 latched `0x828f4838` =
+  fn+**0x9c** on the counter build — the *same instruction* (`cincoffsetimm a4, a4, 0xb0`), shifted
+  by injected code. Name the instruction; an offset silently breaks across builds.
+* **`+0x8c` is NOT the function's first executable statement.** Three initialised declarations
+  precede it (`iRowidReg = 0`, `iReleaseReg = 0`, `Index *pIdx = 0`), emitting `1047ec`–`10480c`.
+  My "the fault is on the first statement" was wrong — and the `movc a4, zero` at `104808` that the
+  zero-data hypothesis rests on is precisely one of those preceding instructions.
+* **"Memory holds the correct capability" overstates.** A GDB read at T+seconds is predicted by
+  *both* arms of the fork — a write-buffer entry that converges and drains correctly shows the same
+  thing. This folder already withdrew that reasoning once; it must not be re-asserted.
+
+### Instrument hazard fixed
+
+`/tmp/capstone/up21.sh` had been edited in place across every experiment, so by the end it carried
+up24's configuration under up21's name — anyone "re-running up21" would have run a different case
+on a different binary. Renamed to `run-sqlite-arm.sh`, which is what it actually is. **There is no
+surviving script for up21**; its configuration is recoverable only from the log.
+
+## S-12 MATCHES A DEFECT THIS PROJECT ALREADY BOARD-MEASURED — and the fix is a compiler gap
+
+The single most useful thing found this session was already written down, in our own build script,
+on 2026-08-05. `build-sqlite-silicon.sh:2278-2288`:
+
+> "At `-O0` `strlen` re-loads its string capability from a stack slot with `ldc` on EVERY
+> iteration, and on silicon that **sporadically yields** 1 instead of the true length — stage 13
+> returned 15, then 26, then hung across three boots of the same source, where **QEMU returns 36
+> every time**. At `-O1` the pointer stays in a register (zero `ldc` in the loop) and stage 13
+> returns 36 on silicon, twice. **This is a real wrong-answer defect, not a workaround.**"
+
+and, at `:2266-2271`:
+
+> "The board froze at exactly the **`cincoffsetimm`** of that sequence (image VA 0x14d884,
+> ra → sqlite3Strlen30), pc not advancing under stepi with mcause=0."
+
+**Every feature of S-12 is in that description:**
+
+| S-12 | the 2026-08-05 defect |
+|---|---|
+| `ldc` reloading a capability from a stack slot | same |
+| consumed by `cincoffsetimm`, which is where it dies | same, named explicitly |
+| sporadic — 54% across 46 arms | sporadic — 15, then 26, then a hang |
+| QEMU never reproduces | QEMU returns the right answer every time |
+| `-O0` build, every pointer spilled | `-O0`, stated as the cause of the round-trip |
+
+So S-12 is very likely **not a new defect to root-cause from scratch** but an instance of a known,
+already-measured class: **at `-O0`, a capability round-tripped through a stack slot sporadically
+returns wrong data on silicon.**
+
+**It also explains the level dependence without needing a mechanism specific to loop level 2.**
+The SQLite-side analysis (below) shows the two calls are otherwise identical — so two levels simply
+means twice the calls and more stack round-trips, i.e. more draws against a per-round-trip failure
+probability. One level is 0/11; two levels are 54%. (A strictly independent per-call model does not
+fit exactly — p≈0.32 per call would predict ~32% for one level, and 0/11 has probability 0.012
+under that — so the count of round-trips per call matters too, not just the call count.)
+
+### Why the fix has not been applied: a defect in OUR backend
+
+The mitigation is `-O1`, which removes the round-trip entirely. The build script records that the
+amalgamation cannot go above `-O0` because of **C-17**: `Cannot select: i128 =
+CapstoneISD::SELECT_CC`, since `Select_GPRCAP_Using_CC_GPR` is emitted only under `!is64Bit()`.
+
+**C-17 no longer reproduces.** Its recorded reproducer — `char *pick(int n, char *a, char *b)
+{ return n == 10 ? a : b; }` — now compiles clean at `-O1` **and** `-O2` on capstone64, as do
+five harder select shapes (long compare, pointer-as-condition, struct field condition, nested
+select). That blocker has been fixed at some point since the comment was written.
+
+**A different backend limit now blocks it:**
+
+```
+fatal error: error in backend: Capstone PureCap: Cannot materialize arbitrary >64-bit
+constants as capabilities; capabilities are unforgeable
+```
+
+That is the live obstacle to building SQLite at `-O1`, and therefore to removing the stack
+round-trips that S-12 appears to be an instance of. **It is compiler/codegen work, which is in the
+main session's lane rather than the RTL lane's** — and it is a far more tractable target than
+continuing to characterise a sporadic silicon fault through a 6-minute board loop at 54% per draw.
+
+### What the SQLite-side analysis contributed
+
+Independently, the caller window turns out to be nearly empty, which removes a whole class:
+
+* **Exactly one function runs between call #1 and call #2** — `sqlite3VdbeCurrentAddr`, which is
+  `return p->nOp;` — plus three integer stores. `sqlite3WhereExplainOneScan` compiles to `0`
+  (`SQLITE_OMIT_EXPLAIN`), `sqlite3WhereAddScanStatus` to `((void)d)`, and the auto-index and
+  Bloom-filter branches are untaken (no WHERE terms; no ANALYZE). Verified in the disassembly.
+* **No malloc, free, or realloc in the window**, so "a realloc moved a buffer" is out.
+* **`pWInfo` is bit-identical on both calls** — same caller slot, same instruction; only `iLevel`
+  (0→1), `pLevel` (+160) and `notReady` differ.
+* **Call #2's frame lands on exactly call #1's bytes**, and the only intervening callee has a
+  0x30-byte frame — no overlap with the spill slot at `SP−0x70`.
+* Pass-vs-fail heap delta is nil in the way that matters: `WhereInfo` is 1488 vs 1648 bytes, and
+  **both round to the same 2048-byte MEMSYS5 bucket**.
+
+---
+
+## One reading REMOVED: a plain ALU write DOES clear a register's capability shadow
+
+**This closes a route that the stale-operand account could have rested on, so it belongs here
+rather than in a lane message.**
+
+The question arose from a compiler change, not from S-12: the Capstone backend now reads a
+pointer's address with a plain `mv` instead of `lcc rd, rs, 2`, because the cursor query is not
+total and traps on NULL. A reading of the RTL suggested that could be silently wrong on silicon —
+QEMU's `gen_set_gpr` clears the tag on **every** integer write, whereas here the metadata shadow's
+write-enable is gated on `cap_result.valid`, which is 0 for a plain ALU op. If the shadow were
+left **stale**, an integer would keep looking like a capability to anything that checks
+`cap_type`, and a register's metadata could outlive the value it described — which is exactly the
+shape a "the operand carried the wrong metadata" account of S-12 needs.
+
+**It is not stale. Measured in simulation, not argued.**
+`capstone-ariane verif/tests/custom/capstone/alu-write-clears-shadow.S`, commit `eb43f5d09`.
+
+`CINCOFFSET` is the detector because its rs2 check *is* the question —
+`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` when `cap_rs2.metadata.cap_type` is not
+`NOT_CAP`. Three arms, ordered with the expected-to-trap one last so a trap could not cost an
+answer:
+
+| arm | rs2 | result |
+|---|---|---|
+| A | never held a capability (`li a5, 8`) | retired, `x12 = 0x80003008` |
+| C | held one, then overwritten by a plain `addi` | **retired**, `x13 = 0x80003008` — the answer |
+| B | holds one right now (positive control) | **exception: UNEXPECTED_OPERAND** |
+
+**Arm B is why arm C means anything.** Without it, "C did not trap" is equally consistent with a
+check that never fires in this configuration; with it, the check is proven able to fire on the
+very next instruction pair. Arm A rules out the other direction — that `CINCOFFSET` simply cannot
+take an integer rs2.
+
+**What this does and does not remove.** It removes *register-shadow staleness* as a mechanism: a
+register that held a capability and was then overwritten by ordinary arithmetic does not carry its
+old metadata forward. It says nothing about the **memory** path, where the slot's contents are
+what they are, and nothing about the load itself — which is still the unmeasured step.
+
+**Scope note, deliberately narrow:** this was run in bare M-mode simulation, not inside a
+capability domain on a monitor-carved stack. Per the standing caveat on directed tests, a clean
+simulation of a synthetic sequence is not exoneration of the production path; it is a specific
+mechanism ruled out, not the bug.
+
+---
+
+## BOARD, 2026-08-27: `-O1` does NOT route around it — two distinct images, two wedges
+
+**Two boots on the resident `caplifive_s07clear_84ed6eafb.bit`. No reflash.** The control passed
+in both, so both boots carry a verdict.
+
+| boot | arm | image | query | outcome |
+|---|---|---|---|---|
+| 1 | control | `sqctl.dom` `-O0` | `q_one` (1 level) | **returned**, `H/return`, `completed=1`, rc=0 |
+| 1 | subject | `sqo1a.dom` `-O1` | `qj2` (2 levels) | `G/enter` + `ENT1`, no return — **WEDGED** |
+| 2 | control | `sqctl.dom` `-O0` | `q_one` (1 level) | **returned**, rc=0 |
+| 2 | subject | `sqo1b.dom` `-O1` | `qj2` (2 levels) | `G/enter` + `ENT1`, no return — **WEDGED** |
+
+Arms after each wedge are collateral and carry no verdict. The third draw (`sqo1c`) has not run.
+
+**The images are genuinely distinct draws**, not repeated boots of one image: redrawn via
+`CAPSTONE_TEXT_PAD` 0/64/128, sha256 verified 4-of-4 unique before staging, and
+`sqlite3WhereCodeOneLoopStart` sits at a different address in each.
+
+**Every draw carries the property under test, verified in the artifact:** zero
+`ldc a?,0x0(a0)` + `cincoffsetimm ?,?,0xb0` pairs, and the surviving `0xb0` consumer is
+`cincoffsetimm a0, s2, 0xb0` — `pWInfo` register-resident in callee-saved `s2`, no stack
+round-trip. **So the S-12 fault site is absent from these images and they wedge anyway.**
+
+### What this refutes
+
+**The strong form of the `-O0`-spill account is dead.** "Removing the stack round-trip removes the
+wedge" is false: the round-trip is gone at the fault site and two independent draws still wedged.
+
+### What it does NOT establish, and this is the half that matters
+
+**2 of 2 is p = 0.29 at the `-O0` base rate of 54%.** That is not evidence that `-O1` is WORSE, or
+even that its rate differs at all. It establishes only that `-O1` is NOT IMMUNE. Six distinct
+images would be needed for p ~ 0.01, and four of those draws have not been spent.
+
+### The wedge signature is NOT S-12's
+
+Both wedges read aperture 225 = **`0xd5`**, identically. Against the two signatures already on
+file:
+
+    0x80   the six S-12 wedges -- core NOT stalled, only trace_buf_empty
+    0x95   dyn unit blocked in get_node_query_validity while the rev-node unit waits on the
+           node-table memory read (capstone_dyn_unit.anvil:106-112, capstone_rev_node.anvil:36-41)
+    0xd5   MEASURED HERE = 0x95 plus wstore
+
+So these are the **rev-node/dyn-blocked class, not the S-12 class**. Whether that means `-O1`
+removed S-12 and exposed a different pre-existing wedge, or that the classes are related, is NOT
+settled by two draws.
+
+### RETRACTED BEFORE PUBLICATION: the commit-pc localization
+
+The wedge read `commit pc = 0x82c1c3fc` in both boots, which maps to image VA `0x1c3fc` and
+tempted a localization to `sqlite3_result_double`. **That is not supported and the check that
+killed it is the point:** the two images hold DIFFERENT INSTRUCTIONS at that address —
+`lui a3, 0x9` in `sqlite3_result_double` in one, `sw a1, 0x44(a0)` in `sqlite3_result_blob64` in
+the other. An identical PC from two images whose code at that address differs means **the
+commit-pc aperture is not tracking the domain**, exactly like the trap latch the driver already
+refuses (`mcause 9`, kernel `mepc 0xffffffff800072cc` — ordinary traffic from earlier).
+
+Apertures 224/225/255 were also byte-identical across the two boots, which is consistent with
+them describing the WEDGED-SYSTEM state rather than the faulting domain. Read 225 as "which wedge
+class", never as "where".
+
+**Next:** the four unspent draws. Until then the honest summary is *`-O1` is not immune, at an
+unmeasured rate, with a wedge signature that is not S-12's.*
+
+### Boot 3 closes the confound: `-O0` still gives S-12, `-O1` gives something else
+
+The `0x80` signature on file was measured on `-O0` images built with the **old** compiler; the
+`0xd5` above was measured on `-O1` images built with **today's**. Compiler version was therefore a
+second variable, and the comparison was not yet single-variable. Boot 3 removes it.
+
+Same boot, same bitstream, same query, same compiler — only the optimisation level differs:
+
+| arm | image | 225 | mcause | tval | commit pc |
+|---|---|---|---|---|---|
+| control | `-O0`, 1 level | — | — | — | **returned**, rc=0 |
+| subject | `-O0`, 2 levels | **`0x80`** | **25** (real capability fault) | **0** | `0x2` |
+| — | `-O1`, 2 levels (boots 1-2) | **`0xd5`** | 9 (stale kernel) | stale | frozen |
+
+**So the signature difference is attributable to `-O1`, not to the compiler changes.** And the
+S-12 reproducer is INTACT on the current compiler: mcause 25 with `tval = 0` and `commit pc = 2` is
+the documented shape — a real capability fault, then the M-1 loop at pc 0 with `mtvec = 0`.
+
+**Aperture 225 decoded** (`cva6.sv:1189-1199`, verified in source, MSB→LSB): `trace_buf_empty`,
+`dyn_wait_store_syncer`, `dyn_wait_load_syncer`, `dyn_wait_rev_res`, `dom_switch_busy`,
+`stall_issue`, `mem_write_flag`, `mem_wait_flag`.
+
+    0x80  trace_buf_empty ONLY -- NOTHING is waiting. The core has simply stopped committing,
+          the shape of an exception stuck at the head of in-order commit.
+    0xd5  trace_buf_empty + dyn_wait_store_syncer + dyn_wait_rev_res + stall_issue + mem_wait
+          -- THREE wait conditions asserted at once: a unit blocked on responses that never
+          arrive. A DYN/rev-node deadlock, not a stall at commit.
+
+**A wedge where nothing is waiting and a wedge where three things are waiting are different
+failure modes.** That is decode, not interpretation.
+
+**The `-O0` fault SITE has moved**, which is expected and worth recording so nobody reads the old
+address as gospel: `mepc = 0x828f4814` → image VA `0xf4814`, in **`sqlite3WhereEnd`**, at
+`lw a1, 0x0(a0)` with `a0 = cincoffsetimm s0, -0x114`. Not the historical
+`sqlite3WhereCodeOneLoopStart+0x8c`. Same class, different site — today's codegen differs.
+`tval = 0` again, so the operand's cursor was zero at ingestion.
+
+**Running tally: `-O1` 2 wedged of 2 draws; the third (`sqo1c`) has still not run** — boot 3's
+`-O0` subject wedged first and took the core. Controls returned in all three boots.
+
+### The new site's mechanism, tested: FLU -> LSU adjacency is NOT the trigger
+
+Boot 3's `-O0` fault is a **producer/consumer pair one instruction apart**, the same shape as the
+original site but a different pair:
+
+    original   ldc           a4, 0x0(a0)      DYN producer
+               cincoffsetimm a4, a4, 0xb0     FLU consumer, rd == rs1
+
+    boot 3     cincoffsetimm a0, s0, -0x114   FLU producer, rd != rs1
+               lw            a1, 0x0(a0)      LSU consumer, IMMEDIATELY next
+
+The `lw` took mcause 25 with `tval = 0`, i.e. it read `a0` as `{cursor 0, NOT_CAP}` — bit-for-bit
+`create_cnull` — while the `cincoffsetimm` that wrote `a0` did not itself fault. Both readings are
+sound at this site: `mepc` is `pc_commit` latched at the trap (`cva6.sv:1138`), and `tval` carries
+the rs1 cursor for capability causes (`ex_stage.sv:490`, `:917,925`).
+
+**`s12-flu-raw.S` covers DYN -> FLU and found HAZARDS = 0. Nothing covered FLU -> LSU.**
+
+`s12-flu-lsu-raw.S` (new) does. Result: **the adjacency is not the trigger.**
+
+    walk proven to have run   2560 lbu, exactly 40960/16
+    cycles                    33,677 (warm variant: 373) -- and NOT the 2000013 timeout,
+                              so a genuine pass rather than a hang reported as SUCCESS
+    exceptions                NONE -- the `lw` did not fault
+    a5                        0x80003020, the correct cursor
+    lcc selector 1 on a5      1 = NONLIN, a valid capability, NOT 7 = NOT_CAP
+
+The first version of this test ran the load WARM and passed in 373 cycles. That would have been
+the void shape its sibling fell into — `s12-flu-raw.S` reported `ldc-pending-cycles = 0` on its
+first run because every load hit, so its zero tested nothing. The eviction is what makes this
+negative admissible.
+
+**Scope, kept narrow:** bare M-mode, not inside a capability domain on a monitor-carved stack, and
+the producer's own operand was not itself pending. So this removes FLU -> LSU adjacency as the
+mechanism; it is not exoneration of the pipeline.
+
+**The other candidate was excluded by prior art rather than re-tested.** A LINEAR rs1 with
+rd != rs1 nulls rs1 and gives rd the capability (`capstone_flu_unit.anvil:29-53`); a swapped pack
+would yield exactly the observed `{0, NOT_CAP}`. But `cincoffset-linear-clear.S` is a passing
+regression test asserting precisely that rd is the valid cap and rs1 is the cleared one — and it
+cannot explain the original site anyway, where `rd == rs1 == a4` and the LINEAR path does not
+apply.
+
+**So both named mechanisms for the new site are now excluded, and the adjacency shape shared by
+the two board sites is not sufficient on its own.**
+
+## Rev-node allocation EXCLUDED as the SLT-vs-built-in discriminator — measured, with a control
+
+The RTL lane proposed `rev_node_head` as the one RTL-visible discriminator between the two
+workloads: monotonic, no reclamation, one number, already on the debug mux. Measured, it does not
+discriminate.
+
+| workload | head | entry carves | runtime allocations |
+|---|---|---|---|
+| built-in extended (no `--slt`) | **250** | 211 | **39** |
+| SLT + `q_one` | **254** | 215 | **39** |
+
+**Runtime allocation is identical.** The SLT harness does not consume more revocation nodes than
+the built-in path, so allocation volume is not the difference between an arm that is 0/14 and one
+that wedges.
+
+**THE APERTURE HAS A POSITIVE CONTROL FOR THE FIRST TIME, and it is arithmetic rather than a
+second instrument:** head minus the domain's static carve count (from `gp-carve-count.py`) must be
+the runtime component, and it lands at 39 for both. A reading that did not track carve count would
+mean the aperture is not measuring what it claims.
+
+That control retroactively classifies the earlier readings:
+
+    421     ~2 domains x 215 carves = 430          PLAUSIBLE, a real head
+    62496   would need ~290 domains of carving     JUNK -- and it appeared BYTE-IDENTICAL
+                                                   from two different images, the same
+                                                   frozen-aperture signature as commit-pc
+
+**Two instrument facts worth carrying:**
+
+* **Only SLOT 1 yields a halted read.** With `HALT_MUX_READS=1`, the halt succeeds for arm 1 and
+  fails with `ActionTimeout` for arm 2, in both boots and in both orderings. The driver correctly
+  voids the running reads rather than printing `0xFFFF` as a head — which is exactly the failure
+  the sentinel fix was written for. Any head comparison must put its subject in slot 1.
+* `0xFFFF` is `REVNODE_SENTINEL`, not a count, and is indistinguishable from an all-ones dead
+  aperture. Never read it as a full pool.
+
+### Closed in both directions: a WEDGING two-level run consumed exactly the same
+
+The gap above is filled, and the answer is stronger than expected — the reading came from a run
+that **wedged**, so it covers the case that mattered:
+
+| workload | outcome | head | entry carves | runtime allocations |
+|---|---|---|---|---|
+| built-in extended | returned | 250 | 211 | **39** |
+| SLT + `q_one` (1 level) | returned | 254 | 215 | **39** |
+| SLT + `qj2` (2 levels) | **WEDGED** | **254** | 215 | **39** |
+
+**Runtime allocation is 39 in all three — wedging and returning alike.** Rev-node consumption is
+excluded as a discriminator in BOTH directions: not between harnesses, not between one and two
+levels, and not between a wedge and a return.
+
+**Cross-validated from two independent paths in the same boot**, which is what makes a
+byte-identical repeat of 254 a measurement rather than the frozen-aperture pattern that has
+already caught us twice: the `[s07] after` read reports 254, and the wedge path's raw bytes read
+`sw=249 = 0xfe`, `sw=250 = 0x00` = 254. The halt succeeded (slot 1) with no `ActionTimeout`.
+
+**And it says something about WHERE the wedge sits.** The wedging run had done exactly the same
+allocation work as the returning ones — 39 runtime nodes, not fewer. So it did not die partway
+through setup; it got as far in allocation terms as a run that completed. That is consistent with
+the recorded PREPARE-time locus and inconsistent with any account in which the wedge follows from
+having done more, or less, capability-lifetime work.

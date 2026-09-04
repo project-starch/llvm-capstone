@@ -449,12 +449,21 @@ void capstone_oob_report(void) {
 unsigned long capstone_arg_calls, capstone_arg_ty1, capstone_arg_ty2, capstone_arg_ra;
 
 void capstone_arg_report(void) {
-  /* APPEND ONCE -- see capstone_oob_report for why resetting `length` destroyed the result.
-     The records are sticky on the first call, so reporting on the first call loses nothing. */
+  /* REPORT THE FIRST N CALLS, not just the first.
+     It used to append exactly once, on the grounds that "the records are sticky on the first
+     call, so reporting on the first call loses nothing". That is true of ty1/ty2/ra -- and
+     FALSE of capstone_arg_calls, which is a real counter incremented on EVERY call. Because
+     the report ran after the increment and then latched, the single line always read
+     `calls=1` regardless of how many times the function actually ran. That artifact was
+     recorded as an open question for days -- "only one ARGP line appears for a two-table
+     self-join ... whether the report is first-call-sticky or the function is genuinely
+     entered once is not established" -- and it was the report, not the function.
+     A per-call line makes the call COUNT observable, which is the whole point of a counter.
+     Bounded so a large workload cannot flood the payload region. */
   static int reported_;
-  if (reported_ || !hostcall_metadata || !hostcall_payload)
+  if (reported_ >= 16 || !hostcall_metadata || !hostcall_payload)
     return;
-  reported_ = 1;
+  reported_++;
   output_text("ARGP calls="); output_hex64(capstone_arg_calls);
   output_text(" ty1=");       output_hex64(capstone_arg_ty1);
   output_text(" ty2=");       output_hex64(capstone_arg_ty2);
@@ -6058,6 +6067,26 @@ static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
 #define SLT_VDBE_ARM()    do { capstone_vdbe_ops = 0; capstone_vdbe_armed = 1; } while (0)
 #define SLT_VDBE_DISARM() do { capstone_vdbe_armed = 0; } while (0)
 #endif
+#ifdef CAPSTONE_SLT_PROGRESS
+/* Record which prepare is in flight, in the shared region, so it SURVIVES a wedge -- the driver
+   already halts the core and reads capstone_entry_mark over JTAG, and prints the four words.
+   Word 1 is the marker's call count; here it becomes the 1-based index of the record whose
+   prepare is running, so a wedged boot names the prepare instead of just reporting that one
+   happened.  Word 2 records how many prepares COMPLETED, so index != completed+1 at readout
+   means the wedge was not inside a prepare at all.
+   Two plain stores to an already-mapped region: neither can fault, so the marker cannot itself
+   change whether the run wedges. */
+#define SLT_PREPARE_MARK(n) do {                                             \
+    if (capstone_entry_mark) {                                               \
+      capstone_entry_mark[1] = (unsigned long)(n) + 1UL;                     \
+      capstone_entry_mark[3] = 0x5747UL;  /* "in a prepare" */               \
+    }                                                                        \
+  } while (0)
+#define SLT_PREPARE_DONE() do {                                              \
+    if (capstone_entry_mark) capstone_entry_mark[2] += 1UL;                  \
+  } while (0)
+#endif
+
 #include "slt/slt_runner.h"
 
 static void capstone_slt_out(void *ctx, const char *text) {
