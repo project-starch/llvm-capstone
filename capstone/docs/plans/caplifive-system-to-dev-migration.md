@@ -25,7 +25,25 @@ board**. The monitor source itself is safe — `sbi_capstone.c` is byte-identica
 **This must be fixed before the migration, not as part of it**, because the migration touches the
 same submodule and a mistake there would take these with it.
 
-`caplifive-system`'s `capstone-bootstrap` branch is **not on the push allowlist**.
+`caplifive-system`'s `capstone-bootstrap` branch **is** on the push allowlist — the allowlist
+matches branch names, and `capstone-bootstrap` is listed. That is not the obstacle.
+
+**MEASURED 2026-09-04 — this agent CANNOT replicate them. Both remotes refuse the push:**
+
+```
+git push fork   capstone-bootstrap
+  remote: Permission to project-starch/caplifive-system-dev.git denied to <this account>.
+  fatal: ... The requested URL returned error: 403
+git push origin capstone-bootstrap
+  remote: Permission to project-starch/caplifive-system.git denied to <this account>.
+  fatal: ... The requested URL returned error: 403
+```
+
+So this is a **credentials/access** problem, not a policy one, and it is exactly the case
+`CLAUDE.md` describes: *"a submodule with no write access is discovered only by attempting a
+push."* It was discovered by attempting it. **Someone with write access to one of those two
+repositories has to push this branch**, and until they do, the correspondence between the running
+monitor and its buildroot commit exists on exactly one disk.
 
 ## Current state
 
