@@ -1,7 +1,8 @@
 # Encodings the decoder must REJECT: the fixed fields the .td declares
 # (movc's rs2 = 0, drop's rd = 0), the register class the encoding forbids
 # (mrev with rd = zero, GPCRNoC0), and a funct7 under OPC_CAP_OP that no
-# instruction defines (0b0000110).  Measured 2026-09-04: all four decode as
+# instruction defines (0b0000110), and the two encodings C-36 retired.  Measured
+# 2026-09-04 (first four) and 2026-09-05 (last two): all decode as
 # "invalid instruction encoding".  This is the control for cap-instructions.txt
 # -- a decoder that accepted anything under the capability opcode would pass
 # that file and fail this one.
@@ -24,3 +25,10 @@
 # unassigned funct7 0b0000110 under OPC_CAP_OP
 # CHECK: warning: invalid instruction encoding
 0x5b 0x95 0xc5 0x0c
+# capenter as the table encoded it until C-36 (funct7 0b0100010): neither the
+# RTL nor QEMU decodes it, and since 2026-09-05 neither does llvm-mc
+# CHECK: warning: invalid instruction encoding
+0x5b 0x95 0x05 0x44
+# capexit (funct7 0b0100011): a compiler-only phantom, removed with C-36
+# CHECK: warning: invalid instruction encoding
+0x5b 0x10 0xb5 0x46

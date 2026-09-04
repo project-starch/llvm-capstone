@@ -1456,12 +1456,6 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     IntrinsicTypes.push_back(Ops[0]->getType());
     break;
   }
-  case Capstone::BI__builtin_capstone_cap_exit: {
-    ID = Intrinsic::capstone_cap_exit;
-    IntrinsicTypes.push_back(Ops[0]->getType());
-    DoesNotReturn = true;
-    break;
-  }
   case Capstone::BI__builtin_capstone_cap_ccsrrw: {
     ID = Intrinsic::capstone_cap_ccsrrw;
     IntrinsicTypes.push_back(Ops[0]->getType());

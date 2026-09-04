@@ -37,5 +37,7 @@ drop a0, a1 # CHECK: :[[@LINE]]:10: error: invalid operand for instruction
 revoke a0, a1 # CHECK: :[[@LINE]]:12: error: invalid operand for instruction
 call a0, a1, a2 # CHECK: :[[@LINE]]:14: error: invalid operand for instruction
 capenter a0, a1, a2 # CHECK: :[[@LINE]]:18: error: invalid operand for instruction
-return a0, a1, a2 # CHECK: :[[@LINE]]:16: error: invalid operand for instruction
-capexit a0, a1, a2 # CHECK: :[[@LINE]]:17: error: invalid operand for instruction
+return a0, a1, a2, a3 # CHECK: :[[@LINE]]:20: error: invalid operand for instruction
+return a0, a1 # CHECK: :[[@LINE]]:1: error: too few operands for instruction
+# capexit was a compiler-only phantom (C-36); the mnemonic itself is gone.
+capexit a0, a1 # CHECK: :[[@LINE]]:1: error: unrecognized instruction mnemonic

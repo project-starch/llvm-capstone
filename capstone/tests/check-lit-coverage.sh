@@ -174,10 +174,18 @@ if "flags" in sections:
 
 # ---- fatal / diagnostic routes ----------------------------------------------
 if "fatal" in sections:
+    # Entries are keyed `file:line` or, preferably, `file:msg=<prefix of the message>`:
+    # a line number goes stale with every edit above it (it did three times in one
+    # day), a message prefix does not.
     unreachable = {}
     for l in data("lit-coverage-unreachable.txt"):
         parts = [p.strip() for p in l.split("|")]
         if len(parts) >= 3: unreachable[parts[0]] = (parts[1], parts[2])
+    def unreachable_entry(key, fname, msg):
+        if key in unreachable: return unreachable[key]
+        for k, v in unreachable.items():
+            if k.startswith(fname + ":msg=") and msg.startswith(k[len(fname) + 5:]): return v
+        return None
     all_checks = " ".join(c for t in list(cg_text.values()) + list(cl_text.values()) for c in CHECK_POS.findall(t))
     seen_fatal = set()
     for f in glob.glob(os.path.join(ROOT, "llvm/lib/Target/Capstone/*.cpp")):
@@ -200,8 +208,8 @@ if "fatal" in sections:
             seen_fatal.add(key)
             frag = max(lits, key=len)[:40]
             if frag in all_checks: continue
-            if key in unreachable:
-                reason, pin = unreachable[key]
+            if (ent := unreachable_entry(key, os.path.basename(f), msg)) is not None:
+                reason, pin = ent
                 if pin.upper().startswith("TODO") or not os.path.exists(os.path.join(ROOT, pin)):
                     gap("fatal", key, f"recorded unreachable but its pinning test is missing: {pin}")
                 continue

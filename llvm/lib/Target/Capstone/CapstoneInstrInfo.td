@@ -2527,10 +2527,17 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
 // which folds again -- cap-i128-and-capability-mask.ll hangs. That test's own
 // comment already warned the combiner rebuilds this shape.
 //
-// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
-// This is semantically equivalent to taking the lower 64 bits.
-// We define it as a move, but with different register classes if needed.
-// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
+// PseudoTRUNC_CAP: read a capability's address into an integer register with an
+// INTEGER WRITE (`addi rd, rs, 0`), never with a bare sub-register copy. The value
+// is the same either way -- X is the low half of C -- but a copy coalesces away
+// and leaves the consumer reading the capability's own register, whose metadata
+// shadow is still tagged; RTL raises UNEXPECTED_OPERAND when such a register is
+// the rs2 of cincoffset/scc or an rs of shrink, QEMU does not check (C-31). An
+// ALU write clears the shadow on both (alu-write-clears-shadow.S). Every
+// c128 -> i64 truncate selects to this pseudo (CapstoneISelDAGToDAG, the
+// ISD::TRUNCATE case), as does cap_get_cursor below. It stays a pseudo until MC
+// lowering so that MachineCopyPropagation, which treats `addi rd, rs, 0` as a
+// copy, cannot delete it when rd and rs are allocated to one register.
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
@@ -2624,6 +2631,25 @@ def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1
   let rs2 = 0;
 }
 
+// PseudoINIT / PseudoSEAL: the forms CODEGEN emits for cap_init and cap_seal.
+// Both instructions CONSUME rs1 (the spec's MOVC step; QEMU nulls it), and the
+// RTL's INIT writes the new LINEAR capability to BOTH rs1 and rd when they
+// differ (R-25, capstone_flu_unit.anvil:147) -- two live LINEAR capabilities
+// over one region, reachable from any C that keeps the source pointer live
+// (`init a1, a0, a1` at -O1 and -O2 before 2026-09-05).  Tying rd to rs1 makes
+// the result overwrite the consumed source, which is what every implementation
+// agrees on; a source that is still live gets a copy first, and on the RTL that
+// movc nulls the original -- the honest reading of a program that keeps a
+// consumed capability.  The MC instructions above stay untied so hand-written
+// `init a1, a0, a2` still assembles.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0,
+    Constraints = "$rd = $rs1_in" in {
+def PseudoINIT : Pseudo<(outs GPCR:$rd), (ins GPCR:$rs1_in, GPR:$rs2), []>,
+                 PseudoInstExpansion<(INIT GPCR:$rd, GPCR:$rd, GPR:$rs2)>;
+def PseudoSEAL : Pseudo<(outs GPCR:$rd), (ins GPCR:$rs1_in), []>,
+                 PseudoInstExpansion<(SEAL GPCR:$rd, GPCR:$rd)>;
+}
+
 // DROP: Invalidate capability locally
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Constraints = "$rd = $rs1" in
 def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
@@ -2649,45 +2675,86 @@ def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // Domain Crossing, World Switching & CSRs
 //===----------------------------------------------------------------------===//
 
+// What the hardware does across a synchronous domain CALL/RETURN pair, from the
+// rtl-oracle pass of 2026-09-05 (RTL capstone_dyn_unit.anvil:250-315 and
+// capstone_dom_switcher.anvil; QEMU op_helper.c:1523-1656, capstone_helper.c:190-220;
+// spec ctrl-flow-insn.adoc:101-168), which the definitions below encode:
+//
+//  * CALL rd, rs1: rs1 is the sealed target (consumed: nulled on both), rd is only
+//    an INDEX recorded in the sealed-return capability -- on the matching RETURN,
+//    x[rd] receives the returned sealed capability; x1 (ra) receives the
+//    sealed-return capability at the call. QEMU asserts rd == rs1
+//    (op_helper.c:1524), the RTL does not need it; codegen ties them (PseudoDomCall).
+//  * NO general register is saved, restored or scrubbed by the hardware: the
+//    switch swaps PC and seven privileged CSRs only (same list on both). Every
+//    register the caller leaves live is visible to and clobberable by the callee
+//    domain. So codegen treats a domain call as preserving NOTHING
+//    (getNoPreservedMask) and the reference compiler additionally zeroes every
+//    non-argument register before the call and saves/restores ra and gp itself.
+//    OPEN (C-36b): this backend does not yet zero non-argument registers or
+//    save/restore gp around a domain call; gp is a reserved register the
+//    allocator cannot spill, so a callee domain that changes it breaks the caller.
+//  * RETURN rd, rs1, rs2: rd (a CAPABILITY, the sealed-return cap) is READ from
+//    the rd field and nulled; rs1 is an INTEGER, the re-entry PC written into the
+//    context; rs2 is an integer used only by the asynchronous form. The table
+//    used to encode rd = 0 and type rs1/rs2 as capabilities: x0's capability slot
+//    is hard-zero on the RTL, so every compiler-emitted return raised
+//    UNEXPECTED_OPERAND, while QEMU took its rd == 0 (trap-return-like) branch.
+//    The board-validated glue (start-gp-captable-generic.S: domreturn(t1, t2, x0),
+//    t1 = ldc'd capability, t2 = lla address) is the shape this now encodes.
+//  * CAPENTER rs1, rs2: the RTL hardwires the destination to a1 (decoder.sv:1287)
+//    and QEMU writes a0 and a1 whatever the encoding; QEMU also asserts
+//    rs1 != 0 && rs2 != 0 (op_helper.c:1663). Not a domain switch (no PC change,
+//    a two-output carve like SPLIT). Encoded with rd = 0, Defs a0/a1; codegen
+//    passes the capability in a0 and reads the result from a1.
 let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
-  // CALL: Domain Crossing
-  // Deliberately not marked isCall yet: we only need correct clobber handling
-  // on the SelectionDAG path for now, and the full call/debug-site modelling
-  // will be added later together with a dedicated call-like lowering path.
+  // CALL: Domain Crossing (the MC form; codegen emits PseudoDomCall below).
   def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
                          (outs GPCR:$rd), (ins GPCR:$rs1),
                          "call", "$rd, $rs1"> {
     let rs2 = 0;
   }
-
-  // CAPENTER: Enter Secure World
-  def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
-                         (outs GPCR:$rd), (ins GPCR:$rs1),
-                         "capenter", "$rd, $rs1"> {
-    let rs2 = 0;
-  }
+  // The form codegen emits: `call a0, a0` -- rd == rs1 (QEMU's assert; the source
+  // is consumed anyway) and both fixed to a0, because under a mask that preserves
+  // nothing a virtual result has no register the allocator may give it (the
+  // instruction that clobbers everything also defines it); a fixed physical
+  // result, as for any call's return value, is what the allocator understands.
+  // selectCapCall copies the target into a0, adds the no-preserved mask, and
+  // reads the result back from a0; ra is defined by the hardware.
+  let isCall = 1, Uses = [C10], Defs = [C10, C1] in
+  def PseudoDomCall : Pseudo<(outs), (ins), []>,
+                      PseudoInstExpansion<(CAP_CALL C10, C10)>;
 
   let isTerminator = 1 in {
-    // RETURN: Domain Return
+    // RETURN: Domain Return. rd is READ (the sealed-return capability); rs1 the
+    // re-entry PC (integer); rs2 the asynchronous form's integer.
     def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP,
-                             (outs), (ins GPCR:$rs1, GPCR:$rs2),
-                             "return", "$rs1, $rs2"> {
+                             (outs), (ins GPCR:$rd, GPR:$rs1, GPR:$rs2),
+                             "return", "$rd, $rs1, $rs2"> {
       let isReturn = 1;
-      let rd = 0;
-    }
-
-    // CAPEXIT: Exit Secure World
-    def CAPEXIT : RVInstR<0b0100011, 0b001, OPC_CAP_OP,
-                          (outs), (ins GPCR:$rs1, GPR:$rs2),
-                          "capexit", "$rs1, $rs2"> {
-      let rd = 0;
     }
   }
+  // There is no CAPEXIT. The table defined one (funct7 0b0100011, "capexit")
+  // until 2026-09-05; it exists in neither the spec, the RTL (no fu_op member, no
+  // .anvil function) nor QEMU (no insn32.decode entry), and would have trapped
+  // as ILLEGAL_INSTRUCTION on silicon (C-36).
 
   // CCSRRW: Capability CSR Read/Write (I-Type format)
   def CCSRRW : RVInstI<0b111, OPC_CAP_OP, (outs GPCR:$rd),
                        (ins csr_sysreg:$imm12, GPCR:$rs1),
                        "ccsrrw", "$rd, $imm12, $rs1">;
+}
+
+// CAPENTER: Enter Secure World. funct7 is 0b0001101 -- what capstone-ariane's
+// decoder.sv:1285 and capstone-qemu's insn32.decode:980 decode. The table carried
+// 0b0100010 until 2026-09-05 (C-36), an encoding neither implementation
+// recognises. The destination is fixed by both implementations (see the block
+// comment above), so rd is encoded 0 and a0/a1 are the defs.
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Defs = [C10, C11] in
+def CAPENTER : RVInstR<0b0001101, 0b001, OPC_CAP_OP,
+                       (outs), (ins GPCR:$rs1, GPR:$rs2),
+                       "capenter", "$rs1, $rs2"> {
+  let rd = 0;
 }
 
 //===----------------------------------------------------------------------===//

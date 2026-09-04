@@ -87,11 +87,14 @@
 # CHECK: cjalr ra, 2047(a0)
 0xdb 0x50 0xf5 0x7f
 # CHECK: capenter a0, a1
-0x5b 0x95 0x05 0x44
-# CHECK: return a0, a1
+0x5b 0x10 0xb5 0x1a
+# CHECK: return a0, a1, a2
+0x5b 0x95 0xc5 0x42
+# The rd = 0 form the compiler used to emit: a legal encoding (QEMU's trap-return
+# branch), decoded with its zero destination visible so it cannot be mistaken
+# for a domain return.
+# CHECK: return zero, a0, a1
 0x5b 0x10 0xb5 0x42
-# CHECK: capexit a0, a1
-0x5b 0x10 0xb5 0x46
 # CHECK: ccsrrw a0, ssp, a1
 0x5b 0xf5 0x15 0x01
 # CHECK: ccsrrw a0, 0, a1

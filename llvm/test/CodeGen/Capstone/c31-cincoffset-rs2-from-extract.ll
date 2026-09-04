@@ -9,20 +9,18 @@
 ; the untouched capability argument.  -O0 spills and reloads the integer through
 ; memory (`ld a1, 0(a1)`), which is an integer write and clears the shadow.
 ;
-; The fix has to put an integer write between the capability and its use as an
-; integer operand of cincoffset/scc/shrink: PseudoTRUNC_CAP (addi rd, rs, 0), as
-; cap_get_cursor already does, instead of a bare sub-register read.  This file
-; pins that shape and is XFAIL until the fix lands.
+; Fixed 2026-09-05: every c128 -> i64 truncate selects to PseudoTRUNC_CAP
+; (addi rd, rs, 0, printed `mv`), an integer write between the capability and
+; any use of its address, as cap_get_cursor already did.  Here rd and rs
+; coincide (`mv a0, a0`): the write is what clears the shadow, not the move.
 ;
-; MUTATION: n/a until the fix lands (the negative checks below fail today, which
-; is the XFAIL); once green, the control @hash_ptr is the mutation target: its
-; `srai` is the integer write, and replacing `ashr` by nothing turns @hash_ptr
-; into the @offset_by_ptr shape, which the CHECK-NOT must then reject.
+; MUTATION: the pre-fix compiler IS the failing case -- `cincoffset a0, a1, a0`
+; with no integer write, which the CHECK-NOT below rejected (measured
+; 2026-09-05 before the rebuild; this file was XFAIL on it).
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O1 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: %llc_cap -O0 < %s -o /dev/null
-; XFAIL: *
 
 ; CHECK-LABEL: use_int_of_ptr:
 ; CHECK-NOT: cincoffset a0, a1, a0
@@ -47,9 +45,9 @@ define ptr addrspace(200) @offset_by_ptr(ptr addrspace(200) %base, ptr addrspace
   ret ptr addrspace(200) %a
 }
 
-; CONTROL: an integer instruction (srai) already sits between the capability and
-; the cincoffset, so this shape is safe today and must stay a single srai/slli
-; pair -- no extra move is wanted where the shadow is already clear.
+; CONTROL: an integer instruction (srai) sits between the capability and the
+; cincoffset; the read itself is still the integer write (`mv a0, a0` before
+; the srai), and the srai/slli pair follows unchanged.
 ; CHECK-LABEL: hash_ptr:
 ; CHECK: srai a0, a0, 4
 ; CHECK-NEXT: slli a0, a0, 3

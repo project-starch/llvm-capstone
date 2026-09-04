@@ -144,8 +144,11 @@ let TargetPrefix = "capstone" in {
   def int_capstone_cap_call : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
                                         [IntrHasSideEffects]>;
 
-  // i64 cap_enter(ptr cap)
-  def int_capstone_cap_enter : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+  // ptr cap_enter(ptr cap, i64 arg): the capability in a0 and the integer rs2;
+  // returns the capability the instruction leaves in a1 (the rewritten a0 is not
+  // surfaced -- use inline asm if both results are needed).
+  def int_capstone_cap_enter : Intrinsic<[llvm_anyptr_ty],
+                                         [LLVMMatchType<0>, llvm_i64_ty],
                                          [IntrHasSideEffects]>;
 
   // ptr cap_ccsrrw(ptr cap, i64 csr)
@@ -154,13 +157,12 @@ let TargetPrefix = "capstone" in {
                                           [IntrHasSideEffects,
                                            ImmArg<ArgIndex<1>>]>;
 
-  // void cap_return(ptr cap, i64 code)
-  def int_capstone_cap_return : Intrinsic<[],[llvm_anyptr_ty, llvm_i64_ty],
+  // void cap_return(ptr cap, i64 reentry_pc, i64 code): cap is the sealed-return
+  // capability (read from the rd field), reentry_pc the integer written into the
+  // context as this domain's resume address, code the asynchronous form's integer.
+  def int_capstone_cap_return : Intrinsic<[], [llvm_anyptr_ty, llvm_i64_ty,
+                                               llvm_i64_ty],
                                           [IntrHasSideEffects, IntrNoReturn]>;
-
-  // void cap_exit(ptr cap, i64 code)
-  def int_capstone_cap_exit : Intrinsic<[], [llvm_anyptr_ty, llvm_i64_ty],
-                                        [IntrHasSideEffects, IntrNoReturn]>;
 
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"

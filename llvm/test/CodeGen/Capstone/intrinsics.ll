@@ -52,13 +52,14 @@ declare ptr addrspace(200) @llvm.capstone.cap.revoke.p200(ptr addrspace(200))
 ; --- Capability CSR operations ---
 declare ptr addrspace(200) @llvm.capstone.cap.ccsrrw.p200(ptr addrspace(200), i64 immarg)
 
-; get_tag is lcc selector 0.  Selector 0 is NOT total on either implementation
-; (it traps on an untagged operand), so this builtin traps on the very value it
-; exists to test; Tier 4 of the validation plan re-lowers it through selector 1.
-; When that lands this CHECK changes with it.
+; get_tag is NOT lcc selector 0: selector 0 traps on an untagged operand on both
+; implementations, so the builtin trapped on the very value it exists to test
+; (C-33).  Since 2026-09-05 it is the one total query, selector 1 (the type,
+; which answers 7 for a non-capability), compared below 7.
 ; CHECK-LABEL: test_get_tag:
 ; CHECK: # %bb.0:
-; CHECK-NEXT: lcc a0, a0, 0
+; CHECK-NEXT: lcc a0, a0, 1
+; CHECK-NEXT: sltiu a0, a0, 7
 ; CHECK-NEXT: cjalr zero, 0(ra)
 define i64 @test_get_tag(ptr addrspace(200) %p) {
 entry:

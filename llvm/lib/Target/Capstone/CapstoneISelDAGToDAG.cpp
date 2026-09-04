@@ -1703,11 +1703,15 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
             CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
         if (Size > 0) {
           MVT XLenVT = Subtarget->getXLenVT();
-          // base = cursor of the materialized capability (= &g).
+          // base = cursor of the materialized capability (= &g), read with the
+          // plain integer write every cursor read uses (PseudoTRUNC_CAP), not
+          // `lcc rd, rs, 2`, which is not total (Tier 4.2: no selector-2 query
+          // is emitted anywhere).
           SDValue Cursor(
-              CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT,
-                                     SDValue(Delined, 0),
-                                     CurDAG->getTargetConstant(2, DL, XLenVT)),
+              CurDAG->getMachineNode(
+                  Capstone::PseudoTRUNC_CAP, DL, XLenVT,
+                  CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
+                                                 XLenVT, SDValue(Delined, 0))),
               0);
           // end = base + sizeof(g) (size may exceed a 12-bit immediate).
           SDValue SizeReg =
@@ -1733,6 +1737,17 @@ void CapstoneDAGToDAGISel::selectLCCField(SDNode *Node, unsigned Field) {
   ReplaceNode(Node, CurDAG->getMachineNode(
                         Capstone::LCC, DL, XLenVT, Node->getOperand(1),
                         CurDAG->getTargetConstant(Field, DL, XLenVT)));
+}
+
+void CapstoneDAGToDAGISel::selectGetTag(SDNode *Node) {
+  SDLoc DL(Node);
+  MVT XLenVT = Subtarget->getXLenVT();
+  SDNode *Type = CurDAG->getMachineNode(
+      Capstone::LCC, DL, XLenVT, Node->getOperand(1),
+      CurDAG->getTargetConstant(1, DL, XLenVT));
+  ReplaceNode(Node, CurDAG->getMachineNode(
+                        Capstone::SLTIU, DL, XLenVT, SDValue(Type, 0),
+                        CurDAG->getTargetConstant(7, DL, XLenVT)));
 }
 
 void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
@@ -1772,7 +1787,8 @@ void CapstoneDAGToDAGISel::selectInit(SDNode *Node) {
 
   // INIT: rd = init(cap, val)
   // (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2)
-  SDNode *Res = CurDAG->getMachineNode(Capstone::INIT, DL, MVT::c128,
+  // The tied pseudo: rd = rs1, so the consumed source is overwritten (R-25).
+  SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoINIT, DL, MVT::c128,
                                        Cap, Val);
   ReplaceNode(Node, Res);
 }
@@ -1837,7 +1853,8 @@ void CapstoneDAGToDAGISel::selectMrev(SDNode *Node) {
 void CapstoneDAGToDAGISel::selectSeal(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Cap = Node->getOperand(1);
-  SDNode *Res = CurDAG->getMachineNode(Capstone::SEAL, DL, MVT::c128, Cap);
+  // The tied pseudo: rd = rs1, the consumed source is overwritten (R-25).
+  SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoSEAL, DL, MVT::c128, Cap);
   ReplaceNode(Node, Res);
 }
 
@@ -1881,16 +1898,25 @@ void CapstoneDAGToDAGISel::selectCapCall(SDNode *Node) {
   SDValue Chain = Node->getOperand(0);
   SDValue Cap = Node->getOperand(2);
 
-  const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
-      CurDAG->getMachineFunction(), CallingConv::C);
-  assert(Mask && "Missing call preserved mask for domain crossing intrinsic");
+  // A domain call preserves NOTHING: the hardware swaps PC and seven CSRs and
+  // leaves every general register to the callee domain (see the block comment
+  // on the domain-crossing instructions in CapstoneInstrInfo.td). The
+  // callee-saved mask of an ordinary call promised that s0-s11 survive, which
+  // was silently false on both implementations.
+  const uint32_t *Mask = Subtarget->getRegisterInfo()->getNoPreservedMask();
+  assert(Mask && "Missing no-preserved mask for the domain call");
   SDValue RegMask = CurDAG->getRegisterMask(Mask);
 
-  SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_CALL, DL,
-                                       CurDAG->getVTList(MVT::c128, MVT::Other),
-                                       {Cap, RegMask, Chain});
-  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
-  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  // Target in a0, result from a0 (see PseudoDomCall in CapstoneInstrInfo.td).
+  Chain = CurDAG->getCopyToReg(Chain, DL, Capstone::C10, Cap, SDValue());
+  SDValue Glue = Chain.getValue(1);
+  SDNode *Res = CurDAG->getMachineNode(
+      Capstone::PseudoDomCall, DL, CurDAG->getVTList(MVT::Other, MVT::Glue),
+      {RegMask, Chain, Glue});
+  SDValue Out = CurDAG->getCopyFromReg(SDValue(Res, 0), DL, Capstone::C10,
+                                       MVT::c128, SDValue(Res, 1));
+  ReplaceUses(SDValue(Node, 0), Out);
+  ReplaceUses(SDValue(Node, 1), Out.getValue(1));
   CurDAG->RemoveDeadNode(Node);
 }
 
@@ -1898,46 +1924,33 @@ void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Chain = Node->getOperand(0);
   SDValue Cap = Node->getOperand(2);
+  SDValue Arg = Node->getOperand(3);
 
-  const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
-      CurDAG->getMachineFunction(), CallingConv::C);
-  assert(Mask && "Missing call preserved mask for domain crossing intrinsic");
-  SDValue RegMask = CurDAG->getRegisterMask(Mask);
-
-  SDNode *Res = CurDAG->getMachineNode(Capstone::CAPENTER, DL,
-                                       CurDAG->getVTList(MVT::c128, MVT::Other),
-                                       {Cap, RegMask, Chain});
-
-  SDValue Trunc = CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
-                                                 MVT::i64, SDValue(Res, 0));
-
-  ReplaceUses(SDValue(Node, 0), Trunc);
-  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  // Both implementations fix the registers: the capability goes in a0, the
+  // result comes out of a1 (the RTL hardwires rd to a1, QEMU writes a0 and a1
+  // and never reads the rd field). rs2 must be a non-zero register for QEMU.
+  Chain = CurDAG->getCopyToReg(Chain, DL, Capstone::C10, Cap, SDValue());
+  SDValue Glue = Chain.getValue(1);
+  SDNode *Res = CurDAG->getMachineNode(
+      Capstone::CAPENTER, DL, CurDAG->getVTList(MVT::Other, MVT::Glue),
+      {CurDAG->getRegister(Capstone::C10, MVT::c128), Arg, Chain, Glue});
+  SDValue Out = CurDAG->getCopyFromReg(SDValue(Res, 0), DL, Capstone::C11,
+                                       MVT::c128, SDValue(Res, 1));
+  ReplaceUses(SDValue(Node, 0), Out);
+  ReplaceUses(SDValue(Node, 1), Out.getValue(1));
   CurDAG->RemoveDeadNode(Node);
 }
 
 void CapstoneDAGToDAGISel::selectCapReturn(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Chain = Node->getOperand(0);
-  SDValue Cap = Node->getOperand(2);
-  SDValue Code = Node->getOperand(3);
+  SDValue Cap = Node->getOperand(2);   // rd: the sealed-return capability
+  SDValue Pc = Node->getOperand(3);    // rs1: the re-entry PC, an integer
+  SDValue Code = Node->getOperand(4);  // rs2: the asynchronous form's integer
 
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_RETURN, DL,
                                        CurDAG->getVTList(MVT::Other),
-                                       {Cap, Code, Chain});
-  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
-  CurDAG->RemoveDeadNode(Node);
-}
-
-void CapstoneDAGToDAGISel::selectCapExit(SDNode *Node) {
-  SDLoc DL(Node);
-  SDValue Chain = Node->getOperand(0);
-  SDValue Cap = Node->getOperand(2);
-  SDValue Code = Node->getOperand(3);
-
-  SDNode *Res = CurDAG->getMachineNode(Capstone::CAPEXIT, DL,
-                                       CurDAG->getVTList(MVT::Other),
-                                       {Cap, Code, Chain});
+                                       {Cap, Pc, Code, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
   CurDAG->RemoveDeadNode(Node);
 }
@@ -2017,8 +2030,6 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   }
 
   // 2. Prepare operands for CJALR
-  SDValue Zero = CurDAG->getTargetConstant(0, DL, MVT::i64); // simm12_i64_op
-
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(TargetReg); // rs1 (Target Function Pointer)
   // No imm12: PseudoCALLIndirect takes only $rs1, and its expansion supplies the
@@ -3349,8 +3360,17 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     // intrinsics take llvm_anyptr_ty and TableGen cannot reconcile iPTRAny with
     // CLenVT ("Type set is empty for each HW mode"). Selecting them here puts
     // them where every other capability intrinsic already is.
+    // capstone_cap_get_tag is NOT `lcc rd, rs, 0`. Selector 0 (validity) traps
+    // on an untagged operand on both implementations (RTL
+    // capstone_dyn_unit.anvil:195; QEMU op_helper.c:837-864), i.e. the builtin
+    // trapped on the very value it exists to test (C-33). Selector 1 (type) is
+    // the one total query: an untagged operand answers 7 (NOT_CAP - 1 in three
+    // bits) on both. So the tag is `lcc rd, rs, 1; sltiu rd, rd, 7`: 1 for any
+    // capability, 0 for a non-capability, never a trap. It answers "is a
+    // capability", not "is a valid capability"; a revoked capability still reads
+    // 1 here, which is the semantics the C header documents.
     case Intrinsic::capstone_cap_get_tag:
-      return selectLCCField(Node, 0);
+      return selectGetTag(Node);
     // capstone_cap_get_cursor is DELIBERATELY NOT SELECTED HERE. selectLCCField emits
     // `lcc rd, rs, 2`, the cursor query, which is NOT TOTAL: it traps on an untagged
     // operand, and a NULL pointer is untagged. That is C-19 -- DAGCombiner folds
@@ -3807,8 +3827,6 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     // Domain Crossing, World Switching & CSRs
     case Intrinsic::capstone_cap_return:
       return selectCapReturn(Node);
-    case Intrinsic::capstone_cap_exit:
-      return selectCapExit(Node);
     }
     break;
   }
@@ -4055,14 +4073,26 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     SDValue Src = Node->getOperand(0);
     MVT SrcVT = Src.getSimpleValueType();
 
-    // Reading the address out of a capability. X is the low half of C, so this
-    // is a subregister reference and costs nothing -- it used to be an ADDI,
-    // which is both an instruction and a write to the address half of a
-    // register whose capability may still be live.
+    // Reading the address out of a capability. X is the low half of C, so the
+    // VALUE is a subregister reference -- but the read must still be an
+    // INTEGER INSTRUCTION, not a bare sub-register copy (C-31). A copy
+    // coalesces away and leaves the consumer reading the capability's own
+    // register, whose metadata shadow is still tagged; the RTL raises
+    // UNEXPECTED_OPERAND when such a register reaches the rs2 of cincoffset,
+    // scc or shrink (capstone_flu_unit.anvil:30), while QEMU reads the cursor
+    // and carries on. `q + (long)p` at -O2 was exactly `cincoffset a0, a1, a0`
+    // with a0 the untouched capability. An ALU write clears the shadow on both
+    // implementations (alu-write-clears-shadow.S), so the truncate is
+    // PseudoTRUNC_CAP, `addi rd, rs, 0`: it is not a COPY to the copy
+    // propagator, so it survives even when rd and rs land in one register, and
+    // rd interferes with the capability's full register while the capability
+    // is live, so a live capability is never written through its address half.
     if (isCapabilityVT(SrcVT) && VT == Subtarget->getXLenVT()) {
-      ReplaceNode(Node, CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr,
-                                                       SDLoc(Node), VT, Src)
-                            .getNode());
+      SDLoc DL(Node);
+      SDValue Addr = CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
+                                                    VT, Src);
+      ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
+                                               VT, Addr));
       return;
     }
     break; // Let the remaining TRUNCATEs be processed as usual
@@ -4297,9 +4327,13 @@ static SDValue narrowToFrameObjectBounds(SelectionDAG *CurDAG, const SDLoc &DL,
     return Cap;
   const CapstoneSubtarget &STI = MF.getSubtarget<CapstoneSubtarget>();
   MVT XLenVT = STI.getXLenVT();
+  // The object's base is the capability's cursor, read with the integer write
+  // every cursor read uses (never `lcc rd, rs, 2`, Tier 4.2).
   SDValue Cursor(
-      CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT, Cap,
-                             CurDAG->getTargetConstant(2, DL, XLenVT)),
+      CurDAG->getMachineNode(
+          Capstone::PseudoTRUNC_CAP, DL, XLenVT,
+          CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL, XLenVT,
+                                         Cap)),
       0);
   SDValue SizeReg = selectImm(CurDAG, DL, XLenVT, Size, STI);
   SDValue End(

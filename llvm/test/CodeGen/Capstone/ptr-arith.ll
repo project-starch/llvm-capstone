@@ -1,10 +1,10 @@
 ; Pinned to -capstone-shrink-stack=false (default on since 2026-07-03): this test
 ; checks pointer-arithmetic lowering, not stack narrowing (the narrowed path is
 ; covered by cap-shrink-{stack,dynalloca}.ll).
-; MUTATION: the mv negative in @test_ptrdiff guards the retired addi read of
-; an address, which no IR shape produces now; demonstrated on the emitted text
-; by inserting 'mv a1, a1' after the label, which the CHECK-NOT catches
-; (performed 2026-09-04).
+; MUTATION: in @test_ptrdiff change `sub` to `add` -> the `sub a0, a0, a1`
+; check fails (performed 2026-09-05).  The mv negative that stood here guarded
+; against an addi read of an address; since C-31 (2026-09-05) that read is the
+; intended shape, so the negative is gone and the two address reads are pinned.
 ;
 ; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
 ; RUN: %llc_cap -O0 < %s -o /dev/null
@@ -153,10 +153,12 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
 ; C pointer subtraction returns an integer difference between two capability
 ; cursors. Do not select this as full-width i128 scalar subtraction.
 ; CHECK-LABEL: test_ptrdiff:
-; The address read is free: ptrtoint is a TRUNCATE to the index width, selected
-; as EXTRACT_SUBREG on sub_cap_addr, and the low half of the register IS the
-; cursor. Nothing stands between the arguments and the subtraction.
-; CHECK-NOT: mv
+; Each address read is ONE integer write (C-31): the low half of the register IS
+; the cursor, but reading it with a bare sub-register copy left the consumer's
+; register tagged on the RTL, so ptrtoint is PseudoTRUNC_CAP (`addi rd, rs, 0`,
+; printed `mv`), here with rd = rs.  Then the subtraction.
+; CHECK-DAG: mv a0, a0
+; CHECK-DAG: mv a1, a1
 ; CHECK: sub a0, a0, a1
 ; CHECK: cjalr zero, 0(ra)
 define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {

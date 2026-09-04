@@ -50,9 +50,13 @@ define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) 
   ret ptr addrspace(200) %r
 }
 
+; Each address read is one integer write (C-31, `mv`), then the xor.  A second
+; `mv a0, a0` follows the xor: the combiner re-forms the xor of two truncates as
+; a truncate of the xor, and that truncate is read the same way -- harmless, one
+; redundant self-move, noted rather than pinned.
 ; CHECK-LABEL: hash_two:
 ; CHECK: xor a0, a0, a1
-; CHECK-NEXT: cjalr zero, 0(ra)
+; CHECK: cjalr zero, 0(ra)
 define i64 @hash_two(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) {
   %x = ptrtoint ptr addrspace(200) %a to i64
   %y = ptrtoint ptr addrspace(200) %b to i64

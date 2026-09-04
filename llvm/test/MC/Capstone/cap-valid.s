@@ -109,12 +109,15 @@ cjalr ra, -2048(a0)
 # CHECK: cjalr ra, 2047(a0)  # encoding: [0xdb,0x50,0xf5,0x7f]
 cjalr ra, 2047(a0)
 
-# CHECK: capenter a0, a1  # encoding: [0x5b,0x95,0x05,0x44]
+# capenter's funct7 is 0b0001101, as the RTL and QEMU decoders have it; the table
+# said 0b0100010 (byte 0x44) until C-36 was fixed, and that encoding is now pinned
+# INVALID in the disassembler suite.
+# capenter rs1, rs2 with rd encoded 0 (both implementations fix the destination).
+# CHECK: capenter a0, a1  # encoding: [0x5b,0x10,0xb5,0x1a]
 capenter a0, a1
-# CHECK: return a0, a1  # encoding: [0x5b,0x10,0xb5,0x42]
-return a0, a1
-# CHECK: capexit a0, a1  # encoding: [0x5b,0x10,0xb5,0x46]
-capexit a0, a1
+# return rd, rs1, rs2: rd is the sealed-return capability, READ from the rd field.
+# CHECK: return a0, a1, a2  # encoding: [0x5b,0x95,0xc5,0x42]
+return a0, a1, a2
 
 # CHECK: ccsrrw a0, ssp, a1  # encoding: [0x5b,0xf5,0x15,0x01]
 ccsrrw a0, ssp, a1

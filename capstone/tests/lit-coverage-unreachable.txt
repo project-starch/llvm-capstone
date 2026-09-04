@@ -9,7 +9,8 @@
 # edit that moves a route must update this file (that is deliberate -- a route
 # that moves may also have changed).
 CapstoneISelDAGToDAG.cpp:1360 | folded displacement >64-bit: IR truncates a GEP index to the 64-bit index width, so the fold sees an in-range value | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
-CapstoneISelDAGToDAG.cpp:1806 | TIGHTEN immediate non-constant: the intrinsic carries ImmArg and the IR verifier rejects a non-immediate, and the builtin is _Constant in clang | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
-CapstoneISelDAGToDAG.cpp:1954 | CCSRRW CSR non-constant: same ImmArg / _Constant argument | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:msg=Capstone TIGHTEN instruction requires a constant | TIGHTEN immediate non-constant: the intrinsic carries ImmArg and the IR verifier rejects a non-immediate, and the builtin is _Constant in clang | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:msg=Capstone CCSRRW instruction requires a constant | CCSRRW CSR non-constant: same ImmArg / _Constant argument | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
 CapstoneISelLowering.cpp:10832 | capability select with SGT/SLE/UGT/ULE: all ten condition codes canonicalise before reaching lowerSELECT (measured 2026-09-04); the SELECT_CC-combine route is probed in Tier 4 | llvm/test/CodeGen/Capstone/select-cap-condcodes.ll
 CapstoneISelLowering.cpp:27029 | every DYNAMIC_STACKALLOC size reaches lowering as XLen (i16/i32 promoted, i128 expanded and truncated by the generic legalizer), so lowerDynamicAllocaSizeToXLen never returns null | llvm/test/CodeGen/Capstone/dynamic-alloca-size-types.ll
+CapstoneISelLowering.cpp:msg=Unsupported dynamic alloca size expression | lowerDynamicAllocaSizeToXLen reduced every size expression tried to XLen (an i128 argument, a widening i128 multiply, the narrow types in the pinning test), so no IR reached the fatal; probed 2026-09-05 with llc -O0 and -O2, both rc 0 | llvm/test/CodeGen/Capstone/dynamic-alloca-size-types.ll

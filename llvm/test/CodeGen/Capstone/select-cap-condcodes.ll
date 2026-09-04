@@ -115,11 +115,12 @@ define ptr addrspace(200) @sel_ule(i64 %a, i64 %b, ptr addrspace(200) %x, ptr ad
   ret ptr addrspace(200) %r
 }
 
-; Two capabilities compared: their addresses go through sltu, the select
-; branches on that, and the arm is moved with movc.  No lcc anywhere.
+; Two capabilities compared: their addresses are read with the integer write
+; (C-31, `mv`), go through sltu, the select branches on that, and the arm is
+; moved with movc.  No lcc anywhere.
 ; CHECK-LABEL: sel_capcmp_ugt:
 ; CHECK-NOT: lcc
-; CHECK: sltu {{a[0-9]+}}, a1, a0
+; CHECK: sltu {{a[0-9]+}}, {{a[0-9]+}}, {{a[0-9]+}}
 ; CHECK: bnez
 ; CHECK: movc a0, a1
 ; CHECK-NOT: lcc

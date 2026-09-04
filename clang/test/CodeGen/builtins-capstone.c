@@ -57,16 +57,12 @@ void *t_revoke(void *c) { return __builtin_capstone_cap_revoke(c); }
 // CHECK: {{(tail )?}}call addrspace(200) ptr addrspace(200) @llvm.capstone.cap.call.p200(ptr addrspace(200) %
 void *t_call(void *c) { return __builtin_capstone_cap_call(c); }
 // CHECK-LABEL: @t_enter(
-// CHECK: {{(tail )?}}call addrspace(200) i64 @llvm.capstone.cap.enter.p200(ptr addrspace(200) %
-unsigned long t_enter(void *c) { return __builtin_capstone_cap_enter(c); }
+// CHECK: {{(tail )?}}call addrspace(200) ptr addrspace(200) @llvm.capstone.cap.enter.p200(ptr addrspace(200) %{{.*}}, i64 %
+void *t_enter(void *c, unsigned long a) { return __builtin_capstone_cap_enter(c, a); }
 // CHECK-LABEL: @t_ccsrrw(
 // CHECK: {{(tail )?}}call addrspace(200) ptr addrspace(200) @llvm.capstone.cap.ccsrrw.p200(ptr addrspace(200) %{{.*}}, i64 1)
 void *t_ccsrrw(void *c) { return __builtin_capstone_cap_ccsrrw(c, 1); }
 // CHECK-LABEL: @t_return(
-// CHECK: {{(tail )?}}call addrspace(200) void @llvm.capstone.cap.return.p200(ptr addrspace(200) %{{.*}}, i64 %
+// CHECK: {{(tail )?}}call addrspace(200) void @llvm.capstone.cap.return.p200(ptr addrspace(200) %{{.*}}, i64 %{{.*}}, i64 %
 // CHECK-NEXT: unreachable
-void t_return(void *c, unsigned long code) { __builtin_capstone_cap_return(c, code); }
-// CHECK-LABEL: @t_exit(
-// CHECK: {{(tail )?}}call addrspace(200) void @llvm.capstone.cap.exit.p200(ptr addrspace(200) %{{.*}}, i64 %
-// CHECK-NEXT: unreachable
-void t_exit(void *c, unsigned long code) { __builtin_capstone_cap_exit(c, code); }
+void t_return(void *c, unsigned long pc, unsigned long code) { __builtin_capstone_cap_return(c, pc, code); }

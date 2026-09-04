@@ -1,5 +1,6 @@
 ; MUTATION: give @ptr_to_long an integer second argument and return it -> 'mv
-; a0, a1' and the mv negative fires (performed 2026-09-04).
+; a0, a1' and the exact `mv a0, a0` check fails (performed 2026-09-04 against
+; the negative that stood here, re-performed 2026-09-05 against this check).
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null
@@ -8,11 +9,14 @@
 ; comparing capability pointers (ptr addrspace(200)). The backend must be able
 ; to select the truncate without crashing.
 
-; Reading the address costs NO instruction: X is the low half of C, so the
-; truncate is EXTRACT_SUBREG on sub_cap_addr.
+; Reading the address is ONE integer write (C-31, 2026-09-05): the value is the
+; low half of the capability register, but a bare sub-register read left the
+; consumer reading a register whose metadata shadow was still tagged, which
+; the RTL rejects as the rs2 of cincoffset/scc.  So the truncate is
+; PseudoTRUNC_CAP, `addi rd, rs, 0`, printed `mv`; here rd and rs coincide.
 ; CHECK-LABEL: ptr_to_long:
-; CHECK-NOT: mv
-; CHECK: cjalr zero, 0(ra)
+; CHECK: mv a0, a0
+; CHECK-NEXT: cjalr zero, 0(ra)
 define i64 @ptr_to_long(ptr addrspace(200) %p) {
 entry:
   %0 = ptrtoint ptr addrspace(200) %p to i64

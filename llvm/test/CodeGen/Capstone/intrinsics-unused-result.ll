@@ -43,7 +43,7 @@ declare ptr addrspace(200) @llvm.capstone.cap.drop.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.revoke.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.ccsrrw.p200(ptr addrspace(200), i64 immarg)
 declare ptr addrspace(200) @llvm.capstone.cap.call.p200(ptr addrspace(200))
-declare i64 @llvm.capstone.cap.enter.p200(ptr addrspace(200))
+declare ptr addrspace(200) @llvm.capstone.cap.enter.p200(ptr addrspace(200), i64)
 
 ;===--- Pure value transforms: an unused result means NO instruction. ---------===;
 
@@ -145,20 +145,22 @@ define void @unused_ccsrrw(ptr addrspace(200) %p) {
   ret void
 }
 
-; The domain-crossing ops keep their frame (their result is defined into a
-; callee-saved register); what matters here is that the instruction is emitted.
+; The domain-crossing ops: what matters here is that the instruction is emitted.
+; call's rd is tied to rs1 since 2026-09-05 (QEMU asserts rd == rs1; this arm
+; used to pin `call s0, a0`, exactly the shape it aborts on).
 ; CHECK-LABEL: unused_call:
-; CHECK: call s0, a0
+; CHECK: call a0, a0
 ; CHECK: cjalr zero, 0(ra)
 define void @unused_call(ptr addrspace(200) %p) {
   %r = call ptr addrspace(200) @llvm.capstone.cap.call.p200(ptr addrspace(200) %p)
   ret void
 }
 
+; capenter's registers are fixed (capability in a0, integer in rs2, result in a1).
 ; CHECK-LABEL: unused_enter:
-; CHECK: capenter s0, a0
+; CHECK: capenter a0, a1
 ; CHECK: cjalr zero, 0(ra)
-define void @unused_enter(ptr addrspace(200) %p) {
-  %r = call i64 @llvm.capstone.cap.enter.p200(ptr addrspace(200) %p)
+define void @unused_enter(ptr addrspace(200) %p, i64 %x) {
+  %r = call ptr addrspace(200) @llvm.capstone.cap.enter.p200(ptr addrspace(200) %p, i64 %x)
   ret void
 }

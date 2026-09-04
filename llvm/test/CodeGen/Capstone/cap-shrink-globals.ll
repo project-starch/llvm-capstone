@@ -26,7 +26,7 @@ declare void @ext_fn() addrspace(200)
 ; CHECK-LABEL: load_global:
 ; CHECK: cincoffset a0, gp, a0
 ; CHECK: delin a0
-; SHRINK: lcc {{a[0-9]+}}, a0, 2
+; SHRINK: mv {{a[0-9]+}}, a0
 ; SHRINK: shrink
 ; NOSHRINK-NOT: shrink
 define i8 @load_global() addrspace(200) {

@@ -1,7 +1,7 @@
 ; Object-granularity capability narrowing for address-taken stack objects (C1,
 ; stack slice, opt-in via -capstone-shrink-stack). When on, materializing the
 ; address of a stack object narrows its capability to [&obj, &obj+size) via
-; lcc(cursor)/add/shrink. This applies both to the bare-FrameIndex address
+; mv(cursor)/add/shrink (the cursor read is the plain integer write, C-31). This applies both to the bare-FrameIndex address
 ; (ISD::FrameIndex) and to interior / load-store base materialization
 ; (materializeFrameIndexAddrBase) via the shared narrowToFrameObjectBounds
 ; helper, so a load/store *through* a fixed stack object also carries object
@@ -25,7 +25,7 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ; to its object when the flag is on, and left at the broad stack bounds when off.
 ; CHECK-LABEL: stack_idx:
 ; CHECK: cincoffsetimm {{a[0-9]+}}, sp, 0
-; SHRINK: lcc {{a[0-9]+}}, {{a[0-9]+}}, 2
+; SHRINK: mv {{a[0-9]+}}, {{a[0-9]+}}
 ; SHRINK: shrink
 ; NOSHRINK-NOT: shrink
 define i8 @stack_idx(i64 %i) addrspace(200) {
@@ -40,7 +40,7 @@ define i8 @stack_idx(i64 %i) addrspace(200) {
 ; to the slot's bounds when the flag is on (broad stack bounds when off).
 ; CHECK-LABEL: cap_slot:
 ; CHECK: cincoffsetimm {{a[0-9]+}}, sp, 0
-; SHRINK: lcc {{a[0-9]+}}, {{a[0-9]+}}, 2
+; SHRINK: mv {{a[0-9]+}}, {{a[0-9]+}}
 ; SHRINK: shrink
 ; SHRINK: stc
 ; NOSHRINK-NOT: shrink

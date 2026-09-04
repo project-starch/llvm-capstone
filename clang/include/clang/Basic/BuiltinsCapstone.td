@@ -208,15 +208,16 @@ def cap_revoke : CapstoneBuiltin<"void*(void*)">;
 let Attributes = [NoThrow] in {
   // Domain Crossing
   def cap_call     : CapstoneBuiltin<"void*(void*)">;
-  def cap_enter    : CapstoneBuiltin<"uint64_t(void*)">;
+  def cap_enter    : CapstoneBuiltin<"void*(void*, uint64_t)">;
 
   // Capability CSRs
   def cap_ccsrrw   : CapstoneBuiltin<"void*(void*, _Constant uint64_t)">;
 }
 
-// Операции, навсегда покидающие текущий контекст исполнения
+// Operations that never return to the current execution context.
 let Attributes =[NoThrow, NoReturn] in {
   // World Switching
-  def cap_return   : CapstoneBuiltin<"void(void*, uint64_t)">;
-  def cap_exit     : CapstoneBuiltin<"void(void*, uint64_t)">;
+  def cap_return   : CapstoneBuiltin<"void(void*, uint64_t, uint64_t)">;
+  // No cap_exit: the instruction it named exists in neither the spec, the RTL
+  // nor QEMU (C-36, removed 2026-09-05).
 }

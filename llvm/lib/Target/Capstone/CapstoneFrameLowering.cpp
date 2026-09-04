@@ -1158,9 +1158,13 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
           MF.getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
       Register AlignedCursorReg = CursorReg;
 
-      BuildMI(MBB, MBBI, DL, TII->get(Capstone::LCC), CursorReg)
-          .addReg(SPReg)
-          .addImm(2)
+      // sp's cursor, read with the plain integer write every cursor read uses
+      // (PseudoTRUNC_CAP, `addi rd, x2, 0`), never `lcc rd, sp, 2`: sp is always
+      // tagged so the query would not trap here, but Tier 4.2 retires every
+      // selector-2 read, and the pseudo (not a COPY) keeps the write from being
+      // propagated away, which would hand the shrink below a tagged operand.
+      BuildMI(MBB, MBBI, DL, TII->get(Capstone::PseudoTRUNC_CAP), CursorReg)
+          .addReg(Capstone::X2)
           .setMIFlag(MachineInstr::FrameSetup);
 
       if (isInt<12>(-(int)MaxAlignment.value())) {
