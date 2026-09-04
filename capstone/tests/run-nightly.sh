@@ -20,6 +20,9 @@
 #     --skip-build       run suites against the current toolchain, no rebuild
 #     --extended         also run the setup-heavier suites (sqlite/hostcall/nullblk)
 #     --only a,b,c       run only the named suites (see --list); still serial
+#     --quick            the ~3 min pre-commit tier (smoke, coremark, borrow-cost,
+#                        shared-region). To pick cases INSIDE one suite, run that
+#                        suite directly with CAPSTONE_ONLY=name1,name2.
 #     --list             print the suite names and exit
 #     --timeout SECONDS  per-suite timeout (default 1800)
 #     -j N               build parallelism (default ~70% of nproc)
@@ -41,9 +44,32 @@ LIT="$CAPSTONE_LLVM_BUILD_DIR/bin/llvm-lit"
 # run-all-beebs boots 82 domains serially, so it carries its own long timeout.
 BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
 CORE_SUITES=(
-  "authority|bash $SCRIPT_DIR/capstone-authority/run-authority-suite.sh"
+  # 3600 for the same reason as the two below, and this one is self-inflicted:
+  # before stage 1 the suite returned on the first exhausted boot, so it "finished"
+  # in about two minutes without reporting. Now that it carries on it has to boot
+  # all 40 domains -- 27 were done when the 1800 default killed it.
+  "authority|bash $SCRIPT_DIR/capstone-authority/run-authority-suite.sh|3600"
   "smoke|bash $RUNTIME_DIR/run-smoke.sh"
   "coremark|bash $RUNTIME_DIR/run-coremark.sh"
+  # SQLITE IS HERE BECAUSE IT WAS BROKEN FOR DAYS AND NOTHING SAID SO. Two SQLite
+  # domains stopped being creatable when their images crossed the single-region
+  # ceiling (1376256 bytes) and the module fell back to max(2*code_len, 512K); the
+  # only thing that noticed was domdata-budget.py printing "VERDICT: DOES NOT FIT"
+  # into a log nobody reads, because nothing ran these on a schedule. The rule that
+  # broke them was a reasonable change made elsewhere, which is exactly the case a
+  # nightly exists for.
+  #
+  # sqlite-memory is the end-to-end application gate: open, CREATE, INSERT, SELECT,
+  # plus an extended workload (transactions, a secondary index, prepared inserts,
+  # UPDATE/DELETE, aggregates and the sorter, index-driven WHERE, JOIN, GROUP BY,
+  # string functions). It is the broadest single check of "the compiler still builds
+  # a working program" that exists here.
+  #
+  # No explicit timeout: MEASURED at 87 s with a warm build, and 790 s on a run
+  # whose boot flaked and retried, so the 1800 default carries better than 2x over
+  # the worst observed. A cold run rebuilds the amalgamation and costs a few
+  # minutes more, still well inside it.
+  "sqlite-memory|bash $BENCH_DIR/sqlite/run-sqlite-memory.sh"
   "rv8|bash $BENCH_DIR/rv8/run-all-rv8.sh|3600"
   "beebs|bash $BENCH_DIR/beebs/run-all-beebs.sh|10800"
   "revoke-matrix|bash $RUNTIME_DIR/run-revoke-matrix-probe.sh"
@@ -51,10 +77,31 @@ CORE_SUITES=(
   "borrow-cost|bash $RUNTIME_DIR/run-borrow-cost-probe.sh"
   "tree-cost-O2|DOMAIN_OPT_LEVEL=-O2 bash $RUNTIME_DIR/run-tree-cost-probe.sh"
   "static-cap-globals|bash $RUNTIME_DIR/run-static-cap-globals-probe.sh"
-  "intra-domain-mrev|bash $RUNTIME_DIR/run-intra-domain-mrev-revoke-probe.sh"
+  # 3600, not the 1800 default: these two boot the guest per arm and the default
+  # was never sized for that. Measured -- intra-domain-mrev is 24 arms and has run
+  # 31 boots in 1130 s (36 s/boot) idle and 31 boots unfinished at 1800 s (58 s/boot)
+  # under load; linear-uninit-corpus is 22 arms, 27 boots in 952 s and 24 boots
+  # unfinished at 1800 s (75 s/boot). Worst observed is 36 x 58 = 2088 s and
+  # 33 x 75 = 2475 s, so 1800 kills healthy runs, which is a false negative rather
+  # than strictness.
+  "intra-domain-mrev|bash $RUNTIME_DIR/run-intra-domain-mrev-revoke-probe.sh|3600"
   "hier-revoke|bash $RUNTIME_DIR/run-hier-revoke-probe.sh"
   "shared-region|bash $RUNTIME_DIR/run-shared-region-probe.sh"
-  "linear-uninit-corpus|bash $RUNTIME_DIR/run-linear-uninit-corpus-probe.sh"
+  "linear-uninit-corpus|bash $RUNTIME_DIR/run-linear-uninit-corpus-probe.sh|3600"
+  # SQLLogicTest, and it is the only CORRECTNESS oracle in this tier: everything
+  # else checks that a program runs, this one checks that its answers are right.
+  # select1.test alone is 1031 records (1000 queries, 31 statements), compared
+  # against expected results, so a miscompile that merely produces wrong values --
+  # the class no marker or fault can catch -- fails here.
+  #
+  # Last, because it is the slowest, and second-to-last in value to nothing.
+  # The corpus is fetched once and cached, pinned by commit AND per-file SHA-256;
+  # a machine with no cache and no network will fail this suite at the fetch, which
+  # is honest rather than silent.
+  # 3600, not the 1800 default, and the reason is the COLD path rather than the run:
+  # measured at 161 s warm, but a cold one compiles a second full amalgamation for
+  # the silicon domain, links it in three passes, and fetches the corpus.
+  "sqlite-slt|bash $BENCH_DIR/sqlite/run-sqlite-slt.sh|3600"
 )
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
@@ -66,6 +113,13 @@ EXTENDED_SUITES=(
 )
 
 # ---- options ------------------------------------------------------------------
+# The quick tier, chosen from the durations the reports actually recorded rather
+# than by feel: smoke 121 s, coremark 23 s, borrow-cost 17 s, shared-region 15 s.
+# About 3 minutes, and between them they cover "a benchmark still compiles and
+# runs", "a domain boots and does capability operations" and "shared memory still
+# works" -- which is what a codegen change breaks. Pre-COMMIT gate, never pre-push.
+QUICK_NAMES="smoke,coremark,borrow-cost,shared-region"
+
 DO_CLEAN=0 SKIP_BUILD=0 EXTENDED=0 ONLY="" TIMEOUT=1800
 JOBS=${JOBS:-$(( $(nproc) * 7 / 10 ))}; [ "$JOBS" -lt 1 ] && JOBS=1
 
@@ -79,6 +133,7 @@ while [ $# -gt 0 ]; do
     --skip-build) SKIP_BUILD=1 ;;
     --extended) EXTENDED=1 ;;
     --only) ONLY="$2"; shift ;;
+    --quick) ONLY="$QUICK_NAMES" ;;
     --list) print_list; exit 0 ;;
     --timeout) TIMEOUT="$2"; shift ;;
     -j) JOBS="$2"; shift ;;
@@ -90,6 +145,16 @@ done
 
 SUITES=("${CORE_SUITES[@]}")
 [ "$EXTENDED" -eq 1 ] && SUITES+=("${EXTENDED_SUITES[@]}")
+
+# CAPSTONE_ONLY narrows the cases INSIDE a suite. That is for iterating on one
+# suite by hand; the nightly is the full run by definition, so inheriting it from
+# the environment would silently shrink the gate -- while every suite whose cases
+# do not match the pattern exited 2 and filled the report with noise.
+if [ -n "${CAPSTONE_ONLY:-}" ]; then
+  echo "run-nightly.sh: ignoring CAPSTONE_ONLY=$CAPSTONE_ONLY (the nightly runs every case;" >&2
+  echo "  use --only to pick suites, or run one suite directly to pick cases)" >&2
+  unset CAPSTONE_ONLY
+fi
 
 # ---- output dir + report ------------------------------------------------------
 TS=$(date +%Y%m%d_%H%M%S)
@@ -168,8 +233,13 @@ run_one() { # $1=name  $2=command  $3=timeout(optional, default $TIMEOUT)
   rc=$?
   dur=$(( SECONDS - start ))
   DURATION[$name]=$dur
+  # 75 is the shared infra-flake code: a guest that never reached login, which
+  # says nothing about the compiler. It still fails the run -- an incomplete
+  # suite is not a passing one -- but it must not read as a capability
+  # regression, because that is the one thing this report exists to spot.
   if [ $rc -eq 0 ]; then RESULT[$name]=PASS
   elif [ $rc -eq 124 ]; then RESULT[$name]=TIMEOUT; OVERALL_OK=0
+  elif [ $rc -eq 75 ]; then RESULT[$name]=FLAKE; OVERALL_OK=0
   else RESULT[$name]="FAIL($rc)"; OVERALL_OK=0
   fi
   log "        -> ${RESULT[$name]} (${dur}s)"

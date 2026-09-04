@@ -229,6 +229,10 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
     return FixedVectorType::get(IntegerType::get(Context, 8), 1);
   case MVT::x86amx:  return Type::getX86_AMXTy(Context);
   case MVT::i64x8:   return IntegerType::get(Context, 512);
+  // Same shape as the fat pointer below it. There is no capability type in IR,
+  // and every caller here wants a Type* of the right SIZE (alloca, argument
+  // lowering, stack slots), not the semantics.
+  case MVT::c128:    return IntegerType::get(Context, 128);
   case MVT::amdgpuBufferFatPointer:  return IntegerType::get(Context, 160);
   case MVT::amdgpuBufferStridedPointer:  return IntegerType::get(Context, 192);
   case MVT::externref: return Type::getWasm_ExternrefTy(Context);

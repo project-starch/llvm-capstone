@@ -164,8 +164,11 @@ bool CapstoneLdcRetry::instrument(MachineInstr &MI) {
   RetryMBB->addSuccessor(SkipMBB);
 
   // head: ask the type, and skip the retry unless it is NOT_CAP.
-  Register TypeReg = MRI.createVirtualRegister(RC);
-  Register DiffReg = MRI.createVirtualRegister(RC);
+  // LCC reads a capability FIELD into an integer register, and the compare that
+  // follows is integer arithmetic. Only the reloaded value is a capability.
+  const TargetRegisterClass *IntRC = &Capstone::GPRRegClass;
+  Register TypeReg = MRI.createVirtualRegister(IntRC);
+  Register DiffReg = MRI.createVirtualRegister(IntRC);
   BuildMI(HeadMBB, DL, TII.get(Capstone::LCC), TypeReg)
       .addReg(OrigDef)
       .addImm(LccFieldType);

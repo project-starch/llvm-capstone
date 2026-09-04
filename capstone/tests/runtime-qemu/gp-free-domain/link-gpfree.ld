@@ -68,6 +68,37 @@ SECTIONS {
     *(.data .data.*)
   } :domain
 
+  /* THE INIT AND FINI ARRAYS, defined so their MARKERS EXIST. Carried over from
+     my_first_domain/link.ld, where the full reasoning lives; the short version is
+     that musl's exit path walks the fini array, and undefined weak markers resolve
+     to ADDRESS ZERO. Forming address zero against the image capability lands
+     0x10000 below its base, subobject bounds shrink that to a function pointer,
+     and the result is a SHRINK whose range is outside what it shrinks -- an
+     `Illegal operand value (29)`. Any domain that calls exit() has that hole, and
+     mruby's test suite reaches it through an unimplemented symlink().
+
+     NEEDED HERE SEPARATELY: this script is not derived from link.ld at build time,
+     it is a sibling copy, so a fix there does not arrive here. libc-capstone.a has
+     weak undefined references to all four markers, so a musl domain linked with
+     this script and no such definitions gets exactly the failure above.
+
+     Placed inside the globals template, in the same position link.ld uses. Both
+     arrays are empty across every object and archive member checked, so this adds
+     symbols and no bytes and the template length does not change -- which is
+     verified rather than assumed, because an orphan landing inside this range
+     would shift every global's offset into the monitor-copied blob. */
+  .init_array : ALIGN(16) {
+    __init_array_start = .;
+    KEEP(*(.init_array))
+    __init_array_end = .;
+  } :domain
+
+  .fini_array : ALIGN(16) {
+    __fini_array_start = .;
+    KEEP(*(.fini_array))
+    __fini_array_end = .;
+  } :domain
+
   .capstone_cap_init : ALIGN(8) {
     __capstone_cap_init_start = .;
     KEEP(*(.capstone_cap_init))

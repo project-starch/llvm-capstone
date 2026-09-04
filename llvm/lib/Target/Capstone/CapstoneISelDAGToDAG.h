@@ -178,6 +178,7 @@ public:
   void selectLGA(SDNode *Node);
 
   // Intrinsics
+  void selectLCCField(SDNode *Node, unsigned Field);
   void selectShrink(SDNode *Node);
   void selectSCC(SDNode *Node);
   void selectInit(SDNode *Node);

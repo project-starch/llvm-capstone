@@ -1,3 +1,5 @@
+import subprocess
+import os
 #!/usr/bin/env python3
 """Does a NOP-patched variant still BEHAVE like the base, under QEMU?
 
@@ -22,7 +24,9 @@ variant behaved differently" are different claims and only one is about the vari
 """
 import argparse, hashlib, os, shutil, subprocess, sys, tempfile
 
-ROOT = "/home/alexey/dev/llvm-capstone"
+ROOT = os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
 SMOKE = f"{ROOT}/capstone/tests/runtime-qemu/run-domain-smoke.py"
 HOST = "/tmp/capstone/sqlite-slt2/sqlite_host.user"
 TEST = f"{ROOT}/capstone/benchmarks/sqlite/slt/dd2_join.test"

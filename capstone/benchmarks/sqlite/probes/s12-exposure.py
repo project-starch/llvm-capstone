@@ -37,7 +37,9 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = "/home/alexey/dev/llvm-capstone"
+ROOT = os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
 QEMU = f"{ROOT}/capstone/capstone-qemu/build/qemu-system-riscv64"
 SMOKE = f"{ROOT}/capstone/tests/runtime-qemu/run-domain-smoke.py"
 # The FAULTING instruction's encoding, as QEMU prints it: one word, big-endian text, no spaces.

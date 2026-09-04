@@ -29,9 +29,11 @@
 
 using namespace llvm;
 
+// Was a list of the three frame registers. It is a class question now: sp, fp
+// and the base pointer are capability registers, and so is anything else the
+// frame code is handed that lives in GPCR.
 static bool isCapabilityFrameReg(Register Reg) {
-  return Reg == Capstone::X2 || Reg == Capstone::X8 ||
-         Reg == CapstoneABI::getBPReg();
+  return Capstone::GPCRRegClass.contains(Reg);
 }
 
 static cl::opt<bool> DisableCostPerUse("capstone-disable-cost-per-use",
@@ -594,7 +596,18 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     if (MI.getOpcode() == Capstone::ADDI)
       DestReg = MI.getOperand(0).getReg();
     else
-      DestReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
+      // The scratch must be in the class adjustReg will WRITE. It decides by
+      // asking whether the frame register is a capability, and if it is, emits
+      // CIncOffset/CIncOffsetImm/MOVC, all of which define a GPCR. Creating it
+      // in GPR regardless produced `$x12 = CIncOffset $c8, $x12` followed by
+      // `$c12 = CIncOffsetImm $x12, 1808` -- a cincoffset writing the address
+      // half, which clears the tag, and then a cincoffsetimm on the untagged
+      // result, which faults with UNEXP_OP_TYPE. Found by running
+      // -verify-machineinstrs over musl; no test covered the gp-captable ABI
+      // and the verifier together.
+      DestReg = MRI.createVirtualRegister(isCapabilityFrameReg(FrameReg)
+                                              ? &Capstone::GPCRRegClass
+                                              : &Capstone::GPRRegClass);
     adjustReg(*II->getParent(), II, DL, DestReg, FrameReg, Offset,
               MachineInstr::NoFlags, std::nullopt);
     MI.getOperand(FIOperandNum).ChangeToRegister(DestReg, /*IsDef*/false,
@@ -699,7 +712,7 @@ bool CapstoneRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
     }
 
     int64_t MaxFPOffset = Offset - CalleeSavedSize;
-    return !isFrameOffsetLegal(MI, Capstone::X8, MaxFPOffset);
+    return !isFrameOffsetLegal(MI, Capstone::C8, MaxFPOffset);
   }
 
   // Assume 128 bytes spill slots size to estimate the maximum possible
@@ -708,7 +721,7 @@ bool CapstoneRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
   // real one for Capstone.
   int64_t MaxSPOffset = Offset + 128;
   MaxSPOffset += MFI.getLocalFrameSize();
-  return !isFrameOffsetLegal(MI, Capstone::X2, MaxSPOffset);
+  return !isFrameOffsetLegal(MI, Capstone::C2, MaxSPOffset);
 }
 
 // Determine whether a given base register plus offset immediate is
@@ -780,7 +793,7 @@ int64_t CapstoneRegisterInfo::getFrameIndexInstrOffset(const MachineInstr *MI,
 
 Register CapstoneRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? Capstone::X8 : Capstone::X2;
+  return TFI->hasFP(MF) ? Capstone::C8 : Capstone::C2;
 }
 
 StringRef CapstoneRegisterInfo::getRegAsmName(MCRegister Reg) const {

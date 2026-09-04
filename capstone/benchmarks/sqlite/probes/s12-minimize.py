@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Minimise S-12 by removing INSTRUCTIONS from the real faulting binary.
 
@@ -39,7 +40,9 @@ import re
 import subprocess
 import sys
 
-OBJDUMP = "/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-objdump"
+OBJDUMP = (os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()) + "/llvm/cmake-build-debug/bin/llvm-objdump"
 TRIPLE = "capstone64-unknown-elf"
 FUNC = "sqlite3WhereCodeOneLoopStart"
 NOP = bytes.fromhex("13000000")          # addi x0, x0, 0, little-endian

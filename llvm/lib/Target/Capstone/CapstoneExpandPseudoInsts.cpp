@@ -329,7 +329,7 @@ bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
   unsigned BaseOpc =
       capstoneGpFreeAbiActive() ? Capstone::SCC : Capstone::CIncOffset;
   BuildMI(MBB, MBBI, DL, TII->get(BaseOpc), DstReg)
-      .addReg(Capstone::X3)
+      .addReg(Capstone::C3)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()));
   // DELIN is tied: $rd = $cap_in, both are DstReg.
   BuildMI(MBB, MBBI, DL, TII->get(Capstone::DELIN), DstReg).addReg(DstReg);

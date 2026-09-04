@@ -46,33 +46,8 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 sed \
   -e '/^#define SQLITE_TRANSIENT[[:space:]]/c\
 static void sqlite3CapstoneTransient(void *p) { (void)p; }\
-#define SQLITE_TRANSIENT sqlite3CapstoneTransient\
-static const char *sqlite3CapstoneViewOrTable(int isView) {\
-  if( isView ) return "view";\
-  return "table";\
-}\
-static const char *sqlite3CapstoneBeforeOrAfter(int isBefore) {\
-  if( isBefore ) return "BEFORE";\
-  return "AFTER";\
-}\
-static const char *sqlite3CapstoneDeleteOrUpdate(int isDelete) {\
-  if( isDelete ) return "DELETE";\
-  return "UPDATE";\
-}\
-static const char *sqlite3CapstoneSpaceOrEmpty(int needsSpace) {\
-  if( needsSpace ) return " ";\
-  return "";\
-}' \
+#define SQLITE_TRANSIENT sqlite3CapstoneTransient' \
   -e 's/sqlite3Atoi64(z, pResult, strlen(z), SQLITE_UTF8)/sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)/' \
-  -e 's/isView?"view":"table"/sqlite3CapstoneViewOrTable(isView)/' \
-  -e 's/(IsView(pTable)? "view" : "table")/sqlite3CapstoneViewOrTable(IsView(pTable))/' \
-  -e 's/(tr_tm == TK_BEFORE)?"BEFORE":"AFTER"/sqlite3CapstoneBeforeOrAfter(tr_tm == TK_BEFORE)/' \
-  -e 's/op==TK_DELETE ? "DELETE" : "UPDATE"/sqlite3CapstoneDeleteOrUpdate(op==TK_DELETE)/' \
-  -e '/pBest->t.z\[pBest->t.n\].*? " " : ""/c\
-            sqlite3CapstoneSpaceOrEmpty(pBest->t.z[pBest->t.n]==39)' \
-  -e 's/SQLITE_INT_TO_PTR(iArg)/0/g' \
-  -e 's/SQLITE_INT_TO_PTR(arg)/0/g' \
-  -e 's/^  static FuncDef aBuiltinFunc\[\] = {$/  FuncDef capstoneBuiltinFunc[] = {/' \
   -e '/^SQLITE_PRIVATE const sqlite3_mem_methods \*sqlite3MemGetMemsys5(void){$/,/^}$/c\
 SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
   static sqlite3_mem_methods memsys5Methods;\
@@ -90,59 +65,18 @@ SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
   }\
   return &memsys5Methods;\
 }' \
-  -e '/^  sqlite3WindowFunctions();$/i\
-  static FuncDef aBuiltinFunc[ArraySize(capstoneBuiltinFunc)];\
-  for(int capstoneI=0; capstoneI<ArraySize(capstoneBuiltinFunc); capstoneI++){\
-    aBuiltinFunc[capstoneI] = capstoneBuiltinFunc[capstoneI];\
-  }\
-  for(int capstoneI=0; capstoneI<ArraySize(aBuiltinFunc); capstoneI++){\
-    int capstoneArg = 0;\
-    const char *capstoneName = aBuiltinFunc[capstoneI].zName;\
-    if( strcmp(capstoneName, "ltrim")==0 ) capstoneArg = 1;\
-    else if( strcmp(capstoneName, "rtrim")==0 ) capstoneArg = 2;\
-    else if( strcmp(capstoneName, "trim")==0 ) capstoneArg = 3;\
-    else if( strcmp(capstoneName, "max")==0 ) capstoneArg = 1;\
-    else if( strcmp(capstoneName, "unistr_quote")==0 ) capstoneArg = 1;\
-    else if( strcmp(capstoneName, "unlikely")==0 ) capstoneArg = 99;\
-    else if( strcmp(capstoneName, "likelihood")==0 ) capstoneArg = 99;\
-    else if( strcmp(capstoneName, "likely")==0 ) capstoneArg = 99;\
-    else if( strcmp(capstoneName, "iif")==0 ) capstoneArg = 5;\
-    else if( strcmp(capstoneName, "if")==0 ) capstoneArg = 5;\
-    if( capstoneArg ) aBuiltinFunc[capstoneI].pUserData = SQLITE_INT_TO_PTR(capstoneArg);\
-  }' \
-  -e 's/const char \*zDbTrig = isTemp ? db->aDb\[1\].zDbSName : zDb;/const char *zDbTrig; if( isTemp ) zDbTrig = db->aDb[1].zDbSName; else zDbTrig = zDb;/' \
-  -e 's/bufpt = flag_zeropad ? "null" : "NaN";/if( flag_zeropad ) bufpt = "null"; else bufpt = "NaN";/' \
-  -e 's/escarg = (xtype==etESCAPE_Q ? "NULL" : "(NULL)");/if( xtype==etESCAPE_Q ) escarg = "NULL"; else escarg = "(NULL)";/' \
   -e 's/#if GCC_VERSION>=4007000 || __has_extension(c_atomic)/#if SQLITE_THREADSAFE \&\& (GCC_VERSION>=4007000 || __has_extension(c_atomic))/' \
   -e '0,/^#define YYDYNSTACK 1$/s//#define YYDYNSTACK 0/' \
-  -e 's/sqlite3VdbeMemSetNull(pMem-(u<p->nField));/if( u<p->nField ) sqlite3VdbeMemSetNull(pMem-1); else sqlite3VdbeMemSetNull(pMem);/' \
-  -e 's/(int)(pReadr1 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr1) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
-  -e 's/(int)(pReadr2 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr2) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
   -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
   -e 's/  nByte = SZ_VDBECURSOR(nField);/  nByte = (SZ_VDBECURSOR(nField)+15)\&~15;/' \
   -e 's/&pMem->z\[SZ_VDBECURSOR(nField)\]/\&pMem->z[(SZ_VDBECURSOR(nField)+15)\&~15]/' \
   "$SQLITE_SRC_DIR/sqlite3.c" > "$PATCHED_SQLITE"
 
 grep -q '^#define SQLITE_TRANSIENT sqlite3CapstoneTransient$' "$PATCHED_SQLITE"
-grep -q 'sqlite3CapstoneViewOrTable(IsView(pTable))' "$PATCHED_SQLITE"
-grep -q 'sqlite3CapstoneViewOrTable(isView)' "$PATCHED_SQLITE"
-grep -q 'sqlite3CapstoneBeforeOrAfter(tr_tm == TK_BEFORE)' "$PATCHED_SQLITE"
-grep -q 'sqlite3CapstoneDeleteOrUpdate(op==TK_DELETE)' "$PATCHED_SQLITE"
-grep -q 'sqlite3CapstoneSpaceOrEmpty(pBest->t.z\[pBest->t.n\]' "$PATCHED_SQLITE"
-grep -q 'aBuiltinFunc\[capstoneI\].pUserData = SQLITE_INT_TO_PTR(capstoneArg)' "$PATCHED_SQLITE"
-grep -q 'aBuiltinFunc\[capstoneI\] = capstoneBuiltinFunc\[capstoneI\]' "$PATCHED_SQLITE"
 grep -q 'memsys5Methods.xInit = memsys5Init' "$PATCHED_SQLITE"
-! grep -q 'SQLITE_INT_TO_PTR(iArg)' "$PATCHED_SQLITE"
-! grep -q 'SQLITE_INT_TO_PTR(arg)' "$PATCHED_SQLITE"
-grep -q 'const char \*zDbTrig; if( isTemp )' "$PATCHED_SQLITE"
 grep -q 'sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)' "$PATCHED_SQLITE"
-grep -q 'if( flag_zeropad ) bufpt = "null"; else bufpt = "NaN";' "$PATCHED_SQLITE"
-grep -q 'if( xtype==etESCAPE_Q ) escarg = "NULL"; else escarg = "(NULL)";' "$PATCHED_SQLITE"
 grep -q '#if SQLITE_THREADSAFE && (GCC_VERSION>=4007000 || __has_extension(c_atomic))' "$PATCHED_SQLITE"
 grep -q '^#define YYDYNSTACK 0$' "$PATCHED_SQLITE"
-grep -q 'if( u<p->nField ) sqlite3VdbeMemSetNull(pMem-1); else sqlite3VdbeMemSetNull(pMem);' "$PATCHED_SQLITE"
-grep -q '__builtin_capstone_cap_get_cursor(pReadr1)' "$PATCHED_SQLITE"
-grep -q '__builtin_capstone_cap_get_cursor(pReadr2)' "$PATCHED_SQLITE"
 # gap 6: sqlite3NestedParse saves the cap-bearing Parse tail through this buffer;
 # 16-align it so memcpy's tag-preserving ldc/stc fast path applies (no byte copy).
 grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_SQLITE"
@@ -234,6 +168,27 @@ for builtin in adddf3 comparedf2 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
   BUILTIN_OBJECTS+=("$object")
 done
 
+# THE DOMAIN DECLARES WHAT IT NEEDS, because at 3.3 MB it no longer fits the rule
+# that applies when it does not. Without .capstone_domreq the module sizes headroom
+# as max(2 * code_len, 512 KiB), asks the buddy allocator for over 10 MB in one
+# block, and the DOM_CREATE ioctl fails before a single instruction runs:
+#
+#   Loadable size = 3336736
+#   SQ: obs=18446744073709551615     <- create_dom returned -1
+#   create_dom failed
+#
+# domreq.S's own header names this exact case ("that 3x-on-the-image rule is what
+# pushed an interpreter image past the buddy allocator's maximum order").
+#
+# SQLite's heap is the in-image sqlite_heap[] array driving memsys5, NOT dom_data,
+# so the declared requirement is essentially the stack. SQLite recurses in the
+# parser and the VDBE, and at -O0 with 16-byte pointers a frame is about twice its
+# size on an ordinary target.
+SQLITE_DOMAIN_STACK=${SQLITE_DOMAIN_STACK:-$((1024 * 1024))}
+SQLITE_DOMAIN_DATA=${SQLITE_DOMAIN_DATA:-$SQLITE_DOMAIN_STACK}
+
+_segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|VirtualAddress|FileSize|MemSize'; }
+
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OBJ_DIR/start.o" \
   "$OBJ_DIR/sqlite3.o" \
@@ -243,6 +198,32 @@ done
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
   "${BUILTIN_OBJECTS[@]}"
+_before=$(_segs)
+
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -DCAPSTONE_DOMREQ_DATA=$SQLITE_DOMAIN_DATA \
+  -DCAPSTONE_DOMREQ_STACK=$SQLITE_DOMAIN_STACK \
+  -c "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
+
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+  "$OBJ_DIR/start.o" \
+  "$OBJ_DIR/sqlite3.o" \
+  "$OBJ_DIR/libc.o" \
+  "$OBJ_DIR/beebs_string.o" \
+  "$OBJ_DIR/sqlite_vfs.o" \
+  "$OBJ_DIR/sqlite_os.o" \
+  "$OBJ_DIR/domain.o" \
+  "${BUILTIN_OBJECTS[@]}" \
+  "$OBJ_DIR/domreq.o"
+
+# The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified, not asserted:
+# four added instructions have flipped a passing run on this project before, and an
+# image-perturbing diagnostic is how that was found.
+if [[ "$(_segs)" != "$_before" ]]; then
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
+  exit 2
+fi
+echo "declared dom_data $SQLITE_DOMAIN_DATA (stack $SQLITE_DOMAIN_STACK)"
 
 "$LLVM_READOBJ" -h "$OUT_DOM" >/dev/null
 echo "Built $OUT_DOM"

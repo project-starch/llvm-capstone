@@ -47,10 +47,14 @@ entry:
 ; CHECK-NOT: cjalr	zero, 0(ra)
 
 ; MIR-LABEL: name:            test_cap_call
-; MIR: renamable $x10 = CAP_CALL killed renamable $x10, csr_ilp32_lp64
+; The capability register form: $c10 IS $x10, seen at capability width.
+; MIR: renamable $c10 = CAP_CALL killed renamable $c10, csr_ilp32_lp64
 
 ; MIR-LABEL: name:            test_cap_enter
-; MIR: renamable $x10 = CAPENTER killed renamable $x10, csr_ilp32_lp64
-; MIR: renamable $x10 = PseudoTRUNC_CAP killed renamable $x10
+; MIR: renamable $c10 = CAPENTER killed renamable $c10, csr_ilp32_lp64
+; Reading the returned address needs no instruction at all: $x10 IS the low half
+; of $c10, so the truncate is a subregister reference that coalesces away.
+; MIR-NEXT: renamable $x10 = KILL renamable $x10, implicit killed $c10
+; MIR-NEXT: PseudoRET implicit killed $x10
 
 

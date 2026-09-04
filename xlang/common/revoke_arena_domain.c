@@ -31,6 +31,31 @@ void xlang_set_no_revoke(void) { rof_no_revoke = 1; }
  * reclaims arena bytes, so this is the total footprint); peak_slots = high-water of
  * concurrently-live allocations (freed slots are reused, so rof_nslots only grows to
  * the max simultaneous live count -> the working-set proxy); live_* = state at call. */
+/* FREES SEEN BY THE ALLOCATOR, which is not the same as objects mruby frees.
+ * mruby carves objects out of GC heap PAGES and only calls free() when a page
+ * falls entirely empty, so a use-after-free INSIDE a page never reaches the
+ * revoking allocator at all and revocation cannot see it. Corpus row 14 is that
+ * question: its defect reproduces under ASan (which does see intra-page reuse)
+ * and neither rof arm faults. These counters answer "did anything get freed at
+ * all, and was any of it page-sized" in one run instead of by argument. */
+static unsigned long xlang_free_calls;
+static unsigned long xlang_free_big;     /* >= 1024 bytes, i.e. plausibly a GC page */
+static unsigned long xlang_free_bytes;
+
+unsigned long xlang_mem_free_calls(void) { return xlang_free_calls; }
+unsigned long xlang_mem_free_big(void)   { return xlang_free_big; }
+unsigned long xlang_mem_free_bytes(void) { return xlang_free_bytes; }
+
+static void xlang_count_free(void *p) {
+  if (!p)
+    return;
+  unsigned long n = rof_size(p);
+  xlang_free_calls += 1;
+  xlang_free_bytes += n;
+  if (n >= 1024)
+    xlang_free_big += 1;
+}
+
 unsigned long xlang_mem_carved(void) { return rof_carved_total; }
 unsigned long xlang_mem_live_bytes(void) { return rof_live_bytes; }
 unsigned xlang_mem_live_count(void) { return rof_live_count; }
@@ -41,6 +66,7 @@ unsigned xlang_mem_peak_slots(void) { return rof_nslots; }
  * offset-0 load — the route that yields a clean cause-25 fault. */
 void *xlang_probe_alloc_and_revoke(void) {
   void *p = rof_malloc(64);
+  xlang_count_free(p);
   rof_free(p); /* revokes */
   return p;    /* now-untagged alias */
 }
@@ -50,7 +76,7 @@ void *xlang_probe_alloc_and_revoke(void) {
  * were plain allocations every row would run clean and report MISS while
  * measuring nothing. */
 void *malloc(size_t n) { return rof_malloc((unsigned long)n); }
-void  free(void *p) { rof_free(p); }
+void  free(void *p) { xlang_count_free(p); rof_free(p); }
 
 /* Tag-preserving realloc — REQUIRED for Lua (and any real engine that stores
  * capabilities inside GC objects it later grows). This is the SOLE TU allowed to
@@ -70,6 +96,7 @@ void  free(void *p) { rof_free(p); }
  * rof_free(old) fires the REVOKE — that is what makes stale aliases stop working. */
 void *realloc(void *p, size_t size) {
   if (size == 0) {
+    xlang_count_free(p);
     rof_free(p);
     return (void *)0;
   }
@@ -81,6 +108,7 @@ void *realloc(void *p, size_t size) {
     unsigned long newsz = rof_size(np);         /* 16-multiple = roundup(size) */
     unsigned long n = oldsz < newsz ? oldsz : newsz;
     rof_copy_caps(np, p, n);                     /* TAG-PRESERVING (ldc/stc words) */
+    xlang_count_free(p);
     rof_free(p);                                 /* the REVOKE of the old node */
   }
   return np;

@@ -395,8 +395,8 @@ static SDValue selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
   return selectImmSeq(CurDAG, DL, VT, Seq);
 }
 
-// The i128 carrier holds a 64-bit numeric value, and it arrives in two
-// spellings that name the same register contents. A signed quantity comes
+// A wide constant used as an ADDRESS holds a 64-bit numeric value, and it
+// arrives in two spellings that name the same register contents. A signed quantity comes
 // sign-extended, as `inttoptr i128 -1`. The SAME value written through C as a
 // cast of a negative or unsigned integer to a capability-width pointer comes
 // ZERO-extended instead, as `inttoptr i128 18446744073709551615`, because the
@@ -1259,6 +1259,11 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
                                                 SDValue Base, int64_t Imm,
                                                 const CapstoneSubtarget *Subtarget);
 
+// A value that lives in a capability register. c128 is the capability VT;
+// i128 is still listed only because __int128 shares GPR -- drop-i128 removes
+// the second half of every one of these tests.
+static bool isCapabilityVT(EVT VT) { return VT == MVT::c128; }
+
 bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
   assert((Opcode == ISD::LOAD) || (Opcode == ISD::STORE));
@@ -1271,7 +1276,7 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
 
   if (Opcode == ISD::LOAD) {
     // 1. Load Capability (i128 -> i128)
-    if (MemVT == MVT::i128 && ResultVT == MVT::i128)
+    if (isCapabilityVT(MemVT) && MemVT == ResultVT)
       MachineOpcode = Capstone::LDC;
       // 2. Load i64 value with extension to i128 (i64 -> i128)
       // This is needed for casts (long -> void*) and working with long.
@@ -1281,16 +1286,15 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
       MachineOpcode = Capstone::LD;
   } else if (Opcode == ISD::STORE) {
     // 1. Store Capability
-    if (MemVT == MVT::i128)
+    if (isCapabilityVT(MemVT))
       MachineOpcode = Capstone::STC;
       // 2. Store i64 value (from 128-bit register)
       // For example: *(long*)ptr = (long)ptr_val;
     else if (MemVT == MVT::i64)
       MachineOpcode = Capstone::SD;
-      // 3. Store narrower integer values carried in a 128-bit capability register.
-      // This arises when a pointer-difference result (i64 in an i128 carrier via
-      // any_extend) is stored into an int/short/char field through a capability
-      // pointer.  SW/SH/SB store the low 32/16/8 bits of the source register.
+      // 3. Store narrower integer values through a capability pointer, e.g. a
+      // pointer-difference result stored into an int/short/char field.
+      // SW/SH/SB store the low 32/16/8 bits of the source register.
     else if (MemVT == MVT::i32)
       MachineOpcode = Capstone::SW;
     else if (MemVT == MVT::i16)
@@ -1338,8 +1342,8 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
                                               FIN->getIndex());
     }
     // Emit: CIncOffset(base, TotalOff), then ldc/stc rd, 0(adjusted).
-    BasePtr = materializeAddrBaseWithImmediate(CurDAG, DL, MVT::i128,
-                                               BasePtr, TotalOff, Subtarget);
+    BasePtr = materializeAddrBaseWithImmediate(
+        CurDAG, DL, BasePtr.getSimpleValueType(), BasePtr, TotalOff, Subtarget);
     Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
     return true;
   };
@@ -1374,7 +1378,7 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   if (Opcode == ISD::LOAD) {
     // Use MachineOpcode that we selected above (LDC or LD)
     SDNode *Res = CurDAG->getMachineNode(
-        MachineOpcode, DL, CurDAG->getVTList(MVT::i128, MVT::Other),
+        MachineOpcode, DL, CurDAG->getVTList(ResultVT, MVT::Other),
         {BasePtr, Offset, Chain});
 
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(Res),
@@ -1403,15 +1407,12 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   MVT XLenVT = Subtarget->getXLenVT();
 
   // cscincoffset requires the tagged capability in the base position. ISD::ADD
-  // is commutative, so `int + ptr` can reach here with the integer in operand(0)
-  // (e.g. a spilled integer arriving as CopyFromReg i128 facing a real
-  // capability). CapstoneTargetLowering applies this same canonicalization to
-  // add nodes that are custom-lowered; adds that reach instruction selection
-  // directly (this path and the CapstoneISD::CIncOffset case) need it here too.
-  // Use the shared operand-role predicates so both sites agree. A FrameIndex
-  // offset is left alone — it has its own base-materialization path.
-  if (((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
-       (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base))) &&
+  // is commutative, so `int + ptr` can reach here the other way round. Which
+  // operand is the capability is now a question about TYPES -- it is the c128
+  // one -- where it used to be answered by asking which operand looked like an
+  // offset. A FrameIndex offset is left alone; it has its own base
+  // materialisation path.
+  if (Base.getValueType() != MVT::c128 && Offset.getValueType() == MVT::c128 &&
       !isa<FrameIndexSDNode>(Offset))
     std::swap(Base, Offset);
   auto materializeXLenAndMask = [&](SDValue LHS, const APInt &Mask) -> SDValue {
@@ -1561,7 +1562,7 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
 void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Symbol = Node->getOperand(0); // This is our TargetGlobalAddress (i64)
-  MVT PtrVT = MVT::i128;
+  MVT PtrVT = MVT::c128;
 
   // gp-captable: a CODE address must never be derived from gp.
   //
@@ -1602,7 +1603,7 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   // We need: Ptr = GP + SymbolAddress
 
   // 1. Get GP (c3)
-  SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+  SDValue GP = CurDAG->getRegister(Capstone::C3, PtrVT);
 
   // 2. Materialize the Symbol Address into a register.
   // We use the PseudoLLA pseudo-instruction (Load Local Address).
@@ -1683,6 +1684,16 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   ReplaceNode(Node, Final);
 }
 
+// LCC reads one field of a capability into an integer register. Field numbers
+// are Table 8 of the spec: 0 valid, 1 type, 2 cursor, 3 base, 4 end, 5 perms.
+void CapstoneDAGToDAGISel::selectLCCField(SDNode *Node, unsigned Field) {
+  SDLoc DL(Node);
+  MVT XLenVT = Subtarget->getXLenVT();
+  ReplaceNode(Node, CurDAG->getMachineNode(
+                        Capstone::LCC, DL, XLenVT, Node->getOperand(1),
+                        CurDAG->getTargetConstant(Field, DL, XLenVT)));
+}
+
 void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Cap = Node->getOperand(1);
@@ -1693,7 +1704,7 @@ void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
   //    (outs GPR:$rd), (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2)
   // We manually create the MachineNode to ensure operands are treated
   // as compatible with GPR (i128).
-  SDNode *Res = CurDAG->getMachineNode(Capstone::SHRINK, DL, MVT::i128, Cap,
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SHRINK, DL, MVT::c128, Cap,
                                        Base, End);
   ReplaceNode(Node, Res);
 }
@@ -1708,7 +1719,7 @@ void CapstoneDAGToDAGISel::selectSCC(SDNode *Node) {
 
   // SCC: rd = scc(cap, cursor)
   // (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2)
-  SDNode *Res = CurDAG->getMachineNode(Capstone::SCC, DL, MVT::i128,
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SCC, DL, MVT::c128,
                                        Cap, Cursor);
   ReplaceNode(Node, Res);
 }
@@ -1720,7 +1731,7 @@ void CapstoneDAGToDAGISel::selectInit(SDNode *Node) {
 
   // INIT: rd = init(cap, val)
   // (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2)
-  SDNode *Res = CurDAG->getMachineNode(Capstone::INIT, DL, MVT::i128,
+  SDNode *Res = CurDAG->getMachineNode(Capstone::INIT, DL, MVT::c128,
                                        Cap, Val);
   ReplaceNode(Node, Res);
 }
@@ -1736,7 +1747,7 @@ void CapstoneDAGToDAGISel::selectDelin(SDNode *Node) {
   // It clears the `linear` flag on the revocation-tree node, so it carries a
   // chain to keep it from being reordered or eliminated.
   SDNode *Res = CurDAG->getMachineNode(Capstone::DELIN, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
@@ -1760,7 +1771,7 @@ void CapstoneDAGToDAGISel::selectTighten(SDNode *Node) {
     report_fatal_error("Capstone TIGHTEN immediate must be in range 0-31!");
 
   SDValue TImm = CurDAG->getTargetConstant(ImmVal, DL, MVT::i64);
-  SDNode *Res = CurDAG->getMachineNode(Capstone::TIGHTEN, DL, MVT::i128, Cap,
+  SDNode *Res = CurDAG->getMachineNode(Capstone::TIGHTEN, DL, MVT::c128, Cap,
                                        TImm);
   ReplaceNode(Node, Res);
 }
@@ -1775,7 +1786,7 @@ void CapstoneDAGToDAGISel::selectMrev(SDNode *Node) {
   // MREV is distinct. The chain keeps two MREVs of the same capability from
   // being CSE'd into one, and an unused MREV from being eliminated.
   SDNode *Res = CurDAG->getMachineNode(Capstone::MREV, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Revocation capability
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
@@ -1785,7 +1796,7 @@ void CapstoneDAGToDAGISel::selectMrev(SDNode *Node) {
 void CapstoneDAGToDAGISel::selectSeal(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Cap = Node->getOperand(1);
-  SDNode *Res = CurDAG->getMachineNode(Capstone::SEAL, DL, MVT::i128, Cap);
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SEAL, DL, MVT::c128, Cap);
   ReplaceNode(Node, Res);
 }
 
@@ -1799,7 +1810,7 @@ void CapstoneDAGToDAGISel::selectDrop(SDNode *Node) {
   // still needs the input chain so that the instruction is not reordered or
   // eliminated by the scheduler.
   SDNode *Res = CurDAG->getMachineNode(Capstone::DROP, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
@@ -1814,7 +1825,7 @@ void CapstoneDAGToDAGISel::selectRevoke(SDNode *Node) {
   // REVOKE is an in-place instruction ($rd tied to $cap_in) with
   // massive global side-effects (memory-wide capability invalidation).
   SDNode *Res = CurDAG->getMachineNode(Capstone::REVOKE, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
@@ -1835,7 +1846,7 @@ void CapstoneDAGToDAGISel::selectCapCall(SDNode *Node) {
   SDValue RegMask = CurDAG->getRegisterMask(Mask);
 
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_CALL, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, RegMask, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
@@ -1853,13 +1864,13 @@ void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
   SDValue RegMask = CurDAG->getRegisterMask(Mask);
 
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAPENTER, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {Cap, RegMask, Chain});
 
-  SDNode *Trunc = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
-                                         MVT::i64, SDValue(Res, 0));
+  SDValue Trunc = CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
+                                                 MVT::i64, SDValue(Res, 0));
 
-  ReplaceUses(SDValue(Node, 0), SDValue(Trunc, 0));
+  ReplaceUses(SDValue(Node, 0), Trunc);
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
   CurDAG->RemoveDeadNode(Node);
 }
@@ -1910,7 +1921,7 @@ void CapstoneDAGToDAGISel::selectCCSRRW(SDNode *Node) {
 
   // Порядок {TImm, Cap} соответствует (ins csr_sysreg:$imm12, GPR:$rs1)
   SDNode *Res = CurDAG->getMachineNode(Capstone::CCSRRW, DL,
-                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       CurDAG->getVTList(MVT::c128, MVT::Other),
                                        {TImm, Cap, Chain});
 
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
@@ -1923,7 +1934,7 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Chain = Node->getOperand(0);
   SDValue Callee = Node->getOperand(1);
-  MVT PtrVT = MVT::i128;
+  MVT PtrVT = MVT::c128;
 
   // Target register that will be passed to CJALR (rs1)
   SDValue TargetReg;
@@ -1951,7 +1962,7 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
       TargetReg = SDValue(Offset, 0);
     } else {
       // 2. GP: Get the root data capability
-      SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+      SDValue GP = CurDAG->getRegister(Capstone::C3, PtrVT);
 
       // 3. CIncOffset: Create the final function pointer capability
       SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT, GP,
@@ -1969,7 +1980,9 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
 
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(TargetReg); // rs1 (Target Function Pointer)
-  Ops.push_back(Zero);      // imm12 (Offset 0)
+  // No imm12: PseudoCALLIndirect takes only $rs1, and its expansion supplies the
+  // zero displacement. Pushing one here was an extra explicit operand, hidden
+  // for as long as the pseudo carried a pattern and was therefore variadic.
 
   // Forward all remaining CALL operands (arg regs, regmask, etc.).
   // This is critical: without the RegMask, the register allocator may legally
@@ -2024,6 +2037,28 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
 
   bool HasBitTest = Subtarget->hasBEXTILike();
 
+  // A capability-width constant that needs more than 64 bits is not a value
+  // this target can express: its 128-bit register carries a 64-bit number, and
+  // a capability is unforgeable, so the extra bits are not an address either.
+  // It has to be refused HERE, before the generated matcher tries an XLen
+  // immediate pattern on it -- those predicates read the constant as an
+  // int64_t and assert inside APInt. Same defect class as the guard in
+  // tryShrinkShlLogicImm; see cap-shrink-logic-imm-wide-const.ll.
+  switch (Opcode) {
+  case ISD::ADD:
+  case ISD::SUB:
+  case ISD::OR:
+  case ISD::XOR:
+    if (isCapabilityVT(VT))
+      for (const SDValue &O : {Node->getOperand(0), Node->getOperand(1)})
+        if (auto *C = dyn_cast<ConstantSDNode>(O))
+          (void)getI128NumericValueOrFatal(
+              CurDAG, C, "Address displacement must fit in 64 bits");
+    break;
+  default:
+    break;
+  }
+
   switch (Opcode) {
   case ISD::FrameIndex: {
     auto *FIN = cast<FrameIndexSDNode>(Node);
@@ -2045,7 +2080,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   case ISD::ADD: {
     SDValue Base = Node->getOperand(0);
     SDValue Offset = Node->getOperand(1);
-    if (VT == MVT::i128) {
+    // c128, not isCapabilityVT: an i128 ADD is integer arithmetic and must not
+    // become a cincoffset. Which operand is the pointer used to be guessed at
+    // here, and guessed wrong -- swapping base and offset, and cincoffsetting an
+    // untagged scalar, which faults on hardware.
+    if (VT == MVT::c128) {
       if (isa<ConstantSDNode>(Base) && !isa<ConstantSDNode>(Offset))
         std::swap(Base, Offset);
 
@@ -2105,11 +2144,14 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   case ISD::Constant: {
     auto *ConstNode = cast<ConstantSDNode>(Node);
 
-    // Capstone pointers/capabilities are i128
-    if (VT == MVT::i128) {
+    // Capstone pointers/capabilities live in a 128-bit register.
+    if (isCapabilityVT(VT)) {
       if (ConstNode->isZero()) {
-        SDValue New = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL,
-                                             Capstone::X0, VT);
+        // The null capability is C0, not X0: a c128-typed CopyFromReg has to
+        // name a register that is in a c128 register class.
+        SDValue New = CurDAG->getCopyFromReg(
+            CurDAG->getEntryNode(), DL,
+            VT == MVT::c128 ? Capstone::C0 : Capstone::X0, VT);
         ReplaceNode(Node, New.getNode());
         return;
       }
@@ -2479,7 +2521,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     // silently without. Same class as the guard in tryShrinkShlLogicImm, and
     // reached from MicroPython's gc_init and mp_pairheap_delete once their
     // masks were rewritten as pointer arithmetic.
-    if (VT == MVT::i128)
+    if (isCapabilityVT(VT))
       break;
 
     if (N1C) {
@@ -3253,6 +3295,27 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectTighten(Node);
     case Intrinsic::capstone_cap_seal:
       return selectSeal(Node);
+    // The five LCC field reads. These were TableGen patterns until the
+    // capability register class arrived; they cannot stay patterns, because the
+    // intrinsics take llvm_anyptr_ty and TableGen cannot reconcile iPTRAny with
+    // CLenVT ("Type set is empty for each HW mode"). Selecting them here puts
+    // them where every other capability intrinsic already is.
+    case Intrinsic::capstone_cap_get_tag:
+      return selectLCCField(Node, 0);
+    // capstone_cap_get_cursor is DELIBERATELY NOT SELECTED HERE. selectLCCField emits
+    // `lcc rd, rs, 2`, the cursor query, which is NOT TOTAL: it traps on an untagged
+    // operand, and a NULL pointer is untagged. That is C-19 -- DAGCombiner folds
+    // `if (p != 0 || q != 0)` into `(addr(p) | addr(q)) != 0`, both operands get `lcc`,
+    // and the first null argument kills the domain at entry. The cursor is read instead
+    // with a plain integer move via the PseudoTRUNC_CAP pattern in CapstoneInstrInfo.td,
+    // which gives the same value and cannot trap. The other four fields have no such
+    // problem and stay here.
+    case Intrinsic::capstone_cap_get_base:
+      return selectLCCField(Node, 3);
+    case Intrinsic::capstone_cap_get_end:
+      return selectLCCField(Node, 4);
+    case Intrinsic::capstone_cap_get_perm:
+      return selectLCCField(Node, 5);
     }
     break;
   }
@@ -3702,6 +3765,21 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   }
   case ISD::BITCAST: {
     MVT SrcVT = Node->getOperand(0).getSimpleValueType();
+    // c128 <-> i128 is a REINTERPRETATION of one register, not a conversion:
+    // inttoptr's integer, and an inline-asm "r" operand whose value the generic
+    // code bitcasts to the register class's first legal type. A plain COPY is
+    // right for both, and the coalescer removes it.
+    //
+    // It must NOT be the scalar move. That move exists to DROP a tag, and using
+    // it here silently untagged every capability passed to inline asm --
+    // CoreMark's CAPSTONE_DELIN(A) became `mv a6, a1; delin a6`, a delin on an
+    // untagged register. An integer needs no dropping: whatever produced it
+    // already cleared the tag.
+    if (isCapabilityVT(VT) && isCapabilityVT(SrcVT) && VT != SrcVT) {
+      ReplaceNode(Node, CurDAG->getMachineNode(TargetOpcode::COPY, DL, VT,
+                                               Node->getOperand(0)));
+      return;
+    }
     // Just drop bitcasts between vectors if both are fixed or both are
     // scalable.
     if ((VT.isScalableVector() && SrcVT.isScalableVector()) ||
@@ -3928,71 +4006,17 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     SDValue Src = Node->getOperand(0);
     MVT SrcVT = Src.getSimpleValueType();
 
-    // Intercept only truncation of i128 -> i64
-    if (SrcVT == MVT::i128 && VT == Subtarget->getXLenVT()) {
-      // Workaround: Explicitly select truncation from i128 to XLenVT (i64).
-      // We use a pseudo-instruction that expands to a register move (ADDI).
-      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP,
-                                           SDLoc(Node), VT, Src);
-      ReplaceNode(Node, Res);
+    // Reading the address out of a capability. X is the low half of C, so this
+    // is a subregister reference and costs nothing -- it used to be an ADDI,
+    // which is both an instruction and a write to the address half of a
+    // register whose capability may still be live.
+    if (isCapabilityVT(SrcVT) && VT == Subtarget->getXLenVT()) {
+      ReplaceNode(Node, CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr,
+                                                       SDLoc(Node), VT, Src)
+                            .getNode());
       return;
     }
     break; // Let the remaining TRUNCATEs be processed as usual
-  }
-  case ISD::SIGN_EXTEND_INREG: {
-    // i128 = sign_extend_inreg(i128 X, srcVT)  --  issue C-1.
-    //
-    // This is lowered *here*, at selection, and deliberately not in a DAG
-    // combine. The combiner cannot own it: expanding to
-    // sign_extend(sign_extend_inreg(trunc(X), srcVT)) is immediately folded by
-    // visitSIGN_EXTEND back into sign_extend_inreg(any_extend(...), srcVT),
-    // which re-enters the same combine -- the infinite loop that
-    // performSIGN_EXTEND_INREGCombine's i128 arm documents and avoids by
-    // handling ONLY the any_extend(i64) shape. Every other shape (an `int`
-    // index feeding capability address arithmetic is the common one) then
-    // survives to here unselectable: "Cannot select: i128 = sign_extend_inreg".
-    //
-    // At selection there is no combiner left to fight, so emit the sequence
-    // directly: take the low XLen bits, sign-extend the source field within
-    // XLen with a shift pair, then widen to i128 -- PseudoSCALAR_COPY_I128
-    // replicates bit 63 into the high half, which is exactly the i128 sign
-    // extension.
-    MVT VT = Node->getSimpleValueType(0);
-    if (VT != MVT::i128)
-      break;
-    MVT XLenVT = Subtarget->getXLenVT();
-    unsigned SrcBits =
-        cast<VTSDNode>(Node->getOperand(1))->getVT().getSizeInBits();
-    unsigned XLenBits = XLenVT.getSizeInBits();
-    SDValue Lo(CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL, XLenVT,
-                                      Node->getOperand(0)),
-               0);
-    // srcVT >= XLen: the low half already holds the value; only the widening
-    // to i128 is needed.
-    if (SrcBits < XLenBits) {
-      SDValue ShAmt = CurDAG->getTargetConstant(XLenBits - SrcBits, DL, XLenVT);
-      SDValue Shl(
-          CurDAG->getMachineNode(Capstone::SLLI, DL, XLenVT, Lo, ShAmt), 0);
-      Lo = SDValue(
-          CurDAG->getMachineNode(Capstone::SRAI, DL, XLenVT, Shl, ShAmt), 0);
-    }
-    ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
-                                             DL, VT, Lo));
-    return;
-  }
-  case ISD::ZERO_EXTEND:
-  case ISD::SIGN_EXTEND:
-  case ISD::ANY_EXTEND: {
-    SDValue Src = Node->getOperand(0);
-    MVT SrcVT = Src.getSimpleValueType();
-
-    if (VT == MVT::i128 && SrcVT.isScalarInteger() && !SrcVT.bitsGT(XLenVT)) {
-      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
-                                           DL, VT, Src);
-      ReplaceNode(Node, Res);
-      return;
-    }
-    break;
   }
   case CapstoneISD::CIncOffset: {
     selectCIncOffset(Node);
@@ -4175,7 +4199,7 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
   if (Imm == 0)
     return Base;
 
-  if (VT == MVT::i128) {
+  if (isCapabilityVT(VT)) {
     if (isInt<12>(Imm)) {
       return SDValue(CurDAG->getMachineNode(
                          Capstone::CIncOffsetImm, DL, VT, Base,
@@ -4212,7 +4236,7 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
 // offset) via lcc, so end = cursor + size.
 static SDValue narrowToFrameObjectBounds(SelectionDAG *CurDAG, const SDLoc &DL,
                                          MVT VT, int FrameIndex, SDValue Cap) {
-  if (!CapstoneShrinkStack || VT != MVT::i128 || FrameIndex < 0)
+  if (!CapstoneShrinkStack || !isCapabilityVT(VT) || FrameIndex < 0)
     return Cap;
   MachineFunction &MF = CurDAG->getMachineFunction();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -4239,7 +4263,7 @@ static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
                                              const SDLoc &DL, MVT VT,
                                              int FrameIndex) {
   SDValue Base = CurDAG->getTargetFrameIndex(FrameIndex, VT);
-  if (VT != MVT::i128)
+  if (!isCapabilityVT(VT))
     return Base;
 
   SDValue Cap(CurDAG->getMachineNode(
@@ -4395,7 +4419,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
         selectConstantAddr(CurDAG, DL, VT, Subtarget, Addr.getOperand(1), Base,
                            Offset, /*IsPrefetch=*/false)) {
       // Insert an ADD instruction with the materialized Hi52 bits.
-      Base = VT == MVT::i128
+      Base = isCapabilityVT(VT)
                  ? SDValue(CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
                                                   Addr.getOperand(0), Base),
                            0)
@@ -4509,7 +4533,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
     if (selectConstantAddr(CurDAG, DL, VT, Subtarget, Addr.getOperand(1), Base,
                            Offset, /*IsPrefetch=*/true)) {
       // Insert an ADD instruction with the materialized Hi52 bits.
-      Base = VT == MVT::i128
+      Base = isCapabilityVT(VT)
                  ? SDValue(CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
                                                   Addr.getOperand(0), Base),
                            0)

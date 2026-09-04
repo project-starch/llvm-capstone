@@ -385,7 +385,7 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
     // it at all, and answering a question nobody asked. Marking it volatile keeps it. This is
     // the same failure mode the two plain stores already guard against below, and the reason
     // every arm of this experiment is disassembled before it is baked.
-    SDValue Cap = DAG.getLoad(MVT::i128, dl, Chain, capOffset(Src, Base),
+    SDValue Cap = DAG.getLoad(MVT::c128, dl, Chain, capOffset(Src, Base),
                               SrcPtrInfo.getWithOffset(Base), Align(16),
                               CapstoneMemcpyFixupNoStc
                                   ? MachineMemOperand::MOVolatile

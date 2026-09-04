@@ -30,7 +30,7 @@ def SDT_CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
                                      SDTCisVT<1, i32>]>;
 
 // Target-dependent type requirements.
-def SDT_CapstoneCall     : SDTypeProfile<0, -1, [SDTCisVT<0, XLenVT>]>;
+def SDT_CapstoneCall     : SDTypeProfile<0, -1, [SDTCisVT<0, CLenVT>]>;
 def SDT_CapstoneSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<1, 2>,
                                              SDTCisVT<3, OtherVT>,
                                              SDTCisSameAs<0, 4>,
@@ -196,16 +196,17 @@ def capstone_split_gpr_pair : RVSDNode<"SplitGPRPair",
 /// Name in quotes "CapstoneISD::CIncOffset"
 /// must match what getTargetNodeName returns.
 /// Profile types: 1 result, 2 operands.
-/// All types i128 (to avoid type conflicts).
+/// Result and base are capabilities; the offset is a plain XLen integer.
+/// That is the whole point of c128: neither operand has to be guessed at.
 def capstone_cincoffset : RVSDNode<"CIncOffset",
-                                   SDTypeProfile<1, 2, [SDTCisVT<0, i128>,
-                                                        SDTCisVT<1, i128>,
-                                                        SDTCisVT<2, i128>]>>;
+                                   SDTypeProfile<1, 2, [SDTCisVT<0, c128>,
+                                                        SDTCisVT<1, c128>,
+                                                        SDTCisVT<2, i64>]>>;
 
 def capstone_lga : SDNode<"CapstoneISD::LGA",
                           SDTypeProfile<1, 1,
                                         // Result (Pointer)
-                                        [SDTCisVT<0, i128>,
+                                        [SDTCisVT<0, c128>,
                                         // Operand (TargetAddr)
                                         SDTCisVT<1, i64>]>>;
                                                      
@@ -250,6 +251,8 @@ def GPRMemZeroOffset : MemOperand<GPR> {
 }
 
 def GPRMem : MemOperand<GPR>;
+// A capability used as a memory base.
+def GPCRMem : MemOperand<GPCR>;
 
 def SPMem : MemOperand<SP>;
 
@@ -709,8 +712,15 @@ class BranchCC_rri<bits<3> funct3, string opcodestr>
 }
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+// The base is a CAPABILITY. Every memory access on this target goes through one
+// -- there is no integer addressing mode -- and typing it GPR made the register
+// allocator copy the pointer into an integer register first. NEITHER instruction
+// available for that copy is correct: `addi` drops the tag, and `movc` and
+// `cincoffsetimm` both CONSUME a linear source. A linear capability cannot be
+// copied, by design, so the allocator must never be asked to; the base stays in
+// its class instead.
 class Load_ri<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
-    : RVInstI<funct3, OPC_LOAD, (outs rty:$rd), (ins GPRMem:$rs1, simm12:$imm12),
+    : RVInstI<funct3, OPC_LOAD, (outs rty:$rd), (ins GPCRMem:$rs1, simm12:$imm12),
               opcodestr, "$rd, ${imm12}(${rs1})">;
 
 class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
@@ -726,7 +736,7 @@ class HLoad_r<bits<7> funct7, bits<5> funct5, string opcodestr>
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
 class Store_rri<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
     : RVInstS<funct3, OPC_STORE, (outs),
-              (ins rty:$rs2, GPRMem:$rs1, simm12:$imm12),
+              (ins rty:$rs2, GPCRMem:$rs1, simm12:$imm12),
               opcodestr, "$rs2, ${imm12}(${rs1})">;
 
 class HStore_rr<bits<7> funct7, string opcodestr>
@@ -829,8 +839,8 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
 // CJALR: Capability Jump and Link Register
 // 1. Save PC+4 to rd (creating a return capability).
 // 2. Jump to target in rs1 (checking tag/perms).
-def CJALR : RVInstI<0b101, OPC_CAP_OP, (outs GPR:$rd),
-                    (ins GPR:$rs1, simm12_i64_op:$imm12),
+def CJALR : RVInstI<0b101, OPC_CAP_OP, (outs GPCR:$rd),
+                    (ins GPCR:$rs1, simm12_i64_op:$imm12),
                     "cjalr", "$rd, ${imm12}(${rs1})">;
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
@@ -1235,22 +1245,22 @@ let Predicates = [HasStdExtZihintntl] in {
 
 let EmitPriority = 0 in {
 def : InstAlias<"lb $rd, (${rs1})",
-                (LB  GPR:$rd, GPR:$rs1, 0)>;
+                (LB  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lh $rd, (${rs1})",
-                (LH  GPR:$rd, GPR:$rs1, 0)>;
+                (LH  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lw $rd, (${rs1})",
-                (LW  GPR:$rd, GPR:$rs1, 0)>;
+                (LW  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lbu $rd, (${rs1})",
-                (LBU  GPR:$rd, GPR:$rs1, 0)>;
+                (LBU  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"lhu $rd, (${rs1})",
-                (LHU  GPR:$rd, GPR:$rs1, 0)>;
+                (LHU  GPR:$rd, GPCR:$rs1, 0)>;
 
 def : InstAlias<"sb $rs2, (${rs1})",
-                (SB  GPR:$rs2, GPR:$rs1, 0)>;
+                (SB  GPR:$rs2, GPCR:$rs1, 0)>;
 def : InstAlias<"sh $rs2, (${rs1})",
-                (SH  GPR:$rs2, GPR:$rs1, 0)>;
+                (SH  GPR:$rs2, GPCR:$rs1, 0)>;
 def : InstAlias<"sw $rs2, (${rs1})",
-                (SW  GPR:$rs2, GPR:$rs1, 0)>;
+                (SW  GPR:$rs2, GPCR:$rs1, 0)>;
 
 def : InstAlias<"add $rd, $rs1, $imm12",
                 (ADDI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
@@ -1268,11 +1278,11 @@ def : InstAlias<"sra $rd, $rs1, $shamt",
                 (SRAI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
 let Predicates = [IsRV64] in {
 def : InstAlias<"lwu $rd, (${rs1})",
-                (LWU  GPR:$rd, GPR:$rs1, 0)>;
+                (LWU  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"ld $rd, (${rs1})",
-                (LD  GPR:$rd, GPR:$rs1, 0)>;
+                (LD  GPR:$rd, GPCR:$rs1, 0)>;
 def : InstAlias<"sd $rs2, (${rs1})",
-                (SD  GPR:$rs2, GPR:$rs1, 0)>;
+                (SD  GPR:$rs2, GPCR:$rs1, 0)>;
 
 def : InstAlias<"addw $rd, $rs1, $imm12",
                 (ADDIW  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
@@ -1745,14 +1755,11 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
-// NOTE (2026-07-31): this instantiation does NOT cover RV64. Both
-// Select_GPRCAP_Using_CC_GPR entries in the generated matcher come out guarded by
-// `!Subtarget->is64Bit()`, so on capstone64 an i128 select has no pattern at all and ISel
-// aborts with "Cannot select: i128 = CapstoneISD::SELECT_CC". Adding explicit i64-typed
-// Pats here does not help -- TableGen drops those too, silently, with no
-// --warn-on-skipped-patterns diagnostic. Not yet root-caused; see
-// agent-handoff/history/ for the investigation and the two-line reproducer.
-defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, i128>;
+// Both types are now HwMode types (CLenVT and XLenVT), so the pseudo expands
+// consistently in each mode. It used to mix a HwMode type with a fixed c128,
+// which silently produced only the RV32 half. lowerSELECT still expands a
+// capability select to a branch, so this is the pseudo that path emits.
+defm Select_GPRCAP : SelectCC_GPR_rrirr<GPCR, CLenVT>;
 
 class SelectCompressOpt<CondCode Cond>
     : Pat<(capstone_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
@@ -1883,13 +1890,16 @@ def PseudoCALLReg : Pseudo<(outs GPR:$rd), (ins call_symbol:$func), [],
 // if the offset fits in a signed 21-bit immediate.
 // Define AsmString to print "call" when compile with -S flag.
 // Define isCodeGenOnly = 0 to support parsing assembly "call" instruction.
-let isCall = 1, Defs = [X1], isCodeGenOnly = 0, Size = 8 in
+let isCall = 1, Defs = [X1], isCodeGenOnly = 0, Size = 8, hasSideEffects = 0,
+    mayLoad = 0, mayStore = 0 in
 def PseudoCALL : Pseudo<(outs), (ins call_symbol:$func), [],
                         "call", "$func">,
                  Sched<[WriteIALU, WriteJalr, ReadJalr]>;
 
-def : Pat<(capstone_call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
-def : Pat<(capstone_call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
+// No direct-call patterns. LowerCall forces every global call indirect through
+// LGA on this target (a code capability has to be derived, not named), so these
+// never matched; with the call target typed as a capability they cannot.
+
 
 def : Pat<(capstone_sret_glue), (SRET)>;
 def : Pat<(capstone_mret_glue), (MRET)>;
@@ -1898,55 +1908,64 @@ def : Pat<(capstone_mnret_glue), (MNRET)>;
 
 let isCall = 1, Defs = [X1] in {
 let Predicates = [NoStdExtZicfilp] in
-def PseudoCALLIndirect : Pseudo<(outs), (ins GPRJALR:$rs1),
-                                [(capstone_call GPRJALR:$rs1)]>,
+// No pattern: CapstoneISD::CALL/TAIL are selected in
+// CapstoneDAGToDAGISel::selectCall. What matters here is the operand CLASS --
+// a call target is a capability, and routing it through GPR made the register
+// allocator copy it into an integer register, which is an `addi` and therefore
+// an UNTAGGED target for cjalr.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirect : Pseudo<(outs), (ins GPCRJALR:$rs1),
+                                [(capstone_call GPCRJALR:$rs1)]>,
                          // Use CJALR
-                         PseudoInstExpansion<(CJALR X1, GPR:$rs1, 0)>;
+                         PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
-def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPRJALRNonX7:$rs1),
-                                     [(capstone_call GPRJALRNonX7:$rs1)]>,
-                              PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPCRJALRNonC7:$rs1),
+                                     [(capstone_call GPCRJALRNonC7:$rs1)]>,
+                              PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
-def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(capstone_sw_guarded_call GPRX7:$rs1)]>,
-                           PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
+                                  [(capstone_sw_guarded_call GPCRC7:$rs1)]>,
+                           PseudoInstExpansion<(CJALR C1, GPCR:$rs1, 0)>;
 }
 }
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(capstone_ret_glue)]>,
-                PseudoInstExpansion<(CJALR X0, X1, 0)>; // Use CJALR
+                PseudoInstExpansion<(CJALR C0, C1, 0)>; // Use CJALR
 
 // PseudoTAIL is a pseudo instruction similar to PseudoCALL and will eventually
 // expand to auipc and jalr while encoding.
 // Define AsmString to print "tail" when compile with -S flag.
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2],
-    Size = 8, isCodeGenOnly = 0 in
+    Size = 8, isCodeGenOnly = 0, hasSideEffects = 0, mayLoad = 0,
+    mayStore = 0 in
 def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), [],
                         "tail", "$dst">,
                  Sched<[WriteIALU, WriteJalr, ReadJalr]>;
 
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in {
 let Predicates = [NoStdExtZicfilp] in
-def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
-                                [(capstone_tail GPRTC:$rs1)]>,
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirect : Pseudo<(outs), (ins GPCRTC:$rs1),
+                                [(capstone_tail GPCRTC:$rs1)]>,
                                 // Use CJALR
-                         PseudoInstExpansion<(CJALR X0, GPR:$rs1, 0)>;
+                         PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
-def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPRTCNonX7:$rs1),
-                                     [(capstone_tail GPRTCNonX7:$rs1)]>,
-                              PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPCRTCNonC7:$rs1),
+                                     [(capstone_tail GPCRTCNonC7:$rs1)]>,
+                              PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
-def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(capstone_sw_guarded_tail GPRX7:$rs1)]>,
-                           PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPCRC7:$rs1),
+                                  [(capstone_sw_guarded_tail GPCRC7:$rs1)]>,
+                           PseudoInstExpansion<(CJALR C0, GPCR:$rs1, 0)>;
 }
 }
 
-def : Pat<(capstone_tail (iPTR tglobaladdr:$dst)),
-          (PseudoTAIL tglobaladdr:$dst)>;
-def : Pat<(capstone_tail (iPTR texternalsym:$dst)),
-          (PseudoTAIL texternalsym:$dst)>;
+// As for the direct call above: a tail call to a symbol goes through LGA too.
 
 let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1, Size = 8,
     isCodeGenOnly = 0, hasSideEffects = 0, mayStore = 0, mayLoad = 0 in
@@ -2057,8 +2076,8 @@ def PseudoZEXT_W : Pseudo<(outs GPR:$rd), (ins GPR:$rs), [], "zext.w", "$rd, $rs
 /// Loads
 
 class LdPat<PatFrag LoadOp, RVInst Inst, ValueType vt = XLenVT>
-    : Pat<(vt (LoadOp (AddrRegImm (XLenVT GPRMem:$rs1), simm12:$imm12))),
-          (Inst GPRMem:$rs1, simm12:$imm12)>;
+    : Pat<(vt (LoadOp (AddrRegImm (CLenVT GPCRMem:$rs1), simm12:$imm12))),
+          (Inst GPCRMem:$rs1, simm12:$imm12)>;
 
 def : LdPat<sextloadi8, LB>;
 def : LdPat<extloadi8, LBU>; // Prefer unsigned due to no c.lb in Zcb.
@@ -2072,9 +2091,9 @@ def : LdPat<zextloadi16, LHU>;
 
 class StPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy,
             ValueType vt>
-    : Pat<(StoreOp (vt StTy:$rs2), (AddrRegImm (XLenVT GPRMem:$rs1),
+    : Pat<(StoreOp (vt StTy:$rs2), (AddrRegImm (CLenVT GPCRMem:$rs1),
                    simm12:$imm12)),
-          (Inst StTy:$rs2, GPRMem:$rs1, simm12:$imm12)>;
+          (Inst StTy:$rs2, GPCRMem:$rs1, simm12:$imm12)>;
 
 def : StPat<truncstorei8, SB, GPR, XLenVT>;
 def : StPat<truncstorei16, SH, GPR, XLenVT>;
@@ -2401,31 +2420,33 @@ def : Pat<(int_capstone_pause), (FENCE 0x1, 0x0)>;
 
 // LDC: Capability Load 128-bit
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPR:$rd),
-                  (ins GPRMem:$rs1, simm12_i64_op:$imm12),
+def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPCR:$rd),
+                  (ins GPCRMem:$rs1, simm12_i64_op:$imm12),
                   "ldc", "$rd, ${imm12}(${rs1})">;
 
 // STC: Capability Store 128-bit
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
-                  (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
+                  (ins GPCR:$rs2, GPCRMem:$rs1, simm12_i64_op:$imm12),
                   "stc", "$rs2, ${imm12}(${rs1})">;
 
-// "When we see a load/store of type i128 -> use CLC/CSC instruction"
-def : LdPat<load, LDC, i128>;
-def : StPat<store, STC, GPR, i128>;
+// No LdPat/StPat for LDC/STC. They are selected in CapstoneDAGToDAGISel::
+// selectLDC_STC, which has to pick between LDC/LD/SD/SW/SH/SB by memory VT and
+// fold the displacement itself. The patterns that used to sit here produced
+// NOTHING -- `Capstone::LDC` never appeared in the generated matcher at all --
+// because LdPat types its base operand XLenVT, which a capability is not.
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 // CIncOffset (Register form): increment the cursor of a capability
 // by a given amount (offset): ptr = ptr + rs2
-def CIncOffset : RVInstR<0b0001100, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                         (ins GPR:$rs1, GPR:$rs2),
+def CIncOffset : RVInstR<0b0001100, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                         (ins GPCR:$rs1, GPR:$rs2),
                          "cincoffset", "$rd, $rs1, $rs2">;
 
 // CIncOffsetImm (Immediate form): increment the cursor of a capability
 // by a given amount (offset):  ptr = ptr + imm
-def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPR:$rd),
-                            (ins GPR:$rs1, simm12_i64_op:$imm12),
+def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPCR:$rd),
+                            (ins GPCR:$rs1, simm12_i64_op:$imm12),
                             "cincoffsetimm", "$rd, $rs1, $imm12">;
 }
 
@@ -2434,42 +2455,29 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def LCC : RVInstRI<0b0000100, 0b001, OPC_CAP_OP,
                    (outs GPR:$rd), // Result: integer
                    // Input: Capability + 5-bit field specifier
-                   (ins GPR:$rs1, uimm5_i64:$imm5),
+                   (ins GPCR:$rs1, uimm5_i64:$imm5),
                    "lcc", "$rd, $rs1, $imm5">;
 
 // Mappings for LCC fields (Table 8 from Spec)
 // 0: valid, 1: type, 2: cursor, 3: base, 4: end, 5: perms
 // get_tag, get_type, get_cursor, get_base, get_end, get_perm
 // Field 1 answers cap_type-1, so a NON-capability reads 7 (NOT_CAP(0)-1 wraps in 3 bits).
-def : Pat<(int_capstone_cap_get_tag GPR:$src),    (LCC GPR:$src, 0)>;
-def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
-def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;
-def : Pat<(int_capstone_cap_get_perm GPR:$src),   (LCC GPR:$src, 5)>;
+// The five LCC field reads are selected in CapstoneDAGToDAGISel::selectLCCField.
+// They cannot be patterns: the intrinsics take llvm_anyptr_ty, and TableGen
+// cannot reconcile iPTRAny with a capability value type.
 
 // SHRINK: Capability bounds narrowing
 // rd = shrink(cap_in, base, end)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Constraints = "$rd = $cap_in" in
-def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                     (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2),
+def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                     (ins GPCR:$cap_in, GPR:$rs1, GPR:$rs2),
                      "shrink", "$rd, $rs1, $rs2">;
-
-// Scalar i64/i32 values sometimes need to flow through the i128 carrier type
-// used by PureCap lowering.  Those moves must not reuse the capability-copy
-// path because that preserves tag/bounds metadata. Materialize them through a
-// scalar ALU move instead so the result stays a plain numeric value.
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def PseudoSCALAR_COPY_I128 : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
-                             PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
-
-// Selection for scalar -> i128 carrier moves is done in
-// CapstoneISelDAGToDAG::Select so the selector can make a targeted decision
-// without falling back to the generic capability-preserving COPY path.
 
 // MOVC: Move Capability.
 // Used to copy capabilities between GPRs preserving the Tag bit.
 // Format: R-type, but rs2 is unused (must be 0).
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
   let rs2 = 0;
 }
@@ -2478,14 +2486,8 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
 // Truncation and Subregister extraction
 //===----------------------------------------------------------------------===//
 
-// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
-// This is semantically equivalent to taking the lower 64 bits.
-// We define it as a move, but with different register classes if needed.
-// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
-
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
-                      PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+// Reading a capability's address is EXTRACT_SUBREG on sub_cap_addr, selected in
+// CapstoneISelDAGToDAG. It needs no instruction: X is the low half of C.
 
 // THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
 //
@@ -2525,6 +2527,17 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
 // which folds again -- cap-i128-and-capability-mask.ll hangs. That test's own
 // comment already warned the combiner rebuilds this shape.
 //
+// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
+// This is semantically equivalent to taking the lower 64 bits.
+// We define it as a move, but with different register classes if needed.
+// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
+                      PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+
+// THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
+
 // Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.
 def : Pat<(int_capstone_cap_get_cursor GPR:$src), (PseudoTRUNC_CAP GPR:$src)>;
 
@@ -2534,20 +2547,20 @@ def : Pat<(int_capstone_cap_get_cursor GPR:$src), (PseudoTRUNC_CAP GPR:$src)>;
 
 // TIGHTEN: Permission Tightening (RI-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def TIGHTEN : RVInstRI<0b0000010, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                       (ins GPR:$rs1, uimm5_i64:$imm5),
+def TIGHTEN : RVInstRI<0b0000010, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                       (ins GPCR:$rs1, uimm5_i64:$imm5),
                        "tighten", "$rd, $rs1, $imm5">;
 
 // SCC: Set Cursor Capability (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                  (ins GPR:$rs1, GPR:$rs2),
+def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                  (ins GPCR:$rs1, GPR:$rs2),
                   "scc", "$rd, $rs1, $rs2">;
 
 // INIT: Initialization (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                   (ins GPR:$rs1, GPR:$rs2),
+def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                   (ins GPCR:$rs1, GPR:$rs2),
                    "init", "$rd, $rs1, $rs2">;
 
 // DELIN: Delinearisation
@@ -2557,8 +2570,8 @@ def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // must not be machine-DCE'd or CSE'd away.
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0,
     Constraints = "$rd = $cap_in" in
-def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                    (ins GPR:$cap_in),
+def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                    (ins GPCR:$cap_in),
                     "delin", "$rd"> {
   let rs1 = 0;
   let rs2 = 0;
@@ -2590,7 +2603,7 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // CapstoneISelDAGToDAG.cpp selectLGA and
 // llvm/test/CodeGen/Capstone/global-base-nonlinear.ll.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
-def PseudoCapGlobalBase : Pseudo<(outs GPR:$rd), (ins GPR:$rs1), []>;
+def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
 
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so
@@ -2599,21 +2612,21 @@ def PseudoCapGlobalBase : Pseudo<(outs GPR:$rd), (ins GPR:$rs1), []>;
 // register allocator would otherwise pick x0, and helper_csmrev writes rd
 // unconditionally -- clobbering the hardwired-zero register.
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
-def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPRNoX0:$rd),
-                   (ins GPR:$rs1), "mrev", "$rd, $rs1"> {
+def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPCRNoC0:$rd),
+                   (ins GPCR:$rs1), "mrev", "$rd, $rs1"> {
   let rs2 = 0;
 }
 
 // SEAL: Seal a capability
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "seal", "$rd, $rs1"> {
   let rs2 = 0;
 }
 
 // DROP: Invalidate capability locally
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Constraints = "$rd = $rs1" in
-def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "drop", "$rs1"> {
   let rs2 = 0;
   let rd = 0; // Don't care field encoded as 0
@@ -2622,8 +2635,8 @@ def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
 // REVOKE: Revoke capability globally (Memory Sweep)
 let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1,
     Constraints = "$rd = $rs1" in
-def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                     (ins GPR:$rs1), "revoke", "$rs1"> {
+def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
+                     (ins GPCR:$rs1), "revoke", "$rs1"> {
   let rs2 = 0;
   let rd = 0; // Don't care field encoded as 0
 }
@@ -2642,14 +2655,14 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
   // on the SelectionDAG path for now, and the full call/debug-site modelling
   // will be added later together with a dedicated call-like lowering path.
   def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
-                         (outs GPR:$rd), (ins GPR:$rs1),
+                         (outs GPCR:$rd), (ins GPCR:$rs1),
                          "call", "$rd, $rs1"> {
     let rs2 = 0;
   }
 
   // CAPENTER: Enter Secure World
   def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
-                         (outs GPR:$rd), (ins GPR:$rs1),
+                         (outs GPCR:$rd), (ins GPCR:$rs1),
                          "capenter", "$rd, $rs1"> {
     let rs2 = 0;
   }
@@ -2657,7 +2670,7 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
   let isTerminator = 1 in {
     // RETURN: Domain Return
     def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP,
-                             (outs), (ins GPR:$rs1, GPR:$rs2),
+                             (outs), (ins GPCR:$rs1, GPCR:$rs2),
                              "return", "$rs1, $rs2"> {
       let isReturn = 1;
       let rd = 0;
@@ -2665,15 +2678,15 @@ let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
 
     // CAPEXIT: Exit Secure World
     def CAPEXIT : RVInstR<0b0100011, 0b001, OPC_CAP_OP,
-                          (outs), (ins GPR:$rs1, GPR:$rs2),
+                          (outs), (ins GPCR:$rs1, GPR:$rs2),
                           "capexit", "$rs1, $rs2"> {
       let rd = 0;
     }
   }
 
   // CCSRRW: Capability CSR Read/Write (I-Type format)
-  def CCSRRW : RVInstI<0b111, OPC_CAP_OP, (outs GPR:$rd),
-                       (ins csr_sysreg:$imm12, GPR:$rs1),
+  def CCSRRW : RVInstI<0b111, OPC_CAP_OP, (outs GPCR:$rd),
+                       (ins csr_sysreg:$imm12, GPCR:$rs1),
                        "ccsrrw", "$rd, $imm12, $rs1">;
 }
 

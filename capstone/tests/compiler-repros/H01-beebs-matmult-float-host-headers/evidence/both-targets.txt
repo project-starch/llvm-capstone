@@ -1,0 +1,2 @@
+capstone64-unknown-elf  error: __float128 is not supported on this target
+riscv64-unknown-elf     error: __float128 is not supported on this target

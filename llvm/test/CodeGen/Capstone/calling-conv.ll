@@ -3,10 +3,14 @@
 declare void @take_ptr_int(ptr addrspace(200), i64)
 
 ; CHECK-LABEL: test_call:
+; The cincoffset result lands in a capability register and cjalr uses it
+; directly. It used to be copied through an integer register on the way, which
+; is an `addi` and therefore an untagged call target.
 ; CHECK: auipc [[REG1:a[0-9]+]], %pcrel_hi(take_ptr_int)
 ; CHECK: addi [[REG2:a[0-9]+]], [[REG1]], %pcrel_lo
-; CHECK: cincoffset [[REG2]], gp, [[REG2]]
-; CHECK: cjalr ra, 0([[REG2]])
+; CHECK: cincoffset [[TGT:a[0-9]+]], gp, [[REG2]]
+; CHECK-NOT: mv {{[a-z0-9]+}}, [[TGT]]
+; CHECK: cjalr ra, 0([[TGT]])
 define void @test_call() {
 entry:
   %ptr = inttoptr i128 4660 to ptr addrspace(200)

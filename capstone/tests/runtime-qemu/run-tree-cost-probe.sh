@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-tree-cost-share}
@@ -25,7 +26,7 @@ ICOUNT=${ICOUNT:-shift=0,sleep=off}
 mkdir -p "$TMP_ROOT" "$SHARE_DIR"
 bash "$SCRIPT_DIR/build-tree-cost-probe.sh" "$SHARE_DIR"
 
-run_mode() { # $1=name
+run_mode_once() { # $1=name
   local name="$1"
   local log="$SHARE_DIR/tree_cost_$name.log"
   python3 "$SCRIPT_DIR/run-domain-smoke.py" \
@@ -34,13 +35,25 @@ run_mode() { # $1=name
     --qemu-extra-arg=-icount \
     --qemu-extra-arg="$ICOUNT" \
     --guest-command "cp /mnt/host/revoke_cost_probe.user /tmp/tc.user && chmod 0755 /tmp/tc.user && /tmp/tc.user /mnt/host/tree_cost_$name.dom" \
-    --success-marker "revoke-cost-probe: measurement complete" >/dev/null 2>&1 \
-    || { echo "run-tree-cost-probe.sh: $name run FAILED; see $log" >&2; return 1; }
+    --success-marker "revoke-cost-probe: measurement complete" >/dev/null 2>&1
+}
+
+run_mode() { # $1=name -- retries an infra flake, and never calls one a failure
+  local name="$1" rc
+  local log="$SHARE_DIR/tree_cost_$name.log"
+  set +e
+  capstone_retry_infra_flake run_mode_once "$name"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] && return 0
+  capstone_verdict_or_flake "$log" "revoke-cost-probe:" "$rc" || rc=$?
+  echo "run-tree-cost-probe.sh: $name produced no measurement (rc=$rc); see $log" >&2
+  return "$rc"
 }
 
 for m in bump norevoke revoke; do
   echo "== booting mode: $m =="
-  run_mode "$m" || exit 1
+  run_mode "$m" || exit $?   # $? not 1: a persistent infra flake must stay 75
 done
 
 echo

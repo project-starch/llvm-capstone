@@ -49,13 +49,16 @@ CapstoneFrameLowering::CapstoneFrameLowering(const CapstoneSubtarget &STI)
       STI(STI) {}
 
 // The register used to hold the frame pointer.
-static constexpr MCPhysReg FPReg = Capstone::X8;
+// sp, fp and ra ARE capabilities on this target: the prologue offsets them
+// with cincoffsetimm and spills them with stc, and the machine verifier now
+// checks that those instructions get capability registers.
+static constexpr MCPhysReg FPReg = Capstone::C8;
 
 // The register used to hold the stack pointer.
-static constexpr MCPhysReg SPReg = Capstone::X2;
+static constexpr MCPhysReg SPReg = Capstone::C2;
 
 // The register used to hold the return address.
-static constexpr MCPhysReg RAReg = Capstone::X1;
+static constexpr MCPhysReg RAReg = Capstone::C1;
 
 // LIst of CSRs that are given a fixed location by save/restore libcalls or
 // Zcmp/Xqccmp Push/Pop. The order in this table indicates the order the
@@ -132,7 +135,7 @@ static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
   const CapstoneInstrInfo *TII = STI.getInstrInfo();
   if (HasHWShadowStack) {
     if (STI.hasStdExtZcmop()) {
-      static_assert(RAReg == Capstone::X1, "C.SSPUSH only accepts X1");
+      static_assert(RAReg == Capstone::C1, "C.SSPUSH only accepts ra");
       BuildMI(MBB, MI, DL, TII->get(Capstone::PseudoMOP_C_SSPUSH));
     } else {
       BuildMI(MBB, MI, DL, TII->get(Capstone::PseudoMOP_SSPUSH)).addReg(RAReg);
@@ -290,7 +293,7 @@ static void emitSiFiveCLICPreemptibleSaves(MachineFunction &MF,
   // This is done instead of telling the register allocator that we need two
   // VRegs to store the value of `mcause` and `mepc` through the instruction,
   // which affects other passes.
-  TII->storeRegToStackSlot(MBB, MBBI, Capstone::X8, /* IsKill=*/true,
+  TII->storeRegToStackSlot(MBB, MBBI, Capstone::C8, /* IsKill=*/true,
                            RVFI->getInterruptCSRFrameIndex(0),
                            &Capstone::GPRRegClass, STI.getRegisterInfo(),
                            Register(), MachineInstr::FrameSetup);
@@ -303,7 +306,7 @@ static void emitSiFiveCLICPreemptibleSaves(MachineFunction &MF,
   // used in the function, then they will appear in `getUnmanagedCSI` and will
   // be saved again.
   BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRS))
-      .addReg(Capstone::X8, RegState::Define)
+      .addReg(Capstone::C8, RegState::Define)
       .addImm(CapstoneSysReg::mcause)
       .addReg(Capstone::X0)
       .setMIFlag(MachineInstr::FrameSetup);
@@ -353,7 +356,7 @@ static void emitSiFiveCLICPreemptibleRestores(MachineFunction &MF,
   BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRW))
       .addReg(Capstone::X0, RegState::Define)
       .addImm(CapstoneSysReg::mcause)
-      .addReg(Capstone::X8, RegState::Kill)
+      .addReg(Capstone::C8, RegState::Kill)
       .setMIFlag(MachineInstr::FrameSetup);
 
   // X8 and X9 need to be restored to their values on function entry, which we
@@ -362,7 +365,7 @@ static void emitSiFiveCLICPreemptibleRestores(MachineFunction &MF,
                             RVFI->getInterruptCSRFrameIndex(1),
                             &Capstone::GPRRegClass, STI.getRegisterInfo(),
                             Register(), MachineInstr::FrameSetup);
-  TII->loadRegFromStackSlot(MBB, MBBI, Capstone::X8,
+  TII->loadRegFromStackSlot(MBB, MBBI, Capstone::C8,
                             RVFI->getInterruptCSRFrameIndex(0),
                             &Capstone::GPRRegClass, STI.getRegisterInfo(),
                             Register(), MachineInstr::FrameSetup);
@@ -1819,7 +1822,14 @@ void CapstoneFrameLowering::processFunctionBeforeFrameFinalized(
       MF.getSubtarget<CapstoneSubtarget>().getRegisterInfo();
   const CapstoneInstrInfo *TII = MF.getSubtarget<CapstoneSubtarget>().getInstrInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const TargetRegisterClass *RC = &Capstone::GPRRegClass;
+  // THE EMERGENCY SPILL SLOT MUST FIT A CAPABILITY, not just an XLen scalar.
+  // Sized from GPR it is 8 bytes at 8-byte alignment, and the scavenger then has
+  // nowhere to put a GPCR: "Error while trying to spill C12 from class GPCR:
+  // Cannot scavenge register without an emergency spill slot!", a hard backend
+  // error rather than a diagnostic. One 16-byte, 16-aligned slot serves BOTH
+  // classes, because the scavenger takes any slot at least as large and as
+  // aligned as the class it is spilling.
+  const TargetRegisterClass *RC = &Capstone::GPCRRegClass;
   auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   int64_t RVVStackSize;

@@ -124,6 +124,21 @@ static const MCPhysReg ArgVRN4M2s[] = {
 static const MCPhysReg ArgVRN2M4s[] = {Capstone::V8M4_V12M4, Capstone::V12M4_V16M4,
                                        Capstone::V16M4_V20M4};
 
+// The capability argument registers. Same ABI slots as the integer ones, same
+// hardware registers -- C10 IS X10 seen at capability width -- but a capability
+// argument has to be assigned the C register, or the machine verifier rightly
+// refuses `$x10 = CIncOffset ...`.
+ArrayRef<MCPhysReg> Capstone::getArgGPCRs(const CapstoneABI::ABI ABI) {
+  static const MCPhysReg ArgICaps[] = {Capstone::C10, Capstone::C11, Capstone::C12,
+                                       Capstone::C13, Capstone::C14, Capstone::C15,
+                                       Capstone::C16, Capstone::C17};
+  static const MCPhysReg ArgECaps[] = {Capstone::C10, Capstone::C11, Capstone::C12,
+                                       Capstone::C13, Capstone::C14, Capstone::C15};
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
+    return ArrayRef(ArgECaps);
+  return ArrayRef(ArgICaps);
+}
+
 ArrayRef<MCPhysReg> Capstone::getArgGPRs(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the ILP32* and LP64* ABIs, except
   // the ILP32E ABI.
@@ -172,6 +187,22 @@ static ArrayRef<MCPhysReg> getArgGPR32s(const CapstoneABI::ABI ABI) {
     return ArrayRef(ArgEGPRs);
 
   return ArrayRef(ArgIGPRs);
+}
+
+// The capability form of the FastCC argument registers. Same slots, capability
+// class -- without it the four FastCC-only registers go unused and every
+// capability past the eighth spills to the stack.
+static ArrayRef<MCPhysReg> getFastCCArgGPCRs(const CapstoneABI::ABI ABI) {
+  static const MCPhysReg FastCCICaps[] = {
+      Capstone::C10, Capstone::C11, Capstone::C12, Capstone::C13,
+      Capstone::C14, Capstone::C15, Capstone::C16, Capstone::C17,
+      Capstone::C28, Capstone::C29, Capstone::C30, Capstone::C31};
+  static const MCPhysReg FastCCECaps[] = {Capstone::C10, Capstone::C11,
+                                          Capstone::C12, Capstone::C13,
+                                          Capstone::C14, Capstone::C15};
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
+    return ArrayRef(FastCCECaps);
+  return ArrayRef(FastCCICaps);
 }
 
 static ArrayRef<MCPhysReg> getFastCCArgGPRs(const CapstoneABI::ABI ABI) {
@@ -425,12 +456,14 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = Capstone::getArgGPRs(ABI);
 
-  // Capability (i128) handling.
-  // Treat i128 values as a single capability that occupies one integer argument
-  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
-  // might already be canonicalized to XLenVT during legalization/splitting.
-  if (ValVT == MVT::i128) {
-    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+  // Capability handling.
+  // A capability occupies one integer argument register, or one 16-byte stack
+  // slot. We must key off ValVT, because LocVT might already be canonicalized
+  // to XLenVT during legalization/splitting. i128 is here only because __int128
+  // still shares the capability register class.
+  if (ValVT == MVT::c128) {
+    ArrayRef<MCPhysReg> ArgRegs = Capstone::getArgGPCRs(ABI);
+    if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
       return false;
@@ -620,7 +653,7 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   }
 
   assert(((ValVT.isFloatingPoint() && !ValVT.isVector()) || LocVT == XLenVT ||
-          LocVT == MVT::i128 ||
+          LocVT == MVT::i128 || LocVT == MVT::c128 ||
           (TLI.getSubtarget().hasVInstructions() &&
            (ValVT.isVector() || ValVT.isCapstoneVectorTuple()))) &&
          "Expected an XLenVT or vector types at this stage");
@@ -716,12 +749,10 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = getFastCCArgGPRs(ABI);
 
-  // Capability (i128) handling, mirroring CC_Capstone.
-  // Treat i128 values as a single capability that occupies one integer argument
-  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
-  // might already be canonicalized to XLenVT during legalization/splitting.
-  if (ValVT == MVT::i128) {
-    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+  // Capability handling, mirroring CC_Capstone.
+  if (ValVT == MVT::c128) {
+    ArrayRef<MCPhysReg> ArgRegs = getFastCCArgGPCRs(ABI);
+    if (MCRegister Reg = State.AllocateReg(ArgRegs)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
                                       LocInfo));
       return false;

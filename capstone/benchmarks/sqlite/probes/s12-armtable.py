@@ -1,3 +1,5 @@
+import subprocess
+import os
 #!/usr/bin/env python3
 """Tabulate the S-12 three-arm ladder from the board logs, one classifier for all arms.
 
@@ -14,7 +16,9 @@ Anything else is VOID and is reported as VOID, never folded into the denominator
 """
 import argparse, os, re, sys, subprocess
 
-ROOT = "/home/alexey/dev/llvm-capstone"
+ROOT = os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
 VERDICT = f"{ROOT}/capstone/benchmarks/sqlite/probes/s12-verdict.py"
 
 ARMS = [

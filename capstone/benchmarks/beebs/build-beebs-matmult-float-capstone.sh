@@ -33,14 +33,27 @@ done
 
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
-# Strip <stdio.h>/<stdlib.h> (not available freestanding) and everything from
+# Strip <stdio.h>/<stdlib.h>/<math.h> (not available freestanding) and everything
 # verify_benchmark onwards; the tail provides an FNV-1a checksum of the global
 # ResultArray (avoids the local float exp[][] -> Bug #3 i128 stride / Bug #9).
-awk '
-  /^#include <(stdio|stdlib)\.h>$/ { next }
-  /^int verify_benchmark/ { exit }
-  { print }
-' "$MATMULT_SRC" > "$PATCHED_SRC"
+# <math.h> goes for the same reason as the other two, and it was the one that
+# was missed: without -nostdinc it resolved to the BUILD MACHINE's glibc and
+# died in bits/floatn.h on `typedef __float128 _Float128`. riscv64 rejects that
+# line too, so it was a cross-compile reaching host headers rather than anything
+# target-specific. See tests/compiler-repros/H01-beebs-matmult-float-host-headers.
+#
+# Prototypes rather than implementations: the only callers are in values_match,
+# which is dead once verify_benchmark is replaced and which --gc-sections drops
+# at link, as the comment on that link line says.
+{
+  printf 'float fabsf(float);\n'
+  printf 'float frexpf(float, int *);\n'
+  awk '
+    /^#include <(stdio|stdlib|math)\.h>$/ { next }
+    /^int verify_benchmark/ { exit }
+    { print }
+  ' "$MATMULT_SRC"
+} > "$PATCHED_SRC"
 cat "$TAIL_SRC" >> "$PATCHED_SRC"
 
 COMMON_FLAGS=(

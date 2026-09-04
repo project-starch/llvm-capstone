@@ -165,13 +165,36 @@
      left in a register. Keeping the blob in s1 across the call is what faulted on
      the first attempt: `Cap mem access OOB ... rs1 = x9`, s1 having come back
      untagged. sp and gp are safe because the ABI keeps them intact. */
-  cincoffsetimm(sp, sp, -32)
+  cincoffsetimm(sp, sp, -48)
   stc(s1, sp, 0)                     /* park the blob cap across the calls            */
   cincoffset(a6, s1, t6)
   stc(a6, sp, 16)                    /* park the entry pointer too                    */
   mv    a7, t3                       /* a7 = runtime IMAGE address of the entry       */
+  /* ...and park a7 too. a7 is CALLER-saved and the initializer is ordinary C that uses it
+     freely -- 36 instructions write a7 inside __capstone_cap_init in one MicroPython domain.
+     Incrementing it in place across the call therefore compares a GARBAGE cursor against the
+     end marker, so whether this loop stops after the right number of entries is decided by
+     whatever the generated initializer happened to leave in a7.
+
+     That is measured, not feared. In a domain built with MICROPY_PY_UCTYPES=0 the last
+     instruction in __capstone_cap_init that writes a7 is `auipc a7, 0xffff8; addi a7, a7,
+     -0x5e8` at 0xa4fd0, i.e. a7 = 0x9c9e8, which is exactly <mod_random_random>. The loop
+     added 8, compared 0x9c9f0 against __capstone_cap_init_end = 0xc3ae8, took the branch, read
+     8 bytes PAST the one-entry table and jalr'd to 0x9c9f0 -- and a QEMU trace shows the next
+     block executed is precisely 0x9c9f0. mod_random_random then allocates a float before
+     gc_init has run, m_malloc fails, the raise finds no NLR handler, and the domain spins
+     forever in nlr_jump_fail. domain_main never runs at all.
+
+     The same build with UCTYPES=1 survived only by luck: its last a7 write is `ldc a7, 0(a7)`,
+     a GCT capability pointing into the blob, which the monitor places above the image, so a7
+     came back greater than the end marker and the loop happened to exit.
+
+     a7 is an integer here (it comes from `mv a7, t3` where t3 is an lla), so a plain sd/ld is
+     safe -- there is no tag to drop. */
+  sd    a7, 32(sp)
 70:
   ldc(a6, sp, 16)
+  ld    a7, 32(sp)                   /* reload: the callee clobbers a7 (caller-saved)  */
 #ifdef INTERP_CAPINIT_IMAGE_TABLE
   /* DIAGNOSTIC: read the entry's delta from the IMAGE (a7) rather than from the monitor's
      copy of it in dom_data (a6). Both should hold the same bytes -- the table lives in the
@@ -193,6 +216,28 @@
   ld    t0, 0(a6)                    /* t0 = initfn - entry (link-time relative)      */
 #endif
   add   t0, a7, t0                   /* -> initfn runtime address                     */
+#ifdef INTERP_PEEK_SP_IN_CAPINIT
+  /* DIAGNOSTIC: publish sp.BASE (=1) or sp.END (=2) as seen from INSIDE RUN_CAP_INIT, so it can
+     be compared against the same two values read in domain_main. The question this answers:
+     a blob pointer derived from sp.base works in domain_main and does NOT work here, so either
+     the two sp's differ or the derivation is at fault, and nothing short of both numbers can
+     tell those apart. csdebugprint emits the full 64 bits; the retval path would truncate to 32.
+     QEMU-ONLY (funct7 0x43 is undecoded on the FPGA) -- never set this for a board build. */
+  /* The lcc macro pastes its third argument onto `x`, so the selector must be a bare literal;
+     an expression like `2 + N` assembles as `x2 + N` and fails with "unexpected token". */
+#if INTERP_PEEK_SP_IN_CAPINIT == 2
+  lcc(t0, sp, 4)                     /* sp.END                                          */
+#else
+  lcc(t0, sp, 3)                     /* sp.BASE                                         */
+#endif
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  /* Unwind exactly as the normal path does: restore the parked blob cap and give sp its 48
+     bytes back. Jumping straight to 78f would leave sp low for the rest of the domain and the
+     next thing to run would fault for an unrelated reason. */
+  ldc(s1, sp, 0)
+  cincoffsetimm(sp, sp, 48)
+  j     78f
+#endif
 #ifdef INTERP_PEEK_CAPINIT_TARGET
   /* DIAGNOSTIC: publish the computed call target instead of calling it. The target is
      (image address of the table entry) + (delta read from the monitor's COPY of that entry
@@ -202,34 +247,38 @@
      reads at run time. The host prints this as `obs=`. Compare against
      pcc_base + (0x141b70 - 0x10000); anything else means the delta or the blob base is
      wrong, and the `jalr` is transferring control to an arbitrary function. */
-  /* 112, not 80: test: parks res at 80(sp), then RUN_CAP_INIT drops sp by 32 before this
-     loop, so the slot is 32 higher from in here. Reading 80(sp) lands on the parked RETURN
-     capability and faults. */
+  /* 128, not 80: test: parks res at 80(sp), then RUN_CAP_INIT drops sp by 48 before this
+     loop, so the slot is 48 higher from in here. Reading 80(sp) lands on the parked RETURN
+     capability and faults. This offset MUST track the frame size above it -- it was 112 while
+     the frame was 32, and an audit caught it still reading 112 after the frame grew to 48,
+     which would have made this diagnostic ldc an untagged integer and faulted on the sw. */
   /* csdebugprint is a QEMU-ONLY debug op (funct7 0x43 on opcode 0x5b); the FPGA decoder
      has nothing there. It prints the named register straight to the emulator console,
      which beats routing a value through the shared region -- the host only reports `obs`
      on its own failure paths and would never surface it. QEMU-only, so this knob must
      never be set for a board build. */
   .insn r 0x5b, 0x1, 0x43, x0, t0, x0
-  ldc(a2, sp, 112)                   /* a2 = res capability parked by test:            */
+  ldc(a2, sp, 128)                   /* a2 = res capability parked by test:            */
   sw    t0, 0(a2)
   /* Unwind exactly as the normal path does before leaving. Branching straight to 78f skips
-     BOTH the blob-cap restore and the `sp += 32`, leaving sp 32 bytes low for the rest of
+     BOTH the blob-cap restore and the `sp += 48`, leaving sp 48 bytes low for the rest of
      the domain -- which shows up as an unrelated fault in whatever runs next (strlen, in
      the first attempt). A diagnostic that changes the frame is measuring itself. */
   ldc(s1, sp, 0)
-  cincoffsetimm(sp, sp, 32)
+  cincoffsetimm(sp, sp, 48)
   j     78f
 #endif
   jalr  ra, 0(t0)                    /* plain call: gp-free ABI, within PCC           */
   ldc(a6, sp, 16)                    /* reload: the callee may have clobbered it      */
   cincoffsetimm(a6, a6, 8)
   stc(a6, sp, 16)
+  ld    a7, 32(sp)
   addi  a7, a7, 8
+  sd    a7, 32(sp)
   lla   t4, __capstone_cap_init_end
   bltu  a7, t4, 70b
   ldc(s1, sp, 0)                     /* restore the blob cap                          */
-  cincoffsetimm(sp, sp, 32)
+  cincoffsetimm(sp, sp, 48)
 78:
   /* Persist "built" ONLY here, once the table AND the initializers are done. Setting
      it inside BUILD would make the very first entry skip its own cap-init, since
@@ -728,6 +777,14 @@ test:
      stash survives it. */
   lla   t0, .Ldomain_trap
   csrw  mtvec, t0
+#endif
+#if defined(INTERP_DOMAIN_MTVEC) || defined(CAPSTONE_GLUE_YIELD)
+  /* PUBLISH THE GLUE FRAME IN cscratch. Two gates need the same store, for reasons that
+     compose rather than conflict: INTERP_DOMAIN_MTVEC's trap handler swaps it back into sp
+     so the shared unwind finds a valid frame, and CAPSTONE_GLUE_YIELD's __capstone_yield
+     reads it to reach the entry return capability stashed at +48. Sited here for the reason
+     the comment above gives -- cscratch is provably free across cap-init -- and that
+     argument is what makes it safe to share. */
   ccsrrw(x0, cscratch, sp)
 #endif
 
@@ -842,7 +899,7 @@ test:
   sw    t0, 0(a0)
 97:
 #endif
-#if defined(INTERP_DOMAIN_MTVEC)
+#if defined(INTERP_DOMAIN_MTVEC) || defined(CAPSTONE_GLUE_YIELD)
   /* Normal return: put cscratch back to zero so .Ldomain_returned sees exactly the state it
      saw before this gate existed. The trap path below arrives at the same state by swapping
      the stashed cap OUT, so both paths converge with identical register and CSR state. */
@@ -973,6 +1030,101 @@ test:
   ldc(a0, sp, 80)                    /* the shared region cap saved at entry */
   sw    t0, 0(a0)
   j .Ldomain_returned
+#endif
+
+#ifdef CAPSTONE_GLUE_YIELD
+/* void __capstone_yield(void);
+ *
+ * Hand control back to the host and RESUME HERE when it calls again, with the C
+ * frame intact. This is what separates a domain that can carry a libc from one
+ * that cannot: a syscall has to return to the instruction after itself, whereas
+ * every entry into this glue otherwise RESTARTS domain_main.
+ *
+ * IT INVENTS NOTHING. Both halves of the problem were already solved in this file
+ * and the transplant is to reuse them rather than to build a third mechanism:
+ *
+ *   the sealed-return capability  -- `test:` already does `stc(ra, sp, 48)`, and
+ *     .Ldomain_returned already reads exactly that slot to domreturn through. The
+ *     yield reaches the same slot via the frame capability that `test:` publishes
+ *     in cscratch, so there is one stash location, not two that can disagree.
+ *   carrying sp across the boundary -- .Ldomain_returned already ends with
+ *     `ccsrrw(x0, cscratch, sp)` and __test_reentry recovers it. cscratch is the
+ *     designated carrier here; sp does NOT survive a domain boundary by itself
+ *     (measured under QEMU on the musl glue: resume faulted with cause 24 at the
+ *     first sp-relative ldc, rs1 = x2, i.e. sp came back as a plain integer).
+ *
+ * cscratch therefore does double duty, and the ordering below is what keeps that
+ * honest: the glue frame is read OUT before the yield's own sp is swapped IN, and
+ * the resume path puts the glue frame back before returning to C. Every point at
+ * which another part of the glue reads cscratch sees the value that part expects.
+ *
+ * gp is restored from the frame rather than rebuilt. __test_reentry re-runs
+ * BUILD_GP_CAPTABLE_INTERP because it arrives with the register file scrubbed; the
+ * table itself lives in dom_data and is untouched by the round trip, so reloading
+ * the pointer is both cheaper and less to get wrong.
+ *
+ * Callee-saved registers are saved even though gp demonstrably survives on some
+ * paths. Which ones survive is unverified, one wrong guess costs a boot to find,
+ * and 15 stores are free by comparison.
+ *
+ * Deliberately does NOT scrub the register file, unlike .Ldomain_returned: that
+ * path is finished and must not leave capabilities behind, whereas here the
+ * registers ARE the suspended computation.
+ */
+  .text
+  .global __capstone_yield
+__capstone_yield:
+  cincoffsetimm(sp, sp, -256)
+  stc(ra, sp, 0)
+  stc(gp, sp, 16)
+  stc(s0, sp, 32)
+  stc(s1, sp, 48)
+  stc(s2, sp, 64)
+  stc(s3, sp, 80)
+  stc(s4, sp, 96)
+  stc(s5, sp, 112)
+  stc(s6, sp, 128)
+  stc(s7, sp, 144)
+  stc(s8, sp, 160)
+  stc(s9, sp, 176)
+  stc(s10, sp, 192)
+  stc(s11, sp, 208)
+  stc(tp, sp, 224)
+
+  ccsrrw(t3, cscratch, x0)           /* t3 = glue frame, published by `test:`          */
+  stc(t3, sp, 240)                   /* the resume path needs it again                 */
+  ldc(t1, t3, 48)                    /* t1 = entry return cap, the slot `test:` filled */
+  lla t2, .Lyield_resume
+  ccsrrw(x0, cscratch, sp)           /* sp travels in cscratch, as at .Ldomain_returned */
+  domreturn(t1, t2, x0)
+
+.Lyield_resume:
+  ccsrrw(sp, cscratch, x0)
+  ldc(gp, sp, 16)
+
+  /* `ra` holds the FRESH sealed-return capability this entry brought in; the slot at
+     glue-frame+48 still holds the spent one, and BOTH the next yield and the eventual
+     .Ldomain_returned read that slot. Refresh it before the C restore overwrites `ra`. */
+  ldc(t3, sp, 240)
+  stc(ra, t3, 48)
+  ccsrrw(x0, cscratch, t3)           /* put the glue frame back where `test:` left it */
+
+  ldc(ra, sp, 0)
+  ldc(s0, sp, 32)
+  ldc(s1, sp, 48)
+  ldc(s2, sp, 64)
+  ldc(s3, sp, 80)
+  ldc(s4, sp, 96)
+  ldc(s5, sp, 112)
+  ldc(s6, sp, 128)
+  ldc(s7, sp, 144)
+  ldc(s8, sp, 160)
+  ldc(s9, sp, 176)
+  ldc(s10, sp, 192)
+  ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
+  cincoffsetimm(sp, sp, 256)
+  ret
 #endif
 
   .align 4

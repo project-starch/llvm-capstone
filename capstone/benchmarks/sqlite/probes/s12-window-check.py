@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Does this build still contain the S-12 fault window? A GATE, not a report.
 
@@ -32,7 +33,9 @@ import re
 import subprocess
 import sys
 
-OBJDUMP = "/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-objdump"
+OBJDUMP = (os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()) + "/llvm/cmake-build-debug/bin/llvm-objdump"
 TRIPLE = "capstone64-unknown-elf"
 FUNC = "sqlite3WhereCodeOneLoopStart"
 

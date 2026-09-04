@@ -1,0 +1,258 @@
+diff --git c/sbi_capstone.c w/sbi_capstone.c
+index b511102..99bf8ba 100644
+--- c/sbi_capstone.c
++++ w/sbi_capstone.c
+@@ -18,6 +18,10 @@
+ #define C_SET_CURSOR(dest, cap, cursor) __asm__("scc(%0, %1, %2)" : "=r"(dest) : "r"(cap), "r"(cursor))
+ #define C_PRINT(v) __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" :: "r"(v))
+ #define C_GEN_CAP(dest, base, end) __asm__(".insn r 0x5b, 0x1, 0x40, %0, %1, %2" : "=r"(dest) : "r"(base), "r"(end));
++/* csinit rd, rs1, rs2: UNINIT(cursor==end) -> LIN with cursor = base + rs2.
++ * No __init builtin exists, so emit the instruction directly (funct7 0x9),
++ * same style as C_PRINT/C_GEN_CAP. */
++#define C_INIT(dest, cap, offset) __asm__(".insn r 0x5b, 0x1, 0x9, %0, %1, %2" : "=r"(dest) : "r"(cap), "r"(offset))
+ #define capstone_error(err_code) do { C_PRINT(CAPSTONE_ERR_STARTER); C_PRINT(err_code); while(1); } while(0)
+ #define cap_base(cap) __capfield((cap), 3)
+ #define cap_end(cap) __capfield((cap), 4)
+@@ -284,18 +288,42 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
+ }
+ 
+ 
++/* A domain's code and its data may live in ONE region or in TWO.
++ *
++ * ONE (data_addr == 0) is the original arrangement and is preserved byte for byte:
++ * a single capability over [base, base+tot_size) is SPLIT into code | seal | data.
++ * Because __split divides one linear capability, that arrangement forces the whole
++ * domain -- image plus stack plus every global's storage -- into a single physically
++ * contiguous allocation, and the kernel module gets that from the buddy allocator,
++ * whose maximum order is then a hard ceiling on domain image size. It capped code_len
++ * at 1,376,256 bytes; the largest domain that ever ran here is 1,375,688, i.e. 568
++ * bytes under it, and two interpreter ports have never run at all.
++ *
++ * TWO regions removes the coupling rather than raising the ceiling. Nothing new is
++ * needed for it: split_out_cap already mints a capability over an arbitrary range,
++ * which is how call_domain_with_cap hands a running domain a second region. The
++ * domain sees no difference -- it still receives dom_code and dom_data through the
++ * sealed region -- so the entry glue is untouched.
++ */
+ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+-                          unsigned tot_size, unsigned entry_offset)
++                          unsigned tot_size, unsigned entry_offset,
++                          unsigned data_addr, unsigned data_size)
+ {
+     // alignment requirement
+     code_size = (((code_size - 1) >> 4) + 1) << 4;
+     __linear void *mem_l, *dom_code, *dom_data, *mem_r;
+     __linear void **dom_seal;
+ 
+-    dom_code = split_out_cap(base_addr, tot_size, 1);
++    if(data_addr) {
++        dom_code = split_out_cap(base_addr, code_size, 1);
++        dom_seal = split_out_cap(data_addr, data_size, 1);
++        dom_data = __split(dom_seal, data_addr + DOMAIN_DATA_SIZE);
++    } else {
++        dom_code = split_out_cap(base_addr, tot_size, 1);
+ 
+-    dom_seal = __split(dom_code, base_addr + code_size);
+-    dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
++        dom_seal = __split(dom_code, base_addr + code_size);
++        dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
++    }
+ 
+     int i;
+     for(i = 0; i < DOMAIN_DATA_N; i += 1) {
+@@ -383,6 +411,14 @@ static unsigned shared_region_annotated(unsigned dom_id, unsigned region_id, uns
+     }
+     else if (annotation_rev == CAPSTONE_ANNOTATION_REV_BORROWED) {
+         // capability type: linear; post-return revoke: yes
++        /* Re-share after a prior revoke: revoking the linear borrow left the
++         * retained handle UNINIT (with cursor==end, per helper_csrevoke). mrev
++         * requires a LIN input, so re-initialise first: csinit(offset 0) ->
++         * LIN, cursor=base. On the first share r is already LIN, so skip. This
++         * is the explicit owner reclaim step for a linear borrow. */
++        if (cap_type(r) == 3 /* CAP_TYPE_UNINIT */) {
++            C_INIT(r, r, 0);
++        }
+         __rev void *rev = __mrev(r);
+ 
+         if (region_cpmp[region_id] != -1) {
+@@ -447,6 +483,108 @@ static unsigned shared_region_annotated(unsigned dom_id, unsigned region_id, uns
+     return 0;
+ }
+ 
++/* Share a child sub-region [offset, offset+len) split-derived from parent_id so a
++ * later revoke_region(parent_id) cascades to it (the paper's H primitive:
++ * sqlite3_close revokes the connection and every statement/value pointer beneath
++ * it). The parent's senior revocation handle is minted with __mrev and retained
++ * under parent_id; the child (and the split-off head/tail fragments) are junior in
++ * the parent's rev lineage, so __revoke(parent_rev) invalidates them. Unlike two
++ * independent create_region()s (independent rev roots -- no cascade), the child
++ * here is __split out of the parent's own cap. */
++static unsigned share_child_region(unsigned dom_id, unsigned parent_id,
++                                   unsigned offset, unsigned len, unsigned perm) {
++    if(dom_id >= dom_n || parent_id >= region_n) {
++        return -1;
++    }
++
++    __dom void *d = domains[dom_id];
++
++    __linear void *r;
++    if (region_cpmp[parent_id] != -1) {
++        r = read_cpmp(region_cpmp[parent_id]);
++    }
++    else {
++        r = regions[parent_id];
++    }
++
++    /* A prior revoke may have left the retained parent handle UNINIT; re-init so
++     * __mrev sees a LIN input (same reclaim step as REV_BORROWED). */
++    if (cap_type(r) == 3 /* CAP_TYPE_UNINIT */) {
++        C_INIT(r, r, 0);
++    }
++
++    unsigned pbase = cap_base(r);
++    unsigned pend = cap_end(r);
++    unsigned cstart = pbase + offset;
++    unsigned cend = cstart + len;
++    if (len == 0 || offset > pend - pbase || cend > pend) {
++        return -1;
++    }
++
++    /* 1. Mint the senior revocation handle and retain it under parent_id, so
++     *    revoke_region(parent_id) -> __revoke(rev) invalidates the junior run. */
++    __rev void *rev = __mrev(r); /* rev: senior (depth d); r: junior (depth d+1) */
++
++    /* 2. Carve the child [cstart, cend) out of the now-junior parent cap. The
++     *    split products stay junior to rev, so a parent revoke cascades to them.
++     *    Retain the head/tail fragments in regions[] the same way split_out_cap
++     *    does (do not drop linear caps); the child is shared last so the
++     *    borrower's REGION_COUNT-1 query resolves to it. */
++    __linear void *head = 0;
++    __linear void *body;
++    if (offset != 0) {
++        body = __split(r, cstart); /* r -> [pbase,cstart); body -> [cstart,pend) */
++        head = r;
++    }
++    else {
++        body = r;
++    }
++
++    __linear void *tail = 0;
++    if (cend != pend) {
++        tail = __split(body, cend); /* body -> [cstart,cend); tail -> [cend,pend) */
++    }
++
++    if (region_cpmp[parent_id] != -1) {
++        write_cpmp(region_cpmp[parent_id], rev);
++    }
++    else {
++        regions[parent_id] = rev;
++    }
++
++    if (head) {
++        regions[region_n] = head;
++        region_n += 1;
++    }
++    if (tail) {
++        regions[region_n] = tail;
++        region_n += 1;
++    }
++
++    /* 3. Tighten permission and share the child (linear borrow). */
++    __linear void *child = body;
++    if (perm == CAPSTONE_ANNOTATION_PERM_IN) {
++        child = __tighten(child, 4);
++    }
++    else if (perm == CAPSTONE_ANNOTATION_PERM_INOUT) {
++        child = __tighten(child, 6);
++    }
++    else if (perm == CAPSTONE_ANNOTATION_PERM_OUT) {
++        child = __tighten(child, 2);
++    }
++    else if (perm == CAPSTONE_ANNOTATION_PERM_FULL) {
++        child = __tighten(child, 7);
++    }
++    else {
++        return -1;
++    }
++
++    d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, child);
++    domains[dom_id] = d;
++
++    return 0;
++}
++
+ // This function has been deprecated, use shared_region_annotated instead
+ static unsigned share_region(unsigned dom_id, unsigned region_id) {
+     if(dom_id >= dom_n || region_id >= region_n) {
+@@ -531,6 +669,20 @@ static void return_from_domain(unsigned retval) {
+     __domreturnsaves(caller_dom, DOM_REENTRY_POINT, 0);
+ }
+ 
++/* Step B: terminate the currently-running domain because it hit an
++ * unrecoverable capability/access fault, and return control cleanly to the
++ * caller (the lender/host) with a fault sentinel -- rather than spinning in
++ * capstone_error(). This reuses the exact domain-return path a normal
++ * DOM_RETURN ecall takes (return_from_domain -> __domreturnsaves), which is
++ * already invoked from inside _cap_trap_entry, so it composes with the trap
++ * context. The cause is emitted for the log but the caller only needs to see
++ * that the call faulted (CAPSTONE_DOMAIN_FAULT_RETVAL). Does not return. */
++static void fault_return_from_domain(unsigned cause) {
++    C_PRINT(CAPSTONE_ERR_STARTER);
++    C_PRINT(cause);
++    return_from_domain(CAPSTONE_DOMAIN_FAULT_RETVAL);
++}
++
+ static unsigned query_region(unsigned region_id, unsigned field) {
+     if(region_id >= region_n) {
+         return -1;
+@@ -625,7 +777,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+         case SBI_EXT_CAPSTONE:
+             switch(func_code) {
+                 case SBI_EXT_CAPSTONE_DOM_CREATE:
+-                    res = create_domain(arg0, arg1, arg2, arg3);
++                    res = create_domain(arg0, arg1, arg2, arg3, arg4, arg5);
+                     break;
+                 case SBI_EXT_CAPSTONE_DOM_CALL:
+                     res = call_domain(arg0);
+@@ -663,6 +815,9 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+                 case SBI_EXT_CAPSTONE_REGION_POP:
+                     res = pop_region(arg0);
+                     break;
++                case SBI_EXT_CAPSTONE_REGION_SHARE_CHILD:
++                    res = share_child_region(arg0, arg1, arg2, arg3, arg4);
++                    break;
+                 default:
+                     err = 1;
+             }
+@@ -695,11 +850,14 @@ static void swap_cpmp(unsigned badaddr) {
+             break;
+     }
+     if(region_id >= region_n) {
++        /* No region covers badaddr: this is not a recoverable CPMP miss but an
++         * unrecoverable domain fault (e.g. a use-after-revoke store, whose
++         * region was revoked, or an out-of-bounds access). Terminate the domain
++         * and return the fault to the caller instead of spinning. */
+         C_PRINT(badaddr);
+         C_PRINT(region_n);
+-        print_regions();
+-        print_cpmps();
+-        capstone_error(CAPSTONE_NO_CPMP_REGION);
++        fault_return_from_domain(CAPSTONE_NO_CPMP_REGION);
++        return; /* not reached: fault_return_from_domain switches domains */
+     }
+ 
+     // check if there is free cpmp entry
+@@ -736,7 +894,12 @@ void handle_exception(unsigned cause) {
+             swap_cpmp(badaddr);
+             break;
+         default:
+-            capstone_error(CAPSTONE_UNKNOWN_EXCP);
++            /* A non-access-fault synchronous cause reaching the monitor from a
++             * domain (e.g. RISCV_EXCP_INVALID_CAP from a use-after-revoke, a
++             * bounds/tag violation) is an unrecoverable domain fault. Terminate
++             * the domain and return the fault to the caller instead of spinning
++             * in capstone_error(). */
++            fault_return_from_domain(cause);
+     }
+ }
+ 

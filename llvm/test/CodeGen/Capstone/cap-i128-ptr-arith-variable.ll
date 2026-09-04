@@ -31,8 +31,12 @@ target triple = "capstone64-unknown-elf"
 ; The offset is scaled and negated in the integer (XLen) domain, then applied to
 ; the base capability with a REGISTER cincoffset -- never lcc'd as if it were a
 ; pointer, and the base must remain the cincoffset operand (not a scalar).
-; CHECK:      slli [[OFF:a[0-9]+]], a1, 5
+; The negate and the scale commute, and the order they come out in changed with
+; c128; what matters is that both happen at XLen and the BASE stays the
+; capability. The `add nsw i32` folds into addiw rather than a separate sext.
+; CHECK:      addiw [[OFF:a[0-9]+]], a1, 1
 ; CHECK:      neg [[OFF]], [[OFF]]
+; CHECK:      slli [[OFF]], [[OFF]], 5
 ; CHECK:      cincoffset a0, a0, [[OFF]]
 ; CHECK-NOT:  lcc
 define ptr addrspace(200) @ptr_sub_var(ptr addrspace(200) %p, i32 %n) addrspace(200) {

@@ -26,9 +26,9 @@ class InstructionCost;
 class CapstoneSubtarget;
 struct CapstoneRegisterInfo;
 
-// Operand-role predicates for commutative i128 capability arithmetic, defined
-// in CapstoneISelLowering.cpp. Shared with instruction selection so the
-// cscincoffset base/offset canonicalization (tagged capability in the base
+
+// True when V is definitely an INTEGER offset rather than a capability. Kept as a
+// free function so the answer (and therefore the choice of cincoffset vs a scalar
 // position) is identical whether an `add` is custom-lowered or reaches ISel
 // directly.
 bool isCapstoneIntegerOffset(SDValue V);
@@ -55,7 +55,6 @@ public:
   bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
   bool isTruncateFree(SDValue Val, EVT VT2) const override;
   bool isZExtFree(SDValue Val, EVT VT2) const override;
-  bool isZExtFree(EVT SrcVT, EVT DstVT) const override;
   bool isSExtCheaperThanZExt(EVT SrcVT, EVT DstVT) const override;
   bool signExtendConstant(const ConstantInt *CI) const override;
   bool isCheapToSpeculateCttz(Type *Ty) const override;
@@ -228,7 +227,14 @@ public:
   bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
     return VT.isScalarInteger();
   }
-  bool convertSelectOfConstantsToMath(EVT VT) const override { return true; }
+  // Only for integers. "To math" means shifts, zexts and adds on VT, which is
+  // meaningless for a capability -- and DAGCombiner::SimplifySelectCC builds a
+  // ZERO_EXTEND to VT, whose "Invalid ZERO_EXTEND!" assert catches it now that a
+  // capability is not an integer type. A capability-typed select of two constant
+  // capabilities stays a select. Found by musl's src/ctype/wctrans.c.
+  bool convertSelectOfConstantsToMath(EVT VT) const override {
+    return VT.isInteger();
+  }
 
   bool isCtpopFast(EVT VT) const override;
 
@@ -306,6 +312,27 @@ public:
                       SelectionDAG &DAG) const override;
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
+
+  /// AS200 pointers are capabilities and their arithmetic is cincoffset, which
+  /// is exactly what PTRADD models: base is the pointer, offset is an integer.
+  /// Keeping it as PTRADD means nothing downstream has to infer which operand
+  /// is the capability.
+
+  // An AS200 pointer is a capability, so its VT is not an integer. The default
+  // is MVT::getIntegerVT(DL.getPointerSizeInBits(AS)) -- it uses the address
+  // space to fetch a size and then discards it.
+  MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const override {
+    if (AS == 200)
+      return MVT::c128;
+    return TargetLowering::getPointerTy(DL, AS);
+  }
+  MVT getPointerMemTy(const DataLayout &DL, uint32_t AS = 0) const override {
+    if (AS == 200)
+      return MVT::c128;
+    return TargetLowering::getPointerMemTy(DL, AS);
+  }
+
+  bool shouldPreservePtrArith(const Function &F, EVT PtrVT) const override;
 
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                          Type *Ty) const override;

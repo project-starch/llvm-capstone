@@ -1,3 +1,5 @@
+import subprocess
+import os
 #!/usr/bin/env python3
 """Build the SENTINEL arm: make the stale pre-`ldc` value of a4 a self-labelling constant.
 
@@ -46,7 +48,9 @@ discriminate and one does not:
 """
 import argparse, hashlib, re, subprocess, sys
 
-OBJDUMP = "/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-objdump"
+OBJDUMP = (os.environ.get("CAPSTONE_ROOT") or subprocess.run(
+    ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()) + "/llvm/cmake-build-debug/bin/llvm-objdump"
 TRIPLE = "capstone64-unknown-elf"
 FUNC = "sqlite3WhereCodeOneLoopStart"
 BASE_SHA256 = "69fe70b767e76b2ba34cca2ec160f3567e1a641ded7baa639803220087f9ca20"

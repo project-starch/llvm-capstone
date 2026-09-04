@@ -11,12 +11,25 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+source "$CAPSTONE_REPO_ROOT/capstone/tests/select.sh"
 
 mapfile -t BEEBS_RUNNERS < <(
   find "$SCRIPT_DIR" -maxdepth 1 -name 'run-beebs-*.sh' \
     ! -name 'run-beebs-simple-common.sh' \
     | sort
 )
+
+# Selection uses the same rule and the same variable as every other suite:
+#   CAPSTONE_ONLY=huffbench,newlib-exp
+# A name matching no runner is an error, not a quietly smaller sweep.
+selected=()
+for runner in "${BEEBS_RUNNERS[@]}"; do
+  bench=$(basename "$runner" .sh); bench=${bench#run-beebs-}
+  capstone_selected "$bench" && selected+=("$runner")
+done
+BEEBS_RUNNERS=("${selected[@]}")
+capstone_select_verify || exit 2
+capstone_select_banner beebs
 
 if [[ ${#BEEBS_RUNNERS[@]} -eq 0 ]]; then
   echo "run-all-beebs.sh: no BEEBS runners found" >&2
@@ -106,11 +119,20 @@ run_one() {
       continue
     fi
 
+    # A run that exhausted its retries on a guest that never booted is not a
+    # result. Record it and let the other benchmarks run: aborting here is what
+    # discarded 58 of 82 in the last nightly, and it is what the authority suite
+    # did before it was fixed.
+    if grep -q "__CAPSTONE_INFRA_FLAKE__" "$log_file" 2>/dev/null; then
+      echo "run-all-beebs.sh: FLAKE $name (never booted after $attempt attempts)" >&2
+      printf 'status=FLAKE\nattempt=%s\nlog=%s\n' "$attempt" "$log_file" >"$result_file"
+      return 75
+    fi
     echo "run-all-beebs.sh: FAIL $name (exit=$status, log=$log_file)" >&2
     echo "run-all-beebs.sh: recent log tail:" >&2
     tail -80 "$log_file" >&2 || true
     printf 'status=FAIL\nattempt=%s\nlog=%s\nexit=%s\n' "$attempt" "$log_file" "$status" >"$result_file"
-    exit "$status"
+    return "$status"
   done
 
   marker=$(grep -Eo '__BEEBS_[A-Z0-9_]+_PASSED__' "$log_file" | tail -1 || true)
@@ -129,7 +151,13 @@ run_one() {
 
 if [[ "$JOBS" -eq 1 ]]; then
   for runner in "${BEEBS_RUNNERS[@]}"; do
-    run_one "$runner"
+    # Never abort the sweep on one benchmark. The verdict is assembled from the
+    # result files below, where a FLAKE is kept apart from a FAIL.
+    #
+    # An `||` list, not `set +e`: run_one re-enables errexit internally, so a
+    # `set +e` here is undone before the function returns and a non-zero return
+    # would still take the whole sweep down.
+    run_one "$runner" || true
   done
 else
   echo "run-all-beebs.sh: running with RUN_ALL_BEEBS_JOBS=$JOBS"
@@ -164,6 +192,7 @@ fi
 
 passed=0
 retried=0
+flaked=0
 for runner in "${BEEBS_RUNNERS[@]}"; do
   name=$(basename "$runner" .sh)
   result_file=$LOG_DIR/$name.result
@@ -177,10 +206,20 @@ for runner in "${BEEBS_RUNNERS[@]}"; do
     if [[ ${attempt:-1} -gt 1 ]]; then
       retried=$((retried + 1))
     fi
+  elif grep -q '^status=FLAKE$' "$result_file"; then
+    # Never booted, so there is no verdict for it. Not a pass, not a failure.
+    flaked=$((flaked + 1))
   else
     echo "run-all-beebs.sh: $name did not pass; result=$result_file" >&2
     exit 1
   fi
 done
+
+# A real failure has already exited 1 above. What is left is an incomplete sweep,
+# which is not a pass either -- 75 says so without claiming a defect.
+if [[ ${flaked:-0} -ne 0 ]]; then
+  echo "run-all-beebs.sh: $passed passed, $flaked never booted; no verdict for those" >&2
+  exit 75
+fi
 
 echo "run-all-beebs.sh: all $passed BEEBS runners completed (infra-retried=$retried, logs=$LOG_DIR)"

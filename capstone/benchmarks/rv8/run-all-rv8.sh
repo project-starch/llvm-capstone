@@ -7,6 +7,7 @@ set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+source "$SCRIPT_DIR/../../tests/select.sh"
 LOG_DIR=${LOG_DIR:-$CAPSTONE_TMP_ROOT/run-all-rv8-logs}
 mkdir -p "$LOG_DIR"
 
@@ -16,7 +17,9 @@ pass=0
 fail=0
 failed=""
 
+capstone_select_banner rv8
 for b in $BENCHES; do
+  capstone_selected "$b" || { echo "SKIP  $b"; continue; }
   marker="__RV8_$(printf '%s' "$b" | tr '[:lower:]' '[:upper:]')_PASSED__"
   ok=0
   for attempt in 1 2; do
@@ -37,6 +40,7 @@ for b in $BENCHES; do
   fi
 done
 
+capstone_select_verify || exit 2
 echo "run-all-rv8: $pass passed, $fail failed.${failed:+ Failed:$failed}"
 if [ "$fail" -eq 0 ]; then
   echo "__RV8_ALL_PASSED__"

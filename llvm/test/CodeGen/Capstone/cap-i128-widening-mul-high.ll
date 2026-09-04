@@ -21,18 +21,20 @@
 ; ever stops firing for these shapes, they would fall through to legalisation and abort,
 ; and this file catches that. It must simply not be read as coverage of the hook.
 ;
-; The hook's own emit path has NO known reaching input and NO test coverage. See
-; cap-i128-widening-mul-const-signedness.ll, which DOES enter the function and exercises
-; the matcher's reject path.
+; The hook is GONE (2026-08-24, with the i128 capability carrier). Its emit path never
+; had a known reaching input, and the file that exercised its reject path --
+; cap-i128-widening-mul-const-signedness.ll -- went with it. This one stays, because what
+; it locks is the COMBINER, which is unaffected.
 ;
 ; The HIGH HALF of a widening multiply, which on this target arrives as a real
 ; 128-bit shift and used to crash the compiler.
 ;
-; On a target where i128 is illegal, DAGCombiner rewrites srl(mul(zext a, zext b), 64)
-; into MULHU while legalising the wide type. Here i128 is LEGAL, because it is the
-; capability carrier, so that combine never runs, the shift survives to
-; legalisation, and SelectionDAGLegalize::ExpandNode asserted
-;   "Unable to legalize non-vector shift".
+; DAGCombiner rewrites srl(mul(zext a, zext b), 64) into MULHU before legalisation.
+; It USED to be that i128 was legal here -- it was the capability carrier -- and the
+; original crash was blamed on that: the shift was thought to survive to legalisation,
+; where SelectionDAGLegalize::ExpandNode asserted "Unable to legalize non-vector shift".
+; The audit above showed the combine fires either way. A capability is c128 now, so
+; i128 is illegal like everywhere else, and this shape is doubly covered.
 ;
 ; Nothing has to write __int128 to reach this: division by a constant is strength
 ; reduced to mulhu(x, magic) >> s, which is how lib/oofatfs's f_mkfs crashed the
