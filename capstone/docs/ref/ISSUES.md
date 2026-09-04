@@ -1318,6 +1318,57 @@ and the folder is the report.
 
 ## RTL / FPGA
 
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, verified in source with a control`
+
+**Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
+than taken on report, including the control that makes it a defect rather than an idiom.**
+
+`core/anvil_build/capstone_flu_unit.anvil:147`, the `INIT` path:
+
+```
+let rd = call create_capability(rd_temp.metadata, new_cursor);
+let result = call create_result_pack(data.trans_id, ex_code::NO_EXCEPTION, rd, rd);
+```
+
+`create_result_pack(id, ex, rs1, rd)` assigns `cap_rs1 = rs1` and `cap_result = rd`
+(`capstone_unit.anvilh:360-364`). Passing `rd` twice therefore writes the **newly created LINEAR
+capability into `rs1` as well as `rd`** — two live LINEAR capabilities over one region, which is
+precisely what linearity exists to prevent.
+
+**THE CONTROL, which is what makes this a defect and not a house idiom.** The `rd,rd` form appears
+four times in this file — `:42`, `:72`, `:106`, `:147`. The first three are each guarded by
+
+```
+if(data.rs1 == data.rd){
+```
+
+i.e. they are the *same-register* case, where writing both is writing one register and is correct.
+**`:147` has no such guard.** Its enclosing conditions are only `rs1.cursor <= rs1.metadata.end`
+(`:139`, raising `ILLEGAL_OPERAND_VALUE`) and the `else` around it. So the codebase demonstrably
+knows the correct idiom and `INIT` omits it, for **any** `rs1 != rd`.
+
+Every sibling in the file passes `rs1` unchanged, `rs1_out` modified, or `rcnull` when the source
+must be consumed (`:173`). None of those apply here.
+
+**QEMU nulls `rs1`**, so this is silicon-only and cannot be reproduced under emulation — the class
+of divergence that has repeatedly cost this project board time.
+
+**Not yet established, and needed before this is handed to the hardware side:**
+
+- **whether it is reachable from our codegen.** If the compiler only ever emits `INIT` with
+  `rs1 == rd`, the defect is real in the ISA and unreachable in practice, which changes its
+  priority completely though not its correctness.
+- **whether the duplicated capability is usable**, or whether a later consumer traps on it.
+- a **directed `.S`** in the simulator with `rs1 != rd`, reading both registers afterwards. This
+  needs no board — `rtl-sim` answers it in ~14 s, and it is the natural next step.
+
+**Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
+`cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
+`INIT` requires `cursor > end` (`:139` above) — which would make a post-revoke `UNINIT` capability
+impossible to re-initialise on silicon. If that holds it is a second independent defect in the
+same instruction pair. Verify before recording.
+
+
 ### R-1 — A load through one capability register misses a store through another `CHARACTERISED`
 **The blocker for several of the 13 benchmark rungs.** An intervening store through one capability register
 causes a later load through a *different* capability register to miss an earlier store to its own
