@@ -9,7 +9,7 @@
 # edit that moves a route must update this file (that is deliberate -- a route
 # that moves may also have changed).
 CapstoneISelDAGToDAG.cpp:1360 | folded displacement >64-bit: IR truncates a GEP index to the 64-bit index width, so the fold sees an in-range value | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
-CapstoneISelDAGToDAG.cpp:1765 | TIGHTEN immediate non-constant: the intrinsic carries ImmArg and the IR verifier rejects a non-immediate, and the builtin is _Constant in clang | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
-CapstoneISelDAGToDAG.cpp:1913 | CCSRRW CSR non-constant: same ImmArg / _Constant argument | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:1806 | TIGHTEN immediate non-constant: the intrinsic carries ImmArg and the IR verifier rejects a non-immediate, and the builtin is _Constant in clang | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
+CapstoneISelDAGToDAG.cpp:1954 | CCSRRW CSR non-constant: same ImmArg / _Constant argument | llvm/test/CodeGen/Capstone/unreachable-fatal-routes.ll
 CapstoneISelLowering.cpp:10832 | capability select with SGT/SLE/UGT/ULE: all ten condition codes canonicalise before reaching lowerSELECT (measured 2026-09-04); the SELECT_CC-combine route is probed in Tier 4 | llvm/test/CodeGen/Capstone/select-cap-condcodes.ll
 CapstoneISelLowering.cpp:27029 | every DYNAMIC_STACKALLOC size reaches lowering as XLen (i16/i32 promoted, i128 expanded and truncated by the generic legalizer), so lowerDynamicAllocaSizeToXLen never returns null | llvm/test/CodeGen/Capstone/dynamic-alloca-size-types.ll

@@ -10,8 +10,11 @@
 ; and is never selected.
 ;
 ; Correct lowering: restore callee-saves if any, pop the frame, then
-; `cjalr zero, 0(target)`.  This file pins that shape.  It is XFAIL until the
-; fix lands; when it lands lit reports XPASS and the marker comes off.
+; `cjalr zero, 0(target)`.  This file pins that shape.  Fixed 2026-09-04 in
+; selectCall (TAIL -> PseudoTAILIndirect); the target register is a member of
+; GPCRTC (t0-t3 or an argument register), which is why the pattern below
+; accepts either -- the epilogue restores the callee-saves, so the target must
+; not live in one.
 ;
 ; MUTATION: change `tail call` to `call` in @tail_direct -> `CHECK-NOT: cjalr ra`
 ; in that function fires.  @not_tail is the standing control: it MUST contain
@@ -22,18 +25,17 @@
 ; RUN: llc < %s -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs | FileCheck %s
 ; RUN: llc < %s -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs -capstone-gp-free | FileCheck %s --check-prefix=GPFREE
 ; RUN: %llc_cap -O0 < %s -o /dev/null
-; XFAIL: *
 
 declare i64 @callee(i64)
 
 ; A direct sibling call: materialise the target, drop the frame, jump.
 ; CHECK-LABEL: tail_direct:
 ; CHECK-NOT: cjalr ra
-; CHECK: cjalr zero, 0(a{{[0-9]+}})
+; CHECK: cjalr zero, 0({{[at][0-9]}})
 ; GPFREE-LABEL: tail_direct:
 ; GPFREE-NOT: jalr ra
 ; GPFREE-NOT: cjalr ra
-; GPFREE: {{j(alr zero, 0\(a[0-9]+\)|r a[0-9]+)}}
+; GPFREE: {{j(alr zero, 0\([at][0-9]\)|r [at][0-9])}}
 define i64 @tail_direct(i64 %x) {
   %y = add i64 %x, 1
   %r = tail call i64 @callee(i64 %y)
@@ -43,7 +45,7 @@ define i64 @tail_direct(i64 %x) {
 ; An indirect sibling call through a capability function pointer.
 ; CHECK-LABEL: tail_indirect:
 ; CHECK-NOT: cjalr ra
-; CHECK: cjalr zero, 0(a{{[0-9]+}})
+; CHECK: cjalr zero, 0({{[at][0-9]}})
 define i64 @tail_indirect(ptr addrspace(200) %f, i64 %x) {
   %r = tail call i64 %f(i64 %x)
   ret i64 %r
@@ -53,10 +55,10 @@ define i64 @tail_indirect(ptr addrspace(200) %f, i64 %x) {
 ; be RELOADED, and the frame popped, before the jump -- the jump returns to our
 ; caller with our caller's ra.
 ; CHECK-LABEL: tail_after_call:
-; CHECK: cjalr ra, 0(a{{[0-9]+}})
+; CHECK: cjalr ra, 0({{[at][0-9]}})
 ; CHECK: ldc ra, {{[0-9]+}}(sp)
 ; CHECK: cincoffsetimm sp, sp, {{[0-9]+}}
-; CHECK-NEXT: cjalr zero, 0(a{{[0-9]+}})
+; CHECK: cjalr zero, 0({{[at][0-9]}})
 define i64 @tail_after_call(i64 %x) {
   %a = call i64 @callee(i64 %x)
   %b = add i64 %a, %x

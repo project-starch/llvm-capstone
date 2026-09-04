@@ -1480,6 +1480,47 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
     return SDValue();
   };
 
+  // C-40: an offset from the NULL capability is never a capability. cincoffset
+  // raises UNEXPECTED_OPERAND when rs1 holds no capability, and null holds none,
+  // so `cincoffset rd, zero, rs2` faults on every execution -- and the codegen
+  // pipeline emits exactly that shape on its own: Loop Strength Reduction
+  // rewrites a pointer loop's exit test `a == aLast` into
+  // `(gep i8, null, %lsr.iv) == null` (SCEVExpander's expansion for a
+  // non-integral address space), which took every -O1/-O2 SQLite domain down at
+  // its first loop. Lower it the way inttoptr is lowered (see the BITCAST case in
+  // CapstoneISelLowering): write the offset into the address half of an undefined
+  // capability, whose cursor is the offset. A comparison then reads the cursor.
+  //
+  // The result is untagged ONLY when the offset was produced by an integer
+  // instruction (an induction variable, as in the LSR shape). A ptrtoint-derived
+  // offset can still carry its source capability's tag: the INSERT_SUBREG copy
+  // is elided when source and destination share a register (copyPhysReg skips
+  // the tag-clearing ADDI in that case), so `(char *)0 + (uintptr_t)p` at -O1
+  // and above may yield p with its full authority rather than an untagged value.
+  // That is the pre-existing inttoptr hole (the BITCAST bridge), not something
+  // this selection adds; it is recorded so that "faults at the load" is not
+  // claimed for it. The claim-auditor demonstrated the elided copy on
+  // 2026-09-04 (ptrtoint -> inttoptr -> load: `lbu a0, 0(a0)` alone at -O1).
+  if (auto *NullBase = dyn_cast<ConstantSDNode>(Base);
+      NullBase && NullBase->isZero() && Base.getValueType() == MVT::c128) {
+    SDValue Addr;
+    if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+      int64_t ImmVal = getI128NumericValueOrFatal(
+          CurDAG, C, "CIncOffset displacement must fit in 64 bits");
+      Addr = selectImm(CurDAG, DL, XLenVT, ImmVal, *Subtarget);
+    } else if (Offset.getSimpleValueType() == XLenVT) {
+      Addr = Offset;
+    }
+    if (Addr) {
+      SDNode *Undef =
+          CurDAG->getMachineNode(TargetOpcode::IMPLICIT_DEF, DL, MVT::c128);
+      SDValue Res = CurDAG->getTargetInsertSubreg(
+          Capstone::sub_cap_addr, DL, MVT::c128, SDValue(Undef, 0), Addr);
+      ReplaceNode(Node, Res.getNode());
+      return;
+    }
+  }
+
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
     int64_t ImmVal = getI128NumericValueOrFatal(
@@ -2002,19 +2043,27 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   if (Node->getGluedNode())
     Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
 
-  // Create CJALR instruction.
-  // Returns: 1. Value (RA) - not used here, 2. Chain, 3. Glue
-  // Note: We specify PtrVT as the first result type to match the instruction
-  // definition, even though CALL node doesn't use it.
-  SDNode *Call = CurDAG->getMachineNode(Capstone::PseudoCALLIndirect, DL,
+  // A sibling call is a JUMP, not a call (C-28). CapstoneISD::TAIL used to be
+  // routed here and built PseudoCALLIndirect like an ordinary call, so the
+  // callee was entered with `cjalr ra` and the caller had no epilogue and no
+  // return after it -- control fell off the end of the function. The tail
+  // pseudo expands to `cjalr zero, 0(rs1)`; being a terminator/return, it is
+  // placed after the epilogue that frame lowering inserts, and its GPCRTC
+  // operand class keeps the target out of the callee-saved registers that the
+  // epilogue restores. See llvm/test/CodeGen/Capstone/tail-call.ll.
+  bool IsTail = Node->getOpcode() == CapstoneISD::TAIL;
+  unsigned Opc = IsTail ? Capstone::PseudoTAILIndirect
+                        : Capstone::PseudoCALLIndirect;
+
+  // Both nodes return {Chain, Glue}; both pseudos take the target and the
+  // forwarded call operands.
+  SDNode *Call = CurDAG->getMachineNode(Opc, DL,
                                         CurDAG->
                                         getVTList(MVT::Other, MVT::Glue),
                                         Ops);
 
-  // Replace original CALL.
-  // CALL returns {Chain, Glue}.
-  // CJALR returns {Value, Chain, Glue}.
-  // Map CALL:0 -> CJALR:1 (Chain), CALL:1 -> CJALR:2 (Glue).
+  // Replace the original CALL/TAIL: result 0 is the chain, result 1 the glue,
+  // on both the ISD node and the pseudo.
   ReplaceUses(SDValue(Node, 0), SDValue(Call, 0)); // Chain
   ReplaceUses(SDValue(Node, 1), SDValue(Call, 1)); // Glue
   CurDAG->RemoveDeadNode(Node);
