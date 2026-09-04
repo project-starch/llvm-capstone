@@ -16,6 +16,11 @@ Minimal snapshot. Read first in every session.
   Post-fix the SQLite domain completes 4 draws of 4 against a pre-fix arm that trapped 3 of 4 —
   Fisher p = 0.071. **Two more draws would settle it; until then do not write "fixed" unqualified.**
   Full mechanism: `capstone/tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/S12-explanation.md`.
+* **PROVISIONAL (2026-09-04): every QEMU result below was produced by a binary dated 2026-08-27**,
+  eight days before the c128 merge, because that merge left `capstone-qemu` unable to compile and
+  nothing rebuilt it. See `ref/ISSUES.md` Q-02. The SILICON results are unaffected — they came
+  from the board, not from QEMU — but any line reading "matches native under QEMU" is waiting on a
+  rebuild before it can be re-asserted.
 * **SQLite RUNS ON SILICON — that is a LIVENESS result, not a correctness one.** The `slt/`
   corpus executes end-to-end in a capability domain; `s12stress` completes 120/120 prepares and
   15/15 of the corpus matches native under QEMU on the current compiler.

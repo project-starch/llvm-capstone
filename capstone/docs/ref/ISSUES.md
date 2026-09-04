@@ -3352,6 +3352,55 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
+### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `OPEN — every post-merge QEMU verdict is provisional`
+
+**Reported by the compiler lane 2026-09-04, re-verified here before recording.**
+
+`target/riscv/op_helper.c` does not compile at `c128-qemu-merge` HEAD. Brace balance:
+
+| revision | depth |
+|---|---|
+| `cb23bf201b` (pre-merge parent) | **0** |
+| `b6e65e9926` (the merge) | **2** |
+| HEAD | **2** |
+| `target/riscv/cap.h` at HEAD (control) | **0** |
+
+The control matters: the same one-line `awk` returns 0 on a sibling file, so it is not miscounting.
+Located precisely — `capstone_report_untagged` opens at :635, and where the parent closes it with
+`}` on its line 651, HEAD runs straight from `fflush(stderr);` into a comment block. The function
+never closes.
+
+**The consequence is the reason this is filed rather than fixed in passing.**
+`build/qemu-system-riscv64` is dated **2026-08-27 20:11**; the merge is **2026-09-04 15:32**.
+Nothing rebuilt it, and nothing could have. **So every QEMU result reported after the merge was
+produced by a binary that predates it by eight days** — including "the SLT corpus matches native
+15/15", which `state/current-state.md` now marks provisional with the binary's date.
+
+The nightly does not catch it: `run-nightly.sh:192-200` relinks only when the binary is older than
+the source, which it *is*, so the branch should have fired on 2026-09-04 and did not. That is a
+second question, and it is the more important one — a gate that should have fired and didn't.
+
+**UNRESOLVED, and deliberately not asserted.** Three helpers — `helper_cslcc`,
+`helper_cscincoffset`, `helper_cscincoffsetimm` — each contain
+`riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());` *outside* the `if (!rs1_v->tag)`
+block that guards it, where the parent had a conditional `assert(rs1_v->tag)`. Read literally that
+raises on **every** such instruction. But the commits introducing it (`62de48fd8d`, `f546e392fe`,
+`fb259f5fbf`, 2026-08-15..20) **predate the working 08-27 binary**, which runs SQLite to
+completion. Both cannot be true, so either the reading is wrong or the binary was built from
+something other than this branch. **Do not act on this half until it is settled** — establishing
+which commit the 08-27 binary came from settles it, and that is step (c) below.
+
+**What closes this:** (a) make HEAD compile; (b) rebuild; (c) identify the commit the 08-27 binary
+was built from; (d) re-run the SLT corpus and smoke on the rebuilt binary, then re-establish or
+retract the post-merge claims; (e) add a QEMU **build** step to the nightly so a non-compiling
+submodule turns a row red, and find out why the existing relink branch stayed silent.
+
+**Not repaired here.** The damage is not only the missing brace — the merge interleaved two
+variants of the gp-fabrication block in `helper_cscincoffset`, so a brace-only fix would compile
+and be semantically wrong, which is worse than not compiling. The repair needs the c128 author's
+intent, and it is capability-ABI code.
+
+
 ### I-01 — the fail-closed push gate was installed in only 2 of 6 repositories `RESOLVED 2026-09-04 — all six gated and negative-tested`
 
 **Found 2026-09-04 by negative-testing it, which is the only way this class surfaces.**
