@@ -1,0 +1,20 @@
+== in sqlite3WhereClauseClear
+   d9d14: 63 0a 05 00  	beqz	a0, 0xd9d28 <sqlite3WhereClauseClear+0x98>
+   d9d18: db b5 09 00  	ldc	a1, 0x0(s3)
+   d9d1c: 63 86 05 00  	beqz	a1, 0xd9d28 <sqlite3WhereClauseClear+0x98>
+   d9d20: 5b 95 04 14  	movc	a0, s1
+   d9d24: e7 80 0b 00  	jalr	s7
+   d9d28: 03 d5 29 02  	lhu	a0, 0x22(s3)
+   d9d2c: 13 75 05 03  	andi	a0, a0, 0x30
+   d9d30: 63 0e 05 00  	beqz	a0, 0xd9d4c <sqlite3WhereClauseClear+0xbc>
+   d9d34: 5b b9 09 03  	ldc	s2, 0x30(s3)
+   d9d38: 5b 15 09 14  	movc	a0, s2
+   d9d3c: e7 80 0a 00  	jalr	s5
+   d9d40: 5b 95 04 14  	movc	a0, s1
+   d9d44: db 15 09 14  	movc	a1, s2
+   d9d48: e7 00 0b 00  	jalr	s6
+   d9d4c: 5b 15 40 19  	cincoffset	a0, zero, s4
+   d9d50: 63 08 05 00  	beqz	a0, 0xd9d60 <sqlite3WhereClauseClear+0xd0>
+   d9d54: db a9 09 05  	cincoffsetimm	s3, s3, 0x50
+   d9d58: 13 0a 0a fb  	addi	s4, s4, -0x50
+1 hit(s)

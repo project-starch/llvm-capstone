@@ -807,3 +807,37 @@ them rather than rediscovering them:
   capstone/tests/check-lit-coverage.sh"`, and extend the `lit` row's file set with
   `clang/test/Sema/capstone*.c`, `clang/test/CodeGen/*capstone*.ll` and
   `llvm/test/Transforms/LICM/capstone-*.ll`.
+
+### 2026-09-04 — Tier 2a first results, and two defects found by the new oracles
+
+- **Tier 2a SLT twins** (harness `capstone/tests/twins/`, positive-controlled; QEMU
+  5dc356547d7f built 22:34; compiler = the branch at db079043's codegen): at **-O0**
+  select1 (1031 records), q_two and dd2_join **AGREE** with native, 0 failures — the first
+  re-runnable SLT value verdict on this project. At **-O1 and -O2 every file faults at
+  the domain's first loop** (ERROR: no summary; cause 24 at pc …9d4c).
+- **C-40** (`capstone/tests/twins/findings/C40-lsr-null-gep-cincoffset/`): llc's Loop
+  Strength Reduction rewrites a pointer loop's exit test into
+  `(gep i8, null, %lsr.iv) == null` and the backend emits `cincoffset a0, zero, s4`,
+  which raises UNEXPECTED_OPERAND on the untagged null base. Five sites at -O1, eight at
+  -O2, none at -O0. Almost certainly the -O1 blocker behind C-3 and "SQLite ships at
+  -O0". Pinned red-first (`c40-null-base-cincoffset.ll`); target-side fix written in
+  `selectCIncOffset` (a null base lowers like inttoptr, an untagged value carrying the
+  offset), rebuild after the twins driver exits.
+- **C-39** (`capstone/tests/fuzz/findings/F01-vector-elt-pointer-zext/`): llvm-stress,
+  every seed: a variable-index extract/insert on a wide vector is split through a stack
+  temporary and `TargetLowering::getVectorSubVecPointer` zero-extends the index into the
+  c128 pointer type. Pinned red-first with a value arm; shared-code fix written
+  (compute the index in the AS0 pointer type, as this fork's `getMemBasePlusOffset` does);
+  validation = Capstone suite for correctness, X86/RISCV/Generic lit as the regression
+  check against an unintended effect (those targets cannot exercise the changed branch).
+- **Tier 2c harness** (`capstone/tests/fuzz/`): csmith 2.4.0 and yarpgen 2.0 installed and
+  pinned (`TOOLS.lock`, flag spellings verified); `build-fuzz-program.sh` builds a
+  generated program into a domain with a freestanding csmith runtime overlay
+  (`csmith-rt/`) that returns the checksum through the 32-bit result channel;
+  `run-domain-batch.py` runs a manifest in one boot and survives a faulting item;
+  `run-fuzz-campaign.py` does the native reference, the builds, the batch and the
+  verdicts, with the XOR and fault positive controls. Dry run of 10 seeds: 16 domains
+  built, 2 generator timeouts, 0 build failures. QEMU runs after the twins.
+- Worktree note: the benchmark host programs include a header from the empty
+  `caplifive-buildroot` submodule dir by relative path; the worktree now carries a
+  RELATIVE symlink to the main checkout's (read-only use; never committed).
