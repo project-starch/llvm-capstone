@@ -530,7 +530,7 @@ fixes are made in this session, one commit each, each with the regression test f
 | **C-32** | `movc` of an untagged c128 nulls the source on silicon while it is live | make the integer→capability INSERT_SUBREG pseudo rematerializable; PHI copies remain → file the residue | `sem-movc-untagged-live.c` |
 | **C-31** | a tagged rs2 can reach `cincoffset` via `EXTRACT_SUBREG` with no ALU write | audit-dependent (4.1 rs2 row); if confirmed, force an `addi rd, rs, 0` between extract and use | `sem-cincoffset-rs2-from-extract.ll` |
 | **C-36** | domain-op definitions (CAPENTER funct7, CAPEXIT phantom, CAP_RETURN operand roles, CAP_CALL clobbers) do not match the ISA | per 4.4, after `rtl-oracle` confirms each | MC M1/M5 + `sem-domain-ops-encoding.s` |
-| **C-25-mnemonic** | `call a0, a1` unassemblable (finding 25) | rename the `CAP_CALL` mnemonic or give `parseCallSymbol` lower precedence — main-session choice | M4 loses its XFAIL |
+| **C-38** | `call a0, a1` unassemblable (finding 25; C-25 is the ptrdiff-untagged fix, so the mnemonic bug is C-38) | rename the `CAP_CALL` mnemonic or give `parseCallSymbol` lower precedence — main-session choice | M4 loses its XFAIL |
 | — | missing Sema for every `__builtin_capstone_*` (finding 3) | `SemaCapstone.cpp` (4.6) | `capstone-builtins-range.c` |
 | — | S12MovcLdcHazard inert on c128 (finding 24) | **retire the pass** (S-12 is fixed in RTL; the pass never fired post-c128) after two more clean board draws | T4 flips from XFAIL to deleted |
 | — | `-capstone-memcpy-high-half-fixup` family | **delete** — S-06 fixed in silicon, deletion already authorised by `S06-WORKAROUNDS-TO-REVERT.md` §3, re-confirmed by one board rung | `flags-memcpy-fixup.ll` becomes a removal test |
@@ -770,7 +770,7 @@ them rather than rediscovering them:
   open C-nn mapped; every negative check in the tree carries a performed `MUTATION:`.
 - **Six** declared XFAILs at the end of Tier 1 (the plan said five): `tail-call.ll`
   and `capstone-tail-call.c` (C-28), `s12-movc-ldc-rename.mir` (the S-12 pass is
-  inert on c128), `cap-call-mnemonic.s` (C-25), `reloc-names.s` (C-37),
+  inert on c128), `cap-call-mnemonic.s` (C-38), `reloc-names.s` (C-37),
   `c20-cttz.ll` (C-20).
 - Observations for Tier 4:
   - **A direct call target is not delin'd**: `cincoffset a3, gp, a0; cjalr ra, 0(a3)`

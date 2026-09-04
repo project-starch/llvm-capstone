@@ -1,4 +1,5 @@
 # Relocations in Capstone objects must be NAMED by the binary-format layer.
+# Capstone issue C-37 (relocation type names print as Unknown).
 #
 # Measured 2026-09-04: for `call foo`, both `llvm-readobj -r` and
 # `llvm-objdump -d -r` print the relocation as "Unknown foo".  The fixup is

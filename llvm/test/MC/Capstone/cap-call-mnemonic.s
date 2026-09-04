@@ -1,4 +1,5 @@
 # The register form of CAP_CALL does not round-trip through the MC layer.
+# Capstone issue C-38 (the register-form CAP_CALL mnemonic collision).
 #
 # Measured 2026-09-04 on the current llvm-mc: assembling `call a0, a1` fails
 # with "invalid operand for instruction" at column 10, because the mnemonic

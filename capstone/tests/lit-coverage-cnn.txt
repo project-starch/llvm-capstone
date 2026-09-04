@@ -22,3 +22,5 @@ C-25 | llvm/test/CodeGen/Capstone/cap-ptrdiff-untagged.ll
 C-26 | llvm/test/CodeGen/Capstone/ptr-diff-signed.ll
 C-28 | llvm/test/CodeGen/Capstone/tail-call.ll
 S-13 | REASON: silicon hang at -O1 in the DYN/rev-node path; RTL-side, no compiler shape identified
+C-37 | llvm/test/MC/Capstone/reloc-names.s
+C-38 | llvm/test/MC/Capstone/cap-call-mnemonic.s
