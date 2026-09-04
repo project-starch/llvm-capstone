@@ -3352,6 +3352,46 @@ the runner so a stall is distinguishable from a dead runner and from normal work
 
 ## Infrastructure / procedure
 
+### I-01 — the fail-closed push gate is installed in only 2 of 6 repositories `OPEN — needs the machine owner`
+
+**Found 2026-09-04 by negative-testing it, which is the only way this class surfaces.**
+
+The pre-push allowlist gate is a symlink to `~/.claude-c/secrets/pre-push-allowlist.sh`. Measured
+coverage:
+
+| repository | pre-push hook |
+|---|---|
+| superproject (`llvm-capstone`) | **installed** |
+| `capstone/capstone-ariane` | **installed** |
+| `capstone/capstone-qemu` | **ABSENT** |
+| `capstone/caplifive-system` | **ABSENT** |
+| `capstone/caplifive-buildroot` | **ABSENT** |
+| `capstone/paper` | **ABSENT** |
+
+Negative-tested rather than inspected: pushing to a branch name that is not on the allowlist is
+**blocked** in `capstone-ariane` (`PUSH BLOCKED: 'definitely-not-allowed-probe2' is not on the
+allowlist`) and **succeeds** in `capstone-qemu`. Both dry-runs; confirmed via `ls-remote` that no
+stray branch was created.
+
+**`capstone/paper` is the one that matters most.** `CLAUDE.md` states never to push it — Overleaf
+owns that remote — and there is nothing enforcing it. The rule is currently held by agent
+discipline alone, in the one place the project has decided discipline is not enough.
+
+**How it was missed:** the first survey of this used
+`[ -x "$(git -C "$r" rev-parse --git-dir)/hooks/pre-push" ]`. `rev-parse --git-dir` returns the
+**relative** `.git`, which then resolved against the caller's working directory — so the check
+tested the *superproject's* hook six times and reported "present" for all six. Use
+`git -C "$r" rev-parse --absolute-git-dir`.
+
+**Not fixed here deliberately.** Installing the hook in the other four repositories would block
+pushes for every lane sharing this machine, including branches legitimately pushed today that are
+not on the allowlist. That is the machine owner's call, not a lane's. One symlink per repository:
+
+```
+ln -s ~/.claude-c/secrets/pre-push-allowlist.sh <repo>/.git/hooks/pre-push
+```
+
+
 ### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED`
 `run_ladder_perf_fpga.py` **rebuilds every artifact by default** (the 25-07 anti-stale fix),
 shelling out to `build-ladder-fpga.sh` with the inherited environment. Setting `LADDER_OPT`

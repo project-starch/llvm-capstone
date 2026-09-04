@@ -64,9 +64,41 @@ leave it in: the pointer in `.gitmodules` and the remote people actually push to
 
 1. **Replicate first.** Add `capstone-bootstrap` (caplifive-system) to the push allowlist and push
    it to `fork`. Nothing else in this plan happens until those 4 commits exist somewhere else.
-2. **Confirm the replacement claim** by diffing the trees, not just `sbi_capstone.c` — the two
-   share no history, so a file-level comparison across `sw/` and `hw/` is the only way to know
-   what `-dev` does *not* carry. Record the diff.
+2. ~~**Confirm the replacement claim** by diffing the trees.~~ **DONE 2026-09-04 — and it
+   changes the plan. `-dev` is BEHIND, so it cannot be adopted as-is.**
+
+   Both repositories track exactly **16 files**, and 4 of the 5 submodule pins agree
+   (`hw/anvil`, `hw/qemu`, `hw/rtl`, `sw/capstone-c`). The entire difference is **`sw/buildroot`**:
+
+   | | `sw/buildroot` pin | date |
+   |---|---|---|
+   | `-dev` | `f11bf691` | 2026-08-12 |
+   | `caplifive-system`, recorded | `17e4fb609` | 2026-08-18 (+3) |
+   | `caplifive-system`, checked out | `80e1dcfe` | 2026-08-31 (+6) |
+
+   Verified straight-line descent: `git merge-base --is-ancestor f11bf691 HEAD` succeeds, so
+   **`-dev`'s pin is an ancestor of what we are actually building.** Adopting it would REGRESS the
+   monitor chain by six commits.
+
+   **`sbi_capstone.c` being byte-identical between the trees is true and misleading** — that is
+   the `package/` copy. The firmware builds from `components/opensbi`, whose pin differs:
+   `460f6e45e` here against `0dbb365c5` in `-dev`'s buildroot.
+
+   So "full replacement" is right about the repository's *role* and wrong about its *content
+   currency*. The migration must carry our buildroot pin forward, not take `-dev`'s.
+
+2b. **The unreplicated work is THREE LEVELS DEEP, not one**, and every level is on this disk only:
+
+   | repository | branch | unpushed |
+   |---|---|---|
+   | `caplifive-system` | `capstone-bootstrap` | **4** |
+   | `sw/buildroot` | `capstone-bootstrap-dts-65536` | **6** (incl. `17e4fb609`, the merged-monitor bump) |
+   | `components/opensbi` | (pinned `460f6e45e`, on no remote) | **3** |
+
+   `caplifive-system`'s *committed* state already points at a buildroot commit that exists
+   nowhere else, so even a successful push of the outer repository alone would produce a
+   dangling reference. **Push innermost-first: `caplifive-opensbi`, then buildroot, then
+   `caplifive-system`.**
 3. **Repoint `.gitmodules`** to `caplifive-system-dev.git`, `git submodule sync`, and bump the
    gitlink to a commit in the new repository.
 4. **Delete the standalone `capstone/caplifive-system-dev/` clone** — after step 3 the submodule
