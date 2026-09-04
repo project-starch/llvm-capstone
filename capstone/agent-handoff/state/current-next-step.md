@@ -1,6 +1,94 @@
 # Next step
 
-## 0. CURRENT — 2026-08-28. S-12 has a CAUSAL TRIGGER CONDITION. The next step is the COMPILER.
+## 0. CURRENT — 2026-08-29. S-12's evidence base was re-audited and MOST OF IT MOVED. Instruments first.
+
+**Supersedes section 0a below in full. Read this before acting on anything further down: the
+tallies that section is built on are wrong, and two of its conclusions invert.**
+
+### What changed, and why none of it is a small correction
+
+An adversarial audit of the arm-versus-baseline scoring found three defects, in ascending order of
+cost.
+
+**The firmware-freshness gate was checking a text file, not the domain.** For a spec
+`sqli.dom:--slt dd1_one.test` both halves resolve to real overlay files, and the gate took the
+last one — so `firmware carries the current binaries` printed on every draw while the `.dom` was
+never compared against the image. Every candidate domain is exactly 1624152 bytes, so nothing else
+could have caught a stale one. **No draw in the 2026-08-28/29 series has a verified binary
+identity**, and `mepc` cannot recover it: the faulting instruction word at VA 0x104814 is
+byte-identical across the baseline, the 3-byte variant and the compiler-pass build. Fixed and
+negative-tested both ways; every verified artifact's sha256 now prints per run.
+
+**Three recorded wedges never ran a domain.** Four per-experiment scripts hand-counted
+`SLT-SUMMARY` lines instead of reading the driver's `=== STAGED BISECTION ===` block. Re-classified
+with `verdict.py`, `ddc-c3`, `dd6-d1` and `dd6-d3` are infrastructure voids in which `create_dom`
+never returned — the driver said so in each log, including *"Do NOT attribute this to the code under
+test."* Fifth hand-rolled classifier, fifth to be wrong.
+
+**Consequently:**
+
+* **"Plan depth >= 2, by any route" is WITHDRAWN; "it is a JOIN" is REINSTATED.** `dd5_inselect`
+  is the only non-JOIN depth-2 arm and the sole basis for the depth framing; its one wedge was a
+  void. Corrected: JOIN arms 5/5, non-JOIN depth-2 arm 0/4, Fisher p = 0.0079 the other way.
+  This is the one correction that *narrows* the trigger.
+* **"Nesting, not repetition" loses its control.** `dd6_twostmt` sat in slot 0 and `dd2_join` in
+  slot 1 — the slot/role confound this investigation has already retracted a series over.
+  Slot-matched it is one returning draw against 4/4, p = 0.20.
+* **The three-byte `movc`/`stc` a4->a6 cure is a CANDIDATE again.** The arm is 0/4 valid, not the
+  7/7 recorded (one void, three draws that booted a different image — already noted in the folder
+  and then re-imported). Against an arm-configuration baseline of 3/4, Fisher gives p = 0.143.
+  The earlier p ~ 1e-5 is withdrawn.
+
+### THE NEXT STEP IS THE BOARD, and the first boot is not about S-12's mechanism at all
+
+**Boot 1 — the `mtval` positive control** (`/tmp/capstone/tvctl-run.sh`, staged, firmware built,
+auto-launching when the console returns). The RTL has two independent sources for `mcause 25` and
+they alias, because the data path adds 24 to the cause enum while the PC-capability path adds 23
+and the reference says 23 — see `tests/fpga-repros/RTL-cap-mcause-off-by-one/`. The only field
+that separates them is `mtval`, which on this silicon has never been shown to carry a non-zero
+value for a capability cause. The arm executes `cincoffsetimm` on a plain 0xBEEF integer,
+verified in the artifact (`lui a0,0xc; addi a1,a0,-0x111`, faulting insn `5b 25 85 00`).
+
+    tval = 0xBEEF   -> the instrument works; every tval = 0 in the S-12 record becomes evidence,
+                       and S-12 is the data-path UNEXPECTED_OPERAND it has always been read as.
+    tval = 0        -> the instrument is dead; "the operand is zero" is unsupported and S-12 may
+                       be a PC-capability revocation failure, which nobody has been looking for.
+    EXCX present    -> M-mode trap entry works, and a firmware-only change can turn every S-12
+                       wedge into a returned fault code -- the biggest instrument win available.
+    EXCX absent
+      AND it wedged -> M-mode trap entry itself is failing, and that is the ONE branch in which
+                       the directed Verilator sim (capmode_q / npc_metadata_q / pc_cap_ex_valid,
+                       does anything commit at mtvec) becomes the right instrument rather than a
+                       detour away from the blocker.
+    returns clean,
+      no fault      -> the run's premise is broken, not confirmed: the probe is unconditional at
+                       SLT entry, so either the wrong image booted -- check the per-run sha256 the
+                       fixed freshness gate now prints -- or this silicon is permissive on
+                       cincoffsetimm over an integer, which S-12's existence argues against.
+
+**Boot 2 — the high-power probe.** `slt/s12stress.test` puts 120 distinct bare two-table joins in
+one domain invocation, and `CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the
+shared region, where it survives a wedge and the driver already reads it. That separates the two
+models a wedge RATE cannot at any N: a per-prepare hazard stops at a varying index, per-boot state
+stops at the first prepare every time. The instrumented build leaves
+`sqlite3WhereCodeOneLoopStart` byte-identical — 2866 instructions, same encodings, same address —
+which the pre-existing `CAPSTONE_ENTRY_MARK` does not.
+
+**Do NOT spend more one-bit draws on arm-versus-baseline.** At a 3-in-4 baseline, four arm draws
+give p = 0.143 in the best case; that is the ceiling, not an accident of this particular run.
+
+### Open, and worth someone's attention
+
+`capmode_q` is sticky (`csr_regfile.sv:295`, set by CAPENTER, cleared only by reset) and
+`npc_metadata_q` is NOT cleared when the core takes an exception (`frontend.sv:425-427` redirects
+the PC alone; `:443-444` holds the metadata). So the first instruction fetched at `mtvec` can be
+PC-capability-checked against stale domain bounds. Not shown to be S-12's mechanism — the latch
+would have recorded the resulting cause and does not — and not filed as an issue for that reason,
+but it is a real gap and the latch is blind to a cause-2 storm.
+
+---
+
+## 0a. SUPERSEDED — 2026-08-28. S-12 has a CAUSAL TRIGGER CONDITION. The next step is the COMPILER.
 
 **Supersedes the 2026-08-27 section below, whose "next step" (reflash to the S-10 bitstream) was
 done: the board now runs `caplifive_s10fix_80843404c.bit`, and S-12 SURVIVED it — `pad48` wedged

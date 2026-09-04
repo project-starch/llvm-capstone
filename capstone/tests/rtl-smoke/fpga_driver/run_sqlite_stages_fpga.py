@@ -18,6 +18,7 @@ Ordering is load-bearing: stages ascend, and the FIRST one that fails to return 
 bisection point. Everything after it is lost, because a wedged domain takes the core with
 it -- that is not a limitation to work around, it is the answer. Stop there and report.
 """
+import hashlib
 import itertools
 import os
 import pathlib
@@ -788,14 +789,36 @@ def main():
     # boot as "STALE FIRMWARE" over a leftover file the run did not reference -- the gate
     # being right about its question and wrong about its subject, which is precisely the
     # failure its own docstring records. Pick whichever side is actually a staged artifact.
+    # KEEP EVERY HALF THAT NAMES A STAGED FILE, not one of them.
+    #
+    # Taking cands[-1] made this gate VACUOUS for the domain binary on every `--slt` run, which
+    # is every S-12 board draw taken since the delta-debug ladder existed. For the spec
+    # `/test-domains/sqli.dom:--slt /test-domains/dd1_one.test` both halves resolve to real
+    # overlay files -- the second because `pathlib.Path("--slt /test-domains/dd1_one.test").name`
+    # is `dd1_one.test` -- so cands[-1] selected the .test file and the .dom was never checked.
+    # The line `firmware carries the current binaries ... verified by decompressed content` then
+    # printed on every run while verifying only that a 600-byte text file was in the image.
+    # Every candidate .dom in this series is exactly 1624152 bytes, so nothing else in the log
+    # could have caught a stale one either.
+    #
+    # Checking ALL matching halves needs no heuristic about which side is the .dom, so it is
+    # also correct for the ladder's `rung:path` form that the previous fix was written for.
     _want = []
     for spec in DOMS:
         tail = spec.split("|", 1)[-1]
         halves = tail.rsplit(":", 1)
         cands = [h for h in halves if (_overlay / pathlib.Path(h).name).is_file()] or [halves[0]]
-        cand = _overlay / pathlib.Path(cands[-1]).name
-        if cand.is_file():
-            _want.append(cand)
+        for h in cands:
+            cand = _overlay / pathlib.Path(h).name
+            if cand.is_file() and cand not in _want:
+                _want.append(cand)
+    # NAME THE BYTES. A run whose verdict is a single bit is worth nothing if the binary that
+    # produced it cannot be named afterwards: an audit of the 2026-08-28/29 series could not
+    # attribute a wedge to the baseline rather than to a 3-byte variant, because no artifact
+    # recorded which one booted. One hash per file per run closes that permanently.
+    for _w in _want:
+        print(f"[stages] verifying {_w.name}  sha256={hashlib.sha256(_w.read_bytes()).hexdigest()}",
+              file=sys.stderr)
     if os.environ.get("FPGA_IMG_NAME"):
         # The staleness guard compares the LOCAL firmware against the LOCAL domains. When booting
         # a stored server-side image neither side of that comparison is what will run, so the check

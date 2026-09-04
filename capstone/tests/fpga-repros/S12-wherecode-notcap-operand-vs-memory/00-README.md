@@ -174,6 +174,174 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-08-29 — READ THIS BEFORE ANY TABLE BELOW. Three wedges in this folder never ran a domain, and the freshness gate was blind
+
+Everything below this section was tallied with the wedge counts named here. They are wrong, they
+are wrong in one direction, and two recorded conclusions invert when they are corrected.
+
+### 1. The gate that was supposed to prove which binary booted was checking a text file
+
+`run_sqlite_stages_fpga.py` verifies that the firmware's initramfs contains the artifacts the run
+is about to use, and printed `firmware carries the current binaries ... verified by decompressed
+content` on every draw in this folder. It selected which artifacts to check by splitting the spec
+on its last colon and taking the LAST half that names a staged file. For
+
+    /test-domains/sqli.dom:--slt /test-domains/dd1_one.test
+
+both halves resolve -- `Path("--slt /test-domains/dd1_one.test").name` is `dd1_one.test`, a real
+overlay file -- so the check ran against the .test and **the .dom was never compared to the image
+at all.** Every candidate domain here is exactly 1624152 bytes and the initramfs byte count is
+identical across all of them, so no other line in any log could have caught a stale one.
+
+Consequence, stated plainly: **no draw in the 2026-08-28/29 series has a verified binary identity.**
+`mepc` cannot recover it either -- the faulting instruction word `0b07275b` at VA 0x104814 is
+byte-identical in the baseline, the 3-byte variant and the compiler-pass build. Fixed and
+negative-tested in both directions (a deliberately stale .dom now raises STALE FIRMWARE; the
+correct one passes), and every verified artifact's sha256 is now printed per run.
+
+### 2. Three "wedges" are INFRASTRUCTURE VOIDS -- `create_dom` never returned
+
+Four scripts (`dd-board.sh`, `dd-confirm.sh`, `dd6.sh`, `clamp.sh`) hand-counted `SLT-SUMMARY
+records=` instead of reading the driver's own `=== STAGED BISECTION ===` block. Re-classified with
+`verdict.py`, which is the sanctioned reader:
+
+    ddc-c3   dd5_inselect   INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d1   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+    dd6-d3   dd2_join       INFRASTRUCTURE WEDGE (domain never created)
+
+The driver had already said so in the log: *"THIS RUN CARRIES NO VERDICT ABOUT ... no `SQ: A/dom-ok`
+-- create_dom never returned, so the domain was never created and NOTHING in it executed. Do NOT
+attribute this to the code under test."* This is the fifth hand-rolled classifier in this
+investigation and the fifth to be wrong; the rule is already written and was not followed.
+
+### 3. "PLAN DEPTH >= 2, BY ANY ROUTE" IS REFUTED BY ITS OWN DATA. It is a JOIN after all
+
+`dd5_inselect` is the only non-JOIN arm that reaches depth 2, and it is the sole evidence for the
+depth framing. Its one recorded wedge is `ddc-c3`, in which nothing executed. Corrected:
+
+    dd2_join      2-table JOIN         4 wedges / 4 valid   (p1, c5, d2, d4)
+    dd4_three     3-table JOIN         1 wedge  / 1 valid   (p3)
+    dd5_inselect  LIST SUBQUERY, d=2   0 wedges / 4 valid   (p4, c1, c2, c4)
+    dd3_subq      flattens to d=1      0 wedges / 5 valid
+    dd1_one       d=1                  0 wedges / many
+
+JOIN arms 5/5, non-JOIN depth-2 arm 0/4: Fisher p = 0.0079. **The superseded "it is a JOIN"
+framing is reinstated and the depth framing is withdrawn.** This narrows the trigger rather than
+widening it, and it is the one place where the correction moves the investigation forward.
+
+### 4. "NESTING, NOT REPETITION" loses its control -- it is slot-confounded
+
+`dd6_twostmt` 0/5 vs `dd2_join` 6/6 was quoted at Fisher p = 0.002. In `dd6.sh` the two arms are
+not interchangeable: **`dd6_twostmt` is in SLOT 0 and `dd2_join` is in SLOT 1**, which is exactly
+the slot/role confound this folder already retracted the fence and nop series over. Slot-matched,
+`dd6_twostmt` has ONE slot-1 draw (`ddb-p5`, returned) against `dd2_join` 4/4: p = 0.20. Whether
+slot placement is itself a variable is unproven at this N (depth>=2 arms are 5/7 in slot 1 and 0/2
+in slot 0, p = 0.44), which is precisely why it cannot be assumed away.
+
+### 5. The null control was not the missing null, and the arm comparison is weaker than recorded
+
+The claim at the head of the "arm in SLOT 1" section -- that no baseline draw existed in the
+configuration the arms were run in -- was false when written. `ddb-p1` and `ddc-c5`, from the day
+before, are that configuration (`sqslt.dom` + `dd1_one` in slot 0, the same bytes as `sqli.dom` in
+slot 1), and both wedged. Adding the 2026-08-29 null control (nc-1 returned, nc-2 wedged with the
+signature; nc-3/4/5 void on a server-side `[GDB] Start failed: Too many open files`, before Linux,
+so they carry nothing) the arm-configuration baseline is **3 wedges / 4**, not the ~0.94 taken from
+draws that all had a VARIANT in slot 0.
+
+Against that, the register-patch arm is **0 wedges / 4** -- not the 7/7 quoted, because `rp-6` is an
+infrastructure void and `rp-7/8/9` booted a different image entirely, which this folder had already
+recorded and then re-imported. Fisher on 0/4 vs 3/4 is **p = 0.143**.
+
+**So the three-byte `movc`/`stc` a4->a6 change is a CANDIDATE cure, not an established one**, and
+the earlier p ~ 1e-5 is withdrawn. Its own binary identity is unverified for the same reason as
+everything else in the series.
+
+### The whole arm series, re-tallied on ONE classifier — data, with the pooling disclaimed
+
+Re-classifying every board log with `verdict.py` and keeping only draws in the identical slot
+configuration (slot 0 = `dd1_one` filler, slot 1 = the arm with `dd2_join`) puts all eight arms on
+one footing for the first time. Groupings verified by DISASSEMBLING the arm binaries, not from the
+build scripts' descriptions:
+
+    arm         wedges/valid   window immediately before the subject ldc          group
+    baseline       3 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    pf64           4 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a4,0(a0)         PRESERVED
+    scalar         3 / 5       movc a5,zero ; stc a5,0(a6) ; ldc a5,0(a0)         PRESERVED
+    regpatch       0 / 4       movc a6,zero ; stc a6,0(a5) ; ldc a4,0(a0)         BROKEN
+    dc-tagged      0 / 3       ldc a4,0(a0) ... stc a4,0(a5) ; ldc a4,0(a0)       BROKEN (value)
+    dc-null        0 / 4       movc a4,zero ; stc a4,0(a5) ; ldc a5,0(a0)         BROKEN
+    li-pidx        0 / 3       sw   a4,0(a5)               ; ldc a4,0(a0)         BROKEN
+    pin4           0 / 2       movc a4,0 ; stc ; +6 insns  ; ldc a5,0(a0)         BROKEN
+
+**QUOTE THE IMAGE-LEVEL NUMBER, NEVER THE DRAW-LEVEL ONE.** The driver states the rule itself:
+*"R-16 and the S-12 wedge clustering are both per-IMAGE, so three boots of one image is ONE draw."*
+Under that rule there are eight units, not thirty:
+
+    3 PRESERVED images all wedge vs 5 BROKEN images all clean   p = 0.018
+    regpatch alone vs baseline alone                            p = 0.143
+    (draw-level 10/13 vs 0/16 gives p = 1.4e-05 and MUST NOT be quoted -- it is the same
+     result with N inflated ~4x by repeat boots of the same binary)
+
+### And it is not yet a finding, for a reason that no amount of re-tallying fixes
+
+* **The entire BROKEN column is unauthenticated returns.** A wedge latches an `mepc` that
+  identifies its image; a return latches nothing. Every draw supporting the cure is a return.
+* **`regpatch.sh` and `nullctl.sh` stage nothing and rebuild nothing** — no `cp -f`, no
+  `make build` — unlike `pin.sh`, `deadcap.sh`, `padframe.sh` and `slot1.sh`, which all do. Those
+  series depend entirely on unrecorded manual staging, and this folder's own exclusion of
+  `rp-7/8/9` proves at least one unrecorded image swap happened inside them.
+* **The one in-configuration baseline wedge cannot be attributed.** `nc-2` latched
+  `mepc = 0x828f4814`. The three-byte patch touches `0x104808` and `0x10480c` and leaves
+  `0x104814` byte-identical — `5b 27 07 0b` in both images, checked in the disassembly — so `nc-2`
+  is equally consistent with **the regpatched image having wedged**, which would turn the headline
+  arm from a 0/4 cure into a wedger and kill the result outright.
+* **`verdict.py` cannot catch this class.** Its infra rule is a whole-log test that can only ever
+  convert `WEDGED` into `VOID`; a void that RETURNS — a stale image running a curing binary —
+  passes through as a valid return. That is the exact column the signal lives in.
+
+### Two corrections to the grouping itself
+
+* **The grouping is well-defined only under a window of fewer than 8 instructions.** A
+  `movc a4, zero` sits 8 instructions before the subject `ldc a4` in EVERY arm including
+  `regpatch`, whose own docstring concedes it. At a window of 8 or more, every arm is "preserved"
+  and the split vanishes. The natural reading — the source of the *immediately preceding*
+  capability store — is the one used, and it was never written down before.
+* **`dc-tagged` does not break the register match; it breaks the VALUE.** Its window stores from
+  `a4` and reloads into `a4`. What changed is that the stored value came from a tagged capability
+  rather than from `movc rD, zero`. Filing it under "register broken" conflates two variables.
+
+### What the eight arms actually identify
+
+Every single-variable account is falsified by one arm:
+
+    store TARGET ADDRESS   s0-0x120 appears in a wedger and in a curer
+    fault-site VA/layout   wedgers at 0x104810/0x104810/0x104808, curers span 0x104804..0x104828
+    store ADJACENCY        adjacent in baseline, pf64, scalar (wedge) AND regpatch, dc-null (cure)
+    a null store PRESENT   present in regpatch and dc-null, both cure
+    register match ALONE   present in dc-tagged, which cures
+
+**Only the CONJUNCTION separates all eight: the capability store immediately before the reload
+stores a `movc`-produced null AND its source register is the reload's destination.** Nothing in
+the set dissociates the null-value half from the register half, so "the register pairing" — the
+phrase this folder has already retracted twice — is still not what the data supports.
+
+Not excluded: `.bss` size, the firmware rebuild that every arm except `regpatch` and the null
+control received, and heap/cache/timing state.
+
+### What is actually being done about it
+
+More one-bit draws cannot fix this -- at a 3-in-4 baseline, four arm draws are the best case above.
+`slt/s12stress.test` puts 120 distinct bare two-table joins in ONE domain invocation, and
+`CAPSTONE_SLT_PROGRESS=1` records which prepare is in flight in the shared region, which survives a
+wedge and which the driver already reads over JTAG. That separates the two models a wedge RATE
+cannot distinguish at any N: a per-prepare hazard stops at a varying index, per-boot state stops at
+the first prepare of every wedging boot. The instrumented build leaves
+`sqlite3WhereCodeOneLoopStart` byte-identical -- 2866 instructions, same encodings, same address --
+which the pre-existing `CAPSTONE_ENTRY_MARK` does not: rebuilt with that one, the register match
+under test is gone from the faulting function altogether.
+
+---
+
 ## REFUTED: the load-syncer mispair. The precondition is unreachable under maximum pressure
 
 This was the strongest surviving mechanism, and the only one so far proposed that produces BOTH
@@ -1468,8 +1636,16 @@ The two candidate sites in the self-arming build:
     arming lcc         VA 0x103bc   DBAS + 0x3bc   db 96 26 08   lcc a3, a3, 0x2
     subject consumer   VA 0x10484   DBAS + 0x484   5b 27 07 0b   cincoffsetimm a4, a4, 0xb0
 
-**PRECONDITION: a wedge whose latched `mepc` is not `DBAS + 0x484` is NOT the subject fault.**
-It is an arming failure or something else, and that arm is VOID.
+**PRECONDITION: a wedge whose latched `mepc` is not the subject consumer's OWN offset for the arm
+being run is NOT the subject fault.** It is an arming failure or something else, and that arm is
+VOID.
+
+> **The offset is PER-ARM, not `DBAS + 0x484`, and taking it as a constant would have thrown away
+> real results.** `scalar` moves the fault site 8 bytes: `s1-scalar-2/4/7` each latched
+> `mepc = 0x828f480c`, and each is a genuine signature-confirmed S-12 wedge. Applied literally,
+> the rule below would have voided all three. Re-derive the offset from the arm's OWN disassembly
+> before applying the precondition — the section that follows says exactly this for a change of
+> BUILD, and it holds just as much for a change of ARM.
 
 **MEASURED, on the build that will actually run:**
 

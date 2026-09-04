@@ -40,6 +40,9 @@ ModulePass *createCapstoneMergeStrConstantsPass();
 void initializeCapstoneMergeStrConstantsPass(PassRegistry &);
 
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
+
+FunctionPass *createCapstoneS12MovcLdcHazardPass();
+void initializeCapstoneS12MovcLdcHazardPass(PassRegistry &);
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
 FunctionPass *createCapstoneIndirectBranchTrackingPass();

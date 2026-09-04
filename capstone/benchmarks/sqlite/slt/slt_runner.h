@@ -65,6 +65,22 @@
  * entry stops CREATE TABLE rather than the query under test. Measured, not theorised -- a
  * clamp of 20 armed at entry reported "no such table: t1" for every statement. Arming and
  * resetting per query is what makes a clamp ladder point at the query it claims to. */
+/* Per-PREPARE progress hook.  S-12 wedges the whole core inside sqlite3_prepare_v2, and a
+   wedged run reports nothing -- so a file of N queries yields one bit ("it wedged") and no
+   indication of WHICH prepare did it.  A payload that defines this macro can record the record
+   index somewhere that survives a wedge, which is what separates the two models the wedge rate
+   cannot: a per-prepare hazard stops at a varying index, a per-boot one stops at the first
+   prepare every time.  Default is a no-op, so an undefining build is byte-identical.
+   It sits in the RUNNER, deliberately, and not in the faulting function: injecting a counter
+   into sqlite3WhereCodeOneLoopStart perturbs its register allocation and destroyed the very
+   pattern under test (checked -- the movc/stc/ldc register match is absent from that build). */
+#ifndef SLT_PREPARE_MARK
+#define SLT_PREPARE_MARK(n) do { (void)(n); } while (0)
+#endif
+#ifndef SLT_PREPARE_DONE
+#define SLT_PREPARE_DONE() do { } while (0)
+#endif
+
 #ifndef SLT_VDBE_ARM
 #define SLT_VDBE_ARM()    do { } while (0)
 #endif
@@ -428,7 +444,9 @@ static unsigned slt_run(const char *input, unsigned long input_len,
         continue;
       }
 
+      SLT_PREPARE_MARK(st->records);   /* before the prepare: S-12 wedges INSIDE it */
       rc = sqlite3_prepare_v2(db, input + sql_start, (int)(sql_end - sql_start), &s2, 0);
+      SLT_PREPARE_DONE();              /* reached only if the prepare RETURNED */
       if ((rc & 0xff) == SQLITE_NOMEM) {
         st->oom++;
         if (s2) sqlite3_finalize(s2);

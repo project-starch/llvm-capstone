@@ -115,6 +115,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstonePostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
+  initializeCapstoneS12MovcLdcHazardPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
@@ -598,6 +599,9 @@ void CapstonePassConfig::addPreEmitPass2() {
     // ensuring return instruction is detected correctly.
     addPass(createCapstonePushPopOptimizationPass());
   }
+  // S-12 silicon workaround: rename movc/ldc destination collisions. Post-RA so
+  // registers are physical, and before pseudo expansion so the pattern is intact.
+  addPass(createCapstoneS12MovcLdcHazardPass());
   addPass(createCapstoneExpandPseudoPass());
 
   // Schedule the expansion of AMOs at the last possible moment, avoiding the
