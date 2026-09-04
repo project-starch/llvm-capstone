@@ -3695,6 +3695,52 @@ seconds of emulation, and R-1's diagnostic family can finally be developed off-b
 
 ## Compiler / toolchain (ours)
 
+### C-41 — the compiler's `return` encodes `rd = 0`, which faults on silicon every time `FIXED in cycle 2 (compiler lane); the silicon behaviour is VERIFIED here`
+
+**Reported by the compiler lane's rtl-oracle pass 2026-09-05; the silicon half verified here
+against the RTL, because "every compiler-emitted return faults on hardware" is too strong a claim
+to record on report.**
+
+The compiler emitted `return` with `rd = 0` and `rs1`/`rs2` typed as capabilities. The spec
+(`ctrl-flow-insn.adoc:130-168`), the RTL and QEMU all read the **sealed-return capability from the
+`rd` FIELD** and require `rs1` to be an **integer** (the re-entry PC). Both operands were wrong.
+
+**Verified chain, four independent facts:**
+
+| # | fact | source |
+|---|---|---|
+| 1 | `RETURN` reads its capability from the `rd` field — `let rd_in_v = data.cap_rd;` | `capstone_dyn_unit.anvil:284` |
+| 2 | it raises `UNEXPECTED_OPERAND` when that is `NOT_CAP`, **or** when `rs1` IS a capability | `:288-289` |
+| 3 | `NOT_CAP` is the **first** member of `cap_type_t`, i.e. encoding **0** | `capstone_unit.anvilh:278-279` |
+| 4 | x0's register slot is hard-zeroed, so its `cap_type` reads 0 | `ariane_regfile_ff.sv:98-99` (`ZERO_REG_ZERO`) |
+
+So `rd = 0` makes fact 1 read an all-zero slot, which by 3+4 is `NOT_CAP`, which by 2 raises
+`UNEXPECTED_OPERAND`. **Deterministically, on every execution.** The `rs1`-typed-as-capability half
+trips the same check independently.
+
+**Why nothing ever saw it — and this is the useful part.** Two masks, stacked:
+
+- **QEMU takes a separate `rd == 0` branch** (`op_helper.c:1570-1595`), trap-return-like with no
+  context swap. So the emulator does something plausible where the hardware raises.
+- **The glue never used the compiler's form.** `start-gp-captable-generic.S:98` hand-encodes
+  `domreturn(t1, t2, x0)` correctly, and every domain on the board returns through the glue. So the
+  board never executed a compiler-emitted `return`, and the fault has been latent since the
+  instruction was added.
+
+That is the same shape as R-25: **correct in the ISA sense that hardware does what the spec says,
+broken in our compiler, and invisible because no shipping path reaches it.** Both were found by
+reading the RTL against the backend rather than by any test, and neither would have been caught by
+a suite, because the suites run what the glue emits.
+
+**Related, same pass, recorded as fact not defect:** a synchronous CALL/RETURN swaps the PC and
+seven CSRs only — **no general register is saved, restored or scrubbed by hardware**
+(`capstone_dom_switcher.anvil:9-22`, `csr_regfile.sv:1901-1918`, and QEMU `capstone_helper.c:190-220`
+agree). The reference compiler zeroes non-argument registers and saves `ra`/`gp` itself. **Anything
+in a caller's registers crosses a domain boundary unless software scrubs it.** The compiler-side
+gap — register scrub and `gp` save/restore around a domain call — remains OPEN as C-36b with the
+compiler lane.
+
+
 ### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for `OPEN — COVERAGE GAP, not a miscompile`
 
 **Filed 2026-09-04 as a deliberate, accepted gap** when the c128 branch was merged. The project
