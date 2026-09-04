@@ -34,7 +34,37 @@
 > The compiler lane's objection to the S-12 framing was correct and is what led here: a forwarding
 > path returning a register's stale contents predicts the reload reading `i`, not an address.
 >
-> ### The experiment this actually needs — a 2x2, not a single arm
+> ### SECOND CORRECTION, same night: there is NO 2x2 — the workaround was already reverted
+>
+> **The R-20 compiler workaround was reverted on 2026-08-10 at 19:39, FOUR HOURS after it landed
+> at 15:22 the same day** (`cdbb92360e2b`, *"the silicon fix makes it unnecessary"*). It is an
+> ancestor of `dev`, and the revert's own post-check was that `git diff 30c275b5d781^ -- llvm/` is
+> **empty**. So it is not in today's compiler, there is nothing to revert, and the claim below —
+> that a rebuild carries the workaround while July's binaries did not — is **false**. Both lack it.
+>
+> **The confound I asserted does not exist.** Struck rather than deleted, because the reasoning
+> that produced it (workaround dated after the measurement → present in any rebuild) is exactly
+> what a later reader will re-derive from the commit dates alone. The date was right; the lifetime
+> was four hours and nobody checks a lifetime.
+>
+> ### What the test actually is: ONE arm, and it is cleaner than the 2x2
+>
+> **R-20 was fixed IN SILICON around 2026-08-10.** The revert commit carries the evidence:
+> `caplifive_r20.bit` holds the RTL fix, the package's own 13 KB repro goes
+> `0xD0000001 → 0xD0000000`, and the SQLite-level site returns where it used to wedge. These
+> measurements were taken **2026-07-23, on a bitstream without that fix.**
+>
+> So: run `rc_p1` (with `rc_const0` as the matched control) on the resident bitstream. If it
+> returns 28 rather than an address, **this bug has been fixed in hardware for about a month and
+> nobody noticed** — and the candidates are the R-20 RTL fix, whose symptom is *literally* "a later
+> reader gets the store's base address", or the S-12 fix.
+>
+> **Establish the lineage first or the result is uninterpretable:** does
+> `caplifive_s12fix_5097eb166.bit` descend from `caplifive_r20.bit`? If NOT, a pass points at S-12
+> and a fail says nothing about R-20. If it does, a pass is consistent with either and a fail
+> refutes both. **Not established here.**
+>
+> ### ~~The experiment this actually needs — a 2x2, not a single arm~~ (WITHDRAWN, see above)
 >
 > The workaround commit says **"TEMPORARY. Revert when a bitstream carrying the RTL fix is
 > resident"**, with revert instructions in
