@@ -34,10 +34,27 @@
 > was measured in July. If it reads `0xD0000001`, R-20 is live and this bug was something else
 > that has since gone.
 >
-> Either way the status moves from OPEN to **NOT REPRODUCED — attribution pending B6**, and the
-> blocks it carried (silicon-compatibility claim, branch merge, app-level silicon perf) are no
-> longer supported by a live failure. They should not be lifted on this reading alone; they
-> should be lifted when B6 says which fix did it.
+> **B6 LANDED, and then the lineage claim was RETRACTED — which makes the attribution cleaner,
+> not murkier.** The frozen `sbx8.dom`, byte-exact, valid control, read `0xD0000000`. Then both
+> lanes discovered independently that the resident bitstream **does** carry the R-20 fix — as
+> `f623c48a1`, a cherry-pick of `2efb3604f` with identical change lines, which `merge-base
+> --is-ancestor` on the original SHA cannot see. Item 1 above ("lacks the R-20 fix") was wrong.
+>
+> So the picture is now the simplest one available:
+>
+> - R-20's signature — *a later reader gets the store's base address instead of the loaded value* —
+>   **is** this bug's signature;
+> - R-20 was measured live in July, on a bitstream without `f623c48a1`;
+> - R-20 is measured **fixed** now, on the frozen package repro with a valid control, on a
+>   bitstream that carries `f623c48a1`;
+> - and this bug does not reproduce on that same bitstream (`rc_p1` = 2080).
+>
+> **Status: NOT REPRODUCED; probable cause R-20, fixed in hardware by `f623c48a1`.** Still not
+> written as "proven": the July reproducer is a reconstruction, and no one has run it on a
+> bitstream that *lacks* `f623c48a1` to watch it fail — that is the one arm that would make the
+> attribution airtight, and it costs a reflash, so it is not worth doing on its own. The blocks
+> this bug carried (silicon-compatibility claim, branch merge, app-level silicon perf) are no
+> longer supported by a live failure and can be lifted on this evidence.
 
 
 > ## UPDATE 2026-09-05 — this may already be FIXED, and the test is cheap

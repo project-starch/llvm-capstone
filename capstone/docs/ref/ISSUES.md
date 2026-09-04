@@ -101,7 +101,42 @@ symptom is gone from the workload that defines it rather than from those images.
 
 Full trail, including the ruled-out lists that cost many board sessions: **`history/20-08-2026_18-04-33_s02-s05-resolved-archived-from-issues.md`**.
 
-## R-20 STATUS ALERT — the fix is in NEITHER the resident bitstream NOR the compiler `OPEN — UNMITIGATED ON THE BOARD as of 2026-09-05`
+## R-20 STATUS ALERT — RETRACTED 2026-09-05: the fix IS in the resident bitstream, cherry-picked under a different SHA `RETRACTED — R-20 is fixed in hardware; the alert below was an instrument error`
+
+> **RETRACTION, same day.** The claim that the resident bitstream lacks the R-20 RTL fix was
+> **wrong**. The fix is present as **`f623c48a1`** (2026-08-11, *"Fix R-20: keep the CAPENTER x10
+> clobber additive instead of overwriting"*), a cherry-pick of `2efb3604f` with **identical change
+> lines** in `core/issue_read_operands.sv` — verified by diffing the two commits' patches — and it
+> **is** an ancestor of `5097eb166`.
+>
+> **How the error was made, and it was made twice independently.** Both lanes tested
+> `git merge-base --is-ancestor 2efb3604f 5097eb166`, which returned NO and was reported as "the
+> fix is absent". That command answers *"is this SHA an ancestor?"* — and a cherry-pick has a
+> different SHA by construction. The right question was *"is this CHANGE present?"*, answered by
+> `git log --grep='R-20' <range> -- <files>` or by patch-id, and it returns the cherry-pick at once.
+> Two people reaching the same wrong answer by the same method is not corroboration; it is the
+> same instrument read twice.
+>
+> **Consequences, all reversed:**
+> - R-20 is **mitigated in hardware** on `caplifive_s12fix_5097eb166.bit`. The compiler workaround's
+>   revert on 2026-08-10 stands on its own terms and its precondition did **not** expire.
+> - The two board readings of `0xD0000000` — rebuilt draw in B1, **frozen `sbx8.dom` byte-exact
+>   in B6, valid control** — are exactly the expected reading on fixed hardware. They are not
+>   evidence of "another route"; they are evidence of the same fix, present.
+> - The "13 KB control in every boot" advice is withdrawn as a *requirement*. It remains a good
+>   idea for a bitstream of unknown lineage, which this one no longer is.
+> - The gp-captable miscompute not reproducing (B4, `rc_p1` = 2080) now has its cleanest
+>   explanation: R-20's signature *is* that bug's signature, R-20 is fixed on this bitstream, and
+>   the bug is gone. See the trail in `history/23-07-2026_...`.
+>
+> **What would have caught it in five seconds:** `git log --oneline e1b3db6ba..5097eb166 --
+> core/issue_read_operands.sv`, which lists the cherry-pick by name. That command was run — as a
+> follow-up to the board result — and is how the error was found. It should have been the first
+> check, not the last.
+>
+> The original alert text is kept below, unedited, so the reasoning that produced it stays legible.
+
+## ~~R-20 STATUS ALERT — the fix is in NEITHER the resident bitstream NOR the compiler~~ (RETRACTED, see above)
 
 **R-20 is currently unmitigated on the hardware we are running.** Both halves verified
 independently today:
