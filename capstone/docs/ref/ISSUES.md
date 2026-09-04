@@ -101,6 +101,43 @@ symptom is gone from the workload that defines it rather than from those images.
 
 Full trail, including the ruled-out lists that cost many board sessions: **`history/20-08-2026_18-04-33_s02-s05-resolved-archived-from-issues.md`**.
 
+## R-20 STATUS ALERT — the fix is in NEITHER the resident bitstream NOR the compiler `OPEN — UNMITIGATED ON THE BOARD as of 2026-09-05`
+
+**R-20 is currently unmitigated on the hardware we are running.** Both halves verified
+independently today:
+
+| mitigation | state |
+|---|---|
+| RTL fix `2efb3604f` (branch `r20-fix`) | **ABSENT** from the resident bitstream's commit `5097eb166` — merge-base `e1b3db6ba`, `git merge-base --is-ancestor 2efb3604f 5097eb166` returns NO, and `git log 5097eb166..r20-fix` lists exactly that one commit |
+| compiler workaround `30c275b5d781` | **REVERTED** 2026-08-10 by `cdbb92360e2b`, an ancestor of `dev`; no R-20 markers remain in the backend |
+
+**How this happened, and it is nobody's mistake.** The workaround was retired on 2026-08-10 on
+good evidence — `caplifive_r20.bit` carried the RTL fix and cleared R-20 on hardware (the
+package's 13 KB repro went `0xD0000001` → `0xD0000000`). That reasoning was sound. What nobody
+tracked is that **a later bitstream was flashed from a line that does not contain the R-20 fix**.
+The mitigation was removed against a bitstream that is no longer resident, and the two facts live
+in different places — one in a compiler commit, one in a synthesis lineage — so neither lane sees
+both.
+
+**Consequence for every board result taken on `caplifive_s12fix_5097eb166.bit`:** an
+address-shaped wrong answer or a wedge is consistent with **R-20** as well as with whatever the
+run was testing. R-20's signature is *"a later reader of x10 gets the store's base address instead
+of the loaded value"* — precisely the shape a regression sweep hunts. **A red rung does not
+establish a compiler regression on its own.**
+
+**The discriminator is cheap and already exists.** `tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/`
+ships a standalone **13 KB** repro returning `0xD0000001` when R-20 is live and `0xD0000000` when
+it is fixed. **Run it as a second control beside `k800` in the first boot of any session on this
+bitstream.** One small domain, and without it every anomaly in the session is ambiguous between
+two causes with no way to separate them afterwards.
+
+**Not yet assessed:** whether results already taken on this bitstream are affected. The S-12
+post-fix draws are about *completion* rather than values, so they are probably untouched — but
+"probably" is doing work there and it has not been checked.
+
+**What would close this:** either resynthesise from a line containing `2efb3604f`, or reinstate the
+compiler workaround until such a bitstream is resident. That is a project-lead call, not a lane's.
+
 ## S-03 — SQLite wedges inside `sqlite3_initialize()` · `RESOLVED 2026-08-10 -- root cause R-20; cleared on silicon by the R-20 compiler workaround`
 
 **S-03 is gone from the board.** Root cause is **R-20** (a capability store loses its x10 clobber
