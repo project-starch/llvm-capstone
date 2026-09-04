@@ -1,0 +1,14 @@
+; The Capstone port patches shared LLVM and clang code (c128 in ValueTypes, the
+; SelectionDAG and legalizer sites, AsmPrinter, ValueTracking, TargetParser, clang
+; CodeGen).  Nothing but the targets that happen to exercise those sites guards them,
+; so an upstream merge can drop one silently.  llvm/utils/capstone-shared-patches.txt
+; lists every shared file that differs from the drift base with its diff size and one
+; line the patch added; this test fails the moment a marker disappears, a patch's
+; size changes, or a new shared file is patched without an entry -- after an upstream
+; merge that is the prompt to re-baseline with `--write`.
+;
+; Negative-tested 2026-09-04: a marker edited in a copy of the manifest -> exit 1
+; "marker not found"; a count edited -> exit 1 "diff is +N -M, manifest says ...".
+;
+; REQUIRES: shell
+; RUN: python3 %S/../../../utils/capstone-shared-drift.py --repo %S/../../../.. --manifest %S/../../../utils/capstone-shared-patches.txt

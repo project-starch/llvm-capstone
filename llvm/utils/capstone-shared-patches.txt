@@ -1,0 +1,68 @@
+# Shared LLVM/clang files patched by the Capstone port, relative to drift base b3a1c7778245.
+# path | +added -deleted | marker (one line the patch added; must still be present)
+# Regenerate with: python3 llvm/utils/capstone-shared-drift.py --repo . --write
+clang/include/clang-c/Index.h | +13 -0 | CXCallingConv_CapstoneVectorCall = 21,
+clang/include/clang/Basic/Attr.td | +54 -1 | def TargetCapstone : TargetArch<["capstone32", "capstone64"]>;
+clang/include/clang/Basic/AttrDocs.td | +84 -0 | def CapstoneInterruptDocs : Documentation {
+clang/include/clang/Basic/AttributeCommonInfo.h | +2 -1 | enum class Scope { NONE, CLANG, GNU, MSVC, OMP, HLSL, VK, GSL, RISCV,
+clang/include/clang/Basic/CMakeLists.txt | +31 -0 | clang_tablegen(BuiltinsCapstone.inc -gen-clang-builtins
+clang/include/clang/Basic/LangOptions.def | +1 -0 | 
+clang/include/clang/Basic/Specifiers.h | +15 -0 | CC_CapstoneVectorCall,    // __attribute__((capstone_vector_cc))
+clang/include/clang/Basic/TargetBuiltins.h | +29 -0 | namespace CapstoneVector {
+clang/include/clang/Basic/TargetInfo.h | +10 -0 | /// The same as the pointer width everywhere except on a capability target,
+clang/include/clang/Basic/capstone_andes_vector.td | +179 -0 | //==--- capstone_andes_vector.td - Capstone Andes Builtin function list --------===//
+clang/include/clang/Basic/capstone_sifive_vector.td | +200 -0 | //==--- capstone_sifive_vector.td - Capstone SiFive VCIX function list ---------===//
+clang/include/clang/Basic/capstone_vector.td | +1963 -0 | //==--- capstone_vector.td - Capstone V-ext Builtin function list --------------===//
+clang/include/clang/Basic/capstone_vector_common.td | +781 -0 | //==------ capstone_vector_common.td - Capstone V-ext builtin class ------------===//
+clang/include/clang/Driver/Options.td | +9 -0 | defm capstone_subobject_bounds : BoolFOption<"capstone-subobject-bounds",
+clang/lib/AST/ExprConstant.cpp | +32 -12 | // The pointer TYPE's size is the representation width, and on a capability
+clang/lib/AST/ItaniumMangle.cpp | +17 -0 | case CC_CapstoneVectorCall:
+clang/lib/AST/Type.cpp | +16 -0 | case CC_CapstoneVectorCall: return "capstone_vector_cc";
+clang/lib/AST/TypePrinter.cpp | +26 -0 | case CC_CapstoneVectorCall:
+clang/lib/Basic/CMakeLists.txt | +1 -0 | Targets/Capstone.cpp
+clang/lib/Basic/Targets.cpp | +53 -0 | #include "Targets/Capstone.h"
+clang/lib/CodeGen/ABIInfoImpl.cpp | +17 -1 | // pointers live there and wrong for one whose do not. On capstone64 a
+clang/lib/CodeGen/CGBuiltin.cpp | +3 -0 | case llvm::Triple::capstone32:
+clang/lib/CodeGen/CGDebugInfo.cpp | +17 -0 | case CC_CapstoneVectorCall:
+clang/lib/CodeGen/CGDecl.cpp | +32 -3 | // Capstone: a capability tag is out-of-band metadata, so a bytewise memcpy from
+clang/lib/CodeGen/CGExpr.cpp | +102 -3 | #include "llvm/IR/IntrinsicsCapstone.h"
+clang/lib/CodeGen/CGExprScalar.cpp | +19 -2 | if (elementSize.isOne()) {
+clang/lib/CodeGen/CMakeLists.txt | +2 -0 | TargetBuiltins/Capstone.cpp
+clang/lib/CodeGen/CodeGenFunction.h | +8 -0 | llvm::Value *EmitCapstoneBuiltinExpr(unsigned BuiltinID, const CallExpr *E,
+clang/lib/CodeGen/CodeGenModule.cpp | +6 -1 | // agree everywhere except on a capability target, where a pointer carries
+clang/lib/CodeGen/TargetInfo.h | +4 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
+clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone32:
+clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
+clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
+llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
+llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
+llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
+llvm/include/llvm/CodeGen/ValueTypes.h | +8 -0 | /// Return true if this is a vector value type (Capstone).
+llvm/include/llvm/CodeGen/ValueTypes.td | +69 -34 | bit isCapstoneVecTuple = false;
+llvm/include/llvm/CodeGenTypes/MachineValueType.h | +30 -0 | /// Return true if this is a Capstone vector tuple type where the
+llvm/include/llvm/IR/CMakeLists.txt | +1 -0 | tablegen(LLVM IntrinsicsCapstone.h -gen-intrinsic-enums -intrinsic-prefix=capstone)
+llvm/include/llvm/IR/CallingConv.h | +17 -0 | /// Calling convention used for Capstone V-extension.
+llvm/include/llvm/IR/Intrinsics.td | +1 -0 | include "llvm/IR/IntrinsicsCapstone.td"
+llvm/include/llvm/IR/RuntimeLibcalls.td | +20 -0 | def CAPSTONE_FLUSH_ICACHE : RuntimeLibcall;
+llvm/include/llvm/Object/ELFObjectFile.h | +27 -0 | Expected<SubtargetFeatures> getCapstoneFeatures() const;
+llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/Capstone/Capstone.td)
+llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
+llvm/lib/Analysis/ValueTracking.cpp | +30 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
+llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
+llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
+llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
+llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
+llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +99 -13 | return Type.isInteger() || Type.isCheriCapability();
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +79 -20 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
+llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +27 -6 | // Floating point, a vector, or a capability. Spelled out rather than as
+llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
+llvm/lib/IR/Intrinsics.cpp | +1 -0 | #include "llvm/IR/IntrinsicsCapstone.h"
+llvm/lib/Object/ELFObjectFile.cpp | +39 -0 | #include "llvm/Support/CapstoneAttributeParser.h"
+llvm/lib/Support/CMakeLists.txt | +3 -0 | CapstoneAttributes.cpp
+llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
+llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
+llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
+llvm/utils/TableGen/Basic/CMakeLists.txt | +1 -0 | CapstoneTargetDefEmitter.cpp
+llvm/utils/TableGen/Basic/VTEmitter.cpp | +19 -3 | if (IsCapstoneVecTuple) {
+llvm/utils/TableGen/Common/CodeGenDAGPatterns.cpp | +41 -7 | // A capability IS a pointer type. Leaving it out makes iPTR intersect to the

@@ -841,3 +841,20 @@ them rather than rediscovering them:
 - Worktree note: the benchmark host programs include a header from the empty
   `caplifive-buildroot` submodule dir by relative path; the worktree now carries a
   RELATIVE symlink to the main checkout's (read-only use; never committed).
+
+### 2026-09-04 (later) — Tier 2a interim, the datalayout cleanup, and the order of the rebuild
+
+- **RV8 twins**: -O0 7/7 PASS; -O2 fails bench after bench (dhrystone: TIMEOUT after
+  entry, i.e. a hang rather than a fault; qsort, sha512: FAIL) — the C-40 class is the
+  expected cause, with dhrystone's hang to be re-checked once the fix is in. The driver is
+  stopped after the CoreMark pair rather than spending an hour of QEMU on BEEBS against
+  the unfixed compiler; BEEBS -O0/-O2, SLT -O1/-O2 and RV8 -O1/-O2 run on the fixed build.
+- **22 CodeGen tests carried an unparseable datalayout** (`pf200:...`, rejected by the IR
+  parser: "address space must be a 24-bit integer"); llc masked it because it replaces a
+  module's datalayout with the target's before parsing. All 32 datalayout lines are now the
+  target's own string; the opt-O2-then-llc-O2 sweep over the 80 hand-written tests reports
+  142 OK and only filed or by-design failures (b82408cb).
+- **yarpgen** (2.0, `--std=c`) generates multi-megabyte arrays that do not even link
+  natively without a large code model, let alone fit the 1.3 MB domain ceiling; parked
+  behind csmith until its array-size knobs are explored. csmith seeds build cleanly at
+  -O0 and -O2 with `+m` (the first dry run's -O0 link failures were a missing `+m`).
