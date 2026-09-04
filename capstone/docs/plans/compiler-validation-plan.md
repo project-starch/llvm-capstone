@@ -1371,3 +1371,15 @@ configuration (the -O2 SQLite domain was not built for the board — the SLT twi
 QEMU-only so far). Next on silicon: the cycle-3 images (jump tables, C-36b, the
 gp-captable-default/DELIN change) through the same rung set, which now has a recorded
 silicon baseline to compare against.
+
+### Execution log — merged to dev (2026-09-05, ~06:05)
+
+dev took the branch by fast-forward at 628adf8d0e80 (the lane that owns the main checkout ran
+the merge and pushed dev), after the merged tree was validated: Capstone lit 106/106, BEEBS
+janne-complex at -O0 and -O2 under QEMU, and the SLT twin select1 at -O2 (AGREE, 1031 records,
+0 failures, the same image hash as the cycle-2 run since the merge moved no compiler file).
+The shared-patch drift gate fired on the merged tree for the two Sema files cycle 2 added
+without re-baselining the manifest — the gate working — and the manifest was re-baselined in
+its own commit. dev now carries the cycle-2 compiler; the default ABI is unchanged (the
+gp-captable default and the DELIN drop are cycle 3), and the one visible change for other
+lanes is the pointer-round-trip warning, which fires in SQLite's amalgamation as a warning.

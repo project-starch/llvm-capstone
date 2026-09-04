@@ -97,3 +97,4 @@ twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-trio-sscanf	AGREE-
 twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-ud	AGREE-PASS	
 twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-whetstone	AGREE-PASS	
 twin beebs O0/O2 qemu=5dc356547d7f@2026-09-04T22:34	run-beebs-wikisort	AGREE-PASS	
+slt select1 -O2 dom=0a61867bd3e6 qemu=5dc356547d7f@2026-09-04T22:34	AGREE	1031 records, 0 shared failures	native: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1	domain: records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1
