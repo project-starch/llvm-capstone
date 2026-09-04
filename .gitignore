@@ -98,3 +98,10 @@ pythonenv*
 # this directory is now redundant -- edits made here do not reach the build.  Kept only
 # pending a decision to remove it; ~3.9 GB, nothing in it that is not on the remote.
 /capstone/caplifive-system-dev/
+
+# Working .dom images under the RTL smoke arms. Build artifacts, rebuilt by the bake
+# step; no .dom under rtl-smoke/ has ever been tracked. Frozen reproducer binaries are
+# committed deliberately under capstone/tests/fpga-repros/<ID>/ instead, where the exact
+# binary IS the evidence.
+/capstone/tests/rtl-smoke/**/*.dom
+/capstone/tests/rtl-smoke/wbuf-arms/attic-staged/
