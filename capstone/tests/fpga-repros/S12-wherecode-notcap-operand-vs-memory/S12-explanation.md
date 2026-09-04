@@ -1,9 +1,8 @@
 # S-12 Explained: How a Stalled Store Hands the Wrong Operand to the Next Instruction
 
-> **STATUS: root cause confirmed in RTL simulation AND on silicon. Variant A is SYNTHESISED and
-> a bitstream exists; it PASSES the pre-registered census criterion and improves timing over the
-> resident image. NOT FLASHED — negative slack means `run.tcl`'s criterion is unmet, so flashing
-> is a deliberate lead override.** The engineering detail, the variant comparison and the
+> **STATUS: FIXED ON SILICON. Variant A is synthesised, flashed, and verified — the SQLite domain
+> that trapped now runs the logic test to completion, 4 draws of 4. See §9.4.** The flash was a
+> deliberate lead override: `run.tcl`'s criterion remains unmet on negative slack.** The engineering detail, the variant comparison and the
 > criterion live in `agent-handoff/plans/s12-fix-synthesis-request.md`. Measurements and
 > provenance are in `00-README.md`.
 >
@@ -545,6 +544,38 @@ project can ship a permanently simpler, ~2.9 ns better bitstream.
   vehicle and the debug tree can go.
 * base+tie-off is clean there → the fix created them; **variant B** becomes the instrument-free
   candidate and arm 1 remains the safe instrumented option.
+
+---
+
+### 9.4 Flashed and verified on silicon — 2026-09-04
+
+`caplifive_s12fix_5097eb166.bit` (arm 1, sha256 `7a97ccd0…62999b0`) was installed in the console
+store, hash-verified on both sides of the transfer, and flashed. The console independently reports
+it resident via its own `flash_state.nv_bitstream_name`.
+
+The same domain image that produced the trap — `sha 29289cdeeac9`, byte-identical, same test,
+same control — was then re-run. Only the bitstream changed:
+
+```text
+                       OLD bitstream (draw 4)      NEW bitstream (all 4 draws)
+   ENT2                 E643D221  ← trap report     5117600D  ← ordinary result
+   marker               SQ: X/fail                  none
+   SQLite               "slt did not run"           SLT-SUMMARY ... completed=1
+   rc                   1                           0
+```
+
+`0x5117600D` decodes as NOT a trap report (top nibble 5; the trap markers are `0xF`/`0xE`). The
+`SLT-SUMMARY` is identical to what QEMU emulation produces for this test, so silicon now agrees
+with the reference.
+
+**Reading discipline for anyone re-running this.** Two traps caught on the way:
+
+* `obs=` came back EMPTY on the fixed build. That is missing data, not success — the verdict came
+  from `ENT2` plus `rc` plus the presence of `SLT-SUMMARY`, all read in the run's own region.
+* The SCOPED per-draw capture for the old trapping run showed `completed=1, rc=0`, contradicting
+  the trap. It was displaying an earlier run. Here the whole-log grep was correct and the scoped
+  extractor was not — the reverse of the usual failure, and it nearly caused a correct result to
+  be retracted. Check both, and reconcile them against `rc` before believing either.
 
 ---
 
