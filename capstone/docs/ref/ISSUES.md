@@ -3410,10 +3410,27 @@ wrong arms and skips two"*, so the SLT instrument is proven able to fire on the 
 
 **STILL OPEN, and each matters on its own:**
 
-- **(c) what the 2026-08-27 binary was built from is unexplained.** The commits introducing defect
-  3 are dated 08-15..20, so that binary should have exhibited it and did not — it ran SQLite to
-  completion. Something about its provenance is not understood, and until it is, results taken on
-  it are of unknown pedigree rather than merely old.
+- ~~**(c) what the 2026-08-27 binary was built from is unexplained.**~~ **CLOSED 2026-09-04.**
+  It is a clean **pre-merge build of this same submodule**, and there is nothing mysterious in it.
+
+  The binary is dated **08-27 20:11**; the reflog shows `cb23bf201b` checked out on 08-26 20:54
+  and the next commit at 08-27 20:58 — 47 minutes *after* the build. So it was built from our
+  pre-merge line, where `helper_cslcc`, `helper_cscincoffset` and `helper_cscincoffsetimm` still
+  used **`assert(rs1_v->tag)`** and carried no raise at all. The three raise-introducing commits
+  (`62de48fd8d`, `f546e392fe`, `fb259f5fbf`) are **not ancestors of `cb23bf201b`** — checked
+  individually with `merge-base --is-ancestor`. They arrived from the c128 side, and the merge is
+  what placed them *outside* their guards.
+
+  So the apparent contradiction — "those commits predate the working binary" — dissolved once the
+  question became *which line* rather than *which date*. Dates ordered the commits; ancestry
+  decided whether they were in the build.
+
+  **A sibling-clone explanation was proposed and is REFUTED.** `build/config-host.mak` records
+  `SRC_PATH=/home/alexey/dev/capstone/capstone-qemu`, which looks like a parallel working tree.
+  It is not one: `/home/alexey/dev/capstone` is a **symlink** to
+  `/home/alexey/dev/llvm-capstone/capstone`, and both paths `stat` to the same inode. There is one
+  tree. Anyone reading that `SRC_PATH` should resolve it before drawing conclusions from it — and
+  it does *not* mean the nightly's relink logic compares against a different tree.
 - **(d) the "SLT corpus matches native 15/15" claim has no committed harness.**
   `run-sqlite-slt.sh` is a liveness check that prints `__CAPSTONE_SQLITE_SLT_RAN__`; the
   case-by-case comparison against `slt_native` was run ad hoc. A claim that cannot be re-run is
