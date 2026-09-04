@@ -416,6 +416,53 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `OPEN — RUNTIME; cheap reproducer, no board needed`
+
+**Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
+result files.** This is a runtime defect, not a codegen one.
+
+The evidence is a matched pair of batches over the same csmith images under QEMU `5dc356547d7f`:
+
+| batch | position | image | verdict |
+|---|---|---|---|
+| B | 5 | `cs2-O2` | **RET** 599932085 |
+| B | 12 | `cs7-O2` | **WEDGE** |
+| C | 1 | `cs7-O0` | **RET** 505522532 — the native checksum |
+| C | 6 | `cs2-O2` | **WEDGE** |
+
+**The same images produce opposite verdicts, and the variable is where they sit in the boot.**
+`cs7` wedges at 12 and passes at 1; `cs2-O2` passes at 5 and wedges at 6. Wedges have been seen at
+positions 5, 8 and 12. The shell prompt never returns; QEMU stays alive. Every wedge is preceded by
+`[CAPSTONE] Print = Scalar(0x1234)` (`helper_csdebugprint`), which also appears in a normal boot —
+so it is the last line printed, **not** the cause.
+
+**Why this matters far beyond the fuzz campaign.** Any result taken from a multi-domain boot is
+suspect in proportion to its position. A domain that wedges late gets blamed on the domain. That is
+exactly the wrong verdict `.claude/skills/board-run/SKILL.md:217-218` already records from the
+board — *"an arm failed at position 4 of a 6-program boot, and positions 5 and 6 were recorded as
+failures. Re-tested one-per-boot, position 5 passed."*
+
+**So the board rule was right, and this is the same phenomenon on the cheap platform.** The
+standing ordering rule (at most one unknown per boot, placed last, known-good control first) was
+derived empirically from board sessions costing minutes each. Here it reproduces in **~0.2 s per
+item**, which means the effect can finally be **root-caused without spending board time** — the
+first time that has been possible.
+
+**Reproducer:** a one-line-per-item manifest for `capstone/tests/fuzz/run-domain-batch.py` with a
+dozen small domains; twenty items shows it inside a minute. Logs at
+`/tmp/capstone/fuzz/f04-position/batch-{A,B,C}.log` with `results-{B,C}.tsv` (scratch — copy
+anything needed before it is cleaned).
+
+**What is NOT yet known:** whether the board exhibits the *same* mechanism or merely the same
+shape; whether the count is domains, capability allocations, or revocation-node consumption;
+and whether one boot in batch A never reaching the login prompt is the same defect earlier or
+ordinary infra flake. The first two are answerable off-board with the reproducer above.
+
+**The method note is the compiler lane's and worth keeping:** they had reported this as an
+`-O0`-only compiler defect, and retracted it after re-running the wedged image first-in-boot. Their
+campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
+Applies equally to board arms.
+
 ## Q-01 — `run-sqlite-memory.sh` cannot create its domain · `RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`
 
 > **RESOLUTION, and the framing below was wrong in one important way.**
