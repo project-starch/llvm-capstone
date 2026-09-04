@@ -2475,6 +2475,79 @@ if [[ "${CAPSTONE_SLT_PROGRESS:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SLT_PROGRESS=1"
 fi
 
+# CAPSTONE_WTRUNC=<n> -- TRUNCATE sqlite3WhereCodeOneLoopStart after its n-th leading statement.
+#
+# This is the reduction that should have been done first. The SQL was delta-debugged down to a
+# two-table join and then the work jumped to binary-patched single-variable arms -- which answer
+# "is this one thing causal", not "what is the SMALLEST thing that still breaks". Those are
+# different questions, and nine hand-written bare-metal reconstructions coming back clean is an
+# argument FOR reduction rather than against it: a reconstruction guesses what matters and can
+# silently omit the essential ingredient, whereas a reduction removes one thing at a time and
+# reports exactly when it stops reproducing.
+#
+# The mapping from source to the fault is now exact:
+#
+#   Index *pIdx = 0;        ->  movc a4, zero ; stc a4, 0x0(a5)
+#   pWC = &pWInfo->sWC;     ->  ldc  a4, 0x0(a0) ; cincoffsetimm a4, a4, 0xb0   <- FAULTS
+#
+# sWC sits at offset 0xb0 in WhereInfo, which is where the 0xb0 in the faulting instruction comes
+# from. So the whole fault is: reload the caller's pWInfo from its stack slot, then take the
+# address of one of its members. Every other one of the function's 2866 instructions is downstream
+# of that and is a candidate for removal.
+#
+# n=1 truncates immediately after `pWC = &pWInfo->sWC;`. If the fault survives that, the repro
+# collapses from 2866 instructions to a few dozen -- small enough to hand to RTL simulation, where
+# a run is 14 seconds with a full instruction and memory trace instead of one bit per 8-minute
+# boot. That change in economics is the point of the exercise.
+#
+# THE RETURN VALUE IS DELIBERATE. `return 0` would leave pWC unused and invites the compiler to
+# delete the very assignment under test; returning its cursor forces the computation at any -O
+# level. The domain is built -O0, where nothing would be eliminated anyway, but a variant that
+# silently optimises away the instruction it exists to test is exactly the failure this project
+# keeps paying for -- so it is prevented rather than assumed away, and the disassembly gate below
+# confirms the window survived rather than trusting either.
+#
+# The early return leaves the CALLER running, which is what we want: the fault, if it happens,
+# happens before the return, so the wedge is still the observable and the program merely goes on
+# to produce a wrong answer.
+if [[ -n "${CAPSTONE_WTRUNC:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WTRUNC" <<'PYWT'
+import os
+import sys
+path, n = sys.argv[1], int(sys.argv[2])
+s = open(path).read()
+# Leading statements of the function body, in source order. Truncation after the n-th.
+STMTS = [
+    "  pWC = &pWInfo->sWC;",
+    "  db = pParse->db;",
+    "  pLoop = pLevel->pWLoop;",
+    "  pTabItem = &pWInfo->pTabList->a[pLevel->iFrom];",
+    "  iCur = pTabItem->iCursor;",
+]
+if not (1 <= n <= len(STMTS)):
+    sys.exit(f"WTRUNC: n must be 1..{len(STMTS)}, got {n}")
+# `pWC = &pWInfo->sWC;` alone appears THREE times in the amalgamation, so the statements have to
+# be anchored to this function's declaration block to be unique. The refusal that caught that is
+# the reason the count is checked rather than assumed.
+PREFIX = "  int iLoop;                /* Iteration of constraint generator loop */\n\n"
+anchor = PREFIX + "\n".join(STMTS[:n])
+if s.count(anchor) != 1:
+    sys.exit(f"WTRUNC: anchor for n={n} occurs {s.count(anchor)} times -- refusing to guess")
+# RETURN VALUE. `0` is a VALID Bitmask, so SQLite may survive the truncation and keep a clean
+# return-vs-wedge observable; the cursor of pWC is not, and a domain that dies on the garbage makes
+# a board wedge ambiguous between S-12 and the truncation's own crash. Default to 0 and let
+# CAPSTONE_WTRUNC_RET=cursor ask for the other, because the risk `cursor` was guarding against --
+# the compiler deleting the assignment under test as dead -- cannot arise at the -O0 the domain is
+# built with, and the window gate confirms the instruction survived either way rather than either
+# choice being trusted.
+ret = ("(Bitmask)(unsigned long)pWC" if os.environ.get("CAPSTONE_WTRUNC_RET") == "cursor"
+       else "0")
+s = s.replace(anchor, anchor + f"\n  return {ret};  /* CAPSTONE_WTRUNC */", 1)
+open(path, "w").write(s)
+print(f"   WTRUNC: sqlite3WhereCodeOneLoopStart truncated after statement {n}")
+PYWT
+fi
+
 if [[ -n "${CAPSTONE_CREATE_LADDER:-}" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_CREATE_LADDER=${CAPSTONE_CREATE_LADDER}"
 fi

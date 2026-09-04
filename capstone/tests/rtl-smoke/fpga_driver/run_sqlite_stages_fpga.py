@@ -837,7 +837,23 @@ def main():
         install_release_on_signal(console)
         rb = nvbit(console)
         if rb != BITSTREAM:
-            raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
+            # NARROW override, for one situation only: the console reports nv_bitstream_name as
+            # None. That happens after the backend restarts -- it appears to learn the name by
+            # performing a flash itself, so a restart loses it while the FPGA keeps its bitstream.
+            # On 2026-08-31 that cost two boots to a HARD STOP, and a power-on showed the SD
+            # bootloader banner immediately, i.e. silicon resident and only the NAME unknown.
+            #
+            # The override does NOT tolerate a genuine mismatch: a console reporting SOME OTHER
+            # name still hard-stops, because that is the case the gate exists for. It covers only
+            # "the console does not know", and it says so in the transcript rather than passing
+            # quietly -- an unverified run has to be visible in its own log, since the whole point
+            # of naming the silicon is that a verdict is worthless without it.
+            if rb is None and os.environ.get("FPGA_BITSTREAM_UNVERIFIED") == "1":
+                log(f"!! BITSTREAM IDENTITY UNVERIFIED: the console reports no resident name. "
+                    f"Proceeding on the ASSUMPTION it is {BITSTREAM!r}, which is NOT confirmed.")
+                log("!! Any result from this boot must be recorded as bitstream-unverified.")
+            else:
+                raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
         # BOOT AN IMAGE ALREADY ON THE SERVER, without uploading and without a local copy.
         #
         # The console stores boot images under a CONTENT-HASH name (sha256[:12]), so a name can
@@ -2541,15 +2557,22 @@ def main():
                                       "The instruction's OPERAND is innocent; PCC's revocation "
                                       "node was invalidated.", flush=True)
                             elif tval == 0:
-                                print("          <== tval == 0. DO NOT read this as "
-                                      "'the operand was NULL, therefore a software bug' -- that "
-                                      "reading was RETRACTED. The FLU tval path has never been "
-                                      "shown to produce a NON-zero value on this bitstream, so a "
-                                      "zero here is equally consistent with the instrument never "
-                                      "populating it. Until `li a0,0xBEEF; cincoffsetimm a0,a0,8` "
-                                      "traps with tval==0xBEEF, treat tval==0 as NO DATA. The "
-                                      "cause code alone already gives cap_type==NOT_CAP for "
-                                      "cincoffsetimm.", flush=True)
+                                print("          <== tval == 0. THE CONTROL THIS LINE DEMANDED HAS "
+                                      "RUN AND PASSED: a domain executing `cincoffsetimm` on a "
+                                      "plain 0xBEEF latches tval==0xBEEF -- tval-ctl3 (2026-08-24, "
+                                      "console-named bitstream) and tvnh-1/tvnh-2 (2026-08-31). "
+                                      "The FLU tval path is LIVE, so a zero here is a READING, not "
+                                      "an unpopulated instrument. It also EXCLUDES the "
+                                      "pc-capability producer of cause 25, which sets tval to the "
+                                      "faulting PC (commit_stage.sv:604) and can never be zero.",
+                                      flush=True)
+                                print("          <== BUT the control only exercised tval[15:0]. "
+                                      "Apertures 213-218 (tval[63:16]) have never returned a "
+                                      "non-zero value here, so an operand that is a non-zero "
+                                      "integer with a zero low half-word -- an address-like value "
+                                      "such as 0x82800000 -- would still read as 0. What is "
+                                      "established is `non-capability with [15:0]==0`; `exactly "
+                                      "null` needs a 0xDEADBEEF-class probe.", flush=True)
                             else:
                                 print("          <== tval is pointer-like: a real capability that "
                                       "LOST ITS TAG (ex_stage.sv:481-487 puts the rs1 cursor "

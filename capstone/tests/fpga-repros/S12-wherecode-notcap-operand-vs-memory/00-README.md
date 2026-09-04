@@ -174,6 +174,194 @@ memory-path and a delivery-path explanation remain live.
 > value is in that set, the repro never exercised the mechanism it was built to test, and an arm
 > with a matching-type `v` is the first variant that *can* reproduce.
 
+## 2026-08-31 — S-12 IS TWO DEFECTS, AND THE ONE THAT KILLS THE BOARD IS NOT SPECIFIC TO S-12
+
+**A deliberate, trivial capability fault raised from inside a domain wedges the whole board in
+exactly the same way S-12 does.** Same latch, same architectural end-state, same silence from the
+monitor. The wedge was never a property of `sqlite3WhereCodeOneLoopStart`.
+
+The control that shows it is the `0xBEEF` probe: a domain materialises a plain integer and executes
+`cincoffsetimm` on it, which is the most boring capability fault available. Compare it against the
+real thing:
+
+    probe                       latch (hw debug mux)              architectural CSRs (gdb)
+    0xBEEF, tvnh-1              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    0xBEEF, tvnh-2              mcause 25  tval 0xbeef            mcause=2  mepc=2  mtval=0
+    real S-12, s12t-1           mcause 25  tval 0  @0x828f4814    mcause=2  mepc=2  mtval=0
+
+`EXCX` is 0 in all three. The monitor's unhandled-exception arm — which reports EXCX/MCAU/MEPC/MTVL
+and then calls `fault_return_from_domain` to terminate the domain and return a code — is present in
+the deployed firmware (`nm` shows `T fault_return_from_domain` at 0x800239ac) and does not run.
+
+### (A) narrowed to one mechanism, with three alternatives structurally excluded
+
+RTL-verified at the bitstream commit `80843404c` (not HEAD; the two differ in `ex_stage.sv`,
+`issue_read_operands.sv`, `load_unit.sv`, `load_store_unit.sv`, `cva6.sv`):
+
+**`operand_a` IS the rs1 cursor**, and it is not a reporting artifact. Cursor and metadata come from
+two physically separate register files (`issue_read_operands.sv:201-204`, `:1683-1704`), and
+`ex_stage.sv:796-797` feeds that same wire into `decompress_cap_tagged` to build `cap_rs1` — the
+object the FLU actually inspects. So `tval` and the FLU's own decision read the SAME signal in the
+SAME cycle.
+
+**The exception nulling does not reach `tval`.** `raise_exception`
+(`capstone_unit.anvilh:448-452`) nulls the OUTPUT-side result pack; `tval` (`ex_stage.sv:488`) reads
+the INPUT-side `fu_data_i[0].operand_a`. Different wires, different pipeline stages. The "every
+capability exception reports tval=0 regardless" escape is refuted structurally, not by comment.
+
+**Therefore `tval = 0` means the FLU genuinely ingested cursor = 0** — while the architectural `a4`
+afterwards holds `0x82be4cd0`, the correct value from the slot. The load wrote the right thing; the
+consumer received something else.
+
+**Three of the four mcause-25 producers are excluded for this trap.** `pc_cap` sets
+`tval = commit_instr_i[0].pc` (`commit_stage.sv:604`), so it would give `tval == mepc != 0`, and it
+cannot coexist with an FLU-attached exception anyway (`:210`, `:611-614`). `DYN` would name the
+`ldc` at VA 0x104810 in `mepc`, not the `cincoffsetimm` at 0x104814. The LSU cannot see this
+instruction at all: `decoder.sv:1164-1166` makes the whole `OpcodeCustom2` block FLU by default and
+`CINCOFFSETIMM` never overrides it, while `LDC` explicitly sets `CAPSTONE_DYN`.
+
+**The surviving mechanism is load-to-use forwarding timing.** `fu_data_q` is captured ONCE, at
+issue-accept (`issue_read_operands.sv:1885-1888`) — there is no re-latch while an instruction waits.
+The `cincoffsetimm` reads `a4` the instruction immediately after the `ldc` writes it, so the only
+path that can satisfy `rs1_valid` in time is the forwarding network. If that grant can fire on a
+cycle where the LDC's result has not genuinely landed in the forwarding structure, the consumer
+captures a zero cursor permanently while the LDC still writes back correctly afterwards — which is
+exactly the observed signature.
+
+**Structurally excluded within that mechanism:** a cursor/metadata mismatch from two different
+producers. The two arbiters share one request vector (`issue_read_operands.sv:789-849`), so they
+always select the same winner.
+
+**Not yet closed, and it needs simulation rather than the board:** whether `rs1_available` /
+`rs1_cap_avail` can both be granted before the load's result is populated — this needs
+`scoreboard.sv` and the D$ response timing, and it is expected to depend on HIT versus MISS. Note
+the previously refuted "stale-regfile read" and "wrong-producer forwarding" hypotheses do NOT cover
+this: both were refuted in bare metal, with their own scope warnings, and neither tested a grant
+racing an unlanded load result.
+
+### So S-12 decomposes
+
+**(A) Why does a capability fault occur at `cincoffsetimm a4, a4, 0xb0`?** The stale-operand
+question. At the wedge the register file holds `a4 = 0x82be4cd0`, exactly the cursor sitting in the
+slot the `ldc` read (`0x82b9f410` → `0x82be4cd0 / 0x0000073fa7462d16`), so **the load did write the
+right value and the consumer ingested something else** — `tval`, which is the rs1 cursor as the FLU
+took it, is 0. The driver already prints this conclusion at the wedge.
+
+**(B) Why does ANY domain capability fault kill the board instead of trapping to the monitor?**
+This is the defect that turns a recoverable fault into a dead board, it is universal rather than
+S-12-specific, and it is almost certainly the same defect as the historical `gp-free` wedge, whose
+recorded signature is character-for-character `pc=0 / mepc=2 / mcause=2 / mtval=0 / MPP=M`.
+
+**(B) is the blocker.** The standing goal is running the SLT corpus on silicon; with (B) in place,
+*any* capability fault anywhere in the corpus takes the board down and yields no diagnosis. Fixing
+(A) alone removes one fault site out of an unknown number.
+
+### Why nobody saw it
+
+The hardware trap latch filters `cause != 2` (`cva6.sv:1126-1137`), so the cause-2 storm the core
+actually ends in is invisible to it — it faithfully preserves the *first* nontrivial trap and hides
+everything after. The architectural CSRs tell the other half of the story and were being read all
+along, on the line directly below. Both halves were in every log.
+
+**Not yet established:** why the trap ends at `pc = 2`. A pending RTL question, with one standing
+candidate: `capmode_q` is sticky (`csr_regfile.sv:295`) and `npc_metadata_q` is not cleared when the
+core takes an exception (`frontend.sv:425-427` redirects the PC alone; `:443-444` holds the
+metadata), so the first instruction fetched at `mtvec` can be PC-capability-checked against stale
+domain bounds. That predicts cause 26/27/28, which would have overwritten the latch and did not —
+so the candidate does not fit as stated, and the residual is exactly the cause-2 path the latch
+cannot see.
+
+---
+
+## 2026-08-31 — THE `mtval` INSTRUMENT WORKS. It was the GDB HALT destroying the reading
+
+`tval = 0xBEEF`, twice out of two, with `mcause = 25`.
+
+The positive control that had been written months ago and never run finally ran. A domain executes
+`cincoffsetimm` on a plain integer 0xBEEF — verified in the artifact, `lui a0,0xc; addi a1,a0,-0x111`
+and the faulting instruction encoded `5b 25 85 00` — and the latch reads:
+
+    HALT_MUX_READS=1   mcause 3    tval 0x00100073 (the ebreak insn word)   mepc 0x368
+    HALT_MUX_READS=0   mcause 25   tval 0x000000000000beef                  mepc 0x828233a0
+
+Same binary, same boot sequence, one variable. **The `monitor halt` the driver issues before reading
+the debug mux was overwriting the trap latch**, and the trap latch is what every `tval` reading in
+this investigation was taken from.
+
+### What this settles
+
+**`mtval` is a live instrument on this silicon** — and it was already known to be, a week before
+this run. `tval-ctl3.log`, 2026-08-24, on a console-NAMED `caplifive_s10fix_80843404c.bit`, latched
+`trap tval = 0x000000000000beef`. The control had been run, its result was sitting in
+`/tmp/capstone/`, and it was re-run on 2026-08-31 because nobody looked. That is the second
+prior-art failure in this investigation and it cost a board session.
+
+Consequently the caveat the driver hard-codes — *"the FLU tval path has never been shown to produce
+a NON-zero value on this bitstream ... treat tval==0 as NO DATA"* — has been printing a FALSE
+warning under every `tval == 0` since 2026-08-24. Fixed.
+
+**The S-12 reading is `tval = 0` at `mcause 25`, `mepc = 0x828f4814` (VA 0x104814, the documented
+`cincoffsetimm a4,a4,0xb0`), and it is NOT N=1.**
+
+    nc-2      2026-08-29   named silicon, pre-read halt FAILED (so un-clobbered)   identical triple
+    s12t-1    2026-08-31   named silicon, no halt requested                        identical triple
+
+plus roughly twenty further draws on this bitstream carrying the same triple. The earlier write-up
+called this N=1; that understated the evidence, and `nc-2` is the strongest single draw in the file.
+
+**It excludes the PC-capability producer of cause 25.** That producer sets `tval` to the faulting PC
+(`commit_stage.sv:604`), so a pc_cap fault would give `tval == mepc == 0x828f4814` — `0x14` on
+aperture 210 and `0x48` on 211. Those two apertures are PROVEN LIVE: they returned `0xef`/`0xbe`
+in the 0xBEEF draws. They read `0x00`. The exclusion rests on `tval != mepc` alone and is airtight.
+
+### What is NOT established
+
+**"The operand was exactly null" is NOT established — only that it was a non-capability whose low
+half-word is zero.** The 0xBEEF control exercises apertures 210 and 211, i.e. `tval[15:0]`.
+Apertures 213-218 (`tval[63:16]`) have never returned a non-zero value on this silicon. An operand
+that is a non-zero integer with a zero low half-word — an address-like value such as `0x82800000`,
+which is exactly the "address-like garbage" shape this project has seen before — would read as
+`tval = 0`. **Closing it costs one arm: a probe materialising `0xDEADBEEF` rather than `0xBEEF`.**
+
+**RETRACTED before it was ever acted on: "every historical `tval = 0` was read through a destroying
+path."** The clobber is SELF-ANNOUNCING. All four latch fields are written in one `always_ff` branch
+(`cva6.sv:1126-1137`), so a clobber necessarily moves `mcause` to 3 or 15 and `mepc` to
+`0x368`/`0x860`. Therefore every historical draw reporting `mcause 25` with a domain-range `mepc`
+was, on its face, NOT clobbered — and that is most of them. The halt-clobber association is real
+(the `0x368`/cause-3 signature appears in 0 of 26 no-halt draws and 17 of 36 halt draws) but it
+invalidates nothing that already reads as a domain capability fault.
+
+**The halt-destroys-the-latch mechanism itself is PLAUSIBLE, not proven.** Its matched pair is
+thinner than it looked: `tv-1` is an INFRASTRUCTURE WEDGE in which the probe never executed at all,
+so the with-halt side is `tv-2` alone. A competing explanation survives — those boots may have
+wedged without ever committing a latchable exception, leaving an earlier ebreak as the only thing
+ever latched, in which case the halt destroyed nothing.
+
+**Provenance, stated per draw rather than blanket.** `tvnh-1`/`tvnh-2` report
+`nv_bitstream_name: None` — they ran under `FPGA_BITSTREAM_UNVERIFIED=1` and are NOT on named
+silicon; the preflight line naming the bitstream there is echoing the env var, not a readback.
+`tval-ctl3`, `nc-2`, `s12t-1` and `s12t-2` ARE named.
+
+**`EXCX` did not fire — and now that absence MEANS something.** Both draws show `EXCX count: 0`.
+The monitor's unhandled-exception arm reports EXCX/MCAU/MEPC/MTVL/MSTA and then calls
+`fault_return_from_domain`, and `nm` confirms both are in the deployed firmware. This run is the
+positive control that path never had: a deliberate, confirmed `mcause 25` raised from inside a
+domain, which is exactly its trigger condition. It did not run.
+
+So **M-mode trap entry does not reach the monitor's handler for a domain capability fault**, and the
+pre-registered consequence stands: a monitor-side change cannot convert S-12 wedges into returned
+fault codes, and the directed Verilator simulation over `capmode_q` / `npc_metadata_q` /
+`pc_cap_ex_valid` is now the indicated instrument rather than a detour.
+
+### Caveat carried with all four draws
+
+The console lost `nv_bitstream_name` when its backend restarted, and these boots ran under
+`FPGA_BITSTREAM_UNVERIFIED=1`. A power-on showed the SD bootloader banner, so silicon is resident,
+but it cannot be NAMED. The `0xBEEF` result is a property of the FLU trap-value path and is not
+plausibly bitstream-version-specific, but the caveat travels with the number.
+
+---
+
 ## 2026-08-29 — READ THIS BEFORE ANY TABLE BELOW. Three wedges in this folder never ran a domain, and the freshness gate was blind
 
 Everything below this section was tallied with the wedge counts named here. They are wrong, they
