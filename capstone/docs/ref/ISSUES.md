@@ -1355,9 +1355,16 @@ of divergence that has repeatedly cost this project board time.
 
 **Not yet established, and needed before this is handed to the hardware side:**
 
-- **whether it is reachable from our codegen.** If the compiler only ever emits `INIT` with
-  `rs1 == rd`, the defect is real in the ISA and unreachable in practice, which changes its
-  priority completely though not its correctness.
+- ~~whether it is reachable from our codegen~~ **ANSWERED 2026-09-04, and it IS reachable.**
+  `INIT` carries **no tied-operand constraint** in the instruction definition, unlike
+  `SHRINK`/`DELIN`/`DROP`/`REVOKE`. Measured on the cycle-1 compiler: a source pointer that stays
+  live across the builtin produces `init a1, a0, a1` at `-O1` and `-O2`. Where `rd == rs1` does
+  occur it is the register allocator reusing a register, not a constraint — nothing forces it.
+
+  So: **real in the ISA and reachable by construction from any C that calls
+  `__builtin_capstone_cap_init` with a live source.** The mitigation is that no in-tree C outside
+  tests uses `cap_init` today, so no shipping domain hits it — that is a fact about our current
+  programs, not about the hardware, and it expires the moment one does.
 - **whether the duplicated capability is usable**, or whether a later consumer traps on it.
 - a **directed `.S`** in the simulator with `rs1 != rd`, reading both registers afterwards. This
   needs no board — `rtl-sim` answers it in ~14 s, and it is the natural next step.
