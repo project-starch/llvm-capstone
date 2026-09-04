@@ -1130,3 +1130,36 @@ already-failing 40 ns budget. Anyone proposing added on-chip observability on th
 price it against this pair, not against LUT count.
 
 Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identical to the base.
+
+### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
+
+**New, citable.** The SQLite logic-test corpus now executes in a capability domain on silicon.
+`s12stress` passes **120/120**, identical to the native x86 baseline; the corpus matches native
+**15/15** under QEMU. Resident bitstream `caplifive_s12fix_5097eb166.bit`.
+
+This is the first application-level *correctness* result on capability silicon. It is **not** a
+performance result — no `mcycle`/`minstret` figures accompany it — so it closes the compatibility
+axis, not the cost axis.
+
+**⚠ Any SLT pass rate from before 2026-09-04 is VOID.** 12 of the 15 test files declared an
+expected value for queries over **empty tables that return no rows**, so those expectations were
+never evaluated: the files were built as wedge probes where "passes" meant *"did not wedge"*. The
+corpus has been fixed and re-verified against the native baseline. **Re-derive any number that
+rests on a pre-2026-09-04 SLT rate.** This is the house rule — *a clean result is not evidence
+until the check is known to fire* — caught in our own instrument.
+
+**⚠ S-12 must not be described as "fixed" in a paper yet.** `ref/ISSUES.md` now reads
+**"ROOT-CAUSED, FIXED IN RTL, FLASHED — verification is CONSISTENT WITH FIXED, not proven"**. The
+fix is real, synthesised and flashed, and the domain that trapped completes 4 draws of 4 — but the
+pre-fix arm trapped 3 of 4, giving Fisher **p = 0.071**, and P(4 clean) against this project's own
+~54% per-draw rate is **0.045**. The registry has already ruled 0.045 insufficient for a cure
+claim elsewhere, so the internal-consistency argument, not merely the p-value, is what forbids it.
+**Two more clean draws would give 0.0095.** Until then: "consistent with fixed".
+
+**One prediction that failed, worth recording.** `5097eb166` **improved** timing over its base
+`80843404c` — WNS **−16.400 → −15.311**, and **987 fewer** failing endpoints (102,769 → 101,782,
+confirmed against §7's table) — despite adding a term to a stall condition, which everyone
+expected to cost time. Whatever intuition predicted otherwise should not be trusted on this
+design.
+
+Provenance: board and RTL lanes, 2026-09-04.

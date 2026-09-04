@@ -197,6 +197,13 @@ XSA-155/166/197/478) are a codegen lottery.
 | **4 hierarchical** | 6 (A, design claim) | — | 7 triaged; sqlite-jdbc trivial |
 | **6 TOCTOU** | **0** | — | **8 triaged; build wasmtime shape** |
 
+**Silicon status, 2026-09-04.** The SQLite logic-test corpus now runs in a capability domain on
+silicon (`s12stress` 120/120, matching native; 15/15 under QEMU). That is a **compatibility**
+result, not a performance one — no cycle counts accompany it. Two caveats travel with it: any SLT
+pass rate from before 2026-09-04 is void (12 of 15 files had never-evaluated expectations), and
+S-12 is **"consistent with fixed, not proven"** — do not write "fixed". See
+`fpga-silicon-measurements-for-paper.md` §7b.
+
 **Cheapest high-value work, in order:**
 
 1. **Capstone column for the 8 unmeasured Corpus-A rows** — pure C, method established, closes
