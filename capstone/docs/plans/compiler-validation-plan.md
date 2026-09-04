@@ -721,3 +721,39 @@ confirmations). `ninja -j90` rebuilds after each codegen fix (Debug tree, minute
   rule.
 - **Retirement scope** already decided ("validate first, then retire proven compiler-debt");
   each retirement still reports its classification row before the removal commit.
+
+## Execution log
+
+### 2026-09-04 — Tier 1 P2 (MC suite) landed; observations for Tier 4
+
+Measured while writing M6/M7, recorded here so the Tier 4 matrix starts with
+them rather than rediscovering them:
+
+- **PseudoTRUNC_CAP expands to a full `movc`**, not an integer `mv`, whenever
+  the source and destination registers differ (`ptrtoint` of the second
+  argument → `movc a0, a1`); with the same register it expands to nothing.
+  The metadata half rides along into the "integer" destination. RTL nulls an
+  UNTAGGED `movc` source (C-32 shape), so a `ptrtoint` of an integer-derived
+  pointer whose source stays live is a candidate for the same defect class —
+  add the row to 4.1 (`movc`) and a shape seed to Tier 3.
+- **Function-pointer constants are minted from gp.** Under the default ABI
+  `__capstone_cap_init` builds the capability stored over
+  `@fp = constant ptr @f` with `auipc/addi; cincoffset a1, gp, a1; delin a1;
+  stc` — a DATA-authority capability whose cursor is a code address. Under
+  `-capstone-gp-captable` the same constant is initialised with the raw
+  integer (`auipc/addi; mv; stc`), untagged. Neither is obviously a valid
+  `cjalr` target on silicon; this is the "indirect call through a
+  function-pointer global" row of 4.4, and `obj-relocs-cap-constant.ll` /
+  `obj-relocs-gp-table.ll` pin today's behaviour so a fix has a red test.
+- Under `-capstone-gp-captable` functions return with `ret` (plain `jalr`),
+  under the default ABI with `cjalr zero, 0(ra)` — consistent with T1's
+  gp-free arm; no action.
+- **C-37 shape confirmed**: `Capstone.def` names the relocations
+  `R_Capstone_*` (mixed case); `lib/Object/ELF.cpp` has no `EM_CAPSTONE` case
+  at any of its four `EM_RISCV` switch sites (`:114`, `:220`, `:276`,
+  `:570`). Every new type check matches number OR name, so only
+  `reloc-names.s` flips when the fix lands.
+- The gate's `mc` section scans `MC/Capstone/*.s` only; the `.ll` round-trip
+  tests in that directory and the Disassembler `.txt` files carry their own
+  `MUTATION:` lines but are not counted by the `mutations` section. Extend
+  the scan when the section is next touched (P4).

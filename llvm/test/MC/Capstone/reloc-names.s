@@ -22,6 +22,6 @@
 
 # CHECK: Relocations [
 # CHECK: .rela.text
-# CHECK: R_CAPSTONE_CALL_PLT foo
+# CHECK: R_Capstone_CALL_PLT foo
 # CHECK-NOT: Unknown
 call foo

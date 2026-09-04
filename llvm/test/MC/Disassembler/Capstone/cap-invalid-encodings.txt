@@ -1,0 +1,26 @@
+# Encodings the decoder must REJECT: the fixed fields the .td declares
+# (movc's rs2 = 0, drop's rd = 0), the register class the encoding forbids
+# (mrev with rd = zero, GPCRNoC0), and a funct7 under OPC_CAP_OP that no
+# instruction defines (0b0000110).  Measured 2026-09-04: all four decode as
+# "invalid instruction encoding".  This is the control for cap-instructions.txt
+# -- a decoder that accepted anything under the capability opcode would pass
+# that file and fail this one.
+#
+# MUTATION: change the first line to 0x5b 0x95 0x05 0x14 (rs2 cleared, i.e. a
+# valid `movc a0, a1`) -> it decodes and the CHECK for a warning on it fails
+# (performed 2026-09-04).
+#
+# RUN: llvm-mc -triple capstone64 --disassemble %s 2>&1 | FileCheck %s
+
+# movc with rs2 != 0
+# CHECK: warning: invalid instruction encoding
+0x5b 0x95 0xc5 0x14
+# drop with rd != 0
+# CHECK: warning: invalid instruction encoding
+0xdb 0x10 0x05 0x16
+# mrev with rd = zero
+# CHECK: warning: invalid instruction encoding
+0x5b 0x90 0x05 0x10
+# unassigned funct7 0b0000110 under OPC_CAP_OP
+# CHECK: warning: invalid instruction encoding
+0x5b 0x95 0xc5 0x0c
