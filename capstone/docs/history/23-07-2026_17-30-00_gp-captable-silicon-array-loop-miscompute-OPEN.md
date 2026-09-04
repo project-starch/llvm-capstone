@@ -1,5 +1,42 @@
 # OPEN: gp-captable domains miscompute a global-array store+accumulate loop on silicon (correct on QEMU)
 
+> ## UPDATE 2026-09-05 — this may already be FIXED, and the test is cheap
+>
+> This document's own conclusion is that the signature is **"a microarchitectural store/forwarding
+> race in the RTL LSU, not a deterministic compiler bug"** — non-deterministic address-valued
+> garbage (`0x8B8x…`), well-formed capabilities, codegen provably equivalent between the passing
+> and failing arms, QEMU always correct.
+>
+> **S-12 is a store/forwarding defect in exactly that path, and it was root-caused, fixed in RTL
+> and flashed on 2026-09-04** — six weeks after these measurements. A capability store's
+> scoreboard `rd` is aliased to its own store-data register; under store-buffer back-pressure the
+> commit stage holds `we_gpr` while withholding `commit_ack`, the WAW guard clears, and forwarding
+> hands a younger consumer the wrong value. "An integer accumulator receiving a capability cursor,
+> only in a loop that also stores, only on silicon, non-deterministically" is that shape.
+>
+> **This was not connected at the time because S-12 had no mechanism until 2026-09-03.** The
+> connection was suggested by the compiler lane on 2026-09-04 from the signature alone.
+>
+> ### The test, and the confound that has to be controlled
+>
+> Rebuild `rc_const0` (`acc[i]=i; s+=acc[i]` — PASS) and `rc_p1` (`acc[i]=i+1` — FAIL) and run both
+> on `caplifive_s12fix_5097eb166.bit`. If `rc_p1` now returns 28 instead of an address, this is
+> closed and with it the block on the silicon-compatibility claim, the branch merge, and app-level
+> silicon perf.
+>
+> **The confound: the reproducers no longer exist.** No `.c`, no `.dom`, no build command survives
+> — only the table in this document. So a rebuild uses **today's compiler**, not July's, and a pass
+> would be consistent with *either* the RTL fix *or* a codegen change. To attribute it, the
+> disassembly of the rebuilt pair must be checked to still be the same shape (store-and-accumulate
+> in one body, the same capability-typed operands); the compiler lane has offered exactly that
+> diff. Without it, a green result is suggestive and not conclusive.
+>
+> This is the third measurement in this repository found on 2026-09-04/05 to be unreproducible from
+> its own record — see `../../tests/fpga-repros/S13-o1-dyn-rev-node-hang/` and the note in
+> `../../tests/fpga-repros/README.md`. The loops here are three lines and rebuildable, which is the
+> only reason this one is recoverable at all.
+
+
 > ## ⚠️ 25-07-2026 — THE ROOT CAUSE BELOW IS REFUTED. READ THIS FIRST.
 >
 > Everything below concluded the cause is an **RTL `shrink`→store forwarding hazard**, with
