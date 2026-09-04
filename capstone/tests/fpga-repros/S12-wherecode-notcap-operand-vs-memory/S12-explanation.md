@@ -460,16 +460,39 @@ events fire, so its activity is **event-driven**, and the events come from count
 (`_thread_0_event_counter_{86,80}_1_q`) on a thread that loops
 (`EVENTS0[0] = _init_0 || EVENTS0[102]`).
 
-**Consequence, stated carefully.** The pre-registered criterion is *literally* satisfied: the
-census is 100% within `dom_switcher`, and `issue_read_operands` contributes zero. That part
-stands. But the *reason* dom-switcher-originating paths were believed inert was a toggle argument
-about `cur_idx`, and 99.8% of the failing endpoints launch from a different register whose toggle
-behaviour is **unestablished**. Static timing analysis cannot settle it — it is
-activity-independent by construction.
+**RESOLVED 2026-09-04, by measurement, in the direction that keeps the licence.** A trace of a
+domain-body run, checking the only three events that can change the register:
 
-So this is the familiar shape one level up: **the check fired, and whether satisfying it means
-what we wanted is a separate question.** Whether the switcher's event thread idles between
-domain switches, or advances during body execution, is an RTL question and is open.
+```text
+   run length 1057 timestamps
+      EVENTS0[80]   transitions = 1     (settles to 0 at t=0, nothing after)
+      EVENTS0[86]   transitions = 1     (same)
+      EVENTS0[87]   transitions = 1     (same)
+```
+
+A register whose every driving term is constant cannot toggle. The event thread does **not**
+advance during body execution — it idles. So arm 1's 101,573 endpoints are inert *on their own
+evidence*, not by inheritance from the `cur_idx` argument. The remaining 209 from `_init_0_reg`
+are inert by construction: set at reset, cleared once when `EVENTS0[4]` first fires, static
+thereafter.
+
+**The limit, which matters for our workload specifically.** That trace was taken on `capldc`,
+where the switcher stays idle throughout. It establishes inertness for *body execution with no
+switch in progress*. It does **not** characterise the thread across a switch, nor show it
+returning to the static state after one.
+
+That is not academic here: **the S-12 workload is a SQLite domain entered via `capenter`**, so its
+body executes *after* a switch. If a completed switch could leave the thread in a state where the
+events subsequently toggle, this trace would not see it. Closing that needs a trace of a workload
+that performs a `capenter` or `domcall` and then keeps executing — worth having before anyone
+relies on this for a flash.
+
+**Why this was worth asking at all.** The criterion said *"dom_switcher-originating"*; what it
+MEANT was *"originating from something inert during body execution"*. Those coincided only because
+every previous build happened to launch from `cur_idx`. Arm 1 separated them. The general lesson
+is the same one this investigation kept relearning, one level up: **the check fired, and whether
+firing separates the hypotheses is a different question.** The criterion should name the
+*property*, with `dom_switcher` membership as evidence toward it rather than as the test itself.
 
 ### 9.3 Why the instrument-free question is not academic
 
