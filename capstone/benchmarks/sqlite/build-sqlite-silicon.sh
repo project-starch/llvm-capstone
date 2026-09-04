@@ -1162,6 +1162,143 @@ fi
 # The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
 # on entry means the caller handed over plain data; anything else means the tag was alive at the
 # boundary and the spill/reload lost it.
+# CAPSTONE_WFENCE_BEFORE=<literal source text> -- put a fence immediately before that statement.
+#
+# WHY A SECOND POSITION. CAPSTONE_WFENCE injects at the top of the body, which lands AFTER the
+# -O0 argument spills but BEFORE the local `= 0` initialisers -- so three stores still execute
+# between it and the reload, one of them immediately prior. That is the leading candidate for the
+# residual 1-in-4 wedge rate the entry fence leaves behind.
+#
+# Anchoring on the statement itself puts the drain AFTER those initialisers and immediately before
+# the reload, closing the window completely. For S-12 the anchor is `pWC = &pWInfo->sWC;`, which is
+# the source of the faulting `ldc` + `cincoffsetimm a4, a4, 0xb0` pair.
+#
+#   rate goes to 0 -> the store-to-load drain window IS the mechanism, not merely a contributor.
+#   rate unchanged -> the residual is NOT the trailing stores, and the entry fence's effect needs
+#                     a different explanation.
+# Still semantically neutral: a fence changes no value and no control flow.
+# CAPSTONE_WNOP_BEFORE=<literal source text> -- a 4-byte NOP at the same point a fence would go.
+#
+# THE DISCRIMINATOR for the fence result. A fence before the reload eliminates the S-12 wedge
+# (0/7 fenced against 7/7 unmodified), but it is NOT layout-neutral: it shifts the reload and its
+# consumer by +4 and moves 1165 of 3633 symbols, and S-12 is documented here as layout-sensitive.
+# A `nop` is the SAME four bytes and the SAME displacement with NO memory semantics.
+#
+#   nop RETURNS  -> the +4 displacement is the operative variable. The cure is a LAYOUT effect and
+#                   any drain / forwarding mechanism is refuted as its explanation.
+#   nop WEDGES   -> the fence's SEMANTICS do the work, not its bytes, and a memory-ordering
+#                   mechanism survives as a class.
+# CAPSTONE_LATE_INIT=pidx|scalar -- move one initialiser from BEFORE the reload to AFTER it.
+#
+# SEPARATES the two surviving memory-ordering accounts. Both are cured by a fence, so the fence
+# cannot tell them apart:
+#   (a) store-to-load DRAIN of the subject stc at +0x40 -- predicts a STALE value, which here is a
+#       NON-ZERO cursor, so it does not explain tval = 0;
+#   (b) WRONG-ADDRESS FORWARD of the null capability written one instruction before the reload by
+#       `movc a4, zero; stc a4, 0x0(a5)` -- predicts {cursor 0, NOT_CAP} EXACTLY, as observed.
+#
+# `pidx` moves `Index *pIdx = 0;` (a CAPABILITY null store) to after `pWC = &pWInfo->sWC;`, taking
+# the null store out of the window. It is not read in between, so semantics are unchanged.
+#
+# `scalar` is the LAYOUT-MATCHED CONTROL: it moves `int iReleaseReg = 0;` instead -- a comparable
+# code motion that leaves the null CAPABILITY store where it is. Without this arm, a cure from
+# `pidx` could not be told from an ordinary layout effect, which is precisely the confound that
+# forced a retraction earlier in this investigation.
+#
+#   pidx cures, scalar does not -> (b): the null capability store is the forwarded value.
+#   both cure                   -> not specific to the capability store; store COUNT or position.
+#   neither cures               -> (a) survives; the null store is not involved.
+if [[ -n "${CAPSTONE_LATE_INIT:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_LATE_INIT" <<'PYLI'
+import sys
+path, which = sys.argv[1], sys.argv[2]
+s = open(path).read()
+# The bare `pWC = &pWInfo->sWC;` line occurs 3 times; anchor on the UNIQUE preceding
+# declaration so the insertion point cannot be guessed wrong.
+PWC = "  int iLoop;                /* Iteration of constraint generator loop */\n\n  pWC = &pWInfo->sWC;"
+if s.count(PWC) != 1:
+    sys.exit(f"LATE_INIT: pWC anchor is not unique ({s.count(PWC)}) -- refusing to guess")
+if which == "pidx":
+    old, new, late = "  Index *pIdx = 0;          /* Index used by loop (if any) */",                      "  Index *pIdx;              /* Index used by loop (if any) */", "  pIdx = 0;"
+elif which == "scalar":
+    old, new, late = "  int iReleaseReg = 0;      /* Temp register to free before returning */",                      "  int iReleaseReg;          /* Temp register to free before returning */", "  iReleaseReg = 0;"
+else:
+    sys.exit(f"LATE_INIT: unknown mode {which!r}")
+if s.count(old) != 1:
+    sys.exit(f"LATE_INIT: declaration anchor is not unique ({s.count(old)}) -- refusing to guess")
+s = s.replace(old, new, 1)
+s = s.replace(PWC, PWC + "\n" + late, 1)
+open(path, "w").write(s)
+print(f"   LATE_INIT[{which}]: initialiser moved to after the pWC assignment")
+PYLI
+fi
+
+if [[ -n "${CAPSTONE_WNOP_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WNOP_BEFORE" <<'PYNB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0: sys.exit(f"WNOP_BEFORE: anchor not found: {anchor!r}")
+if n > 1:  sys.exit(f"WNOP_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess")
+s = s.replace(anchor, '__asm__ volatile("addi x0, x0, 0" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WNOP_BEFORE injected ahead of: {anchor}")
+PYNB
+fi
+
+if [[ -n "${CAPSTONE_WFENCE_BEFORE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE_BEFORE" <<'PYFB'
+import sys
+path, anchor = sys.argv[1], sys.argv[2]
+s = open(path).read()
+n = s.count(anchor)
+if n == 0:
+    sys.exit(f"WFENCE_BEFORE: anchor not found: {anchor!r}")
+if n > 1:
+    sys.exit(f"WFENCE_BEFORE: anchor is AMBIGUOUS ({n} occurrences) -- refusing to guess: {anchor!r}")
+s = s.replace(anchor, '__asm__ volatile("fence rw,rw" ::: "memory"); ' + anchor, 1)
+open(path, "w").write(s)
+print(f"   WFENCE_BEFORE injected ahead of: {anchor}")
+PYFB
+fi
+
+# CAPSTONE_WFENCE=<fn> -- put a full memory fence at the top of <fn>.
+#
+# WHY. The path from this function's entry to its fault site is 36 instructions, branch-free and
+# byte-identical on every call, so the trigger is machine STATE and not an instruction pattern.
+# The state this folder already has evidence for is a store-to-load DRAIN window: the `stc` that
+# spills pWInfo at +0x40 is reloaded by the `ldc` at +0x88 only 18 instructions later, and
+# delay-dependence is recorded (bracketed 10 < T <= 600 instructions) even though the mechanism
+# attached to it was retracted.
+#
+# A fence at entry drains the write path BEFORE that window opens. Unlike CAPSTONE_WCLAMP this is
+# SEMANTICALLY NEUTRAL -- it changes no values, no control flow and no generated SQL program, so a
+# rate change cannot be explained by the intervention having broken the query. That is exactly the
+# property the clamp lacked, which is why the clamp result had to be recorded as weak.
+#
+#   wedge rate collapses -> the drain state IS the trigger, and this is also a WORKAROUND.
+#   wedge rate unchanged -> drain state is excluded, and the search moves to state a fence does
+#                           not touch (cache occupancy, scoreboard, TLB).
+if [[ -n "${CAPSTONE_WFENCE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_WFENCE" <<'PYFENCE'
+import sys, re
+path, fn = sys.argv[1], sys.argv[2]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"WFENCE: {fn} definition not found -- patch shape changed")
+body = m.group(0) + """
+  /* CAPSTONE WFENCE -- drain the write path before the spill/reload window. Neutral: no value,
+     no control flow and no generated code changes; only the timing of the store path does. */
+  __asm__ volatile("fence rw,rw" ::: "memory");
+"""
+s = s.replace(m.group(0), body, 1)
+open(path, "w").write(s)
+print(f"   WFENCE injected at the top of {fn}")
+PYFENCE
+fi
+
 # CAPSTONE_WCLAMP=<fn>:<n> -- make <fn> RETURN EARLY from its <n>th call onward.
 #
 # WHY A CLAMP AND NOT AN OBSERVER. The probe cannot report from a wedge: its output goes to a

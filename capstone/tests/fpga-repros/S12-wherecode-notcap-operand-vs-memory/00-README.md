@@ -470,6 +470,324 @@ intervention is currently known.
 neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
 expecting a verdict.
 
+## RE-ESTABLISHED with the arm in SLOT 1: the null capability store's PRESENCE is required
+
+The retraction below was about instrumentation, not about the effect. Re-run with the arm under test
+in **slot 1** — the slot where the trap latch demonstrably reports — every wedge is now
+signature-checked:
+
+    arm      what left the window        wedged / valid draws   signature
+    pidx     the null CAPABILITY store   0 / 8                  --
+    scalar   a scalar initialiser        3 / 5                  ALL THREE: tval 0, mepc 0x828f480c
+
+`0x828f480c - 0x827F0000 = 0x10480c` — the **`scalar` build's own consumer**, immediately after its
+relocated reload at `0x104808`. So these are genuine S-12 faults at the moved site, which is the
+confirmation slot 0 was structurally incapable of producing. Two further draws were VOID (domain
+never created) and are excluded rather than counted either way.
+
+Fisher exact (3 wedges in 13 draws) = **0.035**.
+
+**WHAT THIS ESTABLISHES:** S-12 requires the **null capability store to be present in the window
+before the reload**. Moving it out cures; a layout-matched code motion that leaves it in does not.
+
+**WHAT IT DOES NOT ESTABLISH** — and the distinction matters for a hardware report:
+
+* It shows the store's **PRESENCE** matters, not that its **VALUE** is what reaches the consumer.
+  Equally consistent: store-buffer OCCUPANCY (any additional 16-byte capability store would do), or
+  its ADDRESS (`s0-0x120`) aliasing the reload's (`s0-0x70`) in a word-granular hit function
+  independent of the value stored.
+* "Layout-matched" means **identical outside a 32-byte window** — `llvm-nm` identical across 3890
+  symbols, 9 instructions differing — with two residuals: the two arms' reloads sit 4 bytes apart
+  (`+0x7c` vs `+0x80`, same 16-byte fetch block), and `scalar` reallocates registers (a5/a6 rather
+  than a4/a5). `pidx` is the arm closer to baseline.
+
+**THE SHARP NEXT ARM, which tests the VALUE directly:** initialise `pIdx` to a live TAGGED
+capability instead of null, leaving the store in the window. A wrong-address forward of the value
+then delivers a *tagged* capability, which cannot raise `UNEXPECTED_OPERAND` with `tval = 0`;
+occupancy or address-aliasing predicts the fault is unchanged. That separates "this store's value is
+forwarded" from "one more capability store in the window is enough".
+
+## RETRACTED: the null-store mechanism AND the layout refutation — SLOT IS CONFOUNDED WITH ROLE
+
+**A systematic design error runs through the fence, nop and late-init experiments alike: the arm
+under test was ALWAYS in slot 0 and the control ALWAYS in slot 1 — and the trap latch only reports
+from slot 1.**
+
+Latched traps across the whole series:
+
+    nop-n1..n4      slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-scalar-2..5  slot0 (arm)      mcause 3 / mepc 0x368 / tval 0x00100073   <- ebreak, NOT S-12
+    li-pidx-1,2,4,5 slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence-f1,f2,f4  slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+    fence2-g1..g3   slot1 (control)  mcause 25 / mepc 0x828f4814 / tval 0      <- confirmed S-12
+
+**Every "the variant still wedges" data point is UNCONFIRMED; every "the control wedged" data point
+is CONFIRMED — and that asymmetry is purely an artifact of slot placement.** The predicted S-12
+`mepc` for a slot-0 arm (`0x824F480C` / `0x824F4818`) was never observed once.
+
+**Consequences:**
+
+* **"The null capability store is implicated" is UNSUPPORTED.** The `scalar` arm's 4/5 wedges were
+  never shown to still be S-12, so the matched pair is unearned and no mechanism follows from it.
+* **"LAYOUT REFUTED: a nop wedges 4/4" is UNSUPPORTED** on the same grounds. The nop/fence *layout*
+  match is genuine (`llvm-nm` diff = 0), but the 4/4 is four unconfirmed wedges set against a 0/7
+  measured on a signature-confirmed control.
+
+**This is NOT a refutation in the other direction either.** The unmodified binary in slot 0 also
+latches `0x368` in 6 of 8 wedges, so `0x368` does not prove "not S-12" — it proves the latch did not
+capture a capability trap. The instrument as deployed cannot un-void these arms.
+
+**WHAT SURVIVES, and it is worth keeping:** `pidx` returned **5/5**, and in 4 of those boots the
+same-boot unmodified control wedged with the confirmed S-12 signature — so the boots were
+demonstrably S-12-hot and the code motion changed the slot-0 outcome. The layout match is also
+genuine and better than claimed: `li-pidx` and `li-scalar` have **identical `llvm-nm` output** (3890
+symbols) and differ by exactly nine instructions in `0x1047fc-0x10481c`. Two residuals to state:
+the reloads differ by 4 bytes (`+0x7c` vs `+0x80`, same 16-byte fetch block) and `scalar` — not
+`pidx` — reallocates registers (a5/a6 rather than a4/a5).
+
+**THE FIX, and it costs no reflash:** put the ARM UNDER TEST IN SLOT 1, with a known-good filler in
+slot 0, so the arm occupies the slot where the latch demonstrably captures `mcause 25 / tval 0`.
+Every comparison in this series needs redoing that way before any of it means anything.
+
+**Also broken, and it matters for reading any of these logs:** the driver's wedge probe hardcodes a
+read of `a4`, but the `scalar` build reallocates the reload target to **a5** — so it printed the
+wrong register (`/tmp/capstone/li-scalar-3.log`: `a4(x14)=0x0`).
+
+**Standing rule this cost us, already in the folder at `:1203`:** *a wedge whose latched `mepc` is
+not `DBAS + 0x484` is NOT the subject fault; that arm is VOID.* It was applied to `g4` and then not
+applied to eight later arms.
+
+## THE NULL CAPABILITY STORE IS IMPLICATED: moving it out cures 0/5, a layout-matched control does not (4/5)
+
+The two surviving memory-ordering accounts are now separated, and the separation is layout-controlled.
+
+`CAPSTONE_LATE_INIT` moves ONE initialiser from before the reload to after it, keeping semantics
+identical (neither variable is read in between):
+
+* **`pidx`** moves `Index *pIdx = 0;` — the **capability** null store, `movc a4, zero; stc a4, 0x0(a5)`,
+  written one instruction before the reload. Verified in the disassembly: the pair now sits at
+  `0x104818`, AFTER the reload at `0x104804` and its consumer at `0x104808`.
+* **`scalar`** moves `int iReleaseReg = 0;` instead — a comparable code motion that LEAVES the null
+  capability store in the window. This arm exists so a cure from `pidx` cannot be dismissed as
+  "some instructions moved", which is the confound that forced the earlier retraction.
+
+    arm      what left the window            wedged / draws
+    pidx     the null CAPABILITY store       0 / 5
+    scalar   a scalar initialiser            4 / 5
+
+Fisher exact (hypergeometric, 4 wedges in 10 draws) = **0.024**.
+
+**MECHANISM.** Taken with the two prior controls — a fence cures (so the cure is SEMANTIC), and a
+`nop` at byte-identical layout wedges 4/4 (so it is NOT layout) — the wedge requires the **null
+capability store to be in flight in the window before the reload**. That is a **wrong-address
+forward**: the `{cursor 0, NOT_CAP}` written by `movc a4, zero; stc a4, 0x0(a5)` to `s0-0x120` is
+delivered to an `ldc` addressed at `s0-0x70`. It is the only surviving account that predicts
+`tval = 0` EXACTLY; a store-to-load drain of the subject `stc` predicts a STALE value, which here is
+a non-zero cursor.
+
+**This is the S-10 / R-19 / R-20 write-buffer forwarding family**, which this folder already lists
+as live and which the S-10 reflash did NOT clear — `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`) is
+still word-granular against a 16-byte capability on the resident bitstream.
+
+**LIMITS, stated.** N=5 per arm; p = 0.024 is significant but not overwhelming. One `pidx` boot
+(draw 3) had a control that did not wedge and is a weak boot, though `pidx` returned in it anyway.
+In `scalar` draws 2-5 the variant wedged first, so the paired control was collateral — the scalar
+wedges are the data points, and they are consistent with the unmodified ~100% rate. And this
+identifies the store whose VALUE is delivered; it does not yet identify the RTL structure that
+misroutes it.
+
+## LAYOUT REFUTED: a NOP at the identical point wedges 4/4 where a FENCE returns 0/7
+
+The objection that killed the previous mechanism claim — that the fence's +4 displacement, not its
+semantics, might be the cure, since S-12 is layout-sensitive — is now tested and **refuted**.
+
+`CAPSTONE_WNOP_BEFORE` puts a 4-byte `nop` (`addi x0, x0, 0`) at the *identical* injection point.
+**The two builds have BYTE-IDENTICAL SYMBOL TABLES** — verified by diffing `llvm-objdump -t`, whose
+only difference was the filename in objdump's own header line; stripped, both hash to
+`a6174d6e9d1b90a7e24a`. Same four bytes, same displacement of the reload (`0x104814`) and its
+consumer (`0x104818`), same addresses throughout. The sole difference is whether the inserted
+instruction carries memory semantics.
+
+    build    layout                  inserted instruction        result
+    nop      identical symbol table  addi x0, x0, 0  (inert)     WEDGED 4 / 4
+    fence    identical symbol table  fence rw,rw     (ordering)  0 wedges / 7
+
+**So the cure is SEMANTIC, not positional.** Layout is excluded as the explanation, and a
+memory-ordering mechanism is reinstated on evidence rather than on assumption. The `nop` arm also
+supplies something the fence arm could not: a same-layout POSITIVE control, wedging 4/4, which
+proves the comparison can produce a wedge at that exact geometry.
+
+**WHAT IS STILL NOT SEPARATED.** Two memory-ordering accounts remain, and a fence cures both:
+
+* **(a) store-to-load drain** — the subject `stc` at `+0x40` has not landed when the `ldc` at
+  `+0x88` reads. Predicts a STALE value, which here is a non-zero cursor, so it does not by itself
+  explain `tval = 0`.
+* **(b) wrong-address forward** — the null capability written one instruction earlier by
+  `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` is forwarded to the reload. Predicts
+  `{cursor 0, NOT_CAP}` EXACTLY, which is what is observed.
+
+**(b) fits `tval = 0` and (a) does not**, so (b) is currently the better-supported of the two — and
+it is the S-10 / R-19 / R-20 write-buffer forwarding family this folder already lists as live, which
+the S-10 reflash did NOT clear.
+
+**THE NEXT DISCRIMINATOR:** move the null-capability store out of the window. `Index *pIdx = 0;`
+compiles to that `movc`/`stc` pair; relocating the initialiser to after `pWC = &pWInfo->sWC;` keeps
+semantics identical (it is not read in between) and removes the null store from the window.
+Wedge disappears → **(b)**, the null store is the forwarded value. Wedge persists → **(a)**.
+
+## RETRACTED: the "store-to-load drain hazard" mechanism, and the dose-response that supported it
+
+**The cure is real. The mechanism is not established, and one of the three data points was
+fabricated by an instrument error.**
+
+**1. The middle rung never ran.** `f3`, the only wedge in the entry-fence arm, was an **R-16 entry
+stall**, and the driver said so in the log: *"INFRASTRUCTURE WEDGE ... NO VERDICT ... no `SQ:
+G/enter` -- the domain was CREATED but never ENTERED ... Do NOT attribute this to the code under
+test."* The classifier counted `SLT-SUMMARY` lines behind a `booted` guard testing `Linux version`
+or `SQ: A/dom-ok` — **an entry stall emits both**. A gate whose condition the failure mode always
+satisfies, which is the exact class this project keeps paying for. It needed `SQ: G/enter` per arm.
+
+    CORRECTED:  not drained          wedged 4/4 in the paired boots
+                fence at entry       0 / 3   + 1 VOID
+                fence before reload  0 / 4
+
+**Flat. There is no dose-response**, and "Fisher = 0.004" and "the residual is the three trailing
+stores" both go with it.
+
+**2. The fence is NOT layout-neutral, and layout now fits BETTER than drain.** It shifts the reload
+and its consumer by +4 (`0x104810/0x104814` → `0x104814/0x104818`) and moves **1165 of 3633
+symbols**. Codegen is otherwise neutral — 2866 instructions, same order, same registers — so
+*semantically* neutral was true and *layout*-neutral was never checked. Decisively: the two fence
+placements have **byte-identical symbol tables**. They are the SAME layout perturbation but
+DIFFERENT drain doses (3 stores remaining vs 0). Drain predicts they differ; layout predicts they
+match. **They match.**
+
+**3. N=4 cannot bear the weight.** This folder's own finding is that behaviour is a deterministic
+function of the image and layout selects it, so the fenced boots are **one image draw**, not four.
+Layout-null probability is ~0.21–0.46, not 0.045. Pairing controls boot state; it does not control
+image identity, which is the confounded variable.
+
+**4. Drain does not predict `tval = 0`.** An unforwarded in-flight store yields the STALE prior
+content, and here that is non-zero (`0x82be4cd0` in the halted read). A surviving alternative
+predicts `{cursor 0, NOT_CAP}` exactly: a **wrong-address forward** of the null capability stored
+one instruction earlier by `movc a4, zero; stc a4, 0x0(a5)` at `0x10480c` — the S-10/R-19/R-20
+family this folder already lists as live. **A fence cures both; this experiment cannot separate
+them.**
+
+**Also corrected:** the fenced reload was labelled `+0x88`; from `0x104788` it is `+0x8c`. The
+address shift went unnoticed at the moment the mechanism was written — which is itself the tell.
+
+**WHAT SURVIVES, and it is worth having:** a `fence rw,rw` immediately before the reload eliminates
+the wedge, 0/4 against 4/4 unmodified in the same boots (3 of the 4 signature-confirmed `mcause 25`
+/ `mepc 0x828f4814` / `tval 0`; `g4` was a genuine wedge with a non-capability `mcause 3` and is not
+an S-12 confirmation). A fence at entry gives the same 0/3. **Usable as a mitigation. Not a
+mechanism.**
+
+**THE DISCRIMINATOR, one boot:** rebuild with a **4-byte `nop`** at the identical injection point,
+verified to produce a symbol table identical to the fenced build modulo one opcode. `nop` returns →
+the +4 displacement is the operative variable and drain is refuted as the cure's mechanism. `nop`
+wedges while `fence` returns → the fence's SEMANTICS do the work, and drain or the null-store
+forward survives as a class.
+
+## SUPERSEDED — the drain mechanism as originally written
+ Closing the window eliminates the wedge, 0/4 vs 4/4
+
+Fencing immediately before the reload removes the failure entirely, and the three conditions form a
+monotone dose-response with a **semantically neutral** intervention throughout — no value, control
+flow or generated program changes, only the timing of the store path:
+
+    write path between the spill (+0x40) and the reload (+0x88)      wedges
+    NOT drained          (unmodified)                                15 / 15
+    PARTIALLY drained    (fence at function entry; 3 stores remain)   1 / 4
+    FULLY drained        (fence immediately before the reload)        0 / 4
+
+The final arm ran the fenced and unmodified builds in the SAME four boots, fenced first: fenced
+returned 4/4, unmodified wedged 4/4. Placement verified in the disassembly —
+
+    10480c  stc a4, 0x0(a5)               last store in the window
+    104810  fence rw, rw                  the drain
+    104814  ldc a4, 0x0(a0)        +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0    the fault site
+
+**STATEMENT OF THE MECHANISM.** The capability spilled by the `stc` at `+0x40` is reloaded by the
+`ldc` at `+0x88` **while that store is still in flight in the write path**, and the load returns
+`{cursor 0, NOT_CAP}` rather than the stored capability. The consumer then raises
+`UNEXPECTED_OPERAND` with `tval = 0`. Draining the write path before the reload prevents it.
+
+**IT ACCOUNTS FOR EVERY PROPERTY THIS FOLDER HAS RECORDED**, which is why it is worth more than the
+statistics alone:
+
+* the 36 instructions to the fault are **identical on every call** — the difference is timing, not
+  instructions, so no instruction-level repro was ever possible;
+* **nine bare-metal reconstructions came back clean** — they reproduced the instructions faithfully
+  and had none of the write pressure;
+* **nesting, not repetition** — the extra where-codegen level fills the write path; two separate
+  one-level prepares (`dd6_twostmt`, same 5 invocations) do not and never wedge;
+* **silicon-only** — QEMU models no write buffer, so the window cannot exist there;
+* **layout- and timing-sensitive with per-image clustering** — the window is a drain race;
+* **one level never wedges** (0/11) — less write pressure ahead of the reload;
+* **`tval = 0` with DRAM intact** — the store had not landed when the load read, and had landed by
+  the time a debugger looked.
+
+**WEIGHT AND LIMITS, stated rather than implied.** N=4 for the full fence. Because the control
+wedged 4/4 in the same boots and the unfenced rate is 15/15, the paired comparison is strong, but
+0/4 is not 0/20 — the residual rate is bounded, not measured. And a fence is a *sufficient*
+mitigation, which does not by itself identify WHICH hardware structure mishandles the in-flight
+store. It points hard at the write/store-buffer forwarding path, and notably the S-10 reflash did
+**not** clear that family: S-07 and the word-granular `wbuffer_hit_oh` (`wt_dcache_mem.sv:280`,
+still word-granular against a 16-byte capability) both remain live on this silicon.
+
+**MITIGATION AVAILABLE NOW.** One `fence rw,rw` before this reload removes the failure at zero
+semantic cost. That is a workaround, not a fix, and must not be described as a fix while the
+hardware structure is unidentified.
+
+## A SEMANTICALLY NEUTRAL FENCE CUTS THE RATE FROM 11/11 TO 1/4 — the strongest mechanism evidence yet
+
+Given the path to the fault is 36 branch-free instructions identical on every call, the trigger is
+STATE. The state with prior evidence is a store-to-load drain window: the `stc` spilling `pWInfo` at
+`+0x40` is reloaded by the `ldc` at `+0x88` eighteen instructions later.
+
+`CAPSTONE_WFENCE` puts `fence rw,rw` at the top of the function. **It is semantically neutral** — no
+value, control-flow or generated-program change, only the timing of the store path — which is
+exactly what the `WCLAMP` experiment lacked and why that one had to be recorded as weak.
+
+**Verified by disassembly, the fence lands INSIDE the window:**
+
+    1047c8  stc a2, 0x0(a0)      +0x40  the subject store
+    1047ec  fence rw, rw                the injected drain
+    1047f8  stc a4, -0x5a0(s0)          three stores still follow ...
+    104810  stc a4, 0x0(a5)             ... one immediately before the reload
+    104814  ldc a4, 0x0(a0)      +0x88  the reload
+    104818  cincoffsetimm a4, a4, 0xb0  faults
+
+    draw   fenced        unmodified control
+    f1     returned      *** WEDGED ***
+    f2     returned      *** WEDGED ***
+    f3     *** WEDGED ***  (collateral)
+    f4     returned      *** WEDGED ***
+
+**Fenced 1 wedge / 4; unmodified 11 / 11 this session. Fisher = 0.004.**
+
+**Reading.** Draining the write path between the spill and the reload removes most of the failure
+but not all of it. That is direct support for the store-to-load drain window as a MAJOR contributor,
+obtained without perturbing the program — and it is consistent with the delay-dependence recorded
+earlier (bracketed 10 < T <= 600) whose mechanism had been retracted.
+
+**The residual has an obvious candidate rather than being mysterious:** three stores execute AFTER
+the fence and before the reload, one of them immediately prior. The fence closes most of the window,
+not all of it. A fence placed immediately before the reload would test that, but the reload is
+compiler-generated `-O0` spill code and there is no source point that maps there.
+
+**WEIGHT: N=4, and 1/4 is one draw from 0/4 or 2/4.** The direction is significant against 11/11,
+but the residual rate is not usefully estimated at this N. More draws would sharpen it, and unlike
+the clamp they would sharpen an UNCONFOUNDED comparison.
+
+**Practical consequence:** a fence in this one function cuts the SQLite failure rate roughly
+fourfold at zero semantic cost. That is not a fix, and it must not be presented as one while the
+mechanism is unidentified — but it is a usable mitigation and a strong pointer for the hardware side
+toward the write/store buffer path, which the S-10 reflash did NOT clear (S-07 and the
+word-granular `wbuffer_hit_oh` at `wt_dcache_mem.sv:280` both remain live).
+
 ## WHY THIS CANNOT BE REDUCED TO AN INSTRUCTION SEQUENCE — measured, and it explains nine clean repros
 
 The natural question for a hardware report is "which instructions?". For S-12 that question has a
