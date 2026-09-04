@@ -437,6 +437,185 @@ be decisive; two would not be.
 > sequential**. `s10fix` KEEPS apertures 224/225 and the syncer bits used for classification, and
 > loses only the S-07 LDC recorder and its switch-160 clear, which this experiment does not use.
 
+## WEAK, AND RECORDED AS WEAK: clamping the 5th call reduces the wedge but does not remove it
+
+`WhereCodeOneLoopStart` runs 3 + plan depth times, so `dd2_join` makes five calls and the fifth is
+the one the extra plan level adds. A build that returns early from call 5 onward
+(`CAPSTONE_WCLAMP=sqlite3WhereCodeOneLoopStart:5`), run against the unclamped build in the SAME
+boots, clamped first:
+
+    draw   clamped (5th call suppressed)   unclamped control
+    k1     *** WEDGED ***                  collateral
+    k2     returned                        *** WEDGED ***
+    k3     returned                        *** WEDGED ***
+
+Clamped 1 wedge / 3; unclamped 8 / 8 across the session. Fisher ~0.02.
+
+**This is suggestive and NOT decisive, for two reasons that are part of the result rather than
+caveats bolted on:**
+
+* **The clamp changes the PROGRAM, not just the call count.** It returns a wrong `notReady`, which
+  corrupts the generated code, so the clamped build differs from the unclamped one in more than the
+  thing under test. Part of any rate difference measures that corruption.
+* **k1's wedge may not be S-12 at all.** With codegen deliberately corrupted a fault can arise
+  anywhere, and a wedge reports no `mcause`/`mepc`, so an S-12 wedge is indistinguishable from one
+  the clamp itself created.
+
+**More draws would not fix this** — they would only sharpen a confounded comparison. What would fix
+it is an intervention that removes the fifth call WITHOUT corrupting codegen, and no such
+intervention is currently known.
+
+**So the load-bearing evidence for the nesting result stays the UNCONFOUNDED pair** — `dd6_twostmt`
+0/5 against `dd2_join` 6/6 at equal call counts, same binary, same boots, no perturbation. The clamp
+neither strengthens nor weakens that; it is recorded here so the next person does not re-run it
+expecting a verdict.
+
+## WHY THIS CANNOT BE REDUCED TO AN INSTRUCTION SEQUENCE — measured, and it explains nine clean repros
+
+The natural question for a hardware report is "which instructions?". For S-12 that question has a
+definite answer and it is **not the one anyone wants**: the instructions are IDENTICAL between the
+calls that are safe and the call that faults.
+
+Disassembled from the running image, function entry `0x104788` to the faulting
+`cincoffsetimm a4, a4, 0xb0` at `0x104814`:
+
+* **36 instructions.**
+* **ZERO branches and ZERO calls** — the path is entirely straight-line.
+* **`iLevel` is never TESTED on that path.** It arrives in `a3` and is spilled once
+  (`1047d4: sw a3, 0x0(a2)`); nothing reads it again before the fault.
+
+So every invocation — the four safe ones and the wedging one — executes the same 36 branch-free
+instructions, in the same order, with the same frame layout. **There is no instruction-level
+difference to find.**
+
+**That is the explanation for this folder's most puzzling row.** Nine directed reconstructions
+reproduced the window — the four-instruction shape, the offset-for-offset 40-line window, the
+intervening-store sweep, the adjacent-granule scalar, all six capability types, store-buffer
+pressure, cache pressure — and every one came back clean. They were not missing an instruction. The
+instructions were never the variable.
+
+**What the trigger therefore is: MACHINE STATE**, produced by a prior nested codegen level, arriving
+at an instruction sequence that is correct and unchanging. That is a statement about
+microarchitecture — cache occupancy, write/store buffer contents, scoreboard state — and NOT about
+decode or execution of any sequence.
+
+**For the hardware side, the report should read:** *these 36 branch-free instructions are correct
+and execute identically on every call; they fault only when a prior, nested where-codegen level has
+run within the same prepare. Look for state that level leaves behind, not for an instruction
+pattern.*
+
+## SETTLED: it is NESTING, not repetition — two levels inside ONE prepare
+
+The sharpest result of the delta-debug, and it retires the "the codegen path runs twice" framing
+that every mechanism proposal has rested on.
+
+**The invocation count was measured** (after repairing a probe that had latched its own counter and
+reported `calls=1` forever): `WhereCodeOneLoopStart` runs **3 + plan depth** times, exactly. So a
+2-level plan enters it 5 times and a 1-level plan 4 times.
+
+**`dd6_twostmt` reaches 5 too** — two ONE-level queries in one file — and it does not wedge. Run as
+a matched pair in the SAME boots, `dd6` first so it always gets a verdict and `dd2_join` last as the
+positive control:
+
+    arm            invocations   levels per prepare   result
+    dd6_twostmt         5          1  (x2 statements)   0 wedges / 5 draws
+    dd2_join            5          2                    6 wedges / 6 draws
+
+The control fired in all four boots. Same call count, same domain binary, same boot, opposite
+outcome. Fisher exact on 6/6 vs 0/5 = **0.002**.
+
+**So cumulative invocation count is NOT the variable, and "it runs twice" is dead.** Running the
+function twice across two separate prepares is SAFE. What distinguishes the wedging case is that the
+second level's code is generated **while the first level's codegen state is still live** — the
+levels NEST. That is a different thing from repetition and it is a much smaller target.
+
+**Current statement of S-12, every clause measured:** it requires **two scan levels within a single
+query's code generation**; it fires at **PREPARE time** (all tables empty, no rows ever processed);
+it is not join-specific (`IN (SELECT ...)` qualifies, a flattened subquery does not); and it is not
+a function of how many times the codegen path runs.
+
+**The next delta is the `iLevel` parameter.** `sqlite3WhereCodeOneLoopStart` takes the level index,
+so the natural next bisection is what it does differently when `iLevel > 0` — inside the function,
+not in the SQL.
+
+## CORRECTED, SAME NIGHT: it is PLAN DEPTH >= 2, not a join — and it happens at PREPARE time
+
+**"It is a JOIN" is RETRACTED.** `dd5_inselect` — `WHERE a IN (SELECT a FROM t1)`, which is not a
+join — WEDGED on its third draw. And the rung that motivated the join framing, `dd3_subq`, turns out
+not to be a two-level query at all: **SQLite FLATTENS it**. Plans read rather than inferred:
+
+    dd1_one       `--SCAN t1                                 1 level
+    dd3_subq      `--SCAN t1                                 1 level   <- FLATTENED, identical to the control
+    dd2_join      |--SCAN t1   `--SCAN y                      2 levels
+    dd5_inselect  |--SCAN t1   `--LIST SUBQUERY `--SCAN t1    2 levels
+    dd4_three     |--SCAN t1  |--SCAN y  `--SCAN z            3 levels
+
+That is this folder's own standing rule biting the person who wrote it down: *same shape of SQL is
+not same execution plan, and the plan must be READ rather than inferred.* `dd3_subq` was classified
+as "two levels, no join" from the SQL text; it is one level, so it was never a counterexample.
+
+**With plans read, the split is exact — on PLAN DEPTH:**
+
+    plan depth   rungs                                    wedged / draws
+    1 level      dd1_one, dd3_subq                        0 / 11
+    >= 2 levels  dd2_join, dd4_three, dd5_inselect        4 / 8   (~50%)
+
+P(0 wedges in 11 one-level draws | the ~54% rate) = 0.46^11 = **1.6e-4**. The positive control
+(`dd2_join`) wedged in both of its draws, so the set is not a dead harness.
+
+**So S-12 requires a query plan with at least two scan levels — by ANY route, join or list-subquery
+— and fires while COMPILING it.** Both tables are empty throughout, so no rows are ever processed
+and the whole effect lives in `sqlite3_prepare_v2`, which matches the fault site
+(`sqlite3WhereCodeOneLoopStart` is a codegen function). The ~50% rate on qualifying plans matches
+the long-recorded per-draw rate.
+
+**What this does NOT say.** It does not identify the mechanism, and it does not distinguish "the
+codegen path runs twice" from "the second level's codegen differs from the first". The next delta is
+inside that function rather than in the SQL.
+
+## SUPERSEDED — the join framing, kept for the reasoning
+
+
+Everything else in this folder is an exclusion. This is the first statement of what S-12 *is*, and
+it came from the SQLite-side delta-debug this folder recommended three times (`:1482`, `:1589`,
+`:2188`) and that was never run until 2026-08-28.
+
+**Two facts reframe the target before any board result.** `q_one` and `q_two` differ by exactly
+`, t1 AS y`, and **both tables are EMPTY** — so no rows are ever processed and the entire difference
+lives in `sqlite3_prepare_v2`. **S-12 is a fault while COMPILING the query, not while running it.**
+That fits the fault site exactly: `sqlite3WhereCodeOneLoopStart` is a code-generation function.
+Every mechanism hunted on 2026-08-27 assumed a data-path event.
+
+**The ladder.** One build, six `.test` files staged together and driven as a runtime argument, two
+domains per boot, so every rung executes from the BYTE-IDENTICAL domain binary — image-to-image
+variance is removed from the comparison entirely. The control (`dd1_one`, one level) completed in
+all five boots.
+
+    rung          shape                                    result
+    dd2_join      FROM t1, t1 AS y        2-table JOIN     *** WEDGED ***
+    dd4_three     FROM t1, y, z           3-table JOIN     *** WEDGED ***
+    dd3_subq      FROM (SELECT a FROM t1) 2 levels, NO join   completed
+    dd5_inselect  WHERE a IN (SELECT ..)  2nd loop via IN     completed
+    dd6_twostmt   two separate 1-level queries                completed
+
+**Both JOINs wedged; neither non-join route to a second level did.** So the trigger is a
+**multi-table FROM clause**, NOT "two levels of where-codegen" in general — a subquery reaches a
+second level and survives, and so does `IN (SELECT ...)`.
+
+**WEIGHT, stated rather than implied.** The two wedges are strong: a wedge is a wedge at any N. The
+three clean rungs are WEAK at N=1 — at the ~54% per-draw rate, P(all three clean | all three can
+wedge) = 0.46^3 = **0.10**. So this is roughly 90% confidence, not settled. **What would settle it:
+three to four repeat draws on `dd3_subq` and `dd5_inselect`.** If they stay clean, join-specificity
+is solid; if either wedges, the characterisation narrows to "a second where-codegen level" after all.
+
+> **A PARSING TRAP THAT PRODUCED TWO WRONG TABLES BEFORE THIS ONE.** The UART truncates markers
+> mid-line (`### TEST 1/2 END'` with no filename), and the driver ECHOES the whole command including
+> its own `END` markers before running it. A parser that requires the filename after `END` reports
+> completed arms as WEDGED; one that counts `END` markers anywhere counts the echo. **Count
+> `SLT-SUMMARY records=` occurrences in the run-scoped section instead** — one per completed arm.
+> A first pass also mixed logs from an aborted earlier attempt with live ones, and nearly produced a
+> "the board degrades after a wedge" conclusion from stale files. Check log mtimes against the run.
+
 ## The fault
 
 A pure-capability SQLite domain running a two-table join wedges with
