@@ -1226,7 +1226,9 @@ CAPENTER x10 clobber additive", 2026-08-10) is NOT its ancestor; merge-base e1b3
 (2026-08-08). So the resident silicon carries the S-12 fix and not the R-20 fix, and with the
 compiler workaround retired **R-20 is unmitigated on the board** — the board lane's consequence,
 which neither of us had followed through: an address-shaped wrong answer on any rung now has two
-candidate causes, so the R-20 repro runs as a second control in the first boot.
+candidate causes, so the R-20 repro runs as a second control in the first boot. *[Superseded
+— see the RETRACTION further down: the fix IS in 5097eb166 as the cherry-pick f623c48a1;
+"provably lacks" was an ancestry-by-hash claim.]*
 
 **The rung set**, all silicon-config builds (`build-ladder-domain.sh`: gp-captable, shrink off,
 no jump tables) with the cycle-2 compiler through `verify-and-stage-rung.sh`, i.e. every image
@@ -1305,7 +1307,9 @@ collision ("relink the control, not the artifact", now in the board-run skill to
 the entry-point check; that check was run over all three image sets of this session and its
 negative control fired). Prediction written before the boot: 0xD0000001; a 0xD0000000 with a
 valid control would be evidence that the s12fix lineage cures the x10 forwarding path by a
-route other than 2efb3604f.
+route other than 2efb3604f. *[Superseded — see the RETRACTION below: the fix is present as
+the cherry-pick f623c48a1, so the prediction's premise was wrong and the "another route"
+hypothesis is struck.]*
 
 ### RETRACTION — the resident bitstream DOES carry the R-20 fix (2026-09-05, ~05:15)
 
