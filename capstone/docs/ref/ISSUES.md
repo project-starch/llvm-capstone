@@ -430,8 +430,21 @@ plain load of an `STC`'s HIGH word can read memory the `STC` has not landed in y
 | | structure | the check | status |
 |---|---|---|---|
 | S-07 | write-buffer **allocation** | `gran_conflict`, `wt_dcache_wbuffer.sv` | fixed in sim; **"silicon-validated" DOWNGRADED — see below** |
-| S-10 | write-buffer **tag lookup** | `wbuffer_hit_oh`, `wt_dcache_mem.sv:287` | fixed, **not yet synthesised into a flashed bitstream** |
+| S-10 | write-buffer **tag lookup** | `wbuffer_hit_oh`, `wt_dcache_mem.sv:287` | fixed; **IS in the flashed bitstream** (`5097eb166`) — see note below |
 | S-10b | **store-buffer** hazard | `page_offset_matches_o`, `store_buffer.sv:309/317/323` | data route fixed; **tag route open** |
+
+**S-10 IS in the flashed RTL — the "not yet synthesised" status was stale.** Established
+2026-09-05 by ancestry, not by content match: the S-10 merge commits `3d3ed1502` and `4fee13b2d`
+are both `git merge-base --is-ancestor` of the flashed `5097eb166`, as are the S-07 fix
+`5c5f4e3a7` and the S-12 fix `b9dd83249`. Confirmed behaviourally in the same pass by the
+compiler lane — `s07-wbuf-forward-residual` and its `-ctl` report the residual NOT observed at
+`5097eb166`, 16 legs trapped plus the positive control.
+
+**This does NOT extend to S-10b.** `c867dfcbb` is unsynthesizable — DRC LUTLP-1, a 69-LUT
+combinatorial loop, bitgen never ran — so the S-10b row above stays as written. Its directed
+tests (`s10b-storebuf-primed.S`, `s10b-storebuf-residual.S`) live on `origin/s10-merge-candidate`
+and `origin/s10b-fix`, not on any flashed branch, and characterise RTL that cannot currently be
+built into a bitstream.
 
 **Repro — S-10 (write-buffer route).** `verif/tests/custom/capstone/s07-wbuf-forward-residual.S`
 with its matched control. **Polarity is inverted**: a trap is the CORRECT outcome and its absence
@@ -1574,10 +1587,25 @@ not consume `UNINIT` sources and `INIT` is faithfully reproducing it. It does co
 
 So the fix is *not* "replace `rd,rd` with `cnull,rd`". Applied unguarded that clobbers the
 result in the `rd == rs1` case, which is the shape all shipping code uses — turning a defect
-nothing currently hits into one everything hits. The `rs1 == rd` guard is mandatory, and which
-write wins when both target one register is exactly the Anvil sequential-reading hazard that
-has produced the opposite of hardware behaviour twice on this project. Do not reason it out;
-test both arms.
+nothing currently hits into one everything hits.
+
+**Mirror MOVC's GUARD, not its VALUES** — an earlier revision of this entry said "pass
+`(rs1, rd)`" for the same-register arm, copying MOVC's variable names, and that is wrong for
+`INIT`. MOVC's `rd == rs1` arm passes the *original* capability because MOVC does not
+transform it. `INIT` does: its `rd` is the retyped LINEAR capability at the new cursor, and
+its source `rs1` is the untouched UNINIT one. Passing the source in the same-register arm
+would make every shipping `INIT` a no-op. The same-register arm must keep passing
+`(rd, rd)` — i.e. exactly what `:147` does today, which is why that case is correct now:
+
+```
+if (data.rs1 == data.rd) { create_result_pack(id, NO_EXCEPTION, rd,             rd) }
+else                     { create_result_pack(id, NO_EXCEPTION, create_cnull(), rd) }
+```
+
+Arm 2 of `init-rs1-ne-rd.S` is the backstop: it fails in ~14 s if the same-register arm is
+got wrong. Which write wins when both target one register is the Anvil sequential-reading
+hazard that has produced the opposite of hardware behaviour twice on this project — so run
+both arms rather than reasoning it out.
 
 **Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
 `cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
