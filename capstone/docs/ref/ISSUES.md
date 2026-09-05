@@ -399,7 +399,25 @@ Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge i
 `XU` across two boots (4 pass; then pass, pass, wedge).
 
 
-## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `ALL THREE ROUTES FIXED IN RTL AND REPRODUCED; none synthesised into a flashed bitstream yet`
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) fix commits ARE in the resident bitstream by content (2026-09-05); S-10b status unknown — its tests are not in the RTL tree`
+
+> **STATUS LINE CORRECTED 2026-09-05.** The header used to say *"none synthesised into a flashed
+> bitstream yet"*. That is **stale**: checked by content —
+> `git log e1b3db6ba..5097eb166 -- core/cache_subsystem/` — the resident bitstream's lineage
+> contains **`5c5f4e3a7` "S-07 FIX: forbid granule co-residency in the write buffer"** and
+> **`4fee13b2d` "S-10 FIX: works in simulation, and costs a combinational loop"**, plus the S-07
+> probe and audit commits. The sweep's RTL-sim pass at `5097eb166` reports the S-07/S-10 residual
+> **not observed** (16 legs trapped + control), consistent with the fixes being present.
+>
+> Same error class as the R-20 alert retracted earlier today — a status written from what was
+> *believed* about a lineage rather than read from it — caught this time before it produced a
+> wrong board verdict, by the check that should always have been first.
+>
+> **Two things this does NOT establish:** `4fee13b2d`'s own message says *"NOT ready to merge"*
+> (a combinational loop), so it is in the bitstream by lineage but its synthesis cost is not
+> recorded here; and **S-10b** — the granule-granular load/store hazard — has no verdict, because
+> its tests are not in the RTL lane's tree (asked). Until they are found, S-10b is *unknown*, not
+> *fixed*.
 
 **Behaviour.** Software destroys authority by overwriting it (`memset`, `bzero`). A capability
 load can miss that store and return the capability **intact and dereferenceable**. Separately, a
@@ -1473,7 +1491,7 @@ and the folder is the report.
 
 ## RTL / FPGA
 
-### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, verified in source with a control`
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, CONFIRMED BY DIRECTED TEST`
 
 **Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
 than taken on report, including the control that makes it a defect rather than an idiom.**
@@ -1521,8 +1539,45 @@ of divergence that has repeatedly cost this project board time.
   tests uses `cap_init` today, so no shipping domain hits it — that is a fact about our current
   programs, not about the hardware, and it expires the moment one does.
 - **whether the duplicated capability is usable**, or whether a later consumer traps on it.
-- a **directed `.S`** in the simulator with `rs1 != rd`, reading both registers afterwards. This
-  needs no board — `rtl-sim` answers it in ~14 s, and it is the natural next step.
+  **STILL OPEN** — the directed test below reads both registers but never dereferences `a5`,
+  so "two LINEAR capabilities exist" is established and "the second one works" is not.
+- ~~a **directed `.S`** in the simulator with `rs1 != rd`~~ **WRITTEN AND RUN 2026-09-05 —
+  CONFIRMED.** `verif/tests/custom/capstone/init-rs1-ne-rd.S`, run on `s12-ldc-rolling-filter`
+  (`05f2be6bd`) and independently by the compiler lane on the flashed `5097eb166`; `flu_unit`
+  is byte-identical between the two, and both runs agree line for line. 443 cycles, 0
+  exceptions, `tohost = 0` — a genuine pass, not a timeout `SUCCESS`.
+
+  ```
+  [Cycle 337] Reg[17]: 0000000000000000                       <- arm 0 CONTROL: MOVC consumed it
+  [Cycle 371] Reg[15]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a5, the SOURCE
+  [Cycle 373] Reg[16]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a6, the DEST
+  [Cycle 407] Reg[19]: Cursor 0x80003400 ... Revnode_id 2 | Type : 1    <- arm 2, rd == rs1: LIN
+  ```
+
+  Source and destination are indistinguishable — same cursor, same bounds, same revnode, both
+  `Type : 1` (LINEAR). Arm 0 is the **instrument control**: a `MOVC` of a linear source leaves
+  `a7` printing a bare `0`, which proves `CAPPRINT` can render a cleared register, so arm 1's
+  non-zero `a5` is a reading and not a blind spot. Arm 2 is the **conformance control**: with
+  `rd == rs1` the result is a single correct LINEAR capability, which is why every compiled
+  `INIT` in the tree today is unaffected.
+
+  `INIT` traps `ILLEGAL_OPERAND_VALUE` unless `cursor > end`, so the UNINIT operands are
+  fabricated with `end = base - 16` to satisfy that precondition without touching the
+  capability under test.
+
+**The fix, and the trap in it.** `MOVC` in the same file is the correct shape and shows the
+required structure: `if (data.rs1 == data.rd)` pass `(rs1, rd)`, else pass
+`(create_cnull(), rd)`. Its `else` branch catches **every** non-`NONLIN` source — `UNINIT`
+included — which also **refutes the one alternative account** of R-25, that `MOVC` simply does
+not consume `UNINIT` sources and `INIT` is faithfully reproducing it. It does consume them.
+`INIT` alone is the defect site.
+
+So the fix is *not* "replace `rd,rd` with `cnull,rd`". Applied unguarded that clobbers the
+result in the `rd == rs1` case, which is the shape all shipping code uses — turning a defect
+nothing currently hits into one everything hits. The `rs1 == rd` guard is mandatory, and which
+write wins when both target one register is exactly the Anvil sequential-reading hazard that
+has produced the opposite of hardware behaviour twice on this project. Do not reason it out;
+test both arms.
 
 **Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
 `cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own

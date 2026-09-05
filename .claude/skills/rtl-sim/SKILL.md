@@ -61,6 +61,13 @@ These are not inconveniences; each one has been read as a result.
    `N` equals the `+time_out=` value (2000013 for 2000000), the test **hung or trapped**.
    Compare against a known good cycle count, and grep the `.iss` log for `Exception:`.
 
+   **And the inverse: AN EXCEPTION IS NOT A FAIL UNTIL YOU KNOW WHERE IT IS.** Several tests
+   place their positive control **last** and are *designed* to end in one trap
+   (`alu-write-clears-shadow.S`: arms A/C/D print at cycles 344/355/362, the only exception is
+   at 365, after every measuring arm — that is the PASS condition). Read the exception's cycle
+   against the arms' print cycles; "the run has an exception" was misread as a failure on
+   2026-09-05 and briefly cast doubt on a compiler change that was in fact safe.
+
 ## Reading the output
 
 Everything lands in `verif/sim/out_<YYYY-MM-DD>/veri-testharness_sim/`:
