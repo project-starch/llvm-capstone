@@ -1587,10 +1587,25 @@ not consume `UNINIT` sources and `INIT` is faithfully reproducing it. It does co
 
 So the fix is *not* "replace `rd,rd` with `cnull,rd`". Applied unguarded that clobbers the
 result in the `rd == rs1` case, which is the shape all shipping code uses — turning a defect
-nothing currently hits into one everything hits. The `rs1 == rd` guard is mandatory, and which
-write wins when both target one register is exactly the Anvil sequential-reading hazard that
-has produced the opposite of hardware behaviour twice on this project. Do not reason it out;
-test both arms.
+nothing currently hits into one everything hits.
+
+**Mirror MOVC's GUARD, not its VALUES** — an earlier revision of this entry said "pass
+`(rs1, rd)`" for the same-register arm, copying MOVC's variable names, and that is wrong for
+`INIT`. MOVC's `rd == rs1` arm passes the *original* capability because MOVC does not
+transform it. `INIT` does: its `rd` is the retyped LINEAR capability at the new cursor, and
+its source `rs1` is the untouched UNINIT one. Passing the source in the same-register arm
+would make every shipping `INIT` a no-op. The same-register arm must keep passing
+`(rd, rd)` — i.e. exactly what `:147` does today, which is why that case is correct now:
+
+```
+if (data.rs1 == data.rd) { create_result_pack(id, NO_EXCEPTION, rd,             rd) }
+else                     { create_result_pack(id, NO_EXCEPTION, create_cnull(), rd) }
+```
+
+Arm 2 of `init-rs1-ne-rd.S` is the backstop: it fails in ~14 s if the same-register arm is
+got wrong. Which write wins when both target one register is the Anvil sequential-reading
+hazard that has produced the opposite of hardware behaviour twice on this project — so run
+both arms rather than reasoning it out.
 
 **Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
 `cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
