@@ -399,7 +399,7 @@ Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge i
 `XU` across two boots (4 pass; then pass, pass, wedge).
 
 
-## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) fix commits ARE in the resident bitstream by content (2026-09-05); S-10b status unknown — its tests are not in the RTL tree`
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) ARE in the resident bitstream (2026-09-05); S-10b MEASURED STILL PRESENT there, and its fix is unsynthesizable`
 
 > **STATUS LINE CORRECTED 2026-09-05.** The header used to say *"none synthesised into a flashed
 > bitstream yet"*. That is **stale**: checked by content —
@@ -415,8 +415,10 @@ Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge i
 >
 > **Two things this does NOT establish:** `4fee13b2d`'s own message says *"NOT ready to merge"*
 > (a combinational loop), so it is in the bitstream by lineage but its synthesis cost is not
-> recorded here; and **S-10b** — the granule-granular load/store hazard — has no verdict, because
-> its tests are not in the RTL lane's tree (asked). Until they are found, S-10b is *unknown*, not
+> recorded here; and **S-10b** — the granule-granular load/store hazard — HAS a verdict as of
+> 2026-09-05 (see "S-10b measured on the flashed bitstream" below): its tests were located on
+> `origin/s10-merge-candidate` and it is **still present**. The paragraph below is retained as
+> the state of knowledge before that measurement. Until they were found, S-10b was *unknown*, not
 > *fixed*.
 
 **Behaviour.** Software destroys authority by overwriting it (`memset`, `bzero`). A capability
@@ -431,7 +433,7 @@ plain load of an `STC`'s HIGH word can read memory the `STC` has not landed in y
 |---|---|---|---|
 | S-07 | write-buffer **allocation** | `gran_conflict`, `wt_dcache_wbuffer.sv` | fixed in sim; **"silicon-validated" DOWNGRADED — see below** |
 | S-10 | write-buffer **tag lookup** | `wbuffer_hit_oh`, `wt_dcache_mem.sv:287` | fixed; **IS in the flashed bitstream** (`5097eb166`) — see note below |
-| S-10b | **store-buffer** hazard | `page_offset_matches_o`, `store_buffer.sv:309/317/323` | data route fixed; **tag route open** |
+| S-10b | **store-buffer** hazard | `page_offset_matches_o`, `store_buffer.sv:309/317/323` | data route fixed; **tag route OPEN and measured LIVE on the flashed bitstream** |
 
 **S-10 IS in the flashed RTL — the "not yet synthesised" status was stale.** Established
 2026-09-05 by ancestry, not by content match: the S-10 merge commits `3d3ed1502` and `4fee13b2d`
@@ -440,8 +442,40 @@ are both `git merge-base --is-ancestor` of the flashed `5097eb166`, as are the S
 compiler lane — `s07-wbuf-forward-residual` and its `-ctl` report the residual NOT observed at
 `5097eb166`, 16 legs trapped plus the positive control.
 
-**This does NOT extend to S-10b.** `c867dfcbb` is unsynthesizable — DRC LUTLP-1, a 69-LUT
-combinatorial loop, bitgen never ran — so the S-10b row above stays as written. Its directed
+**S-10b measured on the flashed bitstream 2026-09-05 — STILL PRESENT.** Run by the compiler
+lane in a detached worktree at `5097eb166` (both tests read from `origin/s10-merge-candidate`,
+testlist entries added in the worktree only; nothing in the RTL lane's checkout touched), and
+the numbers re-read here from its logs rather than taken on report:
+
+| test | exceptions | verdict | cycles | reading |
+|---|---|---|---|---|
+| `s10b-storebuf-primed` | **1** (the control) | SUCCESS | 756 | **0 traps / 8 legs — the defect** |
+| `s10b-storebuf-residual` | 9 (control + 8 legs) | SUCCESS | 980 | 8 / 8 — condition never created, uninformative |
+
+**Polarity is inverted, as with S-10:** a trap is the CORRECT outcome — it means the tag was
+cleared — and its ABSENCE is the defect. Both runs are genuine `RVTEST_PASS`es at their own
+cycle counts, not timeout `SUCCESS`es.
+
+**The control that makes the primed row a reading rather than a blind spot:** both runs retire
+the SAME number of capability-opcode instructions (40). So the primed run's zero leg-traps is
+not "the legs did not execute" — it is the same work, not trapping. The positive control fired
+in both (one `UNEXPECTED_OPERAND` at cycle 403), and in the primed run it is the *only* handler
+entry in the trace.
+
+**WARNING — `s10b-storebuf-primed.S` HAS A STALE HEADER THAT CONTRADICTS ITS OWN RESULT, and it
+is the boilerplate it inherited from the residual variant.** Lines 31-38 say in block capitals
+"THIS TEST DOES NOT CURRENTLY CREATE ITS CONDITION" and "A SUCCESS row for this test in a sweep
+therefore means 'the condition was never created'". That describes the UNPRIMED test. The primed
+variant's own added section (lines 121-133) supersedes it and explains why: the extra
+`ld x0, OFF(s1)` primes the line into L1, so the `LDC` hits and never enters the miss unit, whose
+`wt_dcache_missunit.sv:242` granule-granularity collision check is what stalls the unprimed load
+long enough for the scrub to reach the write buffer and trap. Read top-down, the header produces
+the exact opposite of the correct conclusion. Anyone citing either test must read past line 120.
+
+**This does NOT extend to S-10b, and the two findings compound.** `c867dfcbb` is
+unsynthesizable — DRC LUTLP-1, a 69-LUT combinatorial loop, bitgen never ran. So S-10b is
+present on the resident bitstream (measured above) *and* its only fix cannot currently be built
+into one. Those are the two halves of the same problem, not independent statuses. Its directed
 tests (`s10b-storebuf-primed.S`, `s10b-storebuf-residual.S`) live on `origin/s10-merge-candidate`
 and `origin/s10b-fix`, not on any flashed branch, and characterise RTL that cannot currently be
 built into a bitstream.
