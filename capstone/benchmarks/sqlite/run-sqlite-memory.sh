@@ -5,6 +5,17 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-build}
+
+# Q-01 (2026-09-05): the -O0 amalgamation with the 1 MB arena made a 3.56 MB image (LOAD memsz
+# 0x365bb0: .text 2.44 MB, .bss 1.05 MB), and the kernel module allocates code_len + max(code_len,
+# 64 KiB) -- ~7 MB, order 11, above the kernel's MAX_ORDER 10 -- so create_dom failed before any
+# SQL ran, every night, since the module matched the board's geometry (37ed834). The silicon arm
+# (1.38 MB, 256 KB arena) fits. So this arm builds the amalgamation at -O1 with the 256 KB arena
+# and keeps everything else (default ABI, -O0 glue/libc/VFS, the extended workload). -O0 SQLite
+# coverage is not lost by this: the SLT twins run -O0 arms. Override with SQLITE_OPT_LEVEL /
+# DOMAIN_EXTRA_FLAGS if a bigger image is wanted, and expect Q-01 back above ~2 MB memsz.
+export SQLITE_OPT_LEVEL=${SQLITE_OPT_LEVEL:--O1}
+export DOMAIN_EXTRA_FLAGS="-DSQLITE_HEAP_SIZE=262144 ${DOMAIN_EXTRA_FLAGS:-}"
 SHARE_DIR=${SHARE_DIR:-$OUT_DIR}
 LOG_FILE=${LOG_FILE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-sqlite-memory.log}
 
