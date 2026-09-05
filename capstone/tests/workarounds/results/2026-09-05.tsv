@@ -29,7 +29,7 @@ twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	p
 twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
 twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	
 workaround	2026-09-05	W-08	slt	-O2	IDENTICAL-IMAGES	qemu=5dc356547d7f@2026-09-04T22:34
-# 2026-09-05 06:21-06:43, INTERMEDIATE builds, superseded by the 06:58 rows below (final compiler lib 57b5c5846ec3): the coremark off-ONLY-FAIL row is the capability-base-but-ABSOLUTE-entries build (cause 1 at the link-time target); the rv8 rows ran while the compiler was rebuilt mid-run (voided by audit -- miniz, the only tabled benchmark, was built after the swap).
+# 2026-09-05 06:21-06:43, INTERMEDIATE builds (capability table base, absolute entries), superseded by the 06:58 rows after the closing marker (lib 57b5c5846ec3, label-difference entries): 
 twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	off-ONLY-FAIL	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	aes	AGREE-PASS	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	dhrystone	AGREE-PASS	
@@ -38,6 +38,16 @@ twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	n
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	primes	AGREE-PASS	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	
+# --- end of the superseded 06:21-06:43 rows. The 8 rows below are the 06:58 run on lib 57b5c5846ec3 (differs from the committed ae821a017089 only in the default ABI's cttz action). images-differing=2 = dhrystone and miniz (the two arms' doms.sha), not miniz alone.
+twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	aes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	dhrystone	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	miniz	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	norx	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	primes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	
+# 2026-09-05 13:10 rerun of the W-17 pairs on the COMMITTED compiler ae821a017089 (the 06:58 rows above were on 57b5c5846ec3):
 twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	AGREE-PASS	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	aes	AGREE-PASS	
 twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	dhrystone	AGREE-PASS	

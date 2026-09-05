@@ -1506,3 +1506,51 @@ script is gone. Compiler identity note: the final library hash is ae821a017089; 
 57b5c5846ec3 quoted in the W-17 classification row's evidence is the build immediately
 before the cttz action was restricted to gp-captable (the QEMU controls and twins were run
 on both; the lit and control results are identical, and the row now carries both).
+
+### Record correction after the merge re-audit (2026-09-05, 13:00)
+
+A second `claim-auditor` pass over `55fb0ae627f0..633f13f0277f` (the range dev takes) found the
+CODE safe to merge and the RECORD wrong in four places. Corrected here and in the files named;
+the commits themselves are authored and stay as they are.
+
+- **The "Left alone" sentence above is false.** Active `-fno-jump-tables` pins remaining after
+  the cycle-3 retirements: `benchmarks/beebs/build-beebs-simple-capstone-common.sh:55` (sourced
+  by 20 BEEBS scripts) plus 44 BEEBS scripts that pin directly; `build-rv8-aes-capstone.sh:48`
+  and `build-rv8-primes-capstone.sh:56`; `build-sqlite-capstone.sh:125` (default ABI);
+  `tests/rtl-smoke/build-ladder-base-bare.sh:75` (a second plain-riscv64 baseline half, not
+  only `-fpga`); `tests/runtime-qemu/build-coremark-core-init-state-repro.sh:61` and `:66`;
+  `musl-capstone/yield-probe/build-yield-probe.sh:27`; and THREE frozen copies under
+  `tests/fpga-repros/` (R01, R02, S12), not two. The BEEBS, rv8 aes/primes, default-ABI SQLite
+  and core-init-state pins are retired in the September sweep (W-15 residue), each with its own
+  validation; the baseline halves, the yield probe and the frozen sent packages stay.
+- **Two validation lines are misfiled, not false.** "BEEBS -O2 twin 81/81" ran through scripts
+  that still pin, so it is a REGRESSION CONTROL, not jump-table evidence; "RV8 twin 7/7" the
+  same for aes and primes. The jump-table evidence is the W-17 pairs (the pair runner appends
+  the flag after the script's own, so the ON arm does override the pin): CoreMark AGREE-PASS
+  with one differing image, RV8 AGREE-PASS with two differing images -- **dhrystone and
+  miniz** (the two arms' `doms.sha`), not "miniz, the only tabled benchmark" as the results
+  marker said -- plus the switch controls (forced table OOB, refused 7419, default-ABI 7419)
+  and the recorded absolute-entry control (cause 1 at pc 0x10338).
+- **The twins ERROR row's cause was misattributed.** `slt q_two -O1 dom=fd9f0b02ef51` started at
+  07:38:32, on the intermediate compiler (before the 07:41 rebuild that restricted the cttz
+  action), and was cut by that rebuild; it is evidence about neither compiler. The rerun on the
+  final compiler has a DIFFERENT image hash (6d3ffee8de5b), so the 07:41 change altered this
+  image; the select1 -O2 rerun has the SAME hash as its first row and is a determinism check
+  only. The marker in `tests/twins/results/2026-09-05.tsv` now says so; the workaround results
+  file has a closing marker after its superseded block, whose rows were byte-identical to the
+  final ones apart from the CoreMark verdict.
+- **Why the exposure is bounded, stated properly.** Capstone never sets a BRIND action, so at
+  the base commit `areJTsAllowed` was already true for the default ABI and the entry size is
+  unchanged (4 bytes, `EK_Custom32` -> `EK_LabelDifference32`): this change cannot create a
+  jump table where the base compiler did not already create one, and the base compiler's tables
+  faulted deterministically (cause 24). Every default-ABI domain that passed before either has
+  no table or never executed it. Measured on top of that: the 32 authority-suite sources emit 0
+  tables at -O0 (the level they are built at); the detector was proven to fire in both
+  directions first (a 9-case switch with extern calls emits a table at -O2 AND at -O0 in the
+  default ABI, and 0 tables under gp-captable). Still open, cheap, non-blocking: the
+  `runtime-qemu` probe-source sweep (re-run in the sweep), and generated csmith programs from
+  `build-fuzz-program.sh`, which the same bound covers.
+- **LTO.** The one `-flto` build (`multi-tu-slot-collision.sh`) passes `--plugin-opt=-capstone-gp-captable`
+  to the link step and has a positive control that aborts if the pass did not run; no production
+  gp-captable build uses LTO. The C-43 silent-fault class has no live carrier.
+
