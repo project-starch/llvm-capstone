@@ -30,6 +30,7 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -115,7 +116,6 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstonePostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
-  initializeCapstoneS12MovcLdcHazardPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
@@ -268,6 +268,23 @@ CapstoneTargetMachine::getTargetTransformInfo(const Function &F) const {
 // for all memory accesses, so it is reasonable to assume that an
 // implementation has no-op address space casts. If an implementation makes a
 // change to this, they can override it here.
+unsigned
+CapstoneTargetMachine::getAddressSpaceForPseudoSourceKind(unsigned Kind) const {
+  switch (Kind) {
+  case PseudoSourceValue::Stack:
+  case PseudoSourceValue::FixedStack:
+  case PseudoSourceValue::ConstantPool:
+  case PseudoSourceValue::JumpTable:
+  case PseudoSourceValue::GOT:
+    // All reached through capabilities: the same address space the DataLayout
+    // gives allocas, so a frame-index pointer info agrees with the pointer's
+    // type and with MachinePointerInfo::getUnknownStack.
+    return DL.getAllocaAddrSpace();
+  default:
+    return 0;
+  }
+}
+
 bool CapstoneTargetMachine::isNoopAddrSpaceCast(unsigned SrcAS,
                                              unsigned DstAS) const {
   return true;
@@ -599,9 +616,9 @@ void CapstonePassConfig::addPreEmitPass2() {
     // ensuring return instruction is detected correctly.
     addPass(createCapstonePushPopOptimizationPass());
   }
-  // S-12 silicon workaround: rename movc/ldc destination collisions. Post-RA so
-  // registers are physical, and before pseudo expansion so the pattern is intact.
-  addPass(createCapstoneS12MovcLdcHazardPass());
+  // The S-12 movc/ldc rename pass that used to sit here was retired 2026-09-05:
+  // S-12 is fixed in the RTL (every board draw on s12fix clean), the pass was
+  // default-off, and it never fired on c128 code (W-01).
   addPass(createCapstoneExpandPseudoPass());
 
   // Schedule the expansion of AMOs at the last possible moment, avoiding the

@@ -146,8 +146,8 @@ if "intrinsics" in sections:
 CAPSTONE_FLAGS = {
   "capstone-shrink-globals": "bool", "capstone-shrink-stack": "bool", "capstone-gp-free": "bool",
   "capstone-gp-captable": "bool", "capstone-merge-string-constants": "bool",
-  "capstone-merge-string-max-bytes": "num", "capstone-s12-movc-ldc-workaround": "bool",
-  "capstone-s12-window": "num", "capstone-retry-untagged-ldc": "bool", "capstone-double-ldc": "bool",
+  "capstone-merge-string-max-bytes": "num", 
+  "capstone-retry-untagged-ldc": "bool", "capstone-double-ldc": "bool",
   "capstone-memcpy-high-half-fixup": "bool", "capstone-memcpy-high-half-fixup-max-bytes": "num",
   "capstone-memcpy-fixup-no-stc": "bool", "capstone-memcpy-fixup-no-plain-stores": "bool",
   "capstone-lower-memops-via-libcall": "bool", "capstone-cap-init-limit": "num", "capstone-cap-init-print": "bool",

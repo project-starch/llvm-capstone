@@ -9724,6 +9724,22 @@ SDValue SelectionDAG::getPseudoProbeNode(const SDLoc &Dl, SDValue Chain,
 static MachinePointerInfo InferPointerInfo(const MachinePointerInfo &Info,
                                            SelectionDAG &DAG, SDValue Ptr,
                                            int64_t Offset = 0) {
+  // Capstone: a pointer info with no value and address space 0 on a CAPABILITY
+  // pointer is really an access in the capability address space (the one the
+  // DataLayout gives allocas). Say so before inferring anything: the DAG's CSE
+  // key for a memory node includes the pointer info's address space, and a
+  // node created with MachinePointerInfo() whose pointer later folds to a
+  // frame index would otherwise be re-created (by DAGCombiner's alignment
+  // refinement, which assumes it gets the SAME node back) with the fixed-stack
+  // address space from getAddressSpaceForPseudoSourceKind and a different key
+  // (F-02/F-03, and vararg.ll once the pseudo-source hook returned 200).
+  MachinePointerInfo Base = Info;
+  if (Base.V.isNull() && Base.getAddrSpace() == 0 &&
+      Ptr.getValueType().isCheriCapability())
+    Base = MachinePointerInfo(DAG.getDataLayout().getAllocaAddrSpace(),
+                              Info.Offset);
+    Base.StackID = Info.StackID;
+
   // If this is FI+Offset, we can model it.
   if (const FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Ptr))
     return MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),
@@ -9733,7 +9749,7 @@ static MachinePointerInfo InferPointerInfo(const MachinePointerInfo &Info,
   if (Ptr.getOpcode() != ISD::ADD ||
       !isa<ConstantSDNode>(Ptr.getOperand(1)) ||
       !isa<FrameIndexSDNode>(Ptr.getOperand(0)))
-    return Info;
+    return Base;
 
   int FI = cast<FrameIndexSDNode>(Ptr.getOperand(0))->getIndex();
   return MachinePointerInfo::getFixedStack(

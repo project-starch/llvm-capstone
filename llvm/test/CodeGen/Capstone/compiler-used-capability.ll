@@ -3,6 +3,12 @@
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null
+; The gp-captable ABI, where C-15 lived: getGpCaptableIndex must not give llvm.compiler.used a
+; cap-table slot (it did: `ld.lld: undefined symbol: llvm.compiler.used, referenced by
+; .capstone_gp_table+0x48`). One slot (bundle) in the table, and no relocation against the marker.
+; RUN: llc -mtriple=capstone64 -capstone-gp-captable -filetype=asm -verify-machineinstrs < %s | FileCheck %s --check-prefix=CAPTABLE
+; RUN: llc -mtriple=capstone64 -capstone-gp-captable -filetype=obj -verify-machineinstrs < %s -o %t.cap.o
+; RUN: llvm-readobj -r %t.cap.o | FileCheck %s --check-prefix=CAPOBJ
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 target triple = "capstone64-unknown-unknown-elf"
@@ -27,6 +33,14 @@ target triple = "capstone64-unknown-unknown-elf"
 ; CHECK:       .quad bundle
 ; CHECK-NEXT:  .zero 8
 ; CHECK-NOT:   llvm.compiler.used
+
+; CAPTABLE-LABEL: get_bundle:
+; CAPTABLE:       ldc a0, 0(gp)
+; CAPTABLE:       .section .capstone_gp_table
+; CAPTABLE:       .quad 1
+; CAPTABLE:       .quad bundle-
+; CAPTABLE-NOT:   llvm.compiler.used
+; CAPOBJ-NOT:     llvm.compiler.used
 
 define internal void @callee() addrspace(200) {
 entry:

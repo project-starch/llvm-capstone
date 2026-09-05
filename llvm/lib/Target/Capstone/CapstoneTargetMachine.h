@@ -51,6 +51,19 @@ public:
 
   bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DstAS) const override;
 
+  /// The address space of memory reached through a pseudo-source value. Stack
+  /// slots, constant pools, jump tables and the GOT are all reached through
+  /// capabilities (addrspace 200), and a MachinePointerInfo built from such a
+  /// pseudo source must say so: the DAG's CSE key for a load or store includes
+  /// the pointer info's address space, and a load whose pointer folds to a frame
+  /// index gets its pointer info re-inferred from that frame index. With the
+  /// default (0) the re-inferred info differed from the original (200, from the
+  /// unknown-stack info) and DAGCombiner's alignment refinement, which expects
+  /// to get the SAME node back from getExtLoad, got a fresh one instead
+  /// (F-02/F-03: `NewLoad.getNode() == N` asserted on every variable-index
+  /// extractelement/insertelement at -O2).
+  unsigned getAddressSpaceForPseudoSourceKind(unsigned Kind) const override;
+
   yaml::MachineFunctionInfo *createDefaultFuncInfoYAML() const override;
   yaml::MachineFunctionInfo *
   convertFuncInfoToYAML(const MachineFunction &MF) const override;
