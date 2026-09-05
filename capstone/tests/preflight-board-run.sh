@@ -18,6 +18,10 @@
 #   C5 DTS matches bitstream  -- a firmware built for the other bitstream hands Linux shadow-tag
 #                                memory as RAM and dies in early init, looking like a dead board.
 #   C6 firmware freshness     -- relinking without re-staging ships the previous initramfs.
+#   C15 distinct entry VAs    -- two staged .dom files linked at the same DOMAIN_BASE_VA: R-3 hangs
+#                                the second one silently, and it reads as that rung's verdict.
+#                                DOMAIN_BASE_VA defaults to 0x10000 and 24 of 40 committed .dom
+#                                files enter there. Bit a live diag boot on 2026-09-05.
 #   C7 slot budget            -- split_out_cap's middle exact-fit case spins at ~the 5th
 #                                create_dom, and whatever occupies that slot gets blamed.
 set -uo pipefail
@@ -395,4 +399,32 @@ else
 fi
 
 echo "=========================================="
+# C15 -- DISTINCT ENTRY VAs. ---------------------------------------------------------------
+#
+# Every .dom that will be on the image, control included, must enter at a different VA. R-3
+# silently hangs a second domain reused at the same entry, and the driver then records that
+# hang as the SECOND rung's result. The check lived only in the board-run skill's prose until
+# 2026-09-05, when a diag boot staged rawhazard5 at the control's VA -- a rule in prose is a
+# rule that gets skipped under time pressure; this is why it is a gate.
+READELF=${CAPSTONE_LLVM_READELF:-${CAPSTONE_LLVM_BIN:-$(git rev-parse --show-toplevel 2>/dev/null)/llvm/cmake-build-debug/bin}/llvm-readelf}
+if [[ -d "$OVERLAY" && -x "$READELF" ]]; then
+  declare -A _va_owner=()
+  _va_n=0; _va_bad=0
+  for _d in "$OVERLAY"/*.dom; do
+    [[ -f "$_d" ]] || continue
+    _va=$("$READELF" -h "$_d" 2>/dev/null | awk '/Entry point/{print $NF}')
+    [[ -n "$_va" ]] || { bad "C15: cannot read the entry point of $(basename "$_d") -- not an ELF, or readelf failed; refusing to assume it is distinct"; _va_bad=1; continue; }
+    _va_n=$((_va_n+1))
+    if [[ -n "${_va_owner[$_va]:-}" ]]; then
+      bad "C15: ENTRY-VA COLLISION at $_va: $(basename "$_d") and ${_va_owner[$_va]} -- R-3 will hang whichever runs second and it will read as that rung's verdict. Relink one (DOMAIN_BASE_VA=); if one is a FROZEN artifact, relink the OTHER."
+      _va_bad=1
+    else
+      _va_owner[$_va]=$(basename "$_d")
+    fi
+  done
+  [[ "$_va_bad" -eq 0 ]] && ok "C15: $_va_n staged .dom files, all at distinct entry VAs"
+elif [[ -d "$OVERLAY" ]]; then
+  bad "C15: cannot check entry VAs -- llvm-readelf not found at $READELF (set CAPSTONE_LLVM_READELF). A check that cannot run is not a pass."
+fi
+
 [[ "$FAIL" -eq 0 ]] && { echo "preflight: GO"; exit 0; } || { echo "preflight: BLOCKED"; exit 1; }
