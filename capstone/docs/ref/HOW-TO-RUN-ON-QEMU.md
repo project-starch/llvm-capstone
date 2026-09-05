@@ -196,8 +196,10 @@ last run" fires false after the fix has landed:
 - `build/images/rootfs.ext2` mtime advanced;
 - then `capstone/tests/runtime-qemu/run-smoke.sh` rc 0.
 
-**Capstone-C is two parsers.** The components pipeline runs real cpp (`--` args); the package
-pipeline runs bare `cargo run` with its own preprocessing. A construct can parse under one and not
-the other. If a block will not parse, do not theorise about the parser: bisect in `/tmp` with the
-**unpatched source as the control** (it compiles), and prefer a non-static, value-returning
-helper whose result is assigned — that form parsed under both when in-line and `static void` did not.
+**Capstone-C is two pipelines** — components runs real cpp (`--` args), package runs bare
+`cargo run` with its own preprocessing — and they have produced different parse verdicts on the
+same intermediate source. If a block will not parse, do not theorise about the parser and do not
+trust a rule from a previous session: bisect in `/tmp` with the **unpatched source as the
+control** (it compiles) and a deliberate syntax error as the negative control. (A rule recorded
+here on 2026-09-05 — "an array assignment in the nested tail branch fails under both" — was
+retracted the same day when an auditor compiled that exact form cleanly under both.)

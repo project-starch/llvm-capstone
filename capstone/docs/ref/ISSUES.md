@@ -633,15 +633,43 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >   that iterates `0..region_n` (`:1008`), and a site that returns `region_n` as a count (`:968`).
 >   Ten consumers to teach, under two parsers that already rejected an array assignment inside a
 >   nested `if`.
-> - *Compact: move the last slot into `i`* — the firmware declined this as "migrating a LINEAR
->   capability between a CPMP register and the array, unverified". **The audit shows the move is
->   unnecessary when the last slot sits in a CPMP register: re-point the two index maps
->   (`region_cpmp[i] = region_cpmp[last]; cpmp_region[that] = i; region_cpmp[last] = -1`) and the
->   capability never leaves its register.** When the last slot is in the array, it is the same
->   `tmp = regions[x]; regions[y] = tmp` round-trip the file already performs at `:190-192`. Either
->   way slot `i`'s own CPMP mapping is cleared first, exactly as the tail case does, and
->   `region_n -= 1`. **This is the proposed fix.** It goes to `claim-auditor` before it goes in,
->   and the same manifest B — now expecting 24/24 with zero `0x1235` — is its positive control.
+> - *Compact: move the last slot into `i`* — **REFUTED by claim-auditor (2026-09-05), W3 CONFIRMED,
+>   and every file:line re-read here before recording.** Region ids escape to the guest **as array
+>   indices**: `create_region` returns `region_n - 1` (`sbi_capstone.c:546`); the kernel module
+>   stores it (`modcapstone/module/capstone.c:213`), caches `base_paddr` **keyed by that index**
+>   (`:223`), looks up by it (`:316`), and **`mmap` resolves physical pages through that cache**
+>   (`:391 remap_pfn_range`). The assumption is written down at `:33`: *"it is now assumed that
+>   region_id is the same as the index in regions[]"*. There is no `REGION_POP` ioctl and
+>   `probe_regions` (`:291-307`) only ever grows `region_n`. So compaction retargets a live
+>   guest-held id, and the next `create_region` reuses id `last` for a **new** region: the module
+>   hits `:215` "Region ID reuse detected", does not record the new geometry, and `map_region`
+>   hands userspace **region A's pages while the monitor shares region B**. Silent, and worse than
+>   the wedge. The audit also found the "index-only" argument incomplete: the array branch
+>   (`tmp = regions[last]; regions[i] = tmp`) *is* the migration the firmware author declined, and
+>   it is safe on the two platforms for **different** reasons (spec LDC/STC nulling on silicon;
+>   dead-index unreachability on QEMU, whose `csldc` leaves a tagged duplicate) — which is why
+>   their caution was warranted. **Not implemented; do not implement.**
+>
+> - **The correct fix is the one rejected above on cost: a hole with a `region_live[]` sentinel**,
+>   because it is the only shape that preserves the module's index-equals-id assumption. It touches
+>   the ~11 consumer sites listed there. It is a design change, not a patch, and goes through a plan
+>   and a second audit before code.
+>
+> **THE LANDED TAIL PORT HAS A WEAKER FORM OF THE SAME HAZARD (audit incidental 1, verified).**
+> `drop_exact_fit_tail` is the first shrink of `region_n` that is *reachable from the module* —
+> `pop_region` never had an ioctl. A tail drop inside `create_domain` followed by a `create_region`
+> returns an id the module already holds, takes the alert-without-record branch at `:215-216`, and
+> `map_region` returns the consumed fragment's `base_paddr` — pages that now belong to a domain.
+> Manifest B/F did not exercise it (all three wedges were middle-slot), so the 21/24 + 6/6 stand as
+> observations; the port is correct at the monitor level and **exposes a module assumption that
+> was previously unreachable**. Recorded as a defect in what is committed and running.
+>
+> **RETRACTED (audit incidental 2): the claim that "an array-element assignment inside the tail
+> branch does not parse under either pipeline".** The auditor compiled the inline
+> `region_n -= 1` form under both pipelines from the current tree: it parses. My bisection's
+> failures were on intermediate source states and the rule as generalised is wrong. The helper
+> form that shipped is fine; the *reason* recorded for it is not, and the code comments in both
+> copies (`:213-217`) carry the wrong reason until the next change there.
 >
 > **Also recorded:** the two `caplifive-sbi` checkouts are on **diverged lines** one commit apart
 > each way from `2f772bb` (`04ac643` template-copy vs `1a926b0` "carve gp only for images that
