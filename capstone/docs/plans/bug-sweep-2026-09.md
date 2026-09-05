@@ -297,3 +297,35 @@ Q-03 closed by the board lane (17:10): the hole + `region_live[]` sentinel monit
 - Deferred, not dropped: R-15 stages and R-17/S-01 uc/dp0 arms (stage machinery, session 3); M-1's faulting rung (fix known, unverified); C-9; C-17's >64-bit constant arm decision.
 - Corrections made this session, all recorded where they happened: C-19's simulation test misread (caught before publication); "retraction" misapplied to R-25 in a message; rawhazard5 staged at the control's VA (C15 now gates it); the R-18 oracle files in unpacked form and the accumulator-probe oracle swap (annotated in the rows); R-1 first written GONE on two probes; the S-04 "not reproduced" line that stood on dev for nine minutes (b5aa78aff7bb); the first aha-mont64 reruns voided by an OUT_DIR override; the rawhazard6/7 "same structure" sentence above.
 
+
+### Rows for the IDs that had no instrument this sweep (19:45) — closing the table's own criterion
+
+The plan's verification asks for a row per inventory ID. A count against the registry's headings at 19:35 found 33 without one: the record-only, reserved, hand-off and no-instrument items, none of which was run. Each gets its row below with a verdict no stronger than what the record supports. "NOT RUN" means exactly that; none of these is a GONE.
+
+| id | registry | old status | instrument | verdict | evidence | action |
+|---|---|---|---|---|---|---|
+| C-3 | ISSUES | OPEN | RV8 -O2 twins (default ABI) under QEMU; the board rv8 line | NOT REPRODUCED under QEMU at -O2 (RV8 7/7 ×2 in the pin-retirement validation and the W-17 pair); board line NOT RUN | B2 rows above (W-17 rv8 7/7; retirement RV8 7/7 ×2) | keep OPEN until a board rv8 -O2 line lands (board lane's campaign is the natural place) |
+| C-5 | ISSUES | OPEN | none — a design limit (4 KiB code window), not a defect with a reproducer | UNTESTABLE as filed | — | keep as a documented limit |
+| C-10 | ISSUES | CLOSED (refuted lead) | none needed | record | — | none |
+| C-18 | ISSUES | FIXED 2026-08-11 | its lit pin | lit green at the close-out (Capstone 89 pass); pin NOT re-fired against a pre-fix compiler this sweep | lit run in the branch's validation | none |
+| C-24, C-25 | ISSUES | RECORD ONLY | none | record | — | none |
+| C-27, C-33, C-36 | ISSUES | FIXED 2026-09-05 (this branch) | their red-first lit tests at fix time | fixed in-branch; lit green at the close-out; not re-fired against the pre-fix compiler this sweep | branch commits + lit | none |
+| C-29, C-30, C-35, C-42 | ISSUES | RESERVED | none | record (numbers reserved, nothing filed) | — | none |
+| C-34 | ISSUES | CLOSED 2026-09-05 without a fix | none | record | — | none |
+| C-37 | ISSUES | OPEN | `llvm-readelf -r` on any Capstone object | STILL PRESENT — 23 "Unknown" relocation names on `jt.o` today (ELF.cpp has no EM_CAPSTONE case) | this session's `jt.o` readelf | keep OPEN; small fix, queue after the sweep |
+| C-38 | ISSUES | OPEN (naming decision) | none | UNTESTABLE — a decision, not a defect | — | lead's call |
+| C-43 | ISSUES | OPEN, latent class | the cttz table fault (measured 2026-09-05) and areJTsAllowed under gp-captable | STILL PRESENT as a class; its two known instances are mitigated in-branch (cttz arithmetic form, jump tables refused) | `lowerCTTZNoTable`, `areJTsAllowed` | keep OPEN; class-level guard is a separate design item |
+| I-01 | ISSUES | RESOLVED 2026-09-04 | negative-tested push gate | record | — | none |
+| I-1, I-2 | ISSUES | FIXED (harness) | none this sweep | record | — | none |
+| I-02 | ISSUES | OPEN (allocation convention) | none | UNTESTABLE — process, not code; the I-1..I-5 vs I-01..I-03 collision is noted in the registry | — | lead's call on a convention |
+| I-03 | ISSUES | OPEN, latent on the board | none this sweep (needs a linker placement that lands the array misaligned) | NOT RUN | — | keep OPEN |
+| I-5 | ISSUES | OPEN, cheap fix identified (monitor) | none — monitor | hand-off | — | monitor lane |
+| M-4 | ISSUES | OPEN, filed 2026-09-05 (monitor bound check) | none — monitor | hand-off; verified file:line at filing | — | monitor lane |
+| R-2 | ISSUES | EXPLAINED by C-13 | the C-13/C-14 compiler-side fix's acceptance on the board | covered: gpw2/gpn2 PASS this sweep (batch 4, session 1) | the C-14 rows above | none |
+| R-4, R-5 | ISSUES | OPEN, no reproducer | none — the plan said "write one only if a sweep result points at them"; none did | UNTESTABLE | — | keep OPEN |
+| R-7 | ISSUES | CLOSED into R-1 | R-1's three probes on the board this sweep | covered by R-1 GONE (rawhazard5/6/7) | the R-1 rows above | none |
+| R-10 | ISSUES | ROOT CAUSE of C-13 (RTL), board-confirmed 07-29 | the compiler-side workaround's acceptance (C-14) | RTL side not re-tested; workaround acceptance PASS this sweep | the C-14 rows above | keep as the RTL root cause; RTL lane owns any RTL fix |
+| R-11 | ISSUES | OPEN, not yet hit | `check-repr.py` on the current corpus | NOT RUN this sweep (planned in B1, not executed — no log exists) | — | keep OPEN; run it with the next corpus refresh |
+| R-12 | ISSUES | OPEN, will bite at call_dom | a >1024-split counting rung | UNTESTABLE without new work; deferred (see close-out) | — | deferred, not dropped |
+| R-13 | ISSUES | OPEN | R-21's `linear-clear-audit` arm 2 (a LINEAR cincoffset source) | GONE at 5097eb166 for the cincoffset case: the source reads NOT_CAP after cincoffset (finding 27); the INIT/TIGHTEN duplication stays under R-21 | the R-21 row above | fold into R-21; registry note is the board lane's |
+| R-22 | ISSUES | OPEN, spec violation, not reported | a `stc`-clears-source arm (B3 planned it beside R-24) | NOT RUN — only `excode-base-audit` (R-24) was run | — | keep OPEN; RTL lane hand-off with R-24 |
