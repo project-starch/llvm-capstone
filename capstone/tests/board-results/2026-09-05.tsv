@@ -41,3 +41,30 @@ k800	0x20000	-O0	4k	589ceee3853c6092	4	B7	1	OK	4	4452	control (0x20000 build); b
 sqslt1:q_two.test	0x10000	-O1	n/a	c01e6b89cad0f17a	records=2	B7	2	OK			control k800=4 OK. SQLite silicon build at -O1 (host a1895d35f768b5d0) on q_two.test: records=2 (expected 2) stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 completed=1; doubles as an S-12 draw on the s12fix bitstream
 k800	0x20000	-O0	4k	589ceee3853c6092	4	B8	1	OK	4	4440	control (0x20000 build); boot valid
 sqslt1:select1.test	0x10000	-O1	n/a	c01e6b89cad0f17a	records=1031	B8	2	OK			control k800=4 OK. SQLite silicon build at -O1 (host a1895d35f768b5d0) on select1.test: records=1031 (expected 1031) stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0 completed=1; doubles as an S-12 draw on the s12fix bitstream
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw01	1	OK	4	4442	control; boot valid
+beebs_janne	0x50000	-O0	4k	5ffd481c931eef3e	484656629	sw01	2	OK	484656629	620	sweep sw01; control k800=4 OK
+beebs_expint	0x60000	-O0	4k	9c04c96d5dbf8bae	2021290181	sw01	3	OK	2021290181	110967	sweep sw01; control k800=4 OK
+beebs_nssmall	0xb0000	-O0	32k	2fc5b371cc8c7b2a	2711842293	sw01	4	OK	2711842293	27309	sweep sw01; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw02	1	OK	4	4428	control; boot valid
+beebs_nskeys	0x90000	-O0	4k	9a7f832e985cb465	3914083333	sw02	2	OK	3914083333	114481	sweep sw02; control k800=4 OK
+beebs_nsflat	0xa0000	-O0	4k	f664451c25c21c74	1184999093	sw02	3	OK	1184999093	77582	sweep sw02; control k800=4 OK
+beebs_ns	0x80000	-O0	4k	529cb7db9b686052	1184999093	sw02	4	OK	1184999093	102684	sweep sw02; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw04	1	OK	4	4434	control; boot valid
+gpw2	0xc0000	-O0	4k	695e0d2c4848d394	3983810698	sw04	2	OK	3983810698	973	sweep sw04; control k800=4 OK
+gpn2use1	0x1b0000	-O0	4k	f7d15cf89fae86e5	1463068797	sw04	3	OK	1463068797	1192	sweep sw04; control k800=4 OK
+gpn2	0xe0000	-O0	4k	cd1d059f0aefb483	3976364985	sw04	4	OK	3976364985	2034	sweep sw04; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw05	1	OK	4	4441	control; boot valid
+s06copy	0xf0000	-O0	4k	91428376664cf8bf	32	sw05	2	OK	32	5836	sweep sw05; control k800=4 OK
+s06aggcap	0x100000	-O0	4k	e6b4330833f15f8f	15	sw05	3	OK	15	1449	sweep sw05; control k800=4 OK
+s06aggwide	0x110000	-O0	4k	45a81a9e4ff4a48c	255	sw05	4	OK	255	2407	sweep sw05; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw06	1	OK	4	4427	control; boot valid
+k1200	0x120000	-O0	4k	eb60455bf94cdff0	4	sw06	2	OK	4	4603	sweep sw06; control k800=4 OK
+r14lp	0x130000	-O0	4k	751af4fd6aafd1d9	4	sw06	3	OK	4	4664	sweep sw06; control k800=4 OK
+gpn2use0	0x1a0000	-O0	4k	8c04cc16c4e4df11	1463068797	sw06	4	OK	1463068797	1191	sweep sw06; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw07	1	OK	4	4418	control; boot valid
+crc32_shrinkoff0	0x180000	-O0	4k	e63f1876ac31c885	1703161001	sw07	2	OK	1703161001	271936	sweep sw07; control k800=4 OK
+crc32_shrinkon0	0x170000	-O0	4k	fa180e09631f4a1b	1703161001	sw07	3	OK	1703161001	394690	sweep sw07; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	swd1	1	OK	4	4447	control; boot valid
+rawhazard5	0x20000	-O0	4k	8f8c56bb89dfa34b	48879	swd1	2	VOID	48879	5272	VA COLLISION with the control build (both 0x20000; the preflight had no entry check yet, C15 now): R-3 exposure, NOT an R-1 reading; it returned with dbg0..4=5 (an observation, not a verdict); relink at a distinct VA and rerun
+rawhazard6	0x30000	-O0	4k	57fbf98446c1a3c9	48879	swd1	3	OK	48879	8208	sweep swd1; control k800=4 OK
+rawhazard7	0x40000	-O0	4k	38d3862acd864a82	48879	swd1	4	OK	48879	4319	sweep swd1; control k800=4 OK

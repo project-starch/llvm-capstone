@@ -1,6 +1,6 @@
 # Known-good controls
 
-> ## STALE — 2026-08-18. Do not rely on a row without re-verifying it.
+> ## refreshed 2026-09-05 on s12fix (caplifive_s12fix_5097eb166): k800 = 4 in every boot sw01-sw07, k1200 = 4, r14lp = 4 (boot sw06); worry again when the bitstream or the compiler changes -- was STALE since 2026-08-18 — 2026-08-18. Do not rely on a row without re-verifying it.
 >
 > Every row below reads `last verified 2026-08-06`, against bitstreams that have since been
 > replaced at least three times (`caplifive_s06.bit`, `caplifive_s06fixs08fix.bit`,

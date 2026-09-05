@@ -8,7 +8,7 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-09-04.
+Last updated 2026-09-05 (sweep batch 1: `docs/plans/bug-sweep-2026-09.md`).
 
 ---
 
@@ -589,7 +589,9 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `OPEN — RUNTIME; cheap reproducer, no board needed`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim ~~`OPEN — RUNTIME; cheap reproducer, no board needed`~~ `ROOT-CAUSED 2026-09-05 — the QEMU monitor stand-in spins on an exactly-matching free region; the board firmware already handles it`
+
+> **Sweep 2026-09-05 — ROOT-CAUSED (QEMU side).** Bisect: `cs7-O0` alone as item 1 RETurns (not image-bound); a 24-item batch WEDGED at positions 8, 12, 22 hitting `cs2-O0` twice and `cs7-O0` once, with `cs7-O0` after 1, 3 and 11 returning items RET. Wedged items print no `Created domain ID` and then `[CAPSTONE] Print = Scalar(0x1234)`; returning items print `Created domain ID` and never 0x1234. 0x1234 is printed at exactly one place: `caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c:243-248` (`split_out_cap`) — when the requested `[base, base+len)` exactly equals an existing free region: `// matching region. We don't support this for now` → `C_PRINT(0x1234); while(1);`. Whether a buddy block equals a carve remainder depends on the allocation history (the module never frees a domain's pages), so it is position- and size-history-dependent and hits any image. The board firmware already handles the case (`caplifive-system/.../opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:534-560`, `CAPSTONE_SPLIT_EXACT_FIT`, tail slot; its comment records that the hang was once misattributed to silicon). Fix: port that handling into the QEMU stand-in. Same-image repeats (4/4) and two-size alternation (6/6) do not trigger it; the site is identified by its unique signature.
 
 **Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
 result files.** This is a runtime defect, not a codegen one.
@@ -636,7 +638,14 @@ ordinary infra flake. The first two are answerable off-board with the reproducer
 campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
 Applies equally to board arms.
 
-## Q-01 — `run-sqlite-memory.sh` cannot create its domain · `RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
+
+`capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
+
+
+## Q-01 — `run-sqlite-memory.sh` cannot create its domain · ~~`RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`~~ `FIXED 2026-09-05 — the memory arm fits the module's allocation again (-O1 amalgamation, 256 KB arena)`
+
+> **Sweep 2026-09-05 — STILL PRESENT, same signature.** `run-sqlite-memory.sh` with the full console captured: `SQ: obs=18446744073709551615`, `create_dom failed`, rc 1. Cause line: the memory arm's image is `LOAD filesz 0x265307 memsz 0x365bb0` (.text 2.44 MB, .bss 1.05 MB of which `sqlite_heap` is 1 MB) against the silicon arm's 0x150818 (.text 1.31 MB, 256 KB arena), both at -O0; the module doubles the request, ~7 MB = order 11 > MAX_ORDER 10, as the entry says. **FIXED 2026-09-05 (compiler lane), verified:** `run-sqlite-memory.sh` now builds the amalgamation at -O1 with a 256 KB arena (`SQLITE_OPT_LEVEL`, `DOMAIN_EXTRA_FLAGS=-DSQLITE_HEAP_SIZE=262144`, default ABI kept, glue/libc/VFS still -O0); the image is `LOAD filesz 0x12bf17 memsz 0x16c7c0` (1.49 MB: .text 1.15 MB, .bss 258 KB), the doubled request fits order 10, and the run reaches all five markers (`row name=alpha/beta/gamma`, `__CAPSTONE_SQLITE_EXTENDED_PASSED__`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`), rc 0. -O0 SQLite coverage stays with the SLT twins. The module is not touched.
 
 > **RESOLUTION, and the framing below was wrong in one important way.**
 >
@@ -1746,6 +1755,8 @@ failing probes are also the largest. > **⚠ CORRECTION: this is NOT an off-boar
 > (`expint_diag` is the known-good vehicle) over debugging why a new one does not.
 
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
+
+> **Sweep 2026-09-05 — GONE on silicon.** `beebs_expint -O1` = 2021290181 = host oracle (boot sw01); `expint_diag` in the diagnostic boot, see the results file.
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
 | | capability | baseline (bare-metal) |
@@ -1867,6 +1878,8 @@ software-side explanation *more* likely, not less.
 
 ### R-9 — `beebs_ns` hangs although its tables are never written `LIKELY EXPLAINED 2026-07-29 by C-13 — re-test required`
 
+> **Sweep 2026-09-05 — GONE on silicon.** `beebs_ns` = 1184999093 = oracle, run LAST as the wedge-expected rung and RETURNED; `beebs_nskeys` 3914083333, `beebs_nsflat` 1184999093, `beebs_nssmall` (32k window) 2711842293, all = oracle (boots sw01/sw02). Explained by C-13's fix, as predicted.
+
 **Leading explanation, not yet confirmed on hardware: the copy-path double delin.**
 `beebs_ns` takes the large-RO **copy path**, and the C-4b fix prepends `delin(sp)` to the
 generated glue *only for copy-path rungs* — which made that glue's later `delin(gp)`,
@@ -1972,6 +1985,8 @@ then no END marker in 120 s, both attempts.
   reproduces it.
 
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
+
+> **Sweep 2026-09-05 — GONE on silicon.** `beebs_janne -O1` = 484656629 = host oracle on caplifive_s12fix_5097eb166 (boot sw01, control k800 = 4; `tests/board-results/2026-09-05.tsv`).
 BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
 locals**, with one `.bss` counter (`jc_iters++`) touched through a single capability register.
 R-1 requires a load through one capability register with an intervening store through *another*;
@@ -2248,7 +2263,9 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends `OPEN (partially widened)`
+### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends ~~`OPEN (partially widened)`~~ `GONE 2026-09-05 — c128 carrier; instrument shown live`
+
+> **Sweep 2026-09-05 — GONE.** rv8 `miniz` -O1/-O2 crash the pre-c128 clang (3cb3e621f21c: `Constants.cpp:2220 ConstantExpr::getCast` assertion) and build on ae821a017089; `qsort` builds on both, so its half is not shown live on any recorded compiler. Lit pin `i128-logical-mixed-extend.ll`. Evidence: `docs/plans/bug-sweep-2026-09.md` (B1 close-out).
 Blocks `rv8_qsort` and `rv8_miniz` at −O1/−O2 (both still fail 2026-07-28; −O0 passes).
 
 **The semantics question was malformed, and the answer is now settled.** It was framed as
@@ -2294,6 +2311,8 @@ regress.
 Renamed from "large read-only data cannot be delivered": size was never the variable.
 
 #### C-4a — constant pools are unreachable in a domain `FIXED 2026-07-28`
+
+> **Sweep 2026-09-05 — re-verified FIXED.** `rv8_sha512` rung under QEMU: 1390718314 = oracle.
 **Root cause, with the emitted sequence:**
 ```
 .LCPI0_0: .quad 81985529216486895        ; .rodata.cst8 -- a CONSTANT POOL entry
@@ -2326,6 +2345,8 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > step what two rounds of inference got wrong.
 
 #### C-4b — the large-RO COPY PATH in the generated glue is broken `FIXED 2026-07-28`
+
+> **Sweep 2026-09-05 — re-verified FIXED.** `beebs_crc32big` under QEMU: 1703161001 = oracle (a first run exited 75 on a boot-login infra flake; the rerun is the result).
 
 **FIXED 2026-07-28. Root cause: `cincoffset` CONSUMES a linear `rs1`.**
 
@@ -2579,6 +2600,8 @@ debugging and should be done before more board sessions are spent guessing.
 
 ### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
 
+> **Sweep 2026-09-05 — GONE on silicon.** `gpn2` = 3976364985 = oracle and RETURNED (last in boot sw04, where it used to wedge); `gpw2` = 3983810698 = oracle. The movc-scalar-copy fix is in the flashed compiler/bitstream pair.
+
 > **ATTRIBUTION WAS REVISED TWICE ON 2026-07-30. Read this box before the rest.**
 >
 > v1 "the RTL is buggy" -> v2 "the spec mandates it, the RTL is conforming, QEMU deviates"
@@ -2733,7 +2756,9 @@ real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because
 metadata regfile shares its write-enable with the integer regfile
 (`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
 
-### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — LATENT; and it was NOT the -O1 blocker`
+### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` ~~`OPEN — LATENT; and it was NOT the -O1 blocker`~~ `LATENT BY DESIGN 2026-09-05 — the crash is gone, a diagnostic stands in its place`
+
+> **Sweep 2026-09-05 — crash GONE, diagnostic by design.** The pre-c128 compiler crashes on the wide arm with `Cannot select … SELECT_CC`; ae821a017089 emits the intended diagnostic instead: `Cannot materialize arbitrary >64-bit constants as capabilities`. Decision on lowering such an arm via two i64 halves is queued (B6); until then the limitation is diagnosed, not silent.
 
     fatal error: error in backend: Cannot select:
       t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
@@ -2952,6 +2977,8 @@ N = 2, so this says nothing about a rate. Full evidence, caveats and next step:
 `tests/fpga-repros/S13-o1-dyn-rev-node-hang/`.
 
 ### C-19 — partial capability operations applied speculatively; SQLite could not run at `-O1` `RESOLVED 2026-08-26 — three distinct faults`
+
+> **Sweep 2026-09-05 — simulation half re-measured at 5097eb166: PASS.** `alu-write-clears-shadow.S` arms A, C and D print (Reg[12] cycle 344, Reg[13] 355, Reg[17] 362 — the rd == rs1 zero-gap shape the compiler emits), the run's only exception is the positive control's at cycle 365, after every measuring arm. The test is designed to end in that trap; the verdict is the ORDER of prints and exception, not their presence.
 
 **This is what now blocks `-O1`, after C-17 turned out not to be (see C-17).** The amalgamation
 compiles and links at `-O1`; the image then enters the domain and dies immediately:
@@ -3215,7 +3242,9 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
 
-### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot `FIX WRITTEN, NOT YET BUILT`
+### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot ~~`FIX WRITTEN, NOT YET BUILT`~~ `FIXED — gp-captable lit arm pending; gpn2use1 on board boot 4 (2026-09-05)`
+
+> **Sweep 2026-09-05 — FIXED, status line was stale since 2026-07-30.** `isGpCaptableGlobal` (CapstoneISelDAGToDAG.cpp:118) is in every build since, including the pre-c128 and 08-19 trees; lit `compiler-used-capability.ll` is green (`llvm.compiler.used` in addrspace(200), CHECK-NOT on the symbol) but its RUN lines are default-ABI, so a `-capstone-gp-captable` arm is queued; the rung it was found on (`gpn2use1`) links and returns 1463068797 = host under QEMU; board boot 4 carries it.
 
 Any TU using `__attribute__((used))` fails to link:
 `ld.lld: error: undefined symbol: llvm.compiler.used, referenced by
@@ -3568,6 +3597,8 @@ loop-assigned entries failing and the four straight-line ones passing.
 
 ### C-16 — `memset` destination typed in AS0 strips the capability tag `FIXED 2026-08-02`
 
+> **Sweep 2026-09-05 — re-verified FIXED.** `DOMAIN_OPT_LEVEL=-O0 run-ladder-qemu.sh strarray` returns 420 = oracle.
+
 **This was the SQLite blocker.** `SelectionDAG::getMemset`
 (`llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:9380`) built the destination argument type with
 `PointerType::getUnqual(Ctx)` — an **addrspace(0)** pointer. AS0 here is a 64-bit integer
@@ -3794,7 +3825,9 @@ should get a proper entry, written by whoever has the mruby context, so the regi
 disagreeing with the history.
 
 
-### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed `FIXED 2026-09-04 — three defects; the nightly gap is still OPEN`
+### Q-02 — the c128 merge left `capstone-qemu` unable to compile, and no gate noticed ~~`FIXED 2026-09-04 — three defects; the nightly gap is still OPEN`~~ `FIXED 2026-09-04; (d) and (e) CLOSED 2026-09-05`
+
+> **Sweep 2026-09-05 — (d) and (e) CLOSED, separately.** (d) — the SLT corpus had no committed harness — is closed by `tests/twins/slt-compare.sh` + `slt-harness-check.sh` on dev, with their eight-arm positive control (native-vs-native AGREE, each MISMATCH direction, no-summary ERROR, completed=0 ERROR, zero-records ERROR, cap ERROR) and the select1 -O0/-O1/-O2 AGREE rows in `tests/twins/results/2026-09-05.tsv`. (e) — the nightly gate — is closed by `qemu_staleness_guard` in `run-nightly.sh`, proven to fire: extracted verbatim and run against a synthetic tree, a binary older than a source file under `capstone-qemu/target` prints `STALE QEMU … Every QEMU row below is suspect` and sets OVERALL_OK=0; a binary newer than every source is silent, rc 0.
 
 **Reported by the compiler lane 2026-09-04, re-verified here before recording.**
 
@@ -4001,6 +4034,8 @@ as a bare-metal S-mode OpenSBI payload (`build-ladder-base-bare.sh`,
 ---
 
 ### I-3 — diagnostic probes could not run under QEMU `FIXED 2026-07-28`
+
+> **Sweep 2026-09-05 — re-verified FIXED.** "QEMU smoke passed" with `capstone-diag.user` copied into the share dir (`run-domain-smoke.py --share-dir … --domain-loader /mnt/host/capstone-diag.user`).
 Diagnostic rungs write raw values into `res[3..47]`. Under QEMU a domain saw only an
 8-byte return slot, so every `*_diag` / `rawhazard*` probe was **board-only** — each
 iteration cost a full boot and a broken probe could not be caught before spending one.
@@ -4134,7 +4169,9 @@ gap remains OPEN as **C-36b** with the compiler lane, and it is wider than "scru
   the plausible-sounding version is what a later reader will otherwise re-derive.)
 
 
-### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for `OPEN — COVERAGE GAP, not a miscompile`
+### C-26 — `ptr-diff-signed.ll` no longer guards the path it was written for ~~`OPEN — COVERAGE GAP, not a miscompile`~~ `CLOSED 2026-09-05 — the test can fail now`
+
+> **Sweep 2026-09-05 — CLOSED.** `ptr-diff-signed.ll` runs FileCheck with `--implicit-check-not=__divti3` (and `__divdi3`, `__moddi3`) and carries `sdiv_nonexact_var`, whose non-exact division must emit the libcall, so the CHECK-NOT can fail (verified by the board lane at 633f13f0277f).
 
 **Filed 2026-09-04 as a deliberate, accepted gap** when the c128 branch was merged. The project
 lead's call was "merge as-is, file it" — this entry is that filing, not a request to revisit it.
@@ -4172,6 +4209,8 @@ treatment.
 
 
 ### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `FIXED 2026-07-28`
+
+> **Sweep 2026-09-05 — re-verified FIXED.** `llvm-nm` on the current `fw_jump.elf`: 0 `fw_fdt_bin` symbols (checked by the board lane).
 **FIXED 2026-07-28. Root cause: a stale object file, not the compiler.**
 
 `build/build/opensbi-custom/build/platform/generic/firmware/fw_jump.o` was compiled
@@ -4532,6 +4571,8 @@ data-authority-readable by the domain, which is proven for the monitor's WRITE b
 never been proven for the domain's READ on silicon.
 
 ### C-12 — a NON-DEFAULT globals offset does not work `FIXED 2026-07-28`
+
+> **Sweep 2026-09-05 — re-verified FIXED.** `beebs_crc32big` with `DOMAIN_WINDOW=32k` under QEMU = oracle.
 **FIXED. Two capstone-c miscompiles in the monitor, both found by printing values.**
 
 `DOMAIN_WINDOW=32k` (globals at image offset 0x8000) now returns oracle **1703161001**,
@@ -4588,6 +4629,124 @@ Keep the id so older notes that cite it still resolve.
 
 Validated: Capstone lit 41/41, BEEBS 82/82, CoreMark, authority 32/32, RV8 −O0 5/5, full X86 +
 RISCV lit (6 `emutls*` failures **verified pre-existing** by stash-rebuild-reproduce).
+
+---
+
+
+### C-20 — `__builtin_ctz` on a 32-bit value crashes the Capstone backend `FIXED 2026-09-04 — lit c20-cttz.ll; sweep-verified 2026-09-05`
+
+Repro: `tests/compiler-repros/C20-cttz-i32-crashes-legalizer/run.sh` (filed 2026-08-19, found probing
+JerryScript). The same defect was recorded as **C-24** on 2026-08-15 (6099438c3081, found compiling
+mruby): CTTZ without Zbb expands to a de Bruijn multiply indexing a 32-byte table, that table is a
+ConstantPool node of type i64, and `lowerConstantPool` returned `LGA:i128` unconditionally, so the
+custom lowering handed back a different type than the node it was asked to lower and LegalizeOp
+asserted (`__builtin_clz`/`popcount` unaffected, `ffs` affected). One defect, two numbers — C-24 is
+folded here. Fixed 2026-09-04 in cycle 2 (lit `c20-cttz.ll`, TABLE and CAPTABLE arms).
+
+> **Sweep 2026-09-05 — GONE, instrument live.** PRESENT (backend crash, rc 1) on the pre-c128 build
+> 3cb3e621f21c and on the 08-19 build 421445f12447; ABSENT on ae821a017089.
+
+### C-21 — a select of two `__int128` constants cannot be selected `GONE 2026-09-05 — c128 carrier`
+
+Repro: `tests/compiler-repros/C21-i128-select-of-constants/run.sh`.
+
+> **Sweep 2026-09-05 — GONE, instrument live.** PRESENT on the pre-c128 and 08-19 builds; ABSENT on
+> ae821a017089.
+
+### C-22 — `c ? (__int128)-1 : k` drops the condition and returns `k` `GONE 2026-09-05 — c128 carrier`
+
+Repro: `tests/compiler-repros/C22-i128-or-sext-folds-to-constant/run.sh`. C-23 was filed as the wider
+shape of the same class.
+
+> **Sweep 2026-09-05 — GONE, instrument live.** PRESENT on the pre-c128 build; ABSENT on the 08-19 build
+> and on ae821a017089.
+
+### C-23 — an `__int128` whose high half carries information is computed on the low 64 bits only `NOT REPRODUCIBLE ON ANY RECORDED COMPILER 2026-09-05`
+
+Repro: `tests/compiler-repros/C23-i128-high-half-silently-dropped/run.sh` (filed 2026-08-19,
+640871a07a67; gates itself on a positive control).
+
+> **Sweep 2026-09-05 — not reproducible on any recorded compiler.** `run.sh` and `halves.c` are unchanged
+> since filing (one merge-resolution commit); the parent of the filing commit (421445f12447) compiles both
+> functions correctly with the positive control firing (`control_returns_b reads a2`); the pre-c128 build
+> rejects `__int128` in C; ae821a017089 is clean. The c128 carrier makes the described mechanism
+> (truncate-compute-reextend) inapplicable. Closed as not reproducible, not as fixed.
+
+### C-24 — folded into C-20 `RECORD ONLY`
+
+Allocated 2026-08-15 (6099438c3081) to the `__builtin_ctz` backend crash found compiling mruby; the
+same defect was filed again as C-20 on 2026-08-19. C-20 carries the entry.
+
+### C-25 — the pointer-difference fix `RECORD ONLY`
+
+Allocated to the pointer-difference fix (738c8c94521f), which `cap-ptrdiff-untagged.ll` cites. Two commit
+messages on the validation branch that said "C-25" for the register-form CAP_CALL mnemonic collision mean
+**C-38** (1f548fd15dfc records the correction).
+
+### H-01 — BEEBS `matmult-float` pulled the HOST glibc headers into a cross-compile `FIXED; sweep-verified 2026-09-05`
+
+Repro: `tests/compiler-repros/H01-beebs-matmult-float-host-headers/` (`src/repro.sh`).
+
+> **Sweep 2026-09-05 — re-verified FIXED.** `src/repro.sh` clean on the current toolchain.
+
+---
+
+
+### C-27 — `delin` of a NONLIN gp is a spec/RTL trap that QEMU hides `FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract`
+
+Under the default global ABI every gp-derived base was `delin`ed once; on the RTL (and per the spec) DELIN of a non-linear capability traps, QEMU let it pass (finding 28 of the Tier 4 semantics matrix). Fixed by not emitting the DELIN under the NONLIN-gp contract (the gp-captable ABI never needed it). Pin: `gp-table-linear-delin.ll`.
+
+### C-28 — tail calls were emitted as calls (`cjalr ra` instead of restore-ra + `cjalr zero`) `FIXED cycle 2 (2026-09-05)`
+
+Pin: `tail-call.ll`. The `-fno-optimize-sibling-calls` pins (W-16) were retired on it; the W-16 pair at -O2 is AGREE-PASS and the -O2 CoreMark image with sibling calls on ran on the board.
+
+### C-31 — a pointer's address read through `EXTRACT_SUBREG` left the register tagged for a following `cincoffset` `FIXED 2026-09-05`
+
+The cursor was read as a subregister extract, so the consumer could see capability metadata in an rs2 that must be an integer (`UNEXPECTED_OPERAND`). Fixed: the address read is one plain integer write (`mv`/`addi rd, rs, 0`), which clears the shadow. Pins: `c31-cincoffset-rs2-from-extract.ll`, `cap-addr-bitmask.ll`, `frame-realign.ll`, `cap-shrink-stack.ll`, `ptr-arith.ll`, `select-cap-condcodes.ll`, `legalize-trunc-i128.ll`; RTL measurement `alu-write-clears-shadow.S` (arms A/C/D print, sole exception the positive control) on the RTL lane's branch and at the flashed 5097eb166.
+
+### C-33 — `cap_get_tag` / the `lcc` selector-2 cursor query trapped on NULL `FIXED 2026-09-05`
+
+`lcc rd, rs, 2` is not total. The tag query is lowered through the one total query (selector 1, the type) and the realign's cursor read is a plain move. Pin: `intrinsics.ll`.
+
+### C-34 — a zero-size object emitted a SHRINK with base == end, which is ILLEGAL on the RTL `CLOSED 2026-09-05 without a fix`
+
+A zero-size alloca is laid out as one byte and its SHRINK covers that byte (`li a2, 1`); a zero-size global gets no SHRINK at all. Pin: `sem-shrink-zero-size.ll`.
+
+### C-36 — the domain-op definitions did not match the ISA (CAPENTER funct7, a CAPEXIT phantom, CAP_RETURN/CAP_CALL operand roles) `FIXED 2026-09-05`
+
+CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemonic with no ISA counterpart; both corrected with the intrinsic and builtin, the phantom removed. Pins: `cap-control-flow.ll`, `cap-valid.s`, `cap-invalid.s`.
+
+### C-37 — relocation type names print as "Unknown" `OPEN — lib/Object/ELF.cpp has no EM_CAPSTONE case`
+
+`Capstone.def` names the relocations `R_Capstone_*`; `llvm-readobj -r` prints "Unknown" for every one because `lib/Object/ELF.cpp` lacks an `EM_CAPSTONE` case at its `EM_RISCV` sites. Cosmetic for tooling, misleading for anyone reading an object dump. XFAIL pin: `reloc-names.s`; the object-view checks in `compiler-used-capability.ll` and the constant-initializer tests accept either spelling until this lands.
+
+### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `OPEN — a backend naming decision`
+
+`parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.
+
+### C-39 — a variable-index vector element access zero-extended its index into the c128 pointer type `FIXED 2026-09-05 (c11b8fb6b162)`
+
+llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
+
+### C-40 — Loop Strength Reduction rewrote a pointer loop's exit test into address arithmetic on NULL, which became a `cincoffset` `FIXED 2026-09-05 (ffcc7347)`
+
+`(gep i8, null, %lsr.iv)` lowered to a cincoffset on the NULL capability, a trap on silicon and under QEMU (cause 2). Found in the RV8 -O2 twins (dhrystone, qsort, aes timeouts, sha512 cause 5). Pin: `c40-null-base-cincoffset.ll`; finding folder `tests/twins/findings/C40-lsr-null-gep-cincoffset/`.
+
+### C-29 — number reserved, nothing filed `RESERVED 2026-09-05`
+
+The validation plan's proposal name for the "mixed scalar/capability lowering" CoreMark finding, re-filed under another number when the work landed. Nothing is filed under C-29; do not reuse it.
+
+### C-30 — number reserved, nothing filed `RESERVED 2026-09-05`
+
+The plan's proposal name for the "shared gp-derived LINEAR table pointer consumed by the first cincoffset" finding, re-filed under another number when the work landed. Nothing is filed under C-30; do not reuse it.
+
+### C-35 — number reserved, nothing filed `RESERVED 2026-09-05`
+
+Reserved for the DROP/DELIN/MREV side-effect ordering defect in case `sem-drop-orders-loads.ll` failed; it passed, so nothing is filed under C-35. Do not reuse it.
+
+### C-42 — number reserved, nothing filed `RESERVED 2026-09-05`
+
+Appears only in this file's allocation example ("grep -n 'C-42'"). Nothing is filed under C-42; do not reuse it.
 
 ---
 
@@ -5019,6 +5178,8 @@ the project lead's call.
 
 ### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `OPEN — SPEC VIOLATION, confirmed in RTL simulation 2026-08-11; NOT yet reported`
 
+> **Sweep 2026-09-05 — cincoffset half GONE at 5097eb166; the INIT half is R-25.** `linear-clear-audit.S` arm 2 prints NOT_CAP (the linear source is consumed); R-25 (INIT with rd ≠ rs1 duplicates the source) is confirmed by directed test, see its entry.
+
 **A linear capability can be copied.** `capstone-spec/parts/intro.adoc:58-61` states the invariant
 normatively -- "instructions can only **move, but not copy**, linear capabilities between
 general-purpose registers" -- and the spec defines each instruction below as `MOVC rd, rs1` plus an
@@ -5123,6 +5284,8 @@ land in both or note the divergence.
 
 ### R-23 — `ldc` never checks WRITE permission, so a READ-ONLY capability can move a linear capability out of memory `FIXED IN RTL 2026-08-12 (fpga-testing-fix, merged); QEMU CANNOT VERIFY IT`
 
+> **Sweep 2026-09-05 — fix present in the resident bitstream.** `ldc-perm-check.S` at 5097eb166 raises on the read-only write.
+
 **Fixed on `fpga-testing-dev`.** `check_load_data` (`capstone_unit.anvilh`) raises
 `INSUFFICIENT_PERMISSION` when the loaded value is linear-family and `rs1` lacks write permission,
 and `load_unit.sv` gates the clear itself on `rs1_perm_write` as a redundant second barrier.
@@ -5204,6 +5367,8 @@ offset is written. Whether the granule's tag also goes clear (which would make t
 harmless) was **not measured** and must be before anyone concludes either way.
 
 ### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `OPEN — SPEC VIOLATION, direction now determinate; NOT yet reported`
+
+> **Sweep 2026-09-05 — re-measured, unchanged.** `excode-base-audit.S` at the flashed commit 5097eb166 (detached worktree): still +1.
 
 **RESOLVED 2026-08-12 against `capstone-spec`, and the answer is the opposite of the first guess
 recorded below.** `capstone-academic-spec/parts/int-except.adoc:19-27` gives the authoritative table:
