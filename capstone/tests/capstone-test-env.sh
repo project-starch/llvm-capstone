@@ -69,4 +69,28 @@ fi
 
 mkdir -p "$CAPSTONE_TMP_ROOT"
 
+# Is the toolchain BINARY as new as the compiler SOURCE? Once per process tree (the export
+# stops nested scripts repeating the 0.5 s ninja dry run). A stale build dir is a WARNING here,
+# not a failure -- sourcing must keep working -- but every producer script inherits the warning
+# on its stderr, and CAPSTONE_REQUIRE_FRESH_TOOLCHAIN=1 makes it fatal. Added 2026-09-05 after
+# C-44: a fast-forwarded checkout with the previous evening's binary built an image with the
+# pre-change jump-table dispatch, and a day went into a compiler defect that did not exist.
+# "cannot check" (rc 2) is reported, never treated as fresh. See toolchain-fresh.py.
+if [ -z "${CAPSTONE_TOOLCHAIN_CHECKED:-}" ]; then
+  export CAPSTONE_TOOLCHAIN_CHECKED=1
+  if command -v python3 >/dev/null 2>&1; then
+    _fresh_build_dir=$(dirname -- "$CAPSTONE_LLVM_BIN")
+    python3 "$CAPSTONE_REPO_ROOT/capstone/tests/toolchain-fresh.py" --build "$_fresh_build_dir" --quiet-if-fresh
+    _fresh_rc=$?
+    if [ "$_fresh_rc" -ne 0 ]; then
+      echo "capstone-test-env.sh: WARNING: toolchain check rc=$_fresh_rc for $_fresh_build_dir (1 = stale, 2 = could not check)" >&2
+      if [ "${CAPSTONE_REQUIRE_FRESH_TOOLCHAIN:-0}" = "1" ]; then
+        echo "capstone-test-env.sh: CAPSTONE_REQUIRE_FRESH_TOOLCHAIN=1: refusing to continue" >&2
+        return 1 2>/dev/null || exit 1
+      fi
+    fi
+    unset _fresh_build_dir _fresh_rc
+  fi
+fi
+
 
