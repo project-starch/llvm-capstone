@@ -589,7 +589,7 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; port of the firmware fix LANDED and verified; NOT FIXED — narrowed to the MIDDLE-slot exact fit, i=8 of 10 (2026-09-05)`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; firmware tail-drop PORTED (control fired; its module hazard LATENT); NOT FIXED — MIDDLE-slot exact fit, i=8 of 10; fix design = hole + sentinel, plans/q03-region-hole-sentinel.md (2026-09-05)`
 
 > ### 2026-09-05 — root cause, port, positive control, and what is left
 >
@@ -621,7 +621,8 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 > exactly the same positions, each printing `0x1235, 0x8, 0xa`; zero `0x1234` anywhere;
 > manifest F 6/6.** So the old spin is gone everywhere it could run, and **the live case is the
 > MIDDLE slot: `i = 8` of `region_n = 10`, all three times.** The tail-only handling — which the
-> firmware also limits itself to — never fires on this path. "Report and stop" is a wedge to the
+> firmware also limits itself to — **prints nothing when it fires**, so whether it fired anywhere
+> in this run is unknown, not "never" (corrected 2026-09-05 after audit). "Report and stop" is a wedge to the
 > batch runner, so **Q-03 is not fixed; it is narrowed to one precisely identified case.**
 >
 > **Fix design, audited before writing (not yet implemented):**
@@ -655,14 +656,41 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >   the ~11 consumer sites listed there. It is a design change, not a patch, and goes through a plan
 >   and a second audit before code.
 >
-> **THE LANDED TAIL PORT HAS A WEAKER FORM OF THE SAME HAZARD (audit incidental 1, verified).**
-> `drop_exact_fit_tail` is the first shrink of `region_n` that is *reachable from the module* —
-> `pop_region` never had an ioctl. A tail drop inside `create_domain` followed by a `create_region`
-> returns an id the module already holds, takes the alert-without-record branch at `:215-216`, and
-> `map_region` returns the consumed fragment's `base_paddr` — pages that now belong to a domain.
-> Manifest B/F did not exercise it (all three wedges were middle-slot), so the 21/24 + 6/6 stand as
-> observations; the port is correct at the monitor level and **exposes a module assumption that
-> was previously unreachable**. Recorded as a defect in what is committed and running.
+> **THE LANDED TAIL PORT IS LATENT, NOT LIVE — second audit 2026-09-05, every file:line re-read.**
+> An earlier version of this paragraph (commit `40cb0d6501bb`, ~40 min) recorded it as "a weaker
+> form of the same hazard ... a defect in what is committed and running". Withdrawn: the drop
+> cannot desync the module through any current program. The argument that survives audit (mine
+> did not — two of its five steps were wrong, the conclusion held on a different route):
+> after every successful `REGION_CREATE` the module's count **equals** the monitor's (record
+> branch `:222-231` gives M = N; probe branch `:307` sets M = N), and the module's own region is
+> the monitor's tail at that moment (`create_region` carves, then appends, `:540-546`). The drop
+> only ever removes index `region_n - 1` (`:264`). That index is either ≥ M — appended after the
+> module's last sync, invisible to it — or M − 1, the module's own most recent region, which no
+> carve can exact-fit because every carve base is a fresh `__get_free_pages` (module `:109`,
+> `:145`, `:197`) and the module never frees those pages (`free_pages` at `:206` is dead: the SBI
+> return path hardwires `a0 = 0`, `sbi_capstone.S:72-74`, so `sbi_res.error` is never set). So
+> M ≤ N is invariant and the "Region ID reuse detected" branch (`:215`) is unreachable from it.
+> Two steps of my own argument are wrong on the record: the module caches monitor-internal
+> fragments on the **first** `REGION_CREATE` of every boot (the outer monitor starts at
+> `region_n = 3`, `sbi_capstone_dom.c:12`, plus five `cap_env_init` carves, so the probe branch
+> fires and copies everything) — `IOCTL_REGION_PROBE` having no caller is true and irrelevant;
+> and `probe_regions` cannot "heal" a desync, because it runs only when the returned id is
+> **above** the module's count (`:217`), never in the desynced case.
+>
+> **Three facts the record needs regardless.** (1) The landed drop is **silent** — no `C_PRINT`
+> in `drop_exact_fit_tail` (`:217-223`) and none on the board's tail path — so every "it did not
+> fire" statement about the tail case, including the one this entry carried, is absence of
+> evidence. (2) Manifest B/F **could not** exercise the module hazard: `capstone-test.user` has
+> `create_region` commented out (`userspace/capstone-test.c:34`), so the module's table was
+> empty for all 24 items. (3) The only desync detector, `pr_alert("Region ID reuse detected")`
+> (`:216`), has never been shown to fire; the other alert (`:316-317`) cannot fire in the desync
+> case because both write paths set `region_id` equal to the index. A clean sweep proves nothing
+> until that alert has a positive control. UNRESOLVED (auditor, not dismissed): `device_ioctl`
+> takes no lock, so two concurrent `REGION_CREATE`s could desync by a route unrelated to the
+> drop; inert under `-smp 1` QEMU, not established for the board kernel. The nested `sbi.dom`
+> payloads that issue `REGION_POP` (`nullb_split.smode.c`, `miniweb_backend.smode.c`) hit the
+> nested monitor's own table (`sbi.dom.c:46`), not the outer one the module caches. Related
+> module defects filed as M-2 and M-3.
 >
 > **RETRACTED (audit incidental 2): the claim that "an array-element assignment inside the tail
 > branch does not parse under either pipeline".** The auditor compiled the inline
@@ -3249,6 +3277,26 @@ returning with a cause proves the handler works.
 
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.
+
+### M-2 — the kernel module's `probe_regions` copies the monitor's region table with no bound against its own array `OPEN — filed 2026-09-05 from the Q-03 audit; verified file:line`
+
+`modcapstone/module/capstone.c:292-306` loops `while(region_n < new_region_n)` writing
+`regions[region_n]`, where `new_region_n` is whatever `REGION_COUNT` returns and `regions[]` is
+`MAX_REGION_N = 64` (`:30`). The QEMU stand-in's pool is also 64 (`sbi_capstone.h:42`), but the
+**board firmware's is 96** (`caplifive-system` `sbi_capstone.h:78`), so a board boot whose
+monitor count passes 64 silently overruns a static kernel array. Nothing checks it on either
+side; no run has been shown to reach it. Interacts with the Q-03 fix design (holes are permanent
+and consume slots) — `plans/q03-region-hole-sentinel.md` open item 3.
+
+### M-3 — every Capstone SBI ecall returns `error = 0`, so the module's failure paths are dead code `OPEN — filed 2026-09-05 from the Q-03 audit; verified file:line`
+
+`sbi_capstone.S:72-74` (stand-in) does `call handle_trap_ecall; mv a1, a0; li a0, 0`: the
+handler's return becomes `value` and `error` is hardwired to 0. So `sbi_res.error` checks in the
+module never fire — the `DOM_CREATE failed` path (`module/capstone.c:128`) and the
+`REGION_CREATE failed` path with its `free_pages` (`:206`) are unreachable, and a monitor-side
+`-1` arrives as a *value* (e.g. a region id of `(unsigned)-1`, which the module then tries to
+probe up to). Consequence for Q-03: "the module never frees region pages" is airtight, which is
+part of why the tail drop is latent. Board copy not yet checked for the same `li a0, 0`.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
