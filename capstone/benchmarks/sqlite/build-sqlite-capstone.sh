@@ -123,7 +123,7 @@ COMMON_FLAGS=(
   -ffreestanding
   -fno-builtin
   -fno-jump-tables
-  -fno-optimize-sibling-calls
+  # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
   -ffunction-sections
   -fdata-sections
   -include "$ADAPTED_DIR/capstone_sqlite_libc.h"

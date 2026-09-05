@@ -53,6 +53,10 @@
 
 using namespace llvm;
 
+// gp-captable ABI switch (defined in CapstoneISelDAGToDAG.cpp). Read in the
+// constructor: the CTTZ action depends on it (see lowerCTTZNoTable).
+extern llvm::cl::opt<bool> CapstoneGpCaptable;
+
 // Defined in CapstoneISelDAGToDAG.cpp; read by lowerDYNAMIC_STACKALLOC so
 // dynamic allocas are narrowed under the same -capstone-shrink-stack flag.
 extern cl::opt<bool> CapstoneShrinkStack;
@@ -412,7 +416,11 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::c128, Expand);
   //===--------------------------------------------------------------------===//
 
-  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  // BR_JT is Custom, not Expand: the generic expansion computes the entry
+  // address in the AS0 pointer type (a 64-bit integer) and loads through it,
+  // which is a capability fault on every Capstone implementation (W-17). See
+  // lowerBR_JT.
+  setOperationAction(ISD::BR_JT, MVT::Other, Custom);
   setOperationAction(ISD::BR_CC, XLenVT, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
   setOperationAction(ISD::SELECT_CC, XLenVT, Expand);
@@ -524,6 +532,15 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   if (Subtarget.hasCTZLike()) {
     if (Subtarget.is64Bit())
       setOperationAction({ISD::CTTZ, ISD::CTTZ_ZERO_UNDEF}, MVT::i32, Custom);
+  } else if (CapstoneGpCaptable) {
+    // Custom under gp-captable only: the generic expansion reaches for a de
+    // Bruijn table in a constant pool, which no derivable capability reaches
+    // under that ABI (see lowerCTTZNoTable). Only CTTZ, never CTTZ_ZERO_UNDEF:
+    // the generic code rewrites each into the other when the other is
+    // LegalOrCustom, and marking both would loop. Not Custom outside the ABI:
+    // that alone makes expandCTTZ route CTTZ_ZERO_UNDEF through CTTZ and add a
+    // zero check to code that never had one (audit finding, 2026-09-05).
+    setOperationAction(ISD::CTTZ, XLenVT, Custom);
   } else {
     setOperationAction(ISD::CTTZ, XLenVT, Expand);
   }
@@ -7948,6 +7965,8 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     return lowerConstantPool(Op, DAG);
   case ISD::JumpTable:
     return lowerJumpTable(Op, DAG);
+  case ISD::BR_JT:
+    return lowerBR_JT(Op, DAG);
   case ISD::GlobalTLSAddress:
     return lowerGlobalTLSAddress(Op, DAG);
   case ISD::Constant:
@@ -8965,6 +8984,9 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::CTTZ_ZERO_UNDEF:
     if (Subtarget.hasStdExtZvbb())
       return lowerToScalableOp(Op, DAG);
+    if (Op.getOpcode() == ISD::CTTZ && !Subtarget.hasCTZLike() &&
+        Op.getValueType() == Subtarget.getXLenVT())
+      return lowerCTTZNoTable(Op, DAG);
     assert(Op.getOpcode() != ISD::CTTZ);
     return lowerCTLZ_CTTZ_ZERO_UNDEF(Op, DAG);
   case ISD::FCOPYSIGN:
@@ -9611,6 +9633,99 @@ SDValue CapstoneTargetLowering::lowerJumpTable(SDValue Op,
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
 
   return getAddr(N, DAG);
+}
+
+// Jump-table dispatch with a CAPABILITY table base (W-17).
+//
+// The generic BR_JT expansion (LegalizeDAG) is
+//     addr  = table + index * entrysize      // in TLI.getPointerTy(): AS0 = i64
+//     entry = sextload entrysize [addr]
+//     brind entry
+// On Capstone the AS0 pointer type is a plain 64-bit integer, so `table` came
+// from getAddr as `lui/addi %hi/%lo(.LJTI)` and the entry load went through a
+// scalar register: "Cap mem access requires capability, rs1 = x10", on QEMU
+// and on silicon alike. Every production build carried -fno-jump-tables to
+// dodge it.
+//
+// Here the table address is materialised the way lowerConstantPool does it, as
+// a capability (LGA -> PseudoCapGlobalBase, a gp-derived NONLIN capability
+// with the whole image in bounds), stepped with CIncOffset, and the entry is
+// loaded through that. Entries are label differences (see getJumpTableEncoding:
+// a domain is linked at 0x10000 and executes at its PCC base, so an absolute
+// entry names an address that is never executed), and the dispatch adds the
+// table's runtime address -- the capability's cursor -- before `brind`, which
+// is an integer jump within PCC.
+//
+// Under -capstone-gp-captable an anonymous .LJTI table has no cap-table slot
+// (C-43), so this lowering cannot help there; areJTsAllowed refuses jump tables
+// under that ABI and the switch lowers to compares.
+SDValue CapstoneTargetLowering::lowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Chain = Op.getOperand(0);
+  auto *JT = cast<JumpTableSDNode>(Op.getOperand(1));
+  SDValue Index = Op.getOperand(2);
+  MachineFunction &MF = DAG.getMachineFunction();
+  const DataLayout &TD = DAG.getDataLayout();
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned EntrySize = MF.getJumpTableInfo()->getEntrySize(TD);
+
+  // The table's address as a capability. Not the i64 JumpTable operand and not
+  // lowerJumpTable: both are typed with the AS0 pointer type.
+  SDValue TableSym = DAG.getTargetJumpTable(JT->getIndex(), MVT::i64);
+  SDValue TableCap = DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, TableSym);
+
+  Index = DAG.getZExtOrTrunc(Index, DL, XLenVT);
+  SDValue Off;
+  if (isPowerOf2_32(EntrySize))
+    Off = DAG.getNode(ISD::SHL, DL, XLenVT, Index,
+                      DAG.getConstant(Log2_32(EntrySize), DL, XLenVT));
+  else
+    Off = DAG.getNode(ISD::MUL, DL, XLenVT, Index,
+                      DAG.getConstant(EntrySize, DL, XLenVT));
+  SDValue EntryAddr =
+      DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::c128, TableCap, Off);
+
+  EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
+  SDValue Entry =
+      DAG.getExtLoad(ISD::SEXTLOAD, DL, XLenVT, Chain, EntryAddr,
+                     MachinePointerInfo::getJumpTable(MF), MemVT);
+
+  SDValue Target = Entry;
+  if (isJumpTableRelative()) {
+    // PIC: entries are offsets from the table. The table's integer address is
+    // the capability's cursor (TRUNCATE c128 -> i64 is PseudoTRUNC_CAP).
+    SDValue TableAddr = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, TableCap);
+    Target = DAG.getNode(ISD::ADD, DL, XLenVT, Target, TableAddr);
+  }
+  return expandIndirectJTBranch(DL, Entry.getValue(1), Target, JT->getIndex(),
+                                DAG);
+}
+
+// cttz without a constant pool, for the gp-captable ABI.
+//
+// TargetLowering::expandCTTZ prefers a de Bruijn lookup table when CTPOP is
+// Expand, and that table is a constant pool. Under gp-captable an anonymous
+// .LCPI constant pool has no cap-table slot (C-43: named globals do, anonymous
+// compiler-generated data does not), so the table's byte load faults out of
+// bounds -- measured under QEMU
+// 2026-09-05, cause 5 at the table's address, -O0 and -O2. This is the same
+// wall a jump table hits (areJTsAllowed). Use the arithmetic form instead:
+// cttz(x) = popcount(~x & (x - 1)); CTPOP then expands to shifts and masks and
+// touches no memory. CTTZ is only marked Custom when gp-captable is on (see the
+// constructor), so outside that ABI the generic expansion runs exactly as
+// before -- marking it Custom unconditionally made the generic code route
+// CTTZ_ZERO_UNDEF through CTTZ and add a zero check the default ABI never had.
+SDValue CapstoneTargetLowering::lowerCTTZNoTable(SDValue Op,
+                                                 SelectionDAG &DAG) const {
+  if (!CapstoneGpCaptable)
+    return SDValue();
+  SDLoc DL(Op);
+  EVT VT = Op.getValueType();
+  SDValue X = Op.getOperand(0);
+  SDValue Tmp = DAG.getNode(
+      ISD::AND, DL, VT, DAG.getNOT(DL, X, VT),
+      DAG.getNode(ISD::SUB, DL, VT, X, DAG.getConstant(1, DL, VT)));
+  return DAG.getNode(ISD::CTPOP, DL, VT, Tmp);
 }
 
 SDValue CapstoneTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
@@ -25180,23 +25295,22 @@ bool CapstoneTargetLowering::shouldConvertFpToSat(unsigned Op, EVT FPVT,
   }
 }
 
+// Jump-table entries are ALWAYS label differences on Capstone, whatever the
+// relocation model says. A domain is linked at one address (0x10000) and
+// executes at another (its PCC base): every code reference the backend emits is
+// PC-relative (auipc, PseudoLLA) and works; an absolute `.word .LBB` entry names
+// the link-time address, and `jr` to it is an instruction access fault at
+// "pc = 0x13c08" -- observed on CoreMark's core_state_transition the moment the
+// table load itself was fixed (W-17). With `.word .LBB - .LJTI` entries the
+// dispatch adds the table's runtime address (the cursor of the table
+// capability), see lowerBR_JT.
 unsigned CapstoneTargetLowering::getJumpTableEncoding() const {
-  // If we are using the small code model, we can reduce size of jump table
-  // entry to 4 bytes.
-  if (Subtarget.is64Bit() && !isPositionIndependent() &&
-      getTargetMachine().getCodeModel() == CodeModel::Small) {
-    return MachineJumpTableInfo::EK_Custom32;
-  }
-  return TargetLowering::getJumpTableEncoding();
+  return MachineJumpTableInfo::EK_LabelDifference32;
 }
 
-const MCExpr *CapstoneTargetLowering::LowerCustomJumpTableEntry(
-    const MachineJumpTableInfo *MJTI, const MachineBasicBlock *MBB,
-    unsigned uid, MCContext &Ctx) const {
-  assert(Subtarget.is64Bit() && !isPositionIndependent() &&
-         getTargetMachine().getCodeModel() == CodeModel::Small);
-  return MCSymbolRefExpr::create(MBB->getSymbol(), Ctx);
-}
+bool CapstoneTargetLowering::isJumpTableRelative() const { return true; }
+// (LowerCustomJumpTableEntry, which produced the absolute EK_Custom32 entries,
+// is gone: no encoding selects it any more.)
 
 bool CapstoneTargetLowering::isVScaleKnownToBeAPowerOfTwo() const {
   // We define vscale to be VLEN/RVVBitsPerBlock.  VLEN is always a power
@@ -26056,6 +26170,28 @@ bool CapstoneTargetLowering::shouldFoldSelectWithSingleBitTest(
 
 unsigned CapstoneTargetLowering::getMinimumJumpTableEntries() const {
   return Subtarget.getMinimumJumpTableEntries();
+}
+
+// Under -capstone-gp-captable (C-43) NAMED globals get cap-table slots and
+// ANONYMOUS compiler-generated data -- a .LJTI jump table, a .LCPI constant
+// pool -- does not: gp is bounded to the cap table (the glue's
+// `split(gp, sp, t1)` leaves gp = the table only), a JumpTableSDNode is not a
+// code symbol to selectLGA, so it falls through to the gp path and the entry
+// load faults OOB at the table's own address (measured under QEMU with the knob
+// below). Until jump tables are placed in cap-table-managed data, the backend
+// refuses them under that ABI rather than relying on every build script to
+// pass -fno-jump-tables. The function attribute still applies on top.
+static cl::opt<bool> CapstoneGpCaptableJumpTables(
+    "capstone-gp-captable-jump-tables", cl::Hidden, cl::init(false),
+    cl::desc("Allow jump tables under -capstone-gp-captable. Experimental: the "
+             "table sits in .rodata, which no capability reaches under that ABI, "
+             "so the dispatch load faults; exists to measure exactly that and "
+             "for work on placing tables in cap-table-managed data."));
+
+bool CapstoneTargetLowering::areJTsAllowed(const Function *Fn) const {
+  if (CapstoneGpCaptable && !CapstoneGpCaptableJumpTables)
+    return false;
+  return TargetLowering::areJTsAllowed(Fn);
 }
 
 SDValue CapstoneTargetLowering::expandIndirectJTBranch(const SDLoc &dl,

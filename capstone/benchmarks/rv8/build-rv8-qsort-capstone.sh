@@ -44,7 +44,7 @@ COMMON_FLAGS=(
   -Xclang +m
   -ffreestanding
   -fno-builtin
-  -fno-jump-tables
+  # jump tables: -fno-jump-tables retired 2026-09-05 -- the backend now loads the table through a capability and uses label-difference entries (W-17 fixed; llvm/test/CodeGen/Capstone/jump-table.ll)
   "$DOMAIN_OPT_LEVEL"
   -include "$ADAPTED_DIR/rv8_capstone_preamble.h"
   -I"$ADAPTED_DIR"

@@ -44,7 +44,8 @@ void domain_main(unsigned *res, unsigned func) { (void)func; *res = reada(0) + r
 EOF
 
 for f in a b main; do
-  "$CLANG" -target capstone64-unknown-elf -ffreestanding -fno-jump-tables \
+  # jump tables: -fno-jump-tables retired 2026-09-05 -- the backend now loads the table through a capability and uses label-difference entries (W-17 fixed; llvm/test/CodeGen/Capstone/jump-table.ll)
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding \
     -mllvm -capstone-gp-captable -O1 -c "$WORK/$f.c" -o "$WORK/$f.o" || exit 2
 done
 "$CLANG" -target capstone64-unknown-elf -ffreestanding -DCAPSTONE_GLUE_YIELD=1 \
@@ -122,7 +123,7 @@ NONLTO=$?
 echo
 echo "== the remedy: one module, via full LTO"
 for f in a b main; do
-  "$CLANG" -target capstone64-unknown-elf -ffreestanding -fno-jump-tables \
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding \
     -flto -mllvm -capstone-gp-captable -O1 -c "$WORK/$f.c" -o "$WORK/$f.lto.o" || exit 2
 done
 # The pass is a cl::opt read at CODEGEN time, and under LTO codegen happens in the

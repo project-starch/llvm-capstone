@@ -431,11 +431,7 @@ public:
   bool shouldConvertFpToSat(unsigned Op, EVT FPVT, EVT VT) const override;
 
   unsigned getJumpTableEncoding() const override;
-
-  const MCExpr *LowerCustomJumpTableEntry(const MachineJumpTableInfo *MJTI,
-                                          const MachineBasicBlock *MBB,
-                                          unsigned uid,
-                                          MCContext &Ctx) const override;
+  bool isJumpTableRelative() const override;
 
   bool isVScaleKnownToBeAPowerOfTwo() const override;
 
@@ -538,6 +534,8 @@ private:
   SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerCTTZNoTable(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSELECT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
@@ -693,6 +691,7 @@ private:
                                          const APInt &AndMask) const override;
 
   unsigned getMinimumJumpTableEntries() const override;
+  bool areJTsAllowed(const Function *Fn) const override;
 
   SDValue emitFlushICache(SelectionDAG &DAG, SDValue InChain, SDValue Start,
                           SDValue End, SDValue Flags, SDLoc DL) const;

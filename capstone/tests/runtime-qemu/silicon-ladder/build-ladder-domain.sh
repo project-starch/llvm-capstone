@@ -83,13 +83,15 @@ mkdir -p "$OBJ_DIR" "$(dirname -- "$OUT")"
 SILICON_FLAGS=(-mllvm -capstone-gp-captable
                -mllvm -capstone-shrink-stack=false
                -mllvm -capstone-shrink-globals=false
-               -fno-jump-tables)
-# -fno-jump-tables: a dense `switch` otherwise lowers to a table of code addresses
-# in .rodata plus an indirect `jr`. In a gp-captable domain .rodata is not reachable
-# as plain data (globals come from the gp cap-table), so loading the table faults:
-# "Cap mem access requires capability" -> "domain halted by capability fault:
-# cause = 24" with a wild PC, which looks exactly like a domain crash. Costs a few
-# compares; without it any switch-heavy workload (SQLite) breaks this way.
+               # jump tables: -fno-jump-tables retired 2026-09-05 -- under -capstone-gp-captable the backend refuses jump tables itself (no capability reaches .rodata; W-17), so the flag was redundant here
+              )
+# Jump tables: a dense `switch` would lower to a table of code addresses in .rodata
+# plus an indirect `jr`, and in a gp-captable domain named globals get cap-table slots
+# while anonymous compiler-generated data (a .LJTI table, a .LCPI constant pool) does
+# not (C-43), so the table load faults out of bounds. Since 2026-09-05 the backend refuses jump tables
+# under -capstone-gp-captable itself (areJTsAllowed; measured: a forced table faults,
+# cause 5 at the table's address), so this script no longer passes -fno-jump-tables.
+# The same wall applies to constant pools; cttz uses its arithmetic form under this ABI.
 # +m: native integer multiply (CVA6 has the M extension) instead of a __muldi3
 # libcall the freestanding domain can't link.
 MARCH_FLAGS=(-Xclang -target-feature -Xclang +m)

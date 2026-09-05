@@ -29,3 +29,19 @@ twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	p
 twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
 twin rv8 off/on W-05 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	
 workaround	2026-09-05	W-08	slt	-O2	IDENTICAL-IMAGES	qemu=5dc356547d7f@2026-09-04T22:34
+twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	off-ONLY-FAIL	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	aes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	dhrystone	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	miniz	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	norx	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	primes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	
+twin coremark off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=1	coremark	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	aes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	dhrystone	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	miniz	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	norx	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	primes	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	qsort	AGREE-PASS	
+twin rv8 off/on W-17 -O2 qemu=5dc356547d7f@2026-09-04T22:34 images-differing=2	sha512	AGREE-PASS	

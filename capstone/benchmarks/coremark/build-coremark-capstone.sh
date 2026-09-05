@@ -66,16 +66,19 @@ COMMON_FLAGS=(
   -o "$OBJ_DIR/coremark_domain.o"
 
 # core_state.c: compile with core_init_state renamed so the local override wins.
-# -fno-jump-tables: core_state_transition has a multi-way switch.  At -O2 the compiler
-# generates a jump table with 32-bit integer addresses and loads from it via plain `lw`
-# (using a GP-derived integer as the base).  In cap_mem mode, `lw` requires a capability
-# base, so the scalar table lookup crashes with "cap mem access requires capability".
-# Disabling jump tables forces if-else chains which use only capability-safe operations.
-# -fno-optimize-sibling-calls: core_bench_state ends with a crc16 tail call; the Capstone
-# backend emits `cjalr ra, 0x0(a2)` (a call) rather than restoring ra then `cjalr zero`,
-# so crc16 "returns" to core_state_transition's entry instead of the real caller.
-# Same backend bug as core_bench_matrix; same workaround.
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -fno-optimize-sibling-calls \
+# core_state_transition has a multi-way switch that becomes a jump table.  Until
+# 2026-09-05 this file passed -fno-jump-tables (W-17): the backend loaded the table entry
+# through an integer register ("cap mem access requires capability") and the entries were
+# absolute link-time addresses.  Both are fixed in the backend (capability table base,
+# label-difference entries; llvm/test/CodeGen/Capstone/jump-table.ll), and the W-17 pair
+# on this benchmark at -O2 is AGREE-PASS with jump tables on, so the pin is retired.
+# core_bench_state ends with a crc16 tail call.  Until 2026-09-05 this file passed
+# -fno-optimize-sibling-calls (W-16) because the backend emitted `cjalr ra, 0x0(a2)` (a
+# call) for a tail call instead of restoring ra and `cjalr zero` (C-28).  C-28 is fixed
+# (tail-call.ll), the W-16 pair on this benchmark at -O2 is AGREE-PASS with sibling calls
+# on, and the coremark_matrix rung built with sibling calls returned 14343 on silicon
+# (board-results/2026-09-05.tsv, B4), so the pin is retired.
+"$CLANG" "${COMMON_FLAGS[@]}" \
   -Dcore_init_state=core_init_state_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_state.c" \
   -o "$OBJ_DIR/core_state.o"
@@ -93,8 +96,8 @@ COMMON_FLAGS=(
 #   ldc-then-cincoffset sequence faults with helper_cscincoffset/rs1_v->tag.
 # - core_matrix_capstone.c: uses a local capability-safe matrix initializer while
 #   the upstream function still triggers a mixed scalar/capability lowering bug.
-# - core_state.c: -fno-jump-tables avoids scalar switch-table `lw` in cap_mem mode
-#   (see comment at core_state.c compile step above).
+# - core_state.c: jump tables and sibling calls are on again since 2026-09-05 (W-17,
+#   W-16 retired; see the comment at the core_state.c compile step above).
 # - core_util.c: avoid compiler-generated switch tables of capability-valued
 #   addresses until generic static-cap table materialization exists.
 #   Also compiled at -O0 to prevent loop-to-table transformation in crcu8:
@@ -117,7 +120,7 @@ COMMON_FLAGS=(
 # - core_portme.c runs all three algorithms (COREMARK_DEFAULT_EXECS=7) so that
 #   core_init_matrix is called and mat_params is populated with valid NONLIN caps
 #   before core_bench_matrix is invoked from calc_func during list traversal.
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O1 \
+"$CLANG" "${COMMON_FLAGS[@]}" -O1 \
   -Dcore_list_init=core_list_init_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_list_join.c" \
   -o "$OBJ_DIR/core_list_join.o"
@@ -126,7 +129,7 @@ COMMON_FLAGS=(
   -c "$SCRIPT_DIR/core_list_capstone.c" \
   -o "$OBJ_DIR/core_list_capstone.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables \
+"$CLANG" "${COMMON_FLAGS[@]}" \
   -c "$SCRIPT_DIR/core_state_capstone.c" \
   -o "$OBJ_DIR/core_state_capstone.o"
 
@@ -135,13 +138,11 @@ COMMON_FLAGS=(
 # - core_init_matrix renamed so core_matrix_capstone.c override wins.
 # - Inner matrix loops trigger LINEAR row/col pointer hoisting at runtime;
 #   -O0/-O1 -fno-inline crash the LLVM backend (i128 shift / UNREACHABLE), so -O2.
-# - core_bench_matrix tail-calls crc16 via `cjalr ra, imm(a2)` (a CALL, not a jump),
-#   setting ra=next_inst=0x11b84=matrix_test entry.  crc16's return then lands at
-#   matrix_test with garbled registers → cincoffset crash.  This is a Capstone backend
-#   tail-call lowering bug (should restore ra then emit `cjalr zero`).
-#   Workaround: -fno-optimize-sibling-calls disables the bad tail call so core_bench_matrix
-#   generates a proper call+epilogue instead.
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-optimize-sibling-calls \
+# - core_bench_matrix tail-calls crc16.  Until 2026-09-05 the backend emitted that as
+#   `cjalr ra, imm(a2)` (a CALL, not a jump), so crc16's return landed at matrix_test with
+#   garbled registers (C-28).  Fixed in the backend (restore ra, `cjalr zero`; tail-call.ll);
+#   the -fno-optimize-sibling-calls pin (W-16) is retired, see the note above core_state.c.
+"$CLANG" "${COMMON_FLAGS[@]}" \
   -Dcore_init_matrix=core_init_matrix_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_matrix.c" \
   -o "$OBJ_DIR/core_matrix.o"
@@ -150,14 +151,14 @@ COMMON_FLAGS=(
   -c "$SCRIPT_DIR/core_matrix_capstone.c" \
   -o "$OBJ_DIR/core_matrix_capstone.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
+"$CLANG" "${COMMON_FLAGS[@]}" -O0 \
   -Dcrcu8=crcu8_upstream_unused \
   -Dcrcu16=crcu16_upstream_unused \
   -Dcheck_data_types=check_data_types_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
+"$CLANG" "${COMMON_FLAGS[@]}" -O0 \
   -c "$SCRIPT_DIR/core_util_capstone.c" \
   -o "$OBJ_DIR/core_util_capstone.o"
 

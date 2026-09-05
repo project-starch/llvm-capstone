@@ -1383,3 +1383,114 @@ without re-baselining the manifest — the gate working — and the manifest was
 its own commit. dev now carries the cycle-2 compiler; the default ABI is unchanged (the
 gp-captable default and the DELIN drop are cycle 3), and the one visible change for other
 lanes is the pointer-round-trip warning, which fires in SQLite's amalgamation as a warning.
+
+### Execution log — cycle 3, item 1: jump tables (W-17), and the .rodata wall (2026-09-05, ~07:30)
+
+**The design note above was half right.** The table LOAD did go through an integer (the
+generic BR_JT expansion computes `table + index*4` in the AS0 pointer type), and a custom
+`lowerBR_JT` with a capability base (LGA -> PseudoCapGlobalBase, `cincoffset`, `lw`) fixes
+that half. Two things it did not foresee:
+
+1. **Entries must be label differences.** With the capability base but the old absolute
+   `.word .LBB` entries (EK_Custom32), CoreMark's `core_state_transition` dispatch still
+   failed — an instruction access fault AT the target, cause 1, pc = 0x13c08, the link-time
+   address. A domain does not execute at its link address; every other code reference the
+   backend makes is PC-relative and works. `getJumpTableEncoding` now returns
+   EK_LabelDifference32 unconditionally and the dispatch adds the table's runtime address
+   (the cursor of the table capability, `TRUNCATE c128 -> i64`) before `jr`. RV8's seven
+   benchmarks had passed with absolute entries in the same intermediate build, which is the
+   counterexample the auditor was asked to attack (verdict below).
+2. **Under gp-captable no capability reaches .rodata at all**, so no table lowering can work
+   there: gp is bounded to the cap table and only globals with a slot are addressable. The
+   build-script comment said so; the premise was then measured rather than trusted, with a
+   hidden knob (`-capstone-gp-captable-jump-tables`) that lets a table through: the dispatch
+   load faults OOB at the table's own address (cause 5, rs1 = x10, cursor 0x10156105c), while
+   the same source with the table refused returns the native 7419. So `areJTsAllowed` refuses
+   jump tables under that ABI, which makes the twelve `-fno-jump-tables` pins redundant on
+   the silicon path and is honest about the state: SQLite's VDBE dispatch stays a compare
+   tree on silicon until tables live in cap-table-managed data (a descriptor slot like a
+   global, initialised by the glue's copy path). **That relocation is a scope item for the
+   lead**, not something this session decided.
+
+**The same wall takes cttz.** C-20's fix uses the generic de Bruijn lookup table, a constant
+pool in .rodata. Under gp-captable it faults OOB at -O0 and -O2 (cursor 0x1015a1047), never
+exercised by a board rung because no rung has a `cttz`. Under that ABI cttz now lowers to
+`popcount(~x & (x-1))` (arithmetic, no memory; only ISD::CTTZ is Custom, never ZERO_UNDEF,
+because the generic code rewrites each into the other when the other is LegalOrCustom and
+marking both would loop); the default ABI keeps the table. Controls after the fix: 41 = native
+at -O0 and -O2 under gp-captable and in the default ABI. Any other constant pool under
+gp-captable is the same latent fault; none exists in the corpus today (the SQLite -O1 domain
+ran 1031 records on silicon), which is luck, not a guarantee — same scope item.
+
+**Red first.** `jump-table.ll` failed on the cycle-2 compiler (the `%hi(.LJTI)` integer
+path) and pins, at -O0/-O1/-O2, `auipc %pcrel_hi(.LJTI)`, `cincoffset gp`/`delin`,
+`cincoffset`, `lw`, `add`, `jr`, `.word .LBB-.LJTI`, plus the gp-captable arm (no table) and
+the knob arm (table back). `c20-cttz.ll` gained a TABLE arm (constant pool present in the
+default ABI) and CAPTABLE arms (absent). The coverage gate lists the new flag; 0 gaps.
+
+**QEMU verdicts on the final compiler (lib 57b5c5846ec3):** Capstone lit 107/107; the W-17
+pairs at -O2 with jump tables ON: CoreMark AGREE-PASS, RV8 7/7 AGREE-PASS; a default-ABI
+switch domain 7419. **Pins retired** with a dated note each: `-fno-jump-tables` in
+build-coremark-capstone.sh (5), the five rv8 scripts, build-beebs-newlib-log-capstone.sh,
+multi-tu-slot-collision.sh (2), and — redundant under the backend rule — build-sqlite-silicon.sh
+and build-ladder-domain.sh (a silicon rung, k800, is byte-identical with and without the
+flag: b2d60e525f807ea4). Left alone: build-ladder-base-fpga.sh (the plain-riscv64 baseline
+half) and the two frozen copies under fpga-repros/. **W-16 retired too**: its board condition
+(an -O2 CoreMark image with sibling calls on, on the current bitstream) was met by the
+coremark_matrix rung in B4 (14343, control 4), so `-fno-optimize-sibling-calls` left
+build-coremark-capstone.sh (2), build-sqlite-capstone.sh and build-sqlite-silicon.sh.
+CLASSIFICATION.tsv: W-17 FIXED (cycle 3), W-16 FIXED (C-28), pin retired.
+
+**After the retirements:** CoreMark -O0 and -O2 through the final script PASS (one boot-login
+infra flake on the way, retried by the harness; the image was byte-identical to the
+W-17 OFF-arm image that had passed, d6a791796abc0aa5); BEEBS newlib-log -O0 PASS; the
+multi-tu probe prints its designed "separate objects collide; LTO does not" summary
+(exit 1 is that probe's documented result, unchanged). Two of my own invocations were wrong
+and are rerun through the twin runners (RV8 -O0 had the host binary outside the guest share;
+the SLT runner wants an absolute test path) — results below, together with BEEBS -O2 as the
+wide check and the auditor's verdict on the absolute-entry mechanism.
+
+**Audit of the jump-table claims (claim-auditor, 2026-09-05, ~07:45)** — three refutations
+and two blocks, all acted on before the commit:
+
+- *Absolute entries.* The CoreMark cause-1 fault was **recalled**, not recorded: the pair
+  runner wipes its tree, so the artifact was gone. And my RV8 "control" (7/7 with absolute
+  entries) was **void**: the compiler was rebuilt mid-run, and RV8's only tabled benchmark
+  (miniz, last in the list) was built after the swap. So the mechanism was re-established
+  with a kept artifact: the compiler temporarily emitting absolute entries (EK_BlockAddress),
+  a default-ABI switch domain whose table reads 0x00010268, 0x000103a4… (link addresses),
+  and the run halting with **cause 1 at pc = 0x10338, one of the table's own entries** —
+  log under `/tmp/capstone/board-cycle2/absentry/`, outside any runner's wiped path. QEMU's
+  own trace fixes the link-vs-runtime relation: the dispatch load at link 0x102b4 executes
+  at "pc = 1015602b4, pcc_base = 101560000". Recorded, not recalled.
+- *The guard could not fire.* `CHECK-NOT: .word .LBB0_{{[0-9]+}}$` — a bare `$` is a literal
+  dollar to FileCheck. Fixed to `{{\.word \.LBB0_[0-9]+$}}` and checked both ways: an
+  absolute entry in the input → exit 1, label differences only → exit 0.
+- *A comment contradicted the code* (lowerBR_JT still described absolute entries) and
+  `LowerCustomJumpTableEntry` was dead; both gone.
+- *"No change outside gp-captable" was false*: marking CTTZ Custom unconditionally made the
+  generic expansion route CTTZ_ZERO_UNDEF through CTTZ and add a zero check to the default
+  ABI's zero-poison form. CTTZ is now Custom only when gp-captable is on; `cttz64_zu` in
+  c20-cttz.ll pins the absence of that check in the default ABI (its mutation is the
+  unconditional action).
+- *Wording*: "no capability reaches .rodata" is stronger than the evidence (whether `sp`'s
+  half of the split spans .rodata is unresolved). Everything now says "no capability the
+  compiler can derive a global address from reaches .rodata".
+
+**Two process slips of my own, same day, same class**: the compiler was rebuilt while a
+QEMU suite was mid-run twice (the RV8 pair above; then a BEEBS twin that started building
+under the absolute-entry experiment compiler, killed by PID tree and rerun). A shared-libs
+build swaps the compiler under a running suite silently. Saved as a memory note; the rule
+was already in my constraints and was not followed.
+
+**Final validation, all on the committed-state compiler after its last rebuild (~08:20):**
+Capstone lit 107/107; coverage gate 0 gaps; the six QEMU controls at their expected values
+(cttz 41 under gp-captable at -O0/-O2 and in the default ABI; forced table OOB; refused
+switch 7419; default-ABI switch with tables 7419); CoreMark -O2 PASS through the final
+script; RV8 twins 7/7 at -O0 and -O2; SQLite SLT twins with sibling calls on, q_two -O1
+AGREE (2 records) and select1 -O2 AGREE (1031 records, 0 failures); BEEBS -O2 twin 81/81;
+BEEBS newlib-log -O0 PASS. The board lane filed the .rodata finding as **C-43** with the
+sharper line — named globals get cap-table slots, anonymous compiler-generated data (.LJTI,
+.LCPI) does not; the -O1 SQLite silicon domain's 48 KB of named .rodata is reached and it
+has 0 LCPI labels — and the code comments now say it that way. Committed as one change:
+lowering, refusal, cttz, tests, coverage list, classification rows, retired pins.

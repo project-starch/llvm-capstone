@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build the SQLite domain in the SILICON config (stage S5 of the SQLite-on-silicon plan).
 #
-#   -capstone-gp-captable + gp-free call/ret + shrink OFF + -fno-jump-tables,
+#   -capstone-gp-captable + gp-free call/ret + shrink OFF (the backend refuses jump
+#   tables under gp-captable by itself; the -fno-jump-tables pin was retired 2026-09-05),
 #   descriptor-driven entry glue, one translation unit, globals offset sized to .text.
 #
 # Differences from build-sqlite-capstone.sh, and why each one is needed:
@@ -2546,7 +2547,7 @@ SILICON=(-mllvm -capstone-merge-string-constants=true
          -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
          -mllvm -capstone-shrink-globals=false
-         -fno-jump-tables
+         # jump tables: -fno-jump-tables retired 2026-09-05 -- under -capstone-gp-captable the backend refuses jump tables itself (no capability reaches .rodata; W-17), so the flag was redundant here
          # Tells domain sources they are on the gp-captable ABI, where every global is
          # reached through a cap-table storage capability that is ALREADY NONLIN. Domain
          # code must not delin such a capability: the RTL's DELIN takes CAP_TYPE_LINEAR
@@ -2576,7 +2577,8 @@ read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-} ${SQLITE_DIAG:-}"
 SILICON+=("${_extra_mllvm[@]}")
 
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-        -ffreestanding -fno-builtin -fno-optimize-sibling-calls
+        # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
+        -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
         -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")

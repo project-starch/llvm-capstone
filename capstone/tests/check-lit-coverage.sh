@@ -151,6 +151,7 @@ CAPSTONE_FLAGS = {
   "capstone-memcpy-high-half-fixup": "bool", "capstone-memcpy-high-half-fixup-max-bytes": "num",
   "capstone-memcpy-fixup-no-stc": "bool", "capstone-memcpy-fixup-no-plain-stores": "bool",
   "capstone-lower-memops-via-libcall": "bool", "capstone-cap-init-limit": "num", "capstone-cap-init-print": "bool",
+  "capstone-gp-captable-jump-tables": "bool",
 }
 if "flags" in sections:
     runs = [r for t in cg_text.values() for r in RUN.findall(t)]
