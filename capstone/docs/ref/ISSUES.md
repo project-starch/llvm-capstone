@@ -591,7 +591,7 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; firmware tail-drop PORTED (control fired; its module hazard LATENT); NOT FIXED — MIDDLE-slot exact fit, i=8 of 10; fix design = hole + sentinel, plans/q03-region-hole-sentinel.md, AUDITED 2026-09-05, implementing (2026-09-05)`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `FIXED in the QEMU stand-in 2026-09-05 — hole + region_live[] sentinel (plans/q03-region-hole-sentinel.md); fw_jump ca218db97d53 / sbi.dom ba3a8dca38e3; manifest B 24/24 ×2 with the hole at item 8 reading i=8 n=10 as predicted, F 6/6, five REV_TRANSFERRED probes green. Board firmware NOT changed (same site, lead's call)`
 
 > ### 2026-09-05 — root cause, port, positive control, and what is left
 >
@@ -701,6 +701,54 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 > form that shipped is fine; the *reason* recorded for it is not, and the code comments in both
 > copies (`:213-217`) carry the wrong reason until the next change there.
 >
+> **FIXED in the stand-in (2026-09-05, final build `fw_jump ca218db97d53`, `sbi.dom ba3a8dca38e3`).** The
+> hole + `region_live[]` design from the plan, implemented in both monitor copies and both init
+> files, parse-checked under both Capstone-C pipelines with a negative control, rebuilt under the QEMU
+> lock with the artifact gate positive-controlled against the pre-fix source (the gate's first form
+> grepped `0x1236` and could never fire: Capstone-C emits immediates in DECIMAL, `li a1, 4662` — the
+> same slip CLAUDE.md already names). Readings, against the predictions written before the build:
+>
+> | criterion (plan) | predicted | read |
+> |---|---|---|
+> | manifest B, replayed twice | 24/24 RET, zero `0x1234`/`0x1235` | **24/24 and 24/24**, zero both |
+> | first `0x1236` | item 8 (`fill02-b5`) | **item 8, `i = 8, region_n = 10`** — the exact wedge coordinates |
+> | later holes | record, do not predict | `fill02-b11` (9/11), `fill10-b11` (11/13); identical in every run (five replays of B across two builds agree) |
+> | `0xdeadbeef` / untagged `lcc` on stderr | 0 / 0 | **0 / 0** |
+> | `RET 18446744073709551615` or `262150125` | none | **none** |
+> | `0x1237` (pool full) / `0x1238` (`!linear` exact fit) | 0 / 0 | **0 / 0** |
+> | manifest F (determinism replay) | 6/6 | **6/6** |
+> | borrow-cost, revoke-cost, hier-revoke, revoke-on-free, intra-domain-mrev-revoke probes | pass | **all five pass** |
+> | end-of-boot `region_n` | record | 13 after 24 items + 3 holes (last hole print); 64 available |
+> | module-consistency loader (`tests/runtime-qemu/q03-region-hole-check/`), 8 items + check in one boot | count agrees; fresh region `qlen=4096 mmap=ok write=1`; out-of-range share rejected; hole share rejected; no module alerts | **count=10; region id=11 qlen=4096 mmap=ok write=1; oob_share retval=4294967295; hole_share id=8 retval=4294967295; dmesg reuse=0 fetchfail=0** |
+>
+> **One anomaly, recorded as a rate:** on the attempt-3 build (identical exact-fit logic, plus the
+> REV_TRANSFERRED widening later reverted — Q-05) the first B replay stalled at item 3 (`fill01-b3`,
+> an image that returned at that position in every other run), with no monitor print of any kind and
+> the loader's last line `Segment size = 130c8`, i.e. mid-read of the `.dom` over the 9p share; the
+> runner rebooted and the remaining 21 items returned. Four further replays of B (two per build) had
+> no stall: **1 in 5 boots**, same shape as the compiler lane's aha-mont64 "guest-shell stall on the
+> loader's cp" the same afternoon. Nothing in it implicates the monitor; nothing excludes it. Named in
+> the sweep record as the 9p-read stall so both can point at one signature.
+>
+> **Second regression, found only by the consistency loader's out-of-range share (the replays could not
+> see it):** the first hole build's guards `if(region_id >= region_n || region_live[region_id] == 0)`
+> read `region_live[id]` for an out-of-range id and took an M-mode bounds fault inside the 512-byte
+> array (`cursor = base + 100*8`, cause 5), killing the host process and forcing a guest reboot —
+> **Capstone-C does not short-circuit `||`** (`LogicalOr` lowers to a plain integer `Or`,
+> `capstone-c/src/dag_builder.rs:1095`, `dag.rs:418`). The pre-fix guard had no array access, so an
+> out-of-range id used to return `-1`. Fixed by writing the range check and the table read as two
+> statements at all six sites; the final build's `oob_share retval=4294967295` is the regression test.
+>
+> **Regression found and scoped out:** extending the hole to `REV_TRANSFERRED` slots (auditor's
+> suggestion, spec-correct) made the intra-domain-mrev-revoke probe's host observer fault — it reads
+> transferred pages through QEMU's tagged duplicate. Reverted; filed as **Q-05**.
+>
+> **What this does NOT cover:** the board firmware (`caplifive-system-dev`, `CAPSTONE_SPLIT_EXACT_FIT`)
+> still spins on a middle-slot exact fit; the same patch applies but needs a firmware rebuild and a
+> board session — the lead's call. And the module-side detector (`Region ID reuse detected`) has
+> still not been positive-controlled (plan open item 0): the module-consistency loader's checks do
+> not depend on it, see the plan.
+>
 > **Also recorded:** the two `caplifive-sbi` checkouts are on **diverged lines** one commit apart
 > each way from `2f772bb` (`04ac643` template-copy vs `1a926b0` "carve gp only for images that
 > declare a globals region", the latter on no remote until today); 185 differing lines, all in the
@@ -751,6 +799,35 @@ ordinary infra flake. The first two are answerable off-board with the reproducer
 `-O0`-only compiler defect, and retracted it after re-running the wedged image first-in-boot. Their
 campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
 Applies equally to board arms.
+
+## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `OPEN — QEMU divergence with a test riding on it, filed 2026-09-05`
+
+`shared_region_annotated` with `CAPSTONE_ANNOTATION_REV_TRANSFERRED` moves the region's LINEAR
+capability into the domain and clears its CPMP mapping, but leaves `regions[region_id]` as it was
+(`sbi_capstone.c:608-620`, the code's own `TODO: ... free list`). On silicon a linear `ldc` nulls its
+source, so that slot is empty afterwards; on QEMU `csldc` leaves a **tagged duplicate** (same
+divergence family as Q-04). The monitor's CPMP-miss handler `swap_cpmp` (`:1008-1046`) then serves a
+**host** access to the transferred pages through that duplicate, so on QEMU the host keeps reading
+and writing memory it has given away, and the access faults only if the domain has revoked the
+lineage (the duplicate goes untagged and `cap_base` trips — `intra_domain_mrev_revoke_probe_guest.c:22-28`
+documents that path).
+
+**A nightly-green test depends on the divergence.** `run-intra-domain-mrev-revoke-probe.sh`'s
+control arm `held_no_revoke_ok` (`:161-164`, "no revoke, and the deref succeeds") has the HOST read
+the arena through its Linux `mmap` *after* transferring it; on a spec-following monitor that read has
+no authority and faults (cause 24, `badaddr` = the arena). Observed 2026-09-05: with the Q-03 hole
+fix extended to `REV_TRANSFERRED` (the slot marked dead, duplicate dropped), every other arm of the
+probe and the four sibling REV_TRANSFERRED probes passed, and `held_no_revoke_ok` faulted exactly
+there — `swap_cpmp` printed the arena address, `region_n`, then `0xdeadbeef 0x2`, and the domain-fault
+line `cause = 24, badaddr = 0x10148b008`. **So the hole is what silicon does, and the probe encodes
+QEMU.** The extension was **reverted** to keep Q-03 to the exact-fit case (monitor comment at the
+site names this entry); the probe's host-side observer needs redesigning before the site can change
+— e.g. a non-transferring share for the control, or observing through a second domain — and that is
+a test-semantics decision, not a monitor patch.
+
+Also implied, unverified: on the **board firmware** the same host access after a transfer hits
+`cap_base` on a nulled slot inside `swap_cpmp`, i.e. an M-mode capability exception with no print —
+one candidate shape for a silent host-side wedge after a transfer-annotated share.
 
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
