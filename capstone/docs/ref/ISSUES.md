@@ -3924,6 +3924,42 @@ seconds of emulation, and R-1's diagnostic family can finally be developed off-b
 
 ## Compiler / toolchain (ours)
 
+### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `OPEN — LATENT on silicon; class-level, not one bug`
+
+**Reported by the compiler lane 2026-09-05 from cycle-3 work under QEMU; the artifact claim
+verified here.** Two instances, one mechanism.
+
+**The mechanism, and it is by design.** Under the gp-captable ABI `gp` is bounded to the
+capability table (`split(gp, sp, t1)` in the glue; QEMU prints it as one 32-byte table), and
+globals are reached through `ldc gp[i]`. That works for **named** globals, which get slots and whose
+initialised image is copied into `dom_data` by the monitor. It does **not** work for data the
+compiler emits anonymously into `.rodata`: **jump tables** and **constant pools** have no slot, and
+no capability the compiler can derive reaches them.
+
+| instance | symptom under gp-captable | status |
+|---|---|---|
+| a jump table (forced through a hidden knob) | OOB at the table's own address, cause 5, `rs1 = x10`, cursor `0x10156105c` = link `0x1105c` | backend now **refuses** jump tables under this ABI (`areJTsAllowed`); the twelve `-fno-jump-tables` pins were redundant and are retired; silicon images byte-identical either way |
+| the de Bruijn table behind the `cttz` fix (compiler lane's C-20) | OOB at `-O0` and `-O2`, cursor inside the pool | fixed by **avoidance**: under gp-captable `cttz` lowers to `popcount(~x & (x-1))` and no pool exists; the default ABI keeps the table. QEMU: 41 = native at both levels |
+
+**Why nothing showed until now — checked, not assumed.** No board rung has a `cttz`, and the
+`-O1` silicon SQLite domain (`sqslt1.dom`, 1031 records on the board) has **0 `LCPI` constant-pool
+labels** — verified with `llvm-nm` on the artifact — while carrying a 48 KB `.rodata` of *named*
+data that the cap table does reach. So the corpus passes because nothing in it happens to
+generate anonymous data under this ABI. **That is luck, not a guarantee**, and it is the CLAUDE.md
+class "directed tests that come back clean without ever creating the triggering condition": any
+future source that makes the backend emit a constant pool — a float literal, a large switch that
+survives the JT refusal as a lookup, a vector splat — faults on silicon with no warning.
+
+**The real fix is a scope item with the lead:** place compiler-generated tables in
+cap-table-managed data so they get a slot. Until then the two avoidances above hold, and the
+hazard should be assumed live for any new construct.
+
+**Related fact, same work, worth its own line:** jump-table entries on this target **must be
+label differences, not absolute addresses.** A domain is linked at `0x10000` and executes at its
+PCC base, so an absolute-entry switch domain halts with cause 1 at `pc = 0x10338` — one of its own
+table entries. Log kept at `/tmp/capstone/board-cycle2/absentry/` (scratch).
+
+
 ### C-41 — the compiler's `return` encodes `rd = 0`, which faults on silicon every time `FIXED in cycle 2 (compiler lane); the silicon behaviour is VERIFIED here`
 
 **Reported by the compiler lane's rtl-oracle pass 2026-09-05; the silicon half verified here
