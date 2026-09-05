@@ -157,3 +157,47 @@ uncaught cases are as informative as the caught ones for the paper.
 Put shared artifacts under `capstone/benchmarks/<your-corpus>/` following the `sqlite/`
 layout: `build-*.sh`, `run-*.sh`, `*_domain.c`, and a `README.md` stating what is
 verbatim from the original bug and what was adapted.
+
+## Rebuilding the stand-in monitor (QEMU flavour) — the proven recipe
+
+The QEMU firmware's monitor is **not** rebuilt by a bare `make build`, and four different things
+make a rebuild silently do nothing. Learned over eight attempts on 2026-09-05 (Q-03); every
+failure below was caught by a gate before a wrong binary reached the image.
+
+**Two copies of `sbi_capstone.c`, and the ecall decides which is live.**
+`package/capstone-sbi-domain/capstone-sbi/` compiles into `sbi.dom`; `components/opensbi/lib/sbi/
+capstone-sbi/` is regenerated into `sbi_capstone_dom.c.S` and linked into `fw_jump.elf`. The
+kernel module reaches `DOM_CREATE` via `sbi_ecall` (`modcapstone/module/capstone.c:122`), so
+**`fw_jump` — the components copy — is what QEMU executes** for domain creation. Patch both; the
+components one is the one that matters. They are two checkouts of `caplifive-sbi` and may sit on
+different commits.
+
+```bash
+cd capstone/caplifive-buildroot
+export CAPSTONE_CC_PATH="$(realpath ../capstone-c)"   # or the .c.S regen runs `cd ""` and fails
+# 0. verify the edited source parses BEFORE spending a build -- a FAILED regen rm -f's the .c.S,
+#    leaving the tree unable to rebuild fw_jump until the source parses again:
+( cd ../capstone-c && cargo run -q -- --abi capstone \
+    "$PWD/../caplifive-buildroot/components/opensbi/lib/sbi/sbi_capstone_dom.c" \
+    -- -I"$PWD/../caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi" -D__riscv_xlen=64 \
+    > /tmp/x.S ) && echo parses      # run on the wrapper IN PLACE: its #include is a quoted path
+make build A=capstone-sbi-domain-rebuild   # sbi.dom  (SITE_METHOD=local: rsync + rebuild)
+make build A=opensbi-custom-rebuild        # regen .c.S, RE-SYNC it into build/build/opensbi-custom, relink fw_jump
+make build                                 # repack rootfs.cpio / rootfs.ext2
+```
+
+**Gate every step against the ORIGINAL state, never the previous attempt** — identical source
+rebuilds to identical bytes and rsync preserves an unchanged file's mtime, so "did it change since
+last run" fires false after the fix has landed:
+
+- `sha256sum build/build/opensbi-custom/build/platform/generic/firmware/fw_jump.elf` differs from the pre-fix sha;
+- `sha256sum build/build/capstone-sbi-domain-1.0/sbi.dom` differs from the pre-fix sha, and `llvm-nm` shows the new symbol;
+- `grep -c 0x1234 components/opensbi/lib/sbi/sbi_capstone_dom.c.S` = 0 (whatever the old constant was);
+- `build/images/rootfs.ext2` mtime advanced;
+- then `capstone/tests/runtime-qemu/run-smoke.sh` rc 0.
+
+**Capstone-C is two parsers.** The components pipeline runs real cpp (`--` args); the package
+pipeline runs bare `cargo run` with its own preprocessing. A construct can parse under one and not
+the other. If a block will not parse, do not theorise about the parser: bisect in `/tmp` with the
+**unpatched source as the control** (it compiles), and prefer a non-static, value-returning
+helper whose result is assigned — that form parsed under both when in-line and `static void` did not.

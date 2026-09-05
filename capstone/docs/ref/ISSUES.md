@@ -589,9 +589,65 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim ~~`OPEN — RUNTIME; cheap reproducer, no board needed`~~ `ROOT-CAUSED 2026-09-05 — the QEMU monitor stand-in spins on an exactly-matching free region; the board firmware already handles it`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; port of the firmware fix LANDED and verified; NOT FIXED — narrowed to the MIDDLE-slot exact fit, i=8 of 10 (2026-09-05)`
 
-> **Sweep 2026-09-05 — ROOT-CAUSED (QEMU side).** Bisect: `cs7-O0` alone as item 1 RETurns (not image-bound); a 24-item batch WEDGED at positions 8, 12, 22 hitting `cs2-O0` twice and `cs7-O0` once, with `cs7-O0` after 1, 3 and 11 returning items RET. Wedged items print no `Created domain ID` and then `[CAPSTONE] Print = Scalar(0x1234)`; returning items print `Created domain ID` and never 0x1234. 0x1234 is printed at one site, `split_out_cap`, which `caplifive-buildroot` carries in TWO copies: `package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c:243-248` (compiled into `sbi.dom`) and `components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:246-247` (regenerated into `sbi_capstone_dom.c.S`, linked into `fw_jump.elf`) — and the kernel module reaches DOM_CREATE by an SBI ecall into fw_jump (`modcapstone/module/capstone.c:122`), so the OpenSBI copy is the live create path on QEMU; both must carry the fix (the board lane found this before rebuilding) — when the requested `[base, base+len)` exactly equals an existing free region: `// matching region. We don't support this for now` → `C_PRINT(0x1234); while(1);`. Whether a buddy block equals a carve remainder depends on the allocation history (the module never frees a domain's pages), so it is position- and size-history-dependent and hits any image. The board firmware already handles the case (`caplifive-system/.../opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:534-560`, `CAPSTONE_SPLIT_EXACT_FIT`, tail slot; its comment records that the hang was once misattributed to silicon). Fix: port that handling into the QEMU stand-in. Same-image repeats (4/4) and two-size alternation (6/6) do not trigger it; the site is identified by its unique signature.
+> ### 2026-09-05 — root cause, port, positive control, and what is left
+>
+> **Root cause (compiler lane, verified here in source):** the QEMU stand-in monitor's
+> `split_out_cap` spun forever — `C_PRINT(0x1234); while(1)` — whenever the requested
+> `[base, base+len)` exactly equalled a free region. Whether the host's buddy block equals a
+> leftover region depends on the carve history (the module never frees a domain's pages), so the
+> wedge followed *position*, not image, and was **deterministic for a given sequence** (manifest B
+> wedged at 8/12/22 twice on the old stand-in). The board firmware fixed the identical site on
+> 2026-08-01 under `CAPSTONE_SPLIT_EXACT_FIT` and recorded that the hang *"was misattributed to
+> silicon"*; the QEMU copy never received it. **`preflight-board-run.sh` C7 ("slot budget —
+> split_out_cap's middle exact-fit case spins at ~the 5th") is this same defect seen from the
+> board side** — the preflight had been budgeting around it as a ceiling.
+>
+> **Two copies, and the ecall decides which is live.** `caplifive-buildroot` holds two checkouts
+> of `caplifive-sbi`: `package/capstone-sbi-domain/capstone-sbi` (→ `sbi.dom`) and
+> `components/opensbi/lib/sbi/capstone-sbi` (→ `fw_jump.elf`). The kernel module reaches
+> `DOM_CREATE` by `sbi_ecall` (`modcapstone/module/capstone.c:122`), so **the OpenSBI copy is the
+> one QEMU executes**. The first patch went to the other copy and would have read as "the fix does
+> not work"; caught before the lock was spent.
+>
+> **Port landed and verified** (eight attempts, each stopped by a gate — recipe in
+> `docs/ref/HOW-TO-RUN-ON-QEMU.md` § "Rebuilding the stand-in monitor"): tail-slot exact fit
+> clears the CPMP mapping and drops the slot; a middle-slot exact fit reports **`0x1235`, then
+> `i`, then `region_n`** and stops. Both copies committed (`23b611e`, `7285c19`); built image
+> `fw_jump 7cfcd014b2a8`, `sbi.dom cc2320e2a3d0`, smoke rc 0.
+>
+> **Positive control — the same manifest B, verbatim, on the rebuilt image: 21 RET, 3 WEDGE at
+> exactly the same positions, each printing `0x1235, 0x8, 0xa`; zero `0x1234` anywhere;
+> manifest F 6/6.** So the old spin is gone everywhere it could run, and **the live case is the
+> MIDDLE slot: `i = 8` of `region_n = 10`, all three times.** The tail-only handling — which the
+> firmware also limits itself to — never fires on this path. "Report and stop" is a wedge to the
+> batch runner, so **Q-03 is not fixed; it is narrowed to one precisely identified case.**
+>
+> **Fix design, audited before writing (not yet implemented):**
+>
+> - *Leave a hole (empty slot, `region_n` unchanged)* — **REJECTED by audit.** It turns
+>   `region_n` from "number of live regions" into a high-water mark, and the live copy has seven
+>   `region_id >= region_n` bounds checks (`:550, :660, :754, :773, :812, :851, :1016`) that would
+>   then admit an empty slot as valid, a pop path that counts from the end (`:792-806`), an ejector
+>   that iterates `0..region_n` (`:1008`), and a site that returns `region_n` as a count (`:968`).
+>   Ten consumers to teach, under two parsers that already rejected an array assignment inside a
+>   nested `if`.
+> - *Compact: move the last slot into `i`* — the firmware declined this as "migrating a LINEAR
+>   capability between a CPMP register and the array, unverified". **The audit shows the move is
+>   unnecessary when the last slot sits in a CPMP register: re-point the two index maps
+>   (`region_cpmp[i] = region_cpmp[last]; cpmp_region[that] = i; region_cpmp[last] = -1`) and the
+>   capability never leaves its register.** When the last slot is in the array, it is the same
+>   `tmp = regions[x]; regions[y] = tmp` round-trip the file already performs at `:190-192`. Either
+>   way slot `i`'s own CPMP mapping is cleared first, exactly as the tail case does, and
+>   `region_n -= 1`. **This is the proposed fix.** It goes to `claim-auditor` before it goes in,
+>   and the same manifest B — now expecting 24/24 with zero `0x1235` — is its positive control.
+>
+> **Also recorded:** the two `caplifive-sbi` checkouts are on **diverged lines** one commit apart
+> each way from `2f772bb` (`04ac643` template-copy vs `1a926b0` "carve gp only for images that
+> declare a globals region", the latter on no remote until today); 185 differing lines, all in the
+> gp-delivery feature, **zero conflict hunks** on a trial merge. Reconciling them is the lead's
+> call — see `plans/caplifive-system-to-dev-migration.md`.
 
 **Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
 result files.** This is a runtime defect, not a codegen one.

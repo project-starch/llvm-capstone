@@ -97,6 +97,16 @@ that exits 0 is not evidence the commits are in it.
 protect, so they guard against a bad checkout, a deleted branch or a botched migration — not
 against disk loss. They need to be copied off the machine, and the real fix is still write access.
 
+## Found 2026-09-05 while porting the Q-03 fix — a fifth single-copy commit, and two monitor lines
+
+`caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi` is a checkout of `caplifive-sbi`
+(its remote still named `capstone-sbi.git`, pre-rename) at **`1a926b0` "Carve gp only for images
+that declare a globals region" — on no remote** until the Q-03 push chain. The package checkout of
+the same repo is at `04ac643` (pushed). Common base `2f772bb`; one commit each way; both about
+gp/globals delivery; **zero conflict hunks** on a trial three-way merge — complementary, not
+competing. Today the QEMU firmware runs one line and the domain runs the other, and the merged
+line has never been built. Whether they become one line is a monitor-semantics call for the lead.
+
 ## Proposed sequence
 
 1. **Replicate first.** Add `capstone-bootstrap` (caplifive-system) to the push allowlist and push
