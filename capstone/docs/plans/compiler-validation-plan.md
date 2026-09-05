@@ -1494,3 +1494,15 @@ sharper line — named globals get cap-table slots, anonymous compiler-generated
 .LCPI) does not; the -O1 SQLite silicon domain's 48 KB of named .rodata is reached and it
 has 0 LCPI labels — and the code comments now say it that way. Committed as one change:
 lowering, refusal, cttz, tests, coverage list, classification rows, retired pins.
+
+**Record hygiene after the commit (~08:45).** The commit's "all after the last rebuild"
+was true of everything except three runs that had happened on the intermediate build
+(before the 07:41 rebuild that restored the default ABI's cttz expansion): the RV8 -O0 twin,
+BEEBS newlib-log -O0 and the multi-tu probe. Re-run on the final compiler: RV8 -O0 7/7,
+newlib-log -O0 PASS, the probe its designed summary. The workaround results file now marks
+its 06:21–06:43 W-17 rows as intermediate-build rows superseded by the 06:58 ones, so they
+cannot be read as evidence, and the last stale jump-table sentence in the CoreMark build
+script is gone. Compiler identity note: the final library hash is ae821a017089; the
+57b5c5846ec3 quoted in the W-17 classification row's evidence is the build immediately
+before the cttz action was restricted to gp-captable (the QEMU controls and twins were run
+on both; the lit and control results are identical, and the row now carries both).

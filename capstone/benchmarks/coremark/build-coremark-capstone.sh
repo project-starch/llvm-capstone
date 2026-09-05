@@ -98,9 +98,8 @@ COMMON_FLAGS=(
 #   the upstream function still triggers a mixed scalar/capability lowering bug.
 # - core_state.c: jump tables and sibling calls are on again since 2026-09-05 (W-17,
 #   W-16 retired; see the comment at the core_state.c compile step above).
-# - core_util.c: avoid compiler-generated switch tables of capability-valued
-#   addresses until generic static-cap table materialization exists.
-#   Also compiled at -O0 to prevent loop-to-table transformation in crcu8:
+# - core_util.c: compiled at -O0 (its -fno-jump-tables pin is retired with the others
+#   above) to prevent loop-to-table transformation in crcu8:
 #   at -O1 the compiler inlines crcu8 twice into crcu16 and shares a single
 #   gp-derived LINEAR table pointer across both accesses; the first cincoffset
 #   consumes the pointer and the second fires helper_cscincoffset/rs1_v->tag.
