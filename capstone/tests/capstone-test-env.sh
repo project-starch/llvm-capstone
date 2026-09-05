@@ -80,8 +80,11 @@ if [ -z "${CAPSTONE_TOOLCHAIN_CHECKED:-}" ]; then
   export CAPSTONE_TOOLCHAIN_CHECKED=1
   if command -v python3 >/dev/null 2>&1; then
     _fresh_build_dir=$(dirname -- "$CAPSTONE_LLVM_BIN")
-    python3 "$CAPSTONE_REPO_ROOT/capstone/tests/toolchain-fresh.py" --build "$_fresh_build_dir" --quiet-if-fresh
-    _fresh_rc=$?
+    # `|| _fresh_rc=$?`, not a bare call then `$?`: callers source this under `set -e`, and a
+    # bare command returning 1 would kill them right here, before the WARNING -- so the "warn
+    # only" path would never run in the real format (found by review, 2026-09-05).
+    _fresh_rc=0
+    python3 "$CAPSTONE_REPO_ROOT/capstone/tests/toolchain-fresh.py" --build "$_fresh_build_dir" --quiet-if-fresh || _fresh_rc=$?
     if [ "$_fresh_rc" -ne 0 ]; then
       echo "capstone-test-env.sh: WARNING: toolchain check rc=$_fresh_rc for $_fresh_build_dir (1 = stale, 2 = could not check)" >&2
       if [ "${CAPSTONE_REQUIRE_FRESH_TOOLCHAIN:-0}" = "1" ]; then
