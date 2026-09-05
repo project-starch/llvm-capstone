@@ -1,6 +1,6 @@
 # Q-03 fix design: a HOLE with a `region_live[]` sentinel — never renumber, never reuse
 
-*Proposal, 2026-09-05. Audited by `claim-auditor` the same day: mechanism SAFE WITH CHANGES (eight,
+*Proposal 2026-09-05, audited, **IMPLEMENTED AND VALIDATED the same day** in the QEMU stand-in (final build `fw_jump ca218db97d53`, `sbi.dom ba3a8dca38e3`; readings in `ref/ISSUES.md` Q-03). Audited by `claim-auditor`: mechanism SAFE WITH CHANGES (eight,
 all folded in below and marked **[audit]**), the pool-full item and the acceptance criteria as first
 written NOT SOUND — rewritten. One omission would have stopped the monitor booting (item 0).*
 
@@ -66,13 +66,12 @@ That rules out the two obvious shapes, both already refuted (Q-03 entry, audit 2
    `map_region` returns NULL for it.
 7. **Holes are never reused by the exact-fit path or by any append** (see 5 for the one caveat).
    Reuse is the compaction failure by another route.
-8. **[audit] `REV_TRANSFERRED` slots become holes too** (`:608-620`): the linear capability is
-   handed to the domain and the CPMP mapping cleared, but `regions[region_id]` is left holding a
-   stale duplicate (`:610` says so: "should be added to a free list"). That slot is already dead,
-   still reads live, and its crash path is documented in
-   `intra_domain_mrev_revoke_probe_guest.c:22-28` (stale duplicate → untagged after the domain
-   revokes → `cap_base` in `swap_cpmp`). Same two lines as item 2, distinct print `0x1239`. The
-   five REV_TRANSFERRED probes in the nightly list are its regression check.
+8. **[audit] `REV_TRANSFERRED` slots become holes too — IMPLEMENTED, THEN REVERTED (2026-09-05).**
+   It is what the spec implies and what silicon does, but the `intra-domain-mrev-revoke` probe's
+   control arm has the *host* read the transferred arena through its Linux `mmap`, which only works
+   through QEMU's tagged duplicate; with the hole it faults (cause 24 at the arena address) while
+   every other arm and the four sibling probes pass. Filed as **Q-05**; the site is back to its
+   pre-Q-03 behaviour with a comment naming the entry. Print tag `0x1239` stays reserved.
 9. **Pool full — decided [audit]:** the stand-in has **no** `region_n >= CAPSTONE_MAX_REGION_N`
    check (the board copy has four). Today an append at slot 64 takes a capability bounds fault
    inside M-mode with an unresolved re-entry — not a clean overrun. "Return an error, never spin"
@@ -187,3 +186,23 @@ unchanged — the rebuilt monitor is the one every suite boots.
   refuted (spec LDC/STC nulling on silicon vs QEMU's tagged duplicate). The hole's real cost is
   a permanently leaked slot per exact fit against a pool with zero module headroom (M-2) —
   measured for the first time by criterion 6 above. Revisit if that number is not small.
+
+## Outcome (2026-09-05)
+
+Five rebuild attempts under the QEMU lock; two were gate errors (a hex grep for a constant the
+compiler emits in decimal; a "regenerated in this job" test that a correctly idle make fails), three
+were builds. Findings the acceptance criteria were designed to catch, and did:
+
+| build | result | what it taught |
+|---|---|---|
+| attempt 3 (holes + REV_TRANSFERRED hole) | B 23/24 then 24/24 ×3, F 6/6, four probes pass, **intra-domain-mrev-revoke FAILS** (`held_no_revoke_ok`, cause 24 at the arena) | the probe's host observer rides on QEMU's tagged duplicate → item 8 reverted, **Q-05** filed; one silent 9p-read stall at item 3 (1 in 5 boots), same shape as the compiler lane's aha-mont64 stall |
+| attempt 4 (REV_TRANSFERRED reverted) | B 24/24 ×2, F 6/6, five probes pass; **consistency loader: the out-of-range share faults M-mode** (bounds fault at `table[100]`) | **Capstone-C evaluates every operand of `||`** → guards split into two statements; HOW-TO and memory record it |
+| attempt 5 (guards split) — FINAL | B 24/24 ×2, F 6/6, five probes pass, consistency loader all green (`count=10`, `qlen=4096 mmap=ok write=1`, `oob_share`/`hole_share retval=4294967295`, `reuse=0 fetchfail=0`) | ships |
+
+Hole prints were identical in every replay across all three builds: item 8 `i=8 n=10` (the exact
+wedge coordinates), then `9/11` and `11/13`. Zero `0x1234/0x1235/0x1237/0x1238/0xdeadbeef`, zero
+untagged `lcc`. The pool ended at 13 of 64 after 24 items.
+
+Still open from this plan: item 0 (positive-control the module's `Region ID reuse detected` alert —
+the loader's checks do not depend on it), item 5 (`device_ioctl` locking), the board firmware
+(same site, same patch, the lead's call), and Q-05.

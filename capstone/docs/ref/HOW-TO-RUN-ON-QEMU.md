@@ -192,9 +192,20 @@ last run" fires false after the fix has landed:
 
 - `sha256sum build/build/opensbi-custom/build/platform/generic/firmware/fw_jump.elf` differs from the pre-fix sha;
 - `sha256sum build/build/capstone-sbi-domain-1.0/sbi.dom` differs from the pre-fix sha, and `llvm-nm` shows the new symbol;
-- `grep -c 0x1234 components/opensbi/lib/sbi/sbi_capstone_dom.c.S` = 0 (whatever the old constant was);
+- the regenerated `.c.S` carries the NEW constant and not the old one — **grep the DECIMAL form**:
+  Capstone-C emits immediates as `li a1, 4662`, never `0x1236`, so a `grep -c 0x1234` gate reads 0
+  on every build and can never fire (it did exactly that on 2026-09-05 and passed a vacuous check
+  for two builds). Positive-control the gate: compile the pre-fix source to `/tmp` and confirm the
+  same grep fails it;
 - `build/images/rootfs.ext2` mtime advanced;
 - then `capstone/tests/runtime-qemu/run-smoke.sh` rc 0.
+
+**Capstone-C does not short-circuit `||` or `&&`.** `LogicalOr`/`LogicalAnd` lower to plain integer
+`Or`/`And` DAG nodes (`capstone-c/src/dag_builder.rs:1094-1095`, `dag.rs:418`), so EVERY operand is
+evaluated. A guard of the form `if(id >= n || table[id] == 0)` reads `table[id]` for an out-of-range
+`id` and, since every global is its own exactly-sized capability, takes an M-mode bounds fault. Write
+the range check and the table read as two statements. Found 2026-09-05 by the Q-03 consistency
+loader's out-of-range share, after the same guard had passed every replay.
 
 **Capstone-C is two pipelines** — components runs real cpp (`--` args), package runs bare
 `cargo run` with its own preprocessing — and they have produced different parse verdicts on the
