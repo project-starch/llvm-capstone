@@ -589,7 +589,7 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; firmware tail-drop PORTED (control fired; its module hazard LATENT); NOT FIXED — MIDDLE-slot exact fit, i=8 of 10; fix design = hole + sentinel, plans/q03-region-hole-sentinel.md (2026-09-05)`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `ROOT-CAUSED; firmware tail-drop PORTED (control fired; its module hazard LATENT); NOT FIXED — MIDDLE-slot exact fit, i=8 of 10; fix design = hole + sentinel, plans/q03-region-hole-sentinel.md, AUDITED 2026-09-05, implementing (2026-09-05)`
 
 > ### 2026-09-05 — root cause, port, positive control, and what is left
 >
@@ -3297,6 +3297,14 @@ module never fire — the `DOM_CREATE failed` path (`module/capstone.c:128`) and
 `-1` arrives as a *value* (e.g. a region id of `(unsigned)-1`, which the module then tries to
 probe up to). Consequence for Q-03: "the module never frees region pages" is airtight, which is
 part of why the tail drop is latent. Board copy not yet checked for the same `li a0, 0`.
+
+### M-4 — `call_domain_with_cap` indexes `domains[dom_id]` with no bound check `OPEN — filed 2026-09-05 from the Q-03 plan audit; verified file:line`
+
+`sbi_capstone.c:529-533`: `call_domain_with_cap(dom_id, base, len, cursor)` carves the region and
+reads `domains[dom_id]` directly, while every sibling entry point checks `dom_id >= dom_n` first
+(`:516`, `:550`, `:660`, `:754`, `:888`). Reached from the module's `DOM_CALL_WITH_CAP` ecall
+(`module/capstone.c:157-159`, the S-mode payload path) with a caller-supplied id. Unrelated to
+holes; one guard line.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
