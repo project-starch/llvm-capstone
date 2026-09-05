@@ -68,3 +68,24 @@ k800	0x20000	-O0	4k	589ceee3853c6092	4	swd1	1	OK	4	4447	control; boot valid
 rawhazard5	0x20000	-O0	4k	8f8c56bb89dfa34b	48879	swd1	2	VOID	48879	5272	VA COLLISION with the control build (both 0x20000; the preflight had no entry check yet, C15 now): R-3 exposure, NOT an R-1 reading; it returned with dbg0..4=5 (an observation, not a verdict); relink at a distinct VA and rerun
 rawhazard6	0x30000	-O0	4k	57fbf98446c1a3c9	48879	swd1	3	OK	48879	8208	sweep swd1; control k800=4 OK
 rawhazard7	0x40000	-O0	4k	38d3862acd864a82	48879	swd1	4	OK	48879	4319	sweep swd1; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	swd2	1	OK	4	4439	control; boot valid
+expint_diag	0x70000	-O0	4k	8f226f8e14bdc90e	3883	swd2	2	OK	3883	0	sweep swd2; control k800=4 OK
+accum_probe	0x1c0000	-O0	4k	2353ce870af8f18b	100	swd2	3	OK	100	0	sweep swd2; control k800=4 OK
+accum2_probe	0x1d0000	-O0	4k	f4d3c2faa504e456	3883	swd2	4	READING		0	sweep swd2; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw09	1	OK	4	4452	control; boot valid
+c8fix	0x30000	-O0	4k	a9d34e778c1d3e1f	67699264	sw09	2	OK	67699264	45180	sweep sw09; control k800=4 OK; driver printed MISMATCH: oracle file held unpacked 576 during the boot; corrected to packed 0x04090240; raw retval unchanged (frozen August image on today firmware: NOT REPRODUCED, not a mechanism verdict)
+rmB	0x60000	-O0	4k	21517bc23fedbdd4	67699264	sw09	3	OK	67699264	45285	sweep sw09; control k800=4 OK; driver printed MISMATCH: oracle file held unpacked 576 during the boot; corrected to packed 0x04090240; raw retval unchanged (frozen August image on today firmware: NOT REPRODUCED, not a mechanism verdict)
+c8	0xf0000	-O0	4k	9ecd8c6f9eb2b23d	67699264	sw09	4	OK	67699264	45198	sweep sw09; control k800=4 OK; driver printed MISMATCH: oracle file held unpacked 576 during the boot; corrected to packed 0x04090240; raw retval unchanged (frozen August image on today firmware: NOT REPRODUCED, not a mechanism verdict)
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw10	1	OK	4	4413	control; boot valid
+gzl	0x60000	-O0	4k	0f59624e46b6235c	590400	sw10	2	OK	590400	56763	sweep sw10; control k800=4 OK; driver printed MISMATCH: oracle file held unpacked 576 during the boot; corrected to packed 0x00090240; raw retval unchanged (frozen August image on today firmware: NOT REPRODUCED, not a mechanism verdict)
+gz0	0x30000	-O0	4k	2b36c11d3c04a7c5	590400	sw10	3	OK	590400	56014	sweep sw10; control k800=4 OK; driver printed MISMATCH: oracle file held unpacked 576 during the boot; corrected to packed 0x00090240; raw retval unchanged (frozen August image on today firmware: NOT REPRODUCED, not a mechanism verdict)
+sn0	0xf0000	-O0	4k	401a0f037d578fbb	1000576	sw10	4	OK	1000576	45136	sweep sw10; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw11	1	OK	4	4447	control; boot valid
+fdp0fix	0x30000	-O0	4k	c99b6cd693d0639f	2609	sw11	2	OK	2609	26675	sweep sw11; control k800=4 OK
+fdpO1	0xf0000	-O0	4k	f7c655180f8f1917	2609	sw11	3	OK	2609	8504	sweep sw11; control k800=4 OK
+fdpraw	0x60000	-O0	4k	be78a6b66f8f34a9	2609	sw11	4	OK	2609	26622	sweep sw11; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw12	1	OK	4	4440	control; boot valid
+fdp0	0x30000	-O0	4k	99676ee348d4d300	2609	sw12	2	OK	2609	26727	sweep sw12; control k800=4 OK
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw13	1	OK	4	4426	control; boot valid
+tagr	0x140000	-O0	4k	d4c323361ef49cbf	1017	sw13	2	OK	1017	1048	sweep sw13; control k800=4 OK; the package's control arm: 1000 + 10*type_after_cap_store (1 = LIN) + 7 (placeholder, no second query); matches the package's 2026-08-04 board reading 1017
+tagf	0x160000	-O0	4k	0498eca84fcf6f92	1017	sw13	3	READING		1054	sweep sw13; control k800=4 OK; RETURNED 1017 = 1000 + 10*1 + 7: the type query after the integer overwrite reads 7 (not a live type 1/2) -- the tag was cleared; the package expected a TRAP here on 2026-08-04 because lcc on an untagged value faulted then; today QEMU (diag loader) also returns 1017, so the type query no longer faults on NOT_CAP -- RTL-store-user-metadata invariant RE-CONFIRMED (R-19, the instance it pointed at, not reproduced); M-1 (fault loop) NOT EXERCISED, no fault occurred; fix known INTERP_DOMAIN_MTVEC=1, unverified

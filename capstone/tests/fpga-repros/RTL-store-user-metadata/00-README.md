@@ -1,5 +1,8 @@
 # Every store routes capability metadata into the dcache write-user sideband
 
+> **2026-09-05 (sweep):** invariant RE-CONFIRMED on `caplifive_s12fix_5097eb166` with the same two rungs rebuilt (tagr d4c323361ef49cbf, tagf 0498eca84fcf6f92): `tagr` 1017, `tagf` 1017 — the second type query reads 7 ("not a capability": the `lcc` type query is total on both QEMU and the RTL today, so the deliberate fault no longer faults; the tag was cleared by the integer store, as this package concluded). The software-visible instance this observation pointed at, R-19, is not reproduced on this bitstream (fdpraw/fdp0 = 2609). Rows in `tests/board-results/2026-09-05.tsv`.
+
+
 **Status: code-level RTL observation. The invariant tested here IS correct in silicon.**
 Committed as a regression test and as the evidence trail behind the observation.
 

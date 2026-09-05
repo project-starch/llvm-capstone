@@ -591,7 +591,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 ## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim ~~`OPEN — RUNTIME; cheap reproducer, no board needed`~~ `ROOT-CAUSED 2026-09-05 — the QEMU monitor stand-in spins on an exactly-matching free region; the board firmware already handles it`
 
-> **Sweep 2026-09-05 — ROOT-CAUSED (QEMU side).** Bisect: `cs7-O0` alone as item 1 RETurns (not image-bound); a 24-item batch WEDGED at positions 8, 12, 22 hitting `cs2-O0` twice and `cs7-O0` once, with `cs7-O0` after 1, 3 and 11 returning items RET. Wedged items print no `Created domain ID` and then `[CAPSTONE] Print = Scalar(0x1234)`; returning items print `Created domain ID` and never 0x1234. 0x1234 is printed at exactly one place: `caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c:243-248` (`split_out_cap`) — when the requested `[base, base+len)` exactly equals an existing free region: `// matching region. We don't support this for now` → `C_PRINT(0x1234); while(1);`. Whether a buddy block equals a carve remainder depends on the allocation history (the module never frees a domain's pages), so it is position- and size-history-dependent and hits any image. The board firmware already handles the case (`caplifive-system/.../opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:534-560`, `CAPSTONE_SPLIT_EXACT_FIT`, tail slot; its comment records that the hang was once misattributed to silicon). Fix: port that handling into the QEMU stand-in. Same-image repeats (4/4) and two-size alternation (6/6) do not trigger it; the site is identified by its unique signature.
+> **Sweep 2026-09-05 — ROOT-CAUSED (QEMU side).** Bisect: `cs7-O0` alone as item 1 RETurns (not image-bound); a 24-item batch WEDGED at positions 8, 12, 22 hitting `cs2-O0` twice and `cs7-O0` once, with `cs7-O0` after 1, 3 and 11 returning items RET. Wedged items print no `Created domain ID` and then `[CAPSTONE] Print = Scalar(0x1234)`; returning items print `Created domain ID` and never 0x1234. 0x1234 is printed at one site, `split_out_cap`, which `caplifive-buildroot` carries in TWO copies: `package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c:243-248` (compiled into `sbi.dom`) and `components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:246-247` (regenerated into `sbi_capstone_dom.c.S`, linked into `fw_jump.elf`) — and the kernel module reaches DOM_CREATE by an SBI ecall into fw_jump (`modcapstone/module/capstone.c:122`), so the OpenSBI copy is the live create path on QEMU; both must carry the fix (the board lane found this before rebuilding) — when the requested `[base, base+len)` exactly equals an existing free region: `// matching region. We don't support this for now` → `C_PRINT(0x1234); while(1);`. Whether a buddy block equals a carve remainder depends on the allocation history (the module never frees a domain's pages), so it is position- and size-history-dependent and hits any image. The board firmware already handles the case (`caplifive-system/.../opensbi/lib/sbi/capstone-sbi/sbi_capstone.c:534-560`, `CAPSTONE_SPLIT_EXACT_FIT`, tail slot; its comment records that the hang was once misattributed to silicon). Fix: port that handling into the QEMU stand-in. Same-image repeats (4/4) and two-size alternation (6/6) do not trigger it; the site is identified by its unique signature.
 
 **Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
 result files.** This is a runtime defect, not a codegen one.
@@ -1658,6 +1658,8 @@ same instruction pair. Verify before recording.
 
 
 ### R-1 — A load through one capability register misses a store through another `CHARACTERISED`
+
+> **Sweep 2026-09-05 — NOT REPRODUCED on 5097eb166 on the two probes that ran validly; header unchanged.** Boot swd1 (control k800 = 4): `rawhazard6` dbg0..5 = 5, `rawhazard7` dbg0..3 = 5, every debug slot identical to the QEMU reading of the same bytes. `rawhazard5` VOID (R-3: staged at the control build's VA before the entry-collision gate C15 existed), relinked, not yet rerun. Two valid probes on one bitstream do not retire the entry; a GONE would be a separate status line with all three named.
 **The blocker for several of the 13 benchmark rungs.** An intervening store through one capability register
 causes a later load through a *different* capability register to miss an earlier store to its own
 address — though the addresses are distinct and both capabilities are in-bounds derivations of the
@@ -1756,7 +1758,7 @@ failing probes are also the largest. > **⚠ CORRECTION: this is NOT an off-boar
 
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 
-> **Sweep 2026-09-05 — GONE on silicon.** `beebs_expint -O1` = 2021290181 = host oracle (boot sw01); `expint_diag` in the diagnostic boot, see the results file.
+> **Sweep 2026-09-05 — GONE on silicon.** `beebs_expint -O1` = 2021290181 = host oracle (boot sw01); `expint_diag` = 3883 on silicon (boot swd2), the correct value where the board once read 2.
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
 | | capability | baseline (bare-metal) |
@@ -3128,6 +3130,8 @@ counted, so **a completing `-O1` board run must not be reported as S-12 resolved
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
+> **Sweep 2026-09-05 — OPEN, NOT EXERCISED this sweep.** Boot sw13 (control k800 = 4): `tagr` 1017, `tagf` 1017 — the package's deliberate fault (`lcc` selector 1 on an untagged operand) is total now and does not fault: its second type query reads 7, which QEMU's `helper_cslcc` documents as the TOTAL type query's "not a capability" answer, encoded the same way in the RTL. So nothing faulted and the loop question was not asked. Fix known — build with `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1` (see below); verifying it needs a rung that actually faults, e.g. an out-of-bounds load, not built.
+
 **A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
 is why the SQLite blocker resisted 30+ board sessions.
 
@@ -3242,9 +3246,9 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
 
-### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot ~~`FIX WRITTEN, NOT YET BUILT`~~ `FIXED — gp-captable lit arm pending; gpn2use1 on board boot 4 (2026-09-05)`
+### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot ~~`FIX WRITTEN, NOT YET BUILT`~~ `FIXED 2026-09-05 — gp-captable lit arm green, gpn2use1 = host on QEMU and on silicon (boot sw04)`
 
-> **Sweep 2026-09-05 — FIXED, status line was stale since 2026-07-30.** `isGpCaptableGlobal` (CapstoneISelDAGToDAG.cpp:118) is in every build since, including the pre-c128 and 08-19 trees; lit `compiler-used-capability.ll` is green (`llvm.compiler.used` in addrspace(200), CHECK-NOT on the symbol) but its RUN lines are default-ABI, so a `-capstone-gp-captable` arm is queued; the rung it was found on (`gpn2use1`) links and returns 1463068797 = host under QEMU; board boot 4 carries it.
+> **Sweep 2026-09-05 — FIXED, status line was stale since 2026-07-30.** `isGpCaptableGlobal` (CapstoneISelDAGToDAG.cpp:118) is in every build since, including the pre-c128 and 08-19 trees; lit `compiler-used-capability.ll` is green (`llvm.compiler.used` in addrspace(200), CHECK-NOT on the symbol) and now also carries a `-capstone-gp-captable` arm (one cap-table slot, no `llvm.compiler.used` relocation); the rung it was found on (`gpn2use1`) links and returns 1463068797 = host under QEMU and on silicon (boot sw04, control k800 = 4).
 
 Any TU using `__attribute__((used))` fails to link:
 `ld.lld: error: undefined symbol: llvm.compiler.used, referenced by
@@ -4838,6 +4842,8 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 
 ### R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` IN its own bank-1 slot `OPEN — trigger established on silicon; MECHANISM NOT confirmed (simulation is clean); NOT yet reported`
 
+> **Sweep 2026-09-05 — NOT REPRODUCED on caplifive_s12fix_5097eb166 with the package's own frozen images.** Boot sw11 (control k800 = 4; `fdp0fix` first as the entry-contract control = 2609): `fdpO1` 2609, `fdpraw` 2609 = 0x0A31 exactly, no 0x08000000 residue (the README's defect word is 0x08000A31). Boot sw12: `fdp0` 2609, alone (its VA collides with fdp0fix). Both arms clean; raw lines in `tests/board-results/2026-09-05.tsv`.
+
 **Separate from R-18 on purpose.** R-18, already reported, is the **zeroing** form: the victim is
 written with `0` and counts up, and raw full-width readbacks (`craw` = `0x00000237`, `graw`, `gztr`)
 show **no metadata anywhere**. R-19 is a **different observable**: the victim comes back holding
@@ -4950,6 +4956,8 @@ Exposure in the current SQLite silicon image: 3657 capability stores based on `a
 and correct values are both non-zero there; it bites only where the loaded pointer is NULL.
 
 ### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — REPORTED to the board owner; our compiler workaround is landed and silicon-confirmed`
+
+> **Sweep 2026-09-05 — NOT REPRODUCED on caplifive_s12fix_5097eb166 with the package's own frozen images.** Boot sw09 (control k800 = 4; c8fix first as the entry-contract control): `c8fix` 67699264, `rmB` 67699264, `c8` 67699264 = 0x04090240 (p=64, k=9, qc=576), the README's CORRECT word where the defect reads 0x04090237 (qc=567; fifteen consecutive defective boots recorded here). Boot sw10: `gzl` 590400 and `gz0` 590400 = 0x00090240 (k=9 intact; the "victim 9 damaged" signature absent), `sn0` 1000576 = correct. Frozen August interp-glue images on today's firmware, one bake per boot (C15); raw retvals with the packed oracles in `tests/board-results/2026-09-05.tsv`. "Not reproduced", not a mechanism verdict.
 
 > **STATUS 2026-08-08.** This issue has been **REPORTED to the board owner**, and our side is
 > **worked around**: `-capstone-int-zero-for-zero-copy` (see `design/R18-workaround-movc-zero.md`),
