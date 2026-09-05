@@ -399,7 +399,25 @@ Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge i
 `XU` across two boots (4 pass; then pass, pass, wedge).
 
 
-## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `ALL THREE ROUTES FIXED IN RTL AND REPRODUCED; none synthesised into a flashed bitstream yet`
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) fix commits ARE in the resident bitstream by content (2026-09-05); S-10b status unknown — its tests are not in the RTL tree`
+
+> **STATUS LINE CORRECTED 2026-09-05.** The header used to say *"none synthesised into a flashed
+> bitstream yet"*. That is **stale**: checked by content —
+> `git log e1b3db6ba..5097eb166 -- core/cache_subsystem/` — the resident bitstream's lineage
+> contains **`5c5f4e3a7` "S-07 FIX: forbid granule co-residency in the write buffer"** and
+> **`4fee13b2d` "S-10 FIX: works in simulation, and costs a combinational loop"**, plus the S-07
+> probe and audit commits. The sweep's RTL-sim pass at `5097eb166` reports the S-07/S-10 residual
+> **not observed** (16 legs trapped + control), consistent with the fixes being present.
+>
+> Same error class as the R-20 alert retracted earlier today — a status written from what was
+> *believed* about a lineage rather than read from it — caught this time before it produced a
+> wrong board verdict, by the check that should always have been first.
+>
+> **Two things this does NOT establish:** `4fee13b2d`'s own message says *"NOT ready to merge"*
+> (a combinational loop), so it is in the bitstream by lineage but its synthesis cost is not
+> recorded here; and **S-10b** — the granule-granular load/store hazard — has no verdict, because
+> its tests are not in the RTL lane's tree (asked). Until they are found, S-10b is *unknown*, not
+> *fixed*.
 
 **Behaviour.** Software destroys authority by overwriting it (`memset`, `bzero`). A capability
 load can miss that store and return the capability **intact and dereferenceable**. Separately, a
