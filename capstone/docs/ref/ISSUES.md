@@ -1491,7 +1491,7 @@ and the folder is the report.
 
 ## RTL / FPGA
 
-### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, verified in source with a control`
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, CONFIRMED BY DIRECTED TEST`
 
 **Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
 than taken on report, including the control that makes it a defect rather than an idiom.**
@@ -1539,8 +1539,45 @@ of divergence that has repeatedly cost this project board time.
   tests uses `cap_init` today, so no shipping domain hits it — that is a fact about our current
   programs, not about the hardware, and it expires the moment one does.
 - **whether the duplicated capability is usable**, or whether a later consumer traps on it.
-- a **directed `.S`** in the simulator with `rs1 != rd`, reading both registers afterwards. This
-  needs no board — `rtl-sim` answers it in ~14 s, and it is the natural next step.
+  **STILL OPEN** — the directed test below reads both registers but never dereferences `a5`,
+  so "two LINEAR capabilities exist" is established and "the second one works" is not.
+- ~~a **directed `.S`** in the simulator with `rs1 != rd`~~ **WRITTEN AND RUN 2026-09-05 —
+  CONFIRMED.** `verif/tests/custom/capstone/init-rs1-ne-rd.S`, run on `s12-ldc-rolling-filter`
+  (`05f2be6bd`) and independently by the compiler lane on the flashed `5097eb166`; `flu_unit`
+  is byte-identical between the two, and both runs agree line for line. 443 cycles, 0
+  exceptions, `tohost = 0` — a genuine pass, not a timeout `SUCCESS`.
+
+  ```
+  [Cycle 337] Reg[17]: 0000000000000000                       <- arm 0 CONTROL: MOVC consumed it
+  [Cycle 371] Reg[15]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a5, the SOURCE
+  [Cycle 373] Reg[16]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a6, the DEST
+  [Cycle 407] Reg[19]: Cursor 0x80003400 ... Revnode_id 2 | Type : 1    <- arm 2, rd == rs1: LIN
+  ```
+
+  Source and destination are indistinguishable — same cursor, same bounds, same revnode, both
+  `Type : 1` (LINEAR). Arm 0 is the **instrument control**: a `MOVC` of a linear source leaves
+  `a7` printing a bare `0`, which proves `CAPPRINT` can render a cleared register, so arm 1's
+  non-zero `a5` is a reading and not a blind spot. Arm 2 is the **conformance control**: with
+  `rd == rs1` the result is a single correct LINEAR capability, which is why every compiled
+  `INIT` in the tree today is unaffected.
+
+  `INIT` traps `ILLEGAL_OPERAND_VALUE` unless `cursor > end`, so the UNINIT operands are
+  fabricated with `end = base - 16` to satisfy that precondition without touching the
+  capability under test.
+
+**The fix, and the trap in it.** `MOVC` in the same file is the correct shape and shows the
+required structure: `if (data.rs1 == data.rd)` pass `(rs1, rd)`, else pass
+`(create_cnull(), rd)`. Its `else` branch catches **every** non-`NONLIN` source — `UNINIT`
+included — which also **refutes the one alternative account** of R-25, that `MOVC` simply does
+not consume `UNINIT` sources and `INIT` is faithfully reproducing it. It does consume them.
+`INIT` alone is the defect site.
+
+So the fix is *not* "replace `rd,rd` with `cnull,rd`". Applied unguarded that clobbers the
+result in the `rd == rs1` case, which is the shape all shipping code uses — turning a defect
+nothing currently hits into one everything hits. The `rs1 == rd` guard is mandatory, and which
+write wins when both target one register is exactly the Anvil sequential-reading hazard that
+has produced the opposite of hardware behaviour twice on this project. Do not reason it out;
+test both arms.
 
 **Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
 `cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
