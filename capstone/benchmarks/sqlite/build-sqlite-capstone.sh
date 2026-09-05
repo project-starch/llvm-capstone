@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# -fno-jump-tables retired 2026-09-05 (W-15 residue): BR_JT lowers with a capability table base
+# and label-difference entries since cycle 3 (W-17 pairs AGREE-PASS; jump-table.ll), so the pin only
+# hid the shape from the twins.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -122,7 +125,6 @@ COMMON_FLAGS=(
   -Xclang +m
   -ffreestanding
   -fno-builtin
-  -fno-jump-tables
   # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
   -ffunction-sections
   -fdata-sections

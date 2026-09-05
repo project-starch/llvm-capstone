@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# -fno-jump-tables retired 2026-09-05 (W-15 residue): BR_JT lowers with a capability table base
+# and label-difference entries since cycle 3 (W-17 pairs AGREE-PASS; jump-table.ll), so the pin only
+# hid the shape from the twins.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -55,7 +58,6 @@ COMMON_FLAGS=(
   -Xclang +m
   -ffreestanding
   -fno-builtin
-  -fno-jump-tables
   -ffp-contract=off
   -ffunction-sections
   -fdata-sections

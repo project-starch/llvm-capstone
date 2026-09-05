@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# -fno-jump-tables retired 2026-09-05 (W-15 residue): BR_JT lowers with a capability table base
+# and label-difference entries since cycle 3 (W-17 pairs AGREE-PASS; jump-table.ll), so the pin only
+# hid the shape from the twins.
 set -euo pipefail
 
 # Build a minimal CoreMark-based domain that only calls core_init_state().
@@ -58,12 +61,11 @@ COMMON_FLAGS=(
 
 # Local core_init_state: flat 2D pattern arrays, no capability table loads.
 "$CLANG" "${COMMON_FLAGS[@]}" \
-  -fno-jump-tables \
   -c "$REPO_ROOT/capstone/benchmarks/coremark/core_state_capstone.c" \
   -o "$OBJ_DIR/core_state_capstone.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" \
-  -fno-jump-tables -O0 \
+  -O0 \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
 
