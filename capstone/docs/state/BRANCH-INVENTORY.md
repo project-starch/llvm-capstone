@@ -13,8 +13,10 @@
 > the three consumers) is committed, sim-validated and audited. Synthesised 2026-09-07: WNS −12.733, 101,143
 > failing; all three pre-registered readings hold (the busy-edge hazard has no failing path), but the census is now
 > 100% `issue_read_operands` (`lsu_valid_q`, live on every memory instruction) — **NOT usable either**. No bitstream
-> from this branch is usable; the resident `5097eb166` stays the licensed one. A per-checkpoint second-launch query
-> on the three retained routed checkpoints is the next instrument (census doc, 2026-09-07/08 entry).
+> from this branch is usable by the census gate — and, retracted 2026-09-08, neither is the resident `5097eb166`: the
+> second-launch query on its own checkpoint shows a live second launch behind 101,604 of its failing endpoints. The
+> resident stays in use on its board record; the census is not a licence for any build; a flash is now an empirical
+> risk decision for the lead with the board lane (census doc, RETRACTED 2026-09-08 section).
 > Full account: `history/07-09-2026_14-00-00_fpga-testing-dev-rebuilt-without-the-instrument.md`.
 >
 > **RE-CHECKED 2026-09-04 — the alarm below is mostly RESOLVED, and one branch is still exposed.**

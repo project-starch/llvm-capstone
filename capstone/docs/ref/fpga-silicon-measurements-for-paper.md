@@ -1192,7 +1192,11 @@ of `6f8345fdb`. Same endpoint population as `947327f6d` (tracer 65,562, identica
 launch: what the worst-launch census cannot see is whether an endpoint also fails from a second launch;
 a per-checkpoint query on the three retained routed checkpoints is the instrument for that (census doc,
 2026-09-07/08 entry). No bitstream from `fpga-testing-dev-clean` is usable; the resident `5097eb166`
-stays the licensed one.
+stays the one in use. **Retracted the same night (census doc, RETRACTED 2026-09-08):** that query ran on
+the resident's own routed checkpoint and found 101,604 of its 101,784 failing endpoints also failing from a
+live register (the LSU bypass occupancy counter, −15.157). The census never licensed the resident either;
+its board record does, and why the silicon works at all is unmeasured. All timing figures in this table
+are unaffected; what is gone is the sentence that a failing build is fine because its launches are inert.
 
 ### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
 

@@ -1,5 +1,14 @@
 # What makes a timing-failing bitstream usable here: the census, not the slack
 
+> **RETRACTED 2026-09-08 — read the last section first.** The census verified the WORST launch of each
+> failing endpoint only. On the flashed `5097eb166`, 101,604 of the 101,784 failing endpoints also have a
+> failing path from a live register (`lsu_bypass_i/status_cnt_q_reg[0]`, −15.157 ns, 154 ps behind the worst
+> launch). "Every failing path in the design is inert while the code under test runs" was never true of
+> that build. The census is not a licence; the resident's board record is the evidence, and the reason the
+> board works is unmeasured. The second cone, and the exact mechanism by which a one-launch-per-endpoint
+> enumeration would lose it, were written down in this repository on 2026-08-21, fourteen days before this
+> document existed, and never consulted. The gate below stands as history and is amended in the last section.
+
 **Status:** the acceptance criterion actually in force on this design, replacing the one
 `run.tcl` states. Derived 2026-08 to 2026-09 across five routed builds.
 
@@ -38,6 +47,9 @@ the design is inert while the code under test runs.**
 
 That is a STRUCTURAL property, not a margin. It is why WNS -16.400 is tolerable, and it is the
 reason board results on these images mean anything.
+
+> *2026-09-08: the two sentences above are RETRACTED — the census checked one launch per endpoint; the
+> second launch on the flashed build is live. See the last section.*
 
 ## Why this is the criterion to gate on
 
@@ -102,7 +114,15 @@ executing would close that, and should be run before this is relied on for a fla
 > not transfer — it has to be made again for that register, by RTL for a structurally static
 > signal or by measurement for anything else.
 
+> *2026-09-08: "the launch register", singular, is the error. Every register with a failing path to the
+> endpoint must be inert, and the worst-launch census enumerates only one of them. See the last section.*
+
 ## The gate, for any future bitstream on this design
+
+> *2026-09-08: this gate is kept as the record of what was run. It is NOT a licence — see the last
+> section: the flashed build passes it and still fails from a live launch. Any future reading of a
+> timing-failing build needs the second-launch count (C in that section) alongside the census, and even
+> C = 0 licenses nothing by itself until the third launch is asked for.*
 
 **Run the launch census before trusting a build, and verify it IS a census before reading it.**
 
@@ -439,7 +459,8 @@ failing endpoint to its worst launch only, so it cannot say whether on `947327f6
 `5097eb166`, those same endpoints also failed from live registers through their second-worst launches.
 Nothing here shows that a historical licence was wrong. The resident `5097eb166`'s licence rests today
 on its board record — seven clean domain switches in one boot on 2026-09-07 — which is evidence of a
-different kind and stands.
+different kind and stands. *(Superseded four hours later by the query below: the resident's checkpoint
+shows the second launch is live. The board record stands; the census licence does not. Last section.)*
 
 **The query that settles it, without another synthesis.** Three routed checkpoints are retained on the
 synth machine (`5097eb166`, `947327f6d`, `ef5a8eaf2`). `second-launch.tcl` (kept with the rebuild scripts,
@@ -465,3 +486,122 @@ flow edit plus a firmware rebuild, and anything read through `rdtime` changes sc
 `5097eb166`* for all board work, as now. *A base+tie-off control build* — less informative than the
 checkpoint query above, which asks the same question of the existing checkpoints. Not proposed: timing
 work on the scoreboard forwarding cone.
+
+## RETRACTED 2026-09-08: the census verified one launch per endpoint; on the flashed build the second launch is live
+
+**The instrument.** `second-launch.tcl` (with the rebuild scripts, outside the repo) opens a routed checkpoint
+and counts: **A**, failing endpoints over all launches (per-endpoint worst path, `-max_paths 1000000
+-nworst 1 -slack_lesser_than 0`); **B**, those whose worst launch matches the census's launch pattern;
+**C**, failing endpoints with a failing path from a launch OUTSIDE the pattern (`-from` every sequential
+cell not matching it); **D**, the same restricted to the inside (a control that must equal B); **E**,
+failing endpoints launched from input ports (what a `-from <cells>` query cannot see). Every count prints
+its denominator; C's endpoints are checked to be a subset of A's. Run on COPIES of the retained routed
+checkpoints, one Vivado at a time, 12 GB peak, about twelve minutes each.
+
+| checkpoint | pattern excluded | A | B (census) | C (fail from outside) | D (control) | worst C | C's worst launch (per-endpoint, one register for all) |
+|---|---|---:|---:|---:|---:|---:|---|
+| `5097eb166` flashed | `*/dom_switcher/*` | 101,784 | 101,782 | **101,604** | 101,782 | −15.157 | `ex_stage_i/lsu_i/lsu_bypass_i/status_cnt_q_reg[0]` |
+| `947327f6d` base | `*/dom_switcher/*` | 97,439 | 97,438 | **96,494** | 97,438 | −11.561 | `lsu_bypass_i/status_cnt_q_reg[1]` 96,493; 1 DDR |
+| `947327f6d` base | `*/dom_switcher/req_en_q_reg*` | 97,439 | 97,438 | **96,510** | 97,438 | −11.561 | `status_cnt_q_reg[1]` 93,159; `dom_switcher/_thread_0_event_reg_63_q_reg[1]` 3,350; 1 DDR |
+| `ef5a8eaf2` fix | `*/i_issue_read_operands/*` | 101,143 | 101,143 | **100,900** | 101,143 | −12.505 | `dom_switcher/cur_idx_q_reg[3]` 100,892; `status_cnt_q_reg[1]` 8 |
+
+A exceeds the CPU-clock count only by the DDR endpoints on `clk_pll_i` (2, 1 and 0). E = 0 on every checkpoint. Every D
+equals its B, and every B equals the census recorded for that build, so the `-from` query sees exactly what
+the census saw; C is not a narrowed view.
+
+The symmetry is the result:
+
+| build | worst launch (the census) | second launch (this query) |
+|---|---|---|
+| `5097eb166` flashed | switcher, inert | bypass counter, **live** |
+| `947327f6d` base | switcher, inert | bypass counter, **live** |
+| `ef5a8eaf2` fix | issue valid, **live** | switcher `cur_idx_q_reg[3]`, inert |
+
+Every build fails at 40 ns from a live launch, by its first cone or its second. The licence was never
+"this build has no live failing launch"; it was "the one launch the instrument reported happened to be
+inert", and which cone the instrument reported was decided by picoseconds of placement. On `ef5a8eaf2`
+the second launch is `cur_idx_q_reg[3]` — the exact register, and the exact bit, that `80843404c`
+reported as its *first* cone when this doctrine was written.
+
+**The resident build.** 101,604 of its 101,784 failing endpoints have a failing path from
+`lsu_bypass_i/status_cnt_q_reg[0]`, 154 ps behind the census's worst launch. That register is the LSU
+bypass FIFO's occupancy counter (`core/lsu_bypass.sv:57-126`): incremented on every push, decremented on
+every pop, cleared on flush, and `empty = (status_cnt_q == 0)` gates the unit. It moves on every memory
+instruction of a domain body. So for essentially the whole failing population of the flashed bitstream a
+failing path launches from a register that is live while the code under test runs.
+
+**What this retracts, by sentence.**
+
+* "Every failing path in the design is inert while the code under test runs" and "That is a STRUCTURAL
+  property, not a margin" (the section *What actually licenses these bitstreams*). The census verified the
+  worst launch per endpoint; the second launch was never asked for. The sufficient condition the doctrine
+  rested on does not hold for the flashed build.
+* The restated criterion's "the launch register", singular. The condition is every register with a failing
+  path to the endpoint, and the worst-launch census enumerates one.
+* The 2026-09-04 worked application, "a census still 100% dom_switcher → ship A": its outcome was validated
+  empirically; its mechanism was wrong.
+* The same night's sentence above, "nothing here shows that a historical licence was wrong". It did not;
+  this query does.
+
+**This cone was in the project's own record before the doctrine was written, and the doctrine's
+instrument could not show it.** The history note
+`21-08-2026_09-30-00_s10-exonerated-and-a-second-single-bit-cone.md` (committed 2026-08-21, build
+`76b7f2afc`), section 3, enumerated the failing paths NOT launched from the switcher and found 78,790 of
+them launched from `ex_stage_i/lsu_i/lsu_bypass_i/status_cnt_q_reg[0]` — "a second single-bit
+startpoint, and it is not the switcher" — and said why it had been invisible: "`-nworst 1` reports one
+worst path per endpoint, so while the switcher cone was worse, these paths never surfaced." Its
+conclusion was "the remedy is RTL on **two** cones", with "nothing equivalent known" for the bypass
+counter. This document was first committed on 2026-09-04, fourteen days later, never cited that note,
+and its census — the same `-nworst 1` enumeration — reported one launch per endpoint from then on. The
+second cone did not leave the design; it left the instrument's field of view, and its absence from every
+census afterwards was read as its absence. The synth lane, whose starting briefing named both registers,
+raised this on 2026-09-08 when the resident's number landed; the note is the primary source. Section 4 of
+every forensics run since has in fact shown it — `store_unit` and `load_unit` carrying the whole failing
+count at the design WNS — and it was read each time as the switcher cone passing *through* the LSU rather
+than the LSU cone showing through. So the error is not "the census overstated": the project knew of two
+cones, built an instrument that could see one, and reasoned from the instrument until the other was gone.
+That is the lesson worth more than the retraction: an enumeration that returns one cause per effect
+cannot report a second cause, and a cone that a prior note named does not need re-discovering — it needs
+a query that can still see it.
+
+**A hypothesis the record supports, not a finding.** The census has named a different single bit on every
+build: `cur_idx_q_reg[3]` (80843404c), `[5]` (84ed6eafb), `_thread_0_event_reg_87_q_reg[0]` (5097eb166),
+`req_en_q_reg[0]` (947327f6d); and the second launch is `status_cnt_q_reg[0]` on the resident but
+`status_cnt_q_reg[1]` on 947327f6d — the same two-bit counter, a different bit. A per-endpoint worst-launch
+enumeration must name exactly one register; when several bits of one counter drive near-identical cones,
+which bit wins by a few hundred picoseconds is placement, not structure. The 154 ps between the switcher's
+worst launch and the bypass counter's on the resident is of the same order: two cones separated by less
+than a routing decision. If that is right, "a single-bit startpoint" was an artefact of the reporting all
+along, and any RTL remedy is about the counter and the switcher's control state, not about one bit of
+either. The bit index moving while everything else stays put is measured; the rest is the hypothesis.
+
+**What this does NOT retract.** The board results on `5097eb166`. They rest on their own record — the
+S-12 corpus, the SQLite logic-test corpus identical to native across 10,807 records, seven clean domain
+switches in one boot on 2026-09-07 — and that record is untouched. What changed is the *explanation* of
+why the bitstream works: it is no longer the census argument, and it is now unmeasured. Candidates, none
+chosen here: functional masking — a live launch whose transition cannot propagate through the intermediate
+logic during a body is still a failing STA path but never captures late data; margin between the
+slow-corner timing model and the actual silicon; or both. **C says a structural failing path exists from a
+live launch; it does not say the endpoint ever captures late data.** This instrument cannot separate those,
+and no result in this document does.
+
+**The reframing.** The gate never separated the flashed build from the three it rejected. Queried: on all three checkpoints essentially every failing endpoint has failing paths from at least two launch cones, and on every build at least one of them is live during a body — the worst launch on `6f8345fdb` (by its own census) and on `ef5a8eaf2` (the issue-to-LSU valid; its second launch is the switcher's `cur_idx_q_reg[3]`, 100,892 endpoints at −12.505), the second launch on `5097eb166` and `947327f6d` (the bypass counter). All four builds in this family fail at 40 ns from live launches. Excluding only the census's named register on `947327f6d` still leaves 3,350 endpoints failing from a second switcher register, `_thread_0_event_reg_63_q_reg[1]`: the same artefact one level down — the cone is the module, the named bit is whichever won by picoseconds. The
+only difference between them is that one has a board record. So a flash decision on this design is not a
+census verdict any more; it is an empirical risk decision, made with acceptance tests, by the project lead
+with the board lane. Nothing is recommended for flashing here.
+
+**The slower clock is now the only route to a licence by timing.** The resident's slack histogram
+(1 ns bins of A; an endpoint in bin −k needs a period ≥ 40 + k + 1 ns under the shift rule):
+
+| bin (ns) | −16 | −15 | −14 | −13 | −12 | −11 | −10 | −9 | −8 | −7 | −6 | −5 | −4 | −3 | −2 | −1 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| endpoints | 4 | 100 | 1,535 | 5,758 | 4,984 | 18,898 | 17,423 | 20,269 | 15,249 | 3,357 | 1,815 | 2,070 | 5,934 | 2,975 | 671 | 742 |
+
+Under the shift rule 52 ns still leaves 12,381 failing, 56 ns leaves 4, 57 ns clears every endpoint, and
+60 ns leaves 3–4 ns of margin on the resident. On `947327f6d` the histogram tops out at bin −12 (31 endpoints): 53 ns clears every endpoint and 60 ns leaves 7 ns; on `ef5a8eaf2` it tops out at −13 (122): 54 ns clears all, 60 ns leaves 6 ns. The three builds differ by 4 ns in what would clear them, a more useful comparison than their WNS alone. By that measure the resident is the worst of the three, 3–4 ns further from closing than either
+build declared NOT usable: "safe" was never the property being measured. The edit sites are the three named in the entry
+above.
+
+**Open, for whoever takes the explanation:** count C's paths on the resident checkpoint that pass through
+`dom_switcher` cells. If nearly all do, a single gating argument for the masking hypothesis may exist; if
+not, none does. Five minutes of Vivado; not tonight's commit.

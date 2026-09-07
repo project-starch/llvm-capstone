@@ -143,7 +143,10 @@ base build's (tracer 65,562 identical; issue 21,731; ex 8,415; csr 978). Census 
 collector peak 37.9 GB. What that says about the worst-launch
 census, what is measured and what is only inferred, the per-checkpoint query that settles it and the
 options for the lead are in the census doc's 2026-09-07/08 entry. Board side: nothing to flash; the resident
-`5097eb166` stays.
+`5097eb166` stays. **Same night, retracted:** the per-checkpoint query found the resident's own failing endpoints
+also failing from a live register (LSU bypass occupancy counter, 101,604 of 101,784, −15.157). The census gate
+never separated the flashed build from the ones it rejected; the resident stays on its board record, not on
+the census (census doc, RETRACTED 2026-09-08 section).
 
 ### Appendix: Experiment B result rows (verdict, cycles, RVFI hash, exceptions)
 
