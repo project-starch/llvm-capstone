@@ -51,7 +51,10 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 PATCHED=${PATCHED_SQLITE:-$CAPSTONE_TMP_ROOT/sqlite-build/sqlite3-capstone.c}
 if [[ ! -f "$PATCHED" ]]; then
   echo "patched amalgamation missing; running the existing build to produce it"
-  bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
+  # OUT_DIR is ours (the silicon image's), not the amalgamation's: without the override the
+  # fallback writes sqlite3-capstone.c next to the image and the check below fails anyway
+  # ("still no .../sqlite-build/sqlite3-capstone.c"). Found 2026-09-07 after a reboot emptied /tmp.
+  OUT_DIR="$(dirname "$PATCHED")" bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
 

@@ -1185,6 +1185,40 @@ one boot each (see the campaign rows dated 2026-09-05 in `tests/board-results/` 
 below once they land). Until then the citable line is: *"SQLite 3.53.3 in a capability domain on
 FPGA silicon executes SQLLogicTest `select1` (1031 records) with results identical to native."*
 
+### §7c — The SQLLogicTest corpus on capability silicon (2026-09-05 → 2026-09-07)
+
+Seven files, one boot each, control `k800 = 4` first in every boot, resident
+`caplifive_s12fix_5097eb166.bit`, silicon-config SQLite at -O1, each result read from the run's own
+transcript segment and compared with the native x86 baseline produced by the same runner
+(`benchmarks/sqlite/slt/slt_runner.h`, `build-slt-native.sh`). Images: fresh main-checkout toolchain
+(`libLLVMCapstoneCodeGen.so bfc039bf12e077f5`, clang embedding `fc4f826a16ca`), one image per
+region/heap class, every image validated under QEMU on its own file before it was baked
+(`tests/rtl-smoke/slt-corpus/build-slt-corpus-images.sh`). Rows: `tests/board-results/2026-09-05.tsv`.
+
+| file | records | statements | queries | silicon vs native | boot |
+|---|---|---|---|---|---|
+| `negative-control.test` | 21 | 9 pass / **2 fail** | 6 pass / **4 fail**, 2 skipped, 1 parse error | identical — the comparator's positive control on silicon | sw23 |
+| `evidence/slt_lang_aggfunc.test` | 80 | 12 / **1 fail** | 57 / **10 fail**, 1 skipped | identical, including the corpus's own artifacts | sw24 |
+| `select1.test` | 1031 | 31 | 1000 | identical, 0 failures | B8 |
+| `select2.test` | 1031 | 31 | 1000 | identical, 0 failures | sw27 |
+| `select3.test` | 3351 | 31 | 3320 | identical, 0 failures (~5 min of execution) | sw28 |
+| `select5.test` | 1436 | 704 | 732 | identical, 0 failures (2 MiB heap, 1 MiB stack) | sw26 |
+| `select4.test` | 3857 | 1025 | 2617 + 215 skipped for size | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
+
+**What this establishes.** The two files with deliberate and known failures reproduce them exactly
+on silicon (2 + 4 and 1 + 10), so a clean row is a clean row and not a comparator that cannot fire.
+**All seven files — 10,807 records — are identical to native, zero divergences, on the current
+bitstream and the current compiler.** The citable line: *"SQLite 3.53.3 in a capability domain on
+FPGA silicon executes the SQLLogicTest `select1–5` files and the aggregate-function evidence file —
+10,807 records, 8,746 queries with checked answers — with results identical to native x86, and
+reproduces the negative control's deliberate failures exactly."* This supersedes §7b's "has not
+been run": SQLite correctness on capability silicon now rests on the stock SQLLogicTest corpus, not
+on wedge probes. Caveats, stated: one draw per file (the corpus is deterministic, but silicon has
+known non-deterministic defects and a second pass would cost about an hour); the 9p share and the
+console path produced VOID boots that were re-run rather than counted; and `select4` was the first
+file whose region class (4 MiB) was carved on the board; it worked first time.
+
+
 It is also **not** a performance result — no `mcycle`/`minstret` figures accompany it. So it
 closes part of the **compatibility** axis, and neither the correctness nor the cost axis.
 
