@@ -967,6 +967,7 @@ Table row `clk_out1_xlnx_clk_gen`**.
 | `6f8345fdb` | −13.491 | 99,879 / 173,789 | ~396 MB *(S-12 fix, debug tree TIED OFF)* |
 | `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
 | `947327f6d` | −11.717 | 97,438 / 174,756 | 403,665,530 *(rebuilt `fpga-testing-dev-clean`: same fixes, instrument NEVER ADDED; 2026-09-07)* |
+| `ef5a8eaf2` | −12.733 | 101,143 / 174,188 | 404,402,489 *(`947327f6d` + the registered switch-in-progress flag; 2026-09-07)* |
 
 **Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
 reads healthy while the CPU clock fails. That trap has caught this project before.
@@ -1178,6 +1179,20 @@ Launch census: 97,438 of 97,439 from `dom_switcher/req_en_q_reg[0]` (the busy le
 controller on `clk_pll_i` — a third distinct dom_switcher launch register across four builds. **Census verdict: NOT usable as a
 board bitstream** — that register is the busy level that gates commit, and the trap-entry CSRs sit on
 its failing cone (`bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry).
+
+**Qualified again 2026-09-08 by the fix build.** `ef5a8eaf2` (`947327f6d` plus one registered
+switch-in-progress flag feeding `commit_stage`, `controller` and `frontend`; RTL otherwise identical)
+routed at **−12.733 ns**, **101,143** failing endpoints, **170,410** placed LUTs (92,817 registers, 284 fewer
+than the base for one added flop — unexplained, variance unmeasured). The three readings
+pre-registered for it all hold — no failing path launched from the new flag, the flag's own input meets
+timing, and `req_en_q` launches nothing that fails — so the busy-edge hazard is closed on this build.
+Launch census: 101,143 of 101,143 from `issue_read_operands` (worst launch `lsu_valid_q`, the issue-to-LSU
+valid, live on every memory instruction). **Census verdict: NOT usable as a board bitstream**, the shape
+of `6f8345fdb`. Same endpoint population as `947327f6d` (tracer 65,562, identical count), different worst
+launch: what the worst-launch census cannot see is whether an endpoint also fails from a second launch;
+a per-checkpoint query on the three retained routed checkpoints is the instrument for that (census doc,
+2026-09-07/08 entry). No bitstream from `fpga-testing-dev-clean` is usable; the resident `5097eb166`
+stays the licensed one.
 
 ### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
 

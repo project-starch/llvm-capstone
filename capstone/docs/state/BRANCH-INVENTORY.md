@@ -10,8 +10,11 @@
 > 2026-09-07: WNS −11.717, 97,438 failing, census 100% `dom_switcher/req_en_q` — **NOT usable as a board
 > bitstream**: that register is the busy level that gates commit (census doc, 2026-09-07 entry). The hazard
 > is measured in simulation (Experiment B). The fix (`ef5a8eaf2`, a registered switch-in-progress flag for
-> the three consumers) is committed, sim-validated and audited; its synthesis and census are pending, with the
-> reading pre-registered in the census doc. No bitstream from this branch is usable until that census passes.
+> the three consumers) is committed, sim-validated and audited. Synthesised 2026-09-07: WNS −12.733, 101,143
+> failing; all three pre-registered readings hold (the busy-edge hazard has no failing path), but the census is now
+> 100% `issue_read_operands` (`lsu_valid_q`, live on every memory instruction) — **NOT usable either**. No bitstream
+> from this branch is usable; the resident `5097eb166` stays the licensed one. A per-checkpoint second-launch query
+> on the three retained routed checkpoints is the next instrument (census doc, 2026-09-07/08 entry).
 > Full account: `history/07-09-2026_14-00-00_fpga-testing-dev-rebuilt-without-the-instrument.md`.
 >
 > **RE-CHECKED 2026-09-04 — the alarm below is mostly RESOLVED, and one branch is still exposed.**

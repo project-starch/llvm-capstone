@@ -378,3 +378,90 @@ or as the trap-vector-zero behaviour (a domain enters with `mtvec = 0`, so any t
 no such observation exists on the resident `5097eb166`, whose launch register is a different one and
 which switched cleanly seven times in one boot on 2026-09-07 (sw30). The `CAPSTONE_DOMAIN_TRAP_VECTOR`
 acceptance test in the monitor is the instrument to run with the fixed bitstream, when one exists.
+
+
+### MEASURED 2026-09-07 (read 2026-09-08): `ef5a8eaf2` synthesised — the three pre-registered lines hold, and the build is still NOT usable
+
+Same machine, container, guard and flow as `947327f6d`, ceiling 100 GB: exit 0, 3h09m wall (the box ran at
+load 75–85 on 80 cores for the whole run, so the wall time is not comparable), synthesis peak 20.96 GB.
+Artifact `synth-ef5a8eaf2-exit0.tar.gz` (404,402,489 bytes) with all five checkpoints; provenance worktree
+`capstone-clean-flag` on the synth machine.
+
+| build | WNS (ns) | failing / total (CPU clock, flow report) | placed LUTs | launch census (collector, per-endpoint worst launch) |
+|---|---:|---:|---:|---|
+| `ef5a8eaf2` fix | −12.733 | 101,143 / 174,188 | 170,410 | 101,143 / 101,143 from `issue_stage_i/i_issue_read_operands` |
+| `947327f6d` base | −11.717 | 97,438 / 174,756 | 170,481 | 97,438 `dom_switcher/req_en_q_reg[0]`, 1 DDR |
+| `6f8345fdb` arm 2 | −13.491 | 99,879 / 173,789 | 168,944 | 99,879 `issue_read_operands` |
+
+**The pre-registered reading, line by line** (census verified: the startpoint axis and the endpoint axis
+both sum to the report's 101,143):
+
+1. Failing endpoints launched from `dom_switch_active_q`: **0**. The register does not appear on the
+   startpoint axis at all.
+2. The flag's D input is **not a failing endpoint** (absent from the endpoint axis): its slack is
+   non-negative, so the flag rises on the edge it was designed to.
+3. Failing paths launched from `req_en_q`: **none** — not through the ack leg (`commit_stage.sv:357`),
+   not through the log register, not through the aperture. The busy level launches nothing that fails
+   on this placement.
+
+All three hold. **The busy-edge hazard that Experiment B measured has no failing path on this build.**
+That is the result the fix was built for, and it stands regardless of what the placer did next; the
+fix stays in the branch.
+
+**The census, and why the verdict is nevertheless NOT usable.** All 101,143 failing endpoints have their
+worst launch in `issue_read_operands`. Worst path: `i_issue_read_operands/lsu_valid_q_reg[0]_rep` →
+`i_scoreboard/mem_q_reg[1][sbe][rd][4]/D`, slack −12.733 (the flow's report and the re-opened checkpoint agree;
+TNS −769,201), data path 52.5 ns (logic 8.0, route 44.6), 115 logic levels; the `_rep` suffix is Vivado's fan-out replica of the register.
+`lsu_valid_q` is the issue-to-LSU valid — `assign lsu_valid_o = lsu_valid_q`
+(`core/issue_read_operands.sv:388`), set in the issue `case` for `LOAD, STORE` and for every capability
+load/store (`:1284`, `:1302-1320`), cleared otherwise — so it toggles on every memory instruction of a
+body. There is no inert-launch argument and no benign-transition argument for it. This is the shape of
+`6f8345fdb` (arm 2: `fu_data_q[operand_a]` → scoreboard, −13.491, 94 levels, census 100%
+`issue_read_operands`). **Verdict: NOT usable as a board bitstream.**
+
+Endpoint axis, for the record: the UART tracer 65,562 (the same count to the endpoint as on
+`947327f6d`), issue stage 21,731, ex stage 8,415, cache subsystem 2,460, `csr_regfile` 978 (`mcause`,
+`mepc`, `mtval`, `scause`, `sepc`, `stval`, `dpc` at 128 each, `instret` 64, `mstatus` 7), frontend 451,
+`dom_switcher` 358 — the same endpoint population as the base build, now failing from a different worst
+launch. Interior (section 4 of the enumeration): 100,926 of the 101,143 failing paths pass *through*
+`dom_switcher` cells (worst −12.505) although the switcher launches none of them; the S-07 fix's nets
+carry 4,597 failing paths, worst −10.646, not the critical path. Area, from the placed utilization
+reports (the post-synthesis hierarchical report says 170,415 and 170,507 — wrong stage, same trap as
+before): 170,410 LUTs against the base's 170,481, and **92,817 slice registers against 93,101 — 284 fewer
+on a change that adds exactly one flop.** Placement noise, downstream simplification once the signal is
+registered, or something unseen: not separable while the flow's run-to-run variance is unmeasured; recorded
+so it is not passed over silently.
+
+**Measured, and inferred — kept apart.** MEASURED: two placements of RTL that differs only at three
+consumer ports fail the same endpoint population under different worst launches, `req_en_q` on
+`947327f6d` and `lsu_valid_q` on `ef5a8eaf2`. INFERRED, and unmeasured: the census attributes each
+failing endpoint to its worst launch only, so it cannot say whether on `947327f6d`, or on the resident
+`5097eb166`, those same endpoints also failed from live registers through their second-worst launches.
+Nothing here shows that a historical licence was wrong. The resident `5097eb166`'s licence rests today
+on its board record — seven clean domain switches in one boot on 2026-09-07 — which is evidence of a
+different kind and stands.
+
+**The query that settles it, without another synthesis.** Three routed checkpoints are retained on the
+synth machine (`5097eb166`, `947327f6d`, `ef5a8eaf2`). `second-launch.tcl` (kept with the rebuild scripts,
+outside the repo) opens each and counts, against the report's failing total A and the census number B:
+**C**, the failing endpoints that have a failing path from a launch OUTSIDE the census's launch module,
+with a control D (the same query restricted to the inside, which must be ≥ B) and E (input-port
+launches, which a `-from <cells>` query cannot see). Reading, written before the result: if `947327f6d`
+shows C in the tens of thousands, the busy cone was never the only failing one, and no re-placement of
+this RTL passes the census at 40 ns; if it shows C near zero, the fix's placement is what created the
+issue-cone failures, and the fix itself needs a different placement or a different form. Status at the time of writing: the query is running on the synth machine on all three checkpoints, and its numbers go into this entry when they land.
+If C is large on the resident build too, the gate in this document needs the second-launch count added
+to the census — that amendment waits for the number.
+
+**Options for the lead** (none taken here). *Slower CPU clock.* The worst data path is 52.5 ns, so under
+the shift rule (slack at period P ≈ slack at 40 + (P − 40)) a 60 ns period clears all three builds by
+5–8 ns and licenses a bitstream by timing rather than by argument; `mcycle`-based measurements are
+unaffected, wall clock is 1.5× slower. It is not one variable: the 25 MHz lives in
+`corev_apu/fpga/xilinx/xlnx_clk_gen/tcl/run.tcl` (`CLKOUT1_REQUESTED_OUT_FREQ`, which drives both the
+MMCM and the derived constraint; `CLK_PERIOD_NS=40` is passed to the FPGA Makefile but nothing reads it
+there), in the bootrom's `CLOCK_FREQUENCY` (UART divisor), and in the board firmware's DTS
+(`caplifive.dts`: `timebase-frequency` 12.5 MHz, two `clock-frequency = <25000000>` nodes), so it is a
+flow edit plus a firmware rebuild, and anything read through `rdtime` changes scale. *Keep the resident
+`5097eb166`* for all board work, as now. *A base+tie-off control build* — less informative than the
+checkpoint query above, which asks the same question of the existing checkpoints. Not proposed: timing
+work on the scoreboard forwarding cone.

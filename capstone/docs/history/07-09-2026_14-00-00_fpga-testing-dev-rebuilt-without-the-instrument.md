@@ -124,6 +124,27 @@ force-push over `fpga-testing-dev` is unaffected by the timing result. What it i
 bitstream: flashing it would need the commit-gate change (or an equivalent) and a re-synthesis first.
 The resident `caplifive_s12fix_5097eb166.bit` remains the licensed bitstream.
 
+## Addendum 2, 2026-09-07/08: the fix synthesised — pre-registered lines hold, still NOT usable
+
+`ef5a8eaf2` (this branch's tip: `947327f6d` + `dom_switch_active_q` feeding the three consumers) went
+through the same machine, container, guard and flow: exit 0, 3h09m under load 75–85, synthesis peak
+20.96 GB, artifact `synth-ef5a8eaf2-exit0.tar.gz` (404,402,489 bytes).
+
+| build | WNS (ns) | failing / total (CPU clock) | placed LUTs | launch census |
+|---|---:|---:|---:|---|
+| `ef5a8eaf2` fix | −12.733 | 101,143 / 174,188 | 170,410 | 101,143 / 101,143 `issue_read_operands` (`lsu_valid_q_reg[0]_rep`) |
+| `947327f6d` base | −11.717 | 97,438 / 174,756 | 170,481 | 97,438 `dom_switcher/req_en_q`, 1 DDR |
+
+Pre-registered reading (census doc): (1) launches from `dom_switch_active_q` **0**; (2) the flag's D input
+not a failing endpoint; (3) `req_en_q` launches **nothing** that fails. All three hold: the busy-edge hazard
+measured in Experiment B has no failing path on this build. Verdict nevertheless **NOT usable**: the worst
+launch is now the issue-to-LSU valid, live on every memory instruction, and the endpoint population is the
+base build's (tracer 65,562 identical; issue 21,731; ex 8,415; csr 978). Census verified on both axes (101,143 = 101,143);
+collector peak 37.9 GB. What that says about the worst-launch
+census, what is measured and what is only inferred, the per-checkpoint query that settles it and the
+options for the lead are in the census doc's 2026-09-07/08 entry. Board side: nothing to flash; the resident
+`5097eb166` stays.
+
 ### Appendix: Experiment B result rows (verdict, cycles, RVFI hash, exceptions)
 
 Tip = the identical `core/` tree's record. Arms delay `dom_switch_busy` by one cycle at C = `commit_stage_i`,
