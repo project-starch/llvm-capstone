@@ -424,5 +424,13 @@ advertises exactly the tracked 512 MiB (`DRAM_SIZE_64 = 0x20000000`), a judgemen
 bootrom, silently), and IP generation is not dependency-tracked (build from a fresh clone). Not in the
 lint's cone: the SoC top and the tag controller (`--top-module cva6`).
 
-Still the lead's: the GitHub fork and the push (both branches), the upstream defect reports, and the
-board.
+The fork exists since 2026-09-07 evening as a **private mirror**, `https://github.com/project-starch/cheri-cva6`
+(a GitHub fork of a public repository cannot be private, so it is a new repository holding upstream's six
+branches and tags; no fork link, so an upstream contribution goes as a patch or via a public fork).
+Default branch `dev` = `genesys2-eval` = `c8014e0b` (six commits over `vcu118`), pushed by the lead: this
+lane's stored git credential is a different account and gets 403 on the private repository, so every push
+there is the lead's until that account is added as a write collaborator. A sixth commit landed before the
+push: build A's eight extra UNDRIVEN signals are CHERI-only plumbing whose consumers fold under the same
+flag (README §5), so A stays a sound zero point.
+
+Still the lead's: the upstream defect reports, and the board.
