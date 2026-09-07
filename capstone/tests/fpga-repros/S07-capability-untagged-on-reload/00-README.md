@@ -1,5 +1,7 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Residual NOT observed at 5097eb166, 2026-09-05 sweep:** `s07-wbuf-forward-residual` (+ `-ctl`) shows 17 UNEXPECTED_OPERAND = 16 legs plus the positive control in both arms, the polarity that means the residual is absent. Timing caveat above unchanged. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > **TIMING CAVEAT, NARROWED 2026-08-20 — this fix is EXONERATED as the cause; the measurement was
 > still taken on a bitstream that misses setup.** Read directly from the archived reports of the
 > build that produced `caplifive_s07fix.bit`, not taken on report.

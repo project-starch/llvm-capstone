@@ -1,5 +1,7 @@
 # S-12 ROOT-CAUSED — 2026-09-03
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Fixed in the flashed RTL (`caplifive_s12fix_5097eb166.bit`), 2026-09-05 sweep:** 5097eb166 carries the S-12 fix and the directed test runs 6/6 clean in simulation. For the board count, the **S-12 header in `docs/ref/ISSUES.md` is the source of truth**: 8 of 8 post-fix draws clean, one-sided Fisher p = 0.018 against 1-of-4 pre-fix; boots sw14 and sw15 (`tests/board-results/2026-09-05.tsv`) are the two newest of those eight, at -O0. The compiler-side workaround pass (W-01) has been deleted from the branch. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Read this section first. It supersedes everything below, including the section immediately
 following it, which was the previous "read this first".**
 

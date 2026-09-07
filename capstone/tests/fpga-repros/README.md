@@ -7,6 +7,8 @@ These used to live in `/tmp/capstone/*.tar.gz`, which meant every one of them wa
 reboot and none could be reviewed, diffed or bisected. ISSUES.md says an issue without a
 reproducer is not an issue; a reproducer that only exists in `/tmp` is not much better.
 
+> **2026-09-07 — the 2026-09-05 bug sweep re-tested these packages on `caplifive_s12fix_5097eb166.bit` (rows in `tests/board-results/2026-09-05.tsv`).** Each README now opens with a dated banner giving its verdict (GONE / NOT REPRODUCED / fixed-and-acceptance-passed / NOT RUN / not exercised) with its boot ids, and pointing at `docs/plans/bug-sweep-2026-09.md` and the matching `docs/ref/ISSUES.md` block; R-1's attribution stays open there, and the S-12 count is cited from that file's S-12 header. No folder was moved: sent folders are live links, and the registry is the archive of record. Not exercised by the sweep: `RTL-cap-mcause-off-by-one`, `S09`, `S11`; deferred: `S01`'s perturbation pair and M-1's real-fault rung.
+
 | dir | issue | what it shows |
 |---|---|---|
 | `R01-lsu-hazard/` | **R-1** | a load through one capability register misses a store through another |

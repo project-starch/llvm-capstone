@@ -1,5 +1,7 @@
 # S-09 — a capability survives the plain store meant to destroy it
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Not exercised as a separate arm in the 2026-09-05 sweep**; the shared S-07/S-10 residual test at 5097eb166 did not observe the write-buffer residual (see S07/S10 banners). Status unchanged. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > **TIMING CAVEAT, NARROWED 2026-08-20 — this fix is EXONERATED as the cause; the measurement was
 > still taken on a bitstream that misses setup.** Read directly from the archived reports of the
 > build that produced `caplifive_s07fix.bit`, not taken on report.

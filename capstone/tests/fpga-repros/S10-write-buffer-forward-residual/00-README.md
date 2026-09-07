@@ -1,5 +1,7 @@
 # S-10 — a scrubbed capability still reads back LIVE while the store is in the write buffer
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Residual NOT observed at 5097eb166, 2026-09-05 sweep** (`s07-wbuf-forward-residual`, 17 UNEXPECTED_OPERAND in both arms). The store-buffer tag route (S-10b) is a different matter: `s10b-storebuf-primed` is STILL PRESENT on the resident bitstream, and its fix c867dfcbb is unsynthesizable as written (RTL lane). Not to be read as S-10 closed. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > **TIMING CAVEAT, NARROWED 2026-08-20 — this fix is EXONERATED as the cause; the measurement was
 > still taken on a bitstream that misses setup.** Read directly from the archived reports of the
 > build that produced `caplifive_s07fix.bit`, not taken on report.

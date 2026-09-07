@@ -1,5 +1,7 @@
 # R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **NOT REPRODUCED on `caplifive_s12fix_5097eb166.bit` with this package's own frozen images, 2026-09-05 sweep (boots sw09 and sw10, control green; rows in `tests/board-results/2026-09-05.tsv`, details in the ISSUES.md R-18 block).** Reported status unchanged pending the owner. Note for anyone comparing: the package's oracle files carry the unpacked field (576) while the board prints the packed word (0x04090240); compare packed. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: reproducible silicon defect. A dual-bank write splash is DEMONSTRATED in RTL simulation in
 ~13 s with a one-instruction matched control (see `sim/`) — but the slot it damages is NOT the slot
 the board damages. Read that as a demonstration of a real hardware mechanism, not as a reproduction
