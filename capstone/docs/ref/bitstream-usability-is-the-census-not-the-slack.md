@@ -340,3 +340,41 @@ census the readout path and the hazard cone intersect.
 
 Records: `expB-{C,K,F}.txt`, the diverging traces, the patch and the arm diff are kept with the
 rebuild records outside the repo (`~/dev/llvm-capstone-rebuild/records/expB*`).
+
+### The fix, and the census reading pre-registered for it (2026-09-07, later)
+
+Commit `ef5a8eaf2` on `fpga-testing-dev-clean` adds one top-level flop, `dom_switch_active_q`, set by
+the commit handshake (the switcher's ack, which already contains `~req_en`) and held by `busy`, so it
+rises on the same edge as `req_en` and falls one cycle later; `commit_stage`, `controller` and
+`frontend` take it in place of the raw wire. Measured: 87 of 88 rows identical to `947327f6d`, the
+one mover `revocation` 932 → 934 cycles with an identical trace; the acceptance arm (busy one cycle
+late at the flag's only busy input) changes nothing but two more cycles on the same test, which paired
+with Experiment B isolates the old commit-stage failure to the rising edge; lint counts identical;
+adversarial audit: rising edge unchanged SUPPORTED, later release harmless SUPPORTED. Details in the
+commit message.
+
+**What the audit refuted, and what the census must therefore show.** `req_en` still reaches
+commit-class logic combinationally through the ack: `commit_stage.sv:357` `commit_ack_o[0] =
+dom_switch_ack_i`. That leg is benign only because `req_en` is stable at 0 in the handshake cycle
+and, at its two transitions, `:357` sits inside the gate now driven by `dom_switch_active_q` —
+**conditional on the flag meeting timing at `commit_stage`**. The flag's own D input is a
+core → switcher → core round trip; if it misses setup the flag rises a cycle late and the phantom
+commit returns at a new launch site. The logic after the consumer ports is unchanged, so whether the
+failing paths disappear is a placement outcome (the worst path was route-dominated, 43.3 of 51.4 ns,
+which is the one reason to expect improvement from a dedicated, lightly loaded launch register).
+
+**Pre-registered reading for the synthesis of `ef5a8eaf2`, written before the run:**
+
+1. **Zero** failing endpoints launched from `dom_switch_active_q`. Any → the hazard is re-rooted,
+   not closed, and Experiment B's frontend PC shift can return as route skew between the three
+   consumers.
+2. The flag's D endpoint has **positive slack**.
+3. `req_en`-launched failing paths only via the ack leg (`commit_stage.sv:357`), the log register or
+   the aperture — licensed by the conditional argument above, and only if (1) and (2) hold.
+
+Anything else is a NOT-usable verdict for that build too. **Board-side shape, from the board lane:**
+a committed successor or a +4 first-PC shift would present on the board as R-3's silent hang at entry
+or as the trap-vector-zero behaviour (a domain enters with `mtvec = 0`, so any trap looks like a hang);
+no such observation exists on the resident `5097eb166`, whose launch register is a different one and
+which switched cleanly seven times in one boot on 2026-09-07 (sw30). The `CAPSTONE_DOMAIN_TRAP_VECTOR`
+acceptance test in the monitor is the instrument to run with the fixed bitstream, when one exists.

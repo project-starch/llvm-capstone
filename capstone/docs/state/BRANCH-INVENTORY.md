@@ -1,7 +1,7 @@
 # Branch inventory — `capstone-ariane`, 2026-08-20
 
 > **2026-09-07 — `fpga-testing-dev` has a REBUILT replacement, pushed to origin.** `fpga-testing-dev-clean`
-> (tip `947327f6d`, tag `chain-v4`; same trees as `chain-v3` `9277846e9`, one S-12 message sentence corrected)
+> (tip `ef5a8eaf2` = `947327f6d` + the registered switch-in-progress flag; `947327f6d` is tag `chain-v4`)
 > is the shared base `7e4dc440f` plus eight commits: lint gate and
 > sweep baseline, S-06, S-08, S-07 fix, S-10, S-12, the mtval-cursor feature, synthesis tooling — every fix
 > byte-identical to the flashed `5097eb166`'s version and the S-07 on-silicon instrument never added. All 88
@@ -9,9 +9,9 @@
 > re-derived at S-06 and S-10. Old tip preserved as `backup/fpga-testing-dev-2026-08-21`. Synthesised
 > 2026-09-07: WNS −11.717, 97,438 failing, census 100% `dom_switcher/req_en_q` — **NOT usable as a board
 > bitstream**: that register is the busy level that gates commit (census doc, 2026-09-07 entry). The hazard
-> is measured in simulation (Experiment B: the instruction after a CALL commits when the commit stage sees
-> busy one cycle late). Flashing needs an RTL or timing change that takes the commit gate and the frontend
-> restart off the busy cone, then a re-synthesis; the branch itself is unaffected.
+> is measured in simulation (Experiment B). The fix (`ef5a8eaf2`, a registered switch-in-progress flag for
+> the three consumers) is committed, sim-validated and audited; its synthesis and census are pending, with the
+> reading pre-registered in the census doc. No bitstream from this branch is usable until that census passes.
 > Full account: `history/07-09-2026_14-00-00_fpga-testing-dev-rebuilt-without-the-instrument.md`.
 >
 > **RE-CHECKED 2026-09-04 — the alarm below is mostly RESOLVED, and one branch is still exposed.**
