@@ -1173,6 +1173,18 @@ INSTRUMENT."* Every table is deliberately empty because S-12 fires at PREPARE ti
 **Establishing SQLite correctness on capability silicon requires a corpus with populated tables
 and real expected values. That has not been run.** Do not let this result stand in for it.
 
+**Correction, 2026-09-05 (later the same day): it has now been run, once, and it passed.** Boot B8
+(cycle-2 regression sweep, resident `caplifive_s12fix_5097eb166.bit`, control `k800 = 4` first) ran
+`select1.test` from the stock SQLLogicTest corpus — 1031 records against **populated** tables with
+**real** expected values — in the -O1 silicon-config SQLite domain (image `c01e6b89cad0f17a`, host
+`a1895d35f768b5d0`) and read `records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0
+completed=1`, identical to the native x86 baseline. That is the first SQLite **correctness** result
+on capability silicon: 1000 queries with checked answers, zero divergences. It is one file of the
+seven-file corpus that matches native under QEMU (10,807 records); the remaining six are being run
+one boot each (see the campaign rows dated 2026-09-05 in `tests/board-results/` and the paragraph
+below once they land). Until then the citable line is: *"SQLite 3.53.3 in a capability domain on
+FPGA silicon executes SQLLogicTest `select1` (1031 records) with results identical to native."*
+
 It is also **not** a performance result — no `mcycle`/`minstret` figures accompany it. So it
 closes part of the **compatibility** axis, and neither the correctness nor the cost axis.
 

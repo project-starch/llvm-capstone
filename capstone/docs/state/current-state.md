@@ -47,7 +47,12 @@ Minimal snapshot. Read first in every session.
   has no committed harness — it was run ad hoc, so a rebuild does not re-establish it; treat it as
   withdrawn until a re-runnable harness exists. And the nightly still cannot catch a
   non-compiling QEMU. SILICON results were never affected: they came from the board.
-* **SQLite RUNS ON SILICON — that is a LIVENESS result, not a correctness one.** The `slt/`
+* **SQLite CORRECTNESS on silicon: first result 2026-09-05.** `select1.test` (1031 SQLLogicTest
+  records, populated tables, real expected values) ran in the -O1 silicon-config domain on
+  `caplifive_s12fix_5097eb166.bit` (boot B8) and matched native exactly (31 statements, 1000
+  queries, 0 failures). The remaining six corpus files are being run one boot each; see
+  `ref/fpga-silicon-measurements-for-paper.md` §7b and the 2026-09-05 board rows.
+* **(Superseded by the line above, kept for the caveat it carries.) SQLite RUNS ON SILICON — that is a LIVENESS result, not a correctness one.** The `slt/`
   corpus executes end-to-end in a capability domain; `s12stress` completes 120/120 prepares and
   15/15 of the corpus matches native under QEMU on the current compiler.
   **Read what that measures.** These files are S-12 *wedge probes*, and they say so in their own
