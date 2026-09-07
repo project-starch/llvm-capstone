@@ -301,3 +301,68 @@ own flow runs to a routed design", with build A as the flow check, as §3 alread
 | execution modes | one model: domains entered by `capenter`, monitor in M-mode | integer (hybrid) and capability (purecap) modes per PCC flag, switched by `CJALR`; traps run in the mode of `mtcc` and `mret` restores the interrupted mode (observed) |
 | toolchain used here | our LLVM fork, Capstone-C, monitor, Linux | CTSRD CHERI-LLVM 17 (`~/cheri/output/sdk`), hybrid `lp64d` with `.option capmode` blocks; the hybrid compiler crashes on a tail call through a capability function pointer at `-O1` (`RISCVISD::TAIL` not selectable) — noted, not investigated |
 | verification the tree ships | our sweep, directed tests, board rungs | TestRIG/RVFI-DII vs Sail harness present, not run; no directed CHERI tests under `verif/tests/custom`; the tip was pushed unbuilt (phase 0) |
+
+### 2026-09-07, later — sealing and `CInvoke`: one enforcement defect (audited), one retraction on the way
+
+`cheri_probe_seal.S` (same conventions; `CInvoke` and the return `CJALR` as raw `.insn` words — the
+`CInvoke` encoding has rd field `00001`, `0xfd6a80db` for `cinvoke cs5, cs6`; with rd = 0 the core
+executed it as a no-op, `decoder.sv:1640`). 37 readings, each predicted in the source before the run:
+
+| step | reading | predicted | read |
+|---|---|---|---|
+| `cseal` a code cap and a 16 B data cap (EXECUTE removed with `candperm`) with an authority at address `0x1234` | `cgettype` / `cgetsealed` / `cgettag` of both | `0x1234` / 1 / 1 | as predicted |
+| `csetaddr` on the sealed cap | tag | 0 (v9: modifying a sealed cap invalidates it) | 0 |
+| `lw.cap` through the sealed data cap | trap; `mtval` | 1 trap; cause 3 (seal) at index 22 = `0x2c3` | 1; `0x2c3` |
+| `CInvoke`, matching pair | target reached; IDC (`ct6`) sealed / tag / len / addr; traps | yes; 0 / 1 / 16 / `buf`; none | as predicted |
+| `CInvoke`, **mismatched otypes**: code cap sealed `0x1234`, data cap `[buf+8, +8)` sealed `0x1235` (both read back, both tagged), IDC cleared to null just before, target = a stub that only records | v9: type violation (cause 4), no jump, IDC untouched | **jumped**: stub reached, no trap, and the IDC now holds the `0x1235` data cap **unsealed, tagged, length 8, address `buf+8`** (r26–r28) |
+| control A: `CInvoke` with an **unsealed** code cap, sealed data cap | trap; `mtval` low bits = 3 (seal) | trap; `mtval = 0x3` |
+| control B: matching sealed pair, data cap **keeps EXECUTE** | trap; `mtval` low bits = `0x11` (permit-execute) | trap; `mtval = 0x11` |
+| `cunseal` with the **wrong authority** (address `0x9999` for otype `0x1234`) | v9: type violation trap | no trap; result **untagged, unsealed** |
+
+**Retraction first.** The first draft of this entry — written, never committed — said the RTL "contains no
+comparison of the two otypes anywhere in `cheri_unit.sv`". It does. The grep behind that sentence was
+piped through `head -12`, and the set-sites at `:634`, `:638` and `:653` — the last being the comparison
+itself — fell past the cut. The adversarial audit (claim-auditor, run before commit) caught it and
+supplied the corrected mechanism below, which was then re-verified line by line. The rule already in
+CLAUDE.md (a positive finding from a narrowed view needs the unfiltered artifact) covers this; the
+specific slip is `grep | head` on a list whose completeness *is* the claim.
+
+**The defect, mechanism as verified.** `core/cheri_unit.sv:651-654` does compare
+`operand_a.otype != operand_b.otype` for `CINVOKE` and raises `operand_a_violations[CAP_TYPE_VIOLATION]`
+— on the **a** (code-capability) side, which is where the CTSRD reference implementation attributes it
+(`~/cheri/qemu/target/cheri-common/op_helper_cheri_common.c:496-499`: `CapEx_TypeViolation` = 4 on the
+code register when the otypes differ). But the `CINVOKE` enable mask for operand a (`:324-328`) is
+`TAG | SEAL | PERM_CINVOKE | PERM_EXEC | UNLIGNED_BASE` — **no TYPE bit** — while the operand-b mask
+(`:331`) has the TYPE bit and nothing sets the b-side flag under `CINVOKE`. Exception delivery ANDs flag
+with mask on each side (`:829`, `:834`), and the result-tag clear uses the same masks (`:700-703`), so the
+check can never fire and the IDC is installed tagged. The fix is one bit: add `(1 << CAP_TYPE_VIOLATION)`
+to the a-side mask at `:324-328`. Consequence: a sealed entry capability can be invoked with any sealed
+data capability of a different type — the pairing guarantee `CInvoke` exists for does not hold on this
+core.
+
+**Why the controls were mandatory.** The CHERI unit raises exceptions only for `CINVOKE` (`en_ex`
+defaults to 0 at `:105`, set at `:323`, applied at `:861`), and until this run no CLU-sourced trap had
+been observed — the `0x2c3` trap came from the LSU. Controls A and B use the same instruction with one
+thing changed each and both trapped with the predicted cause, so the exception path is live and the
+TYPE bit is the only thing missing. They also showed a second inconsistency: `:862` assigns
+`$unsigned(cheri_tval.cause)` and **discards `cap_idx`**, so CLU-sourced traps report `0x03` / `0x11`
+where LSU-sourced ones report `(idx << 5) | cause` — software decoding `mtval` per the spec gets a wrong
+index (0) for every capability-unit trap.
+
+**`CUnseal` with the wrong authority: a separate, silent-failure defect.** The mismatch is detected
+(`:632-638`) and masked in (`:468-472`), but `en_ex` is 0 for `CUNSEAL`, so `:861` drops the exception and
+only the tag-clear at `:700-703` happens. The result is unusable, so it is not a hole; software that
+expects the v9 trap will not get it.
+
+Instrument notes from this entry, for the next reader: (1) the merged register file bit a third time —
+`t0` is `ct0`, and `la t0, …` plus the trap handler's `t0` use overwrote the DDC-derived authority, so
+control B's first reading was cause 2 (every capability in it derived untagged); the probes' header rule
+now also says *never use `t0` as scratch; re-derive `ct0` from DDC after any `la t0` or trap*.
+(2) The RVFI `pc` column prints `0xffff1ffffc018004` for 4-byte instructions at addresses ≡ 2 mod 4 and
+at the riscv-tests end-of-test spin; instruction words and results are right.
+
+Phase-1 standing after this: ISA floor 107/107; hybrid, DRAM-path, purecap and sealing probes green
+except the `CInvoke` otype check (fork defect, not a toolchain mismatch), plus the `CUnseal` no-trap and
+the `mtval` index loss. None affects phase 2 (hardware cost). Phase 3's sealed-call demonstrator becomes a
+defect reproduction. Reporting the three to the fork's authors is outward-facing and waits for the lead;
+the repro is the probe file.
