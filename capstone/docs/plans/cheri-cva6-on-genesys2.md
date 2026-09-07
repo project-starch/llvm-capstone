@@ -36,7 +36,7 @@ still upstream's).
 | **ISA revision = CTSRD CHERI-RISC-V (the "v9" encoding family)**, not the 2024+ standard `Zcheri*` encodings despite the config flag names | `core/include/cva6_cheri_pkg.sv`: "Adapted from the CHERI Capability Library (CTSRD cheri-cap-lib)"; `CAP_OTYPE_WIDTH = 18` (RV64), `CAP_HPERMS_WIDTH = 12`, `CAP_E_WIDTH = 6`, `CLEN = 2*XLEN` + 1 tag bit; decoder handles `OpcodeCheri = 7'b1011011` (`riscv_pkg.sv:263`, `decoder.sv:1532`) with `CSEAL`/`CUNSEAL`/`CINVOKE`/`CJALR` |
 | **Our existing CHERI-LLVM SDK targets exactly that ISA** | `~/cheri/output/sdk/bin/clang` = clang 17 from CTSRD `llvm-project` `7e122876ee`; `-target riscv64-unknown-elf -march=rv64imafdcxcheri -mabi=l64pc128` compiles purecap (emits `cincoffset ca0, ca0, a1`), `-mabi=lp64d` compiles hybrid/plain. Built for the QEMU CHERI baseline (`tests/cheri-baseline/`), with a CheriBSD purecap image and rootfs beside it |
 | **Config**: `cv64a6_imafdchzcheri_sv39` — purecap + hybrid both on, 1-bit tag carried as `DataUserWidth`; the fork's `Makefile` defaults `target` to it | `core/include/cv64a6_imafdchzcheri_sv39_config_pkg.sv:30-42`; `Makefile:99-100` |
-| **Tags need storage behind the caches.** The core carries the tag on the AXI user bits; a DDR MIG does not store user bits, so an FPGA build needs the tag controller (a tag cache backed by a reserved DRAM region) in the SoC top | `corev_apu/cheri_tag_mem/cheri_tag_mem.sv` (tag cache: `DRAM_TAGS_BASE`, `DRAM_LENGTH`); controller `axi_tagctrl_reg_wrap` from the submodule `ninolomata/axi_cheri_tagcontroller` (`.gitmodules:54`, reachable) |
+| **Tags need storage behind the caches.** The core carries the tag on the AXI user bits; a DDR MIG does not store user bits, so an FPGA build needs the tag controller (a tag cache backed by a reserved DRAM region) in the SoC top | `corev_apu/cheri_tag_mem/cheri_tag_mem.sv` (tag cache: `DRAM_TAGS_BASE`, `DRAM_LENGTH`); controller `axi_tagctrl_reg_wrap` from the submodule checked out at `vendor/zero-day/axi_tagcontroller` (`.gitmodules:54`, reachable) |
 | **On `cheri-cam` the controller is only in the testbench**, not in the FPGA top | `corev_apu/tb/ariane_testharness.sv:522` (`gen_cheri_tag_controller`, tag region at `0xA0000000`); `corev_apu/fpga/src/ariane_xilinx.sv` has only the boot capability (`:768-783`) and ties user bits to 0 |
 | **The `vcu118` branch is the one with FPGA tag support**, and it keeps Genesys2 in the flow | 3 commits on top of `9a95da4`: "add vcu118 fpga support", "add second uart", "minor fixes"; 23 files, incl. `ariane_xilinx.sv`, `run.tcl`, `genesys-2.xdc`, `vcu118.xdc`, an AXI 512→64 dwidth converter and a DDR4 MIG; it adds `TagCacheMemBase = 0xBFF00000` to the FPGA top (top 1 MiB of a 1 GiB DRAM window → tags for the first 128 MiB); `run.tcl` still selects `genesys-2.xdc` and `src/genesysii.svh` for `BOARD=genesys2`, and the top keeps the `GENESYSII` DDR3 port list. **Confirmed the same day:** in that branch's `ariane_xilinx.sv` the `axi_tagctrl_reg_wrap` instantiation (`:1076-1163`) sits on the common DRAM path between the DRAM AXI slice (`.slv(master[ariane_soc::DRAM])`, `:1036-1040`) and the MIG-side bus, outside every board `ifdef` (the only conditional nearby is `PROTOCOL_CHECKER`, `:1110`), with `DRAMMemBase = 0x8000_0000`, `CapSize = 128`, an 8-way/128-line/4-block tag cache (`:213-222`). So Genesys2 gets the tag controller with no RTL edit; the tags live as ordinary data in DRAM, so the DDR3 MIG needs no user-bit path. |
 | **Genesys2 DRAM window matches**: 1 GiB at `0x8000_0000` | fork `corev_apu/tb/ariane_soc_pkg.sv:51,67` (1 GiB variant), `TagCacheMemBase = DRAMBase + DRAMLength - TagCacheMemLength` (`:71`) |
@@ -217,3 +217,87 @@ One section in the measurements doc, one table per axis:
 Phase 0 in full (a day), ending in: a full checkout at `vcu118` with submodules, the answer to
 the Genesys2 tag-controller question with `file:line`, a Verilator model that builds, and the
 synth README for build B — then phase 1's two smoke programs.
+
+## 8. Status log
+
+### 2026-09-07 — phases 0 and 1 complete; phase 2 waits for a synth-machine slot
+
+**Phase 0 — done, with three fork-tip defects found and worked around.** Full clone at `vcu118`
+`a97cf097` under `~/capstone-artifacts/ext/cheri-cva6-full`; the Verilator 5.008 model
+(`work-ver/Variane_testharness`, target `cv64a6_imafdchzcheri_sv39`) builds with `make verilate`.
+The tip does not build as cloned:
+
+| defect | where | effect | fix applied here | affects synthesis? |
+|---|---|---|---|---|
+| cvfpu gitlink stale: the tip's Flist lists the T-Head divsqrt sources (`core/Flist.cva6`, 25 lines added by `a97cf097`) but `core/cvfpu` still points at v0.7.0, which has none of them | `core/Flist.cva6:43-67` vs the recorded submodule commit `3116391b` | Verilator (and Vivado, which reads the same Flist: `Makefile:616,741`) stops with 25 missing files | cvfpu checked out at `2c794772` (2025-02-12) — the pin upstream OpenHW cva6 carried when it introduced exactly these Flist lines (`b3ece7c5`, 2025-10-13); the next upstream bump (`bb5e4f39`, 2025-11-24) adds an `early_valid_o` port the fork's `core/fpu_wrap.sv:535` never connects, so anything newer fails `PINMISSING` | **yes — the synth lane must apply it** (recipe in the tree's `SYNTH-README-genesys2.md`) |
+| testbench: the "add second uart" commit (`b7957bef`) declares the `uart2_*` APB block twice and reuses the instance name `i_axi2apb_64_32_uart` for the second bridge; the testharness never wires the new `uart2` slave, its pins or its address rule | `corev_apu/tb/ariane_peripherals.sv:311-336`, `corev_apu/tb/ariane_testharness.sv:604-711` | 9 elaboration errors, then a missing interface pin | 6+/9− testbench-only diff mirroring the fork's own FPGA top (`InclUART2=0`, `master[ariane_soc::UART2]`); `corev_apu/tb/` is not synthesised | no |
+| Verilator 5.008 emits `!=` on nested `VlUnpacked` arrays for the tag controller's bloom lock box, and 5.008's header has no such operator | `work-ver/…DepSet…cpp` on `i_lock_box_bloom`; `verilated_types.h` `struct VlUnpacked` | model C++ does not compile | element-wise `operator==`/`!=` added to the tree's private copy of the header (hardlink to our `capstone-ariane/tools` copy broken first); the fork's own `verilator-v5.patch` is byte-identical to ours and does not cover it | no |
+
+Reading of the three together: the `vcu118` tip does not build from a clean checkout. Two further harness facts, both needed to get any verdict at all: the
+fork's `cva6.py` sanity test needs a libc the container's bare-metal gcc lacks (`syscalls.c:4`
+`string.h`), so the model is built with `make verilate` directly; and the harness only ends a run
+on a write to `tohost` if `+tohost_addr=<hex>` is passed (`corev_apu/tb/rvfi_tracer.sv:47`) —
+without it every run "SUCCEEDS" at the timeout with `tohost = 2147483647`, which is not a result.
+
+**Phase 1 — done; the CHERI core executes and enforces capabilities in simulation, hybrid and
+purecap, through the DRAM tag path.** Every probe writes each reading with a plain `sd` into a
+results array (visible as `mem <addr> <data>` in the RVFI trace) and exits with a bitmask, so a
+trapping step still leaves data. Predictions were written in the source headers before each run.
+Sources: `~/capstone-artifacts/ext/cheri-tests/cheri_probe*.S` (our CHERI-LLVM 17, `-mabi=lp64d`
+plus `.option capmode` for the purecap block); runner `ext/cheri-run-one.sh`, decoder
+`ext/cheri-results.py` (exits non-zero when it finds no result store).
+
+| item | what ran | readings | verdict |
+|---|---|---|---|
+| ISA floor | upstream `riscv-tests` env/p, compiled with the container's gcc, hybrid mode (plain RV64) | 107/107 pass — the full rv64{ui,um,ua,uc,uf,ud} set, the same 107 names as the fork's own `testlist_riscv-tests-cv64a6_imafdc_sv39-p.yaml` (51/13/19/1/11/12); 1 400–47 000 cycles each. One instrument fault on the way: the sweep passed a fixed `+tohost_addr=80001000`, and `rv64uc-rvc` (the only test whose `.text.init` exceeds 4 KiB, so env/p's `link.ld` puts its `tohost` at `0x80003000`) was reported TIMEOUT; its trace ended in the `<pass>` spin after `sw gp, tohost` with `gp = 1`, and the rerun with the address read from its symbol table passes in 2 035 cycles. The runners now read `tohost` per ELF with `nm` | pass |
+| hybrid probe (`cheri_probe`) | DDC root cap; `csetbounds` 16 B; `sc.cap`/`lc.cap` round trip (L1-resident); integer `sd` over the slot; OOB `lw.cap` via `cincoffset +16`; in-bounds `lw.cap +12` | 25/25 as predicted: DDC tag 1, len 2⁶⁴−1, base 0, perms `0x78fff`; bounded cap tag 1, len 16, base = addr = buf, metadata `0xffff00000405a004` identical before and after the round trip and identical to the stored word; tag 0 after the integer overwrite; OOB load trapped with `mcause = 28`, `mtval = 0x2a1` = cause 1 (length violation) at cap index 21 (`cs5`), `cap_tval_t` layout in `cva6_cheri_pkg.sv`; in-bounds load no trap, value `0x0f0e0d0c`; 1617 cycles | pass; **positive control fired** |
+| DRAM tag path (`cheri_probe_dram`) | write-through, no-write-allocate dcache (`DCacheType = WT`; `wt_dcache_wbuffer.sv:44`): the first load of a line that was only ever stored misses L1 and crosses AXI into `axi_tagctrl` (`fence` does **not** flush the WT dcache — `controller.sv:121-125` flushes only for WB — so the probe's own header overstates it; its A/C/refill readings are DRAM-path by L1 miss, its B reading is L1-consistent); then 3072 tagged stores one per 4 KiB (12 MiB, 3× the 8-way × 128-line × 32 B tag cache) to force eviction to the in-DRAM table, a 96 KiB scan of the table region (which also cycles the 32 KiB L1), and a reload of a slot whose table word had been written | 22/22: tag 1 / len 16 / metadata unchanged after a store and a first load (L1 miss, AXI); tag 0 after an integer overwrite (L1-resident line, consistent); a never-written slot reads untagged (AXI); 2058 table words written during the sweep, first at `0xA00200A0` = `0x4` (bit 2 = capability index 2 of the 1 KiB block at `0x81005000`, exactly `axi_tagctrl_ax.sv:101-107`); the reload of `0x81005020` — whose tag line was evicted — came back tag 1, len 16, i.e. **refilled from the in-DRAM table** (that line had never been loaded, and the 96 KiB scan had cycled L1, so neither L1 nor the tag cache could have served it); no traps; 280 552 cycles | pass |
+| purecap mode (`cheri_probe_purecap`) | hybrid stub builds the caps, `CJALR` (raw `.insn`; our assembler accepts the mnemonic only under `.option capmode`) into a capmode block: `csc`/`clc`, OOB `clw` through a +16 cap, in-bounds `clw`, `CJALR` back through a flag-0 cap | 10/10: `cgetflags(pcc)` = 1 inside the block, tag 1, len 16, the OOB `clw` trapped (`mcause 28`, `mtval 0x2a1`), `mret` returned in capability mode (flag read 1 right after), in-bounds `clw` = `0x0f0e0d0c` with no second trap, flag 0 again after the return; 1533 cycles | pass; **positive control fired** |
+
+Not run, stated so it is not read as done: `cinvoke` on a sealed pair (plan item 2's last clause)
+and the fork's TestRIG-vs-Sail harness (item 3). Neither gates phase 2; the ISA-drift risk they
+were meant to detect is already answered — every encoding our SDK emitted (`cspecialr`,
+`csetbounds`, `cgethigh`, `sc.cap`/`lc.cap`, capmode `csc`/`clc`, `CJALR`) decoded as intended
+(`core/decoder.sv:1557-1567,1748-1750`). Sealing goes into phase 3's demonstrators.
+
+Two runs before these were **void**, and the lesson is worth the line: CHERI-RISC-V has a merged
+register file, so `t1` and `ct1` are one register; a probe that uses `tN` as an integer scratch
+while `ctN` holds the capability under test destroys the capability and reports a core defect that
+is not there ("`cgetlen` = 0 after a round trip"). Probes now keep capabilities and integer scratch
+in disjoint x-registers and say so in their header. A second instrument fault: the harness opens
+`trace_rvfi_hart_00.dasm` in its working directory with truncation, so two simulations in one tree
+clobber each other's trace (verdict lines on stdout are unaffected); each run now gets its own
+directory.
+
+**A finding for phases 2–3, decide before synthesis (bitstream constant).** On the FPGA the tag
+table sits at `TagCacheMemBase = 0xBFF00000` (`ariane_xilinx.sv:217`) with tags tracked for
+`0x8000_0000..0xA000_0000` (`:1106`); `TagCacheMemLength = 0x10000` (`:218`) is declared but not passed to the controller. The controller stores 8 bytes of table per 1 KiB of data
+(`axi_tagctrl_ax.sv:101-107`, layout confirmed above), so the table for the 512 MiB window is 4 MiB
+and ends at `0xC030_0000`, 3 MiB past the 1 GiB Genesys2 DRAM window. Tags for data below
+`0x8800_0000` (the first 128 MiB) are inside DRAM; capabilities stored above that address have their
+tag traffic sent to addresses beyond the DRAM window; what the MIG path does with those (an error, or a
+wrap into the first megabytes of DRAM, where programs live) is unread — a wrap would corrupt memory
+silently. §2's row already noted "tags for the first 128 MiB"; the
+consequence is that any purecap program above 128 MiB silently loses tags. Options, the lead's call:
+(a) synthesise as shipped and keep phases 3–4 below `0x8800_0000` (bare-metal does); (b) the
+one-constant change `TagCacheMemBase = 0xBFC00000` (DRAM top − 4 MiB) so the whole window is covered
+— a fork defect fix, not a flow change, but it must be in the tree before the run. Written into the
+tree's `SYNTH-README-genesys2.md` for the synth lane either way.
+
+**Phase 2 — ready, blocked on a synth-machine slot.** Recipe, the cvfpu pin, and the table-placement
+decision are in `SYNTH-README-genesys2.md` in the tree. Nothing under `core/` was edited; the fork
+is synthesised as it ships plus the pin. Our `rtl-lint-gate.sh` and its baseline are for
+`capstone-ariane` and do not apply to this tree; the phase-2 gate for build B is therefore "the fork's
+own flow runs to a routed design", with build A as the flow check, as §3 already says.
+
+**Phase 5 rows that need no synthesis** (the rest of the table waits for phases 2 and 4):
+
+| axis | Capstone-CVA6 | CHERI-CVA6 (`vcu118`, as read and as simulated) |
+|---|---|---|
+| capability format | see `docs/design/capability-bounds-model.md`; the revocation-node pool (65 536 nodes) is an RTL constant | 128-bit + 1 tag bit (`CLEN = 2·XLEN`), CHERI-Concentrate bounds (`CAP_E_WIDTH = 6`), 12 hardware + 4 user permissions, 18-bit otype, a flag bit selects capability mode; root and NULL share the all-zero bounds encoding (`cgethigh(ddc) = 0xffff000000000000`) |
+| what a violation looks like | Capstone exception classes per our spec; `tval` conventions in `docs/ref` | `mcause 28`, `mtval = cap_idx[10:5] ‖ cause[4:0]` (`cap_tval_t`); length violation = cause 1, tag violation = cause 2 (both observed) |
+| tag / metadata storage | metadata travels inside the capability word; no separate tag store | one bit per 16 B kept in DRAM by `axi_tagctrl`: 8-way × 128 lines × 32 B write-back tag cache (4 MiB of data covered per fill), table of 8 B per 1 KiB; on Genesys2 the table as shipped covers only the first 128 MiB (above) |
+| temporal safety | revoke-at-free as a hardware operation on the node tree | none in hardware; monotonic capabilities + tags; sweeps are software |
+| execution modes | one model: domains entered by `capenter`, monitor in M-mode | integer (hybrid) and capability (purecap) modes per PCC flag, switched by `CJALR`; traps run in the mode of `mtcc` and `mret` restores the interrupted mode (observed) |
+| toolchain used here | our LLVM fork, Capstone-C, monitor, Linux | CTSRD CHERI-LLVM 17 (`~/cheri/output/sdk`), hybrid `lp64d` with `.option capmode` blocks; the hybrid compiler crashes on a tail call through a capability function pointer at `-O1` (`RISCVISD::TAIL` not selectable) — noted, not investigated |
+| verification the tree ships | our sweep, directed tests, board rungs | TestRIG/RVFI-DII vs Sail harness present, not run; no directed CHERI tests under `verif/tests/custom`; the tip was pushed unbuilt (phase 0) |
