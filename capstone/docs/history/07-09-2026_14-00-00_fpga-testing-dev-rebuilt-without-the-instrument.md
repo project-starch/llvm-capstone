@@ -52,8 +52,10 @@ without it answers `0x00` there, which decodes as "no trap") and the nine-line r
   S-06 `s06-lowhalf-zero` FAIL 729 -> SUCCESS 731, `-swap` FAIL 732 -> SUCCESS 734, `s06sec-raw-alias-no-launder`
   FAIL 697 -> SUCCESS 723; S-08 `s06sec-ctx-scalar-roundtrip` FAIL 612 -> SUCCESS 592; S-07 `s07-wbuf-tag-reorder`
   4 -> 1 exceptions with its control pinned at 1; S-10 `s07-wbuf-forward-residual` 9 -> 17 with its control at 17;
-  S-12 under `S12_MEM_DELAY=40`: pre-fix (S-10 RTL + the S-12 testbench knob) FAIL, 254 exceptions at 190,471 cycles (control 1), tip 1 exception at
-  156,794 cycles.
+  S-12 under `S12_MEM_DELAY=40`: pre-fix (S-10 RTL + the S-12 testbench knob) FAIL, 254 `Exception:` lines at 190,471 cycles (control 1), tip 1 exception at
+  156,794 cycles. The 254 is 253 reproducer traps plus the ARM P control's trap at cycle 591, which is the tip's 1; the
+  original commit b9dd83249 quoted the same runs as 255 in its table and 254 in its prose, so the trap count is
+  convention-dependent and the cycle counts (190,471 / 156,794) are the exact match.
 * **Per-commit deltas are all attributable:** S-06 changes six rows by a few cycles and one timeout trace; S-08
   changes the two domain-switch tests; S-07 changes no shared row; S-10 changes the residual pair and one test by
   three cycles; S-12 changes nothing at delay 0; the mtval commit changes exactly one trace hash
@@ -82,6 +84,6 @@ intermediate sweep records; everything on `s12-ldc-rolling-*`, `s07-recorder-cle
 
 ## Status
 
-The tip is **new RTL** (the instrument is gone) and is unsynthesised: a candidate, not ready. Next: push (needs the
-allowlist line), synthesis + census on the synth machine against the arm-2 tie-off as the expected bound, then any
-board work through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.
+The tip is **new RTL** (the instrument is gone) and is unsynthesised: a candidate, not ready. Pushed 2026-09-07 as
+`fpga-testing-dev-clean`, tip `947327f6d` (`chain-v3` plus one corrected S-12 message sentence). Next: synthesis +
+census on the synth machine against the arm-2 tie-off as the expected bound, then any board work through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.

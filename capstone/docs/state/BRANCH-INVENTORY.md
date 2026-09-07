@@ -1,12 +1,13 @@
 # Branch inventory — `capstone-ariane`, 2026-08-20
 
-> **2026-09-07 — `fpga-testing-dev` has a REBUILT replacement, not yet pushed.** `fpga-testing-dev-clean`
-> (local, tip `9277846e9`, tag `chain-v3`) is the shared base `7e4dc440f` plus eight commits: lint gate and
+> **2026-09-07 — `fpga-testing-dev` has a REBUILT replacement, pushed to origin.** `fpga-testing-dev-clean`
+> (tip `947327f6d`, tag `chain-v4`; same trees as `chain-v3` `9277846e9`, one S-12 message sentence corrected)
+> is the shared base `7e4dc440f` plus eight commits: lint gate and
 > sweep baseline, S-06, S-08, S-07 fix, S-10, S-12, the mtval-cursor feature, synthesis tooling — every fix
 > byte-identical to the flashed `5097eb166`'s version and the S-07 on-silicon instrument never added. All 88
 > simulation rows identical to the flashed tip's; each commit carries its measured record; lint baseline
-> re-derived at S-06 and S-10. Old tip preserved as `backup/fpga-testing-dev-2026-08-21`. Blocked on an
-> allowlist line for the build branch; then synthesis + census (synth lane) before any flash (board lane).
+> re-derived at S-06 and S-10. Old tip preserved as `backup/fpga-testing-dev-2026-08-21`. Next: synthesis
+> + census (synth lane) before any flash (board lane).
 > Full account: `history/07-09-2026_14-00-00_fpga-testing-dev-rebuilt-without-the-instrument.md`.
 >
 > **RE-CHECKED 2026-09-04 — the alarm below is mostly RESOLVED, and one branch is still exposed.**
