@@ -289,6 +289,24 @@ The two new `-board`/`-qemu` names exist because those lines are siblings of the
 `capstone-bootstrap`, not descendants (see "Why the branch names differ" above); a plain push was
 rejected non-fast-forward and must never be forced. Push order stays bottom-up.
 
+## Gitlink audit — 2026-09-08 — the unified state, local until the lead pushes
+
+After `docs/plans/monitor-unification.md`: one branch per nested repo, both checkouts on it. Every
+row below is a **branch creation** on its remote (the `pre-unify/2026-09-08/*` tags mark the
+previous tips, also unpushed). Parent `dev` references `caplifive-system` and `caplifive-buildroot`
+gitlinks that are not on their remotes until these pushes land — push nested repos deepest-first,
+then the parent is already consistent.
+
+| checkout | remote | branch | HEAD |
+|---|---|---|---|
+| `caplifive-system` | `caplifive-system-dev` | `capstone-bootstrap` (fast-forward) | `4686afa` |
+| `…/sw/buildroot` and `caplifive-buildroot` | `caplifive-buildroot` | `capstone-bootstrap-unified` (new) | `41a2a1a` |
+| `…/components/opensbi` (both) | `caplifive-opensbi` and `capstone-opensbi` — two remotes, one history: push to both | `capstone-bootstrap-unified` (new) | `ea34f91` |
+| `…/lib/sbi/capstone-sbi` (both) | `capstone-sbi` | `capstone-bootstrap-unified` (new) | `1b87df8` |
+| `…/package/capstone-sbi-domain/capstone-sbi` | `caplifive-sbi` | `capstone-bootstrap` (unchanged) | `977af95` |
+
+After pushing from one checkout of a shared remote, `git fetch` in the other so both see the branch.
+
 ---
 
 ## Outstanding

@@ -73,9 +73,9 @@ the QEMU wrapper compiles over the unified monitor):
 | capstone-sbi (monitor) | 835f15a | dead text deleted (the 325-line clone, duplicate define, stale comment, `.S` debug block) |
 | capstone-sbi | 17d7b60 | `capstone_target.h`: per-target constants, macros only, `#error` without a target |
 | capstone-sbi | d3adf3f | reporting layer per target: UART block FPGA-only; QEMU reports = trace-print pairs |
-| capstone-sbi | 9b5fc28 | the E/C hunks per target verbatim (whole functions: `print_regions`, `print_cpmps`, `make_hole`, `create_domain`, `handle_exception`; inline: SPLA/SPLB reports, `REV_TRANSFERRED`, `swap_cpmp` prints, IRQX; QEMU-only pre-checks; `MAKE_HOLE` call-site macro; the `.S` fence.i/reentry/rdtime FPGA-only) |
-| opensbi wrapper | 86b5f92, 175206f | `platform/fpga/ariane` defines the FPGA target; the wrapper per target (UART mint, fence.i, MIE, stack size, int-handler `capstone_error`, `fw_base.ldS` ALIGN); `platform/generic` defines the QEMU target + `CAPSTONE_DEBUG_ENABLE` |
-| caplifive-buildroot | 6cced67 | one `components/opensbi` for both targets; the `.c.S` regenerates on a stamp of the defines when TARGET changes (positive control: after a QEMU build, `make -n TARGET=fpga` regenerates) |
+| capstone-sbi | 1b87df8 (was 9b5fc28 before the post-merge audit's message amend) | the E/C hunks per target verbatim (whole functions: `print_regions`, `print_cpmps`, `make_hole`, `create_domain`, `handle_exception`; inline: SPLA/SPLB reports, `REV_TRANSFERRED`, `swap_cpmp` prints, IRQX; QEMU-only pre-checks; `MAKE_HOLE` call-site macro; the `.S` fence.i/reentry/rdtime FPGA-only) |
+| opensbi wrapper | 86b5f92, ea34f91 (175206f before the audit amend: the spurious QEMU `csrw mscratch` removed) | `platform/fpga/ariane` defines the FPGA target; the wrapper per target (UART mint, fence.i, MIE, stack size, int-handler `capstone_error`, `fw_base.ldS` ALIGN); `platform/generic` defines the QEMU target + `CAPSTONE_DEBUG_ENABLE` |
+| caplifive-buildroot | 6cced67, then 21b09c2 (audit follow-ups) and 41a2a1a (ignore fix) | one `components/opensbi` for both targets; the `.c.S` regenerates on a stamp of the defines when TARGET changes (positive control: after a QEMU build, `make -n TARGET=fpga` regenerates) |
 
 QEMU side after the collapse: the `.c.S` regenerated through the real Makefile equals the
 compile-check output exactly; it differs from the QEMU reference in ten functions, all enumerated in
@@ -113,8 +113,12 @@ byte-for-byte the QEMU line's, module with the memset):** the first chain run hi
 shaped failures (QEMU exiting as the smoke command was typed; two kernel boot stalls before login — a
 shape present in live-tree corpus logs too — and a timeout) while the five probes passed; redrawn on
 the quiet host: smoke 2/2, SLT `select1` 1031 records `completed=1`, child-share 3/3 TRAPPED (its
-two stalls were both before login, i.e. before the probe ran). Every QEMU gate is therefore green on
-the firmware the tree builds now.
+two stalls were both before login, i.e. before the probe ran). **Which gate ran on which firmware:**
+the corpus tier (authority, RV8, BEEBS) and the module-consistency check ran on bbe6d434b12c, before
+the audit corrections; only smoke, the five probes, child-share and SLT `select1` re-ran on
+ec508f14bbb6. The corrections moved the tree toward the originals, so the risk was low, but the
+statement "every gate green on the firmware the tree builds now" held only after the live-checkout
+re-run below.
 
 ### Design as executed
 
@@ -243,7 +247,27 @@ native, zero `SPLA/SPLB/RGNO/EXCX/CERR/ILLX/MCAU`, `HOLE` 0 (no exact fit occurr
 remains unexercised on silicon and self-reporting). The firmware is listed in
 `tests/firmware-with-q03-hole.txt`; preflight C7 then passes 8 domains by content with no override.
 
-**QEMU:** every gate green on the firmware the tree builds now (see A1's re-validation paragraph).
+**QEMU:** the worktree chain (A1's re-validation paragraph), then the **live-checkout re-run
+(2026-09-07 22:31, `fw_jump 557b444b6bf3`, the firmware the live tree builds)**. First finding: after
+the switch, the live QEMU checkout's `test-domains` and `nested-enclave` binaries were still the QEMU
+line's while their sources were now the board line's — buildroot does not re-sync a local package on
+a bare pass, the same trap the audit caught in `build-fpga`. Both packages rebuilt (`A=<pkg>-rebuild`);
+all 23 files under `test-domains/`, `nested/`, `null_blk/` then byte-equal to the validated worktree
+`build-qemu`; rootfs 7302d4e3c1f4. On that rootfs: smoke `retval = 42`; module-consistency check
+8/8 returned, `count=9`, `oob_share retval=4294967295`, `reuse=0 fetchfail=0`, PASSED;
+authority 32/32; RV8 7/7; BEEBS 81/81 with zero infrastructure retries (lock held 22:31–22:47,
+per-run root `/tmp/capstone-live-reval`). Every QEMU gate is now green on the firmware the live tree
+builds, from its own images.
+
+**Not yet exercised on silicon: the merged loader library.** The A2 boot ran pre-built programs:
+`lpc` (private structs, no libcapstone) and `sqlite_host_1m.user`, linked before the merge against
+the QEMU line's library. The first rebuild of a board host program links the merged
+`libcapstone.c`, which packs the `.capstone_gp_initdesc` offset into `entry_offset` and synthesizes
+the image across all `PT_LOAD`s (the board line's loader spanned from the first executable `PT_LOAD`
+to the last one). QEMU has validated that shape; the board has not — treat that rebuild as a
+validation boot (control first), not routine. The board rootfs's nested-enclave images are
+`miniweb_backend.smode` ET_EXEC with two `PT_LOAD`s and ET_REL `.ko` modules (`readelf -lW`,
+2026-09-07); nothing in the A2 boot loaded them.
 
 **Audits:** pre-A1 and post-merge, both folded in (see above).
 
@@ -264,7 +288,9 @@ switch of the live checkouts, and the pushes (the lead's; every push is a branch
 1. QEMU's three pre-carve bounds checks on FPGA, replacing the post-carve spin — board boot.
 2. Q-05 `make_hole` at `REV_TRANSFERRED` on FPGA — board boot with a transfer-annotated share.
 3. Geometry (`MAX_REGION_N` 96 / `MAX_DOM_N`) on QEMU — makes M-2 reachable under QEMU.
-4. The other packages both ways.
+4. The other packages both ways (the QEMU line's `__linear` annotations and `C_PRINT` guards into
+   test-domains / null-blk / nested-enclave; the unified tree carries the board line's versions and
+   both live rootfs images are built from them since 22:31).
 5. The gp cluster as one logic (carve only when the image declares globals; split declarators +
    `>>3`) — QEMU tier + full ladder board boot. Highest risk; last.
 6. `swap_cpmp` read-back and the C-13 rounding on QEMU.
