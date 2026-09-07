@@ -308,7 +308,7 @@ record from the identical `core/` tree. Models verified freshly built from the p
 | arm (late consumer) | rows identical | changed | what the RVFI trace shows |
 |---|---:|---:|---|
 | `commit_stage_i` | 16 / 18 | `revocation`, `s06sec-ctx-scalar-roundtrip` | **the instruction after the CALL retires** — `li gp,4` (the test's own "falling through means the switch never happened" code) → FAIL; in `revocation` the successor `lui a0` clobbers a0, the CALL re-executes and traps UNEXPECTED_OPERAND, the core ends at pc 0 → TIMEOUT |
-| `controller_i` | 18 / 18 | — | no effect in this set |
+| `controller_i` | 18 / 18 | — | no change in the two informative tests: **untested at useful power, not exonerated** |
 | `i_frontend` | 16 / 18 | the same two | **after the switch the callee's instruction words retire with PCs shifted by +4** (`0x30302373` retired at `…b0` and again at `…b4`, then `…b4`'s word at `…b8`, …); PC-relative control flow goes wrong, both tests spin at `j pc+0` → TIMEOUT, zero exceptions |
 
 **Read the population before the fractions.** Only three of the 18 tests contain a CALL or RETURN;
@@ -321,8 +321,9 @@ safety; they never raise busy.
 What this settles: the rising-edge hazard (C2) is a measured phantom commit, not an argument; and
 the falling edge has a measured hazard of its own at the frontend (the late release of `npc` after
 the restart mis-associates PCs with fetched words), distinct from the controller reconvergence path
-named above, which this set did not exercise (the controller arm is clean, but no informative test
-reaches a RETURN with a passing baseline). What it does not settle: how much timing margin silicon
+named above, which this set did not exercise (the controller arm shows no change, but that is a
+negative at n = 2 with no informative test reaching a RETURN on a passing baseline; a directed CALL/RETURN
+test that exercises the controller path would give that arm the power the other two have). What it does not settle: how much timing margin silicon
 has at the failing endpoints in `commit_stage`'s and the frontend's cones — the experiment forces a
 full-cycle lateness at a whole port, whereas in silicon only the endpoints on failing paths are late.
 
