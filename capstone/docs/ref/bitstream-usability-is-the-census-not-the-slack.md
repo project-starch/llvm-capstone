@@ -295,3 +295,42 @@ level that gates commit fails the second clause by construction, whatever its st
 
 Artifact: `synth-947327f6d-exit0.tar.gz` (403,665,530 bytes) on the synthesis machine, next to the
 two S-12 arms.
+
+### Experiment B, run the same day: the mechanism is measured, on both edges
+
+Simulation only (Verilator, host), no board, no synthesis. Three worktrees at `947327f6d`, each with
+`dom_switch_busy` captured one cycle late at **exactly one** consumer — a flop inserted in `cva6.sv`
+in front of that instance's `dom_switch_busy_i` port — then the 18 tests that contain a domain
+switch, compared row by row (verdict, cycles, RVFI trace hash, exception count) with the tip's own
+record from the identical `core/` tree. Models verified freshly built from the patched source
+(generated C++ carries the flop).
+
+| arm (late consumer) | rows identical | changed | what the RVFI trace shows |
+|---|---:|---:|---|
+| `commit_stage_i` | 16 / 18 | `revocation`, `s06sec-ctx-scalar-roundtrip` | **the instruction after the CALL retires** — `li gp,4` (the test's own "falling through means the switch never happened" code) → FAIL; in `revocation` the successor `lui a0` clobbers a0, the CALL re-executes and traps UNEXPECTED_OPERAND, the core ends at pc 0 → TIMEOUT |
+| `controller_i` | 18 / 18 | — | no effect in this set |
+| `i_frontend` | 16 / 18 | the same two | **after the switch the callee's instruction words retire with PCs shifted by +4** (`0x30302373` retired at `…b0` and again at `…b4`, then `…b4`'s word at `…b8`, …); PC-relative control flow goes wrong, both tests spin at `j pc+0` → TIMEOUT, zero exceptions |
+
+**Read the population before the fractions.** Only three of the 18 tests contain a CALL or RETURN;
+`CAPENTER` is detected at commit as its own mechanism (`commit_stage.sv:187-191`) and never raises
+the busy level, so the eight CAPENTER tests are uninformative about its edges. Of the three,
+`call-ctx-save` times out on the tip already. **The informative population is two tests, and both
+changed in both the commit-stage and the frontend arm.** The 16 identical rows are not evidence of
+safety; they never raise busy.
+
+What this settles: the rising-edge hazard (C2) is a measured phantom commit, not an argument; and
+the falling edge has a measured hazard of its own at the frontend (the late release of `npc` after
+the restart mis-associates PCs with fetched words), distinct from the controller reconvergence path
+named above, which this set did not exercise (the controller arm is clean, but no informative test
+reaches a RETURN with a passing baseline). What it does not settle: how much timing margin silicon
+has at the failing endpoints in `commit_stage`'s and the frontend's cones — the experiment forces a
+full-cycle lateness at a whole port, whereas in silicon only the endpoints on failing paths are late.
+
+One more intersection worth having in writing: the S-12 board verdict is read out of `mcause`/`mepc`
+packed into the domain return word, and on **this** build those CSRs lie on the busy-launched cone.
+That does not touch the recorded S-12 result — the flashed `5097eb166` has a different launch
+register, and the S-12 trap fires during the body, not at a switch edge — but on any build with this
+census the readout path and the hazard cone intersect.
+
+Records: `expB-{C,K,F}.txt`, the diverging traces, the patch and the arm diff are kept with the
+rebuild records outside the repo (`~/dev/llvm-capstone-rebuild/records/expB*`).

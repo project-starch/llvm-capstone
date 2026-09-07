@@ -113,8 +113,11 @@ been built twice with identical settings on this flow.
 was written. The launch register `req_en_q` is the domain-switch busy level; it is constant during a
 body, but its rising edge is the very signal that gates commit (`commit_stage.sv:303`, commit
 `030378a66`'s fix) and the trap-entry CSRs, `instret`, the scoreboard and the register-file module are
-all on its failing cone. Full argument, the auditor's refutation, and the three things that would
-change the verdict are in `ref/bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry.
+all on its failing cone. Experiment B, run the same afternoon in Verilator, measured both edges: with the commit stage seeing busy
+one cycle late, the instruction after a CALL commits (2 of the 2 informative CALL tests; FAIL and TIMEOUT);
+with the frontend seeing it late, the callee retires with PCs shifted by +4 (the same two tests, TIMEOUT);
+the controller arm is clean. Full argument, the auditor's refutation, the experiment and the things that
+would change the verdict are in `ref/bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry.
 
 **Consequence for the branch.** `fpga-testing-dev-clean` is the correct RTL history and stays; the
 force-push over `fpga-testing-dev` is unaffected by the timing result. What it is not, yet, is a
