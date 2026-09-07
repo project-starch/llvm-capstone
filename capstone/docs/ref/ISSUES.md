@@ -613,7 +613,7 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `FIXED in the QEMU stand-in 2026-09-05 — hole + region_live[] sentinel (plans/q03-region-hole-sentinel.md); fw_jump ca218db97d53 / sbi.dom ba3a8dca38e3; manifest B 24/24 ×2 with the hole at item 8 reading i=8 n=10 as predicted, F 6/6, five REV_TRANSFERRED probes green. Board firmware NOT changed (same site, lead's call)`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `FIXED in the QEMU stand-in 2026-09-05 — hole + region_live[] sentinel (plans/q03-region-hole-sentinel.md); fw_jump ca218db97d53 / sbi.dom ba3a8dca38e3; manifest B 24/24 ×2 with the hole at item 8 reading i=8 n=10 as predicted, F 6/6, five REV_TRANSFERRED probes green. BOARD FIRMWARE PORTED 2026-09-07 (fw_payload 44c88d9ebeb1, audited): 7/7 domains in ONE boot, zero fault tags; no exact fit occurred, so the hole path is unexercised on silicon and self-reporting (HOLE:<slot> RGNN:<n>)`
 
 > ### 2026-09-05 — root cause, port, positive control, and what is left
 >
@@ -821,6 +821,54 @@ ordinary infra flake. The first two are answerable off-board with the reproducer
 `-O0`-only compiler defect, and retracted it after re-running the wedged image first-in-boot. Their
 campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
 Applies equally to board arms.
+
+> ### 2026-09-07 — board firmware ported (same site, same design), audited, one validation boot
+>
+> **Port** (`caplifive-system` → `sw/buildroot/components/opensbi` → nested `lib/sbi/capstone-sbi`;
+> note that `git diff` at the `components/opensbi` level shows only the `sbi_capstone_dom.c` hunk and
+> silently omits `sbi_capstone.c`, which lives one submodule deeper): `region_live[]` +
+> `make_hole(i)` replace the `CAPSTONE_SPLIT_EXACT_FIT` tail-shrink/middle-spin block
+> unconditionally; a `!linear` exact fit reports `SPLB:0000E011` + `RGID` + `RGNN` and stops
+> (unreachable: the FOUR boot-time carves in `cap_env_init` are never exact fits — the int-handler
+> text is a head carve of genesis region 1, the other three sit inside region 0); genesis regions
+> 0..2 marked live; the six guest-facing id consumers guarded as separate statements
+> (`shared_region_annotated`, `share_child_region`, `share_region`, `revoke_region`,
+> `region_de_linear`, `query_region`); `split_out_cap`, `swap_cpmp` and `print_regions` skip holes;
+> `pop_region` clears `region_live`. **Audit (claim-auditor): SAFE, comment-only corrections**, all
+> applied — dead knob and the `EXACT`/`EXACT_MID` codes retired (values kept so old logs decode),
+> the stale in-function comment removed, the runner's "guarded by a commented-out define" description
+> of 0xE006 corrected. Two things the audit found that the plan had wrong: **`print_regions` is
+> LIVE on the board** — `swap_cpmp`'s CPMX fault path calls it and its body linearly reads back
+> every slot, so the hole skip there is load-bearing; and four boot carves, not three. Positive
+> control that no site was optimised away: 21 `region_live` source sites → 21 `ldc(*, gp, 80)` in
+> the generated assembly; `.gct` places `region_live` at gp+80 (768 B), disjoint from `regions`
+> (gp+48) and `region_cpmp` (gp+64).
+>
+> **Validation boot sw30** (`fw_payload 44c88d9ebeb1`, `caplifive_s12fix_5097eb166`, `k800`
+> first, `tests/board-results/2026-09-05.tsv`): **F1 — 7/7 domains returned their native oracles in
+> ONE boot** (k800 = 4, then six BEEBS rungs at distinct VAs), zero
+> `SPLA/SPLB/RGNO/EXCX/CERR/ILLX`, `DBAS`/`DENT` 7/7 — three domains past preflight C7's 4-slot
+> budget, overridden deliberately with `PREFLIGHT_ALLOW_SLOTS=1` and recorded in the run's log line.
+> Linux reaching a shell is itself the positive test for the genesis marking (a wrong init fails the
+> first boot carve with `SPLA:E005` before the UART is ready — a silent pre-banner hang).
+> **F2 — no exact fit occurred: `HOLE` 0.** So `make_hole`, the consumer guards and the module's
+> response to a hole are **unexercised on silicon**; the boot proves non-regression of the append
+> marking, the three search skips and the genesis init, nothing more. The fit is not forceable from
+> a load (it needs the module's `__get_free_pages` block to coincide with a leftover fragment, and
+> the only raw base/len entry, `DOM_CALL_WITH_CAP`, has no ioctl), and the old "runs 5-7 in 4 of 4
+> boots" frequency was partly a replayed-history misread (`SILICON-BLOCKER.md`, "RETRACTED: the
+> ceiling is NOT SPLB"). The path is self-reporting — the first exact fit in any campaign prints
+> `HOLE:<slot> RGNN:<n>` and continues — and the staged runner's summary now counts those lines, so
+> the first natural occurrence is recorded instead of spending boots on a coin flip. Preflight C7
+> now passes on content for firmware listed in `tests/firmware-with-q03-hole.txt` (this build is the
+> first entry) and keeps the 4-slot budget for everything else.
+>
+> **On the board and unchanged:** `package/capstone-sbi-domain`'s copy (→ `sbi.dom`,
+> `region_n = 1`) is unported — a separate TU, no behaviour change, would need its own port plus
+> `region_live[0] = 1`; `pop_region` is reachable by ecall but has no ioctl, so "holes are never
+> reused" holds by reachability, not enforcement; the `REV_TRANSFERRED` site (Q-05's one-line
+> port). **M-2 is now more reachable** — see its entry: the port removes the wedge that kept the
+> module's 64-slot copy under its bound.
 
 ## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `FIXED in the QEMU stand-in 2026-09-07 — the slot becomes a hole (make_hole, tag 0x1239) in both copies and the probe observes through the domain; fw_jump d9b11509c2f4 / sbi.dom b6b17d84c1fa; 5/5 probes, SLT select1 identical, the hole fired 24 times. Board firmware site unchanged (see the close-out)`
 

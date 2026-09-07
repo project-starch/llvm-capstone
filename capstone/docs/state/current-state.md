@@ -22,6 +22,9 @@ Minimal snapshot. Read first in every session.
   tested ancestry by hash. Presence-by-content is the check; see ISSUES.md.
 * **S-13 does not reproduce at `-O1`**, but bitstream and compiler both changed, so it attributes to
   neither yet.
+* **2026-09-07:** Q-03 ported to the BOARD firmware (`fw_payload 44c88d9ebeb1`, audited; boot sw30 7/7 in one
+  boot, no exact fit occurred so the hole path is unexercised on silicon and self-reporting); Q-05 fixed in the
+  stand-in (the probe observes through the domain; both copies make the transferred slot a hole).
 * Q-02 (QEMU build break) closed end to end; Q-03 (position-dependent wedge, reproducible off-board),
   R-25 (INIT linearity break), C-41 (compiler `return` encoding), I-01..I-03 filed and verified.
 

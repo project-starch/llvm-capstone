@@ -23,7 +23,8 @@
 #                                DOMAIN_BASE_VA defaults to 0x10000 and 24 of 40 committed .dom
 #                                files enter there. Bit a live diag boot on 2026-09-05.
 #   C7 slot budget            -- split_out_cap's middle exact-fit case spins at ~the 5th
-#                                create_dom, and whatever occupies that slot gets blamed.
+#                                create_dom, and whatever occupies that slot gets blamed. Lifted
+#                                by CONTENT for firmware listed in firmware-with-q03-hole.txt.
 set -uo pipefail
 FAIL=0
 say() { printf "  %-6s %s\n" "$1" "$2"; }
@@ -293,9 +294,23 @@ if (( n > 0 && n < 4 )); then
 fi
 
 # C7 ----------------------------------------------------------------------------------------
-if [[ "$n" -gt 4 ]]; then
-  bad "$n domains requested; the monitor's middle exact-fit case spins at ~the 5th create_dom, so slots 5+ carry NO verdict (set PREFLIGHT_ALLOW_SLOTS=1 to override deliberately)"
-  [[ "${PREFLIGHT_ALLOW_SLOTS:-0}" == "1" ]] && { FAIL=0; say "warn" "slot budget overridden on purpose"; }
+# The 4-slot budget encodes the monitor's exact-fit spin (Q-03): on firmware without the hole fix
+# the ~5th create_dom could spin and whatever occupied that slot got blamed. Firmware that carries
+# the fix has no such ceiling and is recognised by CONTENT -- its sha256 listed in
+# tests/firmware-with-q03-hole.txt, one line per boot-validated file -- never by name, size or
+# date (buildroot pads images in 2 MiB steps, so sizes collide, and every rebuild is a new hash).
+# The override no longer resets FAIL: before 2026-09-07 `FAIL=0` here silently cleared every
+# BLOCK raised by the checks above it, so PREFLIGHT_ALLOW_SLOTS=1 was a master override in disguise.
+HOLEFIX_LIST="$(dirname "$0")/firmware-with-q03-hole.txt"
+fw_sha=""; [[ -f "$FW" ]] && fw_sha=$(sha256sum "$FW" | cut -d' ' -f1)
+if [[ -n "$fw_sha" && -f "$HOLEFIX_LIST" ]] && grep -q "^$fw_sha" "$HOLEFIX_LIST"; then
+  ok "C7: firmware ${fw_sha:0:12} carries the Q-03 hole fix (listed in $(basename "$HOLEFIX_LIST")) -- no slot budget; $n domain(s)"
+elif [[ "$n" -gt 4 ]]; then
+  if [[ "${PREFLIGHT_ALLOW_SLOTS:-0}" == "1" ]]; then
+    say "warn" "C7: $n domains on firmware ${fw_sha:0:12}, which is NOT listed as carrying the Q-03 hole fix -- slot budget overridden on purpose (PREFLIGHT_ALLOW_SLOTS=1); slots 5+ carry no verdict if the exact-fit spin fires"
+  else
+    bad "$n domains requested on firmware ${fw_sha:0:12}, which is NOT listed in $(basename "$HOLEFIX_LIST") as carrying the Q-03 hole fix; its middle exact-fit case spins at ~the 5th create_dom, so slots 5+ carry NO verdict (list the firmware after a validated boot, or set PREFLIGHT_ALLOW_SLOTS=1 to override deliberately)"
+  fi
 elif [[ "$n" -gt 0 ]]; then ok "$n domains -- within the 4-slot budget"; fi
 
 # C2/C3/C4 ----------------------------------------------------------------------------------

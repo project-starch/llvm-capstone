@@ -141,7 +141,9 @@ available) or about I/O and crash behaviour (no VFS).
 - Wall-clock is not an oracle on silicon: the step budget must be deterministic and per statement,
   and the board driver's silence budget must exceed the worst bundle — unknown until step 1.
 - One draw per case; a divergence needs a second draw before it becomes a finding.
-- Board time cannot start until the Q-03 firmware change is validated on the board: bundles create
-  exactly the region shapes that used to spin.
+- The Q-03 firmware port is on the board since 2026-09-07 (7 domains in one boot, no regression) but
+  its hole path is still unexercised there: bundles create exactly the region shapes that used to spin,
+  so the first campaign boot is also the first silicon exercise of `make_hole` — read its `HOLE`/`RGNN`
+  lines and the M-2 slot count before trusting a long batch.
 - The 16 `OMIT_*` defines are the deployed build; a result on them is not a result on stock SQLite,
   and the write-up must carry the list.

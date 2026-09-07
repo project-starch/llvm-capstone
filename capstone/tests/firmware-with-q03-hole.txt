@@ -1,0 +1,6 @@
+# Firmware images (sha256 of the exact fw_payload.bin that was booted) that carry the Q-03
+# region-hole fix (make_hole + region_live[] in the board monitor). Preflight C7 lifts its
+# 4-slot budget for these BY CONTENT. Add a line only after a boot of that exact file returned
+# its control and every domain; never by name or size (buildroot pads images in 2 MiB steps).
+# sha256  date  boot  evidence
+44c88d9ebeb19c7091e2e04c7078f6f938fa0550e1dee33bca716d024fb84a19  2026-09-07  sw30  k800 + 6 BEEBS rungs 7/7 in one boot, no fault tag, no exact fit occurred (hole path unexercised); monitor source = caplifive-system nested capstone-sbi 56dfbe9 (opensbi 0ac0290)

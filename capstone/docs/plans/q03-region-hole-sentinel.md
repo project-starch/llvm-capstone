@@ -206,3 +206,15 @@ untagged `lcc`. The pool ended at 13 of 64 after 24 items.
 Still open from this plan: item 0 (positive-control the module's `Region ID reuse detected` alert —
 the loader's checks do not depend on it), item 5 (`device_ioctl` locking), the board firmware
 (same site, same patch, the lead's call), and Q-05.
+
+## Board port (2026-09-07)
+
+Same design, same site, in `caplifive-system`'s nested `capstone-sbi` (`fw_payload 44c88d9ebeb1`).
+Audited before the boot (SAFE; comment-only corrections applied). The audit corrected two items above:
+`print_regions` is LIVE on the board (called from `swap_cpmp`'s CPMX fault path, and it linearly reads
+back every slot) so item 4's skip is load-bearing there; and `cap_env_init` makes four `!linear`
+carves, none an exact fit. Validation boot sw30: k800 + six BEEBS rungs, 7/7 oracles in one boot, no
+fault tag, **no exact fit occurred** — the hole path is unexercised on silicon and self-reporting.
+Open item 3 (M-2) is sharpened in ISSUES.md: the port removes the wedge that kept the module's copy
+under 64. Still open: the `sbi.dom` copy on the board, `REV_TRANSFERRED` on the board (Q-05), items 0
+and 5.
