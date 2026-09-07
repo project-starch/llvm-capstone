@@ -30,6 +30,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | `capstone-c-reference-control.md` | 2026-07-28 |
 | `capstone-column-xlang.md` | 2026-08-02 |
 | `cheri-baseline-xlang.md` | 2026-08-02 |
+| `cheri-cva6-on-genesys2.md` | 2026-09-07 |
 | `compatibility-eval-silicon-app.md` | 2026-07-22 |
 | `full-boundary-interface-benchmark.md` | 2026-07-22 |
 | `gp-cap-derive-on-silicon-proposal.md` | 2026-07-24 |
