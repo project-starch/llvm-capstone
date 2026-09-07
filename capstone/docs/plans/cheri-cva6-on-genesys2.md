@@ -229,7 +229,7 @@ The tip does not build as cloned:
 
 | defect | where | effect | fix applied here | affects synthesis? |
 |---|---|---|---|---|
-| cvfpu gitlink stale: the tip's Flist lists the T-Head divsqrt sources (`core/Flist.cva6`, 25 lines added by `a97cf097`) but `core/cvfpu` still points at v0.7.0, which has none of them | `core/Flist.cva6:43-67` vs the recorded submodule commit `3116391b` | Verilator (and Vivado, which reads the same Flist: `Makefile:616,741`) stops with 25 missing files | cvfpu checked out at `2c794772` (2025-02-12) — the pin upstream OpenHW cva6 carried when it introduced exactly these Flist lines (`b3ece7c5`, 2025-10-13); the next upstream bump (`bb5e4f39`, 2025-11-24) adds an `early_valid_o` port the fork's `core/fpu_wrap.sv:535` never connects, so anything newer fails `PINMISSING` | **yes — the synth lane must apply it** (recipe in the tree's `SYNTH-README-genesys2.md`) |
+| cvfpu gitlink stale: the tip's Flist lists the T-Head divsqrt sources (`core/Flist.cva6`, 25 lines added by `a97cf097`) but `core/cvfpu` still points at v0.7.0, which has none of them | `core/Flist.cva6:43-67` vs the recorded submodule commit `3116391b` | Verilator (and Vivado, which reads the same Flist: `Makefile:616,741`) stops with 25 missing files | cvfpu checked out at `2c794772` (2025-02-12) — the pin upstream OpenHW cva6 carried when it introduced exactly these Flist lines (`b3ece7c5`, 2025-10-13); the next upstream bump (`bb5e4f39`, 2025-11-24) adds an `early_valid_o` port the fork's `core/fpu_wrap.sv:535` never connects, so anything newer fails `PINMISSING` | **yes — the synth lane must apply it** (recipe in the tree's `genesys2/README.md` (branch `genesys2-eval`)) |
 | testbench: the "add second uart" commit (`b7957bef`) declares the `uart2_*` APB block twice and reuses the instance name `i_axi2apb_64_32_uart` for the second bridge; the testharness never wires the new `uart2` slave, its pins or its address rule | `corev_apu/tb/ariane_peripherals.sv:311-336`, `corev_apu/tb/ariane_testharness.sv:604-711` | 9 elaboration errors, then a missing interface pin | 6+/9− testbench-only diff mirroring the fork's own FPGA top (`InclUART2=0`, `master[ariane_soc::UART2]`); `corev_apu/tb/` is not synthesised | no |
 | Verilator 5.008 emits `!=` on nested `VlUnpacked` arrays for the tag controller's bloom lock box, and 5.008's header has no such operator | `work-ver/…DepSet…cpp` on `i_lock_box_bloom`; `verilated_types.h` `struct VlUnpacked` | model C++ does not compile | element-wise `operator==`/`!=` added to the tree's private copy of the header (hardlink to our `capstone-ariane/tools` copy broken first); the fork's own `verilator-v5.patch` is byte-identical to ours and does not cover it | no |
 
@@ -282,10 +282,10 @@ consequence is that any purecap program above 128 MiB silently loses tags. Optio
 (a) synthesise as shipped and keep phases 3–4 below `0x8800_0000` (bare-metal does); (b) the
 one-constant change `TagCacheMemBase = 0xBFC00000` (DRAM top − 4 MiB) so the whole window is covered
 — a fork defect fix, not a flow change, but it must be in the tree before the run. Written into the
-tree's `SYNTH-README-genesys2.md` for the synth lane either way.
+tree's `genesys2/README.md` (branch `genesys2-eval`) for the synth lane either way.
 
 **Phase 2 — ready, blocked on a synth-machine slot.** Recipe, the cvfpu pin, and the table-placement
-decision are in `SYNTH-README-genesys2.md` in the tree. Nothing under `core/` was edited; the fork
+decision are in `genesys2/README.md` (branch `genesys2-eval`) in the tree. Nothing under `core/` was edited; the fork
 is synthesised as it ships plus the pin. Our `rtl-lint-gate.sh` and its baseline are for
 `capstone-ariane` and do not apply to this tree; the phase-2 gate for build B is therefore "the fork's
 own flow runs to a routed design", with build A as the flow check, as §3 already says.
@@ -366,3 +366,63 @@ except the `CInvoke` otype check (fork defect, not a toolchain mismatch), plus t
 the `mtval` index loss. None affects phase 2 (hardware cost). Phase 3's sealed-call demonstrator becomes a
 defect reproduction. Reporting the three to the fork's authors is outward-facing and waits for the lead;
 the repro is the probe file.
+
+### 2026-09-07, evening — synthesis readiness: the tree is ready on branch `genesys2-eval`; two runs to go
+
+Three read-only audits (our synth recipe and gates; the committed branch; the fork's Genesys2 Vivado flow)
+plus the lead's decisions (fix the tag table in B; 25 MHz only; run A first) produced these changes on the
+fork branch `genesys2-eval` (the recipe is now `genesys2/README.md` there):
+
+- **Tag table**: `TagCacheMemBase = 0xBFC00000` (`ariane_xilinx.sv:222`) and `DRAM_SIZE_64 = 0x3FC00000`
+  in the bootrom (`bootrom/Makefile:13`, feeding the DTS `reg`). §8's earlier "MIG behaviour unread" is now
+  read: the MIG's AXI address port is 30 bits (`mig_genesys2.prj:153`), so the shipped table's overflow
+  **wrapped onto physical `0x8000_0000..0x8030_0000`, the boot image**, and the controller writes the
+  table for every store in the tracked window (`axi_tagctrl_w.sv:192-215`), so any Linux run on the shipped
+  constants corrupts the first 3 MiB. Verified: the generated DTB reads `reg = <0x0 0x80000000 0x0
+  0x3fc00000>`.
+- **Clock**: `CLK_PERIOD_NS` is consumed by nothing in either tree; the Genesys2 core clock is the clk_wiz
+  IP, which the fork generates at **50 MHz**. For the like-for-like verdict the branch now generates
+  25 MHz (`xlnx_clk_gen/tcl/run.tcl:33`) with the bootrom's `CLOCK_FREQUENCY`/`HALF_CLOCK_FREQUENCY`
+  moved together (UART divisor, DTS timebase 12 500 000 — verified in the built DTB).
+- **Build A is not the fork's `cv64a6_imafdc_sv39`**: in this fork that target keeps both CHERI flags at 1
+  (only the H extension differs), and `cv64a6_imafdch_sv39` also turns the C extension off, halves the
+  dcache line and disables AXI burst writes. A is the target `cv64a6_imafdch_sv39_nocheri`, a config
+  file generated on the fly by `genesys2/gen-nocheri-config.sh` = the CHERI configuration with only
+  `RVZcheripurecap`/`RVZcherihybrid` = 0 (generated, not committed: the copy carries an upstream author
+  header, and our pre-commit scan blocks any staged email — the gate held, the file stayed out).
+  Verilator elaborates no `cheri_unit` for it. The tag controller is unconditional in the FPGA top, so A
+  carries it too; its cost is its own row of the hierarchical utilization report.
+- **Lint numbers travel with the hash** (our gate's invocation and counters, fresh baseline, both liveness
+  guards): B `LATCH 12 / MULTIDRIVEN 2 / UNOPTFLAT 42 / UNDRIVEN 18 / UNUSEDSIGNAL 305`, A
+  `9 / 2 / 37 / 26 / 313`, ALWCOMBORDER, COMBDLY, BLKSEQ 0 in both. Where each sits is in the README.
+- **Flow facts for the synth lane**: no in-tree blocker for `make fpga BOARD=genesys2 XLEN=64` (Flist read
+  by Vivado too, all 36 tag-controller files listed, every top port constrained, MIG prj v4.1 present);
+  prerequisites unverified there: Vivado version, `riscv-none-elf-gcc`/`CROSSCOMPILE=`, `dtc`, python3;
+  `XLEN=64` and `TARGET_CFG=` must be explicit; one `ARTIFACT_DIR` per run; the guard and collector run
+  from copies at the fork root (they take the tree root from their own location). MIG IP alone is the
+  minutes-long flow check before the hours-long run.
+- Predicted readings, written before the runs: A ≈ 45–55 % LUTs + the tag controller, timing met at
+  40 ns; B +25–40 % LUTs over A, BRAM up, DSP flat, timing met at 40 ns. If A fails timing or the flow,
+  the environment is the variable and B is not readable.
+
+Instrument note: a constants patch reported three edits "already applied" because its idempotency test
+looked for the new text anywhere in the file and the same line exists for other boards; caught by
+`git diff --stat`, re-applied with an old-anchor check. Same class as the truncated grep earlier today:
+a check that can pass without the change having happened.
+
+Claim-auditor over the constants (before commit): the tag-table arithmetic CONFIRMED (table
+`0xBFC00000..0xC0000000` exactly; `int unsigned` parameter, no truncation; one address formula tree-wide;
+table traffic is muxed onto the controller's master port and can never be tag-tracked); the zero-point
+configuration CONFIRMED as exactly the two flags; the 25 MHz claim **REFUTED on the UART**: at 25 MHz the
+bootrom's 16× divisor for 115200 is 13, a +4.33 % line rate, where upstream's own 25 MHz board pairs
+25 MHz with 57600 (divisor 27, 0.47 %) — fixed to 57600 (host terminal must match). It also showed that a
+DTS advertising 1020 MiB leaves 508 MiB above the tracked window on the controller's bypass path, where
+nothing downstream carries AXI user bits and a capability store loses its tag silently — so the DTS now
+advertises exactly the tracked 512 MiB (`DRAM_SIZE_64 = 0x20000000`), a judgement call within the lead's
+"fix it" decision and one constant to reverse. Two hazards recorded for the synth lane: `XLEN=64` and
+`TARGET_CFG=` must be explicit for the non-default target (else the 64-bit core pairs with the RV32
+bootrom, silently), and IP generation is not dependency-tracked (build from a fresh clone). Not in the
+lint's cone: the SoC top and the tag controller (`--top-module cva6`).
+
+Still the lead's: the GitHub fork and the push (both branches), the upstream defect reports, and the
+board.
