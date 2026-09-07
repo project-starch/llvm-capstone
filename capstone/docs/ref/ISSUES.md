@@ -12,8 +12,19 @@ Last updated 2026-09-05 (sweep batch 1: `docs/plans/bug-sweep-2026-09.md`).
 
 ---
 
-## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — 6 of 6 post-fix draws clean, one-sided Fisher p = 0.033 against 1-of-4 pre-fix (2026-09-05)`
+## S-12 — `mcause 25` at `sqlite3WhereCodeOneLoopStart+0x8c` · `ROOT-CAUSED, FIXED IN RTL, FLASHED — 8 of 8 post-fix draws clean (the two newest at -O0), one-sided Fisher p = 0.018 against 1-of-4 pre-fix (2026-09-05)`
 
+> **STATISTIC UPDATED AGAIN 2026-09-05 (evening) — the -O0 draws the caveat below asked for exist.**
+> Boots sw14 and sw15 (`board-results/2026-09-05.tsv`; compiler lane, 15:46; control `k800 = 4` first
+> in each boot, one unknown per boot): `sqm1` (-O0 SQLite silicon domain, image `1ff3686fe7763f48`)
+> and `sqm0` (-O0, image `0a0489454fd63371`, the memcpy-optnone-OFF twin), both on `q_two.test` — the
+> two-level self-join that is this entry's trigger — both `SQ: G/enter` + `H/return`,
+> `records=2 stmt_pass=1 query_pass=1 completed=1`, no trap. Two independent boots, two distinct -O0
+> images. Post-fix is **8 of 8** against **1 of 4** pre-fix; one-sided Fisher
+> p = C(9,8)/C(12,8) = 9/495 = **0.018**. The RTL lane's pre-registered alternative (one trap in two
+> -O0 draws would reopen the entry) did not occur. Arithmetic checked independently by the RTL lane;
+> the header above is the source of truth their rebuilt `fpga-testing-dev` S-12 commit cites.
+>
 > **STATISTIC UPDATED 2026-09-05.** Two more post-fix draws completed on `caplifive_s12fix_5097eb166.bit`
 > in the cycle-2 regression sweep: B7 `q_two` (the S-12 trigger query, two-level self-join) and B8
 > `select1` (1031 records, 1000 queries), both with `SQ: G/enter` and `SQ: H/return`, valid
@@ -231,7 +242,18 @@ re-deriving them would waste board time.
 
 ## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `WORKED AROUND 2026-08-10 with NO second defect in play: memcpy alone at -O0 via BEEBS_MEMCPY_OPTNONE. Board-confirmed by a matched pair. Underlying silicon defect still OPEN.`
 
-> **Sweep 2026-09-05 — -O0 SQLite domains pass on 5097eb166 with and without the attribute; the blamed -O1 form was built and QEMU-verified, its board boot is pending; header unchanged.** Boots sw14/sw15 (control k800 = 4): `SQLITE_MEMCPY_OPTNONE=1` (`sqm1` 1ff3686fe7763f48) and `=0` (`sqm0` 0a0489454fd63371) -O0 domains both `SQ: G/enter`, `SQ: H/return`, `SLT-SUMMARY records=2 stmt_pass=1 query_pass=1 oom=0 completed=1` on q_two.test — expected, since at -O0 the attribute changes nothing and both carry the working memcpy form; a first sweep line claiming NOT REPRODUCED on that pair was retracted the same afternoon (board lane's check, dev b5aa78aff7bb). The arm that carries the form this entry blames — the -O1 SQLite silicon domain with `SQLITE_MEMCPY_OPTNONE=0` (`sqm0o1`, sha b4b453f90cd7edb4, differs from its optnone-ON twin `sqbase` 680ebe68987badce which passed as sw18) — is built, passes q_two under QEMU (as S-04 always did), and is staged in the board image; its boot (sw20) lost the console mid-run and the rerun (sw21) could not connect: the console host stopped resolving from this machine at ~16:45 (DNS/tunnel, not the board). Boot it when the console is back: `SLT_SET="sqm0o1.dom sqlite_host.user q_two.test"` bake, then `board-slt2.sh <id> sqm0o1 q_two.test`; SQLITE_NOMEM at open = S-04 present, records=2 pass = not reproduced on this bitstream.
+> **Sweep 2026-09-05, boot sw22 (19:21) — the blamed -O1 memcpy form does NOT reproduce S-04 on `5097eb166`.**
+> `sqm0o1` (-O1 SQLite silicon domain, `SQLITE_MEMCPY_OPTNONE=0`, image `b4b453f90cd7edb4`, host
+> `a1895d35f768b5d0`, control `k800 = 4` first) on `q_two.test`: `A/dom-ok` … `G/enter`, `H/return`,
+> `SLT-SUMMARY records=2 stmt_pass=1 stmt_fail=0 query_pass=1 query_fail=0 oom=0 completed=1`. `sqlite3_open`
+> succeeded and the query passed with exactly the memcpy form this entry blames (seven `sb` from the -O1
+> tail loop, `a0` used directly). N = 1, one boot; the header stays WORKED AROUND until the lead moves the
+> silicon default, but the defect this entry describes is not present on the s12fix bitstream in this
+> draw — consistent with S-04 having been another face of the store-path defects fixed in RTL since
+> 2026-08-10 (S-07/S-12 family), which is the hypothesis to test with a second draw and the stage-164
+> bit read as the entry describes. Row: `board-results/2026-09-05.tsv` sw22.
+>
+> **Sweep 2026-09-05 (afternoon) — -O0 SQLite domains pass on 5097eb166 with and without the attribute; the blamed -O1 form was built and QEMU-verified, its board boot is pending (now done: sw22 above); header unchanged.** Boots sw14/sw15 (control k800 = 4): `SQLITE_MEMCPY_OPTNONE=1` (`sqm1` 1ff3686fe7763f48) and `=0` (`sqm0` 0a0489454fd63371) -O0 domains both `SQ: G/enter`, `SQ: H/return`, `SLT-SUMMARY records=2 stmt_pass=1 query_pass=1 oom=0 completed=1` on q_two.test — expected, since at -O0 the attribute changes nothing and both carry the working memcpy form; a first sweep line claiming NOT REPRODUCED on that pair was retracted the same afternoon (board lane's check, dev b5aa78aff7bb). The arm that carries the form this entry blames — the -O1 SQLite silicon domain with `SQLITE_MEMCPY_OPTNONE=0` (`sqm0o1`, sha b4b453f90cd7edb4, differs from its optnone-ON twin `sqbase` 680ebe68987badce which passed as sw18) — is built, passes q_two under QEMU (as S-04 always did), and is staged in the board image; its boot (sw20) lost the console mid-run and the rerun (sw21) could not connect: the console host stopped resolving from this machine at ~16:45 (DNS/tunnel, not the board). Boot it when the console is back: `SLT_SET="sqm0o1.dom sqlite_host.user q_two.test"` bake, then `board-slt2.sh <id> sqm0o1 q_two.test`; SQLITE_NOMEM at open = S-04 present, records=2 pass = not reproduced on this bitstream.
 
 ### RESOLUTION 2026-08-10 — per-FUNCTION opt scoping, confirmed by a matched pair on silicon
 
@@ -4300,6 +4322,42 @@ two board boots.
 seconds of emulation, and R-1's diagnostic family can finally be developed off-board.
 
 ## Compiler / toolchain (ours)
+
+### C-44 — the MAIN checkout's toolchain binary was a day stale, and every image it built today was misread as a compiler regression `RETRACTED as a compiler defect 2026-09-05 (same day); stands as a process incident; freshness check being added to capstone-test-env.sh`
+
+**What was written first, and why it was wrong.** While preparing the SLT-on-silicon campaign I found
+that the SQLite silicon domain built in the main checkout faulted under QEMU on every corpus file at
+one site (`sqlite3_exec` +`0x19e30`), that restoring `-fno-jump-tables` made it pass, and that the
+faulting image carried 26 jump tables while the passing one carried none. I recorded that as "the
+W-15 pin retirement broke SQLite" — a bisection to one flag, same compiler binary. The compiler lane
+refuted it within the hour with the check I had not run: **which compiler binary.**
+`llvm/cmake-build-debug/lib/libLLVMCapstoneCodeGen.so` was dated **2026-09-04 20:18** and `llc`
+**09-04 15:41**, while `dev` was at 17:15 on 09-05; `ninja -n llc clang lld` showed **2158 pending
+steps**; the main `llc` did not know `-capstone-gp-captable-jump-tables` (added in `d99b68d0c80a`).
+The 26 tables are the OLD backend's generic expansion — `lui a0, 0x161; addi; add; lw a0, 0(a0);
+jr a0`, integer base — exactly the shape the pin existed to suppress before W-17. Verified here from
+the binary and the build directory.
+
+**With today's compiler the pin is a no-op:** the same SLT config built retired vs pinned is
+**byte-identical** (`1ff3686fe7763f48`), and it passes `select1` under QEMU with native counts
+(`records=1031 stmt_pass=31 query_pass=1000 query_fail=0`). So the retirement stands, nothing in the
+build scripts needs re-pinning, and tonight's nightly `sqlite-slt` is expected green because the
+nightly rebuilds the toolchain before its suites. Also learned: `jr` count is **not** a jump-table
+detector on new-compiler -O1 images (438 `jr t1` tail calls, zero tables, in the compiler lane's
+images); it only meant "pinned" for the old compiler's output.
+
+**The incident.** The main checkout's build directory is rebuilt only by the nightly; the compiler
+lane builds in a worktree and points `CAPSTONE_LLVM_BIN` there. Anyone building domains in the main
+checkout between a fast-forward and the next nightly is using yesterday's compiler and does not
+know it. Today that produced a wrong registry entry and cost the SLT campaign its first set of
+images (all four withdrawn and rebuilt on the fresh toolchain before any board time). The fix is a
+loud staleness check (`ninja -n` dry run) in `capstone-test-env.sh`, which the compiler lane is
+adding; until it lands, check the `.so` mtime against `git log -1 dev` before trusting `llc`.
+
+**Why this is filed rather than deleted:** it is the same slip as `feedback_presence_by_content_not_sha`
+and the 2026-09-04 QEMU-pedigree retraction — a bisection that varies one thing while an unexamined
+second thing (the binary's provenance) does the work. The check that would have caught it was
+cheaper than the one run.
 
 ### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `OPEN — LATENT on silicon; class-level, not one bug`
 
