@@ -85,5 +85,38 @@ intermediate sweep records; everything on `s12-ldc-rolling-*`, `s07-recorder-cle
 ## Status
 
 The tip is **new RTL** (the instrument is gone) and is unsynthesised: a candidate, not ready. Pushed 2026-09-07 as
-`fpga-testing-dev-clean`, tip `947327f6d` (`chain-v3` plus one corrected S-12 message sentence). Next: synthesis +
-census on the synth machine against the arm-2 tie-off as the expected bound, then any board work through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.
+`fpga-testing-dev-clean`, tip `947327f6d` (`chain-v3` plus one corrected S-12 message sentence). Synthesised the same day;
+see the addendum at the end. Any board work goes through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.
+
+## Addendum, 2026-09-07 (later the same day): synthesised, censused, NOT usable
+
+One run on the synthesis machine, the arms' container and guard, default flow, ceiling 100 GB:
+exit 0, 1h43m22s, synthesis peak 21.1 GB, collector 34.2 GB, load 39/80 at launch.
+
+| build | WNS (ns) | failing / total (CPU clock) | placed LUTs | launch census |
+|---|---:|---:|---:|---|
+| `947327f6d` this | −11.717 | 97,438 / 174,756 | 170,481 (83.65%) | 97,438 `dom_switcher/req_en_q`, 1 DDR |
+| `6f8345fdb` arm 2, tie-off | −13.491 | 99,879 / 173,789 | 168,944 | 99,879 `issue_read_operands` |
+| `5097eb166` arm 1, flashed | −15.311 | 101,782 / 174,895 | 169,694 | `dom_switcher` (`_thread_0_event_reg_87`, `_init_0`) |
+
+Best-timed fix-carrying build on record; census verified on both axes; DRC and loop signature
+identical to the arms. The pre-registered expectation ("LUTs and WNS between the arms, near arm 2")
+missed in one direction: larger than both, better-timed than both.
+
+**Two corrections to earlier wording.** "Instrument-free" was wrong: the S-07 layer is gone, but
+upstream's UART instruction tracer (`core/tracer.sv`, synthesised unconditionally since it was added
+upstream; 65,562 of the failing endpoints end inside it) and the base's 12 debug-bank apertures
+remain. And "inside flow variance" for the LUT differences was an assumption: no commit has ever
+been built twice with identical settings on this flow.
+
+**Verdict: NOT usable as a board bitstream**, on the census principle as it was meant rather than as it
+was written. The launch register `req_en_q` is the domain-switch busy level; it is constant during a
+body, but its rising edge is the very signal that gates commit (`commit_stage.sv:303`, commit
+`030378a66`'s fix) and the trap-entry CSRs, `instret`, the scoreboard and the register-file module are
+all on its failing cone. Full argument, the auditor's refutation, and the three things that would
+change the verdict are in `ref/bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry.
+
+**Consequence for the branch.** `fpga-testing-dev-clean` is the correct RTL history and stays; the
+force-push over `fpga-testing-dev` is unaffected by the timing result. What it is not, yet, is a
+bitstream: flashing it would need the commit-gate change (or an equivalent) and a re-synthesis first.
+The resident `caplifive_s12fix_5097eb166.bit` remains the licensed bitstream.

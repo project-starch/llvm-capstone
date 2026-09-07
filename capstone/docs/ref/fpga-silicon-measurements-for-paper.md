@@ -966,6 +966,7 @@ Table row `clk_out1_xlnx_clk_gen`**.
 | `80843404c` | −16.400 | 102,769 / 174,275 | 405,480,965 |
 | `6f8345fdb` | −13.491 | 99,879 / 173,789 | ~396 MB *(S-12 fix, debug tree TIED OFF)* |
 | `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
+| `947327f6d` | −11.717 | 97,438 / 174,756 | 403,665,530 *(rebuilt `fpga-testing-dev-clean`: same fixes, instrument NEVER ADDED; 2026-09-07)* |
 
 **Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
 reads healthy while the CPU clock fails. That trap has caught this project before.
@@ -1155,6 +1156,28 @@ already-failing 40 ns budget. Anyone proposing added on-chip observability on th
 price it against this pair, not against LUT count.
 
 Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identical to the base.
+
+**Qualified 2026-09-07 by a second build without the S-07 instrument.** `947327f6d` (the rebuilt
+`fpga-testing-dev-clean`: the same fixes, the S-07 recorder/aperture layer never added at the RTL
+level; the base's 12 debug-bank apertures and upstream's UART instruction tracer `core/tracer.sv`
+remain, as on every build here) routed at **−11.717 ns**, **97,438** failing endpoints, **170,481**
+placed LUTs (83.65%). That is *more* area than `6f8345fdb` (168,944, the WHOLE debug-LED tree tied
+off) and than the fully instrumented `5097eb166` (169,694). The two removals are not the same
+variable — one drops the S-07 layer, the other the entire tree — yet the build with more debug logic
+left in came out 787 LUTs *larger* than the one with all of it. The run-to-run spread of this flow is
+**unmeasured** — no commit has ever been built twice with identical settings here (the only repeat,
+`52fa06b9d`, changed the retiming setting between its two runs) — so nobody can say whether 787 LUTs,
+or the +750 above, is signal. **Do not cite either LUT figure as the instrument's area cost until a
+same-settings replicate exists.** The timing direction
+holds on both builds without the S-07 layer (−13.491 and −11.717 against −15.311); 947327f6d is the
+best-timed fix-carrying build on record, bettered only by `39b21639d` (−10.629, a timing-experiment
+branch). Same DRC/loop signature: no `LUTLP-1`, "found timing loop" = 100. The tracer itself is a
+436-line trace buffer with a UART dump, synthesised unconditionally since it was added upstream; its
+cost has never been measured (65,562 of this build's failing endpoints terminate inside it).
+Launch census: 97,438 of 97,439 from `dom_switcher/req_en_q_reg[0]` (the busy level), 1 from the DDR
+controller on `clk_pll_i` — a third distinct dom_switcher launch register across four builds. **Census verdict: NOT usable as a
+board bitstream** — that register is the busy level that gates commit, and the trap-entry CSRs sit on
+its failing cone (`bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry).
 
 ### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
 

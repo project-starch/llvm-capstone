@@ -221,3 +221,77 @@ design as such. Do not carry it into a paper unqualified.
 Source: synthesis lane, 2026-09-04; artifacts retained on that machine (13 tarballs, three
 directories). See `fpga-silicon-measurements-for-paper.md` §7/§7a for the routed-build table and
 the measured cost of the instrumentation itself.
+
+## MEASURED 2026-09-07: the first build without the S-07 layer, and the edge the criterion never covered
+
+`947327f6d` (`fpga-testing-dev-clean`: the shared base `7e4dc440f` plus S-06, S-08, S-07, S-10, S-12
+and the mtval cursor; the S-07 recorder/aperture layer never added; upstream's UART tracer and the
+base's 12 debug-bank apertures retained) routed at **WNS −11.717 ns**, **97,438** failing endpoints
+on the CPU clock plus one in the DDR controller on `clk_pll_i`. Census verified on both axes before
+being read (by-startpoint 97,439 = by-endpoint 97,439 = the report's own 97,439):
+
+    947327f6d   97,438 / 97,439 launching from `dom_switcher/req_en_q_reg[0]`
+                1 from the DDR controller · issue_read_operands ZERO · cur_idx ZERO
+
+Third distinct `dom_switcher` launch register in four builds (`cur_idx` → `_thread_0_event_reg_87`
+→ `req_en_q`). **As the gate is written it passes. It does not license the bitstream**, and the
+reason is a clause the criterion never stated. Audited adversarially against the RTL at the commit
+(claim-auditor, 2026-09-07; every citation re-read):
+
+* `req_en_q` **is** `dom_switch_busy`: `capstone_dom_switcher.anvil.sv` exports it combinationally
+  (`_busy_ch_busy_0 = req_en_q`). One set — when the switcher accepts commit's request
+  (`EVENTS0[103]` requires `~req_en_q && _commit_ch_req_valid`) — and one clear at the end of the
+  switch (four inlined copies). Constant 0 for the whole of a body. **Steady-state inertness:
+  SUPPORTED.**
+* `cur_idx` was licensed because it "toggles only during a switch **with the frontend flushed**".
+  `req_en_q` is the signal that **causes** the flush. At its rising edge nothing is flushed yet: the
+  switch instruction retired at T0 with busy still 0 (the ack needs `~req_en_q`), so at T0+1 the
+  **next** instruction sits at the commit head and the only things stopping it are
+  `!dom_switch_busy_i` at `commit_stage.sv:303` — which is commit `030378a66`'s fix for precisely
+  that bug, "instruction after CALL executed" — and `flush_commit_o = flush_commit | dom_switch_busy_i`
+  at `:494`. Both are **consumers of the late launch register**: every failing path in this census runs
+  from `req_en_q` *through* the protective logic. An endpoint that captures late evaluates T0+1 with
+  busy = 0. No independent backstop: the scoreboard's `dom_switch_*` ports are dead (declared
+  `scoreboard.sv:89-90`, zero uses), the second-port guard at `commit_stage.sv:517` is compiled out
+  (`NrCommitPorts = 1` in the FPGA config), and issue does not serialise behind CALL/RETURN
+  (`issue_read_operands.sv:307` feeds only the pc/branch latch). **Rising-edge benignity: REFUTED as
+  argued.**
+* The commit-class cone **physically fails on this build**. By-endpoint, from the same forensics:
+  `csr_regfile_i` `mepc_q` 128, `mcause_q` 128, `mtval_q` 128, `sepc_q` 128, `scause_q` 128,
+  `stval_q` 128, `dpc_q` 122, `instret_q` 52, `mstatus_q` 7, `priv_lvl_q` 1 — the trap-entry CSRs
+  and the retired-instruction counter, all written from the busy-gated commit block. Plus 12,874
+  endpoints in `i_scoreboard`, 4,742 in `i_issue_read_operands` (the register file lives there) and
+  5,230 in `lsu_i`, which the forensics script buckets at four path components and cannot resolve
+  further. And 65,562 in `i_tracer`, whose only outputs are a UART pin and one LED-mux bit
+  (**observation-only: SUPPORTED**) — which also means the tracer can record a phantom commit exactly
+  at a switch boundary, where domain switches are being studied.
+* Falling edge: the late value is the conservative one (keep flushing, hold `npc`). One reconvergence
+  hazard named, **UNRESOLVED**: the controller seeing `flush_commit_i` still old (1) while its direct
+  `dom_switch_busy_i` is already new (0) takes `set_pc_commit_o = 1` with a stale `pc_commit_i`; it
+  needs the long path to fail and the short one to pass at the same endpoint, a placement fact.
+* The slacks at those CSR endpoints are outside the worst-2,000 sample, so how much margin silicon has
+  at typical conditions is **unmeasured**; static timing at the slow corner says the edge can be missed.
+
+**Verdict: NOT usable as a board bitstream.** A result taken on it would be read against a possible
+phantom commit at every domain switch.
+
+**The criterion, restated once more.** The launch register must be inert while a body executes
+**and** its transitions must be benign: either they occur only while the pipeline is flushed
+(`cur_idx`), or every endpoint that acts on them is shown to tolerate a one-cycle-late capture. A
+level that gates commit fails the second clause by construction, whatever its steady state.
+
+**What would change the verdict** (design decisions, recorded, not taken):
+1. Give `commit_stage`, `controller` and `frontend` a locally registered switch-in-progress flag, set
+   from the handshake they perform themselves (`dom_switch_valid_o && dom_switch_ack_i`) and cleared
+   when busy falls, so the commit gate is a one-level local path and `req_en_q`'s cone stops being
+   commit-class. Any such change re-runs synthesis and this census.
+2. Experiment B, no board and no synthesis: in Verilator, a one-cycle delay register on
+   `dom_switch_busy` at one consumer at a time (three arms), on a workload that performs a switch and
+   keeps executing. A phantom commit at the boundary in the `commit_stage` arm confirms the mechanism
+   independent of any bitstream; a wrong first PC in the `controller` arm confirms the falling-edge
+   hazard.
+3. `timing-forensics.tcl` should bucket endpoints at six path components or emit the raw endpoint
+   list; at four it cannot separate the register file from the operand latches.
+
+Artifact: `synth-947327f6d-exit0.tar.gz` (403,665,530 bytes) on the synthesis machine, next to the
+two S-12 arms.
