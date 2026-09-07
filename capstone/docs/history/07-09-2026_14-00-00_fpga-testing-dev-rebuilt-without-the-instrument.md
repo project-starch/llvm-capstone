@@ -1,0 +1,87 @@
+# `fpga-testing-dev` rebuilt: eight commits, no instrument, every fix line accounted for, every row measured
+
+**Dates:** built 2026-09-05, measured 2026-09-07 (the first measurement pass was lost to the 5-6 September
+host outage; see "What the measurement pass taught"). **Branch:** `fpga-testing-dev-clean` in `capstone-ariane`,
+intended to replace `fpga-testing-dev` by a force-push the project lead performs. **Old tip preserved:** tag
+`backup/fpga-testing-dev-2026-08-21` (= `e12a0e3e9`), plus `backup/<branch>-2026-09-05` tags on every one of
+our branches and an all-refs bundle under `~/dev/llvm-capstone-rebuild/backups/`.
+
+## What the audit found before anything was rebuilt
+
+* `fpga-testing-dev` was the shared base `7e4dc440f` plus 7 curated commits from 2026-08-21; the flashed
+  bitstream's branch `s12-fix-for-synthesis` (`5097eb166`) was the same base plus 41 raw commits. The two were
+  **RTL-identical except S-10, S-12 and a testbench-only delay knob**; every line of the S-07 on-silicon
+  instrument was in both.
+* The instrument is unconditional and cost, by the arm-2 tie-off measurement, **1.82 ns WNS, ~1,900 failing
+  endpoints, ~750 LUTs** on a design that fails timing on every endpoint.
+* Four look-alike side-branch commits were content-identical to lineage commits; nothing unique lived only there.
+* The five fix commits reused verbatim contained zero instrument identifiers; `data_rtag_src`, `rd_ctag_src` and
+  `cap_wb_displaced` were all introduced by the instrument commit `6f1a597ba`.
+* Every stored `rtl-lint.REF.txt` on every branch said `UNOPTFLAT 39` and was measured with the instrument present.
+* `run.tcl`'s only change on the old branch was a 28-line comment carrying a wrong number.
+
+## The rebuilt history (above `7e4dc440f`, which is untouched)
+
+| # | commit | provenance | RTL identity check |
+|---|---|---|---|
+| 1 | lint gate + sweep script + baseline **measured at the base** | scripts from the flashed tip | gate `--update` at `7e4dc440f` |
+| 2 | S-06 | cherry-pick `3673f5869` | identical |
+| 3 | S-08 | cherry-pick `31bffa77d` | identical |
+| 4 | S-07 fix + sim-only assertion + 8 tests | `1dd83bfac` + `813658ded` | write buffer identical modulo one probe tie-off |
+| 5 | S-10 + the refill-path comment | `4fee13b2d` hunk, placed by script | 12/12 added code lines identical; probe paragraph rewritten |
+| 6 | S-12 + tb knob + 3 tests | `git diff 80843404c 5097eb166` | `issue_read_operands.sv` md5-identical |
+| 7 | mtval cursor + tval latch + switch-212 mirror | `fed5c55b7` + tval subset of `39111e119` | `ex_stage.sv` identical; 11 tval lines identical |
+| 8 | synthesis tooling | flashed-tip versions | `corev_apu/fpga` byte-identical to upstream |
+
+**Residual against `5097eb166`** (`core/` + `corev_apu/`): 12 files, the S-07 instrument and comment text and nothing
+else; mechanically classified, then attacked by an adversarial audit that returned SUPPORTED. Its two corrections
+were taken: the switch-212 trap-summary mirror (a live repro folder names it as the UART-safe readout; a build
+without it answers `0x00` there, which decodes as "no trap") and the nine-line refill-path comment.
+
+## Measurements (all on this branch, 2026-09-07; records committed with their commits)
+
+* **Simulation identity.** All **88 rows** of the capstone testlist identical, trace hashes included, between the
+  rebuilt tip and the flashed `5097eb166`, swept the same day with the same runner.
+* **Determinism control.** The base tree's 67 rows identical to the pre-fix baseline measured on RTL-identical
+  `013e162fd` on 2026-08-14. The runner was validated against three committed oracle rows first, including a test
+  whose `tohost` is not at the default address.
+* **Lint, per commit** (gate positive-controlled with a live injected loop, 40 -> 41, FAIL): base 39/713, S-06
+  39/717, S-08 39/717, S-07 39/717, S-10 **40**/717, S-12 40/717, tip 40/717 (`UNOPTFLAT`/`UNUSEDSIGNAL`; every other
+  counter constant). The baseline file is re-derived exactly twice, at S-06 and S-10.
+* **Pre-fix controls on the parent trees** (test copied in, same runner):
+  S-06 `s06-lowhalf-zero` FAIL 729 -> SUCCESS 731, `-swap` FAIL 732 -> SUCCESS 734, `s06sec-raw-alias-no-launder`
+  FAIL 697 -> SUCCESS 723; S-08 `s06sec-ctx-scalar-roundtrip` FAIL 612 -> SUCCESS 592; S-07 `s07-wbuf-tag-reorder`
+  4 -> 1 exceptions with its control pinned at 1; S-10 `s07-wbuf-forward-residual` 9 -> 17 with its control at 17;
+  S-12 under `S12_MEM_DELAY=40`: pre-fix (S-10 RTL + the S-12 testbench knob) FAIL, 254 exceptions at 190,471 cycles (control 1), tip 1 exception at
+  156,794 cycles.
+* **Per-commit deltas are all attributable:** S-06 changes six rows by a few cycles and one timeout trace; S-08
+  changes the two domain-switch tests; S-07 changes no shared row; S-10 changes the residual pair and one test by
+  three cycles; S-12 changes nothing at delay 0; the mtval commit changes exactly one trace hash
+  (`s07-ldc-chain-forward`, the cursor now in tval).
+
+## What the measurement pass taught, in the order it cost time
+
+1. **Every docker container on this host shared an 8 GiB cgroup** (`system.slice`), while `free` showed 150 GB.
+   Simulations were killed at random for two hours; the same load contributed to the host outage. Resolved by
+   running the built model on the host and, since 2026-09-07, by the host's own `docker.slice`
+   (`~/bin/logs/AGREED-RESOURCE-RULES.md`).
+2. `cva6.py --steps gen` compiles a directed test AND simulates it; `--steps gcc_compile` does neither for
+   directed tests. A compile step that returns success and produces no ELF reads as `NOBUILD` rows.
+3. `+tohost_addr` is per ELF (`nm | grep -w tohost`); hardcoding the first test's value made seven tests fail at
+   cycle 384. The determinism control caught it.
+4. The pre-S-12 negative control needs the S-12 commit's testbench knob applied to the pre-S-12 RTL; without it the
+   define is inert and the control silently reads delay 0.
+5. A positive control for the lint gate must be a *live* loop; a dead one is pruned and the gate stays silent.
+
+## Not on the branch, and where it lives
+
+The S-07 recorders, selftest, gran_match, displacement detector and read-tag-source probe; the strip commit;
+intermediate sweep records; everything on `s12-ldc-rolling-*`, `s07-recorder-clear*`, `timing-*`, `s10b-fix`
+(unsynthesizable), `s12-fix-noinstr`, `s12-fix-variant-b`; the R-25 fix (its own branch, by decision).
+`s12-fix-for-synthesis` and `s12-fix-noinstr` are frozen as the provenance of the two synthesised bitstreams.
+
+## Status
+
+The tip is **new RTL** (the instrument is gone) and is unsynthesised: a candidate, not ready. Next: push (needs the
+allowlist line), synthesis + census on the synth machine against the arm-2 tie-off as the expected bound, then any
+board work through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.
