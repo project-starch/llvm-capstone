@@ -86,9 +86,14 @@ int main(int argc, char **argv) {
   /* The single domain call. Fault probes never come back from this. */
   unsigned long retval = call_dom(dom_id);
   print_nobuf("%s: call retval = 0x%08lx\n", TAG, retval);
-  if (read_arena)
-    print_nobuf("%s: arena[%u] after call = 0x%02x\n", TAG, PROBE_OFFSET,
-                region_bytes[PROBE_OFFSET]);
+  /* Q-05: the arena was TRANSFERRED to the domain; reading it here through the Linux mmap has
+   * no authority and only ever worked through a QEMU-only duplicate. Ask the domain instead:
+   * a second call returns arena[PROBE_OFFSET] read through the domain's own alias. */
+  if (read_arena) {
+    unsigned long byte = call_dom(dom_id);
+    print_nobuf("%s: arena[%u] after call = 0x%02x (read back by the domain)\n", TAG,
+                PROBE_OFFSET, (unsigned)(byte & 0xffu));
+  }
 
   capstone_cleanup();
   return 0;

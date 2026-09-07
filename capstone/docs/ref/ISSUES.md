@@ -822,7 +822,7 @@ ordinary infra flake. The first two are answerable off-board with the reproducer
 campaign rule now reads *"a WEDGE is not a compiler verdict until reproduced first-in-boot."*
 Applies equally to board arms.
 
-## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `OPEN — QEMU divergence with a test riding on it, filed 2026-09-05`
+## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `FIXED in the QEMU stand-in 2026-09-07 — the slot becomes a hole (make_hole, tag 0x1239) in both copies and the probe observes through the domain; fw_jump d9b11509c2f4 / sbi.dom b6b17d84c1fa; 5/5 probes, SLT select1 identical, the hole fired 24 times. Board firmware site unchanged (see the close-out)`
 
 `shared_region_annotated` with `CAPSTONE_ANNOTATION_REV_TRANSFERRED` moves the region's LINEAR
 capability into the domain and clears its CPMP mapping, but leaves `regions[region_id]` as it was
@@ -850,6 +850,33 @@ a test-semantics decision, not a monitor patch.
 Also implied, unverified: on the **board firmware** the same host access after a transfer hits
 `cap_base` on a nulled slot inside `swap_cpmp`, i.e. an M-mode capability exception with no print —
 one candidate shape for a silent host-side wedge after a transfer-annotated share.
+
+> ### 2026-09-07 — FIXED in the stand-in: the slot is a hole, and the probe observes through the domain
+>
+> **The test first (the test-semantics decision named above).** `probe_domain.h` now answers a
+> SECOND call entry by reading `arena[PROBE_OFFSET]` through its own delineated alias and returning
+> the byte, and the guest's post-call check calls the domain again instead of reading the
+> transferred arena through its Linux `mmap` (`intra_domain_mrev_revoke_probe_guest.c`,
+> `probe_domain.h`). The probes' semantics are untouched — the readback runs on a fresh entry after
+> the probe entry returned. **Control on the unchanged monitor: 24 PASS, 0 FAIL**, so the redesign is
+> neutral where the old observer worked.
+>
+> **Then the monitor, both copies** (`components/opensbi` → `fw_jump`, `package/capstone-sbi-domain`
+> → `sbi.dom`): the `REV_TRANSFERRED` site calls `make_hole(region_id, 0x1239)` — slot dead in
+> `region_live[]`, CPMP mapping cleared, `region_n` and every id unchanged — instead of leaving the
+> stale duplicate. Rebuilt `fw_jump d9b11509c2f4`, `sbi.dom b6b17d84c1fa`: smoke rc 0; borrow-cost,
+> revoke-cost, hier-revoke, revoke-on-free and intra-domain-mrev-revoke green; SLT `select1` 1031
+> records identical to native; **the hole path fired 24 times** in the intra-domain run (24 `0x1239`
+> prints), so the pass is not vacuous.
+>
+> **Settled / not settled.** The host can no longer reach pages it transferred, on QEMU as on
+> silicon, and the monitor no longer leans on the `csldc` duplicate at this site. The QEMU divergence
+> itself (`csldc` not nulling its source, Q-04's family) is untouched and stays a QEMU-fidelity item.
+> The **board firmware's** `REV_TRANSFERRED` site is unchanged: it never had the duplicate (a linear
+> `ldc` nulls its source on silicon) but it does not mark the slot dead either, so a host access
+> after a transfer still reaches `cap_base` on a nulled slot inside `swap_cpmp` — the silent-wedge
+> shape named above. That is the same one-line `make_hole` port as Q-03's board port and needs its
+> own boot; not done with Q-03's validation load, which carries no transfer-annotated share.
 
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
@@ -3390,6 +3417,20 @@ undebuggable and takes the core with it.
 monitor count passes 64 silently overruns a static kernel array. Nothing checks it on either
 side; no run has been shown to reach it. Interacts with the Q-03 fix design (holes are permanent
 and consume slots) — `plans/q03-region-hole-sentinel.md` open item 3.
+
+> **Sharpened 2026-09-07 (board-firmware Q-03 port audit; `objdump -t build/target/capstone.ko`
+> re-read).** `regions` is the module's ENTIRE `.bss` (`0x800` = 64 × 32 bytes) and `region_n`
+> lives in `.sbss`, so indices 64..95 write up to 1 KiB past the module's own allocation into
+> whatever the kernel placed next — silent, and the overrun cannot stop itself by clobbering the
+> counter. The module never frees, and resets `region_n` only in `capstone_init`, never in
+> `device_release`. **The Q-03 hole fix removes the brake that kept this unreachable:** the
+> middle-slot exact fit used to wedge the boot at about the 5th domain, and a tail exact fit now
+> costs +1 permanent slot instead of −1. Budget: `cap_env_init` takes ~12–14 slots and a ladder
+> rung ~2 (7 rungs ≈ 28, safe); a SQLite domain takes ~3–6, so 64 arrives around the 10th–15th
+> SQLite domain of a boot — the range the fix unlocks. **Bound the copy in `probe_regions` (or
+> raise `MAX_REGION_N` to the firmware's 96) before any boot runs more than ~8 SQLite domains.** No
+> runner reads `REGION_COUNT`; the only in-run reading of the pool size is the `RGNN` line that
+> accompanies a `HOLE`.
 
 ### M-3 — every Capstone SBI ecall returns `error = 0`, so the module's failure paths are dead code `OPEN — filed 2026-09-05 from the Q-03 audit; verified file:line`
 
