@@ -84,7 +84,10 @@ def main():
             continue
         if s.startswith('Generating') and s.endswith(VCS_GENERATED):
             continue
-        if s.startswith('Building') and s.endswith(VCS_OBJECTS):
+        # ninja prints objects as <dir>/CMakeFiles/<target>.dir/<file>.o; drop the CMakeFiles
+        # segment before matching, or the revision-chain objects never match and every commit
+        # without a rebuild reads STALE (it did, 2026-09-07: AsmPrinter/LTO/IRSymtab/Version).
+        if s.startswith('Building') and re.sub(r'CMakeFiles/[^/]+\.dir/', '', s).endswith(VCS_OBJECTS):
             continue
         offending.append(s)
     ident = identity(a.build)
