@@ -75,29 +75,27 @@ A `git status` run at `caplifive-system` **does not see it**.
 
 ```
 capstone/caplifive-system            (project-starch/caplifive-system-dev)   branch capstone-bootstrap
-└── sw/buildroot                     (project-starch/caplifive-buildroot)    branch capstone-bootstrap-dts-65536
-    └── components/opensbi           (project-starch/caplifive-opensbi)      branch capstone-bootstrap
-        └── lib/sbi/capstone-sbi     (project-starch/capstone-sbi)           branch capstone-bootstrap-board
-            sbi_capstone.c           <-- THE BOARD MONITOR
+└── sw/buildroot                     (project-starch/caplifive-buildroot)    branch capstone-bootstrap-unified
+    ├── components/opensbi           (project-starch/caplifive-opensbi)      branch capstone-bootstrap-unified
+    │   └── lib/sbi/capstone-sbi     (project-starch/capstone-sbi)           branch capstone-bootstrap-unified
+    │       sbi_capstone.c           <-- THE MONITOR, one source for both targets
+    └── package/capstone-sbi-domain/capstone-sbi (project-starch/caplifive-sbi)  977af95 (the sbi.dom copy)
 ```
 
-The QEMU stand-in is the same three repos checked out a second time under `capstone/caplifive-buildroot`,
-with different content on every level:
-
-```
-capstone/caplifive-buildroot         (project-starch/caplifive-buildroot)    branch capstone-bootstrap
-├── components/opensbi               (project-starch/capstone-opensbi)       branch capstone-bootstrap-qemu
-│   └── lib/sbi/capstone-sbi         (project-starch/capstone-sbi)           branch capstone-bootstrap-qemu
-│       sbi_capstone.c               <-- THE QEMU MONITOR (fw_jump; DOM_CREATE is an SBI ecall into it)
-└── package/capstone-sbi-domain/capstone-sbi (project-starch/caplifive-sbi)  branch capstone-bootstrap
-        sbi_capstone.c               <-- builds sbi.dom only
-```
+**Since 2026-09-07 the QEMU stand-in is the SAME tree** (`docs/plans/monitor-unification.md`): the
+second checkout under `capstone/caplifive-buildroot` tracks the same `capstone-bootstrap-unified` on
+every level and differs only in which target it builds (`make TARGET=qemu …`, output `build-qemu/`,
+`build` a symlink to it there; the board checkout builds `TARGET=fpga` into `build-fpga/`, `build` a
+symlink to it). Per-target code in the monitor sits under `CAPSTONE_TARGET_FPGA` /
+`CAPSTONE_TARGET_QEMU` (`capstone_target.h`); the OpenSBI platform directory (`fpga/ariane` vs
+`generic`) supplies the define for OpenSBI's own compile, `CAPSTONE_EXTRA_DEFS` for the capstone-c
+regeneration. `CAPSTONE_CC_PATH` is required and printed on every build.
 
 To check whether a monitor change is committed you must `cd` into the `capstone-sbi` directory of the
 copy you edited and run `git status` **there**. `git diff` one level up (at `components/opensbi`) shows
 only `sbi_capstone_dom.c` and silently omits `sbi_capstone.c` — it is a submodule deeper.
 
-**Why the branch names differ (the "zoo"), stated once.** Each shared repo is checked out two or
+**Why the branch names differed until 2026-09-07 (the "zoo"), stated once, for the history.** Each shared repo is checked out two or
 three times in this tree, and the checkouts hold different code: the board flavour and the QEMU
 flavour of `caplifive-buildroot.git` last shared a commit in January 2025 (`2f56383`; 32 board commits
 — FPGA clock/baud, the device-tree range for the 65536-node bitstream that named the branch, kernel
@@ -106,10 +104,10 @@ from `2f772bb`), the fw_jump stand-in line (4 from the same point) and the templ
 (`origin/capstone-bootstrap`, `04ac643`); the opensbi stand-in forks from `769939a` while the board
 line has 25 commits past it. Every local checkout called its branch `capstone-bootstrap` and none was
 pushed until 2026-09-07, so one name meant three histories; the `-board`/`-qemu` suffixes are those
-histories made visible. **Collapsing to one branch per repo is a merge of the two flavours into one
-source with build-config switches, followed by rebuilding fw_jump and the board firmware and
-revalidating both — not a rename.** Gitlinks reference SHAs, so any reachable branch name satisfies
-the superproject.
+histories made visible. Collapsing them was a merge of the two flavours into one source with
+build-config switches, followed by rebuilding fw_jump and the board firmware and revalidating both —
+done 2026-09-07 as `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`); the `-board`
+and `-qemu` branches and the `pre-unify/2026-09-08/*` tags stay as the frozen pre-merge lines.
 
 There is a second, stale copy of the monitor source at
 `caplifive-system/sw/buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c`.

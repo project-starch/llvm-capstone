@@ -158,7 +158,34 @@ Put shared artifacts under `capstone/benchmarks/<your-corpus>/` following the `s
 layout: `build-*.sh`, `run-*.sh`, `*_domain.c`, and a `README.md` stating what is
 verbatim from the original bug and what was adapted.
 
-## Rebuilding the stand-in monitor (QEMU flavour) — the proven recipe
+## Rebuilding the QEMU monitor — one tree, `TARGET=qemu` (since 2026-09-07)
+
+The board and QEMU flavours of `caplifive-buildroot`, the OpenSBI wrapper and the monitor are one
+source on `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`). Both checkouts
+(`capstone/caplifive-buildroot` for QEMU, `capstone/caplifive-system/sw/buildroot` for the board)
+track that branch; the target is a build variable and each target has its own output directory
+(`build-qemu/`, `build-fpga/`) with `build` a per-checkout symlink to the one the checkout serves —
+the harnesses keep reading `build/images`.
+
+```bash
+cd capstone/caplifive-buildroot            # build -> build-qemu here
+export CAPSTONE_CC_PATH="$(realpath ../capstone-c)"   # REQUIRED; every build prints the compiler it used
+# 0. still parse the wrapper in place first when the monitor changed (a failed regen deletes the .c.S):
+( cd ../capstone-c && cargo run -q -- --abi capstone \
+    "$PWD/../caplifive-buildroot/components/opensbi/lib/sbi/sbi_capstone_dom.c" \
+    -- -I"$PWD/../caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi" -D__riscv_xlen=64 \
+    -DCAPSTONE_TARGET_QEMU -DCAPSTONE_DEBUG_ENABLE > /tmp/x.S ) && echo parses
+make TARGET=qemu build A=opensbi-rebuild   # regenerates the .c.S (also when TARGET changed: a stamp of the defines is a prerequisite), relinks fw_jump
+make TARGET=qemu build A=capstone-sbi-domain-rebuild   # sbi.dom, the third monitor copy (package/capstone-sbi-domain, still its own checkout)
+make TARGET=qemu build                     # repack rootfs
+```
+
+`sbi_capstone.c` is ONE file for both targets: per-target code sits under `CAPSTONE_TARGET_FPGA` /
+`CAPSTONE_TARGET_QEMU` (`capstone_target.h`; the OpenSBI platform directory supplies the define for
+OpenSBI's own compile, `CAPSTONE_EXTRA_DEFS` for the capstone-c regeneration). The gates below still
+apply; the "two copies" paragraph now describes only `sbi.dom`'s package copy.
+
+## Rebuilding the stand-in monitor (QEMU flavour) — the pre-unification recipe, kept for its gate lessons
 
 The QEMU firmware's monitor is **not** rebuilt by a bare `make build`, and four different things
 make a rebuild silently do nothing. Learned over eight attempts on 2026-09-05 (Q-03); every

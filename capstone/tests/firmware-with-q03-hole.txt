@@ -4,3 +4,4 @@
 # its control and every domain; never by name or size (buildroot pads images in 2 MiB steps).
 # sha256  date  boot  evidence
 44c88d9ebeb19c7091e2e04c7078f6f938fa0550e1dee33bca716d024fb84a19  2026-09-07  sw30  k800 + 6 BEEBS rungs 7/7 in one boot, no fault tag, no exact fit occurred (hole path unexercised); monitor source = caplifive-system nested capstone-sbi 56dfbe9 (opensbi 0ac0290)
+b05bf97e8857d41471ec3750ac23df48b44b3e4aa408a154bf4c8e66b9c30310  2026-09-07  sw31  unified tree (monitor-unification.md A2): k800 + 6 BEEBS rungs + SLT select1, 8/8 in one boot, no fault tag, no exact fit occurred; monitor source = capstone-sbi 1b87df8 (opensbi ea34f91, buildroot 21b09c2), firmware .text identical to sw30's

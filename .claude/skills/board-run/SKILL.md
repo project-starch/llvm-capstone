@@ -87,8 +87,11 @@ O=capstone/caplifive-system/sw/buildroot/overlay/test-domains
 T=capstone/caplifive-system/sw/buildroot/build/target/test-domains
 cp -f <artifact> "$O/" && cp -f <artifact> "$T/"      # BOTH — buildroot packs $T
 cd capstone/caplifive-system/sw/buildroot
-make build LINUX_PAYLOAD=1 A=linux-rebuild  CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
-make build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+make TARGET=fpga build LINUX_PAYLOAD=1 A=linux-rebuild  CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+make TARGET=fpga build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+# Since 2026-09-07 the tree is one source for both targets (docs/plans/monitor-unification.md):
+# TARGET=fpga is the default, the output directory is build-fpga/ with `build` a symlink to it in
+# this checkout, CAPSTONE_CC_PATH is required and every build prints the compiler it used.
 ```
 
 `A=linux-rebuild` **first**: buildroot does not track `overlay/` → cpio, so an OpenSBI-only

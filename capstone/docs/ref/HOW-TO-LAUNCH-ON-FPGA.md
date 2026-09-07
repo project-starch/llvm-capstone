@@ -217,14 +217,13 @@ Restore point if anything goes wrong: `~/capstone-b-artifacts/monitor-known-good
 
 ## Superseded: "don't rebuild the monitor with our tree's `capstone-c`"
 
-Regenerating `fw_jump.elf` (QEMU) or the FPGA firmware monitor from **our tree's**
-`capstone-c` (`master`@`8cda52c`) **boot-hangs** (zero serial). **Known fix
-(2026-07-25):** the working firmware is built by `caplifive-system`'s pinned
-`capstone-c` = branch **`bugfix`@`508342a`** (divergent from our `master`; carries
-a gct-alignment fix). So for any monitor rebuild, build with **that** compiler, not
-our tree's. Recovering + pinning this is `plans/monitor-regen-audit-task-B.md` (fast
-path); until it's pinned in-tree, **use the existing working prebuilt as-is** for
-board runs. Memory `project_opensbi_monitor_rebuild_include_wrapper`.
+**Superseded.** The 2026-07-24 boot-hang after a monitor regeneration was NOT the compiler: it was
+an FPGA `fw_jump.o` (built with an embedded device tree) relinked into the QEMU firmware from a shared
+build directory (ISSUES.md C-11, fixed 2026-07-28; the `bugfix`@`508342a` explanation was refuted
+there). Every firmware validated on the board since — including the Q-03 hole firmware of boot sw30
+— is built with **our tree's `capstone/capstone-c` at `8cda52c`**, and since 2026-09-07 the build
+requires `CAPSTONE_CC_PATH` explicitly and prints the compiler it used (`make TARGET=fpga build …`,
+one tree for both targets, `docs/plans/monitor-unification.md`).
 
 ## Large domains go in the BUILDROOT IMAGE over JTAG, not over UART (2026-07-28)
 

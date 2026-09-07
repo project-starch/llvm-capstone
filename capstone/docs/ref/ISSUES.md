@@ -4606,7 +4606,9 @@ Validated: rebuilt monitor md5 `9cbf5068` boots and `beebs_aha_mont64` returns i
 
 **The trap RE-ARMS every time the FPGA firmware is built in this tree**, because the same
 build dir serves both and the FPGA side *requires* `FW_FDT_PATH`. Separating them (a
-distinct `O=` build dir) is the durable fix and is not done yet.
+distinct `O=` build dir) is the durable fix — **done 2026-09-07** by the monitor-stack unification
+(`docs/plans/monitor-unification.md`): one tree, `TARGET=fpga|qemu`, `build-fpga/` and `build-qemu/`,
+and the QEMU `fw_jump.elf` is gated on `fw_fdt_bin` being absent.
 
 **What was wrong before.** The recorded cause was compiler drift (good monitor `s0–s6`/
 frame −368 vs regen `s0–s11`/−464). That difference is real but confined to `create_domain`,
