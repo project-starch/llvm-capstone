@@ -1,5 +1,7 @@
 # A ~1.6 MB pure-capability domain hangs after ANY perturbation of its image
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **NOT RUN in the 2026-09-05 sweep**: the `uc`/`dp0` perturbation pair needs the stage machinery and was deferred (sweep close-out, R-17/S-01). Status unchanged: reproducible board-vs-QEMU divergence, not root-caused. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: reproducible board-vs-QEMU divergence. NOT root-caused, NOT minimised.**
 Handed over as a reproducer plus a list of eliminated variables, not as a diagnosed defect.
 

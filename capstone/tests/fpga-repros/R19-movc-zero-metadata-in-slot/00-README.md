@@ -1,5 +1,7 @@
 # R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **NOT REPRODUCED on `caplifive_s12fix_5097eb166.bit` with this package's own frozen images, 2026-09-05 sweep (boots sw11 and sw12, control green; rows in `tests/board-results/2026-09-05.tsv`, ISSUES.md R-19 block):** `fdp0fix` 2609 as the entry-contract control, then `fdpO1` and `fdpraw` 2609 = 0x0A31, no `compress_cap(NULL)` high half. Trigger class unchanged; not yet reported; N=1 per image on this bitstream. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: this signature is established on silicon and reproducible on demand. It does NOT reproduce
 in Verilator — unlike R-18's splash form, which does, and which ships here too so the contrast is in
 one place. A compiler-side workaround is silicon-confirmed.**

@@ -1,5 +1,7 @@
 # A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **M-1 NOT EXERCISED in the 2026-09-05 sweep** (`caplifive_s12fix_5097eb166.bit`, boot sw13, control green, `tests/board-results/2026-09-05.tsv`): the deliberate fault this package relies on, `lcc` selector 1 on an untagged operand, is total now and returns 1017 instead of trapping, so whether a real domain fault still loops forever was not tested. Needs a rung with a guaranteed capability fault; the `INTERP_DOMAIN_MTVEC=1` fix in ISSUES.md M-1 is still unverified. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: ROOT-CAUSED, and the firmware half is now CONFIRMED ON SILICON (2026-09-02). Writing
 `dom_seal[1]` moves the failure from "no vector at all, storm at address 0" to "the handler's own
 prologue faults in the wrong capability context". The fix is NOT firmware-only; the remaining half

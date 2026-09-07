@@ -1,5 +1,7 @@
 # R-20 — after `stc`, a load into **x10** is read by the next instruction as the store's base address
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Fix present in the flashed RTL by content, 2026-09-05 sweep:** commit f623c48a1 is in 5097eb166 (checked by content, not ancestry), and the directed test `r20-stc-ld-x10` runs clean in simulation at that revision (SUCCESS 775 cycles, 0 exceptions). The one board draw this sweep, `r20sbx` rebuilt at 0xb0000 (boot B1, `tests/board-results/2026-09-05.tsv`), read 0xD0000000 = R-20 NOT observed, but it is a weaker probe than the frozen image and the row marks it NOT conclusive; the 2026-08-10 silicon verification on `caplifive_r20.bit` stands as the evidence. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Wrong symptom? Read this paragraph first.** This package is the **stale-operand-on-x10**
 signature: a plain `ld` whose value the *next* instruction reads as the *store's base address*
 instead of the loaded data, only when the register is **x10/a0**. Three sibling packages describe

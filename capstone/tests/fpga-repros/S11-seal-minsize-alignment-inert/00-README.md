@@ -1,5 +1,7 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Not exercised in the 2026-09-05 sweep**; status unchanged (instruction-semantics defect in SEAL). Listed so the folder does not read as silently current. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **This is an instruction-semantics defect in `SEAL`, not a cache or write-buffer issue.** If you
 arrived here chasing a capability that lost its tag on reload, a stale tag after a plain store, or
 a scrubbed capability reading back live, you want **S-06**, **S-07**, **S-09** or **S-10** instead

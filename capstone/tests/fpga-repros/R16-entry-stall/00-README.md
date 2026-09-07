@@ -1,5 +1,7 @@
 # R-16 — the domain never returns from its FIRST entry (`SHA5` stall)
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Acceptance re-confirmed on `caplifive_s12fix_5097eb166.bit`, 2026-09-05 sweep:** the `k800` control entered and returned in all 22 boots recorded in `tests/board-results/2026-09-05.tsv` (B1–B8, sw01–sw17, swd1–swd2); no first-entry stall was seen. Still the bitstream acceptance test. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > ## RESOLVED 2026-08-04 by `caplifive_fixed_forward.bit`. Kept as a bitstream acceptance test.
 >
 > R-16 was the same **capability operand-forwarding bug** as R-14 (`capstone-ariane

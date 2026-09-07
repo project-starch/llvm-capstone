@@ -1,5 +1,7 @@
 # S-08 — on `caplifive_s06fullfix.bit` the monitor takes an UNHANDLED TRAP just after a domain's first share returns
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Bitstream-specific and superseded**: `caplifive_s06fullfix.bit` is no longer flashed (`s12fix` is), so this was not exercised in the 2026-09-05 sweep. Kept as the record of the 2026-08-15 fix and its silicon verification. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: RESOLVED — FIXED IN RTL AND VERIFIED ON SILICON, 2026-08-15.**
 
 Verified by the reporting lane on `caplifive_s06fixs08fix.bit`, one control-validated boot

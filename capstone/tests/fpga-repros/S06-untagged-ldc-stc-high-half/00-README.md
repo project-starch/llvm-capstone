@@ -1,5 +1,7 @@
 # S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **FIXED in the flashed silicon, acceptance passed 2026-09-05 on `caplifive_s12fix_5097eb166.bit`:** the acceptance rung `s06agg` returns 15 with no memcpy high-half fixup (boot B1), and the `s06copy` / `s06aggcap` / `s06aggwide` rungs pass (boot sw05), control green in both (`tests/board-results/2026-09-05.tsv`); both directed tests (`untagged-ldc-stc-128`, `untagged-ldc-stc-fixup`) run clean in simulation at 5097eb166. The compiler-side fixup family is retirement material (CLASSIFICATION W-04/W-12). (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > **STATUS 2026-08-14 — FIXED IN RTL (Option A), sim-validated, awaiting synthesis.**
 > The general fix (`FIX-PROPOSAL.md` Option A) is implemented on branch
 > `fpga-testing-dev-s06fix` of `capstone-ariane` — delivered as ONE squashed commit

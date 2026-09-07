@@ -1,5 +1,7 @@
 # S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **NOT REPRODUCED 2026-09-05** on `caplifive_s12fix_5097eb166` with the current compiler's -O1 images (ISSUES.md S-13 block): a different bitstream AND a different compiler from the original measurement, so this is not a refutation of the 2026-08 observation, whose images are not reconstructable (banner below). (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 > ## THIS MEASUREMENT CANNOT BE REPRODUCED FROM THIS FOLDER (added 2026-09-04)
 >
 > **The two `-O1` images behind all 8 boots are not here and are not reconstructable.** This folder

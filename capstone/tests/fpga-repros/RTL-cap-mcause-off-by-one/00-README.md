@@ -1,5 +1,7 @@
 # SPEC VIOLATION — every capability `mcause` from the DATA path is one code too high, and 25 aliases
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **Not exercised in the 2026-09-05 sweep**; status unchanged (code-level RTL defect, cost is misclassification). Listed here so the folder does not read as silently current. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 **Status: code-level RTL defect, verified against the reference model. Not reproduced on silicon
 as a functional failure — its cost is misclassification, not miscomputation.**
 

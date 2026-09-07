@@ -1,5 +1,7 @@
 # A load addressed through a register misses pending stores to other addresses
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **R-1 GONE on `caplifive_s12fix_5097eb166.bit`, 2026-09-05 sweep (boots swd1 and sw17, `tests/board-results/2026-09-05.tsv`; control `k800` = 4 in both).** The three probes rebuilt with the current compiler (`rawhazard5/6/7`, the store-through-one-register / reload-through-another shape verified in the rebuilt images' disassembly) return the oracle. **Attribution is OPEN**, as the ISSUES.md R-1 block says: the bitstream carries both the R-20 forwarding fix and the S-12 fix, and the probes are rebuilt images, not the July ones — "GONE on 5097eb166" is the claim, not "fixed by X". Package kept as the record of the original report. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 We've been chasing a divergence where four of our seven benchmark kernels either hang or return
 wrong values on the board while running correctly under QEMU. It is now isolated to a single
 behaviour, with a five-line reproducer, and we could not work around it in software. Sending it

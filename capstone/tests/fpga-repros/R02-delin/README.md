@@ -1,5 +1,7 @@
 # Question: should `delin` on an already-NONLIN capability trap? (we think this one is ours)
 
+> **2026-09-07 (from the 2026-09-05 sweep):** **R-2 covered by the C-13/C-14 fix, re-confirmed 2026-09-05 on `caplifive_s12fix_5097eb166.bit` (boot sw04, control green; `tests/board-results/2026-09-05.tsv`).** The acceptance rungs of the compiler-side fix (`gpw2` = 3983810698, `gpn2` = 3976364985 = oracle, run last where it used to wedge) pass; the question this package asks (should `delin` of a NONLIN capability trap) stands as answered by the spec reading in ISSUES.md C-13/C-27. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+
 Short version: we were emitting a **redundant `delin`** in domain code, it wedges the board, and
 we have removed it. Everything works without it. We are not asking you to change anything — we'd
 just like to know which of two readings is right, and to flag one thing that might be worth a
