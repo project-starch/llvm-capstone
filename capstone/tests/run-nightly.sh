@@ -211,8 +211,12 @@ else
   # lld too: under LTO the code generator runs inside the linker, and the runtime
   # suites link their domains with $LD_LLD. Nothing in clang's dependency closure
   # pulls lld, so a compiler fix could ship with a linker that lacks it.
-  log "[build] clang + lld (incremental, -j$JOBS) ..."
-  if ! cmake --build "$CAPSTONE_LLVM_BUILD_DIR" --target clang lld -j"$JOBS" \
+  # Through build-toolchain.sh (2026-09-07): the machine-wide exclusive memory lock, a
+  # systemd-run scope with MemoryMax, and the scope's memory.peak in the log -- the host
+  # rules after the 5-6 September outage. llc added: lit runs it, and a stale llc would
+  # test yesterday's code generator under today's report.
+  log "[build] llc + clang + lld (incremental, -j$JOBS, memory-locked scope) ..."
+  if ! JOBS="$JOBS" bash "$SCRIPT_DIR/build-toolchain.sh" -C "$CAPSTONE_LLVM_BUILD_DIR" llc clang lld \
         >"$OUT/build-clang.log" 2>&1; then
     BUILD_OK=0; OVERALL_OK=0; log "[build] clang/lld FAILED (see build-clang.log)"
   fi
