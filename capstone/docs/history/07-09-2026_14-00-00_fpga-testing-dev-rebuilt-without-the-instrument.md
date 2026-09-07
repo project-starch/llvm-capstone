@@ -123,3 +123,65 @@ would change the verdict are in `ref/bitstream-usability-is-the-census-not-the-s
 force-push over `fpga-testing-dev` is unaffected by the timing result. What it is not, yet, is a
 bitstream: flashing it would need the commit-gate change (or an equivalent) and a re-synthesis first.
 The resident `caplifive_s12fix_5097eb166.bit` remains the licensed bitstream.
+
+### Appendix: Experiment B result rows (verdict, cycles, RVFI hash, exceptions)
+
+Tip = the identical `core/` tree's record. Arms delay `dom_switch_busy` by one cycle at C = `commit_stage_i`,
+K = `controller_i`, F = `i_frontend`. A row is shown once when all four agree.
+
+```
+capenter                       all four: SUCCESS 436 47d4c257d4aeed72 0
+call-ctx-save                  all four: TIMEOUT 400013 fded058d33bdc5a1 1
+data-sharing                   all four: TIMEOUT 400013 f82dae083835b7ce 1
+data-transfer                  all four: SUCCESS 421 b7f8e7813273cfd8 0
+csd                            all four: SUCCESS 2090 c650ea0e663dfeeb 0
+lcc                            all four: SUCCESS 362 4a6cfffc462c3b0c 0
+jalr                           all four: SUCCESS 570 0033c8a0579e5616 0
+interrupt                      all four: SUCCESS 560 1cef1be4647cd099 0
+interrupt-rv                   all four: SUCCESS 401 08649d9763ec0c82 0
+revocation                     tip : SUCCESS 932 f2b5adfeeb07a7f3 0
+                               C   : TIMEOUT 400013 9761126089477a06 1   <- DIFF
+                               K   : SUCCESS 932 f2b5adfeeb07a7f3 0
+                               F   : TIMEOUT 400013 436d581af8709a17 0   <- DIFF
+s06sec-ctx-scalar-roundtrip    tip : SUCCESS 592 5d1038b0a5aba41a 0
+                               C   : FAIL 573 22f2bd7d7b2afa03 0   <- DIFF
+                               K   : SUCCESS 592 5d1038b0a5aba41a 0
+                               F   : TIMEOUT 400013 516a20fd751263fa 0   <- DIFF
+r20-stc-ld-x10                 all four: SUCCESS 775 406fc4e491c7d5fc 0
+ccsrrw                         all four: TIMEOUT 400013 f0332621c5173654 1
+cpmp-if-check                  all four: SUCCESS 542 0a91a18774881413 0
+cpmp-su-mode                   all four: TIMEOUT 400013 7dea5b550a393f38 0
+scalar-store-movc-zero         all four: SUCCESS 415 20f2994b3413b183 0
+scalar-store-addi-zero         all four: SUCCESS 12816 47d2b28c838f1f45 0
+s07-ldc-chain-forward          all four: SUCCESS 276242 90a93c9151cb5463 1
+```
+
+The arm C patch (arms K and F differ only in which instance's port is rewired):
+
+```diff
+diff --git a/core/cva6.sv b/core/cva6.sv
+index 2e6632884..563f6459c 100644
+--- a/core/cva6.sv
++++ b/core/cva6.sv
+@@ -808,6 +808,11 @@ module cva6
+   logic dom_switch_commit_ack;
+   dom_switch_req_t commit_dom_switch_req;
+   logic dom_switch_busy;
++  // EXPERIMENT B (2026-09-07): dom_switch_busy captured one cycle late at ONE consumer (commit_stage_i).
++  logic dom_switch_busy_dly_q;
++  always_ff @(posedge clk_i or negedge rst_ni) begin
++    if (!rst_ni) dom_switch_busy_dly_q <= 1'b0; else dom_switch_busy_dly_q <= dom_switch_busy;
++  end
+ 
+   // data req
+   logic dom_switch_data_valid;
+@@ -1867,7 +1872,7 @@ module cva6
+       .dom_switch_valid_o (commit_dom_switch_valid),
+       .dom_switch_req_o (commit_dom_switch_req),
+       .dom_switch_ack_i (dom_switch_commit_ack),
+-      .dom_switch_busy_i (dom_switch_busy),
++      .dom_switch_busy_i (dom_switch_busy_dly_q),
+       // Capstone end
+       .halt_i            (halt_ctrl),
+       .flush_dcache_i    (dcache_flush_ctrl_cache),
+```
