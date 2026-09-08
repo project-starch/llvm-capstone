@@ -32,7 +32,7 @@ everything target-specific; both checkouts stay where they are and simply track 
 - Tags by SHA on every pre-unify tip (`pre-unify/2026-09-08/<repo>-<flavour>`): buildroot-qemu
   4d97ecf, opensbi-qemu 1048a61, monitor-qemu e1ccb49, sbidom-qemu 977af95, sysdev 28f9436,
   buildroot-board 5764378, opensbi-board 0ac0290, monitor-board 56dfbe9, parent-dev f5b8acfb0902.
-  Local until the lead pushes them. All-refs bundles of each nested repo under
+  Pushed 2026-09-08 (all but parent-dev and sysdev, whose commits are remote branch history). All-refs bundles of each nested repo under
   `~/capstone-artifacts/unify-backups/`.
 - Work happens in a detached worktree (`~/capstone-artifacts/unify/wt-buildroot`, branch
   `capstone-bootstrap-unified`, from 5764378) with real nested checkouts; the live checkouts are
@@ -273,7 +273,7 @@ validation boot (control first), not routine. The board rootfs's nested-enclave 
 
 **Switch:** the branch `capstone-bootstrap-unified` is checked out in both live checkouts (the worktree
 `~/capstone-artifacts/unify/wt-buildroot` stays as a detached reference); the live QEMU checkout was
-rebuilt on it and smoked. Pushes are the lead's (every nested push is a branch creation).
+rebuilt on it and smoked. Pushed 2026-09-08 12:47 (every nested push a branch creation; the lead's terminal for the three repositories the agent credential cannot write); every gitlink in `dev` resolves on GitHub, verified afterwards.
 
 ### Plan as written
 
@@ -282,7 +282,7 @@ the QEMU core tier; the child-share probe; the module-consistency check; manifes
 suite. Board: the live `sw/buildroot` checkout switched to the committed unified state, one boot,
 k800 first, six BEEBS rungs, SLT `select1` last. Two audits (before A1: this table and the
 byte-identity claim; after A2: preprocessed-source equivalence and the readings). Then docs, the
-switch of the live checkouts, and the pushes (the lead's; every push is a branch creation).
+switch of the live checkouts, and the pushes (done 2026-09-08; every push was a branch creation).
 
 ## Phase B — convergence backlog (each its own commit and gate)
 1. QEMU's three pre-carve bounds checks on FPGA, replacing the post-carve spin — board boot.

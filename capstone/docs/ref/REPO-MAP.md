@@ -289,13 +289,15 @@ The two new `-board`/`-qemu` names exist because those lines are siblings of the
 `capstone-bootstrap`, not descendants (see "Why the branch names differ" above); a plain push was
 rejected non-fast-forward and must never be forced. Push order stays bottom-up.
 
-## Gitlink audit — 2026-09-08 — the unified state, local until the lead pushes
+## Gitlink audit — 2026-09-08 — the unified state, pushed 12:47, every gitlink resolves
 
 After `docs/plans/monitor-unification.md`: one branch per nested repo, both checkouts on it. Every
-row below is a **branch creation** on its remote (the `pre-unify/2026-09-08/*` tags mark the
-previous tips, also unpushed). Parent `dev` references `caplifive-system` and `caplifive-buildroot`
-gitlinks that are not on their remotes until these pushes land — push nested repos deepest-first,
-then the parent is already consistent.
+row below was a **branch creation** on its remote (the `pre-unify/2026-09-08/*` tags mark the
+previous tips). All pushed by 2026-09-08 12:47 and re-verified afterwards: every gitlink in the
+four-level chain (`dev` → `caplifive-system` → `sw/buildroot` → `components/opensbi` →
+`lib/sbi/capstone-sbi`, plus `components/linux` 830b3c6, `buildroot/` d8ce1de and the `sbi.dom`
+package 977af95) is reachable from a remote branch of its nested repository, and both checkouts of
+each shared repository see `origin/capstone-bootstrap-unified` at the same SHA.
 
 | checkout | remote | branch | HEAD |
 |---|---|---|---|
@@ -306,9 +308,11 @@ then the parent is already consistent.
 | `…/package/capstone-sbi-domain/capstone-sbi` | `caplifive-sbi` | `capstone-bootstrap` (unchanged) | `977af95` |
 
 After pushing from one checkout of a shared remote, `git fetch` in the other so both see the branch.
-Pushed 2026-09-08 with the agent credential: `caplifive-buildroot` only (branch + both tags). The
-credential has no write access to `caplifive-sbi`, `caplifive-opensbi` or `caplifive-system-dev`
-(403 on every push, read access intact) — those three pushes are the lead's.
+Credentials: the agent credential could push `caplifive-buildroot` only (branch + both tags); it has
+no write access to `caplifive-sbi`, `caplifive-opensbi` or `caplifive-system-dev` (403, read intact),
+so the lead pushed those three from a terminal (one script, three pushes). Not pushed, by choice:
+the two `pre-unify` tags on the parent and on `caplifive-system`, which the agent pre-push hook
+rejects as tag refs; the commits they mark are on their remotes as branch history.
 
 ---
 
