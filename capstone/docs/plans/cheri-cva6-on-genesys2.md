@@ -433,4 +433,43 @@ there is the lead's until that account is added as a write collaborator. A sixth
 push: build A's eight extra UNDRIVEN signals are CHERI-only plumbing whose consumers fold under the same
 flag (README §5), so A stays a sound zero point.
 
-Still the lead's: the upstream defect reports, and the board.
+**2026-09-08 — synthesised: A and B both route and close timing; the comparison table exists.**
+Run on the synth machine (branch staged into a bare repo over ssh; the machine has no credentials for the
+private mirror and needs none, the submodules are public), Vivado 2024.2 = row C's, flow checks (bootrom
+DTB values, MIG v4.1 → v4.2 upgrade) first, then A and B under the synth lane's guard, one checkout and
+one artifact directory each, never in parallel. Results, all from each build's own post-route reports:
+
+| | A: CHERI-CVA6 fork, CHERI off | B: CHERI-CVA6 fork, CHERI on | B − A (cost of CHERI) | C: Capstone-CVA6 `5097eb166` |
+|---|---:|---:|---:|---:|
+| Slice LUTs (of 203,800) | 91,998 (45.1 %) | 119,037 (58.4 %) | +27,039 (+29.4 %) | 169,696 (83.3 %) |
+| FFs (of 407,600) | 58,890 | 71,861 | +12,971 (+22.0 %) | 93,257 |
+| BRAM tiles (of 445) | 98 | 130 | +32 | 55 |
+| DSPs | 27 | 27 | 0 | 27 |
+| WNS, 40 ns clock | **+11.244 ns** | **+6.518 ns** | | −15.311 ns |
+| failing / total endpoints | 0 / 102,124 | 0 / 129,688 | | 101,782 / 174,895 |
+| wall clock, peak RSS | 35 min, 19.0 GB | 75 min, 20.1 GB | | |
+
+Core-level B − A: +44 % LUTs, +43 % FFs, of which half is the issue stage (merged register file of
+151-bit register-format capabilities, and forwarding); the +32 RAMB36 are the tagged data cache; the FPU is flat; the tag controller (7.5 k
+LUTs, 32 RAMB36) is in both builds. Full table and the reading rules in
+`docs/ref/fpga-silicon-measurements-for-paper.md` §7c. Prediction check: A ≈ 45–55 % LUTs → 45.1 %; B
++25–40 % over A → +29.4 %; timing met at 40 ns → both met.
+
+Two incidents. **A's first attempt failed at elaboration** on `[63:64]` in `store_unit.sv:129`, a
+part-select that only reverses with CHERI off; Verilator had reported it as `SELRANGE` in the twin's lint,
+a class the eight-counter table does not include — fixed at four sites (fork `a9568ac2`, B's counters
+unchanged; the rebuilt CHERI model then ran 107/107 riscv-tests with identical cycle counts and the four
+probes with byte-identical results), and the fork README §5 now says to read `SELRANGE` for any never-synthesised configuration.
+Our own `rtl-lint-gate.sh` has the same eight counters; adding `SELRANGE` is a one-line proposal for the
+capstone lane, not made here. **B's first launch ran in A's checkout** (my launch script hard-coded the
+directory): `make` found everything up to date, exited in 15 s, and its `> synthesis.log` truncated A's
+in-tree logs, which the synth lane noticed as "no trace of build A"; A's tarball had already captured them.
+A correction from that: I reported "0 critical warnings" for A from the truncated log; the archived log has
+4, identical to B's 4, all from the fork's XDC (a clock group naming the absent Ethernet clock, two IP XDCs
+applied before OOC stitching). The same-part timing-closure control went to the RTL lane.
+
+Synthesised-but-not-run: no bitstream has been on the board (phase 3, volatile-only, ask-first). The
+clean Capstone cost (Capstone base on this flow) is not measured. Artifacts stay on the synth machine
+under `~/scratch/cheri-cva6-artifacts/`.
+
+Still the lead's: the upstream defect reports, the board, and whether to synthesise Capstone's own base.

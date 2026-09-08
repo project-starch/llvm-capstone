@@ -1216,3 +1216,73 @@ expected to cost time. Whatever intuition predicted otherwise should not be trus
 design.
 
 Provenance: board and RTL lanes, 2026-09-04.
+
+### §7c — CHERI-CVA6 and Capstone-CVA6 on the same part, flow and constraint (2026-09-08)
+
+**First hardware-cost comparison with a CHERI core on our own board.** Three routed builds on the
+Genesys2's `xc7k325tffg900-2`, Vivado 2024.2, the same `run.tcl` settings (retiming on, `RuntimeOptimized`),
+the same 40 ns constraint on the core clock (25 MHz) and the same synth-guard. A and B are the
+zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2` in `project-starch/cheri-cva6`,
+built from `vcu118` + the constants and elaboration fixes listed in the branch README) with the CHERI
+core logic off and on; C is the Capstone-CVA6 bitstream resident on the board, re-read from its archived
+tarball (§7). Every number is from that build's own post-route `utilization_placed` /
+`utilization_hier` and `timing_summary_routed` reports, Intra Clock Table row `clk_out1_xlnx_clk_gen`.
+
+| | A: CHERI-CVA6 fork, CHERI off | B: CHERI-CVA6 fork, CHERI on | B − A (cost of CHERI) | C: Capstone-CVA6 `5097eb166` |
+|---|---:|---:|---:|---:|
+| Slice LUTs (of 203,800) | 91,998 (45.1 %) | 119,037 (58.4 %) | +27,039 (+29.4 %) | 169,696 (83.3 %) |
+| FFs (of 407,600) | 58,890 | 71,861 | +12,971 (+22.0 %) | 93,257 |
+| BRAM tiles (of 445) | 98 | 130 | +32 | 55 |
+| DSPs | 27 | 27 | 0 | 27 |
+| WNS, 40 ns clock | **+11.244 ns** | **+6.518 ns** | | −15.311 ns |
+| failing / total endpoints | 0 / 102,124 | 0 / 129,688 | | 101,782 / 174,895 |
+| wall clock, peak RSS | 35 min, 19.0 GB | 75 min, 20.1 GB | | |
+
+**What B − A says.** CHERI costs this SoC **+29 % LUTs, +22 % FFs and +32 block RAMs**, and the design
+still closes timing with 6.5 ns to spare. At the core alone the cost is **+44 % LUTs, +43 % FFs**:
+
+| block (LUTs / FFs) | A | B | B − A |
+|---|---:|---:|---:|
+| core `i_ariane` | 59,889 / 29,576 | 86,244 / 42,177 | +26,355 (+44 %) / +12,601 (+43 %) |
+| of which `issue_stage_i` (merged register file of 151-bit register-format capabilities, scoreboard, operand forwarding) | 16,797 / 7,285 | 31,475 / 12,294 | +14,678 / +5,009 |
+| of which `ex_stage_i` (CHERI unit is flattened into it; FPU flat at 11.6 k → 11.9 k) | 27,239 / 10,936 | 32,874 / 12,336 | +5,635 / +1,400 |
+| of which `lsu_i` (capability loads/stores, bounds and permission checks) | 12,262 / 7,704 | 16,082 / 9,391 | +3,820 / +1,687 |
+| of which `i_wt_dcache` (129-bit memory-format lines, 128 + tag; RAMB36 40 → 72) | 5,877 / 1,654 | 8,959 / 2,408 | +3,082 / +754 |
+| of which `csr_regfile_i` (capability CSRs) | 3,157 / 2,379 | 4,851 / 4,397 | +1,694 / +2,018 |
+| of which `i_frontend` (PCC) | 2,805 / 4,451 | 4,423 / 7,234 | +1,618 / +2,783 |
+| tag controller `i_axi_tagctrl_reg_wrap_raw` (present in both; 32 RAMB36) | 7,488 / 7,057 | 7,925 / 7,386 | +437 / +329 |
+| DDR controller, crossbar, peripherals, atomics, debug | 22,994 / 20,586 | 23,239 / 20,626 | +245 / +40 |
+
+Half of the core cost is the issue stage: the merged register file holds capabilities in the 151-bit
+register format (`$bits(cap_reg_t)`: decoded bounds and metadata beside the 64-bit address; the regfile's
+4,713 FFs are 31 × 151 + 32) and every operand path, scoreboard entry and forwarding mux widens with it. The tagged, capability-wide data cache
+accounts for the whole block-RAM increase (its data banks map onto RAMB36 at 129 bits worse than at 64).
+The tag controller is the same in both builds; it is a cost of the fork's SoC, not of turning CHERI on.
+
+**What A and B say about C.** Same part, same flow, same constraint, same guard: a CVA6-class SoC at
+45 % and at 58 % occupancy **closes at 40 ns with margin**, where every Capstone build (eight routed, §7)
+fails by 10.6–16.4 ns at 83–85 %. The part, the constraint and the flow are therefore not what fails;
+what fails is specific to the Capstone design at its occupancy. This is the first such control from
+outside the Capstone lineage. It does not say *which* Capstone structure is responsible.
+
+**What may NOT be read from this table.** *A vs C is not "CVA6 vs Capstone".* A's core is the fork's
+2024-era upstream CVA6 (write-through data cache, current issue logic); Capstone's is an older upstream
+base with its own cache and pipeline, so A → C mixes the base-version difference with Capstone's own
+cost. *B − A is the clean CHERI cost on one base; the equivalent clean Capstone cost needs Capstone's own
+base synthesised on this flow,* which has not been done. Core-level rows are what Vivado kept as
+hierarchy; the CHERI unit itself is flattened into `ex_stage_i` and cannot be priced separately without a
+`keep_hierarchy` build. Nothing here is a performance number: no bitstream has been run on the board.
+
+**Two incidents behind the numbers, so they are not repeated.** (1) A's first attempt died at Vivado
+elaboration on a reversed part-select (`[63:64]`, `store_unit.sv:129`) that only exists with CHERI off;
+Verilator had listed it as `SELRANGE`, a class outside the eight counters our lint table tracks. Four
+sites were rewritten to select the same bits with CHERI on (B's lint counters unchanged; the rebuilt CHERI
+model runs all 107 riscv-tests with identical verdicts and cycle counts and the four CHERI probes with
+byte-identical result vectors) — read `SELRANGE` for any configuration nobody has synthesised. (2) B's first launch ran in A's directory
+(hard-coded path), did nothing in 15 s, and truncated A's in-tree logs; A's tarball already held them.
+The quarantined output sits under `B-25/attempt0-wrong-tree`.
+
+Provenance: cheri lane, 2026-09-08 04:46–06:49 UTC on the synth machine; tarballs
+`~/scratch/cheri-cva6-artifacts/{A-25,B-25}/synth-a9568ac2-exit0.tar.gz` (235 MB, 292 MB), row C from
+`~/scratch/capstone-artifacts/synth-5097eb166-exit0.tar.gz`; bitstreams `ariane_xilinx.bit` inside each.
+Plan and log: `docs/plans/cheri-cva6-on-genesys2.md`.
