@@ -1877,7 +1877,7 @@ and the folder is the report.
 
 ## RTL / FPGA
 
-### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `OPEN — RTL READING 2026-09-08, silicon UNCONFIRMED, not yet claim-audited; explains why the monitor's fence.i after such writes is load-bearing`
+### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `OPEN — MEASURED IN SIMULATION 2026-09-08 (RTL ef5a8eaf2: a younger load checked CPMP against the old entry five cycles before the CCSRRW landed, FAIL 11; fence.i between them PASS), silicon UNCONFIRMED; the CPMP data check is demonstrated, the cscratch/switcher path and LDC/STC are not; the monitor's three fence.i after CCSRRW are load-bearing and stay until the RTL flushes`
 
 **Found while asking whether the board monitor's eleven FPGA-only `fence.i` sites (Phase B item 8,
 `docs/plans/monitor-unification.md`) are still needed.** Two rtl-oracle reads, quoted `file:line`:
@@ -1913,6 +1913,31 @@ expectation. (a) intermittently wrong with (b) always right confirms the race; b
 means the window is not hit by this code path (not proof of absence). **Owner: the RTL lane** (an
 issue-time interlock for `CAPSTONE_DYN` behind a pending `CCSRRW`, or `flush_o` on `CCSRRW`, is the
 RTL-side fix; the monitor keeps its `fence.i` until then).
+
+> **DEMONSTRATED IN SIMULATION 2026-09-08 (RTL lane).** Write-up with the waveform readings:
+> `docs/history/08-09-2026_22-00-00_r26-ccsrrw-stale-read-demonstrated.md`; tests on capstone-ariane
+> branch `r26-ccsrrw-stale-read` (kept out of the gate testlist because the hazard arm is an expected
+> FAIL). M-mode with `mstatus.MPRV=1, MPP=S` so loads are CPMP-checked, no `mret` between; CPMP[0]
+> wide over three lines, `CCSRRW` narrows it, a load inside wide/outside narrow follows; positive
+> control (load outside wide traps) and post-`fence.i` control (same load traps) fire in every arm.
+> With no older instruction, or an older `div`, the load TRAPS — the VCD shows the divider holding the
+> shared fixed-latency unit so the CSR op cannot issue until it finishes, commits two cycles after
+> issue, and the load's check lands one cycle after commit on the edge the write becomes visible: a
+> zero-cycle window by timing, not by design. With an older cache-missing `ld` ahead of the `CCSRRW`
+> (`S12_MEM_DELAY=40`) the CSR write waits at commit behind it; the younger load's CPMP check runs
+> at tick 1183 with `cpmp_allow = 1` against the OLD entry, the write lands at 1193, the load retires
+> with data from outside the new bounds — **FAIL 11 (hazard)**; with `fence.i` between: PASS. So any
+> older instruction that delays the CCSRRW's commit and is not on the fixed-latency unit opens a
+> window of its latency for every younger load/store. A plain `ld` was used; `LDC`/`STC` hit the same
+> `pmp_data_if` check but were not run. NOT exercised: the `cscratch`/`cepc` readers in
+> `dom_switch_read_process` — the switcher reads after the CALL/RETURN commits, so that path needs
+> the switcher's read to fall within a cycle of the write; a separate test with CALL semantics, and
+> the shape with the board consequence (`sbi_capstone_init.S:44-51`). Proposed fix shape: `flush_o`
+> in the CCSR write block for CPMPn/CSCRATCH/CEPC, the idiom the ordinary side-effecting CSR writes
+> use (`csr_regfile.sv:1160-1394`); the `ldmiss` arm turning PASS with the controls still firing is
+> the acceptance test. RTL, lint, audit, synthesis before any board use. For the monitor (Phase B
+> item 8): the three `fence.i` after `CCSRRW` are now KNOWN load-bearing for CPMP writes, not merely
+> kept on suspicion.
 
 ### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, CONFIRMED BY DIRECTED TEST`
 
