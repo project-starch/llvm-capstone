@@ -123,7 +123,7 @@ n=0
 #     the ladder-rung workflow generates 13 KB files by the dozen and 25 of them is 2.7 s of
 #     JTAG on every boot forever.
 # Retire with: bash capstone/tests/stage-board-domains.sh --apply <rungs...>
-OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc k800.dom"
+OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc k800.dom rtpc"
 if [[ -d "$OVERLAY" ]]; then
   _wanted=" $OVERLAY_KEEP_ALWAYS "
   # BAKED_RUNGS names rungs WITHOUT the .dom suffix ("lf0"), while SQLITE_STAGE_DOMS gives full
@@ -206,7 +206,7 @@ fi
 # "overlay clean" -- a silent pass in exactly the situation the gate exists to catch. Checked
 # separately because the target legitimately holds package-installed files the overlay never has.
 TARGET_DIR=${STAGE_TARGET:-capstone/caplifive-system/sw/buildroot/build/target/test-domains}
-TARGET_KEEP="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc"
+TARGET_KEEP="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc rtpc"
 if [[ -d "$TARGET_DIR" && -n "$RUNGS$DOMS" ]]; then
   _tw=" $TARGET_KEEP $OVERLAY_KEEP_ALWAYS "
   for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do

@@ -23,9 +23,17 @@ Minimal snapshot. Read first in every session.
   host-observer read the unification's first nightly exposed, NOT a merge defect), fixed in the
   corpus controller to read back through the domain's alias. Auditor-confirmed; a non-blocking
   monitor-robustness note recorded (ISSUES.md Q-05, 2026-09-08).
-* **Not collapsed (Phase B, listed in the plan, not started):** FPGA pre-carve checks, Q-05 on
-  FPGA, geometry on QEMU, the other packages, the gp cluster, fence.i/rdtime, M-2, kernel
-  unification. So it is "one source, per-target `#ifdef`s", not identical behaviour on both targets.
+* **Phase B collapsed the per-target behaviour (2026-09-08, evening and night).** Geometry on QEMU
+  (item 3), M-2 bounded at 96 (item 9, refusal seen on silicon), the pre-carve refusal on FPGA
+  (item 1), the rounding and the diagnostic store (6a/6b), eleven of fifteen `fence.i` gone (item
+  8, three variants booted), the null-blk package and the relocatable S-mode loader (item 4), ONE
+  `create_domain` (item 5, nine differences gone) and the transferred slot a hole on the board too
+  (item 2: boots sw36/sw37 ran the first transfer-annotated share on silicon, one HOLE line).
+  Board boots sw33–sw37 all at the oracles, zero fault tags; QEMU tier 18/18 through item 3,
+  17/18 on item 5A (one BEEBS case silent before the loader's first line amid five boot-login
+  infra flakes; 3/3 rerun alone, first in a fresh boot). Left: kernel
+  unification (item 10, deferred by the lead), the dead `mem_l`/`mem_r` locals, and the
+  `gpoff == 0` loader branch that no board image reaches. Monitor 5b27d01 / buildroot d3c2402.
 
 ## 2026-09-05
 

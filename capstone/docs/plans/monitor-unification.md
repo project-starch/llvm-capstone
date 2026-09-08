@@ -286,7 +286,7 @@ switch of the live checkouts, and the pushes (done 2026-09-08; every push was a 
 
 ## Phase B — convergence backlog (each its own commit and gate)
 1. QEMU's three pre-carve bounds checks on FPGA, replacing the post-carve spin — board boot.
-2. Q-05 `make_hole` at `REV_TRANSFERRED` on FPGA — board boot with a transfer-annotated share.
+2. ~~Q-05 `make_hole` at `REV_TRANSFERRED` on FPGA — board boot with a transfer-annotated share.~~ **DONE 2026-09-08** (boots sw36/sw37).
 3. Geometry (`MAX_REGION_N` 96 / `MAX_DOM_N`) on QEMU — makes M-2 reachable under QEMU.
 4. The other packages both ways (the QEMU line's `__linear` annotations and `C_PRINT` guards into
    test-domains / null-blk / nested-enclave; the unified tree carries the board line's versions and
@@ -387,8 +387,42 @@ committed form booted CLEAN 7/7 as sw34 (`fw_payload 116e65accecc`, listed). Lin
 A0 loader regression repaired (create_dom_ko's relocatable S-mode path; buildroot commit of
 2026-09-08 evening) — the split domain now loads and serves I/O; the remaining S-mode init fault
 is pre-existing (Q-06, A/B against the pre-unification sbi.dom). `run-nullblk-all.sh` now fails on
-a runner failure (it returned 0 before). Item 2 next: the transfer-annotated board probe (new
-silicon-ladder app + host, never done). Item 5 last.
+a runner failure (it returned 0 before). Item 5 **DONE** (2026-09-08 evening): 5A (monitor 1de9e07) put the QEMU arm's globals copy in
+8-byte units with one declarator per line — the generated QEMU file changed by exactly six lines
+(4→3, 16→8, ldc/stc→ld/sd; R-10's shape), the FPGA file not at all; QEMU chain and tier green.
+5B (monitor 4070620) collapsed the two arms into ONE create_domain built from the QEMU arm plus
+the FPGA-only DBAS/DENT traces, the trap-vector `#ifdef` and the C-13 narrative, with the
+pre-carve check through REPORT_REGION_OVERFLOW; QEMU generated file byte-identical to 5A's, FPGA
+file differs only inside `_create_domain` (frame 672→576, the guards, the conditional carve and
+slot, the RGNF check). Measured on the staged ELFs: every board domain packs a nonzero globals
+offset (0x1000 ×7, SQLite 0x150000), so no board behaviour changes; the gpoff == 0 branch has no
+board image and is unexercised on silicon. Boot sw35 (fw_payload 9d9061be1b26): k800, six rungs,
+SLT select1 — all at the oracles, zero fault tags, DBAS/DENT printed 8/8. Nine differences gone;
+no per-target conditional left inside the function. Item 2: probe built (silicon app with
+delin-once + interp glue, freestanding host `rtpc`), QEMU pre-gate PASSED (0x22300000 then the
+sentinel read back through the domain). Item 2 **DONE** (2026-09-08 night): boot sw36 (fw_payload
+30f0ff5a33d2, monitor 4070620) ran the first transfer-annotated share on silicon — k800 control 4,
+`RESULT revxfer retval=574619742` (call 1 0x22300000, call 2 0x2240005e: the domain read its
+sentinel back through its own delin-once alias), SHA5/SHA6 2/2, zero fault tags, HOLE 0 on the old
+arm, core alive after. 2B (monitor 5b27d01, wrapper 1c48f02, buildroot d3c2402): ONE
+`MAKE_HOLE(region_id, 0x1239)` after the per-target type check; the board's `make_hole` clears the
+CPMP association the removed block cleared, then retires the slot and prints HOLE/RGNN; QEMU
+generated file byte-identical to item 5's, FPGA file differs only inside `_shared_region_annotated`
+(the inline CPMP clear → `call make_hole`). Boot sw37 (fw_payload 5dd1c265a70d): same readings
+plus exactly one `HOLE:0000000E` / `RGNN:0000000F` (the transferred arena, region 14). The
+`REV_TRANSFERRED` handling is now one statement on both targets; what still differs at the site is
+the type-check REPORT (UART tags vs `C_PRINT`), the reporting layer. The 5A nightly tier
+(`/tmp/capstone-5a/nightly-20260908_194146`) finished 17/18: `beebs` FAIL(1) on `sglib-hashtable`,
+whose guest printed nothing within 20 s of launch — before the loader's "Ok, good file." line, so
+before any monitor code — in a tier that also logged five boot-to-login infra retries (huffbench,
+minver, newlib-sqrt, sglib-arraysort, tarai ×2; the two earlier tiers today had one each) while
+another user's MySQL/Bazel jobs loaded the machine. Rerun alone, first in a fresh boot, three
+times on the rebuilt images (fw_jump c1a450ac5d06, sbi.dom f48906bf25a4, generated file
+byte-identical to 5A): 3/3 at the marker (retval 0xc171c0de, `Globals offset = 0x0` — the QEMU
+BEEBS images DO take the gpoff == 0 branch, so that branch is exercised under QEMU, only not on
+silicon). Classified as an infra flake; the other 17 suites passed on the same images. The probe pair (`rtpc`, `revxfer.dom`, entry VA
+0xA0000) stays staged; the SLT trio and the M-2 pair sit in `/tmp/capstone/overlay-attic` until a
+boot needs them (the preflight refuses unused overlay files above the budget).
 
 **Order that costs the fewest boots:** 3 (QEMU only) → 9 (QEMU control, then it protects every later boot) → 6 rounding (QEMU) → **one board boot** carrying 1 + 2 + 6-magic-removal + 8's firmware-only arm (batched, control first, one unknown last per the board rule — so more likely two boots: {1, 6, 8} then {2}) → 4 null-blk → 5 last with its own ladder boot. Items 10 and the initramfs need no work unless the lead wants them.
 

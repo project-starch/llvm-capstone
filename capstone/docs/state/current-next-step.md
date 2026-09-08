@@ -1,19 +1,31 @@
 # Next step
 
-## 0. CURRENT — 2026-09-08. Monitor stack unified; Phase B is the remaining work.
+## 0. CURRENT — 2026-09-08 (night). Monitor stack unified; Phase B done except the kernel.
 
 The unification (one branch `capstone-bootstrap`, `make TARGET=fpga|qemu`) is done, pushed and
-validated on both targets (see `current-state.md` and `docs/plans/monitor-unification.md`). No
-open action from it. The remaining convergence work is Phase B in the plan doc, none started;
-each item is its own commit with its own gate. Decisions for the lead:
+validated on both targets (see `current-state.md` and `docs/plans/monitor-unification.md`).
+Phase B (the plan doc's convergence backlog) is done for items 1–9: geometry, M-2 bound (raised to
+96 AND bounded, the lead's choice), the pre-carve refusal, fence.i pruning, the null-blk package
+and loader, ONE `create_domain`, and the transferred slot becoming a hole on the board too — each
+its own commit with its own gate, five board boots (sw33–sw37) all at the oracles with zero fault
+tags. The QEMU tier on the last QEMU-visible change (5A; 5B and 2B are byte-identical there) came
+back 17/18: one BEEBS case (sglib-hashtable) printed nothing for 20 s before the loader's first
+line, in a window that also produced five boot-to-login infra retries under another user's load;
+rerun alone, first in a fresh boot, on the rebuilt images it passed 3/3 at its marker — recorded
+as an infra flake, not a monitor result. Item 10 (kernel unification) is deferred by
+the lead's decision; the +1.05 MB initramfs stays. What remains:
 
-1. **M-2 before any board boot with more than ~8 SQLite domains.** The Q-03 hole fix removed the
-   wedge that kept the module's unbounded `probe_regions` copy unreachable (ISSUES.md M-2). Bound
-   it, or raise the module's `MAX_REGION_N`, first.
-2. **The +1.05 MB initramfs** the unified FPGA defconfig now installs (the board line's extra test
-   domains and diagnostics, ~8 s per JTAG upload): keep or trim.
-3. Phase B item 8 (`fence.i`/`rdtime`) resolves by the author's answer or one firmware-only board
-   boot; item 4 (the QEMU line's package edits) and the gp cluster (item 5) are the larger ones.
+1. **Push the Phase B tail** (`/tmp/capstone/push-final.sh`, the lead's credential; every push a
+   fast-forward, preconditions checked): monitor 4a12d8b→5b27d01 (three commits), wrapper
+   5450a2d→1c48f02 (three), buildroot 8c51969→d3c2402 (three), caplifive-system 20fd22f→77eb5a8
+   (one); then `dev`. The live QEMU images are already rebuilt from the committed source
+   (fw_jump c1a450ac5d06, sbi.dom f48906bf25a4; generated file byte-identical to 5A's).
+2. Small follow-ups, each its own commit: the dead `mem_l`/`mem_r` locals in `split_out_cap`; the
+   `gpoff == 0` `create_domain` branch has no board image (unexercised on silicon, stated in the
+   plan doc); R-26 (CCSRRW vs younger CAPSTONE_DYN readers) awaits an RTL-lane demonstration;
+   Q-06 (null-blk split S-mode init) belongs to the null-blk owner.
+3. Before any SLT or M-2 board boot, restage `/tmp/capstone/overlay-attic/*` into the overlay and
+   `build/target/test-domains` (the preflight refuses unused overlay files above its budget).
 
 The S-12 material below is FINISHED BUSINESS, retained as the evidence trail; do not act on it.
 

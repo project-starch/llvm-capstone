@@ -870,7 +870,7 @@ Applies equally to board arms.
 > port). **M-2 is now more reachable** — see its entry: the port removes the wedge that kept the
 > module's 64-slot copy under its bound.
 
-## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `FIXED in the QEMU stand-in 2026-09-07 — the slot becomes a hole (make_hole, tag 0x1239) in both copies and the probe observes through the domain; fw_jump d9b11509c2f4 / sbi.dom b6b17d84c1fa; 5/5 probes, SLT select1 identical, the hole fired 24 times. Board firmware site unchanged (see the close-out)`
+## Q-05 — after `REV_TRANSFERRED`, the host keeps reaching the transferred pages through a stale duplicate that only QEMU leaves behind `FIXED in the QEMU stand-in 2026-09-07 — the slot becomes a hole (make_hole, tag 0x1239) in both copies and the probe observes through the domain; fw_jump d9b11509c2f4 / sbi.dom b6b17d84c1fa; 5/5 probes, SLT select1 identical, the hole fired 24 times. BOARD PORTED 2026-09-08 (Phase B item 2B, monitor 5b27d01): boot sw36 ran the first transfer-annotated share on silicon on the old arm (probe retval 574619742, no fault), boot sw37 the hole form — same readings plus exactly one HOLE line for the transferred region; the handling is one statement on both targets, only the type-check report still differs per target`
 
 `shared_region_annotated` with `CAPSTONE_ANNOTATION_REV_TRANSFERRED` moves the region's LINEAR
 capability into the domain and clears its CPMP mapping, but leaves `regions[region_id]` as it was
