@@ -161,7 +161,7 @@ verbatim from the original bug and what was adapted.
 ## Rebuilding the QEMU monitor — one tree, `TARGET=qemu` (since 2026-09-07)
 
 The board and QEMU flavours of `caplifive-buildroot`, the OpenSBI wrapper and the monitor are one
-source on `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`). Both checkouts
+source on `capstone-bootstrap` (`docs/plans/monitor-unification.md`). Both checkouts
 (`capstone/caplifive-buildroot` for QEMU, `capstone/caplifive-system/sw/buildroot` for the board)
 track that branch; the target is a build variable and each target has its own output directory
 (`build-qemu/`, `build-fpga/`) with `build` a per-checkout symlink to the one the checkout serves —

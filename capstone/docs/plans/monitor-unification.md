@@ -24,7 +24,7 @@ fixes never reached QEMU). The 2025 bring-up hacks in the monitor (`rdtime` emul
 `split_out_cap` clone, `fence.i`) are the third contributor's; the author curated the line in 2026 and
 re-added `fence.i` deliberately (99aaffa).
 
-**Goal:** one branch, `capstone-bootstrap-unified`, in every repo; `TARGET=fpga|qemu` selects
+**Goal:** one branch in every repo (named `capstone-bootstrap-unified` during the merge, `capstone-bootstrap` since 2026-09-08 — see "Final scheme" at the end); `TARGET=fpga|qemu` selects
 everything target-specific; both checkouts stay where they are and simply track the same branch.
 
 ## Safety record
@@ -294,8 +294,54 @@ switch of the live checkouts, and the pushes (done 2026-09-08; every push was a 
 5. The gp cluster as one logic (carve only when the image declares globals; split declarators +
    `>>3`) — QEMU tier + full ladder board boot. Highest risk; last.
 6. `swap_cpmp` read-back and the C-13 rounding on QEMU.
-7. The `sbi.dom` copy onto the unified monitor source.
+7. ~~The `sbi.dom` copy onto the unified monitor source.~~ **DONE 2026-09-08** (see "Final scheme").
 8. `fence.i` / `rdtime` / `mstatus.MIE`: rtl-oracle on the current RTL, then one firmware-only board
    boot without `fence.i`. The `#ifdef` stays until that boot passes.
 9. M-2: bound the module's region copy before any >8-domain SQLite boot.
 10. Kernel unification (the lead's later decision).
+
+## Final scheme (2026-09-08): one branch name, the sbi.dom copy retired
+
+**Why a second step.** After A2 every repository had a new name, `capstone-bootstrap-unified`, next
+to its old ones; the lead asked for a permanent scheme. The old `capstone-bootstrap` tips were
+siblings of the unified line (the QEMU buildroot line, the QEMU wrapper line, the sbi.dom monitor
+line), so the name could not move onto it without a force-push. Instead each repository got a
+**lineage merge**: `git merge -s ours` of the old line(s) into the unified tip — the tree stays the
+unified one, the old tips become ancestors, and `capstone-bootstrap` fast-forwards onto it everywhere
+(hook-compatible, nothing rewritten). Monitor 3da7ebe (parents 1b87df8 ← e1ccb49, then ← 977af95),
+wrapper 3de3342 (ea34f91 ← 1048a61, monitor pin 3da7ebe), buildroot b7fc740 (41a2a1a ← 4d97ecf,
+pins 3de3342 / 3da7ebe). The QEMU monitor and wrapper lines are carried in content (A1's gates); the
+QEMU buildroot line's package edits are NOT (item 4) and b7fc740's message says which — lineage is
+not presence there.
+
+**Item 7 folded in, because it is what makes the monitor repository one-branch.** The sbi.dom
+package (`package/capstone-sbi-domain`) now `#define CAPSTONE_TARGET_QEMU` before including the
+monitor source and pins the same commit as `components/opensbi/lib/sbi/capstone-sbi`; the separate
+977af95 copy (04ac643's template copy + Q-03/Q-05 cherry-picks) is superseded. Generated sbi.dom
+from the unified source: 6259-line `.c.S`, no FPGA-only text (0 `fence.i`, 0 UART CSR writes), QEMU
+print encoding, `make_hole` present. QEMU firmware unchanged (fw_jump 557b444b6bf3 live /
+ec508f14bbb6 worktree).
+
+**Validation on the final tips (2026-09-08 13:23–13:40).** Worktree images (`/tmp/capstone-unify`):
+smoke 42; borrow-cost, revoke-cost, hier-revoke, revoke-on-free, intra-domain-mrev green; child-share
+cascade TRAPPED (sbi.dom's only consumer); SLT select1 1031 records / 1000 queries `completed=1`;
+module-consistency check 8/8, `count=9`, `oob_share retval=4294967295`, `reuse=0 fetchfail=0`. FPGA:
+`.c.S` pair IDENTICAL, `fw_jump` IDENTICAL, `fw_payload .text` IDENTICAL to boot sw31's references.
+Live QEMU images rebuilt: fw_jump unchanged, sbi.dom byte-equal to the worktree's, smoke 42.
+Board boot sw32 (2026-09-08 13:43–14:00, `fw_payload be14f318a56f`, 17.5 MB, listed in
+`tests/firmware-with-q03-hole.txt`): k800 = 4 first, six BEEBS rungs at their native oracles, SLT
+select1 1031 records / 1000 queries identical to native, zero `SPLA/SPLB/RGNO/EXCX/CERR/ILLX/MCAU`,
+`HOLE` 0. The SQLite host program of that boot was rebuilt against the MERGED loader library
+(8e52da5a1793, marker strings present) and validated under QEMU on select2 first — the first run of
+the merged library on silicon, closing the caveat recorded above. QEMU nightly tier on the live
+images (2026-09-08, `--skip-build`, `parent c20716d54f2f`): 17 of 18 suites PASS on the first run;
+the 18th, `linear-uninit-corpus`, failed on `linear_drop_sibling_ok`. Run down and fixed the same
+day: bisected to the Q-05 monitor commit (a pre-existing stale host-observer read the unification's
+nightly surfaced, not a merge defect; ISSUES.md Q-05, 2026-09-08 note), fixed in the corpus
+controller to read back through the domain's alias, suite then green 3/3 at O0/O1/O2. Tier **18/18**.
+
+**Local checkouts.** Both trees on local branch `capstone-bootstrap` at these tips (all levels, plus
+the sbi.dom package checkout); the local `-unified` names deleted; the board tree keeps its old
+`capstone-bootstrap-dts-*` local names (frozen, ancestors). The worktree
+`~/capstone-artifacts/unify/wt-buildroot` holds the same tips on scratch branches `unify-final`.
+

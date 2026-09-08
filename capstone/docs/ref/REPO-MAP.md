@@ -75,15 +75,15 @@ A `git status` run at `caplifive-system` **does not see it**.
 
 ```
 capstone/caplifive-system            (project-starch/caplifive-system-dev)   branch capstone-bootstrap
-└── sw/buildroot                     (project-starch/caplifive-buildroot)    branch capstone-bootstrap-unified
-    ├── components/opensbi           (project-starch/caplifive-opensbi)      branch capstone-bootstrap-unified
-    │   └── lib/sbi/capstone-sbi     (project-starch/capstone-sbi)           branch capstone-bootstrap-unified
+└── sw/buildroot                     (project-starch/caplifive-buildroot)    branch capstone-bootstrap
+    ├── components/opensbi           (project-starch/caplifive-opensbi)      branch capstone-bootstrap
+    │   └── lib/sbi/capstone-sbi     (project-starch/capstone-sbi)           branch capstone-bootstrap
     │       sbi_capstone.c           <-- THE MONITOR, one source for both targets
-    └── package/capstone-sbi-domain/capstone-sbi (project-starch/caplifive-sbi)  977af95 (the sbi.dom copy)
+    └── package/capstone-sbi-domain/capstone-sbi (project-starch/caplifive-sbi)  branch capstone-bootstrap, SAME commit as the monitor above: sbi.dom is that source's QEMU arm
 ```
 
 **Since 2026-09-07 the QEMU stand-in is the SAME tree** (`docs/plans/monitor-unification.md`): the
-second checkout under `capstone/caplifive-buildroot` tracks the same `capstone-bootstrap-unified` on
+second checkout under `capstone/caplifive-buildroot` tracks the same `capstone-bootstrap` on
 every level and differs only in which target it builds (`make TARGET=qemu …`, output `build-qemu/`,
 `build` a symlink to it there; the board checkout builds `TARGET=fpga` into `build-fpga/`, `build` a
 symlink to it). Per-target code in the monitor sits under `CAPSTONE_TARGET_FPGA` /
@@ -106,8 +106,12 @@ line has 25 commits past it. Every local checkout called its branch `capstone-bo
 pushed until 2026-09-07, so one name meant three histories; the `-board`/`-qemu` suffixes are those
 histories made visible. Collapsing them was a merge of the two flavours into one source with
 build-config switches, followed by rebuilding fw_jump and the board firmware and revalidating both —
-done 2026-09-07 as `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`); the `-board`
-and `-qemu` branches and the `pre-unify/2026-09-08/*` tags stay as the frozen pre-merge lines.
+done 2026-09-07 as `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`). On 2026-09-08 that
+name was retired too: lineage merges (strategy ours, trees unchanged) made every old line an ancestor
+of the unified tree, so `capstone-bootstrap` fast-forwarded onto it in all three repositories and is
+the ONE branch name from then on (see "Branch scheme — final" below). The `-unified`, `-board`, `-qemu`
+and `-dts-65536` names on the remotes and the `pre-unify/2026-09-08/*` tags are frozen old tips: keep
+them, never build from them, delete the branch names whenever convenient (the tags suffice).
 
 There is a second, stale copy of the monitor source at
 `caplifive-system/sw/buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c`.
@@ -288,6 +292,22 @@ their remotes and every gitlink resolves, so a fresh clone reproduces both the b
 The two new `-board`/`-qemu` names exist because those lines are siblings of the remote's
 `capstone-bootstrap`, not descendants (see "Why the branch names differ" above); a plain push was
 rejected non-fast-forward and must never be forced. Push order stays bottom-up.
+
+## Branch scheme — 2026-09-08 final: one name, `capstone-bootstrap`, in every repository
+
+| repository | `capstone-bootstrap` tip | it contains (all ancestors) |
+|---|---|---|
+| caplifive-sbi (monitor, both checkouts + the sbi.dom package checkout) | `3da7ebe` | board line 56dfbe9, QEMU line e1ccb49, sbi.dom line 977af95 |
+| caplifive-opensbi (wrapper, both checkouts) | `3de3342` | board line 0ac0290, QEMU line 1048a61 |
+| caplifive-buildroot (both checkouts) | `b7fc740` | board line 5764378, QEMU line 4d97ecf, unified 41a2a1a |
+| caplifive-system-dev | `fec33fa` (bumps `sw/buildroot` to b7fc740) | 4686afa and everything before |
+
+The merges carry no content of their own (their trees are the unified ones) except two pins and the
+two-line switch that builds `sbi.dom` from the monitor source's QEMU arm (Phase B item 7). What the
+QEMU buildroot line still holds that the tree does not is listed in b7fc740's message (Phase B item
+4); ancestry there is lineage, not presence — read the file. Validation on the final tips: FPGA
+`.c.S` pair, `fw_jump` and `fw_payload .text` byte-identical to boot sw31's; QEMU smoke, five
+probes, child-share cascade, SLT select1, module-consistency check (worktree and live images).
 
 ## Gitlink audit — 2026-09-08 — the unified state, pushed 12:47, every gitlink resolves
 

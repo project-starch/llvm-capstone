@@ -926,6 +926,33 @@ one candidate shape for a silent host-side wedge after a transfer-annotated shar
 > shape named above. That is the same one-line `make_hole` port as Q-03's board port and needs its
 > own boot; not done with Q-03's validation load, which carries no transfer-annotated share.
 
+>
+> ### 2026-09-08 — a SECOND read-arena consumer was missed, found by the unification nightly
+>
+> The reconciliation above updated `intra_domain_mrev_revoke_probe_guest.c`, but the corpus suite
+> that includes the same framework — `linear-uninit-corpus`, whose `linear_drop_sibling_ok` also
+> passes `read-arena` — still read the transferred arena through the host `mmap`
+> (`linear_uninit_corpus_probe_guest.c`). It had never run against a Q-05 monitor until the first
+> nightly on the unified tree (only two nightlies exist for it: 2026-09-07 12:50, pre-Q-05, PASS;
+> 2026-09-08, post-Q-05, FAIL 3/3). **Bisected to exactly Q-05** (`e1ccb49` FAIL vs its parent
+> `2b96170` PASS, single-file diff, same toolchain and domains; the `0x1239` `make_hole` print fires
+> only in the failing arm). **Not introduced by the branch-unification merge**, which carries the
+> Q-05 site verbatim under `CAPSTONE_TARGET_QEMU`. Confirmed by claim-auditor: the domain's own
+> post-drop write and read-back succeed (retval `0x11130044`); only the controller's host `mmap`
+> read faults, `CAPSTONE_NO_CPMP_REGION` (cause 24) — a stale host observer, not over-revocation.
+> **Fixed** the same way (controller reads back through the domain's alias via a second `call_dom`,
+> the framework already supports it): suite green 3/3 at O0/O1/O2, `arena[8] = 0x44 (read back by
+> the domain)`.
+>
+> **Non-blocking monitor robustness observation (pre-existing, not Q-05's doing).** The
+> unauthorized host read is rejected by taking an M-mode capability fault inside
+> `fault_return_from_domain` (it assumes an active-domain caller; a host-initiated `NO_CPMP_REGION`
+> miss has a stale caller context) rather than a clean rejection. `fault_return_from_domain` is
+> byte-identical across `2b96170`/`e1ccb49`/`f019678`; Q-05 only made the path reachable by removing
+> the duplicate that used to cover every host read. It does not change any test verdict (the host
+> read is unauthorized either way). Worth hardening if the stand-in is ever used to prove clean
+> rejection of unauthorized host access.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
 `capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
