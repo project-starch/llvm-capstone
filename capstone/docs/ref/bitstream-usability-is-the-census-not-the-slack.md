@@ -602,6 +602,51 @@ Under the shift rule 52 ns still leaves 12,381 failing, 56 ns leaves 4, 57 ns cl
 build declared NOT usable: "safe" was never the property being measured. The edit sites are the three named in the entry
 above.
 
-**Open, for whoever takes the explanation:** count C's paths on the resident checkpoint that pass through
-`dom_switcher` cells. If nearly all do, a single gating argument for the masking hypothesis may exist; if
-not, none does. Five minutes of Vivado; not tonight's commit.
+**Answered the same morning (2026-09-08, lead's go-ahead), three follow-ups on the retained checkpoints.**
+
+*1. The fourth checkpoint, `6f8345fdb` (arm 2, tie-off), second-launch query, pattern
+`*/i_issue_read_operands/*`:* A 99,879 = B 99,879 = its recorded census; **C = 99,163**, every one of them
+from `dom_switcher/_thread_0_event_counter_80_1_q_reg` at −12.283; D = 99,879; E = 0. The same shape as
+`ef5a8eaf2`: live worst launch in the issue stage, a switcher register second. That completes the family —
+four checkpoints, four different switcher registers named across them, and on every one a live launch
+among the first two.
+
+| checkpoint | worst launch | second launch | period that clears every endpoint (shift rule) | margin at 60 ns |
+|---|---|---|---:|---:|
+| `5097eb166` flashed | switcher, inert | bypass counter, **live** | 57 ns | 3–4 ns |
+| `947327f6d` | switcher, inert | bypass counter, **live** | 53 ns | 7 ns |
+| `6f8345fdb` | issue valid, **live** | switcher, inert | 55 ns | 5 ns |
+| `ef5a8eaf2` | issue valid, **live** | switcher, inert | 54 ns | 6 ns |
+
+*2. The masking question — do the live launch's failing paths all traverse the switcher?* `masking-query.tcl`
+takes the live launch (`lsu_bypass_i/status_cnt_q_reg[0..1]`, two cells) and counts **S**, the failing
+endpoints it reaches; **S_thru**, those with a failing path from it *through* `dom_switcher` cells; and
+**S_avoid**, the failing endpoints it still reaches after `set_disable_timing` on every `dom_switcher` cell
+(in memory, on a copy). S − S_avoid is the set whose every live failing path traverses the switcher, the only
+endpoints for which a single gating argument could exist.
+
+| checkpoint | S | S_thru | S_avoid (worst) | only through the switcher |
+|---|---:|---:|---:|---:|
+| `5097eb166` flashed | 101,602 | 90,742 | 94,530 (−15.157) | 7,072 (7%) |
+| `947327f6d` | 96,493 | 85,260 | 93,384 | 3,109 (3%) |
+
+S_thru and "only through" do not partition S: 3,788 resident endpoints have both a through-path and a path
+that avoids the switcher. S_avoid's endpoints on the resident: scoreboard 12,888, LSU 5,153,
+`issue_read_operands` 2,982, `dyn_unit` 2,030, dcache 1,887, the multiplier, FPU, `rev_node`, icache — the
+execution core, not the switcher. Controls, in the order they were run: the first counted the objects `-through` returns after the disable and read 10 before, 10 after — but those ten all start at a LUT output pin inside the switcher (`dom_switch_addr_q[55]_i_2/O` on the resident, `_data_ch_req_valid_selector_q[0]_i_1/O` on the base) and carry no slack at all: unconstrained fragments that begin where an arc was disabled, not timed paths. The decisive control counts constrained paths only, on both checkpoints: before the disable 50 of 50 paths through the switcher's combinational cells and 50 of 50 launched from its registers carry a slack; after it 0 of 50 and 0 of 50, and a `-slack_lesser_than 1000` through-count reads 0. Every S and S_avoid figure is itself filtered by `-slack_lesser_than 0`, which cannot admit a fragment. Of the resident's 94,530 S_avoid endpoints, 67 are captures at switcher registers (setup checks survive an arc disable) and 94,463 lie outside the switcher; on the base, 0 and 93,384. The synth lane cross-checked the six files.
+
+**So the masking hypothesis, in its only cheap form, is closed:** for 93–97% of the endpoints a live failing
+path reaches the capture register without touching the switcher's logic, and no state the switcher holds
+during a body can gate it. What remains as an explanation for the working silicon is the timing model's
+margin over the actual part at the conditions it runs in, or data-dependent masking inside the execution
+core itself — neither of which this project can measure with the instruments it has, and neither of which
+is an argument anyone should build on.
+
+*3. A same-part, same-flow control from the CHERI lane (verified from its artifact):* a CHERI-CVA6 fork's
+SoC with CHERI off (`genesys2-eval` `a9568ac2`, a 2024 upstream CVA6 base) on the same xc7k325t, the same
+`run.tcl` settings, the same 40 ns `clk_out1` constraint and the same guard routes at **WNS +11.244 ns, 0 of
+102,124 endpoints failing, 91,998 placed LUTs (45.1%)**, 35 minutes. Capstone `5097eb166` on the same
+everything: −15.311, 101,782 of 174,895, 169,696 LUTs (83.3%). The part, the constraint and the flow close a
+CVA6-class SoC at 25 MHz with 11 ns to spare; what fails is this design at 83% occupancy. Caveats the CHERI
+lane attached and which stand: a newer upstream base, and the CHERI-on build is the fairer occupancy
+comparison (its row follows when it routes).
