@@ -968,6 +968,36 @@ returned 0 on a runner failure until 2026-09-08 (fixed: failures propagate). Own
 S-mode split. Where to look: the `.init.text` of `nullb_split.smode.ko` and what `sbi.dom`'s
 `DOM_CALL_WITH_CAP` init hands it (the untagged rs1 = x5 at the first `lcc`).
 
+> **LOCALISED 2026-09-09 (one QEMU session, no fix; owner unchanged).** The faulting `lcc` is NOT in
+> the module: it is `sbi.dom`'s `query_region` → `cap_base(region)` (`sbi_capstone.c:1520-1541`;
+> the encoding `lcc(t1, t0, 3)` sits at image VA `0x24030`, and the halt pc minus that VA gives a
+> 64 KiB-aligned load base in every run — `0x101570000`, `0x1015f0000`). A temporary print in
+> `query_region` (QEMU arm, package copy, reverted; image f48906bf25a4 restored) read, per call,
+> `region_id / region_n / region_cpmp[id] / field`: the module's init loop queries region 1 (its
+> METADATA region) → `1/4/-1/BASE` OK through `regions[]`; `validate_conf` queries `3/4/-1` and
+> `2/4/-1` OK; the NEXT query of region 1 reads `1/5/1/BASE` — region 1 has meanwhile been
+> installed in CPMP slot 1 by `swap_cpmp` (the module touched its metadata page) — and
+> `read_cpmp(1)` returns an UNTAGGED value whose cursor is the region base
+> (`rs1_scalar = 0x1014ce000`), so `cap_base` faults. So: the first query of a region that lives in
+> a CPMP slot faults; everything before that works, which is why the device still serves I/O
+> (`__SPLIT_DONE__` before the second `DOM_CALL`). Two candidate mechanisms, NOT separated:
+> (a) the entry was installed untagged (`swap_cpmp` moves `regions[id]` in with `write_cpmp`; if the
+> `regions[]` copy had already lost its tag the slot holds an untagged base — check what the
+> domain-switch save/restore does to the CPMP set between the install and the query); (b) something
+> read the slot back before the query. Relevant either way — **UNRESOLVED, spec not checked**:
+> QEMU's `CCSRRW` is a pure swap (`op_helper.c:1249-1290`: `tmp = *ccsr; *ccsr = *rs1; *rd = tmp`),
+> so `read_cpmp` (rs1 = x0) leaves the CPMP entry NULL after every read unless written back;
+> `split_out_cap` writes back (`:606, :651`), `query_region` never does, so on QEMU the SECOND query
+> of a CPMP-resident region would fault even if the first succeeded. The RTL gates the write on
+> `csr_cap_valid` (`commit_stage.sv:379-383`), which reads as "an untagged rs1 does not write", i.e.
+> a non-destructive read on silicon — an RTL-vs-QEMU divergence on the read-with-x0 form, to be
+> confirmed in simulation before it is filed. Next for the owner: print the tag at install time
+> (`swap_cpmp` after `write_cpmp`, read back and write back) and at the domain-switch boundary; if
+> (a), the fix is in the install/switch path; if the entry is tagged at install and untagged at
+> the query, the QEMU swap semantics are the cause and `query_region` must write back (or the
+> emulator must not null on a read). Records: `~/capstone-artifacts/unify/q06-instrument.log`, serial
+> log `/tmp/capstone-q06/capstone-runtime-qemu-nullb-split-io.log` (the `Print = Scalar(...)` runs).
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
 `capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
