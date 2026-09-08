@@ -2,7 +2,32 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-05 — CURRENT
+## 2026-09-08 — CURRENT
+
+* **The monitor stack is unified onto ONE branch, `capstone-bootstrap`, in every nested repo**
+  (caplifive-buildroot `b7fc740`, opensbi `3de3342`, monitor/sbi.dom `3da7ebe`, caplifive-system
+  `fec33fa`; parent `dev` `1a1a3dff5778`, all pushed). One source builds both targets:
+  `make TARGET=fpga|qemu`, output in `build-<target>/`, `build` a per-checkout symlink,
+  per-target code under `CAPSTONE_TARGET_FPGA`/`CAPSTONE_TARGET_QEMU`. `CAPSTONE_CC_PATH` is
+  required. The old two-branch split (board vs QEMU, drifted for six weeks and forced Q-03/Q-05 to
+  be ported twice) is gone; the `-board`/`-qemu`/`-unified`/`-dts-65536` names are frozen pre-merge
+  tips (ancestors of `capstone-bootstrap`, also `pre-unify/2026-09-08/*` tags). Design and record:
+  `docs/plans/monitor-unification.md`; layout: `docs/ref/REPO-MAP.md`.
+* **Validated on both targets.** FPGA `.c.S` pair, `fw_jump` and `fw_payload .text` byte-identical
+  to boot sw31; **board boot sw32 8/8** (control first, six BEEBS rungs, SLT `select1` identical to
+  native, zero fault tags), with the SQLite host program rebuilt against the merged loader library
+  so that library has now run on silicon; **QEMU nightly tier 18/18**. sbi.dom now builds from the
+  one monitor source (Phase B item 7 done).
+* **One nightly regression, surfaced and fixed the same day.** `linear-uninit-corpus` /
+  `linear_drop_sibling_ok` failed; bisected to the Q-05 monitor commit (a pre-existing stale
+  host-observer read the unification's first nightly exposed, NOT a merge defect), fixed in the
+  corpus controller to read back through the domain's alias. Auditor-confirmed; a non-blocking
+  monitor-robustness note recorded (ISSUES.md Q-05, 2026-09-08).
+* **Not collapsed (Phase B, listed in the plan, not started):** FPGA pre-carve checks, Q-05 on
+  FPGA, geometry on QEMU, the other packages, the gp cluster, fence.i/rdtime, M-2, kernel
+  unification. So it is "one source, per-target `#ifdef`s", not identical behaviour on both targets.
+
+## 2026-09-05
 
 * **SQLite passes its logic tests on silicon at `-O1`** — the first validation above `-O0`.
   `select1` 1031 records / 1000 queries / 0 failures and `q_two` (the S-12 trigger) both completed

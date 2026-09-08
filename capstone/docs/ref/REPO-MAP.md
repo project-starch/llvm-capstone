@@ -295,6 +295,48 @@ rejected non-fast-forward and must never be forced. Push order stays bottom-up.
 
 ## Branch scheme — 2026-09-08 final: one name, `capstone-bootstrap`, in every repository
 
+### Full branch inventory and archive status (2026-09-08)
+
+**The monitor stack — the repos this unification touched — now has ONE working branch each,
+`capstone-bootstrap`, plus upstream `master` and frozen pre-merge tips:**
+
+| repo | working | frozen pre-merge tips (ancestors of `capstone-bootstrap`; keep or delete on GitHub, harmless) |
+|---|---|---|
+| caplifive-buildroot | `capstone-bootstrap` b7fc740 | `capstone-bootstrap-unified` 41a2a1a, `capstone-bootstrap-dts-65536` 5764378 |
+| caplifive-opensbi | `capstone-bootstrap` 3de3342 | `capstone-bootstrap-unified` ea34f91, `capstone-bootstrap-qemu` 1048a61 |
+| caplifive-sbi (monitor + sbi.dom, ONE repo; `capstone-sbi.git` redirects here) | `capstone-bootstrap` 3da7ebe | `capstone-bootstrap-unified` 1b87df8, `-board` 56dfbe9, `-qemu` e1ccb49 |
+| caplifive-system-dev | `capstone-bootstrap` fec33fa | — |
+
+Every frozen tip is an ancestor of `capstone-bootstrap` (the lineage merges recorded them) and is
+also a `pre-unify/2026-09-08/*` tag locally, so a `git branch -r --contains` reaches each from the
+live branch: **archival is durable by ancestry; the frozen branch names are pure clutter.** They
+were not deleted on the remote — the pre-push hook forbids branch deletion (fail-closed) and it is
+a shared namespace; delete them on GitHub by hand if wanted. Redundant LOCAL copies were deleted.
+
+**One genuinely diverging local branch is kept, not archived:** `capstone-bootstrap-dts-1021` in the
+board `sw/buildroot` checkout (ed28ed8) is the device-tree memory range plus opensbi pin and the
+annotated-share `copy_from_user` probe for the **1021-node bitstream** (`caplifive_fixed_forward`).
+It is NOT an ancestor of the unified line (which carries the 65536-node DT) and is local-only. If the
+1021-node bitstream is ever booted again its config lives only here; leave it until that is ruled out.
+
+### Other repos: many branches, but NOT the same target-split — no further unification indicated
+
+The "one repo, several branches for one code base built different ways" problem existed only in the
+monitor stack, and is now closed. The other repos' multiple branches are **distinct work**, not a
+build-target split, so there is nothing analogous to unify:
+
+* **capstone-ariane** (RTL) — dozens of branches (`fpga-testing-dev`, `-clean`, `s06fix`, `s10-*`,
+  `s12-*`, `r20-fix`, `timing-*`, `seal-minsize-test`, …) are different fixes and experiments, many
+  in flight, owned by the RTL lane. Different code, not different builds of one thing.
+* **capstone-qemu** — `capstone-bootstrap`, `c128-qemu-merge`, `s06-lcc-total-query`, … are separate
+  emulator feature lines.
+* **capstone-c**, **capstone-spec**, **capstone-academic-spec**, **paper** — upstream/author or
+  single-line repos; the branches are theirs.
+* **parent llvm-capstone** — `dev` is the trunk; `compiler-validation-plan`, `c128-integration`,
+  `cheri-cva6-eval`, `backup/*` are work lines and snapshots.
+
+
+
 | repository | `capstone-bootstrap` tip | it contains (all ancestors) |
 |---|---|---|
 | caplifive-sbi (monitor, both checkouts + the sbi.dom package checkout) | `3da7ebe` | board line 56dfbe9, QEMU line e1ccb49, sbi.dom line 977af95 |

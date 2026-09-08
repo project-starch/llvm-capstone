@@ -1,6 +1,26 @@
 # Next step
 
-## 0. CURRENT — 2026-09-04. S-12 IS CLOSED. The next steps are no longer about S-12.
+## 0. CURRENT — 2026-09-08. Monitor stack unified; Phase B is the remaining work.
+
+The unification (one branch `capstone-bootstrap`, `make TARGET=fpga|qemu`) is done, pushed and
+validated on both targets (see `current-state.md` and `docs/plans/monitor-unification.md`). No
+open action from it. The remaining convergence work is Phase B in the plan doc, none started;
+each item is its own commit with its own gate. Decisions for the lead:
+
+1. **M-2 before any board boot with more than ~8 SQLite domains.** The Q-03 hole fix removed the
+   wedge that kept the module's unbounded `probe_regions` copy unreachable (ISSUES.md M-2). Bound
+   it, or raise the module's `MAX_REGION_N`, first.
+2. **The +1.05 MB initramfs** the unified FPGA defconfig now installs (the board line's extra test
+   domains and diagnostics, ~8 s per JTAG upload): keep or trim.
+3. Phase B item 8 (`fence.i`/`rdtime`) resolves by the author's answer or one firmware-only board
+   boot; item 4 (the QEMU line's package edits) and the gp cluster (item 5) are the larger ones.
+
+The S-12 material below is FINISHED BUSINESS, retained as the evidence trail; do not act on it.
+
+---
+
+## (superseded) 2026-09-04. S-12 IS CLOSED. The next steps are no longer about S-12.
+
 
 **Everything below this section, including the one dated 2026-08-29 that calls itself CURRENT, is
 the S-12 investigation and is FINISHED BUSINESS. It is retained as the evidence trail; do not act
