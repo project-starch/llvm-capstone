@@ -1,6 +1,8 @@
 # Branch inventory — `capstone-ariane`, 2026-08-20
 
-> **2026-09-07 — `fpga-testing-dev` has a REBUILT replacement, pushed to origin.** `fpga-testing-dev-clean`
+> **2026-09-08 — `fpga-testing-dev` IS the rebuilt branch now.** The lead force-pushed `fpga-testing-dev-clean`
+> → `fpga-testing-dev` (both `ef5a8eaf2` on origin) and pushed the backup tag; any checkout of the branch must
+> `git reset --hard origin/fpga-testing-dev`. `fpga-testing-dev-clean`
 > (tip `ef5a8eaf2` = `947327f6d` + the registered switch-in-progress flag; `947327f6d` is tag `chain-v4`)
 > is the shared base `7e4dc440f` plus eight commits: lint gate and
 > sweep baseline, S-06, S-08, S-07 fix, S-10, S-12, the mtval-cursor feature, synthesis tooling — every fix

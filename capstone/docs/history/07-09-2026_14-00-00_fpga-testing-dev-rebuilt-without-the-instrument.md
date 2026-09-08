@@ -2,7 +2,7 @@
 
 **Dates:** built 2026-09-05, measured 2026-09-07 (the first measurement pass was lost to the 5-6 September
 host outage; see "What the measurement pass taught"). **Branch:** `fpga-testing-dev-clean` in `capstone-ariane`,
-intended to replace `fpga-testing-dev` by a force-push the project lead performs. **Old tip preserved:** tag
+intended to replace `fpga-testing-dev` by a force-push the project lead performs (done 2026-09-08: `fpga-testing-dev` = `ef5a8eaf2`, the backup tag on origin). **Old tip preserved:** tag
 `backup/fpga-testing-dev-2026-08-21` (= `e12a0e3e9`), plus `backup/<branch>-2026-09-05` tags on every one of
 our branches and an all-refs bundle under `~/dev/llvm-capstone-rebuild/backups/`.
 
@@ -86,7 +86,7 @@ intermediate sweep records; everything on `s12-ldc-rolling-*`, `s07-recorder-cle
 
 The tip is **new RTL** (the instrument is gone) and is unsynthesised: a candidate, not ready. Pushed 2026-09-07 as
 `fpga-testing-dev-clean`, tip `947327f6d` (`chain-v3` plus one corrected S-12 message sentence). Synthesised the same day;
-see the addendum at the end. Any board work goes through the board lane. The force-push to `fpga-testing-dev` is the project lead's action.
+see the addendum at the end. Any board work goes through the board lane. The force-push to `fpga-testing-dev` was the project lead's action, performed 2026-09-08.
 
 ## Addendum, 2026-09-07 (later the same day): synthesised, censused, NOT usable
 
