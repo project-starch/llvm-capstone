@@ -46,7 +46,15 @@ TMP=$(mktemp) ; trap 'rm -f "$TMP"' EXIT
 # pattern -- a detector's rule list is not a violation. Announced below, never silent.
 SELF='capstone/tests/precommit-scan.sh'
 if [[ -n "$RANGE" ]]; then
-  git log --format='%H%n%an%n%ae%n%s%n%b' "$RANGE" >> "$TMP" 2>/dev/null
+  # Author and committer identity ARE scanned (a cherry-picked collaborator commit carries a
+  # name), but the committing user's OWN configured identity is dropped first: it is on every
+  # commit in every repo, so feeding it in made --range block on any range whatsoever --
+  # including history that --msg had passed and that was already pushed. Found 2026-09-07:
+  # four clean ranges, every hit an author line the scan had emitted itself. Not a weakened
+  # pattern: the same name in a subject, a body or a diff still blocks (control below).
+  ME="$(git config user.name 2>/dev/null || true) <$(git config user.email 2>/dev/null || true)>"
+  git log --format='%H%n%an <%ae>%n%cn <%ce>%n%s%n%b' "$RANGE" 2>/dev/null \
+    | { if [[ "$ME" != " <>" ]]; then grep -vxF -- "$ME" || true; else cat; fi; } >> "$TMP"
   git diff "$RANGE" -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
 else
   git diff --cached -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null

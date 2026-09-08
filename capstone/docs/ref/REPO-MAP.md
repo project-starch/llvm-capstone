@@ -301,11 +301,14 @@ then the parent is already consistent.
 |---|---|---|---|
 | `caplifive-system` | `caplifive-system-dev` | `capstone-bootstrap` (fast-forward) | `4686afa` |
 | `…/sw/buildroot` and `caplifive-buildroot` | `caplifive-buildroot` | `capstone-bootstrap-unified` (new) | `41a2a1a` |
-| `…/components/opensbi` (both) | `caplifive-opensbi` and `capstone-opensbi` — two remotes, one history: push to both | `capstone-bootstrap-unified` (new) | `ea34f91` |
-| `…/lib/sbi/capstone-sbi` (both) | `capstone-sbi` | `capstone-bootstrap-unified` (new) | `1b87df8` |
+| `…/components/opensbi` (both) | `caplifive-opensbi` (`capstone-opensbi.git` is a GitHub redirect to it — ONE repository, push once) | `capstone-bootstrap-unified` (new) | `ea34f91` |
+| `…/lib/sbi/capstone-sbi` (both) | `caplifive-sbi` (`capstone-sbi.git` redirects to it — the same repository as the `sbi.dom` package's) | `capstone-bootstrap-unified` (new) | `1b87df8` |
 | `…/package/capstone-sbi-domain/capstone-sbi` | `caplifive-sbi` | `capstone-bootstrap` (unchanged) | `977af95` |
 
 After pushing from one checkout of a shared remote, `git fetch` in the other so both see the branch.
+Pushed 2026-09-08 with the agent credential: `caplifive-buildroot` only (branch + both tags). The
+credential has no write access to `caplifive-sbi`, `caplifive-opensbi` or `caplifive-system-dev`
+(403 on every push, read access intact) — those three pushes are the lead's.
 
 ---
 
