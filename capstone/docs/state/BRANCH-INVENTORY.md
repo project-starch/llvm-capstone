@@ -1,4 +1,65 @@
-# Branch inventory — `capstone-ariane`, 2026-08-20
+# Branch inventory — `capstone-ariane`
+
+> Rewritten 2026-09-08 after the branch clean-up. The 2026-08-20 inventory that used to head this file is kept
+> below as history; every branch it lists is now an archive tag.
+
+## Current branches of ours (5)
+
+| branch | tip | role |
+|---|---|---|
+| `fpga-testing-dev` | `ef5a8eaf2` | the canonical line: rebuilt history above `7e4dc440f` (eight commits, no S-07 on-silicon instrument) + the registered switch-in-progress flag. Synthesised, censused, **NOT usable as a bitstream**; the census itself is retracted as a licence (`ref/bitstream-usability-is-the-census-not-the-slack.md`, RETRACTED 2026-09-08). |
+| `s12-fix-for-synthesis` | `5097eb166` | provenance of the resident bitstream `caplifive_s12fix_5097eb166.bit`; its board record is the only licence any build has. Frozen. |
+| `s12-fix-noinstr` | `6f8345fdb` | provenance of the arm-2 (debug tree tied off) routed checkpoint used in the second-launch queries. Frozen. |
+| `s12-ldc-rolling-filter` | `62b09ca92` | live RTL checkout: R-25 directed test and the LDC rolling-filter work. |
+| `capstone-bootstrap` | `b860fda3f` | the superproject's recorded submodule line. |
+
+Old tip of `fpga-testing-dev` (`e12a0e3e9`, seven commits that added and then stripped the instrument) is tag
+`backup/fpga-testing-dev-2026-08-21`, on origin.
+
+## Archived 2026-09-08: branch deleted, tip kept as a `backup/*` tag
+
+Every tag below points at the branch's last tip; each was checked to hold zero commits that exist nowhere else
+before the branch was deleted. Tags live locally and on origin (pushed by the lead with the hook bypass).
+
+| former branch | tag | what it was |
+|---|---|---|
+| `fpga-testing-dev-clean` | (= `fpga-testing-dev`, no tag needed; `947327f6d` is `chain-v4`) | the rebuild's working name |
+| `r20-fix` | `backup/r20-fix-2026-09-05` | R-20 fix, since carried into the mainline |
+| `fpga-testing-dev-s06` | `backup/fpga-testing-dev-s06-2026-09-05` (+ local tip in `backup/local-fpga-testing-dev-merged-backup-2026-09-05`) | S-06 phases |
+| `fpga-testing-dev-s06fix` | `backup/fpga-testing-dev-s06fix-2026-09-05` | S-07 + S-10 mainline of August, `80843404c` built |
+| `s07-recorder-clear`, `s07-recorder-clear-39b` | `backup/s07-recorder-clear-2026-09-05`, `backup/s07-recorder-clear-39b-2026-09-05` | S-07 LDC recorder instrument (never synthesised into the shipped line) |
+| `s10-fix-wip`, `s10-merge-candidate`, `s10-narrow-mcp`, `s10b-fix`, `s10-candidate` | `backup/s10-*-2026-09-05`, `backup/local-s10-candidate-2026-09-05` | the S-10 line (see history below) |
+| `timing-control-618f4ce36`, `timing-control-e1140aeea` | `backup/timing-control-*-2026-09-05` | the two timing controls; e1140aeea's was run (−10.629) |
+| `timing-multicycle`, `timing-directive-explore` | `backup/timing-multicycle-2026-09-05`, `backup/timing-directive-explore-2026-09-05` | the two NON-RTL flow changes (multicycle constraint; Explore directives) — recover from the tags, see below |
+| `s12-ldc-rolling-min` | `backup/s12-ldc-rolling-min-2026-09-05` (remote tip `52fa06b9d`), `backup/local-s12-ldc-rolling-min-2026-09-08` (local tip `f888fd1a7`, a 35-line `run.tcl` note) | retiming-ON arm and its notes |
+| `seal-minsize-test` | `backup/seal-minsize-test-2026-09-05` | SEAL min-size repro kept out of the testlist |
+| `s12-fix-afpr`, `s12-fix-variant-b` | `backup/local-s12-fix-afpr-2026-09-05` (= `5097eb166`), `backup/local-s12-fix-variant-b-2026-09-05` | S-12 fix variants |
+| `s06fix-phases-archive` | `backup/local-s06fix-phases-archive-2026-09-05` | S-06 phase history before the squash |
+| `fpga-testing-dev-linear`, `fpga-testing-dev-merged-backup` | `backup/local-fpga-testing-dev-linear-2026-09-05`, `backup/local-fpga-testing-dev-merged-backup-2026-09-05` | August working branches |
+| `_tmp_ctl` | (content in `backup/timing-control-618f4ce36-2026-09-05`) | scratch |
+
+## Other people's branches (42): untouched
+
+Live or structural: `fpga-testing` (origin's default branch), `fpga-testing-harness`, `fpga-testing-fix`,
+`capt-verilator`, `capt-implementation`, `master` (= `capstone-dev` = `optimise`). Fourteen stale branches carry
+unique commits and stay. Twenty-one stale branches have every commit reachable from a live branch
+(`virtual-debug`, `pc_cap`, `linear-clearing`, `fpga-testing-old-anvil`, `tag-unit`, `new-version`,
+one experimental branch named after its author, `exec-merge`, `user_data`, `new-version-testing`, `branch-128bits`, `original`, `load-fix`,
+`vanilla-keystone`, `capstone-dev`, `optimise`, `bugfixes`, `testcases-wip`, `revoke-state-machine-wip`,
+`actions`, `int-wip`); deleting them would lose nothing, and they were left alone deliberately.
+
+## How this was checked
+
+For every local and remote branch: tip, date, author; `git rev-list --count <tip> --not <every other ref>`
+(unique commits); containment in `origin/fpga-testing-dev`, the backup tag of its old tip, `capstone-bootstrap`,
+`master`, `fpga-testing`, `fpga-testing-harness`, `capt-implementation`; which `backup/*` tag sits at the tip;
+local-vs-remote divergence. A local branch was deleted only if its tip was still reachable from a tag or another
+remote ref at the moment of deletion.
+
+---
+
+# Historical: the 2026-08-20 inventory (S-10 timing branches)
+
 
 > **2026-09-08 — `fpga-testing-dev` IS the rebuilt branch now.** The lead force-pushed `fpga-testing-dev-clean`
 > → `fpga-testing-dev` (both `ef5a8eaf2` on origin) and pushed the backup tag; any checkout of the branch must
