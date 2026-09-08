@@ -649,4 +649,7 @@ SoC with CHERI off (`genesys2-eval` `a9568ac2`, a 2024 upstream CVA6 base) on th
 everything: −15.311, 101,782 of 174,895, 169,696 LUTs (83.3%). The part, the constraint and the flow close a
 CVA6-class SoC at 25 MHz with 11 ns to spare; what fails is this design at 83% occupancy. Caveats the CHERI
 lane attached and which stand: a newer upstream base, and the CHERI-on build is the fairer occupancy
-comparison (its row follows when it routes).
+comparison. That build routed the same morning (same commit, CHERI on; verified from its artifact): **WNS
++6.518 ns, 0 of 129,688 endpoints failing, 119,037 placed LUTs (58.4%), 71,861 registers**, 75 minutes. Both
+the 45% and the 58% SoC close on the same part, flow, constraint and guard where Capstone at 83% fails by
+15 ns; the CHERI lane's full table is in the measurements doc §7c on its branch.
