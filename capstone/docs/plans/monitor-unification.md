@@ -378,10 +378,17 @@ a `do{}while(0)` wrapper cost 176 lines of inert codegen; FPGA generated file di
 `create_region` and `share_child_region`) — **boot sw33 DONE (fw_payload 1aabcfff1f7e): k800 + six rungs at oracle, the M-2 control
 PASSED on silicon (45 regions, refusal RGNF at region_n 94, 22 regions past 64 tracked, dmesg clean)
 — items 1 and 9 validated on silicon; and the Q-03 HOLE path fired 5 times on the board with no
-fault, the first time it has been exercised on silicon (the caveat carried since sw30 is closed). The QEMU probes merged (capstone-qemu b9f6b00). Item 8: `rdtime`
-permanent; the three CCSRRW-adjacent `fence.i` load-bearing by R-26; the other eight get one
-firmware-only boot per variant (`~/capstone-artifacts/unify/board-b8.sh A|B|C`, sources restored
-by git after each). Item 2 next: the transfer-annotated board probe. Items 4 (null-blk), 5 last.
+fault, the first time it has been exercised on silicon (the caveat carried since sw30 is closed). The QEMU probes merged (capstone-qemu b9f6b00). Item 8 **DONE**: `rdtime`
+permanent; the three CCSRRW-adjacent `fence.i` kept (load-bearing by R-26) and the UART-mint one
+kept (untested); the other eleven REMOVED (monitor 4a12d8b) after three firmware-only boots — A (6
+`.S` sites dropped), B (5 `cap_env_init` sites), C (both) — each CLEAN 7/7 at the oracles, then the
+committed form booted CLEAN 7/7 as sw34 (`fw_payload 116e65accecc`, listed). Linked-firmware
+`fence.i` count 163 → 152. Item 4 (null-blk) DONE as far as this tree can take it: the QEMU line's package carried and an
+A0 loader regression repaired (create_dom_ko's relocatable S-mode path; buildroot commit of
+2026-09-08 evening) — the split domain now loads and serves I/O; the remaining S-mode init fault
+is pre-existing (Q-06, A/B against the pre-unification sbi.dom). `run-nullblk-all.sh` now fails on
+a runner failure (it returned 0 before). Item 2 next: the transfer-annotated board probe (new
+silicon-ladder app + host, never done). Item 5 last.
 
 **Order that costs the fewest boots:** 3 (QEMU only) → 9 (QEMU control, then it protects every later boot) → 6 rounding (QEMU) → **one board boot** carrying 1 + 2 + 6-magic-removal + 8's firmware-only arm (batched, control first, one unknown last per the board rule — so more likely two boots: {1, 6, 8} then {2}) → 4 null-blk → 5 last with its own ladder boot. Items 10 and the initramfs need no work unless the lead wants them.
 

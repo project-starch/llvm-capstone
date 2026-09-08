@@ -953,6 +953,21 @@ one candidate shape for a silent host-side wedge after a transfer-annotated shar
 > read is unauthorized either way). Worth hardening if the stand-in is ever used to prove clean
 > rejection of unauthorized host access.
 
+## Q-06 — the null-blk split domain's S-mode init takes an untagged-lcc fault (cause 24) under QEMU; the block device still serves I/O `OPEN — filed 2026-09-08 from Phase B item 4; pre-existing (A/B against the pre-unification sbi.dom: identical fault); the suite has no passing record on any line`
+
+`run-nullblk-split-io.sh` / `-rmmod.sh` (extended tier, `run-nullblk-all.sh`): after the loader
+repair (buildroot, Phase B item 4) `null_blk.user` creates the split domain (ID 0, `sbi.dom` +
+`nullb_split.smode.ko`), `__SPLIT_READY__` and `__SPLIT_DONE__` are printed (hello-world written to and
+read back from `/dev/nullb0`), but the S-mode init logs `capstone-qemu: lcc on an UNTAGGED operand:
+guest pc=0x1015940xx rd=x6 rs1=x5 sel=3` and `domain halted by capability fault: cause = 24`, and the
+smoke runner fails the run on that line. **Not from the unification:** the pre-unification `sbi.dom`
+(source 977af95, hash 1454ae74db57) swapped into the identical rootfs faults the same way
+(pc 0x101593af8). Before the loader repair the domain did not load at all ("Found 0 segments"), so
+this fault was unreachable and the suite has never passed on any line; `run-nullblk-all.sh` also
+returned 0 on a runner failure until 2026-09-08 (fixed: failures propagate). Owner: null-blk /
+S-mode split. Where to look: the `.init.text` of `nullb_split.smode.ko` and what `sbi.dom`'s
+`DOM_CALL_WITH_CAP` init hands it (the untagged rs1 = x5 at the first `lcc`).
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
 `capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
