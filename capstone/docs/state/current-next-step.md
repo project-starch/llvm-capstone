@@ -1,6 +1,6 @@
 # Next step
 
-## 0. CURRENT — 2026-09-08 (night). Monitor stack unified; Phase B done except the kernel.
+## 0. CURRENT — 2026-09-09. Phase B closed on the shipping firmware (boot sw38); follow-ups in `docs/plans/after-phase-b.md`.
 
 The unification (one branch `capstone-bootstrap`, `make TARGET=fpga|qemu`) is done, pushed and
 validated on both targets (see `current-state.md` and `docs/plans/monitor-unification.md`).
@@ -15,7 +15,11 @@ rerun alone, first in a fresh boot, on the rebuilt images it passed 3/3 at its m
 as an infra flake, not a monitor result. Item 10 (kernel unification) is deferred by
 the lead's decision; the +1.05 MB initramfs stays. What remains:
 
-1. **Push the Phase B tail** (`/tmp/capstone/push-final.sh`, the lead's credential; every push a
+0. **Done since:** the Phase B tail is pushed (2026-09-09); closing boot sw38 9/9 on the final
+   firmware; the nightly marks suites that ran under other users' load; Q-06 localised to `sbi.dom`'s
+   `query_region` on a CPMP-resident region (owner unchanged); R-26 with the RTL lane
+   (`docs/plans/after-phase-b.md`).
+1. ~~**Push the Phase B tail**~~ DONE (`/tmp/capstone/push-final.sh`, the lead's credential; every push a
    fast-forward, preconditions checked): monitor 4a12d8b→5b27d01 (three commits), wrapper
    5450a2d→1c48f02 (three), buildroot 8c51969→d3c2402 (three), caplifive-system 20fd22f→77eb5a8
    (one); then `dev`. The live QEMU images are already rebuilt from the committed source

@@ -421,8 +421,12 @@ times on the rebuilt images (fw_jump c1a450ac5d06, sbi.dom f48906bf25a4, generat
 byte-identical to 5A): 3/3 at the marker (retval 0xc171c0de, `Globals offset = 0x0` — the QEMU
 BEEBS images DO take the gpoff == 0 branch, so that branch is exercised under QEMU, only not on
 silicon). Classified as an infra flake; the other 17 suites passed on the same images. The probe pair (`rtpc`, `revxfer.dom`, entry VA
-0xA0000) stays staged; the SLT trio and the M-2 pair sit in `/tmp/capstone/overlay-attic` until a
-boot needs them (the preflight refuses unused overlay files above the budget).
+0xA0000) stays staged; the M-2 pair sits in `~/capstone-artifacts/overlay-attic` until a boot needs
+it (the preflight refuses unused overlay files above the budget). **Phase B closed on the shipping
+firmware (boot sw38, 2026-09-09, fw_payload b1680288381d = monitor 5b27d01 with the SLT trio restaged):**
+k800, six BEEBS rungs, SLT select1 (1031 records identical) and the transfer probe in ONE boot, 9/9
+at the oracles, exactly one HOLE line (the probe's arena), zero fault tags. Follow-ups live in
+`after-phase-b.md`.
 
 **Order that costs the fewest boots:** 3 (QEMU only) → 9 (QEMU control, then it protects every later boot) → 6 rounding (QEMU) → **one board boot** carrying 1 + 2 + 6-magic-removal + 8's firmware-only arm (batched, control first, one unknown last per the board rule — so more likely two boots: {1, 6, 8} then {2}) → 4 null-blk → 5 last with its own ladder boot. Items 10 and the initramfs need no work unless the lead wants them.
 

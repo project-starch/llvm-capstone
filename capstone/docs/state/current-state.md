@@ -34,6 +34,8 @@ Minimal snapshot. Read first in every session.
   infra flakes; 3/3 rerun alone, first in a fresh boot). Left: kernel
   unification (item 10, deferred by the lead), the dead `mem_l`/`mem_r` locals, and the
   `gpoff == 0` loader branch that no board image reaches. Monitor 5b27d01 / buildroot d3c2402.
+  **Closed on the shipping firmware 2026-09-09: boot sw38, 9/9** (control, six rungs, SLT select1,
+  the transfer probe; one HOLE line; zero fault tags). Next: `docs/plans/after-phase-b.md`.
 
 ## 2026-09-05
 
