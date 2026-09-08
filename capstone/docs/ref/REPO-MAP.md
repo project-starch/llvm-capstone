@@ -319,6 +319,36 @@ annotated-share `copy_from_user` probe for the **1021-node bitstream** (`caplifi
 It is NOT an ancestor of the unified line (which carries the 65536-node DT) and is local-only. If the
 1021-node bitstream is ever booted again its config lives only here; leave it until that is ruled out.
 
+### Stale-branch sweep (2026-09-08): every remote branch of every repo, dated, ours vs upstream, merged vs ahead
+
+Method: `merge-base --is-ancestor` of each remote tip against the repo's working branch. Upstream
+authors' branches (the buildroot/opensbi/QEMU authors' `perf-*`, `dpdk-*`, `capt*`, `capslock*`,
+…) are theirs and were not judged. Findings for OUR branches:
+
+* **Stale, fully merged, safe to delete** (nothing unreachable afterwards): parent
+  `lane-b/capstone-b-008-revoke-on-free`, `lane-b/capstone-bootstrap-b` (lane B retired, both in
+  `dev`); the monitor-stack frozen tips listed above; capstone-qemu `capstone-bootstrap-b`,
+  `s06-lcc-total-query` (both in the live line). Deletion is a human action — the agent hook forbids
+  it — scripted with re-verification in `/tmp/capstone/delete-stale-branches.sh`.
+* **Merged but kept pending a decision:** parent `compiler-validation-plan` (the compiler lane's
+  delivery branch); opensbi/sbi `genesys-testing` (a board-owner-facing name); the `caplifive-release`
+  markers; capstone-ariane `fpga-testing-dev-clean` (now identical in content to the force-pushed
+  `fpga-testing-dev`; the RTL lane's to retire).
+* **Genuinely diverged, ours, one repo — the only remaining case of the shape this document is
+  about:** **capstone-qemu**. The parent pins `f5972c3` on `c128-qemu-merge` (the live emulator since
+  2026-09-04), while `capstone-bootstrap` (`8d4e3d3`, 2026-08-27) holds ONE commit the live line never
+  took: "QEMU capability probes: an STC type probe and a whole-program slot tracker, env-gated and
+  inert by default" (841 lines in `op_helper.c` / `trans_capstone.c.inc`). Decide: merge it forward
+  onto `c128-qemu-merge` (inert by default; needs a QEMU rebuild and the nightly), or retire the
+  probes and delete the branch. Until then the live QEMU lacks them.
+* **capstone-ariane:** 20-odd `s07/s10/s12/timing-*` branches, all ours, all ahead of
+  `fpga-testing-dev` — frozen synthesis-arm provenance by the RTL lane's rule, not stale. Local
+  `fpga-testing` / `fpga-testing-dev` are merged copies.
+* **Parent local:** `backup/pre-*` snapshots hold history rewritten away on 2026-08-19/09-04 (2–100
+  commits not in `dev`) — that is their purpose, keep; `c128-integration` was an ancestor of `dev`
+  and is deleted. `main` has not moved since 2025-09-19 and holds 2 commits `dev` lacks; `dev` is the
+  trunk in practice — a `main` fast-forward is the lead's call.
+
 ### Other repos: many branches, but NOT the same target-split — no further unification indicated
 
 The "one repo, several branches for one code base built different ways" problem existed only in the
