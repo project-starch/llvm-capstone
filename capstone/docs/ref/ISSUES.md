@@ -1862,6 +1862,43 @@ and the folder is the report.
 
 ## RTL / FPGA
 
+### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `OPEN — RTL READING 2026-09-08, silicon UNCONFIRMED, not yet claim-audited; explains why the monitor's fence.i after such writes is load-bearing`
+
+**Found while asking whether the board monitor's eleven FPGA-only `fence.i` sites (Phase B item 8,
+`docs/plans/monitor-unification.md`) are still needed.** Two rtl-oracle reads, quoted `file:line`:
+
+* The `CCSRRW` write block (`core/csr_regfile.sv:2374-2550`; `CCSR_CPMP0` at `:2407-2414`,
+  `CCSR_CSCRATCH` at `:2399-2406`) updates `cpmp_d`/`cscratch_d` only when `ccsr_we_i` is asserted,
+  and that is driven from the **commit** stage (`core/commit_stage.sv:381-383`). It never sets
+  `flush_o`; ordinary side-effecting CSR writes do (`:1160-1535`), and the controller flushes the
+  pipeline on `flush_csr_i` (`core/controller.sv:209-212`).
+* `LDC`/`STC` and `CALL`/`RETURN` decode to `fu = CAPSTONE_DYN` (`core/decoder.sv:1272-1309`),
+  whose issue is gated only by `capstone_dyn_ready_i` (`core/issue_read_operands.sv:410-431,
+  535-536`) — the `csr_ready`-based stall that holds `alu/ctrl_flow/csr/mult/capstone_flu` ops
+  behind an uncommitted CSR write (`core/csr_buffer.sv:57-62`, `core/ex_stage.sv:521`) does not
+  apply to them. They read `cpmp_q` combinationally in the bounds check
+  (`core/pmp/src/pmp_data_if.sv:117-133`) and `cpmp_q`/`cscratch_q`/`mscratch_q` in the
+  domain-switch save/restore (`core/csr_regfile.sv:401-432`).
+* So a younger LDC/STC/CALL/RETURN can execute against the **old** `cpmp`/`cscratch` value while
+  the older `CCSRRW` is still in flight. `fence.i` (`core/controller.sv:139-145`) is the flush the
+  write never triggers; its icache flush is irrelevant here. `cepc`: no combinational consumer found
+  (`mepc_q` is read only at `mret`'s commit, `:2811`) — no hazard, weaker evidence.
+* Not every monitor `fence.i` is explained by this: of the nine in `sbi_capstone.S` only three follow a
+  `CCSRRW` (lines 96, 188, 201 after 94, 181, 198); the five in `cap_env_init` follow split/store
+  operations, not CSR writes. Fetch-side capability caching and ordinary icache non-coherence were
+  both ruled out for those (`cpmp` never reaches the frontend; `split_out_cap` writes no code bytes).
+* `sbi_capstone_init.S:44-51` has `CCSRRW … CSCRATCH` followed by domain entry with NO `fence.i`
+  in between — whether that path reaches a `dom_switch` read soon enough to expose the race is
+  UNRESOLVED.
+
+**What would settle it on silicon** (proposed, not run): one boot, two staged firmware variants
+— (a) as today, (b) `fence.i` inserted after every `CCSRRW … CSCRATCH/CPMP` and removed everywhere
+else; a domain that returns a marker only if its restored `sp`/`gp` capability matches a baked
+expectation. (a) intermittently wrong with (b) always right confirms the race; both always right
+means the window is not hit by this code path (not proof of absence). **Owner: the RTL lane** (an
+issue-time interlock for `CAPSTONE_DYN` behind a pending `CCSRRW`, or `flush_o` on `CCSRRW`, is the
+RTL-side fix; the monitor keeps its `fence.i` until then).
+
 ### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, CONFIRMED BY DIRECTED TEST`
 
 **Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
