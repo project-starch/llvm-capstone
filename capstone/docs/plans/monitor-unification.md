@@ -367,5 +367,21 @@ commit with its own gate; "boot" means a board boot with control first.
 | 10 ◆ | kernel unification: both are Linux 6.1 (FPGA: buildroot 6.1.26 + `fpgakernel.config`, 103 lines; QEMU: `components/linux` pin 830b3c6 + `kernel.config`) | one kernel source + one config with two fragments | one less pin; the QEMU kernel's capstone patches reach the board | the board kernel is the one that boots silicon; a config merge is a boot-and-see change | 1 boot | **defer** — nothing in Phase A depends on it; ◆ the lead |
 | ◆ | initramfs: the unified FPGA rootfs carries the QEMU line's programs (`nested/` 176 KB, seven `*.user` ~120 KB; `rootfs.cpio` 6.1 MB, `fw_payload` 17.5 MB, dominated by the kernel and the 1.6 MB SLT domain) | trim the FPGA defconfig or keep | trim saves ~0.3 MB ≈ 2 % of the JTAG upload | a second defconfig fork is exactly the divergence just removed | — | **keep**; not worth a fork |
 
+**Status (2026-09-08, evening).** Item 3 DONE (monitor 5011c59; QEMU tier 18/18). Item 9 DONE
+(buildroot 4463cba; two-armed control `tests/runtime-qemu/run-m2-region-overflow.sh`: bounded at 64
+the module refuses ids ≥ 64 and the control fails, at 96 all 23 regions past 64 are tracked and it
+passes; silicon confirmation = boot sw33). Item 6(a) DONE (monitor 0a97cff; worktree chain: smoke,
+five probes, child-share TRAPPED, SLT identical, module check, M-2 control). Item 6(b) DONE (the
+diagnostic store was already gone; the stale comment deleted, monitor cd616c0). Item 1 DONE in
+source (cd616c0; QEMU generated file byte-identical — the report macro is plain statements because
+a `do{}while(0)` wrapper cost 176 lines of inert codegen; FPGA generated file differs only inside
+`create_region` and `share_child_region`) — **boot sw33 DONE (fw_payload 1aabcfff1f7e): k800 + six rungs at oracle, the M-2 control
+PASSED on silicon (45 regions, refusal RGNF at region_n 94, 22 regions past 64 tracked, dmesg clean)
+— items 1 and 9 validated on silicon; and the Q-03 HOLE path fired 5 times on the board with no
+fault, the first time it has been exercised on silicon (the caveat carried since sw30 is closed). The QEMU probes merged (capstone-qemu b9f6b00). Item 8: `rdtime`
+permanent; the three CCSRRW-adjacent `fence.i` load-bearing by R-26; the other eight get one
+firmware-only boot per variant (`~/capstone-artifacts/unify/board-b8.sh A|B|C`, sources restored
+by git after each). Item 2 next: the transfer-annotated board probe. Items 4 (null-blk), 5 last.
+
 **Order that costs the fewest boots:** 3 (QEMU only) → 9 (QEMU control, then it protects every later boot) → 6 rounding (QEMU) → **one board boot** carrying 1 + 2 + 6-magic-removal + 8's firmware-only arm (batched, control first, one unknown last per the board rule — so more likely two boots: {1, 6, 8} then {2}) → 4 null-blk → 5 last with its own ladder boot. Items 10 and the initramfs need no work unless the lead wants them.
 

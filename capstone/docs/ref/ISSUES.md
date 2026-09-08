@@ -613,7 +613,7 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `FIXED in the QEMU stand-in 2026-09-05 — hole + region_live[] sentinel (plans/q03-region-hole-sentinel.md); fw_jump ca218db97d53 / sbi.dom ba3a8dca38e3; manifest B 24/24 ×2 with the hole at item 8 reading i=8 n=10 as predicted, F 6/6, five REV_TRANSFERRED probes green. BOARD FIRMWARE PORTED 2026-09-07 (fw_payload 44c88d9ebeb1, audited): 7/7 domains in ONE boot, zero fault tags; no exact fit occurred, so the hole path is unexercised on silicon and self-reporting (HOLE:<slot> RGNN:<n>)`
+## Q-03 — a domain wedges by POSITION IN THE BOOT, not by image, and any image can be the victim `FIXED — hole path EXERCISED ON SILICON 2026-09-08 (boot sw33: 5 HOLE events, no fault; see the close-out). FIXED in the QEMU stand-in 2026-09-05 — hole + region_live[] sentinel (plans/q03-region-hole-sentinel.md); fw_jump ca218db97d53 / sbi.dom ba3a8dca38e3; manifest B 24/24 ×2 with the hole at item 8 reading i=8 n=10 as predicted, F 6/6, five REV_TRANSFERRED probes green. BOARD FIRMWARE PORTED 2026-09-07 (fw_payload 44c88d9ebeb1, audited): 7/7 domains in ONE boot, zero fault tags; no exact fit occurred, so the hole path is unexercised on silicon and self-reporting (HOLE:<slot> RGNN:<n>)`
 
 > ### 2026-09-05 — root cause, port, positive control, and what is left
 >
@@ -3520,7 +3520,7 @@ returning with a cause proves the handler works.
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.
 
-### M-2 — the kernel module's `probe_regions` copies the monitor's region table with no bound against its own array `OPEN — filed 2026-09-05 from the Q-03 audit; verified file:line`
+### M-2 — the kernel module's `probe_regions` copies the monitor's region table with no bound against its own array `FIXED 2026-09-08 — array sized to the monitor's max (96) AND the copy bounded (buildroot 4463cba); two-armed control tests/runtime-qemu/run-m2-region-overflow.sh (at 64 the module refuses ids >= 64, at 96 all tracked); on silicon boot sw33 PASSED (22 regions past 64). Was OPEN — filed 2026-09-05 from the Q-03 audit`
 
 `modcapstone/module/capstone.c:292-306` loops `while(region_n < new_region_n)` writing
 `regions[region_n]`, where `new_region_n` is whatever `REGION_COUNT` returns and `regions[]` is
