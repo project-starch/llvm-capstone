@@ -429,6 +429,37 @@ trailing scalar field is initialised just before the copy. `W-12` (`SQLITE_GRANU
 > `ldc`'s OWN result (values are read after an `stc` into a second region, so `ldc` vs `stc` vs readback is
 > undetermined). The board readings and the six-run table are untouched; only the attribution moves.
 
+> **SEPARATION ARMS, 2026-09-10 (RTL lane, `f29465d8c`, predictions written into the test headers
+> before either ran, logs kept under `records/r29/`). Both overlay accounts are DISFAVOURED. This is a
+> DIRECTION, not a verdict, and the named site does not move on it.**
+>
+> * `r29-sep-forceres` attacks the `:397` overlay: a plain load of the same word the store wrote sits
+>   between the store and the wide load, so `store_buffer.sv:279` holds it until the store is
+>   forwardable and it brings the line in — which also retires the miss-refill leg. Past it the entry
+>   should be resident in the write buffer, where the overlay is claimed blind to it.
+>   **Predicted FAIL 11; read PASS, 1843 cycles**, both halves intact, and the separator load itself
+>   read `y` correctly.
+> * `r29-sep-userzero` attacks the second defect at the same line: `y` written first and drained with
+>   a `fence`, then a plain store to the LOW word, then the separator load to force residency, then
+>   the wide load. **Predicted FAIL 11 from the `.user = 0` overlay; read PASS, 2229 cycles**, both
+>   halves intact.
+>
+> What is left standing is the **store buffer's word-granular disambiguation** (`load_unit.sv:297`,
+> `store_buffer.sv:279/287/293`), which would move the fix site out of the cache overlay entirely and
+> fits the timing better — a store-buffer window is a handful of cycles, which is what
+> one-instruction adjacency looks like.
+>
+> **Why this is not yet a refutation.** Nothing in either arm observes where the store physically was
+> at the read cycle. Both are equally consistent with the separator load having drained the store all
+> the way to the array, in which case neither arm created its condition and neither PASS means
+> anything — the same "a clean result from a check not shown to fire" shape that produced two
+> retractions on this defect already. The next step is a **waveform probe** on the existing
+> `s06agg-shape` run: write-buffer hit, byte enables, refill valid, the high-word lane and the
+> store-buffer queues, sampled at the wide load's read cycle. That observes rather than infers. The
+> same probe can sample `is_cap_req` (`wt_axi_adapter.sv:196`) and `st_wr_cap`
+> (`wt_dcache_mem.sv:138`) and so answer **R-10**'s live secondary half in the same run.
+
+
 **The account as first written (RTL lane, 2026-09-09, line numbers verified against
 `core/cache_subsystem/wt_dcache_mem.sv` at `66c4e7517`; read it with the audit box above).** A cache line is one 16-byte granule (`DcacheLineWidth = 128`): a 128-bit `ldc` returns the
 low word on `rd_data_o` and the high word on `rd_user_o` from bank 1 (`:279`). The write-buffer overlay
@@ -478,7 +509,41 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND`
+### S-14 — restoring `SQLITE_OMIT_EXPLAIN` makes the SQLite domain fault at its FIRST region share, before any of its own code runs `OPEN — DEMONSTRATED 2026-09-09 under QEMU by single-define bisection with an all-deployed control; root cause NOT established and not claimed; the define is dropped from the restore set, so nothing ships broken`
+
+**What happens.** The `restored` SQLite silicon image built with all eight `-U` defines does not run:
+it faults at `SQ: E/share1` with **cause 24** (unexpected operand type), *before* the domain enters,
+on the ordinary SLT path with no probe involved. The `deployed` image passes the same corpus file in
+the same run (`SQ: H/return`, `SLT-SUMMARY` present). Same host, same file, same monitor.
+
+**Why it is one define and which.** Bisected one define at a time, each built and run through that
+same path, with an all-deployed control in the same loop: **`-USQLITE_OMIT_EXPLAIN` alone** reaches
+only `E/share1` with cause 24; `FOREIGN_KEY`, `UTF16`, `INCRBLOB`, `GET_TABLE`, `DEPRECATED`,
+`COMPILEOPTION_DIAGS` and `UNTESTABLE` each reach `H/return`. Confirmed compositionally afterwards:
+the seven together pass, all eight fail.
+
+**Why it is filed rather than shrugged off.** Restoring EXPLAIN buys nothing here — we build from the
+amalgamation, whose parser tables are pre-generated, so `SQLITE_OMIT_EXPLAIN` never removed the
+grammar and EXPLAIN parses and runs today *with* the define set. So the practical answer was to drop
+it (the restore set is seven), and the branch does. But **a build define that changes what the
+monitor's region share does, before the domain executes a single instruction, is a finding on its
+own**: nothing in the SQLite source should be able to reach `share1`. The plausible shapes — an
+image-layout or alignment change that moves a capability-bearing object, or a region-count/size
+change that alters what is carved — are exactly the shapes of I-03, R-11 and the region-pool limits,
+and none of them has been checked here.
+
+**Smallest reproducer today:** build `sqlite_silicon.dom` with `SQLITE_FEATURE_SET=restored` plus only
+`-USQLITE_OMIT_EXPLAIN` and run it through the SLT path; the fault is at the first share. Reducing
+that to something smaller than SQLite is the first task if this is picked up.
+
+**What would settle it:** which object moved. Diff the two images' `.capstone_gp_initdesc` and region
+descriptors (the capability-init slot checker already passes on **both** images, so it is not an
+undersized holder), and identify what the monitor is being handed at `share1` that it rejects as an
+unexpected operand type.
+
+**Owner:** unassigned. Found by the helper lane during the SQLite stock-ness work, 2026-09-09.
+
+### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
 JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board sweep.
@@ -510,6 +575,15 @@ JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board swe
 - **Not a root fix.** The monitor still lacks the icache invalidate on domain switch, so
   same-VA reuse still hangs. Sidestepped, not repaired — the fix sketch remains in
   `plans/curried-crunching-gizmo.md`.
+- **2026-09-10 — the workaround is now machine-enforced, which also makes the defect unmeasurable.**
+  `tests/preflight-board-run.sh:434` BLOCKS a boot that stages two `.dom` files at the same
+  `DOMAIN_BASE_VA` (*"C15: ENTRY-VA COLLISION ... R-3 will hang whichever runs second and it will
+  read as that rung's verdict"*). That is the right default and it is why no sweep has hit R-3
+  since — but it means **"not seen lately" carries no information about R-3**, and the only
+  post-reflash same-VA data point (2026-09-05, `rawhazard5` accidentally staged at the control's VA,
+  did not stall) is explicitly recorded as NOT a verdict. Measuring R-3 on current silicon requires
+  disabling C15 deliberately for one arm, as the last domain of a boot. The R-26 CCSRRW flush in
+  `66c4e7517` does not touch it: that entry states *"its icache flush is irrelevant here"*.
 - **Mechanism note:** the domain-boundary `fence.i` was long suspected to fix R-1 as well;
   board test #63 disproved that. It remains the right fix for **this** issue only.
 
@@ -517,13 +591,6 @@ JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board swe
 `rv8_primes` returned the *correct* result while a word of its shared region held a stray DRAM
 address. Passing rungs were only ever clean where someone looked.
 - **Evidence:** `ref/fpga-silicon-measurements-for-paper.md` §5
-
-### R-5 — Illegal/meaningless capability ops wedge rather than trap `OPEN`
-M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recovers. Seen for
-`C_GEN_CAP` (QEMU-only op), for the R-2 `delin`, and for an `scc`-derived load.
-- **Evidence:** `history/22-07-2026_18-05-00_gp-free-silicon-smoke-*.md`
-
----
 
 ### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `ROOT CAUSE of C-13, board-confirmed 2026-07-29`
 
@@ -554,6 +621,21 @@ the corruption happens in the copy, not the compiler.
 
 The monitor's own comment -- "the image bytes here are const initializer data with no
 capability tags, so the 128 bits round-trip unchanged" -- is FALSE on real silicon.
+
+> **2026-09-10 — THE SECONDARY DEFECT BELOW IS LIVE, AND IT IS R-29's SHAPE. It was proposed for
+> demotion to "a one-line RTL observation" and that proposal is withdrawn.** The two lines this entry
+> named on 2026-07-29 decide "this store holds a capability" by OR-reducing the metadata word and
+> never consult `cap_type` — the same word-versus-granule confusion that **R-29** is about, and R-29
+> is demonstrated on the newest bitstream (`66c4e7517`, boots sw46 and sw48, `s06agg` = 66 twice).
+> Neither line has been retracted or re-measured since. Treat R-10's secondary half and R-29 as
+> **sibling accounts of one memory-subsystem question**, and let R-29's separation arms answer
+> whether the OR-reduce is in the path; if it is, this half closes with R-29's fix rather than on its
+> own. R-10's PRIMARY half (the `__linear` declarator bug in capstone-c) is fixed and shipped — it is
+> only the RTL half below that is live.
+>
+> Also unchanged and still owed: the **stage-8 discriminator against the fixed firmware** proposed in
+> this entry has never been run, on any bitstream; and this entry's own instruction *"Do not record
+> C-13 as fixed"* was overtaken when C-13 was archived on C-14's mechanism, not on this one.
 
 **Secondary defect, same root.** `is_cap_req = |dcache_data.user`
 (`wt_axi_adapter.sv:196`) and `st_wr_cap = |wr_user_i` (`wt_dcache_mem.sv:138`) decide
@@ -890,18 +972,55 @@ Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6
 **Recorded because the reasoning is the useful part:** any future pass that adds or removes
 globals *after* ISel would silently break this positional scheme.
 
-### R-12 — rev-node exhaustion is SILENT CORRUPTION, not a fault `OPEN, will bite at call_dom`
+### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse; whether any workload approaches it is UNMEASURED`
 
-The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation
-**#1025 wraps to node id 0 and reuses live ids**. `overflow_flag` reaches only a debug LED
+> **CORRECTED 2026-09-10 (board lane), read against the FLASHED bitstream's own source
+> (`capstone-ariane` `66c4e7517`), not against this entry's cited lines.** Both halves of the
+> original account are false on this RTL, and they fail in opposite directions -- the threshold is
+> 64x larger and the failure mode is *more* visible, not less:
+>
+> * **The head is 16 bits, and the pool is 65536 nodes.** `core/anvil_build/capstone_rev_node.anvil:74`
+>   gates allocation on `*head != 16'd65535` with the comment `REVNODE_SENTINEL = (2^REVNODE_HEAD_BITS)-1`;
+>   `:78-79` build the id as `#{14'd0,*head}` and bump by `16'd1`. `core/include/ariane_pkg.sv:587`
+>   sizes the pool: *"Revocation-node pool: 65536 nodes * 16 bytes/node"*, and `CAP_REVNODE_MEM_BASE`
+>   `0xBFF00000 + 65536*16 = 0xC0000000` abuts the tag region exactly. The 10-bit `head` this entry
+>   cited is not at `capstone_rev_node.anvil:168` or anywhere else. The same correction was already
+>   made on 2026-08-27 in `benchmarks/sqlite/build-sqlite-silicon.sh:943-949` against the resident
+>   bitstream; it never reached this entry.
+> * **Exhaustion does NOT wrap, and it is not silent.** `capstone_rev_node.anvil:99-107` is explicit:
+>   *"rev-node pool exhausted ... deliberately drop this request instead of aliasing a new node onto
+>   an id that wraps back into 0/1/2 or a live node. We never send `ep.init_res`, so SPLIT's
+>   `recv rev_node_ep.init_res` blocks forever -- a forced, visible stall instead of silent id reuse."*
+>   So the title's "SILENT CORRUPTION, not a fault" is backwards: the designed behaviour is a
+>   **deadlock**, which on this RTL presents as a wedge (no trap, no return -- see M-1).
+> * **Consequently the SQLite scare is void.** SQLite's entry glue does ~1,060 splits, which is
+>   1.6 % of the 65532 usable ids, not a crossing of 1,024. Nothing in the ladder approaches the real
+>   threshold either.
+>
+> **What is now open, and it is a measurement, not a code reading.** The board driver reported
+> `rev-node head = 65047 (99.3% of 65535)` after the wedged probe in BOTH boot sw45 and boot sw47 --
+> the *identical* value in two boots that ran different stage sets. Either the pool really is 485
+> allocations from a deadlock on a freshly power-cycled board (which would matter a great deal, since
+> there is no slot reclamation -- `DROP` invalidates without freeing), or the read is not a datum: it
+> is taken after a wedge, through a path that can serve cached values, and the driver already
+> documents one way this register lies (`run_sqlite_stages_fpga.py:2112-2130`: `0xFFFF` is the
+> sentinel and is indistinguishable from an all-ones dead aperture, which was misreported as
+> "99.998 % consumed" until 2026-08-27). **One check settles it:** read the head at two known points
+> in a HEALTHY boot -- before the first domain and after a known number of splits -- and see whether
+> it starts near zero and moves by the expected amount. Until that runs, 99.3 % is not a finding.
+
+*The original account, kept because it is what the entry claimed for six weeks:*
+
+~~The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation
+**#1025 wraps to node id 0 and reuses live ids**.~~ `overflow_flag` reaches only a debug LED
 (`cva6.sv:1185`) -- nothing traps, nothing prints. Only `SPLIT` and `MREV` allocate
 (`capstone_dyn_unit.anvil:136, :91`); `ldc`/`stc`/`cincoffset` allocate nothing
 (`:330-332, :399`, `capstone_flu_unit.anvil:29-44`).
 
-`create_domain` does **5** splits, so this is NOT the current SQLite blocker. But SQLite's
+~~`create_domain` does **5** splits, so this is NOT the current SQLite blocker. But SQLite's
 entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first domain to
 cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
-ladder rung approaches it (bigmany: 65).
+ladder rung approaches it (bigmany: 65).~~
 
 ### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
 

@@ -117,6 +117,30 @@ so it is the instruction and not code layout.
   storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
   Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
 
+### R-5 — Illegal/meaningless capability ops wedge rather than trap `SUPERSEDED 2026-09-10 — each of the three named instances was reattributed, and the generic residual ("a domain fault is a wedge, not a trap") is tracked in M-1 with a 2026-09-09 board observation; nothing distinct remains under this ID`
+M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recovers. Seen for
+`C_GEN_CAP` (QEMU-only op), for the R-2 `delin`, and for an `scc`-derived load.
+- **Evidence:** `history/22-07-2026_18-05-00_gp-free-silicon-smoke-*.md`
+
+> **CLOSED 2026-09-10 (board lane), by checking each instance rather than the header.** This entry
+> generalised from three observations dated 2026-07-22/23, all on
+> `working-caplifive-captype-fixed.bit` — the bitstream two reflashes before the current one. Each has
+> since been attributed elsewhere, and none of them to "the RTL wedges on an illegal capability op":
+>
+> * **`C_GEN_CAP`** was a **firmware** defect, not an RTL one: the monitor minted `gp` with a
+>   QEMU-only opcode, so the result was garbage, the following `stc` stored through it and M-mode
+>   faulted into `capstone_error` = `while(1)`. The fix landed the same week
+>   (`history/22-07-2026_18-05-00_gp-free-silicon-smoke-…md:97`, *"The `C_GEN_CAP` fix landed"*).
+> * **the R-2 `delin`** is archived as `R-2 — delin in domain code wedges the board`
+>   `EXPLAINED 2026-07-29 by C-13 — not an RTL defect`.
+> * **the `scc`-derived load** is the C-13 / SPLIT-gp line, archived under C-13 and C-14.
+>
+> What is left is the general fact that a domain fault does not return — and that is **M-1**, which
+> carries a 2026-09-09 board observation of exactly it (*"on this RTL a fault inside a domain is a
+> wedge, never a returned value, so every silicon probe must be written to RETURN on both outcomes or
+> be the last arm of its boot"*). Keeping R-5 open in parallel with M-1 duplicates one issue under two
+> IDs and invites a second, divergent investigation. Anything new of this shape goes to M-1.
+
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `GONE on caplifive_s12fix_5097eb166 — closed on evidence 2026-09-09: beebs_janne at its oracle 484656629 in fourteen boots (sw01, sw30–sw42) and the -O1 sweep twin; probable cause R-20, fixed by content in 5097eb166`
 
 > **Sweep 2026-09-05 — GONE on silicon.** `beebs_janne -O1` = 484656629 = host oracle on caplifive_s12fix_5097eb166 (boot sw01, control k800 = 4; `tests/board-results/2026-09-05.tsv`).
