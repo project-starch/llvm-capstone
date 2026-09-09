@@ -722,6 +722,13 @@ unexpected operand type.
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
+> **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
+> `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
+> attacking it. **It is not a property of the currently flashed bitstream in particular:** the same
+> arithmetic and the same clause are in the previous bitstreams and, for R-30, in the spec itself, so
+> nothing here argues that the 2026-09-09 flash should not have happened or should be reverted. The
+> R-25/26/27 fixes that build carries are validated on silicon and stand.
+
 **The arithmetic, from the flashed bitstream's own source.** For an UNINIT capability over a region
 `[S, E)`:
 
@@ -787,6 +794,13 @@ making it the smaller and better-tested change. **This is a spec decision and be
 the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before this one.
 
 ### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `OPEN — SECURITY-RELEVANT. VERIFIED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517) against the spec; not yet demonstrated by a directed test`
+
+> **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
+> `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
+> attacking it. **It is not a property of the currently flashed bitstream in particular:** the same
+> arithmetic and the same clause are in the previous bitstreams and, for R-30, in the spec itself, so
+> nothing here argues that the 2026-09-09 flash should not have happened or should be reverted. The
+> R-25/26/27 fixes that build carries are validated on silicon and stand.
 
 **The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
 
