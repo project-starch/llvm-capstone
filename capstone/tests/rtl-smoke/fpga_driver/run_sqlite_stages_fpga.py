@@ -1611,7 +1611,13 @@ def main():
             # Without this distinction the summary below blames whichever domain happened to
             # occupy that slot. It did exactly that on 2026-08-06 and produced a confident,
             # entirely false localization of a SQLite function that never executed.
-            created = "SQ: A/dom-ok" in text
+            # NON-SQ HOSTS (`lpc`, `rtpc`: the ladder rungs and the transfer/R-25 probes) never print
+            # `SQ: A/dom-ok` or `SQ: G/enter`, so a probe that entered and wedged was classified as
+            # "INFRASTRUCTURE WEDGE (domain never created)" -- boot sw45 (2026-09-09) said exactly that
+            # about r25dup, whose segment carried DBAS/DENT (create_domain) and ENT0/ENT1 (the monitor
+            # about to leave M-mode INTO the domain) and whose wedge tracer had latched mcause 25.
+            # The monitor's own tags are host-independent, so they are accepted as the same evidence.
+            created = ("SQ: A/dom-ok" in text) or bool(re.search(r"\bDBAS:[0-9A-Fa-f]{8}", text))
             # ENTRY is a SEPARATE question from creation, and conflating them manufactures
             # false verdicts. `SQ: A/dom-ok` only means create_dom returned; the domain can
             # still fail to ENTER (R-16, the entry stall), in which case its markers stop at
@@ -1621,7 +1627,7 @@ def main():
             # never entered (A/dom-ok=1, G/enter=0, SHA5=2, SHA6=1), which read as "this level
             # wedges" and nearly retracted a sound bisection. The board-run skill has always
             # keyed on `SQ: G/enter`; the runner did not.
-            entered = "SQ: G/enter" in text
+            entered = ("SQ: G/enter" in text) or bool(re.search(r"\bENT1:[0-9A-Fa-f]{8}", text))
             # EXCX AND THE OTHER MONITOR SPIN TAGS BELONG HERE. This regex decides whether a
             # non-returning arm is reported as "the domain wedged" or "the MONITOR wedged", and it
             # listed only two tags. EXCX:0000E002 -- the unconditional `default:` arm of the
