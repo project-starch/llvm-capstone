@@ -907,6 +907,27 @@ unexpected operand type.
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
 >
+> # ALL FOUR GATES PASS, 2026-09-10. Branch `r30-r31-init-revoke`. What remains is a DECISION, not a gate.
+>
+> | gate | result |
+> |---|---|
+> | **lint** | PASS — UNOPTFLAT **40**, every count at baseline |
+> | **functional** | both arms PASS on the fixed tree and **FAIL 11 on the same tree with only the two operators reverted** — a true one-variable pair, rebuilt without the R-29 candidate that confounded the first control |
+> | **auditor** | R-31's polarity SUPPORTED against four attacks; R-30's code change defensible; **two of the author's own claim sentences refuted and corrected in the source** |
+> | **sweep** | **88 of 88** runnable tests PASS, 0 failures, 0 hangs (`records/r3031/sweep-table.txt`) |
+>
+> Three of the 91 listed tests did not build — `rand`, `perf_tcache_random`, `perf_riscv_random` —
+> because their listed sources are **absent from the tree entirely**. Generator entries with no
+> checked-in source, so they would not build on any revision. Stated rather than assumed; a control run
+> on those three would make it airtight and was judged unnecessary against the missing-file evidence.
+>
+> **TWO THINGS THAT ARE NOT GATES AND MUST TRAVEL WITH THIS TO THE LEAD:**
+> 1. **R-30 is a spec DEVIATION, not a conformance fix.** The spec text must be amended in the same
+>    change, which needs a ruling on whether `end` is inclusive or exclusive — not a lane's to make.
+> 2. **It must NOT ship RTL-only.** The monitor traps on **five** sites once R-31 lands, and R-31
+>    restores the type discipline **without closing the disclosure**, because the scalar-path check is
+>    gated on a privilege level domains never run at. Firmware ships with it or neither ships.
+>
 > **DEMONSTRATED 2026-09-10 (`a1484c6d3`), with negative controls that prove the arms fire:**
 > `r30-fill-init` FAIL 11 → PASS and `r31-revoke-cursor` FAIL 11 → PASS, where on the UNFIXED tree the
 > failures carry the reserved codes "INIT trapped" and "type is not UNINIT" — the two defects being
@@ -1206,6 +1227,27 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > that revoke through a write-bearing capability or INIT a filled region; and **the new revoke arm must
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
+>
+> # ALL FOUR GATES PASS, 2026-09-10. Branch `r30-r31-init-revoke`. What remains is a DECISION, not a gate.
+>
+> | gate | result |
+> |---|---|
+> | **lint** | PASS — UNOPTFLAT **40**, every count at baseline |
+> | **functional** | both arms PASS on the fixed tree and **FAIL 11 on the same tree with only the two operators reverted** — a true one-variable pair, rebuilt without the R-29 candidate that confounded the first control |
+> | **auditor** | R-31's polarity SUPPORTED against four attacks; R-30's code change defensible; **two of the author's own claim sentences refuted and corrected in the source** |
+> | **sweep** | **88 of 88** runnable tests PASS, 0 failures, 0 hangs (`records/r3031/sweep-table.txt`) |
+>
+> Three of the 91 listed tests did not build — `rand`, `perf_tcache_random`, `perf_riscv_random` —
+> because their listed sources are **absent from the tree entirely**. Generator entries with no
+> checked-in source, so they would not build on any revision. Stated rather than assumed; a control run
+> on those three would make it airtight and was judged unnecessary against the missing-file evidence.
+>
+> **TWO THINGS THAT ARE NOT GATES AND MUST TRAVEL WITH THIS TO THE LEAD:**
+> 1. **R-30 is a spec DEVIATION, not a conformance fix.** The spec text must be amended in the same
+>    change, which needs a ruling on whether `end` is inclusive or exclusive — not a lane's to make.
+> 2. **It must NOT ship RTL-only.** The monitor traps on **five** sites once R-31 lands, and R-31
+>    restores the type discipline **without closing the disclosure**, because the scalar-path check is
+>    gated on a privilege level domains never run at. Firmware ships with it or neither ships.
 >
 > **DEMONSTRATED 2026-09-10 (`a1484c6d3`), with negative controls that prove the arms fire:**
 > `r30-fill-init` FAIL 11 → PASS and `r31-revoke-cursor` FAIL 11 → PASS, where on the UNFIXED tree the
