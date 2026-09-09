@@ -221,6 +221,45 @@ monitor that fills nothing.
 Both implementations hold `end` exclusively, so `>=` is coherent. **It must land together with the
 monitor change (item 2)** or `run-nullblk-all.sh` goes red and stays red.
 
+### It did not compile, and I had called it written
+
+`CAP_PERM_MASK_W`, the symbol the new permission clause tested, **exists nowhere in the QEMU tree**.
+The change had never been built when I described it as written and reasoned about what it would do.
+Corrected to `cap_perms_allow(perms, CAP_PERMS_WO)`, the file's own idiom, which expands to the same
+`(perms & 2) == 2` the RTL tests. A second correction in the same pass: the `csinit` comment stated
+that the exclusive-`end` ruling was **the lead's 2026-09-10 ruling**. It is not; it is item 1 of this
+file and it is still open. The code is written under the *recommended* resolution and the comment now
+says so.
+
+### Predictions for the suite run, written BEFORE it
+
+The change is built into `capstone-qemu/build-q07/`, **never into `build/`** — the shared binary is
+what every other lane's suite picks up by default, and swapping uncommitted semantics into it is the
+2026-09-05 toolchain-rebuild incident in a new coat. The suites take it via `CAPSTONE_QEMU_BINARY`.
+
+**There are TWO different reds here and conflating them would be the whole error.** One is a harness
+that encodes the old behaviour; the other is a defect reproducing.
+
+| probe / suite | prediction | the discriminator that makes it that and not the other |
+|---|---|---|
+| `uninit_use_before_init_fault` | **PASS**, cause 26 | unchanged: the read is refused by TYPE, and the cursor move makes the address *unambiguously* in-bounds, so it tests more than before |
+| `uninit_negative_offset_fault` | **PASS, and VOID as evidence** | it reads `db[-1]` *because* revoke parked the cursor at `end`, making that address `end-1` and inside the region. With the cursor at `base` it addresses `base-1`, which is OUT of bounds. It will still report 26, but no longer for the reason its own comment gives. **The probe needs rewriting, not the fix.** |
+| `uninit_init_then_use_ok` | **FAIL**, domain faults cause 29 instead of returning `0x1412005e` | it does `revoke` then `cap_init` with **no fill in between**. Cursor at base, `csinit` now demands `>= end`. This is a HARNESS red: the probe encodes the old `cursor = end` shortcut. |
+| `run-nullblk-all.sh` | **FAIL** at the monitor's `INIT` after `REVOKE` | `sbi_capstone.c:1196-1197` and `:1340-1341`, same shape, in the monitor rather than a domain. This red **IS M-5 reproduced** and is the intended consequence, not a regression. |
+| `run-smoke.sh` | **PASS** | a red here would be a surprise and would say the change reaches beyond the reclaim path |
+
+**`uninit_init_then_use_ok` is M-5 in miniature** — the same revoke-then-init-with-no-rewrite, in
+seven lines, in a domain, off the board. That makes it the cheapest possible test bed for whichever
+reclaim shape is chosen in item 2, and it costs no board time.
+
+**If `run-nullblk-all.sh` comes back GREEN, the first hypothesis is that it never executed a
+revoke-then-init pair — not that M-5 is fine.** A suite that cannot reach the condition reports a
+pass, and that is the most expensive mistake available on this project. The positive control is to
+confirm from the log that `helper_csrevoke` ran at all before recording any verdict either way.
+
+**The QEMU change will NOT be committed whatever colour comes back.** Its landing condition is
+unchanged: it lands together with the monitor change, which is item 2, which is yours.
+
 ---
 
 ## 6. Smaller, and safe to defer
