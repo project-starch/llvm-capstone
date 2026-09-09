@@ -33,7 +33,13 @@ file.** That replaces section D.2 of the plan below.)*
 > RTL (M-1's open half), so the core wedged and the probe never ran: both R-25 arms VOID for sw39. Rebuilt
 > with UNINIT = 4; rerun as boot sw41 (k800, r25same, r25dup last) after variant D (sw40). The QEMU side
 > cannot stand in: QEMU does not decode CAPTYPE and its INIT accepts exactly the operand the RTL rejects
-> (Q-07). Two registry entries filed from this work: Q-07 and M-5; one line for the R-25 folder later: the
+> (Q-07). **sw41 (16:03): R-25 CONFIRMED on silicon** — r25same 0x25000001, r25dup 0x25000001 (the store
+> through the INIT source landed: the duplicate is live), k800 = 4, zero fault tags. **sw40/sw42: variant D
+> CLEAN** on the current silicon (sw40 with two of the three CCSRRW fence.i dropped, sw42 with all three;
+> 7/7 at the oracles each, zero fault tags), so the post-flash D/E boots are no-regression checks and the
+> R-26/R-27 evidence stays the simulation. Synthesis of 66c4e7517 waits for the lead's word to the synth
+> lane in its own session (~1 h 45 min from the go). Two registry entries filed from this work: Q-07 and
+> M-5; one line for the R-25 folder later: the
 > RTL does not implement the spec's cincoffset-past-end rule (cap-man-insn.adoc:262), which is what makes
 > the construction possible.
 
@@ -61,6 +67,15 @@ Timeline: 1 today; 2 tomorrow morning (~1 h board); 3–4 the RTL lane's schedul
 the flash (~2 h board); 6 the day after.
 
 ## 3. The monitor and compiler buckets (this lane, unchanged order; Q-06 done)
+
+> **Status 2026-09-09 16:30.** M-4 DONE (monitor 0658243: `call_domain_with_cap` bounds `dom_id`; generated
+> files differ only in that function on both targets; smoke, borrow-cost, null-blk unchanged). M-3 DONE
+> (monitor bff5b71: the ecall trampoline reports error = -1 when a handler's value is -1; generated files
+> byte-identical to M-4's; smoke, five probes, null-blk, M-2 control, hole check, cascade unchanged). I-5
+> CLOSED on evidence (every monitor error site already names itself on the UART; entry archived). M-1's
+> remaining half is RTL-side (sw39 evidence written under the entry; ownership to the RTL lane). Both
+> monitor changes owe one FPGA control boot, batched into the first post-flash boot. Next: Q-04, then
+> C-37 / C-9 / C-43.
 
 M-4 (bound `dom_id` in `call_domain_with_cap`) → M-1 (read `RTL-domain-trap-vector-unset/` first: its
 firmware half is already on silicon; what remains may be RTL-side, in which case M-1 moves to the RTL bucket)

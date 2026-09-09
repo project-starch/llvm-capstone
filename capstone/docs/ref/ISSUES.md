@@ -1196,20 +1196,6 @@ It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` an
 capability becomes two with no bookkeeping. Sits directly next to C-14 in kind: an
 instruction whose source-register behaviour diverges from what the compiler assumes.
 
-### I-5 — every monitor error is invisible on the FPGA `OPEN, cheap fix identified`
-
-`capstone_error` is `C_PRINT(...)` + `while(1)`, and `C_PRINT` is `csrw 0x800` -- the RTL
-trace, NOT the UART. So all five silent-spin sites look identical to a hang on the board:
-`handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default
-(`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` -> `capstone_error`
-(`:917-923`), and two in `split_out_cap` (`:236, :246`).
-
-**Fix, zero board cost to develop:** give `capstone_error` a real UART putchar via
-`split_out_cap(0x10000000, 0x100, 0)` -- the same mechanism the monitor already uses for
-`mtime` (`sbi_capstone_dom.c:32-36`). Every future wedge would then name its own site
-instead of presenting as silence. This is the highest-leverage change available for board
-debugging and should be done before more board sessions are spent guessing.
-
 ### C-14 (superseded framing) — "a domain with MORE THAN ONE global fails" `RETRACTED`
 
 **The split is exact.** Sorting every silicon result by the domain's global count:
@@ -1580,6 +1566,16 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
+> **2026-09-09, board lane — the remaining half is RTL-side, ownership moves to the RTL lane.** The
+> firmware half (the trap-vector context slot written by `create_domain`) has been on silicon since
+> 2026-09-02 (`tests/fpga-repros/RTL-domain-trap-vector-unset/`). Boot sw39 showed what the other half
+> costs today: a domain that raised UNEXPECTED_CAP_TYPE at its INIT (`r25same`, first attempt) was not
+> delivered to the monitor; the core wedged into a repeating 32-byte UART record carrying 0xdead..
+> and the driver had to power-cycle. The RTL lane reads it as M-1's own path (the faulting instruction
+> was the capability op itself, so R-27's window does not apply). Consequence for probes: on this RTL
+> a fault inside a domain is a wedge, never a returned value, so every silicon probe must be written to
+> RETURN on both outcomes or be the last arm of its boot. Nothing further for the monitor here.
+
 > **Sweep 2026-09-05 — OPEN, NOT EXERCISED this sweep.** Boot sw13 (control k800 = 4): `tagr` 1017, `tagf` 1017 — the package's deliberate fault (`lcc` selector 1 on an untagged operand) is total now and does not fault: its second type query reads 7, which QEMU's `helper_cslcc` documents as the TOTAL type query's "not a capability" answer, encoded the same way in the RTL. So nothing faulted and the loop question was not asked. Fix known — build with `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1` (see below); verifying it needs a rung that actually faults, e.g. an out-of-bounds load, not built.
 
 **A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
@@ -1615,24 +1611,6 @@ returning with a cause proves the handler works.
 
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.
-
-### M-3 — every Capstone SBI ecall returns `error = 0`, so the module's failure paths are dead code `OPEN — filed 2026-09-05 from the Q-03 audit; verified file:line`
-
-`sbi_capstone.S:72-74` (stand-in) does `call handle_trap_ecall; mv a1, a0; li a0, 0`: the
-handler's return becomes `value` and `error` is hardwired to 0. So `sbi_res.error` checks in the
-module never fire — the `DOM_CREATE failed` path (`module/capstone.c:128`) and the
-`REGION_CREATE failed` path with its `free_pages` (`:206`) are unreachable, and a monitor-side
-`-1` arrives as a *value* (e.g. a region id of `(unsigned)-1`, which the module then tries to
-probe up to). Consequence for Q-03: "the module never frees region pages" is airtight, which is
-part of why the tail drop is latent. Board copy not yet checked for the same `li a0, 0`.
-
-### M-4 — `call_domain_with_cap` indexes `domains[dom_id]` with no bound check `OPEN — filed 2026-09-05 from the Q-03 plan audit; verified file:line`
-
-`sbi_capstone.c:529-533`: `call_domain_with_cap(dom_id, base, len, cursor)` carves the region and
-reads `domains[dom_id]` directly, while every sibling entry point checks `dom_id >= dom_n` first
-(`:516`, `:550`, `:660`, `:754`, `:888`). Reached from the module's `DOM_CALL_WITH_CAP` ecall
-(`module/capstone.c:157-159`, the S-mode payload path) with a caller-supplied id. Unrelated to
-holes; one guard line.
 
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
 

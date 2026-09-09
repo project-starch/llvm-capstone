@@ -3446,6 +3446,35 @@ and consume slots) — `plans/archived/q03-region-hole-sentinel.md` open item 3.
 > runner reads `REGION_COUNT`; the only in-run reading of the pool size is the `RGNN` line that
 > accompanies a `HOLE`.
 
+### M-3 — every Capstone SBI ecall returns `error = 0`, so the module's failure paths are dead code `FIXED 2026-09-09 (monitor bff5b71: the trampoline reports error = -1 iff the handler's value is -1, both targets; positive control under QEMU: one refused REGION_CREATE → one `REGION_CREATE failed … error=-1 value=-1` line in the guest's dmesg, pages freed; the FPGA control boot is batched into the first post-flash boot)`
+
+`sbi_capstone.S:72-74` (stand-in) does `call handle_trap_ecall; mv a1, a0; li a0, 0`: the
+handler's return becomes `value` and `error` is hardwired to 0. So `sbi_res.error` checks in the
+module never fire — the `DOM_CREATE failed` path (`module/capstone.c:128`) and the
+`REGION_CREATE failed` path with its `free_pages` (`:206`) are unreachable, and a monitor-side
+`-1` arrives as a *value* (e.g. a region id of `(unsigned)-1`, which the module then tries to
+probe up to). Consequence for Q-03: "the module never frees region pages" is airtight, which is
+part of why the tail drop is latent. Board copy not yet checked for the same `li a0, 0`.
+
+> **FIXED 2026-09-09 (board lane, monitor bff5b71).** `sbi_capstone.S` after `call handle_trap_ecall`: `mv a1, a0;
+> addi t0, a0, 1; seqz a0, t0; neg a0, a0` — error = -1 exactly when the value is -1, on both targets (the
+> .c.S files are byte-identical to M-4's). Positive control under QEMU: the M-2 host's 53 creates end at the
+> monitor's refusal; the guest's `dmesg | grep -c 'REGION_CREATE failed'` reads 1 with `error=-1 value=-1`,
+> i.e. the module's failure path ran and `free_pages` with it (before this change the same run logged
+> nothing). The board copy carried the same `li a0, 0` (one unified source since 2026-09-08). Caveat: a domain
+> whose own DOM_CALL return value is -1 now reads as an error; no shipped domain returns it.
+
+### M-4 — `call_domain_with_cap` indexes `domains[dom_id]` with no bound check `FIXED 2026-09-09 (monitor 0658243; QEMU-validated: generated files differ only inside call_domain_with_cap on both targets, smoke/borrow-cost/null-blk unchanged; the FPGA control boot is batched into the first post-flash boot)`
+
+`sbi_capstone.c:529-533`: `call_domain_with_cap(dom_id, base, len, cursor)` carves the region and
+reads `domains[dom_id]` directly, while every sibling entry point checks `dom_id >= dom_n` first
+(`:516`, `:550`, `:660`, `:754`, `:888`). Reached from the module's `DOM_CALL_WITH_CAP` ecall
+(`module/capstone.c:157-159`, the S-mode payload path) with a caller-supplied id. Unrelated to
+holes; one guard line.
+
+> **FIXED 2026-09-09 (board lane, monitor 0658243).** `call_domain_with_cap` now checks `dom_id >= dom_n` and
+> returns -1, the check `call_domain` already had. With M-3 the -1 arrives at the module as an error.
+
 ### I-01 — the fail-closed push gate was installed in only 2 of 6 repositories `RESOLVED 2026-09-04 — all six gated and negative-tested`
 
 **Found 2026-09-04 by negative-testing it, which is the only way this class surfaces.**
@@ -3634,6 +3663,29 @@ failing probes are also the largest. > **⚠ CORRECTION: this is NOT an off-boar
 > **This therefore costs board time to resolve, and each attempt is one boot.** Budget
 > accordingly, and prefer adding slots to a probe that ALREADY delivers on the board
 > (`expint_diag` is the known-good vehicle) over debugging why a new one does not.
+
+### I-5 — every monitor error is invisible on the FPGA `FIXED — closed on evidence 2026-09-09: capstone_error and every named site report a 4-char UART tag on the FPGA (the I-4 tagging work); boots sw33 (HOLE/RGNF), sw36-sw42 (SHA0..SHA6, HOLE, RGNN, DBAS/DENT) read them on silicon`
+
+`capstone_error` is `C_PRINT(...)` + `while(1)`, and `C_PRINT` is `csrw 0x800` -- the RTL
+trace, NOT the UART. So all five silent-spin sites look identical to a hang on the board:
+`handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default
+(`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` -> `capstone_error`
+(`:917-923`), and two in `split_out_cap` (`:236, :246`).
+
+**Fix, zero board cost to develop:** give `capstone_error` a real UART putchar via
+`split_out_cap(0x10000000, 0x100, 0)` -- the same mechanism the monitor already uses for
+`mtime` (`sbi_capstone_dom.c:32-36`). Every future wedge would then name its own site
+instead of presenting as silence. This is the highest-leverage change available for board
+debugging and should be done before more board sessions are spent guessing.
+
+> **Closed on evidence 2026-09-09 (board lane).** `capstone_error(code)` is now `capstone_error_tag(CERR, code)`
+> (`sbi_capstone.c:187-188`): after the trace print it calls `capstone_report(tag, code)`, which writes the tag and
+> value to the UART on the FPGA target, then spins. The five sites this entry listed each carry their own tag now:
+> `handle_exception` default → `EXCX`/`MCAU`, illegal-instruction-not-time → `ILLX`, `swap_cpmp` no region →
+> `CPMX` then `fault_return_from_domain`, `split_out_cap` no region → `SPLA` + `BASE`/`ALEN`, the generic path →
+> `CERR`. Read on silicon: `HOLE:`/`RGNN:`/`RGNF:` on boot sw33, `SHA0..SHA6`, `DBAS`/`DENT`, `HOLE` on sw36–sw42
+> (`tests/board-results/2026-09-05.tsv`). The remaining "spin after naming itself" is by design; a wedge with a
+> name is what this entry asked for.
 
 ### H-01 — BEEBS `matmult-float` pulled the HOST glibc headers into a cross-compile `FIXED; sweep-verified 2026-09-05`
 
