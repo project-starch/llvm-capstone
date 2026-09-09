@@ -6859,6 +6859,41 @@ SDValue CapstoneTargetLowering::expandUnalignedRVVStore(SDValue Op,
                       Store->getMemOperand()->getFlags());
 }
 
+// C-43: under the gp-free / gp-captable ABI, gp is bounded to the capability table and every global
+// is reached through `ldc gp[i]`; a constant POOL (double/float bit patterns, division-by-constant
+// magic numbers, large i64 immediates) is NOT a GlobalVariable, gets no cap-table slot, and no
+// capability the backend can derive reaches it, so the load faults out of bounds on silicon with NO
+// warning (QEMU cause 5 at the pool's own address -- observed via rv8_sha512, C-4).
+//
+// WHAT ACTUALLY PREVENTS THE FAULT is the set of avoidances, not this guard: useConstantPoolForLargeInts
+// returns false under the ABI (ints/floats/soft-float doubles all materialise inline), areJTsAllowed
+// refuses jump tables, and lowerCTTZNoTable avoids the cttz de Bruijn table. A SimplifyCFG
+// switch-lookup table and a `private`/anonymous constant array are GlobalVariables, so they DO get a
+// cap-table slot (isGpCaptableGlobal has no linkage filter -- verified: a `private unnamed_addr
+// addrspace(200) constant` lowers to `ldc gp[i]` with a .capstone_gp_table entry). So no producer of
+// anonymous unslotted data survives in normal codegen.
+//
+// This guard is therefore a BACKSTOP, reachable only if an avoidance is bypassed -- today that means
+// the hidden -capstone-gpfree-constant-pools knob (its sole purpose is to give this guard a positive
+// control in lit). It must gate on the SAME predicate as useConstantPoolForLargeInts
+// (capstoneGpFreeAbiActive, i.e. gp-free OR gp-captable), not on gp-captable alone, or a gp-free build
+// with pooling re-enabled would slip past it. It converts the fault into a located compile error;
+// giving pools a slot (the monitor copying the pool into dom_data) is a scope item, not a fix here.
+// See docs/ref/ISSUES.md C-43.
+bool capstoneGpFreeAbiActive();
+static void diagnoseAnonymousConstantUnderGpCaptable(SelectionDAG &DAG,
+                                                     const SDLoc &DL) {
+  if (!capstoneGpFreeAbiActive())
+    return;
+  DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
+      DAG.getMachineFunction().getFunction(),
+      "constant-pool data has no cap-table slot under the gp-free/gp-captable "
+      "ABI (C-43); this source would fault out of bounds on silicon",
+      DL.getDebugLoc()));
+  // Fall through to the normal LGA lowering so codegen does not crash on the way
+  // out; the diagnostic has already made llc exit non-zero.
+}
+
 static SDValue lowerConstant(SDValue Op, SelectionDAG &DAG,
                              const CapstoneSubtarget &Subtarget) {
   assert(Op.getValueType() == MVT::i64 && "Unexpected VT");
@@ -6899,6 +6934,7 @@ static SDValue lowerConstant(SDValue Op, SelectionDAG &DAG,
   // address that cannot be used with Capstone's ld instruction.
   // Emit LOAD:i64(LGA:i128(TargetConstantPool)) directly instead.
   SDLoc DL(Op);
+  diagnoseAnonymousConstantUnderGpCaptable(DAG, DL);
   const ConstantInt *CI = cast<ConstantSDNode>(Op)->getConstantIntValue();
   SDValue CPIdx = DAG.getTargetConstantPool(CI, MVT::i64, Align(8));
   SDValue Cap = DAG.getNode(CapstoneISD::LGA, DL, MVT::c128, CPIdx);
@@ -9618,6 +9654,11 @@ SDValue CapstoneTargetLowering::lowerBlockAddress(
 SDValue CapstoneTargetLowering::lowerConstantPool(
     SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
+  // C-43 backstop. On rv64im soft-float there is no ISD::ConstantPool producer
+  // (large ints/doubles ride lowerConstant, no vectors), so this site is
+  // unreachable even with -capstone-gpfree-constant-pools and is not covered by a
+  // test; the lit positive control fires the guard through lowerConstant instead.
+  diagnoseAnonymousConstantUnderGpCaptable(DAG, DL);
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   SDValue TargetAddr = DAG.getTargetConstantPool(N->getConstVal(), MVT::i64,
                                                  N->getAlign(), N->getOffset(), 0);

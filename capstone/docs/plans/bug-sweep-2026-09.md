@@ -328,7 +328,7 @@ The plan's verification asks for a row per inventory ID. A count against the reg
 | C-34 | ISSUES | CLOSED 2026-09-05 without a fix | none | record | — | none |
 | C-37 | ISSUES | OPEN | `llvm-readelf -r` on any Capstone object | STILL PRESENT — 23 "Unknown" relocation names on `jt.o` today (ELF.cpp has no EM_CAPSTONE case) → **FIXED 2026-09-09** (the C-37 commit: EM_CAPSTONE cases in lib/Object/ELF.cpp, ELFYAML and llvm-readobj's machine table; `obj-relocs-cap-constant.ll` / `obj-relocs-gp-table.ll` tightened to names only, red on the unfixed tools, green after) | this session's `jt.o` readelf; the two MC tests | fixed in-branch; registry entry moves to the archive (board lane) |
 | C-38 | ISSUES | OPEN (naming decision) | none | UNTESTABLE — a decision, not a defect | — | lead's call |
-| C-43 | ISSUES | OPEN, latent class | the cttz table fault (measured 2026-09-05) and areJTsAllowed under gp-captable | STILL PRESENT as a class; its two known instances are mitigated in-branch (cttz arithmetic form, jump tables refused) | `lowerCTTZNoTable`, `areJTsAllowed` | keep OPEN; class-level guard is a separate design item |
+| C-43 | ISSUES | OPEN, latent class | the cttz table fault (2026-09-05), areJTsAllowed, and the 2026-09-09 pool/private-global probes below | CLASS FULLY MITIGATED in-branch — every known producer of anonymous compiler-generated data is avoided or slotted, and a backstop guard now catches any bypass → **guard + knob landed 2026-09-09** | `useConstantPoolForLargeInts`, `areJTsAllowed`, `lowerCTTZNoTable`, `diagnoseAnonymousConstantUnderGpCaptable` | keep OPEN as a class record; slot-allocated pools stay a lead design item |
 | I-01 | ISSUES | RESOLVED 2026-09-04 | negative-tested push gate | record | — | none |
 | I-1, I-2 | ISSUES | FIXED (harness) | none this sweep | record | — | none |
 | I-02 | ISSUES | OPEN (allocation convention) | none | UNTESTABLE — process, not code; the I-1..I-5 vs I-01..I-03 collision is noted in the registry | — | lead's call on a convention |
@@ -343,3 +343,28 @@ The plan's verification asks for a row per inventory ID. A count against the reg
 | R-12 | ISSUES | OPEN, will bite at call_dom | a >1024-split counting rung | UNTESTABLE without new work; deferred (see close-out) | — | deferred, not dropped |
 | R-13 | ISSUES | OPEN | R-21's `linear-clear-audit` arm 2 (a LINEAR cincoffset source) | GONE at 5097eb166 for the cincoffset case: the source reads NOT_CAP after cincoffset (finding 27); the INIT/TIGHTEN duplication stays under R-21 | the R-21 row above | fold into R-21; registry note is the board lane's |
 | R-22 | ISSUES | OPEN, spec violation, not reported | a `stc`-clears-source arm (B3 planned it beside R-24) | NOT RUN — only `excode-base-audit` (R-24) was run | — | keep OPEN; RTL lane hand-off with R-24 |
+
+### C-43 — class fully characterised, guard + knob landed (2026-09-09)
+
+C-43 is the class "anonymous compiler-generated data has no cap-table slot under the gp-free/gp-captable ABI, so its load faults out of bounds on silicon (QEMU cause 5)." The sweep instrumented every way such data can be produced. Result: **there is no live producer left; the class is mitigated by avoidances, and a backstop guard now catches any bypass.**
+
+Producers, each checked on the current compiler (new lib, llc rebuilt 2026-09-09):
+
+- **Large i64 / FP / soft-float double constants → constant POOL.** Avoided: `useConstantPoolForLargeInts()` returns false under `capstoneGpFreeAbiActive()` (the C-4 fix). The constant is materialised inline (`lui/addi/slli` chain). Confirmed: a -3750763034362895579 literal emits `.LCPI0_0` + `.quad` + `cincoffset a0, gp, a0` in the DEFAULT ABI (the fault shape), and an inline chain with no `.LCPI` under `-capstone-gp-captable`.
+- **Jump tables → .rodata table.** Refused by `areJTsAllowed` (returns false under gp-captable; the hidden `-capstone-gp-captable-jump-tables` knob is the only bypass).
+- **cttz de Bruijn table.** Avoided by `lowerCTTZNoTable` (arithmetic `popcount(~x & (x-1))`).
+- **SimplifyCFG switch-lookup table AND private/anonymous constant arrays → private GLOBAL.** These were the "possible third instance, unverified." **Verified NOT part of the exposure:** `isGpCaptableGlobal` has no linkage filter, so a `private unnamed_addr addrspace(200) constant [4 x i32]` gets a cap-table slot exactly like a named global — it lowers to `ldc a1, 0(gp)` and emits a `.capstone_gp_table` entry `.quad .L.tab`. A switch run through `opt -O2` did not even form a `switch.table` global here. So anonymous globals are reached by `ldc gp[i]`, never by the faulting pcrel+scc-into-.rodata form.
+
+**Correction to the C-43 registry entry (for the board lane, ISSUES.md is their path):** the entry's sentence that "a float literal ... faults on silicon with no warning" is false today — floats, doubles and large ints all materialise inline under the ABI. And the private/anonymous-global residual the entry leaves open is closed: such globals get slots.
+
+**The fix landed this branch (2026-09-09):**
+- `diagnoseAnonymousConstantUnderGpCaptable` in `CapstoneISelLowering.cpp` — a `DiagnosticInfoUnsupported` backstop at both constant-pool lowering sites, gated on `capstoneGpFreeAbiActive()` (the SAME predicate as the avoidance — gp-free OR gp-captable — not gp-captable alone, so a gp-free build cannot slip past it). It converts the silent silicon fault into a located compile error.
+- A hidden `-capstone-gpfree-constant-pools` option (`CapstoneGpFreeConstantPools`, init false) in `CapstoneSubtarget.cpp`. It re-enables pooling under the ABI for ONE purpose: to drive the pooling path into the guard so the guard has a positive control in lit. It does not produce a working image; the guard refuses it. Unlike the jump-table knob there is deliberately no "measure the fault" mode (the fault is already characterised by C-4).
+
+**Tests** (`llvm/test/CodeGen/Capstone/`):
+- `c43-anon-constant-pool.ll` — three arms on one source: (b) default ABI emits `.LCPI0_0` + the gp-derived pool address (the CONTROL proving the trigger exists); (c) `-capstone-gp-captable` alone materialises inline, no `.LCPI`, no C-43 (the avoidance that ships); (a) `-capstone-gp-captable -capstone-gpfree-constant-pools` → `not llc`, the C-43 diagnostic (the guard, positive control).
+- `c43-addressable-data-ok.ll` — negative control: a named global AND a private constant array both reach via `ldc gp[i]` with a `.capstone_gp_table` entry; the guard must not fire.
+
+**Verification:** full Capstone lit green (102 tests, CodeGen + MC); the guard proven to fire (arm a, llc rc 1) and proven silent in normal codegen (arm c, knob off). Red-first is demonstrated by arm (b): the exact lowering path the guard sits behind exits 0 and emits the faulting pool in the default ABI; knob-on is that same path with the guard in front. Corpus negative control: the gp-captable silicon SQLite build predicts zero C-43 diagnostics (knob defaults off).
+
+**Observation, not a new ID:** an AS0 (no `addrspace(200)`) pointer load on this target aborts llc at `LegalizeDAG.cpp:1352` (there is nothing to legalise an AS0 load into) — it was the earlier "crash," unrelated to gp-captable and not the C-43 guard. Not chased; callers always use addrspace(200).
