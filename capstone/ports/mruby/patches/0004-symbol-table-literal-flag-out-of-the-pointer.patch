@@ -1,0 +1,155 @@
+diff --git i/src/symbol.c w/src/symbol.c
+--- i/src/symbol.c
++++ w/src/symbol.c
+@@ -58,34 +58,32 @@
+ /* Per-symbol flags (stored in mrb->sym_flags[]) */
+ #define SYM_FL_DYNAMIC  0x01  /* created at runtime (to_sym, send, etc.) */
+ #define SYM_FL_MARK     0x02  /* marked during symbol GC */
++#define SYM_FL_LITERAL  0x04  /* name is a NUL-terminated literal, not BER-prefixed */
+ 
+ #if MRB_SYMBOL_MAX > 0
+ static void mrb_symbol_gc(mrb_state *mrb);
+ #endif
+ 
+-/* LSB pointer tagging for literal flags */
+-#define SYMTBL_LITERAL_FLAG ((uintptr_t)1)
+-
+-/* Extract clean pointer for memory operations */
+-static inline const char*
+-symtbl_get_ptr(const char *tagged_ptr)
+-{
+-  return (const char*)((uintptr_t)tagged_ptr & ~SYMTBL_LITERAL_FLAG);
+-}
+-
+-/* Check if symbol is literal by testing LSB */
++/* THE LITERAL FLAG LIVES IN sym_flags[], NOT IN THE POINTER.
++ *
++ * Upstream packs it into the pointer's LSB:
++ *     (uintptr_t)ptr | 1   to set,   & ~1   to read back.
++ * On a capability target that round trip is lossy in a way it is not on a flat
++ * one: the cast to uintptr_t drops the capability, the OR produces a plain
++ * integer, and casting back yields an address with no tag. Masking the bit off
++ * again restores the address and cannot restore the tag, so the next dereference
++ * raises "requires capability". Measured: mrb_open_core dies in sym_check ->
++ * mrb_packed_int_decode reading `lb` through exactly such a word.
++ *
++ * mruby already keeps a per-symbol byte array for SYM_FL_DYNAMIC and SYM_FL_MARK
++ * and grows it alongside symtbl, so the flag has a home that costs nothing new.
++ * Same class as the packing proc.h does, which MRB_USE_METHOD_T_STRUCT already
++ * exists to avoid; the symbol table had no equivalent switch.
++ */
+ static inline mrb_bool
+-symtbl_is_literal(const char *tagged_ptr)
++sym_is_literal(mrb_state *mrb, mrb_sym i)
+ {
+-  return ((uintptr_t)tagged_ptr & SYMTBL_LITERAL_FLAG) != 0;
+-}
+-
+-/* Create tagged pointer for literal string - with alignment verification */
+-static inline const char*
+-symtbl_tag_literal(const char *ptr)
+-{
+-  mrb_assert(((uintptr_t)ptr & 1) == 0);  /* Assert alignment */
+-  return (const char*)((uintptr_t)ptr | SYMTBL_LITERAL_FLAG);
++  return (mrb->sym_flags[i] & SYM_FL_LITERAL) != 0;
+ }
+ 
+ static void
+@@ -190,12 +188,11 @@
+ static mrb_bool
+ sym_check(mrb_state *mrb, const char *name, size_t len, mrb_sym i)
+ {
+-  const char *tagged_ptr = mrb->symtbl[i];
+-  if (tagged_ptr == NULL) return FALSE;  /* tombstone (freed by symbol GC) */
+-  const char *symname = symtbl_get_ptr(tagged_ptr);  /* Untag for access */
++  const char *symname = mrb->symtbl[i];
++  if (symname == NULL) return FALSE;  /* tombstone (freed by symbol GC) */
+   size_t symlen;
+ 
+-  if (symtbl_is_literal(tagged_ptr)) {
++  if (sym_is_literal(mrb, i)) {
+     symlen = strlen(symname);
+   }
+   else {
+@@ -296,14 +293,12 @@
+ 
+   /* Rebuild hash table from existing linear data */
+   for (i = 1; i <= mrb->symidx; i++) {
+-    const char *tagged_ptr = mrb->symtbl[i];
+-    if (tagged_ptr == NULL) continue;  /* skip tombstones */
+-    const char *name = symtbl_get_ptr(tagged_ptr);
++    const char *name = mrb->symtbl[i];
++    if (name == NULL) continue;  /* skip tombstones */
+     size_t len;
+     uint8_t hash;
+ 
+-    /* Get name and length from tagged pointer */
+-    if (symtbl_is_literal(tagged_ptr)) {
++    if (sym_is_literal(mrb, i)) {
+       len = strlen(name);
+     }
+     else {
+@@ -349,13 +344,13 @@
+     mrb->symcapa = symcapa;
+   }
+ 
++  mrb_bool is_literal = FALSE;
+   lit = lit || mrb_ro_data_p(name);
+   if (lit && name[len] == 0 && strlen(name) == len) {
+-    if (((uintptr_t)name & 1) != 0) {
+-      /* Fallback: unaligned literal, allocate heap copy */
+-      goto heap_allocation;
+-    }
+-    mrb->symtbl[sym] = symtbl_tag_literal(name);
++    /* No alignment fallback is needed any more: nothing is stored in the pointer,
++       so an odd address is fine. */
++    mrb->symtbl[sym] = name;
++    is_literal = TRUE;
+   }
+   else {
+   heap_allocation:;
+@@ -377,13 +372,13 @@
+   }
+ 
+   mrb->symidx = sym;
++  /* One assignment, so the literal bit cannot be clobbered by whichever branch
++     runs second -- both used to write sym_flags[sym] outright. */
++  mrb->sym_flags[sym] = (is_literal ? SYM_FL_LITERAL : 0)
++                      | (lit ? 0 : SYM_FL_DYNAMIC);
+   if (!lit) {
+-    mrb->sym_flags[sym] = SYM_FL_DYNAMIC;
+     mrb->dynamic_sym_count++;
+   }
+-  else {
+-    mrb->sym_flags[sym] = 0;
+-  }
+   return sym;
+ }
+ 
+@@ -635,11 +630,10 @@
+     return NULL;
+   }
+ 
+-  const char *tagged_ptr = mrb->symtbl[sym];
+-  if (tagged_ptr == NULL) goto outofsym;  /* tombstone (freed by symbol GC) */
+-  const char *symname = symtbl_get_ptr(tagged_ptr);  /* Untag for access */
++  const char *symname = mrb->symtbl[sym];
++  if (symname == NULL) goto outofsym;  /* tombstone (freed by symbol GC) */
+ 
+-  if (!symtbl_is_literal(tagged_ptr)) {
++  if (!sym_is_literal(mrb, sym)) {
+     const uint8_t *p = (const uint8_t*)symname;
+     uint32_t len = mrb_packed_int_decode(p, &p);
+     symname = (const char*)p;
+@@ -938,9 +932,9 @@
+     memset(ht->symlink, 0, mrb->symcapa);
+     for (i = 1; i <= mrb->symidx; i++) {
+       if (mrb->symtbl[i] == NULL) continue;  /* skip tombstones */
+-      const char *name = symtbl_get_ptr(mrb->symtbl[i]);
++      const char *name = mrb->symtbl[i];
+       size_t len;
+-      if (symtbl_is_literal(mrb->symtbl[i])) {
++      if (sym_is_literal(mrb, i)) {
+         len = strlen(name);
+       }
+       else {

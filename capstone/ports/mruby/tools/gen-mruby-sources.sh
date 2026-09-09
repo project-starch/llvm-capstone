@@ -49,7 +49,13 @@ hdr = (d / "mruby.h").read_text(encoding="utf8", errors="replace")
 checks = [
     ("0001 embedded-string width", hdr.count("#define MRB_STR_EMBED_LEN_BITS 6"), 1),
     ("0001 capability alignment",  src.count("mrb_alignas(sizeof(void*))"),        4),
-    ("0003 stack-bounds probe",    src.count("md_probe_stack"),                    3)  # one extern, two call sites,
+    ("0003 stack-bounds probe",    src.count("md_probe_stack"),                    3),  # one extern, two call sites,
+    # 0004 must be checked by ABSENCE as well as presence: the whole point is that
+    # the literal flag is no longer packed into the pointer, and a half-applied patch
+    # that leaves one masking site behind would still compile and still fault.
+    ("0004 literal flag out of the pointer", src.count("sym_is_literal"),           5),
+    ("0004 no pointer packing left",         src.count("SYMTBL_LITERAL_FLAG"),      0),
+    ("0005 region aligned by delta",         src.count("size_t misalign = (size_t)"), 1),
 ]
 bad = []
 for name, got, want in checks:

@@ -1,0 +1,30 @@
+diff --git i/src/gc.c w/src/gc.c
+--- i/src/gc.c
++++ w/src/gc.c
+@@ -501,11 +501,21 @@
+   uint16_t page_count;
+   uint16_t i;
+ 
+-  /* align base to pointer size */
+-  uintptr_t align = sizeof(void*);
+-  uintptr_t offset = ((uintptr_t)base + align - 1) & ~(align - 1);
+-  size -= (size_t)(offset - (uintptr_t)base);
+-  base = (uint8_t*)offset;
++  /* Align base to pointer size WITHOUT a pointer-integer round trip.
++     The obvious form,
++         uintptr_t offset = ((uintptr_t)base + align - 1) & ~(align - 1);
++         base = (uint8_t*)offset;
++     is lossy on a capability target: the cast to uintptr_t drops the capability
++     and the cast back produces an address with no tag, so the very next
++     `base + i * sizeof(page)` is a cincoffset on a non-capability and traps with
++     "unexpected operand type". Computing the DELTA and adding it to the pointer
++     keeps the provenance, and is identical arithmetic everywhere else. */
++  size_t align = sizeof(void*);
++  size_t misalign = (size_t)((uintptr_t)base & (uintptr_t)(align - 1));
++  size_t adjust = misalign ? (align - misalign) : 0;
++  if (size <= adjust) return 0;
++  base += adjust;
++  size -= adjust;
+ 
+   page_count = (uint16_t)(size / sizeof(mrb_heap_page));
+   if (page_count == 0) return 0;
