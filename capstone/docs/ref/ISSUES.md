@@ -1488,6 +1488,10 @@ The sweep was positive-controlled against its own blind spot: `CAP_TYPE_UNINIT` 
 (`ariane_pkg.sv:655`), so a raw bit-slice test would be invisible to a name grep. Searching
 `[30:28]` and `3'b100` finds the known sim-only assert and nothing else.
 
+**Three of the sweep's citations were re-read at `66c4e7517` in this session rather than taken on the
+subagent's word** — the CPMP block and its `cpmp_allow` term at `pmp_data_if.sv:286-294` and
+`:124-134` (the novel claim), and the LDC gate at `load_unit.sv:231`. All three match verbatim.
+
 **THE PRIVILEGE RESIDUAL IS CLOSED BY MEASUREMENT, NOT BY DERIVATION.** The source argument reduces
 to "the M-gated block cannot fire in a domain", which needs the domain to run at `priv_lvl != M`;
 the RTL alone does not settle that, because `priv_lvl_q` moves only on trap entry or `xRET`
@@ -1497,6 +1501,14 @@ touching it (`capstone_dom_switcher.anvil` has no `priv_lvl`/`mpp` occurrence at
 carrying no capability metadata trips that same block's FIRST clause (`:972`, cause 24) and **did not
 trap in a domain**. The UNINIT clause is in the same block under the same gate, so it does not fire
 either. That is a measurement of the block in question rather than an inference about privilege.
+
+**That argument has one premise, and it was checked rather than assumed.** It holds only if the
+M-gate existed on the RTL that measurement ran against — otherwise the block was inert for some other
+reason that need not carry forward. `caplifive_fixed_forward.bit` was built from `capstone-ariane
+7aac52f93` (ISSUES-ARCHIVE.md:708), and at that revision the gate is present at
+`load_store_unit.sv:934` with the NOT_CAP clause at `:958` and the UNINIT clause at `:961` — the same
+block, the same gate, the same structure as at `66c4e7517`. The premise holds and the residual is
+closed outright rather than conditionally.
 
 **A LIVE, NON-M-GATED capability check on every domain load and store DOES exist, and it is not this
 one.** CPMP, `pmp/src/pmp_data_if.sv:286-294`, fires exactly when `ld_st_priv_lvl_i != PRIV_LVL_M`
