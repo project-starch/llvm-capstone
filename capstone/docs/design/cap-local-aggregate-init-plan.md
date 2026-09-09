@@ -62,7 +62,7 @@ the implementation should ensure cap-containing constants never reach the memcpy
   stores, not a `memcpy` from a private global.
 - **Reproducer:** a domain that does the local-aggregate-copy shape (extend the
   `nested-cap-global` family with a *local* copy) → runs without fault in QEMU.
-- **SQLite:** `capstone/benchmarks/sqlite/run-sqlite-memory.sh` should advance past
+- **SQLite:** `capstone/ports/sqlite/run-sqlite-memory.sh` should advance past
   `sqlite3RegisterBuiltinFunctions()` (and, ideally, print the three rows +
   `__CAPSTONE_SQLITE_MEMORY_PASSED__`). Some of the agent's source-level
   adaptations (e.g. "initialize memsys5's methods table at runtime", "move

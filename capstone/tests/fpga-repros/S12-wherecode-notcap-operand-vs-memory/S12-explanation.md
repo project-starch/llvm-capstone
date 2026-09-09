@@ -605,7 +605,7 @@ right and the scoped extractor wrong. The opposite is true: the scoped capture w
 that survives is the ordinary one, stated correctly: **scope every read to the region after
 `POST images/upload`, and treat an absent marker as an ERROR, never as a fallback to `tail -1`.**
 
-`0x5117600D` is **`SQLITE_HC_SLT_RAN`** (`capstone/benchmarks/sqlite/sqlite_hostcall.h:67`) — a
+`0x5117600D` is **`SQLITE_HC_SLT_RAN`** (`capstone/ports/sqlite/sqlite_hostcall.h:67`) — a
 FIXED CONSTANT meaning "the runner reached its normal exit", not a computed result. That is the
 right reason to trust it, and it explains what would otherwise look suspicious: the same word
 appears for the control, for the arm, and for the old bitstream's one passing draw. Calling it an

@@ -12,7 +12,7 @@ set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
-REPROS="$REPO_ROOT/capstone/benchmarks/sqlite/cve-repros"
+REPROS="$REPO_ROOT/capstone/bug-corpora/sqlite/cve-repros"
 source "$REPO_ROOT/capstone/tests/capstone-test-env.sh" 2>/dev/null || true
 
 CHERI_SDK=${CHERI_SDK:-$HOME/cheri/output/sdk}
@@ -25,7 +25,7 @@ OUT=${OUT:-$HOME/cheri-ws/rootfs-overlay/root/cheri-baseline}
 # the injected defect. Default to the patched source; keep the vanilla one only
 # to demonstrate that contrast (sanity_vanilla).
 SQLITE_SRC=${SQLITE_SRC_DIR:-$HOME/cheri/cheribsd/contrib/sqlite3}
-SQLITE_VANILLA=${SQLITE_VANILLA:-$(bash "$REPO_ROOT/capstone/benchmarks/sqlite/fetch-sqlite.sh" 2>/dev/null | tail -1)}
+SQLITE_VANILLA=${SQLITE_VANILLA:-$(bash "$REPO_ROOT/capstone/ports/sqlite/fetch-sqlite.sh" 2>/dev/null | tail -1)}
 
 for p in "$CC" "$SYSROOT" "$SQLITE_SRC/sqlite3.c"; do
   [ -e "$p" ] || { echo "MISSING: $p" >&2; exit 2; }

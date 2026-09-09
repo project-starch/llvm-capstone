@@ -6044,7 +6044,7 @@ It was found to be `None` (stock OpenPiton+Ariane) at the start of a session.
 
 ### R1 — THE BLOCKER: stage 10 wedges (3/3 separate boots)
 
-    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 10
+    PROBE_DEST=/tmp/capstone/repro bash capstone/ports/sqlite/build-stage-probes.sh 10
     # stage into the initramfs, rebuild firmware, then:
     export SQLITE_STAGE_DOMS="/test-domains/wd71.dom,/test-domains/wd10.dom"
     export SQLITE_STAGE_TIMEOUT=180 PROBE_SCOPED_OUT=/tmp/capstone/r1.txt
@@ -6056,7 +6056,7 @@ domain). Source: `sqlite_capstone_domain.c`, stage 10 = `sqlite3MallocInit()` +
 
 ### R2 — the deterministic wrong-answer reproducer (7 samples, all `rc=2`)
 
-    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 66
+    PROBE_DEST=/tmp/capstone/repro bash capstone/ports/sqlite/build-stage-probes.sh 66
     export SQLITE_STAGE_DOMS="/test-domains/wd71.dom,/test-domains/wd66.dom,/test-domains/wd66.dom"
 
 Stage 66 walks `capstone_probe_lit[1]` ("rtrim") TWICE through the same pointer and returns a
@@ -6067,7 +6067,7 @@ two loops were verified byte-identical (23 instructions each, `0x36994` / `0x36a
 
 ### R3 — the health control (6+ samples, all `rc=0x45`)
 
-    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 71
+    PROBE_DEST=/tmp/capstone/repro bash capstone/ports/sqlite/build-stage-probes.sh 71
 
 Stage 71 walks the same element ONCE and returns `0x40 | index-of-NUL` = `0x45`. Put it FIRST in
 every batch; a value other than `0x45` means the session is bad, not the experiment.

@@ -19,7 +19,7 @@
 set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
-FIX="$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite/slt/negative-control.test"
+FIX="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite/slt/negative-control.test"
 [[ -f "$FIX" ]] || { echo "ERROR: $FIX missing" >&2; exit 2; }
 
 WORK=$(mktemp -d "${CAPSTONE_TMP_ROOT:-/tmp}/slt-harness-check.XXXXXX")

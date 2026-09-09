@@ -4,13 +4,13 @@
 #   build-slt-native-cap.sh <cap> <output-binary>
 #
 # Same sources, same semantic defines and the same one-line sqlite3AtoF patch as
-# benchmarks/sqlite/build-slt-native.sh (which it runs first, so the patched
+# ports/sqlite/build-slt-native.sh (which it runs first, so the patched
 # amalgamation exists); the only difference is the cap, which that script cannot take.
 # Rebuilds only when the output is older than its inputs.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
-SQL="$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite"
+SQL="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 
 CAP=${1:?usage: build-slt-native-cap.sh <cap> <output>}
 OUT=${2:?usage: build-slt-native-cap.sh <cap> <output>}

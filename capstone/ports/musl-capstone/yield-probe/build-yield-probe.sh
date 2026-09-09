@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh"
 
 REPO_ROOT=$CAPSTONE_REPO_ROOT
 CLANG=${CAPSTONE_CLANG:?}

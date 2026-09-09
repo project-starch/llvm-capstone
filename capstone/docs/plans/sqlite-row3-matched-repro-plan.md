@@ -25,7 +25,7 @@ the validated probe's revoke from `sqlite3_step` to statement finalization."*
 
 ## What already exists (verified 2026-07-09 — do NOT rebuild from scratch)
 
-- **Real SQLite compiles under Capstone.** `benchmarks/sqlite/build-sqlite-capstone.sh`
+- **Real SQLite compiles under Capstone.** `ports/sqlite/build-sqlite-capstone.sh`
   fetches the official amalgamation (SQLite **3.53.3**, SHA3-verified via
   `fetch-sqlite.sh`), patches only the `SQLITE_TRANSIENT` function-pointer sentinel
   (the 128-bit-cap constant evaluator asserts on `(destructor_type)-1`), and links
@@ -179,7 +179,7 @@ whether B2 is required for the headline.
 
 ### B1 built + validated (2026-07-09, A)
 
-Landed: `benchmarks/sqlite/sqlite_row3_domain.c` (real-SQLite domain, one address
+Landed: `ports/sqlite/sqlite_row3_domain.c` (real-SQLite domain, one address
 space), `sqlite_host_row3.c` (shares the arena as region #2, REV_TRANSFERRED),
 `run-sqlite-row3.sh`; `build-sqlite-{capstone,host}.sh` parameterised
 (`DOMAIN_SRC`/`HOST_SRC`). **GREEN at `-O0`** (QEMU): fault cause 24 + no-revoke

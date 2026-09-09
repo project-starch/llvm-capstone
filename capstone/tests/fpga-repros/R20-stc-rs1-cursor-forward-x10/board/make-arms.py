@@ -9,7 +9,7 @@ them would be 9 MB of near-identical binaries. They are regenerated here and che
 
 The base image is the "ar2" SQLite silicon build: sqlite3RegisterBuiltinFunctions clamped so that
 only sqlite3AlterFunctions runs, with nDef = 1. Produce it with
-capstone/benchmarks/sqlite/build-sqlite-silicon.sh; its sha256 is in ../SHA256SUMS.
+capstone/ports/sqlite/build-sqlite-silicon.sh; its sha256 is in ../SHA256SUMS.
 
 Address arithmetic: the domain has a single PT_LOAD with .text at vaddr 0x10000 and file offset
 0x1000, so file_offset = vaddr - 0xF000. Baking an arm is `cp -f` -- there is no checksum or

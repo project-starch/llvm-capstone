@@ -503,7 +503,7 @@ SQLite 3.53.3 compiles, links, **and runs end to end** as a
 arena and the runtime-initialized SQLite VFS skeleton. `run-sqlite-memory.sh`
 executes `CREATE TABLE` / `INSERT` / `SELECT` and the domain returns correct rows
 (`row name=alpha value=11 / beta=22 / gamma=33`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`).
-The pinned fetch/build/run workflow is in `capstone/benchmarks/sqlite/README.md`.
+The pinned fetch/build/run workflow is in `capstone/ports/sqlite/README.md`.
 
 **Bring-up is complete — all 8 gaps resolved:**
 - Gaps 1–2 (compiler): `CapstoneCapGlobalInit` recurses nested global aggregates

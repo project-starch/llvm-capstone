@@ -23,14 +23,14 @@ say(){ echo "$(date '+%F %T') $*" | tee -a "$LOG"; }
 ARTIFACTS="sqslt1m.dom sqslt3.dom sqslt4.dom sqslt5.dom sqlite_host_1m.user sqlite_host_2m.user sqlite_host_4m.user sqlite_host_2m5.user sqm0o1.dom sqlite_host.user q_two.test negctl.test aggfunc.test select1.test select2.test select3.test select4.test select5.test"
 DEFAULT_BOOTS="negctl:sqlite_host_1m.user:sqslt1m.dom:negctl.test:900 aggfunc:sqlite_host_1m.user:sqslt1m.dom:aggfunc.test:900 select2:sqlite_host_1m.user:sqslt1m.dom:select2.test:2400 select5:sqlite_host_2m5.user:sqslt5.dom:select5.test:3000 select3:sqlite_host_2m.user:sqslt3.dom:select3.test:4800 select4:sqlite_host_4m.user:sqslt4.dom:select4.test:5400"
 BOOTS=${*:-$DEFAULT_BOOTS}
-CORPUS=$(bash "$ROOT/capstone/benchmarks/sqlite/fetch-sqllogictest.sh" 2>/dev/null | tail -1)
+CORPUS=$(bash "$ROOT/capstone/ports/sqlite/fetch-sqllogictest.sh" 2>/dev/null | tail -1)
 export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"; export FPGA_FW=$FW
 export FPGA_BITSTREAM=${FPGA_BITSTREAM:-caplifive_s12fix_5097eb166.bit} FPGA_BITSTREAM_UNVERIFIED=1 PREFLIGHT_ALLOW_SHORT=1
 export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
 TOOL="CodeGen.so $(sha256sum "$ROOT/llvm/cmake-build-debug/lib/libLLVMCapstoneCodeGen.so" | cut -c1-16) $(stat -c %y "$ROOT/llvm/cmake-build-debug/lib/libLLVMCapstoneCodeGen.so" | cut -c1-16)"
 say "CAMPAIGN START; images $IMG; toolchain $TOOL; boots: $BOOTS"
 probe(){ curl -sS -m 10 -o /dev/null -w '%{http_code}' "$FPGA_URL" 2>/dev/null; }
-testfile(){ [ -f "$IMG/../$1" ] && { echo "$IMG/../$1"; return; }; case "$1" in negctl.test) echo "$ROOT/capstone/benchmarks/sqlite/slt/negative-control.test";; aggfunc.test) echo "$CORPUS/evidence/slt_lang_aggfunc.test";; q_two.test) echo "$ROOT/capstone/benchmarks/sqlite/slt/q_two.test";; *) echo "$CORPUS/$1";; esac; }
+testfile(){ [ -f "$IMG/../$1" ] && { echo "$IMG/../$1"; return; }; case "$1" in negctl.test) echo "$ROOT/capstone/ports/sqlite/slt/negative-control.test";; aggfunc.test) echo "$CORPUS/evidence/slt_lang_aggfunc.test";; q_two.test) echo "$ROOT/capstone/ports/sqlite/slt/q_two.test";; *) echo "$CORPUS/$1";; esac; }
 for b in $BOOTS; do
   IFS=: read -r name host dom tf budget <<< "$b"
   [ -f "$IMG/$dom" ] && [ -f "$IMG/$host" ] || { say "SKIP $name: $dom / $host not in $IMG"; continue; }

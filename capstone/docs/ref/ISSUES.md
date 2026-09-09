@@ -4200,7 +4200,7 @@ deliberately, with a re-baseline, not as a side effect of a QEMU repair.
 ### Superseded record (2026-08-14, pre-root-cause)
 
 **Not caused by the S-06 granule guard.** That flag is `cl::init(false)` and is referenced by
-exactly one build script (`benchmarks/sqlite/build-sqlite-silicon.sh`); no suite below passes it,
+exactly one build script (`ports/sqlite/build-sqlite-silicon.sh`); no suite below passes it,
 and `grep -rl guard-cap-granule` over the suite scripts returns nothing. The SQLite silicon domain
 passes under QEMU with the guard both ON and OFF (hashes `c08aeaa614ac61e4` vs `f1214600d0dac351`,
 `.text` differing by ~34 KB, both reaching `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and

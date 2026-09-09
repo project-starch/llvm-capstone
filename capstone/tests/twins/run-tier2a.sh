@@ -11,7 +11,7 @@
 set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
-SQL="$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite"
+SQL="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 TSV=${TWINS_RESULTS:-$SCRIPT_DIR/results/$(date +%Y-%m-%d).tsv}
 export SLT_TWIN_RESULTS="$TSV"
 QID="qemu=$(sha256sum "$CAPSTONE_QEMU_BINARY" | cut -c1-12)@$(date -r "$CAPSTONE_QEMU_BINARY" +%Y-%m-%dT%H:%M)"

@@ -91,9 +91,9 @@ header and the controller.
 ```bash
 source capstone/tests/capstone-test-env.sh
 SQLITE_STATIC_BUILTINS=1 OUT_DIR=/tmp/capstone/sb1 \
-  bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh     # the reproducer
+  bash capstone/ports/sqlite/build-sqlite-silicon.sh     # the reproducer
 SQLITE_STATIC_BUILTINS=0 OUT_DIR=/tmp/capstone/sb0 \
-  bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh     # the control
+  bash capstone/ports/sqlite/build-sqlite-silicon.sh     # the control
 ```
 
 `IMAGE-HASHES.txt` pins the exact binaries that produced the 2026-08-04 verdicts. A rebuild may
