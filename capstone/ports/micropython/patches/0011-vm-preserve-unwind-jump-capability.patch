@@ -1,0 +1,26 @@
+Preserve the bytecode pointer while an unwind-jump destination is on the object stack.
+
+MP_BC_UNWIND_JUMP temporarily stores its destination ip as an mp_obj_t. The original
+conversion routes the pointer through uintptr_t, which retains the numeric address but drops
+out-of-band capability metadata. When unwind_jump later pops that value through MP_OBJ_TO_PTR,
+the interpreter installs an untagged ip and faults on the next bytecode fetch.
+
+The port uses object representation A, where mp_obj_t is a pointer, and the matching pop
+already uses MP_OBJ_TO_PTR. Use MP_OBJ_FROM_PTR for the push so the capability remains intact.
+This is the control-flow path exercised by break/continue through with/finally blocks.
+
+diff --git a/py/vm.c b/py/vm.c
+--- a/py/vm.c
++++ b/py/vm.c
+@@ -685,7 +685,10 @@ unwind_jump:;
+                 ENTRY(MP_BC_UNWIND_JUMP): {
+                     MARK_EXC_IP_SELECTIVE();
+                     DECODE_SLABEL;
+-                    PUSH((mp_obj_t)(mp_uint_t)(uintptr_t)(ip + slab)); // push destination ip for jump
++                    /* The destination is still a pointer. Routing it through uintptr_t keeps
++                       only its address on capability targets, so the later MP_OBJ_TO_PTR(POP())
++                       reconstructs an untagged ip and faults at the next dispatch. */
++                    PUSH(MP_OBJ_FROM_PTR(ip + slab)); // push destination ip for jump
+                     PUSH((mp_obj_t)(mp_uint_t)(*ip)); // push number of exception handlers to unwind (0x80 bit set if we also need to pop stack)
+ unwind_jump:;
+                     mp_uint_t unum = (mp_uint_t)POP(); // get number of exception handlers to unwind

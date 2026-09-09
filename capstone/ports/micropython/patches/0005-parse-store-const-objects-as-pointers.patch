@@ -1,0 +1,27 @@
+Store a const object in a parse node as a pointer, not through uintptr_t.
+
+make_node_const_object writes an mp_obj_t into a node slot as `(uintptr_t)obj`, while
+mp_parse_node_extract_const_object reads that same slot straight back as an mp_obj_t. The trip
+through an integer was never needed, and on a target whose pointers are wider than uintptr_t it
+truncates the object and drops its tag, so the first use of the recovered object faults.
+
+Depends on 0004, which makes mp_parse_node_t a pointer type; before that patch this assignment
+is the one place the compiler flags.
+diff --git a/py/parse.c b/py/parse.c
+index 5937427f1..dc3bd49f7 100644
+--- a/py/parse.c
++++ b/py/parse.c
+@@ -566,7 +566,12 @@ static mp_parse_node_t make_node_const_object(parser_t *parser, size_t src_line,
+     pn->nodes[1] = (uint64_t)obj >> 32;
+     #else
+     pn->kind_num_nodes = RULE_const_object | (1 << 8);
+-    pn->nodes[0] = (uintptr_t)obj;
++    /* Store the object as a POINTER, not through uintptr_t. The reader,
++       mp_parse_node_extract_const_object, already casts the slot straight back to mp_obj_t,
++       so the round trip through an integer was never needed -- and on a target whose pointers
++       are wider than uintptr_t it truncates the object and drops its tag, so the first use of
++       the recovered object faults. */
++    pn->nodes[0] = (mp_parse_node_t)obj;
+     #endif
+     return (mp_parse_node_t)pn;
+ }

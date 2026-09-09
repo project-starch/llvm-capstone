@@ -1,0 +1,34 @@
+Give empty arrays a real backing pointer.
+
+array_new passed a zero byte request to m_malloc for an empty bytearray or array.array, producing
+items=NULL. Generic array, buffer, string-printing and Unicode paths nevertheless form items + 0.
+That is undefined pointer arithmetic in C, and on Capstone it lowers to cincoffset with a
+non-capability NULL base.
+
+Allocate one spare element for an empty array and record it in the existing free count. This keeps
+the allocation metadata truthful, preserves observable length and contents, and lets later append
+or extension paths reuse the reserve normally.
+
+A focused EXTRA+MPZ run changes bytearray_add.py, bytearray_byte_operations.py,
+bytearray_decode.py and bytearray_slice_assign.py from capability faults to PASS; all nine direct
+tests between them retain their PASS status and result words.
+
+diff --git i/py/objarray.c w/py/objarray.c
+index 75bc671c1..02314d9e3 100644
+--- i/py/objarray.c
++++ w/py/objarray.c
+@@ -105,9 +105,12 @@ static mp_obj_array_t *array_new(char typecode, size_t n) {
+     o->base.type = &mp_type_array;
+     #endif
+     o->typecode = typecode;
+-    o->free = 0;
++    // Keep a real pointer even for an empty array. Generic array and buffer
++    // operations may form items + 0, which is undefined when items is NULL
++    // and cannot be represented as a capability-derived pointer.
++    o->free = n == 0;
+     o->len = n;
+-    o->items = m_new(byte, typecode_size * o->len);
++    o->items = m_new(byte, typecode_size * (o->len + o->free));
+     return o;
+ }
+ #endif
