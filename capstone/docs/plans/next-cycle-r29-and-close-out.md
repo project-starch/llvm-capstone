@@ -205,16 +205,23 @@ compiler lane holds C-43 (land `5d2932a9`), C-14, C-4 (no status token — needs
 |---|---|
 | R-4: close or keep open? | **RECORD ONLY.** Closure as "not reproducible" is rejected as overstating the record — nobody ever attempted reproduction, and the sweep marked it UNTESTABLE because there was nothing to run. Its symptom class is now owned by R-19, R-10-secondary and R-29, so a new sighting goes to whichever it matches. No attribution is made: R-4 has no artefact and a fit is not a mechanism. |
 | C-4 disposition | **FIXED, both halves re-verified.** Verified against the sub-entries: the "remaining domain-creation bug" the heading promised does not exist. The proposer's caveat (recorded evidence, rungs not re-run) is kept. Could not be moved to the archive — see the scan note. |
-| C-14 disposition | **Symptom and attribution separated, then the attribution SETTLED** — see Q-04 below. It is a compiler fix: `movc` as a scalar register copy destroys its source on conformant hardware. |
+| C-14 disposition | **RETRACTED AND REDONE.** First answer said "attribution pending Q-04"; an audit showed the dependency was manufactured (the entry's own v3 box says the compiler attribution was never in doubt) and the defect is already FIXED — `copyPhysReg` branches on register class, so scalar copies are an ALU move. Two residuals rehomed: the untagged-in-GPCR live copy to **C-32**, the MOVC modelling defect to new **C-46**. |
 | C-45: land this cycle? | **Yes**, as its own commit on top of C-38's and never squashed with it. The code and its test are open now; the cost of leaving it is a declared instruction form the assembler silently refuses; the risk is bounded by the same file, same test, 102/102 suite. |
 | Scan: stop reading removed lines? | **Yes, and context lines too — WARN, not BLOCK.** Full reasoning, patch and six required controls in `precommit-scan-removed-lines-proposal.md`. NOT applied: it is a release gate and therefore the lead's. Hit three times in one session; it is currently preventing C-4 from being archived. |
 
-**Q-04 was ruled rather than deferred**, because reading the spec settled it: the MOVC definition
-writes `cnull` to the source whenever `type != 1`, `NOT_CAP` is type 0, and there is no scalar
-carve-out. So QEMU is the outlier and Q-04 is a QEMU fix, not a spec question. The counter-argument —
-that nulling a scalar serves no security purpose and the rule could be narrowed — is recorded as a
-spec-amendment proposal for the spec's owners, explicitly not adopted by a lane and not settled by
-leaving QEMU divergent.
+**⚠ Q-04 was ruled and the ruling is RETRACTED the same day.** It argued the spec was explicit because
+*"`NOT_CAP` is type 0, and `0 != 1`"*. **The spec has no `NOT_CAP` type** — its table is Linear 0,
+Non-linear 1, Revocation 2, Uninitialised 3, Sealed 4, Sealed-return 5, and `NOT_CAP = 0` is the RTL's
+enum, which inserts it at zero and shifts everything up. The RTL's own comment says so. The syllogism
+evaluated a spec sentence with RTL constants, which is the mistake that cost boot sw39 and that a
+memory note exists to prevent.
+
+The ambiguity the ruling denied is real: MOVC's operands are annotated as capabilities, and the spec
+commit that removed its *"is not a capability"* exception left the consumption clause untouched — so
+scalar-exemption is a RESTORATION of that clause's original precondition rather than an amendment,
+which is the opposite of what the ruling claimed and makes it the CHEAPER option. **Q-04 is a spec
+question and remains the lead's.** What survives is only that the RTL does null a NOT_CAP source, which
+is board-confirmed.
 
 **2026-09-10, later: answering M-5 uncovered two larger defects, and the bitstream plan changed.**
 
