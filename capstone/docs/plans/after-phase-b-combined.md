@@ -21,6 +21,22 @@ file.** That replaces section D.2 of the plan below.)*
 
 ## 2. The R-25/26/27 board track (this lane executes; two decisions are the lead's)
 
+> **Status 2026-09-09 15:40.** Pre-flash boot **sw39** ran on the Q-06 firmware (fw_payload aa471de2e4e8):
+> k800 + six BEEBS rungs 7/7 at the oracles — the Q-06 control boot is done, zero fault tags. The two R-25
+> domains (r25same control, r25dup probe; sources in `tests/runtime-qemu/silicon-ladder/`) were built from the
+> RTL lane's test construction (LIN region, cursor past end, in-place CAPTYPE to UNINIT, then INIT), because
+> the spec and the RTL accept INIT only for cursor > end, which no store sequence and no revoke produces. On
+> silicon the control wedged at its INIT with mcause 27 (UNEXPECTED_CAP_TYPE). Cause, from the RTL lane: the
+> RTL's type numbering is not the spec's (asm_insn.h: NOT_CAP 0, LIN 1, NONLIN 2, REV 3, UNINIT 4 …); the
+> domain wrote 3 = REVOKE, and INIT rejected it as it must. CAPTYPE itself works in a domain (no mode check;
+> in place on rd; rs1's low three bits are the type). A domain fault is not delivered to the monitor on this
+> RTL (M-1's open half), so the core wedged and the probe never ran: both R-25 arms VOID for sw39. Rebuilt
+> with UNINIT = 4; rerun as boot sw41 (k800, r25same, r25dup last) after variant D (sw40). The QEMU side
+> cannot stand in: QEMU does not decode CAPTYPE and its INIT accepts exactly the operand the RTL rejects
+> (Q-07). Two registry entries filed from this work: Q-07 and M-5; one line for the R-25 folder later: the
+> RTL does not implement the spec's cincoffset-past-end rule (cap-man-insn.adoc:262), which is what makes
+> the construction possible.
+
 1. **Now, off-board (this lane):** build the pre-flash batch — the R-25 domain probe (INIT `rs1≠rd`, probe
    `rs1`, marker 1 = duplicate present / 0 = NOT_CAP; the RTL lane owes the `.S`/image or its spec, else I write
    it from the registry's R-25 entry), firmware variant **D** (drop the three CCSRRW-adjacent `fence.i` in
