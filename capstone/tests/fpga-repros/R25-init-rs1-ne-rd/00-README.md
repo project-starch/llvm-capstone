@@ -75,16 +75,28 @@ constant must be the RTL's 4, and the UNINIT operand's cursor must be moved past
 enforce the spec's bound there) — the two divergences named in the first paragraph.
 
 **Post-flash (bitstream from `66c4e7517`): not yet booted; boot sw45.** Prediction on file, written before it:
-`r25same` unchanged at `0x25000001`, and `r25dup` traps 25 at the store through the consumed source. A capability
+`r25same` unchanged at `0x25000001`, and `r25dup` traps at the store through the consumed source — the same
+store, at offset `0x490`, that returned `0x25000001` on the current silicon in sw41. A capability
 trap is a WEDGE on this RTL, so that reads as **wedged after `ENT1` with cause 25 latched by the tracer**, not as
 a returned value — which is why the probe runs LAST in its boot. A returned `0x25000001` would mean the duplicate
 survived the fix.
 
 **Acceptance criterion, agreed with the board lane BEFORE the boot, because a wedge is easy to over-read.**
-The reading counts as "R-25 fixed on silicon" only if the tracer latches **cause 25** AND `mepc` is at the
-store instruction under test (image VA offset `0x47c` in `r25dup`'s `domain_main`). A wedge with no cause 25
-latched, or with `mepc` away from that store, is recorded as **"wedged, cause unattributed"** — not as a
-confirmation. The evidence sent for this arm is the driver's tracer block (latched `mcause`/`mepc`, the `ENT1`
+Read off `r25dup`'s disassembly, which corrects an earlier version of this paragraph that named the wrong
+instruction (`0x47c` is the `delin`, not the store):
+
+| image VA | offset from `0xc0000` | instruction | what it does on the FIXED RTL |
+|---|---|---|---|
+| `0xc0468` | `0x468` | `init a3, a1, a0` | consumes the source; `a1` becomes NOT_CAP |
+| `0xc0474` | `0x474` | `stc a1, 0x0(a2)` | the `-O0` spill of the post-`INIT` `a1`. Stores a NOT_CAP **value** through a valid stack capability, which the spec permits — `mem-access-insn.adoc`, the cnull rewrite applies only when `x[rs2]` holds a capability, a scalar is stored as data. **This must NOT trap.** If it does, that is a separate finding and not the R-25 reading |
+| `0xc047c` | `0x47c` | `delin` | — |
+| `0xc0490` | `0x490` | `stc a1, 0x0(a2)`, after `ldc a2, 0x0(a2)` reloads U from its stack slot | **the store under test** |
+
+The reading counts as "R-25 fixed on silicon" only if the core wedges with `mepc` at **offset `0x490`** and the
+tracer latches **`UNEXPECTED_OPERAND`**. The raw cause number is recorded as sent, not normalised: it may read
+**24 or 25** depending on which side of R-24's off-by-one the tracer reports, and pinning it to one value in
+advance would make a correct reading look wrong. A wedge with `mepc` away from `0x490`, or with no
+`UNEXPECTED_OPERAND` latched, is recorded as **"wedged, cause unattributed"** — not as a confirmation. The evidence sent for this arm is the driver's tracer block (latched `mcause`/`mepc`, the `ENT1`
 marker, the last UART bytes) plus the run-scoped transcript segment, never a summary.
 
 **And if it RETURNS instead of wedging**, the fix did not take on silicon although it passes in simulation.
