@@ -225,8 +225,8 @@ is board-confirmed.
 
 ## THE LESSON OF 2026-09-10, and it is worth more than any finding in this plan
 
-**Five arms across two lanes produced readings without ever creating the condition they were built to
-test.** In one night, on one investigation:
+**Six instruments across two lanes produced readings without ever creating the condition they were built
+to test.** In one night, on one investigation:
 
 1. **The board driver's classifier** keyed on the SQLite host's markers, so an `rtpc` stage could only
    ever read "domain never created" — it had been misreporting every probe of that shape.
@@ -240,8 +240,16 @@ test.** In one night, on one investigation:
    arrived and the domain never ran. **The driver printed `ran=0` and the parser read the retval
    anyway.**
 
-Four of the five had no warning to discard. The fifth did, which makes it the most useful of them:
-**the check existed and was simply not wired to the verdict.**
+6. **`host-sweep.sh` itself.** It reuses compiled ELFs from a reference worktree `wt-ref` when the
+   `.S` is unchanged — and **`~/dev/llvm-capstone-rebuild/wt-ref` does not exist** (verified; its
+   siblings do). With no reference tree every simulation runs to the timeout, so the script emits a
+   full set of plausible `TIMEOUT 400013` rows rather than erroring. Nine tests were read that way,
+   including one that passes in the container path in seconds on the same model. **A missing
+   dependency presenting as uniform results.**
+
+Five of the six had no warning to discard. The one that did is the most useful of them: **the check
+existed and was simply not wired to the verdict.** And the sixth is the worst class of all — the
+instrument was not merely unguarded, it was *not connected to anything* and still produced a full table.
 
 **The one arm that actually refuted something** — `r29-sep-userzero-miss` — is the one whose reading
 contains its own positive control: a correct LOW word at the failing cycle, which only the write buffer
@@ -259,6 +267,7 @@ Applied concretely, and each of these is now in the corresponding instrument:
 * `r30-fill-init` — refuse unless `LCC` shows the cursor actually reached `end` (bounds can widen on a
   register writeback, so "four stores into a 64-byte region" does not imply it).
 * the R-29 arms — refuse without `wr_cl_vld`, which is what says the load actually missed.
+* `host-sweep.sh` — exit non-zero when `REFWT` is absent, instead of sweeping against nothing.
 
 This is a **sharpening of** the existing rule that a clean result is not evidence until the check is
 known to fire, not a replacement for it. The addition is that the proof-of-condition must be **named
