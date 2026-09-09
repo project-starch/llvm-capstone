@@ -1067,8 +1067,26 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > by plain `ld` anyway, so the reinitialisation step R-31 restores is bypassable by a different route.
 >
 > **Consequence: R-31 is necessary and not sufficient**, and any claim that its fix "closes the
-> disclosure" is unsupported until that gate is re-measured on the current bitstream. That measurement
-> is cheap and board-side, and it should happen before the fix is described as closing anything.
+> disclosure" is unsupported until that gate is re-measured on the current bitstream.
+>
+> **2026-09-10 — and the reason is STRUCTURAL, not a bug in the check.** The gate requires
+> `ld_st_priv_lvl_i == riscv::PRIV_LVL_M` (`load_store_unit.sv:947-950` at `66c4e7517`), i.e. it only
+> applies to loads and stores issued in **M-mode**. Domains do not run in M-mode: the monitor's own
+> trace markers say so in as many words — `SHA5` is *"about to leave M-mode for the domain"* and `ENT1`
+> is *"about to leave M-mode INTO the domain"* (`sbi_capstone.c:126`, `:129`). So the only capability-type
+> check on the SCALAR load/store path is inapplicable to domain code **by construction**.
+>
+> That explains the 2026-08-04 "inert" measurement completely, and it reclassifies it: not a check that
+> fails to fire, but a check that was never in scope for the code we run. **It also makes R-31's
+> insufficiency structural rather than contingent** — an UNINIT capability held by a domain is readable
+> with an ordinary `ld` no matter what REVOKE hands back, so the reinitialisation property cannot be
+> restored by the RTL revoke fix alone. Closing it needs the scalar path type-checked outside M-mode,
+> which is a design question well beyond R-31.
+>
+> **Confirmation in flight:** board probe `lsugate` (boot sw51) retypes a capability to UNINIT with
+> CAPTYPE and does a plain scalar `ld` through it, carrying an LCC type read-back so a return cannot be
+> confused with a lost type. Predicted **0x310003A5** (type 3 = LCC's view of RTL UNINIT, byte 0xA5 =
+> the planted sentinel) on this reading; a wedge would refute it. Prediction recorded before the run.
 
 > **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
 > `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
