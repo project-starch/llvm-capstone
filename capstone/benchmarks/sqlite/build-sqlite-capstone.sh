@@ -119,6 +119,38 @@ SQLITE_DEFINES=(
   -DYYSTACKDEPTH=1000
 )
 
+# ---- feature set ------------------------------------------------------------------------------
+# `deployed` (the default) reproduces every recorded board result byte for byte. `restored`
+# undefines the omissions above that are CODE-SIZE choices rather than platform limits, so a result
+# can be stated as "SQLite minus what a domain with no OS, no filesystem and no threads cannot
+# provide" instead of "minus seventeen features". What stays omitted either way: OS_OTHER,
+# THREADSAFE, TEMP_STORE, ZERO_MALLOC/MEMSYS5, WAL, MMAP, SHARED_CACHE, TEMPDB, LOAD_EXTENSION,
+# LOCALTIME, AUTOINIT -- and FLOATING_POINT, which is not a define flip here (it needs soft-float
+# builtins this build does not link; see docs/plans/sqlite-stockness-and-benchmark-breadth.md).
+#
+# THIS IS A LITERAL ARRAY ON PURPOSE. build-slt-native.sh and build-sqlite-silicon.sh both harvest
+# these blocks out of this file with `sed`, which is how the oracle and the two domain builds have
+# stayed in step. A conditional the sed cannot see would let them drift apart silently, and that
+# drift is the one failure this pairing exists to prevent.
+SQLITE_RESTORE=(
+  -USQLITE_OMIT_EXPLAIN
+  -USQLITE_OMIT_FOREIGN_KEY
+  -USQLITE_OMIT_UTF16
+  -USQLITE_OMIT_INCRBLOB
+  -USQLITE_OMIT_GET_TABLE
+  -USQLITE_OMIT_DEPRECATED
+  -USQLITE_OMIT_COMPILEOPTION_DIAGS
+  -USQLITE_UNTESTABLE
+)
+SQLITE_FEATURE_SET=${SQLITE_FEATURE_SET:-deployed}
+case "$SQLITE_FEATURE_SET" in
+  deployed) SQLITE_RESTORE=() ;;
+  restored) ;;
+  *) echo "ERROR: SQLITE_FEATURE_SET must be 'deployed' or 'restored', got '$SQLITE_FEATURE_SET'" >&2
+     exit 1 ;;
+esac
+echo "== SQLITE_FEATURE_SET=$SQLITE_FEATURE_SET (${#SQLITE_RESTORE[@]} omissions restored)"
+
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
   -Xclang -target-feature
@@ -134,6 +166,7 @@ COMMON_FLAGS=(
   -I"$VFS_SKELETON_DIR"
   -I"$SQLITE_SRC_DIR"
   "${SQLITE_DEFINES[@]}"
+  "${SQLITE_RESTORE[@]}"      # after SQLITE_DEFINES: -U must win over the -D above
 )
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \

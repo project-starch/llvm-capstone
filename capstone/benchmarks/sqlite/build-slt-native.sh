@@ -43,9 +43,15 @@ echo "== amalgamation: $SQLITE_SRC_DIR"
 # Everything else -- above all SQLITE_OMIT_FLOATING_POINT, SQLITE_DQS=0, OMIT_JSON,
 # OMIT_FOREIGN_KEY, OMIT_UTF16 -- DOES change what the engine accepts and is kept.
 EXCLUDE='SQLITE_OS_OTHER|SQLITE_OMIT_AUTOINIT|SQLITE_ZERO_MALLOC|SQLITE_ENABLE_MEMSYS5|SQLITE_DEFAULT_LOOKASIDE|SQLITE_UNTESTABLE'
-mapfile -t DEFS < <(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-capstone.sh" \
-                    | grep -oE '\-D[A-Za-z0-9_]+(=[^ )]*)?' \
-                    | grep -vE "^-D($EXCLUDE)")
+# SQLITE_FEATURE_SET moves the oracle and the domain TOGETHER: `restored` pulls in the second
+# literal block (the -U flags), harvested after the first so it wins, exactly as the domain builds
+# do. Both -D and -U are matched now; before this only -D was, so a -U added to the domain build
+# would have been invisible here and the two would have diverged without a word.
+_blocks='/^SQLITE_DEFINES=(/,/^)/p'
+[[ "${SQLITE_FEATURE_SET:-deployed}" == restored ]] && _blocks="$_blocks;/^SQLITE_RESTORE=(/,/^)/p"
+mapfile -t DEFS < <(sed -n "$_blocks" "$SCRIPT_DIR/build-sqlite-capstone.sh" \
+                    | grep -oE '\-[DU][A-Za-z0-9_]+(=[^ )]*)?' \
+                    | grep -vE "^-[DU]($EXCLUDE)")
 (( ${#DEFS[@]} > 10 )) || { echo "ERROR: harvested only ${#DEFS[@]} defines -- the list moved" >&2; exit 1; }
 echo "== semantic defines shared with the domain: ${#DEFS[@]}"
 printf '   %s\n' "${DEFS[@]}" | head -30
