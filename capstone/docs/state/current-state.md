@@ -2,7 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-08 — CURRENT
+## 2026-09-09 — CURRENT
+
+* **The R-25/26/27 bitstream is on the board** (`caplifive_r25r26r27_66c4e7517.bit`, flashed persistently
+  2026-09-09; `caplifive_s12fix_5097eb166.bit` stays in the console store as the restore path). Boots sw44
+  (closing set 9/9), sw45 (acceptance 7/7, R-25 PROBE wedges as predicted), sw46/sw47 (firmware variants D/E
+  clean — the R-26 board arms, no-regression only), sw48 (the s06agg isolation). R-25/R-26/R-27 archived.
+  The monitor drops its four R-26 `fence.i` (monitor `1a39e37`, wrapper `f17110a`, buildroot `fe31893`,
+  caplifive-system `884b716`; nested pushes need the lead's credential).
+* **RETRACTION: S-06's struct-assignment half was never fixed — now `R-29`.** `s06agg` reads 66 on the
+  new bitstream in two firmwares (sw46, sw48); the RTL lane's directed test fails on `5097eb166`,
+  `ef5a8eaf2` and `66c4e7517` alike when the plain `sd` of the high half is adjacent to the 128-bit `ldc`
+  (write-buffer forwarding, S-07/S-10 family). The S-06 folder's cited acceptance (boot B1 "15") was a
+  different program. Memcpy half stands. `W-12` stays. Not a regression of the new bitstream.
+* Driver classifier: `created`/`entered` now also read the monitor's `DBAS`/`ENT1` tags, so a wedged
+  `rtpc`/`lpc` probe is no longer reported as "domain never created" (sw45/sw47 r25dup).
+
 
 * **The monitor stack is unified onto ONE branch, `capstone-bootstrap`, in every nested repo**
   (caplifive-buildroot `b7fc740`, opensbi `3de3342`, monitor/sbi.dom `3da7ebe`, caplifive-system

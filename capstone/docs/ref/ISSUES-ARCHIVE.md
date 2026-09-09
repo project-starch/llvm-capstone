@@ -1169,6 +1169,123 @@ same instruction pair. Verify before recording.
 > replication with the same image last in sw47 (variant E boot). Records: `tests/board-results/2026-09-05.tsv`
 > sw41/sw45, `tests/fpga-repros/R25-init-rs1-ne-rd/`.
 
+### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `FIXED IN RTL 2026-09-09 (flush_o on every CCSRRW, 9d8797560), SIM-VERIFIED (ldmiss 11 → PASS, controls unchanged), IN THE FLASHED BITSTREAM caplifive_r25r26r27_66c4e7517 since 2026-09-09; the board arms are NO-REGRESSION checks only: firmware variants D (three CCSRRW fence.i dropped) and E (all four) clean on 66c4e7517 as sw46/sw47, and D was already clean on 5097eb166 as sw42, so silicon never exhibited the race; the monitor fence.i drop is a separate commit`
+
+**Found while asking whether the board monitor's eleven FPGA-only `fence.i` sites (Phase B item 8,
+`docs/plans/monitor-unification.md`) are still needed.** Two rtl-oracle reads, quoted `file:line`:
+
+* The `CCSRRW` write block (`core/csr_regfile.sv:2374-2550`; `CCSR_CPMP0` at `:2407-2414`,
+  `CCSR_CSCRATCH` at `:2399-2406`) updates `cpmp_d`/`cscratch_d` only when `ccsr_we_i` is asserted,
+  and that is driven from the **commit** stage (`core/commit_stage.sv:381-383`). It never sets
+  `flush_o`; ordinary side-effecting CSR writes do (`:1160-1535`), and the controller flushes the
+  pipeline on `flush_csr_i` (`core/controller.sv:209-212`).
+* `LDC`/`STC` and `CALL`/`RETURN` decode to `fu = CAPSTONE_DYN` (`core/decoder.sv:1272-1309`),
+  whose issue is gated only by `capstone_dyn_ready_i` (`core/issue_read_operands.sv:410-431,
+  535-536`) — the `csr_ready`-based stall that holds `alu/ctrl_flow/csr/mult/capstone_flu` ops
+  behind an uncommitted CSR write (`core/csr_buffer.sv:57-62`, `core/ex_stage.sv:521`) does not
+  apply to them. They read `cpmp_q` combinationally in the bounds check
+  (`core/pmp/src/pmp_data_if.sv:117-133`) and `cpmp_q`/`cscratch_q`/`mscratch_q` in the
+  domain-switch save/restore (`core/csr_regfile.sv:401-432`).
+* So a younger LDC/STC/CALL/RETURN can execute against the **old** `cpmp`/`cscratch` value while
+  the older `CCSRRW` is still in flight. `fence.i` (`core/controller.sv:139-145`) is the flush the
+  write never triggers; its icache flush is irrelevant here. `cepc`: no combinational consumer found
+  (`mepc_q` is read only at `mret`'s commit, `:2811`) — no hazard, weaker evidence.
+* Not every monitor `fence.i` is explained by this: of the nine in `sbi_capstone.S` only three follow a
+  `CCSRRW` (lines 96, 188, 201 after 94, 181, 198); the five in `cap_env_init` follow split/store
+  operations, not CSR writes. Fetch-side capability caching and ordinary icache non-coherence were
+  both ruled out for those (`cpmp` never reaches the frontend; `split_out_cap` writes no code bytes).
+* `sbi_capstone_init.S:44-51` has `CCSRRW … CSCRATCH` followed by domain entry with NO `fence.i`
+  in between — whether that path reaches a `dom_switch` read soon enough to expose the race is
+  UNRESOLVED.
+
+**What would settle it on silicon** (proposed, not run): one boot, two staged firmware variants
+— (a) as today, (b) `fence.i` inserted after every `CCSRRW … CSCRATCH/CPMP` and removed everywhere
+else; a domain that returns a marker only if its restored `sp`/`gp` capability matches a baked
+expectation. (a) intermittently wrong with (b) always right confirms the race; both always right
+means the window is not hit by this code path (not proof of absence). **Owner: the RTL lane** (an
+issue-time interlock for `CAPSTONE_DYN` behind a pending `CCSRRW`, or `flush_o` on `CCSRRW`, is the
+RTL-side fix; the monitor keeps its `fence.i` until then).
+
+> **DEMONSTRATED IN SIMULATION 2026-09-08 (RTL lane).** Write-up with the waveform readings:
+> `docs/history/08-09-2026_22-00-00_r26-ccsrrw-stale-read-demonstrated.md`; tests on capstone-ariane
+> branch `r26-ccsrrw-stale-read` (kept out of the gate testlist because the hazard arm is an expected
+> FAIL). M-mode with `mstatus.MPRV=1, MPP=S` so loads are CPMP-checked, no `mret` between; CPMP[0]
+> wide over three lines, `CCSRRW` narrows it, a load inside wide/outside narrow follows; positive
+> control (load outside wide traps) and post-`fence.i` control (same load traps) fire in every arm.
+> With no older instruction, or an older `div`, the load TRAPS — the VCD shows the divider holding the
+> shared fixed-latency unit so the CSR op cannot issue until it finishes, commits two cycles after
+> issue, and the load's check lands one cycle after commit on the edge the write becomes visible: a
+> zero-cycle window by timing, not by design. With an older cache-missing `ld` ahead of the `CCSRRW`
+> (`S12_MEM_DELAY=40`; label correction 2026-09-09: the pre-05:55 runs actually ran at the default latency, the define had not reached Verilator — a verified 40-cycle rerun on the clean tip still reads FAIL 11 and passes with the fix) the CSR write waits at commit behind it; the younger load's CPMP check runs
+> at tick 1183 with `cpmp_allow = 1` against the OLD entry, the write lands at 1193, the load retires
+> with data from outside the new bounds — **FAIL 11 (hazard)**; with `fence.i` between: PASS. So any
+> older instruction that delays the CCSRRW's commit and is not on the fixed-latency unit opens a
+> window of its latency for every younger load/store. A plain `ld` was used; `LDC`/`STC` hit the same
+> `pmp_data_if` check but were not run. NOT exercised: the `cscratch`/`cepc` readers in
+> `dom_switch_read_process` — the switcher reads after the CALL/RETURN commits, so that path needs
+> the switcher's read to fall within a cycle of the write; a separate test with CALL semantics, and
+> the shape with the board consequence (`sbi_capstone_init.S:44-51`). Proposed fix shape: `flush_o`
+> in the CCSR write block for CPMPn/CSCRATCH/CEPC, the idiom the ordinary side-effecting CSR writes
+> use (`csr_regfile.sv:1160-1394`); the `ldmiss` arm turning PASS with the controls still firing is
+> the acceptance test. RTL, lint, audit, synthesis before any board use. For the monitor (Phase B
+> item 8): the three `fence.i` after `CCSRRW` are now KNOWN load-bearing for CPMP writes, not merely
+> kept on suspicion.
+
+**2026-09-09, board lane, archived.** Shipped as C1 (9d8797560) of the bitstream flashed today (`caplifive_r25r26r27_66c4e7517.bit`). The two firmware-variant boots the entry asked for ran on the new silicon: variant D (the three CCSRRW-adjacent `fence.i` in `sbi_capstone.S` dropped, 149 linked) = sw46, k800 + six BEEBS rungs at their oracles; variant E (D plus the UART-mint `fence.i` in `sbi_capstone_dom.c`, 148 linked) = sw47, the same seven at their oracles and the R-25 probe last (entered, wedged as predicted, N=2). Because variant D was ALREADY clean on the previous bitstream (sw42 on 5097eb166: 8/8 + the transfer probe), these boots are no-regression checks, not a demonstration that the race was ever visible on silicon; the demonstration is the simulation (`ldmiss` 11 → PASS). `sbi_capstone_init.S:44-51` (CCSRRW CSCRATCH then entry, no fence) is covered by the fix by construction (every CCSRRW flushes) and by the cscratch arm of the RTL lane's set. The monitor commit that removes the four `fence.i` follows separately, gated on the sw48 reading of the unrelated s06agg mismatch first seen in sw46.
+
+### R-27 — a pipeline flush inside the DYN unit's revocation-node query window orphans the node's response; the next capability operation waits forever (core dead, no trap) `FIXED IN RTL 2026-09-09 (ex_stage drain of the orphaned response, 66c4e7517), SIM-VERIFIED (58-arm set: 57 PASS + the deliberate control FAIL, 0 hangs), IN THE FLASHED BITSTREAM caplifive_r25r26r27_66c4e7517 since 2026-09-09; silicon confirmation NOT POSSIBLE BY CONSTRUCTION (no board arm creates a flush inside the query window); boots sw44–sw47 on that bitstream are the no-regression record`
+
+> **Correction to the shipped commit's stated reason (RTL lane, 2026-09-09 evening).** The R-27 commit message
+> (66c4e7517) justifies draining the init and mrev response channels by "an interrupt during a SPLIT/MREV
+> wait". That window does not exist (see R-28: an interrupt binds at decode and never reaches a functional
+> unit), and its pool-exhaustion fallback does not hold either, because a stalled MREV never writes back so no
+> interrupt can be taken. The drained channels are harmless and stay in the shipped RTL; this corrects the
+> stated reason only. Nothing is resynthesised; the bitstream plan is unaffected.
+
+**Found by the RTL lane while gating the R-26 fix** (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`,
+"Named: the CALL-shaped hang", the directed arms, and the claim-auditor section; waveforms in
+`~/dev/llvm-capstone-rebuild/records/r26/`). Mechanism, read off the waveform of `r26-v2-cscratch-fence` (two ticks
+per cycle): the DYN unit sends a validity query to the revocation node at tick 1139 and waits; a `fence.i`
+commits at 1141 and `ex_stage.sv` wires that flush to the DYN unit, whose thread resets (its response `ack`
+drops at 1143); the node answers at 1145 — `rev_query_res_valid` rises and never falls, because nobody acks it
+and the node is inside `send ep.query_res` (`capstone_rev_node.anvil:59`) with no fallthrough, timeout or drain
+(`capstone_rev_node.anvil.sv:768-769, 872`); the re-issued CALL's request at 1683 is never acked; `ready` stays 0;
+issue, decode and the frontend back up behind it. Not the frontend, not the switcher, not the R-26 flush as such:
+the one ingredient is **an EX flush landing in the ≈3-cycle window between a DYN op's query request and the
+node's response**. Flushes that reach EX: side-effecting CSR writes, `fence`, `fence.i`, `sfence.vma`, exceptions
+and interrupts, `eret`, AMO/switch commit flushes (a mispredict does not, `controller.sv:111-115`). Ops that
+query the node before completing: REVOKE, SPLIT, TIGHTEN, CALL, RETURN, LDC, STC, LCC. `fence`/`fence.i` commit
+only when the store buffer is empty (`commit_stage.sv:411-456`), which is how a pending store moves their flush by
+tens of cycles into a younger LDC's window.
+
+Three independent triggers on the unmodified tree, all HANG (no trap, `tohost` never written): `fence.i` then
+CALL (`r26-diag-csfence-mstatus`); `fence` then an LDC chain after a draining store (`r27-fence-nost`); a load that
+faults immediately followed by an LDC (`r27-ldf-n0` — the core hangs instead of trapping; one `nop` of separation
+and it traps cleanly). Pre-existing: none of them needs the R-26 flush. **Fix candidate** (`ex_stage.sv`, ~30
+lines, one `always_ff`): per response channel remember a request the node accepted whose response is still owed;
+if `flush_i` lands while one is owed, drain that response (ack it to the node, hide it from the DYN unit) and hold
+`capstone_dyn_ready_o` low until it is gone. Read on the fix tree: all three triggers HANG → PASS with every
+control unchanged; lint gate at the baseline counts exactly (UNOPTFLAT 40, ANVIL 0); the combined R-25+R-26+R-27
+tree: 58-arm set clean, 88-row sweep identical except the predicted CCSRRW cycle deltas. **Label
+correction (RTL lane audit, 2026-09-09):** every simulation labelled "40-cycle memory" before 05:55 UTC that
+day ran at the DEFAULT latency (the define never reached Verilator through the model-build script);
+nothing measured is invalid, the labels were. A verified 40-cycle record now exists: on the clean tip the
+load-fault trigger `r27-ldf-n0` still HANGs; the fence-timed triggers miss the window at 40 cycles and hit
+it at 0 (timing tickets, as the mechanism says); with the drain, on the combined tree, the 58-arm set has 0
+hangs at 40 cycles (side-branch commits r27 f1d42e39a, r26 67d870cc8, r25 ec50837b5). Audit: mechanism
+SUPPORTED on six attack lines; fix PLAUSIBLE, no misattribution sequence found; named residuals — one owed bit per
+channel rests on the DYN unit's own serialisation; the node's designed non-answer when the pool is exhausted
+(`head == 16'hFFFF`) remains a dead core after a later flush, not a new defect. The alternative (the anvil node
+abandoning a send on flush) was tried upstream and reverted (`f5f9291c8`, `d15d45b33`, `7bcbdb39c`).
+
+**Board relevance.** Every monitor `fence.i` after a capability operation, every domain trap and every interrupt
+is a candidate placement of this window on silicon; whether any historic silent wedge was this is UNRESOLVED
+(the Q-03 position-in-boot wedge is fixed by other means; the S-12 draws are explained). Whether the drain joins
+the R-25/R-26 bitstream is the lead's decision; a bitstream carrying the R-26 flush without it is worse than
+today's, by the RTL lane's own reading. Owner: the RTL lane.
+
+**2026-09-09, board lane, archived.** The drain shipped as C3 of the three-commit bitstream (fpga-testing-dev 66c4e7517; C1 R-26, C2 R-25), synthesised (WNS −12.425 ns) and flashed persistently the same day as `caplifive_r25r26r27_66c4e7517.bit`. Nothing on the board can create the trigger (a pipeline flush inside a revocation-node query window), so the silicon record is the no-regression set: sw44 (closing set 9/9), sw45 (acceptance 7/7 + the R-25 pair), sw46/sw47 (firmware variants D/E). The fix is the simulation evidence; the header says so. The correction box above (the commit message's stated reason) stands as written by the RTL lane.
+
 ## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `RESOLVED as observed 2026-08-20`
 
 **Gone.** The workload that passed 3/3 on `caplifive_s07fix.bit` runs `sqlite3_initialize()` and
@@ -1219,6 +1336,21 @@ the cause; the failing cone is domain-switch machinery).
 Full trail: **`history/20-08-2026_18-04-33_s02-s05-resolved-archived-from-issues.md`**.
 
 ## S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits · `FIXED in silicon and verified (2026-08-14), workarounds reverted`
+
+> **CORRECTION 2026-09-09 (board lane): the struct-assignment half of this entry's "verified" was never
+> verified, and that shape is NOT fixed.** The acceptance the S-06 folder cited for it — "`s06agg` returns
+> 15 (boot B1)" — is a row whose image (`32e13a81cf52d4d8`, entry VA `0x20000`) is not the committed
+> `src/s06agg.dom` (`249118220f8cf37a`, entry VA `0x10000`), whose program returns 64..67 only; 15 came
+> from a different program under the same label. The committed rung's first readings, 2026-09-09 on
+> `caplifive_r25r26r27_66c4e7517`, are **66** (sw46, variant-D firmware) and **66** (sw48, the M-3 monitor):
+> `y` lost, `x` intact. The RTL lane's directed test of the exact shape fails the same way (`y` zeroed) on
+> `5097eb166`, `ef5a8eaf2` and `66c4e7517` when the plain `sd` of the high half is the instruction before
+> the 128-bit `ldc`, and passes with four instructions between — adjacency is the trigger, which points at
+> write-buffer forwarding rather than the tag path this entry's fix addressed. **What stands:** the fix
+> for the tag path and the memcpy-shaped rungs (`s06copy`, `s06aggcap`, `s06aggwide`) at their oracles on
+> both bitstreams. **Filed as `R-29` in `ISSUES.md`; this entry stays archived as the tag-path record.**
+> `W-12` stays in force on R-29's account.
+
 
 > **STATUS CORRECTED 2026-08-18.** This heading read `OPEN — SILICON DEFECT, root-caused in RTL,
 > needs a hardware fix` until today, four days after the fix landed and was verified on silicon

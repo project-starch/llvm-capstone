@@ -1,5 +1,12 @@
 # Amendment 2026-09-09 (evening): status, the R-25/26/27 board track, and the registry split into two files
 
+*Status 2026-09-09 night: section 2 steps 4–5 done — bitstream flashed (lead's go), sw44/sw45 closing +
+acceptance, sw46/sw47 variants D/E clean (no-regression), the fence.i-drop monitor commit landed (nested, unpushed),
+R-25/26/27 archived. NEW: the s06agg rung read 66 (sw46, isolated in sw48 to the domain, not the firmware) and the
+RTL lane's directed test fails on all three revisions with the store adjacent — filed as R-29, the S-06 folder
+corrected (its cited acceptance was a different program). Step 6 (re-triage boot) is next; R-29's matched board pair
+(a fence between the `sd` and the `ldc`, predicted 64) joins it.*
+
 *(Amends the combined plan below, which the lead approved this morning. Three things changed: the CHERI smoke
 and Q-06 are done; the RTL lane's R-25/26/27 state is now known precisely; and the lead's new rule for the
 registry: **`ISSUES.md` holds only the open, relevant issues; every resolved entry goes to a separate archive
