@@ -1098,9 +1098,22 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 >
 > **So the structural argument above is IN DOUBT, not confirmed and not refuted.** A wedge is evidence
 > against it, since the argument predicts a clean return. The discriminator is one re-run with
-> `WEDGE_TRACER=1`: a latched `mcause` of 27 (`UNEXPECTED_CAP_TYPE`, RTL numbering) at the load's `mepc`
-> would show the check firing and refute the M-mode reading; a wedge at the CAPTYPE or `LCC` would mean
-> the probe never reached its measurement. **Until that runs, R-31's sufficiency is UNRESOLVED in both
+> `WEDGE_TRACER=1`, reading the latched `mcause` against the LSU's OWN cause table
+> (`load_store_unit.sv:972-990` at `66c4e7517`), which emits **raw** mcause values rather than going
+> through the `24 + enum` execute-path encoder:
+>
+> | latched mcause | meaning |
+> |---|---|
+> | **26** | the type check fired — not LINEAR/NONLIN. **This is the discriminator**: the check IS live in a domain and the M-mode reading above is wrong. |
+> | 24 | the operand was NOT_CAP — the capability was lost before the load, so the probe never held UNINIT |
+> | 27 | a permission fault, not a type fault |
+> | 28 | out of bounds — the retype corrupted the reconstructed bounds, not a type result |
+> | anything else, or a wedge with no latch | the probe wedged before its measurement |
+>
+> **Note my first draft of this table said 27.** The LSU raises `26` for a wrong type and reserves `27`
+> for permissions; I had applied the FLU/DYN `24 + enum` convention to a unit that does not use it —
+> the same numbering-system confusion, a fourth time, caught before the reading rather than after.
+> (That the LSU and the execute path use different conventions is itself part of **R-24**.) **Until that runs, R-31's sufficiency is UNRESOLVED in both
 > directions** and neither the "inert by construction" nor the "check is live" claim should be cited.
 
 > **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
