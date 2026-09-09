@@ -35,7 +35,7 @@ From their Table 1, MicroPython specifically:
 as a number: ASan's redzones, and our capability bounds, are placed 957 times while
 the program creates 839,561 objects that could be out of bounds with respect to
 each other. It is independent quantitative support for
-`benchmarks/micropython/temporal-corpus/evidence/heap-bounds-model.s` and the two
+`bug-corpora/micropython/temporal/evidence/heap-bounds-model.s` and the two
 matched pairs in `tests/runtime-qemu/silicon-ladder/`.
 
 Other figures: CMASan costs 9.63% over ASan on average (3.15% on MicroPython), and

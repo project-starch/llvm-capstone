@@ -5,7 +5,7 @@ not by the gate, and not by review.
 
 ## What happened
 
-`benchmarks/micropython/spatial-corpus/github-bodies.json` stores the raw GitHub
+`bug-corpora/micropython/spatial/github-bodies.json` stores the raw GitHub
 API response for 27 issue bodies. It exists for a good reason: `is_spatial` in the
 spatial corpus was set by READING each report rather than its title, after the
 temporal audit had to undo fourteen rows whose class had been read off titles. A

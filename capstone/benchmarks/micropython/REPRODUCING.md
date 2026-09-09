@@ -85,10 +85,10 @@ Always check `Created domain ID = 0` in the round log before believing anything.
 
 | row | scripts | extra |
 |---|---|---|
-| `MPY-T09` `MPY-T10` `MPY-T11` `MPY-T12` `MPY-T13` `MPY-T25` | `temporal-corpus/repros/domain/` | none |
-| `MPY-S01` | `spatial-corpus/cases/MPY-S01_*/` | none |
-| `MPY-S31` | `spatial-corpus/cases/MPY-S31_*/` | none |
-| `MPY-S05` | `spatial-corpus/cases/MPY-S05_*/` | apply `revert-the-fix.patch` to the MicroPython tree first, **and reverse it afterwards** — that tree is shared by every other build |
+| `MPY-T09` `MPY-T10` `MPY-T11` `MPY-T12` `MPY-T13` `MPY-T25` | `temporal/repros/domain/` | none |
+| `MPY-S01` | `spatial/cases/MPY-S01_*/` | none |
+| `MPY-S31` | `spatial/cases/MPY-S31_*/` | none |
+| `MPY-S05` | `spatial/cases/MPY-S05_*/` | apply `revert-the-fix.patch` to the MicroPython tree first, **and reverse it afterwards** — that tree is shared by every other build |
 
 Rows measured through the C glue rather than a script use `DOMAIN_EXTRA_DEFS` and
 `run-domain-smoke.py`, one flag per row, all in `port/mpy_domain.c` behind their own
@@ -116,7 +116,7 @@ sweep that measures one thing twice.
     MPY_TEST_INCLUDE_UNSUPPORTED=1 MPY_FLOAT_CORE=1 \
     DOMAIN_EXTRA_DEFS="$ROM" DOM_NAME=mpy_vfs_suite bash $B
 
-with `temporal-corpus/evidence/vfs-smoke-domain.py` as the script. Expected:
+with `temporal/evidence/vfs-smoke-domain.py` as the script. Expected:
 `VFS hello 32768` — a FAT filesystem formatted, mounted, written and read back over
 a RAM block device written in Python. With `MPY_VFS` unset the image is
 byte-identical to a build without any of that work.
@@ -131,7 +131,7 @@ defect is gone:
     make -C /tmp/capstone/mpy-<name>/ports/unix -j16 CC=gcc-12 MICROPY_MPYCROSS_DEPENDENCY=
 
 `CC=gcc-12` and the empty `MICROPY_MPYCROSS_DEPENDENCY` are both required; the
-reasons are in `temporal-corpus/evidence/parent-build-attempt-2026-08-17.txt`.
+reasons are in `temporal/evidence/parent-build-attempt-2026-08-17.txt`.
 Do NOT add `-fsanitize=address`: every combination tried ends in `FATAL: uncaught
 NLR` on any input at all, including `import sys`.
 
@@ -139,5 +139,5 @@ NLR` on any input at all, including `import sys`.
 
 `MPY-T01` `MPY-T04` need POSIX file descriptors, `MPY-T06` needs berkeley-db
 (not even checked out in the pinned tree), `MPY-T19` needs NimBLE. The reasoning is
-in `temporal-corpus/REMAINING.md` and was re-checked against the sources rather
+in `temporal/REMAINING.md` and was re-checked against the sources rather
 than asserted.
