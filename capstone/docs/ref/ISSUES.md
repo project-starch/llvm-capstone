@@ -1083,10 +1083,25 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > restored by the RTL revoke fix alone. Closing it needs the scalar path type-checked outside M-mode,
 > which is a design question well beyond R-31.
 >
-> **Confirmation in flight:** board probe `lsugate` (boot sw51) retypes a capability to UNINIT with
-> CAPTYPE and does a plain scalar `ld` through it, carrying an LCC type read-back so a return cannot be
-> confused with a lost type. Predicted **0x310003A5** (type 3 = LCC's view of RTL UNINIT, byte 0xA5 =
-> the planted sentinel) on this reading; a wedge would refute it. Prediction recorded before the run.
+> **BOARD READING sw51 (2026-09-10): the probe ENTERED AND WEDGED — which CONTRADICTS the prediction
+> above, and the run does NOT say why.** Predicted `0x310003A5` (a return, on the structural argument);
+> observed no return. The domain was created and entered (`DBAS`, `DENT`, `SHA0`-`SHA6`, `ENT0`/`ENT1`,
+> region 14 transferred, and the driver's own classifier says created-and-entered with no monitor tag),
+> so this is a genuine in-domain wedge and not an entry stall.
+>
+> **But it does NOT establish that the scalar load trapped, and the parser that said it did was wrong.**
+> `WEDGE_TRACER` was 0 for this boot, so there is no latched `mcause`/`mepc`. The probe executes CAPTYPE,
+> then a spill/reload of the retyped capability, then `LCC`, then the scalar `ld`. A wedge at ANY of
+> those looks identical from outside. My boot script printed *"the scalar load TRAPPED -> the LSU check
+> is LIVE"* from the absence of a result — the exact over-claim this investigation has been cataloguing
+> all night, committed by my own parser.
+>
+> **So the structural argument above is IN DOUBT, not confirmed and not refuted.** A wedge is evidence
+> against it, since the argument predicts a clean return. The discriminator is one re-run with
+> `WEDGE_TRACER=1`: a latched `mcause` of 27 (`UNEXPECTED_CAP_TYPE`, RTL numbering) at the load's `mepc`
+> would show the check firing and refute the M-mode reading; a wedge at the CAPTYPE or `LCC` would mean
+> the probe never reached its measurement. **Until that runs, R-31's sufficiency is UNRESOLVED in both
+> directions** and neither the "inert by construction" nor the "check is live" claim should be cited.
 
 > **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
 > `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
