@@ -145,6 +145,77 @@ A smaller, purely synthetic example to start from:
 - **`-O0` vs `-O1` changes behaviour**, sometimes decisively. State the level in every
   result; do not compare numbers across levels.
 
+- **The loader stalls intermittently, and it looks exactly like a hang in your domain.**
+  Signature: the serial log stops after `Segment size = ...` and never prints
+  `Loadable size`, while QEMU spins at 100% CPU. That gap is `mmap` + `memset` +
+  `memcpy` from the 9p-mapped image inside `capstone-test.user`, i.e. before the domain
+  is created and before any of your code runs. Roughly half the boots in one session
+  did this, on images of about 1.6 MB. Cause unknown; do not read it as a result.
+  Retry, and check WHERE the log stops before believing anything about the domain.
+  (An earlier note here blamed a second load in the same boot. That is refuted: the
+  stall happens on the first load too.)
+
+---
+
+## 4b. Locating a fault: `tests/runtime-qemu/fault-locate.py`
+
+A capability fault used to take twenty to forty minutes to place: read the anchor
+rung's return value, subtract the symbol address for the load base, subtract that from
+the pc, `llvm-nm`, read the disassembly, guess which struct field an offset names. It
+produced wrong readings more than once. The script does all of it:
+
+```bash
+python3 capstone/tests/runtime-qemu/fault-locate.py <run-log> <image.dom>
+```
+
+It prints the load base, the image offset, the enclosing function, the **faulting
+instruction** and the source line with its inline chain.
+
+Two things it does that are not arithmetic:
+
+- **It checks the pc, then disambiguates it.** The monitor restores the exact pc since
+  `_helper_access_with_cap` was given the caller's return address (before that its
+  `GETPC()` named QEMU's own text, `cpu_restore_state()` failed silently, and `env->pc`
+  kept the translation-block ENTRY). The script takes the instruction at the reported pc
+  when it matches `rs1`/imm/size and says `the reported pc is exact`; otherwise it scans
+  forward and says how stale the pc was. Reading an old log still works.
+- **It REFUSES rather than guessing.** No fault line, no anchor, a load base whose
+  offset leaves the executable section, no matching instruction in the window: exit 2
+  with what it looked for. A tool that prints an empty result reads like a finding.
+- **It refuses AMBIGUITY too, and that is not theoretical.** 33.9% of the memory
+  instructions in a real image have another instruction with the same
+  (base, immediate, size) inside the 256-byte window, 39.7% for faults that report no
+  size, and `-capstone-double-ldc` emits such pairs by construction. Naming the first
+  candidate put the answer in a *different function* 11.3% of the time. So when the pc
+  is not exact and more than one candidate matches, it lists them and exits 2.
+
+Source lines need line tables. For the mruby port that is `MRUBY_DEBUG_INFO=1`, which
+adds `-gline-tables-only`. Debug sections are non-alloc, so the twin is usable as an
+oracle for the image that actually ran — but **check** that rather than assume it, and
+check more than the bytes. Identical `.text` CONTENT with a different `.text` ADDRESS
+would still give wrong line numbers:
+
+```bash
+# 1. same code
+llvm-objcopy -O binary --only-section=.text <image> - | md5sum        # both images
+# 2. same addresses
+llvm-readelf -SW <image> | grep -E '\.text|\.rodata|\.data '          # both images
+# 3. same symbols
+diff <(llvm-nm -n <release> | awk '$2=="T"{print $1,$3}') \
+     <(llvm-nm -n <twin>    | awk '$2=="T"{print $1,$3}')
+```
+
+All three passed for the mruby pair the tool was first used on; the md5 alone is the
+weaker test.
+
+`--self-test <image.dom>` runs four controls built out of the image itself: an exact pc
+must be taken as-is, a stale pc must still resolve, an ambiguous window must be REFUSED,
+and an immediate proven absent from the scanned window must be refused. The negative
+controls are built against the window the tool will actually scan and assert their own
+premise, because the first version of them was tautological: it built the impossible
+immediate out of the same window it was about to search, so the refusal was guaranteed
+by construction and the control proved nothing.
+
 ---
 
 ## 5. What to hand back
