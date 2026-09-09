@@ -68,15 +68,24 @@ DYN unit's revocation-query window; nothing in the post-flash set creates one de
 absence of regression, not evidence the drain works. Recording it here so a later reader does not promote the
 one to the other.
 
-**Predictions for the flash boots, written 2026-09-09 BEFORE any of them ran** (board lane, boots sw44–sw47 on
-the bitstream from `66c4e7517`): sw44, the closing set, reads identical to its `ef5a8eaf2`-era values — control
-`k800` = 4, the six BEEBS rungs at their oracles, SLT `select1` at `records=1031 … completed=1`, the transfer
-probe at `retval=574619742`, zero fault tags. sw45, the acceptance set, reads its recorded sweep oracles
-(`s06copy` 32 clean, `s06aggcap` 15, `s06aggwide` 255, `sbx8` `0xD0000000`, `rc_const0`/`rc_p1` at their sweep
-values) with `r25dup` LAST trapping 25 at the store through the consumed source. sw46 and sw47, firmware
-variants D and E, read CLEAN 8/8 plus the probe, which is a no-regression check and not R-26 evidence — the
-current silicon already boots both clean (sw40, sw42). **Any hang or wedge in any of these is the reading that
-would matter most, and it is the one nobody predicts.**
+**Predictions for the flash boots, written 2026-09-09 BEFORE any of them ran** and reconciled against the board
+lane's scripts before the first one (an earlier version of this paragraph had the two variant boots' stage sets
+wrong; corrected here rather than after the reading). Boots sw44–sw47 on the bitstream from `66c4e7517`:
+
+| boot | stages | predicted |
+|---|---:|---|
+| sw44, closing set | 9 | `k800` 4; six BEEBS rungs at their oracles; SLT `select1` `records=1031 … completed=1`; transfer probe `574619742` with exactly one `HOLE` line; zero fault tags |
+| sw45, acceptance set | 9 | `k800` 4; `s06copy` 32; `s06aggcap` 15; `s06aggwide` 255; `rc_const0` 2016; `rc_p1` 2080; `sbx8` 3489660928 (`0xD0000000`); `r25same` `0x25000001`; `r25dup` LAST |
+| sw46, firmware variant D | 8 | `k800` + six rungs + `s06agg` 64. No probe |
+| sw47, firmware variant E | 7 | `k800` + six rungs. No probe |
+
+**How `r25dup` will read if the R-25 fix works.** Not as a returned value: a capability trap is a wedge on this
+RTL, so the expected reading is **wedged after `ENT1` with cause 25 latched by the tracer**, which is why it is
+placed last in its boot. A returned `0x25000001` there would mean the duplicate survived the fix.
+
+sw46 and sw47 are no-regression checks and NOT R-26 evidence — the current silicon already boots both variants
+clean (sw40, sw42). **Any hang or wedge outside `r25dup` is the reading that would matter most, and it is the
+one nobody predicts.**
 
 ## Records
 

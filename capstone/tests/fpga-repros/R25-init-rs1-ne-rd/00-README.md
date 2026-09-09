@@ -73,8 +73,12 @@ fault tags, two HOLE lines (the transferred arenas), core alive, both domains an
 constant must be the RTL's 4, and the UNINIT operand's cursor must be moved past `end` with CINCOFFSET (RTL does not
 enforce the spec's bound there) — the two divergences named in the first paragraph.
 
-**Post-flash (bitstream from `66c4e7517`): not yet booted.** Prediction on file: `r25same` unchanged, `r25dup` traps 25
-at the store through the consumed source.
+**Post-flash (bitstream from `66c4e7517`): not yet booted; boot sw45.** Prediction on file, written before it:
+`r25same` unchanged at `0x25000001`, and `r25dup` traps 25 at the store through the consumed source. A capability
+trap is a WEDGE on this RTL, so that reads as **wedged after `ENT1` with cause 25 latched by the tracer**, not as
+a returned value — which is why the probe runs LAST in its boot. A returned `0x25000001` would mean the duplicate
+survived the fix. This is the only one of the three fixes whose post-flash boot can confirm anything: R-26's
+variant boots and R-27 have no arm that distinguishes a working fix from an untriggered one.
 
 ## Records
 
