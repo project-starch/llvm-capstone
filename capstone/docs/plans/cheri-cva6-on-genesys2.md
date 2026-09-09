@@ -472,4 +472,39 @@ Synthesised-but-not-run: no bitstream has been on the board (phase 3, volatile-o
 clean Capstone cost (Capstone base on this flow) is not measured. Artifacts stay on the synth machine
 under `~/scratch/cheri-cva6-artifacts/`.
 
-Still the lead's: the upstream defect reports, the board, and whether to synthesise Capstone's own base.
+**2026-09-09 — the CHERI bitstream RUNS ON THE BOARD: smoke test PASSED on silicon.** Build B was written
+to the Genesys2's config memory **non-volatile** (the lead's choice over a volatile program, "more stable"),
+driven by the board lane from the package `~/capstone-artifacts/cheri-cva6/board-package/`; records in
+`~/capstone-artifacts/cheri-cva6/board-run-1/`, read back first-hand for this entry. 14:48–14:54, one
+session under the console lock.
+
+| step | reading |
+|---|---|
+| resident before | `caplifive_s12fix_5097eb166.bit` |
+| write | `cheri_cva6_B_a9568ac2_25mhz.bit`, persistent, 90 s; `nv_bitstream_name` flipped to it |
+| bitstream live? | **yes** — the post-flash UART is the fork's bootrom (`Hello World! / init SPI / status 0x25 ×2 / SPI initialized! / initializing SD...`), not Capstone's (`Hit any key to enter update mode`); console `baud_rate_state` 57600 |
+| JTAG | attach fine, `riscv.cpu tap/device found: 0x00000001`, irlen 5, same as the Capstone SoC |
+| load | `monitor load_image … 0x80000000 bin`, 8,388 bytes in 0.08 s; `x/4i 0x80000000` = `auipc t1` / `addi` / `csrw mtvec` |
+| UART | banner, `T1 tag=1`, `T2 tag=1`, `T3 tag=0`, `T4 trapped=1 mcause=1c mtval=2a1`, `SMOKE PASS` — byte-identical to the Verilator transcript |
+| DRAM mirror | `x/7gx 0x80001000` = `1, c0de0002, 0, 1, 1c, 2a1, 80000150` — the pass pattern, `trap_pc` at T4's `lc.cap` |
+| restore | `caplifive_s12fix_5097eb166.bit` written back, 90 s, power cycle, `nv_bitstream_name` confirmed, lock released |
+
+**What silicon now proves that simulation could not:** DDR3 calibration with this bitstream; the **tag
+controller against real DDR** (T2: a capability stored at `0x81000100` and reloaded keeps its tag, so the
+table at `0xBFC00000` and the MIG address path work); the tag is cleared by an integer store (T3); the
+capability exception path traps with cause `0x1c` and `mtval` naming the register (T4); the UART at 57600
+from a 25 MHz core clock; and JTAG/debug-module access to this SoC. The core clock is the 25 MHz the
+bitstream was constrained for, which is where its +6.5 ns of slack was measured.
+
+Two corrections made during the preparation, both mine: the non-volatile route needs the **`.bit`**, not the
+`.mcs` (the console's persistent path takes a `.bit` filename and does the config-memory conversion itself —
+the Capstone restore is exactly that call); and the board-lane audit replaced the console's `load-image`
+action with the GDB order (`reset halt` → `monitor load_image` → `set $pc` → `continue`), because
+`load-image` poisons the TAP for the following attach. The audit also asked for bounded UART polls and a
+DRAM mirror of the verdict, so a dead UART would still return a reading; both went into the test and the
+mirror is what corroborates the console output above.
+
+Not done on the board: any benchmark, anything purecap, anything Linux-level (no CHERI Linux/CheriBSD port
+for this SoC is in the tree, so the comparison stays bare-metal for now).
+
+Still the lead's: the upstream defect reports, and whether to synthesise Capstone's own base.
