@@ -132,8 +132,18 @@ SQLITE_DEFINES=(
 # these blocks out of this file with `sed`, which is how the oracle and the two domain builds have
 # stayed in step. A conditional the sed cannot see would let them drift apart silently, and that
 # drift is the one failure this pairing exists to prevent.
+#
+# EXPLAIN IS DELIBERATELY NOT IN THIS LIST, and that is a measured decision rather than an
+# oversight. Restoring it -- and it alone, of the eight -- makes the domain fault at the FIRST
+# region share (`SQ: E/share1`, cause 24), before it executes anything, on the ordinary SLT path
+# with no probe involved. Bisected 2026-09-09 one define at a time against an all-deployed control:
+# NONE and the other seven reach `SQ: H/return`; -USQLITE_OMIT_EXPLAIN alone reaches only E/share1;
+# the seven together pass and all eight fail. Root cause NOT established (see the registry entry).
+# It also happens to be the omission that buys nothing: we build from the amalgamation, whose
+# parser tables are pre-generated, so SQLITE_OMIT_EXPLAIN never removed the grammar and EXPLAIN
+# parses and runs today WITH the define set. Restoring it would trade a working domain for a
+# feature that already works.
 SQLITE_RESTORE=(
-  -USQLITE_OMIT_EXPLAIN
   -USQLITE_OMIT_FOREIGN_KEY
   -USQLITE_OMIT_UTF16
   -USQLITE_OMIT_INCRBLOB
