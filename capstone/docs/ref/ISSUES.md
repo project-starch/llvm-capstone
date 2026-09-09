@@ -357,7 +357,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour) and the second defect at `:397` (a plain word-0 entry overlaying `.user = 0`), which is UNTESTED, not refuted. No fix candidate; synthesis-first; W-12 stays in force`
+### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). No fix candidate; synthesis-first; W-12 stays in force`
 
 **Signature.** The rung `s06agg` (`tests/fpga-repros/R29-wbuffer-highword-forwarding/src/s06agg.dom`,
 `249118220f8cf37a`, entry VA `0x10000`, `-O0`) copies `struct { void *p; unsigned long x, y; }` by
@@ -464,15 +464,32 @@ trailing scalar field is initialised just before the copy. `W-12` (`SQLITE_GRANU
 > **Residency is necessary but not sufficient: the load must also MISS.** That is the third arm in
 > this investigation to pass by not creating its condition, and it is the same error each time.
 >
-> **Still not observed, flagged rather than glossed:** `wbuffer_hit_oh` and `wbuffer_be` are internal
-> combinational signals and are not in the trace, so the word-gating itself is inferred from port
-> behaviour rather than read directly; and the second defect at `:397` (a plain word-0 entry overlaying
-> `.user = 0`) is **UNTESTED, not refuted** — `r29-sep-userzero` passed, but by the same mechanism it
-> probably never missed either.
+> **The `.user = 0` account is REFUTED too (RTL lane, `b871c51d4`, 2026-09-10).** `r29-sep-userzero-miss`
+> writes `y` to the high word and drains it with a `fence` so memory holds it, EVICTS the granule's set
+> with twelve loads at the same-set stride (32 KiB, 8-way, 16-byte lines: index is `addr[11:4]` over 256
+> sets, so twelve tags overflow eight ways), then stores plainly to the LOW word and does the wide load
+> immediately. Predicted FAIL 11; read **PASS** at 2485 cycles — and this time the trace shows the
+> condition existed: at cycle 4379 `wr_cl_vld = 1` (the load MISSED), `rd_data_o = 0x1111222233334444`
+> and **`rd_user_o = 0x5555666677778888`, correct**. The positive control is inside the reading: `x` was
+> stored one instruction earlier and never drained, so memory cannot hold it, and the only source for a
+> correct low word is the write-buffer overlay — its appearing on `rd_data_o` proves a plain WORD-0
+> entry was resident and hit the word-granular compare at that cycle, which is exactly the condition
+> under which the `.user` account says the high lane is driven from zero. It was not. So either a plain
+> entry's `.user` is not zero as `store_unit.sv:363` was read to imply, or `rd_user_o`'s overlay is not
+> gated as that account assumes; the arm does not separate those and does not need to, because the
+> failure does not occur. **A fix need not cover it.**
+>
+> The contrast is the lesson: `r29-sep-userzero` also passed, but there the load HIT and the reading was
+> worth nothing. The only difference between the two arms is the eviction.
+>
+> **Still not observed:** `wbuffer_hit_oh` and `wbuffer_be` are internal combinational signals absent
+> from the trace, so the word-gating itself is inferred from port behaviour rather than read directly.
+> That needs a Verilator public-signal build — and R-10's `is_cap_req` / `st_wr_cap` are the same
+> problem and the same fix, so ONE traced build with those exposed closes both. That is the next probe,
+> before any fix candidate.
 >
 > **For a fix this is good news:** a granule-scoped data overlay would repair the observed case, since
-> the entry holding `y` is right there. It must still ALSO refuse the `.user` overlay for a
-> non-capability entry, because this probe leaves that hazard untouched.
+> the entry holding `y` is right there.
 
 > **SEPARATION ARMS, 2026-09-10 — SUPERSEDED BY THE PROBE ABOVE; kept because the reasoning that did
 > not survive is the useful part.** (RTL lane, `f29465d8c`, predictions written into the test headers
@@ -544,12 +561,30 @@ control intact in both. The site is named and corroborated; a claim-auditor pass
 pending (result to be recorded here either way). Bare M-mode simulation: corroborates the mechanism,
 adds no board evidence.
 
+> **SILICON DISTANCE LADDER, boot sw49, 2026-09-10 — the window is ONE INSTRUCTION WIDE.** Four arms,
+> one variable, each image's gap verified in its own disassembly rather than in its source (an arm whose
+> filler had been optimised away would return 64 and read as "the defect stopped"):
+>
+> | arm | gap | reading | |
+> |---|---|---|---|
+> | `k800` | — | 4 | control, OK |
+> | `s06agg` | 0 | **66** | third reading of this draw (sw46, sw48, sw49), first on the fence.i-drop firmware |
+> | `s06agg_d1` | 1 | **64** | **the turn point** |
+> | `s06agg_d2` | 2 | 64 | |
+> | `s06agg_d4` | 4 | 64 | matches the simulation's four-apart arm |
+>
+> A single intervening instruction clears it. Combined with the probe, the condition is *resident AND
+> the load misses*, so this ladder measures the REFILL window rather than the write buffer's: by one
+> instruction later the line is already in and the load hits. It also means the exposure in real code is
+> narrow — the compiler must emit the plain store immediately before the capability-grained copy, which
+> is exactly what an aggregate assignment with a trailing scalar does.
+
 **What would settle it (rewritten after the audit).** (a) Separate the three accounts in simulation with
 instruments that OBSERVE, not infer: where the `sd` is at the `ldc`'s read cycle (store buffer, write buffer,
 array), whether the `ldc` hit or missed, and the `ldc`'s OWN result register (not a readback after an `stc`) —
 one arm per account, prediction first, logs kept. (b) A fix candidate only after (a); whatever it is, it must
 also refuse the `.user` overlay for a non-capability entry (the second defect), then the sim pair, lint, the
-auditor and synthesis before any board time. (c) The matched board pair:
+auditor and synthesis before any board time. (c) ~~The matched board pair~~ — **done, boot sw49 above.** (d) The matched board pair:
 the same rung with a `fence` (or any instruction) between the `sd` and the `ldc`, predicted 64. (c) A
 fix candidate then goes through the sim pair (adjacent must PASS, apart unchanged), lint, synthesis, and
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
@@ -1018,7 +1053,7 @@ Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6
 **Recorded because the reasoning is the useful part:** any future pass that adds or removes
 globals *after* ISel would silently break this positional scheme.
 
-### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse; whether any workload approaches it is UNMEASURED`
+### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
 
 > **CORRECTED 2026-09-10 (board lane), read against the FLASHED bitstream's own source
 > (`capstone-ariane` `66c4e7517`), not against this entry's cited lines.** Both halves of the
@@ -1043,17 +1078,37 @@ globals *after* ISel would silently break this positional scheme.
 >   1.6 % of the 65532 usable ids, not a crossing of 1,024. Nothing in the ladder approaches the real
 >   threshold either.
 >
-> **What is now open, and it is a measurement, not a code reading.** The board driver reported
-> `rev-node head = 65047 (99.3% of 65535)` after the wedged probe in BOTH boot sw45 and boot sw47 --
+> **THE MEASUREMENT IS IN, 2026-09-10, and the answer is that the instrument cannot make it.** Every
+> rev-node head sample the driver took on a HEALTHY boot — sw44, sw46 and sw48, all arms returning —
+> reads `0xFFFF`, which the driver correctly refuses as a datum
+> (`run_sqlite_stages_fpga.py:2112-2130`: it is `REVNODE_SENTINEL` and is indistinguishable from an
+> all-ones dead aperture). The `65047` reading appears in exactly the two boots that carried a WEDGE,
+> sw45 and sw47, and is identical in both. So there is no healthy-boot consumption datum at all.
+>
+> **And `0xFFFF` cannot be the true head, which is what settles it.** Per the RTL,
+> `head == 16'd65535` IS the exhausted state: `capstone_rev_node.anvil:74` gates allocation on
+> `*head != 16'd65535`, and `:99-107` then drops the request so SPLIT blocks forever. If the head
+> really were at the sentinel, `create_domain`'s five splits would deadlock and no domain would ever
+> run — yet every one of those boots created domains and returned their oracles. Therefore `0xFFFF`
+> here is the dead aperture, not the register, and the whole read path is uninformative about pool
+> consumption on a healthy boot.
+>
+> **Conclusion: `99.3 % consumed` is WITHDRAWN as a reading.** It was never a live allocation count;
+> it is what the halted read path yields after a wedge, twice identically. Answering the actual
+> question — how close does any workload come to 65532 — needs a different instrument, and the
+> cheapest is monitor-side: `create_domain` and the entry glue already know how many splits they
+> perform, so a counter reported through the existing trace tags would give an exact number with no
+> aperture involved. Not scheduled; nothing currently approaches the threshold on any known workload.
+
+*The original open question, kept for the record:* the board driver reported
+`rev-node head = 65047 (99.3% of 65535)` after the wedged probe in BOTH boot sw45 and boot sw47 --
 > the *identical* value in two boots that ran different stage sets. Either the pool really is 485
 > allocations from a deadlock on a freshly power-cycled board (which would matter a great deal, since
 > there is no slot reclamation -- `DROP` invalidates without freeing), or the read is not a datum: it
 > is taken after a wedge, through a path that can serve cached values, and the driver already
-> documents one way this register lies (`run_sqlite_stages_fpga.py:2112-2130`: `0xFFFF` is the
-> sentinel and is indistinguishable from an all-ones dead aperture, which was misreported as
-> "99.998 % consumed" until 2026-08-27). **One check settles it:** read the head at two known points
-> in a HEALTHY boot -- before the first domain and after a known number of splits -- and see whether
-> it starts near zero and moves by the expected amount. Until that runs, 99.3 % is not a finding.
+> documents one way this register lies. **That check has now been made — see the box above — and the
+> healthy-boot reading is the sentinel, so the answer is that this instrument cannot measure pool
+> consumption at all.**
 
 *The original account, kept because it is what the entry claimed for six weeks:*
 

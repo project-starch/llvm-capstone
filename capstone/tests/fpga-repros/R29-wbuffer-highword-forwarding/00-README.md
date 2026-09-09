@@ -6,7 +6,9 @@
 > line memory does not yet hold — while the write-buffer entry holding that half sits resident and
 > fully valid at the same cycle, because the overlay that would repair it is gated at WORD
 > granularity and a word-1 entry never hits. **Refill = origin; word-gated overlay = the missing
-> repair.** The store-buffer account is refuted by observation. No fix candidate yet.
+> repair.** The store-buffer account and the `.user = 0` account are both refuted by traced arms that
+> show their condition existed. **On silicon the window is ONE instruction wide** (boot sw49). No fix
+> candidate yet.
 
 **If you arrived here with a different symptom, you probably want a sibling.** This folder is about a
 *plain* 8-byte store immediately before a *128-bit* load of the same 16-byte granule, where the load
@@ -94,11 +96,13 @@ without ever creating the failing condition — is the part worth reading.
    **This is the missing repair**, confirmed by the probe below: the entry is resident and valid at
    the failing read and the overlay still does not supply it. Its arm `r29-sep-forceres` read PASS
    only because forcing residency also forced a cache HIT.
-2. **A second defect at the same line.** A plain store's write-buffer `.user` is provably zero
-   (`store_unit.sv:363`), so a *resident plain word-0 entry* sets `wbuffer_be` to all ones and drives
-   all eight lanes of `rd_user_o` from `.user = 0`. Any fix must refuse the `.user` overlay for a
-   non-capability entry, not merely add a word-1 term. **UNTESTED, not refuted**: arm
-   `r29-sep-userzero` read PASS, but by the same mechanism it probably never missed.
+2. **A second defect at the same line.** A plain store's write-buffer `.user` was read as provably zero
+   (`store_unit.sv:363`), which would make a *resident plain word-0 entry* drive all eight lanes of
+   `rd_user_o` from `.user = 0`. **REFUTED** by `r29-sep-userzero-miss`, which forces both residency and
+   a miss (it evicts the set with twelve loads at the same-set stride) and reads PASS with
+   `rd_user_o` **correct** at the missing cycle — with a positive control inside the reading, since `x`
+   was stored one instruction earlier and never drained, so a correct low word can only have come from
+   the overlay. A fix need not cover this.
 3. **The store buffer's disambiguation is word-granular too** (`load_unit.sv:297` takes the page
    offset from `vaddr[11:0]`; `store_buffer.sv:279/287/293` compare `[11:3]`), so a 16-byte `ldc` at
    `…010` is not held for a pending store at `…018`. **REFUTED by the probe**: both store-buffer
@@ -135,9 +139,28 @@ creating its condition.
 
 **Still not observed, and flagged rather than glossed.** `wbuffer_hit_oh` and `wbuffer_be` are
 internal combinational signals absent from the trace, so the word-gating itself is inferred from port
-behaviour rather than read directly. And account (2), the `.user = 0` overlay from a resident plain
-word-0 entry, is **UNTESTED rather than refuted** — its arm passed, but by the same mechanism it
-probably never missed either. A fix must still cover it.
+behaviour rather than read directly. Reading them needs a Verilator public-signal build; R-10's
+`is_cap_req` and `st_wr_cap` are the same problem and the same fix, so one traced build closes both.
+
+### On silicon the window is ONE instruction wide (boot sw49, 2026-09-10)
+
+Four arms, one variable — the number of filler instructions between the plain `sd` of the high word
+and the `ldc` of that granule — with **each image's gap verified in its own disassembly**, because an
+arm whose filler had been optimised away would return 64 and read as "the defect stopped".
+
+| arm | gap | reading | |
+|---|---|---|---|
+| `k800` | — | 4 | control, OK |
+| `s06agg` | 0 | **66** | third reading of this draw (sw46, sw48, sw49) |
+| `s06agg_d1` | 1 | **64** | **the turn point** |
+| `s06agg_d2` | 2 | 64 | |
+| `s06agg_d4` | 4 | 64 | matches simulation's four-apart arm |
+
+One intervening instruction clears it. With the probe's finding that the load must also MISS, this
+ladder measures the **refill** window, not the write buffer's: one instruction later the line is
+already in and the load hits. The practical exposure is correspondingly narrow — the store must be
+immediately before the copy, which is exactly what an aggregate assignment with a trailing scalar
+emits.
 
 ## Retractions on this defect, kept because they are the useful part
 
@@ -151,16 +174,19 @@ probably never missed either. A fix must still cover it.
 * The apart-PASS run's log was later overwritten, so that particular result rests on
   `sim/s06agg-shape-RECORDS.md` rather than on a re-readable artifact.
 
+**The pattern behind all three, worth more than the individual incidents.** Every one was a directed
+arm that PASSED without ever creating the condition it was built for — stores too far apart, a
+separator load that turned the miss into a hit, an eviction that was missing. A pass means nothing
+until the trace shows the condition existed; the arm that finally refuted account (2) is the one whose
+reading contains its own positive control.
+
 ## What would settle it
 
 1. ~~A waveform probe~~ — **done 2026-09-10, above.** What it still owes: `wbuffer_hit_oh` and
    `wbuffer_be` read directly rather than inferred, an arm for the `.user = 0` hazard that actually
    misses, and `is_cap_req` (`wt_axi_adapter.sv:196`) / `st_wr_cap` (`wt_dcache_mem.sv:138`) sampled
    to answer R-10's secondary half.
-2. **A distance ladder on the board** — the same rung with 1, 2 and 4 filler instructions between the
-   `sd` and the `ldc`. Nothing has measured this window on silicon, and the probe sharpens what the
-   ladder measures: the condition is *resident AND the load misses*, so the ladder should show a
-   distance beyond which the line is already in.
+2. ~~A distance ladder on the board~~ — **done, boot sw49: the turn is at one instruction.**
 3. **Then a fix candidate**, which must cover whichever account (1) selects *and* the `.user = 0`
    overlay. Note the constraint the RTL records: the tag-side term took UNOPTFLAT 39 → 40 across three
    formulations (`wt_dcache_mem.sv:384`), so this is synthesis-first — lint at baseline, auditor,
