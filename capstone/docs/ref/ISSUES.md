@@ -1125,8 +1125,35 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > by the RTL lane's simulation, where the privilege level and the fault site are both observable
 > directly, than by another draw at it on the board.
 >
-> **So the structural argument above is UNCONFIRMED — neither supported nor refuted by any board
-> reading.** It rests on reading the gate's condition and the monitor's own entry markers. The discriminator is one re-run with
+> # SETTLED FROM SOURCE 2026-09-10 (RTL lane, verified here): R-31 IS NECESSARY BUT NOT SUFFICIENT. This is a READING, not an open question.
+>
+> The capability check on ordinary loads and stores is gated on
+> `CVA6Cfg.CAPSTONE_EXT && capmode_i && ld_st_priv_lvl_i == riscv::PRIV_LVL_M`
+> (`load_store_unit.sv:947-950`). **Domains do not run in M-mode**, and the arithmetic is direct:
+> `create_domain` sets the domain-switch context to `dom_seal[3] = (3 << 38) | (2 << 34)` =
+> `0xC800000000`, whose bits **[12:11] — mstatus MPP — are ZERO**, so the `mret` into a domain lands in
+> **USER mode**. The monitor says the same from the other side at `sbi_capstone.c:1838-1842`:
+> *"MPP=3 -> the address IS a firmware address … MPP<3 -> it is a guest virtual address"*.
+>
+> **So the check CANNOT FIRE for any domain access.** A revoked region handed back as UNINIT remains
+> readable by a plain `ld` inside the domain, and the reinitialisation discipline R-31 restores is
+> bypassable by anything that reads with scalar loads instead of `LDC`. This matches the finding this
+> project already recorded — and retracted a bounds claim over — that plain integer loads and stores are
+> unchecked in our domains, filed then as a gate-or-configuration question rather than a defect.
+>
+> **What R-31's fix should therefore be sold as:** it restores the TYPE DISCIPLINE on the
+> capability-grained route. It does **not** by itself close the disclosure. Anyone describing it as
+> closing the disclosure is wrong, and that is now a statement about the source rather than a pending
+> measurement.
+>
+> **A TRAP FOR WHOEVER TRIES TO MEASURE THIS, worth more than the finding.** A bare-metal directed test
+> runs in **M-mode**, where the gate DOES fire — so such a test would report *"the check works, UNINIT is
+> not readable"*, which is true of the test and false of every domain. It would have been an eighth
+> instance of tonight's pattern, and I proposed exactly that route before it was caught. **A real
+> measurement has to reach U or S mode**, which means a code CPMP entry for the low-privilege code; the
+> one existing S-mode capability test is parked precisely because it lacks that and spins on an
+> instruction-access fault. That is a day of test work, not a board slot, and it should wait for the
+> `end`-convention ruling because **the answer does not change what R-30 and R-31 do.** The discriminator is one re-run with
 > `WEDGE_TRACER=1`, reading the latched `mcause` against the LSU's OWN cause table
 > (`load_store_unit.sv:972-990` at `66c4e7517`), which emits **raw** mcause values rather than going
 > through the `24 + enum` execute-path encoder:
