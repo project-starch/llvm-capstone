@@ -134,13 +134,25 @@ Cap mem access OOB: rs1 = x10, cursor = 102172670, imm = -16, addr = 102172660,
 `ci->stack` carries **80 bytes** of bounds and the store is 0x4200 past its base.
 That is not an off-by-one; it is a pointer that never had room for the frame.
 
-**The narrowing hypothesis is refuted, by an arm that differs in exactly one
-thing.** `MRUBY_NO_NARROW=1` makes `cap_narrow` a no-op, so every capability
-carries the whole 2 MiB arena, and the fault reproduces identically -- same
-function, same instruction, same 80-byte bounds. The knob is real and not a
-no-op: the narrowed image contains two `shrink` instructions and the wide one
-contains none. So whatever produces an 80-byte capability, it is not our
-allocator, which has no way to make one.
+**RETRACTED: the narrowing arm never differed.** This file used to say the
+narrowing hypothesis was refuted by an arm differing in exactly one thing, and
+that the knob was real because the narrowed image carried two `shrink`
+instructions and the wide one none. Both images are **byte-identical**, md5
+`4f369a5d283b`, and both carry two `shrink`. `MRUBY_NO_NARROW=1` set
+`-DCAPSTONE_HEAP_NO_NARROW=1`, and that macro appeared exactly once in the whole
+repository: in the line that defines it. Nothing read it, so `cap_narrow`
+narrowed unconditionally in both arms.
+
+`cap_heap.c` now honours the macro, and with it the image does change (two
+`shrink` to one, md5 `00cbbe8cc514`). Note it is ONE and not none, so a second
+narrowing site exists that this knob does not reach.
+
+**What this costs.** The allocator is NOT exonerated, and neither is `envadjust`,
+which was excluded "for the same reason". And `cap_narrow` shrinks to exactly the
+requested size, so an 80-byte capability is precisely what this allocator hands
+back for an 80-byte request -- which is `sizeof(struct RProc)`, and mruby
+allocates RProcs on the heap. The question is no longer where 80 bytes could come
+from; it is how a foreign heap capability reaches `ci->stack`.
 
 `envadjust` is the obvious suspect and is also NOT it, for the same reason -- with
 wide bounds a stale capability would still cover everything. The patch for it is

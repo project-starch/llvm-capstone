@@ -29,12 +29,20 @@ DOM_NAME=${DOM_NAME:-mruby}
 # mrblib under a capability-checking QEMU. The first probe run timed out at 6 and the
 # message called it "QEMU stopped", which reads like a crash.
 TMULT=${TMULT:-30}
+# The LOGIN timeout is separate on purpose. --timeout-multiplier scales every timeout,
+# including the ones that should stay short, so at TMULT=30 a boot that stalls costs an hour
+# before anyone finds out. Half the boots in the session that added this line were stalls.
+export CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300}
 mkdir -p "$SHARE"
 
 if [[ ${SKIP_BUILD:-0} != 1 ]]; then
   echo "== building $DOM_NAME (narrowing: $([[ ${MRUBY_NO_NARROW:-0} == 1 ]] && echo OFF || echo on))"
   DOM_NAME="$DOM_NAME" bash "$SCRIPT_DIR/build-mruby-silicon.sh"
 fi
+# THE LOADER TOO, not just the image. capstone-test.user is what invokes the domain, and
+# it lives in the buildroot target tree rather than the share. Leaving it out costs a whole
+# boot: the guest answers "not found", which reads like a broken image.
+cp -f "$CAPSTONE_BUILDROOT_DIR/build/target/capstone-test.user" "$SHARE/" 2>/dev/null || true
 cp -f "$OUT_DIR/$DOM_NAME.dom" "$SHARE/"
 
 echo "== one boot, $CALLS calls ascending"

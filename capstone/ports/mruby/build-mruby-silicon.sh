@@ -104,9 +104,8 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -DMD_REGION_BYTES="$MRUBY_REGION"
         -include "$SCRIPT_DIR/port/capstone_mruby_libc.h"
         -I"$AMALGAM_DIR" -I"$SCRIPT_DIR/port" -I"$RV8"
-        -I"$REPO_ROOT/capstone/benchmarks/micropython/adapted/include"
-        -I"$REPO_ROOT/capstone/benchmarks/micropython/port"
-        -I"$REPO_ROOT/capstone/benchmarks/wamr/adapted/include")
+        -I"$SCRIPT_DIR/adapted/include"
+        -I"$SCRIPT_DIR/adapted")
 
 # The stack-bounds probe in mrb_vm_run (patch 0003 + port/md_probe.c). Off by
 # default and added as a flag rather than as -D...=0, because the patch tests it
@@ -157,7 +156,10 @@ COMMON_FLAGS=("${COMMON[@]}" -D__SOFTFP__)
 source "$BEEBS_SOFTFLOAT"
 OBJS+=("${softfloat_objs[@]}")
 
-for b in fixsfdi fixunssfdi fixunssfsi floatunsisf; do
+# floatunsisf is NOT here: the shared softfloat list took it on 2026-09-05, and
+# compiling it twice writes the same softfloat-floatunsisf.o into OBJS twice, which
+# ld.lld reports as a duplicate symbol against the object itself.
+for b in fixsfdi fixunssfdi fixunssfsi; do
   "$CLANG" "${COMMON_FLAGS[@]}" -I"$COMPILER_RT" -c "$COMPILER_RT/$b.c" \
     -o "$OBJ_DIR/softfloat-$b.o"
   OBJS+=("$OBJ_DIR/softfloat-$b.o")

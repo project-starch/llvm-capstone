@@ -1,0 +1,12 @@
+#ifndef CAPSTONE_WAMR_INTTYPES_H
+#define CAPSTONE_WAMR_INTTYPES_H
+#include <stdint.h>
+#define PRId32 "d"
+#define PRIu32 "u"
+#define PRIx32 "x"
+#define PRId64 "lld"
+#define PRIu64 "llu"
+#define PRIx64 "llx"
+#define PRIuPTR "lu"
+#define PRIxPTR "lx"
+#endif
