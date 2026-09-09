@@ -939,6 +939,25 @@ unexpected operand type.
 >
 > **Nothing is edited until the lead rules again.** The previous ruling stands recorded below because it
 > was made in good faith on the framing available, and the framing was mine.
+>
+> **INDEPENDENTLY VERIFIED by the RTL lane** (2026-09-10), who checked all three claims against the
+> source rather than accepting them, and worked the equivalence through arithmetically. They withdrew
+> their own route 2, in their words, because they *"derived the RTL's convention from the spec's instead
+> of reading it"* — the same class of error being caught in others' work all night. No spec edit has been
+> made by either lane.
+>
+> **AND ONE CONSEQUENCE IS NOW SETTLED THAT WAS PREVIOUSLY LEFT AS "NARROWS": whether Q-07 CLOSES
+> DEPENDS ON A CHOICE IN THE QEMU FIX, NOT ON A FACT.**
+> * If QEMU's `csinit` keeps `cursor == end`, it accepts exactly one value while the fixed RTL accepts
+>   `end` and above, so the sets still differ above `end` — **narrows**, which is what was recorded.
+> * If QEMU's `csinit` takes `cursor >= end` — which is what the Q-07 change written on 2026-09-10 does
+>   (`op_helper.c`: fault iff `cursor < end`) — the two accepted sets are **identical** and **Q-07
+>   closes**.
+>
+> Both implementations hold `end` exclusively, so `>= end` is the coherent choice and is what is
+> written. The earlier retraction of "fixing R-30 closes Q-07" was correct against the `== end`
+> proposal and is superseded by the `>=` one; recorded this way so neither statement reads as simply
+> wrong.
 
 > # ~~LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE~~ — SUPERSEDED, see the box above.
 >
@@ -1309,6 +1328,25 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 >
 > **Nothing is edited until the lead rules again.** The previous ruling stands recorded below because it
 > was made in good faith on the framing available, and the framing was mine.
+>
+> **INDEPENDENTLY VERIFIED by the RTL lane** (2026-09-10), who checked all three claims against the
+> source rather than accepting them, and worked the equivalence through arithmetically. They withdrew
+> their own route 2, in their words, because they *"derived the RTL's convention from the spec's instead
+> of reading it"* — the same class of error being caught in others' work all night. No spec edit has been
+> made by either lane.
+>
+> **AND ONE CONSEQUENCE IS NOW SETTLED THAT WAS PREVIOUSLY LEFT AS "NARROWS": whether Q-07 CLOSES
+> DEPENDS ON A CHOICE IN THE QEMU FIX, NOT ON A FACT.**
+> * If QEMU's `csinit` keeps `cursor == end`, it accepts exactly one value while the fixed RTL accepts
+>   `end` and above, so the sets still differ above `end` — **narrows**, which is what was recorded.
+> * If QEMU's `csinit` takes `cursor >= end` — which is what the Q-07 change written on 2026-09-10 does
+>   (`op_helper.c`: fault iff `cursor < end`) — the two accepted sets are **identical** and **Q-07
+>   closes**.
+>
+> Both implementations hold `end` exclusively, so `>= end` is the coherent choice and is what is
+> written. The earlier retraction of "fixing R-30 closes Q-07" was correct against the `== end`
+> proposal and is superseded by the `>=` one; recorded this way so neither statement reads as simply
+> wrong.
 
 > # ~~LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE~~ — SUPERSEDED, see the box above.
 >
