@@ -88,16 +88,30 @@ control first.
 
 ## Status
 
-**The ladder reaches mruby's own VM.** One image, six calls:
+**The ladder reaches mruby's bytecode dispatch.** One image, ascending calls:
 
 | call | what | result |
 |---|---|---|
 | 0 | anchor, `&domain_main` | returns the load base |
 | 1 | entry, cap-init, return channel | **OK** |
-| 2 | the outer allocator, narrowed | **OK** |
-| 3 | `mrb_open_core` | **cause 7**, a bounds fault on a store |
-| 4 | `mrb_gc_add_region` | not reached |
-| 5 | run bytecode | not reached |
+| 2 | the outer allocator, malloc/realloc/free | **OK** |
+| 3 | narrowing control, `malloc(64)` bounds | **64** |
+| 4 | probe self-test | **fires** |
+| 5 | `mrb_open_core` | **UNEXPECTED_OPERAND** in `mrb_vm_exec` |
+| 57 | `mrb_gc_add_region` | not reached |
+| 58 | run bytecode | not reached |
+
+Call 5 used to be a bounds fault on the stack clear in `mrb_vm_run`; that was the
+inlined `setjmp` and is fixed (see ROOT CAUSE below). What is left is a different
+class -- an untagged operand, not a too-small capability:
+
+```
+Cap mem access requires capability: pc = 102030b20, rs1 = x24, imm = 16
+```
+
+Image offset 0x40b20, inside `mrb_vm_exec` (0x3a418-0x5856c): `lbu a0, 0x10(s8)`
+guarded by `bnez s8`, so `s8` is a non-null word that carries no tag. mruby is now
+executing its own VM rather than dying while setting the stack up.
 
 **RETRACTED, and the retraction is the useful part.** This file previously said the
 store landed "one element past a buffer of `nregs` elements", and that our exact
@@ -185,68 +199,89 @@ The builtins the probe reads were checked against the backend rather than assume
 `CapstoneISelDAGToDAG.cpp` selects LCC field 0 for the tag, 2 for the cursor, 3 for
 the base and 4 for the end.
 
-**Where it stands: an irreducible contradiction, measured from every reachable
-side.** The probe measures the frame `mrb_vm_run` is about to clear as healthy, and
-the next four instructions fault on an 80-byte capability. Each line below is a
-measurement with a control, not an inference:
-
-| | |
-|---|---|
-| frame 1 is healthy | `ci->stack` 4096 bytes, cursor at base, `nregs` 4, `stack_keep` 0, `stbase` the same 4096 at the same address, 143360 bytes inside the arena |
-| the frame is `mrb_vm_run`'s | the probe reports its call site: 1, not `exec_irep` |
-| escaping BEFORE frame 1's clear | no fault; the full 60-rung ladder completes |
-| letting frame 1's clear run | fault, before frame 2 is reached |
-| disabling BOTH clears | no fault; it hangs instead, on a stack mruby believes it cleared |
-| the predicate can fire | ladder rung 4, a fake context carrying a deliberately tiny capability |
-| the knobs are really compiled in | `md_knobs` is read back through the ladder, and out of the image itself |
-| reading `ci->stack` twice inside the probe | identical, `md_reread_differs` = 0 |
-| the probe does not touch the heap | the `malloc` it used to do for the arena base is gone; the domain hands it in |
-| the probe preserves the caller | it saves and restores s0-s3 and touches nothing else callee-saved; `mrb_vm_run` holds the context in s7 |
-| the domain stack does not overlap the heap | probe stack address is 183059 bytes BELOW the arena, growing away |
-| the LCC field indices are right | `CapstoneISelDAGToDAG.cpp`: 0 tag, 2 cursor, 3 base, 4 end |
-
-The probe now takes the context and does the same two loads the clear does --
-`c->ci` at slot 3, then `ci->stack` at slot 3 -- so the two are reading the same
-words through the same register. **What is left is the four instructions between
-`md_probe_stack`'s `ret` and the store, and that is no longer an mruby question.**
-
-Two earlier readings are retracted along the way, and both were retracted by a
-knob rather than by an argument. "Disabling the clears does not help" was measured
-on a build where `MD_PROBE_SKIP_CLEAR`'s body had been deleted by a rewrite,
-leaving only its `#define`; the flag was accepted and did nothing. "The fault is
-not in a `vm.c` clear" followed from that and falls with it. `md_knobs` reports the
-compiled flags back through the ladder now, because a knob that did not take is
-not visible from outside the image.
-
-**The four instructions are a KNOWN SHAPE on this project, and doubling every
-`ldc` moves the fault.** The reload is
+**ROOT CAUSE: a `naked` `setjmp` is inlined, and inlining is exactly what removes
+the ABI that binds its argument.** Everything above this line about a load defect
+is retracted. Both faults are one bug, and it is in this port.
 
 ```
-ldc a1, 0x30(s7)     ; rd = a1
-ldc a1, 0x30(a1)     ; rs1 = a1, the previous rd
+remark: 'setjmp' inlined into 'mrb_vm_exec' with (cost=always):
+        always inline attribute at callsite mrb_vm_exec:178:3
 ```
 
-which is, byte for byte, the pair `llvm/lib/Target/Capstone/CapstoneLdcRetry.cpp`
-was written for: "two ADJACENT `ldc`s where the second's rs1 is the first's rd",
-the shape shared by four S-07 wedges in four unrelated functions in four builds.
-S-07 itself is a silicon defect in the load path and does not exist under QEMU, so
-this is a shape match, not a mechanism match.
+Each link checked against its source:
 
-Built with `-mllvm -capstone-double-ldc` (MRUBY_DOUBLE_LDC=1), which re-issues every
-`ldc` and takes the second result -- and unlike the type-query retry puts nothing
-between the pair, so it does not serialise the overlap under test. The knob is
-verified in the image rather than assumed: 22410 `ldc` become 38632.
+1. mruby marks `mrb_vm_exec` `MRB_FLATTEN` = `__attribute__((flatten))`
+   (`src/vm.c:2491`), to force its extracted opcode handlers back inline.
+2. `flatten` makes clang stamp `alwaysinline` on **every** call site in that
+   function -- 263 in the frontend IR -- including `MRB_TRY`'s `setjmp`.
+3. `getAttributeBasedInliningDecision` honours a call-site `alwaysinline` at
+   `InlineCost.cpp:3217`, **before** it reads the callee's `noinline` at 3246, and
+   `isInlineViable` does not reject a `naked` callee. Both attributes are present
+   and the inline happens anyway:
+   `attributes #9 = { naked noinline nounwind returns_twice ... }`.
+   clang's own comment says what was intended: "Naked implies noinline: we should
+   not be inlining such functions" (`CodeGenModule.cpp:2763`).
+4. A `naked` body is inline asm with no operand constraints. It addresses its
+   argument as `a0` because that is where the ABI puts it. Inlined, nothing puts
+   `&c_jmp` into `a0`.
 
-The stack-clear fault is GONE in that build. `mrb_vm_run` runs past it and dies
-later in the same function, on a CAPABILITY store (`size = 16`, `imm = 160`) rather
-than the 8-byte store of the clear.
+The image counts it: the save sequence appeared **three** times -- the real
+`setjmp` plus two splices. At both splice sites `a0` holds a `mrb_callinfo *`:
 
-**That is a lead, not a verdict, and the pass's own header says why:** an instrument
-rich enough to change this shape also perturbs register allocation and scheduling,
-so a fault that moves is consistent both with "the first read was delivering
-something wrong" and with "the code is simply different now". What it does
-establish is that the contradiction sits on a shape this project has already found
-trouble in twice, which is where to look next.
+```
+37d4c: ldc a0, 0x10(s1)   mrb->c
+37d50: ldc a0, 0x30(a0)   c->ci
+37d5c: stc s2, 0x10(a0)   ci->proc = begin_proc
+37d60: stc a1, 0x40(a0)   ci->pc   = irep->iseq
+37d64: stc ra, 0x0(a0)    setjmp's body, a0 still ci
+   ...
+37d70: stc s2, 0x30(a0)   ci->stack = s2 = begin_proc
+   ...
+37d98: stc sp, 0xd0(a0)   224 bytes into a 96-byte callinfo
+37d9c: li  a0, 0x0
+37da0: ret                and mrb_vm_run RETURNS here
+```
+
+That one mechanism accounts for every symptom recorded above and below:
+
+* **the 80 bytes.** `stc s2, 0x30(a0)` writes `s2` -- `begin_proc`, a
+  `struct RProc *` -- into `ci->stack`. `sizeof(struct RProc)` is 80. The bounds
+  were never an allocator result and never a bad load; they are an RProc pointer
+  put in the stack slot by a register save that thought it was writing a jmp_buf.
+* **the healthy probe reading.** The frame really is sound when the probe looks.
+  The corruption is written by an earlier VM entry, through a pointer that has
+  nothing to do with the clear.
+* **the second fault (`stc s9, 0xa0(a0)`, bounds 160).** The same save running off
+  the end of whatever `a0` addressed -- `irep->iseq` in that build.
+* **the hang.** The asm's own `ret` ends the enclosing function, so `mrb_vm_run`
+  returned an undefined `mrb_value` right after setting up `ci`, and
+  `mrb_open_core` carried on with a half-built VM.
+* **why `-capstone-double-ldc` "helped".** It never repaired a load. It moved the
+  addresses enough to change which fault came first.
+
+**Fix: `port/capstone_setjmp.c` gets its own translation unit.** Without LTO
+nothing can inline across objects. It owns no globals and emits no
+`.capstone_gp_table`, so the gp-captable single-owner gate is unaffected --
+`gen-amalgam.py`'s `OWN_TU` set carries the reason. The build now counts the save
+sequence in the linked image and fails unless there is exactly one copy; the
+positive control is the pre-fix image, which printed 3.
+
+Two things fall out of the fix on their own: `mrb_vm_exec` is a real function
+again (it was only ever inlined into `mrb_vm_run` because its `setjmp` had stopped
+being a `returns_twice` call), and the jmp_buf now reaches `setjmp` properly --
+`cincoffsetimm a0, s0, -0x310` at 0x3a52c, a frame address.
+
+**Open, and a compiler question rather than an mruby one:** `isInlineViable`
+should refuse a `naked` callee outright. The port-level split fixes mruby; the next
+port that puts `flatten` or `always_inline` near naked asm gets the same silent
+miscompile.
+
+## Superseded: what the instruments said before the cause was known
+
+Everything in this section was measured on builds carrying the inlined `setjmp`.
+The measurements are real; the conclusions drawn from them are not. It is kept for
+the method lessons, which are independent of the bug.
+
 
 **The clear is past, and the next blocker is characterised.**
 `MD_PROBE_DO_CLEAR` has the probe perform the clear itself, in C, over the same
@@ -335,7 +370,7 @@ The control matters here as much as the measurement: in the same boot that produ
 the 200000-fetch result, a known-good image completed all six of its rungs and
 returned its escape marker, so the silence was the subject and not the vehicle.
 
-**Three probe versions were wrong before one was rightBefore that fault: **stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
+**Before that fault: stage 0 returned `0x6D520001`.** The 1.4 MB image loads, the domain is created and
 entered, `__capstone_cap_init` materialises the capability globals, and the marker
 reaches the host. Stages 1 to 4 are the next step; no case has been scored.
 
