@@ -966,6 +966,8 @@ Table row `clk_out1_xlnx_clk_gen`**.
 | `80843404c` | −16.400 | 102,769 / 174,275 | 405,480,965 |
 | `6f8345fdb` | −13.491 | 99,879 / 173,789 | ~396 MB *(S-12 fix, debug tree TIED OFF)* |
 | `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
+| `947327f6d` | −11.717 | 97,438 / 174,756 | 403,665,530 *(rebuilt `fpga-testing-dev-clean`: same fixes, instrument NEVER ADDED; 2026-09-07)* |
+| `ef5a8eaf2` | −12.733 | 101,143 / 174,188 | 404,402,489 *(`947327f6d` + the registered switch-in-progress flag; 2026-09-07)* |
 
 **Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
 reads healthy while the CPU clock fails. That trap has caught this project before.
@@ -1156,6 +1158,46 @@ price it against this pair, not against LUT count.
 
 Both routed legally: no DRC `LUTLP-1`, "found timing loop" = 100 on both, identical to the base.
 
+**Qualified 2026-09-07 by a second build without the S-07 instrument.** `947327f6d` (the rebuilt
+`fpga-testing-dev-clean`: the same fixes, the S-07 recorder/aperture layer never added at the RTL
+level; the base's 12 debug-bank apertures and upstream's UART instruction tracer `core/tracer.sv`
+remain, as on every build here) routed at **−11.717 ns**, **97,438** failing endpoints, **170,481**
+placed LUTs (83.65%). That is *more* area than `6f8345fdb` (168,944, the WHOLE debug-LED tree tied
+off) and than the fully instrumented `5097eb166` (169,694). The two removals are not the same
+variable — one drops the S-07 layer, the other the entire tree — yet the build with more debug logic
+left in came out 787 LUTs *larger* than the one with all of it. The run-to-run spread of this flow is
+**unmeasured** — no commit has ever been built twice with identical settings here (the only repeat,
+`52fa06b9d`, changed the retiming setting between its two runs) — so nobody can say whether 787 LUTs,
+or the +750 above, is signal. **Do not cite either LUT figure as the instrument's area cost until a
+same-settings replicate exists.** The timing direction
+holds on both builds without the S-07 layer (−13.491 and −11.717 against −15.311); 947327f6d is the
+best-timed fix-carrying build on record, bettered only by `39b21639d` (−10.629, a timing-experiment
+branch). Same DRC/loop signature: no `LUTLP-1`, "found timing loop" = 100. The tracer itself is a
+436-line trace buffer with a UART dump, synthesised unconditionally since it was added upstream; its
+cost has never been measured (65,562 of this build's failing endpoints terminate inside it).
+Launch census: 97,438 of 97,439 from `dom_switcher/req_en_q_reg[0]` (the busy level), 1 from the DDR
+controller on `clk_pll_i` — a third distinct dom_switcher launch register across four builds. **Census verdict: NOT usable as a
+board bitstream** — that register is the busy level that gates commit, and the trap-entry CSRs sit on
+its failing cone (`bitstream-usability-is-the-census-not-the-slack.md`, 2026-09-07 entry).
+
+**Qualified again 2026-09-08 by the fix build.** `ef5a8eaf2` (`947327f6d` plus one registered
+switch-in-progress flag feeding `commit_stage`, `controller` and `frontend`; RTL otherwise identical)
+routed at **−12.733 ns**, **101,143** failing endpoints, **170,410** placed LUTs (92,817 registers, 284 fewer
+than the base for one added flop — unexplained, variance unmeasured). The three readings
+pre-registered for it all hold — no failing path launched from the new flag, the flag's own input meets
+timing, and `req_en_q` launches nothing that fails — so the busy-edge hazard is closed on this build.
+Launch census: 101,143 of 101,143 from `issue_read_operands` (worst launch `lsu_valid_q`, the issue-to-LSU
+valid, live on every memory instruction). **Census verdict: NOT usable as a board bitstream**, the shape
+of `6f8345fdb`. Same endpoint population as `947327f6d` (tracer 65,562, identical count), different worst
+launch: what the worst-launch census cannot see is whether an endpoint also fails from a second launch;
+a per-checkpoint query on the three retained routed checkpoints is the instrument for that (census doc,
+2026-09-07/08 entry). No bitstream from `fpga-testing-dev-clean` is usable; the resident `5097eb166`
+stays the one in use. **Retracted the same night (census doc, RETRACTED 2026-09-08):** that query ran on
+the resident's own routed checkpoint and found 101,604 of its 101,784 failing endpoints also failing from a
+live register (the LSU bypass occupancy counter, −15.157). The census never licensed the resident either;
+its board record does, and why the silicon works at all is unmeasured. All timing figures in this table
+are unaffected; what is gone is the sentence that a failing build is fine because its launches are inert.
+
 ### §7b — SQLite logic tests on capability silicon, and what may NOT be claimed yet (2026-09-04)
 
 **New, citable — and it is a LIVENESS result, not a correctness one.** The SQLite logic-test
@@ -1184,6 +1226,40 @@ seven-file corpus that matches native under QEMU (10,807 records); the remaining
 one boot each (see the campaign rows dated 2026-09-05 in `tests/board-results/` and the paragraph
 below once they land). Until then the citable line is: *"SQLite 3.53.3 in a capability domain on
 FPGA silicon executes SQLLogicTest `select1` (1031 records) with results identical to native."*
+
+### §7c — The SQLLogicTest corpus on capability silicon (2026-09-05 → 2026-09-07)
+
+Seven files, one boot each, control `k800 = 4` first in every boot, resident
+`caplifive_s12fix_5097eb166.bit`, silicon-config SQLite at -O1, each result read from the run's own
+transcript segment and compared with the native x86 baseline produced by the same runner
+(`benchmarks/sqlite/slt/slt_runner.h`, `build-slt-native.sh`). Images: fresh main-checkout toolchain
+(`libLLVMCapstoneCodeGen.so bfc039bf12e077f5`, clang embedding `fc4f826a16ca`), one image per
+region/heap class, every image validated under QEMU on its own file before it was baked
+(`tests/rtl-smoke/slt-corpus/build-slt-corpus-images.sh`). Rows: `tests/board-results/2026-09-05.tsv`.
+
+| file | records | statements | queries | silicon vs native | boot |
+|---|---|---|---|---|---|
+| `negative-control.test` | 21 | 9 pass / **2 fail** | 6 pass / **4 fail**, 2 skipped, 1 parse error | identical — the comparator's positive control on silicon | sw23 |
+| `evidence/slt_lang_aggfunc.test` | 80 | 12 / **1 fail** | 57 / **10 fail**, 1 skipped | identical, including the corpus's own artifacts | sw24 |
+| `select1.test` | 1031 | 31 | 1000 | identical, 0 failures | B8 |
+| `select2.test` | 1031 | 31 | 1000 | identical, 0 failures | sw27 |
+| `select3.test` | 3351 | 31 | 3320 | identical, 0 failures (~5 min of execution) | sw28 |
+| `select5.test` | 1436 | 704 | 732 | identical, 0 failures (2 MiB heap, 1 MiB stack) | sw26 |
+| `select4.test` | 3857 | 1025 | 2617 + 215 skipped for size | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
+
+**What this establishes.** The two files with deliberate and known failures reproduce them exactly
+on silicon (2 + 4 and 1 + 10), so a clean row is a clean row and not a comparator that cannot fire.
+**All seven files — 10,807 records — are identical to native, zero divergences, on the current
+bitstream and the current compiler.** The citable line: *"SQLite 3.53.3 in a capability domain on
+FPGA silicon executes the SQLLogicTest `select1–5` files and the aggregate-function evidence file —
+10,807 records, 8,746 queries with checked answers — with results identical to native x86, and
+reproduces the negative control's deliberate failures exactly."* This supersedes §7b's "has not
+been run": SQLite correctness on capability silicon now rests on the stock SQLLogicTest corpus, not
+on wedge probes. Caveats, stated: one draw per file (the corpus is deterministic, but silicon has
+known non-deterministic defects and a second pass would cost about an hour); the 9p share and the
+console path produced VOID boots that were re-run rather than counted; and `select4` was the first
+file whose region class (4 MiB) was carved on the board; it worked first time.
+
 
 It is also **not** a performance result — no `mcycle`/`minstret` figures accompany it. So it
 closes part of the **compatibility** axis, and neither the correctness nor the cost axis.
@@ -1216,3 +1292,44 @@ expected to cost time. Whatever intuition predicted otherwise should not be trus
 design.
 
 Provenance: board and RTL lanes, 2026-09-04.
+
+### §7d — The CHERI-CVA6 bitstream RUNS on our Genesys2 (2026-09-09)
+
+**First non-Capstone core executed on this board, and the first silicon evidence for the CHERI tag
+path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`, §7c) was written
+to the board's config memory **non-volatile**, and a bare-metal UART smoke test ran on it. Driven by the
+board lane from `~/capstone-artifacts/cheri-cva6/board-package/`; records in
+`~/capstone-artifacts/cheri-cva6/board-run-1/`. One session under the console lock, 14:48–14:54.
+
+| step | reading |
+|---|---|
+| resident before / after | `caplifive_s12fix_5097eb166.bit` both times (restore verified) |
+| write | `cheri_cva6_B_a9568ac2_25mhz.bit`, persistent, 90 s |
+| bitstream live? | **yes** — post-flash UART is the fork's bootrom (`Hello World! / init SPI / status 0x25 ×2 / SPI initialized! / initializing SD...`), not Capstone's (`Hit any key to enter update mode`) |
+| JTAG | `riscv.cpu tap/device found: 0x00000001`, irlen 5 — same as the Capstone SoC |
+| load | 8,388 bytes to `0x80000000` in 0.08 s; `x/4i` shows the image's own first instructions |
+| UART output | `T1 tag=1`, `T2 tag=1`, `T3 tag=0`, `T4 trapped=1 mcause=1c mtval=2a1`, `SMOKE PASS` — byte-identical to the Verilator transcript |
+| DRAM mirror `x/7gx 0x80001000` | `1, c0de0002, 0, 1, 1c, 2a1, 80000150` — pass pattern; `trap_pc` is T4's `lc.cap` |
+
+**What this establishes that simulation could not.** DDR3 calibration with this bitstream; **the tag
+controller against real DDR** — a capability stored at `0x81000100` and reloaded keeps its tag, so the tag
+table at `0xBFC00000` and the MIG address path work (this was the single largest unknown, since the shipped
+fork constant overflowed DRAM and was fixed for these builds); an integer store clears the tag; the
+capability exception path traps with cause `0x1c` and `mtval` naming the faulting register; the UART at
+57600 from the 25 MHz core clock; JTAG and debug-module access to this SoC. The core ran at the 25 MHz the
+bitstream was constrained for, i.e. the clock at which §7c measured its +6.5 ns of slack.
+
+**What it does NOT establish.** Nothing about performance: no benchmark, no cycle counts, no `mcycle`
+readings. Nothing purecap and nothing Linux-level — no CHERI Linux or CheriBSD port for this SoC is in the
+tree, so any near-term comparison with Capstone stays bare-metal. Four CHERI operations were exercised, not
+the ISA. The three RTL defects found in simulation (§ the plan doc) were not re-tested here.
+
+**Method notes worth keeping.** The verdict is corroborated twice over: the console text and a DRAM block
+the test wrote itself, at fixed addresses after `tohost`, with every UART poll bounded so a dead UART could
+not have wedged the run. Before trusting any reading, the *live* bitstream was confirmed from the bootrom
+banner: had the old bitstream still been live, the same image would have executed CHERI opcodes on the
+Capstone core and produced illegal-instruction traps that read like a CHERI failure. The discriminator was
+written down before the run, not after.
+
+Provenance: cheri lane (package, test, analysis) and board lane (console), 2026-09-09. Plan and full log:
+`docs/plans/cheri-cva6-on-genesys2.md`.

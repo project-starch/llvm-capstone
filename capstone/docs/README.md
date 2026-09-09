@@ -55,10 +55,10 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 | directory | files | what belongs here | how to read it |
 |---|---|---|---|
 | `state/` | 3 | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
-| `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every known defect and is the authoritative status for all of them. `SUBAGENTS.md` before delegating. |
+| `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
 | `design/` | 32 | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
-| `plans/` | 24 live, 21 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
-| `history/` | 205 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
+| `plans/` | 29 live, 24 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
+| `history/` | 196 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
 | `patches/` | — | out-of-tree patches | |
 
 ### The files worth knowing by name
@@ -126,8 +126,10 @@ Use these only when the task actually needs them:
 - **`ref/RATE-RULE.md` — why a single wedge is NOT a result on silicon, with the measured k/n.
   Read before recording, citing or acting on any board outcome.** Rescued 2026-08-18 from deep
   inside `SILICON-BLOCKER.md`, where it silently invalidated most of that document.
-- `ref/known-good-controls.md` — **currently STALE** (rows last verified three bitstreams ago) and
-  a preflight gate depends on it; re-verify a row before relying on it.
+- `ref/known-good-controls.md` — **partly refreshed.** Its three load-bearing rows (`k800`,
+  `k1200`, `r14lp`) were re-verified 2026-09-05 on `caplifive_s12fix_5097eb166`; every other row
+  still reads `last verified 2026-08-06`, against bitstreams replaced at least three times since.
+  A preflight gate depends on this file: re-verify a row before relying on it.
 - `ref/SILICON-BLOCKER.md` — **SUPERSEDED**, the 2026-08-01..06 investigation. The defect it
   chased is S-06, fixed in silicon. Kept because its line numbers are cited from live repro
   folders; do not renumber or trim it.
@@ -136,7 +138,8 @@ Use these only when the task actually needs them:
 - `ref/testing-matrix.md` — compact map of test layers and entry points
 - `ref/capstone-agent-test-instructions.md` — practical command cookbook
 - `ref/capstone-coding-conventions.md` — local coding conventions
-- `ref/delegation-guidance.md` — bounded executor rules for split agent work
+- `history/09-09-2026_ARCHIVED_delegation-guidance.md` — bounded executor rules for split agent
+  work; archived 2026-09-09, superseded in practice by `ref/SUBAGENTS.md`
 - `ref/beebs-benchmark-bringup-manual.md` — exact workflow for adding one or
   more BEEBS benchmark wrappers
 - `ref/capstone-purecap-pointer-model.md` — pointer/capability authority model

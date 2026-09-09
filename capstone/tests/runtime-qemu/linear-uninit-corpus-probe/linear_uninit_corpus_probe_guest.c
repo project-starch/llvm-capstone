@@ -14,16 +14,17 @@
  * for either row; the controller is the same one the held-cap probe uses, minus
  * its arena-lifecycle comment.
  *
- * The post-call read of the host's Linux mmap ("read-arena") is opt-in, and only
- * safe while some capability over the region still has a live revocation node.
- * REV_TRANSFERRED leaves a stale duplicate of the region capability in the
- * monitor's regions[] and drops the region's cpmp entry, so the next host access
- * takes a cpmp miss and swap_cpmp() calls cap_base(regions[id]). If the domain
- * revoked that lineage -- which every row14 probe does, by construction -- the
- * reload yields an untagged value and the lcc inside cap_base() trips
- * `helper_cslcc: Assertion rs1_v->tag failed`, aborting QEMU. Guard rail, not a
- * mechanism failure; see ../intra-domain-mrev-revoke-probe/README.md, "Gap
- * found". So: read-arena for the row11 probes, never for row14.
+ * The post-call read-back ("read-arena") is opt-in, for the row11 probes only,
+ * never for row14 (which revokes the arena). It reads arena[CORPUS_OFFSET]
+ * through the DOMAIN'S own surviving alias, via a second call_dom, exactly as
+ * the sibling intra-domain-mrev-revoke controller does since Q-05. It used to
+ * read the host's Linux mmap directly, which only ever worked because QEMU left
+ * a stale tagged duplicate of a transferred region behind a linear move; Q-05
+ * (2026-09-07, sbi_capstone.c REV_TRANSFERRED -> make_hole) removed that
+ * duplicate, so a host mmap read of a transferred region now takes a monitor
+ * cpmp-miss fault (CAPSTONE_NO_CPMP_REGION). The observer moved into the domain;
+ * the probes' semantics are untouched. See probe_domain.h and
+ * ../intra-domain-mrev-revoke-probe/README.md, "Gap found".
  *
  * Domain payloads are domain_main-style .dom images built with the Capstone
  * clang, loaded with create_dom(path, NULL). A probe that takes a capability
@@ -79,9 +80,17 @@ int main(int argc, char **argv) {
 
   unsigned long retval = call_dom(dom_id);
   print_nobuf("%s: call retval = 0x%08lx\n", TAG, retval);
-  if (read_arena)
-    print_nobuf("%s: arena[%u] after call = 0x%02x\n", TAG, CORPUS_OFFSET,
-                region_bytes[CORPUS_OFFSET]);
+  /* Q-05: the arena was TRANSFERRED to the domain; reading it here through the
+   * host's Linux mmap has no authority and only worked through a QEMU-only
+   * duplicate the monitor no longer keeps. Ask the domain instead: a second call
+   * returns arena[CORPUS_OFFSET] read through its own alias (see probe_domain.h,
+   * probe_calls). (void)region_bytes: the mapping is kept only for the memset. */
+  if (read_arena) {
+    unsigned long byte = call_dom(dom_id);
+    print_nobuf("%s: arena[%u] after call = 0x%02x (read back by the domain)\n", TAG,
+                CORPUS_OFFSET, (unsigned)(byte & 0xffu));
+  }
+  (void)region_bytes;
 
   capstone_cleanup();
   return 0;

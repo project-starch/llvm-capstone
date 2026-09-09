@@ -6,7 +6,11 @@ This directory holds work-in-progress plans for ongoing Capstone development.
 
 - One Markdown file per logical work item, named descriptively (no timestamps needed).
 - Keep plans concise: problem statement, approach, concrete next action.
-- When a plan is fully executed, move it to `../history/` with a `DD-MM-YYYY_` prefix and a
+- When a plan is fully executed, move it to `archived/` with a row in `archived/README.md` saying
+  why. (The older rule said `../history/` with a date prefix; September practice is `archived/`, and
+  the twenty-five files there are the precedent. `history/` stays what it is: dated investigation
+  notes, append-only.) A plan that is cited as the explanation of something still live stays here
+  with a dated completion banner instead — moving it would break the citations for no reader gain.
   short completion note at the top.
 - **Do not store project plans in `~/.claude/plans/` or any path outside this repository.**
   Plans committed here are portable across machines, agents, and contributors.
@@ -21,14 +25,12 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 
 | File | last touched |
 |------|------|
-| `18-08-2026_s07-v3-make-debugging-fast.md` | 2026-08-18 |
 | `backend-compiler-fixes.md` | 2026-06-22 |
 | `beebs-deferred-benchmarks.md` | 2026-07-20 |
 | `benchmark-bringup.md` | 2026-06-19 |
 | `c14-movc-source-destruction-fix.md` | 2026-07-30 |
 | `capability-authority-audit.md` | 2026-06-19 |
 | `capstone-c-reference-control.md` | 2026-07-28 |
-| `capstone-column-xlang.md` | 2026-08-02 |
 | `cheri-baseline-xlang.md` | 2026-08-02 |
 | `compatibility-eval-silicon-app.md` | 2026-07-22 |
 | `full-boundary-interface-benchmark.md` | 2026-07-22 |
@@ -41,5 +43,4 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | `sqlite-on-silicon-scoping.md` | 2026-08-05 |
 | `sqlite-row3-matched-repro-plan.md` | 2026-07-20 |
 | `sqlite-row3-option-b-held-cap-probe-plan.md` | 2026-07-20 |
-| `xlang-phase1-followups-TODO.md` | 2026-07-27 |
 | `xlang-phase2-seam-TODO.md` | 2026-08-02 |

@@ -1,0 +1,26 @@
+diff --git a/core/anvil_build/capstone_flu_unit.anvil b/core/anvil_build/capstone_flu_unit.anvil
+index eb8e3f9e5..8bc289fcf 100644
+--- a/core/anvil_build/capstone_flu_unit.anvil
++++ b/core/anvil_build/capstone_flu_unit.anvil
+@@ -144,8 +144,19 @@ func INIT(data){
+                 let rd_temp = call modify_cap_type(rs1,cap_type_t::CAP_TYPE_LINEAR);
+                 let new_cursor = val + rd_temp.metadata.start;
+                 let rd = call create_capability(rd_temp.metadata,new_cursor);
+-                let result = call create_result_pack(data.trans_id,ex_code::NO_EXCEPTION,rd,rd);
+-                send ep.res(result)
++                // R-25: INIT is MOVC + retype. With rd != rs1 the source must be consumed (cnull),
++                // as CINCOFFSET/SCC do above; with rd == rs1 the single write is the new capability.
++                // Guard on the register index, as the siblings do -- NOT an unguarded cnull (SEAL's
++                // form), which would clobber the rd == rs1 shape every compiled INIT uses.
++                if(data.rs1 == data.rd){
++                    let result = call create_result_pack(data.trans_id,ex_code::NO_EXCEPTION,rd,rd);
++                    send ep.res(result)
++                }
++                else{
++                    let rs1_out = call create_cnull();
++                    let result = call create_result_pack(data.trans_id,ex_code::NO_EXCEPTION,rs1_out,rd);
++                    send ep.res(result)
++                }
+             }
+         }
+     }

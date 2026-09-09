@@ -1,0 +1,293 @@
+# R-26 directed tests (CCSRRW -> younger load CPMP check). Kept OUT of testlist_capstone.yaml: r26-v2-ldmiss is
+# expected to FAIL (tohost exit code 11 = hazard) until the RTL flushes or interlocks after a capability CSR write.
+# Run the deciding arm with a 40-cycle memory: DEFINE=+define+S12_MEM_DELAY=40 (see the history note of 2026-09-08).
+- test: r26-diag-nodelay
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-nodelay.S
+- test: r26-diag-div
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-div.S
+- test: r26-diag-fence
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-fence.S
+- test: r26-diag-div3
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-div3.S
+- test: r26-v2-ldmiss
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-ldmiss.S
+- test: r26-v2-ldmiss-fence
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-ldmiss-fence.S
+- test: r26-v2-noolder
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-noolder.S
+- test: r26-v2-cscratch
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-cscratch.S
+- test: r26-v2-cscratch-fence
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-cscratch-fence.S
+- test: r26-v2-cscratch-ctl
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-v2-cscratch-ctl.S
+- test: r26-diag-csfence-noolder
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-csfence-noolder.S
+- test: r26-diag-csfence-mstatus
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-csfence-mstatus.S
+- test: r26-diag-csfence-nops
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-csfence-nops.S
+- test: r26-diag-csfence-mret
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-diag-csfence-mret.S
+- test: r26-mret-ccsrrw
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-mret-ccsrrw.S
+- test: r26-mret-mstatus
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-mret-mstatus.S
+- test: r26-mret-mstatus-nofence
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-mret-mstatus-nofence.S
+- test: r26-mret-mstatus-nops
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-mret-mstatus-nops.S
+- test: r26-mret-mstatus-noolder
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r26-mret-mstatus-noolder.S
+- test: r27-fence-st
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-fence-st.S
+- test: r27-fence-st-drained
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-fence-st-drained.S
+- test: r27-fence-nost
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-fence-nost.S
+- test: r27-nofence-st
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-nofence-st.S
+- test: r27-fencei-st
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-fencei-st.S
+- test: r27-fence-st-pad
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-fence-st-pad.S
+- test: r27-exc-n0
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n0.S
+- test: r27-exc-n4
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n4.S
+- test: r27-exc-n8
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n8.S
+- test: r27-exc-n12
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n12.S
+- test: r27-exc-n16
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n16.S
+- test: r27-exc-n20
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n20.S
+- test: r27-exc-n24
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n24.S
+- test: r27-exc-n8-legal
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n8-legal.S
+- test: r27-exc-n20-legal
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-exc-n20-legal.S
+- test: r27-ccsr-n0
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n0.S
+- test: r27-ccsr-n1
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n1.S
+- test: r27-ccsr-n2
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n2.S
+- test: r27-ccsr-n4
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n4.S
+- test: r27-ccsr-n8
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n8.S
+- test: r27-ccsr-n16
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n16.S
+- test: r27-ccsr-n32
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-n32.S
+- test: r27-ccsr-older-n24
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n24.S
+- test: r27-ccsr-older-n28
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n28.S
+- test: r27-ccsr-older-n32
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n32.S
+- test: r27-ccsr-older-n36
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n36.S
+- test: r27-ccsr-older-n40
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n40.S
+- test: r27-ccsr-older-n44
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n44.S
+- test: r27-ccsr-older-n48
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n48.S
+- test: r27-ccsr-older-n52
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ccsr-older-n52.S
+- test: r27-ldf-n0
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n0.S
+- test: r27-ldf-n1
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n1.S
+- test: r27-ldf-n2
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n2.S
+- test: r27-ldf-n3
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n3.S
+- test: r27-ldf-n4
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n4.S
+- test: r27-ldf-n6
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n6.S
+- test: r27-ldf-n8
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n8.S
+- test: r27-ldf-n0-legal
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n0-legal.S
+- test: r27-ldf-n2-legal
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/r27-ldf-n2-legal.S

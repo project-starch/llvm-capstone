@@ -2,7 +2,42 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-05 — CURRENT
+## 2026-09-08 — CURRENT
+
+* **The monitor stack is unified onto ONE branch, `capstone-bootstrap`, in every nested repo**
+  (caplifive-buildroot `b7fc740`, opensbi `3de3342`, monitor/sbi.dom `3da7ebe`, caplifive-system
+  `fec33fa`; parent `dev` `1a1a3dff5778`, all pushed). One source builds both targets:
+  `make TARGET=fpga|qemu`, output in `build-<target>/`, `build` a per-checkout symlink,
+  per-target code under `CAPSTONE_TARGET_FPGA`/`CAPSTONE_TARGET_QEMU`. `CAPSTONE_CC_PATH` is
+  required. The old two-branch split (board vs QEMU, drifted for six weeks and forced Q-03/Q-05 to
+  be ported twice) is gone; the `-board`/`-qemu`/`-unified`/`-dts-65536` names are frozen pre-merge
+  tips (ancestors of `capstone-bootstrap`, also `pre-unify/2026-09-08/*` tags). Design and record:
+  `docs/plans/monitor-unification.md`; layout: `docs/ref/REPO-MAP.md`.
+* **Validated on both targets.** FPGA `.c.S` pair, `fw_jump` and `fw_payload .text` byte-identical
+  to boot sw31; **board boot sw32 8/8** (control first, six BEEBS rungs, SLT `select1` identical to
+  native, zero fault tags), with the SQLite host program rebuilt against the merged loader library
+  so that library has now run on silicon; **QEMU nightly tier 18/18**. sbi.dom now builds from the
+  one monitor source (Phase B item 7 done).
+* **One nightly regression, surfaced and fixed the same day.** `linear-uninit-corpus` /
+  `linear_drop_sibling_ok` failed; bisected to the Q-05 monitor commit (a pre-existing stale
+  host-observer read the unification's first nightly exposed, NOT a merge defect), fixed in the
+  corpus controller to read back through the domain's alias. Auditor-confirmed; a non-blocking
+  monitor-robustness note recorded (ISSUES.md Q-05, 2026-09-08).
+* **Phase B collapsed the per-target behaviour (2026-09-08, evening and night).** Geometry on QEMU
+  (item 3), M-2 bounded at 96 (item 9, refusal seen on silicon), the pre-carve refusal on FPGA
+  (item 1), the rounding and the diagnostic store (6a/6b), eleven of fifteen `fence.i` gone (item
+  8, three variants booted), the null-blk package and the relocatable S-mode loader (item 4), ONE
+  `create_domain` (item 5, nine differences gone) and the transferred slot a hole on the board too
+  (item 2: boots sw36/sw37 ran the first transfer-annotated share on silicon, one HOLE line).
+  Board boots sw33–sw37 all at the oracles, zero fault tags; QEMU tier 18/18 through item 3,
+  17/18 on item 5A (one BEEBS case silent before the loader's first line amid five boot-login
+  infra flakes; 3/3 rerun alone, first in a fresh boot). Left: kernel
+  unification (item 10, deferred by the lead), the dead `mem_l`/`mem_r` locals, and the
+  `gpoff == 0` loader branch that no board image reaches. Monitor 5b27d01 / buildroot d3c2402.
+  **Closed on the shipping firmware 2026-09-09: boot sw38, 9/9** (control, six rungs, SLT select1,
+  the transfer probe; one HOLE line; zero fault tags). Next: `docs/plans/after-phase-b.md`.
+
+## 2026-09-05
 
 * **SQLite passes its logic tests on silicon at `-O1`** — the first validation above `-O0`.
   `select1` 1031 records / 1000 queries / 0 failures and `q_two` (the S-12 trigger) both completed
@@ -22,6 +57,9 @@ Minimal snapshot. Read first in every session.
   tested ancestry by hash. Presence-by-content is the check; see ISSUES.md.
 * **S-13 does not reproduce at `-O1`**, but bitstream and compiler both changed, so it attributes to
   neither yet.
+* **2026-09-07:** Q-03 ported to the BOARD firmware (`fw_payload 44c88d9ebeb1`, audited; boot sw30 7/7 in one
+  boot, no exact fit occurred so the hole path is unexercised on silicon and self-reporting); Q-05 fixed in the
+  stand-in (the probe observes through the domain; both copies make the transferred slot a hole).
 * Q-02 (QEMU build break) closed end to end; Q-03 (position-dependent wedge, reproducible off-board),
   R-25 (INIT linearity break), C-41 (compiler `return` encoding), I-01..I-03 filed and verified.
 
@@ -47,11 +85,12 @@ Minimal snapshot. Read first in every session.
   has no committed harness — it was run ad hoc, so a rebuild does not re-establish it; treat it as
   withdrawn until a re-runnable harness exists. And the nightly still cannot catch a
   non-compiling QEMU. SILICON results were never affected: they came from the board.
-* **SQLite CORRECTNESS on silicon: first result 2026-09-05.** `select1.test` (1031 SQLLogicTest
-  records, populated tables, real expected values) ran in the -O1 silicon-config domain on
-  `caplifive_s12fix_5097eb166.bit` (boot B8) and matched native exactly (31 statements, 1000
-  queries, 0 failures). The remaining six corpus files are being run one boot each; see
-  `ref/fpga-silicon-measurements-for-paper.md` §7b and the 2026-09-05 board rows.
+* **SQLite CORRECTNESS on silicon: the SQLLogicTest corpus (2026-09-05 → 09-07).** Seven files,
+  one boot each, control first, fresh toolchain, every result compared with the native baseline
+  from the run's own transcript: negative control and `aggfunc` reproduce their known failures
+  exactly (the comparator fires on silicon); `select1/2/3/4/5` identical to native with zero
+  divergences — **the whole corpus, 10,807 records, 8,746 checked queries, on silicon.** Rows sw23–sw29 and B8 in
+  `tests/board-results/2026-09-05.tsv`; write-up in `ref/fpga-silicon-measurements-for-paper.md` §7c.
 * **(Superseded by the line above, kept for the caveat it carries.) SQLite RUNS ON SILICON — that is a LIVENESS result, not a correctness one.** The `slt/`
   corpus executes end-to-end in a capability domain; `s12stress` completes 120/120 prepares and
   15/15 of the corpus matches native under QEMU on the current compiler.

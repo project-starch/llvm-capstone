@@ -120,7 +120,7 @@ EXTENDED_SUITES=(
 # works" -- which is what a codegen change breaks. Pre-COMMIT gate, never pre-push.
 QUICK_NAMES="smoke,coremark,borrow-cost,shared-region"
 
-DO_CLEAN=0 SKIP_BUILD=0 EXTENDED=0 ONLY="" TIMEOUT=1800
+DO_CLEAN=0 SKIP_BUILD=0 EXTENDED=0 ONLY="" TIMEOUT=1800 REFUSE_UNDER_LOAD=0
 JOBS=${JOBS:-$(( $(nproc) * 7 / 10 ))}; [ "$JOBS" -lt 1 ] && JOBS=1
 
 print_list() {
@@ -136,6 +136,7 @@ while [ $# -gt 0 ]; do
     --quick) ONLY="$QUICK_NAMES" ;;
     --list) print_list; exit 0 ;;
     --timeout) TIMEOUT="$2"; shift ;;
+    --refuse-under-load) REFUSE_UNDER_LOAD=1 ;;
     -j) JOBS="$2"; shift ;;
     -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -246,17 +247,54 @@ if [ "$BUILD_OK" -eq 0 ]; then
   log "[abort] build failed; skipping suites"
 fi
 
+# ---- host load at suite start -------------------------------------------------
+# The 2026-09-08 19:41 tier came back 17/18 with six boot-to-login infra retries (one per tier
+# earlier that day) while another user's MySQL/Bazel jobs loaded the machine; the one FAIL was a
+# guest silent before the loader's first line, 3/3 when rerun alone. The report could not say "I
+# ran under load", so it read like a regression. Now every suite row records the 1-min load and
+# the CPU other users were drawing when it started, and a suite that started under load is marked
+# so a FAIL there is reread before it is believed. The exit status is NOT softened by any of this:
+# an incomplete or failing tier still fails; the mark only says what to do next.
+# The criterion is OTHER USERS' CPU only (summed %CPU of processes not owned by the invoking user,
+# sampled at suite start and end, the larger counts). load1 is recorded for the reader but does
+# not decide: the nightly's own lit-generic at JOBS=78 leaves load1 in the 40s-50s when the next
+# suite starts, which is this run's own footprint, not interference. %CPU from ps is a process's
+# lifetime average, so a long-running foreign job shows its true weight and a short burst is
+# under-counted -- good enough to label the tier that failed under a MySQL/Bazel neighbour.
+LOAD_FOREIGN_MAX=${LOAD_FOREIGN_MAX:-400}                # other users' summed %CPU above this = under load
+declare -A LOAD1 FOREIGN UNDERLOAD
+foreign_cpu() { ps -eo user:32,pcpu --no-headers 2>/dev/null | awk -v me="$(id -un)" '$1!=me {s+=$2} END {printf "%d", s+0}'; }
+host_load() { # $1=name $2=start|end -- sets LOAD1[$1] (start only), FOREIGN[$1] (max of samples), UNDERLOAD[$1]
+  local name="$1" when="${2:-start}" fc
+  fc=$(foreign_cpu)
+  if [ "$when" = start ]; then
+    LOAD1[$name]=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0); FOREIGN[$name]=$fc
+  elif [ "$fc" -gt "${FOREIGN[$name]:-0}" ]; then
+    FOREIGN[$name]=$fc
+  fi
+  if [ "${FOREIGN[$name]}" -gt "$LOAD_FOREIGN_MAX" ]; then UNDERLOAD[$name]=1; else UNDERLOAD[$name]=0; fi
+}
+
 run_one() { # $1=name  $2=command  $3=timeout(optional, default $TIMEOUT)
   local name="$1" cmd="$2" to="${3:-$TIMEOUT}" start rc dur
   local suitelog="$OUT/$name.log"
   [ -n "$to" ] || to="$TIMEOUT"
-  log "[suite] $name (timeout ${to}s) ..."
+  host_load "$name"
+  if [ "$REFUSE_UNDER_LOAD" -eq 1 ] && [ "${UNDERLOAD[$name]}" -eq 1 ]; then
+    local waited=0
+    while [ "${UNDERLOAD[$name]}" -eq 1 ] && [ $waited -lt 1800 ]; do
+      log "[suite] $name: host under load (load1 ${LOAD1[$name]}, foreign CPU ${FOREIGN[$name]}%) -- waiting"
+      sleep 60; waited=$(( waited + 60 )); host_load "$name" start
+    done
+  fi
+  log "[suite] $name (timeout ${to}s; load1 ${LOAD1[$name]}, foreign CPU ${FOREIGN[$name]}%$([ "${UNDERLOAD[$name]}" -eq 1 ] && echo ' -- UNDER LOAD')) ..."
   start=$SECONDS
   ( cd "$CAPSTONE_REPO_ROOT" && timeout "$to" bash -c "$cmd" ) \
       >"$suitelog" 2>&1
   rc=$?
   dur=$(( SECONDS - start ))
   DURATION[$name]=$dur
+  host_load "$name" end
   # 75 is the shared infra-flake code: a guest that never reached login, which
   # says nothing about the compiler. It still fails the run -- an incomplete
   # suite is not a passing one -- but it must not read as a capability
@@ -266,7 +304,11 @@ run_one() { # $1=name  $2=command  $3=timeout(optional, default $TIMEOUT)
   elif [ $rc -eq 75 ]; then RESULT[$name]=FLAKE; OVERALL_OK=0
   else RESULT[$name]="FAIL($rc)"; OVERALL_OK=0
   fi
-  log "        -> ${RESULT[$name]} (${dur}s)"
+  if [ "${UNDERLOAD[$name]}" -eq 1 ] && [ "${RESULT[$name]}" != PASS ]; then
+    log "        -> ${RESULT[$name]} (${dur}s) UNDER LOAD -- rerun the failing case alone, first in a fresh boot, before reading this as a regression"
+  else
+    log "        -> ${RESULT[$name]} (${dur}s)"
+  fi
 }
 
 # ---- stage 2: lit (fast, parallel-safe) ---------------------------------------
@@ -291,9 +333,12 @@ if [ "$BUILD_OK" -eq 1 ]; then
   # ---- stage 3: QEMU suites (SERIAL, rootfs lock guarded) ---------------------
   # flock guards against a second nightly; a manual concurrent QEMU run must
   # still be avoided by convention (the suites must be SERIALIZED (never two at once)).
-  # One lock path for every runner, defined in capstone-test-env.sh (moved out of /tmp on
-  # 2026-09-08: /tmp is emptied at boot). Unset means the env was not sourced: stop, do not
-  # invent a second path.
+  # ONE lock path for every runner, defined in capstone-test-env.sh and nowhere else. Two
+  # incidents behind that: deriving it from CAPSTONE_TMP_ROOT let a tier under
+  # /tmp/capstone-q06tier and a probe run under /tmp/capstone take different locks and share
+  # the rootfs (2026-09-09); and a path under /tmp is emptied at boot, so two lanes recreating
+  # it can hold different inodes (moved to $HOME/.capstone-locks on 2026-09-09). Unset means
+  # the env was not sourced: stop, do not invent a second path.
   LOCK="${CAPSTONE_QEMU_LOCK:?CAPSTONE_QEMU_LOCK unset: source capstone/tests/capstone-test-env.sh}"
   mkdir -p "$(dirname -- "$LOCK")"; : >"$LOCK" 2>/dev/null || true
   exec 9>"$LOCK"
@@ -314,12 +359,12 @@ fi
   echo "- build: $([ "$SKIP_BUILD" -eq 1 ] && echo skipped || ([ "$BUILD_OK" -eq 1 ] && echo ok || echo FAILED))"
   echo "- output: \`$OUT\`"
   echo
-  echo "| suite | result | duration | log |"
-  echo "|---|---|---|---|"
+  echo "| suite | result | duration | load1 | foreign CPU | log |"
+  echo "|---|---|---|---|---|---|"
   for entry in "lit|" "lit-generic|" "${SUITES[@]}"; do
     name="${entry%%|*}"
     [ -n "${RESULT[$name]:-}" ] || continue
-    echo "| $name | ${RESULT[$name]} | ${DURATION[$name]}s | \`$name.log\` |"
+    echo "| $name | ${RESULT[$name]}$([ "${UNDERLOAD[$name]:-0}" -eq 1 ] && echo ' (UNDER LOAD)') | ${DURATION[$name]}s | ${LOAD1[$name]:-?} | ${FOREIGN[$name]:-?}% | \`$name.log\` |"
   done
   echo
   echo "Overall: $([ "$OVERALL_OK" -eq 1 ] && echo '**PASS**' || echo '**FAIL**')"

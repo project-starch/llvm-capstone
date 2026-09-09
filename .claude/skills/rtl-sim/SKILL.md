@@ -14,11 +14,23 @@ workloads run **inside a capability domain** after `capenter`, on a monitor-carv
 reaching globals through a cap table. A clean simulation of a synthetic test is therefore
 **not** exoneration — see "Reading a negative result".
 
+## Containers: cgroup parent, memory cap, at most three at once
+
+**Every `docker run` and `docker build` here carries `--cgroup-parent=docker.slice` and an explicit
+`--memory`.** Without the flag a container lands inside `system.slice`, which is capped at 8 GiB on
+this host and also holds sshd, resolved, networkd and tailscaled. On 2026-09-05 concurrent cva6
+containers filled that cgroup: 137 cgroup OOM kills, the network daemons stalled while allocating,
+and the machine was off the network for 36 hours while `free` showed ~150 GB available the whole
+time — `free`/`htop` cannot see a cgroup limit. Watch `/sys/fs/cgroup/docker.slice/memory.events`
+and `/sys/fs/cgroup/system.slice/memory.events` instead. A simulation run needs ~2 GB, a model
+rebuild (verilation, `-j4`) up to ~16 GB. **Never more than three cva6 containers at once from one
+lane**, and coordinate before exceeding that in aggregate (`~/bin/logs/AGREED-RESOURCE-RULES.md`).
+
 ## Run one test
 
 ```bash
 cd capstone/capstone-ariane
-docker run --rm -v "$(pwd)":/workdir --user "$(id -u):$(id -g)" --entrypoint bash \
+docker run --rm --cgroup-parent=docker.slice --memory=8g -v "$(pwd)":/workdir --user "$(id -u):$(id -g)" --entrypoint bash \
   -e HOME=/tmp -e RISCV=/toolchain -e CVA6_REPO_DIR=/workdir \
   -e NUM_JOBS=16 -e VERILATOR_THREADS=1 cva6-build-rv -c '
 set -e; cd /workdir
@@ -111,7 +123,7 @@ for d in $(git config -f .gitmodules --get-regexp path | awk '{print $2}'); do
   [ -e "$d/.git" ] && { rm -rf "/path/to/wt/$d"; cp -al "$d" "/path/to/wt/$d"; }
 done
 cp -al verif/tests/riscv-tests /path/to/wt/verif/tests/riscv-tests   # else the test won't compile
-docker run --rm -v /path/to/wt:/workdir --user "$(id -u):$(id -g)" --entrypoint make \
+docker run --rm --cgroup-parent=docker.slice --memory=16g -v /path/to/wt:/workdir --user "$(id -u):$(id -g)" --entrypoint make \
   -e ANVILC=/usr/local/bin/anvil -e CVA6_REPO_DIR=/workdir cva6-build-rv -C core/anvil_build
 ```
 

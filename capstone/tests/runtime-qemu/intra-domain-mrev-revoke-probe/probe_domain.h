@@ -38,9 +38,25 @@ static void *probe_arena;
 
 /* Handle the REGION_SHARE entry. Returns 1 when this entry was the delivery and
  * domain_main has nothing else to do. */
+static unsigned probe_calls; /* CALL entries seen; the second one is the host's readback request */
 static inline int probe_receive(void *arg, unsigned func) {
   if (func == PROBE_DPI_REGION_SHARE) {
     probe_arena = arg; /* stc: the delivered capability, tag intact */
+    return 1;
+  }
+  /* Q-05 (2026-09-07): the arena is TRANSFERRED to this domain, so the host has no authority
+   * over it after the share -- its old post-call read through the Linux mmap only worked
+   * because QEMU leaves a tagged duplicate behind a linear move, which the spec forbids and
+   * the monitor no longer relies on. The observer is now the domain itself: on a SECOND call
+   * entry it reads arena[PROBE_OFFSET] through its own alias and returns the byte. The
+   * probes' semantics are untouched: this runs only after domain_main's probe entry
+   * returned, on a fresh entry, through the same delin pattern the probes use. */
+  if (probe_calls++ > 0) {
+    unsigned *res = (unsigned *)arg;
+    void *A = probe_arena;
+    void *D = __builtin_capstone_cap_delin(A);
+    volatile unsigned char *buf = (volatile unsigned char *)D;
+    *res = (unsigned)buf[PROBE_OFFSET];
     return 1;
   }
   return 0;

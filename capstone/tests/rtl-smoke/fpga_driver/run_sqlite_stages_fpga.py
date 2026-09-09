@@ -1603,10 +1603,10 @@ def main():
             # INFRASTRUCTURE vs DOMAIN wedge. `SQ: A/dom-ok` is printed by the host the
             # instant create_dom returns (sqlite_host.c), so its ABSENCE means the domain was
             # never created and NOTHING in it ran. `SPLB`/`SPLA` are monitor spin tags: 0xE006
-            # is split_out_cap's unimplemented exact-fit case (sbi_capstone.c, guarded by
-            # CAPSTONE_SPLIT_EXACT_FIT which is commented out), an M-mode `while(1)` that the
-            # monitor's own comment records as wedging runs 5-7 in 4 of 4 boots and as the
-            # source of "a large share of this campaign's random wedges".
+            # was split_out_cap's unimplemented exact-fit spin (an M-mode `while(1)` that wedged
+            # runs 5-7 in 4 of 4 boots, "a large share of this campaign's random wedges") and
+            # 0xE010 its middle-slot successor; both retired 2026-09-07 by the Q-03 hole fix
+            # (sbi_capstone.c make_hole), which reports HOLE:<slot> RGNN:<n> and continues.
             #
             # Without this distinction the summary below blames whichever domain happened to
             # occupy that slot. It did exactly that on 2026-08-06 and produced a confident,
@@ -3486,6 +3486,20 @@ def main():
             print(_t, flush=True)
             transcript.append(_t + "\n")
 
+        # Q-03 hole events: the monitor prints `HOLE:<slot>` then `RGNN:<n>` when an exact-fit split
+        # retires a slot in place (firmware with the hole fix; the old firmware spun at SPLB instead).
+        # Counted from THIS run's transcript only -- the console replays the previous boot on
+        # connect. ZERO means the hole path did not run this boot: that is non-regression evidence
+        # only and never "the fix works on silicon". Printed on every run so the first natural
+        # occurrence is recorded instead of needing a boot spent on a layout coincidence.
+        _run_text = "".join(transcript)
+        _holes = re.findall(r"HOLE:([0-9A-Fa-f]{8})", _run_text)
+        _rgnn = re.findall(r"RGNN:([0-9A-Fa-f]{8})", _run_text)
+        _t = (f"  Q-03 hole events this boot: {len(_holes)}"
+              + (f" (slots {[int(h, 16) for h in _holes]}, region_n after {[int(x, 16) for x in _rgnn]})"
+                 if _holes else " -- hole path UNEXERCISED this boot"))
+        print(_t, flush=True)
+        transcript.append(_t + "\n")
         pathlib.Path(OUT).write_text("".join(transcript))
         log(f"per-domain UART -> {OUT}")
 

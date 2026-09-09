@@ -1,6 +1,6 @@
 # xlang — next task set (Phase-2 seam)
 
-> **SUPERSEDED 2026-08-01 by `capstone-column-xlang.md`.** This doc planned the
+> **SUPERSEDED 2026-08-01 by `capstone-column-xlang.md` (archived here too since 2026-09-09).** This doc planned the
 > Capstone column via *real mruby* (the `mrb_open_allocf` seam). That route is
 > dropped in favour of shims on both columns — faster, and it collapses the three
 > seam mechanisms below (mruby allocf, Rust `#[global_allocator]`, `LD_PRELOAD`

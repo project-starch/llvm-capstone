@@ -50,11 +50,11 @@ normal mid-work, and must be resolved before pushing the parent.
 | `capstone/capstone-ariane` | **the RTL.** CVA6 + Capstone, Anvil sources, directed tests | `fpga-testing-dev` | yes — `7e4dc440f`, gitlink in sync |
 | `capstone/capstone-qemu` | the emulator; functional oracle for the board | `capstone-bootstrap` | yes — pushed `62bf0f1d61` |
 | `capstone/capstone-c` | Capstone C runtime / cap-table reference | detached `8cda52c` | n/a |
-| `capstone/caplifive-system` | board bring-up: buildroot, OpenSBI, device tree | `capstone-bootstrap` | local ahead of gitlink |
+| `capstone/caplifive-system` | board bring-up: buildroot, OpenSBI, device tree (remote: `caplifive-system-dev`) | `capstone-bootstrap` | pushed `28f9436` (2026-09-07) |
 | `capstone/capstone-academic-spec` | **the spec we cite.** Exception codes, instruction semantics | `caplifive-s06` | branch local; tracks `origin/caplifive-release` |
 | `capstone/capstone-spec` | older spec checkout, branch `caplifive` | `caplifive` | — |
 | `capstone/paper` | the paper. **Overleaf owns the remote — never push** | `main` | — |
-| `capstone/caplifive-buildroot` | second buildroot copy, **not the live one** | `capstone-bootstrap` | tracks origin |
+| `capstone/caplifive-buildroot` | second buildroot copy: **the QEMU stand-in** (its `components/opensbi` monitor is what QEMU's `DOM_CREATE` ecall reaches); not the board's | `capstone-bootstrap` | pushed `4d97ecf` (2026-09-07) |
 
 ### Two traps in that table
 
@@ -74,22 +74,48 @@ there does nothing. Its `sqlite_silicon.dom` dates from 2026-08-02 and is not wh
 A `git status` run at `caplifive-system` **does not see it**.
 
 ```
-capstone/caplifive-system                                        branch capstone-bootstrap
-└── sw/buildroot                                                 branch capstone-bootstrap-dts-65536
-    └── components/opensbi                                       branch capstone-bootstrap
-        └── lib/sbi/capstone-sbi        <-- THE LIVE MONITOR      branch capstone-bootstrap
-            sbi_capstone.c
+capstone/caplifive-system            (project-starch/caplifive-system-dev)   branch capstone-bootstrap
+└── sw/buildroot                     (project-starch/caplifive-buildroot)    branch capstone-bootstrap
+    ├── components/opensbi           (project-starch/caplifive-opensbi)      branch capstone-bootstrap
+    │   └── lib/sbi/capstone-sbi     (project-starch/capstone-sbi)           branch capstone-bootstrap
+    │       sbi_capstone.c           <-- THE MONITOR, one source for both targets
+    └── package/capstone-sbi-domain/capstone-sbi (project-starch/caplifive-sbi)  branch capstone-bootstrap, SAME commit as the monitor above: sbi.dom is that source's QEMU arm
 ```
 
-To check whether a monitor change is committed you must `cd` into
-`caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi` and run `git status` **there**.
+**Since 2026-09-07 the QEMU stand-in is the SAME tree** (`docs/plans/monitor-unification.md`): the
+second checkout under `capstone/caplifive-buildroot` tracks the same `capstone-bootstrap` on
+every level and differs only in which target it builds (`make TARGET=qemu …`, output `build-qemu/`,
+`build` a symlink to it there; the board checkout builds `TARGET=fpga` into `build-fpga/`, `build` a
+symlink to it). Per-target code in the monitor sits under `CAPSTONE_TARGET_FPGA` /
+`CAPSTONE_TARGET_QEMU` (`capstone_target.h`); the OpenSBI platform directory (`fpga/ariane` vs
+`generic`) supplies the define for OpenSBI's own compile, `CAPSTONE_EXTRA_DEFS` for the capstone-c
+regeneration. `CAPSTONE_CC_PATH` is required and printed on every build.
 
-Note `sw/buildroot` is on a differently-named branch (`capstone-bootstrap-dts-65536`) from
-everything around it. That is deliberate, not drift.
+To check whether a monitor change is committed you must `cd` into the `capstone-sbi` directory of the
+copy you edited and run `git status` **there**. `git diff` one level up (at `components/opensbi`) shows
+only `sbi_capstone_dom.c` and silently omits `sbi_capstone.c` — it is a submodule deeper.
+
+**Why the branch names differed until 2026-09-07 (the "zoo"), stated once, for the history.** Each shared repo is checked out two or
+three times in this tree, and the checkouts hold different code: the board flavour and the QEMU
+flavour of `caplifive-buildroot.git` last shared a commit in January 2025 (`2f56383`; 32 board commits
+— FPGA clock/baud, the device-tree range for the 65536-node bitstream that named the branch, kernel
+config, modcapstone fixes — against 12 QEMU commits); the monitor repo has the board line (29 commits
+from `2f772bb`), the fw_jump stand-in line (4 from the same point) and the template-copy line
+(`origin/capstone-bootstrap`, `04ac643`); the opensbi stand-in forks from `769939a` while the board
+line has 25 commits past it. Every local checkout called its branch `capstone-bootstrap` and none was
+pushed until 2026-09-07, so one name meant three histories; the `-board`/`-qemu` suffixes are those
+histories made visible. Collapsing them was a merge of the two flavours into one source with
+build-config switches, followed by rebuilding fw_jump and the board firmware and revalidating both —
+done 2026-09-07 as `capstone-bootstrap-unified` (`docs/plans/monitor-unification.md`). On 2026-09-08 that
+name was retired too: lineage merges (strategy ours, trees unchanged) made every old line an ancestor
+of the unified tree, so `capstone-bootstrap` fast-forwarded onto it in all three repositories and is
+the ONE branch name from then on (see "Branch scheme — final" below). The `-unified`, `-board`, `-qemu`
+and `-dts-65536` names on the remotes and the `pre-unify/2026-09-08/*` tags are frozen old tips: keep
+them, never build from them, delete the branch names whenever convenient (the tags suffice).
 
 There is a second, stale copy of the monitor source at
 `caplifive-system/sw/buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c`.
-**Editing that one has no effect on the firmware.**
+**Editing that one has no effect on the firmware** (it builds the board's `sbi.dom`; unported for Q-03).
 
 ---
 
@@ -243,6 +269,142 @@ breaks `git submodule update` for everyone; that has already happened once on `c
 
   **Consequence while this stands:** a fresh clone cannot reproduce the firmware the board runs,
   because the monitor that emits the `EXCX`/`MCAU`/`MEPC` trap report is only in the unpushed chain.
+
+## Gitlink audit — 2026-09-07 — the chain is pushed; the 08-12 divergence is closed
+
+Every nested repo fetched and its HEAD compared with its remote branch; every superproject-recorded
+SHA checked for reachability on the nested remote (`git branch -r --contains`). All nine lines are on
+their remotes and every gitlink resolves, so a fresh clone reproduces both the board firmware
+(`fw_payload 44c88d9ebeb1`, boot sw30) and the QEMU stand-in (`fw_jump d9b11509c2f4`).
+
+| checkout | remote | branch | HEAD |
+|---|---|---|---|
+| parent `dev` | llvm-capstone | `dev` | `9927476d933b` |
+| `caplifive-system` | `caplifive-system-dev` (now `origin`, the fork rule is retired) | `capstone-bootstrap` | `28f9436` |
+| `…/sw/buildroot` | `caplifive-buildroot` | `capstone-bootstrap-dts-65536` | `5764378` |
+| `…/components/opensbi` | `caplifive-opensbi` | `capstone-bootstrap` | `0ac0290` |
+| `…/lib/sbi/capstone-sbi` | `capstone-sbi` | `capstone-bootstrap-board` (new) | `56dfbe9` |
+| `caplifive-buildroot` | `caplifive-buildroot` | `capstone-bootstrap` | `4d97ecf` |
+| `…/components/opensbi` | `capstone-opensbi` | `capstone-bootstrap-qemu` (new) | `1048a61` |
+| `…/lib/sbi/capstone-sbi` | `capstone-sbi` | `capstone-bootstrap-qemu` (new) | `e1ccb49` |
+| `…/package/capstone-sbi-domain/capstone-sbi` | `caplifive-sbi` | `capstone-bootstrap` | `977af95` |
+
+The two new `-board`/`-qemu` names exist because those lines are siblings of the remote's
+`capstone-bootstrap`, not descendants (see "Why the branch names differ" above); a plain push was
+rejected non-fast-forward and must never be forced. Push order stays bottom-up.
+
+## Branch scheme — 2026-09-08 final: one name, `capstone-bootstrap`, in every repository
+
+### Full branch inventory and archive status (2026-09-08)
+
+**The monitor stack — the repos this unification touched — now has ONE working branch each,
+`capstone-bootstrap`, plus upstream `master` and frozen pre-merge tips:**
+
+| repo | working | frozen pre-merge tips (ancestors of `capstone-bootstrap`; keep or delete on GitHub, harmless) |
+|---|---|---|
+| caplifive-buildroot | `capstone-bootstrap` b7fc740 | `capstone-bootstrap-unified` 41a2a1a, `capstone-bootstrap-dts-65536` 5764378 |
+| caplifive-opensbi | `capstone-bootstrap` 3de3342 | `capstone-bootstrap-unified` ea34f91, `capstone-bootstrap-qemu` 1048a61 |
+| caplifive-sbi (monitor + sbi.dom, ONE repo; `capstone-sbi.git` redirects here) | `capstone-bootstrap` 3da7ebe | `capstone-bootstrap-unified` 1b87df8, `-board` 56dfbe9, `-qemu` e1ccb49 |
+| caplifive-system-dev | `capstone-bootstrap` fec33fa | — |
+
+Every frozen tip is an ancestor of `capstone-bootstrap` (the lineage merges recorded them) and is
+also a `pre-unify/2026-09-08/*` tag locally, so a `git branch -r --contains` reaches each from the
+live branch: **archival is durable by ancestry; the frozen branch names are pure clutter.** They
+were not deleted on the remote — the pre-push hook forbids branch deletion (fail-closed) and it is
+a shared namespace; delete them on GitHub by hand if wanted. Redundant LOCAL copies were deleted.
+
+**One genuinely diverging local branch is kept, not archived:** `capstone-bootstrap-dts-1021` in the
+board `sw/buildroot` checkout (ed28ed8) is the device-tree memory range plus opensbi pin and the
+annotated-share `copy_from_user` probe for the **1021-node bitstream** (`caplifive_fixed_forward`).
+It is NOT an ancestor of the unified line (which carries the 65536-node DT) and is local-only. If the
+1021-node bitstream is ever booted again its config lives only here; leave it until that is ruled out.
+
+### Stale-branch sweep (2026-09-08): every remote branch of every repo, dated, ours vs upstream, merged vs ahead
+
+Method: `merge-base --is-ancestor` of each remote tip against the repo's working branch. Upstream
+authors' branches (the buildroot/opensbi/QEMU authors' `perf-*`, `dpdk-*`, `capt*`, `capslock*`,
+…) are theirs and were not judged. Findings for OUR branches:
+
+* **Stale, fully merged, safe to delete** (nothing unreachable afterwards): parent
+  `lane-b/capstone-b-008-revoke-on-free`, `lane-b/capstone-bootstrap-b` (lane B retired, both in
+  `dev`); the monitor-stack frozen tips listed above; capstone-qemu `capstone-bootstrap-b`,
+  `s06-lcc-total-query` (both in the live line). Deletion is a human action — the agent hook forbids
+  it — scripted with re-verification in `/tmp/capstone/delete-stale-branches.sh`.
+* **Merged but kept pending a decision:** parent `compiler-validation-plan` (the compiler lane's
+  delivery branch); opensbi/sbi `genesys-testing` (a board-owner-facing name); the `caplifive-release`
+  markers; capstone-ariane `fpga-testing-dev-clean` (now identical in content to the force-pushed
+  `fpga-testing-dev`; the RTL lane's to retire).
+* **Genuinely diverged, ours, one repo — the only remaining case of the shape this document is
+  about:** **capstone-qemu**. The parent pins `f5972c3` on `c128-qemu-merge` (the live emulator since
+  2026-09-04), while `capstone-bootstrap` (`8d4e3d3`, 2026-08-27) holds ONE commit the live line never
+  took: "QEMU capability probes: an STC type probe and a whole-program slot tracker, env-gated and
+  inert by default" (841 lines in `op_helper.c` / `trans_capstone.c.inc`). Decide: merge it forward
+  onto `c128-qemu-merge` (inert by default; needs a QEMU rebuild and the nightly), or retire the
+  probes and delete the branch. Until then the live QEMU lacks them.
+* **capstone-ariane:** 20-odd `s07/s10/s12/timing-*` branches, all ours, all ahead of
+  `fpga-testing-dev` — frozen synthesis-arm provenance by the RTL lane's rule, not stale. Local
+  `fpga-testing` / `fpga-testing-dev` are merged copies.
+* **Parent local:** `backup/pre-*` snapshots hold history rewritten away on 2026-08-19/09-04 (2–100
+  commits not in `dev`) — that is their purpose, keep; `c128-integration` was an ancestor of `dev`
+  and is deleted. `main` has not moved since 2025-09-19 and holds 2 commits `dev` lacks; `dev` is the
+  trunk in practice — a `main` fast-forward is the lead's call.
+
+### Other repos: many branches, but NOT the same target-split — no further unification indicated
+
+The "one repo, several branches for one code base built different ways" problem existed only in the
+monitor stack, and is now closed. The other repos' multiple branches are **distinct work**, not a
+build-target split, so there is nothing analogous to unify:
+
+* **capstone-ariane** (RTL) — dozens of branches (`fpga-testing-dev`, `-clean`, `s06fix`, `s10-*`,
+  `s12-*`, `r20-fix`, `timing-*`, `seal-minsize-test`, …) are different fixes and experiments, many
+  in flight, owned by the RTL lane. Different code, not different builds of one thing.
+* **capstone-qemu** — `capstone-bootstrap`, `c128-qemu-merge`, `s06-lcc-total-query`, … are separate
+  emulator feature lines.
+* **capstone-c**, **capstone-spec**, **capstone-academic-spec**, **paper** — upstream/author or
+  single-line repos; the branches are theirs.
+* **parent llvm-capstone** — `dev` is the trunk; `compiler-validation-plan`, `c128-integration`,
+  `cheri-cva6-eval`, `backup/*` are work lines and snapshots.
+
+
+
+| repository | `capstone-bootstrap` tip | it contains (all ancestors) |
+|---|---|---|
+| caplifive-sbi (monitor, both checkouts + the sbi.dom package checkout) | `3da7ebe` | board line 56dfbe9, QEMU line e1ccb49, sbi.dom line 977af95 |
+| caplifive-opensbi (wrapper, both checkouts) | `3de3342` | board line 0ac0290, QEMU line 1048a61 |
+| caplifive-buildroot (both checkouts) | `b7fc740` | board line 5764378, QEMU line 4d97ecf, unified 41a2a1a |
+| caplifive-system-dev | `fec33fa` (bumps `sw/buildroot` to b7fc740) | 4686afa and everything before |
+
+The merges carry no content of their own (their trees are the unified ones) except two pins and the
+two-line switch that builds `sbi.dom` from the monitor source's QEMU arm (Phase B item 7). What the
+QEMU buildroot line still holds that the tree does not is listed in b7fc740's message (Phase B item
+4); ancestry there is lineage, not presence — read the file. Validation on the final tips: FPGA
+`.c.S` pair, `fw_jump` and `fw_payload .text` byte-identical to boot sw31's; QEMU smoke, five
+probes, child-share cascade, SLT select1, module-consistency check (worktree and live images).
+
+## Gitlink audit — 2026-09-08 — the unified state, pushed 12:47, every gitlink resolves
+
+After `docs/plans/monitor-unification.md`: one branch per nested repo, both checkouts on it. Every
+row below was a **branch creation** on its remote (the `pre-unify/2026-09-08/*` tags mark the
+previous tips). All pushed by 2026-09-08 12:47 and re-verified afterwards: every gitlink in the
+four-level chain (`dev` → `caplifive-system` → `sw/buildroot` → `components/opensbi` →
+`lib/sbi/capstone-sbi`, plus `components/linux` 830b3c6, `buildroot/` d8ce1de and the `sbi.dom`
+package 977af95) is reachable from a remote branch of its nested repository, and both checkouts of
+each shared repository see `origin/capstone-bootstrap-unified` at the same SHA.
+
+| checkout | remote | branch | HEAD |
+|---|---|---|---|
+| `caplifive-system` | `caplifive-system-dev` | `capstone-bootstrap` (fast-forward) | `4686afa` |
+| `…/sw/buildroot` and `caplifive-buildroot` | `caplifive-buildroot` | `capstone-bootstrap-unified` (new) | `41a2a1a` |
+| `…/components/opensbi` (both) | `caplifive-opensbi` (`capstone-opensbi.git` is a GitHub redirect to it — ONE repository, push once) | `capstone-bootstrap-unified` (new) | `ea34f91` |
+| `…/lib/sbi/capstone-sbi` (both) | `caplifive-sbi` (`capstone-sbi.git` redirects to it — the same repository as the `sbi.dom` package's) | `capstone-bootstrap-unified` (new) | `1b87df8` |
+| `…/package/capstone-sbi-domain/capstone-sbi` | `caplifive-sbi` | `capstone-bootstrap` (unchanged) | `977af95` |
+
+After pushing from one checkout of a shared remote, `git fetch` in the other so both see the branch.
+Credentials: the agent credential could push `caplifive-buildroot` only (branch + both tags); it has
+no write access to `caplifive-sbi`, `caplifive-opensbi` or `caplifive-system-dev` (403, read intact),
+so the lead pushed those three from a terminal (one script, three pushes). Not pushed, by choice:
+the two `pre-unify` tags on the parent and on `caplifive-system`, which the agent pre-push hook
+rejects as tag refs; the commits they mark are on their remotes as branch history.
 
 ---
 
