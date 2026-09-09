@@ -96,6 +96,16 @@ afterwards. Predictions, for the hash synthesised from `r30-r31-init-revoke`:
 * **What would falsify "this is a free change":** WNS outside that spread, or LUTs outside it, or any
   movement in the UNOPTFLAT loop set. Any of those stops the flash conversation and sends the change
   back, regardless of the functional results.
+* **A movement in the loop set falsifies the REASONING, not just the number, and must not be explained
+  away.** The prediction rests on the claim that two operators inside already-evaluated conditions add
+  no signal, term or comparator — the same claim that predicted lint at baseline 40 and was borne out.
+  If the loop set moves, that claim is wrong, and it is the claim that has to be re-examined first,
+  before any argument that the movement is harmless. (RTL lane's addition; it is the half of a
+  pre-registration that usually gets forgotten.)
+* **Independently verified 2026-09-10:** the branch changes exactly two non-comment lines under
+  `core/`; everything else in the diff is comments, the two directed tests and their testlist entries,
+  none of which is synthesised. The `capstone-spec` submodule is clean at `ca9c84f` — **no spec edit has
+  been made in any form**, including the corrected one-token version.
 * **Read the intra-clock row, not `eth_rxck`**, and gate every artefact on mtime later than the run
   start — `make clean` leaves the previous run's reports in place.
 
