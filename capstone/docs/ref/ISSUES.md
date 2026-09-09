@@ -1158,24 +1158,6 @@ Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6
 **Recorded because the reasoning is the useful part:** any future pass that adds or removes
 globals *after* ISel would silently break this positional scheme.
 
-### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
-The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
-tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /
-**mv a4,a4** / bne` — where plain riscv64 emits 5 for the same source.
-
-- **Found:** 2026-07-27, while building the I-2 counter-sanity probe. It is logged because
-  it **silently defeated that probe**: the measurement depends on both targets retiring the
-  same instruction count, and the compiler manufactured a 1.4× difference out of nothing.
-- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity_kernel.h` with the inner
-  `__asm__ volatile("" : "+r"(acc))` restored; disassemble
-  `--triple=riscv64 --mattr=+m` and compare against `ladder-base/obj/base_ctrsanity.o`.
-- **Impact:** small in isolation (two wasted instructions per tie), but the register-pinning
-  idiom is used throughout the ladder kernels to defeat constant folding, so it inflates
-  the capability instruction count of **any** rung that uses it — i.e. it can bias an
-  overhead ratio upward. Worth a look before the next measurement round.
-- **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
-  a consumed result instead.
-
 ### R-12 — rev-node exhaustion is SILENT CORRUPTION, not a fault `OPEN, will bite at call_dom`
 
 The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation

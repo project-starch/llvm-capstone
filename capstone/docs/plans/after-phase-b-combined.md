@@ -74,7 +74,8 @@ the flash (~2 h board); 6 the day after.
 > byte-identical to M-4's; smoke, five probes, null-blk, M-2 control, hole check, cascade unchanged). I-5
 > CLOSED on evidence (every monitor error site already names itself on the UART; entry archived). M-1's
 > remaining half is RTL-side (sw39 evidence written under the entry; ownership to the RTL lane). Both
-> monitor changes owe one FPGA control boot, batched into the first post-flash boot. **Q-04 is NOT a
+> monitor changes owe one FPGA control boot, batched into the first post-flash boot; the nightly tier on the
+> M-3 images (M-4 + M-3 + Q-06) is **18/18** (2026-09-09 16:30–17:15, no suite under load). **Q-04 is NOT a
 > QEMU fix for this lane:** the C-14 trail's standing position is that scalars are probably exempt from
 > MOVC's nulling and the RTL's behaviour is the oversight, so Q-04 needs a spec ruling from the lead and
 > the RTL lane; if the ruling goes the other way it becomes C-14's compiler fix. **C-37 / C-9 / C-43 belong

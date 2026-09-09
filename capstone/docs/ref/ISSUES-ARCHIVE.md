@@ -1296,6 +1296,31 @@ regress.
 - **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
   reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
 
+### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `NOT REPRODUCED ON THE CURRENT COMPILER 2026-09-09 (compiler lane, branch b67808e34f6a): zero self-moves at -O1/-O2 with the tie present, same mv count as plain riscv64; the -O0 self-moves are FastRegAlloc stack-slot address materialisation, not this; not GONE because no archived compiler can fire the 2026-07-27 instrument`
+The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
+tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /
+**mv a4,a4** / bne` — where plain riscv64 emits 5 for the same source.
+
+- **Found:** 2026-07-27, while building the I-2 counter-sanity probe. It is logged because
+  it **silently defeated that probe**: the measurement depends on both targets retiring the
+  same instruction count, and the compiler manufactured a 1.4× difference out of nothing.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity_kernel.h` with the inner
+  `__asm__ volatile("" : "+r"(acc))` restored; disassemble
+  `--triple=riscv64 --mattr=+m` and compare against `ladder-base/obj/base_ctrsanity.o`.
+- **Impact:** small in isolation (two wasted instructions per tie), but the register-pinning
+  idiom is used throughout the ladder kernels to defeat constant folding, so it inflates
+  the capability instruction count of **any** rung that uses it — i.e. it can bias an
+  overhead ratio upward. Worth a look before the next measurement round.
+- **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
+  a consumed result instead.
+
+> **NOT REPRODUCED 2026-09-09 (compiler lane, instrument and sweep doc on branch b67808e34f6a).** The filed
+> shape is an optimised-loop wart (5→7 instructions, a `mv` around the tie). The current compiler emits zero
+> self-moves at -O1/-O2 with the tie present, the same `mv` count as plain riscv64. The -O0 self-moves seen
+> first are a red herring: deleting the tie leaves all nine, so they are stack-slot address materialisation
+> under FastRegAlloc, gone at -O1. Not GONE, because neither archived old compiler (llvm-pre-c128, llvm-0819)
+> has a clang/llc that can fire the 2026-07-27 instrument. No fix; archived on this evidence.
+
 ### C-10 — capability-spill lead: REFUTED `CLOSED`
 Proposed and killed the same evening, by the falsification checks written into the entry
 before acting on it.
