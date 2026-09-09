@@ -2,8 +2,10 @@
 
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `9d8797560`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
 > at the default memory latency and at a verified 40-cycle latency, lint at the baseline counts, sweep unchanged except
-> the predicted cycle deltas. **Bitstream: in synthesis at `66c4e7517`, not yet on the board.** The board arm is the
-> board lane's firmware variants D/E (the monitor's CCSRRW-adjacent `fence.i` dropped), filed under `board/` when read.
+> the predicted cycle deltas. **Bitstream: not yet synthesised or on the board (2026-09-09, awaiting the lead's go to the synth lane).**
+> The board arm is the board lane's firmware variants D/E (the monitor's CCSRRW-adjacent `fence.i` dropped); readings
+> so far in the Board section below: on the CURRENT silicon, dropping two of the three `fence.i` boots CLEAN (sw40), so
+> the variant boots are a no-regression check on the fixed bitstream, not the evidence for R-26. The evidence is `sim/`.
 
 **Wrong symptom? Read this paragraph first.** This package is the **stale CPMP check**: a capability-CSR write commits
 without flushing, and a younger memory instruction runs its permission check against the old entry. It raises nothing
@@ -51,6 +53,23 @@ on both trees, spinning on a fetch check its own S-mode code predates) changes o
 ## Run it
 
 `bash run.sh <checkout> r26-v2-ldmiss` (add `+define+S12_MEM_DELAY=40` as the third argument for the 40-cycle model).
+
+## Board
+
+The monitor keeps three `fence.i` after `CCSRRW` in `sbi_capstone.S` (`:90`, `:176`, `:189`) plus the UART-mint one in
+`sbi_capstone_dom.c:47`. Variant "D" drops the three, "E" drops all four. On the current silicon the R-26 window needs an
+older cache-missing load between the `CCSRRW` and the younger load (the arm table above), which the monitor's code around
+those sites may or may not present — so a CLEAN variant boot on the current silicon says the monitor does not hit the
+window there, not that the defect is absent. Decided and written before the flash: **the variant boots are
+no-regression checks**; R-26's evidence stays the simulation arms.
+
+**2026-09-09, boot sw40, current silicon `caplifive_s12fix_5097eb166`, board lane.** Firmware `bf97e48c80f9` (monitor
+`91c48f3` with two of the three `CCSRRW` `fence.i` dropped, `:176` and `:189`; `:90` kept; 150 `fence.i` linked): control
+`k800` = 4, all six BEEBS rungs at their oracles, zero fault tags, HOLE 0 — "D minus one" CLEAN on the current silicon.
+Variant D proper (all three dropped, `fence.i` count in the `.S` asserted 0) is boot sw42; its reading is filed here when
+it lands. Rows in `tests/board-results/2026-09-05.tsv`.
+
+**Post-flash (bitstream from `66c4e7517`): not yet booted.** Prediction on file: D and E CLEAN, closing set identical.
 
 ## Records
 
