@@ -1,3 +1,103 @@
+# Amendment 2026-09-09 (evening): status, the R-25/26/27 board track, and the registry split into two files
+
+*(Amends the combined plan below, which the lead approved this morning. Three things changed: the CHERI smoke
+and Q-06 are done; the RTL lane's R-25/26/27 state is now known precisely; and the lead's new rule for the
+registry: **`ISSUES.md` holds only the open, relevant issues; every resolved entry goes to a separate archive
+file.** That replaces section D.2 of the plan below.)*
+
+## 1. Where things stand now
+
+| item | state |
+|---|---|
+| CHERI smoke (build B) | **PASS on silicon** 2026-09-09 14:48–14:54, non-volatile route, Capstone restored and verified; records `~/capstone-artifacts/cheri-cva6/board-run-1/` |
+| Q-06 | **FIXED, QEMU-validated** (monitor 91c48f3, wrapper 6058091, buildroot 4244cbf, caplifive-system 8616741, unpushed): null-blk suite 3/3 for the first time; tier on the fixed images running; the FPGA build owes ONE control boot (new global shifts two FPGA-only UART globals by a slot; `.c.S` diff enumerated) |
+| R-26 | fixed in RTL, sim-verified at the verified 40-cycle latency; on branch |
+| R-27 | found, drain fix sim-verified (58-arm set: 57 PASS + the deliberate control FAIL, 0 hangs); on branch |
+| R-25 | fixed in RTL, self-checking test PASS; on branch |
+| RTL Phase 3 (two/three final commits on `fpga-testing-dev`) | **pending** — then the **LEAD pushes** `fpga-testing-dev` (hook blocks the branch name) |
+| RTL Phase 4 (synthesis, ~3.5 h) | not started; prediction written (WNS −11.7…−15.3 ns, 168.9–170.5 k LUTs) |
+| Board Phase 5 | pending on the pre-flash boot (below) and the **LEAD's flash decision** |
+| Registry | 6427 lines; 49 entries above the in-file "Archive" line of which **19 are fixed**; 50 below of which **10 are OPEN** (I-03, I-02, C-43, C-37, C-38, R-19, R-18, R-21, R-22, R-24) — mixed both ways, which is the lead's complaint |
+
+## 2. The R-25/26/27 board track (this lane executes; two decisions are the lead's)
+
+1. **Now, off-board (this lane):** build the pre-flash batch — the R-25 domain probe (INIT `rs1≠rd`, probe
+   `rs1`, marker 1 = duplicate present / 0 = NOT_CAP; the RTL lane owes the `.S`/image or its spec, else I write
+   it from the registry's R-25 entry), firmware variant **D** (drop the three CCSRRW-adjacent `fence.i` in
+   `sbi_capstone.S`; `fence-variant.py` gains a `D` mode; QEMU byte-identity is irrelevant — FPGA-only sites),
+   the I-4 probes (`accum_probe`/`accum2_probe`, rebuild from the sweep's recipe), the C-3 RV8 -O2 rung, and
+   the Q-06 firmware as the baseline of that boot. Entry VAs distinct; preflight records for the `|label`
+   rungs; oracles from the host values.
+2. **Pre-flash boot sw39 on the current silicon** (one boot, control first, one unknown last): k800 → the six
+   BEEBS rungs (the Q-06 firmware's control set) → I-4 probes → C-3 rung → the R-25 probe (predicted **1**)
+   → variant D LAST (predicted CLEAN by the RTL lane's reading; if so the post-flash D/E boots are
+   no-regression checks, written down before the flash). This is also Q-06's owed control boot.
+3. **LEAD:** push `fpga-testing-dev` when the RTL lane reports Phase 3 done; the RTL lane synthesises (3.5 h).
+4. **LEAD:** flash decision with the lint numbers, the sweep deltas, the §7 row and the sw39 readings.
+5. **Post-flash boots** (this lane): boot 1 = the closing set on the new bitstream (k800, six rungs, SLT
+   select1, transfer probe); boot 2 = R16 acceptance, the S-06 trio, the R20 rung, the R-25 probe (predicted
+   **0**), variants D and E. Then the `fence.i`-drop monitor commit and the registry lines R-25/26/27 →
+   FIXED ON SILICON (through bench while it holds the file).
+6. **Re-triage boot** on the new bitstream: R-17/S-01 pair, R-18 frozen images, the resolved-but-retained
+   packages as regression tests.
+
+Timeline: 1 today; 2 tomorrow morning (~1 h board); 3–4 the RTL lane's schedule plus the lead; 5 the day of
+the flash (~2 h board); 6 the day after.
+
+## 3. The monitor and compiler buckets (this lane, unchanged order; Q-06 done)
+
+M-4 (bound `dom_id` in `call_domain_with_cap`) → M-1 (read `RTL-domain-trap-vector-unset/` first: its
+firmware half is already on silicon; what remains may be RTL-side, in which case M-1 moves to the RTL bucket)
+→ M-3 (real SBI error returns; the module's failure paths go live, module suite must stay green) → I-5 → Q-04
+(QEMU MOVC nulling; grep for MOVC-of-scalar shapes first) → C-37 → C-9 → C-43. Each its own commit, `.c.S`
+gates on both targets, the FPGA control boots batched into the boots of section 2 (sw39 takes M-4/M-1 if they
+land before it; otherwise post-flash boot 2). About three working days for the monitor items, two to three for
+the compiler items.
+
+## 4. The registry split (replaces D.2; bench executes on `archive-docs`; this lane reviews the diff)
+
+- **Two files in `docs/ref/`:** `ISSUES.md` (title stays "Open issues registry"; contains ONLY entries whose
+  header status is OPEN / CHARACTERISED / WORKED AROUND / LATENT / RECORD-ONLY-but-open) and a new
+  `ISSUES-ARCHIVE.md` ("Resolved issues — kept for provenance"; contains every entry whose header status is
+  FIXED / CLOSED / RESOLVED / RETRACTED / GONE / NOT A BUG / SUPERSEDED / EXPLAINED / NOT REPRODUCIBLE /
+  RECORD ONLY (folded) / RESERVED). **The rule is the header's status token, never the entry's current
+  position** — 19 fixed entries sit above today's archive line and 10 open ones below it.
+- **Mechanics:** entries move VERBATIM (heading, body, strike-throughs, retraction boxes), one `git mv`-like
+  cut/paste per entry; the in-file "## Archive — fixed, kept for provenance" section disappears from
+  `ISSUES.md` (its preamble becomes the archive file's preamble); `## How to add an entry` stays in `ISSUES.md`
+  and gains one sentence: "when an entry's status becomes final, move it to `ISSUES-ARCHIVE.md` in the same
+  commit; IDs are never reused". Both files carry a one-line pointer to the other at the top. The
+  "Last updated" line is refreshed. The 21 headers my parser could not classify are placed by a human read of
+  the status token (bench has classified them already).
+- **Cross-references:** no script parses `ISSUES.md` (checked: only comments in `run-nightly.sh`,
+  `run-q03-region-hole-check.sh`, `m2_region_overflow_host.c`, ladder kernels, CLASSIFICATION.tsv). Prose
+  references of the form `ISSUES.md:<line>` are already stale by construction and stay. References that name a
+  fixed entry's HEADER as a source of truth (the S12 repro README: "the S-12 header in docs/ref/ISSUES.md is
+  the source of truth") are updated to `ISSUES-ARCHIVE.md` in the same commit (`grep -rn "ISSUES.md" capstone
+  --include=*.md` lists them; expected under ten).
+- **Ordering inside the archive:** by ID family then number (R, S, C, Q, M, I, F), so an ID is found by
+  scanning; the archive file's preamble says entries are frozen and corrections go under them dated, as now.
+- **Review gate before the fast-forward:** a script check that every ID present before the split is present
+  exactly once across the two files (`grep -hoE '^#{2,3} [A-Z]-[0-9]+' both | sort | uniq -c`), that no open
+  status token appears in the archive file and no final status token heads an entry in `ISSUES.md`, and that
+  the two files' total entry count equals the old file's. I run it on bench's branch before the
+  fast-forward; bench does not fast-forward until I say so.
+- Registry lines that land while bench holds the file (Q-06 FIXED, R-25/26/27 updates) go to bench as text
+  and are written into whichever file the status now dictates (Q-06 → archive at the split, with its board
+  control-boot caveat carried in the header).
+
+## 5. Verification for this amendment
+- sw39 rows in the tsv from the run's own transcript; predictions for D and the R-25 probe written into the
+  plan doc BEFORE the boot; a boot whose control fails is VOID.
+- Q-06: tier PASS on the fixed images (or its FAIL explained the way the 5A tier's was), then the dev gitlink
+  commit and the nested pushes through `/tmp/capstone/push-final.sh` (the lead's credential).
+- The split: the three-way count check above, `git show --stat` shows only the two registry files plus the
+  handful of cross-reference edits; every commit scanned.
+
+---
+
+---
+
 # Combined plan 2026-09-09: the 33 open issues, the R-25/26/27 bitstream on the board, the CHERI smoke, archiving
 
 *(Board lane. Approved by the lead 2026-09-09 as written, with the session split (board: A, B, C and every
