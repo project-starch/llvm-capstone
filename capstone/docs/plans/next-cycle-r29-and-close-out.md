@@ -199,6 +199,23 @@ compiler lane holds C-43 (land `5d2932a9`), C-14, C-4 (no status token — needs
 | §5 monitor/QEMU chain | NOT STARTED (Q-07 → M-5 → I-03 → M-1). |
 | §6 standing four | C-5 CLOSED as stale — the window is a per-image knob discovered from the ELF, positive-controlled by building one rung at both windows. R-12 done (§1). I-02 done: `tests/next-issue-id.sh`, positive-controlled on C-25. C-38 DONE by the compiler lane; C-45 spun out. |
 
+**The lead's open questions, answered 2026-09-10 (all committed).**
+
+| question | answer |
+|---|---|
+| R-4: close or keep open? | **RECORD ONLY.** Closure as "not reproducible" is rejected as overstating the record — nobody ever attempted reproduction, and the sweep marked it UNTESTABLE because there was nothing to run. Its symptom class is now owned by R-19, R-10-secondary and R-29, so a new sighting goes to whichever it matches. No attribution is made: R-4 has no artefact and a fit is not a mechanism. |
+| C-4 disposition | **FIXED, both halves re-verified.** Verified against the sub-entries: the "remaining domain-creation bug" the heading promised does not exist. The proposer's caveat (recorded evidence, rungs not re-run) is kept. Could not be moved to the archive — see the scan note. |
+| C-14 disposition | **Symptom and attribution separated, then the attribution SETTLED** — see Q-04 below. It is a compiler fix: `movc` as a scalar register copy destroys its source on conformant hardware. |
+| C-45: land this cycle? | **Yes**, as its own commit on top of C-38's and never squashed with it. The code and its test are open now; the cost of leaving it is a declared instruction form the assembler silently refuses; the risk is bounded by the same file, same test, 102/102 suite. |
+| Scan: stop reading removed lines? | **Yes, and context lines too — WARN, not BLOCK.** Full reasoning, patch and six required controls in `precommit-scan-removed-lines-proposal.md`. NOT applied: it is a release gate and therefore the lead's. Hit three times in one session; it is currently preventing C-4 from being archived. |
+
+**Q-04 was ruled rather than deferred**, because reading the spec settled it: the MOVC definition
+writes `cnull` to the source whenever `type != 1`, `NOT_CAP` is type 0, and there is no scalar
+carve-out. So QEMU is the outlier and Q-04 is a QEMU fix, not a spec question. The counter-argument —
+that nulling a scalar serves no security purpose and the rule could be narrowed — is recorded as a
+spec-amendment proposal for the spec's owners, explicitly not adopted by a lane and not settled by
+leaving QEMU divergent.
+
 **A process failure worth the lead's eye.** One commit tonight went in while `precommit-scan` said
 BLOCKED, because the command printed the scan's exit code instead of gating on it. The hit was a false
 positive and the content was verified clean, but the procedure was wrong and it is the same shape as
