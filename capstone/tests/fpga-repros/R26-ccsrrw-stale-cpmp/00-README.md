@@ -3,7 +3,8 @@
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `9d8797560`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
 > at the default memory latency and at a verified 40-cycle latency, lint at the baseline counts, sweep unchanged except
 > the predicted cycle deltas. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517` (sha256 `b03bd967…52da3`, WNS
-> −12.425 ns at 40 ns, 169,207 placed LUTs); not flashed — the flash is the project lead's decision.**
+> −12.425 ns at 40 ns, 169,207 placed LUTs), BEING FLASHED 2026-09-09 on the project lead's decision; the
+> post-flash variant boots sw46/sw47 are filed below when they land.**
 > The board arm is the board lane's firmware variants D/E (the monitor's CCSRRW-adjacent `fence.i` dropped); readings
 > so far in the Board section below: on the CURRENT silicon, dropping two of the three `fence.i` boots CLEAN (sw40), so
 > the variant boots are a no-regression check on the fixed bitstream, not the evidence for R-26. The evidence is `sim/`.

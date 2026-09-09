@@ -3,7 +3,10 @@
 > **Status 2026-09-09: pre-existing on `ef5a8eaf2`, fixed in RTL** (`capstone-ariane` `66c4e7517`, the tip of
 > `fpga-testing-dev`), **sim-verified** (three triggers HANG → PASS at the default latency; the load-fault trigger HANG →
 > PASS at a verified 40-cycle latency), lint at the baseline counts, adversarially audited. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
-> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns); not flashed, and silicon UNCONFIRMED** — no board arm exists yet, and whether historic board wedges were this is UNRESOLVED.
+> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns), and BEING FLASHED 2026-09-09 on the project
+> lead's decision; silicon UNCONFIRMED and expected to stay so** — no board arm exists for R-27, so the
+> post-flash boots can only show no-regression, never confirmation. Whether historic board wedges were this
+> is UNRESOLVED. See "Board" below for what the flash boots were predicted to read, written before them.
 
 **Wrong symptom? Read this paragraph first.** This package is the **silent deadlock**: no trap, no UART output, the
 core stops fetching a few instructions after a capability instruction. `../R26-ccsrrw-stale-cpmp/` is the permission
@@ -57,6 +60,23 @@ itself was tried upstream and reverted (`f5f9291c8`, `d15d45b33`, `7bcbdb39c`).
 ## Run it
 
 `bash run.sh <checkout> r27-ldf-n0` — HANG on `ef5a8eaf2`, PASS with one counted trap at `66c4e7517`.
+
+## Board
+
+**No arm confirms R-27 on silicon, and the flash does not change that.** The deadlock needs a flush inside the
+DYN unit's revocation-query window; nothing in the post-flash set creates one deliberately, so a clean sweep is
+absence of regression, not evidence the drain works. Recording it here so a later reader does not promote the
+one to the other.
+
+**Predictions for the flash boots, written 2026-09-09 BEFORE any of them ran** (board lane, boots sw44–sw47 on
+the bitstream from `66c4e7517`): sw44, the closing set, reads identical to its `ef5a8eaf2`-era values — control
+`k800` = 4, the six BEEBS rungs at their oracles, SLT `select1` at `records=1031 … completed=1`, the transfer
+probe at `retval=574619742`, zero fault tags. sw45, the acceptance set, reads its recorded sweep oracles
+(`s06copy` 32 clean, `s06aggcap` 15, `s06aggwide` 255, `sbx8` `0xD0000000`, `rc_const0`/`rc_p1` at their sweep
+values) with `r25dup` LAST trapping 25 at the store through the consumed source. sw46 and sw47, firmware
+variants D and E, read CLEAN 8/8 plus the probe, which is a no-regression check and not R-26 evidence — the
+current silicon already boots both clean (sw40, sw42). **Any hang or wedge in any of these is the reading that
+would matter most, and it is the one nobody predicts.**
 
 ## Records
 
