@@ -440,6 +440,21 @@ RTL-side fix; the monitor keeps its `fence.i` until then).
 
 ### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `OPEN — SILICON, SECURITY-MODEL VIOLATION, CONFIRMED BY DIRECTED TEST`
 
+> **CONFIRMED ON SILICON 2026-09-09 (boot sw41, board lane).** The domain probe `r25dup`
+> (`tests/runtime-qemu/silicon-ladder/r25dup_fpga_app.c`; construction from the RTL lane's self-checking
+> test: transferred LIN region, cursor past end, CAPTYPE in place to UNINIT = 4 in the RTL's numbering,
+> `init a3, a1, a0` with rd ≠ rs1, then a capability store THROUGH rs1 and a load back through the region)
+> returned **0x25000001** on caplifive_s12fix_5097eb166: the store through rs1 landed and a tagged
+> capability came back, so rs1 still held a live LINEAR capability after INIT — the duplicate. The control
+> `r25same` (rd == rs1, same chain) returned 0x25000001 as required; k800 = 4; zero fault tags. This is the
+> pre-flash reading the RTL lane predicted; on the R-25-fixed bitstream (fpga-testing-dev 66c4e7517, C2
+> 42a141c93) the same arm must trap at that store (UNEXPECTED_OPERAND). Boot sw39's first attempt of the
+> same pair wrote the spec's type number 3 (= REVOKE on the RTL) and wedged at INIT with cause 27; VOID,
+> recorded in the tsv. Two side findings: the RTL does not implement the spec's cincoffset-past-end rule
+> (cap-man-insn.adoc:262), which is what makes the construction possible; and a domain fault is not
+> delivered to the monitor on this RTL (M-1's open half) — the core wedged into a repeating 0xdead.. UART
+> record.
+
 **Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
 than taken on report, including the control that makes it a defect rather than an idiom.**
 
