@@ -704,10 +704,37 @@ JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board swe
 - **Mechanism note:** the domain-boundary `fence.i` was long suspected to fix R-1 as well;
   board test #63 disproved that. It remains the right fix for **this** issue only.
 
-### R-4 — A shared-region word is silently corrupted `OPEN`
+### R-4 — A shared-region word is silently corrupted `RECORD ONLY 2026-09-10 — one uninstrumented sighting from 2026-07-28, three bitstreams ago, no reproducer and no image; its SYMPTOM CLASS is now covered by three characterised entries and a new sighting belongs to whichever it matches. NOT closed as 'not reproducible': nobody ever tried`
 `rv8_primes` returned the *correct* result while a word of its shared region held a stray DRAM
 address. Passing rungs were only ever clean where someone looked.
 - **Evidence:** `ref/fpga-silicon-measurements-for-paper.md` §5
+
+> **DISPOSITION 2026-09-10 — RECORD ONLY. The reasoning matters more than the verdict.**
+>
+> Three lines, no reproducer, no named image, no bitstream, and the one observation predates the
+> 2026-08-04 reflash — so it is on `working-caplifive-captype-fixed.bit`, three bitstreams behind
+> current silicon. The cited evidence is itself a bullet inside a *"what is NOT established"* list.
+>
+> **Closure as "not reproducible" was proposed and is REJECTED as overstating the record.** Nobody
+> ever tried to reproduce it: the 2026-09 sweep marked it UNTESTABLE precisely because there was
+> nothing to run. *"We looked and it did not recur"* and *"there was never anything to look at"* are
+> different claims, and only the second is true here. Closing on absence of evidence is the failure
+> this project has repeatedly paid for.
+>
+> **What HAS changed is that the symptom class is no longer unattributed.** "A region word holds
+> something the program never wrote" now has three characterised owners, each with a reproducer:
+> **R-19** (the victim holds `compress_cap(NULL) + n`, a hardware encoding the program cannot
+> materialise), **R-10**'s secondary half (capability-ness inferred by OR-reducing a metadata word —
+> still live on the refill path at `wt_dcache_mem.sv:358`/`:501`), and **R-29** (a granule's high half
+> served stale from the refill leg; *stale DRAM contents* is exactly what "a stray DRAM address" looks
+> like). **No attribution is made here.** R-4 has no artefact to match against any of them, and a fit
+> is not a mechanism — this registry has paid for that confusion before.
+>
+> **The actionable part.** Keeping this open as a separate ID invites a fourth parallel investigation
+> of a symptom three entries already own. A NEW sighting of this shape is filed against whichever of
+> R-19, R-10 or R-29 its signature matches, or gets its own ID *with an artefact* — not reopened here.
+> It stays in the open registry rather than the archive because nothing about it was resolved; it is
+> retained as provenance for the sighting.
 
 ### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `ROOT CAUSE of C-13, board-confirmed 2026-07-29`
 
@@ -877,7 +904,25 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### C-4 — split into a FIXED half and a remaining domain-creation bug
+### C-4 — constant pools unreachable in a domain (C-4a) and the large-RO copy path in the generated glue (C-4b) `FIXED 2026-07-28, BOTH halves re-verified 2026-09-05 under QEMU (C-4a rv8_sha512 = 1390718314 = oracle; C-4b beebs_crc32big = 1703161001 = oracle). NOT MOVED TO THE ARCHIVE — see the note directly below`
+
+> **APPLIED 2026-09-10.** Verified against this entry's own sub-entries: there is no residual. C-4a and
+> C-4b are both FIXED and both re-verified, and the "remaining domain-creation bug" the old heading
+> promised is the `helper_cssplit` path that C-4b's rung now returns its oracle on. The compiler lane's
+> caveat (recorded further down) stands and is not dropped: this rests on RECORDED sweep evidence and
+> neither rung was re-run for the decision.
+>
+> **Why this entry is NOT in `ISSUES-ARCHIVE.md` despite a final status.** Moving it is impossible
+> today without weakening or bypassing `precommit-scan`. Text further down this entry contains a phrase
+> the scan's credential pattern matches (`precommit-scan.sh:163`) — a false positive; it is the
+> registry's own word for a status word. The scan reads REMOVED and CONTEXT diff lines as well as added
+> ones, so the commit that deletes this entry from here is blocked by the text it deletes, the commit
+> that adds it to the archive is blocked too, and even editing NEAR the phrase blocks. Recorded rather
+> than worked around. The fix is a scope correction to the scan — removals and context should WARN, not
+> BLOCK, since content leaving the tree cannot introduce a secret — and that is a change to a release
+> gate, so it is the lead's call. Until then this entry is final-but-resident, which is a cost of the
+> gate and not a fact about C-4.
+
 
 > **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** Both sub-entries read
 > `FIXED 2026-07-28` and both carry a "Sweep 2026-09-05 re-verified FIXED" line (C-4a via
@@ -1258,7 +1303,13 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
 
-### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
+### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `GONE ON SILICON 2026-09-05 (gpn2 = 3976364985 = oracle and RETURNED, in the boot where it used to wedge); ATTRIBUTION OPEN pending the Q-04 spec ruling on whether a scalar source is exempt from the MOVC consumption rule — this entry closes on that ruling, not on the symptom`
+
+> **APPLIED 2026-09-10.** The symptom and the attribution are deliberately kept apart. "Gone on
+> silicon" is not "fixed": closing this on the symptom would discard the live question of whether our
+> codegen relies on behaviour the spec does not guarantee. Q-04 is the blocker and is named in the
+> header so nobody re-derives it. If the ruling goes scalar-exempt this becomes a small compiler fix
+> (stop using `movc` for scalar copies) and the compiler lane takes it.
 
 > **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** The entry carries a
 > "Sweep 2026-09-05 — GONE on silicon" line (`gpn2` = 3976364985 = oracle and RETURNED, in the boot
@@ -1863,8 +1914,21 @@ target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
 builtins found zero occurrences of `call` followed by a bare register and a symbol. So this is a hole
 in what the assembler accepts versus what the instruction definitions declare, not a blocked user.
 
-**Owner:** compiler lane, on the lead's word — it is a small parser change of the same shape as C-38's
-and they have offered to take it this cycle.
+**DECISION 2026-09-10: land it this cycle, as its OWN commit on top of C-38's, never squashed with it.**
+
+Three reasons in order of weight. (1) It is in the function C-38 just changed, so the code and its
+test are open now; later it costs more, because whoever picks it up must re-derive why
+`parseCallSymbol` declines register names. (2) The cost of leaving it is a latent trap — an
+instruction form the definitions declare and the assembler silently refuses is what someone hits at
+the worst possible moment, and today's "no consumer" search does not bind tomorrow's code. (3) The
+risk is bounded: same file, same test, and a lit suite currently at 102/102 on the branch, so a
+regression is immediately visible and immediately revertible.
+
+**Separability is the condition, not a nicety.** C-38 is board-relevant (the disassembler round trip);
+C-45 is not. If either has to be reverted they must come apart — which is also why keeping C-45 out of
+C-38's commit was right.
+
+**Owner:** compiler lane.
 
 ### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `MITIGATED IN-BRANCH 2026-09-09 (compiler lane, 5d2932a941ea): every producer of anonymous unslotted data is avoided (pools via useConstantPoolForLargeInts, jump tables via areJTsAllowed, cttz via lowerCTTZNoTable) or slotted (private globals get cap-table slots); backstop guard diagnoseAnonymousConstantUnderGpCaptable with a -capstone-gpfree-constant-pools knob as its lit positive control; class record kept — slot-allocated pools remain a LEAD design item`
 
