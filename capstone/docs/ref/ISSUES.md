@@ -2266,6 +2266,35 @@ undebuggable and takes the core with it.
 
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
 
+> # ⚠ 2026-09-10: FIVE monitor sites, not two — and the widest one is not a re-share at all.
+>
+> My grep found the two `C_INIT` sites and I said so was not proof of completeness. It was not. The
+> RTL lane's auditor found **five** consumers that would meet an UNINIT capability once R-31 lands:
+>
+> 1. **`split_out_cap` — the widest, and it needs no re-share whatsoever.** A revoked region is left
+>    `region_live`, so an unrelated later `create_region` inside its range picks it and SPLITs an
+>    UNINIT. Nothing about the revoked region's own lifecycle is involved; an unrelated allocation
+>    walks into it.
+> 2. **unguarded `__mrev` in REV_DEFAULT.**
+> 3. **unguarded `__delin` in `delinearize_region`.**
+> 4. **REV_SHARED silently skips its delin** and hands the borrower an UNINIT whose first `LDC` faults.
+> 5. **REV_TRANSFERRED's type check is a hard `while(1)` wedge on the FPGA target**, not a trap — so it
+>    presents as a hang rather than an error.
+>
+> **Checked and NOT sites:** `TIGHTEN` accepts UNINIT, the `LCC` base/end queries are fine, the CPMP
+> install path cannot tell LINEAR from UNINIT, and the domain switcher never reads a type.
+>
+> **So the monitor change is materially larger than "fix the two `C_INIT` calls".** It has to cover all
+> five, and site 1 in particular means the fix cannot be confined to the share/revoke paths.
+>
+> **A third QEMU divergence, and it is load-bearing for the security claim.** QEMU's `helper_csrevoke`
+> puts the revoked cursor at **END**; the fixed RTL puts it at **BASE**. That is *why* this monitor code
+> exists: `C_INIT(r, r, 0)` succeeds on QEMU without any rewrite, so the shortcut was never wrong under
+> the emulator anyone develops against. **Consequence: the disclosure R-31 closes on silicon remains
+> open on QEMU by that route until QEMU is aligned** — so "R-31 closes the disclosure" is false for the
+> emulator even after the RTL fix, which is a second reason beyond the inert-LSU one not to describe it
+> that way.
+
 > **2026-09-10 — THIS ENTRY'S PREMISE IS WRONG ON THIS SILICON, and the two findings that replace it
 > are R-30 and R-31. Read those first.**
 >
