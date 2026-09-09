@@ -48,7 +48,14 @@ cp -f "$OUT_DIR/$DOM_NAME.dom" "$SHARE/"
 echo "== one boot, $CALLS calls ascending"
 CAPSTONE_QUIET_GP=1 python3 "$REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" --log-file "$LOG" --timeout-multiplier "$TMULT" \
-  --guest-command "/mnt/host/capstone-test.user /mnt/host/$DOM_NAME.dom $CALLS; " \
-  "$SHARE/$DOM_NAME.dom" || true
+  --guest-command "/mnt/host/capstone-test.user /mnt/host/$DOM_NAME.dom $CALLS; " || true
+# NO positional .dom argument. A positional domain makes run-domain-smoke.py load and
+# call the image a FIRST time before the ladder runs, and nothing frees that domain, so
+# the ladder then asks for a second region on a guest still holding the first. One
+# domain per boot is this project's documented rule and rung 0 is already the anchor,
+# so the smoke proved nothing the ladder does not.
+# It is NOT a fix for the intermittent loader stall. That was the first reading and it
+# is wrong: the stall (log stops after "Segment size", QEMU spinning at 100%) happens
+# on the first load of a boot as well.
 
 python3 "$SCRIPT_DIR/tools/report-ladder.py" "$LOG"

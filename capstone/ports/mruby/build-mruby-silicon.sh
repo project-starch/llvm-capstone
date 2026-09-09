@@ -117,6 +117,14 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 # re-issues every ldc and uses the second result, and unlike the type-query retry it
 # puts nothing between the pair, so it does not serialise the very overlap under
 # test. If the fault goes away, the first read is delivering something wrong.
+# Line tables only, so a fault pc can be mapped to a source line instead of read out
+# of the disassembly by hand. Debug sections are non-alloc: .text stays byte-identical,
+# which the caller should CHECK rather than assume before quoting a line number.
+if [[ ${MRUBY_DEBUG_INFO:-0} == 1 ]]; then
+  COMMON+=(-gline-tables-only)
+  echo "== line tables ON: .text must still match the release image"
+fi
+
 if [[ ${MRUBY_DOUBLE_LDC:-0} == 1 ]]; then
   COMMON+=(-mllvm -capstone-double-ldc)
   echo "== -capstone-double-ldc is ON: every ldc is issued twice"
