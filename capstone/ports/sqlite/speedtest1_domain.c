@@ -1,0 +1,316 @@
+/* speedtest1 as a Capstone domain.
+ *
+ * SQLite's own benchmark, its source unchanged, with its stdio on the hostcall payload and
+ * no files: printf and fprintf render through sqlite3_vsnprintf into the payload the host
+ * prints after the domain returns, fopen refuses, unlink is a no-op, and exit writes its
+ * code and parks the domain in abort(). The benchmark's main is included under another
+ * name and called with fixed arguments (SPEEDTEST1_ARGS).
+ *
+ * memsys5 is configured here, before the benchmark's own sqlite3_initialize, from the
+ * in-image sqlite_heap[] the other SQLite domains use. With SQLITE_LOOKASIDE=1200,40 in the
+ * build the allocator chain is the one the paper measures: lookaside above memsys5,
+ * memsys5 above nothing.
+ *
+ * Built by run-sqlite-speedtest1.sh: DOMAIN_SRC=this file, -DSPEEDTEST1_SRC='"<path>"'.
+ */
+#include "sqlite3.h"
+#include "sqlite_hostcall.h"
+
+#ifndef SQLITE_HEAP_SIZE
+#define SQLITE_HEAP_SIZE (256U * 1024U)
+#endif
+#ifndef SPEEDTEST1_ARGS
+#define SPEEDTEST1_ARGS "--memdb", "--size", "1", "--testset", "main", "--verify", "--stats"
+#endif
+#define CAPSTONE_DPI_REGION_SHARE 1U
+/* Bisection aid, see domain_main: -DSPEEDTEST1_STOP_AT=n stops at milestone n. */
+#ifndef SPEEDTEST1_STOP_AT
+#define SPEEDTEST1_STOP_AT 0
+#endif
+#ifndef SPEEDTEST1_STACK_ARENA
+#define SPEEDTEST1_STACK_ARENA 0
+#endif
+#define CAPSTONE_DELIN(value)                                                \
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
+
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
+static volatile char *hostcall_payload;
+static unsigned shared_region_count;
+
+static void output_text(const char *text) {
+  if (!hostcall_metadata || !hostcall_payload)
+    return;
+  /* Both delins guarded for the same reason as sqlite_capstone_domain.c: on the
+     gp-captable ABI these capabilities are reached through the cap-table and arrive
+     NONLIN, and DELIN on a non-linear capability raises UNEXPECTED_CAP_TYPE on the RTL,
+     which WEDGES rather than traps (R-5). QEMU's helper_csdelin returns early, hiding it.
+     This is the S-02 root cause, proven on silicon 2026-08-09: with the guard the same
+     arm returned in 4 s where it had wedged. UNTESTED IN THIS FILE -- this domain has not
+     been re-run on the board since the guard was added; it is the same construct and the
+     same ABI, but say so rather than imply it was measured here. */
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
+  CAPSTONE_DELIN(text);
+#endif
+  char *payload = (char *)hostcall_payload;
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
+  CAPSTONE_DELIN(payload);
+#endif
+  unsigned long offset = hostcall_metadata->length;
+  while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
+    payload[offset++] = *text++;
+  hostcall_metadata->length = offset;
+}
+
+static void output_uint(unsigned long value) {
+  char digits[24];
+  unsigned count = 0;
+  do {
+    digits[count++] = (char)('0' + value % 10UL);
+    value /= 10UL;
+  } while (value);
+  char text[24];
+  unsigned i = 0;
+  while (count)
+    text[i++] = digits[--count];
+  text[i] = 0;
+  output_text(text);
+}
+
+/* The benchmark's stdio: two streams, both the payload. */
+struct capstone_sqlite_file {
+  int fd;
+};
+static FILE stream_out = {1};
+static FILE stream_err = {2};
+FILE *stdout = &stream_out;
+FILE *stderr = &stream_err;
+
+int vfprintf(FILE *stream, const char *format, va_list ap) {
+  char buffer[1024];
+  (void)stream;
+  sqlite3_vsnprintf((int)sizeof buffer, buffer, format, ap);
+  output_text(buffer);
+  return (int)strlen(buffer);
+}
+
+int fprintf(FILE *stream, const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  int n = vfprintf(stream, format, ap);
+  va_end(ap);
+  return n;
+}
+
+int printf(const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  int n = vfprintf(stdout, format, ap);
+  va_end(ap);
+  return n;
+}
+
+int fflush(FILE *stream) {
+  (void)stream;
+  return 0;
+}
+
+FILE *fopen(const char *path, const char *mode) {
+  (void)path;
+  (void)mode;
+  return NULL;
+}
+
+int fclose(FILE *stream) {
+  (void)stream;
+  return 0;
+}
+
+char *fgets(char *text, int size, FILE *stream) {
+  (void)text;
+  (void)size;
+  (void)stream;
+  return NULL;
+}
+
+size_t fwrite(const void *data, size_t size, size_t count, FILE *stream) {
+  (void)data;
+  (void)stream;
+  return size * count;
+}
+
+int unlink(const char *path) {
+  (void)path;
+  return 0;
+}
+
+int atoi(const char *text) {
+  int sign = 1, value = 0;
+  while (*text == ' ' || *text == '\t')
+    text++;
+  if (*text == '-' || *text == '+')
+    sign = *text++ == '-' ? -1 : 1;
+  while (*text >= '0' && *text <= '9')
+    value = value * 10 + (*text++ - '0');
+  return sign * value;
+}
+
+/* Return from anywhere. The real entry point is the assembly stub below: it records the frame
+   start.S handed over, the stack and the return capability, then continues in
+   speedtest1_domain_main. exit() writes its code into the result slot, restores that frame
+   and returns to start.S as if domain_main had returned. Without this a fatal error parks the
+   domain in abort() forever, the host never regains the core, and the message in the payload
+   is never read (measured 2026-09-09: no host heartbeat for 150 s while a domain spun). */
+unsigned char speedtest1_exit_frame[32] __attribute__((aligned(16), used));
+static unsigned *domain_result;
+
+__asm__(
+    "  .text\n"
+    "  .globl domain_main\n"
+    "domain_main:\n"
+    "1: auipc t0, %pcrel_hi(speedtest1_exit_frame)\n"
+    "  addi t0, t0, %pcrel_lo(1b)\n"
+    "  .insn r 0x5b, 0x1, 0xc, t0, gp, t0\n" /* cincoffset t0, gp, t0: the frame record */
+    "  .insn s 0x5b, 0x4, sp, 0(t0)\n"       /* stc sp, 0(t0) */
+    "  .insn s 0x5b, 0x4, ra, 16(t0)\n"      /* stc ra, 16(t0) */
+    "  j speedtest1_domain_main\n");
+
+__attribute__((noreturn)) void exit(int code) {
+  output_text("__CAPSTONE_SPEEDTEST1_EXIT__ code=");
+  output_uint((unsigned long)(unsigned)code);
+  output_text("\n");
+  if (domain_result)
+    *domain_result = 0x5117E100u | ((unsigned)code & 0xFFu);
+  __asm__ volatile(
+      "1: auipc t0, %%pcrel_hi(speedtest1_exit_frame)\n"
+      "  addi t0, t0, %%pcrel_lo(1b)\n"
+      "  .insn r 0x5b, 0x1, 0xc, t0, gp, t0\n"
+      "  .insn i 0x5b, 0x3, sp, 0(t0)\n" /* ldc sp, 0(t0) */
+      "  .insn i 0x5b, 0x3, ra, 16(t0)\n" /* ldc ra, 16(t0) */
+      "  ret\n" ::: "memory");
+  for (;;)
+    ;
+}
+
+/* sqlite3.h maps double to sqlite3_int64 inside its own prototypes when floating point is
+   omitted and restores the word at its end; the benchmark's own doubles must follow the same
+   mapping or every call that passes one fails to type. Test 300, the Mandelbrot set, then
+   computes with integers: the build has no floating point, and that test is not the
+   measurement. */
+#ifdef SQLITE_OMIT_FLOATING_POINT
+#define double sqlite3_int64
+#endif
+/* Milestones on the payload, so a run that never returns still says how far it got: the
+   benchmark's own sqlite3_initialize and sqlite3_open_v2 calls go through these shims. */
+static int speedtest1_initialize(void) {
+  output_text("__CAPSTONE_SPEEDTEST1_INIT__\n");
+  int rc = sqlite3_initialize();
+  output_text(rc == SQLITE_OK ? "__CAPSTONE_SPEEDTEST1_INITIALIZED__\n"
+                              : "__CAPSTONE_SPEEDTEST1_INIT_FAILED__\n");
+  if (SPEEDTEST1_STOP_AT == 3) abort();
+  return rc;
+}
+static int speedtest1_open_v2(const char *name, sqlite3 **db, int flags, const char *vfs) {
+  output_text("__CAPSTONE_SPEEDTEST1_OPEN__\n");
+  int rc = sqlite3_open_v2(name, db, flags, vfs);
+  output_text(rc == SQLITE_OK ? "__CAPSTONE_SPEEDTEST1_OPENED__\n"
+                              : "__CAPSTONE_SPEEDTEST1_OPEN_FAILED__\n");
+  if (SPEEDTEST1_STOP_AT == 4) abort();
+  return rc;
+}
+#define sqlite3_initialize speedtest1_initialize
+#define sqlite3_open_v2 speedtest1_open_v2
+#define main speedtest1_main
+#include SPEEDTEST1_SRC
+#undef main
+#undef sqlite3_open_v2
+#undef sqlite3_initialize
+#ifdef SQLITE_OMIT_FLOATING_POINT
+#undef double
+#endif
+
+void speedtest1_domain_main(unsigned *res, unsigned func) {
+  if (func == CAPSTONE_DPI_REGION_SHARE) {
+    if (shared_region_count == 0)
+      hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
+    else if (shared_region_count == 1)
+      hostcall_payload = (volatile char *)res;
+    ++shared_region_count;
+    return;
+  }
+  /* Bisection aid: -DSPEEDTEST1_STOP_AT=n returns to the host at milestone n with a
+     distinctive result the host prints, so a run that dies silently can be narrowed to the
+     segment between two milestones. 1 after the entry marker, 2 after memsys5 is configured,
+     3 after sqlite3_initialize, 4 after sqlite3_open_v2. */
+#define SPEEDTEST1_STOP(n, res) \
+  do { if (SPEEDTEST1_STOP_AT == (n)) { *(res) = 0x5117E000u | (n); return; } } while (0)
+  if (!hostcall_metadata || !hostcall_payload) {
+    *res = SQLITE_HC_ERR_REGION_MISMATCH; /* the shares never arrived: no payload to write */
+    return;
+  }
+  hostcall_metadata->length = 0;
+  domain_result = res;
+  output_text("__CAPSTONE_SPEEDTEST1_ENTER__\n");
+  if (SPEEDTEST1_STOP_AT == 1) {
+    /* Report the stack capability's bounds: what dom_data looks like from inside, for carving
+       the arena out of it. LCC selector 1 is the total type query (7 = not a capability);
+       2, 3, 4 are cursor, start, end and raise on a non-capability, so the type goes first. */
+    void *frame = __builtin_frame_address(0);
+    unsigned long ty, cur, st, en;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ty) : "r"(frame));
+    output_text("stack cap type="); output_uint(ty);
+    if (ty != 7UL) {
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cur) : "r"(frame));
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(st) : "r"(frame));
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(en) : "r"(frame));
+      output_text(" cursor="); output_uint(cur);
+      output_text(" start="); output_uint(st);
+      output_text(" end="); output_uint(en);
+      output_text(" size="); output_uint(en - st);
+      output_text(" below_frame="); output_uint(cur - st);
+    }
+    output_text("\n");
+  }
+  SPEEDTEST1_STOP(1, res);
+  /* memsys5's arena. In the image it is capped by the kernel module's order-10 block
+     (Q-01: create_dom fails above about 2 MB of image), and speedtest1 at --size 1 peaks at
+     843 KB on x86 before memsys5's power-of-two rounding. The stack region the module hands
+     the domain is 2.9 MB with the frame at its top (measured 2026-09-09), so
+     -DSPEEDTEST1_STACK_ARENA=<bytes> carves the arena from that region's low end instead,
+     leaving the rest to the stack. Derived pointers keep the stack capability's bounds. */
+  unsigned char *heap = sqlite_heap;
+  int heap_size = (int)sizeof(sqlite_heap);
+#if SPEEDTEST1_STACK_ARENA > 0
+  {
+    unsigned char *frame = __builtin_frame_address(0);
+    unsigned long cur, st, en;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cur) : "r"(frame));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(st) : "r"(frame));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(en) : "r"(frame));
+    heap = frame - (cur - st);
+    heap_size = SPEEDTEST1_STACK_ARENA;
+    output_text("arena: ");
+    output_uint((unsigned long)heap_size);
+    output_text(" bytes from the stack region's low end, region ");
+    output_uint(en - st);
+    output_text(" bytes, stack keeps ");
+    output_uint((en - st) - (unsigned long)heap_size);
+    output_text("\n");
+  }
+#endif
+  int rc = sqlite3_config(SQLITE_CONFIG_HEAP, heap, heap_size, 64);
+  if (rc != SQLITE_OK) {
+    output_text("__CAPSTONE_SPEEDTEST1_EXIT__ config-heap\n");
+    *res = SQLITE_HC_ERR_CONFIG_HEAP;
+    return;
+  }
+  output_text("__CAPSTONE_SPEEDTEST1_START__\n");
+  SPEEDTEST1_STOP(2, res);
+  static char *argv[] = {"speedtest1", SPEEDTEST1_ARGS, 0};
+  int argc = (int)(sizeof(argv) / sizeof(argv[0])) - 1;
+  rc = speedtest1_main(argc, argv);
+  output_text("__CAPSTONE_SPEEDTEST1_DONE__ rc=");
+  output_uint((unsigned long)(unsigned)rc);
+  output_text("\n");
+  *res = SQLITE_HC_RET_DONE;
+}

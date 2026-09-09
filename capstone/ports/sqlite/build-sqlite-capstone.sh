@@ -89,6 +89,9 @@ grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_
 grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
 grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 
+# SQLITE_LOOKASIDE=slots-size,count (default 0,0: the pool off) selects SQLite's compiled-in
+# lookaside default; the allocator chain lookaside > memsys5 that the paper measures needs
+# 1200,40, the shipped default (run-sqlite-speedtest1.sh sets it).
 SQLITE_DEFINES=(
   -DNDEBUG
   -DSQLITE_OS_OTHER=1
@@ -115,7 +118,7 @@ SQLITE_DEFINES=(
   -DSQLITE_UNTESTABLE=1
   -DSQLITE_ZERO_MALLOC=1
   -DSQLITE_ENABLE_MEMSYS5=1
-  -DSQLITE_DEFAULT_LOOKASIDE=0,0
+  -DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}
   -DYYSTACKDEPTH=1000
 )
 
@@ -205,7 +208,7 @@ COMMON_FLAGS=(
   -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"
 
 BUILTIN_OBJECTS=()
-for builtin in adddf3 comparedf2 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
+for builtin in adddf3 comparedf2 divdf3 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
                floatdidf floatsidf floatunsidf fp_mode muldf3 subdf3; do
   object="$OBJ_DIR/$builtin.o"
   "$CLANG" -target capstone64-unknown-elf \

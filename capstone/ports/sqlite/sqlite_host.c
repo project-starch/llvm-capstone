@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "sqlite_hostcall.h"
@@ -66,6 +67,39 @@ static int fail_cleanup(const char *message, unsigned long value) {
   return 1;
 }
 
+static int tail_payload;
+
+struct tail_state {
+  volatile struct sqlite_hostcall_v0 *metadata;
+  const char *payload;
+  unsigned long printed;
+  int stop;
+};
+
+static void tail_flush(struct tail_state *t) {
+  unsigned long length = t->metadata->length;
+  if (length > SQLITE_HC_REGION_SIZE)
+    return;
+  if (length > t->printed) {
+    (void)write(STDOUT_FILENO, t->payload + t->printed, (size_t)(length - t->printed));
+    t->printed = length;
+  }
+}
+
+static void *tail_main(void *arg) {
+  struct tail_state *t = arg;
+  unsigned ticks = 0;
+  while (!__atomic_load_n(&t->stop, __ATOMIC_ACQUIRE)) {
+    tail_flush(t);
+    /* a heartbeat every ten seconds: its absence says the host is not being scheduled while
+       the domain holds the core, which is a different finding from "the domain wrote nothing" */
+    if (++ticks % 20 == 0)
+      mark_u("SQ: tail alive, payload bytes=", t->metadata->length);
+    usleep(500000);
+  }
+  return NULL;
+}
+
 int main(int argc, char **argv) {
   int feature_probe = 0;   /* --feature-probe: ask the domain which restored APIs it carries */
   /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
@@ -80,8 +114,10 @@ int main(int argc, char **argv) {
     feature_probe = 1;
   } else if (argc == 4 && !strcmp(argv[2], "--slt")) {
     slt_path = argv[3];
+  } else if (argc == 3 && !strcmp(argv[2], "--tail")) {
+    tail_payload = 1;
   } else if (argc != 2 && argc != 3) {
-    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
+    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage|--tail]\n"
                     "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n"
                     "       %s <sqlite-domain.dom> --feature-probe\n", argv[0], argv[0], argv[0]);
     return 2;
@@ -95,7 +131,7 @@ int main(int argc, char **argv) {
      stage, so every existing invocation behaves exactly as before. */
   unsigned long probe_stage = 0;
   int have_probe_stage = 0;
-  if (argc == 3) {
+  if (argc == 3 && !tail_payload) {
     probe_stage = strtoul(argv[2], NULL, 0);
     have_probe_stage = 1;
   }
@@ -277,10 +313,22 @@ int main(int argc, char **argv) {
                           SQLITE_HC_ANNOTATION_REV_SHARED);
 
   mark("SQ: G/enter\n");
+  /* --tail: a thread prints the payload WHILE the domain runs, from where it left off, every
+     half second. A domain that never returns (a wedge, a fatal error parked in abort()) then
+     still shows everything it wrote up to that point, and a long benchmark shows its
+     progress. Both regions are shared with the domain, so the length it publishes and the
+     bytes behind it are visible here as they land. */
+  struct tail_state tail = {metadata, payload, 0, 0};
+  pthread_t tail_thread;
+  int tail_started = tail_payload && pthread_create(&tail_thread, NULL, tail_main, &tail) == 0;
   unsigned long result = call_dom(domain);
+  if (tail_started) {
+    __atomic_store_n(&tail.stop, 1, __ATOMIC_RELEASE);
+    pthread_join(tail_thread, NULL);
+  }
   mark("SQ: H/return\n");
-  if (metadata->length > 0 && metadata->length <= SQLITE_HC_REGION_SIZE) {
-    (void)write(STDOUT_FILENO, payload, (size_t)metadata->length);
+  if (metadata->length > tail.printed && metadata->length <= SQLITE_HC_REGION_SIZE) {
+    (void)write(STDOUT_FILENO, payload + tail.printed, (size_t)(metadata->length - tail.printed));
     fflush(stdout);
   }
   /* AN SLT RUN MUST RETURN ITS OWN MARKER, AND NOTHING ELSE COUNTS -- including DONE.
