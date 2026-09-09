@@ -757,6 +757,26 @@ unexpected operand type.
 > `existing-insn.adoc:255` uses the same operator as a store's fault condition, which the RTL
 > implements as `(perm & 2) != 2` at `dyn:401`. The test is right and only the SENSE is reversed. Still
 > derived from source rather than measured — two readers agreeing is not a demonstration.
+>
+> **FIX ON A BRANCH AND LINT-CLEAN, 2026-09-10.** `r30-r31-init-revoke` off `66c4e7517`, anvil
+> regenerated before linting: **UNOPTFLAT exactly 40** with every other count at baseline (LATCH 52,
+> MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 717, ANVIL_UNOPTFLAT 0).
+> `capstone_flu_unit.anvil` takes `INIT`'s `<=` → `<`; `capstone_dyn_unit.anvil` takes the revoke
+> polarity `==` → `!=`; each carries its reasoning, the spec citation and the ships-together constraint
+> in the comment.
+>
+> **Why these lint clean where R-29's candidate did not**, predicted before the run and worth keeping
+> as the general rule: both flip ONE OPERATOR inside a condition that is already evaluated — no new
+> signal, no new term, no new comparator, so there is nothing to join the ring. R-29's candidate added
+> a partner-word hit vector and a leading-zero count, which is why it cost a loop and these do not.
+>
+> **Predictions, written before the lint ran and before any simulation** (`records/r3031/`):
+> `init-rs1-ne-rd` unchanged (it fabricates `cursor > end`, which `<` still accepts); a new
+> fill-then-INIT arm goes ILLEGAL_OPERAND_VALUE → PASS; `revocation.S` and `data-sharing.S` MAY change
+> and every change must be explained before it is accepted; the 88-row sweep identical except on rows
+> that revoke through a write-bearing capability or INIT a filled region; and **the new revoke arm must
+> show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
+> disclosure is closed.
 
 **The arithmetic, from the flashed bitstream's own source.** For an UNINIT capability over a region
 `[S, E)`:
@@ -855,6 +875,26 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > `existing-insn.adoc:255` uses the same operator as a store's fault condition, which the RTL
 > implements as `(perm & 2) != 2` at `dyn:401`. The test is right and only the SENSE is reversed. Still
 > derived from source rather than measured — two readers agreeing is not a demonstration.
+>
+> **FIX ON A BRANCH AND LINT-CLEAN, 2026-09-10.** `r30-r31-init-revoke` off `66c4e7517`, anvil
+> regenerated before linting: **UNOPTFLAT exactly 40** with every other count at baseline (LATCH 52,
+> MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 717, ANVIL_UNOPTFLAT 0).
+> `capstone_flu_unit.anvil` takes `INIT`'s `<=` → `<`; `capstone_dyn_unit.anvil` takes the revoke
+> polarity `==` → `!=`; each carries its reasoning, the spec citation and the ships-together constraint
+> in the comment.
+>
+> **Why these lint clean where R-29's candidate did not**, predicted before the run and worth keeping
+> as the general rule: both flip ONE OPERATOR inside a condition that is already evaluated — no new
+> signal, no new term, no new comparator, so there is nothing to join the ring. R-29's candidate added
+> a partner-word hit vector and a leading-zero count, which is why it cost a loop and these do not.
+>
+> **Predictions, written before the lint ran and before any simulation** (`records/r3031/`):
+> `init-rs1-ne-rd` unchanged (it fabricates `cursor > end`, which `<` still accepts); a new
+> fill-then-INIT arm goes ILLEGAL_OPERAND_VALUE → PASS; `revocation.S` and `data-sharing.S` MAY change
+> and every change must be explained before it is accepted; the 88-row sweep identical except on rows
+> that revoke through a write-bearing capability or INIT a filled region; and **the new revoke arm must
+> show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
+> disclosure is closed.
 
 **The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
 
