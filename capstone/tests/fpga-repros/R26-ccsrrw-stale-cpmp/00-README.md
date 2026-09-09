@@ -66,8 +66,14 @@ no-regression checks**; R-26's evidence stays the simulation arms.
 **2026-09-09, boot sw40, current silicon `caplifive_s12fix_5097eb166`, board lane.** Firmware `bf97e48c80f9` (monitor
 `91c48f3` with two of the three `CCSRRW` `fence.i` dropped, `:176` and `:189`; `:90` kept; 150 `fence.i` linked): control
 `k800` = 4, all six BEEBS rungs at their oracles, zero fault tags, HOLE 0 — "D minus one" CLEAN on the current silicon.
-Variant D proper (all three dropped, `fence.i` count in the `.S` asserted 0) is boot sw42; its reading is filed here when
-it lands. Rows in `tests/board-results/2026-09-05.tsv`.
+Rows in `tests/board-results/2026-09-05.tsv`.
+
+**2026-09-09, boot sw42, current silicon `caplifive_s12fix_5097eb166`, board lane.** Firmware `ad76ea743c2a` (monitor
+`91c48f3` with all three `CCSRRW`-adjacent `fence.i` dropped, `:90`, `:176`, `:189`; zero `fence.i` left in the `.S`
+asserted; 149 `fence.i` linked): control `k800` = 4, six BEEBS rungs at their oracles, zero fault tags, HOLE 0, seven
+`TEST END rc=0` — **variant D CLEAN on the current silicon**, as sw40 was. Monitor source restored afterwards. This
+settles the pre-flash question: the post-flash D/E boots are no-regression checks, and R-26's evidence stays `sim/`.
+Rows sw40/sw41/sw42 and the firmware list in `tests/board-results/2026-09-05.tsv` (dev `cb498f049ee4`).
 
 **Post-flash (bitstream from `66c4e7517`): not yet booted.** Prediction on file: D and E CLEAN, closing set identical.
 
