@@ -2765,6 +2765,37 @@ in minutes what no software-visible observable here can.
 
 ### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
 
+> **RUN 2026-09-10, with the positive control the earlier attempt lacked. Still NOT HIT, and now that
+> statement means something.** The 2026-09 sweep logged `check-repr.py` as NOT RUN; an audit then ran it
+> on a stale corpus where it returned clean **without executing its detection branch at all**, which is
+> a pass that carries no information.
+>
+> **What was run.** The checker over the current domain set — the acceptance images, the R-29 ladder
+> variants, `lsugate`, and the SQLite silicon image — all **OK**, exit 0.
+>
+> **Why that alone still proves nothing, and it is worth stating.** The truncation branch is gated on
+> `tot > WINDOW` (2 MiB). Every small domain reports `tot = 131072`. **The SQLite image reports
+> `tot = 2097152` — exactly the window, so `>` is false and the branch does not run.** The largest real
+> domain we ship sits precisely at the cliff edge, one doubling from exercising this at all.
+>
+> **The branch DOES execute on a large enough image.** `pass1.dom` (8.6 MB, `tot = 16777216`) takes it
+> and reports OK **with the checker's own fragility note**: *"past the 2 MiB window — exact only because
+> every top happens to be aligned; treat as fragile."* So the branch runs and finds nothing, rather than
+> not running.
+>
+> **POSITIVE CONTROL on the detector itself.** `cursorless_top_exact` was driven directly: with the
+> region spanning bit 21 and above and an unaligned top it **REJECTS** — `[0x0,0x200001)` E=1 losing 1
+> byte, and eight more at wider spans — while the matched control at the same span with an aligned top
+> **ACCEPTS**. The discriminator is real; it is not a function that can only return true.
+>
+> **Status therefore: NOT HIT, on a check now shown able to fire.** The condition needs a domain past
+> 2 MiB whose carve produces an unaligned top. Nothing we ship is past 2 MiB; SQLite is AT it. **The
+> trigger for re-running this is a domain image crossing 2 MiB**, and the SQLite corpus work is the
+> likeliest thing to do it — which is what "not yet hit" should be read to mean.
+>
+> *(Method note: the earlier clean run is the exact shape this registry keeps paying for — a check that
+> returns OK because its detection code never executed. Running it is not the same as exercising it.)*
+
 `compress_bounds` has two branches selected by `bounds.start == cursor`
 (`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
 (`capstone_dyn_unit.anvil:139-144`), so carved capabilities take the **cursorless**
