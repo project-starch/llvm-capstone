@@ -2,8 +2,9 @@
 
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `42a141c93`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
 > (this package's test FAIL 11 → PASS), lint at the baseline counts, 88-row sweep unchanged. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
-> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns, 169,207 placed LUTs), BEING FLASHED 2026-09-09 on the
-> project lead's decision; the post-flash reading is filed below when boot sw45 lands.** **Pre-flash silicon reading
+> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns, 169,207 placed LUTs), FLASHED 2026-09-09 on the project
+> lead's decision and verified after the power cycle (`nv_bitstream_name` = `caplifive_r25r26r27_66c4e7517.bit`,
+> Capstone bootrom banner up); the post-flash reading is filed below when boot sw45 lands.** **Pre-flash silicon reading
 > 2026-09-09 (boot sw41): duplicate PRESENT on `caplifive_s12fix_5097eb166`**, as predicted; the post-flash reading is filed below when the fixed bitstream has booted.
 
 **Wrong symptom? Read this paragraph first.** This package is the **linearity break**: after `INIT rd, rs1, imm` with
@@ -77,7 +78,19 @@ enforce the spec's bound there) — the two divergences named in the first parag
 `r25same` unchanged at `0x25000001`, and `r25dup` traps 25 at the store through the consumed source. A capability
 trap is a WEDGE on this RTL, so that reads as **wedged after `ENT1` with cause 25 latched by the tracer**, not as
 a returned value — which is why the probe runs LAST in its boot. A returned `0x25000001` would mean the duplicate
-survived the fix. This is the only one of the three fixes whose post-flash boot can confirm anything: R-26's
+survived the fix.
+
+**Acceptance criterion, agreed with the board lane BEFORE the boot, because a wedge is easy to over-read.**
+The reading counts as "R-25 fixed on silicon" only if the tracer latches **cause 25** AND `mepc` is at the
+store instruction under test (image VA offset `0x47c` in `r25dup`'s `domain_main`). A wedge with no cause 25
+latched, or with `mepc` away from that store, is recorded as **"wedged, cause unattributed"** — not as a
+confirmation. The evidence sent for this arm is the driver's tracer block (latched `mcause`/`mepc`, the `ENT1`
+marker, the last UART bytes) plus the run-scoped transcript segment, never a summary.
+
+**And if it RETURNS instead of wedging**, the fix did not take on silicon although it passes in simulation.
+That divergence is large enough that the arm is rerun as the FIRST domain of a fresh boot before anything is
+written, the rule this project already applies to wedges, applied symmetrically. **No R-25 silicon claim goes
+into this folder or the registry with fewer than two boots behind it.** This is the only one of the three fixes whose post-flash boot can confirm anything: R-26's
 variant boots and R-27 have no arm that distinguishes a working fix from an untriggered one.
 
 ## Records

@@ -3,8 +3,9 @@
 > **Status 2026-09-09: pre-existing on `ef5a8eaf2`, fixed in RTL** (`capstone-ariane` `66c4e7517`, the tip of
 > `fpga-testing-dev`), **sim-verified** (three triggers HANG → PASS at the default latency; the load-fault trigger HANG →
 > PASS at a verified 40-cycle latency), lint at the baseline counts, adversarially audited. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
-> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns), and BEING FLASHED 2026-09-09 on the project
-> lead's decision; silicon UNCONFIRMED and expected to stay so** — no board arm exists for R-27, so the
+> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns), and FLASHED 2026-09-09 on the project lead's
+> decision, verified after the power cycle (`nv_bitstream_name` = `caplifive_r25r26r27_66c4e7517.bit`); silicon
+> UNCONFIRMED and expected to stay so** — no board arm exists for R-27, so the
 > post-flash boots can only show no-regression, never confirmation. Whether historic board wedges were this
 > is UNRESOLVED. See "Board" below for what the flash boots were predicted to read, written before them.
 
