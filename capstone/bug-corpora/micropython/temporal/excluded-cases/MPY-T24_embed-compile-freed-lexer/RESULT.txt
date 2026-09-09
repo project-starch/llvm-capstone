@@ -1,0 +1,34 @@
+MPY-T24 / upstream 11781
+
+  stock at the fix's PARENT be8d660fc2: builds, runs to completion, exit 0
+  Capstone domain                     : not run
+
+MEASURED, AND THE ANSWER IS NEGATIVE FOR THIS REPRODUCTION.
+
+The embed port's own example was generated and built at the pre-fix commit and
+produces its expected output:
+
+  hello world! [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]eol
+  iter 00000000 ...
+
+No segfault. The fix, d2a3cd7ac428, is titled "embed: Improve stack top
+estimation" and changes examples/embedding/main.c together with
+ports/embed/port/embed_util.c, so the defect is a miscalculated stack limit: deep
+enough recursion inside the embedded interpreter overruns without being caught.
+The shipped example does not recurse, so it never approaches the limit.
+
+Reproducing it properly would mean writing a deeply recursive embedded script,
+which is beyond the published reproduction and would be a trigger of our own
+invention. Recorded as not-reproducible with this reproduction rather than
+extended until it broke.
+
+REPRODUCING THE BUILD: the embed tree must be generated first, which the
+README documents and the Makefile does not do for you:
+
+  make -f micropython_embed.mk PYTHON=python3 CC=gcc-12
+  make PYTHON=python3 CC=gcc-12
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

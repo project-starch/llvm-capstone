@@ -1,0 +1,53 @@
+MPY-S01 / upstream 19314
+
+  stock MicroPython at pin 2e3304a : SIGSEGV (str, bytes, list and tuple)
+  Capstone domain under QEMU       : FAULT, cause 7, in all three arms run
+
+TRAPPED -- AND THAT IS THE FIRST TIME IN EITHER CORPUS. But read the bounds
+before reading that as protection.
+
+WHY THIS ONE REPRODUCES AT ALL. It is OPEN upstream, so it is present at the pin
+and needed no parent build. `len(seq) * n` is computed in unchecked size_t:
+8 * 2**61 wraps to 0, so the allocation is EMPTY while the write that follows is
+not. Kept to small ints on purpose -- 2**61 < MP_SMALL_INT_MAX -- so it triggers
+under MICROPY_LONGINT_IMPL_NONE, which is what this domain is built with. A
+2**62 form taken straight from the issue would need mpz and would silently raise
+here instead of triggering.
+
+WHAT THE HARDWARE SAID.
+
+  bytes  bounds = (101790fe0, 1017f0fe0)   width 0x60000 = 393216 = 384 KiB
+  list   bounds = (101790fe0, 1017f0fe0)   width 0x60000 = 393216 = 384 KiB
+  tuple  bounds = (1017f96e0, 1017f9700)   width 0x20    = 32
+
+384 KiB is MPY_HEAP_SIZE exactly, and the faulting cursor in both arms is the
+upper bound itself. So the write was NOT stopped at the end of the object it
+overran. It ran the entire length of the heap first and was stopped at the far
+edge of the region -- every live object in between was overwritten on the way.
+That is the same single capability the temporal corpus is about, seen from the
+other side: it is wide enough to be useless as an object bound and narrow enough
+to eventually stop a runaway write.
+
+The tuple arm is different and is NOT claimed to be the same finding. Its
+faulting object is 32 bytes wide and sits 0x8700 ABOVE the heap's upper bound, so
+it is not a GC block at all; something outside the heap, carved with its own
+bounds, stopped that arm early. WHICH object is UNRESOLVED -- the fault message
+gives the extent but not the symbol, and identifying it would need the link map
+for this image. Recorded as measured-and-unexplained rather than folded into the
+other two.
+
+WHAT IS AND IS NOT CLAIMED. Trapped: measured, cause 7, three arms. Protection at
+object granularity: NO, and the bounds width is the evidence against it. Whether
+the corruption preceding the fault is observable from Python: not measured, and
+it cannot be from inside a domain the fault terminates.
+
+CONTROL. The sanity test PASSED in the same image, retval 0x00077724, matching the
+host oracle. That matters here more than usual: an EARLIER attempt at this run
+used the wrong guest runner -- `capstone-test.user <dom> <times> [<second-elf>]`
+was handed the suite runner's `<start> <count>` arguments, so "5" was opened as a
+second ELF, domain creation returned -1, and all three arms "faulted" at
+pc 0x8001b10e with cause 5, inside the MONITOR. A clean monotone ladder of three
+faults, and it measured nothing. Grep `Created domain ID = 0` before believing any
+of it; -1 (printed as 18446744073709551615) means no domain ever existed.
+
+Raw: ../../evidence/domain-spatial-2026-08-18.txt

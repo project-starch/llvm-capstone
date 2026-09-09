@@ -1,0 +1,3 @@
+index	name	status	got	want	oracle
+0	00_sanity.py	PASS	0x00077724	0x00077724	host python
+1	01_t02_extend_self.py	FAIL	0x001b89ac	0x001c53a5	host python

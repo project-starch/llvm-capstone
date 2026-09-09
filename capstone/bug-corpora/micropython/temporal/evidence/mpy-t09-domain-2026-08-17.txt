@@ -1,0 +1,35 @@
+Real MicroPython bugs in a Capstone domain, QEMU, 2026-08-17.
+Image: EXTRA feature level, pin 2e3304a, our port with only the portability patches.
+Driver: tools/run-resumable-suite.py --capture-output; scripts in ../repros/domain/.
+
+idx name                      status  retval      domain output   stock output
+--- ------------------------- ------- ----------- --------------- ------------
+0   00_sanity.py              PASS    0x00077724  'SANE 2'        'SANE 2'
+1   01_t09_stale_view.py      RETURN  0x0018e966  'T09 1 1'       'T09 1 1'
+2   02_t12_dict_reentrant.py  FAULT   -           -               SIGSEGV
+3   03_t11_sort_gc.py         FAULT   -           -               SIGSEGV
+
+MPY-T09 (upstream 18168): NOT TRAPPED.
+  The domain's output is byte-identical to unprotected stock MicroPython, and the
+  retval hash matches the value computed from the stock output in advance.
+  'T09 1 1' decodes as: the memoryview diverged from the bytearray (it addresses
+  orphaned storage) AND the write through it did not reach the bytearray. So the
+  use-after-free write executed inside the capability domain and corrupted
+  storage, exactly as it does with no capability hardware at all.
+
+MPY-T12 and MPY-T11: FAULTED, but NOT for temporal safety.
+  Both halt at the same pc with cause 24, 'Cap mem access requires capability',
+  i.e. an untagged word used as a pointer. That is the tag check catching a wild
+  pointer, which is the same thing the MMU catches on stock, where both SIGSEGV.
+  Capstone did not determine that an object was dead. Any pointer-integrity
+  mechanism stops these two; neither is evidence of temporal protection.
+
+IN-IMAGE CONTROL.
+  idx 0 returning its expected value shows the interpreter runs; idx 2 and 3
+  faulting shows capability checking is live in THIS image. So idx 1 completing
+  quietly cannot be explained by a domain that never ran or checks that were off.
+
+FIRST ATTEMPT WAS VOID, recorded because it nearly passed as a result.
+  Built at CORE_FEATURES, memoryview is EXTRA-level, so 01 died with
+  'NameError: name not defined' and still RETURNED a retval. Read without the
+  captured output, a returning test looks exactly like an untrapped one.

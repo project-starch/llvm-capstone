@@ -1,0 +1,79 @@
+RETRACTED 2026-08-18, LATER THE SAME DAY. THE CRASH DOES NOT BLOCK VFS.
+The probe below was run WITHOUT -Xclang -target-feature -Xclang +m. The domain
+build always passes +m (build-micropython-silicon.sh:149, COMMON), and with it
+lib/oofatfs/ff.c compiles. The probe did not match the subject it was probing.
+
+  clang <COMMON flags, incl. +m> -c lib/oofatfs/ff.c   ->  ff.o, 69400 bytes
+
+Without +m there is no mulhu, so the division-by-constant that ff.c's f_mkfs
+performs lowers to a 128-bit multiply plus a shift by 64 that this target cannot
+express at all. That is a real limitation and it is still there; it is simply not
+on the path any domain build takes.
+
+WHAT THIS COSTS. The reachability note built on this file said MPY-T14/MPY-T15
+were blocked by the compiler. They are not. The remaining work is what the note
+listed FIRST and then buried: MICROPY_VFS is 0 in port/mpconfigport.h, and the
+build script has no mechanism for lib/ sources. Probed with the real flags, the
+rest of the stack is clear -- ffunicode.c, vfs.c, vfs_fat_diskio.c,
+vfs_fat_file.c, vfs_reader.c and vfs_blockdev.c all compile, and vfs_fat.c stops
+at "#error MICROPY_VFS_FAT requires MICROPY_VFS", which is configuration.
+
+WHAT WOULD HAVE CAUGHT IT. The probe was hand-written rather than taken from the
+build's own flag list, and a FAILING result was believed without the control that
+a PASSING configuration exists. The habit the project already has for clean
+results -- show the check can produce the opposite -- applies to dirty ones too:
+a probe that fails should be re-run in the configuration that is supposed to
+work, before the failure is written down as a blocker.
+
+A SEPARATE FIX EXISTS AND IS NOT THIS. llvm/lib/Target/Capstone/CapstoneISelLowering.cpp
+now lowers srl(mul(zext,zext), XLen) to mulhu/mulh and reports cleanly instead of
+asserting on the forms it cannot do. That removes the compiler ABORT seen below,
+but it does NOT change FatFs codegen: with +m the object file is byte-identical
+with and without it (cmp on ff.o, both 69400 bytes). It is worth having on its own
+terms, not as the unblocker this file was read as asking for.
+
+--- ORIGINAL NOTE BELOW, KEPT AS WRITTEN ---
+
+A pre-existing backend crash blocks VFS in the domain, and with it MPY-T14/MPY-T15.
+
+WHAT WAS BEING ATTEMPTED. MPY-T14 and MPY-T15 are the last of the four rows judged
+feasible, and the only one of the four that would have been an upstream
+reproduction rather than a reconstruction. Both need MICROPY_VFS, which needs
+lib/oofatfs, MicroPython's bundled FatFs.
+
+THE FEASIBILITY PROBE, run before touching the build system:
+
+  clang -target capstone64-unknown-elf -ffreestanding -nostdlibinc -std=c99 -O0 \
+        -DFFCONF_H=".../lib/oofatfs/ffconf.h" -c lib/oofatfs/ff.c
+
+  clang: llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp:4395:
+    SelectionDAGLegalize::ExpandNode(SDNode *):
+    Assertion `VT.isVector() && "Unable to legalize non-vector shift"' failed.
+  4. Running pass 'Capstone DAG->DAG Pattern Instruction Selection'
+     on function '@f_mkfs'
+
+No preceding errors. This is ordinary, valid C, and the compiler asserts on it.
+
+NOT CAUSED BY capstone-codegen-cap-constants. Checked rather than assumed, using
+the same procedure as the emutls question: all nine changed files under llvm/lib
+and llvm/utils were reverted to origin/capstone-bootstrap, clang was rebuilt, and
+the crash reproduces IDENTICALLY, same assertion, same function. Pre-existing.
+
+WHAT IT IS. On capstone64 i128 is a legal type, because it carries a capability.
+A 128-bit shift therefore survives to SelectionDAG legalisation, where ExpandNode
+has no expansion for a non-vector shift of that width and asserts. It is the same
+family as the round-1 fix recorded in llvm/lib/Target/Capstone/i128-capability-fixes.md
+("i128 shift-by-≥XLen"), but a distinct gap: that one produced a wrong result,
+this one has no legalisation at all.
+
+CONSEQUENCE FOR THE CORPUS. MPY-T14 and MPY-T15 cannot be measured in the domain
+until that is fixed. The earlier reachability note called this row "a
+build-configuration job, not a porting one". That was wrong twice over: the build
+system also hardcodes the port directory and has no mechanism for lib/ sources
+outside libm, and underneath both of those sits a compiler that cannot compile
+FatFs at all.
+
+WHAT WAS SALVAGED. The probe cost about a minute and was run BEFORE modifying
+port/Makefile, the build script and mpconfigport.h, which would have been an hour
+of work ending at the same assertion. Probe the cheapest blocking dependency
+first.

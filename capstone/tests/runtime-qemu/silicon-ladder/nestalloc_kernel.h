@@ -15,7 +15,7 @@
  * is therefore a finding, not a reassurance: it is the nested-allocator gap, measured.
  *
  * The mechanism, confirmed in the disassembly (see the corpus folder under
- * benchmarks/micropython/temporal-corpus/evidence/): the backend sets bounds once,
+ * bug-corpora/micropython/temporal/evidence/): the backend sets bounds once,
  * over the whole `nest_heap` object, and every sub-allocated pointer inherits them.
  * A pointer to a "freed" block is still inside those bounds with a valid tag, so a
  * store through it is a bare `sb` the hardware has no grounds to reject. Capstone

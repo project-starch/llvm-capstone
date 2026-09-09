@@ -1,0 +1,52 @@
+MPY-S05 / upstream 15271
+
+  Capstone domain under QEMU : returns, "S05 1 4104 -1", no fault
+
+UNTRAPPED. FIX REVERSAL on the pinned tree, not a parent build, and not an
+upstream program.
+
+WHAT WAS REVERTED. One hunk, revert-the-fix.patch: upstream 3d93fed0aab8 moved
+`self->free = 8` to AFTER the m_renew that justifies it. Before it, a grow that
+raises MemoryError leaves the array claiming eight slots it does not own. Reversal
+rather than a backport because the fix is a single hunk with no second hardening
+elsewhere -- MPY-S02 and MPY-S03 were checked for the same treatment and both
+failed it, for reasons in ../../STATUS.md that are about this port's config, not
+about effort.
+
+  "S05 1 4104 -1" decodes as:
+    1     the MemoryError fired, so the defect's precondition was CREATED
+    4104  the array reports 4104 bytes after eight appends onto a 4096-byte buffer
+    -1    the planted victim's 64 bytes were all still 0x22
+
+So eight writes landed past the end of a 4096-byte allocation -- 4096 is exactly
+128 GC blocks, so bytes 4096..4103 are in a block the array does not own -- and
+none of them was trapped. The domain returned normally.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped, and the out-of-bounds write demonstrably
+executed: measured. WHICH live object those bytes landed in: NOT established, and
+the -1 says so rather than hiding it. A victim bytearray allocated immediately
+after the array was not hit, most likely because MicroPython allocates an array's
+object and its items separately, so what follows a's items is some other object's
+header rather than the victim's data. That places this at the strength of MPY-T07
+and MPY-T16, below MPY-S01 and MPY-T29.
+
+FOUR EARLIER SHAPES FAILED, and each failure is a fact about the allocator worth
+keeping, not just a wasted run:
+
+  1-byte array, single ballast size    -> first == 0
+  1-byte array, ballast down to 8 B    -> first == 0
+      MICROPY_BYTES_PER_GC_BLOCK is 32. A one-byte array already owns a whole
+      block, so growing it to nine bytes allocates NOTHING and can never fail.
+      Both runs completed cleanly having never created the condition they test.
+  block-aligned candidates, ballast to 8 B -> uncaught MemoryError at enumerate()
+      The heap was filled so completely that no further Python could run at all.
+  large array, victim allocated AFTER the collect -> first == 1, hit == -1
+      The trigger fired, but the victim was placed elsewhere and the stray bytes
+      landed in free space.
+
+The first two are the reason the `first` field exists in the output at all. Without
+it a run that never triggered and a run that triggered and was not trapped both
+print a line and both look like results.
+
+CONTROL. 00_sanity.py PASSED in the same image, retval 0x00077724, matching the
+host oracle.
