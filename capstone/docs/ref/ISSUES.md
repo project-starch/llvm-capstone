@@ -2378,6 +2378,41 @@ land in both or note the divergence.
 
 ### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `OPEN — SPEC VIOLATION, direction now determinate; NOT yet reported`
 
+> **2026-09-10 — A FIX IS WRITTEN AND IS EXPLICITLY NOT GATED. Do NOT batch it into a bitstream yet.**
+> RTL lane, branch `r24-excode-base` at `69658cf16` off `66c4e7517`.
+>
+> **Direction re-confirmed against the spec, because the RTL's own comment said the opposite.**
+> `capstone-spec` gives 24/25/26/27/28/29 for unexpected operand type, invalid capability, unexpected
+> capability type, insufficient permissions, out of bound and illegal operand value — i.e. `23 +
+> ordinal` throughout. The two encoders emit `24 + ordinal`, so the encoders are the off-by-one and
+> `commit_stage` was already conformant.
+>
+> **Two pieces of stale documentation went with it, and finding them is what settled the direction
+> rather than assuming it.** The comment above the `ex_code` enum asserted that the encoders agreed
+> with `riscv_pkg.sv` and called `commit_stage`'s base 23 *"an off-by-one in its own right"* — both
+> backwards. And `riscv_pkg`'s four capability localparams carried the encoders' wrong numbers while
+> being **declared and never referenced anywhere in `core/`**, which is why nothing ever caught the
+> disagreement. That is the same shape as R-10's finding the same day: the authority everyone cites
+> turned out to be unused.
+>
+> **What is NOT done, and it is most of the work:** no test updates, no lint, no auditor, no sweep.
+> `excode-base-audit` must be rewritten — measuring this base is its entire purpose and it expects the
+> old values *by design*, with a header explaining that the RTL is +1 against the spec — and eight
+> other directed tests assert capability cause numbers and need checking. A known-good test still
+> passes on the built model, which says the change does not break the core and is the ONLY gate it has
+> passed. **Order when someone picks it up: the test updates FIRST**, because until
+> `excode-base-audit` is rewritten the suite cannot tell a correct change from a broken one.
+>
+> **Consequence to carry into the same commit whenever it lands:** every capability `mcause` this
+> project has recorded shifts by one, so the board driver, the wedge tracer and the historical
+> readings need annotating — an old `mcause 25` reads as the new 24.
+>
+> ⚠️ **INSTRUMENT WARNING for that worktree.** `host-sweep.sh` returned `TIMEOUT 400013` for all nine
+> tests run on it, *including* `init-rs1-ne-rd`, which passes through the container path in 6013 cycles
+> on the same model. Those nine rows are a HARNESS failure, not readings; taken at face value they say
+> this change hangs the core. Use the container path on that worktree until it is understood. Not
+> chased.
+
 > **Sweep 2026-09-05 — re-measured, unchanged.** `excode-base-audit.S` at the flashed commit 5097eb166 (detached worktree): still +1.
 
 **RESOLVED 2026-08-12 against `capstone-spec`, and the answer is the opposite of the first guess
