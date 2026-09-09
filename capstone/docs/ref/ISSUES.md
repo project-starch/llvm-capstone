@@ -357,9 +357,9 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM PLAUSIBLE, NOT PROVEN (claim-auditor 2026-09-09 night, verdict PLAUSIBLE-BUT-UNPROVEN): the write-buffer overlay that would repair the high half is gated at WORD granularity (`wt_dcache_mem.sv:283/:335/:397`, the data twin of the S-10 tag hazard at `:286`), but which of the store buffer's word-granular disambiguation (`load_unit.sv:297`, `store_buffer.sv:279`), the miss-refill leg (`wt_dcache_mem.sv:354-358`) or the overlay itself produces the reading is NOT SEPARATED, and a second independent defect at `:397` drives `rd_user_o` from a plain word-0 entry's `.user = 0`; no fix candidate; synthesis-first; W-12 stays in force`
+### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM PLAUSIBLE, NOT PROVEN (claim-auditor 2026-09-09 night, verdict PLAUSIBLE-BUT-UNPROVEN): the write-buffer overlay that would repair the high half is gated at WORD granularity (`wt_dcache_mem.sv:283/:335/:397`, the data twin of the S-10 tag hazard at `:286`), but which of the store buffer's word-granular disambiguation (`load_unit.sv:297`, `store_buffer.sv:279`), the miss-refill leg (`wt_dcache_mem.sv:354-358`) or the overlay itself produces the reading is NOT SEPARATED, and a second independent defect at `:397` drives `rd_user_o` from a plain word-0 entry's `.user = 0`; no fix candidate; synthesis-first; W-12 stays in force`
 
-**Signature.** The rung `s06agg` (`tests/fpga-repros/S06-untagged-ldc-stc-high-half/src/s06agg.dom`,
+**Signature.** The rung `s06agg` (`tests/fpga-repros/R29-wbuffer-highword-forwarding/src/s06agg.dom`,
 `249118220f8cf37a`, entry VA `0x10000`, `-O0`) copies `struct { void *p; unsigned long x, y; }` by
 aggregate assignment and returns `64 + r`: bit 0 = `x` (low half of the second granule) lost, bit 1 = `y`
 (high half) lost. QEMU returns 64. The board returns **66**: `y` lost, `x` intact. The directed test reads
@@ -385,7 +385,7 @@ the row labelled `s06agg` in boot B1 (`32e13a81cf52d4d8`, entry VA `0x20000`, re
 program — 15 is outside this program's 64..67 range — and that row was the S-06 folder's cited acceptance
 for the struct-assignment half (corrected in the folder and under the archived S-06 entry, 2026-09-09).
 
-**Simulation (RTL lane, 2026-09-09, `sim/s06agg-shape.S`, delay-40 model, capability mode after
+**Simulation (RTL lane, 2026-09-09, `fpga-repros/R29-wbuffer-highword-forwarding/sim/s06agg-shape.S`, delay-40 model, capability mode after
 CAPENTER, the same object shape and the rung's instruction order).** Adjacent (`sd y` then `ldc` of the
 granule): **FAIL 11, `y` = 0** on `5097eb166` (the silicon that flew before this flash), `ef5a8eaf2` and
 `66c4e7517`, 1984 cycles each; with four instructions between the store and the load: PASS on all three,

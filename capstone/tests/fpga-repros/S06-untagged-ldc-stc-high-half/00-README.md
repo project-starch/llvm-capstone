@@ -1,25 +1,22 @@
 # S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits
 
-> **2026-09-09 — CORRECTION: the struct-assignment half of the acceptance below is RETRACTED. That shape
-> was NEVER FIXED; it is now registry entry `R-29`.** The 2026-09-07 banner cites "`s06agg` returns 15
-> (boot B1)". The image in that row (`tests/board-results/2026-09-05.tsv`, hash `32e13a81cf52d4d8`, entry
-> VA `0x20000`) is not `src/s06agg.dom` (`249118220f8cf37a`, entry VA `0x10000`), whose program can only
-> return 64..67 (`src/s06agg_kernel.h`); 15 came from a different program that shared the label. The
-> committed rung's first readings are 2026-09-09 on `caplifive_r25r26r27_66c4e7517`: **66** in boot sw46
-> (variant-D firmware) and **66** in boot sw48 (the M-3 monitor, every `fence.i` present) — `y` lost, `x`
-> intact, this folder's own predicted signature. The RTL lane's directed test `sim/s06agg-shape.S`
-> (`sim/s06agg-shape-RECORDS.md`) fails the same way (code 11, `y` ZEROED) on `5097eb166`, `ef5a8eaf2`
-> and `66c4e7517` when the plain `sd` of `y` is the instruction immediately before the 128-bit `ldc` of
-> that granule — the rung's exact order, `sd a0,0x18(a2)` then `ldc a3,0x10(a2)` — and passes on all three
-> with four instructions between (a first run with the stores apart read PASS ×3 and was retracted within
-> the hour). So: not the new bitstream (the defect is in the silicon that flew before it), not firmware,
-> and by the adjacency dependence not the tag path this folder's fix addressed — a buffered 8-byte store
-> forwarded into the upper half of a 128-bit untagged load (S-07/S-10 family). **What stands:** the
-> memcpy half — `s06copy` 32, `s06aggcap` 15, `s06aggwide` 255 at their oracles in sw05 and again in
-> sw45 on the new bitstream — and the directed tests of the tag-path fix. **What does not:** "acceptance
-> passed" for `s06agg`. This folder stays the reproducer's home (`src/s06agg.dom`, its kernel, the sim
-> arm); R-29 gets its own folder when there is a fix candidate. `W-12` (SQLITE_GRANULE_GUARD) stays in
-> force on R-29's account.
+> **2026-09-10 — THE STRUCT-ASSIGNMENT HALF OF THIS FOLDER IS NOW `R-29`, IN ITS OWN FOLDER:
+> [`../R29-wbuffer-highword-forwarding/`](../R29-wbuffer-highword-forwarding/). This folder is the
+> MEMCPY half only.** The 2026-09-07 banner below claimed acceptance for both halves and cited
+> "`s06agg` returns 15 (boot B1)" for the aggregate one. That row's image
+> (`tests/board-results/2026-09-05.tsv`, hash `32e13a81cf52d4d8`) is not the reproducer this folder
+> shipped, whose program can only return 64..67; 15 came from a different program that shared the
+> label. The real first readings of that rung, 2026-09-09 on `caplifive_r25r26r27_66c4e7517.bit`, are
+> **66** in boot sw46 and **66** again in boot sw48 — the predicted defect signature — and a directed
+> RTL test of the shape fails on `5097eb166`, `ef5a8eaf2` and `66c4e7517` alike whenever the plain
+> store of the high half is adjacent to the 128-bit load. **That shape was never fixed**, its trigger
+> is adjacency rather than the tag path, and it is therefore not this issue: it is R-29, and its
+> reproducer, sim arms, evidence and retractions now live in that folder.
+>
+> **What stands here, unchanged:** the tag-path fix and the memcpy half — `s06copy` 32, `s06aggcap`
+> 15 and `s06aggwide` 255 at their oracles in boot sw05 on `5097eb166` and again in boot sw45 on the
+> new bitstream — plus the directed tests in `sim/`. **What does not:** "acceptance passed" for the
+> aggregate rung. `W-12` (SQLITE_GRANULE_GUARD) stays in force on R-29's account, not this one.
 
 
 > **2026-09-07 (from the 2026-09-05 sweep):** **FIXED in the flashed silicon, acceptance passed 2026-09-05 on `caplifive_s12fix_5097eb166.bit`:** the acceptance rung `s06agg` returns 15 with no memcpy high-half fixup (boot B1), and the `s06copy` / `s06aggcap` / `s06aggwide` rungs pass (boot sw05), control green in both (`tests/board-results/2026-09-05.tsv`); both directed tests (`untagged-ldc-stc-128`, `untagged-ldc-stc-fixup`) run clean in simulation at 5097eb166. The compiler-side fixup family is retirement material (CLASSIFICATION W-04/W-12). (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
