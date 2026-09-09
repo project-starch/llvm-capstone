@@ -907,6 +907,22 @@ unexpected operand type.
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
 >
+> # ✅ LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE. The change is authorised and proceeds.
+>
+> The recommendation was put with its one surviving argument stated plainly — every RTL access path and
+> all of QEMU already assume exclusive, while the spec leans inclusive wherever it speaks — and with the
+> fact that this is a DEVIATION rather than a conformance fix. The lead ruled for exclusive.
+>
+> **What that authorises, in order:** amend `cap-man-insn.adoc:421` to match (`cursor < end` illegal,
+> i.e. accept `cursor >= end`) in the SAME change as `capstone_flu_unit.anvil:139`; keep the revoke
+> polarity fix with it; land the firmware change alongside, never RTL-only; then synthesis, then the
+> lead's flash decision. The `SEAL` and `SHRINKTO` inclusive stragglers are reconciled separately and do
+> not hold this up.
+>
+> **What it does NOT authorise:** describing R-31's fix as closing the disclosure. It restores the type
+> discipline on the capability-grained route; the scalar route stays open because its check is gated on
+> a privilege level domains never run at.
+
 > # ALL FOUR GATES PASS, 2026-09-10. Branch `r30-r31-init-revoke`. What remains is a DECISION, not a gate.
 >
 > | gate | result |
@@ -1228,6 +1244,22 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
 >
+> # ✅ LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE. The change is authorised and proceeds.
+>
+> The recommendation was put with its one surviving argument stated plainly — every RTL access path and
+> all of QEMU already assume exclusive, while the spec leans inclusive wherever it speaks — and with the
+> fact that this is a DEVIATION rather than a conformance fix. The lead ruled for exclusive.
+>
+> **What that authorises, in order:** amend `cap-man-insn.adoc:421` to match (`cursor < end` illegal,
+> i.e. accept `cursor >= end`) in the SAME change as `capstone_flu_unit.anvil:139`; keep the revoke
+> polarity fix with it; land the firmware change alongside, never RTL-only; then synthesis, then the
+> lead's flash decision. The `SEAL` and `SHRINKTO` inclusive stragglers are reconciled separately and do
+> not hold this up.
+>
+> **What it does NOT authorise:** describing R-31's fix as closing the disclosure. It restores the type
+> discipline on the capability-grained route; the scalar route stays open because its check is gated on
+> a privilege level domains never run at.
+
 > # ALL FOUR GATES PASS, 2026-09-10. Branch `r30-r31-init-revoke`. What remains is a DECISION, not a gate.
 >
 > | gate | result |
