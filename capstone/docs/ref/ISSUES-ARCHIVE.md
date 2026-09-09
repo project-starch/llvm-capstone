@@ -1792,6 +1792,67 @@ regress.
 - **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
   reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
 
+### C-5 — 4 KiB code window `CLOSED 2026-09-10 — STALE SINCE ~2026-08: the window is no longer a hardcoded number anywhere in the path. It is a per-image build knob (`DOMAIN_WINDOW`), discovered from the ELF by the loader and honoured by the monitor; 4 KiB remains the DEFAULT deliberately, and that is a documented layout decision, not an unlifted cap`
+`link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
+hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
+is what full CoreMark and Dhrystone need. Task #62.
+
+---
+
+> ## READ FIRST — most OPEN `R-*` entries predate the 2026-08-04 bitstream reflash
+>
+> The board ran `working-caplifive-captype-fixed.bit` until **2026-08-04**, when it was
+> reflashed to **`caplifive_fixed_forward.bit`** (the operand-forwarding fix,
+> `capstone-ariane 7aac52f93`).
+>
+> **R-14 and R-16 were both that one bug** — two entries that had each accumulated sessions of
+> independent investigation turned out to be the same defect, and both are now FIXED and
+> archived. Every other `R-*` measured before that date is therefore **suspect**: it may already
+> be fixed, and its recorded mechanism may be wrong.
+>
+> Treat a pre-2026-08-04 `R-*` as *unverified on current silicon* until it is re-measured. Do not
+> hand one to the board owner, and do not build a theory on one, without re-running it first.
+> Re-running is usually one boot.
+>
+> Unaffected: `C-*` (compiler) and `I-*` (infrastructure) entries, which do not depend on the
+> bitstream.
+
+> **CLOSED 2026-09-10 (board lane), verified end to end rather than from this entry's own citation.**
+> The entry says *"`link-gpfree.ld` forces globals to image offset `0x1000` ... One hardcoded number"*.
+> No such number is in the path any more:
+>
+> * **Link time — a knob.** `tests/runtime-qemu/silicon-ladder/build-ladder-domain.sh:42-51` takes
+>   `DOMAIN_WINDOW` and substitutes it into a temp copy of the linker script. Its own header explains
+>   the design: *"Opt-in PER RUNG, deliberately not a global default: changing the window changes image
+>   layout, and this project has a documented layout sensitivity (a 2026-07-26 A/B where four added
+>   instructions flipped a passing rung). Every measured rung stays at 4 KiB so its published number
+>   stands."* The separate `link-gpfree-32k.ld` copy — the thing the monitor used to silently disagree
+>   with — is gone.
+> * **Load time — discovered, not assumed.** `package/modcapstone/userspace/lib/libcapstone.c:230-241`
+>   walks the section headers for `.capstone_gp_initdesc` (which the script places first in the globals
+>   region) and computes `globals_off` from its address; `:263` packs it as
+>   `entry_off | (globals_off << 32)`. An image with no such section yields 0, which the monitor treats
+>   as "declares no globals region" — so pre-existing domains behave exactly as before.
+> * **Monitor — uses the discovered value.** `sbi_capstone.c:757` unpacks `packed_gpoff` and `:970-971`
+>   carves with `gpoff`, guarded by `gpoff != 0 && code_size > gpoff`. `GPFREE_GLOBALS_OFFSET` at `:213`
+>   now appears **only in comments** — it is dead as code.
+>
+> **Positive control run today**, because "the knob exists" is a claim and not a reading: the same
+> rung (`al_fpga_app.c`) built twice, default and `DOMAIN_WINDOW=32k`, both `rc=0`, and
+> `.capstone_gp_initdesc` lands at `0x11000` (base + 0x1000) versus `0x18000` (base + 0x8000). Two
+> distinct images, so the knob reaches the linker, and by the loader path above it reaches the monitor.
+>
+> **What remains is not a defect.** A domain whose `.text` exceeds the window must be built with
+> `DOMAIN_WINDOW` set — that is how full CoreMark and Dhrystone should be built when someone wants
+> them, and 32 KiB is already silicon-validated. Raising the *default* is deliberately not done: it
+> would relayout every frozen rung image, which on this platform means a fresh entry-stall draw per
+> rung (R-16) and invalidates the published cycle numbers. If that trade is ever wanted it is a
+> decision, not a bug fix.
+>
+> *(Third registry entry in one pass whose body was overtaken by the code — see R-12 and R-3. The
+> common cause is that the fix landed in a build script or a loader rather than in the file the entry
+> cited, so nothing prompted a re-read.)*
+
 ### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `NOT REPRODUCED ON THE CURRENT COMPILER 2026-09-09 (compiler lane, branch b67808e34f6a): zero self-moves at -O1/-O2 with the tie present, same mv count as plain riscv64; the -O0 self-moves are FastRegAlloc stack-slot address materialisation, not this; not GONE because no archived compiler can fire the 2026-07-27 instrument`
 The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
 tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /

@@ -357,7 +357,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM PLAUSIBLE, NOT PROVEN (claim-auditor 2026-09-09 night, verdict PLAUSIBLE-BUT-UNPROVEN): the write-buffer overlay that would repair the high half is gated at WORD granularity (`wt_dcache_mem.sv:283/:335/:397`, the data twin of the S-10 tag hazard at `:286`), but which of the store buffer's word-granular disambiguation (`load_unit.sv:297`, `store_buffer.sv:279`), the miss-refill leg (`wt_dcache_mem.sv:354-358`) or the overlay itself produces the reading is NOT SEPARATED, and a second independent defect at `:397` drives `rd_user_o` from a plain word-0 entry's `.user = 0`; no fix candidate; synthesis-first; W-12 stays in force`
+### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour) and the second defect at `:397` (a plain word-0 entry overlaying `.user = 0`), which is UNTESTED, not refuted. No fix candidate; synthesis-first; W-12 stays in force`
 
 **Signature.** The rung `s06agg` (`tests/fpga-repros/R29-wbuffer-highword-forwarding/src/s06agg.dom`,
 `249118220f8cf37a`, entry VA `0x10000`, `-O0`) copies `struct { void *p; unsigned long x, y; }` by
@@ -429,9 +429,56 @@ trailing scalar field is initialised just before the copy. `W-12` (`SQLITE_GRANU
 > `ldc`'s OWN result (values are read after an `stc` into a second region, so `ldc` vs `stc` vs readback is
 > undetermined). The board readings and the six-run table are untouched; only the attribution moves.
 
-> **SEPARATION ARMS, 2026-09-10 (RTL lane, `f29465d8c`, predictions written into the test headers
-> before either ran, logs kept under `records/r29/`). Both overlay accounts are DISFAVOURED. This is a
-> DIRECTION, not a verdict, and the named site does not move on it.**
+> **WAVEFORM PROBE, 2026-09-10 (RTL lane; write-up and dumps in `records/r29/PROBE-READING.md`).
+> THIS IS THE VERDICT, and it supersedes both the audit box and the separation arms below.** Sampled
+> at the failing read of `s06agg-shape` on `66c4e7517` (times in VCD units):
+>
+> | cycle | signal | value | what it means |
+> |---|---|---|---|
+> | 2509 | `wbuffer_q[0].data` | `0x5555666677778888` | the plain store of `y` is IN THE WRITE BUFFER |
+> | 2509 | `wbuffer_q[0].valid` | `0xff` | all eight bytes, not cleared before the read |
+> | 2509–2687 | store-buffer commit + speculative counts | `0` | the store buffer is EMPTY across the read |
+> | 2675 | `wr_cl_vld` | `1` | the wide load **MISSED**; this is the refill leg |
+> | 2675 | `rd_data_o` | `0x1111222233334444` | the granule's LOW word, from the refill |
+> | 2675 | `rd_user_o` | `0` | the HIGH word lane carries **zero** |
+>
+> * **Account (b), the store buffer, is REFUTED for this run.** Both counters are zero across the
+>   read, so the store had already left it; `load_unit.sv:297` and `store_buffer.sv:279` did not
+>   produce this reading. The previous note below said (b) was what stood — that was inference from
+>   two passing arms and observation overturns it.
+> * **Account (c), the miss-refill leg, is HOW THE STALE DATA ARRIVES.** `wr_cl_vld` is high at the
+>   delivering cycle, so `ruser` comes from the line returning from memory (`:354-358`), and memory
+>   does not hold `y` yet — the write buffer writes the array only at TX return.
+> * **Account (a), the word-gated overlay, is THE MISSING REPAIR, not the origin.** An entry holding
+>   `y` is resident and fully valid at that read and `rd_user_o` is nevertheless zero; `:397` is what
+>   should have supplied it and did not.
+>
+> So the correct sentence is the auditor's rather than the first one written here: *the refill brings a
+> stale high half, and the write-buffer overlay that would repair it is gated at WORD granularity so a
+> word-1 entry is invisible.* The original wording made the overlay the origin; those are different
+> claims and only the second survives.
+>
+> **Why the two separation arms passed** — unexplained until now: each inserts a plain load of the
+> store's own word ahead of the wide load, and that load brings the line IN, so the wide load then
+> HITS and never takes the refill leg. They removed the very condition that produces the failure.
+> **Residency is necessary but not sufficient: the load must also MISS.** That is the third arm in
+> this investigation to pass by not creating its condition, and it is the same error each time.
+>
+> **Still not observed, flagged rather than glossed:** `wbuffer_hit_oh` and `wbuffer_be` are internal
+> combinational signals and are not in the trace, so the word-gating itself is inferred from port
+> behaviour rather than read directly; and the second defect at `:397` (a plain word-0 entry overlaying
+> `.user = 0`) is **UNTESTED, not refuted** — `r29-sep-userzero` passed, but by the same mechanism it
+> probably never missed either.
+>
+> **For a fix this is good news:** a granule-scoped data overlay would repair the observed case, since
+> the entry holding `y` is right there. It must still ALSO refuse the `.user` overlay for a
+> non-capability entry, because this probe leaves that hazard untouched.
+
+> **SEPARATION ARMS, 2026-09-10 — SUPERSEDED BY THE PROBE ABOVE; kept because the reasoning that did
+> not survive is the useful part.** (RTL lane, `f29465d8c`, predictions written into the test headers
+> before either ran, logs under `records/r29/`.) Both overlay accounts read as DISFAVOURED and the
+> store-buffer account as the one left standing. The probe shows why that was wrong: neither arm
+> created the miss.
 >
 > * `r29-sep-forceres` attacks the `:397` overlay: a plain load of the same word the store wrote sits
 >   between the store and the wide load, so `store_buffer.sv:279` holds it until the store is
@@ -444,10 +491,9 @@ trailing scalar field is initialised just before the copy. `W-12` (`SQLITE_GRANU
 >   the wide load. **Predicted FAIL 11 from the `.user = 0` overlay; read PASS, 2229 cycles**, both
 >   halves intact.
 >
-> What is left standing is the **store buffer's word-granular disambiguation** (`load_unit.sv:297`,
-> `store_buffer.sv:279/287/293`), which would move the fix site out of the cache overlay entirely and
-> fits the timing better — a store-buffer window is a handful of cycles, which is what
-> one-instruction adjacency looks like.
+> ~~What is left standing is the **store buffer's word-granular disambiguation**~~ — **REFUTED
+> 2026-09-10 by the waveform probe above**: both store-buffer counters are zero across the failing
+> read.
 >
 > **Why this is not yet a refutation.** Nothing in either arm observes where the store physically was
 > at the read cycle. Both are equally consistent with the separator load having drained the store all
@@ -1543,31 +1589,6 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 `granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)` rule with the base truncated down —
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
-
-### C-5 — 4 KiB code window `OPEN`
-`link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
-hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
-is what full CoreMark and Dhrystone need. Task #62.
-
----
-
-> ## READ FIRST — most OPEN `R-*` entries predate the 2026-08-04 bitstream reflash
->
-> The board ran `working-caplifive-captype-fixed.bit` until **2026-08-04**, when it was
-> reflashed to **`caplifive_fixed_forward.bit`** (the operand-forwarding fix,
-> `capstone-ariane 7aac52f93`).
->
-> **R-14 and R-16 were both that one bug** — two entries that had each accumulated sessions of
-> independent investigation turned out to be the same defect, and both are now FIXED and
-> archived. Every other `R-*` measured before that date is therefore **suspect**: it may already
-> be fixed, and its recorded mechanism may be wrong.
->
-> Treat a pre-2026-08-04 `R-*` as *unverified on current silicon* until it is re-measured. Do not
-> hand one to the board owner, and do not build a theory on one, without re-running it first.
-> Re-running is usually one boot.
->
-> Unaffected: `C-*` (compiler) and `I-*` (infrastructure) entries, which do not depend on the
-> bitstream.
 
 ## Infrastructure / procedure
 
