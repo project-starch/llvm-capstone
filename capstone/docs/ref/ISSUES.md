@@ -1805,7 +1805,23 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
-### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `OPEN — LATENT on silicon; class-level, not one bug`
+### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `MITIGATED IN-BRANCH 2026-09-09 (compiler lane, 5d2932a941ea): every producer of anonymous unslotted data is avoided (pools via useConstantPoolForLargeInts, jump tables via areJTsAllowed, cttz via lowerCTTZNoTable) or slotted (private globals get cap-table slots); backstop guard diagnoseAnonymousConstantUnderGpCaptable with a -capstone-gpfree-constant-pools knob as its lit positive control; class record kept — slot-allocated pools remain a LEAD design item`
+
+> **MITIGATED IN-BRANCH 2026-09-09 (compiler lane, 5d2932a941ea; detail in
+> `docs/plans/bug-sweep-2026-09.md`, "C-43 — class fully characterised").** Two corrections to the text below:
+> (1) the claim that a float literal faults on silicon with no warning is FALSE today — under the gp-free /
+> gp-captable ABI floats, doubles and large i64 constants materialise inline (`useConstantPoolForLargeInts()`
+> returns false under the ABI, the C-4 fix), no pool is formed; (2) the private/anonymous-global residual is
+> CLOSED — a private `unnamed_addr` addrspace(200) constant array gets a cap-table slot exactly like a named
+> global (`isGpCaptableGlobal` has no linkage filter), verified to lower to `ldc gp[i]` with a
+> `.capstone_gp_table` entry, never the faulting pcrel+scc-into-.rodata form; SimplifyCFG switch-lookup tables
+> are private globals and slot the same way. Backstop: `diagnoseAnonymousConstantUnderGpCaptable`
+> (DiagnosticInfoUnsupported, gated on `capstoneGpFreeAbiActive`) with the hidden
+> `-capstone-gpfree-constant-pools` knob whose only job is the lit positive control (`c43-anon-constant-pool.ll`
+> fires, rc 1; `c43-addressable-data-ok.ll` silent). Gates: Capstone lit 102/102; the SQLite silicon corpus as
+> the negative control — build rc 0, zero C-43 diagnostics, 490 real `ldc gp[i]` sites emitted, so the
+> gp-captable pass demonstrably ran. Stays in this file because the slot-allocated-pools design decision is the
+> lead's; nothing else remains for the compiler.
 
 **Reported by the compiler lane 2026-09-05 from cycle-3 work under QEMU; the artifact claim
 verified here.** Two instances, one mechanism.
