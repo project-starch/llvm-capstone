@@ -74,7 +74,7 @@ fault tags, two HOLE lines (the transferred arenas), core alive, both domains an
 constant must be the RTL's 4, and the UNINIT operand's cursor must be moved past `end` with CINCOFFSET (RTL does not
 enforce the spec's bound there) — the two divergences named in the first paragraph.
 
-**Post-flash, boot sw45, 2026-09-09, on `caplifive_r25r26r27_66c4e7517.bit`, M-3 firmware — THE ACCEPTANCE
+**Post-flash, boots sw45 and sw47, 2026-09-09, on `caplifive_r25r26r27_66c4e7517.bit`, M-3 firmware — THE ACCEPTANCE
 CRITERION ABOVE IS MET.** Control `k800` = 4 first; the seven other stages at their oracles (`s06copy` 32,
 `s06aggcap` 15, `s06aggwide` 255, `rc_const0` 2016, `rc_p1` 2080, `sbx8` `0xD0000000`, and the R-25 control
 `r25same` `0x25000001`), eight `TEST END rc=0`. Then `r25dup`, last: domain created (`DBAS:81AC0000`, `DENT`),
@@ -98,8 +98,22 @@ that label. The monitor's own tags, which do not depend on the host, say the dom
 The driver gains created/entered from the monitor's `DENT`/`ENT1` tags as a separate fix, negative-tested
 against this same log.
 
-**Replication:** the reading is N=1 as filed. A second `r25dup` arm is appended last to boot sw47 for N=2, and
-this paragraph is updated when it lands. Raw evidence: `board-b45/driver.log` and `boot.txt`.
+**Replication — N=2, and the second reading varies a condition rather than repeating one.** Boot sw47, same
+bitstream but **variant-E firmware** (all four `CCSRRW`-adjacent `fence.i` dropped, 148 linked, against sw45's
+M-3 firmware with all of them), and the probe placed last again. Domain 7 this time, entered (`ENT0`/`ENT1`),
+no `RESULT`, no return within 900 s. The wedge tracer latched the same reading at a different address:
+
+| | sw45 | sw47 |
+|---|---|---|
+| firmware | M-3 line, all `fence.i` | variant E, four dropped (148 linked) |
+| domain | 8 | 7 |
+| `DBAS` | `0x81AC0000` | `0x81AA0000` |
+| latched `mepc` | `0x81AC0490` | `0x81AA0490` (bytes `90 04 aa 81 00 00 00`) |
+| offset into the domain | **`+0x490`** | **`+0x490`** |
+| latched `mcause` | 25 | 25 (`TRAP LOG` `0x99` = seen + `0x19`) |
+
+Two boots, two different domain bases, two different firmware images, the same fault at the same instruction
+offset. Raw evidence: `board-b45/driver.log` and `boot.txt`; `board-b47/driver.log:1782-1932`.
 
 **Superseded plan line (kept, because the prediction is the point):** Prediction on file, written before it:
 `r25same` unchanged at `0x25000001`, and `r25dup` traps at the store through the consumed source — the same
