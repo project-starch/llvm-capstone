@@ -83,6 +83,18 @@ The load retired with the data (`x6 = 0x3333333333333333`), phases 0 and 2 trapp
   Either is RTL, goes through lint + audit + synthesis before any board use, and would be validated by this
   test turning `ldmiss` into a PASS with the control still firing.
 
+## Correction (2026-09-09)
+
+The waveform in the table above was **not** a 40-cycle-memory run: the trace build re-verilated the model without
+the `S12_MEM_DELAY` define (found by audit on 2026-09-09; the arm runner passed no `--isscomp_opts`). The
+`ldmiss.vcd` events are a **delay-0** trace, in which the older load still misses the cache and the CCSRRW still
+commits five cycles after the younger load's check — the hazard opens on an ordinary miss with no added memory
+latency, which is the stronger statement. The FAIL 11 / PASS arm table was **also** taken at delay 0 — the model built for it never contained the define
+(the build path logged the define and the built model did not have it; see the 09-09 note's banner). So every
+number in this note is a delay-0 number, and the hazard is a delay-0 hazard: an ordinary cache miss opens it. At a
+verified 40-cycle latency (`records/r26/pre-all-d40.log`, 2026-09-09) `r26-v2-ldmiss` reads FAIL 11 after 3202
+cycles, `ldmiss-fence` PASS, the controls as in the table — the same verdicts, three times the cycle counts.
+
 ## Side observation, not chased
 
 The first version of the test initialised its counters in memory right after the capability setup (`CAPENTER`,
