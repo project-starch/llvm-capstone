@@ -302,6 +302,42 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 ## Q-07 — QEMU's `INIT` requires `cursor == end` and aborts the host process otherwise; the spec and the RTL require `cursor > end` `OPEN — QEMU divergence, filed 2026-09-09 from the R-25 probe work`
 
+> **2026-09-10 — Q-07 AND M-5 ARE ONE SYSTEM, and neither can be fixed alone. Verified in the QEMU
+> source, not inferred.**
+>
+> `helper_csinit` (`capstone-qemu/target/riscv/op_helper.c:1198-1200`) is three host `assert()`s, so a
+> wrong operand `SIGABRT`s the emulator instead of raising a guest trap. All three map one-to-one onto
+> spec exceptions (`capstone-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
+> unexpected capability type, 29 illegal operand value), and the idiom to replace them with sits five
+> lines away in the same file at `:728`. That part is mechanical.
+>
+> **What is not mechanical:** `helper_csrevoke` at `:920-921` places the retained handle's cursor at
+> `end` *specifically to satisfy this assertion*, and says so —
+> *"UNINIT … cursor at END, the canonical UNINIT form that csinit requires (csinit asserts
+> cursor==end). Leaving it at base produced a handle no instruction could advance — scc rejects UNINIT
+> and csinit rejects cursor!=end — so a linear borrow could never be re-lent after revoke."* It labels
+> itself an *"Experimental revocation-semantics choice"*. The RTL instead leaves `cursor = start`,
+> which is why **M-5** is silicon-dead: no legal instruction sequence takes UNINIT(cursor=start) to LIN
+> on hardware except the `CAPTYPE` debug op, which production code cannot use.
+>
+> **So the order is forced and the two must land together.** Fix Q-07 alone and QEMU's own
+> revoke → init → mrev flow breaks. Fix M-5 alone and there is nothing on QEMU that reproduces it.
+> Aligning `csrevoke` to the RTL's `cursor = start` in the same commit converts M-5 from
+> silicon-latent-and-unmeasurable into QEMU-reproducible with an existing gate — and
+> `run-nullblk-all.sh` then goes red and STAYS red until M-5 is resolved, which is correct rather than
+> an obstacle, but means **neither may be pushed to `dev` before M-5's resolution is chosen**.
+>
+> **The decision, which is the lead's with the RTL lane** (M-5 has two sites, not the one the entry
+> names: `sbi_capstone.c:1196-1197` and `:1340-1341` in `share_child_region`): amend the spec's `INIT`
+> precondition; add a monitor-side reclaim that does not route through `INIT`; or change what `revoke`
+> leaves behind in the RTL. Ship `>` rather than `>=` whichever way it goes — spec `:421` and RTL
+> `capstone_flu_unit.anvil:139` both fault on `<=`, so `>` is what silicon does today, and any `>=`
+> relaxation is a spec change first.
+>
+> Gates when it lands: `run-linear-uninit-corpus-probe.sh` (its expectations are written around the
+> current `csinit` semantics and must be rewritten with the fix) **and** `run-nullblk-all.sh`, together,
+> serialized on the rootfs lock.
+
 **The accepted operand sets are DISJOINT, so an `INIT` path can be QEMU-validated and silicon-dead
 at the same time.** The spec raises *Illegal operand value* when `x[rs1].cursor <= x[rs1].end`
 (`capstone-spec/parts/cap-man-insn.adoc:421`) and the RTL does the same
@@ -1592,6 +1628,42 @@ Worth fixing on its own merits: **any** domain that faults for any reason is cur
 undebuggable and takes the core with it.
 
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
+
+> **2026-09-10 — M-5 AND Q-07 ARE ONE SYSTEM, and neither can be fixed alone. Verified in the QEMU
+> source, not inferred.**
+>
+> `helper_csinit` (`capstone-qemu/target/riscv/op_helper.c:1198-1200`) is three host `assert()`s, so a
+> wrong operand `SIGABRT`s the emulator instead of raising a guest trap. All three map one-to-one onto
+> spec exceptions (`capstone-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
+> unexpected capability type, 29 illegal operand value), and the idiom to replace them with sits five
+> lines away in the same file at `:728`. That part is mechanical.
+>
+> **What is not mechanical:** `helper_csrevoke` at `:920-921` places the retained handle's cursor at
+> `end` *specifically to satisfy this assertion*, and says so —
+> *"UNINIT … cursor at END, the canonical UNINIT form that csinit requires (csinit asserts
+> cursor==end). Leaving it at base produced a handle no instruction could advance — scc rejects UNINIT
+> and csinit rejects cursor!=end — so a linear borrow could never be re-lent after revoke."* It labels
+> itself an *"Experimental revocation-semantics choice"*. The RTL instead leaves `cursor = start`,
+> which is why **M-5** is silicon-dead: no legal instruction sequence takes UNINIT(cursor=start) to LIN
+> on hardware except the `CAPTYPE` debug op, which production code cannot use.
+>
+> **So the order is forced and the two must land together.** Fix Q-07 alone and QEMU's own
+> revoke → init → mrev flow breaks. Fix M-5 alone and there is nothing on QEMU that reproduces it.
+> Aligning `csrevoke` to the RTL's `cursor = start` in the same commit converts M-5 from
+> silicon-latent-and-unmeasurable into QEMU-reproducible with an existing gate — and
+> `run-nullblk-all.sh` then goes red and STAYS red until M-5 is resolved, which is correct rather than
+> an obstacle, but means **neither may be pushed to `dev` before M-5's resolution is chosen**.
+>
+> **The decision, which is the lead's with the RTL lane** (M-5 has two sites, not the one the entry
+> names: `sbi_capstone.c:1196-1197` and `:1340-1341` in `share_child_region`): amend the spec's `INIT`
+> precondition; add a monitor-side reclaim that does not route through `INIT`; or change what `revoke`
+> leaves behind in the RTL. Ship `>` rather than `>=` whichever way it goes — spec `:421` and RTL
+> `capstone_flu_unit.anvil:139` both fault on `<=`, so `>` is what silicon does today, and any `>=`
+> relaxation is a spec change first.
+>
+> Gates when it lands: `run-linear-uninit-corpus-probe.sh` (its expectations are written around the
+> current `csinit` semantics and must be rewritten with the fix) **and** `run-nullblk-all.sh`, together,
+> serialized on the rootfs lock.
 
 `shared_region_annotated`'s `REV_BORROWED` branch does `if (cap_type(r) == 3) C_INIT(r, r, 0)` on
 the retained handle after a revoke. On silicon that operand cannot satisfy `INIT`: stores through an
