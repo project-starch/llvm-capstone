@@ -19,7 +19,7 @@ import argparse, os, re, sys, subprocess
 ROOT = os.environ.get("CAPSTONE_ROOT") or subprocess.run(
     ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
     cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
-VERDICT = f"{ROOT}/capstone/benchmarks/sqlite/probes/s12-verdict.py"
+VERDICT = f"{ROOT}/capstone/ports/sqlite/probes/s12-verdict.py"
 
 ARMS = [
     # label,       log glob prefix,  .dom name,    expected sha16,      what it holds

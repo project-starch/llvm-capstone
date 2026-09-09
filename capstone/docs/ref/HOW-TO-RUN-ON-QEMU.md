@@ -74,7 +74,7 @@ Useful `run-domain-smoke.py` flags:
 | `--timeout-multiplier` | raise for long workloads |
 
 A complete worked example, with both halves and a real pass criterion, is
-`capstone/benchmarks/sqlite/run-sqlite-silicon.sh`. **Copy its shape.** It builds both
+`capstone/ports/sqlite/run-sqlite-silicon.sh`. **Copy its shape.** It builds both
 halves, runs them, and requires five specific markers.
 
 > **Changed 2026-08-20, and the old pointer would have cost you a build.** This used to name
@@ -110,7 +110,7 @@ real revoke from an unrelated fault. Concretely: at `-O0` a plain spill/reload c
 produce a "tag gone" cause-24 fault, which looks identical to a caught use-after-free
 until the control shows the same program completing when the revoke is removed.
 
-Read `capstone/benchmarks/sqlite/run-sqlite-row3.sh` — its header comment states this
+Read `capstone/ports/sqlite/run-sqlite-row3.sh` — its header comment states this
 contract exactly, and `sqlite_row3_domain.c` shows the wrapper that carves an
 independently revocable copy and revokes it at the right moment.
 

@@ -1,6 +1,6 @@
 // `long double` is binary128 here, and it works.
 //
-// It did not: musl's survey (capstone/musl-capstone/survey-musl-capstone.py)
+// It did not: musl's survey (capstone/ports/musl-capstone/survey-musl-capstone.py)
 // carried src/math/fmodl.c as its CONTROL_MUST_FAIL, with the reason recorded as
 // "long double lowers to a 128-bit shift, which this target cannot do while
 // MVT::i128 is the capability carrier. It will keep failing until the

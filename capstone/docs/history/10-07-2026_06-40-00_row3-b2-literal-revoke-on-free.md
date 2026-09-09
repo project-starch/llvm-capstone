@@ -13,7 +13,7 @@ name, because memsys5 allocations are not independently revocable. A reviewer
 could fairly object: *"you protected a copy you made, not SQLite's real memory."*
 
 **B2 removes the objection.** SQLite's ENTIRE heap is a revoke-on-free linear
-allocator (`benchmarks/sqlite/revoke_on_free_alloc.h`) installed via
+allocator (`ports/sqlite/revoke_on_free_alloc.h`) installed via
 `SQLITE_CONFIG_MALLOC`. The pointer that faults post-`finalize` is the exact value
 `sqlite3_column_name` returned — SQLite's own pointer, into SQLite's own
 allocation, revoked by the `xFree` on SQLite's own `finalize` path. No wrapper, no
@@ -94,7 +94,7 @@ scalar as a scalar). This is a general lesson for any custom Capstone allocator:
 | `alloc_no_free_ok` | `0x0812005e` | `0x0812005e` | `0x0812005e` |
 | `alloc_sibling_survives_ok` | `0x0813003c` | `0x0813003c` | `0x0813003c` |
 
-**Phase 1 — literal row3 on real SQLite** (`benchmarks/sqlite/run-sqlite-row3-b2.sh`,
+**Phase 1 — literal row3 on real SQLite** (`ports/sqlite/run-sqlite-row3-b2.sh`,
 fault + no-revoke control × `-O0/-O1/-O2`, 6/6):
 
 | Domain-TU opt | control | fault variant |
@@ -119,7 +119,7 @@ proving. SQLite (the engine) is built `-O0`; only the domain TU opt varies.
 ## Scope
 
 - `llvm/` (in-tree): the `PseudoCapGlobalBase` global-base codegen fix + lit.
-- `capstone/benchmarks/sqlite/`: `revoke_on_free_alloc.h`, `sqlite_row3_b2_domain.c`,
+- `capstone/ports/sqlite/`: `revoke_on_free_alloc.h`, `sqlite_row3_b2_domain.c`,
   `sqlite_host_row3_b2.c`, `run-sqlite-row3-b2.sh` (all NEW; A's `sqlite_row3_domain.c`
   untouched).
 - `capstone/tests/runtime-qemu/revoke-on-free-probe/` + `build-`/`run-revoke-on-free-probe.sh`.

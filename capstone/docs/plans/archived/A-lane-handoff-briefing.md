@@ -32,7 +32,7 @@ is not acceptable for the claim). Security story is settled; the **separating ax
 - **Three benchmark suites on QEMU:** CoreMark ✓, BEEBS 82/82 ✓, RV8 7/7 ✓ (only C++ `bigint`
   deferred). `state/current-state.md` "Verified baseline".
 - **SQLite 3.53.3 runs end-to-end in a pure-cap domain on QEMU** (all 8 bring-up gaps closed;
-  CREATE/INSERT/SELECT correct). `benchmarks/sqlite/`.
+  CREATE/INSERT/SELECT correct). `ports/sqlite/`.
 - **CHERI-vs-Capstone perf comparison DONE + in the paper** (QEMU-to-QEMU, microbench + BST):
   eager CHERI ~14–17 M instr/free vs our O(1) +5 instr/op. `evaluation.tex`.
 - **C1 spatial narrowing** (globals default-on, stack default-on, real umm_malloc heap) shipped +

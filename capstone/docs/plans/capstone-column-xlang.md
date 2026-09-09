@@ -21,8 +21,8 @@ Do not restart any of these:
 | The CHERI column | `xlang/cheri/RESULTS.md` | **done** — 14 rows x 3 configs, reproduced from a clean `CHERI_ROOT`, verdicts byte-identical |
 | The shims | `xlang/cheri/shims/` | done — 14 shims, `#define`s over `vm_stack_uaf.h` |
 | The fidelity gate | `xlang/cheri/check_shim_fidelity.py` | done — 18/18, proves each shim still triggers its defect natively |
-| The Capstone pattern to copy | `capstone/benchmarks/sqlite/sqlite_row*_domain.c` + `run-sqlite-row*.sh` | proven on the sqlite corpus |
-| The revoking allocator | `capstone/benchmarks/sqlite/revoke_on_free_alloc.h` | proven — SPLIT / MREV / delin, `xFree` revokes the node |
+| The Capstone pattern to copy | `capstone/ports/sqlite/sqlite_row*_domain.c` + `run-sqlite-row*.sh` | proven on the sqlite corpus |
+| The revoking allocator | `capstone/ports/sqlite/revoke_on_free_alloc.h` | proven — SPLIT / MREV / delin, `xFree` revokes the node |
 
 **The only missing thing is the Capstone column itself.**
 

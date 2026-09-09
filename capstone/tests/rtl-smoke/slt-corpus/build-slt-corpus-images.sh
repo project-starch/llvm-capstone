@@ -19,7 +19,7 @@ IMG=${1:?images dir}; NATIVE=${2:?native baseline tsv}
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)
 export CAPSTONE_REQUIRE_FRESH_TOOLCHAIN=1
 source "$ROOT/capstone/tests/capstone-test-env.sh"
-CORPUS=$(bash "$ROOT/capstone/benchmarks/sqlite/fetch-sqllogictest.sh" | tail -1)
+CORPUS=$(bash "$ROOT/capstone/ports/sqlite/fetch-sqllogictest.sh" | tail -1)
 mkdir -p "$IMG"; LOG="$IMG/build.log"; : > "$LOG"
 exec 9>"${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}"; flock 9; export CAPSTONE_QEMU_LOCK_HELD=1
 #      tag:heap:stack:region:validate-on:dom-name:host-name
@@ -32,7 +32,7 @@ for spec in "1m:262144:2097152:1048576:select2:sqslt1m.dom:sqlite_host_1m.user" 
   OUT=/tmp/capstone/sqlite-slt-$tag
   set +e
   SQLITE_HEAP_SIZE=$heap SQLITE_SILICON_STACK=$stack SLT_REGION_SIZE=$region OUT_DIR=$OUT SHARE_DIR=/tmp/capstone/sqlite-slt-share-$tag SLT_TEST=$CORPUS/$f.test \
-    timeout 5400 bash "$ROOT/capstone/benchmarks/sqlite/run-sqlite-slt.sh" > "$IMG/qemu-$tag.log" 2>&1; rc=$?
+    timeout 5400 bash "$ROOT/capstone/ports/sqlite/run-sqlite-slt.sh" > "$IMG/qemu-$tag.log" 2>&1; rc=$?
   set -e
   sil=$(grep -a -o 'SLT-SUMMARY.*' "$OUT/sqlite-slt.log" 2>/dev/null | tail -1 || true)
   nat=$(awk -F'\t' -v n="$f" '$1==n{print $2}' "$NATIVE")

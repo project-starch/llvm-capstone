@@ -13,7 +13,7 @@
  * the duplication is deliberate, so touching this file cannot destabilise the
  * already-measured mruby results.
  *
- * revoke_on_free_alloc.h lives under capstone/benchmarks/sqlite/ (add its dir to
+ * revoke_on_free_alloc.h lives under capstone/ports/sqlite/ (add its dir to
  * -I). It is a raw, dependency-free allocator despite the path.
  */
 #include "revoke_on_free_alloc.h"

@@ -12,7 +12,7 @@ yield-probe: DONE after 2 serviced request(s), domain entered domain_main 1 time
 __CAPSTONE_YIELD_PROBE_PASSED__
 ```
 
-Harness: `capstone/musl-capstone/yield-probe/run-yield-probe.sh`.
+Harness: `capstone/ports/musl-capstone/yield-probe/run-yield-probe.sh`.
 
 **Why it matters.** A syscall must return to the instruction after itself. The
 shared entry glue instead RESTARTS `domain_main` on every entry, and the existing

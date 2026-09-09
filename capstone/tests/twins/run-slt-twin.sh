@@ -16,7 +16,7 @@
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
-SQL="$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite"
+SQL="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 
 LEVEL=${1:?usage: run-slt-twin.sh <-O0|-O1|-O2|-Os> [file.test ...]}
 shift

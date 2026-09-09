@@ -3,7 +3,7 @@
 What `xlang_alloc` / `xlang_realloc` / `xlang_free` must do, in Capstone terms.
 Carried forward from `plans/xlang-phase2-seam-TODO.md` §2, rewritten against the
 shim route and against the allocator that actually exists
-(`capstone/benchmarks/sqlite/revoke_on_free_alloc.h`).
+(`capstone/ports/sqlite/revoke_on_free_alloc.h`).
 
 This is the smallest document in the column and the one that decides what it
 measures. Read it before touching `mock_mruby_capstone.c`.

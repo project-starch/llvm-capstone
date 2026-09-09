@@ -54,7 +54,7 @@ Host-side drivers (`cheri-run.py`, `oneshot.py`, `classify.py`,
 `cheri_status.c`) are corpus-agnostic and are reused, not rewritten.
 
 `rows.tsv` is also the seed of the corpus's consolidated ledger — the analog of
-`capstone/benchmarks/sqlite/cve-repros/PROVENANCE-LEDGER.md`, the sqlite
+`capstone/bug-corpora/sqlite/cve-repros/PROVENANCE-LEDGER.md`, the sqlite
 corpus's per-CVE analysis report (upstream artifact, defect class, verdicts,
 primitive family). The xlang table should reach the paper the same way.
 

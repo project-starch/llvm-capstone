@@ -11,7 +11,7 @@ REPO_ROOT=${CAPSTONE_REPO_ROOT}
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OUT_DIR=${1:-$TMP_ROOT/capstone-runtime-qemu-share}
 OBJ_DIR=${OBJ_DIR:-$TMP_ROOT/sqlite-vfs-skeleton-obj}
-SQLITE_FETCH=${SQLITE_FETCH:-$REPO_ROOT/capstone/benchmarks/sqlite/fetch-sqlite.sh}
+SQLITE_FETCH=${SQLITE_FETCH:-$REPO_ROOT/capstone/ports/sqlite/fetch-sqlite.sh}
 SQLITE_SRC_DIR=${SQLITE_SRC_DIR:-$(bash "$SQLITE_FETCH")}
 
 CLANG=${CLANG:-$CAPSTONE_CLANG}

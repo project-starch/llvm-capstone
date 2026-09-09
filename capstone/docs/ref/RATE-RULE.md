@@ -242,7 +242,7 @@ calculation is required or relevant. Check for that before running any test.
 **Retracting the claim, made earlier on this page and in a report, that a clean `S7T` at n~20
 would make `S7T` vs `XU` "a genuine matched pair worth diffing" and that "the diff is the
 localisation".** It is not a matched pair and the diff localises nothing. Source, not inference --
-`benchmarks/sqlite/sqlite_capstone_domain.c:6737-6743`:
+`ports/sqlite/sqlite_capstone_domain.c:6737-6743`:
 
     #ifdef CAPSTONE_S07_CURSOR_SELFTEST
         /* Runs INSTEAD of the workload: this arm exists to prove the instrument, and it must be
@@ -1935,7 +1935,7 @@ return at `sqlite3OsRead+0x4c`, mcause 25 — tally k=2 in n=16. That signature 
 
 ## What the suite actually checks, because "SQLite ran" is not the claim
 
-`benchmarks/sqlite/sqlite_capstone_domain.c` is self-checking, not a smoke test:
+`ports/sqlite/sqlite_capstone_domain.c` is self-checking, not a smoke test:
 `BEGIN`/`COMMIT`, `CREATE TABLE`, `CREATE INDEX`, prepared `INSERT`s with typed binding
 (int/text/real), `UPDATE`, `DELETE`, then `COUNT(*)`, `SUM`, `MAX`, `ORDER BY` with a top-row
 assertion, an index-driven range `WHERE`, a two-table `JOIN`, a `GROUP BY` subquery and scalar

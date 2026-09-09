@@ -29,7 +29,7 @@ ROOT = os.environ.get("CAPSTONE_ROOT") or subprocess.run(
     cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
 SMOKE = f"{ROOT}/capstone/tests/runtime-qemu/run-domain-smoke.py"
 HOST = "/tmp/capstone/sqlite-slt2/sqlite_host.user"
-TEST = f"{ROOT}/capstone/benchmarks/sqlite/slt/dd2_join.test"
+TEST = f"{ROOT}/capstone/ports/sqlite/slt/dd2_join.test"
 
 
 def run(dom, timeout, tag):
@@ -38,7 +38,7 @@ def run(dom, timeout, tag):
     The serial log, not the runner's stdout. The runner reports pass/fail; the log carries the
     guest's own markers (`SQ: G/enter`, `SQ: H/return`, the SLT-SUMMARY counters), which is what
     "did this variant behave like the base" actually means. Passing --log-file also matches the
-    invocation in benchmarks/sqlite/run-sqlite-slt.sh, which is the one known to work.
+    invocation in ports/sqlite/run-sqlite-slt.sh, which is the one known to work.
     """
     share = tempfile.mkdtemp(prefix="s12fg-")
     log = f"/tmp/capstone/funcgate-{tag}.log"

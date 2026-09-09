@@ -2,7 +2,7 @@
 
 The last two deferred rows of the SQLite Stage-2 defect corpus, as mechanism probes
 on RTL. With these, **all 17 in-scope rows are validated**
-(`benchmarks/sqlite/cve-repros/stage2-mapping.md`).
+(`ports/sqlite/cve-repros/stage2-mapping.md`).
 
 ```
 bash ../run-linear-uninit-corpus-probe.sh      # 7 probes x -O0/-O1/-O2, one boot each

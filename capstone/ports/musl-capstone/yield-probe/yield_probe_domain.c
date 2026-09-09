@@ -20,7 +20,7 @@
  * A pass therefore requires all three of: message 1 once, message 2 once, and
  * the marker intact.
  */
-#include "../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
 
 /* shared_region_annotated() enters the domain with func == 1 and the region
    capability in the first argument; see the SQLite domain, which uses the same

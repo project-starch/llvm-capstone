@@ -6,7 +6,7 @@ It does **not** build or run the full SQLite core yet.
 Instead it proves a smaller but real step:
 
 - fetch the pinned official SQLite amalgamation through
-  `capstone/benchmarks/sqlite/fetch-sqlite.sh`,
+  `capstone/ports/sqlite/fetch-sqlite.sh`,
 - compile a tiny custom-VFS skeleton against the real `sqlite3.h`,
 - compile that code with the in-tree Capstone `clang` for `capstone64-unknown-elf`,
 - and link it into a normal `.dom` sample-domain image.

@@ -111,7 +111,7 @@ cd llvm/cmake-build-debug && ninja -j90 llc clang lld     # never -j112
 ```
 
 Then rebuild anything compiled with it -- at minimum
-`capstone/benchmarks/sqlite/build-sqlite-silicon.sh` -- and re-run the ladder and QEMU suites.
+`capstone/ports/sqlite/build-sqlite-silicon.sh` -- and re-run the ladder and QEMU suites.
 
 **The four XFAILed lit tests were self-cancelling, and that has already happened.** `aggregate-copy.ll`,
 `aggregate-memcpy-align.ll`, `globals.ll` and `mem-intrinsics.ll` have hand-written CHECK chains

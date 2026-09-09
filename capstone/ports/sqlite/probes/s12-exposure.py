@@ -78,7 +78,7 @@ def run_traced(dom, test, host, extra, log_path, timeout):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dom")
-    ap.add_argument("--test", default=f"{ROOT}/capstone/benchmarks/sqlite/slt/dd2_join.test")
+    ap.add_argument("--test", default=f"{ROOT}/capstone/ports/sqlite/slt/dd2_join.test")
     ap.add_argument("--host", default="/tmp/capstone/sqlite-slt2/sqlite_host.user")
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--entry", default=None,

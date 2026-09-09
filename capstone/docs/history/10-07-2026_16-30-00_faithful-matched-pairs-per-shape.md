@@ -30,7 +30,7 @@ Result: **every in-scope shape now has a literal real-SQLite repro** — 5 faith
 
 ## The rows
 
-### L — row 11 (double-finalize), `benchmarks/sqlite/sqlite_row11_domain.c`
+### L — row 11 (double-finalize), `ports/sqlite/sqlite_row11_domain.c`
 
 SQLite's whole heap is the revoke-on-free allocator (`revoke_on_free_alloc.h`,
 `SQLITE_CONFIG_MALLOC`). `sqlite3_prepare_v2` hands back a statement handle into an
@@ -42,7 +42,7 @@ again harmlessly); fault variant faults cause 24. The handle must cross the firs
 finalize call, so it is spilled and the reload comes back untagged (cause 24) at
 every opt level; the control disambiguates.
 
-### U — row 14 (uninit connection), `benchmarks/sqlite/sqlite_row14_domain.c`
+### U — row 14 (uninit connection), `ports/sqlite/sqlite_row14_domain.c`
 
 `db` is a genuine UNINIT capability (revoke a still-linear lineage → UNINIT,
 task-009), carved off a 64-byte SPLIT sub-cap of the arena tail so the rest stays
@@ -55,7 +55,7 @@ into `&db`; it does not initialise a caller-provided UNINIT region. So we MINT t
 UNINIT `db` to model the uninitialised connection; the correct path runs real
 SQLite. The fault is on a genuine UNINIT capability.
 
-### H — row 7 (cursor dealloc), `benchmarks/sqlite/sqlite_row7_domain.c` +
+### H — row 7 (cursor dealloc), `ports/sqlite/sqlite_row7_domain.c` +
 `revoke_on_free_hier_alloc.h` + Phase-0 `tests/runtime-qemu/hier-revoke-probe/`
 
 **The hard one, and the mechanism answer is YES.** Per-connection SUB-ARENAS: each
@@ -86,7 +86,7 @@ leaves the statement usable — this is exactly why the host UAF exists); fault
 variant faults cause 24 (the statement handle spills across `close_v2`). Row 7 is
 the literal representative for all HIERARCHICAL rows (4/5/7/8/9/10/12).
 
-### S — row 2 (UDF context UAF), `benchmarks/sqlite/sqlite_row2_domain.c`
+### S — row 2 (UDF context UAF), `ports/sqlite/sqlite_row2_domain.c`
 
 A SQL function is registered with a context pointer `app` (an rof allocation); the
 host frees `app` (REVOKE) while the function stays registered; `sqlite3_exec`
@@ -122,7 +122,7 @@ cheap."
 
 ## Scope / discipline
 
-- Additive only: new files under `benchmarks/sqlite/` and `tests/runtime-qemu/`.
+- Additive only: new files under `ports/sqlite/` and `tests/runtime-qemu/`.
   A's `sqlite_row3{,_b2}_domain.c` untouched. No `start.S`, monitor, `capstone-c`,
   buildroot or LLVM change. **No `capstone-qemu` gitlink bump** — every mechanism
   reused ops that already exist (SPLIT, MREV, REVOKE, csdrop, the UNINIT-load

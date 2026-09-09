@@ -49,8 +49,8 @@ The existing runtime-QEMU SQLite VFS skeleton uses the same fetcher.
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-bash capstone/benchmarks/sqlite/build-sqlite-capstone.sh
-bash capstone/benchmarks/sqlite/build-sqlite-host.sh
+bash capstone/ports/sqlite/build-sqlite-capstone.sh
+bash capstone/ports/sqlite/build-sqlite-host.sh
 ```
 
 The target build uses `SQLITE_OS_OTHER=1`, `SQLITE_THREADSAFE=0`,
@@ -94,7 +94,7 @@ non-recursive capability-global shape.
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-bash capstone/benchmarks/sqlite/run-sqlite-memory.sh
+bash capstone/ports/sqlite/run-sqlite-memory.sh
 ```
 
 Current result: **green** — the domain runs the base 3-row workload and the

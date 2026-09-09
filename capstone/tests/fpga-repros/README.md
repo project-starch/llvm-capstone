@@ -132,13 +132,13 @@ size and carve count as well as by hash.
     export SQLITE_SUPPORT_OPT_LEVEL=-O1
     for S in 18 20 21 22; do
       OUT_DIR=/tmp/capstone/sqlite-s$S DOMAIN_EXTRA_DEFS="-DCAPSTONE_SQLITE_STAGE=$S" \
-        bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh
+        bash capstone/ports/sqlite/build-sqlite-silicon.sh
     done
     #  stage 18 -> variant A (WEDGES)   stage 20 -> variant B (returns 4, expected 16)
     #  stage 21 -> variant C (correct)  stage 22 -> variant D (correct)
 
 The staged-return scaffolding those depend on is in
-`capstone/benchmarks/sqlite/sqlite_capstone_domain.c` (`CAPSTONE_SQLITE_STAGE`).
+`capstone/ports/sqlite/sqlite_capstone_domain.c` (`CAPSTONE_SQLITE_STAGE`).
 
 ## Running one
 

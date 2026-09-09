@@ -883,7 +883,7 @@ here is a silicon result and none of it should be cited as one.
 
 ### What was measured, and why it is a DIFFERENCE rather than a rate
 
-`benchmarks/sqlite/slt/slt_runner.h` is a SQLLogicTest runner that compiles **unchanged** for
+`ports/sqlite/slt/slt_runner.h` is a SQLLogicTest runner that compiles **unchanged** for
 the host and for a capability domain, and `slt_native.c` links it against the **same** SQLite
 3.53.3 amalgamation with the **same** semantic build configuration. The result is the
 difference between the two sides.
@@ -1232,7 +1232,7 @@ FPGA silicon executes SQLLogicTest `select1` (1031 records) with results identic
 Seven files, one boot each, control `k800 = 4` first in every boot, resident
 `caplifive_s12fix_5097eb166.bit`, silicon-config SQLite at -O1, each result read from the run's own
 transcript segment and compared with the native x86 baseline produced by the same runner
-(`benchmarks/sqlite/slt/slt_runner.h`, `build-slt-native.sh`). Images: fresh main-checkout toolchain
+(`ports/sqlite/slt/slt_runner.h`, `build-slt-native.sh`). Images: fresh main-checkout toolchain
 (`libLLVMCapstoneCodeGen.so bfc039bf12e077f5`, clang embedding `fc4f826a16ca`), one image per
 region/heap class, every image validated under QEMU on its own file before it was baked
 (`tests/rtl-smoke/slt-corpus/build-slt-corpus-images.sh`). Rows: `tests/board-results/2026-09-05.tsv`.

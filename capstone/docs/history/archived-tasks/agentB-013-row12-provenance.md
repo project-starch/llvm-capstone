@@ -11,7 +11,7 @@ You are **Agent-B** (compiler/codegen + emulator + literal-repro lane). Obey
 ## Why this task
 
 A just consolidated the 19-row corpus into a single provenance ledger
-(`capstone/benchmarks/sqlite/cve-repros/PROVENANCE-LEDGER.md`, on `capstone-bootstrap`).
+(`capstone/bug-corpora/sqlite/cve-repros/PROVENANCE-LEDGER.md`, on `capstone-bootstrap`).
 It surfaced **one hard citation-mismatch that is a real paper liability**: the
 paper's `tab:scope` caption claims "All links verified," but **row 12** cites an
 artifact that documents a *different* defect than the row describes.
@@ -28,7 +28,7 @@ artifact that documents a *different* defect than the row describes.
   fix. So row 12's scenario is currently a **constructed MODEL**, not a lowering
   of #34992.
 
-Full finding: `capstone/benchmarks/sqlite/cve-repros/row12_expo_unfinalized_close/PROVENANCE.md`
+Full finding: `capstone/bug-corpora/sqlite/cve-repros/row12_expo_unfinalized_close/PROVENANCE.md`
 (tier already flagged **MODEL / CITATION-MISMATCH**).
 
 This is squarely your lane — you produced the literal matched pairs for rows

@@ -78,7 +78,7 @@ For each **non-`N/A`** function add:
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-bash capstone/benchmarks/sqlite/fetch-sqlite.sh    # if not already fetched
+bash capstone/ports/sqlite/fetch-sqlite.sh    # if not already fetched
 SQLITE_DIR="$CAPSTONE_TMP_ROOT/sqlite-src/sqlite-amalgamation-3530300"
 grep -nE 'SQLITE_API .* sqlite3_[a-z0-9_]+\(' "$SQLITE_DIR/sqlite3.h" | head
 ```
@@ -93,8 +93,8 @@ functions, but note that you skipped them.
 
 ## STRICT ground rules
 
-- **Only create/modify** `capstone/benchmarks/sqlite/cve-repros/api-classification.md`
-  and `capstone/benchmarks/sqlite/cve-repros/api-classification.csv`. Touch nothing
+- **Only create/modify** `capstone/bug-corpora/sqlite/cve-repros/api-classification.md`
+  and `capstone/bug-corpora/sqlite/cve-repros/api-classification.csv`. Touch nothing
   else — not `sqlite3.h`, not the corpus, not the compiler, not build scripts.
 - **Do NOT commit.** Leave the files; the supervising agent reviews and commits.
 - **Do not invent functions.** Every row must correspond to a real prototype in

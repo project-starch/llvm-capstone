@@ -19,7 +19,7 @@ surveyed; 169 foreign-architecture sources (`src/**/x86_64/`, `aarch64/`, ...)
 excluded and counted separately, since musl's own build would not compile those
 for this target either.
 
-Harness: `capstone/musl-capstone/survey-musl-capstone.{sh,py}`. musl 1.2.5, not
+Harness: `capstone/ports/musl-capstone/survey-musl-capstone.{sh,py}`. musl 1.2.5, not
 vendored, SHA-256 pinned.
 
 ## Three arms, each differing in exactly one thing

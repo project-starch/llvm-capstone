@@ -1,6 +1,6 @@
 # SQLite column-borrow / revoke probe (Stage-2 "after", row 3)
 
-The Capstone "after" for `benchmarks/sqlite/cve-repros/row3_diesel_colname_cached`
+The Capstone "after" for `ports/sqlite/cve-repros/row3_diesel_colname_cached`
 (diesel **RUSTSEC-2021-0037**): a `sqlite3_column_*` pointer cached across
 `sqlite3_step`, dereferenced once the row it named has advanced — a use-after-free
 that is silent on a normal machine and caught by AddressSanitizer in the Stage-1

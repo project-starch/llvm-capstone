@@ -3,7 +3,7 @@
 *2026-07-10. Decision record for how faithful the SQLite defect corpus can be
 made, which rows can reach a LITERAL real-SQLite matched pair, which cannot and
 why, and what the two documented residuals (U, S) would need to fully resolve.
-Companion to `benchmarks/sqlite/cve-repros/stage2-mapping.md` (the table) and
+Companion to `ports/sqlite/cve-repros/stage2-mapping.md` (the table) and
 `history/10-07-2026_16-30-00_faithful-matched-pairs-per-shape.md` (task-010, the
 5 literal reps).*
 

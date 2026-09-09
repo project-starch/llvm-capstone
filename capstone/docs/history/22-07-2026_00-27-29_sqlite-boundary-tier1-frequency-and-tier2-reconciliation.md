@@ -19,7 +19,7 @@ runs a rich workload in a pure-capability domain today.*
   overhead can't be measured directly" — is **stale**. All 8 cap-tag-preservation
   gaps were resolved by 2026-07-03; SQLite runs **end to end in a domain** with an
   extended workload. Re-verified fresh this session (see below). The stale claim
-  lived in `benchmarks/sqlite/README.md` (dated 2026-06-30); corrected.
+  lived in `ports/sqlite/README.md` (dated 2026-06-30); corrected.
 
 ## What was actually run
 
@@ -58,7 +58,7 @@ in this note. Amalgamation at `/tmp/capstone/sqlite-src/sqlite-amalgamation-3530
 
 ### Tier-2 status re-verification (in-domain, QEMU)
 
-Ran `capstone/benchmarks/sqlite/run-sqlite-memory.sh` fresh (build + QEMU). Result:
+Ran `capstone/ports/sqlite/run-sqlite-memory.sh` fresh (build + QEMU). Result:
 **both** `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and `__CAPSTONE_SQLITE_MEMORY_PASSED__`,
 with correct rows (`alpha=11/beta=22/gamma=33`). The extended in-domain workload
 already exercises: transaction, secondary `INDEX`, `INTEGER PRIMARY KEY`+`REAL`,
@@ -97,7 +97,7 @@ measures the denominator **in the real environment**: a bulk SQLite scan running
 pure-capability domain, instruction-counted with `csrdicount` under QEMU `-icount`
 (the same functional-model proxy the paper's QEMU-to-QEMU comparison uses).
 
-Probe: `benchmarks/sqlite/sqlite_boundary_cost_domain.c` (built via
+Probe: `ports/sqlite/sqlite_boundary_cost_domain.c` (built via
 `build-sqlite-capstone.sh DOMAIN_SRC=…`, knob `-DBOUNDARY_ROWS`). It inserts N rows
 into `t(id,a,b)` (two TEXT cols), then brackets a `SELECT a,b FROM t ORDER BY id`
 scan that reads each column via `sqlite3_column_text` (the borrow site), counting
@@ -137,7 +137,7 @@ orchestrator: the QEMU binary is not auto-rebuilt when the submodule source move
 
 ## Doc corrections made
 
-- `benchmarks/sqlite/README.md`: stale "not yet green / faults at
+- `ports/sqlite/README.md`: stale "not yet green / faults at
   `sqlite3RegisterBuiltinFunctions`" status replaced with the end-to-end-pass status
   (all 8 gaps resolved; extended workload green).
 - `plans/compatibility-eval-silicon-app.md` §4: prioritization + two-tier framing

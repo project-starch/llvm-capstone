@@ -54,7 +54,7 @@ minimal repro `s06agg` returns **5** on silicon where a correct machine returns 
 
 ### 1.3 Anything that enables 1.1/1.2 in a build
 
-* `capstone/benchmarks/sqlite/build-sqlite-silicon.sh` — the `_ldc_fixup` knob and any
+* `capstone/ports/sqlite/build-sqlite-silicon.sh` — the `_ldc_fixup` knob and any
   `EXTRA_MLLVM` default that turns the guard on.
 * Any baked-domain recipe passing `SQLITE_LDC_HIGH_HALF_FIXUP=1` or
   `-mllvm -capstone-guard-cap-granule-copies` (see `bake-sqlite-doms.sh` invocations in the history

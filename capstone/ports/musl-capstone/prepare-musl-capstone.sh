@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$SCRIPT_DIR/../tests/capstone-test-env.sh"
+source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 MUSL_SRC_DIR=$(bash "$SCRIPT_DIR/fetch-musl.sh" | tail -1)
 ARCH_DIR="$MUSL_SRC_DIR/arch/capstone64"

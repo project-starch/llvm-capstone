@@ -22,7 +22,7 @@ Companion reading: `ref/HOW-TO-RUN-ON-QEMU.md` (the mechanism),
 
 ## 1. Where we start
 
-`bash capstone/benchmarks/sqlite/run-sqlite-memory.sh` is green on QEMU:
+`bash capstone/ports/sqlite/run-sqlite-memory.sh` is green on QEMU:
 
 ```
 row name=alpha value=11 / beta 22 / gamma 33

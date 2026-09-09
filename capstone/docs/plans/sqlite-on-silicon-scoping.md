@@ -55,7 +55,7 @@ out-of-repo (`/tmp/capstone/`); design record here is canonical.
 
 - SQLite 3.53.3 **runs end-to-end in a pure-cap domain on QEMU** — CREATE/INSERT/
   SELECT correct, all 8 bring-up gaps closed (`state/current-state.md` "SQLite
-  in-memory bring-up"; `benchmarks/sqlite/`).
+  in-memory bring-up"; `ports/sqlite/`).
 - **HostCall** delegates syscalls to the host → **no full libc** needed (same model
   used for every QEMU domain run).
 - **umm_malloc** heap is vendored and PureCap-safe.

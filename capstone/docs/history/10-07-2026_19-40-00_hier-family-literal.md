@@ -104,7 +104,7 @@ overrides re-run `-O1` at will.
 
 ## Discipline / regressions
 
-- **Additive only.** New files: `benchmarks/sqlite/sqlite_row{5,9}_domain.c` +
+- **Additive only.** New files: `ports/sqlite/sqlite_row{5,9}_domain.c` +
   `run-sqlite-row{5,9}.sh`. Reuses the generic B2 host `sqlite_host_row3_b2.c`.
   **No `llvm/` change, no `capstone/capstone-qemu` change (no gitlink bump).**
   `revoke_on_free_hier_alloc.h`, `sqlite_row7_domain.c`, A's `sqlite_row3*` /
