@@ -946,7 +946,7 @@ in `plans/sqlite-regression-suite-proposal.md`.
 
 ## §7 — Timing closure across every routed build (2026-08-27)
 
-**No bitstream this project has ever produced has closed timing.** Six distinct commits, **eight
+**No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
 routed builds**, every one negative; range **−10.629 to −16.400 ns**, best **−10.629 ns** against a
 **40.000 ns** period (25 MHz,
 confirmed from the report's own clock definition and from the MMCM's
@@ -968,6 +968,48 @@ Table row `clk_out1_xlnx_clk_gen`**.
 | `5097eb166` | −15.311 | 101,782 / 174,895 | ~400 MB *(S-12 fix, instrumented)* |
 | `947327f6d` | −11.717 | 97,438 / 174,756 | 403,665,530 *(rebuilt `fpga-testing-dev-clean`: same fixes, instrument NEVER ADDED; 2026-09-07)* |
 | `ef5a8eaf2` | −12.733 | 101,143 / 174,188 | 404,402,489 *(`947327f6d` + the registered switch-in-progress flag; 2026-09-07)* |
+| `66c4e7517` | −12.425 | 102,508 / 174,960 | 399,051,406 *(`ef5a8eaf2` + the R-25, R-26 and R-27 RTL fixes; 2026-09-09)* |
+
+
+### The R-25/R-26/R-27 build, `66c4e7517` (2026-09-09)
+
+Three RTL fixes over `ef5a8eaf2`: the R-26 pipeline flush after a committed capability CSR write
+(`csr_regfile.sv`), the R-25 `INIT` guard that nulls `rs1` when `rs1 != rd`
+(`capstone_flu_unit.anvil`), and the R-27 drain that retires a revocation-node response whose
+requester was flushed (`ex_stage.sv`). Synthesised at 40 ns with no flow edit; guard exit 0 in
+1 h 19 m, synthesis peak 25.90 GB against a 100 GB ceiling. Bitstream 11,443,722 bytes, sha256
+`b03bd9673b9a685c31dff541fce1e7ba07b7ce9901e51051a19ac31e21652da3`; the artifact is retained on the
+synth machine under the synth machine account's scratch directory.
+
+**The prediction was written before the run and both halves held:** WNS in [−15.3, −11.7] read
+−12.425, placed LUTs in [168.9 k, 170.5 k] read 169,207. The stated reasoning — one flush term, one
+null write and about twelve flops of drain logic cannot move these measurably — is borne out.
+
+| quantity | `66c4e7517` | `ef5a8eaf2` | delta |
+|---|---:|---:|---:|
+| WNS, `clk_out1_xlnx_clk_gen` (ns) | −12.425 | −12.733 | +0.308 |
+| failing endpoints | 102,508 / 174,960 | 101,143 / 174,188 | +1,365 |
+| Slice LUTs (placed) | 169,207 (83.03 %) | — | — |
+| LUT as logic | 167,353 (82.12 %) | — | — |
+| Slice registers | 93,145 (22.85 %) | 92,817 | +328 |
+
+The register delta is the direction drain flops should push, and the opposite of the unexplained
+−284 on the `ef5a8eaf2` build.
+
+**This row does not license a flash, and must not be read as doing so.** It fails timing at 40 ns
+like every build in the table; it is second-best of the family behind `947327f6d`'s −11.717 and
+better than the flashed `5097eb166`'s −15.311 by 2.886 ns, but "better-timed than the one already on
+the board" is not a licence — the shift rule puts closure for this design at roughly 53–55 ns.
+Neither does the launch census: its worst launch is `dom_switcher/cur_idx_q_reg[0]`, which is inert,
+but that is the same shape `5097eb166` showed before a second-launch query found a live cone behind
+it on 99.8 % of its endpoints, and that query has NOT been run on this checkpoint. See the clean-tip
+verdict and its 2026-09-08 retraction before citing the census for anything. A flash remains an
+empirical risk decision and the project lead's.
+
+Other gates on this build, for the record: `write_bitstream completed successfully` once against a
+negative control of 0 and a positive control of 6; zero `DRC LUTLP-1` against 44 DRC mentions in the
+same log; 100 `found timing loop` lines, identical to `ef5a8eaf2` and the whole lineage; routed
+legally with zero illegal or unroutable nets.
 
 **Read the right row.** `eth_rxck` is the *first* "Failing Endpoints" line in that report and it
 reads healthy while the CPU clock fails. That trap has caught this project before.

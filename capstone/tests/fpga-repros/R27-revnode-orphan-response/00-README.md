@@ -2,8 +2,8 @@
 
 > **Status 2026-09-09: pre-existing on `ef5a8eaf2`, fixed in RTL** (`capstone-ariane` `66c4e7517`, the tip of
 > `fpga-testing-dev`), **sim-verified** (three triggers HANG → PASS at the default latency; the load-fault trigger HANG →
-> PASS at a verified 40-cycle latency), lint at the baseline counts, adversarially audited. **Bitstream: not yet
-> synthesised (2026-09-09, awaiting the lead's go to the synth lane); silicon UNCONFIRMED** — no board arm exists yet, and whether historic board wedges were this is UNRESOLVED.
+> PASS at a verified 40-cycle latency), lint at the baseline counts, adversarially audited. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
+> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns); not flashed, and silicon UNCONFIRMED** — no board arm exists yet, and whether historic board wedges were this is UNRESOLVED.
 
 **Wrong symptom? Read this paragraph first.** This package is the **silent deadlock**: no trap, no UART output, the
 core stops fetching a few instructions after a capability instruction. `../R26-ccsrrw-stale-cpmp/` is the permission

@@ -1,8 +1,9 @@
 # R-25 — `INIT` with `rd != rs1` wrote the new LINEAR capability to BOTH registers
 
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `42a141c93`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
-> (this package's test FAIL 11 → PASS), lint at the baseline counts, 88-row sweep unchanged. **Bitstream: not yet
-> synthesised or on the board (2026-09-09, awaiting the lead's go to the synth lane).** **Pre-flash silicon reading
+> (this package's test FAIL 11 → PASS), lint at the baseline counts, 88-row sweep unchanged. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
+> (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns, 169,207 placed LUTs); not flashed — the flash is the
+> project lead's decision.** **Pre-flash silicon reading
 > 2026-09-09 (boot sw41): duplicate PRESENT on `caplifive_s12fix_5097eb166`**, as predicted; the post-flash reading is filed below when the fixed bitstream has booted.
 
 **Wrong symptom? Read this paragraph first.** This package is the **linearity break**: after `INIT rd, rs1, imm` with
