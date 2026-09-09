@@ -1028,6 +1028,147 @@ i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the 
 offset is written. Whether the granule's tag also goes clear (which would make the residue
 harmless) was **not measured** and must be before anyone concludes either way.
 
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `FIXED ON SILICON 2026-09-09 — bitstream caplifive_r25r26r27_66c4e7517 (fpga-testing-dev 66c4e7517, INIT guard 42a141c93): the probe that returned 0x25000001 on 5097eb166 (boot sw41) now traps UNEXPECTED_OPERAND (25) at the store through the consumed INIT source (boot sw45, latched mepc = DBAS+0x490), control at 0x25000001 in the same boot`
+
+> **CONFIRMED ON SILICON 2026-09-09 (boot sw41, board lane).** The domain probe `r25dup`
+> (`tests/runtime-qemu/silicon-ladder/r25dup_fpga_app.c`; construction from the RTL lane's self-checking
+> test: transferred LIN region, cursor past end, CAPTYPE in place to UNINIT = 4 in the RTL's numbering,
+> `init a3, a1, a0` with rd ≠ rs1, then a capability store THROUGH rs1 and a load back through the region)
+> returned **0x25000001** on caplifive_s12fix_5097eb166: the store through rs1 landed and a tagged
+> capability came back, so rs1 still held a live LINEAR capability after INIT — the duplicate. The control
+> `r25same` (rd == rs1, same chain) returned 0x25000001 as required; k800 = 4; zero fault tags. This is the
+> pre-flash reading the RTL lane predicted; on the R-25-fixed bitstream (fpga-testing-dev 66c4e7517, C2
+> 42a141c93) the same arm must trap at that store (UNEXPECTED_OPERAND). Boot sw39's first attempt of the
+> same pair wrote the spec's type number 3 (= REVOKE on the RTL) and wedged at INIT with cause 27; VOID,
+> recorded in the tsv. Two side findings: the RTL does not implement the spec's cincoffset-past-end rule
+> (cap-man-insn.adoc:262), which is what makes the construction possible; and a domain fault is not
+> delivered to the monitor on this RTL (M-1's open half) — the core wedged into a repeating 0xdead.. UART
+> record.
+
+**Reported by the compiler lane's rtl-oracle pass 2026-09-04; verified here against the RTL rather
+than taken on report, including the control that makes it a defect rather than an idiom.**
+
+`core/anvil_build/capstone_flu_unit.anvil:147`, the `INIT` path:
+
+```
+let rd = call create_capability(rd_temp.metadata, new_cursor);
+let result = call create_result_pack(data.trans_id, ex_code::NO_EXCEPTION, rd, rd);
+```
+
+`create_result_pack(id, ex, rs1, rd)` assigns `cap_rs1 = rs1` and `cap_result = rd`
+(`capstone_unit.anvilh:360-364`). Passing `rd` twice therefore writes the **newly created LINEAR
+capability into `rs1` as well as `rd`** — two live LINEAR capabilities over one region, which is
+precisely what linearity exists to prevent.
+
+**THE CONTROL, which is what makes this a defect and not a house idiom.** The `rd,rd` form appears
+four times in this file — `:42`, `:72`, `:106`, `:147`. The first three are each guarded by
+
+```
+if(data.rs1 == data.rd){
+```
+
+i.e. they are the *same-register* case, where writing both is writing one register and is correct.
+**`:147` has no such guard.** Its enclosing conditions are only `rs1.cursor <= rs1.metadata.end`
+(`:139`, raising `ILLEGAL_OPERAND_VALUE`) and the `else` around it. So the codebase demonstrably
+knows the correct idiom and `INIT` omits it, for **any** `rs1 != rd`.
+
+Every sibling in the file passes `rs1` unchanged, `rs1_out` modified, or `rcnull` when the source
+must be consumed (`:173`). None of those apply here.
+
+**QEMU nulls `rs1`**, so this is silicon-only and cannot be reproduced under emulation — the class
+of divergence that has repeatedly cost this project board time.
+
+**Not yet established, and needed before this is handed to the hardware side:**
+
+- ~~whether it is reachable from our codegen~~ **ANSWERED 2026-09-04, and it IS reachable.**
+  `INIT` carries **no tied-operand constraint** in the instruction definition, unlike
+  `SHRINK`/`DELIN`/`DROP`/`REVOKE`. Measured on the cycle-1 compiler: a source pointer that stays
+  live across the builtin produces `init a1, a0, a1` at `-O1` and `-O2`. Where `rd == rs1` does
+  occur it is the register allocator reusing a register, not a constraint — nothing forces it.
+
+  So: **real in the ISA and reachable by construction from any C that calls
+  `__builtin_capstone_cap_init` with a live source.** The mitigation is that no in-tree C outside
+  tests uses `cap_init` today, so no shipping domain hits it — that is a fact about our current
+  programs, not about the hardware, and it expires the moment one does.
+- **whether the duplicated capability is usable**, or whether a later consumer traps on it.
+  **STILL OPEN** — the directed test below reads both registers but never dereferences `a5`,
+  so "two LINEAR capabilities exist" is established and "the second one works" is not.
+- ~~a **directed `.S`** in the simulator with `rs1 != rd`~~ **WRITTEN AND RUN 2026-09-05 —
+  CONFIRMED.** `verif/tests/custom/capstone/init-rs1-ne-rd.S`, run on `s12-ldc-rolling-filter`
+  (`05f2be6bd`) and independently by the compiler lane on the flashed `5097eb166`; `flu_unit`
+  is byte-identical between the two, and both runs agree line for line. 443 cycles, 0
+  exceptions, `tohost = 0` — a genuine pass, not a timeout `SUCCESS`.
+
+  ```
+  [Cycle 337] Reg[17]: 0000000000000000                       <- arm 0 CONTROL: MOVC consumed it
+  [Cycle 371] Reg[15]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a5, the SOURCE
+  [Cycle 373] Reg[16]: Cursor 0x80003200 ... Revnode_id 2 | Type : 1    <- a6, the DEST
+  [Cycle 407] Reg[19]: Cursor 0x80003400 ... Revnode_id 2 | Type : 1    <- arm 2, rd == rs1: LIN
+  ```
+
+  Source and destination are indistinguishable — same cursor, same bounds, same revnode, both
+  `Type : 1` (LINEAR). Arm 0 is the **instrument control**: a `MOVC` of a linear source leaves
+  `a7` printing a bare `0`, which proves `CAPPRINT` can render a cleared register, so arm 1's
+  non-zero `a5` is a reading and not a blind spot. Arm 2 is the **conformance control**: with
+  `rd == rs1` the result is a single correct LINEAR capability, which is why every compiled
+  `INIT` in the tree today is unaffected.
+
+  `INIT` traps `ILLEGAL_OPERAND_VALUE` unless `cursor > end`, so the UNINIT operands are
+  fabricated with `end = base - 16` to satisfy that precondition without touching the
+  capability under test.
+
+**The fix, and the trap in it.** `MOVC` in the same file is the correct shape and shows the
+required structure: `if (data.rs1 == data.rd)` pass `(rs1, rd)`, else pass
+`(create_cnull(), rd)`. Its `else` branch catches **every** non-`NONLIN` source — `UNINIT`
+included — which also **refutes the one alternative account** of R-25, that `MOVC` simply does
+not consume `UNINIT` sources and `INIT` is faithfully reproducing it. It does consume them.
+`INIT` alone is the defect site.
+
+So the fix is *not* "replace `rd,rd` with `cnull,rd`". Applied unguarded that clobbers the
+result in the `rd == rs1` case, which is the shape all shipping code uses — turning a defect
+nothing currently hits into one everything hits.
+
+**Mirror MOVC's GUARD, not its VALUES** — an earlier revision of this entry said "pass
+`(rs1, rd)`" for the same-register arm, copying MOVC's variable names, and that is wrong for
+`INIT`. MOVC's `rd == rs1` arm passes the *original* capability because MOVC does not
+transform it. `INIT` does: its `rd` is the retyped LINEAR capability at the new cursor, and
+its source `rs1` is the untouched UNINIT one. Passing the source in the same-register arm
+would make every shipping `INIT` a no-op. The same-register arm must keep passing
+`(rd, rd)` — i.e. exactly what `:147` does today, which is why that case is correct now:
+
+```
+if (data.rs1 == data.rd) { create_result_pack(id, NO_EXCEPTION, rd,             rd) }
+else                     { create_result_pack(id, NO_EXCEPTION, create_cnull(), rd) }
+```
+
+Arm 2 of `init-rs1-ne-rd.S` is the backstop: it fails in ~14 s if the same-register arm is
+got wrong. Which write wins when both target one register is the Anvil sequential-reading
+hazard that has produced the opposite of hardware behaviour twice on this project — so run
+both arms rather than reasoning it out.
+
+**Related, from the same pass and NOT yet verified here:** a `REVOKE` landing on `UNINIT` leaves
+`cursor = START` on RTL (`capstone_dyn_unit.anvil:67-68`) against `END` on QEMU, while RTL's own
+`INIT` requires `cursor > end` (`:139` above) — which would make a post-revoke `UNINIT` capability
+impossible to re-initialise on silicon. If that holds it is a second independent defect in the
+same instruction pair. Verify before recording.
+
+
+> **FIXED ON SILICON 2026-09-09 (board lane, boot sw45).** Bitstream caplifive_r25r26r27_66c4e7517 (sha256
+> b03bd967…52da3), flashed 2026-09-09 19:30 on the lead's word. The same r25dup image (09784ff1a88e) that returned
+> 0x25000001 on caplifive_s12fix_5097eb166 in sw41 — the duplicate live — now enters (ENT0/ENT1) and the wedge
+> tracer latches mcause 25 (UNEXPECTED_OPERAND) at mepc 0x81AC0490 = DBAS + 0x490, the `stc a1, 0x0(a2)` that
+> stores THROUGH the INIT source: the source is NOT_CAP after `init a3, a1, a0`, as the spec requires. The -O0
+> spill at +0x474 (a scalar value through a valid stack capability) did not trap, as the spec permits. The
+> control r25same (rd == rs1) read 0x25000001 in the same boot, k800 = 4, the S-06 trio and the R-20 draws at
+> their sweep oracles. A domain fault is a wedge on this RTL (M-1), so the reading is the latched trap, not a
+> return value. **Classifier caveat:** the driver's summary labelled that stage "INFRASTRUCTURE WEDGE (domain never
+> created)" — its `created`/`entered` flags are the SQLite host's `SQ: A/dom-ok` / `SQ: G/enter` markers
+> (`run_sqlite_stages_fpga.py:1614,1624`), which the rtpc host never prints; the monitor's own DBAS/DENT/ENT0/ENT1
+> tags and the tracer's latched pair (which the driver itself preferred over the clobbered gdb CSRs at its line
+> 2482) are the reading. Do not re-derive "never created" from that label on an rtpc-driven stage. N=1 on sw45;
+> replication with the same image last in sw47 (variant E boot). Records: `tests/board-results/2026-09-05.tsv`
+> sw41/sw45, `tests/fpga-repros/R25-init-rs1-ne-rd/`.
+
 ## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `RESOLVED as observed 2026-08-20`
 
 **Gone.** The workload that passed 3/3 on `caplifive_s07fix.bit` runs `sqlite3_initialize()` and

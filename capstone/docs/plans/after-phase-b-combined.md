@@ -66,6 +66,20 @@ file.** That replaces section D.2 of the plan below.)*
 Timeline: 1 today; 2 tomorrow morning (~1 h board); 3–4 the RTL lane's schedule plus the lead; 5 the day of
 the flash (~2 h board); 6 the day after.
 
+> **Flash cycle 2026-09-09 19:30 →.** caplifive_r25r26r27_66c4e7517 flashed persistently on the lead's word
+> (nv name verified after a power cycle; pulled from the synth machine with the lead's authorisation, hash
+> verified three times). sw44: the closing set 9/9 on the new bitstream (also the M-4/M-3 control). sw45: the
+> acceptance set 7/7 at the sweep oracles, r25same 0x25000001, r25dup wedged after ENT1 with the tracer's
+> latched mcause 25 at DBAS+0x490 = the store through the consumed INIT source — the pre-registered fixed-RTL
+> reading. **Classification note, for the board-run skill's table:** the driver's summary printed
+> "INFRASTRUCTURE WEDGE (domain never created)" for that stage because its `created`/`entered` flags are the
+> SQLite host's `SQ: A/dom-ok` / `SQ: G/enter` markers (`run_sqlite_stages_fpga.py:1614,1624`), which the
+> rtpc host never prints; the monitor's own DBAS/DENT/ENT0/ENT1 tags established creation and entry. The
+> driver and the operator disagreed on the most important arm of the cycle; the driver gets a fix (created and
+> entered also from the monitor tags, negative-tested on this driver.log) after the variant boots finish, and
+> a "wedge after entry" reading must always be checked against the monitor tags, not the host markers alone.
+> sw46/sw47 (variants D and E) follow.
+
 ## 3. The monitor and compiler buckets (this lane, unchanged order; Q-06 done)
 
 > **Status 2026-09-09 16:30.** M-4 DONE (monitor 0658243: `call_domain_with_cap` bounds `dom_id`; generated
