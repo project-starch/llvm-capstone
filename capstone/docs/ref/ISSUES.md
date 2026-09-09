@@ -780,6 +780,74 @@ unexpected operand type.
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
+> # ⚠ AUDIT 2026-09-10: the CONCLUSION SURVIVES, the ENTRY DOES NOT. Three defects, all corrected below; read this box before citing anything in this entry.
+>
+> **1. PROVENANCE — the header's "reading the FLASHED RTL (66c4e7517)" is WRONG for most citations.**
+> The `capstone-ariane` checkout is on `62b09ca92`, and `66c4e7517` **is not an ancestor of it**
+> (`merge-base --is-ancestor` → NO). The `capstone_dyn_unit.anvil` cites are safe (that file is
+> identical between the two), but the others are working-tree line numbers. Corrected against
+> `git show 66c4e7517:`:
+>
+> | entry said | actually, at 66c4e7517 |
+> |---|---|
+> | `load_store_unit.sv:994-996` | `:975-977` (`:993-996` is a `tval` assignment) |
+> | `lsu:1004` | `:985` |
+> | `flu:227` / `:231-232` / `:237` (SHRINKTO) | `:238` / `:242-243` / `:248` |
+> | `flu:163` (SEAL) | `:170` |
+> | `flu:204-209` (SHRINK clamps) | `:210-217` |
+> | `init-rs1-ne-rd.S:29-32` and its `MKCAP(a5, CAP_TYPE_UNINIT, 512, 496)` | **does not exist at 66c4e7517** — that file fabricates the operand as MKCAP LIN + `CINCOFFSETIMM` 272 + in-place `CAPTYPE` at `:43-47`, and contains neither the quoted sentence nor that line |
+>
+> **2. STEP (1)'s MECHANISM IS REFUTED, and the correct reason is stronger.** The entry said scalar
+> stores cannot advance the cursor *because the LSU traps them*. That gate
+> (`load_store_unit.sv:975-977`) is conditioned on `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`
+> (`:947-950`) and was **measured INERT in our domains** on silicon (7 probes, 2026-08-04; a store
+> through a base with no capability metadata, which trips the block's first clause, did not trap). So
+> the trap is not what closes the route. **What closes it is that a scalar store has no
+> capability-writeback path at all:** `scoreboard.sv:240-247` sets `cap_result` only from writeback
+> ports 0 (FLU) and 4 (DYN) and `'0` for every other port, `commit_stage.sv:325` gates the capability
+> regfile write on `cap_result.valid`, and `store_unit.sv:200` emits capability metadata only for `STC`
+> or a domain switch. A `sd` cannot write a capability register regardless of the check.
+> Also: the entry's phrase "type-3 capability" is wrong on this RTL — **type 3 is REVOKE**; UNINIT is 4
+> (`capstone_unit.anvilh:278-286`). The SV uses symbolic names so the code is right; the prose was not.
+> Same class as the sw39 loss.
+>
+> **3. THE PREDICTED OBSERVABLE IS WRONG AND WOULD VOID THE DIRECTED TEST.** The entry predicts
+> "exception 29". `ILLEGAL_OPERAND_VALUE` is enum index 6 (`capstone_unit.anvilh`, whose own comment
+> reads `ILLEGAL_OPERAND_VALUE, // mcause 30`), and the execute-path encoders compute `24 + code`
+> (`ex_stage.sv:472` for FLU, `cva6.sv:1443` for DYN). INIT is an FLU op, so the delivered **mcause is
+> 30, not 29** — which is exactly **R-24**, open in this same file. A test asserting 29 would report a
+> miss and read as REFUTING R-30.
+>
+> **Three prose overstatements, softened:**
+> * *"Neither spec states whether `end` is inclusive or exclusive"* is too strong — `prog-model.adoc:118`
+>   defines aliasing over the **closed** interval `[base, end]`, and SEAL uses `end - start + 1`, so the
+>   spec leans INCLUSIVE. The arithmetic still fails under both readings, but **"shortfall exactly one
+>   byte" is true only under the EXCLUSIVE reading**; under inclusive it is 16.
+> * *"SHRINK clamps the cursor down, never up"* — `flu:210-213` clamps a below-start cursor **up**. The
+>   conclusion holds (it cannot exceed the new end, `:216-217`, `:203`), but the cited range showed only
+>   the half that supported the claim.
+> * *"Any `imm <= 0` passes"* for SHRINKTO — only `imm == 0`. A negative immediate wraps under the
+>   unsigned compare at `flu:243` and faults.
+>
+> **One route the entry closed by accident rather than by argument, now explicit:** `CINCOFFSETIMM` on a
+> LINEAR capability is **unbounded** (`flu:66-70`, no bounds check), so a cursor CAN legally be placed
+> past `end` while the capability is LINEAR — the flashed test file does exactly that. The route to INIT
+> then needs a LINEAR→UNINIT retype, and the only architectural producer of UNINIT is REVOKE, which
+> resets `cursor := start` (`dyn:68`); the retype in that test is the Custom3 `CAPTYPE` **debug** op. So
+> the route is closed, but by the absence of an architectural retype, not by the cursor rules.
+>
+> **A route the entry never considered, tested and closed by the auditor.** The register file stores
+> COMPRESSED metadata (`ex_stage.sv:1215` compresses on writeback, `issue_read_operands.sv:1151` +
+> `ex_stage.sv:784` decompress), so every STC advance re-round-trips the bounds and a shrunken `end`
+> would make INIT reachable. A model of `compress_bounds`/`decompress_bounds` swept over 400,000 random
+> `(base, size)` with `cursor == end`: `end` **never shrinks** (0 cases), so INIT still faults. Route
+> closed. *Caveat: a Python model of the source, not an RTL simulation.*
+> **Incidental and UNRESOLVED:** ~30 % of those cases **widened** the region on an ordinary register
+> writeback (start rounds down, end rounds up) — e.g. `[0x80000010, 0x80010010)` reading back as
+> `[0x80000000, 0x80010080)`. Whether that is intended compressed-capability rounding or a defect was
+> not checked against design intent. **Consequence for any directed test here: read `end` back with
+> `LCC` rather than assuming the requested value, or the predicted out-of-bounds point will be wrong.**
+
 > **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
 > `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
 > attacking it. **It is not a property of the currently flashed bitstream in particular:** the same
@@ -930,6 +998,53 @@ cannot reach the precondition* — a workaround, in the test suite, for a defect
 the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before this one.
 
 ### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `OPEN — SECURITY-RELEVANT. VERIFIED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517) against the spec; not yet demonstrated by a directed test`
+
+> # AUDIT 2026-09-10: R-31 is SUPPORTED on all four attacks — and it is ALSO NOT SUFFICIENT. Both halves matter.
+>
+> **The reading that could have collapsed it does not.** `\<=p` is defined BY EXTENSION at
+> `capstone-spec/parts/prog-model.adoc:103-113`, and the only pairs with `2` on the left are
+> `(2,2), (2,3), (2,6), (2,7)` — exactly the set with bit 1 set. `:94-95` names the encoding
+> ("`2` = write-only … `6` = read-write"). So `2 \<=p perms` **is** `(perms & 2) == 2`: subset ordering
+> on a 3-bit mask. Cross-checked for consistency: `mem-access-insn.adoc:36` uses `4 \<=p perms` for a
+> load and `:46` uses `2 \<=p perms` for a store, which the RTL implements as `perm&4` (`dyn:338`) and
+> `perm&2` (`dyn:401`). Same operator, same reading, both directions. **Both spec copies are identical**
+> here, so there is no "the RTL implements the other spec" escape.
+>
+> **`rsp == 1` confirmed** as "no invalidated capability was linear": the flag is set on `rev_req`
+> (`capstone_rev_node.anvil:156`), cleared when an invalidated node had `linear == 1` (`:24-25`), and
+> returned at `:19`; nodes are born linear and cleared only by `delin`.
+>
+> **The disclosure consequence confirmed via a check this entry did not make.** The obvious refutation
+> would be that `rev_req` also invalidates the REQUESTING node, which would make the returned LINEAR
+> fault `INVALID_CAPABILITY` and disclose nothing. It does not: the walk starts at `node_in.next`
+> (`:155`), bounds on the requester's own depth (`:154`) and terminates at `:18`, so the requester's node
+> is never visited. `modify_cap_type` preserves perms and the revnode id, and REVOKE touches no memory.
+>
+> **An attack that nearly succeeded.** `asm_insn.h:13` and `CapstoneInstrInfo.td:2670-2675` both encode
+> REVOKE with `rd = x0`, which would send the retyped capability to the discard register. Refuted at
+> `decoder.sv:1185` (`instruction_o.rd[4:0] = instr.rtype.rs1` — the encoded rd is overridden) and
+> `ariane_regfile_ff.sv:63-67, :87-94` (when both ports target one index the rd port wins).
+>
+> **QEMU has NO permission clause at all** (`op_helper.c:907-908`), so the RTL differs from the spec
+> *and* from the emulator. That removes the "the spec sentence is probably just wrong" escape.
+>
+> **Premise confirmed:** the monitor's retained revocation handle really does carry write for RW regions
+> — `rev = __mrev(r)` is minted (`sbi_capstone.c:1180`, `:1198`) BEFORE the `__tighten` calls that narrow
+> the shared copy, MREV preserves perms, and `__tighten` can only succeed if the bits are already held.
+>
+> # ⚠ BUT FIXING R-31 ALONE DOES NOT CLOSE THE DISCLOSURE, and the entry implied that it would.
+>
+> UNINIT blocks `LDC` (`dyn:332`), but a **scalar `ld`** is type-checked only in
+> `load_store_unit.sv:975-977`, and that block is gated on `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`
+> (`:947-950`). **That gate was measured INERT in our domains** — the 2026-08-04 seven-probe silicon
+> result recorded as `project_lsu_cap_check_inert`, where a store through a base carrying no capability
+> metadata (tripping the block's first clause) did not trap. The same gate is present at `66c4e7517` and
+> **has not been re-measured since**. If it is still inert, an UNINIT capability in a domain is readable
+> by plain `ld` anyway, so the reinitialisation step R-31 restores is bypassable by a different route.
+>
+> **Consequence: R-31 is necessary and not sufficient**, and any claim that its fix "closes the
+> disclosure" is unsupported until that gate is re-measured on the current bitstream. That measurement
+> is cheap and board-side, and it should happen before the fix is described as closing anything.
 
 > **PROVISIONAL, and not a regression — read this before citing it.** This rests on READING
 > `66c4e7517`'s source. There is no directed test and no board arm yet, and a claim-auditor pass is
