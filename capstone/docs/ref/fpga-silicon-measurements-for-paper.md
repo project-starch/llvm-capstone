@@ -984,13 +984,21 @@ synth machine under the synth machine account's scratch directory.
 **Provenance of that hash, stated exactly.** It is the synthesis lane's computed value, checked by them
 against both copies on that machine — the in-tree `work-fpga/ariane_xilinx.bit` and the same member inside
 the run tarball — and confirmed identical, with no third copy under `ariane.runs/impl_1` (the flow's own
-Makefile has already moved it). It has **not** been verified against a transferred file, because the
-bitstream has never been transferred: the synth machine has no route to the working machine (no name
-resolution, no outbound key), and a pull in the other direction stages an undecided flash and so waits on
-the project lead. Nothing is extracted anywhere; the bitstream exists only inside the tarball and in the
-run's own work directory. Whoever eventually pulls it should verify on arrival, and read a mismatch as a
-transfer problem only after re-checking the source, since the first version of this value was quoted from
-the in-tree copy while being described as the tarball member's.
+Makefile has already moved it). **Transferred and independently confirmed 2026-09-09**, on the
+project lead's authorisation: the board lane streamed the tarball member to the working machine as
+`~/capstone-artifacts/bitstreams/caplifive_r25r26r27_66c4e7517.bit` with a `.sha256` sidecar, and the value
+now has three independent computations in agreement — the synthesis lane's on its own machine, the board
+lane's on arrival, and a third by the RTL lane against the landed file, all `b03bd967…52da3` at 11,443,722
+bytes. The transfer had to originate from the working machine: the synth machine has no route outward, no
+name resolution and no outbound key. **Nothing has been uploaded to the board console and nothing flashed**
+— the flash gate is unset and the decision is the project lead's.
+
+The earlier version of this paragraph said the hash was unverified by transfer, which was true when
+written; it is superseded rather than deleted because the sequence is the point. Read a mismatch against
+this value as a transfer problem only after re-checking the source, since the first quote of it came from
+the in-tree copy while being described as the tarball member's. The file carries its commit in its name and
+its hash in a sidecar, which is the practice worth keeping: a bitstream named for a property rather than a
+commit has twice on this project travelled further than the artifact that carried it.
 
 **The prediction was written before the run and both halves held:** WNS in [−15.3, −11.7] read
 −12.425, placed LUTs in [168.9 k, 170.5 k] read 169,207. The stated reasoning — one flush term, one
