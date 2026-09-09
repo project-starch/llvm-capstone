@@ -12,14 +12,14 @@
 # Unknown, not only this one.  Scope: human inspection of objects and the
 # planned obj-relocs tests; nothing in the board path reads relocation names
 # (the board-run artifact check is `llvm-objdump -d`), so no board verdict is
-# affected.  XFAIL until fixed; then lit reports XPASS and the marker comes off.
+# affected.  Was XFAIL until fixed; lit reported XPASS on 2026-09-09 when the
+# EM_CAPSTONE cases landed in lib/Object/ELF.cpp, and the marker came off.
 #
 # MUTATION: change `call foo` to `lui a0, 1` (no relocation) -> the CHECK for a
 # named relocation fails on an EMPTY relocation list, which shows the check is
 # bound to a relocation being present and named, not to any text.
 #
 # RUN: llvm-mc -triple capstone64 -filetype=obj %s | llvm-readobj -r - | FileCheck %s
-# XFAIL: *
 
 # CHECK: Relocations [
 # CHECK: .rela.text

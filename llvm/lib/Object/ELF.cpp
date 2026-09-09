@@ -118,6 +118,16 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_CAPSTONE:
+    // Capstone (e_machine 259) has its own relocation numbering in
+    // ELFRelocs/Capstone.def; without this case every Capstone relocation
+    // printed as "Unknown (N)" in llvm-readobj/llvm-readelf/llvm-objdump.
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/Capstone.def"
+    default:
+      break;
+    }
+    break;
   case ELF::EM_S390:
     switch (Type) {
 #include "llvm/BinaryFormat/ELFRelocs/SystemZ.def"
@@ -219,6 +229,8 @@ uint32_t llvm::object::getELFRelativeRelocationType(uint32_t Machine) {
     return ELF::R_PPC64_RELATIVE;
   case ELF::EM_RISCV:
     return ELF::R_RISCV_RELATIVE;
+  case ELF::EM_CAPSTONE:
+    return ELF::R_Capstone_RELATIVE;
   case ELF::EM_S390:
     return ELF::R_390_RELATIVE;
   case ELF::EM_SPARC:

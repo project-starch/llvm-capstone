@@ -6,8 +6,8 @@
 ; address fields are ADD64/SUB64 pairs against the global and the undefined
 ; symbol __gpfree_globals_base that the glue's cap-table generator defines.
 ; Pin the pairs, the table offsets and the ldc sequence.  Measured 2026-09-04
-; on the branch tools.  Type NAMES print as "Unknown (N)" until C-37, so each
-; type is matched by number OR by the name it carries once C-37 lands.
+; on the branch tools.  Types are matched by NAME: C-37 (fixed 2026-09-09) gave
+; lib/Object an EM_CAPSTONE case, so a tool that prints a number here has lost it.
 ;
 ; MUTATION: drop -capstone-gp-captable from the object RUN line -> the same
 ; module's default-ABI object has no .rela.capstone_gp_table section, `use`
@@ -36,37 +36,37 @@ define i64 @use() {
 ; CHECK: Section ({{[0-9]+}}) .rela.capstone_gp_table {
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x18
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: x (
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x18
-; CHECK-NEXT: Type: {{R_Capstone_SUB64|Unknown \(40\)}}
+; CHECK-NEXT: Type: R_Capstone_SUB64
 ; CHECK-NEXT: Symbol: .L0
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x30
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: px (
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x30
-; CHECK-NEXT: Type: {{R_Capstone_SUB64|Unknown \(40\)}}
+; CHECK-NEXT: Type: R_Capstone_SUB64
 ; CHECK-NEXT: Symbol: .L0
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x48
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: fp (
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x48
-; CHECK-NEXT: Type: {{R_Capstone_SUB64|Unknown \(40\)}}
+; CHECK-NEXT: Type: R_Capstone_SUB64
 ; CHECK-NEXT: Symbol: .L0
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
@@ -75,22 +75,22 @@ define i64 @use() {
 ; CHECK: Section ({{[0-9]+}}) .rela.capstone_gp_initdesc {
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x30
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: x (
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x30
-; CHECK-NEXT: Type: {{R_Capstone_SUB64|Unknown \(40\)}}
+; CHECK-NEXT: Type: R_Capstone_SUB64
 ; CHECK-NEXT: Symbol: __gpfree_globals_base (
 ; CHECK-NEXT: Addend: 0x0
 ; CHECK-NEXT: }
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x48
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: px (
 ; CHECK: Offset: 0x60
-; CHECK-NEXT: Type: {{R_Capstone_ADD64|Unknown \(36\)}}
+; CHECK-NEXT: Type: R_Capstone_ADD64
 ; CHECK-NEXT: Symbol: fp (
 ; CHECK: Symbol: __gpfree_globals_base (
 

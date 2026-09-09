@@ -66,7 +66,9 @@ llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +79 -20 | (ValueVT.isInt
 llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +51 -9 | // GLOBALS address space. On a fat-pointer target that is a capability type,
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
 llvm/lib/IR/Intrinsics.cpp | +1 -0 | #include "llvm/IR/IntrinsicsCapstone.h"
+llvm/lib/Object/ELF.cpp | +12 -0 | // Capstone (e_machine 259) has its own relocation numbering in
 llvm/lib/Object/ELFObjectFile.cpp | +39 -0 | #include "llvm/Support/CapstoneAttributeParser.h"
+llvm/lib/ObjectYAML/ELFYAML.cpp | +4 -0 | ECase(EM_CAPSTONE);
 llvm/lib/Support/CMakeLists.txt | +3 -0 | CapstoneAttributes.cpp
 llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
