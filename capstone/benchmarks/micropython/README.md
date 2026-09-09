@@ -11,7 +11,7 @@ changes live here as patches, and the freestanding environment is in `adapted/`.
 | Path | What it is |
 |---|---|
 | `fetch-micropython.sh` | clone at a pinned commit, apply `patches/` |
-| `patches/` | portability fixes against upstream, each with its rationale above the diff |
+| `patches/` | portability fixes against upstream, each with its rationale above the diff. One patch per capability finding, because they are counted, retired and removal-tested individually; the configuration-only changes are merged into `0016` |
 | `adapted/include/` | freestanding headers the core needs and `-ffreestanding` does not provide |
 | `port/` | the Capstone port: `mpconfigport.h`, the hal headers, and `mpy_domain.c` |
 | `census-capstone.sh` | compile every `py/*.c` for the silicon ABI and report what fails |
