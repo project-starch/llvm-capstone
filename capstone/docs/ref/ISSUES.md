@@ -455,6 +455,27 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 
 ### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). No fix candidate; synthesis-first; W-12 stays in force`
 
+> **FIX CANDIDATE 2026-09-10: functionally correct, FAILS THE LINT GATE. Branch
+> `r29-granule-data-overlay`, commit `00e89d968`.** The granule-scoped data overlay does what it was
+> written to do — `s06agg-shape` goes FAIL 11 → PASS with four controls unchanged and the predictions
+> written first — but `verif/sim/rtl-lint-gate.sh` reads **UNOPTFLAT 40 → 41**, a new combinational
+> loop inside `i_wt_dcache_mem`. The RTL lane predicted it would escape because it feeds `rd_user_o`
+> rather than `rd_ctag_o`; it did not. That is exactly the risk `wt_dcache_mem.sv:384` warns about, and
+> the third formulation in this family to take a +1.
+>
+> **The decision this raises is the lead's, and it is a real fork.** Precedent exists: **S-10** took
+> the same +1 and was accepted, after synthesis showed its loop set unchanged and its nets clear of the
+> critical path. So the options are (a) spend a synthesis to learn whether this loop is benign the same
+> way — about 1 h 20 m plus the collector on a quiet machine — or (b) reformulate first and synthesise
+> only a lint-clean candidate. Neither is a lane's call: (a) spends a build on a gate failure, and
+> CLAUDE.md is explicit that the lint gate must pass and that adding a term to a cone on the standing
+> UNOPTFLAT list is the highest-risk edit available.
+>
+> **What this does NOT do is hold up R-30 and R-31.** Those are the more serious defects — one is a
+> data-disclosure gap on the flashed part — and R-29 is a narrow one-instruction window with `W-12`
+> already in force. They go on their own branch and their own bitstream if they lint clean; R-29
+> follows in its own cycle.
+
 **Signature.** The rung `s06agg` (`tests/fpga-repros/R29-wbuffer-highword-forwarding/src/s06agg.dom`,
 `249118220f8cf37a`, entry VA `0x10000`, `-O0`) copies `struct { void *p; unsigned long x, y; }` by
 aggregate assignment and returns `64 + r`: bit 0 = `x` (low half of the second granule) lost, bit 1 = `y`
