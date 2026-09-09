@@ -297,6 +297,41 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
+> **RULING 2026-09-10 (board lane), from the spec text itself. SCALARS ARE NOT EXEMPT. QEMU is the
+> outlier and QEMU is what changes.**
+>
+> `capstone-spec/parts/cap-man-insn.adoc:34-38` is the whole definition and it is not ambiguous:
+>
+> ```
+> * If `rs1 = rd`, the instruction is a no-op.
+> * Otherwise
+> . Write `x[rs1]` to `x[rd]`.
+> . If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`.
+> ```
+>
+> `NOT_CAP` is type 0, and `0 != 1`, so the source is nulled. There is no scalar carve-out in the
+> text, and the RTL implements it literally. The claim that the spec is "under-specified on whether
+> scalars are exempt" (raised while dispositioning **C-14**) does not survive reading the paragraph:
+> it is under-*motivated*, which is a different thing.
+>
+> **Consequences, both of which follow immediately:**
+> 1. **Q-04 is a QEMU fix**, not a spec question — make `helper_csmovc` null a NOT_CAP source. Gate:
+>    the tier, plus a grep for MOVC-of-scalar shapes first (the Q-05 experience: find who leans on the
+>    divergence before removing it).
+> 2. **C-14 is a compiler fix**, and its attribution is no longer pending. Using `movc` as a scalar
+>    register copy destroys the source on spec-conformant hardware. The symptom being "gone on
+>    silicon" is not the same as the codegen being correct — it means the current rungs happen not to
+>    read the source afterwards.
+>
+> **The counter-argument, recorded because it is reasonable and is NOT being adopted here.** Nulling a
+> scalar serves no security purpose: there is no linearity to preserve in a non-capability, so a
+> narrower rule (`type != 1 && the operand is a capability`) would lose nothing and would make
+> `movc`-as-`mv` legal. That is a genuine SPEC AMENDMENT proposal, and it is the project lead's and the
+> spec's owners' to make — not a lane's, and not something to assume by leaving QEMU divergent. Until
+> such an amendment exists, the implementations should agree with the text they have, because a silent
+> three-way disagreement between spec, RTL and emulator is worse than either rule. Filed as the open
+> question, not as a blocker.
+
 `capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
 
 
@@ -1310,6 +1345,13 @@ second split/store from the table split.
 > codegen relies on behaviour the spec does not guarantee. Q-04 is the blocker and is named in the
 > header so nobody re-derives it. If the ruling goes scalar-exempt this becomes a small compiler fix
 > (stop using `movc` for scalar copies) and the compiler lane takes it.
+>
+> **THE RULING CAME THE SAME DAY, and it went the other way: scalars are NOT exempt** (see Q-04). The
+> spec text has no scalar carve-out and the RTL implements it literally, so `movc` as a scalar register
+> copy destroys its source on conformant hardware. C-14 is therefore a COMPILER FIX and its attribution
+> is settled. The header's "pending the Q-04 ruling" is superseded by this box; the work is to stop
+> emitting `movc` for scalar copies whose source is live afterwards. That the current rungs pass on
+> silicon means only that they do not read the source again — not that the codegen is right.
 
 > **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** The entry carries a
 > "Sweep 2026-09-05 — GONE on silicon" line (`gpn2` = 3976364985 = oracle and RETURNED, in the boot
