@@ -370,7 +370,7 @@ is a candidate placement of this window on silicon; whether any historic silent 
 the R-25/R-26 bitstream is the lead's decision; a bitstream carrying the R-26 flush without it is worse than
 today's, by the RTL lane's own reading. Owner: the RTL lane.
 
-### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated, no directed test, no fix`
+### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated; directed arms exist (r28-interrupt-probe) but cannot reach it (see the box); the live untested route is in the commit stage; no fix`
 
 > **2026-09-09 (evening), RTL lane after a claim-auditor pass — STAYS OPEN, and the interrupt route is closed
 > by the RTL, not by measurement.** (1) An interrupt binds to an instruction at DECODE (`decoder.sv`:
@@ -401,9 +401,10 @@ after their request has reached the node, which may by then have mutated state �
 validity bit — for an instruction that is then killed and never retires. The R-27 drain discards the orphaned
 response; it cannot undo the mutation. Consequence if real: a revocation-tree entry out of step with the
 architectural state after an interrupt-timed flush (a node consumed, or a capability's lineage invalidated,
-with the instruction re-executed afterwards and doing it again, or not at all). What would settle it: a directed
-test placing an interrupt (timer, `S12_MEM_DELAY` to widen the window) on each write op's request→response window
-and reading the node pool / validity bits before and after against the retired-instruction trace. Owner: the RTL
+with the instruction re-executed afterwards and doing it again, or not at all). What would settle it — corrected 2026-09-09: NOT an
+interrupt-timed arm (an interrupt binds at decode and never reaches a functional unit, see the box) but the
+commit-stage route: a domain whose PC-capability revocation node is a descendant of the node a REVOKE/DROP
+walks, read against the node pool and the retired-instruction trace. Owner: the RTL
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 ### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `FIXED IN RTL 2026-09-09, SIM-VERIFIED, BITSTREAM PENDING (branch r26-ccsrrw-stale-read b7a794cfd: flush_o on every CCSRRW; ldmiss FAIL 11 → PASS, controls unchanged); silicon UNCONFIRMED; the flush must ship together with the R-27 drain (a flush inside the DYN unit's revocation-query window deadlocks the node); the monitor's four fence.i stay until the fixed bitstream is on the board`
