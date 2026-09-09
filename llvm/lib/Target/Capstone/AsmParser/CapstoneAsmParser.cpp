@@ -2236,6 +2236,25 @@ ParseStatus CapstoneAsmParser::parseCallSymbol(OperandVector &Operands) {
     return ParseStatus::NoMatch;
   std::string Identifier(getTok().getIdentifier());
 
+  // C-38: a REGISTER NAME is never a call symbol. Three defs share the "call"
+  // mnemonic: PseudoCALL (`call $func`), PseudoCALLReg (`call $rd, $func`) and
+  // the capability domain-crossing CAP_CALL (`call $rd, $rs1`, two GPCRs). An
+  // identifier in the last operand position used to be claimed here as a symbol
+  // whatever it spelled, so `call a0, a1` matched PseudoCALLReg with a symbol
+  // named "a1" and CAP_CALL could never be reached -- yet the DISASSEMBLER
+  // prints the CAP_CALL encoding as exactly `call a0, a1`, so object -> text ->
+  // object was impossible for this one instruction. Declining register names
+  // here lets the operand fall through to register parsing and CAP_CALL match,
+  // while `call foo` (foo is not a register) still reaches PseudoCALL.
+  //
+  // The check goes BEFORE the `@`/peek chain because the answer does not depend
+  // on what follows: a register name is not a symbol in any position. The
+  // sibling guard below handles the converse case (`call rd, foo`, where the
+  // FIRST operand is a register). See docs/ref/ISSUES.md C-38 and the round-trip
+  // pin llvm/test/MC/Capstone/cap-call-mnemonic.s.
+  if (matchRegisterNameHelper(Identifier))
+    return ParseStatus::NoMatch;
+
   if (getLexer().peekTok().is(AsmToken::At)) {
     Lex();
     Lex();
