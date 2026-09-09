@@ -425,8 +425,19 @@ enables overlay `rd_user_o`. The tag-side term already cost UNOPTFLAT 39 → 40 
 (`:384`), and the file says any new term there joins the ring — `rd_user_o` may be a different cone but
 that is for synthesis to say. Synthesis-first, one bitstream, the lead's call; not this cycle.
 
+**The discriminating arm (RTL lane, 2026-09-09, prediction written before the run).** `r29-lowword` is
+`s06agg-shape` with one variable changed: the last store before the `ldc` targets the LOW word and the high
+word is stored early. The word-0-gating account entails PASS (a resident store to word 0 does set
+`wbuffer_hit_oh`, so the overlay applies); a generic "a nearby store disturbs the load" account entails
+FAIL. Reading on `66c4e7517`, delay-40: `s06agg-shape` (adjacent store to the HIGH word) FAIL 11, 1984
+cycles, `y` zeroed; `r29-lowword` (adjacent store to the LOW word) PASS, 1844 cycles, both intact; plain
+control intact in both. The site is named and corroborated; a claim-auditor pass on the mechanism is
+pending (result to be recorded here either way). Bare M-mode simulation: corroborates the mechanism,
+adds no board evidence.
+
 **What would settle it.** (a) A fix candidate at `:397` (above) through the sim pair, lint, the auditor and
-synthesis before any board time. (b) The matched board pair:
+synthesis before any board time — and `r29-lowword` must still PASS, so a fix that repairs the high word
+by breaking the low one cannot read as success. (b) The matched board pair:
 the same rung with a `fence` (or any instruction) between the `sd` and the `ldc`, predicted 64. (c) A
 fix candidate then goes through the sim pair (adjacent must PASS, apart unchanged), lint, synthesis, and
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
