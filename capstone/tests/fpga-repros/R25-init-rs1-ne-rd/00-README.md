@@ -74,7 +74,34 @@ fault tags, two HOLE lines (the transferred arenas), core alive, both domains an
 constant must be the RTL's 4, and the UNINIT operand's cursor must be moved past `end` with CINCOFFSET (RTL does not
 enforce the spec's bound there) — the two divergences named in the first paragraph.
 
-**Post-flash (bitstream from `66c4e7517`): not yet booted; boot sw45.** Prediction on file, written before it:
+**Post-flash, boot sw45, 2026-09-09, on `caplifive_r25r26r27_66c4e7517.bit`, M-3 firmware — THE ACCEPTANCE
+CRITERION ABOVE IS MET.** Control `k800` = 4 first; the seven other stages at their oracles (`s06copy` 32,
+`s06aggcap` 15, `s06aggwide` 255, `rc_const0` 2016, `rc_p1` 2080, `sbx8` `0xD0000000`, and the R-25 control
+`r25same` `0x25000001`), eight `TEST END rc=0`. Then `r25dup`, last: domain created (`DBAS:81AC0000`, `DENT`),
+share complete (`SHA0`…`SHA6`, region 28, `HOLE:1C`), domain 8 entered (`ENT0:00000008`, `ENT1:00000008`), then
+a wedge. **The driver's wedge tracer latched `mcause` 25 (`UNEXPECTED_OPERAND`, RTL numbering) at `mepc`
+2175534224 = `0x81AC0490` = `DBAS` + `0x490`** — the store through the consumed `INIT` source, the exact
+instruction named in the table above. The `0x474` spill did **not** trap, since execution reached `0x490`.
+
+**The matched pair, which is the whole argument:** the same image, same firmware family, control at oracle in
+the same boot, **returned `0x25000001` through that store pre-flash (sw41) and traps at it post-flash (sw45)**.
+The only difference between the two boots is the bitstream.
+
+*Two readings that must not be taken from that boot.* The gdb-read CSRs say `mcause` 2 / `mepc` 2; those are a
+later clobber from the wedge loop and the tracer says so itself (`driver.log:2482` discards `mtval` for exactly
+that reason). The latched pair is the reading. And the driver's own stage summary says
+`INFRASTRUCTURE WEDGE (domain never created)`, which is a **classifier misfire, confirmed at its source**:
+`run_sqlite_stages_fpga.py` sets `created` from `"SQ: A/dom-ok"` and `entered` from `"SQ: G/enter"`, both
+markers of the SQLite host program. The R-25 pair runs under the `rtpc` host, which emits no `SQ:` line at all —
+this boot contains zero — so those flags are False by construction for every stage in it and any wedge prints
+that label. The monitor's own tags, which do not depend on the host, say the domain was created and entered.
+The driver gains created/entered from the monitor's `DENT`/`ENT1` tags as a separate fix, negative-tested
+against this same log.
+
+**Replication:** the reading is N=1 as filed. A second `r25dup` arm is appended last to boot sw47 for N=2, and
+this paragraph is updated when it lands. Raw evidence: `board-b45/driver.log` and `boot.txt`.
+
+**Superseded plan line (kept, because the prediction is the point):** Prediction on file, written before it:
 `r25same` unchanged at `0x25000001`, and `r25dup` traps at the store through the consumed source — the same
 store, at offset `0x490`, that returned `0x25000001` on the current silicon in sw41. A capability
 trap is a WEDGE on this RTL, so that reads as **wedged after `ENT1` with cause 25 latched by the tracer**, not as
