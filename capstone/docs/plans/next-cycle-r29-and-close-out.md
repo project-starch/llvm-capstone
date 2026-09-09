@@ -223,6 +223,53 @@ which is the opposite of what the ruling claimed and makes it the CHEAPER option
 question and remains the lead's.** What survives is only that the RTL does null a NOT_CAP source, which
 is board-confirmed.
 
+## THE LESSON OF 2026-09-10, and it is worth more than any finding in this plan
+
+**Five arms across two lanes produced readings without ever creating the condition they were built to
+test.** In one night, on one investigation:
+
+1. **The board driver's classifier** keyed on the SQLite host's markers, so an `rtpc` stage could only
+   ever read "domain never created" — it had been misreporting every probe of that shape.
+2. **`s06agg-shape`'s first version** put the store four instructions from the load. It passed on three
+   RTL revisions and was reported as exonerating the hardware.
+3. **`r29-lowword`** was offered as the discriminating arm. The mechanism it was built to test predicts
+   it should FAIL; it passed because the write-buffer entry was never resident.
+4. **Both R-29 separation arms** inserted a load that brought the line in, so the wide load HIT and
+   never took the refill leg — removing the very condition under test.
+5. **The `lsugate` probe (mine)** was staged under the wrong host, so the region transfer never
+   arrived and the domain never ran. **The driver printed `ran=0` and the parser read the retval
+   anyway.**
+
+Four of the five had no warning to discard. The fifth did, which makes it the most useful of them:
+**the check existed and was simply not wired to the verdict.**
+
+**The one arm that actually refuted something** — `r29-sep-userzero-miss` — is the one whose reading
+contains its own positive control: a correct LOW word at the failing cycle, which only the write buffer
+could have supplied, proving the entry was resident exactly when the account said it was invisible.
+
+### The rule (RTL lane's wording, adopted here)
+
+> **For every arm, name IN ADVANCE the observation that proves its condition existed, and make the
+> parser REFUSE a verdict without that observation rather than score the run.**
+
+Applied concretely, and each of these is now in the corresponding instrument:
+* `lsugate` — refuse any reading whose RESULT line says `ran=0`; and refuse a wedge as a verdict at all
+  without a latched `mcause` (a wedge at the retype, the reload, the query or the load are identical
+  from outside).
+* `r30-fill-init` — refuse unless `LCC` shows the cursor actually reached `end` (bounds can widen on a
+  register writeback, so "four stores into a 64-byte region" does not imply it).
+* the R-29 arms — refuse without `wr_cl_vld`, which is what says the load actually missed.
+
+This is a **sharpening of** the existing rule that a clean result is not evidence until the check is
+known to fire, not a replacement for it. The addition is that the proof-of-condition must be **named
+before the run and enforced by the parser**, because every one of the five above was written by someone
+who knew that rule and believed their arm satisfied it.
+
+**Proposed for `CLAUDE.md`** as one sentence under "A CLEAN result is not evidence until the check is
+known to fire" — not added, because that file is the lead's:
+*"Name the observation that proves the triggering condition existed, and make the instrument refuse a
+verdict without it; five arms in one session scored runs whose condition never occurred."*
+
 ## STATE AS OF 2026-09-10 NIGHT — read this section before the ones below it
 
 Four things I recorded earlier today were **retracted the same day**, three of them by adversarial
