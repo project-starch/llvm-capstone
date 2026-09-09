@@ -2440,9 +2440,31 @@ disagreeing with the history.
 > generic check. And it is not `isMoveReg`, while `isCopyInstrImpl` recognises only `isMoveReg` plus
 > ADD/OR/XOR-with-X0, so MachineCopyPropagation will neither forward through it nor delete it.
 > **It becomes live the moment someone adds an IR pattern for MOVC, marks it `isMoveReg`, or reaches it
-> from a pre-RA pass.** Scope of that claim, stated by the auditor rather than by me: it is a static
-> reading of pass ordering and instruction flags, and the post-RA scheduler, tail duplication and
-> MachineLateInstrsCleanup were not audited.
+> from a pre-RA pass.**
+>
+> **The post-RA half of that caveat is now CLOSED (compiler lane, 2026-09-10), by auditing the target's
+> actual pass list rather than a guess at it.** What runs after register allocation, from
+> `CapstoneTargetMachine.cpp`: `CapstoneRedundantCopyElimination`, `CapstonePostRAExpandPseudo`, KCFI,
+> `CapstoneLoadStoreOpt`, `MachineCopyPropagation`, `CapstoneLateBranchOpt`, IndirectBranchTracking,
+> BranchRelaxation, `CapstoneMakeCompressibleOpt`, then the machine outliner and a feature-gated post-RA
+> scheduler.
+>
+> The dangerous-looking one is safe, and it was checked by PREDICATE rather than by name:
+> `CapstoneRedundantCopyElimination` is a target pass that deletes copies post-RA, exactly where MOVC
+> lives, so it was the obvious candidate. It cannot touch MOVC — it matches the **generic COPY** opcode
+> with source `X0`, guarded by a BEQ/BNE against `X0` (`:76`, `:79`, `:121`); MOVC is a real target
+> instruction, not a generic COPY, and `X0` is an integer register, not a GPCR.
+>
+> **What genuinely remains is narrower:** the post-RA scheduler and the machine outliner can reorder or
+> factor around MOVC, and because the source-nulling write is unmodelled they would treat a later read
+> of `rs1` as independent of it. That is a real hazard in principle — but it needs a READ OF THE SOURCE
+> AFTER the `movc`, which is the live-source case both emitters already mark against with a kill flag
+> and which `copyPhysReg`'s own comment argues the allocator never asks for on a linear capability. So
+> every remaining path funnels through the same precondition, and **that precondition is C-32's**.
+>
+> **Two limits stated rather than glossed:** whether the post-RA scheduler is actually enabled for the
+> CPU we build was not confirmed, only that it is feature-gated; and this is a reading of predicates,
+> not a case constructed to make either pass misbehave.
 >
 > **THE FIX SHAPE THIS ENTRY FIRST IMPLIED IS WRONG AND MUST NOT BE APPLIED.** Mirroring
 > `PseudoINIT`/`PseudoSEAL` with `Constraints = "$rd = $rs1"` would be a serious error: those are
