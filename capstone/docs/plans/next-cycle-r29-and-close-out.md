@@ -236,9 +236,13 @@ to test.** In one night, on one investigation:
    it should FAIL; it passed because the write-buffer entry was never resident.
 4. **Both R-29 separation arms** inserted a load that brought the line in, so the wide load HIT and
    never took the refill leg — removing the very condition under test.
-5. **The `lsugate` probe (mine)** was staged under the wrong host, so the region transfer never
-   arrived and the domain never ran. **The driver printed `ran=0` and the parser read the retval
-   anyway.**
+5. **The `lsugate` probe (mine), TWICE, for two different reasons.** First staged under the wrong
+   host, so the region transfer never arrived and the domain never ran — **the driver printed `ran=0`
+   and the parser read the retval anyway**. Re-run with the tracer on, it wedged at image offset 0xb0,
+   which is `delin gp` in the **entry glue**, roughly 0x280 bytes before its own measurement. Two
+   boots, no measurement, and on the second I briefly recorded the wedge as evidence against a
+   hypothesis before reading where it actually happened. **A wedge that occurs before the experiment
+   is not evidence about the experiment.**
 
 6. **`host-sweep.sh` itself.** It reuses compiled ELFs from a reference worktree `wt-ref` when the
    `.S` is unchanged — and **`~/dev/llvm-capstone-rebuild/wt-ref` does not exist** (verified; its
@@ -261,9 +265,9 @@ could have supplied, proving the entry was resident exactly when the account sai
 > parser REFUSE a verdict without that observation rather than score the run.**
 
 Applied concretely, and each of these is now in the corresponding instrument:
-* `lsugate` — refuse any reading whose RESULT line says `ran=0`; and refuse a wedge as a verdict at all
-  without a latched `mcause` (a wedge at the retype, the reload, the query or the load are identical
-  from outside).
+* `lsugate` — refuse any reading whose RESULT line says `ran=0`; refuse a wedge as a verdict without a
+  latched `mcause`; **and check the latched `mepc` against the measurement's own offset before reading
+  the wedge as the measurement at all** — the second attempt wedged 0x280 bytes short of it.
 * `r30-fill-init` — refuse unless `LCC` shows the cursor actually reached `end` (bounds can widen on a
   register writeback, so "four stores into a 64-byte region" does not imply it).
 * the R-29 arms — refuse without `wr_cl_vld`, which is what says the load actually missed.

@@ -1096,8 +1096,37 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > is LIVE"* from the absence of a result — the exact over-claim this investigation has been cataloguing
 > all night, committed by my own parser.
 >
-> **So the structural argument above is IN DOUBT, not confirmed and not refuted.** A wedge is evidence
-> against it, since the argument predicts a clean return. The discriminator is one re-run with
+> **sw51 ATTEMPT 2 (tracer on): the wedge is in the ENTRY GLUE, not at the measurement. The run carries
+> NO verdict, and the "evidence against" reading below is withdrawn.** Latched `mcause` **27**, latched
+> `mepc` **0x819e00b0**, with this domain's `DBAS` at `0x819e0000` — so image offset **0xb0**, which
+> disassembles to **`delin gp` in the entry glue**:
+>
+> ```
+> d00ac: <unknown>
+> d00b0: delin gp        <- the fault
+> d00b4: addi  t1, t1, -0x10
+> ```
+>
+> The probe's scalar load is at offset **0x334**. The domain entered, ran about 0xb0 bytes of startup
+> glue, and faulted deriving its own `gp` — **before `domain_main` and therefore before CAPTYPE, the
+> type read-back, or the measurement.** So sw51 says nothing whatever about the LSU check, in either
+> direction, and the earlier "a wedge is evidence against the structural argument" line is withdrawn:
+> a wedge that happens before the experiment is not evidence about the experiment.
+>
+> (Cause 27 here is in the ambiguous band — see **R-24** — but `delin` is an execute-path op, so it
+> reads as `UNEXPECTED_CAP_TYPE`. A domain faulting in its own entry glue is an observation worth its
+> own look; it is NOT attributed here, and it may be peculiar to this probe: the build reports
+> *"3 global(s) (0 initialized)"* where the R-25 probes at adjacent entry VAs report 3 of 3 initialised,
+> and `k800` ran to its oracle in the same boot.)
+>
+> **THIS PROBE HAS NOW FAILED TWICE, FOR TWO DIFFERENT REASONS, WITHOUT EVER MEASURING ANYTHING** —
+> first staged under a host that never delivers the region share, then wedging in the glue. It is
+> parked rather than re-run a third time: two boots have been spent and the question is better answered
+> by the RTL lane's simulation, where the privilege level and the fault site are both observable
+> directly, than by another draw at it on the board.
+>
+> **So the structural argument above is UNCONFIRMED — neither supported nor refuted by any board
+> reading.** It rests on reading the gate's condition and the monitor's own entry markers. The discriminator is one re-run with
 > `WEDGE_TRACER=1`, reading the latched `mcause` against the LSU's OWN cause table
 > (`load_store_unit.sv:972-990` at `66c4e7517`), which emits **raw** mcause values rather than going
 > through the `24 + enum` execute-path encoder:
