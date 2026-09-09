@@ -223,6 +223,37 @@ which is the opposite of what the ruling claimed and makes it the CHEAPER option
 question and remains the lead's.** What survives is only that the RTL does null a NOT_CAP source, which
 is board-confirmed.
 
+## STATE AS OF 2026-09-10 NIGHT — read this section before the ones below it
+
+Four things I recorded earlier today were **retracted the same day**, three of them by adversarial
+audit. The entries carry the retractions in place; this is the summary.
+
+| I said | corrected to |
+|---|---|
+| Q-04 is settled by the spec text | **RETRACTED.** The argument mixed two type-numbering systems (the spec has no `NOT_CAP`; its `0` is Linear). Q-04 is a genuine spec question and the lead's. |
+| C-14 is gone-on-silicon with attribution pending Q-04 | **RETRACTED.** The dependency was manufactured and the defect was already FIXED. Two residuals rehomed to C-32 and new C-46. |
+| R-30's fix is a conformance fix | **RETRACTED.** The spec says `cursor <= end` is illegal, so the pre-fix RTL was CONFORMANT. The change is a deliberate **spec deviation** and needs the spec amended with it. |
+| Fixing R-30 closes Q-07 | **RETRACTED.** It NARROWS it. Post-fix the RTL accepts `cursor >= end` while QEMU asserts `== end`. |
+| C-46's fix is to tie `rd` to `rs1` | **WITHDRAWN.** That would break every capability copy. |
+| M-5 has two consumer sites | **Five.** The widest, `split_out_cap`, needs no re-share at all. |
+| R-31's fix closes the disclosure | **Necessary, not sufficient.** A plain scalar load is checked only by a block measured INERT in our domains in 2026-08, and QEMU's revoke leaves the cursor at `end` so the shortcut still succeeds there. |
+
+**What survives all of it:** R-30's arithmetic (a full fill leaves the cursor at `end`, so INIT is
+unreachable by filling) and R-31's polarity (the RTL returns LINEAR where the spec says UNINIT), both
+demonstrated by directed tests with negative controls that fail on the unfixed tree.
+
+**So the lead now has a SPEC DECISION, not just a flash decision:** whether `end` is inclusive or
+exclusive. The surviving argument for exclusive is that QEMU is exclusive throughout and the whole
+software stack is validated against QEMU. The spec itself leans inclusive wherever it speaks, and the
+RTL is split against itself. Nothing should be synthesised until that is answered, because the RTL is
+in flux until it is.
+
+**A fourth arm produced a reading without creating its condition, and it was mine.** Boot sw51's LSU
+sufficiency probe was staged under the ladder host instead of the transfer host, so the region share
+never arrived and the domain never ran. The driver printed `ran=0`; my parser matched only the retval
+and reported the zero as a measurement. One wasted boot, re-running with the host fixed and a parser
+that refuses `ran=0`.
+
 **2026-09-10, later: answering M-5 uncovered two larger defects, and the bitstream plan changed.**
 
 M-5's "design choice" rested on a false premise, and reading the flashed RTL to settle it produced
