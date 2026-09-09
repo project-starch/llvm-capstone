@@ -1,0 +1,177 @@
+# Decisions waiting on the lead — 2026-09-10
+
+Everything below is blocked on a call only you can make. Nothing here is a status update; each item is
+a question with the evidence needed to answer it, what happens either way, and what it costs. Read in
+order — **item 1 gates four of the others.**
+
+Nothing is edited, committed or synthesised while these are open. Both lanes are holding.
+
+---
+
+## 1. The `end` convention — ONE TOKEN EACH SIDE, no convention change
+
+**GATES: R-30, R-31, the firmware change, the QEMU change, the synthesis run, and the flash.**
+
+### The question I asked first was wrong, in both directions
+
+I put it as *"is `end` inclusive or exclusive, project-wide"*, you ruled **exclusive**, and executing
+that ruling immediately produced a contradiction. The RTL lane refused the edit rather than make it,
+which is how this surfaced.
+
+There is no project-wide convention to rule on. The two documents use **opposite** conventions and each
+is internally consistent **except for one instruction copied from the other**:
+
+| | convention | verified by | the ONE odd instruction | the fix |
+|---|---|---|---|---|
+| **RTL** | **exclusive** (`end` = one past the last byte) | LSU faults when `ea + size > bound_end` (`load_store_unit.sv:985`); SPLIT sets `rs1.end := val` and `rd.start := val` (`dyn:141-142`), which only partitions without overlap if exclusive | `INIT`'s check `cursor <= end` (`capstone_flu_unit.anvil:139`) — inclusive arithmetic | `<=` → `<` |
+| **spec** | **inclusive** (`end` = the last byte) | aliasing closed over `[base, end]` (`prog-model.adoc:119`); `end = INIT_*_END - 1` (`ctrl-status-insn.adoc:79-80`); SHRINKTO `end = cursor + imm - 1` (`cap-man-insn.adoc:269`) | the STORE BOUND `[base, end - CLENBYTES]` (`mem-access-insn.adoc:93`) — exclusive arithmetic | `end - CLENBYTES` → `end - CLENBYTES + 1` |
+
+### Why this resolution is right
+
+Fix one token on each side, change **no** conventions, and the two agree byte for byte. For a region of
+bytes `S..S+63`:
+
+* **RTL** `end = S+64`; stores permitted at `S, S+16, S+32, S+48` (`cursor <= end-16`); the last leaves
+  the cursor at `S+64`; amended `INIT` accepts `cursor >= end` ✓
+* **spec** `end = S+63`; amended bound permits the same four positions; cursor ends at `S+64`; the
+  **existing** `cursor > end` accepts it ✓
+* **QEMU** is exclusive throughout and already accepts this.
+
+### ⚠ One route on the table would open a bounds hole — do not take it
+
+Changing the **RTL's** store bound to `end - 15` (correct for the spec's inclusive `end`) permits, under
+the RTL's exclusive `end`, a 16-byte store whose last byte lands **at** `end` — **one byte past the
+region, on the store path.** The RTL lane proposed it in good faith from the spec's arithmetic and
+withdrew it after reading the RTL's own; both of us made the same class of error, three hours apart, in
+opposite directions.
+
+### What each answer authorises
+
+* **Adopt the resolution (recommended):** the RTL's one token, the spec's one token, both fixes ship
+  with the firmware change, then synthesis. **Q-07 also closes** as a side effect (see item 5).
+* **Adopt full exclusive as originally ruled:** a four-site spec revision (`:421`, SHRINKTO `:269`,
+  `ctrl-status:79-89`, `prog-model:119`) plus two RTL stragglers. Real revision, not an amendment
+  riding a bitstream.
+* **Adopt full inclusive:** the RTL's access paths and SPLIT all change. Largest option; not
+  recommended by anyone.
+
+**My recommendation: the resolution.** Smallest, makes both documents self-consistent, no convention
+moves, and the RTL becomes conformant rather than deviant.
+
+---
+
+## 2. How should the monitor reclaim a revoked region?
+
+**Blocked by item 1. This is the firmware half and it must ship with the RTL fix — never RTL-only.**
+
+Once R-31 lands, revoke returns UNINIT-at-base and **five** monitor sites meet it. The widest,
+`split_out_cap`, needs no re-share at all: a revoked region stays `region_live`, so an unrelated later
+`create_region` in its range picks it and SPLITs an UNINIT.
+
+| option | what it costs | what it buys |
+|---|---|---|
+| **1. Zero-fill, then INIT** *(the spec's intended reclaim)* | **one store per 16 bytes** — ~65,536 stores per revoke on SQLite's 1 MiB region | The security property itself. The owner must overwrite the borrower's data before reuse. **The only option that closes anything.** |
+| **2. Leave UNINIT, refuse the re-share** | turns a working path into an error return; `__mrev` needs LIN, so callers learn a new contract | cheap |
+| **3. Fill lazily in the domain** | changes the shared-region ABI; largest change | matches what the type is for; moves cost to the region's user |
+
+**My recommendation: option 1, with the per-revoke cost measured on the board before acceptance**, and
+option 3 named as the design-level answer if that cost proves unacceptable. **The number is the
+decision** — 65,536 stores per revoke is not obviously affordable and is not mine to accept.
+
+---
+
+## 3. R-29: spend a synthesis run on a lint regression, or reformulate first?
+
+**Not blocked by item 1. Independent.**
+
+The fix is **functionally correct** — the directed test goes from failing to passing, four controls
+unchanged, predictions written first — and **fails the lint gate at UNOPTFLAT 40 → 41**, a new loop
+inside the very module whose source warns about exactly that.
+
+* **(a) Synthesise anyway.** Precedent exists: S-10 took the same +1 and was accepted after synthesis
+  showed its loop set unchanged and its nets clear of the critical path. ~1 h 20 m plus the collector.
+  **Only synthesis can actually answer whether this loop is benign.**
+* **(b) Reformulate first**, synthesise only a lint-clean candidate. Cost unknown; three formulations of
+  a closely related term all took the same +1.
+
+I have not recommended one. `CLAUDE.md` is explicit that the lint gate must pass and that adding a term
+to a cone on the standing UNOPTFLAT list is the highest-risk edit available; spending a build on a gate
+failure is a deliberate trade, not a lane's call.
+
+**Context for the trade:** R-29 is a **one-instruction window** (boot sw49: the defect appears only when
+the store is immediately before the load; a single intervening instruction clears it), and `W-12` is
+already in force. It is the least urgent of the three RTL items.
+
+---
+
+## 4. Q-04 — are scalars exempt from the MOVC consumption rule?
+
+**Genuinely a spec question. I ruled on it, was wrong, and retracted.**
+
+My ruling argued the spec was explicit because *"NOT_CAP is type 0, and 0 != 1"*. **The spec has no
+`NOT_CAP` type** — its table is Linear 0, Non-linear 1, Revocation 2, Uninitialised 3, Sealed 4,
+Sealed-return 5 (`prog-model.adoc:177-184`). `NOT_CAP = 0` is the RTL's enum, which inserts it at zero
+and shifts everything up; the RTL says so itself. I evaluated a spec sentence with RTL constants.
+
+**The ambiguity is real, on four grounds:** MOVC's operands are annotated as capabilities
+(`cap-man-insn.adoc:16,23,25`); spec commit `a1db3c2` **removed** MOVC's *"`x[rs1]` is not a
+capability"* exception and **left the consumption clause untouched**; `mem-access-insn.adoc:45` uses the
+same `(i.e. type != 1)` gloss for a scalar-**excluding** condition; and `:105` writes the guard longhand
+as *"is a capability and type is not 1"*.
+
+**So scalar-exemption is a RESTORATION of the clause's original precondition, not an amendment** — the
+opposite of what my ruling said, and it makes it the cheaper option.
+
+**What each answer implies:** exempt → QEMU is right, the RTL changes, and **C-32** (not C-14) is the
+compiler item it gates. Not exempt → QEMU changes, and the compiler must stop using `movc` where the
+source is live. **What stands either way:** the RTL does null a NOT_CAP source, board-confirmed.
+
+---
+
+## 5. Q-07 — does the QEMU fix close the divergence or only narrow it?
+
+**A choice inside the fix, not a fact. Blocked by item 1 only for its precondition form.**
+
+The Q-07 change is **written and deliberately uncommitted** (`capstone-qemu/target/riscv/op_helper.c`):
+`csinit`'s three host `assert()`s become guest traps, `csrevoke` gains the spec's permission clause and
+puts the cursor at **base**, and the **missing UNINIT cursor advance** is added to the store path — QEMU
+had none anywhere, so a monitor fill loop would have been a no-op and the suites would have passed a
+monitor that fills nothing.
+
+* `csinit` keeps `cursor == end` → QEMU accepts one value, the fixed RTL accepts `end` and above →
+  **narrows**.
+* `csinit` takes `cursor >= end` → sets identical → **closes**. This is what is written.
+
+Both implementations hold `end` exclusively, so `>=` is coherent. **It must land together with the
+monitor change (item 2)** or `run-nullblk-all.sh` goes red and stays red.
+
+---
+
+## 6. Smaller, and safe to defer
+
+* **R-4** — retitled RECORD ONLY. Closure as *"not reproducible"* was rejected as overstating: nobody
+  ever attempted reproduction. **Confirm or overrule.**
+* **C-45** — decided to land this cycle (own commit on top of C-38's, never squashed). Compiler lane is
+  holding for your word.
+* **`precommit-scan` scope** — proposal written and NOT applied
+  (`precommit-scan-removed-lines-proposal.md`): removed and context lines should WARN, not BLOCK.
+  Every pattern unchanged; only which lines can FAIL narrows. Six controls listed. It currently
+  prevents **C-4** from being archived despite a final status.
+* **CLAUDE.md, two proposed sentences**, not added because that file is yours:
+  1. *"Name the observation that proves the triggering condition existed, and make the instrument
+     refuse a verdict without it."*
+  2. *"State which definition a constant or symbol comes from before acting on it; this codebase carries
+     three numbering systems and two of them silently disagree."*
+
+---
+
+## What is NOT waiting on you
+
+Done and pushed: R-30/R-31 filed, demonstrated and through all four gates (lint at baseline, a
+one-variable functional pair, an auditor pass, 88/88 sweep); R-25/R-26/R-27 archived; the fence.i drop;
+the SQLite stock-ness merge with its board validation; boots sw44–sw51; the R-29 folder split; C-5 and
+C-38 closed; C-45 and C-46 filed; R-11 run with the positive control it never had; the registry
+corrections; and the ID allocator.
+
+**Read this alongside `next-cycle-r29-and-close-out.md`**, whose "STATE AS OF 2026-09-10 NIGHT" section
+lists what was retracted today and why — four of my own conclusions among them.
