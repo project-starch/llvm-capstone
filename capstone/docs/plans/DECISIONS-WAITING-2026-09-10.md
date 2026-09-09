@@ -4,7 +4,26 @@ Everything below is blocked on a call only you can make. Nothing here is a statu
 a question with the evidence needed to answer it, what happens either way, and what it costs. Read in
 order — **item 1 gates four of the others.**
 
-Nothing is edited, committed or synthesised while these are open. Both lanes are holding.
+Nothing is edited or committed into a shipping path while these are open. The QEMU change is written
+and deliberately uncommitted; the RTL change is committed on a local branch and unpushed.
+
+## WHAT MOVED AFTER THIS FILE WAS WRITTEN — read this before the items
+
+* **The synthesis build is AUTHORISED.** You confirmed both halves in the synth lane's own session.
+  **The one thing still outstanding is the push**, which is yours and which no lane can do: the branch
+  is not on the allowlist and the agent credential has no write access to that repository. The synth
+  lane is watching `origin` every 60 s and will start the moment `r30-r31-init-revoke` at `1bfff7776`
+  appears; if a different SHA turns up they will stop and ask rather than build it. See item 1.
+* **Item 2's number was wrong by a factor of 256, and the correction flips my recommendation.** I said
+  65,536 stores per revoke over a 1 MiB region. Every region in the tree is 4096 bytes. It is 256
+  stores, and option 1 goes from unaffordable to a page memset. **This is the single most important
+  change in the file.**
+* **Item 5 has been MEASURED**, not just reasoned about. The change also turned out not to compile,
+  having been described as written.
+* **R-31's sufficiency is settled** without a board arm, and the probe built to answer it is retired.
+  The registry entry carries the evidence.
+* **A suite everyone named as the M-5 gate cannot reach the condition**, and its green means nothing
+  about M-5. It is still a valid control for something else.
 
 ---
 
