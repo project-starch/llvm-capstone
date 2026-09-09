@@ -84,6 +84,31 @@ wrong; corrected here rather than after the reading). Boots sw44–sw47 on the b
 RTL, so the expected reading is **wedged after `ENT1` with cause 25 latched by the tracer**, which is why it is
 placed last in its boot. A returned `0x25000001` there would mean the duplicate survived the fix.
 
+### Readings, as they land
+
+**sw44, the closing set — 2026-09-09, first boot on `caplifive_r25r26r27_66c4e7517.bit`, firmware
+`f187c0f85d8c` (M-3 line). PREDICTION HELD, nine stages, nine `TEST END rc=0`, driver rc 0.**
+
+| stage | read | oracle |
+|---|---|---|
+| `k800` (control, first) | 4 | 4 |
+| `beebs_bs` | 887447230 | at oracle |
+| `beebs_crc32` | 1703161001 | at oracle |
+| `beebs_janne` | 484656629 | at oracle |
+| `beebs_expint` | 2021290181 | at oracle |
+| `beebs_ns` | 1184999093 | at oracle |
+| `beebs_nskeys` | 3914083333 | at oracle |
+| SLT `select1` | `records=1031`, stmt 31/0, query 1000/0, `completed=1` | as `ef5a8eaf2` era |
+| transfer probe `revxfer` (last) | `574619742`, exactly one `HOLE` line | as `ef5a8eaf2` era |
+
+No `SHAX`, `SPLA`, `SPLB`, `RGNO`, `RGNF`, `EXCX`, `CERR`, `ILLX` or `MCAU` line — zero fault tags. Identical
+to the `ef5a8eaf2`-era closing set, which is what this boot was for: **the three RTL fixes cost nothing
+observable on the workloads that already worked.** It doubles as the owed M-4/M-3 firmware control.
+
+*Provenance note:* an earlier launch of this boot sequence stopped during staging, before any board time, on a
+missing restage, an entry-VA collision and the variant scripts testing for the previous monitor. No reading was
+taken on those attempts, so no boot was voided and nothing here is a retry of a failed run.
+
 sw46 and sw47 are no-regression checks and NOT R-26 evidence — the current silicon already boots both variants
 clean (sw40, sw42). **Any hang or wedge outside `r25dup` is the reading that would matter most, and it is the
 one nobody predicts.**
