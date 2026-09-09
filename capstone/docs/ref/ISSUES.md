@@ -703,8 +703,35 @@ the corruption happens in the copy, not the compiler.
 The monitor's own comment -- "the image bytes here are const initializer data with no
 capability tags, so the 128 bits round-trip unchanged" -- is FALSE on real silicon.
 
-> **2026-09-10 — THE SECONDARY DEFECT BELOW IS LIVE, AND IT IS R-29's SHAPE. It was proposed for
-> demotion to "a one-line RTL observation" and that proposal is withdrawn.** The two lines this entry
+> **2026-09-10, SECOND READING — PARTIALLY FIXED, and the split is the finding. Read this box, not the
+> one below it, for the current state.** Checked against the FLASHED tip (`capstone-ariane`
+> `66c4e7517`) rather than against this entry's cited lines, which are stale:
+>
+> * **Both sites this entry names are REPAIRED, by explicit intent.**
+>   `wt_axi_adapter.sv:209` is now `assign is_cap_req = dcache_data.is_cap;` and
+>   `wt_dcache_mem.sv:155` is `assign st_wr_cap = wr_is_cap_i;`. Each carries an S-06-fix comment
+>   saying the flag is carried explicitly from the store opcode *"instead of inferred from |user|"*,
+>   naming the old inference as defect D3/D4/D7. (The entry cites `:196`, which is now a comment.)
+> * **But the PATTERN survives, twice, on the REFILL path — and nobody had looked there:**
+>   `wt_dcache_mem.sv:358` `rd_ctag = |wr_cl_user_i[7:0];` and
+>   `wt_dcache_mem.sv:501` `cap_tag_q[wr_cl_idx_i][j] <= wr_vld_bits_i[j] & (|wr_cl_user_i[7:0]);`
+>   Both decide "this granule holds a capability" by OR-reducing the incoming line's user byte, which
+>   is exactly the shape this entry describes. **The store side was repaired; the refill side was not.**
+>
+> So the secondary half is **PARTIALLY FIXED**: closed at the two cited sites, live at `:358` and
+> `:501`. Note how it was found — by reading the tip, not by sampling. The waveform probe originally
+> planned for this would have sampled `is_cap_req` and `st_wr_cap`, seen them behaving correctly, and
+> closed the entry WRONGLY.
+>
+> **One co-location, recorded as geography and not as causation:** `:358` sits in the SAME
+> `always_comb` as the refill assignment the R-29 probe caught — that block sets `rdata`, `ruser` and
+> `rd_ctag` together on the `wr_cl_vld` leg. R-29 is the DATA half of that leg being stale; these two
+> are the TAG half being inferred by OR-reduce on the same leg. Whether they interact is UNTESTED and
+> is not asserted here. A fix touching that block should be written knowing all three live in it.
+
+> **2026-09-10 — first reading, superseded by the box above: THE SECONDARY DEFECT BELOW IS LIVE, AND
+> IT IS R-29's SHAPE. It was proposed for demotion to "a one-line RTL observation" and that proposal is
+> withdrawn.** The two lines this entry
 > named on 2026-07-29 decide "this store holds a capability" by OR-reducing the metadata word and
 > never consult `cap_type` — the same word-versus-granule confusion that **R-29** is about, and R-29
 > is demonstrated on the newest bitstream (`66c4e7517`, boots sw46 and sw48, `s06agg` = 66 twice).
