@@ -2462,9 +2462,27 @@ disagreeing with the history.
 > and which `copyPhysReg`'s own comment argues the allocator never asks for on a linear capability. So
 > every remaining path funnels through the same precondition, and **that precondition is C-32's**.
 >
-> **Two limits stated rather than glossed:** whether the post-RA scheduler is actually enabled for the
-> CPU we build was not confirmed, only that it is feature-gated; and this is a reading of predicates,
-> not a case constructed to make either pass misbehave.
+> **BOTH LIMITS NOW CLOSED (compiler lane, 2026-09-10), and the residual is INERT IN OUR CONFIGURATION.**
+> The post-RA scheduler is a *tune* feature, `TunePostRAScheduler`, carried by named cores only;
+> `GenericTuneFeatures` at `CapstoneProcessors.td:89` is `[TuneOptimizedNF2SegmentLoadStore]` and
+> `GENERIC_RV64` takes that list, and our build scripts pass no `-mcpu` at all, so we get the generic
+> model and the feature is absent. The machine outliner is not opted in either —
+> `CapstoneTargetMachine.cpp` does not override `enableMachineOutliner`, which defaults to false, so it
+> runs only under an explicit flag. Re-verified here: 14 named cores carry the tune feature, the generic
+> list does not, there is no outliner override, and no build script passes `-mcpu`.
+>
+> **So the watch-list changes shape: the trigger is a BUILD-CONFIGURATION change, not a source change.**
+> C-46 becomes reachable if someone selects a tuned `-mcpu` or turns the outliner on — and even then
+> only in the read-after-copy case that **C-32** owns. Remaining limit, stated: this is a reading of
+> predicates and feature lists, not a case constructed to make a pass misbehave.
+>
+> **A near-miss worth recording, self-caught by the auditor.** Their first check grepped for
+> `FeaturePostRAScheduler` and returned empty, which reads as "no CPU enables it" — the right conclusion
+> for the wrong reason, because the token is `TunePostRAScheduler`. They noticed and redid it, which is
+> how the named-core list above exists. That is the **third** instance in one session of the same
+> failure: matching a name or a value instead of asking what defines it (the others being the Q-04
+> retraction and the 3-versus-4 type-numbering trap in M-5). Two of the three were caught; the one that
+> was not cost a retracted ruling.
 >
 > **THE FIX SHAPE THIS ENTRY FIRST IMPLIED IS WRONG AND MUST NOT BE APPLIED.** Mirroring
 > `PseudoINIT`/`PseudoSEAL` with `Constraints = "$rd = $rs1"` would be a serious error: those are
