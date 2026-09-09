@@ -57,21 +57,38 @@ to refuse a commit. They should still be scanned and still be reported.
 
 ## The change
 
-Two edits to `capstone/tests/precommit-scan.sh`. After the block that assembles `$TMP` (i.e. after the
-`if [[ -n "$RANGE" ]] … else … fi` at `:56-72`) and before the checks:
+**Filter each `git diff` AT THE POINT IT IS APPENDED — do not post-process `$TMP`.**
+
+My first draft of this patch split `$TMP` afterwards with `grep -vE '^[-@ ]'`, and that draft was
+WRONG in a way that would have quietly reduced coverage: `$TMP` also holds the commit message and the
+full text of every untracked file, and **an indented line in either of those starts with a space**. A
+post-hoc split would have dropped every indented line of a brand-new file out of the blocking set —
+which is precisely the 2026-08-18 case the untracked scan was added for, where a new `plans/` document
+passed a scan that had never read a byte of it. A gate patch that silently narrows what is scanned is
+worse than the problem it fixes, so the split has to know which lines came from a diff.
+
+So: introduce `DEL` once, and route each of the three `git diff` invocations at `:58`, `:60` and `:67`
+through a helper that sends removals and context to `DEL` and everything else to `$TMP`. The message
+and the untracked `cat` continue to append to `$TMP` untouched.
 
 ```bash
-# Removed and context lines are scanned but do not BLOCK -- see
-# docs/plans/precommit-scan-removed-lines-proposal.md. Every pattern is unchanged; only the set of
-# lines that can FAIL the scan is narrowed, and a secret being introduced is always a `+` line.
+# Removed/context diff lines are scanned but do not BLOCK -- see
+# docs/plans/precommit-scan-removed-lines-proposal.md. Patterns are unchanged; only the set of lines
+# that can FAIL is narrowed, and an INTRODUCED secret is always a `+` line. Applied per-diff, never to
+# $TMP as a whole: $TMP also carries the commit message and untracked file contents, whose indented
+# lines start with a space and must keep blocking.
 DEL="$(mktemp)"; trap 'rm -f "$TMP" "$DEL"' EXIT
-KEPT="$(mktemp)"
-grep -E '^[-@ ]' "$TMP" | grep -vE '^\+\+\+|^---' > "$DEL" 2>/dev/null || true
-grep -vE '^[-@ ]' "$TMP" > "$KEPT" 2>/dev/null || true
-mv -f "$KEPT" "$TMP"
+split_diff() {          # stdin = diff; blocking lines -> $TMP, informational -> $DEL
+  awk -v del="$DEL" '
+    /^\+\+\+|^---/ { print; next }                 # file headers: keep blocking
+    /^[-@ ]/          { print > del; next }          # removals, hunk headers, context: warn only
+                      { print }                      # additions and everything else: blocking
+  ' >> "$TMP"
+}
 ```
 
-and immediately before the final verdict block at `:190`:
+then replace each `git diff … >> "$TMP"` with `git diff … | split_diff`, and immediately before the
+final verdict block at `:190`:
 
 ```bash
 if [[ -s "$DEL" ]]; then
@@ -90,9 +107,7 @@ if [[ -s "$DEL" ]]; then
 fi
 ```
 
-**Note the `$TMP` split keeps the message and untracked content**, because those lines do not start
-with `-`, `@` or a space in the way diff body lines do. Verify that rather than assuming it — see the
-controls below.
+Control 4 below exists specifically to catch the mistake my first draft made. Run it.
 
 ## Controls this change MUST pass before it is trusted
 
