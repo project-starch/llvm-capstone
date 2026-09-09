@@ -2169,6 +2169,36 @@ undebuggable and takes the core with it.
 >    rule.
 > 5. **M-5's monitor code is then reachable and can be judged on its merits.** It is not fixable before
 >    the above and is not the thing to fix first.
+
+> **2026-09-10, THIRD PASS — M-5 IS THE FIRMWARE HALF OF THE R-30/R-31 CHANGE, and it is the sequence
+> the RTL previously made IMPOSSIBLE, not a workaround for a new behaviour.**
+>
+> Once R-31 lands both sites go live and `C_INIT(r, r, 0)` on a cursor-at-base capability traps (R-30's
+> fix accepts `cursor >= end`, not base). The monitor must change in the same cycle.
+>
+> **Why the shortcut exists at all**, and it reframes the entry: before R-30, "fill the region then
+> INIT" was *impossible* — INIT was unreachable by filling for a region of any size. Re-initialising
+> straight through was the only thing that could work. The two RTL fixes together make the correct
+> sequence expressible for the first time.
+>
+> **A numbering trap that leads to the OPPOSITE conclusion, recorded so the next reader does not fall
+> in.** The sites test `cap_type(r) == 3` while the RTL's UNINIT is **4**, which looks like the test can
+> never fire and there is no blocker. It fires: `cap_type(cap)` is `__capfield((cap), 1)`
+> (`sbi_capstone.c:195`), the LCC type query, and LCC returns `cap_type - 1`, so RTL UNINIT reads back
+> as 3. Checked independently by two readers because the 3-versus-4 invites the wrong answer.
+>
+> **Options and costs:** (1) **zero-fill then INIT**, the spec's intended reclaim — walk the region with
+> `STC` (16 B per store, `imm` 0, so the cursor is the address) to `end`, then `INIT`. This IS the
+> security property. **Cost: one store per 16 bytes**, i.e. 65,536 stores per revoke for SQLite's 1 MiB
+> region — a real number that belongs in front of the lead. (2) leave it UNINIT and refuse the re-share
+> — cheap, but turns a working path into an error return and `__mrev` needs LIN. (3) fill lazily in the
+> domain — matches what the type is for, largest change, alters the shared-region ABI.
+> **Recommended (1)**, with the per-revoke cost measured on the board before acceptance and (3) as the
+> design-level answer if it proves unacceptable.
+>
+> **Deliberately NOT written yet, for a gate reason rather than caution:** QEMU never advances an UNINIT
+> cursor at all (Q-07), so a fill loop is a no-op under the emulator and the suites would pass a monitor
+> that fills nothing. Q-07's QEMU fix must land first or the gate is worthless.
 >
 > The original coupling note stands below, because it is what made the search necessary.
 
@@ -2392,7 +2422,40 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
-### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the compiler does not know it CONSUMES a linear source `OPEN — split out of C-14 2026-09-10 so it is not orphaned by that entry's closure; wrong for LINEAR capabilities on ANY implementation, independent of the scalar question in Q-04`
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
+
+> **CORRECTED 2026-09-10 by the compiler lane, on both counts that matter. The premise holds; the
+> severity and the fix do not.**
+>
+> **Premise CONFIRMED.** `MOVC` is `hasSideEffects = 0` with `$rs1` a pure USE and no `Constraints`,
+> while every sibling that consumes or modifies its source ties them — `SHRINK` (`$rd = $cap_in`),
+> `DROP` (also `hasSideEffects = 1`), `PseudoINIT` and `PseudoSEAL` (`$rd = $rs1_in`). The comment at
+> `:2643` even calls consumption *"the spec's MOVC step"* while MOVC's own definition does not model it.
+>
+> **But it is LATENT, because each transform I named is independently blocked, with a mechanism for
+> each.** MOVC has **no IR pattern** — it is emitted only from `CapstoneInstrInfo.cpp:549`
+> (`copyPhysReg`) and `CapstoneRegisterInfo.cpp:313` (frame-index elimination), both at or after
+> register allocation, so MachineCSE and MachineSinking are pre-RA and never see it. It is not marked
+> `isReMaterializable`, and `isReallyTriviallyReMaterializable` special-cases only RVV before the
+> generic check. And it is not `isMoveReg`, while `isCopyInstrImpl` recognises only `isMoveReg` plus
+> ADD/OR/XOR-with-X0, so MachineCopyPropagation will neither forward through it nor delete it.
+> **It becomes live the moment someone adds an IR pattern for MOVC, marks it `isMoveReg`, or reaches it
+> from a pre-RA pass.** Scope of that claim, stated by the auditor rather than by me: it is a static
+> reading of pass ordering and instruction flags, and the post-RA scheduler, tail duplication and
+> MachineLateInstrsCleanup were not audited.
+>
+> **THE FIX SHAPE THIS ENTRY FIRST IMPLIED IS WRONG AND MUST NOT BE APPLIED.** Mirroring
+> `PseudoINIT`/`PseudoSEAL` with `Constraints = "$rd = $rs1"` would be a serious error: those are
+> codegen pseudos where the tie IS the semantics, whereas **MOVC is the register-COPY primitive** —
+> `copyPhysReg` builds it precisely when the destination differs from the source, so tying them defeats
+> its only purpose and breaks every capability copy, including C-14's fix. The only defensible change is
+> `hasSideEffects = 1` alone, and that pessimises every capability copy to insure a latent risk. **That
+> is a trade for the lead, not a cleanup**, which is why no code has been changed.
+>
+> Also relevant and previously unrecorded: both emitters already pass a kill flag on the source, so the
+> source is normally dead after the `movc`. The live-source case is the one `copyPhysReg`'s own comment
+> argues the allocator never asks for on a linear capability, with the untagged case flagged as the
+> residual — which is exactly where **C-32** sits.
 
 `llvm/lib/Target/Capstone/CapstoneInstrInfo.td:2479-2483` declares
 
