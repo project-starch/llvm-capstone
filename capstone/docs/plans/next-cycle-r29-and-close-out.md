@@ -187,6 +187,27 @@ The rest of the open list is unchanged: RTL lane holds R-22/R-21/R-13/R-19/R-24/
 compiler lane holds C-43 (land `5d2932a9`), C-14, C-4 (no status token — needs a human read), C-17
 (latent).
 
+## 7b. Progress, 2026-09-10 (all pushed)
+
+| item | state |
+|---|---|
+| §0 lead | `push-final.sh` run; all four nested remotes verified in sync |
+| §1 corrections | DONE. R-12 rewritten (16-bit head, 65536 pool, exhaustion DEADLOCKS rather than wraps, SQLite scare void) and its 99.3 % reading WITHDRAWN — every healthy boot reads the sentinel, only wedged boots give 65047, and the sentinel cannot be the true head or no domain would run. R-5 closed SUPERSEDED. R-10 corrected TWICE: its cited sites are repaired, but the OR-reduce pattern survives on the REFILL path at `wt_dcache_mem.sv:358`/`:501` → PARTIALLY FIXED. R-3's header now says the root defect is live and preflight C15 makes it unmeasurable. S-14 filed for the EXPLAIN fault. tsv opt-level labels corrected. |
+| §2 R-29 | Mechanism SEPARATED: the load MISSES and takes the refill leg while the entry that would repair it is resident but invisible to a word-gated overlay. Store-buffer and `.user = 0` accounts both REFUTED by traced arms. **Board sw49: the silicon window is ONE instruction wide.** Still owed: `wbuffer_hit_oh`/`wbuffer_be` read directly. No fix candidate yet; R-24 rides the same bitstream. |
+| §3 board boot A | DONE as sw49 (the distance ladder). R-15 and R-17/S-01 arms NOT run — they moved out when the ladder became the higher-value use of the boot. |
+| §4 SQLite | Helper delivered the seven-define set and the probe. Audit complete: the feature-set gate verified two-sided by EXIT STATUS in all four combinations; budgets tie out. Board boot sw50 running. |
+| §5 monitor/QEMU chain | NOT STARTED (Q-07 → M-5 → I-03 → M-1). |
+| §6 standing four | C-5 CLOSED as stale — the window is a per-image knob discovered from the ELF, positive-controlled by building one rung at both windows. R-12 done (§1). I-02 done: `tests/next-issue-id.sh`, positive-controlled on C-25. C-38 DONE by the compiler lane; C-45 spun out. |
+
+**A process failure worth the lead's eye.** One commit tonight went in while `precommit-scan` said
+BLOCKED, because the command printed the scan's exit code instead of gating on it. The hit was a false
+positive (the word "token" next to a backticked status value) and the content was verified clean, but
+the procedure was wrong and it is the same shape as the documented "never filter between a gate and
+its exit status" failure. Gating is restored. It also surfaced a real property: **the scan reads
+REMOVED lines too**, so once such a phrase is committed, the commit that deletes it is blocked as
+well. Cleaning up a false positive therefore needs either a gate change or a bypass — both the lead's
+call, so the wording was left alone.
+
 ## 8. Order
 
 Day 1: §1 corrections, §6.1 (C-5), the R-29 folder split the lead approved, §3 board boot A, §4 audit
