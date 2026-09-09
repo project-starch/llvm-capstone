@@ -6359,6 +6359,89 @@ void domain_main(unsigned *res, unsigned func) {
   *res = capstone_heapcap_probe();
   return;
 #endif
+  /* FEATURE-SET PROBE. Dispatched on its own magic opcode, before the SLT check.
+     Each call is behind the omission that removes it, so ONE source builds both feature sets:
+     under `deployed` the six calls are compiled out and the line reads 0/6, under `restored`
+     they are compiled in and must all execute. That two-sided reading is the whole point --
+     a probe that only ever prints 6/6 could not distinguish a restored build from a broken
+     counter. Every call is chosen to RETURN rather than to be interesting: what is under test
+     is that the API exists and executes inside the domain, not its semantics. */
+  if (hostcall_metadata &&
+      ((unsigned long)hostcall_metadata->opcode & SQLITE_HC_OP_FEATURE_MASK)
+          == (unsigned long)SQLITE_HC_OP_FEATURE) {
+    unsigned have = 0;
+    sqlite3 *fdb = 0;
+    /* THE HEAP AND THE INIT COME FIRST, exactly as capstone_slt_entry does them. This build sets
+       SQLITE_OMIT_AUTOINIT, so sqlite3_open on an uninitialised library is undefined -- the first
+       version of this probe skipped both calls and the domain faulted the instant it entered, on
+       BOTH feature sets. (What the fault looked like is worth knowing: cause 1 at pc 0x0, which is
+       M-1's unset trap vector reporting somebody else's fault from address zero, not an
+       instruction-fetch bug.) */
+    if (sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64) != SQLITE_OK) {
+      output_text("FEATURE-SET config-heap-failed\n");
+      *res = 0x4EB000FFUL;
+      return;
+    }
+    if (sqlite3_initialize() != SQLITE_OK) {
+      output_text("FEATURE-SET initialize-failed\n");
+      *res = 0x4EB000FEUL;
+      return;
+    }
+    /* STEP MARKERS. A fault inside any of these calls halts the domain, and the host still
+       prints the payload, so the last tag in the line names the call that faulted rather than
+       costing a bisection run per candidate. */
+    output_text("FEATURE-SET-STEPS open");
+    if (sqlite3_open(":memory:", &fdb) == SQLITE_OK && fdb) {
+      output_text(" exec");
+      (void)sqlite3_exec(fdb, "CREATE TABLE f(a INTEGER); INSERT INTO f VALUES(1)", 0, 0, 0);
+#ifndef SQLITE_OMIT_GET_TABLE
+      output_text(" gt");
+      { char **rows = 0; int nr = 0, nc = 0;
+        if (sqlite3_get_table(fdb, "SELECT a FROM f", &rows, &nr, &nc, 0) == SQLITE_OK) ++have;
+        if (rows) sqlite3_free_table(rows); }
+#endif
+#ifndef SQLITE_OMIT_INCRBLOB
+      output_text(" bo");
+      { sqlite3_blob *blob = 0;
+        /* Any return code counts: the call linking and running is what is under test. */
+        (void)sqlite3_blob_open(fdb, "main", "f", "a", 1, 0, &blob);
+        if (blob) (void)sqlite3_blob_close(blob);
+        ++have; }
+#endif
+#ifndef SQLITE_OMIT_UTF16
+      output_text(" o16");
+      { static const unsigned short mem16[] = {':','m','e','m','o','r','y',':',0};
+        sqlite3 *db16 = 0;
+        if (sqlite3_open16(mem16, &db16) == SQLITE_OK) ++have;
+        if (db16) (void)sqlite3_close(db16); }
+#endif
+#ifndef SQLITE_OMIT_COMPILEOPTION_DIAGS
+      output_text(" co");
+      if (sqlite3_compileoption_get(0) != 0) ++have;
+      /* Deliberately asserts the value, not merely the call: this build DOES omit EXPLAIN,
+         so a `used` that answers 1 would mean the diagnostic is lying about our own build. */
+      if (sqlite3_compileoption_used("OMIT_EXPLAIN") == 1) ++have;
+#endif
+#ifndef SQLITE_OMIT_DEPRECATED
+      output_text(" ex");
+      if (sqlite3_expired(0) != 0) ++have;   /* NULL statement counts as expired */
+#endif
+      (void)sqlite3_close(fdb);
+    }
+    output_text("\n");
+    output_text("FEATURE-SET ");
+#ifdef SQLITE_OMIT_GET_TABLE
+    output_text("deployed: ");
+#else
+    output_text("restored: ");
+#endif
+    /* One digit, emitted directly: output_hex64 is defined behind a probe #ifdef and is not in
+       scope on every build that carries this dispatch, and `have` is 0..6 by construction. */
+    { char d[2]; d[0] = (char)('0' + (have > 9 ? 9 : have)); d[1] = 0; output_text(d); }
+    output_text("/6\n");
+    *res = 0x4EB00000UL | (have & 0xfUL);
+    return;
+  }
 #ifdef CAPSTONE_SQLITE_SLT
   /* Magic-guarded, like the staged selector beside it: a zeroed region falls through to
      the ordinary workload, so a build carrying this code behaves exactly as before when

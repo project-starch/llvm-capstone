@@ -930,8 +930,13 @@ fi
 
 
 
-SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-capstone.sh" \
-                 | grep -oE '\-D[A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
+# Harvest BOTH literal blocks from build-sqlite-capstone.sh, in file order so the -U flags of
+# SQLITE_RESTORE land after the -D flags of SQLITE_DEFINES and win. SQLITE_FEATURE_SET=restored
+# pulls the second block in; anything else leaves the deployed set exactly as it was.
+_blocks='/^SQLITE_DEFINES=(/,/^)/p'
+[[ "${SQLITE_FEATURE_SET:-deployed}" == restored ]] && _blocks="$_blocks;/^SQLITE_RESTORE=(/,/^)/p"
+SQLITE_DEFINES=$(sed -n "$_blocks" "$SCRIPT_DIR/build-sqlite-capstone.sh" \
+                 | grep -oE '\-[DU][A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
 
 # CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
 #

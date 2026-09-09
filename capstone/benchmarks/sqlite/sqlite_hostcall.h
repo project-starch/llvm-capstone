@@ -51,6 +51,19 @@ struct sqlite_hostcall_v0 {
 #define SQLITE_HC_OP_SLT      0x534C5400UL
 #define SQLITE_HC_OP_SLT_MASK 0xFFFFFF00UL
 
+/* ------------------------------------------------------------ feature-set probe transport */
+/* "FEA\0", the same magic-guarded shape as the SLT opcode beside it and non-colliding with it
+ * or with the 0x5A6E00nn staged selector. It asks the domain to call the six SQLite APIs that
+ * SQLITE_FEATURE_SET=restored puts back and report how many were compiled in.
+ *
+ * WHY A PROBE AT ALL. The SLT corpus cannot tell the two feature sets apart -- none of its files
+ * uses a restored feature, so both builds produce identical tallies, which is equally consistent
+ * with "the switch is inert". check-feature-set.sh settles that natively by looking at exported
+ * symbols; this settles it INSIDE THE DOMAIN, on silicon, where the symbol table is not
+ * observable. */
+#define SQLITE_HC_OP_FEATURE      0x46454100UL
+#define SQLITE_HC_OP_FEATURE_MASK 0xFFFFFF00UL
+
 /* THE INPUT SITS IN THE TOP HALF, THE OUTPUT GROWS FROM ZERO. They share one region, so
  * they must not collide: the domain's output limit is lowered to this offset for SLT
  * builds, which is a compile-time constant swap and therefore costs the ordinary build
