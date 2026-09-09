@@ -297,6 +297,43 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
 
+> # ⚠ RETRACTED 2026-09-10, the same day it was made. THE RULING BELOW IS WRONG AND Q-04 REMAINS A GENUINE SPEC QUESTION.
+>
+> **The error, plainly: I mixed two numbering systems.** The ruling argued *"`NOT_CAP` is type 0, and
+> `0 != 1`, so the source is nulled."* **The spec has no `NOT_CAP` type at all.** Its table
+> (`capstone-spec/parts/prog-model.adoc:177-184`) is Linear 0, Non-linear 1, Revocation 2,
+> Uninitialised 3, Sealed 4, Sealed-return 5 — in the SPEC's numbering `0` is **LINEAR**. `NOT_CAP = 0`
+> is the RTL's enum, which inserts it at 0 and shifts everything up; the RTL says so itself at
+> `capstone_dyn_unit.anvil:182-183`: *"the spec numbers types with no NOT_CAP, the RTL inserts it at 0
+> and shifts"*. So the syllogism that was the whole argument evaluates a spec sentence with RTL
+> constants.
+>
+> **This is the exact mistake that cost boot sw39** and that the project's own memory note "RTL
+> cap-type numbering ≠ spec" exists to prevent. It was made anyway, in a ruling, against the file that
+> records it.
+>
+> **And the ambiguity the ruling denied is real, on four independent grounds** (all re-verified):
+> `cap-man-insn.adoc:16` says *"**Capabilities** can be moved between registers with the MOVC
+> instruction"* and its operands are annotated `(C)`; spec commit `a1db3c2` removed MOVC's
+> *"`x[rs1]` is not a capability"* exception and **left the consumption clause untouched**, so the
+> clause was written under a precondition that was later deleted; `mem-access-insn.adoc:45` uses the
+> same `(i.e., type != 1)` gloss for a scalar-EXCLUDING condition; and `:105` writes the guard out
+> longhand as *"is a capability and `x[rs2].type` is not `1`"*, which is exactly QEMU's `tag &&`.
+> CINCOFFSET is even defined in terms of MOVC (`:74-78`) while requiring a capability operand (`:66`).
+>
+> **What stands from the ruling:** the RTL really does null a NOT_CAP source
+> (`capstone_flu_unit.anvil:13-26` — anything not `CAP_TYPE_NONLIN` is nulled), and that is
+> board-confirmed by this entry's own reading. What does not stand is that the spec settles the
+> question, or that QEMU is simply wrong.
+>
+> **Q-04 is therefore what it was before: a spec question, and the lead's with the spec's owners.** The
+> substantive framing is that scalar-exemption would be a RESTORATION of the clause's original
+> precondition rather than an amendment — which is the opposite of what the ruling said, and which
+> makes it the cheaper option rather than the more expensive one. **C-14 does NOT depend on it** (see
+> that entry).
+>
+> The ruling is left below rather than deleted, because the reasoning that failed is the useful part.
+
 > **RULING 2026-09-10 (board lane), from the spec text itself. SCALARS ARE NOT EXEMPT. QEMU is the
 > outlier and QEMU is what changes.**
 >
@@ -1008,11 +1045,26 @@ address. Passing rungs were only ever clean where someone looked.
 > **What HAS changed is that the symptom class is no longer unattributed.** "A region word holds
 > something the program never wrote" now has three characterised owners, each with a reproducer:
 > **R-19** (the victim holds `compress_cap(NULL) + n`, a hardware encoding the program cannot
-> materialise), **R-10**'s secondary half (capability-ness inferred by OR-reducing a metadata word —
-> still live on the refill path at `wt_dcache_mem.sv:358`/`:501`), and **R-29** (a granule's high half
-> served stale from the refill leg; *stale DRAM contents* is exactly what "a stray DRAM address" looks
-> like). **No attribution is made here.** R-4 has no artefact to match against any of them, and a fit
-> is not a mechanism — this registry has paid for that confusion before.
+> materialise), **R-10**, and **R-29**. **No attribution is made here.** R-4 has no artefact to match
+> against any of them, and a fit is not a mechanism — this registry has paid for that confusion before.
+>
+> **Corrected 2026-09-10 after an audit, because the first version of this paragraph overreached in
+> three specific ways and the corrections are more useful than the claim:**
+> * It restated R-4's *"held a stray DRAM address"* as *"holds something the program never wrote"*,
+>   which is strictly broader — and **that widening is the only thing that makes R-19 fit**. R-19's
+>   victim holds `compress_cap(NULL) + n`, a 64-bit encoding constant, which is not a DRAM address.
+>   R-19 is the WEAKEST of the three and fits only the widened sentence.
+> * It cited the wrong sentence of **R-10**. The strong fit is not the OR-reduce inference but R-10's
+>   own: *"when the high half is ZERO, `is_cap_req = 0` sets `axi_wr_blen = 0`, so only ONE beat is
+>   written and **the high 8 bytes are left at whatever was in DRAM**."* That is a memory-CONTENT
+>   mechanism, which is what "held" describes. It is the strongest of the three.
+> * It offered no discriminator. Here is one: **R-10's half-beat write leaves stale DRAM IN MEMORY,
+>   while R-29 is READ-SIDE** (`rd_user_o` served from the refill leg, memory intact). If the
+>   2026-07-28 sighting came from a host-side dump of the region, R-29 cannot be the mechanism. The
+>   three lines do not say how it was observed, so **R-29's membership is UNRESOLVED**, not
+>   established.
+>
+> The routing rule below survives all of that and is the actionable part.
 >
 > **The actionable part.** Keeping this open as a separate ID invites a fourth parallel investigation
 > of a symptom three entries already own. A NEW sighting of this shape is filed against whichever of
@@ -1192,7 +1244,9 @@ no `memcpy` and no scalar-pointer cast anywhere today.
 
 > **APPLIED 2026-09-10.** Verified against this entry's own sub-entries: there is no residual. C-4a and
 > C-4b are both FIXED and both re-verified, and the "remaining domain-creation bug" the old heading
-> promised is the `helper_cssplit` path that C-4b's rung now returns its oracle on. The compiler lane's
+> promised is the `helper_cssplit` path that C-4b's rung now returns its oracle on — though note that
+> identifying that referent is INFERENCE from C-4b's provenance text, not sourced to the authoring
+> commit, which predates a directory rename and could not be read directly. The compiler lane's
 > caveat (recorded further down) stands and is not dropped: this rests on RECORDED sweep evidence and
 > neither rung was re-run for the decision.
 >
@@ -1206,6 +1260,11 @@ no `memcpy` and no scalar-pointer cast anywhere today.
 > BLOCK, since content leaving the tree cannot introduce a secret — and that is a change to a release
 > gate, so it is the lead's call. Until then this entry is final-but-resident, which is a cost of the
 > gate and not a fact about C-4.
+>
+> **Correction to commit `3c013e06d99f`'s message.** It says C-4 was "archived … moved to the archive".
+> It was not, for the reason above; the file has said `NOT MOVED TO THE ARCHIVE` throughout. The message
+> misdescribes its own content, which is the failure the `-o/--only` rule exists to prevent, in a
+> different form. Recorded here rather than by rewriting a pushed message.
 
 
 > **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** Both sub-entries read
@@ -1587,7 +1646,38 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
 
-### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `GONE ON SILICON 2026-09-05 (gpn2 = 3976364985 = oracle and RETURNED, in the boot where it used to wedge); ATTRIBUTION OPEN pending the Q-04 spec ruling on whether a scalar source is exempt from the MOVC consumption rule — this entry closes on that ruling, not on the symptom`
+### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `FIXED — `copyPhysReg` branches on register class (GPCR → MOVC, GPR → ADDI, `CapstoneInstrInfo.cpp:548-563`), so scalar copies no longer go through MOVC; GONE ON SILICON 2026-09-05. TWO RESIDUALS REHOMED, see the box: the untagged-in-GPCR live copy is C-32, the MOVC modelling is C-46`
+
+> # ⚠ CORRECTED 2026-09-10 — twice in one day. Read this box, not the two below it.
+>
+> **The "attribution pending Q-04" status was wrong on both halves, and an auditor caught it.**
+>
+> 1. **The Q-04 dependency was manufactured.** This entry's own v3 box already says: *"**What is NOT
+>    in doubt, through all three versions:** the mechanism, the numeric proof, and that LLVM is
+>    emitting the wrong instruction. Only blame moved."* The compiler attribution was never pending on
+>    a spec ruling. I invented a dependency the entry explicitly denies.
+> 2. **The defect as described is already FIXED.** `CapstoneInstrInfo.cpp:548-563` branches on
+>    register class — `GPCRRegClass` → `MOVC`, `GPRRegClass` → `ADDI` — so an integer copy is an
+>    ordinary ALU move. The body's citation of *"`copyPhysReg` emits MOVC for every GPR-to-GPR copy
+>    (`CapstoneInstrInfo.cpp:520-523`)"* is stale in both the line numbers and the claim. The rungs
+>    pass on silicon **because the fix landed**, not because they happen not to re-read the source —
+>    the ruling attributed to luck what this same entry attributes to a fix.
+>
+> **Two residuals are real and are rehomed rather than closed with the entry:**
+> * **The untagged-capability-in-GPCR live copy → C-32.** `movc` with a source read afterwards is
+>   still emitted for GPCR operands; the auditor reproduced it directly
+>   (`movc a0, s0 ; cjalr ; movc a0, s0`) from `test/CodeGen/Capstone/c32-movc-untagged-live.ll`, which
+>   is committed `XFAIL` with a positive control. Q-04's own tail already says *"the compiler side is
+>   C-32"*. **That** is what a Q-04 ruling would gate, not this entry.
+> * **The MOVC instruction MODELLING → C-46 (new).** `CapstoneInstrInfo.td:2479-2483` declares
+>   `hasSideEffects = 0` with `$rs1` as a pure USE and no `Constraints` tying `rd` to `rs1`, unlike
+>   `PseudoINIT`/`PseudoSEAL` a few definitions below. That is wrong for LINEAR capabilities on ANY
+>   implementation, independent of the scalar question. It was named inside this entry and would have
+>   been ORPHANED by closing C-14 — a grep for it returns exactly one hit, here.
+>
+> **Caveat carried from the auditor rather than hidden:** the `llc` used to reproduce the C-32 shape is
+> older than two of the lowering sources, though `CapstoneInstrInfo.cpp` and `.td` are older still than
+> the binary, so the emission path exercised is current. A `ninja llc` and a re-run would collapse it.
 
 > **APPLIED 2026-09-10.** The symptom and the attribution are deliberately kept apart. "Gone on
 > silicon" is not "fixed": closing this on the symptom would discard the live question of whether our
@@ -2235,6 +2325,38 @@ disagreeing with the history.
 
 
 ## Compiler / toolchain (ours)
+
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the compiler does not know it CONSUMES a linear source `OPEN — split out of C-14 2026-09-10 so it is not orphaned by that entry's closure; wrong for LINEAR capabilities on ANY implementation, independent of the scalar question in Q-04`
+
+`llvm/lib/Target/Capstone/CapstoneInstrInfo.td:2479-2483` declares
+
+```
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def MOVC : ... (ins GPCR:$rs1)
+```
+
+with `$rs1` a pure USE and **no `Constraints`** tying `rd` to `rs1` — unlike `PseudoINIT` and
+`PseudoSEAL` a few definitions below, which do exactly that. But `MOVC` writes `cnull` to `rs1`
+whenever the source is not non-linear, so for a LINEAR source the instruction **destroys its own
+operand** and the machine model says it does not. That licenses every transform that assumes a copy is
+non-destructive: rematerialisation, CSE, sinking, and reordering across the copy.
+
+**This is independent of Q-04.** Whether or not a SCALAR source is consumed is a spec question; that a
+LINEAR one is consumed is not in dispute in any of the three implementations. So this is wrong today
+regardless of how that ruling lands.
+
+**Why it has its own ID.** It was named inside C-14 (*"The LLVM bug is bigger than the scalar case"*)
+and a grep for it returned exactly one hit — that entry. C-14 is now FIXED for the scalar case, and
+closing it would have taken this with it. Split out on the one-defect-one-ID rule, ID allocated with
+`tests/next-issue-id.sh`.
+
+**Not yet demonstrated.** No test shows a miscompile from the missing constraint; the argument is from
+the definition. **What would settle it:** a directed case where a `movc` of a linear capability is CSE'd
+or rematerialised and the source is read afterwards, predicting a fault or a null on the second read.
+Until that exists this is a modelling defect by inspection, not an observed miscompile.
+
+**Owner:** compiler lane. Related: **C-32** (the untagged-in-GPCR live copy), **Q-04** (whether a
+scalar source is consumed at all).
 
 ### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `OPEN — found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically); low priority, no known consumer`
 
