@@ -2,8 +2,8 @@
 
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `42a141c93`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
 > (this package's test FAIL 11 → PASS), lint at the baseline counts, 88-row sweep unchanged. **Bitstream: in synthesis
-> at `66c4e7517`, not yet on the board.** Silicon readings (pre-flash "duplicate present", post-flash "consumed") are the
-> board lane's boots sw41 and the post-flash set; when they land they are filed under `board/` here with their date.
+> at `66c4e7517`, not yet on the board.** **Pre-flash silicon reading 2026-09-09 (boot sw41): duplicate PRESENT on
+> `caplifive_s12fix_5097eb166`**, as predicted; the post-flash reading is filed below when the fixed bitstream has booted.
 
 **Wrong symptom? Read this paragraph first.** This package is the **linearity break**: after `INIT rd, rs1, imm` with
 `rd != rs1`, the source register still holds a live LINEAR capability to the same region, under the same
@@ -57,8 +57,23 @@ to the `ef5a8eaf2` record in status, RVFI hash and cycles.
 
 ## Run it
 
-`bash run.sh <checkout> init-rs1-ne-rd` (the test is in `testlist_capstone.yaml`; edit `LIST` in `run.sh` accordingly —
-it defaults to `testlist_r26.yaml` for the sibling packages).
+`bash run.sh <checkout> init-rs1-ne-rd` (this folder's `run.sh` reads `testlist_capstone.yaml`, where the test lives;
+the sibling packages' scripts read `testlist_r26.yaml`). Expected: FAIL 11 on `ef5a8eaf2`, PASS at `66c4e7517`.
+
+## Board
+
+**2026-09-09, boot sw41, current silicon `caplifive_s12fix_5097eb166`, firmware `ffefa4eec605` (Q-06 line), board lane.**
+Control `k800` = 4 (boot valid). `r25same` (CAPTYPE with RTL type 4, `INIT rd == rs1`, delin, stc, ldc, tag check) =
+`0x25000001`: the construction works inside a domain. `r25dup` (`init a3, a1, a0`, then a capability store THROUGH `a1`,
+the consumed source, and a tagged read-back) = `0x25000001`: **the store through the consumed source landed and a tagged
+capability came back — the duplicate is present on the current silicon**, exactly the pre-flash prediction below. Zero
+fault tags, two HOLE lines (the transferred arenas), core alive, both domains answered both CALLs identically. Rows in
+`tests/board-results/2026-09-05.tsv` (sw41); registry R-25 carries the same paragraph. Probe construction notes: the type
+constant must be the RTL's 4, and the UNINIT operand's cursor must be moved past `end` with CINCOFFSET (RTL does not
+enforce the spec's bound there) — the two divergences named in the first paragraph.
+
+**Post-flash (bitstream from `66c4e7517`): not yet booted.** Prediction on file: `r25same` unchanged, `r25dup` traps 25
+at the store through the consumed source.
 
 ## Records
 

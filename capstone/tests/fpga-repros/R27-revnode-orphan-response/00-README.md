@@ -61,4 +61,5 @@ itself was tried upstream and reverted (`f5f9291c8`, `d15d45b33`, `7bcbdb39c`).
 ## Records
 
 `docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md` (mechanism, waveforms, the audit, the latency correction).
-Registry R-27, R-28. Waveforms under `~/dev/llvm-capstone-rebuild/records/r26/` (not committed: 20–30 MB each).
+Registry R-27, R-28. The waveforms themselves (20–30 MB each) are not committed; the tick tables above and in the
+history note are the record, and `sim/callhang-fe-1660-1760.txt` is the frontend dump from the first hang.
