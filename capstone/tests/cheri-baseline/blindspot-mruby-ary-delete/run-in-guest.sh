@@ -1,0 +1,47 @@
+#!/bin/sh
+# Runs INSIDE CheriBSD purecap. One blind-spot case, three revocation configs.
+#
+# ary-delete (formerly A1) is mruby issue 6339: mrb_ary_delete keeps the removed element in a local the
+# GC does not know about, the object is swept mid-delete, and its slot comes back
+# off the PAGE FREE LIST as a String. Nothing reaches malloc or free, so purecap
+# sees an in-bounds access through a tagged capability and revocation has nothing
+# to revoke. The oracle is therefore the ANSWER, not a crash.
+#
+# The verdict is a PRINTED MARKER, because this build has no Kernel#exit and an
+# exit-code oracle reported NoMethodError as rc=1, which reads exactly like a
+# correct answer:
+#   ARYDEL=1  correct        ARYDEL=2  WRONG ANSWER, a MISS
+#   no marker and rc>=128      CHERI caught it on a signal
+#   SANITY_OK=7                the interpreter and the channel both work
+DIR=/root/ary-delete-6339
+CFG="${1:-spatial}"
+cd "$DIR" || exit 2
+
+case "$CFG" in
+  spatial)  REV=0; EVERY=0 ;;
+  temporal) REV=1; EVERY=0 ;;
+  eager)    REV=1; EVERY=1 ;;
+  *) echo "unknown cfg $CFG"; exit 2 ;;
+esac
+
+echo "===CHERI-BASELINE-BEGIN cfg=$CFG==="
+sysctl security.cheri.runtime_revocation_default=$REV >/dev/null 2>&1 \
+  && echo "KNOB revocation=$(sysctl -n security.cheri.runtime_revocation_default 2>/dev/null)" \
+  || echo "KNOB revocation=ABSENT"
+sysctl security.cheri.runtime_revocation_every_free_default=$EVERY >/dev/null 2>&1 \
+  && echo "KNOB every_free=$(sysctl -n security.cheri.runtime_revocation_every_free_default 2>/dev/null)" \
+  || echo "KNOB every_free=ABSENT"
+
+# POSITIVE CONTROL FOR THE VEHICLE. A plain heap-buffer-overflow on a malloc'd
+# buffer is the one thing purecap must stop. Without it, every MISS in this table
+# is indistinguishable from a harness that never reports anything.
+# Expect: CONTROL=BEFORE, then a signal (rc>=128), and NO CONTROL=AFTER.
+o=$(timeout 60 ./catch_control 2>&1); rc=$?
+echo "CONTROL rc=$rc out=[$(printf '%s' "$o" | tr '\n\t' ';;' | cut -c1-80)]"
+
+o=$(timeout 60 ./mruby sanity.rb 2>&1); rc=$?
+echo "SANITY rc=$rc out=[$(printf '%s' "$o" | tr '\n\t' ';;' | cut -c1-80)]"
+
+o=$(timeout 60 ./mruby ary_delete.rb 2>&1); rc=$?
+echo "ROW ary-delete cfg=$CFG rc=$rc out=[$(printf '%s' "$o" | tr '\n\t' ';;' | cut -c1-100)]"
+echo "===CHERI-BASELINE-END cfg=$CFG==="

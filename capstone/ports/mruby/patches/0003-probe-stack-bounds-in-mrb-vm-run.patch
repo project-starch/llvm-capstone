@@ -1,0 +1,106 @@
+diff --git i/src/vm.c w/src/vm.c
+index 148332bd0..51d1b9b5e 100644
+--- i/src/vm.c
++++ w/src/vm.c
+@@ -184,6 +184,27 @@ mrb_realloc_with_gc_disabled(mrb_state *mrb, void *p, size_t size)
+   return p;
+ }
+ 
++#ifdef MD_PROBE_STACK
++/* Capstone bring-up instrument; port/md_probe.c. Takes the callinfo the clear is
++   about to use, not the context, because exec_irep uses a ci it cached before
++   stack_extend ran. BOTH clears are wrapped: instrumenting only mrb_vm_run's
++   produced a healthy reading and a fault four instructions later, and the reason
++   was that the other one exists. */
++extern long md_probe_stack(long site, void *ci, void *stbase, long nregs, long keep);
++#ifdef MD_VM_WATCHDOG_ON
++/* Installed once, from the first frame the probe sees, because there is no mrb_state
++   to hang it on before mrb_open_core starts. Signature-erased in md_probe.c and cast
++   here, where mruby's own types are in scope. */
++extern void md_fetch_hook(void *, const void *, const void *, void *);
++#endif
++#ifdef MD_VM_STAGES
++/* 1 = leave right after the clear, 2 = after stack[0] = self. Returns nonzero
++   when the caller should leave at that stage. */
++extern int md_vm_stage_gate(int stage);
++extern unsigned long md_vm_retries;
++#endif
++#endif
++
+ static void
+ stack_extend_alloc(mrb_state *mrb, mrb_int room)
+ {
+@@ -994,6 +1015,10 @@ exec_irep(mrb_state *mrb, mrb_value self, const struct RProc *p)
+   }
+   else {
+     stack_extend(mrb, nregs);
++#ifdef MD_PROBE_STACK
++    /* ci was cached at the top of this function, BEFORE stack_extend ran. */
++    nregs = (mrb_int)md_probe_stack(2, ci, mrb->c->stbase, (long)nregs, (long)keep);
++#endif
+     stack_clear(ci->stack+keep, nregs-keep);
+   }
+ 
+@@ -1772,8 +1797,27 @@ mrb_vm_run(mrb_state *mrb, const struct RProc *proc, mrb_value self, mrb_int sta
+     }
+   }
+   stack_extend(mrb, nregs);
++#ifdef MD_PROBE_STACK
++  nregs = (mrb_int)md_probe_stack(1, c->ci, c->stbase, (long)nregs, (long)stack_keep);
++#ifdef MD_VM_WATCHDOG_ON
++  if (!mrb->code_fetch_hook)
++    mrb->code_fetch_hook = (void (*)(mrb_state*, const struct mrb_irep*,
++                                     const mrb_code*, mrb_value*))md_fetch_hook;
++#endif
++#endif
+   stack_clear(c->ci->stack + stack_keep, nregs - stack_keep);
++#ifdef MD_VM_STAGES
++  /* STAGED RETURN POINTS through the bracketed region. The hang sits in C between
++     the clear and the first thousand bytecode instructions, and the ladder cannot
++     see inside a call that never returns -- so each stage LEAVES here instead,
++     ascending, and the first one that fails to return IS the bisection point.
++     md_vm_stage_gate is set by the domain before each mrb_open_core attempt. */
++  if (md_vm_stage_gate(1)) return mrb_nil_value();
++#endif
+   c->ci->stack[0] = self;
++#ifdef MD_VM_STAGES
++  if (md_vm_stage_gate(2)) return mrb_nil_value();
++#endif
+   mrb_value result = mrb_vm_exec(mrb, proc, irep->iseq);
+   mrb_assert(mrb->c == c);      /* do not switch fibers via mrb_vm_run(), unlike mrb_vm_exec() */
+   mrb_assert(c->ci == c->cibase || (c->ci - c->cibase) == cioff - 1);
+@@ -2473,10 +2517,34 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq
+   CI_PROC_SET(ci, begin_proc);
+   ci->pc = iseq;
+ 
++#ifdef MD_VM_STAGES
++  /* Stage 3: leave before MRB_TRY. Everything above is plain setup plus the
++     optable of block addresses; everything below goes through our own setjmp. */
++  if (md_vm_stage_gate(3)) return mrb_nil_value();
++#endif
++
+ RETRY_TRY_BLOCK:
+ 
++#ifdef MD_VM_STAGES
++  /* Counts arrivals at the retry label. MRB_TRY is setjmp, and this port supplies
++     its own; a setjmp that returns more than it should would spin here without
++     executing a single bytecode instruction, which is exactly the shape observed:
++     a hang with fewer than a thousand instruction fetches. */
++  md_vm_retries++;
++#endif
++
+   MRB_TRY(&c_jmp) {
+ 
++#ifdef MD_VM_STAGES
++  /* Stage 4: inside MRB_TRY, before the dispatch loop.
++     mrb->jmp MUST be put back first. Returning straight out of MRB_TRY leaves it
++     pointing at this frame's dead c_jmp, and the first thing upstream to raise then
++     longjmps into a stack frame that no longer exists -- which is what the first
++     version of this stage did, faulting in mrb_vm_run and reading exactly like a
++     finding about mruby. A variant has to stop the FLOW, not a leaf. */
++  if (md_vm_stage_gate(4)) { mrb->jmp = prev_jmp; return mrb_nil_value(); }
++#endif
++
+   if (mrb_unlikely(mrb->exc)) {
+     mrb_gc_arena_restore(mrb, ai);
+     if (mrb->exc->tt == MRB_TT_BREAK)

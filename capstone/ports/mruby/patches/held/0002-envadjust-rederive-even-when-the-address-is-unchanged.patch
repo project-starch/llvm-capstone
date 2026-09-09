@@ -1,0 +1,19 @@
+diff --git i/src/vm.c w/src/vm.c
+index 148332b..acd4b59 100644
+--- i/src/vm.c
++++ w/src/vm.c
+@@ -141,7 +141,13 @@ envadjust(mrb_state *mrb, mrb_value *oldbase, mrb_value *newbase)
+ {
+   mrb_callinfo *ci = mrb->c->cibase;
+ 
+-  if (newbase == oldbase) return;
++  /* No `if (newbase == oldbase) return;` fast path.
++     On a capability target the same ADDRESS is not the same CAPABILITY: when
++     realloc grows a block in place it returns the old address carrying the NEW,
++     wider bounds, while every ci->stack still holds the OLD, narrower one.
++     Skipping the walk leaves those stale, and the next stack_clear stores past
++     the old bound. Re-deriving from newbase below is correct either way, since
++     the offset is zero when the base did not move. */
+ 
+   while (ci <= mrb->c->ci) {
+     struct REnv *e = mrb_vm_ci_env(ci);
