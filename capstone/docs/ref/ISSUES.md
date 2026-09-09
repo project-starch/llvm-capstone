@@ -780,6 +780,30 @@ unexpected operand type.
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
+> # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
+>
+> `cap-man-insn.adoc:421` lists `x[rs1].cursor <= x[rs1].end` as INIT's illegal-operand condition.
+> **The PRE-FIX RTL was therefore SPEC-CONFORMANT.** Changing `flu:139` to `<` makes the RTL deviate,
+> and `:421` must be amended in the same change or the two disagree in the other direction.
+>
+> **The "three independent arguments for exclusive" recorded above collapse to ONE.** The spec is
+> INCLUSIVE wherever it actually speaks — `prog-model.adoc:119` defines aliasing over a closed interval
+> and `:289` bounds fetch at `end-3` — and the RTL is split against itself: STC/LDC use `end-16` and
+> SPLIT faults on `cursor >= end`, but SEAL computes `end - start + 1` and SHRINKTO sets
+> `rd_end = inc - 1`, both inclusive. What survives is that **QEMU is exclusive throughout and the whole
+> software stack is validated against QEMU.** That is a real argument and it may well be decisive, but
+> it is one reason, not three, and it makes this a choice about which convention the project adopts
+> rather than a defect being corrected.
+>
+> **AND Q-07 NARROWS RATHER THAN CLOSES.** I recorded that fixing R-30 this way would close Q-07 and
+> called it the best reason to do it. That is withdrawn: post-fix the RTL accepts `cursor >= end` while
+> QEMU asserts `cursor == end`, so the accepted sets still differ *above* `end`. The divergence shrinks;
+> it does not disappear.
+>
+> **What still stands, unchanged:** the arithmetic (a full fill leaves the cursor at `end`), that INIT
+> is therefore unreachable by filling, and that this makes the UNINIT type's purpose unachievable. What
+> changes is that the remedy is a spec amendment plus an RTL change, decided together.
+
 > # ⚠ AUDIT 2026-09-10: the CONCLUSION SURVIVES, the ENTRY DOES NOT. Three defects, all corrected below; read this box before citing anything in this entry.
 >
 > **1. PROVENANCE — the header's "reading the FLASHED RTL (66c4e7517)" is WRONG for most citations.**
