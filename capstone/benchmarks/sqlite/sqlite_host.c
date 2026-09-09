@@ -67,6 +67,7 @@ static int fail_cleanup(const char *message, unsigned long value) {
 }
 
 int main(int argc, char **argv) {
+  int feature_probe = 0;   /* --feature-probe: ask the domain which restored APIs it carries */
   /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
      strtoul'd as a probe stage, so a bare path would parse to 0 and quietly publish the
      stage-0 selector -- a run that looks like a staged probe and tests nothing. */
@@ -75,11 +76,14 @@ int main(int argc, char **argv) {
   if (argc == 6 && !strcmp(argv[2], "--slt") && !strcmp(argv[4], "--clamp")) {
     slt_path = argv[3];
     clamp_n = strtoul(argv[5], NULL, 0);
+  } else if (argc == 3 && !strcmp(argv[2], "--feature-probe")) {
+    feature_probe = 1;
   } else if (argc == 4 && !strcmp(argv[2], "--slt")) {
     slt_path = argv[3];
   } else if (argc != 2 && argc != 3) {
     fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
-                    "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n", argv[0], argv[0]);
+                    "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n"
+                    "       %s <sqlite-domain.dom> --feature-probe\n", argv[0], argv[0], argv[0]);
     return 2;
   }
   /* RUNTIME PROBE SELECTION (optional 2nd argument).
@@ -259,6 +263,10 @@ int main(int argc, char **argv) {
     metadata->offset = (sqlite_hostcall_u64_t)got;
     mark_u("SQ: slt=", got);
   }
+  if (feature_probe) {
+    metadata->opcode = SQLITE_HC_OP_FEATURE;
+    mark("SQ: feature-probe\n");
+  }
   mark("SQ: E/share1\n");
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
@@ -280,7 +288,13 @@ int main(int argc, char **argv) {
      instead, which prints its own markers and would otherwise look like a success. The
      0x5117BADn values are the runner's refusals-to-start; each means no records were
      evaluated, and each must fail the run rather than pass it with an empty report. */
-  if (slt_path) {
+  if (feature_probe) {
+    /* The probe returns the 0x4EB0 marker family the driver already reads as a result, so no
+       driver change is needed; the FEATURE-SET line itself comes back in the payload. */
+    if ((result & 0xFFF00000UL) != 0x4EB00000UL)
+      return fail_cleanup("feature probe did not run", result);
+    mark_u("SQ: feature=", result);
+  } else if (slt_path) {
     /* A DOMAIN-SIDE PROBE MARKER IS A SUCCESSFUL RUN, NOT A FAILURE TO START.
      *
      * Probe builds (CAPSTONE_HEAPCAP_PROBE and friends) return their own 0x4EA0/0x4EB0 marker
