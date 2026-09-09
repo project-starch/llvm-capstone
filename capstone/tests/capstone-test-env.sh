@@ -69,6 +69,16 @@ fi
 
 mkdir -p "$CAPSTONE_TMP_ROOT"
 
+# The ONE QEMU serialisation lock, defined here and nowhere else. It moved out of /tmp on
+# 2026-09-08: /usr/lib/tmpfiles.d/tmp.conf carries `D /tmp 1777 root root 30d`, and the
+# capital D empties /tmp at boot, so a lock there is recreated by the first lane to run
+# after a reboot -- and two lanes recreating it around the same moment hold different
+# inodes and do not serialise. Every runner reads $CAPSTONE_QEMU_LOCK; none may hardcode a
+# path (a second path is a second lock). CAPSTONE_QEMU_LOCK_HELD=1 tells a runner that its
+# caller already holds it.
+export CAPSTONE_QEMU_LOCK=${CAPSTONE_QEMU_LOCK:-$HOME/.capstone-locks/qemu.lock}
+mkdir -p "$(dirname -- "$CAPSTONE_QEMU_LOCK")"
+
 # Is the toolchain BINARY as new as the compiler SOURCE? Once per process tree (the export
 # stops nested scripts repeating the 0.5 s ninja dry run). A stale build dir is a WARNING here,
 # not a failure -- sourcing must keep working -- but every producer script inherits the warning

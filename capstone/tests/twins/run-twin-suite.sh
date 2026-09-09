@@ -28,7 +28,9 @@ printf 'suite=%s\nlevel=%s\n%s\ncompiler=%s\nstarted=%s\n' "$SUITE" "$LEVEL" "$Q
 # The rootfs lock is ONE file for the whole machine, whatever CAPSTONE_TMP_ROOT a caller
 # sets (the pair runner gives each arm its own tmp root; deriving the lock from it would
 # have let two QEMU suites run at once -- found 2026-09-05 before it happened).
-LOCK=${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}
+# The one lock path comes from capstone-test-env.sh (sourced above); no fallback here, because
+# a second path is a second lock (moved out of /tmp on 2026-09-08: /tmp is emptied at boot).
+LOCK=${CAPSTONE_QEMU_LOCK:?CAPSTONE_QEMU_LOCK unset: source capstone/tests/capstone-test-env.sh}
 
 case "$SUITE" in
   rv8)      CMD=(env DOMAIN_OPT_LEVEL="$LEVEL" LOG_DIR="$OUT/logs" bash "$BENCH/rv8/run-all-rv8.sh") ;;

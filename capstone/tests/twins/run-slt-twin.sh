@@ -23,7 +23,9 @@ shift
 case "$LEVEL" in -O0|-O1|-O2|-O3|-Os|-Oz) ;; *) echo "ERROR: level must be -O0/-O1/-O2/-Os, got $LEVEL" >&2; exit 2 ;; esac
 CAP=${SLT_TWIN_CAP:-256}
 # One machine-wide lock, independent of CAPSTONE_TMP_ROOT (see run-twin-suite.sh).
-LOCK=${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}
+# The one lock path comes from capstone-test-env.sh (sourced above); no fallback here, because
+# a second path is a second lock (moved out of /tmp on 2026-09-08: /tmp is emptied at boot).
+LOCK=${CAPSTONE_QEMU_LOCK:?CAPSTONE_QEMU_LOCK unset: source capstone/tests/capstone-test-env.sh}
 
 if [[ $# -eq 0 ]]; then
   CORPUS=$(bash "$SQL/fetch-sqllogictest.sh")

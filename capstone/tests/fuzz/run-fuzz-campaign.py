@@ -152,8 +152,12 @@ def main():
                 f.write(f"{name}\t{path}\n")
         share = out / "share"
         res = out / "batch-results.tsv"
-        # One lock for the machine, independent of CAPSTONE_TMP_ROOT (see run-twin-suite.sh).
-        lock = pathlib.Path(os.environ.get("CAPSTONE_QEMU_LOCK", "/tmp/capstone/nightly-qemu.lock"))
+        # One lock for the machine, defined once in capstone-test-env.sh (moved out of /tmp on
+        # 2026-09-08: /tmp is emptied at boot). No fallback: a second path is a second lock.
+        lock_env = os.environ.get("CAPSTONE_QEMU_LOCK")
+        if not lock_env:
+            sys.exit("run-fuzz-campaign: CAPSTONE_QEMU_LOCK unset: source capstone/tests/capstone-test-env.sh first")
+        lock = pathlib.Path(lock_env)
         cmd = ["python3", str(HERE / "run-domain-batch.py"), "--manifest", str(mpath),
                "--share", str(share), "--log", str(out / "batch.log"), "--out", str(res),
                "--per-item-timeout", str(a.per_item_timeout)]

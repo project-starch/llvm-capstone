@@ -291,7 +291,11 @@ if [ "$BUILD_OK" -eq 1 ]; then
   # ---- stage 3: QEMU suites (SERIAL, rootfs lock guarded) ---------------------
   # flock guards against a second nightly; a manual concurrent QEMU run must
   # still be avoided by convention (the suites must be SERIALIZED (never two at once)).
-  LOCK="$CAPSTONE_TMP_ROOT/nightly-qemu.lock"; : >"$LOCK" 2>/dev/null || true
+  # One lock path for every runner, defined in capstone-test-env.sh (moved out of /tmp on
+  # 2026-09-08: /tmp is emptied at boot). Unset means the env was not sourced: stop, do not
+  # invent a second path.
+  LOCK="${CAPSTONE_QEMU_LOCK:?CAPSTONE_QEMU_LOCK unset: source capstone/tests/capstone-test-env.sh}"
+  mkdir -p "$(dirname -- "$LOCK")"; : >"$LOCK" 2>/dev/null || true
   exec 9>"$LOCK"
   flock 9 || log "[warn] could not take QEMU lock; proceeding serially anyway"
   for entry in "${SUITES[@]}"; do
