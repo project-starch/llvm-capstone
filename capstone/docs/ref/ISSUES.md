@@ -357,7 +357,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM NAMED at `core/cache_subsystem/wt_dcache_mem.sv:397` (the high word of a 128-bit load is overlaid from the write buffer only for an entry that hit at WORD 0; a plain store to word 1 never hits, so the stale bank-1 array data is returned) — the data-side twin of the S-10 tag hazard the same file documents at `:286`; no fix candidate yet (the term would join the `rd_ctag_o` UNOPTFLAT ring, synthesis-first); W-12 stays in force`
+### R-29 — a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM PLAUSIBLE, NOT PROVEN (claim-auditor 2026-09-09 night, verdict PLAUSIBLE-BUT-UNPROVEN): the write-buffer overlay that would repair the high half is gated at WORD granularity (`wt_dcache_mem.sv:283/:335/:397`, the data twin of the S-10 tag hazard at `:286`), but which of the store buffer's word-granular disambiguation (`load_unit.sv:297`, `store_buffer.sv:279`), the miss-refill leg (`wt_dcache_mem.sv:354-358`) or the overlay itself produces the reading is NOT SEPARATED, and a second independent defect at `:397` drives `rd_user_o` from a plain word-0 entry's `.user = 0`; no fix candidate; synthesis-first; W-12 stays in force`
 
 **Signature.** The rung `s06agg` (`tests/fpga-repros/S06-untagged-ldc-stc-high-half/src/s06agg.dom`,
 `249118220f8cf37a`, entry VA `0x10000`, `-O0`) copies `struct { void *p; unsigned long x, y; }` by
@@ -405,8 +405,32 @@ trailing scalar field is initialised just before the copy. `W-12` (`SQLITE_GRANU
 `workarounds/CLASSIFICATION.tsv`) stays in force with this entry as its reason; `W-04`'s retirement
 (the memcpy high-half fixup) is unaffected, the memcpy loop does not have the shape.
 
-**Mechanism (RTL lane, 2026-09-09, verified against `core/cache_subsystem/wt_dcache_mem.sv` at
-`66c4e7517`).** A cache line is one 16-byte granule (`DcacheLineWidth = 128`): a 128-bit `ldc` returns the
+> **AUDIT 2026-09-09 night (RTL lane's claim-auditor): the attribution below is PLAUSIBLE-BUT-UNPROVEN;
+> the header was softened the same night.** What survived: the location (`rd_user_o` is the lane carrying
+> the high 64 bits of an `ldc` — `:397` → `wt_dcache.sv:385` → `:257` → `wt_dcache_ctrl.sv:104` →
+> `load_unit.sv:761` → `load_store_unit.sv:624`, single beat, no alternate route; line width 128 makes
+> bank 1 the granule's high word), the word-granular gating at `:283/:335/:397`, and the S-10 tag comment
+> at `:286`. What is false as written: the fall-through is not only the stale array — `:354-358` has a
+> refill leg where `ruser` comes from the line returning from memory, and since the source region is never
+> read before the `ldc` and this dcache does not write-allocate, the `ldc` very plausibly MISSED and took
+> that leg, a different race in a different unit; and the generate loop is `gen_rd_user` at `:396`. What
+> is unmeasured: WHERE the store was at the read cycle — allocation with `wtag` = word 1 is confirmed
+> (`wt_dcache_wbuffer.sv:728-731`, S-07's stall at `:475-476` needs a capability on one side and both stores
+> are plain), residency at the read was never observed. A stronger alternative is alive: load/store
+> disambiguation is word-granular too (`load_unit.sv:297` takes the page offset from `vaddr[11:0]`,
+> `store_buffer.sv:279/287/293` compare `[11:3]`), so a 16-byte `ldc` at `…010` is NOT held for a pending
+> store at `…018` and the `sd` may still be in the STORE BUFFER, never having reached the dcache — a
+> different file, a different fix, and a window of a few cycles rather than forty, which fits
+> one-instruction adjacency better. A SECOND DEFECT at the same line: a plain store's wbuffer `.user` is
+> provably zero (`store_unit.sv:363`), so a resident plain WORD-0 entry sets `wbuffer_be` to all ones and
+> drives all eight lanes of `rd_user_o` from `.user = 0` — a word-1 term does not fix that; the fix must
+> also refuse the `.user` overlay when the entry is not a capability. Also: the apart-PASS run's log was
+> overwritten (that result rests on the commit message and the records file), and no test observes the
+> `ldc`'s OWN result (values are read after an `stc` into a second region, so `ldc` vs `stc` vs readback is
+> undetermined). The board readings and the six-run table are untouched; only the attribution moves.
+
+**The account as first written (RTL lane, 2026-09-09, line numbers verified against
+`core/cache_subsystem/wt_dcache_mem.sv` at `66c4e7517`; read it with the audit box above).** A cache line is one 16-byte granule (`DcacheLineWidth = 128`): a 128-bit `ldc` returns the
 low word on `rd_data_o` and the high word on `rd_user_o` from bank 1 (`:279`). The write-buffer overlay
 compares at WORD granularity: `wbuffer_hit_oh[k]` (`:283`) matches an entry whose `wtag` equals the load's
 word address, and a granule-aligned `ldc` compares WORD 0; `wbuffer_be` (`:335`) is that entry's byte
@@ -425,7 +449,15 @@ enables overlay `rd_user_o`. The tag-side term already cost UNOPTFLAT 39 → 40 
 (`:384`), and the file says any new term there joins the ring — `rd_user_o` may be a different cone but
 that is for synthesis to say. Synthesis-first, one bitstream, the lead's call; not this cycle.
 
-**The discriminating arm (RTL lane, 2026-09-09, prediction written before the run).** `r29-lowword` is
+> **RETRACTED AS CONFIRMATION 2026-09-09 night (RTL lane, on the audit).** `r29-lowword`'s oracle is
+> inverted: the claimed RTL predicts that arm FAILS (an adjacent word-0 plain store hits, sets `wbuffer_be`,
+> overlays `.user = 0`), so its PASS means the entry was not resident and the arm never created the
+> condition it was built for. It is also not a one-variable pair: the store and load share `[11:3]`, so
+> `page_offset_matches` STALLS the load (+56 cycles on otherwise identical code) and the seeds differ. The
+> "r29-lowword must still pass" acceptance line is withdrawn with it. Kept below as the record of what was
+> claimed.
+
+~~**The discriminating arm (RTL lane, 2026-09-09, prediction written before the run).**~~ `r29-lowword` is
 `s06agg-shape` with one variable changed: the last store before the `ldc` targets the LOW word and the high
 word is stored early. The word-0-gating account entails PASS (a resident store to word 0 does set
 `wbuffer_hit_oh`, so the overlay applies); a generic "a nearby store disturbs the load" account entails
@@ -435,9 +467,12 @@ control intact in both. The site is named and corroborated; a claim-auditor pass
 pending (result to be recorded here either way). Bare M-mode simulation: corroborates the mechanism,
 adds no board evidence.
 
-**What would settle it.** (a) A fix candidate at `:397` (above) through the sim pair, lint, the auditor and
-synthesis before any board time — and `r29-lowword` must still PASS, so a fix that repairs the high word
-by breaking the low one cannot read as success. (b) The matched board pair:
+**What would settle it (rewritten after the audit).** (a) Separate the three accounts in simulation with
+instruments that OBSERVE, not infer: where the `sd` is at the `ldc`'s read cycle (store buffer, write buffer,
+array), whether the `ldc` hit or missed, and the `ldc`'s OWN result register (not a readback after an `stc`) —
+one arm per account, prediction first, logs kept. (b) A fix candidate only after (a); whatever it is, it must
+also refuse the `.user` overlay for a non-capability entry (the second defect), then the sim pair, lint, the
+auditor and synthesis before any board time. (c) The matched board pair:
 the same rung with a `fence` (or any instruction) between the `sd` and the `ldc`, predicted 64. (c) A
 fix candidate then goes through the sim pair (adjacent must PASS, apart unchanged), lint, synthesis, and
 one bitstream; the rung's 66 → 64 on the board is the acceptance.

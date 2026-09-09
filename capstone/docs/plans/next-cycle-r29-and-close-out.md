@@ -12,7 +12,7 @@ approved on 2026-09-09.)*
 | bitstream | `caplifive_r25r26r27_66c4e7517.bit` on the board (persistent); `caplifive_s12fix_5097eb166.bit` in the console store as the restore path |
 | R-25 | fixed on silicon (sw41 → sw45, N=2 in sw47); archived |
 | R-26, R-27 | in the bitstream, sim-proven; board arms D/E clean = no-regression; archived; the monitor's four `fence.i` dropped (monitor `1a39e37` … caplifive-system `884b716`, **nested pushes pending the lead's credential** — the parent already points at them) |
-| R-29 | NEW, open: a plain `sd` to a granule's HIGH word immediately before a 128-bit `ldc` returns it stale (`wt_dcache_mem.sv:397`); on every revision including the pre-flash silicon; board sw46/sw48 = 66; sim FAIL 11 adjacent / PASS apart / `r29-lowword` PASS; claim-auditor pass pending (RTL lane) |
+| R-29 | NEW, open: a plain `sd` to a granule's HIGH word immediately before a 128-bit `ldc` returns it stale (candidate site `wt_dcache_mem.sv:397`; **audit 2026-09-09 night: PLAUSIBLE-BUT-UNPROVEN** — the store buffer's word-granular disambiguation and the miss-refill leg are live alternatives, a second defect at the same line drives `rd_user_o` from a plain word-0 entry's `.user = 0`, and `r29-lowword` is retracted as confirmation); on every revision including the pre-flash silicon; board sw46/sw48 = 66; sim FAIL 11 adjacent / PASS apart |
 | S-06 | struct-assignment acceptance RETRACTED (cited a different program); memcpy half stands; W-12 KEEP |
 | registry | 31 headed entries in `ISSUES.md` (29 with a status token; C-4 and the superseded C-14 framing have none), 71 archived |
 | SQLite stock-ness | helper's branch `sqlite-stockness` (02a967eb, ae536a64): SQLITE_FEATURE_SET gate + harvests + check-feature-set.sh. **2026-09-09 night, helper:** the eight-define restored image FAULTS at `SQ: E/share1` (cause 24) before the domain enters; bisected one define at a time with an all-deployed control: only `-USQLITE_OMIT_EXPLAIN` breaks it, and EXPLAIN is the one restoration that buys nothing (already inert at the SQL surface). Restore set becomes SEVEN defines; seven-together confirmation, budget rerun and the probe rerun in progress (~1 h). Board boot (`board-b43.sh`) and merge pending on that |
@@ -27,20 +27,25 @@ approved on 2026-09-09.)*
 
 ## 1. R-29 — the fix track (RTL lane; one bitstream; the lead flashes)
 
-The mechanism is named and corroborated by a prediction-first arm; what remains is a fix that survives the
-gates, and the gates are the whole cost.
+The site is located but the mechanism is NOT separated (audit, 2026-09-09 night): three accounts are alive — the
+word-granular write-buffer overlay at `:397`, the store buffer's word-granular disambiguation
+(`load_unit.sv:297`, `store_buffer.sv:279`), and the miss-refill leg (`:354-358`) — and a second defect at `:397`
+(a plain word-0 entry overlays `.user = 0`) needs its own term. So step 0 is now SEPARATION, then the fix.
 
-1. **Fix candidate at `wt_dcache_mem.sv:397`**: extend the granule-scoped term S-10 added for the tag
-   (`wbuffer_gran_oh`, `:296`) to the data path, so a resident word-1 entry's own data and byte enables
-   overlay `rd_user_o`. **Predictions written before the run:** `s06agg-shape` adjacent → PASS with the
-   read-back `x`/`y` intact; `r29-lowword` → still PASS (a fix that repairs the high word by breaking the
-   low one must not read as success); the 88-row sweep status- and hash-identical, cycle deltas only on
+0. **Separate the accounts in simulation** (RTL lane): one arm per account with instruments that OBSERVE —
+   where the `sd` is at the `ldc`'s read cycle (store buffer / write buffer / array), whether the `ldc` hit or
+   missed, and the `ldc`'s OWN result register rather than a readback after an `stc`. Predictions first,
+   logs kept (the apart-PASS log was overwritten; that result rests on the records file).
+1. **Fix candidate** where step 0 points — if at `wt_dcache_mem.sv:397`, extend the granule-scoped term S-10
+   added for the tag (`wbuffer_gran_oh`, `:296`) to the data path AND refuse the `.user` overlay for a
+   non-capability entry; if in the store buffer, its disambiguation at granule width. **Predictions written
+   before the run:** `s06agg-shape` adjacent → PASS with the `ldc`'s own result intact; the 88-row sweep status- and hash-identical, cycle deltas only on
    rows that execute an `ldc` behind a resident plain store, each explained.
 2. **Lint = baseline exactly** (UNOPTFLAT 40, ANVIL 0). The file itself says the tag-side term joined a
    combinational ring at 39 → 40 across three formulations (`:384`); `rd_user_o` may be a different cone,
    nobody assumes so. If the count moves, the candidate goes back, not forward.
-3. **claim-auditor** on the diff, the soft spot named: "does the new overlay ever select a word-1 entry's
-   data for a load that is NOT granule-aligned, and does it change `rd_ctag_o`'s cone?"
+3. **claim-auditor** on the diff, the soft spot named: "does the fix cover the account step 0 selected AND the
+   `.user = 0` overlay, and does it change `rd_ctag_o`'s cone?"
 4. **Synthesis** (synth lane, 40 ns, no flow edit), §7 row in the measurements doc. Prediction: within the
    family's spread. **Batching:** any other RTL fix that is sim-verified and lint-clean by then joins the
    same bitstream — the candidates are R-22 (the `stc` arm has never been run; if it is a one-line
@@ -58,7 +63,7 @@ right entry's DATA and BYTE ENABLES, i.e. a second entry index rather than `wbuf
 ~1 h; lint minutes but the real risk; auditor 20 min; synthesis ~1 h 45 on a quiet machine; if the loop bites,
 add a day for reformulation. R-22's `stc` arm is a MEASUREMENT, run in simulation before the bitstream is
 defined, never batched blind. The questions the bitstream must answer are written down before it is committed.
-The mechanism carries "named and corroborated, claim-auditor pending" until the audit lands (in flight).
+The audit landed the same night: PLAUSIBLE-BUT-UNPROVEN, so step 0 precedes the candidate.
 The board boot after the flash: 1 h.
 
 ## 2. The re-triage boot on the current bitstream (this lane, one boot, ~1 h, no fix needed)
@@ -70,7 +75,7 @@ whose control fails is VOID.
 |---|---|---|---|
 | 1 | `k800` | control | 4 |
 | 2 | `s06agg_fence` (new: the S-06 kernel with `fence` between the `sd` and the `ldc`) | is the board pair discriminating BEFORE the fix | **64** (`s06agg` read 66 twice on this bitstream; not rerun) |
-| 3 | `s06agg_lowword` (new: the last plain store to the LOW word, high word stored early — the board twin of `r29-lowword`) | the word-0-gating account on silicon | **64** |
+| 3 | `s06agg_lowword` (new: the last plain store to the LOW word, high word stored early) | the `.user = 0` overlay account on silicon — the audit says a RESIDENT word-0 plain entry should zero the high half, so 66 here would be that defect; the sim twin `r29-lowword` is retracted (its store and load share `[11:3]`, which stalls the load) and the board twin carries the same confound | **64 or 66; either reading is recorded, neither attributes** |
 | 4 | R-15's 9216-byte capability-bearing global | attribution retracted 2026-07-31, never rerun on a fixed bitstream | returns (value from its host oracle) |
 | 5–6 | R-17/S-01's `uc`/`dp0` perturbation pair | the pair was never run in the 2026-09-05 sweep | both return; if one hangs, it hangs LAST |
 
@@ -79,8 +84,11 @@ board arm here** (RTL lane, 2026-09-09 night): read in granules, its `rmB`/`rmC`
 shares the victim's granule (offset 4, low word; victim at offset 12, high word) — damaged" versus "a different
 granule — correct", which fits granule-scoped forwarding sharply and makes the capability store two rows away
 the red herring. But `r29-lowword` (an adjacent plain store to the LOW word) PASSED, which the simplest form of
-that account would not predict; the difference may be RMW vs plain store, or the victim being reached through
-the movc-zero copy path. So R-18 gets a DIRECTED SIMULATION ARM of its exact geometry (RTL lane, after the
+that account would not predict (that arm is since RETRACTED as a measurement, so it constrains nothing either
+way); the difference may be RMW vs plain store, or the victim being reached through the movc-zero copy path.
+The RTL lane's first four R-18 arms (the victim's own store drained by a fence: both LDC-read arms fail, both
+plain-read arms pass, same-granule and other-granule alike) do NOT reproduce the rmB/rmC discrimination and are
+confounded by the same stc-then-readback path the audit flagged — not yet a result. So R-18 gets a DIRECTED SIMULATION ARM of its exact geometry (RTL lane, after the
 audit), not a board boot — the board could not separate the two mechanisms either, and "not reproduced with
 its frozen images at `5097eb166`" was never a mechanism verdict. If the arm attributes R-18 to `:397`, R-18's
 question joins the list the R-29 bitstream must answer, and its frozen images go into the acceptance boot. The
@@ -153,7 +161,7 @@ closed on evidence, or explicitly parked with its blocker named (R-28, R-12 by d
 
 - Every board arm has its prediction in this file before the boot; readings recorded from the run's own
   transcript segment into `board-results/*.tsv` with the image hash; a result cited by hash, never by label.
-- R-29 fix: the sim pair + `r29-lowword` + sweep identity + lint baseline + auditor + synthesis row, in
+- R-29 fix: the separation arms + the sim pair + sweep identity + lint baseline + auditor + synthesis row, in
   the commit message; the board acceptance is the rung's 66 → 64 with the pair unchanged.
 - Every commit scanned with `precommit-scan.sh` (absolute path), `-o` own paths, `git show --stat` after;
   nested pushes through `push-final.sh`.
