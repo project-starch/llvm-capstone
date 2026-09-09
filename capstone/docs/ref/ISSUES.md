@@ -695,6 +695,122 @@ unexpected operand type.
 
 **Owner:** unassigned. Found by the helper lane during the SQLite stock-ness work, 2026-09-09.
 
+### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
+
+**The arithmetic, from the flashed bitstream's own source.** For an UNINIT capability over a region
+`[S, E)`:
+
+* the only instruction that advances an UNINIT cursor is `STC`
+  (`load_store_unit.sv:994-996` traps every scalar store through a type-3 capability with
+  `UNEXPECTED_CAP_TYPE`, so `sd`/`sw`/`sb`/`sh` cannot);
+* `STC`'s bound is `rs1_end = end - 16` and it faults when `cursor > rs1_end`
+  (`capstone_dyn_unit.anvil:387`, `:409`), and `imm` must be 0 for UNINIT (`:404`), so the cursor
+  *is* the address;
+* each accepted store advances the cursor by 16 (`capstone_dyn_unit.anvil:431-432`).
+
+So the last permitted store is at `E - 16`, after which **cursor = E**. And `INIT` faults iff
+`cursor <= end` (`capstone_flu_unit.anvil:139`). `E <= E` is true, so `INIT` raises
+`ILLEGAL_OPERAND_VALUE (29)`. **Maximum reachable cursor `E`; required `E + 1`; shortfall exactly 1.**
+
+**Every other route is closed**, checked one by one at `66c4e7517`: `CINCOFFSET`/`CINCOFFSETIMM`
+reject UNINIT (`flu:32`, `:63`); `SCC` rejects it (`flu:97`); `SHRINK` clamps the cursor down, never
+up (`flu:204-209`); `SPLIT` rejects it (`dyn:120`); `TIGHTEN` touches only permissions
+(`dyn:221-248`); `MOVC` and `LDC`/`STC` round trips preserve type and cursor.
+
+**One legal sequence reaches the precondition and is useless.** `SHRINKTO` accepts UNINIT
+(`flu:227`), guards on `(cursor < start) || (cursor + imm > end)` (`:231-232`) and sets
+`end := cursor + imm - 1` (`:237`). Any `imm <= 0` passes and yields `end < cursor`, satisfying
+`INIT` — but the surviving capability has `end < start`, an inverted zero-length region. A sequence
+exists; none preserves the region.
+
+**So the generic "fill an uninitialised region, then INIT it" flow — the reason the type exists —
+cannot complete on this silicon for a region of any size.** This is strictly larger than **M-5**,
+which is one instance of it.
+
+**The spec has the same defect, so the RTL inherited rather than introduced it.**
+`capstone-spec/parts/mem-access-insn.adoc:93` bounds the store at `[base, end - CLENBYTES]` and
+`cap-man-insn.adoc:421` faults `INIT` on `cursor <= end`. Neither spec states whether `end` is
+inclusive or exclusive (`prog-model.adoc:92` defines it only as "the end memory address"), and the
+arithmetic fails under BOTH readings — exclusive is dead by one byte as above; inclusive is worse,
+because the largest aligned address `<= end - 16` leaves the cursor at `end - 15` and the region's
+last granule is never writable at all.
+
+**Why nothing downstream noticed:** QEMU papers over it three separate ways — `csrevoke` puts the
+cursor at `end` rather than `base` (`op_helper.c:920`), `csinit` asserts `cursor == end` instead of
+`> end` (`:1200`), and QEMU never advances an UNINIT cursor at all (no such write exists in the
+target). See **Q-07**.
+
+**What would settle it, and what it costs.** A directed test is cheap and should come first: fill an
+UNINIT region to its bound with `STC` and then `INIT` it, predicting exception 29. The repo already
+contains the admission — `verif/tests/custom/capstone/init-rs1-ne-rd.S:29-32` says INIT "raises
+ILLEGAL_OPERAND_VALUE (29) unless the uninitialised capability's cursor is past its end", and can only
+fire INIT by FABRICATING the operand with the Custom3 debug ops (`MKCAP(a5, CAP_TYPE_UNINIT, 512, 496)`
+— `end = base - 16`). That is a test working around the defect rather than reporting it.
+
+**The fix is one comparison, but which one depends on a decision that is not a lane's.** The `end`
+convention must be declared first, because the RTL is currently split against itself — exclusive on
+every access path (`lsu:1004`, `dyn:387`, SPLIT `dyn:141-145`) and inclusive in `SEAL` (`flu:163`) and
+`SHRINKTO` (`flu:237`).
+* **`end` exclusive** (what the access paths already assume, and what QEMU is throughout): `INIT`'s
+  test becomes fault iff `cursor < end`, i.e. `flu:139` `<=` → `<`. Spec `cap-man-insn.adoc:421`
+  changes with it, and `SEAL`/`SHRINKTO`'s ±1 are the stragglers to reconcile.
+* **`end` inclusive**: `INIT`'s `>` is right and the STORE bound is the bug — `dyn:387` and
+  `mem-access-insn.adoc:93` become `end - CLENBYTES + 1`, which also unblocks the last granule.
+
+Recommendation: **exclusive**, because it is what the RTL's access paths and all of QEMU already do,
+making it the smaller and better-tested change. **This is a spec decision and belongs to the lead and
+the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before this one.
+
+### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `OPEN — SECURITY-RELEVANT. VERIFIED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517) against the spec; not yet demonstrated by a directed test`
+
+**The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
+
+* every invalidated capability `c` is non-linear, **or**
+* `2 \<=p x[rs1].perms` does **NOT** hold — i.e. the revocation capability does **not** carry write,
+
+and **otherwise** sets it to UNINIT with `cursor = base`.
+
+**The RTL** (`capstone_dyn_unit.anvil:62`) is:
+
+```
+if(rsp == 1'd1 || ((rs1.metadata.perm&3'd2)==3'd2)){   // -> LINEAR
+```
+
+`rsp == 1` is the first clause, correctly implemented (`capstone_rev_node.anvil:156`, `:24-26`, `:19`:
+the flag starts at 1 and is cleared when an invalidated node was linear). The second disjunct is
+**inverted**: `perm & 2` is the WRITE bit — confirmed from the access checks in the same file, where
+`STC` faults `INSUFFICIENT_PERMISSION` on `(perm & 2) != 2` (`dyn:401`) and `LDC` on `(perm & 4) != 4`
+(`dyn:338`). So the RTL returns LINEAR when write **is** held; the spec says LINEAR when write is
+**not** held.
+
+**Consequence on silicon, and it is the security-relevant direction.** For a revocation capability
+that carries write — which is *every* shared read-write region the monitor hands out — revoking a
+capability whose borrow was linear returns **LINEAR with the cursor untouched**, instead of UNINIT at
+base. The UNINIT step exists precisely to force the owner to overwrite the region before it can read
+it again; skipping it hands the owner a directly readable capability over whatever the borrower left
+there. That is an information-disclosure gap relative to the spec's intent, not merely a type
+mismatch.
+
+Conversely a revocation capability WITHOUT write yields UNINIT at base — a handle that can still be
+`STC`-filled (the UNINIT path skips the write-permission check, `dyn:401` tests only LINEAR/NONLIN)
+but can never be `INIT`-ed, per **R-30**.
+
+**This corrects M-5.** M-5 records that the monitor's re-share path `C_INIT`s a revoke-derived UNINIT
+and predicts a trap. On this RTL, for the RW regions that path actually handles, `cap_type(r) == 3`
+is **false** — REVOKE returned LINEAR — so `C_INIT` is never reached and the path silently *appears*
+to work. M-5's latency has a different cause than recorded, and the observable is a disclosure rather
+than a trap.
+
+**Ordering, and it is a hard constraint.** Fixing this inversion makes RW revokes return UNINIT, which
+immediately runs into R-30's dead `INIT` and turns a silent disclosure into a live monitor trap. **R-31
+must not ship before R-30 is decided and fixed.** Ship them together or not at all.
+
+**What would settle it:** a directed test that revokes a linear borrow of a writable region and reads
+back the returned type and cursor, predicting UNINIT-at-base under the spec and observing LINEAR-with-
+cursor-preserved today. Neither this nor R-30 has been demonstrated by execution — both rest on
+reading the flashed source, which is why they are filed as OPEN with that stated rather than as
+measured defects.
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
@@ -1721,6 +1837,26 @@ Worth fixing on its own merits: **any** domain that faults for any reason is cur
 undebuggable and takes the core with it.
 
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
+
+> **2026-09-10 — THIS ENTRY'S PREMISE IS WRONG ON THIS SILICON, and the two findings that replace it
+> are R-30 and R-31. Read those first.**
+>
+> M-5 says the monitor `C_INIT`s a revoke-derived UNINIT that `INIT` cannot accept. Two corrections:
+>
+> 1. **For the RW regions this path actually handles, REVOKE does not return UNINIT at all.** The RTL's
+>    permission clause is inverted against the spec (**R-31**, `capstone_dyn_unit.anvil:62`), so a
+>    revocation capability carrying write yields **LINEAR with the cursor untouched**. `cap_type(r) == 3`
+>    at `sbi_capstone.c:1197` is therefore FALSE, `C_INIT` is never reached, and the path silently
+>    appears to work — by skipping the reinitialisation the spec requires, which is a disclosure rather
+>    than the trap this entry predicts.
+> 2. **`INIT` is unreachable for ANY UNINIT capability, not just revoke-derived ones** (**R-30**): the
+>    cursor tops out at `end` and `INIT` demands `> end`, a shortfall of exactly one byte. So M-5 is one
+>    instance of a generally dead instruction, not a defect of the re-share path.
+>
+> **The entry stays open** because the monitor code is still wrong in both worlds — it depends on an
+> `INIT` that cannot succeed — but it is no longer the thing to fix first, and it is not fixable in the
+> monitor alone. The two sites remain `sbi_capstone.c:1196-1197` and `:1340-1341`, and any monitor
+> change must follow the R-30 `end`-convention decision rather than precede it.
 
 > **2026-09-10 — M-5 AND Q-07 ARE ONE SYSTEM, and neither can be fixed alone. Verified in the QEMU
 > source, not inferred.**
