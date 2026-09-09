@@ -2765,11 +2765,32 @@ adopted.
 
 **`run-nullblk-all.sh` IS NOT AN M-5 GATE, and its green must not be read as one.** It was predicted
 red and came back green; the pre-registered response to a green was to suspect the instrument first,
-and that was right. The suite **never executes a revoke**: no `revoke` appears in any of the three
-serial logs, no null_blk-side source calls it, and its guest command is `modprobe`/`insmod`/`dd`
-with no region revoke anywhere. It is a valid don't-break-the-split-path control — and it stayed
-green, which is a real and useful result — but it cannot reach the condition and so carries no
-verdict about this entry. The plan's §5.1 gate list named it as one and is corrected here.
+and that was right. **RETRACTED WITHIN THE HOUR: my first account of WHY was wrong.** I wrote that the
+suite never executes a revoke. It does — `null_blk.c` issues `SBI_EXT_CAPSTONE_REGION_REVOKE` in
+eleven places, and instrumenting `helper_csrevoke` in the scratch build counts **48 revokes in
+`split-io` and 12 in `split-rmmod`**.
+
+**The measured reason, which is more useful than the one I invented:**
+
+    PROBE csrevoke: type_out=0 no_lin_revoked=1 has_write=1 base=101525000 end=101526000
+
+Every one of the 60 revokes returns `type_out = 0` = `CAP_TYPE_LIN`, because `no_lin_revoked = 1` —
+**nothing linear was invalidated**, so the LINEAR clause is taken and the handle never becomes UNINIT.
+The monitor's `cap_type(r) == 3` guard at `sbi_capstone.c:1196` therefore never fires, and
+`helper_csinit` is called **zero** times across all three tests. null_blk shares non-linearly; M-5 is a
+**linear-borrow** path.
+
+**So the fill cost in decisions item 2 attaches to LINEAR borrows only, not to every revoke** — 60
+revokes here would cost nothing extra. That narrows the affected population and is a real input to
+that decision.
+
+Two incidental confirmations from the same instrumentation: `end - base = 0x1000` on every line, which
+**measures** the 4096-byte region that the 256-store figure rests on; and `has_write = 1` throughout,
+so it is the linearity clause and not the permission clause doing the work here.
+
+It is a valid don't-break-the-split-path control — and it stayed green, which is a real and useful
+result — but it cannot reach the condition and so carries no verdict about this entry. The plan's
+§5.1 gate list named it as one and is corrected here.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 

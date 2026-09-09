@@ -9,7 +9,10 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## WHAT MOVED AFTER THIS FILE WAS WRITTEN — read this before the items
 
-* **The synthesis build is AUTHORISED.** You confirmed both halves in the synth lane's own session.
+* **The synthesis build is AUTHORISED — as reported to me by the synth lane, not observed here.**
+  They say you confirmed both halves in their session. I have not seen that confirmation myself and am
+  recording it as their report, because a relayed confirmation is exactly what I spent this session
+  refusing to treat as a gate; if they misread you, this line is still true as written.
   **The one thing still outstanding is the push**, which is yours and which no lane can do: the branch
   is not on the allowlist and the agent credential has no write access to that repository. The synth
   lane is watching `origin` every 60 s and will start the moment `r30-r31-init-revoke` at `1bfff7776`
@@ -350,11 +353,32 @@ under test and zero times in the shared `build/` one, so any reading here is att
 
 **The nullblk prediction was WRONG, and the pre-registered response to a green was the right one.**
 I wrote: *"if it comes back GREEN, the first hypothesis is that it never executed a revoke-then-init
-pair — not that M-5 is fine."* That is exactly what happened. **The suite never executes a revoke at
-all**: `revoke` appears zero times in all three serial logs, no null_blk-side source calls it, and the
-guest command is `modprobe`/`insmod`/`dd` with no region revoke anywhere in it. So nullblk is a valid
-don't-break-the-split-path control — and it stayed green, which is worth having — but it is **not an
-M-5 gate**, and the plan's §5.1 named it as one. The real gate is `uninit_init_then_use_ok`.
+pair — not that M-5 is fine."* That is exactly what happened, and nullblk is **not** an M-5 gate. The
+real gate is `uninit_init_then_use_ok`.
+
+**⚠ But my first explanation of why was wrong and I retracted it within the hour.** I claimed the
+suite never executes a revoke, on a source grep whose output I did not read: I printed a hardcoded
+caption saying "none listed" underneath a list that was not empty. `null_blk.c` issues a region
+revoke in eleven places. **Third instance today of reading my own caption, prediction or memory
+instead of the output in front of me.**
+
+**Measured instead of inferred**, by instrumenting `helper_csrevoke` in the scratch build and, first,
+proving the print reaches the serial log on a run that provably revokes:
+
+| test | revokes executed | `csinit` calls | type returned |
+|---|---:|---:|---|
+| `split-io` | **48** | 0 | LINEAR, every one |
+| `split-rmmod` | **12** | 0 | LINEAR, every one |
+| `baseline` | 0 | 0 | — |
+
+`no_lin_revoked = 1` on all sixty: **nothing linear was invalidated**, so revoke takes the LINEAR
+clause, the handle never becomes UNINIT, and the monitor's `cap_type == 3` guard never fires.
+null_blk shares **non-linearly**. M-5 is a linear-borrow path.
+
+**That is a direct input to item 2: the fill cost attaches to LINEAR borrows, not to every revoke.**
+Sixty revokes in this suite would cost nothing extra under option 1. And the same trace **measures**
+the region size the 256-store figure depends on — `end - base = 0x1000` on every line — which is now
+a measurement rather than a constant I read.
 
 Had I written "nullblk green means M-5 is fine" instead of the control, this run would have produced a
 clean, confident, entirely void result. That is the sixth instance of that shape this session.
