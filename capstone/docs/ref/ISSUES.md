@@ -814,6 +814,39 @@ unexpected operand type.
 > that revoke through a write-bearing capability or INIT a filled region; and **the new revoke arm must
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
+>
+> **DEMONSTRATED 2026-09-10 (`a1484c6d3`), with negative controls that prove the arms fire:**
+> `r30-fill-init` FAIL 11 → PASS and `r31-revoke-cursor` FAIL 11 → PASS, where on the UNFIXED tree the
+> failures carry the reserved codes "INIT trapped" and "type is not UNINIT" — the two defects being
+> present. The prints show the conditions directly: an UNINIT capability over `[0x80003000,
+> 0x80003040)` reads cursor exactly `0x80003040` after four 16-byte `STC`s, landing ON `end`, which IS
+> the shortfall; and after the revoke the capability reads **type UNINIT with the cursor back at base**,
+> confirmed independently by `LCC`. That cursor reading is the one a type-only check would have missed.
+> *Caveat from the author:* `r30-fill-init`'s post-INIT bounds are an artefact of passing an absolute
+> address as `rs2` (INIT computes `rs2.cursor + start`, so it double-counts); it does not affect the
+> claim, which is only that INIT stopped trapping.
+>
+> # ⚠ THE RTL FIXES ALONE WOULD TRAP THE MONITOR. They must ship WITH a firmware change.
+>
+> This corrects the ordering note above, which said R-31 must not ship before R-30 as though R-30
+> rescued it. **It does not.** The monitor has two sites — `sbi_capstone.c:1196-1197` in
+> `shared_region_annotated` and `:1340-1341` in `share_child_region` — of the form
+> `if (cap_type(r) == 3) { C_INIT(r, r, 0); }`. They are DEAD today for RW regions precisely because of
+> the inversion (revoke returns LINEAR, so the test is false). Fix R-31 and they go live. And R-30's fix
+> does not save them: INIT then accepts `cursor >= end`, while a revoke-derived UNINIT has its cursor at
+> **base** — which the `r31-revoke-cursor` arm shows directly. Base is not end for any non-empty region,
+> so `C_INIT` traps on the first revoke of a writable region with a linear borrow.
+>
+> **And the monitor is wrong on the merits, which is why this is a fix rather than an obstacle.**
+> `C_INIT` immediately after revoke is an attempt to skip the refill. Revoke hands back UNINIT-at-base
+> exactly so the owner must overwrite the borrower's data before reusing the region; a monitor that
+> re-inits straight through defeats the property R-31 restores. So **M-5 stops being latent and becomes
+> the third piece of this change**: fill the region and then INIT, or leave it UNINIT until something
+> does. The bitstream and the firmware land together, gated on the QEMU suites.
+>
+> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without
+> inspecting the type. That grep is not proof of completeness and an auditor has been asked to look for
+> a third consumer.
 
 **The arithmetic, from the flashed bitstream's own source.** For an UNINIT capability over a region
 `[S, E)`:
@@ -932,6 +965,39 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > that revoke through a write-bearing capability or INIT a filled region; and **the new revoke arm must
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
+>
+> **DEMONSTRATED 2026-09-10 (`a1484c6d3`), with negative controls that prove the arms fire:**
+> `r30-fill-init` FAIL 11 → PASS and `r31-revoke-cursor` FAIL 11 → PASS, where on the UNFIXED tree the
+> failures carry the reserved codes "INIT trapped" and "type is not UNINIT" — the two defects being
+> present. The prints show the conditions directly: an UNINIT capability over `[0x80003000,
+> 0x80003040)` reads cursor exactly `0x80003040` after four 16-byte `STC`s, landing ON `end`, which IS
+> the shortfall; and after the revoke the capability reads **type UNINIT with the cursor back at base**,
+> confirmed independently by `LCC`. That cursor reading is the one a type-only check would have missed.
+> *Caveat from the author:* `r30-fill-init`'s post-INIT bounds are an artefact of passing an absolute
+> address as `rs2` (INIT computes `rs2.cursor + start`, so it double-counts); it does not affect the
+> claim, which is only that INIT stopped trapping.
+>
+> # ⚠ THE RTL FIXES ALONE WOULD TRAP THE MONITOR. They must ship WITH a firmware change.
+>
+> This corrects the ordering note above, which said R-31 must not ship before R-30 as though R-30
+> rescued it. **It does not.** The monitor has two sites — `sbi_capstone.c:1196-1197` in
+> `shared_region_annotated` and `:1340-1341` in `share_child_region` — of the form
+> `if (cap_type(r) == 3) { C_INIT(r, r, 0); }`. They are DEAD today for RW regions precisely because of
+> the inversion (revoke returns LINEAR, so the test is false). Fix R-31 and they go live. And R-30's fix
+> does not save them: INIT then accepts `cursor >= end`, while a revoke-derived UNINIT has its cursor at
+> **base** — which the `r31-revoke-cursor` arm shows directly. Base is not end for any non-empty region,
+> so `C_INIT` traps on the first revoke of a writable region with a linear borrow.
+>
+> **And the monitor is wrong on the merits, which is why this is a fix rather than an obstacle.**
+> `C_INIT` immediately after revoke is an attempt to skip the refill. Revoke hands back UNINIT-at-base
+> exactly so the owner must overwrite the borrower's data before reusing the region; a monitor that
+> re-inits straight through defeats the property R-31 restores. So **M-5 stops being latent and becomes
+> the third piece of this change**: fill the region and then INIT, or leave it UNINIT until something
+> does. The bitstream and the firmware land together, gated on the QEMU suites.
+>
+> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without
+> inspecting the type. That grep is not proof of completeness and an auditor has been asked to look for
+> a third consumer.
 
 **The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
 
