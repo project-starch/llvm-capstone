@@ -1,0 +1,22 @@
+diff --git a/core/csr_regfile.sv b/core/csr_regfile.sv
+index 56d11b675..e3d69da9c 100644
+--- a/core/csr_regfile.sv
++++ b/core/csr_regfile.sv
+@@ -1935,6 +1935,17 @@ module csr_regfile
+         end
+       endcase
+     end
++    // R-26: a capability CSR write (CCSRRW to CTVEC/CEPC/CSCRATCH/CPMPn) takes effect at commit and has
++    // side-effects on younger instructions -- the CPMP entries gate every load/store's permission check in
++    // EX -- but CCSRRW clears csr_we (csr_op_logic), so it never reached the flush that the side-effecting
++    // CSR writes above raise. Flush like satp/mstatus do: the controller refetches from pc_commit + 4 and
++    // the younger instructions re-execute against the new entry. Placed before the exception clear below,
++    // so an excepting CCSRRW still traps rather than flushes. Measured in simulation 2026-09-08: without
++    // this, with an older cache-missing load ahead of the CCSRRW, a younger load's check ran five cycles
++    // before the write landed (docs/history/08-09-2026_22-00-00_r26-ccsrrw-stale-read-demonstrated.md).
++    if (CVA6Cfg.CAPSTONE_EXT && capmode_q && ccsr_en && ccsr_we_i) begin
++      flush_o = 1'b1;
++    end
+     if (CVA6Cfg.IS_XLEN64) begin
+       mstatus_d.sxl = riscv::XLEN_64;
+       mstatus_d.uxl = riscv::XLEN_64;

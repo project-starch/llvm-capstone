@@ -7,7 +7,7 @@
 
 | branch | tip | role |
 |---|---|---|
-| `fpga-testing-dev` | `ef5a8eaf2` | the canonical line: rebuilt history above `7e4dc440f` (eight commits, no S-07 on-silicon instrument) + the registered switch-in-progress flag. Synthesised, censused, **NOT usable as a bitstream**; the census itself is retracted as a licence (`ref/bitstream-usability-is-the-census-not-the-slack.md`, RETRACTED 2026-09-08). |
+| `fpga-testing-dev` | `66c4e7517` (2026-09-09: `ef5a8eaf2` + R-26 `9d8797560`, R-25 `42a141c93`, R-27 `66c4e7517`; pushed by the RTL lane under the lead's go-ahead; in synthesis) — previously `ef5a8eaf2` | the canonical line: rebuilt history above `7e4dc440f` (eight commits, no S-07 on-silicon instrument) + the registered switch-in-progress flag. Synthesised, censused, **NOT usable as a bitstream**; the census itself is retracted as a licence (`ref/bitstream-usability-is-the-census-not-the-slack.md`, RETRACTED 2026-09-08). |
 | `s12-fix-for-synthesis` | `5097eb166` | provenance of the resident bitstream `caplifive_s12fix_5097eb166.bit`; its board record is the only licence any build has. Frozen. |
 | `s12-fix-noinstr` | `6f8345fdb` | provenance of the arm-2 (debug tree tied off) routed checkpoint used in the second-launch queries. Frozen. |
 | `s12-ldc-rolling-filter` | `62b09ca92` | live RTL checkout: R-25 directed test and the LDC rolling-filter work. |
@@ -15,6 +15,18 @@
 
 Old tip of `fpga-testing-dev` (`e12a0e3e9`, seven commits that added and then stripped the instrument) is tag
 `backup/fpga-testing-dev-2026-08-21`, on origin.
+
+## 2026-09-09 fix-cycle side branches (local, development history; archive as tags once the bitstream is validated)
+
+| branch | tip | local tag (the lead pushes tags) |
+|---|---|---|
+| `r26-ccsrrw-stale-read` | `67d870cc8` | `backup/r26-ccsrrw-stale-read-2026-09-09` |
+| `r25-init-rs1-dup` | `ec50837b5` | `backup/r25-init-rs1-dup-2026-09-09` |
+| `r27-revnode-orphan-drain` | `3bfaa544c` | `backup/r27-revnode-orphan-drain-2026-09-09` |
+| `p3-final` | `66c4e7517` (= `fpga-testing-dev`) | `backup/p3-final-2026-09-09` |
+
+The first commit of `r26-ccsrrw-stale-read` (`2e4dc369c`) is on origin; everything else in these branches is on origin
+only through the three squashed commits on `fpga-testing-dev`.
 
 ## Archived 2026-09-08: branch deleted, tip kept as a `backup/*` tag
 

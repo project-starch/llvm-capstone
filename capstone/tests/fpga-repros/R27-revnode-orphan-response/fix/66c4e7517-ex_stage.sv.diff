@@ -1,0 +1,165 @@
+diff --git a/core/ex_stage.sv b/core/ex_stage.sv
+index 4998cb140..c555c35ce 100644
+--- a/core/ex_stage.sv
++++ b/core/ex_stage.sv
+@@ -874,6 +874,62 @@ module ex_stage
+     logic[0:0] rev_query_res_ack;
+     logic[0:0] rev_query_res_valid;
+     logic[0:0] rev_query_res_0;
++    logic[0:0] rev_init_res_ack_node, rev_init_res_valid_dyn;
++    logic[0:0] rev_rev_res_ack_node, rev_rev_res_valid_dyn;
++    logic[0:0] rev_drop_res_ack_node, rev_drop_res_valid_dyn;
++    logic[0:0] rev_delin_res_ack_node, rev_delin_res_valid_dyn;
++    logic[0:0] rev_mrev_res_ack_node, rev_mrev_res_valid_dyn;
++    logic[0:0] rev_query_res_ack_node, rev_query_res_valid_dyn;
++
++    // R-27 (2026-09-09): a pipeline flush resets the DYN unit (its flush endpoint below) but not the
++    // revocation node. A response the node produces for a request whose requester was flushed is never
++    // acknowledged; the node blocks in that send, never serves another request, and the next capability
++    // instruction that talks to it (CALL/RETURN/LDC/STC/REVOKE/SPLIT/TIGHTEN/LCC/DROP/DELIN/MREV) waits
++    // forever behind the DYN unit's ready. Measured in r26-v2-cscratch-fence and r27-fence-nost: the
++    // fence.i / fence flush landed one cycle after the query request; the response rose two cycles
++    // later and stayed asserted to the end of the run. Per response channel: remember a request the
++    // node accepted whose response is still owed; when a flush lands while one is owed, drain that
++    // response (acknowledge it to the node, hide it from the DYN unit) and hold the DYN unit's ready
++    // until it is gone, so a re-issued instruction can never consume its predecessor's answer.
++    // Assumptions, stated (2026-09-09 audit): (a) one DYN op in flight per channel -- the DYN unit's rtr
++    // handshake serialises ops (capstone_dyn_ready above), so one owed bit per channel suffices; (b)
++    // rev_drain_q is registered, so in the flush cycle itself ready is still ungated -- harmless, the same
++    // flush empties issue and no op can be dispatched in that cycle; (c) KNOWN CORNER, a design choice: the
++    // node deliberately never answers init/mrev when its pool is exhausted (capstone_rev_node.anvil,
++    // head == 16'hFFFF), so a SPLIT/MREV then stalls forever by design. Before this logic an interrupt
++    // could still be taken (the flush resets the DYN unit, the node is idle, the handler's capability ops
++    // work; the program itself never gets past the stalled op). With it, that flush latches the owed bit
++    // into a drain that no response will ever clear, and ready stays low for the life of the core: the
++    // handler's first capability op hangs too. Accepted here because the alternative -- leaving init/mrev
++    // out of the drain -- keeps the orphan deadlock alive for an interrupt during a SPLIT/MREV wait; the
++    // exhausted pool is a separate, already-registered condition (no slot reclamation).
++    localparam int unsigned REV_CH = 6;
++    logic [REV_CH-1:0] rev_req_hs, rev_res_hs_node, rev_res_valid_node, rev_res_ack_dyn;
++    logic [REV_CH-1:0] rev_res_ack_node, rev_res_valid_dyn;
++    logic [REV_CH-1:0] rev_owed_q, rev_drain_q;
++    assign rev_req_hs = {rev_query_req_valid & rev_query_req_ack, rev_mrev_req_valid & rev_mrev_req_ack,
++                         rev_delin_req_valid & rev_delin_req_ack, rev_drop_req_valid & rev_drop_req_ack,
++                         rev_rev_req_valid & rev_rev_req_ack, rev_init_req_valid & rev_init_req_ack};
++    assign rev_res_valid_node = {rev_query_res_valid, rev_mrev_res_valid, rev_delin_res_valid,
++                                 rev_drop_res_valid, rev_rev_res_valid, rev_init_res_valid};
++    assign rev_res_ack_dyn = {rev_query_res_ack, rev_mrev_res_ack, rev_delin_res_ack,
++                              rev_drop_res_ack, rev_rev_res_ack, rev_init_res_ack};
++    assign rev_res_ack_node  = rev_drain_q | rev_res_ack_dyn;
++    assign rev_res_valid_dyn = rev_res_valid_node & ~rev_drain_q;
++    assign rev_res_hs_node   = rev_res_valid_node & rev_res_ack_node;
++    assign {rev_query_res_ack_node, rev_mrev_res_ack_node, rev_delin_res_ack_node,
++            rev_drop_res_ack_node, rev_rev_res_ack_node, rev_init_res_ack_node} = rev_res_ack_node;
++    assign {rev_query_res_valid_dyn, rev_mrev_res_valid_dyn, rev_delin_res_valid_dyn,
++            rev_drop_res_valid_dyn, rev_rev_res_valid_dyn, rev_init_res_valid_dyn} = rev_res_valid_dyn;
++    always_ff @(posedge clk_i or negedge rst_ni) begin
++      if (!rst_ni) begin
++        rev_owed_q  <= '0;
++        rev_drain_q <= '0;
++      end else begin
++        rev_owed_q  <= (rev_owed_q | rev_req_hs) & ~rev_res_hs_node;
++        rev_drain_q <= (rev_drain_q | (flush_i ? (rev_owed_q | rev_req_hs) : {REV_CH{1'b0}})) & ~rev_res_hs_node;
++      end
++    end
+ 
+     logic[257:0] forward_normal_load_result,forward_normal_store_result;
+     logic forward_normal_load_valid,forward_normal_store_valid;
+@@ -882,7 +938,8 @@ module ex_stage
+ 
+     logic capstone_dyn_ready, capstone_dyn_ready_q, capstone_dyn_ready_n;
+     assign capstone_dyn_ready_n = !capstone_dyn_valid_i & capstone_dyn_ready;
+-    assign capstone_dyn_ready_o = !capstone_dyn_valid_i & capstone_dyn_ready_q;
++    // R-27: no new DYN op while a flushed predecessor's revocation-node response is still being drained.
++    assign capstone_dyn_ready_o = !capstone_dyn_valid_i & capstone_dyn_ready_q & ~(|rev_drain_q);
+     // S-07 diagnostic: latch the DYN op's rs1 cursor at ingestion. The dyn unit
+     // serializes (capstone_dyn_ready backpressure => one op in flight), so a single
+     // register suffices; the result pack nulls cap_rs1 on exception paths, so the
+@@ -936,37 +993,37 @@ module ex_stage
+     ._rev_node_ep_init_req_valid (rev_init_req_valid)
+     ,._rev_node_ep_init_req_ack (rev_init_req_ack)
+     ,._rev_node_ep_init_req_0 (rev_init_req_0)
+-    ,._rev_node_ep_init_res_valid (rev_init_res_valid)
++    ,._rev_node_ep_init_res_valid (rev_init_res_valid_dyn)
+     ,._rev_node_ep_init_res_ack (rev_init_res_ack)
+     ,._rev_node_ep_init_res_0 (rev_init_res_0)
+     ,._rev_node_ep_rev_req_valid (rev_rev_req_valid)
+     ,._rev_node_ep_rev_req_ack (rev_rev_req_ack)
+     ,._rev_node_ep_rev_req_0 (rev_rev_req_0)
+-    ,._rev_node_ep_rev_res_valid (rev_rev_res_valid)
++    ,._rev_node_ep_rev_res_valid (rev_rev_res_valid_dyn)
+     ,._rev_node_ep_rev_res_ack (rev_rev_res_ack)
+     ,._rev_node_ep_rev_res_0 (rev_rev_res_0)
+     ,._rev_node_ep_drop_req_valid (rev_drop_req_valid)
+     ,._rev_node_ep_drop_req_ack (rev_drop_req_ack)
+     ,._rev_node_ep_drop_req_0 (rev_drop_req_0)
+-    ,._rev_node_ep_drop_res_valid (rev_drop_res_valid)
++    ,._rev_node_ep_drop_res_valid (rev_drop_res_valid_dyn)
+     ,._rev_node_ep_drop_res_ack (rev_drop_res_ack)
+     ,._rev_node_ep_drop_res_0 (rev_drop_res_0)
+     ,._rev_node_ep_delin_req_valid (rev_delin_req_valid)
+     ,._rev_node_ep_delin_req_ack (rev_delin_req_ack)
+     ,._rev_node_ep_delin_req_0 (rev_delin_req_0)
+-    ,._rev_node_ep_delin_res_valid (rev_delin_res_valid)
++    ,._rev_node_ep_delin_res_valid (rev_delin_res_valid_dyn)
+     ,._rev_node_ep_delin_res_ack (rev_delin_res_ack)
+     ,._rev_node_ep_delin_res_0 (rev_delin_res_0)
+     ,._rev_node_ep_mrev_req_valid (rev_mrev_req_valid)
+     ,._rev_node_ep_mrev_req_ack (rev_mrev_req_ack)
+     ,._rev_node_ep_mrev_req_0 (rev_mrev_req_0)
+-    ,._rev_node_ep_mrev_res_valid (rev_mrev_res_valid)
++    ,._rev_node_ep_mrev_res_valid (rev_mrev_res_valid_dyn)
+     ,._rev_node_ep_mrev_res_ack (rev_mrev_res_ack)
+     ,._rev_node_ep_mrev_res_0 (rev_mrev_res_0)
+     ,._rev_node_ep_query_req_valid (rev_query_req_valid)
+     ,._rev_node_ep_query_req_ack (rev_query_req_ack)
+     ,._rev_node_ep_query_req_0 (rev_query_req_0)
+-    ,._rev_node_ep_query_res_valid (rev_query_res_valid)
++    ,._rev_node_ep_query_res_valid (rev_query_res_valid_dyn)
+     ,._rev_node_ep_query_res_ack (rev_query_res_ack)
+     ,._rev_node_ep_query_res_0 (rev_query_res_0)
+     ,._load_ep_res_ack()
+@@ -1045,37 +1102,37 @@ module ex_stage
+     ,._ep_init_req_ack (rev_init_req_ack)
+     ,._ep_init_req_0 (rev_init_req_0)
+     ,._ep_init_res_valid (rev_init_res_valid)
+-    ,._ep_init_res_ack (rev_init_res_ack)
++    ,._ep_init_res_ack (rev_init_res_ack_node)
+     ,._ep_init_res_0 (rev_init_res_0)
+     ,._ep_rev_req_valid (rev_rev_req_valid)
+     ,._ep_rev_req_ack (rev_rev_req_ack)
+     ,._ep_rev_req_0 (rev_rev_req_0)
+     ,._ep_rev_res_valid (rev_rev_res_valid)
+-    ,._ep_rev_res_ack (rev_rev_res_ack)
++    ,._ep_rev_res_ack (rev_rev_res_ack_node)
+     ,._ep_rev_res_0 (rev_rev_res_0)
+     ,._ep_drop_req_valid (rev_drop_req_valid)
+     ,._ep_drop_req_ack (rev_drop_req_ack)
+     ,._ep_drop_req_0 (rev_drop_req_0)
+     ,._ep_drop_res_valid (rev_drop_res_valid)
+-    ,._ep_drop_res_ack (rev_drop_res_ack)
++    ,._ep_drop_res_ack (rev_drop_res_ack_node)
+     ,._ep_drop_res_0 (rev_drop_res_0)
+     ,._ep_delin_req_valid (rev_delin_req_valid)
+     ,._ep_delin_req_ack (rev_delin_req_ack)
+     ,._ep_delin_req_0 (rev_delin_req_0)
+     ,._ep_delin_res_valid (rev_delin_res_valid)
+-    ,._ep_delin_res_ack (rev_delin_res_ack)
++    ,._ep_delin_res_ack (rev_delin_res_ack_node)
+     ,._ep_delin_res_0 (rev_delin_res_0)
+     ,._ep_mrev_req_valid (rev_mrev_req_valid)
+     ,._ep_mrev_req_ack (rev_mrev_req_ack)
+     ,._ep_mrev_req_0 (rev_mrev_req_0)
+     ,._ep_mrev_res_valid (rev_mrev_res_valid)
+-    ,._ep_mrev_res_ack (rev_mrev_res_ack)
++    ,._ep_mrev_res_ack (rev_mrev_res_ack_node)
+     ,._ep_mrev_res_0 (rev_mrev_res_0)
+     ,._ep_query_req_valid (rev_query_req_valid)
+     ,._ep_query_req_ack (rev_query_req_ack)
+     ,._ep_query_req_0 (rev_query_req_0)
+     ,._ep_query_res_valid (rev_query_res_valid)
+-    ,._ep_query_res_ack (rev_query_res_ack)
++    ,._ep_query_res_ack (rev_query_res_ack_node)
+     ,._ep_query_res_0 (rev_query_res_0)
+     ,._debug_ep_debug_out_0 (rev_node_debug)
+     ,._debug_ep_head_0 (rev_node_head)
