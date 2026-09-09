@@ -216,6 +216,37 @@ that nulling a scalar serves no security purpose and the rule could be narrowed 
 spec-amendment proposal for the spec's owners, explicitly not adopted by a lane and not settled by
 leaving QEMU divergent.
 
+**2026-09-10, later: answering M-5 uncovered two larger defects, and the bitstream plan changed.**
+
+M-5's "design choice" rested on a false premise, and reading the flashed RTL to settle it produced
+**R-30** (`INIT` is unreachable by filling ANY UNINIT region — the cursor tops out at `end`, `INIT`
+demands `> end`, shortfall one byte) and **R-31** (REVOKE's permission clause is inverted against the
+spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of
+UNINIT-at-base — the reinitialisation step is skipped and the borrower's data is disclosed). Both
+verified independently by two readers against `66c4e7517`, including the lattice-operator reading that
+would have collapsed R-31 had it gone the other way. Neither is demonstrated by execution yet, and both
+entries say so.
+
+Neither is a regression: the same arithmetic and the same clause are on the previous bitstreams, and
+R-30 is in the spec's own text. Nothing here argues against the 2026-09-09 flash or the results it
+produced.
+
+**This reorders the bitstream into two builds:**
+
+| build | contents | state |
+|---|---|---|
+| first | R-30 + R-31 | branch `r30-r31-init-revoke`, **lint CLEAN at baseline 40**, predictions written before the run; functional arms and the auditor outstanding |
+| second | R-29 | candidate works functionally but takes UNOPTFLAT 40 → 41; **the lead's fork**: spend a synthesis on the S-10 precedent, or reformulate first |
+
+R-29 must not hold up R-30/R-31 — a disclosure gap and a dead type outrank a one-instruction window
+that already has `W-12` in force. **R-31 must not ship without R-30**, or a silent disclosure becomes a
+live monitor trap on every RW revoke.
+
+**One decision is genuinely the lead's and it gates the first build:** declare whether `end` is
+inclusive or exclusive. Recommended EXCLUSIVE — every RTL access path and all of QEMU already assume
+it, it makes the fix a one-character change, and **it also closes Q-07**, whose current state is that
+QEMU and the RTL accept disjoint `INIT` operands.
+
 **A process failure worth the lead's eye.** One commit tonight went in while `precommit-scan` said
 BLOCKED, because the command printed the scan's exit code instead of gating on it. The hit was a false
 positive and the content was verified clean, but the procedure was wrong and it is the same shape as
