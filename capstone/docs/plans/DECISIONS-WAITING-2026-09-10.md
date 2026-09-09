@@ -103,6 +103,23 @@ pushed by the lead rather than by a lane. This needs the same.
 2. **Say the word in the synth lane's own session.** An authorisation given here does not reach them,
    deliberately — they were asked to refuse a relayed one and they did.
 
+**A bundle would move the commit but NOT solve this, and the synth lane is why I am saying so.** I
+offered `git bundle` as a way to hand them `1bfff7776` with no push and no allowlist involvement.
+They TESTED it rather than reasoning about it — a real bundle, `git bundle verify` reporting okay,
+a fetch landing the tip — and it works mechanically. They then refused it on a ground I had not
+considered: `collect-synth-artifacts.sh` stamps `PROVENANCE.txt` from the repository HEAD, so a build
+from a bundle reports a hash against a commit **that exists on no remote**, and nobody, the lead
+included, can resolve afterwards what was actually built. This build's whole value is a
+pre-registered comparison against `66c4e7517`; a base nobody can resolve makes that comparison
+uncitable even if every number lands inside the predicted range.
+
+**So the push is load-bearing, not paperwork.** The bundle stays available as a fallback if you would
+rather not push, and the synth lane will build it while stating prominently that the base is
+unpushed — but that is a worse artifact and the choice is yours. One incidental gain from their test:
+`git bundle verify` REFUSES a bundle whose prerequisite the receiving repository lacks, so
+"`66c4e7517` is an ancestor" would be enforced by git against their copy of the flashed revision
+rather than asserted by me.
+
 *(A correction that cost the synth lane a search: this document is in the PARENT repo,
 `project-starch/llvm-capstone` on `dev`, not in `capstone-ariane`. I cited it without naming the repo.)*
 
@@ -146,13 +163,52 @@ Once R-31 lands, revoke returns UNINIT-at-base and **five** monitor sites meet i
 
 | option | what it costs | what it buys |
 |---|---|---|
-| **1. Zero-fill, then INIT** *(the spec's intended reclaim)* | **one store per 16 bytes** — ~65,536 stores per revoke on SQLite's 1 MiB region | The security property itself. The owner must overwrite the borrower's data before reuse. **The only option that closes anything.** |
+| **1. Zero-fill, then INIT** *(the spec's intended reclaim)* | **one store per 16 bytes** — **256 stores per revoke**, see the correction below | The security property itself. The owner must overwrite the borrower's data before reuse. **The only option that closes anything.** |
 | **2. Leave UNINIT, refuse the re-share** | turns a working path into an error return; `__mrev` needs LIN, so callers learn a new contract | cheap |
 | **3. Fill lazily in the domain** | changes the shared-region ABI; largest change | matches what the type is for; moves cost to the region's user |
 
-**My recommendation: option 1, with the per-revoke cost measured on the board before acceptance**, and
-option 3 named as the design-level answer if that cost proves unacceptable. **The number is the
-decision** — 65,536 stores per revoke is not obviously affordable and is not mine to accept.
+### ⚠ RETRACTION: the number I told you was 256 times too large, and it flips the recommendation
+
+I wrote "~65,536 stores per revoke on SQLite's 1 MiB region" and then wrote that the number IS the
+decision. **The region is not 1 MiB. There is no 1 MiB region anywhere in the tree.**
+
+`SQLITE_HC_REGION_SIZE` is **4096** (`benchmarks/sqlite/sqlite_hostcall.h:34`). So is every other
+region-size constant I could find — `BORROW_COST_REGION_SIZE`, `CORPUS_REGION_SIZE`, `REGION_SIZE`,
+`SQLITE_HIER_REGION_SIZE`, `ROW3_ARENA_SIZE` and thirteen more: **every one is 4096UL**, and the
+literal call sites pass `4096` too. A page, not a megabyte. If a megabyte-scale region exists it is
+not created through `create_region` and I did not find it.
+
+**4096 / 16 = 256 stores per revoke.** Not 65,536.
+
+What that does to the cost, from numbers already measured on this silicon
+(`fpga-silicon-measurements-for-paper.md` §1) rather than from a fresh estimate:
+
+| quantity | value | where it comes from |
+|---|---:|---|
+| reclaim today (`mrev`+`delin`+`revoke`) | 171 cyc | measured |
+| copy rate, 256 B / 1024 B | 3.52 cyc/byte | measured, and linear across both points |
+| fill of 4096 B, CEILING (copy rate, so load+store — a fill has no loads) | ~14,400 cyc | derived |
+| fill of 4096 B, FLOOR (256 stores at the measured CPI 2.0-3.2) | ~510-820 cyc | derived |
+| **reclaim WITH the fill** | **~700 to ~14,600 cyc** | derived |
+
+And against the workload: boundary frequency on speedtest1 is **~1 borrow per ~19k instructions**
+(measured), which at the measured CPI is ~47.5k cycles between borrows. Adding 510-14,400 cycles to
+each moves the boundary overhead from the measured ~1 % to somewhere between **~2 % and ~31 %**.
+
+**This is a different decision from the one I put to you.** At 65,536 stores option 1 was
+self-evidently unaffordable and option 3 was the likely answer. At 256 stores option 1 is a page
+memset per reclaim, the cost is bounded above by ~31 % on the one workload we have measured
+boundary frequency for, and it is the only option that closes anything.
+
+**Recommendation, restated on the corrected number: option 1.** The per-revoke cost should still be
+measured on the board before acceptance, but it is now a confirmation rather than a go/no-go — and
+the arm is cheap, because `uninit_init_then_use_ok` (item 5) is already the fill-then-init shape in
+seven lines.
+
+**How the error happened, since it is the same class as the others today.** I did not read a
+constant; I carried "1 MiB" from somewhere else in my head and multiplied. The check that would have
+caught it is one `grep` for the size constant, which is the same check the RTL-versus-spec type
+numbering needed, and the same one the QEMU permission mask needed an hour ago.
 
 ---
 
