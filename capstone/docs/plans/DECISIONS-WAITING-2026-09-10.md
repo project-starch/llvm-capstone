@@ -316,6 +316,37 @@ confirm from the log that `helper_csrevoke` ran at all before recording any verd
 **The QEMU change will NOT be committed whatever colour comes back.** Its landing condition is
 unchanged: it lands together with the monitor change, which is item 2, which is yours.
 
+### THE READING — every prediction confirmed, except the one that mattered most
+
+Run against `build-q07` (positive control: the new-only diagnostic string appears once in the binary
+under test and zero times in the shared `build/` one, so any reading here is attributable).
+
+| probe / suite | predicted | actual |
+|---|---|---|
+| `uninit_use_before_init_fault` | PASS, cause 26 | **PASS, cause 26** |
+| `uninit_negative_offset_fault` | PASS, void as evidence | **PASS, cause 26** — and void, as predicted |
+| `uninit_init_then_use_ok` | FAIL, cause 29 | **FAIL, cause 29**, `pc = 0x101560264` |
+| the four `row11` LINEAR probes | unaffected | **4 PASS** — the change is confined to the UNINIT path |
+| `run-nullblk-all.sh` | FAIL at the monitor's reclaim | **PASS** — see below |
+
+**The nullblk prediction was WRONG, and the pre-registered response to a green was the right one.**
+I wrote: *"if it comes back GREEN, the first hypothesis is that it never executed a revoke-then-init
+pair — not that M-5 is fine."* That is exactly what happened. **The suite never executes a revoke at
+all**: `revoke` appears zero times in all three serial logs, no null_blk-side source calls it, and the
+guest command is `modprobe`/`insmod`/`dd` with no region revoke anywhere in it. So nullblk is a valid
+don't-break-the-split-path control — and it stayed green, which is worth having — but it is **not an
+M-5 gate**, and the plan's §5.1 named it as one. The real gate is `uninit_init_then_use_ok`.
+
+Had I written "nullblk green means M-5 is fine" instead of the control, this run would have produced a
+clean, confident, entirely void result. That is the sixth instance of that shape this session.
+
+**One probe now needs rewriting, and it is the probe and not the fix.**
+`uninit_negative_offset_fault` reads `db[-1]` *because* revoke parked the cursor at `end`, which made
+that address `end-1` and INSIDE the region — that is its whole stated point, separating "no read
+authority" from "out of bounds". With the cursor at `base` it addresses `base-1`, which is outside.
+It still reports 26, because the type check precedes the bounds check, so it passes for a reason its
+own comment contradicts. Gated on the same decision as the fix; noted so it is not forgotten.
+
 ---
 
 ## 6. Smaller, and safe to defer

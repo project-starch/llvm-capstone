@@ -1466,6 +1466,53 @@ cursor-preserved today. Neither this nor R-30 has been demonstrated by execution
 reading the flashed source, which is why they are filed as OPEN with that stated rather than as
 measured defects.
 
+
+**SUFFICIENCY SETTLED FROM SOURCE 2026-09-10 — the fix is NECESSARY but does NOT close the
+disclosure, and no board arm is needed to say so.** The fix makes revoke return UNINIT, whose purpose
+is to carry no read authority. But at the flashed revision `66c4e7517` **nothing traps a plain scalar
+`ld` through an UNINIT capability in a domain.** An `rtl-oracle` sweep of every `UNINIT` occurrence at
+that revision (24 non-doc hits) places all of them in one of four places, none reachable from a scalar
+load:
+
+* the **M-gated** `cap_violation_detection` block, `load_store_unit.sv:947-977`, whose UNINIT clause
+  (`:975`, cause 26) sits under `ld_st_priv_lvl_i == riscv::PRIV_LVL_M`;
+* **LDC-only** paths — `load_unit.sv:214-218` gated at `:231` on `operation == LDC`;
+  `commit_stage.sv:331-340` gated on `fu == CAPSTONE_DYN && op == LDC`; `capstone_unit.anvilh:583-609`,
+  reachable only from `capstone_dyn_unit.anvil:495`;
+* **DYN/FLU-unit instructions only** (`capstone_dyn_unit.anvil`, `capstone_flu_unit.anvil`) — a
+  `LOAD`-typed instruction is dispatched at `issue_read_operands.sv:1282-1284` and never reaches the
+  `default:` arm at `:1291-1312` that feeds those units;
+* **simulation-only**, `ex_stage.sv:808-837`, inside `` `ifndef SYNTHESIS ``.
+
+The sweep was positive-controlled against its own blind spot: `CAP_TYPE_UNINIT` is `3'b100`
+(`ariane_pkg.sv:655`), so a raw bit-slice test would be invisible to a name grep. Searching
+`[30:28]` and `3'b100` finds the known sim-only assert and nothing else.
+
+**THE PRIVILEGE RESIDUAL IS CLOSED BY MEASUREMENT, NOT BY DERIVATION.** The source argument reduces
+to "the M-gated block cannot fire in a domain", which needs the domain to run at `priv_lvl != M`;
+the RTL alone does not settle that, because `priv_lvl_q` moves only on trap entry or `xRET`
+(`csr_regfile.sv:1048,2155,2318,2341,2362,2376`) and the domain switcher writes `mstatus` without
+touching it (`capstone_dom_switcher.anvil` has no `priv_lvl`/`mpp` occurrence at all). The
+**2026-08-04 seven-probe measurement settles it directly and better**: a store through a base
+carrying no capability metadata trips that same block's FIRST clause (`:972`, cause 24) and **did not
+trap in a domain**. The UNINIT clause is in the same block under the same gate, so it does not fire
+either. That is a measurement of the block in question rather than an inference about privilege.
+
+**A LIVE, NON-M-GATED capability check on every domain load and store DOES exist, and it is not this
+one.** CPMP, `pmp/src/pmp_data_if.sv:286-294`, fires exactly when `ld_st_priv_lvl_i != PRIV_LVL_M`
+and is instantiated on the scalar path at `load_store_unit.sv:476-506`. It checks a **separate
+16-entry CSR-mapped window table** (`:124-134`), never the load's own `rs1`, and its gating term is
+`cap_type != NOT_CAP` — so an UNINIT window entry grants access exactly like a LINEAR one. It cannot
+close this disclosure and is, if anything, permissive toward UNINIT.
+
+**The `lsugate` board probe is RETIRED, not repaired.** It was built to measure this and wedged twice
+in its entry glue. The question is now answered from primary sources plus an existing measurement, so
+spending a third boot would confirm what the evidence already implies — the S-12 recorder mistake.
+If it is ever revived, the two live mechanisms are distinguishable by signature: cause 26 with a
+VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the domain was not in
+U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
+want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
@@ -2702,6 +2749,27 @@ M-mode.
 re-shares it. No such host exists yet, which is why this is latent rather than measured. Filed
 2026-09-09 by the RTL lane; line numbers verified against the sources named above.
 
+
+
+**REPRODUCED UNDER QEMU 2026-09-10, and the gate everyone assumed is the WRONG ONE.** With the held
+Q-07 change built into `capstone-qemu/build-q07/` (never into `build/`), the corpus probe
+`uninit_init_then_use_ok` **faults with cause 29** — `Illegal operand value`, from `helper_csinit`,
+because revoke now leaves the cursor at `base` and `INIT` requires `>= end`:
+
+    [CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x101560264, tval = 0x0
+
+That probe is **M-5 in seven lines**: revoke, then `cap_init`, with no rewrite of the borrower's data
+in between — the same shape as `sbi_capstone.c:1196-1197` and `:1340-1341`, in a domain instead of the
+monitor, off the board. It is therefore the cheapest available test bed for whichever reclaim shape is
+adopted.
+
+**`run-nullblk-all.sh` IS NOT AN M-5 GATE, and its green must not be read as one.** It was predicted
+red and came back green; the pre-registered response to a green was to suspect the instrument first,
+and that was right. The suite **never executes a revoke**: no `revoke` appears in any of the three
+serial logs, no null_blk-side source calls it, and its guest command is `modprobe`/`insmod`/`dd`
+with no region revoke anywhere. It is a valid don't-break-the-split-path control — and it stayed
+green, which is a real and useful result — but it cannot reach the condition and so carries no
+verdict about this entry. The plan's §5.1 gate list named it as one and is corrected here.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
