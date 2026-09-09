@@ -728,6 +728,14 @@ unexpected operand type.
 > arithmetic and the same clause are in the previous bitstreams and, for R-30, in the spec itself, so
 > nothing here argues that the 2026-09-09 flash should not have happened or should be reverted. The
 > R-25/26/27 fixes that build carries are validated on silicon and stand.
+>
+> **INDEPENDENTLY CONFIRMED by the RTL lane, 2026-09-10**, line by line against the same revision, and
+> they went at the one reading that could have collapsed R-31: whether `\<=p` is a lattice relation a
+> bitmask test would get wrong. It is not a problem here — `asm_insn.h` encodes NA 0, XO 1, WO 2, WX 3,
+> RO 4, RX 5, RW 6, RWX 7, so bit 1 is write and `2 \<=p perms` is exactly `(perms & 2) == 2`; and
+> `existing-insn.adoc:255` uses the same operator as a store's fault condition, which the RTL
+> implements as `(perm & 2) != 2` at `dyn:401`. The test is right and only the SENSE is reversed. Still
+> derived from source rather than measured — two readers agreeing is not a demonstration.
 
 **The arithmetic, from the flashed bitstream's own source.** For an UNINIT capability over a region
 `[S, E)`:
@@ -790,7 +798,24 @@ every access path (`lsu:1004`, `dyn:387`, SPLIT `dyn:141-145`) and inclusive in 
   `mem-access-insn.adoc:93` become `end - CLENBYTES + 1`, which also unblocks the last granule.
 
 Recommendation: **exclusive**, because it is what the RTL's access paths and all of QEMU already do,
-making it the smaller and better-tested change. **This is a spec decision and belongs to the lead and
+making it the smaller and better-tested change.
+
+**AND IT CLOSES Q-07 AS A SIDE EFFECT, which materially changes the cost of the decision** (RTL lane,
+2026-09-10). Q-07 currently records that QEMU and the RTL accept **disjoint** `INIT` operands — QEMU
+asserts `cursor == end` and aborts the emulator on precisely the operand the RTL demands. Under the
+exclusive convention the RTL's corrected test accepts `cursor >= end`, which is what QEMU already
+implements, so the two agree for the first time and Q-07's divergence disappears rather than needing
+its own fix. A spec decision that resolves a second recorded defect is a different proposition from
+one that merely enables this one.
+
+**Three independent arguments for exclusive**, all from the RTL itself: `STC`'s bound is `end - 16`,
+which is exclusive arithmetic (inclusive would need `end - 15`); a full buffer leaves the cursor at
+`end`, the exclusive convention's natural "one past the last byte"; and QEMU's `helper_csinit` has
+asserted `cursor == end` all along, i.e. it implemented exclusive from the start.
+
+**Independent corroboration the RTL lane supplied:** `init-rs1-ne-rd.S` was written before this defect
+was named, and it fabricates its UNINIT operand with `CINCOFFSET` past `end` *precisely because filling
+cannot reach the precondition* — a workaround, in the test suite, for a defect nobody had named. **This is a spec decision and belongs to the lead and
 the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before this one.
 
 ### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `OPEN — SECURITY-RELEVANT. VERIFIED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517) against the spec; not yet demonstrated by a directed test`
@@ -801,6 +826,14 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > arithmetic and the same clause are in the previous bitstreams and, for R-30, in the spec itself, so
 > nothing here argues that the 2026-09-09 flash should not have happened or should be reverted. The
 > R-25/26/27 fixes that build carries are validated on silicon and stand.
+>
+> **INDEPENDENTLY CONFIRMED by the RTL lane, 2026-09-10**, line by line against the same revision, and
+> they went at the one reading that could have collapsed R-31: whether `\<=p` is a lattice relation a
+> bitmask test would get wrong. It is not a problem here — `asm_insn.h` encodes NA 0, XO 1, WO 2, WX 3,
+> RO 4, RX 5, RW 6, RWX 7, so bit 1 is write and `2 \<=p perms` is exactly `(perms & 2) == 2`; and
+> `existing-insn.adoc:255` uses the same operator as a store's fault condition, which the RTL
+> implements as `(perm & 2) != 2` at `dyn:401`. The test is right and only the SENSE is reversed. Still
+> derived from source rather than measured — two readers agreeing is not a demonstration.
 
 **The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
 
