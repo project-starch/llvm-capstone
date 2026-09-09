@@ -337,6 +337,31 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 ## Q-07 — QEMU's `INIT` requires `cursor == end` and aborts the host process otherwise; the spec and the RTL require `cursor > end` `OPEN — QEMU divergence, filed 2026-09-09 from the R-25 probe work`
 
+> **2026-09-10, SECOND PASS — THE QUESTION IS ANSWERED, AND NONE OF THE THREE OPTIONS ON THE TABLE
+> WAS THE RIGHT ONE.** The choice was posed as: amend the spec's `INIT` precondition, add a
+> monitor-side reclaim that avoids `INIT`, or change what `revoke` leaves behind in the RTL. It rested
+> on a false premise. See **R-30** and **R-31**: `INIT` is unreachable on this silicon for ANY UNINIT
+> capability (the cursor tops out at `end`, `INIT` demands `> end`), and REVOKE's permission clause is
+> inverted, so for the RW regions this path handles REVOKE returns LINEAR and the monitor's `C_INIT` is
+> never even reached.
+>
+> **The resolution, in order, and only the first step is a decision:**
+> 1. **Declare whether `end` is inclusive or exclusive.** The spec never says and the RTL is split
+>    against itself. Recommended EXCLUSIVE — every access path and all of QEMU already assume it.
+>    **The lead's, with the spec's owners.**
+> 2. **Fix `INIT`** to match (R-30): under the exclusive reading, `capstone_flu_unit.anvil:139`
+>    `<=` → `<`, with `cap-man-insn.adoc:421` changed alongside it.
+> 3. **Fix REVOKE's permission clause** (R-31) — but NOT before step 2, or a silent disclosure becomes
+>    a live monitor trap.
+> 4. **Then QEMU aligns to the fixed RTL**, which is what Q-07 becomes: `helper_csrevoke` leaves the
+>    UNINIT cursor at BASE like the RTL rather than at `end`, and `helper_csinit` raises exception 29
+>    instead of asserting, using the corrected comparison. The three-way disagreement collapses to one
+>    rule.
+> 5. **M-5's monitor code is then reachable and can be judged on its merits.** It is not fixable before
+>    the above and is not the thing to fix first.
+>
+> The original coupling note stands below, because it is what made the search necessary.
+
 > **2026-09-10 — Q-07 AND M-5 ARE ONE SYSTEM, and neither can be fixed alone. Verified in the QEMU
 > source, not inferred.**
 >
@@ -1857,6 +1882,31 @@ undebuggable and takes the core with it.
 > `INIT` that cannot succeed — but it is no longer the thing to fix first, and it is not fixable in the
 > monitor alone. The two sites remain `sbi_capstone.c:1196-1197` and `:1340-1341`, and any monitor
 > change must follow the R-30 `end`-convention decision rather than precede it.
+
+> **2026-09-10, SECOND PASS — THE QUESTION IS ANSWERED, AND NONE OF THE THREE OPTIONS ON THE TABLE
+> WAS THE RIGHT ONE.** The choice was posed as: amend the spec's `INIT` precondition, add a
+> monitor-side reclaim that avoids `INIT`, or change what `revoke` leaves behind in the RTL. It rested
+> on a false premise. See **R-30** and **R-31**: `INIT` is unreachable on this silicon for ANY UNINIT
+> capability (the cursor tops out at `end`, `INIT` demands `> end`), and REVOKE's permission clause is
+> inverted, so for the RW regions this path handles REVOKE returns LINEAR and the monitor's `C_INIT` is
+> never even reached.
+>
+> **The resolution, in order, and only the first step is a decision:**
+> 1. **Declare whether `end` is inclusive or exclusive.** The spec never says and the RTL is split
+>    against itself. Recommended EXCLUSIVE — every access path and all of QEMU already assume it.
+>    **The lead's, with the spec's owners.**
+> 2. **Fix `INIT`** to match (R-30): under the exclusive reading, `capstone_flu_unit.anvil:139`
+>    `<=` → `<`, with `cap-man-insn.adoc:421` changed alongside it.
+> 3. **Fix REVOKE's permission clause** (R-31) — but NOT before step 2, or a silent disclosure becomes
+>    a live monitor trap.
+> 4. **Then QEMU aligns to the fixed RTL**, which is what Q-07 becomes: `helper_csrevoke` leaves the
+>    UNINIT cursor at BASE like the RTL rather than at `end`, and `helper_csinit` raises exception 29
+>    instead of asserting, using the corrected comparison. The three-way disagreement collapses to one
+>    rule.
+> 5. **M-5's monitor code is then reachable and can be judged on its merits.** It is not fixable before
+>    the above and is not the thing to fix first.
+>
+> The original coupling note stands below, because it is what made the search necessary.
 
 > **2026-09-10 — M-5 AND Q-07 ARE ONE SYSTEM, and neither can be fixed alone. Verified in the QEMU
 > source, not inferred.**
