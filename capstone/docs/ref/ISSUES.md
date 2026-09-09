@@ -3283,6 +3283,43 @@ land in both or note the divergence.
 
 ### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `OPEN — SPEC VIOLATION, direction now determinate; NOT yet reported`
 
+> # 2026-09-10 — R-24 IS NOT "THE RTL DEVIATES FROM THE SPEC". THE RTL DISAGREES WITH ITSELF, TODAY, ON THE FLASHED PART.
+>
+> Found sideways, while fixing the discriminator for an unrelated board probe. The **load/store unit
+> emits capability causes RAW** — it does not go through the execute path's `24 + enum` encoder — and
+> every one of its numbers is the spec's (`load_store_unit.sv:974-990` at `66c4e7517`, read directly):
+>
+> | LSU condition | LSU emits | spec name and number |
+> |---|---|---|
+> | `NOT_CAP` operand | 24 | Unexpected operand type — 24 |
+> | invalid revocation node | 25 | Invalid capability — 25 |
+> | not LINEAR/NONLIN (wrong type) | 26 | Unexpected capability type — 26 |
+> | load without read permission | 27 | Insufficient capability permissions — 27 |
+> | store without write permission | 27 | same |
+> | address out of bounds | 28 | Capability out of bound — 28 |
+>
+> **Six for six.** So the LSU is a **THIRD independent witness** that the spec base is `23 + ordinal`,
+> alongside the spec text itself and `commit_stage`'s PC-capability check. Against those three stand the
+> two execute-path encoders, which add 24 and land one high on every cause.
+>
+> **The consequence is sharper than a spec deviation and much harder to argue with: the same logical
+> fault reports a DIFFERENT NUMBER depending on which unit raised it.** A capability-type error is
+> **26** from the load/store path and **27** from the execute path. Insufficient permission is **27**
+> from one and **28** from the other.
+>
+> **This has already cost readings and will cost more.** Anyone correlating a board wedge's latched
+> `mcause` against the RTL must first know which unit raised it, and **the wedge tracer does not record
+> that**. It is also exactly why the `lsugate` probe's discriminator is 26 rather than 27 — I wrote 27
+> first, by applying the execute path's convention to a unit that does not use it, and caught it only
+> because the value was about to be read off a board.
+>
+> After R-24 the number stops depending on the unit. That is the argument for the change, and it is a
+> better one than conformance: **an implementation that reports one fault two ways is unreadable
+> regardless of which numbering anyone prefers.**
+>
+> *Nothing on the R-24 branch changes for this — it remains the ungated one-liner with its test updates
+> owed. This strengthens the case, not the patch.*
+
 > **2026-09-10 — A FIX IS WRITTEN AND IS EXPLICITLY NOT GATED. Do NOT batch it into a bitstream yet.**
 > RTL lane, branch `r24-excode-base` at `69658cf16` off `66c4e7517`.
 >
