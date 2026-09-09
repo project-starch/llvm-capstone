@@ -284,6 +284,12 @@ Cheap habits that catch all of the above:
   declaration, would have counted events on arbitrary capability cursor bits — the generated code
   reads it at `[255 +: 3]`.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
+* **Cite a board result by its image hash, never by its label.** A `board-results` row's label can
+  name a different program: the S-06 folder's "acceptance passed" for `s06agg` cited a row whose image
+  was not the folder's `.dom` and whose value, 15, lay outside that program's 64..67 code range — the
+  shape had never been fixed (R-29, found 2026-09-09 by reading the value range). Before writing FIXED
+  or "acceptance passed", match the row's hash against the folder's `SHA256SUMS`, and treat a value
+  outside the reproducer's documented code range as a different program, not a pass.
 
 ## Simulation green is not synthesis clean
 
