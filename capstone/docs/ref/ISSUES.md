@@ -1859,10 +1859,6 @@ PCC base, so an absolute-entry switch domain halts with cause 1 at `pc = 0x10338
 table entries. Log kept at `/tmp/capstone/board-cycle2/absentry/` (scratch).
 
 
-### C-37 — relocation type names print as "Unknown" `OPEN — lib/Object/ELF.cpp has no EM_CAPSTONE case`
-
-`Capstone.def` names the relocations `R_Capstone_*`; `llvm-readobj -r` prints "Unknown" for every one because `lib/Object/ELF.cpp` lacks an `EM_CAPSTONE` case at its `EM_RISCV` sites. Cosmetic for tooling, misleading for anyone reading an object dump. XFAIL pin: `reloc-names.s`; the object-view checks in `compiler-used-capability.ll` and the constant-initializer tests accept either spelling until this lands.
-
 ### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `OPEN — a backend naming decision`
 
 `parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.

@@ -2736,6 +2736,18 @@ Reserved for the DROP/DELIN/MREV side-effect ordering defect in case `sem-drop-o
 
 CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemonic with no ISA counterpart; both corrected with the intrinsic and builtin, the phantom removed. Pins: `cap-control-flow.ll`, `cap-valid.s`, `cap-invalid.s`.
 
+### C-37 — relocation type names print as "Unknown" `FIXED 2026-09-09 (compiler lane, compiler-validation-plan f94eb41a900f): lib/Object/ELF.cpp names Capstone relocations from ELFRelocs/Capstone.def; llvm-readelf -h prints "Capstone" for e_machine 259; the symptom object shows 0 "Unknown" where it showed 23`
+
+`Capstone.def` names the relocations `R_Capstone_*`; `llvm-readobj -r` prints "Unknown" for every one because `lib/Object/ELF.cpp` lacks an `EM_CAPSTONE` case at its `EM_RISCV` sites. Cosmetic for tooling, misleading for anyone reading an object dump. XFAIL pin: `reloc-names.s`; the object-view checks in `compiler-used-capability.ll` and the constant-initializer tests accept either spelling until this lands.
+
+> **FIXED 2026-09-09 (compiler lane, f94eb41a900f on compiler-validation-plan).** `lib/Object/ELF.cpp` names
+> Capstone relocations from `ELFRelocs/Capstone.def` and knows `R_Capstone_RELATIVE`; ELFYAML accepts
+> `EM_CAPSTONE` and the names (yaml2obj/obj2yaml); llvm-readobj's machine table prints "Capstone" for e_machine
+> 259. Tests: `obj-relocs-cap-constant.ll` and `obj-relocs-gp-table.ll` tightened to names only (red on the
+> unfixed tools, green after), the constant test also pins Machine/names/no-Unknown under readelf, and
+> `reloc-names.s` (the 2026-09-04 XFAIL pin) reported XPASS and lost its marker. MC/Capstone + CodeGen/Capstone
+> lit 100/100. Evidence: the symptom object (`jt.o`, 23 "Unknown" names on 2026-09-05) now shows 0.
+
 ### C-39 — a variable-index vector element access zero-extended its index into the c128 pointer type `FIXED 2026-09-05 (c11b8fb6b162)`
 
 llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
