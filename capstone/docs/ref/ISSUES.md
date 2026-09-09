@@ -1933,7 +1933,13 @@ lines, one `always_ff`): per response channel remember a request the node accept
 if `flush_i` lands while one is owed, drain that response (ack it to the node, hide it from the DYN unit) and hold
 `capstone_dyn_ready_o` low until it is gone. Read on the fix tree: all three triggers HANG → PASS with every
 control unchanged; lint gate at the baseline counts exactly (UNOPTFLAT 40, ANVIL 0); the combined R-25+R-26+R-27
-tree: 58-arm set clean, 88-row sweep identical except the predicted CCSRRW cycle deltas. Audit: mechanism
+tree: 58-arm set clean, 88-row sweep identical except the predicted CCSRRW cycle deltas. **Label
+correction (RTL lane audit, 2026-09-09):** every simulation labelled "40-cycle memory" before 05:55 UTC that
+day ran at the DEFAULT latency (the define never reached Verilator through the model-build script);
+nothing measured is invalid, the labels were. A verified 40-cycle record now exists: on the clean tip the
+load-fault trigger `r27-ldf-n0` still HANGs; the fence-timed triggers miss the window at 40 cycles and hit
+it at 0 (timing tickets, as the mechanism says); with the drain, on the combined tree, the 58-arm set has 0
+hangs at 40 cycles (side-branch commits r27 f1d42e39a, r26 67d870cc8, r25 ec50837b5). Audit: mechanism
 SUPPORTED on six attack lines; fix PLAUSIBLE, no misattribution sequence found; named residuals — one owed bit per
 channel rests on the DYN unit's own serialisation; the node's designed non-answer when the pool is exhausted
 (`head == 16'hFFFF`) remains a dead core after a later flush, not a new defect. The alternative (the anvil node
@@ -2005,7 +2011,7 @@ RTL-side fix; the monitor keeps its `fence.i` until then).
 > shared fixed-latency unit so the CSR op cannot issue until it finishes, commits two cycles after
 > issue, and the load's check lands one cycle after commit on the edge the write becomes visible: a
 > zero-cycle window by timing, not by design. With an older cache-missing `ld` ahead of the `CCSRRW`
-> (`S12_MEM_DELAY=40`) the CSR write waits at commit behind it; the younger load's CPMP check runs
+> (`S12_MEM_DELAY=40`; label correction 2026-09-09: the pre-05:55 runs actually ran at the default latency, the define had not reached Verilator — a verified 40-cycle rerun on the clean tip still reads FAIL 11 and passes with the fix) the CSR write waits at commit behind it; the younger load's CPMP check runs
 > at tick 1183 with `cpmp_allow = 1` against the OLD entry, the write lands at 1193, the load retires
 > with data from outside the new bounds — **FAIL 11 (hazard)**; with `fence.i` between: PASS. So any
 > older instruction that delays the CCSRRW's commit and is not on the fixed-latency unit opens a
