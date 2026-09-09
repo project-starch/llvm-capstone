@@ -159,7 +159,7 @@ by their own plans. When it resumes, this is the order I would spend boots in:
 
 Declined, recorded so they are not re-proposed: the TCL suite (interpreter port plus a file VFS),
 `mptester` and `threadtest3` (no threads), I/O-error and crash tests (no VFS with durability), Lua
-and mruby (dropped by `docs/plans/capstone-column-xlang.md` and `cheri-baseline-xlang.md`).
+and mruby (dropped by `docs/plans/archived/capstone-column-xlang.md` and `cheri-baseline-xlang.md`).
 
 Two stale statements found while surveying. They are **not** part of the postponement: fix them in
 the same pass as Part 1 step 5, since they are wrong today and cost nothing to correct.

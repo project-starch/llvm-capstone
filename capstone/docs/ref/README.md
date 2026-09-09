@@ -57,7 +57,7 @@ capability `mcause` in either file against that table before acting on it** — 
 
 ## Quiet — check before relying on
 
-* `delegation-guidance.md` (2026-06-19) — superseded in practice by `SUBAGENTS.md` and the
+* `delegation-guidance.md` — **MOVED 2026-09-09** to `history/09-09-2026_ARCHIVED_delegation-guidance.md`; it was superseded in practice by `SUBAGENTS.md` and the skills, and nothing live cited it.
   delegation section of `CLAUDE.md`. The archived peer-lane guide is
   `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`.
 

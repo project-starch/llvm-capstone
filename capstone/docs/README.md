@@ -57,8 +57,8 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 | `state/` | 3 | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
 | `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
 | `design/` | 32 | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
-| `plans/` | 24 live, 21 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
-| `history/` | 205 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
+| `plans/` | 29 live, 24 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
+| `history/` | 196 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
 | `patches/` | — | out-of-tree patches | |
 
 ### The files worth knowing by name
@@ -138,7 +138,8 @@ Use these only when the task actually needs them:
 - `ref/testing-matrix.md` — compact map of test layers and entry points
 - `ref/capstone-agent-test-instructions.md` — practical command cookbook
 - `ref/capstone-coding-conventions.md` — local coding conventions
-- `ref/delegation-guidance.md` — bounded executor rules for split agent work
+- `history/09-09-2026_ARCHIVED_delegation-guidance.md` — bounded executor rules for split agent
+  work; archived 2026-09-09, superseded in practice by `ref/SUBAGENTS.md`
 - `ref/beebs-benchmark-bringup-manual.md` — exact workflow for adding one or
   more BEEBS benchmark wrappers
 - `ref/capstone-purecap-pointer-model.md` — pointer/capability authority model

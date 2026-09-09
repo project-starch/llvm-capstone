@@ -35,4 +35,14 @@ its silicon validation *downgraded*. `S07-instrumentation-complete-spec.md` ther
 
 | plan | why archived |
 |---|---|
-| `xlang-phase2-seam-TODO.md` | says so itself: superseded 2026-08-01 by `plans/capstone-column-xlang.md`. |
+| `xlang-phase2-seam-TODO.md` | says so itself: superseded 2026-08-01 by `plans/archived/capstone-column-xlang.md`. |
+
+## Archived 2026-09-09 — finished, and one that was never a plan to begin with
+
+| plan | why archived |
+|---|---|
+| `monitor-unification.md` | **NOT moved.** Phases A and B are complete, but eight live documents cite it as the explanation of the current `TARGET=fpga\|qemu` build scheme (`ref/REPO-MAP.md` ×3, both how-to guides, `ISSUES.md`, both state docs). It stays in `plans/` under a dated completion banner; moving it would break those citations for no reader gain. |
+| `q03-region-hole-sentinel.md` | the hole-with-sentinel design is implemented, validated on QEMU and exercised on silicon (boots sw33 and sw37). Its open item 3 is cited from the Q-03 entry, now in `ref/ISSUES-ARCHIVE.md`. |
+| `capstone-column-xlang.md` | the xlang Capstone column is decided and recorded; it is also the document that declines real mruby and real Lua, which is why it is cited from later plans. |
+| `xlang-phase1-followups-TODO.md` | its items closed 2026-07-27; superseded in substance by `capstone-column-xlang.md`. A history note still cites it by its old path, which is correct for its date and is left alone. |
+| `caplifive-system-to-dev-migration.md` | the proposal was resolved 2026-09-04; `caplifive-system-dev` is the live remote. |

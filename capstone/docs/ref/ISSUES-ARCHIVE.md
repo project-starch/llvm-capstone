@@ -3197,7 +3197,7 @@ intent, and it is capability-ABI code.
 > each way from `2f772bb` (`04ac643` template-copy vs `1a926b0` "carve gp only for images that
 > declare a globals region", the latter on no remote until today); 185 differing lines, all in the
 > gp-delivery feature, **zero conflict hunks** on a trial merge. Reconciling them is the lead's
-> call — see `plans/caplifive-system-to-dev-migration.md`.
+> call — see `plans/archived/caplifive-system-to-dev-migration.md`.
 
 **Found 2026-09-05 by the compiler lane while retracting a compiler claim; verified here from their
 result files.** This is a runtime defect, not a codegen one.
@@ -3430,7 +3430,7 @@ S-mode split. Where to look: the `.init.text` of `nullb_split.smode.ko` and what
 **board firmware's is 96** (`caplifive-system` `sbi_capstone.h:78`), so a board boot whose
 monitor count passes 64 silently overruns a static kernel array. Nothing checks it on either
 side; no run has been shown to reach it. Interacts with the Q-03 fix design (holes are permanent
-and consume slots) — `plans/q03-region-hole-sentinel.md` open item 3.
+and consume slots) — `plans/archived/q03-region-hole-sentinel.md` open item 3.
 
 > **Sharpened 2026-09-07 (board-firmware Q-03 port audit; `objdump -t build/target/capstone.ko`
 > re-read).** `regions` is the module's ENTIRE `.bss` (`0x800` = 64 × 32 bytes) and `region_n`

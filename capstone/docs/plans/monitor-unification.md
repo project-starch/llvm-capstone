@@ -1,5 +1,14 @@
 # Monitor-stack unification: one source per repo, target by build configuration
 
+> **COMPLETE 2026-09-09 — kept in `plans/` deliberately, not archived.** Phases A and B are
+> finished and validated on both targets; the branch scheme and `make TARGET=fpga|qemu` it describes
+> are what the tree does today. It stays here because eight live documents cite it as the
+> explanation of that scheme (`ref/REPO-MAP.md`, `ref/HOW-TO-RUN-ON-QEMU.md`,
+> `ref/HOW-TO-LAUNCH-ON-FPGA.md`, `ref/ISSUES.md`, `state/current-state.md`,
+> `state/current-next-step.md`), so its path is a reference, not a plan pointer. Read it as a
+> record of a finished change. Follow-on work is in `after-phase-b-combined.md`.
+
+
 *Started 2026-09-07. Status lines below are updated as phases land. The full design and the
 reasoning are in this file; the session-local plan it was written from is not a repo artifact.*
 
