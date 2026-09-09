@@ -48,6 +48,22 @@ static cl::opt<bool> CapstoneDisableUsingConstantPoolForLargeInts(
     cl::desc("Disable using constant pool for large integers."),
     cl::init(false), cl::Hidden);
 
+// C-43: off by default, and NOT a knob for production. Under the gp-free /
+// gp-captable ABI a constant pool is unreachable (see useConstantPoolForLargeInts
+// below), so the default is to avoid forming one. Setting this re-enables pooling
+// under that ABI for one purpose only: to drive the pooling path into the C-43
+// guard so the guard has a positive control in lit. It does NOT produce a working
+// image -- the guard fails the compile. There is deliberately no "measure the
+// fault" mode here (unlike -capstone-gp-captable-jump-tables): the fault is already
+// characterised (C-4), and emitting a known-faulting pool image buys nothing.
+static cl::opt<bool> CapstoneGpFreeConstantPools(
+    "capstone-gpfree-constant-pools",
+    cl::desc("Re-enable constant pooling under the gp-free/gp-captable ABI so the "
+             "C-43 guard can be exercised in lit, and for future work on "
+             "slot-allocated pools. The guard refuses the image; this does not "
+             "produce working code."),
+    cl::init(false), cl::Hidden);
+
 static cl::opt<unsigned> CapstoneMaxBuildIntsCost(
     "capstone-max-build-ints-cost",
     cl::desc("The maximum cost used for building integers."), cl::init(0),
@@ -168,8 +184,11 @@ bool CapstoneSubtarget::useConstantPoolForLargeInts() const {
   // Materialising the constant inline costs a few instructions instead, which is
   // strictly better than not running. This is the same reason -fno-jump-tables
   // is already mandatory for these domains: a jump table is .rodata too.
+  // Off by default under the ABI (pool is unreachable). The hidden knob exists
+  // only to drive the pooling path into the C-43 guard for a lit positive control;
+  // it never produces a working image. See CapstoneGpFreeConstantPools.
   if (capstoneGpFreeAbiActive())
-    return false;
+    return CapstoneGpFreeConstantPools;
   return !CapstoneDisableUsingConstantPoolForLargeInts;
 }
 
