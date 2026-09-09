@@ -201,12 +201,18 @@ compiler lane holds C-43 (land `5d2932a9`), C-14, C-4 (no status token — needs
 
 **A process failure worth the lead's eye.** One commit tonight went in while `precommit-scan` said
 BLOCKED, because the command printed the scan's exit code instead of gating on it. The hit was a false
-positive (the word "token" next to a backticked status value) and the content was verified clean, but
-the procedure was wrong and it is the same shape as the documented "never filter between a gate and
-its exit status" failure. Gating is restored. It also surfaced a real property: **the scan reads
-REMOVED lines too**, so once such a phrase is committed, the commit that deletes it is blocked as
-well. Cleaning up a false positive therefore needs either a gate change or a bypass — both the lead's
-call, so the wording was left alone.
+positive and the content was verified clean, but the procedure was wrong and it is the same shape as
+the documented "never filter between a gate and its exit status" failure. Gating is restored.
+
+Two properties of the gate came out of it, the second corrected by the compiler lane after I first
+described it wrongly. **(1)** The pattern at `precommit-scan.sh:163` is
+`\btoken\s*[=:]\s*\S` — the word "token" followed by a colon or equals and any non-space. Backticks
+are irrelevant; the fix is to avoid that construction entirely and write "status word" or name the
+value directly. **(2)** The script appends `git diff` output wholesale (`:58`, `:60`, `:67`) with no
+filter for added lines, so **REMOVED lines are scanned too** — once such a phrase is committed, the
+later commit that deletes it is blocked as well. Cleaning up a false positive therefore needs either a
+gate change or a bypass, both the lead's call, so the wording was left alone. The pattern guards the
+real console credential and should not be weakened.
 
 ## 8. Order
 
