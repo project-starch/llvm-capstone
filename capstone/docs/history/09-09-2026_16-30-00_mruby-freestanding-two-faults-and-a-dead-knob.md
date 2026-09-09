@@ -140,3 +140,68 @@ already in the registry. mruby is the vehicle that exposes it, not the subject.
 the double-ldc image the jmp_buf pointer is itself loaded twice (`ldc a0, 0x10(s6)` at
 0x3a95c and 0x3a960) and still carries 160 bytes where the object is 224. Either the wrong
 value is what sits in memory there, or the defect is not simply "the first read of a pair".
+
+## RETRACTED: neither fault is a load defect. Both are one inlined naked function
+
+The section above is wrong. The defect is not S-12 / R-20 and it is not a load. Both faults
+come from a single cause, and it is entirely inside this port.
+
+**`setjmp` is `naked`, and mruby gets it INLINED.**
+
+```
+remark: 'setjmp' inlined into 'mrb_vm_exec' with (cost=always):
+        always inline attribute at callsite mrb_vm_exec:178:3
+```
+
+The chain, each link checked against its source:
+
+1. mruby marks `mrb_vm_exec` `MRB_FLATTEN` = `__attribute__((flatten))` (`src/vm.c:2491`), so
+   its extracted opcode handlers are forced back inline.
+2. `flatten` makes clang stamp `alwaysinline` on **every** call site in that function --
+   263 of them in the frontend IR, including `MRB_TRY`'s `setjmp((&c_jmp)->impl)`.
+3. `getAttributeBasedInliningDecision` honours a call-site `alwaysinline` at
+   `InlineCost.cpp:3217`, **before** it looks at the callee's `noinline` at 3246, and
+   `isInlineViable` does not reject a `naked` callee. The IR carries both attributes and the
+   inline happens anyway: `attributes #9 = { naked noinline nounwind returns_twice ... }`.
+4. A `naked` function's body is inline asm with no operand constraints. It addresses its
+   argument as `a0` because that is where the ABI puts it. Inlined, nothing puts `&c_jmp`
+   into `a0`, so the fourteen `stc`s write 224 bytes through whatever `a0` happened to hold.
+
+The image proves it: the save sequence appears **three** times -- once as the real `setjmp`,
+twice spliced into callers. At both splice sites `a0` holds a `mrb_callinfo *`:
+
+```
+37d4c: ldc a0, 0x10(s1)   mrb->c
+37d50: ldc a0, 0x30(a0)   c->ci
+37d5c: stc s2, 0x10(a0)   ci->proc = begin_proc
+37d60: stc a1, 0x40(a0)   ci->pc   = irep->iseq
+37d64: stc ra, 0x0(a0)    setjmp's body, a0 still ci
+   ...
+37d98: stc sp, 0xd0(a0)   224 bytes into a 96-byte callinfo
+```
+
+That single mechanism produces both faults:
+
+* **Fault 2** is the save itself running off the end of whatever `a0` addresses -- 160 bytes
+  in the double-ldc image (`irep->iseq`), 96 in the plain one (`mrb_callinfo`). The buffer was
+  never too small; the pointer was never the buffer.
+* **Fault 1** is its wreckage. `stc s2, 0x30(a0)` puts `s2` -- `begin_proc`, a `struct RProc *`
+  -- into `ci->stack`. `sizeof(struct RProc)` is **80**, which is the capability the stack
+  clear then faults on. The 80 bytes were never an allocator bound and never a bad load: they
+  are an RProc pointer written into the stack slot by a register save that thought it was
+  writing a jmp_buf.
+
+So the earlier reading has to go in full: the probe was right that the frame is healthy when
+it looks, the clear was right to reload, and `-capstone-double-ldc` never repaired a load --
+it moved the addresses enough to change which fault came first.
+
+**Fix.** `port/capstone_setjmp.c` gets its own translation unit; separate objects cannot be
+inlined across without LTO. It owns no globals, so the gp-captable single-owner gate is
+unaffected. The build now counts the save sequence in the linked image and fails unless there
+is exactly one copy -- positive control: before the split it printed 3.
+
+**Still open, and it is a compiler question, not an mruby one:** `isInlineViable` should
+refuse a `naked` callee outright. Inlining one is always wrong, because its asm binds its
+operands by ABI register and inlining is exactly what removes the ABI. The port-level split
+fixes mruby; the next port that puts `flatten` or `always_inline` near naked asm gets the same
+silent miscompile.

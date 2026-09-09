@@ -32,7 +32,18 @@ def main(argv):
 
     # Sorted so the unit is reproducible; a build that differs run to run cannot be
     # compared against itself, which is the whole basis of a matched pair.
-    port = sorted(p for p in port_dir.glob("*.c"))
+    #
+    # OWN_TU: sources that must NOT share a translation unit with mruby.
+    # capstone_setjmp.c is `naked` inline asm that addresses its argument as a0 by
+    # ABI. mruby marks mrb_vm_exec __attribute__((flatten)) (vm.c:2491), which puts
+    # `alwaysinline` on EVERY call site in it -- including MRB_TRY's setjmp. LLVM
+    # honours a call-site alwaysinline before the callee's noinline
+    # (InlineCost.cpp:3217 vs 3246) and isInlineViable does not reject naked
+    # callees, so in one TU the naked body is spliced in with nothing put in a0:
+    # the 14 register saves then write 224 bytes through whatever a0 held, which
+    # was the mrb_callinfo*. Separate objects cannot be inlined across without LTO.
+    OWN_TU = {"capstone_setjmp.c"}
+    port = sorted(p for p in port_dir.glob("*.c") if p.name not in OWN_TU)
     if not port:
         sys.exit(f"no .c files in {port_dir}")
 

@@ -151,6 +151,11 @@ OBJS=()
 "$CLANG" "${COMMON[@]}" -c "$ALL" -o "$OBJ_DIR/mruby_all.o"
 OBJS+=("$OBJ_DIR/mruby_all.o")
 
+# setjmp/longjmp get their OWN object; see gen-amalgam.py's OWN_TU for why. It owns
+# no globals, so the one-TU-owns-globals gate below stays satisfied.
+"$CLANG" "${COMMON[@]}" -c "$SCRIPT_DIR/port/capstone_setjmp.c" -o "$OBJ_DIR/capstone_setjmp.o"
+OBJS+=("$OBJ_DIR/capstone_setjmp.o")
+
 echo "== compiling the shared freestanding pieces"
 COMMON_FLAGS=("${COMMON[@]}" -D__SOFTFP__)
 source "$BEEBS_SOFTFLOAT"
@@ -226,6 +231,23 @@ link "$(printf '0x%x' $GOFF)" "$OUT_DIR/$DOM_NAME.dom" "$OBJ_DIR/domreq.o"
 [[ "$BEFORE" == "$(_segs "$OUT_DIR/$DOM_NAME.dom")" ]] || {
   echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2; exit 2; }
 echo "   declared dom_data >= $(( CARVE + MRUBY_STACK )) (carve $CARVE + stack $MRUBY_STACK)"
+echo "== gate: the naked setjmp must not have been inlined"
+python3 - "$OUT_DIR/$DOM_NAME.dom" <<'PYEOF' || exit 2
+import sys
+# `stc ra, 0x0(a0)` followed by `stc s0, 0x10(a0)` -- the first two slots of
+# capstone_setjmp.c's save. One copy = the real function. More = the naked body was
+# spliced into a caller, where nothing puts the jmp_buf in a0 and the 14 stores land
+# on whatever a0 held. Positive control: before capstone_setjmp.c got its own TU this
+# printed 3.
+pat = bytes.fromhex("5b401500") + bytes.fromhex("5b488500")
+d = open(sys.argv[1], "rb").read()
+n, i = 0, 0
+while (j := d.find(pat, i)) >= 0:
+    n += 1; i = j + 1
+print(f"   setjmp save-sequence copies: {n} (must be 1)")
+sys.exit(0 if n == 1 else 1)
+PYEOF
+
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || {
   echo "the declared budget does not fit" >&2; exit 1; }
 
