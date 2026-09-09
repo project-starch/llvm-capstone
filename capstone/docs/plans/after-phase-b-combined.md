@@ -1,0 +1,185 @@
+# Combined plan 2026-09-09: the 33 open issues, the R-25/26/27 bitstream on the board, the CHERI smoke, archiving
+
+*(Board lane. Approved by the lead 2026-09-09 as written, with the session split (board: A, B, C and every
+boot; bench: D and the registry re-triage). The RTL lane's own plan is in their fix-cycle history note; the
+earlier `after-phase-b.md` is executed except its R-26 half. Decisions that are the lead's are marked
+**LEAD**. Nothing here edits CLAUDE.md.)*
+
+## Context
+
+The lead asked four things: where the registry is, whether `fpga-repros/` and the docs carry resolved
+material that should be archived, whether the CHERI lane's volatile program + smoke test can run now, and
+one plan covering the 33 open registry entries, the R-25/26/27 validation the RTL lane is preparing, and
+the CHERI smoke — with an honest "when are we finished".
+
+Facts gathered read-only today:
+- The registry is `capstone/docs/ref/ISSUES.md` (one heading per ID; `## Q-06`, `### R-26`, …). My count:
+  96 headed entries, 42 with a fixed/closed status, 33 open, 21 whose header line my parser could not
+  classify (mixed strike-through statuses — they are not unknown work, they need a human read once).
+  17 fixed-status entries still sit ABOVE the file's own "Archive — fixed, kept for provenance" section
+  (S-12, S-02, S-03, S-05, S-07, Q-03, Q-05, Q-01, S-08, S-06, C-18, R-1, C-2, C-19, M-2, C-15; R-26 now too).
+- `tests/fpga-repros/` has 18 active folders and an `ARCHIVED/` folder whose README rule is "fixed in
+  silicon AND verified on the board → `git mv` + banner + index row; kept as bitstream regression tests,
+  never handed over as open". By their own 2026-09-07 banners, these qualify now: R01 (R-1 GONE on
+  5097eb166), R16 (RESOLVED, kept as acceptance test), R20 (fix present by content), S06 (FIXED, acceptance
+  passed), S12 (fixed in the flashed RTL), S08 (bitstream-specific, superseded). NOT qualifying: R18
+  ("not reproduced with frozen images" is not fixed), R19, S01, S07 (residual not observed — the registry
+  says FIXED, the folder says "not observed"; read both before moving), S09/S10/S11/S13, the three RTL-*
+  observation folders.
+- Docs: `docs/plans/archived/` exists (21 there, README index). Plans whose own status says done:
+  `monitor-unification.md` (Phase A+B complete), `capstone-column-xlang.md`, `xlang-phase1-followups-TODO.md`,
+  `instrumentation-cleanup.md` (closed). `docs/ref/SILICON-BLOCKER.md` is marked SUPERSEDED by `docs/README.md`.
+  Everything else in `ref/` and `design/` is reference or design and stays; `history/` is append-only.
+  (A grep for "superseded/DONE" in file heads produced false hits — ISSUES "closed", fpga-user-manual
+  "Done", RATE-RULE — those are NOT candidates.)
+- The board is idle on this lane's side (sw38 done). The next Capstone board runs wait for the RTL lane's
+  bitstream. The CHERI package (`~/capstone-artifacts/cheri-cva6/board-package/`) is audited and revised:
+  volatile program only, restore by power cycle.
+- The RTL lane's status (their section below): R-26 and R-25 fixed in sim; R-27 found, drain fix
+  sim-verified; Phase 2 on the combined worktree; synthesis next; **LEAD** decision pending whether R-27
+  joins the bitstream (their recommendation: yes; already put to the lead — not re-asked here).
+
+## Where things stand (progress)
+
+| bucket | open | disposition from the evidence on file (`plans/bug-sweep-2026-09.md` rows) |
+|---|---|---|
+| close on existing evidence | 6 | R-21 (GONE at 5097eb1 for cincoffset), R-6 and R-8 (their rungs pass on s12fix), R-4 and R-5 (no reproducer, none produced by the sweep), C-5 (a documented design limit, not a defect) |
+| needs ONE board reading | 4 | I-4 (probes returned zeros — rerun k800 + accum probes), R-17/S-01 (the uc/dp0 perturbation pair), C-3 (RV8 -O1/-O2 board line never run), R-11 (`check-repr.py` on the current corpus, no boot) |
+| real fixes, this lane, board-free | 9 | Q-06, Q-04, M-1, M-3, M-4, I-5, C-9, C-37, C-43 (C-17 latent, no work until it bites) |
+| RTL lane | 6 | R-25, R-26, R-27 (in flight), R-28 (needs a directed test), R-22 (the `stc` arm never run), R-19 sim half |
+| **LEAD** decision | 4 | C-38 (mnemonic naming), I-02 (ID allocation convention), R-24 (spec vs RTL side; hand-off text exists), R-12 (deferred by record — keep or drop) |
+| deferred by record | 1 | R-18 (reported, workaround landed and silicon-confirmed; not reproduced with frozen images — closes with the re-triage on the new bitstream) |
+| unparsed headers | 21 | a human read of each header, then either the archive section or the open list |
+
+So roughly a third of the 33 close on evidence already recorded, a third are small fixes in this lane, a
+third are the RTL lane's or the lead's.
+
+## The board timeline (the only serialised resource)
+
+1. **CHERI volatile program + smoke — NOW** (~45 min of board time, no dependency on anything Capstone).
+   Conditions already agreed with the cheri lane: hold the console lock for the whole session; record
+   `flash_state.nv_bitstream_name` first; `switch_reset_all`; direct POST with `volatile: true`; bootrom
+   banner at 57600 (the console is already at 57600 — the Capstone DTS says so); GDB path (reset halt →
+   monitor load_image → set $pc → continue); read `x/7gx 0x80001000` if the UART is silent; power-cycle
+   BEFORE releasing the lock; confirm `nv_bitstream_name` unchanged; no Capstone run in between. **LEAD**
+   gives the go and answers the SD-slot question. The cheri lane drives it (they own the package); the
+   board lane stands by for the console.
+2. **Pre-flash boot on the current silicon** (owed to the RTL plan's step 16; batch, control first, one
+   unknown last): k800 control → I-4 probes (accum_probe, accum2_probe) → C-3 RV8 rung → the M-1/M-4
+   monitor-control domains (see below, only if their commit has landed by then) → the R-25 domain probe
+   (INIT rs1≠rd, predicted **1** = duplicate present) → firmware variant D (three CCSRRW `fence.i`
+   dropped) LAST — predicted CLEAN on today's silicon by the RTL lane's reading, which makes the post-flash
+   D/E boots a no-regression check, written down before the flash. One boot, ~40 min.
+3. **LEAD: flash decision** after the RTL lane's synthesis (their Phases 2–4, ~half a day + 3.5 h). Not
+   this lane's.
+4. **Post-flash boots** (RTL plan steps 18–19): boot 1 = the closing set (k800, six rungs, SLT select1,
+   transfer probe) on the new bitstream; boot 2 = R16 acceptance, the S-06 trio, the R20 rung, the R-25
+   probe (predicted **0**), variants D and E. Then the `fence.i` drop commit (four sites, R-26 history note
+   as the reason, `.c.S` gate), and the registry lines R-25/26/27 → FIXED ON SILICON.
+5. **Re-triage boot on the new bitstream**: the six archived-candidate packages as regression tests
+   (that is what `ARCHIVED/` is for), R-17/S-01's uc/dp0 pair, R-18's frozen images. One or two boots.
+
+## Work off the board (parallel with 2–5)
+
+### A. Q-06 (bounded investigation, then the fix that follows from it)
+Facts: the fault is `sbi.dom`'s `query_region` → `cap_base` on a CPMP-resident region; the value read back
+from the slot is untagged; two mechanisms unseparated ((a) installed untagged, (b) read back and not
+restored); QEMU's `CCSRRW` is a swap (a read with x0 nulls the entry), the RTL gates the write on the
+operand being a capability — UNRESOLVED against the spec.
+- Step 1: one more temporary print in the PACKAGE copy of the monitor (assert the `sbi.dom` hash differs
+  before running): the tag right after `write_cpmp` in `swap_cpmp` and at the domain-switch boundary.
+  This separates (a) from (b). One QEMU run under the lock.
+- Step 2: the fix. On QEMU, `query_region` must write back after `read_cpmp` regardless (split_out_cap
+  already does); if (a), the install/switch path is the fix and it is bigger (touches the switcher — then
+  a monitor commit gated by the FPGA `.c.S` diff and a control boot). Gate: `run-nullblk-all.sh` green,
+  the tier, the QEMU probe chain.
+- Estimate: the localisation plus the (b)-shaped fix in half a day; longer if it is (a).
+
+### B. The monitor cluster (one or two monitor commits, QEMU-gated, one control boot batched into step 2 or 4)
+- M-4: bound `dom_id` in `call_domain_with_cap` (refuse with -1 like the item-1 checks).
+- M-1: domains run with `mtvec = 0` — write the trap-vector context slot in `create_domain` (the
+  `RTL-domain-trap-vector-unset` folder has the firmware half already confirmed on silicon 2026-09-02;
+  check what remains there before writing).
+- M-3: SBI ecalls always return error 0 — return the real error where the handler has one; the module's
+  failure paths become live, so the module suite must stay green.
+- I-5: monitor errors invisible on the FPGA — the "cheap fix identified" in its entry.
+- Q-04: QEMU's MOVC must null a NOT_CAP source — an emulator change, gated by the tier (some tests may
+  lean on the divergence; the Q-05 experience says find them first with a grep for MOVC-of-scalar shapes).
+- Order: M-4 → M-1 → M-3 → I-5 → Q-04. Each its own commit, `.c.S` gate on both targets, pin-bump chain
+  only when the FPGA code changes.
+
+### C. Compiler bucket (this lane, after A and B)
+- C-37: `lib/Object/ELF.cpp` EM_CAPSTONE relocation names (small; lit test with `llvm-readelf -r`).
+- C-9: the redundant `mv rd, rd` around inline-asm constraints (codegen; byte-identity gate on the corpus).
+- C-43: a guard for anonymous compiler-generated data under `-capstone-gp-captable` plus a directed test;
+  the two known instances are mitigated, the class is not.
+- C-3: closes or reopens on the RV8 board reading from step 2.
+- C-38, I-02: **LEAD** decisions; C-17 stays latent.
+
+### D. Archiving (docs-only, no board, no build tree; one commit per group) — corrected against the
+### folders' own rules (independent inventory 2026-09-09)
+The repro README already settles the question: **"A package is open, archived, or resolved-but-retained …
+ARCHIVED/ is for packages nothing further will be run against"**, and its 2026-09-07 banner: **"No folder
+was moved: sent folders are live links, and the registry is the archive of record."** A sent folder's path IS
+the link the hardware side holds, so `git mv` of a sent folder breaks a live report. Therefore:
+1. `fpga-repros/`: **no `git mv` of any sent folder.** R16 (bitstream acceptance test), R20 (the R20 rung),
+   S06 (the S-06 trio) and S12 are *resolved-but-retained* instruments — they run again on every new
+   bitstream (board step 4/5) and stay where they are. Work: a `status` column in the top-level
+   `README.md` index (open / resolved-retained / superseded, dated, from each folder's own banner); a dated
+   banner where a folder has NO status line (S09, S10, S11; S13's index row says OPEN while its README says
+   "cannot be reproduced from this folder" — reconcile from the README); the `ARCHIVED/README.md` index
+   row that is missing for `R14-strline-struct/`. Candidates for `ARCHIVED/` only if never sent (check the
+   registry's hand-off notes first): R02 (superseded, secondary item) and S08 (bitstream-specific,
+   superseded). R01 stays: its banner says "attribution is OPEN".
+2. `ISSUES.md`: move the 17 fixed-status entries (18 with R-26 once the bitstream lands — not before) below
+   "Archive — fixed, kept for provenance", verbatim (the file's own in-file archive; no second file); read
+   the 21 unparsed headers and place each; the six close-on-evidence dispositions written as dated status
+   lines. Update the "Last updated" line. One commit.
+3. `docs/plans/`: the directory has TWO live rules (`plans/README.md`: "move to ../history/ with a date
+   prefix"; `plans/archived/README.md`: "lands here when finished, superseded, or overtaken") — the
+   September practice is `plans/archived/` (21 files), so use it and make `plans/README.md` say so (and
+   drop its stale row for `18-08-2026_s07-v3-…`, which is already archived). Move, with a "why archived"
+   row each: `monitor-unification.md` (Phase A+B complete; fix the two pointers to it in `after-phase-b.md`
+   and `current-state.md`), `q03-region-hole-sentinel.md` (implemented and validated),
+   `capstone-column-xlang.md`, `xlang-phase1-followups-TODO.md`, `caplifive-system-to-dev-migration.md`
+   (its proposal was resolved 2026-09-04). **NOT** `instrumentation-cleanup.md`: it says "do this once S-12
+   is closed" and S-12 is closed — it is now an actionable RTL-lane task, not a finished plan (flag it to
+   the RTL lane). `after-phase-b.md` stays until its R-26 half closes.
+4. `docs/ref/`: `SILICON-BLOCKER.md` stays where it is — both index docs say "do not renumber or trim, its
+   line numbers are cited from live repro folders", and a move changes the cited path. `delegation-guidance.md`
+   → `docs/history/DD-MM-YYYY_ARCHIVED_delegation-guidance.md` after a grep shows no live reference.
+   `docs/README.md` still calls `known-good-controls.md` STALE; the file was refreshed 2026-09-05 — fix the
+   line. Nothing in `design/` moves ("decisions, superseded by later ones rather than edited"). `history/`
+   untouched.
+5. `REPO-MAP.md` / `docs/README.md` counts refreshed in the same commit as 3.
+
+## Session assignment (**LEAD** approves; agreed between the two sessions 2026-09-09)
+Two sessions share this lane's checkout: `board` (this one, the original) and `bench` (the fork).
+`board` takes A, B, C and every board boot (it holds the board context and the QEMU lock discipline);
+`bench` takes D and the `ISSUES.md` re-triage, which touch no build tree and no board, and does not start
+until the lead approves this plan. Rules while both run: only `bench` edits `ISSUES.md`, `docs/plans`,
+`docs/ref` and `tests/fpga-repros` until it says done (registry lines `board` needs go through it);
+`board` owns the monitor/QEMU trees and `tests/runtime-qemu`; `board` commits to `dev` in the main
+checkout and messages `bench` before each commit; `bench` works on the worktree branch `archive-docs`
+(from bff08f239bd9), rebases onto the new tip, and fast-forwards `dev` at the end; only one session
+drives the board; `git commit -o` on own paths, `git show --stat` after each.
+
+## When are we finished
+- This lane's QEMU and docs work (A, B, C-37/C-9/C-43, D): about one working week, independent of the
+  board.
+- The RTL bitstream: the RTL lane's Phase 2 close + 3.5 h synthesis, then the **LEAD** flash decision;
+  the two post-flash boots the same day as the flash.
+- "Finished" = no open entry in the monitor and compiler buckets; R-25/26/27 FIXED ON SILICON; the old
+  R-* entries re-triaged against the flashed bitstream (step 5); the archive moves done. Not in scope:
+  R-28 (needs the RTL lane's directed test), R-12 (deferred by record unless the lead reopens it), the
+  four LEAD decisions until taken.
+
+## Verification
+- Every commit scanned with `precommit-scan.sh` (absolute path), `-o` own paths; the plan itself committed
+  to `docs/plans/` after approval.
+- Board readings recorded in `tests/board-results/*.tsv` from the run's own transcript segment; a boot
+  whose control fails is VOID and rerun.
+- Archive moves: `git mv` only (history preserved), banners dated, index rows present, `git ls-files`
+  confirms nothing untracked; a `grep -rn "fpga-repros/R01"` sweep updates cross-references.
+
+---
