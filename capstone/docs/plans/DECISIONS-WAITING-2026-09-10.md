@@ -82,6 +82,26 @@ not a bitstream. The one route that WOULD have changed the RTL differently, movi
 precede is the **FLASH**, which needs the firmware change (item 2) because the pair must not ship
 RTL-only. Synthesis produces a hash; flashing spends it.
 
+### Pre-registered prediction for the R-30/R-31 build, written BEFORE the run
+
+Required by the synth lane: a build whose expected reading is not written down first cannot be checked
+afterwards. Predictions, for the hash synthesised from `r30-r31-init-revoke`:
+
+* **WNS** within the family's spread, **−11.7 to −15.3 ns** on the `clk_out1_xlnx_clk_gen` intra-clock
+  row of `ariane_xilinx_timing_summary_routed.rpt`. The 66c4e7517 build read **−12.425**.
+* **Placed LUTs 168.9k–170.5k** from `ariane_xilinx_utilization_placed.rpt`. 66c4e7517 read **169.7k**.
+* **Rationale for expecting no measurable movement:** the change is two comparison operators inside
+  conditions already being evaluated — no new signal, no new term, no new comparator. That is also why
+  it linted at baseline 40 where the R-29 candidate went to 41.
+* **What would falsify "this is a free change":** WNS outside that spread, or LUTs outside it, or any
+  movement in the UNOPTFLAT loop set. Any of those stops the flash conversation and sends the change
+  back, regardless of the functional results.
+* **Read the intra-clock row, not `eth_rxck`**, and gate every artefact on mtime later than the run
+  start — `make clean` leaves the previous run's reports in place.
+
+**This build does NOT settle R-29** (different branch, lint-failing, item 3) and does NOT authorise a
+flash (item 2).
+
 ## 2. How should the monitor reclaim a revoked region?
 
 **Blocked by item 1. This is the firmware half and it must ship with the RTL fix — never RTL-only.**
