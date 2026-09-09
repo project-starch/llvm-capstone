@@ -3334,6 +3334,25 @@ CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemon
 
 llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
 
+### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `FIXED 2026-09-10 (compiler lane, 8b2544a6c3e9 on compiler-validation-plan) by PARSER PRECEDENCE, not a rename: parseCallSymbol now declines register names so the operand falls through to register parsing`
+
+`parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.
+
+> **Closed 2026-09-10.** Three defs share the `call` mnemonic — `PseudoCALL`, `PseudoCALLReg` and
+> `CAP_CALL` — and `parseCallSymbol` claimed any identifier in the last operand position as a symbol,
+> so `call a0, a1` parsed as a symbol named `a1` and `CAP_CALL` was unreachable. **Precedence was
+> chosen over a rename deliberately:** the disassembler already prints `call a0, a1`, and the
+> round-trip only closes if the assembler accepts what the disassembler emits, so renaming would have
+> had to change the text on both sides. `call a0, a1` and `call a0, a0` (the `PseudoDomCall` form) now
+> assemble to the right encodings and round-trip through `-filetype=obj`; the XFAIL is dropped from
+> `cap-call-mnemonic.s`, `cap-call-symbol.s` is untouched and green, `cap-invalid.s` still errors, and
+> the full Capstone lit suite is 102/102. The test's stated mutation was re-verified to fire.
+>
+> **Spun out, not fixed here:** the register+symbol form `call a0, foo` (`PseudoCALLReg`) does not
+> assemble either — see **C-45**. That is NOT a regression from this change: the pre-fix 2026-09-04
+> binary rejects `call a0, a1`, `call a0, a0` and `call a0, foo` identically, so the form never
+> worked. Kept out of this commit under the one-defect-per-commit rule.
+
 ### C-40 — Loop Strength Reduction rewrote a pointer loop's exit test into address arithmetic on NULL, which became a `cincoffset` `FIXED 2026-09-05 (ffcc7347)`
 
 `(gep i8, null, %lsr.iv)` lowered to a cincoffset on the NULL capability, a trap on silicon and under QEMU (cause 2). Found in the RV8 -O2 twins (dhrystone, qsort, aes timeouts, sha512 cause 5). Pin: `c40-null-base-cincoffset.ll`; finding folder `tests/twins/findings/C40-lsr-null-gep-cincoffset/`.

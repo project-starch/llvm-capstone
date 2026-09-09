@@ -163,8 +163,10 @@ stale — leave them.
 3. **I-02 — adopt the convention.** Allocate by checking **both** `ISSUES.md` and
    `git log --all --grep`, backed by a committed ID ledger, so an ID assigned only in a commit
    (C-25 is the live example) cannot be handed out twice.
-4. **C-38 — rename the register-form `CAP_CALL` mnemonic** so `call a0, a1` assembles; drop the
-   XFAIL pin `cap-call-mnemonic.s`. Smallest, and purely a backend naming call.
+4. ~~**C-38 — rename the register-form `CAP_CALL` mnemonic**~~ **DONE 2026-09-10** (compiler lane,
+   `8b2544a6c3e9`), by parser precedence rather than a rename — the disassembler already prints
+   `call a0, a1`, so a rename would have had to change both sides of the round trip. Lit 102/102.
+   Spun out: `call a0, foo` still does not assemble, filed as **C-45**, never worked, no consumer.
 
 ## 7. Registry disposition, revised
 

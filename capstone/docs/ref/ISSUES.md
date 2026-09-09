@@ -815,6 +815,15 @@ span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_caps
 no `memcpy` and no scalar-pointer cast anywhere today.
 
 ### C-4 — split into a FIXED half and a remaining domain-creation bug
+
+> **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** Both sub-entries read
+> `FIXED 2026-07-28` and both carry a "Sweep 2026-09-05 re-verified FIXED" line (C-4a via
+> `rv8_sha512` = oracle, C-4b via `beebs_crc32big` = 1703161001 = oracle). The header's "a remaining
+> domain-creation bug" looks stale: the residual it names is a QEMU `helper_cssplit` assertion, and
+> `beebs_crc32big` is the rung built specifically for that path and now returns its oracle under QEMU.
+> Proposed token: `FIXED 2026-07-28, re-verified 2026-09-05`, retitled to drop the "remaining" clause.
+> **Caveat stated by the proposer:** this reads the sweep's recorded evidence; the rung was not re-run
+> for this recommendation.
 Renamed from "large read-only data cannot be delivered": size was never the variable.
 
 #### C-4a — constant pools are unreachable in a domain `FIXED 2026-07-28`
@@ -1187,6 +1196,15 @@ building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separa
 second split/store from the table split.
 
 ### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
+
+> **RECOMMENDATION 2026-09-10 (compiler lane), for the lead — not applied.** The entry carries a
+> "Sweep 2026-09-05 — GONE on silicon" line (`gpn2` = 3976364985 = oracle and RETURNED, in the boot
+> where it used to wedge). But its own attribution box records that the blame was revised twice, and
+> the spec is under-specified on whether scalars are exempt from the MOVC consumption rule — which is
+> the open **Q-04** question, not a compiler defect anyone can close. Proposed token:
+> `GONE ON SILICON 2026-09-05 — attribution pending the Q-04 spec ruling`, i.e. staying open on the
+> ruling rather than on the symptom. If the ruling goes scalar-exempt it becomes a small compiler fix
+> (stop using `movc` for scalar copies) and the compiler lane takes it.
 
 > **Sweep 2026-09-05 — GONE on silicon.** `gpn2` = 3976364985 = oracle and RETURNED (last in boot sw04, where it used to wedge); `gpw2` = 3983810698 = oracle. The movc-scalar-copy fix is in the flashed compiler/bitstream pair.
 
@@ -1732,6 +1750,23 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `OPEN — found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically); low priority, no known consumer`
+
+Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+register form
+(`call a0, a1`) by making `parseCallSymbol` decline register names; the register+**symbol** form that
+`PseudoCALLReg` defines still does not assemble.
+
+**Not a regression, established rather than assumed:** the pre-fix binary of 2026-09-04 rejects
+`call a0, a1`, `call a0, a0` and `call a0, foo` identically, so this form has never worked on this
+target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
+
+**No known consumer:** a search of the MC and CodeGen tests, the runtime glue and the compiler-rt
+builtins found zero occurrences of `call` followed by a bare register and a symbol. So this is a hole
+in what the assembler accepts versus what the instruction definitions declare, not a blocked user.
+
+**Owner:** compiler lane, on the lead's word — it is a small parser change of the same shape as C-38's
+and they have offered to take it this cycle.
+
 ### C-43 — under `-capstone-gp-captable`, ANY anonymous compiler-generated data faults OOB; the corpus is clean by luck `MITIGATED IN-BRANCH 2026-09-09 (compiler lane, 5d2932a941ea): every producer of anonymous unslotted data is avoided (pools via useConstantPoolForLargeInts, jump tables via areJTsAllowed, cttz via lowerCTTZNoTable) or slotted (private globals get cap-table slots); backstop guard diagnoseAnonymousConstantUnderGpCaptable with a -capstone-gpfree-constant-pools knob as its lit positive control; class record kept — slot-allocated pools remain a LEAD design item`
 
 > **MITIGATED IN-BRANCH 2026-09-09 (compiler lane, 5d2932a941ea; detail in
@@ -1783,10 +1818,6 @@ label differences, not absolute addresses.** A domain is linked at `0x10000` and
 PCC base, so an absolute-entry switch domain halts with cause 1 at `pc = 0x10338` — one of its own
 table entries. Log kept at `/tmp/capstone/board-cycle2/absentry/` (scratch).
 
-
-### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `OPEN — a backend naming decision`
-
-`parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.
 
 ### R-15 — a domain with a 9216-byte capability-bearing global wedges `OPEN — ATTRIBUTION RETRACTED 2026-07-31`
 

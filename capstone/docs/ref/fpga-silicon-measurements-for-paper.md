@@ -1279,7 +1279,7 @@ and real expected values. That has not been run.** Do not let this result stand 
 **Correction, 2026-09-05 (later the same day): it has now been run, once, and it passed.** Boot B8
 (cycle-2 regression sweep, resident `caplifive_s12fix_5097eb166.bit`, control `k800 = 4` first) ran
 `select1.test` from the stock SQLLogicTest corpus — 1031 records against **populated** tables with
-**real** expected values — in the -O1 silicon-config SQLite domain (image `c01e6b89cad0f17a`, host
+**real** expected values — in the silicon-config SQLite domain (image `c01e6b89cad0f17a`, host
 `a1895d35f768b5d0`) and read `records=1031 stmt_pass=31 stmt_fail=0 query_pass=1000 query_fail=0
 completed=1`, identical to the native x86 baseline. That is the first SQLite **correctness** result
 on capability silicon: 1000 queries with checked answers, zero divergences. It is one file of the
@@ -1291,8 +1291,19 @@ FPGA silicon executes SQLLogicTest `select1` (1031 records) with results identic
 ### §7c — The SQLLogicTest corpus on capability silicon (2026-09-05 → 2026-09-07)
 
 Seven files, one boot each, control `k800 = 4` first in every boot, resident
-`caplifive_s12fix_5097eb166.bit`, silicon-config SQLite at -O1, each result read from the run's own
+`caplifive_s12fix_5097eb166.bit`, silicon-config SQLite (see the optimisation-level note below), each result read from the run's own
 transcript segment and compared with the native x86 baseline produced by the same runner
+> **Optimisation level, corrected 2026-09-10.** Earlier revisions of this section described the SQLite
+> domain as "-O1". That is the level of the SUPPORT code only. The build chain:
+> `build-slt-corpus-images.sh:35` invokes `run-sqlite-slt.sh` with no optimisation variable set and
+> `run-sqlite-slt.sh` sets none either, so `build-sqlite-silicon.sh` takes its defaults —
+> `OPT=${SQLITE_OPT_LEVEL:--O0}` at `:42` for the SQLite amalgamation and
+> `SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}` at `:2724` for the support code. So the corpus images
+> are **SQLite itself at -O0 with the support code at -O1**. Confirmed independently: a build with no
+> optimisation variable set reproduces the corpus image hash exactly, which a different amalgamation
+> level could not. The measurements are unaffected — only their description was wrong. The same
+> correction was applied to the opt column of every `sqslt1m` row in `tests/board-results/2026-09-05.tsv`.
+
 (`benchmarks/sqlite/slt/slt_runner.h`, `build-slt-native.sh`). Images: fresh main-checkout toolchain
 (`libLLVMCapstoneCodeGen.so bfc039bf12e077f5`, clang embedding `fc4f826a16ca`), one image per
 region/heap class, every image validated under QEMU on its own file before it was baked
