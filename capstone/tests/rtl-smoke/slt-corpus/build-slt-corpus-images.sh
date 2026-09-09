@@ -21,7 +21,7 @@ export CAPSTONE_REQUIRE_FRESH_TOOLCHAIN=1
 source "$ROOT/capstone/tests/capstone-test-env.sh"
 CORPUS=$(bash "$ROOT/capstone/benchmarks/sqlite/fetch-sqllogictest.sh" | tail -1)
 mkdir -p "$IMG"; LOG="$IMG/build.log"; : > "$LOG"
-exec 9>"${CAPSTONE_QEMU_LOCK:-/tmp/capstone/nightly-qemu.lock}"; flock 9; export CAPSTONE_QEMU_LOCK_HELD=1
+exec 9>"${CAPSTONE_QEMU_LOCK:?source capstone-test-env.sh first: CAPSTONE_QEMU_LOCK is the one QEMU lock path}"; flock 9; export CAPSTONE_QEMU_LOCK_HELD=1
 #      tag:heap:stack:region:validate-on:dom-name:host-name
 for spec in "1m:262144:2097152:1048576:select2:sqslt1m.dom:sqlite_host_1m.user" \
             "s3:1048576:2097152:2097152:select3:sqslt3.dom:sqlite_host_2m.user" \
