@@ -907,7 +907,40 @@ unexpected operand type.
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
 >
-> # ✅ LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE. The change is authorised and proceeds.
+> # ⚠ THE RULING WAS MADE ON A FRAMING THAT IS WRONG IN BOTH DIRECTIONS. Back to the lead before anything is edited. (2026-09-10, later)
+>
+> The question was put as "is `end` inclusive or exclusive, project-wide". It is not one question, and
+> neither of the two routes debated is correct:
+>
+> * **The RTL's `end` is EXCLUSIVE**, confirmed twice at `66c4e7517`: the LSU faults when
+>   `lsu_ea_full + lsu_access_sz > bound_end` (`:985`), so the last valid byte is `bound_end - 1`; and
+>   SPLIT sets `rs1.end := val` with `rd.start := val` (`dyn:141-142`), which partitions without overlap
+>   only if `end` is exclusive.
+> * **The spec's `end` is INCLUSIVE**, equally clearly: `prog-model.adoc:119` closes the interval
+>   `[c.base, c.end]`, `ctrl-status-insn.adoc:79-80` sets `end = INIT_*_END - 1`, and SHRINKTO
+>   (`cap-man-insn.adoc:269`) sets `end = cursor + imm - 1`.
+>
+> **Each document has exactly ONE instruction using the other's arithmetic, and they are DIFFERENT
+> instructions.** That is why this looked like a convention dispute:
+>
+> | | convention | the odd one out | fix |
+> |---|---|---|---|
+> | **spec** | inclusive | the STORE BOUND, `[base, end - CLENBYTES]` (`mem-access-insn.adoc:93`) — exclusive arithmetic | `end - CLENBYTES + 1` |
+> | **RTL** | exclusive | `INIT`'s check, `cursor <= end` (`flu:139`) — inclusive arithmetic | `<=` → `<` |
+>
+> **Fix one on each side, change no conventions, and the two agree.** For bytes `S..S+63` the spec says
+> `end = S+63` and the RTL says `end = S+64`; both permit stores at `S, S+16, S+32, S+48`; both leave the
+> cursor at `S+64`; both then accept `INIT`. QEMU is exclusive throughout and already accepts that.
+>
+> **AND ONE OF THE PROPOSED ROUTES IS A SECURITY REGRESSION.** Changing the RTL's STC bound to
+> `end - 15` — correct for the spec's inclusive `end` — permits, under the RTL's exclusive `end`, a
+> 16-byte store at `end - 15` whose last byte is at `end`: **one byte past the region, on the store
+> path.** It must not be applied to the RTL. It is the right fix for the SPEC and only for the spec.
+>
+> **Nothing is edited until the lead rules again.** The previous ruling stands recorded below because it
+> was made in good faith on the framing available, and the framing was mine.
+
+> # ~~LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE~~ — SUPERSEDED, see the box above.
 >
 > The recommendation was put with its one surviving argument stated plainly — every RTL access path and
 > all of QEMU already assume exclusive, while the spec leans inclusive wherever it speaks — and with the
@@ -1244,7 +1277,40 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > show the CURSOR RESET TO BASE, not merely the type changing** — the type alone does not prove the
 > disclosure is closed.
 >
-> # ✅ LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE. The change is authorised and proceeds.
+> # ⚠ THE RULING WAS MADE ON A FRAMING THAT IS WRONG IN BOTH DIRECTIONS. Back to the lead before anything is edited. (2026-09-10, later)
+>
+> The question was put as "is `end` inclusive or exclusive, project-wide". It is not one question, and
+> neither of the two routes debated is correct:
+>
+> * **The RTL's `end` is EXCLUSIVE**, confirmed twice at `66c4e7517`: the LSU faults when
+>   `lsu_ea_full + lsu_access_sz > bound_end` (`:985`), so the last valid byte is `bound_end - 1`; and
+>   SPLIT sets `rs1.end := val` with `rd.start := val` (`dyn:141-142`), which partitions without overlap
+>   only if `end` is exclusive.
+> * **The spec's `end` is INCLUSIVE**, equally clearly: `prog-model.adoc:119` closes the interval
+>   `[c.base, c.end]`, `ctrl-status-insn.adoc:79-80` sets `end = INIT_*_END - 1`, and SHRINKTO
+>   (`cap-man-insn.adoc:269`) sets `end = cursor + imm - 1`.
+>
+> **Each document has exactly ONE instruction using the other's arithmetic, and they are DIFFERENT
+> instructions.** That is why this looked like a convention dispute:
+>
+> | | convention | the odd one out | fix |
+> |---|---|---|---|
+> | **spec** | inclusive | the STORE BOUND, `[base, end - CLENBYTES]` (`mem-access-insn.adoc:93`) — exclusive arithmetic | `end - CLENBYTES + 1` |
+> | **RTL** | exclusive | `INIT`'s check, `cursor <= end` (`flu:139`) — inclusive arithmetic | `<=` → `<` |
+>
+> **Fix one on each side, change no conventions, and the two agree.** For bytes `S..S+63` the spec says
+> `end = S+63` and the RTL says `end = S+64`; both permit stores at `S, S+16, S+32, S+48`; both leave the
+> cursor at `S+64`; both then accept `INIT`. QEMU is exclusive throughout and already accepts that.
+>
+> **AND ONE OF THE PROPOSED ROUTES IS A SECURITY REGRESSION.** Changing the RTL's STC bound to
+> `end - 15` — correct for the spec's inclusive `end` — permits, under the RTL's exclusive `end`, a
+> 16-byte store at `end - 15` whose last byte is at `end`: **one byte past the region, on the store
+> path.** It must not be applied to the RTL. It is the right fix for the SPEC and only for the spec.
+>
+> **Nothing is edited until the lead rules again.** The previous ruling stands recorded below because it
+> was made in good faith on the framing available, and the framing was mine.
+
+> # ~~LEAD'S RULING 2026-09-10: `end` IS EXCLUSIVE~~ — SUPERSEDED, see the box above.
 >
 > The recommendation was put with its one surviving argument stated plainly — every RTL access path and
 > all of QEMU already assume exclusive, while the spec leans inclusive wherever it speaks — and with the
