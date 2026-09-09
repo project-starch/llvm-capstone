@@ -321,6 +321,13 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ### R-27 — a pipeline flush inside the DYN unit's revocation-node query window orphans the node's response; the next capability operation waits forever (core dead, no trap) `OPEN — DEMONSTRATED IN SIMULATION 2026-09-09 on the unmodified ef5a8eaf2, three directed triggers; fix candidate sim-verified on branch r27-revnode-orphan-drain (458218562), lint at baseline, adversarially audited; NOT synthesised; silicon UNCONFIRMED`
 
+> **Correction to the shipped commit's stated reason (RTL lane, 2026-09-09 evening).** The R-27 commit message
+> (66c4e7517) justifies draining the init and mrev response channels by "an interrupt during a SPLIT/MREV
+> wait". That window does not exist (see R-28: an interrupt binds at decode and never reaches a functional
+> unit), and its pool-exhaustion fallback does not hold either, because a stalled MREV never writes back so no
+> interrupt can be taken. The drained channels are harmless and stay in the shipped RTL; this corrects the
+> stated reason only. Nothing is resynthesised; the bitstream plan is unaffected.
+
 **Found by the RTL lane while gating the R-26 fix** (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`,
 "Named: the CALL-shaped hang", the directed arms, and the claim-auditor section; waveforms in
 `~/dev/llvm-capstone-rebuild/records/r26/`). Mechanism, read off the waveform of `r26-v2-cscratch-fence` (two ticks
@@ -364,6 +371,29 @@ the R-25/R-26 bitstream is the lead's decision; a bitstream carrying the R-26 fl
 today's, by the RTL lane's own reading. Owner: the RTL lane.
 
 ### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated, no directed test, no fix`
+
+> **2026-09-09 (evening), RTL lane after a claim-auditor pass — STAYS OPEN, and the interrupt route is closed
+> by the RTL, not by measurement.** (1) An interrupt binds to an instruction at DECODE (`decoder.sv`:
+> `instruction_o.valid = instruction_o.ex.valid`); such an instruction never reaches a functional unit
+> (`issue_read_operands.sv:1268`) and is latched into the issue slot with `ex.valid` clear
+> (`id_stage.sv:346,372-386`), so it cannot acquire one afterwards; the write ops additionally issue only into
+> an empty scoreboard. Cite the RTL for this, not any arm. (2) The directed arms on branch
+> `r28-interrupt-probe` (monotonic revocation-node ids over a counted run of MREV/SPLIT) are NOT evidence
+> either way: node requests equalled retirements in every family because no arm had a measured chance of
+> landing an interrupt on an in-flight op — the twelve `r28-mrev-n*` arms FAIL with their own oracle's code
+> 15 (the interrupt missed), and three positive-control attempts on a scratch build with MREV removed from
+> the hold set all had the flush arrive before the node request went out; the detector is unproven for an
+> orphan. (3) A LIVE untested route keeps the entry open: `commit_stage.sv:205-229` runs a PC-capability
+> check on the commit head after write-back, and its invalidating input is produced during a write op's own
+> execution (`ex_stage.sv:1207` into `commit_stage.sv:243-246`) — a REVOKE or DROP that clears the validity
+> of the node its own PC capability derives from would mutate node state in EX and then fail to retire, mepc
+> on itself: R-28's shape without an interrupt. The test is a domain whose PC-capability revocation node is a
+> descendant of the node the REVOKE walks. Also unresolved: single-step debug (`csr_regfile.sv:2222`) and a
+> one-cycle `commit_ack` race against `flush_csr`. Oracle limits, for whoever writes the next arm: for DROP
+> and REVOKE no end-state oracle can work at all — invalidation is idempotent, so an op killed after mutating
+> the node and re-executed leaves exactly the state one execution leaves; allocation is the only
+> non-idempotent mutation, which is why MREV and SPLIT are the two ops testable that way; DELIN is a plain
+> gap. Detail: the fix-cycle history note, R-28 section.
 
 Named by the claim-auditor while attacking the R-27 fix (same history note). The write ops are held until they
 are the oldest instruction (`issue_read_operands.sv:1525-1533`), but an interrupt or a debug flush can still land
