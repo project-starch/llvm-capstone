@@ -171,6 +171,9 @@ COMMON_FLAGS=(
   -ffunction-sections
   -fdata-sections
   -include "$ADAPTED_DIR/capstone_sqlite_libc.h"
+  # host-independent: the seven glibc headers the amalgamation includes resolve here, never in
+  # the host's /usr/include (see adapted/stubinc/README, 2026-09-09)
+  -I"$ADAPTED_DIR/stubinc"
   -I"$ADAPTED_DIR"
   -I"$SCRIPT_DIR"
   -I"$VFS_SKELETON_DIR"

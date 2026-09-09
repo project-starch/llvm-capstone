@@ -1,0 +1,11 @@
+Freestanding stand-ins for the seven glibc headers the SQLite amalgamation includes:
+assert, ctype, math, stdio, stdlib, string, time. Each is empty. The domain's libc is
+capstone_sqlite_libc.h, force-included before every translation unit; it also predefines the
+glibc guards (_STDIO_H and the rest), which used to skip the bodies of the host's headers.
+
+Why the stubs exist (2026-09-09): the guards do not stop glibc's headers from including
+features.h first, and features.h needs bits/wordsize.h, which Debian-layout hosts keep under
+/usr/include/<multiarch>/, a directory the capstone64 target's search path does not have. So
+the build failed on such a host and passed on hosts with the file directly in /usr/include.
+build-sqlite-capstone.sh puts this directory first on the include path, so the host's
+/usr/include is never reached for these seven names on any host.
