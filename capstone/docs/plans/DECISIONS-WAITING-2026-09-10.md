@@ -60,6 +60,28 @@ moves, and the RTL becomes conformant rather than deviant.
 
 ---
 
+### ⚡ SYNTHESIS IS NOT BLOCKED BY THIS DECISION — the RTL change is the SAME under every surviving route
+
+Checked against the branch: the RTL diff versus the flashed revision is **exactly two operators**, plus
+two new directed tests and a testlist entry.
+
+```
+- if(rsp == 1'd1 || ((rs1.metadata.perm&3'd2)==3'd2)){     R-31 polarity
++ if(rsp == 1'd1 || ((rs1.metadata.perm&3'd2)!=3'd2)){
+- if(rs1.cursor <= rs1.metadata.end){                      R-30 precondition
++ if(rs1.cursor <  rs1.metadata.end){
+```
+
+**Both surviving routes produce that identical RTL change.** The resolution (spec fixes its store
+bound, RTL fixes `INIT`) and the original full-exclusive ruling both give `<=` → `<` at `flu:139`. Only
+the **spec** edit differs between them — one token versus four sites — and a spec edit is a document,
+not a bitstream. The one route that WOULD have changed the RTL differently, moving the store bound to
+`end - 15`, is refuted as a bounds hole and is not on the table.
+
+**So the bitstream can be synthesised now and the spec decision can follow it.** What synthesis cannot
+precede is the **FLASH**, which needs the firmware change (item 2) because the pair must not ship
+RTL-only. Synthesis produces a hash; flashing spends it.
+
 ## 2. How should the monitor reclaim a revoked region?
 
 **Blocked by item 1. This is the firmware half and it must ship with the RTL fix — never RTL-only.**
