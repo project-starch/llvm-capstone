@@ -981,6 +981,17 @@ requester was flushed (`ex_stage.sv`). Synthesised at 40 ns with no flow edit; g
 `b03bd9673b9a685c31dff541fce1e7ba07b7ce9901e51051a19ac31e21652da3`; the artifact is retained on the
 synth machine under the synth machine account's scratch directory.
 
+**Provenance of that hash, stated exactly.** It is the synthesis lane's computed value, checked by them
+against both copies on that machine — the in-tree `work-fpga/ariane_xilinx.bit` and the same member inside
+the run tarball — and confirmed identical, with no third copy under `ariane.runs/impl_1` (the flow's own
+Makefile has already moved it). It has **not** been verified against a transferred file, because the
+bitstream has never been transferred: the synth machine has no route to the working machine (no name
+resolution, no outbound key), and a pull in the other direction stages an undecided flash and so waits on
+the project lead. Nothing is extracted anywhere; the bitstream exists only inside the tarball and in the
+run's own work directory. Whoever eventually pulls it should verify on arrival, and read a mismatch as a
+transfer problem only after re-checking the source, since the first version of this value was quoted from
+the in-tree copy while being described as the tarball member's.
+
 **The prediction was written before the run and both halves held:** WNS in [−15.3, −11.7] read
 −12.425, placed LUTs in [168.9 k, 170.5 k] read 169,207. The stated reasoning — one flush term, one
 null write and about twelve flops of drain logic cannot move these measurably — is borne out.
