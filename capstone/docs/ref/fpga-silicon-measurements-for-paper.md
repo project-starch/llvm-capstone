@@ -1292,3 +1292,44 @@ expected to cost time. Whatever intuition predicted otherwise should not be trus
 design.
 
 Provenance: board and RTL lanes, 2026-09-04.
+
+### §7d — The CHERI-CVA6 bitstream RUNS on our Genesys2 (2026-09-09)
+
+**First non-Capstone core executed on this board, and the first silicon evidence for the CHERI tag
+path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`, §7c) was written
+to the board's config memory **non-volatile**, and a bare-metal UART smoke test ran on it. Driven by the
+board lane from `~/capstone-artifacts/cheri-cva6/board-package/`; records in
+`~/capstone-artifacts/cheri-cva6/board-run-1/`. One session under the console lock, 14:48–14:54.
+
+| step | reading |
+|---|---|
+| resident before / after | `caplifive_s12fix_5097eb166.bit` both times (restore verified) |
+| write | `cheri_cva6_B_a9568ac2_25mhz.bit`, persistent, 90 s |
+| bitstream live? | **yes** — post-flash UART is the fork's bootrom (`Hello World! / init SPI / status 0x25 ×2 / SPI initialized! / initializing SD...`), not Capstone's (`Hit any key to enter update mode`) |
+| JTAG | `riscv.cpu tap/device found: 0x00000001`, irlen 5 — same as the Capstone SoC |
+| load | 8,388 bytes to `0x80000000` in 0.08 s; `x/4i` shows the image's own first instructions |
+| UART output | `T1 tag=1`, `T2 tag=1`, `T3 tag=0`, `T4 trapped=1 mcause=1c mtval=2a1`, `SMOKE PASS` — byte-identical to the Verilator transcript |
+| DRAM mirror `x/7gx 0x80001000` | `1, c0de0002, 0, 1, 1c, 2a1, 80000150` — pass pattern; `trap_pc` is T4's `lc.cap` |
+
+**What this establishes that simulation could not.** DDR3 calibration with this bitstream; **the tag
+controller against real DDR** — a capability stored at `0x81000100` and reloaded keeps its tag, so the tag
+table at `0xBFC00000` and the MIG address path work (this was the single largest unknown, since the shipped
+fork constant overflowed DRAM and was fixed for these builds); an integer store clears the tag; the
+capability exception path traps with cause `0x1c` and `mtval` naming the faulting register; the UART at
+57600 from the 25 MHz core clock; JTAG and debug-module access to this SoC. The core ran at the 25 MHz the
+bitstream was constrained for, i.e. the clock at which §7c measured its +6.5 ns of slack.
+
+**What it does NOT establish.** Nothing about performance: no benchmark, no cycle counts, no `mcycle`
+readings. Nothing purecap and nothing Linux-level — no CHERI Linux or CheriBSD port for this SoC is in the
+tree, so any near-term comparison with Capstone stays bare-metal. Four CHERI operations were exercised, not
+the ISA. The three RTL defects found in simulation (§ the plan doc) were not re-tested here.
+
+**Method notes worth keeping.** The verdict is corroborated twice over: the console text and a DRAM block
+the test wrote itself, at fixed addresses after `tohost`, with every UART poll bounded so a dead UART could
+not have wedged the run. Before trusting any reading, the *live* bitstream was confirmed from the bootrom
+banner: had the old bitstream still been live, the same image would have executed CHERI opcodes on the
+Capstone core and produced illegal-instruction traps that read like a CHERI failure. The discriminator was
+written down before the run, not after.
+
+Provenance: cheri lane (package, test, analysis) and board lane (console), 2026-09-09. Plan and full log:
+`docs/plans/cheri-cva6-on-genesys2.md`.
