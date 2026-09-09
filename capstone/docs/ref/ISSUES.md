@@ -1907,7 +1907,58 @@ and the folder is the report.
 
 ## RTL / FPGA
 
-### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `OPEN — MEASURED IN SIMULATION 2026-09-08 (RTL ef5a8eaf2: a younger load checked CPMP against the old entry five cycles before the CCSRRW landed, FAIL 11; fence.i between them PASS), silicon UNCONFIRMED; the CPMP data check is demonstrated, the cscratch/switcher path and LDC/STC are not; the monitor's three fence.i after CCSRRW are load-bearing and stay until the RTL flushes`
+### R-27 — a pipeline flush inside the DYN unit's revocation-node query window orphans the node's response; the next capability operation waits forever (core dead, no trap) `OPEN — DEMONSTRATED IN SIMULATION 2026-09-09 on the unmodified ef5a8eaf2, three directed triggers; fix candidate sim-verified on branch r27-revnode-orphan-drain (458218562), lint at baseline, adversarially audited; NOT synthesised; silicon UNCONFIRMED`
+
+**Found by the RTL lane while gating the R-26 fix** (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`,
+"Named: the CALL-shaped hang", the directed arms, and the claim-auditor section; waveforms in
+`~/dev/llvm-capstone-rebuild/records/r26/`). Mechanism, read off the waveform of `r26-v2-cscratch-fence` (two ticks
+per cycle): the DYN unit sends a validity query to the revocation node at tick 1139 and waits; a `fence.i`
+commits at 1141 and `ex_stage.sv` wires that flush to the DYN unit, whose thread resets (its response `ack`
+drops at 1143); the node answers at 1145 — `rev_query_res_valid` rises and never falls, because nobody acks it
+and the node is inside `send ep.query_res` (`capstone_rev_node.anvil:59`) with no fallthrough, timeout or drain
+(`capstone_rev_node.anvil.sv:768-769, 872`); the re-issued CALL's request at 1683 is never acked; `ready` stays 0;
+issue, decode and the frontend back up behind it. Not the frontend, not the switcher, not the R-26 flush as such:
+the one ingredient is **an EX flush landing in the ≈3-cycle window between a DYN op's query request and the
+node's response**. Flushes that reach EX: side-effecting CSR writes, `fence`, `fence.i`, `sfence.vma`, exceptions
+and interrupts, `eret`, AMO/switch commit flushes (a mispredict does not, `controller.sv:111-115`). Ops that
+query the node before completing: REVOKE, SPLIT, TIGHTEN, CALL, RETURN, LDC, STC, LCC. `fence`/`fence.i` commit
+only when the store buffer is empty (`commit_stage.sv:411-456`), which is how a pending store moves their flush by
+tens of cycles into a younger LDC's window.
+
+Three independent triggers on the unmodified tree, all HANG (no trap, `tohost` never written): `fence.i` then
+CALL (`r26-diag-csfence-mstatus`); `fence` then an LDC chain after a draining store (`r27-fence-nost`); a load that
+faults immediately followed by an LDC (`r27-ldf-n0` — the core hangs instead of trapping; one `nop` of separation
+and it traps cleanly). Pre-existing: none of them needs the R-26 flush. **Fix candidate** (`ex_stage.sv`, ~30
+lines, one `always_ff`): per response channel remember a request the node accepted whose response is still owed;
+if `flush_i` lands while one is owed, drain that response (ack it to the node, hide it from the DYN unit) and hold
+`capstone_dyn_ready_o` low until it is gone. Read on the fix tree: all three triggers HANG → PASS with every
+control unchanged; lint gate at the baseline counts exactly (UNOPTFLAT 40, ANVIL 0); the combined R-25+R-26+R-27
+tree: 58-arm set clean, 88-row sweep identical except the predicted CCSRRW cycle deltas. Audit: mechanism
+SUPPORTED on six attack lines; fix PLAUSIBLE, no misattribution sequence found; named residuals — one owed bit per
+channel rests on the DYN unit's own serialisation; the node's designed non-answer when the pool is exhausted
+(`head == 16'hFFFF`) remains a dead core after a later flush, not a new defect. The alternative (the anvil node
+abandoning a send on flush) was tried upstream and reverted (`f5f9291c8`, `d15d45b33`, `7bcbdb39c`).
+
+**Board relevance.** Every monitor `fence.i` after a capability operation, every domain trap and every interrupt
+is a candidate placement of this window on silicon; whether any historic silent wedge was this is UNRESOLVED
+(the Q-03 position-in-boot wedge is fixed by other means; the S-12 draws are explained). Whether the drain joins
+the R-25/R-26 bitstream is the lead's decision; a bitstream carrying the R-26 flush without it is worse than
+today's, by the RTL lane's own reading. Owner: the RTL lane.
+
+### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated, no directed test, no fix`
+
+Named by the claim-auditor while attacking the R-27 fix (same history note). The write ops are held until they
+are the oldest instruction (`issue_read_operands.sv:1525-1533`), but an interrupt or a debug flush can still land
+after their request has reached the node, which may by then have mutated state — a minted node, a cleared
+validity bit — for an instruction that is then killed and never retires. The R-27 drain discards the orphaned
+response; it cannot undo the mutation. Consequence if real: a revocation-tree entry out of step with the
+architectural state after an interrupt-timed flush (a node consumed, or a capability's lineage invalidated,
+with the instruction re-executed afterwards and doing it again, or not at all). What would settle it: a directed
+test placing an interrupt (timer, `S12_MEM_DELAY` to widen the window) on each write op's request→response window
+and reading the node pool / validity bits before and after against the retired-instruction trace. Owner: the RTL
+lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
+
+### R-26 — a Capstone CSR write (`CCSRRW` to `cpmp[i]` / `cscratch`) is not serialised against younger LDC/STC/CALL/RETURN, which read those registers combinationally `FIXED IN RTL 2026-09-09, SIM-VERIFIED, BITSTREAM PENDING (branch r26-ccsrrw-stale-read b7a794cfd: flush_o on every CCSRRW; ldmiss FAIL 11 → PASS, controls unchanged); silicon UNCONFIRMED; the flush must ship together with the R-27 drain (a flush inside the DYN unit's revocation-query window deadlocks the node); the monitor's four fence.i stay until the fixed bitstream is on the board`
 
 **Found while asking whether the board monitor's eleven FPGA-only `fence.i` sites (Phase B item 8,
 `docs/plans/monitor-unification.md`) are still needed.** Two rtl-oracle reads, quoted `file:line`:
