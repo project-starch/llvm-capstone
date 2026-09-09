@@ -11,7 +11,8 @@ Added 2026-08-12 during a documentation audit. Keep it updated when a doc change
 
 | doc | what it is | status |
 |---|---|---|
-| `ISSUES.md` | the issue registry (`R-nn`, `S-nn`, `C-nn`) — every defect, retraction and elimination | **LIVE, authoritative.** 4587 lines; read the entry, not the file |
+| `ISSUES.md` | the OPEN issue registry (`R-nn`, `S-nn`, `C-nn`, `Q-nn`, `M-nn`, `I-nn`) | **LIVE, authoritative.** Split 2026-09-09: 39 open entries; read the entry, not the file |
+| `ISSUES-ARCHIVE.md` | the resolved half — every FIXED, RETRACTED, GONE or SUPERSEDED entry, verbatim | **LIVE for provenance.** 59 entries, ordered by ID family; an ID absent from `ISSUES.md` is here |
 | `SILICON-BLOCKER.md` | the SQLite-on-silicon investigation, 2026-08-01..08-06 | **SUPERSEDED — do not build on it.** The defect it chased is S-06, fixed in silicon 2026-08-14. Its own line 5170 retracts the method behind most of the reasoning above it; that lesson now lives in `RATE-RULE.md`. **DO NOT RENUMBER OR TRIM:** its line numbers are cited from `tests/fpga-repros/` (a live sent link), `state/current-state.md` and several `history/` notes. |
 | `REPO-MAP.md` | repos, branches, submodules, gitlinks, and which remote each lives on | **LIVE** |
 | `HOW-TO-LAUNCH-ON-FPGA.md` | the board procedure in full | **LIVE.** The distilled version is the `board-run` skill, which auto-loads |
