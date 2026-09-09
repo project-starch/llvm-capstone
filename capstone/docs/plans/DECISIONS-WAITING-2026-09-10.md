@@ -82,6 +82,30 @@ not a bitstream. The one route that WOULD have changed the RTL differently, movi
 precede is the **FLASH**, which needs the firmware change (item 2) because the pair must not ship
 RTL-only. Synthesis produces a hash; flashing spends it.
 
+### ⛔ THE BUILD IS BLOCKED ON A PUSH, SEPARATELY FROM ANY AUTHORISATION
+
+The synth lane cannot see the branch, and checked rather than assuming I was wrong to say it exists.
+Both facts verified here:
+
+* **`r30-r31-init-revoke` exists locally at `1bfff7776`**, and `66c4e7517` **is** an ancestor of it, so
+  the base check will pass once it is reachable.
+* **It has never been pushed.** `git ls-remote --heads origin r30-r31-init-revoke` returns nothing.
+
+**Why, and it is not an oversight.** The branch is not on the push allowlist — that file is the lead's
+and no lane may add to it — and the agent credential has historically lacked write access to
+`capstone-ariane`. That is why `fpga-testing-dev` at `66c4e7517`, the currently flashed build, was
+pushed by the lead rather than by a lane. This needs the same.
+
+**So there are TWO things for the lead, not one, and either without the other leaves the build stuck:**
+
+1. **Push `r30-r31-init-revoke` at `1bfff7776`** to `project-starch/capstone-ariane` (or name the remote
+   to use instead).
+2. **Say the word in the synth lane's own session.** An authorisation given here does not reach them,
+   deliberately — they were asked to refuse a relayed one and they did.
+
+*(A correction that cost the synth lane a search: this document is in the PARENT repo,
+`project-starch/llvm-capstone` on `dev`, not in `capstone-ariane`. I cited it without naming the repo.)*
+
 ### Pre-registered prediction for the R-30/R-31 build, written BEFORE the run
 
 Required by the synth lane: a build whose expected reading is not written down first cannot be checked
