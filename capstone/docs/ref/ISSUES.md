@@ -3307,9 +3307,34 @@ land in both or note the divergence.
 > **26** from the load/store path and **27** from the execute path. Insufficient permission is **27**
 > from one and **28** from the other.
 >
+> **WHICH HISTORICAL VALUES ARE ACTUALLY AMBIGUOUS — precisely, so past readings can be AUDITED rather
+> than written off.** The LSU emits 24-28; the execute path emits `24 + ordinal`, i.e. 25-30. The
+> overlap is 25 through 28 and only that:
+>
+> | latched mcause | raised by | reading |
+> |---|---|---|
+> | **24** | LSU only | `NOT_CAP` operand — **unambiguous** |
+> | **25** | BOTH | LSU invalid revocation node **or** execute `UNEXPECTED_OPERAND` |
+> | **26** | BOTH | LSU wrong capability type **or** execute `INVALID_CAPABILITY` |
+> | **27** | BOTH | LSU insufficient permission **or** execute `UNEXPECTED_CAP_TYPE` |
+> | **28** | BOTH | LSU out of bounds **or** execute `INSUFFICIENT_PERMISSION` |
+> | **29** | execute only | `OUT_OF_BOUNDS` — **unambiguous** |
+> | **30** | execute only | `ILLEGAL_OPERAND_VALUE` — **unambiguous** |
+>
+> So a blanket "historical causes are ambiguous" would be wrong and needlessly destructive: **24, 29 and
+> 30 pin down their unit**. Only 25-28 need the raising instruction to disambiguate. **One filed claim
+> is affected — see R-25 in the archive**, whose header names a cause in the ambiguous band.
+>
 > **This has already cost readings and will cost more.** Anyone correlating a board wedge's latched
-> `mcause` against the RTL must first know which unit raised it, and **the wedge tracer does not record
-> that**. It is also exactly why the `lsugate` probe's discriminator is 26 rather than 27 — I wrote 27
+> `mcause` in 25-28 against the RTL must first know which unit raised it, and **the wedge tracer does
+> not record that**.
+>
+> **Where the tracer fix does NOT belong: with R-24.** Recording the raising unit means a new signal
+> into the tracer path, and that is precisely the kind of addition that took the R-29 candidate from
+> UNOPTFLAT 40 to 41. R-24's whole virtue is that it is two operators with no new term; putting a cone
+> risk into the one change that currently carries none would be a bad trade. It belongs with the DRIVER
+> work, where it can be done in **software** — record which instruction faulted and infer the unit from
+> its opcode — with no RTL at all. It is also exactly why the `lsugate` probe's discriminator is 26 rather than 27 — I wrote 27
 > first, by applying the execute path's convention to a unit that does not use it, and caught it only
 > because the value was about to be read off a board.
 >

@@ -1052,7 +1052,25 @@ i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the 
 offset is written. Whether the granule's tag also goes clear (which would make the residue
 harmless) was **not measured** and must be before anyone concludes either way.
 
-### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `FIXED ON SILICON 2026-09-09 — bitstream caplifive_r25r26r27_66c4e7517 (fpga-testing-dev 66c4e7517, INIT guard 42a141c93): the probe that returned 0x25000001 on 5097eb166 (boot sw41) now traps UNEXPECTED_OPERAND (25) at the store through the consumed INIT source (boot sw45, latched mepc = DBAS+0x490), control at 0x25000001 in the same boot`
+### R-25 — `INIT` writes the new LINEAR capability to BOTH `rs1` and `rd`, so linearity is broken `FIXED ON SILICON 2026-09-09 — bitstream caplifive_r25r26r27_66c4e7517 (fpga-testing-dev 66c4e7517, INIT guard 42a141c93): the probe that returned 0x25000001 on 5097eb166 (boot sw41) now traps at the store through the consumed INIT source with LATCHED CAUSE 25 (boot sw45, latched mepc = DBAS+0x490), control at 0x25000001 in the same boot. **The cause NAME is not pinned down by that number** — see the correction box below — but the verdict does not rest on it`
+
+> **CORRECTION 2026-09-10 — the header used to name the cause `UNEXPECTED_OPERAND`, and the latched
+> number does not establish that. The VERDICT is unaffected; the name was.**
+>
+> Cause **25 is in the ambiguous band** created by the RTL's two encoding conventions (see **R-24**):
+> the load/store unit emits raw spec numbers while the execute path emits `24 + ordinal`, so 25 through
+> 28 each have two readings. At an `STC`, a latched 25 is equally consistent with the execute path's
+> `UNEXPECTED_OPERAND` — which STC raises when its address operand is `NOT_CAP`, its first check — and
+> with the load/store unit's *invalid revocation node*. The number alone does not separate them.
+>
+> **Why the verdict stands anyway, and this is the part worth keeping.** R-25's claim never used the
+> cause name. It rests on a MATCHED PAIR: the same image returning `0x25000001` through that store on
+> `5097eb166` and trapping at the same instruction on `66c4e7517`, with the bitstream as the only
+> difference, and the control at its oracle in the same boot. That argument is untouched by which unit
+> raised the fault — a trap where there was previously a completed store is the finding either way.
+>
+> So this is a claim that asserted more than its evidence supported, in a detail, while its conclusion
+> was sound. **After R-24 lands the number becomes unambiguous and the header can name the cause.**
 
 > **CONFIRMED ON SILICON 2026-09-09 (boot sw41, board lane).** The domain probe `r25dup`
 > (`tests/runtime-qemu/silicon-ladder/r25dup_fpga_app.c`; construction from the RTL lane's self-checking
