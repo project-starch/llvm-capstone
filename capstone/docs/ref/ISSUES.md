@@ -461,7 +461,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10, two of four MEASURED`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; THREE of four MEASURED, and one of them is an RTL off-by-one rather than a convention split`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the
@@ -474,8 +474,26 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 > |---|---|---|---|
 > | `SPLIT` at `val` | byte `val` in the **lower** half (`cap-man-insn.adoc:338`) | byte `val` in the **UPPER** half | **MEASURED** |
 > | `LCC rd, rs1, 4` over a K-byte region | `base + K − 1` (`:197`) | **`base + K`** | **MEASURED** |
-> | `SHRINKTO imm` | a region of exactly `imm` bytes (`:294`) | `imm − 1` under an exclusive end | source reading |
+> | `SHRINKTO imm` | a region of exactly `imm` bytes (`:294`) | **`imm − 1` — and the RTL disagrees with ITSELF here** | **MEASURED** |
 > | `SEAL` minimum size | ≥ 1024 (`:486`, `end − base + 1`) | ≥ 1023 under an exclusive end | source reading |
+>
+> **⚠ `SHRINKTO` IS NOT THE SAME KIND OF PROBLEM AS THE OTHER THREE — it is an off-by-one in the
+> hardware, not a convention difference.** Measured: over a 256-byte region with the cursor at base,
+> `SHRINKTO 64` produces `start 0x80001000, end 0x8000103f` — **63 bytes, not 64** (406 cycles, no
+> exception). `capstone_flu_unit.anvil:232-239` guards on `cursor + imm > end`, which is **exclusive**
+> arithmetic, then sets `rd_end = cursor + imm - 1`, which under an exclusive `end` is one byte short.
+> The guard and the effect use different conventions, so this is internal to the RTL: the spec is
+> self-consistent the other way and would give exactly `imm`. Every other row here is two documents
+> differing; this row is one document differing from itself, and a caller who knows the convention
+> still gets the wrong size.
+>
+> **`SHRINK` was on this list and comes OFF it: it does not diverge.** `SHRINK` and `SHRINKTO` are
+> different opcodes — `SHRINK` is R-type with `rd` an in-out capability and `rs1`/`rs2` plain integer
+> bounds (`flu:178`), `SHRINKTO` is I-type `0x5B` funct3 `0b000` (`decoder.sv:1174`). The spec's
+> `SHRINK` matches this RTL clause for clause: the integer-operand requirement, `base := x[rs1]`,
+> `end := x[rs2]`, and all three illegal-operand conditions. Two attempts to measure "SHRINKTO" that
+> trapped `UNEXPECTED_OPERAND` were passing a capability where an integer belongs — the wrong
+> instruction, not a convention question.
 >
 > **The two measurements**, both directed tests on `capstone_cv64a6_imafdc_sv39`, both real
 > completions rather than the harness's SUCCESS-at-timeout:
@@ -485,8 +503,9 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 >   `0x80001040`. Contiguous, no gap, no overlap — and byte `val` is in the upper half. The spec's
 >   `rs1.end := val` (inclusive) with `rd.base := val + 1` is the other partition, equally gapless,
 >   one byte across.
-> * `verif/tests/custom/capstone/bound-value-readback.S` (`abe54a655`), 383 cycles. Over a region of
->   exactly 256 bytes, LCC field 4 minus field 3 reads **256** — the exclusive end.
+> * `verif/tests/custom/capstone/bound-value-readback.S` (`95930b8e3`), which now measures both: LCC
+>   field 4 minus field 3 reads **256** over a 256-byte region — the exclusive end — and `SHRINKTO 64`
+>   over that region yields **63** bytes. 406 cycles, no exception.
 >
 > **SPLIT is the one that is not a notation question.** The other three are readbacks: a caller that
 > knows the convention can adjust. SPLIT is the same call producing a **different partition**, so code
@@ -500,12 +519,10 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 > because whichever way it goes one of the two documents changes**, and it was deferred on 2026-09-10
 > with that reasoning recorded rather than left implicit.
 >
-> **What would close it:** a ruling, plus tests of the same shape for `SHRINKTO` and `SEAL`. Note that
-> SEAL needs a *different* shape — its question is a minimum size, answered by observing which of two
-> boundary cases raises, not by reading a field back. `SHRINKTO` resisted two attempts in the readback
-> test (`UNEXPECTED_OPERAND` with `rd == rs1` and again with a distinct `rd`), so its operand
-> convention on this RTL is not what either attempt assumed; that is where the next attempt should
-> start.
+> **What would close it:** a ruling on the convention rows, and a test for `SEAL` — which needs a
+> *different* shape, since a minimum size is answered by observing which of two boundary cases raises
+> rather than by reading a field back. **`SHRINKTO` needs no ruling: it needs an RTL fix**, and it
+> should be tracked as such rather than waiting behind a documentation decision.
 >
 > Full narrative, including the resolution this is the residue of:
 > `history/10-09-2026_19-00-00_decisions-A-and-B.md`.
