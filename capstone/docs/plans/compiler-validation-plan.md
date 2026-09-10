@@ -358,7 +358,7 @@ to confirm with the project lead at that point.
 
 ## Tier 4 — semantics + ABI audit (≈ 80 h) — does the compiler's model match spec, QEMU, RTL?
 
-Sources of truth: spec `capstone-spec` (`cap-man-insn.adoc`, `ctrl-flow-insn.adoc`,
+Sources of truth: spec `capstone-academic-spec` (`cap-man-insn.adoc`, `ctrl-flow-insn.adoc`,
 `insn-list.adoc`, `prog-model.adoc`); QEMU `capstone-qemu/target/riscv/op_helper.c`, `cap.h`;
 RTL `capstone-ariane/core/anvil_build/capstone_{flu,dyn}_unit.anvil`, `decoder.sv`,
 `commit_stage.sv`. Directed RTL tests are `audit-<insn>-<case>.S` in

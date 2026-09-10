@@ -203,7 +203,7 @@ response unassigned behind `// TODO: obtain the dom switch req response`, filled
 by `f69e403c5`. Six bring-up commits, all one-line subjects, none describing an interface or a
 trade-off. No response-side register has ever existed on any branch
 (`git log --all -S'dom_switch_reg_resp_q'` returns zero). **And the spec is silent on latency** -
-`capstone-spec` specifies only the byte-exact context layout and the swap semantics, and the Anvil
+`capstone-academic-spec` specifies only the byte-exact context layout and the swap semantics, and the Anvil
 channel declaration is a plain latency-agnostic handshake. Registering is architecturally free.
 
 **A correction inside the correction:** the original text below cited `csr_regfile.sv:389`'s

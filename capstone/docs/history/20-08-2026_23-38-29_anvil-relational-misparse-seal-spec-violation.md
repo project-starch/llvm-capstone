@@ -48,14 +48,14 @@ The parse Anvil produced is `size < ( max_size || ((start & 15) != 0) )`.
 
 ### This is a SPEC VIOLATION, not a design choice
 
-`capstone-spec/parts/cap-man-insn.adoc:459-462`, the `Illegal operand value (29)` conditions
+`capstone-academic-spec/parts/cap-man-insn.adoc:484-487`, the `Illegal operand value (29)` conditions
 for `SEAL`:
 
 > - The size of the memory region associated with `x[rs1]` is smaller than
 >   `CLENBYTES * {sealed_cap_size_clen}` bytes (i.e. `x[rs1].end - x[rs1].base + 1 < CLENBYTES * {sealed_cap_size_clen}`).
 > - `x[rs1].base` is not aligned to `CLENBYTES` bytes.
 
-with `capstone-spec/attributes.adoc:9` → `:sealed_cap_size_clen: 64`, so CLENBYTES(16) x 64 =
+with `capstone-academic-spec/attributes.adoc:9` → `:sealed_cap_size_clen: 64`, so CLENBYTES(16) x 64 =
 **1024 bytes**. The Anvil **source** encodes both rules correctly — `max_size = 64'd1024` and
 `(start & 15) != 0`. Only the generated netlist is wrong. The RTL *looks* right on review; the
 defect is invisible above the netlist.
@@ -186,7 +186,7 @@ against constants derived from `start` and **never consults `end`** —
 
 That check is itself generated correctly (`capstone_dyn_unit.anvil.sv:4032-4033`) — its source
 parenthesises its operands. And it *must* work that way, because the spec says so:
-`capstone-spec/parts/prog-model.adoc:91` — *"`end` … Not applicable when `type = 4` (sealed) or
+`capstone-academic-spec/parts/prog-model.adoc:91` — *"`end` … Not applicable when `type = 4` (sealed) or
 `type = 5` (sealed-return)."*
 
 **So SEAL's minimum-size precondition is the only thing standing between a small region and a
@@ -219,7 +219,7 @@ table or run `anvil` on a five-line case.
 
 | where | minimum |
 |---|---|
-| `capstone-spec` and `capstone-academic-spec` (byte-identical over the `[#seal]` block) | **1024 B** (64 x CLENBYTES) |
+| `capstone-academic-spec` and `capstone-academic-spec` (byte-identical over the `[#seal]` block) | **1024 B** (64 x CLENBYTES) |
 | `capstone-qemu/target/riscv/cap.h:35` | `16 * 33` = **528 B** |
 | `capstone-c/samples/capstone.h:36` | `CAPSTONE_SEALED_REGION_SIZE 36`, used as `runtime->malloc(...)` — **36 B as written** |
 | the Anvil source's intent | 1024 B |

@@ -26,7 +26,7 @@ core/anvil_build/capstone_flu_unit.anvil:333  func CAPCREATE(data){ ... modify_c
 ```
 
 **They are not in the specification.** Checked against a live matcher — `SEAL`, `MREV` and
-`REVOKE` are all found in `capstone-spec/parts/`, while `CAPCREATE`, `CAPTYPE`, `CAPPERM`,
+`REVOKE` are all found in `capstone-academic-spec/parts/`, while `CAPCREATE`, `CAPTYPE`, `CAPPERM`,
 `CAPBOUND` and `CAPNODE` return **nothing** anywhere in the spec tree.
 
 **And nothing gates them.** `core/decoder.sv:1109` dispatches `riscv::OpcodeCustom3` straight to

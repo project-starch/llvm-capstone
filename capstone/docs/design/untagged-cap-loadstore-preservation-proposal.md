@@ -5,7 +5,7 @@
 a **bug** in the current emulator and that the intended model is **goal 1**
 (untagged `ldc`/`stc` bit-exact over the full 128-bit word), and that the spec
 document should state it — so **Option A was chosen** and a matching spec note is
-tracked on a `capstone-spec` branch. Validated: authority-suite round-trip probe
+tracked on a `capstone-academic-spec` branch. Validated: authority-suite round-trip probe
 `untagged_cap_roundtrip` (both 64-bit halves survive; retval `0x22990003`) plus
 the full authority suite green (20/20 unchanged + the new probe). Grew out of the
 SQLite bring-up (`sqlite-marshalling-feasibility.md` / gaps 3–4); the same

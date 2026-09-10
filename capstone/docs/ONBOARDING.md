@@ -32,8 +32,8 @@ cd llvm-capstone
 ```
 
 `--recurse-submodules` is **required, not optional**: the submodules
-(`caplifive-buildroot`, `caplifive-system`, `capstone-qemu`, `capstone-c`,
-`capstone-spec`, `capstone-ariane`, `paper`) themselves contain **nested** submodules
+(`caplifive-buildroot`, `caplifive-system`, `capstone-qemu`, `capstone-ariane`) themselves contain
+**nested** submodules
 (QEMU roms/edk2, buildroot/opensbi components, …). If you already cloned without it, run:
 
 ```bash

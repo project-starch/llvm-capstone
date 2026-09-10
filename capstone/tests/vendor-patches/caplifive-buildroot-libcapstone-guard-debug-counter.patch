@@ -8,7 +8,7 @@ index 34abcf5..376e42d 100644
  #define DEBUG_COUNTER_SWITCH_U 0
 +/* Guarded, matching the caplifive-system copy. `.insn r 0x5b, 0x1, 0x45` is QEMU's
 +   csdebugcount (insn32.decode:991, helper op_helper.c:1440) -- one of the QEMU-private
-+   debug block at funct7 0x40-0x48. It has no definition in capstone-spec (highest funct7
++   debug block at funct7 0x40-0x48. It has no definition in capstone-academic-spec (highest funct7
 +   there is 0x21 RETURN / 0x0D CAPENTER) and none in capstone-ariane: the RTL decoder's
 +   funct7 default sets no illegal flag (decoder.sv:1291), so the word reaches the Capstone
 +   FLU as a bogus op and its dispatch wildcard raises ILLEGAL_INSTRUCTION

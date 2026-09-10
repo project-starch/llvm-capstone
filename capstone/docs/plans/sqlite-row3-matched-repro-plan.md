@@ -94,7 +94,7 @@ reproduced: `name[0]` read = heap-use-after-free vs real SQLite 3.53.3, freed by
 **not buildable on the current stack:**
 
 - Minting a revocation capability is `MREV`, and both the spec
-  (`capstone-spec/parts/cap-man-insn.adoc:533` — raises *Unexpected capability
+  (`capstone-academic-spec/parts/cap-man-insn.adoc:559-560` — raises *Unexpected capability
   type* unless `x[rs1].type == 0` linear) and the emulator (`helper_csmrev` asserts
   `CAP_TYPE_LIN`) require a **linear** source capability.
 - A domain has **no intra-domain linear authority**: `my_first_domain/start.S`

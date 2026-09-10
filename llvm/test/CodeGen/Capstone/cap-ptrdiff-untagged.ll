@@ -4,7 +4,7 @@
 ; `p - q` used to lower through cap_get_cursor on both sides, which selects to
 ; `lcc rd, rs, 2`. The spec makes that instruction raise "Unexpected operand
 ; type (24)" when x[rs1] is not a capability
-; (capstone-spec/parts/cap-man-insn.adoc:164-168), so the sequence faulted
+; (capstone-academic-spec/parts/cap-man-insn.adoc:164-168), so the sequence faulted
 ; whenever either operand was null -- and `NULL - NULL` is ordinary C, defined
 ; as 0 by every real implementation.
 ;

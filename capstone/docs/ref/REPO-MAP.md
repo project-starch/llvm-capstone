@@ -52,14 +52,16 @@ normal mid-work, and must be resolved before pushing the parent.
 | `capstone/capstone-c` | Capstone C runtime / cap-table reference | detached `8cda52c` | n/a |
 | `capstone/caplifive-system` | board bring-up: buildroot, OpenSBI, device tree (remote: `caplifive-system-dev`) | `capstone-bootstrap` | pushed `28f9436` (2026-09-07) |
 | `capstone/capstone-academic-spec` | **the spec we cite.** Exception codes, instruction semantics | `caplifive-s06` | branch local; tracks `origin/caplifive-release` |
-| `capstone/capstone-spec` | older spec checkout, branch `caplifive` | `caplifive` | — |
+| ~~`capstone/capstone-spec`~~ | **REMOVED 2026-09-10** — archived; `capstone-academic-spec` is the only spec checkout | — | — |
 | `capstone/paper` | the paper. **Overleaf owns the remote — never push** | `main` | — |
 | `capstone/caplifive-buildroot` | second buildroot copy: **the QEMU stand-in** (its `components/opensbi` monitor is what QEMU's `DOM_CREATE` ecall reaches); not the board's | `capstone-bootstrap` | pushed `4d97ecf` (2026-09-07) |
 
 ### Two traps in that table
 
-**There are two spec checkouts.** `capstone-academic-spec` (branch `caplifive-s06`) is the one
-carrying our amendments and the one to cite. `capstone-spec` is a separate older checkout on branch
+**There is now ONE spec checkout.** `capstone-academic-spec` (branch `capstone-bootstrap`) carries our
+amendments and is the one to cite. The second checkout, `capstone-spec`, was archived and REMOVED from the
+tree on 2026-09-10; its one local commit duplicated `21a01f0` and its content survives there. Older notes
+below describe it as a separate checkout on branch
 `caplifive`. Check which you are in before quoting a line number.
 
 **There are two buildroots.** The **live** one, whose overlay the board image is built from, is
@@ -242,7 +244,7 @@ breaks `git submodule update` for everyone; that has already happened once on `c
 | `capstone-qemu` | `capstone-bootstrap` | yes `62bf0f1d6` | yes |
 | `caplifive-buildroot` | `capstone-bootstrap` | yes | yes |
 | `capstone-c` | detached `8cda52c6` | yes | yes |
-| `capstone-spec` | `caplifive` | yes | yes |
+| `capstone-academic-spec` | `caplifive` | yes | yes |
 | `capstone-academic-spec` | `caplifive-s06` | **was stale — BUMPED** to `fa9600fa` | yes (`origin/caplifive-release`) |
 | `caplifive-system` | `capstone-bootstrap` | **DIFFERS — left alone deliberately** | **no, see below** |
 | `paper` | `main` | **DIFFERS — left alone deliberately** | yes |
@@ -360,7 +362,7 @@ build-target split, so there is nothing analogous to unify:
   in flight, owned by the RTL lane. Different code, not different builds of one thing.
 * **capstone-qemu** — `capstone-bootstrap`, `c128-qemu-merge`, `s06-lcc-total-query`, … are separate
   emulator feature lines.
-* **capstone-c**, **capstone-spec**, **capstone-academic-spec**, **paper** — upstream/author or
+* **capstone-c**, **capstone-academic-spec**, **capstone-academic-spec**, **paper** — upstream/author or
   single-line repos; the branches are theirs.
 * **parent llvm-capstone** — `dev` is the trunk; `compiler-validation-plan`, `c128-integration`,
   `cheri-cva6-eval`, `backup/*` are work lines and snapshots.

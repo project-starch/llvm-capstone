@@ -208,7 +208,7 @@ remaining work is the **recording-side semantics**, which is the author's call.
 
 ## 8. Spec-grounded semantics (authoritative)
 
-From `capstone-spec/parts/cap-man-insn.adoc` (REVOKE/MREV) and `prog-model.adoc`
+From `capstone-academic-spec/parts/cap-man-insn.adoc` (REVOKE/MREV) and `prog-model.adoc`
 (definitions). These largely *answer* the questions below from the spec, leaving
 the author to confirm the implementation should match.
 

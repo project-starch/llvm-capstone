@@ -6,7 +6,7 @@ line that encodes it. The spec, QEMU and RTL columns hold only what has been rea
 line or shown by a test this validation ran; anything else says **not audited** rather than
 guessing. A cell that reads "agrees" without a citation is a bug in this document.
 
-Sources: spec `capstone/capstone-spec/parts/cap-man-insn.adoc` (line numbers as of 2026-09-04);
+Sources: spec `capstone/capstone-academic-spec/parts/cap-man-insn.adoc` (line numbers as of 2026-09-04);
 QEMU `capstone/capstone-qemu/target/riscv/op_helper.c`, `cap.h`, `cpu_bits.h`, `insn32.decode`,
 `insn_trans/trans_capstone.c.inc`; RTL `capstone/capstone-ariane/core/anvil_build/
 capstone_{flu,dyn}_unit.anvil`, `capstone_unit.anvilh`, `core/decoder.sv`,

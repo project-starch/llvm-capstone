@@ -55,13 +55,14 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 > The edit stands because it was confirmed, not because it was already made.
 >
 > **What landed** — `capstone-academic-spec` (branch `caplifive-s06`) **`21a01f0`** and
-> `capstone-spec` (branch `caplifive`) **`230418b`**, the same four tokens in both. Both local only. The **RTL half was already on** `r30-r31-init-revoke` at `1bfff7776`
+> ~~`capstone-spec` (branch `caplifive`) **`230418b`**~~ — that submodule was archived and removed on
+> 2026-09-10; its commit duplicated `21a01f0`, whose content is on a remote. Local only. The **RTL half was already on** `r30-r31-init-revoke` at `1bfff7776`
 > (`INIT`: `cursor <= end` → `<`), and that half is common to both surviving routes, so it is not
 > waiting on this decision. Under the prepared resolution neither convention moves: the RTL stays
 > exclusive, the spec stays inclusive, and one arithmetic form is corrected on each side so the two
 > describe the same machine.
 >
-> **BOTH SPEC CHECKOUTS ARE EDITED, and that mattered.** `capstone/capstone-spec` (branch
+> **BOTH SPEC CHECKOUTS ARE EDITED, and that mattered.** `capstone/capstone-academic-spec` (branch
 > `caplifive`) carried the same four bounds. `mem-access-insn.adoc` and `existing-insn.adoc` were
 > **byte-identical** between the two trees before the change, so fixing only one would have left them
 > disagreeing on exactly the lines under discussion. They are identical again.
@@ -256,8 +257,9 @@ afterwards. Predictions, for the hash synthesised from `r30-r31-init-revoke`:
   pre-registration that usually gets forgotten.)
 * **Independently verified 2026-09-10:** the branch changes exactly two non-comment lines under
   `core/`; everything else in the diff is comments, the two directed tests and their testlist entries,
-  none of which is synthesised. The `capstone-spec` submodule is clean at `ca9c84f` — **no spec edit has
-  been made in any form**, including the corrected one-token version.
+  none of which is synthesised. ~~The `capstone-spec` submodule is clean at `ca9c84f` — no spec edit has
+  been made in any form.~~ **SUPERSEDED:** the spec edit was made and ruled (`21a01f0`, `eadaf87` on
+  `capstone-academic-spec`), and `capstone-spec` has since been removed from the tree entirely.
 * **Read the intra-clock row, not `eth_rxck`**, and gate every artefact on mtime later than the run
   start — `make clean` leaves the previous run's reports in place.
 

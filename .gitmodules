@@ -7,9 +7,6 @@
 [submodule "capstone/capstone-qemu"]
 	path = capstone/capstone-qemu
 	url = https://github.com/project-starch/capstone-qemu.git
-[submodule "capstone/capstone-spec"]
-	path = capstone/capstone-spec
-	url = https://github.com/project-starch/capstone-spec
 
 [submodule "capstone/paper"]
 	path = capstone/paper

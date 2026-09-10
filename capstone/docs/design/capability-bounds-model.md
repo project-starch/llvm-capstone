@@ -1,7 +1,7 @@
 # Capstone capability bounds model — precision, `SHRINK`, and naming
 
 *Status: ground-truth for the granularity contribution (C1). Sourced from the
-spec (`capstone-spec/parts/{cap-man-insn,prog-model}.adoc`), the QEMU model
+spec (`capstone-academic-spec/parts/{cap-man-insn,prog-model}.adoc`), the QEMU model
 (`capstone-qemu/target/riscv/{cap.h,cap_compress.c,op_helper.c}`), and the LLVM
 backend (`CapstoneInstrInfo.td`, `CapstoneISelDAGToDAG.cpp`,
 `IntrinsicsCapstone.td`). This resolves the "representability" question and the

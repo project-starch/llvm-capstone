@@ -1017,7 +1017,7 @@ agree. The honest order is: implement `LDC` linear-clear in QEMU first, then gat
 what QEMU considers legal and would move results for every QEMU-gated test, so it needs its own
 decision and its own corpus run — it is not a mirror commit.
 
-`capstone-spec/parts/mem-access-insn.adoc:44-46` requires `Insufficient capability permissions (27)`
+`capstone-academic-spec/parts/mem-access-insn.adoc:44-46` requires `Insufficient capability permissions (27)`
 when the loaded value is not a scalar or a non-linear capability and `2 <=p x[rs1].perms` does not
 hold. `capstone_dyn_unit.anvil:314` implements the **read** check (`perm & 4`) only; there is no
 second arm anywhere in `func LDC` (`:293-353`).

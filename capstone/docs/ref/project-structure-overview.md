@@ -82,7 +82,7 @@ explicit submodules in the top-level repo.
 - `capstone/caplifive-buildroot/` — Buildroot-based guest runtime, Linux/OpenSBI integration, userspace helpers, kernel modules, packaging.
 - `capstone/capstone-qemu/` — Capstone-enabled QEMU tree.
 - `capstone/capstone-c/` — companion Capstone compiler/runtime repository used by some Buildroot flows.
-- `capstone/capstone-spec/` — SPEC-related or benchmark-related auxiliary repository.
+- `capstone/capstone-academic-spec/` — SPEC-related or benchmark-related auxiliary repository.
 
 These child repos should remain visible in the IDE and should be changed only when
 there is a clear justification.

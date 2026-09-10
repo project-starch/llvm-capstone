@@ -11,7 +11,7 @@
 # other dedicated SEAL test seals a 16 KiB region and exercises the accept path
 # only, so it has never had a positive control.
 #
-# THE SPEC, capstone-spec/parts/cap-man-insn.adoc:459-462, requires
+# THE SPEC, capstone-academic-spec/parts/cap-man-insn.adoc:484-487, requires
 # "Illegal operand value (29)" -- mcause 30 in riscv_pkg.sv:354 -- when either:
 #   * the region is smaller than CLENBYTES * sealed_cap_size_clen = 16 * 64 = 1024 bytes, or
 #   * the base is not aligned to CLENBYTES = 16 bytes.

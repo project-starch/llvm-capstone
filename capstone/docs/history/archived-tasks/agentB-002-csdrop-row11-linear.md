@@ -40,7 +40,7 @@ They split cleanly by lane:
 
 ## Steps
 
-1. **Spec first.** Read `capstone/capstone-spec` for the `drop` / `csdrop`
+1. **Spec first.** Read `capstone/capstone-academic-spec` for the `drop` / `csdrop`
    instruction: encoding, operand form (the note shows `drop a2`), and exact
    semantics — it consumes/invalidates a **linear** capability. Confirm the
    post-drop register state the spec mandates.

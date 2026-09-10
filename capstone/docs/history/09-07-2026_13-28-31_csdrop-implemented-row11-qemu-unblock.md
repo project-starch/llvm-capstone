@@ -18,7 +18,7 @@ and was explicitly out of scope.)
 
 ## Spec semantics (authoritative)
 
-`capstone-spec/parts/cap-man-insn.adoc` `[#drop]` and `insn-list.adoc`:
+`capstone-academic-spec/parts/cap-man-insn.adoc` `[#drop]` and `insn-list.adoc`:
 
 - Encoding: **Func3 = `001`, Func7 = `0001011`, opcode `1011011`**, single operand
   `rs1` (a capability `C`); `rd`/`rs2` unused. (One below MOVC's `0001010`.)

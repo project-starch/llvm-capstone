@@ -98,7 +98,7 @@ This has two consequences:
    `SHRINK`, conflicting with the current specification condition that a
    compressed implementation must preserve values and must not make an
    operation more powerful:
-   `capstone-spec/parts/prog-model.adoc:149-165`.
+   `capstone-academic-spec/parts/prog-model.adoc:149-165`.
 
 There is also undefined C behavior in `cap_uncompress`: expressions such as
 `1 << (E + 14)` use an `int` left operand for shifts that can exceed 31

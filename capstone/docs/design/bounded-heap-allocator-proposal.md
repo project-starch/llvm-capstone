@@ -103,7 +103,7 @@ linkable by SQLite once the QEMU copy issue (§5) is resolved.
 **Decision (2026-07-01): the allocator uses `SHRINK`, not `SPLIT`.**
 
 *Origin of the idea, for the record:* the `SPLIT` **instruction** is from the
-Capstone spec (`capstone-spec/parts/cap-man-insn.adoc`; surfaced in
+Capstone spec (`capstone-academic-spec/parts/cap-man-insn.adoc`; surfaced in
 `capability-bounds-model.md` — a true capability split into two adjacent halves,
 in the ISA but not wired into LLVM). The **"root-elimination via trusted SPLIT"**
 framing is from the internal 2026-06-29 audit, not a published paper. Applying it

@@ -93,7 +93,7 @@ divergence will bite any future toolchain.
 
 **No. It is the specified behaviour, and the RTL implements it correctly.**
 
-`capstone-spec/parts/cap-man-insn.adoc:33-37`:
+`capstone-academic-spec/parts/cap-man-insn.adoc:33-37`:
 
     * If `rs1 = rd`, the instruction is a no-op.
     * Otherwise

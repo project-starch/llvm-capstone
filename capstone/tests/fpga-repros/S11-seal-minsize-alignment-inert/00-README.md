@@ -60,7 +60,7 @@ A sealed-return capability's load/store window is bounded from `start` alone and
 ```
 
 That check is itself generated correctly, and it *must* work that way, because the specification
-says so — `capstone-spec/parts/prog-model.adoc:91`: *"`end` … Not applicable when `type = 4`
+says so — `capstone-academic-spec/parts/prog-model.adoc:91`: *"`end` … Not applicable when `type = 4`
 (sealed) or `type = 5` (sealed-return)."*
 
 **So SEAL's minimum-size precondition is the only thing standing between a small region and a
@@ -70,7 +70,7 @@ read/write authority it never had.
 
 ## What the specification requires
 
-`capstone-spec/parts/cap-man-insn.adoc:459-462`, under `[#seal]`, the `Illegal operand value (29)`
+`capstone-academic-spec/parts/cap-man-insn.adoc:484-487`, under `[#seal]`, the `Illegal operand value (29)`
 conditions:
 
 > - The size of the memory region associated with `x[rs1]` is smaller than
@@ -161,7 +161,7 @@ invisible.
 
 | where | minimum |
 |---|---|
-| `capstone-spec` and `capstone-academic-spec` | **1024 B** |
+| `capstone-academic-spec` and `capstone-academic-spec` | **1024 B** |
 | `capstone-qemu/target/riscv/cap.h:35` | `16 * 33` = **528 B** |
 | `capstone-c/samples/capstone.h:36` | **36 B** as written |
 

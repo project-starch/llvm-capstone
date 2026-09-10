@@ -301,7 +301,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >
 > **The error, plainly: I mixed two numbering systems.** The ruling argued *"`NOT_CAP` is type 0, and
 > `0 != 1`, so the source is nulled."* **The spec has no `NOT_CAP` type at all.** Its table
-> (`capstone-spec/parts/prog-model.adoc:177-184`) is Linear 0, Non-linear 1, Revocation 2,
+> (`capstone-academic-spec/parts/prog-model.adoc:177-184`) is Linear 0, Non-linear 1, Revocation 2,
 > Uninitialised 3, Sealed 4, Sealed-return 5 — in the SPEC's numbering `0` is **LINEAR**. `NOT_CAP = 0`
 > is the RTL's enum, which inserts it at 0 and shifts everything up; the RTL says so itself at
 > `capstone_dyn_unit.anvil:182-183`: *"the spec numbers types with no NOT_CAP, the RTL inserts it at 0
@@ -337,7 +337,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 > **RULING 2026-09-10 (board lane), from the spec text itself. SCALARS ARE NOT EXEMPT. QEMU is the
 > outlier and QEMU is what changes.**
 >
-> `capstone-spec/parts/cap-man-insn.adoc:34-38` is the whole definition and it is not ambiguous:
+> `capstone-academic-spec/parts/cap-man-insn.adoc:34-38` is the whole definition and it is not ambiguous:
 >
 > ```
 > * If `rs1 = rd`, the instruction is a no-op.
@@ -369,7 +369,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 > three-way disagreement between spec, RTL and emulator is worse than either rule. Filed as the open
 > question, not as a blocker.
 
-`capstone-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
+`capstone-academic-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
 
 
 ## Q-07 — QEMU's `INIT` requires `cursor == end` and aborts the host process otherwise; the spec and the RTL require `cursor > end` `OPEN — QEMU divergence, filed 2026-09-09 from the R-25 probe work`
@@ -413,7 +413,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >
 > `helper_csinit` (`capstone-qemu/target/riscv/op_helper.c:1198-1200`) is three host `assert()`s, so a
 > wrong operand `SIGABRT`s the emulator instead of raising a guest trap. All three map one-to-one onto
-> spec exceptions (`capstone-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
+> spec exceptions (`capstone-academic-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
 > unexpected capability type, 29 illegal operand value), and the idiom to replace them with sits five
 > lines away in the same file at `:728`. That part is mechanical.
 >
@@ -446,7 +446,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 
 **The accepted operand sets are DISJOINT, so an `INIT` path can be QEMU-validated and silicon-dead
 at the same time.** The spec raises *Illegal operand value* when `x[rs1].cursor <= x[rs1].end`
-(`capstone-spec/parts/cap-man-insn.adoc:421`) and the RTL does the same
+(`capstone-academic-spec/parts/cap-man-insn.adoc:446`) and the RTL does the same
 (`core/anvil_build/capstone_flu_unit.anvil:139`). QEMU instead asserts:
 `helper_csinit` is `assert(cursor == end)` (`target/riscv/op_helper.c:1200`) — a **host** assert,
 not a guest trap. So `cursor == end` passes under QEMU and traps on silicon, while `cursor > end`
@@ -1279,7 +1279,7 @@ cannot complete on this silicon for a region of any size.** This is strictly lar
 which is one instance of it.
 
 **The spec has the same defect, so the RTL inherited rather than introduced it.**
-`capstone-spec/parts/mem-access-insn.adoc:93` bounds the store at `[base, end - CLENBYTES]` and
+`capstone-academic-spec/parts/mem-access-insn.adoc:93` bounds the store at `[base, end - CLENBYTES]` and
 `cap-man-insn.adoc:421` faults `INIT` on `cursor <= end`. Neither spec states whether `end` is
 inclusive or exclusive (`prog-model.adoc:92` defines it only as "the end memory address"), and the
 arithmetic fails under BOTH readings — exclusive is dead by one byte as above; inclusive is worse,
@@ -1334,7 +1334,7 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > # AUDIT 2026-09-10: R-31 is SUPPORTED on all four attacks — and it is ALSO NOT SUFFICIENT. Both halves matter.
 >
 > **The reading that could have collapsed it does not.** `\<=p` is defined BY EXTENSION at
-> `capstone-spec/parts/prog-model.adoc:103-113`, and the only pairs with `2` on the left are
+> `capstone-academic-spec/parts/prog-model.adoc:103-113`, and the only pairs with `2` on the left are
 > `(2,2), (2,3), (2,6), (2,7)` — exactly the set with bit 1 set. `:94-95` names the encoding
 > ("`2` = write-only … `6` = read-write"). So `2 \<=p perms` **is** `(perms & 2) == 2`: subset ordering
 > on a 3-bit mask. Cross-checked for consistency: `mem-access-insn.adoc:36` uses `4 \<=p perms` for a
@@ -1637,7 +1637,7 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > inspecting the type. That grep is not proof of completeness and an auditor has been asked to look for
 > a third consumer.
 
-**The spec** (`capstone-spec/parts/cap-man-insn.adoc:585-592`) sets `x[rs1].type` to LINEAR if EITHER
+**The spec** (`capstone-academic-spec/parts/cap-man-insn.adoc:610-617`) sets `x[rs1].type` to LINEAR if EITHER
 
 * every invalidated capability `c` is non-linear, **or**
 * `2 \<=p x[rs1].perms` does **NOT** hold — i.e. the revocation capability does **not** carry write,
@@ -2497,7 +2497,7 @@ second split/store from the table split.
 > source on this silicon), the numeric proof, and that LLVM is emitting the wrong
 > instruction. Only blame moved.
 
-**What the spec says.** `capstone-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
+**What the spec says.** `capstone-academic-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
 
     * If `rs1 = rd`, the instruction is a no-op.
     * Otherwise
@@ -2974,7 +2974,7 @@ undebuggable and takes the core with it.
 >
 > `helper_csinit` (`capstone-qemu/target/riscv/op_helper.c:1198-1200`) is three host `assert()`s, so a
 > wrong operand `SIGABRT`s the emulator instead of raising a guest trap. All three map one-to-one onto
-> spec exceptions (`capstone-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
+> spec exceptions (`capstone-academic-spec` `parts/cap-man-insn.adoc:415-421`: 24 unexpected operand type, 26
 > unexpected capability type, 29 illegal operand value), and the idiom to replace them with sits five
 > lines away in the same file at `:728`. That part is mechanical.
 >
@@ -3008,7 +3008,7 @@ undebuggable and takes the core with it.
 `shared_region_annotated`'s `REV_BORROWED` branch does `if (cap_type(r) == 3) C_INIT(r, r, 0)` on
 the retained handle after a revoke. On silicon that operand cannot satisfy `INIT`: stores through an
 `UNINIT` capability are bound to `[base, end-16]` and advance its cursor by 16 per store
-(`capstone-spec/parts/mem-access-insn.adoc:93,:104`), so **no** store sequence reaches
+(`capstone-academic-spec/parts/mem-access-insn.adoc:93,:104`), so **no** store sequence reaches
 `cursor > end`, and revoke leaves `cursor = start` on the RTL. The only way to reach the required
 state is the `CAPTYPE` debug instruction, which production code does not use.
 
@@ -4112,7 +4112,7 @@ the project lead's call.
 
 > **Sweep 2026-09-05 — cincoffset half GONE at 5097eb166; the INIT half is R-25.** `linear-clear-audit.S` arm 2 prints NOT_CAP (the linear source is consumed); R-25 (INIT with rd ≠ rs1 duplicates the source) is confirmed by directed test, see its entry.
 
-**A linear capability can be copied.** `capstone-spec/parts/intro.adoc:58-61` states the invariant
+**A linear capability can be copied.** `capstone-academic-spec/parts/intro.adoc:58-61` states the invariant
 normatively -- "instructions can only **move, but not copy**, linear capabilities between
 general-purpose registers" -- and the spec defines each instruction below as `MOVC rd, rs1` plus an
 edit, where `MOVC` writes `cnull` to a non-NONLIN source (`cap-man-insn.adoc:36-38`). `MOVC` does
@@ -4187,7 +4187,7 @@ not**, so the reference model is itself inconsistent on one instruction.
 
 ### R-22 — `stc` does not write `cnull` to its register source `OPEN — SPEC VIOLATION; NOT yet reported`
 
-`capstone-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
+`capstone-academic-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
 not `1` (non-linear), write `cnull` to `x[rs2]`." The RTL does not.
 
 The decoder aliases `STC`'s `rd` field to `rs2` (`decoder.sv:1308-1314`), which looks like it could
@@ -4282,7 +4282,7 @@ land in both or note the divergence.
 > RTL lane, branch `r24-excode-base` at `69658cf16` off `66c4e7517`.
 >
 > **Direction re-confirmed against the spec, because the RTL's own comment said the opposite.**
-> `capstone-spec` gives 24/25/26/27/28/29 for unexpected operand type, invalid capability, unexpected
+> `capstone-academic-spec` gives 24/25/26/27/28/29 for unexpected operand type, invalid capability, unexpected
 > capability type, insufficient permissions, out of bound and illegal operand value — i.e. `23 +
 > ordinal` throughout. The two encoders emit `24 + ordinal`, so the encoders are the off-by-one and
 > `commit_stage` was already conformant.
@@ -4315,7 +4315,7 @@ land in both or note the divergence.
 
 > **Sweep 2026-09-05 — re-measured, unchanged.** `excode-base-audit.S` at the flashed commit 5097eb166 (detached worktree): still +1.
 
-**RESOLVED 2026-08-12 against `capstone-spec`, and the answer is the opposite of the first guess
+**RESOLVED 2026-08-12 against `capstone-academic-spec`, and the answer is the opposite of the first guess
 recorded below.** `capstone-academic-spec/parts/int-except.adoc:19-27` gives the authoritative table:
 
 | Exception | spec code |
@@ -4656,7 +4656,7 @@ directed tests that check `mcause` (e.g. `cincoffset-stale-metadata.S`, which ex
 off-by-one *comments* in the `ex_code` enum that caused the misnaming ARE fixed
 (`capstone_unit.anvilh`, comment-only).
 
-Verified against `capstone-spec`: **NOT YET.** The spec's exception numbering has not been checked
+Verified against `capstone-academic-spec`: **NOT YET.** The spec's exception numbering has not been checked
 against either encoder, so which base is *correct* — as opposed to which is in the majority — is
 still open. Do that before proposing a fix.
 
