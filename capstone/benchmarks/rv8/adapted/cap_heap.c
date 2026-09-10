@@ -65,10 +65,26 @@ static inline void *cap_rewiden(void *user_p) {
   return (void *)(cap_arena + (addr - abase));
 }
 
-/* Narrow a wide arena pointer to exactly [p, p+n). */
+/* Narrow a wide arena pointer to exactly [p, p+n).
+ *
+ * CAPSTONE_HEAP_NO_NARROW=1 turns this into a no-op so every allocation carries the whole
+ * arena. It is the control arm for "the bounds in this fault came from us": with narrowing
+ * off, no heap capability can be smaller than the arena, so a small-bounds fault cannot be
+ * the allocator's.
+ *
+ * IT WAS DEAD. A build passed -DCAPSTONE_HEAP_NO_NARROW for as long as the arm was in
+ * use and nothing ever read it -- the macro appeared exactly once in the whole
+ * repository, in the line that defines it. Both images came out BYTE-IDENTICAL, so the
+ * arm that was said to differ in exactly one thing differed in nothing, and every
+ * conclusion drawn from it has to be taken again. */
 static inline void *cap_narrow(void *p, size_t n) {
+#if defined(CAPSTONE_HEAP_NO_NARROW) && (CAPSTONE_HEAP_NO_NARROW)
+  (void)n;
+  return p;
+#else
   unsigned long c = __builtin_capstone_cap_get_cursor((char *)p);
   return __builtin_capstone_cap_shrink(p, c, c + n);
+#endif
 }
 
 void *malloc(size_t n) {

@@ -289,10 +289,30 @@ BEEBS_WRITER_ATTR void *memmove(void *dst, const void *src, bsize_t n) {
     for (; i < n; i++)
       d[i] = s[i];
   } else {
-    /* Overlapping copy toward higher addresses: byte loop backward. This drops
-       tags for capabilities in an overlapping backward move (rare); such a
-       pointer faults loudly on next use rather than corrupting silently. */
-    for (bsize_t i = n; i != 0; i--)
+    /* Overlapping copy toward higher addresses, walked downward.
+       This WAS a plain byte loop, and its own comment called the resulting tag loss
+       "rare". It is not: the QEMU tag watch (CAPSTONE_TAGWATCH=1) counted 15 capability
+       tags destroyed by this line in ONE run of an allocator-heavy workload, where a
+       moving realloc walks blocks that hold capabilities. So mirror the forward
+       path -- byte tail, capability-sized chunks through the aligned middle, byte head.
+       Walking downward keeps the overlap safe: d[k] aliases s[k+delta] with delta > 0,
+       and every higher index has already been read by the time it is overwritten. */
+    bsize_t i = n;
+    bsize_t da = ((bsize_t)d) & (ps - 1u);
+    bsize_t sa = ((bsize_t)s) & (ps - 1u);
+    if (da == sa) {
+      bsize_t head = da ? (ps - da) : 0u;
+      if (head > n)
+        head = n;
+      bsize_t mid_end = head + ((n - head) / ps) * ps;
+      for (; i > mid_end; i--)
+        d[i - 1] = s[i - 1];
+      while (i >= head + ps) {
+        i -= ps;
+        BEEBS_CHUNK_COPY(d + i, s + i);
+      }
+    }
+    for (; i != 0; i--)
       d[i - 1] = s[i - 1];
   }
   return dst;
@@ -483,6 +503,40 @@ int main(void) {
   /* overlapping move: shift "0123456789" right by 2 */
   char ov[16] = "0123456789";
   memmove(ov + 2, ov, 8);
+
+  /* OVERLAPPING BACKWARD MOVES THAT CROSS THE CHUNK GRAIN.
+     The case above is 8 bytes, which is below the chunk size on the target and
+     exactly one chunk on the host, so it never exercised the aligned middle of the
+     backward path -- and that middle is where the capability-preserving copy lives.
+     These walk every alignment of dst and src and every length through two chunks,
+     against a reference computed forward into a scratch buffer. Getting the backward
+     chunking wrong corrupts data silently, which is worse than the tag loss it fixes. */
+  {
+    const bsize_t ps_ = sizeof(void *);
+    static unsigned char mv[256], ref[256];
+    for (bsize_t delta = 1; delta <= 2 * ps_; delta++) {
+      for (bsize_t len = 1; len <= 4 * ps_; len++) {
+        for (bsize_t off = 0; off < ps_; off++) {
+          bsize_t src = 16 + off, dst = src + delta;
+          if (dst + len > sizeof(mv))
+            continue;
+          for (bsize_t k = 0; k < sizeof(mv); k++)
+            mv[k] = ref[k] = (unsigned char)(k * 7u + 1u);
+          for (bsize_t k = len; k != 0; k--)          /* reference, byte by byte */
+            ref[dst + k - 1] = ref[src + k - 1];
+          memmove(mv + dst, mv + src, len);
+          for (bsize_t k = 0; k < sizeof(mv); k++)
+            if (mv[k] != ref[k]) {
+              printf("memmove backward mismatch: delta=%lu len=%lu off=%lu at %lu\n",
+                     (unsigned long)delta, (unsigned long)len,
+                     (unsigned long)off, (unsigned long)k);
+              fail = 1;
+              k = sizeof(mv);
+            }
+        }
+      }
+    }
+  }
   if (ov[2] != '0' || ov[9] != '7')
     fail = 1;
 
