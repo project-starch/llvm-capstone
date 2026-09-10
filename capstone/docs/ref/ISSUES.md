@@ -2583,6 +2583,40 @@ fault has it at `0x104788`. No artifact on disk matches `0x104788`. The SHAPE cl
 the four-instruction fault window reproduces at fn+0x8c, matching the record -- but these
 numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting binary.
 
+> ## ⚠ THE `memset` RESIDUE IS **NOT REPRODUCED** (2026-09-10, compiler lane) — strike the second-route claim
+>
+> The entry carried a live residue: a non-zero-fill `memset` was said to reach the unforgeable-constant
+> diagnostic because `findOptimalMemOpLowering` guards its i128 avoidance on `Op.isMemcpy()`. **It does
+> not.** A 72-run grid — sizes 16 to 256, alignments 1/8/16, default / `-capstone-gp-captable` / `-O0`
+> — produced **zero** forge diagnostics. A non-zero `memset` lowers to scalar stores and never selects
+> i128.
+>
+> **The zero is trustworthy because the FIRST positive control was wrong and was caught.** That control
+> was a plain `i128` return, which is not capability-typed and cannot forge — so it returned a clean
+> zero, and the *control* was failing rather than the subject passing. The zero was only believed after
+> an `inttoptr` of a >64-bit constant was shown to still diagnose. This is the exact shape this
+> registry keeps recording, caught this time before it became a claim.
+>
+> **The fix that was planned would have SHIPPED A BUG**, and this lane's audit stopped it. It proposed
+> widening all three `isMemcpy` guards. Guard 2 (`CapstoneISelLowering.cpp:25677`) assigns **c128**
+> chunks specifically to preserve TAGS from a copy's source; a `memset` has no source and no tags, so
+> widening it would have *caused* a 128-bit materialisation — the very forge being chased. Guard 3
+> (`:25700`) is the only genuine "never i128, cap the unit at XLen" branch, and widening its predicate
+> alone would have **asserted**: its body calls `Op.getSrcAlign()`, which is
+> `assert(isMemcpy() && "Must be a memcpy")` at `TargetLowering.h:181-183`, in a Debug build.
+>
+> **Why nobody had opened the function.** The plan cited the guards at `:26131`, `:26157`, `:26179`.
+> Those line numbers were **never valid at any tip** — they come from a stale comment at
+> `CapstoneISelLowering.cpp:2921` that cites them. The real guards are at `:25651`, `:25677`, `:25700`.
+> A stale in-source citation kept a function unread; **that comment is still there and should be
+> fixed.**
+>
+> **FOR THE LEAD — close the queued "two i64 halves" lowering PERMANENTLY.** It has **no mechanism**:
+> there is no ALU write to a capability's upper half, `SCC` asserts a tagged `rs1` so it cannot build
+> one from `cnull`, and `CIncOffset` raises on an untagged `rs1` (`CapstoneISelLowering.cpp:8054-8060`,
+> which says exactly this in its own comment). Two-halves would silently drop the high half — **worse
+> than today's diagnostic**, which is correct and should stand.
+
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
 > **2026-09-09, board lane — the remaining half is RTL-side, ownership moves to the RTL lane.** The
@@ -3046,9 +3080,30 @@ disagreeing with the history.
 > register allocation, so MachineCSE and MachineSinking are pre-RA and never see it. It is not marked
 > `isReMaterializable`, and `isReallyTriviallyReMaterializable` special-cases only RVV before the
 > generic check. And it is not `isMoveReg`, while `isCopyInstrImpl` recognises only `isMoveReg` plus
-> ADD/OR/XOR-with-X0, so MachineCopyPropagation will neither forward through it nor delete it.
-> **It becomes live the moment someone adds an IR pattern for MOVC, marks it `isMoveReg`, or reaches it
-> from a pre-RA pass.**
+> ADD/OR/XOR-with-X0.
+>
+> **⚠ CORRECTED 2026-09-10: "marks it `isMoveReg`" is NOT a trigger, and a proposed test pinning that
+> was TRIED AND WITHDRAWN.** I asserted that because `isCopyInstrImpl` opens with
+> `if (MI.isMoveReg())`, setting that flag would immediately expose MOVC to MachineCopyPropagation, and
+> I made demonstrating it the condition for keeping the test. The compiler lane demonstrated it and
+> **nothing happened**: `isMoveReg = 1` plus a rebuild changed no codegen at all, identical MOVC counts
+> across five shapes built to give copy propagation something to remove.
+>
+> **The reason is pass ORDER, and it makes reason 1 structural rather than flag-dependent.** Capability
+> copies are generic `COPY` MachineInstrs until `ExpandPostRAPseudos` lowers them through `copyPhysReg`
+> (`CapstoneInstrInfo.cpp:548-549`). In `TargetPassConfig::addMachinePasses`,
+> `addMachineLateOptimization()` — which contains `MachineCopyPropagation` (`:1540`) — is called at
+> `:1179`, and `ExpandPostRAPseudos` is added at `:1182`. The other `MachineCopyPropagation`
+> (`:1511`) is inside `addOptimizedRegAlloc()`, earlier still. **Both copy-propagation runs finish
+> before a MOVC exists.** No pass that could act on one ever holds one. Verified here by reading the
+> call order rather than the line order, which points the other way and is what I first misread.
+>
+> So the pinning test would have PASSED for a reason unrelated to what it asserted — the exact
+> "proven to work and still under-determining" shape this registry keeps recording. It was dropped and
+> the three inertness reasons live at the instruction definition instead.
+>
+> **It becomes live if someone adds an IR pattern for MOVC or reaches it from a pre-RA pass** — not
+> from the flag.
 >
 > **The post-RA half of that caveat is now CLOSED (compiler lane, 2026-09-10), by auditing the target's
 > actual pass list rather than a guess at it.** What runs after register allocation, from
@@ -3135,7 +3190,7 @@ Until that exists this is a modelling defect by inspection, not an observed misc
 **Owner:** compiler lane. Related: **C-32** (the untagged-in-GPCR live copy), **Q-04** (whether a
 scalar source is consumed at all).
 
-### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `OPEN — found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically). ⚠ "low priority, no known consumer" is WITHDRAWN 2026-09-10: CODEGEN ITSELF emits `PseudoCALLReg`, so `-S` output cannot be reassembled`
+### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `FIXED 2026-09-10 (compiler lane, `07bf18d4f20c` on `compiler-validation-plan`) by making the capability/integer operand coercion IDEMPOTENT — the reverse arm mirrors the forward arm's full class set. Found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically). ⚠ "low priority, no known consumer" is WITHDRAWN 2026-09-10: CODEGEN ITSELF emits `PseudoCALLReg`, so `-S` output cannot be reassembled`
 
 Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+register form
 (`call a0, a1`) by making `parseCallSymbol` decline register names; the register+**symbol** form that
@@ -3145,7 +3200,33 @@ Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+r
 `call a0, a1`, `call a0, a0` and `call a0, foo` identically, so this form has never worked on this
 target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
 
-> ## ⚠ THE OBVIOUS FIX TURNS A LOUD ERROR INTO SILENT WRONG OBJECT CODE. Read this before landing it.
+> ## ⚠ RETRACTED — I ANALYSED THE WRONG TREE. The box below is kept because its reasoning is right about `dev` and wrong about where the fix lands.
+>
+> **Measured on `compiler-validation-plan` after the arm was built** — which is what I asked for, and
+> the prediction did **not** hold:
+>
+>     call a0, a1               ->  [0x5b,0x95,0x05,0x40]  CAP_CALL, NO relocation
+>     call c10, c11             ->  same encoding
+>     call a0, foo              ->  auipc a0 + jalr a0, R_Capstone_CALL_PLT foo
+>     call t0, __riscv_save_12  ->  auipc t0 + jalr t0, R_Capstone_CALL_PLT
+>
+> **Why.** I read `parseCallSymbol` on `dev`. **C-38 is not on `dev`** — and I had established that
+> myself the same day, when I qualified C-38's archive entry for citing a commit that is not an
+> ancestor of `dev`. C-38 adds a guard declining a REGISTER NAME as a call symbol *in any operand
+> position*, so on that branch the trailing operand stays a register, `CAP_CALL` matches first and
+> `PseudoCALLReg` is never reached. My own proof case is the tell: on `dev` `call c10, c11` fails; on
+> the branch it assembles.
+>
+> **So the mechanism was right and the tree was wrong**, which is the more embarrassing of the two — I
+> was holding the fact that would have caught it. **Read the branch a fix lands on, not the branch you
+> happen to be standing in.**
+>
+> The four conditions were met anyway and are worth keeping: the predicted failure is now a standing
+> pin (three register/register calls must emit NO relocation, so a degradation adds a third
+> `R_Capstone_CALL_PLT` and fails loudly), the XFAIL file was rewritten so the suite can see a change,
+> and the class set is mirrored in full.
+>
+> ### ~~THE OBVIOUS FIX TURNS A LOUD ERROR INTO SILENT WRONG OBJECT CODE~~ — true on `dev`, prevented by C-38 on the branch.
 >
 > The proposed fix makes the operand coercion idempotent: add a reverse arm to
 > `validateTargetOperandClass` so a `GPCR` register at an `MCK_GPR` slot is rewritten back to its `X`
