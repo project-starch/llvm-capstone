@@ -409,6 +409,29 @@ own comment contradicts. Gated on the same decision as the fix; noted so it is n
 
 ---
 
+## 5b. C-32 — which of two designs stops `MOVC` being emitted for an untagged pointer?
+
+**Yours because both touch the ABI of integer-bridged pointers.** Analysis by the compiler lane,
+audited and filed by this lane today as a registry entry — C-32 had **no entry at all** while its ID
+was live in a committed test, which is the second instance of that failure mode.
+
+`inttoptr` on a `c128` lowers to an UNDEF capability carrying only an address; the tag is deliberately
+clear, because that is what `inttoptr` means. Register allocation may then copy it with `MOVC`, and
+**the RTL faults on a `MOVC` of an untagged operand. The spec sides with the RTL**, so QEMU is the
+permissive side and **no QEMU run can observe this class** — it needs a codegen fix, not an emulator
+one.
+
+| design | what it buys | what it leaves |
+|---|---|---|
+| **A rematerializable bridge pseudo**, mirroring `PseudoTRUNC_CAP` | at `-O2` the bridge is already one `mv`, so remat turns both `movc` into `mv` | **PHI copies**, which remat cannot reach |
+| **A register class marking a bridged integer**, so `copyPhysReg` picks `mv` | would cover PHI copies too | probably unworkable: *untagged* is a property of the **value**, a `RegisterClass` is a set of **physical registers**, and `copyPhysReg` sees only physical numbers |
+
+**No code is being written either way.** The reproducer is already committed as an XFAIL and is
+checkable on branch tools alone, so whichever you pick can be validated without a board or an
+emulator.
+
+---
+
 ## 6. Smaller, and safe to defer
 
 * **R-4** — retitled RECORD ONLY. Closure as *"not reproducible"* was rejected as overstating: nobody
