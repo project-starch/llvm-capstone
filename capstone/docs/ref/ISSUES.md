@@ -800,6 +800,44 @@ unexpected operand type.
 > the working images differ, geometry is the factor and both entries collapse into one. That is
 > off-board and needs no boot.
 
+### I-6 — a userspace binary that dies **in M-mode** is probably reading a machine-mode CSR, not hitting a monitor bug `RECORDED 2026-09-10 — a diagnostic trap, not a defect; measured by the bench lane while building the speedtest1 matched baseline`
+
+**The signature, and why it convinces.** A plain static Linux userspace binary dies, and the console
+shows a fault whose `pc` is in **firmware space**:
+
+    [CAPSTONE] Print = Scalar(0xdeadbeef), Print = Scalar(0x2)
+    Cap mem access requires capability: pc = 80023318
+    domain halted by capability fault: cause = 24, pc = 0x80023338
+
+**Two counter probes, `csrr cycle` and `csrr instret`, had ALREADY SUCCEEDED in the same guest
+command.** That is what makes the wrong conclusion so natural: the counters are demonstrably readable,
+so the crash "cannot" be about counters, and the firmware `pc` points at the monitor.
+
+**The cause is a U-mode read of an M-mode CSR.** The VFS clock in `capstone_sqlite_os.c` reads
+**`mcycle`, CSR `0xB00`**. A capability *domain* may read it, because the monitor leaves it
+domain-readable; **Linux userspace may not.** The `Scalar(0x2)` is **mcause 2, illegal instruction**.
+With no libc there is no handler, so the process dies and the trap surfaces from M-mode.
+
+**Discriminator, before suspecting the monitor: grep the binary for a machine-mode CSR.** The U-mode
+mirrors are `cycle` (`0xC00`) and `instret` (`0xC02`).
+
+**THE GENERAL SHAPE, which is the part worth carrying: the two halves of a paired measurement do NOT
+run at the same privilege.** The capability arm is a domain and reads `mcycle`; the baseline arm is
+ordinary userspace and must read `cycle`. Sharing a timing header between them is the obvious thing to
+do and is wrong, and it fails in **the arm nobody suspects**, because the domain side is the exotic one.
+
+**And the rule was ALREADY WRITTEN DOWN, in the right words, in the wrong place.**
+`tests/rtl-smoke/ladder_base_ctl.c:17-22` states it exactly: the domain half reads `0xB00` which the
+monitor leaves domain-readable, userspace cannot, the U-mode mirror is `0xC00`. It did not prevent
+this, because the code that broke was written for a *domain* and only later compiled for userspace, so
+nobody had any reason to open the ladder's control program. **This is a placement failure, not an
+absence.** Recorded here, in the registry, because that is where someone who has just watched a
+userspace binary die in M-mode will actually look; also in `fpga-debugging-recipes.md` §6.
+
+**Corollary for board arms:** probe each counter in its **own** invocation. A gated CSR traps with no
+handler, so only that invocation dies and the rest of the run still returns data — the "make every run
+RETURN" rule applied to privilege rather than to control flow.
+
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — DESIGN CHOICE PENDING (lead); reproducer committed as an XFAIL, no fix attempted`
 
 **FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
