@@ -39,6 +39,14 @@ size_t speedtest1_hook_table_bytes(size_t arena_size);
 void speedtest1_hook_install(void *arena, size_t arena_size, void *table);
 void speedtest1_hook_report(void);
 #endif
+/* -DSPEEDTEST1_SUBLET=1: the Sublet port of both allocators (sublet/sublet-3530300.patch). The
+   pool is the third region the host shares, linear (sqlite_host.user --arena <bytes>); the
+   tables memsys5 keeps beside it come from the stack region, where the arena used to be. */
+#ifdef SPEEDTEST1_SUBLET
+void sqlite3_sublet_grant(void *pLinear);
+void sqlite3_sublet_pool(unsigned long *pBase, unsigned long *pEnd);
+void sqlite3_sublet_stats(unsigned long *aOut);
+#endif
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
@@ -290,8 +298,13 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
       hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
     else if (shared_region_count == 1)
       hostcall_payload = (volatile char *)res;
+#ifdef SPEEDTEST1_SUBLET
+    else if (shared_region_count == 2)
+      sqlite3_sublet_grant((void *)res); /* the pool, linear, into its slot and nowhere else */
+#else
     else if (shared_region_count == 2)
       pool_region = (volatile char *)res;
+#endif
     else if (shared_region_count == 3)
       tables_region = (void *)res;
     ++shared_region_count;
@@ -351,6 +364,32 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     }
     cap_bounds(tables_region, &tables_base, &tables_end);
     tables_size = tables_end - tables_base;
+#ifdef SPEEDTEST1_SUBLET
+    {
+      unsigned long pool_end, atoms;
+      sqlite3_sublet_pool(&arena_addr, &pool_end);
+      if (pool_end <= arena_addr) {
+        output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no pool: the host shared no linear region\n");
+        *res = 0x5117E106u;
+        return;
+      }
+      arena_size = pool_end - arena_addr;
+      /* memsys5's tables beside the pool: a control byte, a link, a capability per atom and
+         the handles of the split blocks, 41 bytes an atom (mem5.c under the port), aligned */
+      atoms = arena_size / 64;
+      heap_size = (int)(((atoms + 15) & ~15UL) + atoms * 8 + atoms * 16 + (atoms + 32) * 16 + 64);
+      heap = tables_region;
+      output_text("regions: pool ");
+      output_uint(arena_size);
+      output_text(" bytes at ");
+      output_uint(arena_addr);
+      output_text(", linear, tables ");
+      output_uint(tables_size);
+      output_text(" bytes, memsys5's tables ");
+      output_uint((unsigned long)heap_size);
+      output_text("\n");
+    }
+#else
     if (!pool_region) {
       output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no pool region\n");
       *res = 0x5117E106u;
@@ -370,6 +409,7 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
       output_uint(tables_size);
       output_text(" bytes\n");
     }
+#endif
     hook_table = (unsigned char *)tables_region + (heap == tables_region ? heap_size : 0);
     hook_room = tables_size - (heap == tables_region ? (unsigned long)heap_size : 0UL);
     if ((unsigned long)heap_size > tables_size && heap == tables_region) {
@@ -389,6 +429,31 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     heap_size = SPEEDTEST1_STACK_ARENA;
     arena_addr = (unsigned long)(uintptr_t)heap;
     arena_size = (unsigned long)heap_size;
+#ifdef SPEEDTEST1_SUBLET
+    {
+      unsigned long pool_end, atoms;
+      sqlite3_sublet_pool(&arena_addr, &pool_end);
+      if (pool_end <= arena_addr) {
+        output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no pool: the host shared no third region\n");
+        *res = 0x5117E106u;
+        return;
+      }
+      arena_size = pool_end - arena_addr;
+      atoms = arena_size / 64;
+      heap_size = (int)(((atoms + 15) & ~15UL) + atoms * 8 + atoms * 16 + (atoms + 32) * 16 + 64);
+      output_text("sublet: pool ");
+      output_uint(arena_size);
+      output_text(" bytes at ");
+      output_uint(arena_addr);
+      output_text(", the host's region, tables ");
+      output_uint((unsigned long)heap_size);
+      output_text(" bytes from the stack region's low end, region ");
+      output_uint(en - st);
+      output_text(" bytes, stack keeps ");
+      output_uint((en - st) - (unsigned long)heap_size);
+      output_text("\n");
+    }
+#else
     output_text("arena: ");
     output_uint((unsigned long)heap_size);
     output_text(" bytes from the stack region's low end, region ");
@@ -396,6 +461,7 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     output_text(" bytes, stack keeps ");
     output_uint((en - st) - (unsigned long)heap_size);
     output_text("\n");
+#endif
     hook_table = heap + heap_size;
     hook_room = (en - st) - (unsigned long)heap_size - 393216UL; /* the stack keeps 384 KB */
   }
@@ -433,6 +499,23 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
   rc = speedtest1_main(argc, argv);
 #ifdef SPEEDTEST1_HOOK
   speedtest1_hook_report();
+#endif
+#ifdef SPEEDTEST1_SUBLET
+  {
+    unsigned long v[5];
+    sqlite3_sublet_stats(v);
+    output_text("sublet: split=");
+    output_uint(v[0]);
+    output_text(" mrev=");
+    output_uint(v[1]);
+    output_text(" delin=");
+    output_uint(v[2]);
+    output_text(" revoke=");
+    output_uint(v[3]);
+    output_text(" init=");
+    output_uint(v[4]);
+    output_text("\n");
+  }
 #endif
   output_text("__CAPSTONE_SPEEDTEST1_DONE__ rc=");
   output_uint((unsigned long)(unsigned)rc);

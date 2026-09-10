@@ -6,6 +6,7 @@
 #
 #   run-sqlite-speedtest1.sh            --memdb --size 1 --testset main --verify --stats
 #   SPEEDTEST1_ARGS='"--memdb","--size","2"' run-sqlite-speedtest1.sh
+#   SPEEDTEST1_SUBLET=1 run-sqlite-speedtest1.sh      the Sublet port of both allocators
 #   SPEEDTEST1_HOOK=1 SPEEDTEST1_HOOK_SRC=<file.c> SQLITE_HOOK_PATCH=<file.patch> ...
 #                                                     an instrument linked into the domain
 #   SPEEDTEST1_PROBE=1 SPEEDTEST1_PROBE_SRC=<file.c> SPEEDTEST1_MARKER=<line> ...
@@ -38,16 +39,27 @@ export SQLITE_LOOKASIDE=${SQLITE_LOOKASIDE:-1200,40}
 # fits --size 1 with room for the stack); the in-image heap then only needs to exist.
 STACK_ARENA=${SPEEDTEST1_STACK_ARENA:-1441792}
 DOMAIN_ARGS="${SPEEDTEST1_ARGS:+-DSPEEDTEST1_ARGS=$SPEEDTEST1_ARGS} ${SPEEDTEST1_STOP_AT:+-DSPEEDTEST1_STOP_AT=$SPEEDTEST1_STOP_AT} -DSPEEDTEST1_STACK_ARENA=$STACK_ARENA"
-# SPEEDTEST1_MARKER names what counts as success.
-# The allocator's memory comes from the host as a region. SPEEDTEST1_POOL is memsys5's heap,
-# control bytes inside, so it holds POOL/65 atoms; the tables region holds what sits beside the
-# pool, an instrument's table (16 bytes an atom). A region above 4 MiB comes from the kernel's
-# CMA area, hence cma= on the guest's command line. 1441792 is the size the pinned passes used
+# SPEEDTEST1_SUBLET=1: the Sublet port of memsys5 and lookaside (sublet/sublet-3530300.patch). The
+# pool is then a region the host shares linear, SPEEDTEST1_ARENA bytes (--arena), and the tables
+# region holds memsys5's tables. SPEEDTEST1_MARKER names what counts as success.
+SUBLET=${SPEEDTEST1_SUBLET:-0}
+# The allocators' memory comes from the host as regions. SPEEDTEST1_POOL is memsys5's heap in
+# the unprotected arm, control bytes inside, so it holds POOL/65 atoms; the port's pool is
+# those atoms times 64, so both arms carve the same blocks and every address matches. The
+# tables region holds memsys5's tables under the port (57 bytes an atom with the handles) and
+# the instrument's table (16 bytes an atom). A region above 4 MiB comes from the kernel's CMA
+# area, hence cma= on the guest's command line. 1441792 is the size the pinned passes used
 # (22181 atoms); --size 100 wants a pool of 136314880 (2^21 atoms, 130 MiB).
 POOL=${SPEEDTEST1_POOL:-1441792}
 ATOMS=$((POOL / 65))
+ARENA=$((ATOMS * 64))
 mib() { echo $(( ($1 + 1048575) / 1048576 * 1048576 )); }
 HOST_ARGS="--tail --pool $POOL --tables $(mib $((ATOMS * 16 + 65536)))"
+if [ "$SUBLET" = 1 ]; then
+  export SQLITE_SUBLET_PATCH=${SQLITE_SUBLET_PATCH:-$SCRIPT_DIR/sublet/sublet-3530300.patch}
+  DOMAIN_ARGS="$DOMAIN_ARGS -DSPEEDTEST1_SUBLET=1"
+  HOST_ARGS="--tail --arena $ARENA --tables $(mib $((ATOMS * 57 + ATOMS * 16 + 131072)))"
+fi
 KERNEL_ARGS="--kernel-arg cma=${SPEEDTEST1_CMA:-1G}"
 export CAPSTONE_REV_NODES=${CAPSTONE_REV_NODES:-8388608}
 MARKER=${SPEEDTEST1_MARKER:-'__CAPSTONE_SPEEDTEST1_DONE__ rc=0'}

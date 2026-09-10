@@ -92,6 +92,15 @@ grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 # An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
 # calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed
 # there. -F0: a source the patch was not written for is refused, not patched somewhere near.
+# SQLITE_SUBLET_PATCH: the Sublet port of memsys5 and lookaside (sublet/sublet-3530300.patch),
+# a diff against the file the sed above produces, applied to the copy, before the instrument.
+# The port's primitives (sublet.h) sit beside the patch; that directory joins the include path
+# only here, so the unprotected build never sees a Sublet file.
+SUBLET_FLAGS=()
+if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
+  SUBLET_FLAGS=(-I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+fi
 if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"
 fi
@@ -186,6 +195,7 @@ COMMON_FLAGS=(
   -I"$ADAPTED_DIR/stubinc"
   -I"$ADAPTED_DIR"
   -I"$SCRIPT_DIR"
+  "${SUBLET_FLAGS[@]}"
   -I"$VFS_SKELETON_DIR"
   -I"$SQLITE_SRC_DIR"
   "${SQLITE_DEFINES[@]}"

@@ -101,7 +101,7 @@ Current result: **green** — the domain runs the base 3-row workload and the
 extended workload, emitting `__CAPSTONE_SQLITE_EXTENDED_PASSED__` then
 `__CAPSTONE_SQLITE_MEMORY_PASSED__`.
 
-## speedtest1
+## speedtest1 and the Sublet port
 
 `run-sqlite-speedtest1.sh` runs SQLite's own benchmark in a domain, `--memdb --size 1`,
 all 32 tests, with the lookaside pool on (`SQLITE_LOOKASIDE=1200,40`) and memsys5 as the
@@ -121,18 +121,48 @@ into copies of the sources; `SPEEDTEST1_PROBE=n` with `SPEEDTEST1_PROBE_SRC` han
 `speedtest1_probe` instead of the benchmark. The domain exports its two payload writers for
 whatever is linked in. Nothing in this directory fills either seam.
 
+`SPEEDTEST1_SUBLET=1` runs the same benchmark on the Sublet port of both allocators. Two
+different ports live in this directory and are kept apart on purpose: everything else here
+makes SQLite compile and run on Capstone, unprotected; `sublet/` makes it protected, applied on
+top of that and counted separately, because the paper's A7 counts exactly those lines.
+
 | File | What it is |
 |---|---|
-| `speedtest1_domain.c` | the adapter: freestanding stdio, the exit that returns, the arena; takes memsys5's heap from the host's region and an instrument's table from a second, or carves both from the stack region when the host lends none |
+| `sublet/` | the Sublet port: `sublet.h`, the primitives as operations on capability slots (split, take, give, handle, carve, move; no linear capability ever sits in a C variable), and `sublet-3530300.patch`, 28 hunks against the sed-adapted amalgamation, each classed in its header. Its README carries the recipe and the bookkeeping |
+| `speedtest1_domain.c` | the adapter: freestanding stdio, the exit that returns, the arena; takes memsys5's heap or the port's pool from the host's region (`sqlite3_sublet_grant`) and memsys5's tables and an instrument's table from a second, carves them from the stack region when the host lends none, prints the primitive counts |
 | `sqlite_host.c --tail [--pool <bytes> \| --arena <bytes>] [--tables <bytes>]` | creates the regions and shares them with a handle the monitor keeps, `--pool` non-linear (REV_DEFAULT), `--arena` linear (REV_BORROWED), and releases them after the run |
 
-The allocator's memory comes from the host as a region, so the benchmark's size is not
-bounded by the domain's stack region. `SPEEDTEST1_POOL` is memsys5's heap (`--pool`,
-non-linear, control bytes inside, POOL/65 atoms of 64 bytes); a tables region (`--tables`)
-holds what sits beside it. Above 4 MiB a region comes from the kernel's CMA area (`cma=1G` on
+Under the port memsys5's pool is one linear capability carved into blocks, one revocation
+node each; a split takes a handle senior to both halves first, so a merge is one revoke;
+every hand-out is mrev and delin, every free a revoke. The lookaside's block comes from
+memsys5 linear (`sqlite3MallocLinear`), is carved into slots the same way, and dies with
+one revoke when memsys5 frees it. The allocators' policies are unchanged: an instrument's
+per-test profile under the port is the unprotected build's to the allocation, plus one
+memsys5 allocation per connection for the lookaside's side table.
+
+Two things the emulator hides, found in review: its revoke leaves an uninitialised
+region's cursor at the end so one `init` reclaims it, where the specification wants the
+region written through first (a merge would cost a write of the block on such hardware);
+and its stores of linear capabilities do not null the source register, so a helper that
+reads a register after storing it works here and not there (`sublet_take_linear` reads
+first). The first has since arrived in the emulator: the merge line's Q-07 (capstone-qemu
+72fb56be86) moves the cursor to the base on a revoke and makes `init` trap, and under it the
+port halts at its first merge with cause 29 until it writes the block through before `init`.
+The passes ran on the pre-Q-07 diagnostic build. The emulator's node pool is sized at start
+(`CAPSTONE_REV_NODES`, the runner sets eight million) and reuses no node; a run at `--size 1`
+takes 43417 nodes, at `--size 100` 3525357.
+
+The allocators' memory comes from the host as regions, so the benchmark's size is not
+bounded by the domain's stack region. `SPEEDTEST1_POOL` is memsys5's heap in the unprotected
+build (`--pool`, non-linear, control bytes inside, POOL/65 atoms of 64 bytes); the port's
+pool is the same atoms times 64 (`--arena`, linear under a handle the monitor keeps); a
+tables region (`--tables`) holds memsys5's tables under the port and what sits beside the
+pool. Above 4 MiB a region comes from the kernel's CMA area (`cma=1G` on
 the guest's command line, which the runner passes), and after the run the host gives both
 back with `release_region`. For `--size 100` set `SPEEDTEST1_POOL=136314880` (2^21 atoms,
-130 MiB) and `SPEEDTEST1_ARGS` accordingly. Without host regions, `-DSPEEDTEST1_STACK_ARENA`
+130 MiB) and `SPEEDTEST1_ARGS` accordingly; the run takes about seven minutes on QEMU with
+the tag map indexed (capstone-qemu branch `diag/domain-runs`), over an hour without. Without
+host regions, `-DSPEEDTEST1_STACK_ARENA`
 carves 2 MiB from the stack region's low end, which fits `--size 1`.
 
 The plain benchmark at `--size 1` runs on the QEMU `dev` pins. A run with an instrument

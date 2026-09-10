@@ -1,0 +1,487 @@
+# Sublet for SQLite 3.53.3: memsys5 and the lookaside pool, in a Capstone domain.
+#
+# A diff against sqlite3-capstone.c as build-sqlite-capstone.sh produces it from
+# the amalgamation (its sed lines are the platform's, not this port's).  The
+# primitives are sublet.h beside this patch; the amalgamation includes it in the
+# first hunk, and the build puts this directory on the include path only when it
+# applies the patch.  Every hunk belongs to one class of the bookkeeping in
+# nested-allocators-paper experiments/A7-ports.md:
+#
+#   I  interface: the block for a level that carves it arrives linear, under a
+#      handle the level below keeps (sqlite3MallocLinear; the grant memsys5 is
+#      given; the API that hands the pool over and reports the counters)
+#   H  hierarchy: a primitive where the allocator carves, hands out, frees or
+#      merges (sublet_handle and sublet_split at memsys5's split, sublet_take
+#      at both allocators' hand-out, sublet_give at both frees, sublet_give_to
+#      at memsys5's merge, sublet_carve at both initial carves)
+#   M  metadata layout: what may no longer live in freed memory, because it is
+#      revoked (memsys5's free-list links, its control bytes and one
+#      capability per atom in the configured heap; the lookaside's free lists
+#      and slot capabilities in a table beside the pool; the parent handles)
+#
+# What the port gives up: an application-supplied lookaside buffer
+# (sqlite3_db_config LOOKASIDE with a buffer) is refused, it is not a linear
+# block this level can carve; the SQLITE_DEBUG poison writes into a freed block
+# are gone, the block is revoked memory.  The allocators' policies are
+# unchanged: the same blocks split and merge, the same slots pop and push, so
+# the free-to-reuse gaps of A1 are the same under the port (the profile gate of
+# A8).  Apply with patch -F0 -p1 to the copy in the build directory, before any
+# instrument's patch.
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -25,6 +25,7 @@
+ #ifndef SQLITE_AMALGAMATION
+ #define SQLITE_CORE 1
+ #define SQLITE_AMALGAMATION 1
++#include "sublet.h"
+ #ifndef SQLITE_PRIVATE
+ # define SQLITE_PRIVATE static
+ #endif
+@@ -18607,6 +18608,8 @@
+   u16 szTrue;             /* True value of sz, even if disabled */
+   u8 bMalloced;           /* True if pStart obtained from sqlite3_malloc() */
+   u32 nSlot;              /* Number of lookaside slots allocated */
++  u32 nBig;               /* Number of full-size slots, before the small ones */
++  LookasideSlot *aSlot;   /* One entry per slot, beside the pool, not in it */
+   u32 anStat[3];          /* 0: hits.  1: size misses.  2: full misses */
+   LookasideSlot *pInit;   /* List of buffers not previously used */
+   LookasideSlot *pFree;   /* List of available buffers */
+@@ -18622,6 +18625,7 @@
+ };
+ struct LookasideSlot {
+   LookasideSlot *pNext;    /* Next buffer in the list of free buffers */
++  sublet_cap cap;          /* The slot: linear while free, its handle while out */
+ };
+ 
+ #define DisableLookaside  db->lookaside.bDisable++;db->lookaside.sz=0
+@@ -21726,6 +21730,7 @@
+ SQLITE_PRIVATE int sqlite3MallocInit(void);
+ SQLITE_PRIVATE void sqlite3MallocEnd(void);
+ SQLITE_PRIVATE void *sqlite3Malloc(u64);
++SQLITE_PRIVATE void *sqlite3MallocLinear(u64, sublet_cap*);
+ SQLITE_PRIVATE void *sqlite3MallocZero(u64);
+ SQLITE_PRIVATE void *sqlite3DbMallocZero(sqlite3*, u64);
+ SQLITE_PRIVATE void *sqlite3DbMallocRaw(sqlite3*, u64);
+@@ -29503,8 +29508,8 @@
+   ** Memory available for allocation
+   */
+   int szAtom;      /* Smallest possible allocation in bytes */
+-  int nBlock;      /* Number of szAtom sized blocks in zPool */
+-  u8 *zPool;       /* Memory available to be allocated */
++  int nBlock;      /* Number of szAtom sized blocks in the pool */
++  uptr poolBase;   /* Address of the pool; the memory itself is in aCap */
+ 
+   /*
+   ** Mutex to control access to the memory allocation subsystem.
+@@ -29538,8 +29543,46 @@
+   */
+   u8 *aCtrl;
+ 
++  /*
++  ** Sublet.  The pool arrives as one linear capability and is carved into
++  ** blocks, each with its own revocation node.  aCap[i] holds the block that
++  ** starts at atom i: linear while it is free, its revocation handle while it
++  ** is checked out.  aPar holds, for every block that was split, the handle
++  ** taken before the split; it is senior to both halves, so one revoke of it
++  ** merges them again.  The free-list links live in aLink, beside the pool,
++  ** because a freed block is revoked memory.
++  */
++  Mem5Link *aLink;
++  sublet_cap *aCap;
++  sublet_cap *aPar;
++  int aParOff[LOGMAX+2];
++
+ } mem5;
+ 
++/* The pool as the level below handed it over: linear, its handle kept there. */
++static sublet_cap memsys5Grant;
++
++SQLITE_API void sqlite3_sublet_grant(void *pLinear){
++  sublet_store(&memsys5Grant, pLinear);
++}
++SQLITE_API void sqlite3_sublet_pool(unsigned long *pBase, unsigned long *pEnd){
++  if( sublet_type(&memsys5Grant)==7 ){ *pBase = *pEnd = 0; return; }
++  *pBase = sublet_base(&memsys5Grant);
++  *pEnd = sublet_end(&memsys5Grant);
++}
++SQLITE_API void sqlite3_sublet_stats(unsigned long *aOut){
++  aOut[0] = sublet_stats.split;
++  aOut[1] = sublet_stats.mrev;
++  aOut[2] = sublet_stats.delin;
++  aOut[3] = sublet_stats.revoke;
++  aOut[4] = sublet_stats.init;
++}
++
++/* Where the handle senior to the block of 2^iLog atoms at i is kept. */
++static sublet_cap *memsys5Parent(int i, int iLog){
++  return &mem5.aPar[mem5.aParOff[iLog] + (i>>iLog)];
++}
++
+ /*
+ ** Access the static variable through a macro for SQLITE_OMIT_WSD.
+ */
+@@ -29549,7 +29592,7 @@
+ ** Assuming mem5.zPool is divided up into an array of Mem5Link
+ ** structures, return a pointer to the idx-th such link.
+ */
+-#define MEM5LINK(idx) ((Mem5Link *)(&mem5.zPool[(idx)*mem5.szAtom]))
++#define MEM5LINK(idx) (&mem5.aLink[idx])
+ 
+ /*
+ ** Unlink the chunk at mem5.aPool[i] from list it is currently
+@@ -29610,7 +29653,7 @@
+ static int memsys5Size(void *p){
+   int iSize, i;
+   assert( p!=0 );
+-  i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
++  i = (int)(((uptr)p-mem5.poolBase)/mem5.szAtom);
+   assert( i>=0 && i<mem5.nBlock );
+   iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
+   return iSize;
+@@ -29626,7 +29669,7 @@
+ ** routine so there is never any chance that two or more
+ ** threads can be in this routine at the same time.
+ */
+-static void *memsys5MallocUnsafe(int nByte){
++static int memsys5CarveUnsafe(int nByte){
+   int i;           /* Index of a mem5.aPool[] slot */
+   int iBin;        /* Index into mem5.aiFreelist[] */
+   int iFullSz;     /* Size of allocation rounded up to power of 2 */
+@@ -29636,7 +29679,7 @@
+   assert( nByte>0 );
+ 
+   /* No more than 1GiB per allocation */
+-  if( nByte > 0x40000000 ) return 0;
++  if( nByte > 0x40000000 ) return -1;
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Keep track of the maximum allocation request.  Even unfulfilled
+@@ -29658,7 +29701,7 @@
+   if( iBin>LOGMAX ){
+     testcase( sqlite3GlobalConfig.xLog!=0 );
+     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
+-    return 0;
++    return -1;
+   }
+   i = mem5.aiFreelist[iBin];
+   memsys5Unlink(i, iBin);
+@@ -29667,6 +29710,11 @@
+ 
+     iBin--;
+     newSize = 1 << iBin;
++    /* The handle senior to both halves, then the split: a fresh node for the
++    ** upper half, the lower half keeps the block's. */
++    sublet_handle(&mem5.aCap[i], memsys5Parent(i, iBin+1));
++    sublet_split(&mem5.aCap[i], mem5.poolBase+(uptr)(i+newSize)*mem5.szAtom,
++                 &mem5.aCap[i+newSize]);
+     mem5.aCtrl[i+newSize] = CTRL_FREE | iBin;
+     memsys5Link(i+newSize, iBin);
+   }
+@@ -29683,14 +29731,23 @@
+   if( mem5.maxOut<mem5.currentOut ) mem5.maxOut = mem5.currentOut;
+ #endif
+ 
+-#ifdef SQLITE_DEBUG
+-  /* Make sure the allocated memory does not assume that it is set to zero
+-  ** or retains a value from a previous allocation */
+-  memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
+-#endif
++  return i;
++}
+ 
+-  /* Return a pointer to the allocated memory. */
+-  return (void*)&mem5.zPool[i*mem5.szAtom];
++/* The block goes out under a handle this level keeps: as an alias for the
++** caller, or linear, to a level that carves it into objects of its own.
++*/
++static void *memsys5MallocUnsafe(int nByte){
++  int i = memsys5CarveUnsafe(nByte);
++  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
++}
++SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, sublet_cap *pBlock){
++  int i;
++  if( nByte>0x7fffff00 ) return 0;
++  memsys5Enter();
++  i = memsys5CarveUnsafe((int)nByte);
++  memsys5Leave();
++  return i<0 ? 0 : (void*)sublet_take_linear(&mem5.aCap[i], pBlock);
+ }
+ 
+ /*
+@@ -29703,11 +29760,11 @@
+   /* Set iBlock to the index of the block pointed to by pOld in
+   ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
+   */
+-  iBlock = (int)(((u8 *)pOld-mem5.zPool)/mem5.szAtom);
++  iBlock = (int)(((uptr)pOld-mem5.poolBase)/mem5.szAtom);
+ 
+   /* Check that the pointer pOld points to a valid, non-free block. */
+   assert( iBlock>=0 && iBlock<mem5.nBlock );
+-  assert( ((u8 *)pOld-mem5.zPool)%mem5.szAtom==0 );
++  assert( ((uptr)pOld-mem5.poolBase)%mem5.szAtom==0 );
+   assert( (mem5.aCtrl[iBlock] & CTRL_FREE)==0 );
+ 
+   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
+@@ -29727,6 +29784,7 @@
+ #endif
+ 
+   mem5.aCtrl[iBlock] = CTRL_FREE | iLogsize;
++  sublet_give(&mem5.aCap[iBlock]);
+   while( ALWAYS(iLogsize<LOGMAX) ){
+     int iBuddy;
+     if( (iBlock>>iLogsize) & 1 ){
+@@ -29747,15 +29805,13 @@
+       mem5.aCtrl[iBlock] = CTRL_FREE | iLogsize;
+       mem5.aCtrl[iBuddy] = 0;
+     }
++    /* The handle taken before the split covers both halves: one revoke and
++    ** the block is whole again; the upper half's capability died with it. */
++    sublet_give_to(memsys5Parent(iBlock, iLogsize), &mem5.aCap[iBlock]);
++    sublet_clear(&mem5.aCap[iBlock+size]);
+     size *= 2;
+   }
+ 
+-#ifdef SQLITE_DEBUG
+-  /* Overwrite freed memory with the 0x55 bit pattern to verify that it is
+-  ** not used after being freed */
+-  memset(&mem5.zPool[iBlock*mem5.szAtom], 0x55, size);
+-#endif
+-
+   memsys5Link(iBlock, iLogsize);
+ }
+ 
+@@ -29893,9 +29949,24 @@
+     mem5.szAtom = mem5.szAtom << 1;
+   }
+ 
+-  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+-  mem5.zPool = zByte;
+-  mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
++  /* The pool is the grant, linear, from the level below.  The configured
++  ** heap holds only the tables beside it: control bytes, links, one
++  ** capability per atom and the handles of the split blocks. */
++  mem5.poolBase = sublet_base(&memsys5Grant);
++  mem5.nBlock = (int)((sublet_end(&memsys5Grant)-mem5.poolBase)/mem5.szAtom);
++  mem5.aParOff[0] = 0;
++  mem5.aParOff[1] = 0;
++  for(ii=1; ii<=LOGMAX; ii++){
++    mem5.aParOff[ii+1] = mem5.aParOff[ii] + (mem5.nBlock>>ii) + 1;
++  }
++  mem5.aCtrl = zByte;
++  mem5.aLink = (Mem5Link*)&zByte[(mem5.nBlock+15)&~15];
++  mem5.aCap = (sublet_cap*)&zByte[((u8*)&mem5.aLink[mem5.nBlock]-zByte+15)&~15];
++  mem5.aPar = &mem5.aCap[mem5.nBlock];
++  if( (u8*)&mem5.aPar[mem5.aParOff[LOGMAX+1]] > &zByte[nByte] ){
++    return SQLITE_NOMEM;
++  }
++  memset(zByte, 0, (size_t)((u8*)&mem5.aPar[mem5.aParOff[LOGMAX+1]]-zByte));
+ 
+   for(ii=0; ii<=LOGMAX; ii++){
+     mem5.aiFreelist[ii] = -1;
+@@ -29906,6 +29977,8 @@
+     int nAlloc = (1<<ii);
+     if( (iOffset+nAlloc)<=mem5.nBlock ){
+       mem5.aCtrl[iOffset] = ii | CTRL_FREE;
++      sublet_carve(&memsys5Grant, mem5.poolBase+(uptr)(iOffset+nAlloc)*mem5.szAtom,
++                   &mem5.aCap[iOffset]);
+       memsys5Link(iOffset, ii);
+       iOffset += nAlloc;
+     }
+@@ -31814,6 +31887,17 @@
+ static int isLookaside(sqlite3 *db, const void *p){
+   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pTrueEnd);
+ }
++/* The entry beside the pool for the slot that holds p. */
++static LookasideSlot *lookasideEntry(sqlite3 *db, const void *p){
++#ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
++  if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
++    return &db->lookaside.aSlot[db->lookaside.nBig
++              + ((uptr)p-(uptr)db->lookaside.pMiddle)/LOOKASIDE_SMALL];
++  }
++#endif
++  return &db->lookaside.aSlot[((uptr)p-(uptr)db->lookaside.pStart)
++                              /db->lookaside.szTrue];
++}
+ #else
+ #define isLookaside(A,B) 0
+ #endif
+@@ -31904,22 +31988,24 @@
+     if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+       if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+-        LookasideSlot *pBuf = (LookasideSlot*)p;
++        LookasideSlot *pBuf = lookasideEntry(db, p);
+         assert( db->pnBytesFreed==0 );
+ #ifdef SQLITE_DEBUG
+         memset(p, 0xaa, LOOKASIDE_SMALL);  /* Trash freed content */
+ #endif
++        sublet_give(&pBuf->cap);
+         pBuf->pNext = db->lookaside.pSmallFree;
+         db->lookaside.pSmallFree = pBuf;
+         return;
+       }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+       if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+-        LookasideSlot *pBuf = (LookasideSlot*)p;
++        LookasideSlot *pBuf = lookasideEntry(db, p);
+         assert( db->pnBytesFreed==0 );
+ #ifdef SQLITE_DEBUG
+         memset(p, 0xaa, db->lookaside.szTrue);  /* Trash freed content */
+ #endif
++        sublet_give(&pBuf->cap);
+         pBuf->pNext = db->lookaside.pFree;
+         db->lookaside.pFree = pBuf;
+         return;
+@@ -31943,22 +32029,24 @@
+   if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+     if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+-      LookasideSlot *pBuf = (LookasideSlot*)p;
++      LookasideSlot *pBuf = lookasideEntry(db, p);
+       assert( db->pnBytesFreed==0 );
+ #ifdef SQLITE_DEBUG
+       memset(p, 0xaa, LOOKASIDE_SMALL);  /* Trash freed content */
+ #endif
++      sublet_give(&pBuf->cap);
+       pBuf->pNext = db->lookaside.pSmallFree;
+       db->lookaside.pSmallFree = pBuf;
+       return;
+     }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+     if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+-      LookasideSlot *pBuf = (LookasideSlot*)p;
++      LookasideSlot *pBuf = lookasideEntry(db, p);
+       assert( db->pnBytesFreed==0 );
+ #ifdef SQLITE_DEBUG
+       memset(p, 0xaa, db->lookaside.szTrue);  /* Trash freed content */
+ #endif
++      sublet_give(&pBuf->cap);
+       pBuf->pNext = db->lookaside.pFree;
+       db->lookaside.pFree = pBuf;
+       return;
+@@ -32140,22 +32228,22 @@
+     if( (pBuf = db->lookaside.pSmallFree)!=0 ){
+       db->lookaside.pSmallFree = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return sublet_take(&pBuf->cap);
+     }else if( (pBuf = db->lookaside.pSmallInit)!=0 ){
+       db->lookaside.pSmallInit = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return sublet_take(&pBuf->cap);
+     }
+   }
+ #endif
+   if( (pBuf = db->lookaside.pFree)!=0 ){
+     db->lookaside.pFree = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return (void*)pBuf;
++    return sublet_take(&pBuf->cap);
+   }else if( (pBuf = db->lookaside.pInit)!=0 ){
+     db->lookaside.pInit = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return (void*)pBuf;
++    return sublet_take(&pBuf->cap);
+   }else{
+     db->lookaside.anStat[2]++;
+   }
+@@ -188146,6 +188234,7 @@
+   sqlite3_int64 szAlloc; /* Total space set aside for lookaside memory */
+   int nBig;              /* Number of full-size slots */
+   int nSm;               /* Number smaller LOOKASIDE_SMALL-byte slots */
++  sublet_cap block;      /* The buffer, linear, while it is carved into slots */
+ 
+   if( sqlite3LookasideUsed(db,0)>0 ){
+     return SQLITE_BUSY;
+@@ -188157,6 +188246,11 @@
+   if( db->lookaside.bMalloced ){
+     sqlite3_free(db->lookaside.pStart);
+   }
++  sqlite3_free(db->lookaside.aSlot);
++  db->lookaside.aSlot = 0;
++  /* A buffer the application supplies is not a linear block this level can
++  ** carve; only a block from the level below is. */
++  if( pBuf ) return SQLITE_MISUSE;
+   /* The size of a lookaside slot after ROUNDDOWN8 needs to be larger
+   ** than a pointer and small enough to fit in a u16.
+   */
+@@ -188171,13 +188265,11 @@
+   if( szAlloc==0 ){
+     sz = 0;
+     pStart = 0;
+-  }else if( pBuf==0 ){
++  }else{
+     sqlite3BeginBenignMalloc();
+-    pStart = sqlite3Malloc( szAlloc );
++    pStart = sqlite3MallocLinear( szAlloc, &block );
+     sqlite3EndBenignMalloc();
+     if( pStart ) szAlloc = sqlite3MallocSize(pStart);
+-  }else{
+-    pStart = pBuf;
+   }
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+   if( sz>=LOOKASIDE_SMALL*3 ){
+@@ -188194,6 +188286,13 @@
+   }else{
+     nBig = nSm = 0;
+   }
++  if( pStart ){
++    db->lookaside.aSlot = sqlite3MallocZero((u64)(nBig+nSm)*sizeof(LookasideSlot));
++    if( db->lookaside.aSlot==0 ){
++      sqlite3_free(pStart);
++      pStart = 0;
++    }
++  }
+   db->lookaside.pStart = pStart;
+   db->lookaside.pInit = 0;
+   db->lookaside.pFree = 0;
+@@ -188202,28 +188301,33 @@
+   if( pStart ){
+     int i;
+     LookasideSlot *p;
++    uptr a = (uptr)pStart;
+     assert( sz > (int)sizeof(LookasideSlot*) );
+-    p = (LookasideSlot*)pStart;
++    p = db->lookaside.aSlot;
+     for(i=0; i<nBig; i++){
+       p->pNext = db->lookaside.pInit;
+       db->lookaside.pInit = p;
+-      p = (LookasideSlot*)&((u8*)p)[sz];
++      sublet_carve(&block, a += sz, &p->cap);
++      p++;
+     }
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+     db->lookaside.pSmallInit = 0;
+     db->lookaside.pSmallFree = 0;
+-    db->lookaside.pMiddle = p;
++    db->lookaside.pMiddle = (void*)a;
+     for(i=0; i<nSm; i++){
+       p->pNext = db->lookaside.pSmallInit;
+       db->lookaside.pSmallInit = p;
+-      p = (LookasideSlot*)&((u8*)p)[LOOKASIDE_SMALL];
++      sublet_carve(&block, a += LOOKASIDE_SMALL, &p->cap);
++      p++;
+     }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+-    assert( ((uptr)p)<=szAlloc + (uptr)pStart );
+-    db->lookaside.pEnd = p;
++    sublet_clear(&block);  /* what the slots did not cover dies with the block */
++    assert( a<=szAlloc + (uptr)pStart );
++    db->lookaside.pEnd = (void*)a;
+     db->lookaside.bDisable = 0;
+-    db->lookaside.bMalloced = pBuf==0 ?1:0;
++    db->lookaside.bMalloced = 1;
+     db->lookaside.nSlot = nBig+nSm;
++    db->lookaside.nBig = nBig;
+   }else{
+     db->lookaside.pStart = 0;
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+@@ -188848,6 +188952,7 @@
+   if( db->lookaside.bMalloced ){
+     sqlite3_free(db->lookaside.pStart);
+   }
++  sqlite3_free(db->lookaside.aSlot);
+   sqlite3_free(db);
+ }
+ 

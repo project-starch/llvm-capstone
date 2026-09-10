@@ -18,7 +18,14 @@ wrong word: they measure no time, they answer compatibility, and they are all sh
 inside. Splitting them was cheapest while only `sqlite` had to move; with the MicroPython,
 JerryScript, WAMR and mruby ports in flight it would have cost five times as much.
 
-## Two things that are decided, so nobody re-derives them
+## Three things that are decided, so nobody re-derives them
+
+**A protection port lives apart from the compatibility port.** A port directory answers
+whether the program runs under capabilities; the Sublet port of its allocators answers what
+the discipline costs it, and the paper counts those lines. So `ports/<program>/sublet/` holds
+the primitives and the patch that protect, applied on top only when asked for, and nothing in
+`adapted/`, `patches/` or `port/` is Sublet's. The unprotected build must never read a file
+from `sublet/`.
 
 **`capstone/tests/capstone-test-env.sh` does not move. 341 files reference it.** It is the
 one path in this repository that everything sources, and a tidy-up that relocates it for
