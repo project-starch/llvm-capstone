@@ -2476,6 +2476,41 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // MOVC: Move Capability.
 // Used to copy capabilities between GPRs preserving the Tag bit.
 // Format: R-type, but rs2 is unused (must be 0).
+//
+// C-46 -- THE MODEL BELOW IS KNOWINGLY INCOMPLETE. On silicon this instruction
+// CONSUMES its source (nulls rs1), and nothing here says so: hasSideEffects=0,
+// $rs1 is a pure USE, and $rd is not tied to it. The honest model would be
+// hasSideEffects=1, which pessimises EVERY capability copy to insure a hazard no
+// current build can reach; that trade is the lead's and has not been taken.
+//
+// Do NOT "fix" this by tying $rd to $rs1 the way PseudoINIT and PseudoSEAL do.
+// Those are codegen pseudos where the tie IS the semantics. MOVC is the register
+// COPY primitive -- copyPhysReg builds it precisely when the registers DIFFER --
+// so tying them would break every capability copy, C-14's fix first.
+//
+// It is inert today because three separate things each block it. NONE of them is
+// pinned by a test, deliberately -- see the last paragraph.
+//   1. COPY PROPAGATION NEVER SEES A MOVC. Capability copies are generic COPY
+//      MachineInstrs until ExpandPostRAPseudos lowers them through copyPhysReg,
+//      and MachineCopyPropagation has already run by then -- its trace shows
+//      `$c8 = COPY $c10`, never a MOVC. So the pass reasons about COPY, whose
+//      semantics are the generic ones, and this instruction's own flags do not
+//      enter into it.
+//   2. no post-RA scheduler -- TunePostRAScheduler ships only with named cores,
+//      and nothing here passes -mcpu, so SELECTING A TUNED -mcpu turns it on;
+//   3. no machine outliner -- enableMachineOutliner is not overridden for this
+//      target, so ENABLING THE OUTLINER makes it live.
+// 2 and 3 can only reorder or factor around the unmodelled source-write when a
+// read of the source OUTLIVES the movc, which is the case C-32 owns.
+//
+// A lit test pinning "MOVC is not treated as a copy" was written for reason 1 and
+// then WITHDRAWN, because it could not be shown to fire: setting isMoveReg = 1
+// here and rebuilding changed no codegen at all (movc counts identical across five
+// shapes), for exactly the reason above -- there is no MOVC in hand when the pass
+// runs. Reason 1 is therefore stronger than a flag check would have been, and a
+// test asserting it would have passed for a reason unrelated to what it claimed.
+// Reasons 2 and 3 are build-configuration changes no lit test can observe. So the
+// guard for all three is this comment, not a gate.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
