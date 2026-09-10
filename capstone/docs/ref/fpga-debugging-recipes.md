@@ -302,6 +302,29 @@ Teardown is time-boxed and ordered least-important-first: switches, power, unloc
 
 ## 3. Anti-patterns, with the cost each one caused here
 
+### A THROWAWAY VERIFICATION SCRIPT WILL READ A STALE LOG AS A PASS. Delete the log first.
+
+**2026-09-10, bench lane, near miss.** A five-line post-merge check printed a **correct verification
+hash and a plausible cycle count while the build was FAILING.** The build died before it could
+overwrite the previous run's log, and the grep read the stale file. The compile error was **two lines
+above the hash in the same output**, and it was nearly not looked at, because the hash was the thing
+being checked for, it was there, and it was right.
+
+**This is the `rtl-sim` skill's "DELETE THE ARTIFACTS BEFORE EVERY RUN" rule, in a place nobody thinks
+to apply it.** That rule is written for simulation output directories, where a failed compile leaves
+the previous run's `.log` and `.iss` in place. The same failure lives in **any script that writes a log
+and then greps it** — including one you wrote this afternoon and will throw away this evening. Those
+are *more* dangerous, not less, because they get no scrutiny.
+
+**The rule, stated so it transfers:** if a script writes an artifact and then reads it, **delete the
+artifact first, or fail on its mtime.** And a grep for a success token is not a verdict unless the
+producer's exit status is also checked — the token can be true of a previous run.
+
+**The bench lane's own summary is the one to remember:** *"If a stale log can be read as a pass in a
+five-line script I wrote this afternoon, it can be read as a pass anywhere."*
+
+
+
 **A1 — One hypothesis per board session.** Six sessions narrowing a wedge inside `strlen`; each bought a single bit; the clamp then showed `strlen` was not even spinning, so all six had been bisecting the wrong thing. The answer came from one session that ran four variants. `run_sqlite_stages_fpga.py:4-8`, `CLAUDE.md:107-110`.
 
 **A2 — Observing a wedge instead of forcing a return.** A wedged domain emits nothing, so every failed run says only "somewhere after `SQ: G/enter`" — and possibly about the wrong function. `sqlite_capstone_domain.c:508-513`.

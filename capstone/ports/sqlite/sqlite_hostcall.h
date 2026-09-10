@@ -33,7 +33,10 @@ struct sqlite_hostcall_v0 {
  *
  * NARROWED 2026-09-10 (bench lane, measured with `parsenumber` so that a failure is the
  * REGION and not the workload; recorded here by the board lane because their branch is
- * not yet pushable -- take THIS block wholesale on merge rather than resolving it):
+ * not yet pushable). ON MERGE: KEEP THIS COMMENT BLOCK VERBATIM, AND RESOLVE THE REST OF
+ * THE FILE NORMALLY. An earlier wording said "take this block wholesale", which reads as
+ * file-level advice; it was implemented as `git checkout --theirs` on the whole file and
+ * silently dropped the other side's transport defines until the domain stopped compiling:
  *
  *     two 1 MiB regions   clean end to end
  *     two 4 MiB regions   clean end to end
