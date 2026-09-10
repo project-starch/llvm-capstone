@@ -2997,6 +2997,40 @@ result — but it cannot reach the condition and so carries no verdict about thi
 >
 > **Not pushed:** the `capstone-sbi` remote refuses this credential with a 403. Tried and recorded.
 >
+> ### THE RECLAIM COUNTER IS A BOARD INSTRUMENT ONLY — and it produced an unreadable zero first
+>
+> The fill's cost is **bytes per reclaim x reclaims per boot**, and only the first factor is known.
+> A counter answers the second on a boot that is happening anyway, so one was added.
+>
+> **On its first run it reported ZERO reclaims across the whole 12-probe suite** — which read naively
+> says the guard never fired and the fill never ran. **It is a fact about visibility, not about the
+> guard.** On the emulator target `capstone_uart_flush` is a **no-op** and `capstone_report` goes
+> through the trace instruction rather than the UART, so **no monitor marker of any kind reaches
+> those logs.** No amount of gate work would have surfaced that; the number simply cannot be read
+> there.
+>
+> **Measured properly instead**, by instrumenting `helper_csrevoke` and running one probe: **three
+> revokes, all returning type 3 (UNINIT)** — so the guard fires ~3x per probe, ~36x across the suite,
+> and the fill runs every time. Combined with the loop-bound argument above, that closes it from both
+> ends.
+>
+> **Two design consequences, both from the RTL lane:**
+>
+> 1. **The count is reported UNCONDITIONALLY on every share, not inside the guard.** Inside the guard
+>    the tag is *absent* pre-flash (revoke returns LINEAR, guard never fires), so there would be no way
+>    to test that the number can be READ until the one boot where it matters. Reported on every share,
+>    a **pre-flash boot shows `RCLM:00000000`** — zero reclaims, path proven. **That boot is not a
+>    convenience; it is the only chance to test the instrument before the boot that needs it.**
+> 2. **A RUNNING count beats a teardown total, and not only for readability.** Truncate the last line
+>    and the earlier ones survive, and the sequence says *when* reclaims happened rather than only how
+>    many. A single teardown total has no fallback: truncate it and the measurement is gone, flushed
+>    or not. The flush is still there — teardown is where output gets cut, which is why
+>    `REPORT_REGION_OVERFLOW` flushes too.
+>
+> **The general form: a counter that cannot be read is worse than no counter, because it produces a
+> number rather than silence.**
+
+>
 > ### WHY THE GATE MEANS WHAT IT LOOKS LIKE — the loop bound, and a failure mode it forecloses
 >
 > The RTL lane asked the right question: if the emulator's `revoke` still parked the cursor at `end`,
