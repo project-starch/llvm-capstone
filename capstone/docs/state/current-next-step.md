@@ -40,18 +40,25 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    sizes. **This is what blocks proving the `pre_mmap_offset` fix**
    — `tests/runtime-qemu/offsetcycle` is written and fails against the old module rather than
    passing quietly, and it cannot complete a single cycle until the guard exists.
-4. **Two repositories this credential cannot push, both tried and recorded rather than assumed.**
-   - monitor `0a5c3d9` — `project-starch/capstone-sbi` returns `403, Permission denied`
-     (2026-09-10);
-   - `caplifive-system` `e873811` — `project-starch/caplifive-system-dev` returns
-     `Permission to … denied to <this account>` / 403 (2026-09-11). That commit only moves the
-     `sw/buildroot` pointer to `1a5a591`, which IS pushed, so nothing is lost — but **the parent's
-     `capstone/caplifive-system` gitlink is deliberately NOT bumped**, because bumping it would
-     make `dev` reference a commit that does not exist on any remote.
+4. **ONE repository this credential cannot push — and the OTHER entry here was stale and is
+   withdrawn.**
 
-   Both need someone with write access, or the credential needs it. Until then the board tree's
-   state is reproducible only by re-running the fast-forward, which is one command and is written
-   down here.
+   **WITHDRAWN: "push monitor `0a5c3d9`, it is LOCAL ONLY".** It is not. `git ls-remote` — the
+   authoritative check rather than a cached remote-tracking ref — shows
+   `capstone-sbi refs/heads/capstone-bootstrap` at exactly `0a5c3d9a3413…`. The item was recorded
+   on 2026-09-10 after a genuine 403 and then carried forward on 2026-09-11 without being re-tried,
+   which is how a blocker outlives the thing blocking it. **A blocker asserts a fact about the
+   world today; re-verify it before repeating it, and check the remote itself rather than the
+   local copy of what the remote said.**
+
+   **STILL REAL: `caplifive-system` `e873811`.** `project-starch/caplifive-system-dev` returns
+   `Permission … denied` / 403, tried 2026-09-11. Verified against `ls-remote`: the remote tip is
+   `2b2bec6` and our commit is exactly one clean fast-forward ahead of it, so only the permission
+   is missing. The commit moves the `sw/buildroot` pointer to `1a5a591`, which IS pushed, so
+   nothing is lost — but **the parent's `capstone/caplifive-system` gitlink is deliberately NOT
+   bumped**, because that would make `dev` reference a commit existing on no remote. To reproduce
+   the board tree without it: in `capstone/caplifive-system/sw/buildroot`,
+   `git fetch origin capstone-bootstrap && git merge --ff-only origin/capstone-bootstrap`.
 5. **`shrinkto-size-fix`** (`a4b478754`, off `1bfff7776`) is committed with its witness test but the
    branch is **not on the push allowlist** and **has not been synthesised**. It needs an allowlist
    entry before it can go anywhere.
