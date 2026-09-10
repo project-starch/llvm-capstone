@@ -9,6 +9,16 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## WHAT MOVED AFTER THIS FILE WAS WRITTEN — read this before the items
 
+* **✅ THE BITSTREAM IS BUILT AND CLEAN — and the flash needs TWO of your decisions, not a yes.**
+  `1bfff7776` synthesised 2026-09-10, exit 0, and **all three pre-registered falsifiers held**: WNS
+  −12.425 inside −15.3…−11.7, placed LUTs 169,207 inside 168.9k…170.5k, combinational loops 29 and
+  unmoved. Bitstream same size to the byte as `66c4e7517` with a different sha256, which is the figure
+  that carries information — a matching hash would have meant the change was not in the build.
+  **It proves the change is free, not that it works.** Full detail on R-30.
+  **What still gates the flash: item 1 (the `end` re-ruling, because the spec amendment ships in the
+  same change) and item 2 (the reclaim shape, because the firmware half must land alongside — this
+  must never ship RTL-only).** The `.bit` is in-tree on the synth machine, not extracted or staged.
+
 * **✅ SYNTHESIS IS UNBLOCKED. The branch is PUSHED and the build is authorised.**
   `r30-r31-init-revoke` is on `origin` at `1bfff77762acfb7369ccdc8d28980dbd84130e46`. You instructed
   this lane to add the branch to the allowlist and push it, so the allowlist now carries that entry
