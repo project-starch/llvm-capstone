@@ -1636,6 +1636,60 @@ decrements `region_n` without rolling back `pre_mmap_offset`, leaking mmap offse
 > silicon, so the sentence above holds for boot sw54's image and for nothing after it. The
 > `pre_mmap_offset` leak is fixed in the same change. Read §7h before citing this paragraph.
 
+### §7i — The domain's instruction count is measurable on silicon, and it matches the emulator (boot sw57, 2026-09-11)
+
+Every "domain CPI" in this document before today divided **board cycles by an emulator instruction
+count**, because no board image reported the domain's own `minstret`. The instrumented image had
+never booted. Boot sw57 ran it: control first, then seven arms ascending, **8/8, zero failures,
+every verification hash equal to its prediction and to the plain image's**.
+
+| testset | predicted `instret` | board `instret` | delta | relative |
+|---|---:|---:|---:|---:|
+| star | 59,443,559 | 59,443,629 | +70 | 1.2e-06 |
+| parsenumber | 60,938,716 | 60,938,800 | +84 | 1.4e-06 |
+| orm | 274,563,761 | 274,563,817 | +56 | 2.0e-07 |
+| main | 696,764,734 | 696,765,119 | +385 | 5.5e-07 |
+| fp | 933,826,083 | 933,826,300 | +217 | 2.3e-07 |
+| cte | 2,019,055,526 | 2,019,055,631 | +105 | 5.2e-08 |
+| rtree | 2,420,439,710 | 2,420,440,011 | +301 | 1.2e-07 |
+
+**The emulator's instruction counts are sound for this workload.** All seven deltas are positive and
+between 56 and 385 instructions on counts up to 2.4 billion — far too small to be a timer tick
+(~3,780 instructions), so it is a handful in the invocation path.
+
+**Domain CPI, measured rather than mixed:** star 3.847, parsenumber 3.783, orm 3.416, main 3.833,
+fp 4.458, cte 2.985, rtree 3.736.
+
+**`cte` is confirmed as a real effect, not a bad prediction.** It is the only pair in §7h whose
+measured cycle ratio exceeds its instruction ratio (1.166 against 1.141), and the two readings were
+indistinguishable without this boot: the tick correction makes the gap worse, and the CPI route is
+closed algebraically because domain-CPI over baseline-CPI *is* cycle-ratio over instruction-ratio.
+Its prediction was right to 5.2e-08, so §7h's row stands.
+
+**The denominator question is now arithmetic instead of framing.** With both arms measured on the
+board, the instruction ratio can be taken against the baseline's own (ticked) count or against a
+tick-free one, and the two differ by the tick:
+
+| testset | vs BOARD baseline `instret` | vs tick-free count |
+|---|---:|---:|
+| star | 1.2495 | 1.3263 |
+| parsenumber | 1.3536 | 1.4412 |
+| orm | 1.2740 | 1.3487 |
+| main | 1.1973 | 1.2698 |
+| fp | 1.2769 | 1.3720 |
+| cte | 1.0927 | 1.1407 |
+| rtree | 1.3170 | 1.4050 |
+
+Using the board's ticked baseline lowers every ratio by ~6%. That is the §7h tick asymmetry and
+nothing else; the right-hand column reproduces the predicted ratios to three decimals, which follows
+from the table above rather than being independent of it.
+
+**One pre-registered control did not transfer and is recorded as void rather than as a pass.**
+`instret − mcycle = 39`, which held on all seven arms under emulation, is unobservable on silicon by
+construction: `-icount` makes mcycle and minstret the same quantity, so a 39-instruction bracket
+asymmetry shows; on the board cycles are real and run ~3.8x instructions, so it cannot be seen. It
+neither passed nor failed here.
+
 ### §7h — A 130 MiB capability region exists on silicon (boot sw55, 2026-09-11)
 
 The board kernel now compiles CMA in (`configs/fpgakernel.config`) and the device tree reserves

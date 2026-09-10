@@ -68,7 +68,16 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    allocator served the 4 MiB arm, because 4 MiB sits exactly at the buddy ceiling and either could
    have. The matched failing pair exists under emulation only. Worth one arm inside a boot that is
    happening anyway, not worth a boot.
-8. **The instrumented domain image gets its OWN boot — the base-VA knob is refused, on evidence.**
+8. ~~**The instrumented domain image gets its OWN boot**~~ **DONE — boot sw57, 8/8, and all three
+   questions are answered.** The board's domain instruction count matches the emulated one to
+   between 5.2e-08 and 1.4e-06 relative on all seven arms; `cte`'s prediction was right to 5.2e-08,
+   so its anomalous ratio is a real effect and §7h's row stands; and the denominator choice is now
+   arithmetic with a number on it rather than a framing forced by missing data. Domain CPI is
+   measured rather than mixed for the first time. Recorded in
+   `ref/fpga-silicon-measurements-for-paper.md` §7i. The ruling and its reasoning are kept below
+   because the reasoning outlived the decision.
+
+   **The instrumented domain image gets its OWN boot — the base-VA knob is refused, on evidence.**
    Three separate questions tonight came down to the same missing measurement: whether the board's
    domain instruction count equals the emulated one (a claim asserted and retracted the same day),
    whether `cte`'s anomaly is a real effect or a bad prediction for that one testset, and which
