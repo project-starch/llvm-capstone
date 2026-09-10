@@ -3145,6 +3145,65 @@ Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+r
 `call a0, a1`, `call a0, a0` and `call a0, foo` identically, so this form has never worked on this
 target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
 
+> ## ⚠ THE OBVIOUS FIX TURNS A LOUD ERROR INTO SILENT WRONG OBJECT CODE. Read this before landing it.
+>
+> The proposed fix makes the operand coercion idempotent: add a reverse arm to
+> `validateTargetOperandClass` so a `GPCR` register at an `MCK_GPR` slot is rewritten back to its `X`
+> form. The root cause it addresses is real and precisely located — the forward coercion mutates the
+> operand IN PLACE at `CapstoneAsmParser.cpp:1344` and `:1352`, the matcher never restores it when that
+> candidate fails, and the later `PseudoCALLReg` trial then sees `C10` where it wants a `GPR`.
+>
+> **But `CAP_CALL` is unreachable from the assembler for a SECOND, independent reason**, and the fix
+> does not address it. `parseCallSymbol` (`CapstoneAsmParser.cpp:2246-2248`) returns `NoMatch` **only
+> when the identifier is not last**, and the generated matcher registers that custom parser for `call`
+> operands **0 and 1** (`CapstoneGenAsmMatcher.inc:10392-10393`). So the trailing operand of
+> `call a0, a1` is **always** consumed as a call symbol and is never a register. Proof that this is not
+> the mutation bug: `call c10, c11` needs no coercion at all and still fails —
+>
+>     $ llvm-mc -triple capstone64 -show-encoding   # 'call c10, c11'
+>     error: invalid operand for instruction
+>
+> **The consequence, reproduced on stock `riscv64` where nothing mutates operand 0.** Once the reverse
+> arm restores operand 0 to `X10`, `PseudoCALLReg {MCK_GPR, MCK_CallSymbol}` has BOTH operands
+> satisfied and matches:
+>
+>     $ llvm-mc -triple riscv64 -show-encoding   # 'call a0, a1'
+>     call a0, a1   # fixup A - offset: 0, value: a1, kind: fixup_riscv_call_plt
+>
+> That is a PLT call to an undefined symbol **literally named `a1`**. And `call a0, a1` is **exactly
+> the text our disassembler emits for the CAP_CALL encoding** (`0x5b 0x95 0x05 0x40` disassembles to
+> `call a0, a1`, verified). So after the fix, disassemble-then-reassemble silently produces different
+> object code where today it errors out.
+>
+> **THE TEST SUITE WOULD NOT NOTICE.** `test/MC/Capstone/cap-call-mnemonic.s` is `XFAIL: *` and its
+> `CHECK` demands the CAP_CALL encoding. After the fix the file still fails, on the encoding, so it
+> still reports XFAIL and the delta is invisible. Its own promise at `:11-12` — "reports XPASS the
+> moment it lands" — does not come true either.
+>
+> **This is NOT a reason to reject the fix.** `call a0, foo` and the real codegen shape
+> `call t0, __riscv_save_12` both fail today (verified) and must assemble. Land it, but: pin
+> `call <reg>, <reg>` so it cannot silently become a symbol call; rewrite the XFAIL file so the suite
+> can see the change; and record that **C-38 stays open with its failure mode changed from loud to
+> silent**, which is worse than the failure it replaces if nobody is told.
+>
+> **Two more findings from the same sweep.** (a) The reverse arm as described handles only `MCK_GPR`,
+> one of twenty integer-side classes in the match table, while the forward arm covers seven capability
+> classes — so `cN` would be accepted at `MCK_GPR` and still rejected at `MCK_GPRNoX0`, `MCK_GPRC`,
+> `MCK_SP` and the rest. **Inconsistent acceptance is worse than either consistent choice.** (b) The
+> arm's blast radius is not the mutation: `cN` spellings are user-writable and committed as such
+> (`test/MC/Capstone/cap-regnames.s` asserts `movc c10, c11` assembles), so the arm would newly accept
+> `add c10, c11, c12` and `lw c10, 0(c11)` across all `MCK_GPR` slots. Whether that widening is wanted
+> is a design question — `CapstoneAsmParser.cpp:1332-1338` documents a one-register-file model where
+> `cN` and `xN` are the same register — but it should be decided, not acquired.
+>
+> *(Found by an adversarial sweep of the generated match table, 2026-09-10; every claim above
+> re-verified here against the primary source or by running `llvm-mc`. The sweep also REFUTED the
+> premise that `call` is the only mnemonic with competing GPCR/GPR definitions — twelve others have
+> them, `fld flh flq flw fsd fsh fsq fsw sb sd sh sw`. They are safe only because their GPR row sorts
+> FIRST, on operand count. `CAP_CALL` and `PseudoCALLReg` tie at two operands. So the invariant being
+> relied on is real but narrow, and a future two-operand capability pseudo on an existing integer
+> mnemonic re-creates this exactly.)*
+
 **~~No known consumer~~ — WITHDRAWN 2026-09-10 (compiler lane), and I verified both sites myself
 rather than taking the report.** Codegen emits `PseudoCALLReg` on two live paths:
 
