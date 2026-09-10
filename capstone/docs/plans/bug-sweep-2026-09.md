@@ -397,6 +397,36 @@ silently different object code from the text our own disassembler prints. C-38 d
 in any operand position, so the trailing operand stays a register and `CAP_CALL` matches first. That
 predicted failure is now a standing pin: the three register/register calls must produce no relocation.
 
+**C-45 follow-up — the fix was narrowed (`d7514ed41f2c`), on the lead's ruling.** The first fix keyed
+the reverse coercion on the register CLASS. That closed the stranding but also made the `cN` spelling
+acceptable wherever an INTEGER class is asked for: `add c10, c11, c12` and `sd c10, 0(c11)` began
+assembling, where they had been errors. Raised with the lead rather than kept, because it changed the
+accepted assembly language as a side effect of fixing an operand-restoration bug.
+
+The restore is now guarded by a flag set when the forward arm actually rewrites an operand, so it
+undoes exactly that and nothing else; an operand the user wrote as `c10` is untouched and still fails
+against an integer class. Three findings decided it, the third being the one that matters most:
+
+- **No prior intent.** The one-register-file comment justifies the FORWARD direction only, saying the
+  assembly names a capability operand with its integer name. `cap-regnames.s` scopes the `cN` spelling
+  to capability operands. Nothing anywhere asserted it in an integer slot, so the wider behaviour would
+  have extended a decision nobody took.
+- **The load/store mnemonics were never at risk either way**, but not for the reason first given here.
+  Their forms differ by the paren and symbol tokens, and those are themselves operand classes in the
+  match row, so a mistyped register cannot make one form look like another. That is stronger than the
+  operand-count argument and does not depend on sort order. `call` had no such separator, which is
+  exactly why it broke.
+- **The future case decides it.** A later two-operand capability pseudo on an integer mnemonic
+  re-creates the stranding shape. Under the class guard it would do so in a tree where a stray `cN`
+  SATISFIES an integer slot instead of failing. The flag keeps the blast radius to the operands the
+  forward arm mutated.
+
+The restore also verifies the requested class actually contains the restored register, because the
+forward arm returns success on its narrowed classes without re-checking membership; mirroring its shape
+alone could have accepted a register the class does not hold. `cap-invalid.s` gains four negatives,
+anchored by line and column, and they are known to discriminate: each ASSEMBLED under the previous
+build and errors under this one.
+
 **C-17 — the memset residue is NOT REPRODUCED (`a92dfd4a5748`).** A comment claimed a non-zero
 `llvm.memset` still reaches the unforgeable-constant diagnostic. Zero forge diagnostics across 72 runs
 (sizes 16/17/24/32/48/64/128/256 x alignments 1/8/16 x {default, `-capstone-gp-captable`, `-O0`}); a
