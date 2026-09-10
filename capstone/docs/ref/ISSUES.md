@@ -461,7 +461,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; THREE of four MEASURED, and one of them is an RTL off-by-one rather than a convention split`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the
@@ -475,7 +475,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 > | `SPLIT` at `val` | byte `val` in the **lower** half (`cap-man-insn.adoc:338`) | byte `val` in the **UPPER** half | **MEASURED** |
 > | `LCC rd, rs1, 4` over a K-byte region | `base + K − 1` (`:197`) | **`base + K`** | **MEASURED** |
 > | `SHRINKTO imm` | a region of exactly `imm` bytes (`:294`) | **`imm − 1` — and the RTL disagrees with ITSELF here** | **MEASURED** |
-> | `SEAL` minimum size | ≥ 1024 (`:486`, `end − base + 1`) | ≥ 1023 under an exclusive end | source reading |
+> | `SEAL` minimum size | ≥ 1024 (`:486`, `end − base + 1`) | **no minimum at all — the check is INERT (S-11)** | **MEASURED** |
 >
 > **⚠ `SHRINKTO` IS NOT THE SAME KIND OF PROBLEM AS THE OTHER THREE — it is an off-by-one in the
 > hardware, not a convention difference.** Measured: over a 256-byte region with the cursor at base,
@@ -503,6 +503,10 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 >   `0x80001040`. Contiguous, no gap, no overlap — and byte `val` is in the upper half. The spec's
 >   `rs1.end := val` (inclusive) with `rd.base := val + 1` is the other partition, equally gapless,
 >   one byte across.
+> * `verif/tests/custom/capstone/seal-minsize-boundary.S` (`f6ec6c198`), 670 cycles: a 1022-byte
+>   region seals. Its negative control — sealing a NON-LINEAR capability, rejected on a different
+>   branch — is the only raise in the run, which is what stops "no arm raised" from meaning "the
+>   instrument never reached SEAL".
 > * `verif/tests/custom/capstone/bound-value-readback.S` (`95930b8e3`), which now measures both: LCC
 >   field 4 minus field 3 reads **256** over a 256-byte region — the exclusive end — and `SHRINKTO 64`
 >   over that region yields **63** bytes. 406 cycles, no exception.
@@ -519,10 +523,22 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 > because whichever way it goes one of the two documents changes**, and it was deferred on 2026-09-10
 > with that reasoning recorded rather than left implicit.
 >
-> **What would close it:** a ruling on the convention rows, and a test for `SEAL` — which needs a
-> *different* shape, since a minimum size is answered by observing which of two boundary cases raises
-> rather than by reading a field back. **`SHRINKTO` needs no ruling: it needs an RTL fix**, and it
-> should be tracked as such rather than waiting behind a documentation decision.
+> **⚠ `SEAL` IS TWO DEFECTS STACKED, and the ±1 is currently UNOBSERVABLE.** Measured
+> (`seal-minsize-boundary.S`, 670 cycles, one exception in the whole run — the control): a
+> **1022-byte** region seals without raising, where the spec requires ≥ 1024. That confirms **S-11**
+> (`fpga-repros/S11-seal-minsize-alignment-inert/`) on the RTL rather than from the generated
+> Verilog: the Anvil check folds to `size < 1`, unreachable for any capability with `end >= start`,
+> so **neither** the minimum size **nor** the 16-byte base alignment is enforced. Underneath it, the
+> Anvil computes `size = end - start + 1` — an inclusive formula under an exclusive `end` — so it
+> would admit 1023 bytes even once reachable. **Fixing S-11 without that `+1` ships a check that is
+> wrong on its first day; they must move together.** The test's 1023-byte arm exists for exactly
+> that and becomes the discriminator with no rewrite.
+>
+> **What would close R-32:** a ruling on the two convention rows (`SPLIT`, `LCC`) — decision note at
+> `/tmp/capstone/lane-notes-2026-09-10/decision-R32-bound-values.md`. The other two rows need no
+> ruling at all: **`SHRINKTO` needs an RTL fix** (one token, `flu:237`), and **`SEAL` needs S-11
+> fixed and the `+1` fixed in the same change**. Both should be tracked as work rather than waiting
+> behind a documentation decision.
 >
 > Full narrative, including the resolution this is the residue of:
 > `history/10-09-2026_19-00-00_decisions-A-and-B.md`.

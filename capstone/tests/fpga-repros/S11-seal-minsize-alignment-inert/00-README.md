@@ -1,6 +1,12 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
-> **2026-09-07 (from the 2026-09-05 sweep):** **Not exercised in the 2026-09-05 sweep**; status unchanged (instruction-semantics defect in SEAL). Listed so the folder does not read as silently current. (sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`)
+> **2026-09-10: CONFIRMED ON THE RTL BY A DIRECTED TEST.** `verif/tests/custom/capstone/seal-minsize-boundary.S` (`capstone-ariane` `f6ec6c198`), 670 cycles: a **1022-byte** region seals without raising, where the spec requires ≥ 1024. Its negative control — sealing a NON-LINEAR capability, which SEAL rejects on a different branch (`UNEXPECTED_CAP_TYPE`, mcause 27) — is the **only** exception in the whole run, so "no arm raised" cannot be the instrument failing to reach SEAL. Until now this folder rested on reading the generated Verilog; it now rests on the hardware.
+>
+> **AND THERE IS A SECOND DEFECT UNDERNEATH IT.** The Anvil computes `size = end - start + 1` (`flu:159`) — an INCLUSIVE formula under this RTL's EXCLUSIVE `end` — so even once the folded condition is repaired the check admits a region whose real size is **1023** bytes. **Fixing the fold without fixing the `+1` ships a check that is wrong on its first day.** The test's 1023-byte arm exists for exactly that and becomes the discriminator with no rewrite. Tracked as `R-32` in the registry.
+>
+> **Also worth knowing before implementing:** QEMU never raises on an undersized SEAL either (`op_helper.c:1280-1283` prints and falls through) and its minimum is **528**, not 1024 — so a fix here makes three implementations disagree three ways until QEMU is brought along.
+>
+> *(Previous line, superseded: "Not exercised in the 2026-09-05 sweep; status unchanged." Sweep table: `docs/plans/bug-sweep-2026-09.md`; registry: `docs/ref/ISSUES.md`.)*
 
 **This is an instruction-semantics defect in `SEAL`, not a cache or write-buffer issue.** If you
 arrived here chasing a capability that lost its tag on reload, a stale tag after a plain store, or
