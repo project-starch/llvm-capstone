@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
     if ((long)rid < 0) {
         /* Distinguishable from a map failure, which is the whole point. */
         printf("BIGREGION CREATE FAILED bytes=%lu -- no CMA area, or above it\n", size);
+        printf("BASELINE-PROBE bigregion_bytes = 0\n");
         printf("__BIGREGION_CREATE_FAILED__\n");
         return 1;
     }
@@ -74,6 +75,7 @@ int main(int argc, char **argv) {
     unsigned char *p = (unsigned char *)map_region(rid, size);
     if (!p || p == (unsigned char *)-1) {
         printf("BIGREGION MAP FAILED id=%lu ptr=%p\n", (unsigned long)rid, (void *)p);
+        printf("BASELINE-PROBE bigregion_bytes = 0\n");
         printf("__BIGREGION_MAP_FAILED__\n");
         return 1;
     }
@@ -91,6 +93,13 @@ int main(int argc, char **argv) {
     printf("BIGREGION dmesg oops=%lu bug=%lu warn=%lu\n", oops, bug, warn);
     if (oops || bug || warn) ok = 0;
 
+    /* ALSO report in the BASELINE-PROBE form, because the BOARD driver's staged-marker guard
+       hard-stops on any arm that emits neither `SQ: obs=` nor `ladder-perf: RESULT ... retval=`
+       nor `BASELINE-PROBE <what> = <value>`. That guard cost boot sw52 its last arm when a
+       host-binary probe reported in a format it did not know. This probe is a host binary
+       reporting a value, so the form is honest rather than a workaround -- and emitting it here
+       is cheaper than teaching the guard a fourth format. */
+    printf("BASELINE-PROBE bigregion_bytes = %lu\n", ok ? size : 0UL);
     fflush(stdout);
     printf(ok ? "__BIGREGION_PASSED__\n" : "__BIGREGION_FAILED__\n");
     return ok ? 0 : 1;
