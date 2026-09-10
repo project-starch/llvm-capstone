@@ -878,14 +878,37 @@ unexpected operand type.
 > that themselves within the hour**, unprompted, as an N=1 over-claim. The withdrawal is the right
 > call and is why this box says what it says.
 >
-> **What is actually known: one instance from a restored build define, one from an arena size, the
-> same signature, and NO mechanism established for either.** The tempting common factor is image or
+> **A THIRD TRIGGER, 2026-09-11 (bench lane, reported to the board lane and filed here on their
+> behalf): adding `json` to the SQLite feature set.** Same `SQ: E/share1`, cause 24, before entry,
+> **on every testset**. What makes this the most useful of the three is that it arrives with the
+> bracketing series the entry above asked for — the same image built four ways:
+>
+> | build | `code_len` | `globals_off` | globals | result |
+> |---|---:|---:|---:|---|
+> | baseline | 1,483,608 | `0x150000` | 208 | runs |
+> | + floating point | 1,551,080 | `0x160000` | 211 | runs |
+> | + rtree | 1,621,624 | `0x170000` | 218 | runs |
+> | **+ json** | **1,760,872** | **`0x190000`** | **234** | **FAULTS** |
+>
+> **Read what this does and does not settle.** It is monotone in all three quantities and the fault
+> appears only at the largest, which is consistent with the geometry hypothesis and is the first
+> evidence for it beyond "both triggers change the layout". It does **not** identify which of the
+> three quantities matters, and it cannot: they move together across these four builds. Separating
+> them needs a build that moves one without the others — the discriminator below.
+>
+> **What is actually known: three instances — a restored build define, an arena size, and a feature
+> set — with three unrelated causes, the same signature, and NO mechanism established for any of
+> them.** The tempting common factor is image or
 > `dom_data` geometry — both triggers change the image's size or layout — but nobody has shown that,
 > and this registry has a bad record with mechanisms that merely fit.
 >
 > **Consequences, both directions.** Do not read a future `E/share1` as benign because "it is just the
 > heap"; and do not read S-14 as being about `EXPLAIN` specifically until something separates the two.
 > If a board stage produces this signature it is an open defect, not a known quantity.
+>
+> **The bracketing series makes the discriminator sharper, not unnecessary.** Three triggers with
+> three unrelated causes and one signature is now a pattern rather than a coincidence, and the next
+> step is still to move ONE quantity.
 >
 > **The cheap discriminator nobody has run:** build the EXPLAIN-restored image and the oversized-arena
 > image and compare their `.text` size, globals offset and `dom_data` carve. If those coincide where
