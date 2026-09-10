@@ -29,7 +29,22 @@ struct sqlite_hostcall_v0 {
  * workload): 4 KiB works, 1 MiB works with all five success markers, 64 MiB FAILS with
  * "map_region failed" and no markers at all. The 64 MiB arm is what makes the 1 MiB pass
  * meaningful -- without a failing arm, a pass is equally consistent with the constant
- * never reaching the build. Note it fails at MAP time, not at create time. */
+ * never reaching the build. Note it fails at MAP time, not at create time.
+ *
+ * NARROWED 2026-09-10 (bench lane, measured with `parsenumber` so that a failure is the
+ * REGION and not the workload; recorded here by the board lane because their branch is
+ * not yet pushable -- take THIS block wholesale on merge rather than resolving it):
+ *
+ *     two 1 MiB regions   clean end to end
+ *     two 4 MiB regions   clean end to end
+ *     two 8 MiB regions   map_region FAILED, after SQ: D/mapped, before entry
+ *
+ * So the bracket is 4 MiB works / 8 MiB fails, closing a 63 MiB gap that had stood since
+ * August. WHAT THIS STILL DOES NOT ESTABLISH, and the old note did not say it either: the
+ * host creates **TWO** regions of this size, so the passing arm is two 4 MiB regions and
+ * the failing arm two 8 MiB ones. **Whether the limit is per-region or on the total is
+ * NOT established by these arms** -- that needs a run with two DIFFERENT sizes, which
+ * nobody has done. Do not quote "4 MiB per region" from this. */
 #ifndef SQLITE_HC_REGION_SIZE
 #define SQLITE_HC_REGION_SIZE 4096UL
 #endif
