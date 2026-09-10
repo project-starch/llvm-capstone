@@ -828,6 +828,45 @@ why it needs a codegen fix rather than an emulator one.
 Both touch the ABI of integer-bridged pointers, which is why neither is a lane's call. Analysis by the
 compiler lane, 2026-09-10; entry placed by the board lane, whose path this file is.
 
+> # ✅ SYNTHESISED 2026-09-10 — all three pre-registered falsifiers HELD. R-30 + R-31, `1bfff7776`.
+>
+> Built on the synth machine, exit 0, 1 h 21 m 54 s, peak 25.87 GB against a 100 GB ceiling. Scored
+> against the prediction **as written**, not against a prediction adjusted afterwards:
+>
+> | | `1bfff7776` | `66c4e7517` | pre-registered | |
+> |---|---:|---:|---|---|
+> | WNS `clk_out1` | **−12.425** | −12.425 | −15.3 … −11.7 | PASS |
+> | placed Slice LUTs | **169,207** (83.03 %) | 169,207 | 168.9k … 170.5k | PASS |
+> | combinational loops | **29** | 29 | must not move | PASS |
+> | TNS / failing endpoints | −718477.5 / 102508 | identical | — | |
+> | registers | 93,131 | 93,131 | — | |
+>
+> **THE FIGURE THAT CARRIES THE INFORMATION IS THE BITSTREAM, NOT THE TIMING.** Same size to the byte,
+> 11,443,722, and a **different** sha256 — `406e12bf…` against `b03bd967…`. Same structure, different
+> bits, which is exactly what flipping two comparison operators does: LUT *initialisation contents*
+> change while LUT and register counts do not. **Identical timing is the expected result here, not a
+> suspicious one, and a MATCHING hash would have meant the build did not contain the change.**
+>
+> Every figure was compared field-for-field against the same report pulled from `66c4e7517`'s own
+> artifact rather than against notes. `write_bitstream completed successfully` is present in the log
+> rather than inferred from the exit code. Routed DRC: 20 rules, all Warning, no Error or Critical and
+> no `LUTLP-1` — a negative that is supported, because the same extractor listed 20 real rule names
+> from a populated table.
+>
+> **Provenance, stated because the stamp says "dirty":** `1bfff7776` plus exactly four locally modified
+> files, all machine-path and guard fixes (`env.sh`, `env_cap.sh`, `fpga-env.sh`, `synth-guard.sh`).
+> **No file under `core/`, `corev_apu/` or `verif/` was modified.**
+>
+> **WHAT THIS DOES NOT ESTABLISH: that either fix WORKS.** Every number says the change is
+> timing-neutral and structurally invisible, and nothing more. The functional case rests on the
+> directed tests and the one-variable control, not on this build.
+>
+> **THE FLASH IS NOT MERELY WAITING FOR A YES.** It is gated on two OPEN decisions, not one: the
+> `end`-convention re-ruling (decisions item 1), because the spec amendment ships in the same change;
+> and the monitor reclaim shape (item 2), because the firmware half must land alongside and **this must
+> never ship RTL-only**. The `.bit` is in-tree on the synth machine — not extracted, not staged, not
+> flashed.
+
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
 > # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
