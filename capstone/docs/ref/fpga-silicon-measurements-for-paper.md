@@ -1415,3 +1415,57 @@ written down before the run, not after.
 
 Provenance: cheri lane (package, test, analysis) and board lane (console), 2026-09-09. Plan and full log:
 `docs/plans/cheri-cva6-on-genesys2.md`.
+
+### §7e — What a capability-store fill costs on silicon, measured by a matched pair (boot sw52, 2026-09-10)
+
+**Why this number was needed.** The R-30/R-31 firmware half overwrites a revoked region before
+reusing it. Whether that is affordable was the open question in the reclaim decision, and the answer
+had to be given as a bracket — roughly 3 % to 25 % of the boundary path — because one quantity in it
+had never been measured: what 4 KiB of capability stores costs on this silicon. This closes it.
+
+**Instrument.** Two ladder rungs that differ by exactly one instruction, run in the same boot on the
+resident `caplifive_r25r26r27_66c4e7517.bit`:
+
+| rung | loop body | retval (oracle) | cycles | instret | CPI |
+|---|---|---:|---:|---:|---:|
+| `fillcost` | `stc zero,0(p)` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 768 (768) | **8,196** | 1,131 | 7.25 |
+| `fillnop` | `nop` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 256 (256) | **2,143** | 1,125 | 1.90 |
+
+Control `k800` returned 4 in the same boot, so the boot carries a verdict. Both retvals are the ones
+their oracles demand, and each encodes two facts — `+256` the asm loop's own iteration counter,
+returned as an output rather than assumed, and `+512` slot 0 read back as zero after being seeded
+**non-zero**, i.e. the store landed. A deleted loop reads 0.
+
+**Result.**
+
+    8,196 - 2,143 = 6,053 cycles for 256 capability stores over 4 KiB
+                  = 23.6 cycles per 16-byte capability store
+                  = 1.48 cycles per byte filled
+
+The loop overhead is **cancelled, not assumed**: the two arms have the same iteration count and
+within 6 instructions the same instruction count (the 6 are the `+512` branch fillcost takes and
+fillnop does not). 1.48 cycles/byte for a fill sits below the separately measured 3.52 cycles/byte
+for a 1024-byte **copy**, which is the expected direction — a copy loads and stores where a fill
+only stores.
+
+**`fillcost`'s CPI of 7.25 is above the 1.13–6.44 on-silicon spread, and that is the finding, not a
+failure.** The arm is 256 stores walking 64 cold cache lines with almost no other work; it is
+memory-system-bound by construction. `fillnop`, the same loop without the store, sits at 1.90 and
+inside the spread.
+
+**What it means for the reclaim.** Against the measured one revoke per ~28,829 instructions, a 4 KiB
+reclaim adds ~1,024 instructions (**+3.6 % instructions**) and ~6,053 cycles. In cycles the share
+depends on the boundary path's own CPI: **~14 % at 1.5, ~8 % at 2.5**. That lands in the lower half
+of the 3–25 % bracket the decision was taken under, and it is a cost per *revoke*, not per boundary
+crossing.
+
+**Two things this does NOT measure.** It is a **cold** buffer, every line missing; a region the
+borrower has just been using may be partly warm, so this is closer to a ceiling than a typical case.
+And the monitor's own loop is one instruction shorter per iteration — it gets the pointer walk free
+from the UNINIT cursor advance, which this bitstream does not provide for a LINEAR capability. The
+reclaim path end to end is only measurable after the flash.
+
+**Also from this boot, and it is the reason the counter is in the firmware at all:**
+`RCLM:00000000` appears on every share (3 shares, 3 markers). Zero reclaims, as it must be on a
+bitstream where the guard cannot fire — and the reporting path is now **proven readable on silicon**,
+which is the one thing about it that could not be tested after the flash.
