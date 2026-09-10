@@ -2916,12 +2916,31 @@ bool CapstoneTargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
   // hand-written four-i32 struct in C does NOT reproduce it, so start from the
   // lit test rather than from the sqlite3Pragma values.
   //
-  // NOT SUFFICIENT ON ITS OWN. memset still reaches the same forge by a different
-  // route: findOptimalMemOpLowering guards every i128-avoidance branch on
-  // Op.isMemcpy() (see :26131, :26157, :26179), so a memset falls through to the
-  // generic picker, which picks i128 because i128 is a legal type, and never
-  // consults this hook. A 16-byte llvm.memset with a non-zero fill still fails.
-  // SQLite happens not to contain one. See ISSUES.md C-17.
+  // A NOTE HERE PREVIOUSLY CLAIMED memset reaches the same forge by a second
+  // route, and cited three line numbers in findOptimalMemOpLowering. BOTH HALVES
+  // WERE WRONG, so it is corrected rather than deleted -- the wrong citation cost
+  // a planning cycle by sending a reader to line numbers that never existed at any
+  // tip, which is how it survived: nobody opened the function.
+  //
+  // 1. The line numbers were never valid. findOptimalMemOpLowering's three
+  //    Op.isMemcpy() guards are at roughly :25651, :25677 and :25700, and they are
+  //    THREE DIFFERENT MECHANISMS, not one avoidance wearing three hats. :25677
+  //    assigns c128 chunks so an aligned struct copy keeps its source's TAGS --
+  //    widening THAT one to a fill would materialise a 128-bit value and CAUSE the
+  //    forge. Only :25700 is the genuine i128 avoidance.
+  //
+  // 2. The claim itself does not reproduce. Measured 2026-09-10 on this tree:
+  //    zero forge diagnostics across 72 runs -- sizes 16/17/24/32/48/64/128/256 x
+  //    alignments 1/8/16 x {default ABI, -capstone-gp-captable, -O0} -- with the
+  //    check PROVEN LIVE in the same session (an inttoptr of a >64-bit constant
+  //    still diagnoses, and c17-wide-constant-arm.ll is green). A non-zero memset
+  //    lowers to scalar stores; it does not select i128, so it never arrives here.
+  //
+  // Not reproducible is not the same as impossible: this is an empirical result
+  // over that grid, not a proof. If a memset ever does forge, the target is
+  // :25700 alone, and note its body calls Op.getSrcAlign(), which asserts
+  // isMemcpy() -- so it needs a destination-only alignment path, not a widened
+  // predicate. See ISSUES.md C-17.
   if (MemVT == MVT::i128)
     return false;
   return TargetLoweringBase::canMergeStoresTo(AS, MemVT, MF);

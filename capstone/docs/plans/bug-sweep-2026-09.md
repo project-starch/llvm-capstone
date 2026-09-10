@@ -368,3 +368,91 @@ Producers, each checked on the current compiler (new lib, llc rebuilt 2026-09-09
 **Verification:** full Capstone lit green (102 tests, CodeGen + MC); the guard proven to fire (arm a, llc rc 1) and proven silent in normal codegen (arm c, knob off). Red-first is demonstrated by arm (b): the exact lowering path the guard sits behind exits 0 and emits the faulting pool in the default ABI; knob-on is that same path with the guard in front. Corpus negative control: the gp-captable silicon SQLite build predicts zero C-43 diagnostics (knob defaults off).
 
 **Observation, not a new ID:** an AS0 (no `addrspace(200)`) pointer load on this target aborts llc at `LegalizeDAG.cpp:1352` (there is nothing to legalise an AS0 load into) — it was the earlier "crash," unrelated to gp-captable and not the C-43 guard. Not chased; callers always use addrspace(200).
+
+### Compiler-lane close-out (2026-09-10) — C-45 fixed, C-17 and C-46 not reproduced
+
+Three items were taken to completion. Two of the three ended as **corrections to the record rather than
+code fixes**, both because a claim that had been written down did not survive being tested.
+
+**C-45 — FIXED (`07bf18d4f20c`).** `call a0, foo` did not assemble, and neither did
+`call t0, __riscv_save_12`, which matters more: that second shape is emitted by codegen itself, for
+spill libcalls (`CapstoneFrameLowering.cpp`) and by the machine outliner (`CapstoneInstrInfo.cpp`), so
+`-S` output could contain a call the assembler refused to take back. The entry's original "low
+priority, no known consumer" was wrong — the consumer is our own `-S` output.
+
+The cause is not call parsing. `validateTargetOperandClass` coerces an integer register to its
+capability form **in place**, and the generic matcher does not restore the operand when the candidate
+being validated then fails. `call` is the one mnemonic where that is fatal, because `CAP_CALL`
+(`$rd, $rs1`) and `PseudoCALLReg` (`$rd, $func`) have the same shape and tie on operand count, so
+`CAP_CALL` is tried first, rewrites `a0` to `C10`, fails on `foo`, and leaves `PseudoCALLReg` looking at
+a capability register where it wants an integer one. Fixed with a reverse arm mirroring the forward
+arm's full class set. Twelve other mnemonics have two defs differing capability-vs-integer at one index
+(`fld flh flq flw fsd fsh fsq fsw sb sd sh sw`), but their forms differ in operand count and syntax, so
+the integer row sorts first and strands nothing — a future TWO-OPERAND capability pseudo on an existing
+integer mnemonic would re-create this exactly.
+
+A predicted regression was tested for and does **not** occur here. On a tree without C-38 the reverse
+arm would let `call a0, a1` match `PseudoCALLReg` and emit a PLT call against a symbol spelled `a1` —
+silently different object code from the text our own disassembler prints. C-38 declines register names
+in any operand position, so the trailing operand stays a register and `CAP_CALL` matches first. That
+predicted failure is now a standing pin: the three register/register calls must produce no relocation.
+
+**C-45 follow-up — the fix was narrowed (`d7514ed41f2c`), on the lead's ruling.** The first fix keyed
+the reverse coercion on the register CLASS. That closed the stranding but also made the `cN` spelling
+acceptable wherever an INTEGER class is asked for: `add c10, c11, c12` and `sd c10, 0(c11)` began
+assembling, where they had been errors. Raised with the lead rather than kept, because it changed the
+accepted assembly language as a side effect of fixing an operand-restoration bug.
+
+The restore is now guarded by a flag set when the forward arm actually rewrites an operand, so it
+undoes exactly that and nothing else; an operand the user wrote as `c10` is untouched and still fails
+against an integer class. Three findings decided it, the third being the one that matters most:
+
+- **No prior intent.** The one-register-file comment justifies the FORWARD direction only, saying the
+  assembly names a capability operand with its integer name. `cap-regnames.s` scopes the `cN` spelling
+  to capability operands. Nothing anywhere asserted it in an integer slot, so the wider behaviour would
+  have extended a decision nobody took.
+- **The load/store mnemonics were never at risk either way**, but not for the reason first given here.
+  Their forms differ by the paren and symbol tokens, and those are themselves operand classes in the
+  match row, so a mistyped register cannot make one form look like another. That is stronger than the
+  operand-count argument and does not depend on sort order. `call` had no such separator, which is
+  exactly why it broke.
+- **The future case decides it.** A later two-operand capability pseudo on an integer mnemonic
+  re-creates the stranding shape. Under the class guard it would do so in a tree where a stray `cN`
+  SATISFIES an integer slot instead of failing. The flag keeps the blast radius to the operands the
+  forward arm mutated.
+
+The restore also verifies the requested class actually contains the restored register, because the
+forward arm returns success on its narrowed classes without re-checking membership; mirroring its shape
+alone could have accepted a register the class does not hold. `cap-invalid.s` gains four negatives,
+anchored by line and column, and they are known to discriminate: each ASSEMBLED under the previous
+build and errors under this one.
+
+**C-17 — the memset residue is NOT REPRODUCED (`a92dfd4a5748`).** A comment claimed a non-zero
+`llvm.memset` still reaches the unforgeable-constant diagnostic. Zero forge diagnostics across 72 runs
+(sizes 16/17/24/32/48/64/128/256 x alignments 1/8/16 x {default, `-capstone-gp-captable`, `-O0`}); a
+non-zero memset lowers to scalar stores and never selects i128.
+
+Two process notes, both worth more than the result. The comment cited three line numbers that **were
+never valid at any tip**, which is precisely why the claim survived — readers were sent to lines that
+did not exist and so never opened the function. And the first positive control written for this was
+itself wrong (a plain i128 return, which is not capability-typed and cannot forge) and reported a clean
+zero: *the control was failing, not the subject passing.* The verdict only became evidence once a
+correct control was shown to fire.
+
+Also established: the three `Op.isMemcpy()` guards are three different mechanisms, and widening the
+second — which assigns c128 chunks so an aligned struct copy keeps its source's tags — would **cause**
+the forge rather than avoid it. **For the lead:** the queued "two i64 halves" lowering has no
+mechanism. There is no ALU write to a capability's upper half, `SCC` asserts a tagged `rs1` and
+`CIncOffset` raises on an untagged one, so it would silently drop the high half — worse than the
+diagnostic standing today. Recommend closing that decision permanently.
+
+**C-46 — inert, and the pin was WITHDRAWN (`2b465fac3636`).** A lit test was written to pin "MOVC is
+not treated as a copy" and could not be demonstrated: setting `isMoveReg = 1` and rebuilding changed no
+codegen at all, across five shapes chosen to give copy propagation something to remove. The reason is
+structural and stronger than the pin would have been — capability copies are generic `COPY` until
+`ExpandPostRAPseudos` lowers them through `copyPhysReg`, and `MachineCopyPropagation` has already run by
+then, so **no pass that could act on it ever holds a MOVC**. The test would have passed for a reason
+unrelated to what it asserted. The remaining two triggers are build-configuration changes no test can
+observe, so all three are recorded at the instruction definition instead of in a gate that cannot fire.
+No code change: the only honest model is `hasSideEffects = 1`, which pessimises every capability copy,
+and that trade is the lead's.

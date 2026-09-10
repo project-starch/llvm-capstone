@@ -354,6 +354,12 @@ struct CapstoneOperand final : public MCParsedAsmOperand {
   struct RegOp {
     MCRegister RegNum;
     bool IsGPRAsFPR;
+    // C-45: set when validateTargetOperandClass rewrote an INTEGER register into
+    // its capability form for a candidate that was being tried. The generic match
+    // loop does not restore operands when a candidate fails, so this records what
+    // to undo -- and ONLY that, so fixing the stranding does not also change which
+    // spellings the assembler accepts. See validateTargetOperandClass.
+    bool CoercedFromGPR;
   };
 
   struct ImmOp {
@@ -1098,6 +1104,7 @@ public:
     auto Op = std::make_unique<CapstoneOperand>(KindTy::Register);
     Op->Reg.RegNum = Reg;
     Op->Reg.IsGPRAsFPR = IsGPRAsFPR;
+    Op->Reg.CoercedFromGPR = false;
     Op->StartLoc = S;
     Op->EndLoc = E;
     return Op;
@@ -1342,6 +1349,7 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
     case MCK_GPCRJALR:
     case MCK_GPCRTC:
       Op.Reg.RegNum = Capstone::C0 + Idx;
+      Op.Reg.CoercedFromGPR = true;
       return Match_Success;
     case MCK_GPCRNoC0:
     case MCK_GPCRJALRNonC7:
@@ -1350,9 +1358,86 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
       if (Idx == 0 && Kind == MCK_GPCRNoC0)
         break;
       Op.Reg.RegNum = Capstone::C0 + Idx;
+      Op.Reg.CoercedFromGPR = true;
       return Match_Success;
     default:
       break;
+    }
+  }
+
+  // C-45: the REVERSE coercion, which makes the one above IDEMPOTENT.
+  //
+  // The arm above rewrites the operand IN PLACE, and the generic matcher does not
+  // restore it when the candidate it was validating subsequently fails -- it just
+  // moves to the next MatchEntry. So a failed trial LEAVES the operand rewritten
+  // and poisons every later candidate that wanted the integer class.
+  //
+  // `call` is where that bites, because it is the one mnemonic with two defs of the
+  // same SHAPE distinguished only by operand class: CAP_CALL (`$rd, $rs1`, two
+  // GPCRs) sorts before PseudoCALLReg (`$rd, $func`, GPR + symbol) since both take
+  // two operands and tie on count. For `call a0, foo` the CAP_CALL trial rewrites
+  // a0 to C10, then fails on `foo` (an expression, which no coercion can fix); the
+  // PseudoCALLReg trial then sees C10 against MCK_GPR and dies at the fallthrough
+  // below. That is the whole bug: `call a0, foo` and the real codegen shape
+  // `call t0, __riscv_save_12` (CapstoneFrameLowering.cpp, spill libcalls; and the
+  // machine outliner in CapstoneInstrInfo.cpp) could not be assembled at all, so
+  // -S output was not reassemblable.
+  //
+  // Twelve other mnemonics (fld flh flq flw fsd fsh fsq fsw sb sd sh sw) also have
+  // two defs differing GPCR-vs-GPR at one index, but their forms differ in operand
+  // COUNT and syntax (a bare-symbol pseudo vs a parenthesised address), so the GPR
+  // row sorts first, the mutation lands last, and nothing is stranded. A future
+  // TWO-OPERAND capability pseudo added to an existing integer mnemonic would
+  // re-create this exactly -- that is the shape to watch for.
+  //
+  // RESTORES ONLY WHAT THE ARM ABOVE REWROTE, and deliberately nothing else. The
+  // guard is `CoercedFromGPR`, not the register class: an operand the user actually
+  // WROTE as `c10` is untouched here, so it still fails against an integer class
+  // exactly as it did before this fix. That keeps the accepted assembly language
+  // byte-for-byte unchanged -- the one-register-file comment above justifies the
+  // FORWARD direction only ("the assembly names a capability operand with its
+  // integer name"), and cap-regnames.s scopes the cN spelling to CAPABILITY
+  // operands, so nothing here has ever decided that cN is writable in an integer
+  // slot. Making it so would be a language change, and is not this bug's to make.
+  //
+  // Restoring on the class instead would do it: it would accept `add c10, c11, c12`
+  // as a side effect of fixing an operand-restoration bug, and, worse, a future
+  // two-operand capability pseudo on an integer mnemonic -- the shape that would
+  // re-create C-45 -- would then find a stray cN SATISFYING a GPR slot rather than
+  // failing. The twelve load/store mnemonics that pair the two classes are safe
+  // regardless, because their forms differ by the paren and symbol tokens, which
+  // are themselves operand classes in the match row; `call` had no such separator,
+  // which is exactly why it broke.
+  //
+  // No cross-statement reset is needed: operands are parsed fresh per statement.
+  // Oscillation is self-correcting -- coerce, fail, restore for an integer slot,
+  // coerce again for a later capability slot -- because each arm only ever puts the
+  // operand into the form the candidate being tried asked for.
+  if (Op.Reg.CoercedFromGPR &&
+      CapstoneMCRegisterClasses[Capstone::GPCRRegClassID].contains(Reg)) {
+    unsigned RestoreRCID;
+    switch (Kind) {
+    case MCK_GPR:           RestoreRCID = Capstone::GPRRegClassID; break;
+    case MCK_GPRJALR:       RestoreRCID = Capstone::GPRJALRRegClassID; break;
+    case MCK_GPRTC:         RestoreRCID = Capstone::GPRTCRegClassID; break;
+    case MCK_GPRNoX0:       RestoreRCID = Capstone::GPRNoX0RegClassID; break;
+    case MCK_GPRJALRNonX7:  RestoreRCID = Capstone::GPRJALRNonX7RegClassID; break;
+    case MCK_GPRTCNonX7:    RestoreRCID = Capstone::GPRTCNonX7RegClassID; break;
+    case MCK_GPRX7:         RestoreRCID = Capstone::GPRX7RegClassID; break;
+    default:                RestoreRCID = ~0U; break;
+    }
+    // Restore, then let the class ITSELF decide. The forward arm returns success
+    // on the group of narrowed classes without re-checking membership, so a
+    // restore that only mirrored its shape could accept a register the requested
+    // class does not contain (x10 offered to MCK_GPRX7, say). Checking is cheap
+    // and makes the undo sound rather than merely symmetric.
+    if (RestoreRCID != ~0U) {
+      MCRegister Restored = Capstone::X0 + (Reg - Capstone::C0);
+      if (CapstoneMCRegisterClasses[RestoreRCID].contains(Restored)) {
+        Op.Reg.RegNum = Restored;
+        Op.Reg.CoercedFromGPR = false;
+        return Match_Success;
+      }
     }
   }
 
@@ -2235,6 +2320,25 @@ ParseStatus CapstoneAsmParser::parseCallSymbol(OperandVector &Operands) {
   if (getLexer().getKind() != AsmToken::Identifier)
     return ParseStatus::NoMatch;
   std::string Identifier(getTok().getIdentifier());
+
+  // C-38: a REGISTER NAME is never a call symbol. Three defs share the "call"
+  // mnemonic: PseudoCALL (`call $func`), PseudoCALLReg (`call $rd, $func`) and
+  // the capability domain-crossing CAP_CALL (`call $rd, $rs1`, two GPCRs). An
+  // identifier in the last operand position used to be claimed here as a symbol
+  // whatever it spelled, so `call a0, a1` matched PseudoCALLReg with a symbol
+  // named "a1" and CAP_CALL could never be reached -- yet the DISASSEMBLER
+  // prints the CAP_CALL encoding as exactly `call a0, a1`, so object -> text ->
+  // object was impossible for this one instruction. Declining register names
+  // here lets the operand fall through to register parsing and CAP_CALL match,
+  // while `call foo` (foo is not a register) still reaches PseudoCALL.
+  //
+  // The check goes BEFORE the `@`/peek chain because the answer does not depend
+  // on what follows: a register name is not a symbol in any position. The
+  // sibling guard below handles the converse case (`call rd, foo`, where the
+  // FIRST operand is a register). See docs/ref/ISSUES.md C-38 and the round-trip
+  // pin llvm/test/MC/Capstone/cap-call-mnemonic.s.
+  if (matchRegisterNameHelper(Identifier))
+    return ParseStatus::NoMatch;
 
   if (getLexer().peekTok().is(AsmToken::At)) {
     Lex();
