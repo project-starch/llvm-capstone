@@ -189,6 +189,26 @@ afterwards. Predictions, for the hash synthesised from `r30-r31-init-revoke`:
 * **Read the intra-clock row, not `eth_rxck`**, and gate every artefact on mtime later than the run
   start — `make clean` leaves the previous run's reports in place.
 
+**⏱ THE RUN IS ON A LOADED MACHINE, AND THAT CANNOT EXPLAIN AWAY ANY OF THE ABOVE.** The synth lane
+reports several SPEC runs pinned at 100 % CPU under another workload, load average ~14, not theirs and
+correctly left alone. The 1 h 20 m reference from `66c4e7517` was measured idle, so **expect an
+overrun, and check contention before router convergence.**
+
+But note what the falsifier is made of: **WNS, placed LUTs, and the UNOPTFLAT loop set. Wall-clock is
+not in it.** Contention changes how long the tools take; it does not change placement quality, the
+utilisation report or the loop analysis. So a slow run is not a reason to soften any of the three
+numbers, and "the machine was busy" is not available as an explanation if one of them moves. Recorded
+now, before the reading, precisely so it cannot be reached for afterwards.
+
+**The two ways contention CAN cost us a valid reading, both real:**
+* **A partial run read as a complete one.** The rule above already says gate every artefact on an
+  mtime later than the run start, because `make clean` leaves the previous run's reports in place. A
+  long run raises the odds of a kill partway through and therefore of a mixed old/new report set.
+  That rule is now load-bearing rather than hygienic.
+* **A memory-pressure kill misattributed to the change.** The guard runs with a 100 GB ceiling on a
+  machine under someone else's load. If the build dies, contention is the first suspect and the RTL
+  the last — a two-operator change cannot plausibly move peak synthesis memory.
+
 **This build does NOT settle R-29** (different branch, lint-failing, item 3) and does NOT authorise a
 flash (item 2).
 
