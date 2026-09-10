@@ -200,11 +200,22 @@ int main(int argc, char **argv) {
   mark("SQ: D/mapped\n");
   mark_u("SQ: r1=", (unsigned long)metadata_region);
   mark_u("SQ: r2=", (unsigned long)payload_region);
+  /* TEST THE CREATE, not just the map. Without this a failed create returns
+     (region_id_t)-1, map_region walks ids upward and returns NULL, and the run reports
+     "map_region failed" -- which is what mislabelled the 64 MiB arm in three documents.
+     The real failure was the buddy allocator's order-10 (4 MiB) wall at CREATE time.
+     sqlite_host_row3_b2.c:57 already checks its arena this way; these two did not. */
+  if ((long)metadata_region < 0 || (long)payload_region < 0)
+    return fail_cleanup("create_region failed -- above 4 MiB this needs a CMA area",
+                        (unsigned long)SQLITE_HC_REGION_SIZE);
   struct sqlite_hostcall_v0 *metadata =
       (struct sqlite_hostcall_v0 *)map_region(metadata_region,
                                               SQLITE_HC_REGION_SIZE);
   char *payload = (char *)map_region(payload_region, SQLITE_HC_REGION_SIZE);
-  if (!metadata || !payload)
+  /* map_region returns mmap()'s value raw, so a rejected mapping is MAP_FAILED
+     ((void*)-1), NOT NULL. A bare !metadata test silently accepts it and the failure
+     surfaces later as a fault on first use. */
+  if (!metadata || metadata == (void *)-1 || !payload || payload == (void *)-1)
     return fail_cleanup("map_region failed", 0);
 
   memset(metadata, 0, SQLITE_HC_REGION_SIZE);
