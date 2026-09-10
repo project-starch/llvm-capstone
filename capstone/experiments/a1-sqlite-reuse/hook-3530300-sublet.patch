@@ -1,0 +1,156 @@
+# A1's instrument in the Capstone domain, on the Sublet port: the same calls as
+# hook-3530300.patch at the same sites, with the contexts of the ported
+# allocators.  Three lines differ in substance: the allocation the hook records
+# is the alias the port hands out (sublet_take); the block a level takes
+# linear (sqlite3MallocLinear, the lookaside's pool) is a memsys5 allocation
+# like any other and is recorded at its address; and the lookaside free records
+# the object's address (p), because pBuf is the entry beside the pool now, not
+# the slot.  Applies after sublet-3530300.patch, with patch -F0 -p1, to the
+# copies in the build directory.
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -29737,9 +29737,16 @@
+ /* The block goes out under a handle this level keeps: as an alias for the
+ ** caller, or linear, to a level that carves it into objects of its own.
+ */
++void a1_memsys5_realloc(void);
++void a1_memsys5_free(void*);
++void *a1_memsys5_alloc(void*, size_t);
++void a1_lookaside_escape(void);
++void a1_lookaside_free(void*);
++void *a1_lookaside_alloc(void*, size_t);
++/* A1: the levels recorded from inside, see memhook.c */
+ static void *memsys5MallocUnsafe(int nByte){
+   int i = memsys5CarveUnsafe(nByte);
+-  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
++  return i<0 ? 0 : a1_memsys5_alloc(sublet_take(&mem5.aCap[i]), (size_t)nByte);
+ }
+ SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, sublet_cap *pBlock){
+   int i;
+@@ -29747,13 +29754,14 @@
+   memsys5Enter();
+   i = memsys5CarveUnsafe((int)nByte);
+   memsys5Leave();
+-  return i<0 ? 0 : (void*)sublet_take_linear(&mem5.aCap[i], pBlock);
++  return i<0 ? 0 : a1_memsys5_alloc((void*)sublet_take_linear(&mem5.aCap[i], pBlock), (size_t)nByte);
+ }
+ 
+ /*
+ ** Free an outstanding memory allocation.
+ */
+ static void memsys5FreeUnsafe(void *pOld){
++  a1_memsys5_free(pOld);
+   u32 size, iLogsize;
+   int iBlock;
+ 
+@@ -29854,6 +29862,7 @@
+ ** routine should return 0 without freeing pPrior.
+ */
+ static void *memsys5Realloc(void *pPrior, int nBytes){
++  a1_memsys5_realloc();
+   int nOld;
+   void *p;
+   assert( pPrior!=0 );
+@@ -31996,6 +32005,7 @@
+         sublet_give(&pBuf->cap);
+         pBuf->pNext = db->lookaside.pSmallFree;
+         db->lookaside.pSmallFree = pBuf;
++        a1_lookaside_free(p);
+         return;
+       }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+@@ -32008,6 +32018,7 @@
+         sublet_give(&pBuf->cap);
+         pBuf->pNext = db->lookaside.pFree;
+         db->lookaside.pFree = pBuf;
++        a1_lookaside_free(p);
+         return;
+       }
+     }
+@@ -32037,6 +32048,7 @@
+       sublet_give(&pBuf->cap);
+       pBuf->pNext = db->lookaside.pSmallFree;
+       db->lookaside.pSmallFree = pBuf;
++      a1_lookaside_free(p);
+       return;
+     }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+@@ -32049,6 +32061,7 @@
+       sublet_give(&pBuf->cap);
+       pBuf->pNext = db->lookaside.pFree;
+       db->lookaside.pFree = pBuf;
++      a1_lookaside_free(p);
+       return;
+     }
+   }
+@@ -32221,6 +32234,7 @@
+     }else if( db->mallocFailed ){
+       return 0;
+     }
++    a1_lookaside_escape();
+     return dbMallocRawFinish(db, n);
+   }
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+@@ -32228,22 +32242,22 @@
+     if( (pBuf = db->lookaside.pSmallFree)!=0 ){
+       db->lookaside.pSmallFree = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return sublet_take(&pBuf->cap);
++      return a1_lookaside_alloc(sublet_take(&pBuf->cap), (size_t)n);
+     }else if( (pBuf = db->lookaside.pSmallInit)!=0 ){
+       db->lookaside.pSmallInit = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return sublet_take(&pBuf->cap);
++      return a1_lookaside_alloc(sublet_take(&pBuf->cap), (size_t)n);
+     }
+   }
+ #endif
+   if( (pBuf = db->lookaside.pFree)!=0 ){
+     db->lookaside.pFree = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return sublet_take(&pBuf->cap);
++    return a1_lookaside_alloc(sublet_take(&pBuf->cap), (size_t)n);
+   }else if( (pBuf = db->lookaside.pInit)!=0 ){
+     db->lookaside.pInit = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return sublet_take(&pBuf->cap);
++    return a1_lookaside_alloc(sublet_take(&pBuf->cap), (size_t)n);
+   }else{
+     db->lookaside.anStat[2]++;
+   }
+@@ -32255,6 +32269,7 @@
+     return 0;
+   }
+ #endif
++  a1_lookaside_escape();
+   return dbMallocRawFinish(db, n);
+ }
+ 
+--- a/speedtest1.c
++++ b/speedtest1.c
+@@ -79,6 +79,9 @@
+ ;
+ 
+ #include "sqlite3.h"
++/* A1: tests reported from inside, see memhook.c */
++void a1_end_test(void);
++void a1_begin_test(int, const char*);
+ #include <assert.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -420,6 +423,7 @@
+   char *zName;
+   va_list ap;
+   iTestNumber = iTestNum;
++  a1_begin_test(iTestNum, zTestName);
+   va_start(ap, zTestName);
+   zName = sqlite3_vmprintf(zTestName, ap);
+   va_end(ap);
+@@ -451,6 +455,7 @@
+ 
+ /* Complete a test case */
+ void speedtest1_end_test(void){
++  a1_end_test();
+   sqlite3_int64 iElapseTime = speedtest1_timestamp() - g.iStart;
+   if( g.doCheckpoint ) speedtest1_exec("PRAGMA wal_checkpoint;");
+   assert( iTestNumber > 0 );

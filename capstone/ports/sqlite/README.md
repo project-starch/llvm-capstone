@@ -119,7 +119,8 @@ defines `speedtest1_hook_table_bytes`, `speedtest1_hook_install` and
 `speedtest1_hook_report`, and gets a table carved beside the arena) and patches its calls
 into copies of the sources; `SPEEDTEST1_PROBE=n` with `SPEEDTEST1_PROBE_SRC` hands the run to
 `speedtest1_probe` instead of the benchmark. The domain exports its two payload writers for
-whatever is linked in. Nothing in this directory fills either seam.
+whatever is linked in. A1's instrument and its six probes are
+`experiments/a1-sqlite-reuse/`, whose `run.sh` sets all of it.
 
 `SPEEDTEST1_SUBLET=1` runs the same benchmark on the Sublet port of both allocators. Two
 different ports live in this directory and are kept apart on purpose: everything else here
