@@ -29,7 +29,18 @@ struct sqlite_hostcall_v0 {
  * workload): 4 KiB works, 1 MiB works with all five success markers, 64 MiB FAILS with
  * "map_region failed" and no markers at all. The 64 MiB arm is what makes the 1 MiB pass
  * meaningful -- without a failing arm, a pass is equally consistent with the constant
- * never reaching the build. Note it fails at MAP time, not at create time.
+ * never reaching the build.
+ *
+ * CORRECTED 2026-09-11: it fails at CREATE time, not at map time, and the message that
+ * says otherwise is the caller's, not the kernel's. ioctl_create_region used to return
+ * WITHOUT copy_to_user when the allocation failed, so the pre-initialised region_id of -1
+ * survived and create_region handed back ULONG_MAX silently; map_region then walked ids
+ * upward, found nothing, and returned NULL, which the host printed as "map_region failed".
+ * The clincher is that a genuine device_mmap rejection returns MAP_FAILED, (void*)-1, and
+ * the caller's !metadata test does not catch that -- so the observed NULL cannot have come
+ * from the map path. MAP_SIZE_LIMIT is 256 MiB and never bit at 64. The real ceiling was
+ * the buddy allocator's MAX_ORDER 10 * 4 KiB = 4 MiB, per region. Both halves are now
+ * fixed: the module reports a failed create, and the host tests for MAP_FAILED.
  *
  * NARROWED 2026-09-10 (bench lane, measured with `parsenumber` so that a failure is the
  * REGION and not the workload; recorded here by the board lane because their branch is

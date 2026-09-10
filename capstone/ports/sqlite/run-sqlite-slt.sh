@@ -40,7 +40,8 @@ MAXIN=$(( REGION / 2 ))
 SZ=$(stat -c%s "$SLT_TEST")
 if (( SZ >= MAXIN )); then
   echo "ERROR: $SLT_TEST is $SZ bytes; the input half of a $REGION-byte region holds $MAXIN." >&2
-  echo "       Raise SLT_REGION_SIZE (1 MiB is the largest MEASURED size) or pick a smaller file." >&2
+  echo "       Raise SLT_REGION_SIZE (4 MiB is the largest size measured with this workload;" >&2
+  echo "       above that a region needs CMA) or pick a smaller file." >&2
   exit 1
 fi
 

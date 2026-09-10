@@ -1630,3 +1630,53 @@ is added and `fpgakernel.config` gains no CMA, so on silicon this remains a pure
 no new capability — a region larger than the buddy allocator's 4 MiB still cannot be created on the
 board. The CMA half is exercised under emulation only (§7e appendix). And `ioctl_release_region`
 decrements `region_n` without rolling back `pre_mmap_offset`, leaking mmap offset space monotonically.
+
+> **SUPERSEDED the next day by §7h**, for both halves of that paragraph. The `reserved-memory` node
+> and the `fpgakernel.config` CMA symbols landed on 2026-09-11 and a 130 MiB region now exists on
+> silicon, so the sentence above holds for boot sw54's image and for nothing after it. The
+> `pre_mmap_offset` leak is fixed in the same change. Read §7h before citing this paragraph.
+
+### §7h — A 130 MiB capability region exists on silicon (boot sw55, 2026-09-11)
+
+The board kernel now compiles CMA in (`configs/fpgakernel.config`) and the device tree reserves
+256 MiB at `0xAC000000` carrying `linux,cma-default` (`configs/caplifive.dts`). **This is the first
+capability region above 4 MiB on any target other than emulation, and the ceiling it clears has been
+in place for the whole project.**
+
+| arm | size | result |
+|---|---|---|
+| `k800` (control, first in the boot) | — | **retval 4**, 4,499 cycles, 53,406 ran, 1,089 instret |
+| `bigregion` | 4 MiB | created, mapped, first+last byte round-tripped |
+| `bigregion` | 8 MiB | created, mapped, first+last byte round-tripped |
+| `bigregion` | **130 MiB** | created, mapped, first+last byte round-tripped |
+
+**4 / 4 arms**, zero `Oops`/`BUG:`/`WARNING:` counted across each allocation, no fault tags. The
+control ran first and passed, so the boot carries a verdict at all — it fails roughly one boot in
+five and a failed control voids everything after it.
+
+**The reservation is verified by SIZE, not by existence**, which is the check the whole design turns
+on: `CONFIG_CMA_SIZE_MBYTES` defaults to **16 on non-x86**, so a *rejected* device-tree node leaves a
+quiet 16 MiB default area behind, under which a small arm passes and a large one fails and the log
+still shows a CMA line. The kernel's own lines, scoped to this run's `load_image` rather than to the
+console's replay of the previous boot:
+
+```
+Reserved memory: created CMA memory pool at 0x00000000ac000000, size 256 MiB
+OF: reserved mem: initialized node linux,cma@ac000000, compatible id shared-dma-pool
+OF: reserved mem: 0x00000000ac000000..0x00000000bbffffff (262144 KiB) map reusable linux,cma@ac000000
+Memory: 693668K/985928K available (… 262144K cma-reserved)
+```
+
+**Why the 130 MiB arm settles the mechanism without a failing board arm beside it.** The buddy
+allocator's largest block is `MAX_ORDER 10` × 4 KiB = **4 MiB**, and the silent fallback area is
+16 MiB; 130 MiB is 32× the first and 8× the second, so that allocation cannot have come from either.
+The matched failing arm exists too, but under emulation: at 8 MiB with no CMA area the create fails,
+and with `cma=256M` on the same image it succeeds (§7e appendix). What the board arms do NOT
+separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
+and either could have — and that is why it is present as a probe control rather than as evidence.
+
+`linux,cma-default` is load-bearing rather than decorative. The module registers `region_dev` with
+`platform_device_register_simple(…, NULL, 0)`, so `dev->of_node` is NULL, `dev->cma_area` is never
+assigned, and `dma_alloc_contiguous` falls through to `dma_contiguous_default_area`
+(`kernel/dma/contiguous.c:313-333`) — which only a node carrying that property ever sets
+(`:430-431`). Without it the node reserves memory nothing on this system can reach.

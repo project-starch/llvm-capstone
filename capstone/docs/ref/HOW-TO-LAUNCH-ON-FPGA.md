@@ -602,9 +602,11 @@ landed by checking the built firmware, not the source:
     print(bytes.fromhex("3c3c0000") in d[i:i+0x4000])   # the OLD value gone
     EOF
 
-**Why this is written here and not only in the submodule:** `caplifive-system` source stays
-uncommitted by project policy, and `configs/caplifive.dts` is not even tracked there. The edit
-therefore does not survive a submodule reset or a fresh clone — this section is the durable
-copy. (A committed copy also exists on branch `capstone-bootstrap-dts-65536` in the
-`caplifive-system-dev` checkout, unpushed.)
+**Why this is written here as well as in the submodule (CORRECTED 2026-09-11):** the two claims
+this paragraph used to make are both false now. Submodule source is committed -- the "stays
+uncommitted" policy was withdrawn on 2026-08-05 -- and `configs/caplifive.dts` **is** tracked,
+committed and clean in both buildroot checkouts. So the edit does survive a reset and a fresh
+clone. This section is kept as the reasoning, not as the only copy: the DTS says *what* the value
+is, and only this section says *why* it is that value and how to read it back out of the built
+firmware.
 

@@ -199,8 +199,15 @@ running the real workload end to end:
 | 64 MiB | **FAILS** — `SQ: X/fail`, `map_region failed`, zero markers |
 
 **The 64 MiB arm is the control and it is what makes the 1 MiB arm mean anything.** Without it a
-pass at 1 MiB is equally consistent with the constant not reaching the build at all. It fails at
-`map_region` rather than `create_region`, which is worth knowing: the ceiling bites at map time.
+pass at 1 MiB is equally consistent with the constant not reaching the build at all.
+
+**CORRECTED 2026-09-11 — it fails at `create_region`, not at `map_region`.** The `map_region failed`
+text is the host's own message on a NULL return, not a kernel diagnosis. `ioctl_create_region`
+returned without `copy_to_user` when the allocation failed, so `create_region` handed back
+`ULONG_MAX` silently and `map_region` then had no id to find. A real `device_mmap` rejection returns
+`MAP_FAILED` rather than NULL and the caller's `!metadata` test does not catch it, so the observed
+NULL can only be a create failure. The ceiling was the buddy allocator's `MAX_ORDER 10` x 4 KiB =
+**4 MiB per region**, not anything about mapping; `MAP_SIZE_LIMIT` is 256 MiB and never bit at 64.
 
 **So a megabyte-scale region is available and proven, and that is the mechanism stage 1 needs.**
 The header is left at 4096 deliberately — raising it belongs with the runner that consumes it,

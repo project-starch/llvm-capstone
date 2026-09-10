@@ -381,8 +381,12 @@ So after any reflash:
 
 1. Read `CAP_TAG_MEM_BASE` from `capstone-ariane/core/include/ariane_pkg.sv` **at the bitstream's
    commit** (`git show <commit>:core/...`), or run `calculate_memory.py`.
-2. Set `reg = <0x0 0x80000000 0x0 (BASE - 0x80000000, page-aligned down)>` in BOTH
-   `caplifive.dts` and `configs/caplifive.dts`.
+2. Set `reg = <0x0 0x80000000 0x0 (BASE - 0x80000000, page-aligned down)>` in
+   **`configs/caplifive.dts`**. There is no top-level `caplifive.dts` -- the "both" that
+   matters is that the file exists once in EACH of the two buildroot checkouts,
+   `capstone/caplifive-buildroot` and `capstone/caplifive-system/sw/buildroot`, which are
+   separate trees on disk (different inodes) cloned from one repo. The board build reads the
+   second; keep them in step or a `git status` in the other will contradict the DTB.
 3. Verify the value is in the **built firmware's DTB**, not just the source.
 4. Also update `FPGA_BITSTREAM` — the drivers hard-stop on a mismatch, which is the gate working.
 
@@ -534,7 +538,8 @@ Register the handler **before** connect, take the full payload, and settle befor
 
 * **Check whether the memory map moved** — `CAP_TAG_MEM_BASE` / `CAP_REVNODE_MEM_BASE` in
   `capstone-ariane/core/include/ariane_pkg.sv` **at the new bitstream's commit**. If it moved,
-  update `reg = <...>` in BOTH `caplifive.dts` and `configs/caplifive.dts` and verify in the built
+  update `reg = <...>` in `configs/caplifive.dts` -- in BOTH buildroot checkouts, `caplifive-buildroot`
+  and `caplifive-system/sw/buildroot`; there is no top-level `caplifive.dts` -- and verify in the built
   DTB. (`git show <commit>:core/include/ariane_pkg.sv` answers this in seconds and is worth doing
   every time — it cost two boots once.)
 * **Pass `FPGA_BITSTREAM` explicitly per run** while experimenting. The drivers' defaults go stale
