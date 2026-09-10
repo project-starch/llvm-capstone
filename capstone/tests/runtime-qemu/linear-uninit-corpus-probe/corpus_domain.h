@@ -43,6 +43,28 @@
  * grant is consumed: `probe_arena` and every copy of it now name an invalidated
  * revocation node. That is the point -- this models a freshly allocated
  * connection wrapper whose `sqlite3 *db` is not usable yet. */
+/* RECLAIM: fill, then init. After R-30/R-31 revoke returns UNINIT positioned at BASE and csinit
+ * refuses a cursor that has not reached END, so the owner must overwrite the borrower's bytes
+ * before reuse -- which is the security property the UNINIT type exists to force. Filling also
+ * walks the cursor to end, so one loop does both.
+ *
+ * ONE asm block, not a C loop: the cursor advance happens IN THE REGISTER, and keeping the fill
+ * and the csinit together means the advanced capability never has to cross back into C between
+ * them. `.insn s 0x5b, 0x4, x0, 0(rs1)` is stc of the null capability -- 16 zero bytes, tag clear;
+ * imm MUST be 0 for an UNINIT operand. The monitor does exactly this at its two reclaim sites. */
+static inline void *corpus_fill_then_init(void *cap, unsigned nbytes) {
+  void *out;
+  unsigned n = nbytes >> 4;
+  __asm__ volatile(
+      "1: beq %2, x0, 2f\n\t"
+      ".insn s 0x5b, 0x4, x0, 0(%1)\n\t"
+      "addi %2, %2, -1\n\t"
+      "j 1b\n\t"
+      "2: .insn r 0x5b, 0x1, 0x9, %0, %1, x0"
+      : "=r"(out), "+r"(cap), "+r"(n));
+  return out;
+}
+
 static inline void *corpus_uninit_handle(void) {
   void *arena = probe_arena;
   void *rev = __builtin_capstone_cap_mrev(arena);

@@ -2965,6 +2965,38 @@ It is a valid don't-break-the-split-path control — and it stayed green, which 
 result — but it cannot reach the condition and so carries no verdict about this entry. The plan's
 §5.1 gate list named it as one and is corrected here.
 
+> # ✅ FIXED 2026-09-10 — the lead ruled FILL THEN INITIALISE, and it is implemented and gated.
+>
+> Monitor `capstone-sbi` at **`a006c63`** (branch `capstone-bootstrap`, all four checkouts in sync).
+> Both reclaim sites — `shared_region_annotated`'s `REV_BORROWED` branch and `share_child_region` —
+> now fill the region before initialising: one capability store per 16 bytes, which overwrites the
+> borrower's data **and** walks the cursor to `end`, so the two are one loop.
+>
+> **The fill is the security step, not a workaround for a precondition.** Before R-30/R-31 the cursor
+> came back already at `end`, so `INIT` succeeded with no rewrite at all. That is what this closes.
+>
+> **GATES, all green, on the emulator carrying the Q-07 change (`build-q07`) and a monitor rebuilt
+> from `a006c63`:**
+>
+> | gate | result | what it means |
+> |---|---|---|
+> | **`run-hostcall-all.sh`** | **12/12, 0 failures** | **THE gate.** Twelve probes revoke a region and immediately re-share it as `REV_BORROWED`, which IS the site changed. |
+> | `run-linear-uninit-corpus-probe.sh` | **7/7** | the in-domain miniature. `uninit_init_then_use_ok` **failed with cause 29 this morning** on the same emulator without the fill, and passes now — the red-to-green. |
+> | `run-smoke.sh` | pass | don't-break-the-monitor control |
+> | `run-nullblk-all.sh` | 3/3 | **control only.** Measured: all 60 of its revokes return LINEAR, so it cannot reach this path and its green carries NO verdict here. |
+>
+> **Two probes were rewritten, because they encoded the OLD cursor placement**, not because the fix
+> was wrong. `uninit_init_then_use_ok` now fills before initialising. `uninit_negative_offset_fault`
+> read `db[-1]` *because* the cursor sat at `end`, making that address `end-1` and inside the region;
+> with the cursor at `base` it addressed `base-1`, outside, and **kept passing while testing the
+> opposite of what it claimed**. It now reads a well-inside offset.
+>
+> **Inert on the currently flashed bitstream** — verified from the RTL, not assumed: `revoke` there
+> returns LINEAR for a writable region, so the guard does not fire. This can sit in the tree without
+> disturbing anything already measured, and becomes live at the flash.
+>
+> **Not pushed:** the `capstone-sbi` remote refuses this credential with a 403. Tried and recorded.
+
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
 **Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).

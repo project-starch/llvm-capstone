@@ -5,14 +5,15 @@
 // not about broken memory, a dead region or a botched derivation: the very same
 // handle, put through csinit, reads and writes the very same bytes.
 //
-//   db     = <UNINIT handle over the arena>     no read authority, cursor == end
-//   opened = init(db, 0)                        sqlite3_open(): LIN, cursor = base
+//   db     = <UNINIT handle over the arena>     no read authority, cursor == BASE
+//   opened = fill(db) then init(db, 0)          sqlite3_open(): LIN, cursor = base
 //   d      = delin(opened)                      an ordinary pointer to hand out
 //   d[8]   = 0x5e; read it back                 the connection is usable
 //
-// csinit is a required, explicit reclaim step: it asserts the input is UNINIT
-// with cursor == end, and it consumes it (UNINIT is not copyable). There is no
-// way to skip it and no second handle left behind.
+// csinit is a required, explicit reclaim step: it asserts the input is UNINIT with the cursor
+// having REACHED end, and it consumes it (UNINIT is not copyable). There is no way to skip it and
+// no second handle left behind -- and since R-31 no way to reach it without first overwriting the
+// borrower's data, which is the point.
 //
 // Expected: no fault, retval 0x1412005e.
 #include "corpus_domain.h"
@@ -24,7 +25,10 @@ void domain_main(void *arg, unsigned func) {
   unsigned *res = (unsigned *)arg;
 
   void *db = corpus_uninit_handle();
-  void *opened = __builtin_capstone_cap_init(db, 0); /* LIN over [base, end) */
+  /* FILL, then init. Was a bare cap_init: revoke used to hand the cursor back AT end, so csinit
+   * succeeded with no rewrite of the borrower's data at all -- the disclosure R-31 closes. Now the
+   * cursor comes back at BASE and csinit refuses it until the region has been overwritten. */
+  void *opened = corpus_fill_then_init(db, CORPUS_REGION_SIZE); /* LIN over [base, end) */
   void *d = __builtin_capstone_cap_delin(opened);
 
   volatile char *p = (volatile char *)d;

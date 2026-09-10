@@ -222,7 +222,12 @@ now, before the reading, precisely so it cannot be reached for afterwards.
 **This build does NOT settle R-29** (different branch, lint-failing, item 3) and does NOT authorise a
 flash (item 2).
 
-## 2. How should the monitor reclaim a revoked region?
+## 2. ~~How should the monitor reclaim a revoked region?~~ ✅ RULED AND IMPLEMENTED
+
+> **RULED 2026-09-10: fill, then initialise.** Implemented in the monitor at `a006c63`, all four
+> checkouts in sync, and green on all four emulator gates including the host-call suite that actually
+> exercises the two sites. The emulator half landed with it at `72fb56be86`. Details on M-5.
+> **Kept below for the reasoning and the cost correction; nothing here is waiting.**
 
 **Blocked by item 1. This is the firmware half and it must ship with the RTL fix — never RTL-only.**
 
