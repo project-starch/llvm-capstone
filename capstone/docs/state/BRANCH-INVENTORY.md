@@ -8,7 +8,7 @@
 | branch | tip | role |
 |---|---|---|
 | `fpga-testing-dev` | `66c4e7517` (2026-09-09: `ef5a8eaf2` + R-26 `9d8797560`, R-25 `42a141c93`, R-27 `66c4e7517`; pushed by the RTL lane under the lead's go-ahead; in synthesis) — previously `ef5a8eaf2` | the canonical line: rebuilt history above `7e4dc440f` (eight commits, no S-07 on-silicon instrument) + the registered switch-in-progress flag. Synthesised, censused, **NOT usable as a bitstream**; the census itself is retracted as a licence (`ref/bitstream-usability-is-the-census-not-the-slack.md`, RETRACTED 2026-09-08). |
-| `s12-fix-for-synthesis` | `5097eb166` | provenance of the resident bitstream `caplifive_s12fix_5097eb166.bit`; its board record is the only licence any build has. Frozen. |
+| `s12-fix-for-synthesis` | `5097eb166` | provenance of `caplifive_s12fix_5097eb166.bit`, which is **NO LONGER RESIDENT** — corrected 2026-09-10; the board has carried `caplifive_r25r26r27_66c4e7517.bit` since the R-25/26/27 flash. Its board record still stands as history. Frozen. |
 | `s12-fix-noinstr` | `6f8345fdb` | provenance of the arm-2 (debug tree tied off) routed checkpoint used in the second-launch queries. Frozen. |
 | `s12-ldc-rolling-filter` | `62b09ca92` | live RTL checkout: R-25 directed test and the LDC rolling-filter work. |
 | `capstone-bootstrap` | `b860fda3f` | the superproject's recorded submodule line. |

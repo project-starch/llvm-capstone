@@ -2997,6 +2997,45 @@ result — but it cannot reach the condition and so carries no verdict about thi
 >
 > **Not pushed:** the `capstone-sbi` remote refuses this credential with a 403. Tried and recorded.
 >
+> ### WHY THE GATE MEANS WHAT IT LOOKS LIKE — the loop bound, and a failure mode it forecloses
+>
+> The RTL lane asked the right question: if the emulator's `revoke` still parked the cursor at `end`,
+> a revoked handle would arrive with `cursor == end`, the fill would run **zero iterations**, the
+> self-check would pass trivially, the counter would increment having filled nothing, and 12/12 would
+> tell us the guard fires while saying nothing at all about the loop. **That gate would be
+> indistinguishable from a real one in every artifact.**
+>
+> **It cannot happen here, and the reason is structural rather than evidential.** The loop bound is
+> computed from the BOUNDS, not from the cursor —
+> `n = (cap_end(cap) - cap_base(cap)) >> 4`. So a handle arriving with `cursor == end` does not
+> produce a short loop; it produces `n` attempted stores whose **first** one violates STC's
+> `cursor <= end - 16` and **faults loudly on the first reclaim**. The gates pass, therefore the
+> cursor arrived at `base` and the loop ran `n` times on every reclaim the twelve host-call probes
+> performed.
+>
+> Independently: `op_helper.c:937` sets `cursor = base` unconditionally, aligned to the spec and to
+> `capstone_dyn_unit.anvil`'s `create_capability(..., rs1.metadata.start)`.
+>
+> **Consequence for the flash, and it lowers the risk:** the fill loop has already run in anger, many
+> times. What is new at the flash is the HARDWARE path — real revoke semantics, real capability stores
+> against the memory system, and the five sites going live together — not the firmware logic.
+
+>
+> ### THE FLASH BOOT IS THE FIRST TIME ANY OF THIS RUNS ON HARDWARE — order the arms accordingly
+>
+> All five reclaim sites are **inert on the current bitstream**, so the emulator gates are the only
+> evidence there will be until the flash. At the flash, **five newly-live paths become live at once,
+> on a bitstream that also changes `revoke` semantics underneath them.** That is more than one unknown
+> in one boot, which is exactly what this project's board rules exist to prevent.
+>
+> **Take them one at a time where the stage set allows:** a known-good control, then the simplest
+> revoke-and-reuse path, and only then the SQLite stages, which are the ones that both share the large
+> regions and exercise `split_out_cap`. A wedge in the middle of a combined boot makes everything
+> after it collateral, and the five sites would not be separable afterwards.
+>
+> *(RTL lane, 2026-09-10. Not a reason to hold the change — it is about what the first boot can be
+> made to conclude.)*
+>
 > ### A STUCK FILL IS RECOVERABLE — by shrinking `end` DOWN, not by moving the cursor up
 >
 > The constraint recorded elsewhere is that `STC` is the only instruction that advances an UNINIT

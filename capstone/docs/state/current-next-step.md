@@ -47,7 +47,7 @@ on it.**
 S-12 is root-caused, fixed in RTL, synthesised, flashed, and the SQLite domain that trapped now
 completes. The registry entry (`ref/ISSUES.md`) and the full mechanism
 (`capstone/tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/S12-explanation.md`) carry the
-detail. The resident bitstream is `caplifive_s12fix_5097eb166.bit`.
+detail. The resident bitstream is **`caplifive_r25r26r27_66c4e7517.bit`** (RTL `66c4e7517`; carries the R-25, R-26 and R-27 fixes). **CORRECTED 2026-09-10** — this said an older bitstream, and the board scripts that actually ran boots sw48-sw51 all set `FPGA_BITSTREAM=caplifive_r25r26r27_66c4e7517.bit`, which is the record that settles it. Several drivers still carry stale hardcoded defaults, so **set `FPGA_BITSTREAM` explicitly** or the resident-silicon guard hard-stops.
 
 The verification is **consistent with fixed, not proven**: 4 clean draws against a pre-fix arm that
 trapped 3 of 4, Fisher p = 0.071. This project has already ruled that bound insufficient
