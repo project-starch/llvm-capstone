@@ -87,6 +87,26 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    LAST`, and the image is 112 bytes larger than the plain one — R-17's exact shape. That risk
    exists either way; a dedicated boot only decides what a hang costs. Run it as control first,
    then the seven instret arms ascending, so a hang costs the expensive end and nothing cheaper.
+
+   **CORRECTED within the hour — the decision stands, its stated reason does not.** I leaned on
+   R-17's nine-for-nine as if it gave a probability for a relink. It does not, and there is
+   evidence against it from tonight's own boot: the seven-testset image is itself a **+176,760
+   byte** perturbation of the three-testset one — more globals, a different define set — and it
+   returned on the board across all seven arms of sw56 and in sw52's family before that. So R-17
+   does not govern this image family in the literal form its title states.
+
+   What R-17 does establish is narrower and still enough. Its **tested-and-excluded** list names
+   *address of the executed code* — `sqlite3Strlen30` is at the **same** address in both the
+   passing and hanging builds — so a differing address is **untested, not cleared**, which is the
+   opposite of what an exclusion would give us. And reading past its headline: the residual is
+   **sporadic wrong `strlen` results, ~3% of calls, not length-dependent**, which reads as a
+   machine-level sporadic fault that sometimes lands fatally rather than as "perturbation causes
+   hangs". A sporadic fault landing badly in nine builds of one program does not transfer to a
+   relink of another.
+
+   **So the ruling rests on the cost asymmetry alone, which is independent of R-17's true scope:**
+   a wedge on a dedicated boot costs instret arms only; a wedge on a shared boot costs the pairs
+   and the baseline half with it. That argument would hold if R-17 did not exist.
    **Build it from the SEVEN-testset source** — the `speedtest1_instret.dom` in the sw52 set is the
    old three-testset workload and would answer a question about a program we no longer run.
 
