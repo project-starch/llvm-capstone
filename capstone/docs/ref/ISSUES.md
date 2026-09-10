@@ -3117,7 +3117,12 @@ result — but it cannot reach the condition and so carries no verdict about thi
 > returns LINEAR for a writable region, so the guard does not fire. This can sit in the tree without
 > disturbing anything already measured, and becomes live at the flash.
 >
-> **Not pushed:** the `capstone-sbi` remote refuses this credential with a 403. Tried and recorded.
+> ~~**Not pushed:** the `capstone-sbi` remote refuses this credential with a 403.~~ **CORRECTED
+> 2026-09-11 — it IS pushed.** `git ls-remote capstone-sbi capstone-bootstrap` returns
+> `0a5c3d9a3413…`, the same commit. The 403 was real when recorded and the line was then repeated
+> for a day without a retry. **Re-try a blocker before restating it, and ask the REMOTE, not the
+> local copy of what the remote last said** — counting commits against `origin/HEAD` reads a cached
+> ref and a symref that need not name the branch in question, and it agreed with the stale line.
 >
 > ### THE RECLAIM COUNTER IS A BOARD INSTRUMENT ONLY — and it produced an unreadable zero first
 >
@@ -3283,13 +3288,21 @@ run, not the mechanism.
 
 **It blocks the `pre_mmap_offset` proof.** `tests/runtime-qemu/offsetcycle` fails against the old
 module rather than passing quietly, which is the only reason it is worth a run — and it cannot
-complete a single cycle until this guard exists. The fix is deliberately NOT written yet: the
-monitor's remote returns 403 for this credential and `0a5c3d9` is already unpushable, so every
-monitor commit lengthens a stack only someone with write access can land; and there is a design
-question inside it that is not a guard — for a never-shared region the monitor holds the only
-capability, so "refuse the revoke" and "nothing to revoke, proceed to the pop" are both defensible
-and the module's own contract (`module/capstone.c`, the comment above `ioctl_release_region`) does
-not settle it.
+complete a single cycle until this guard exists. The fix is deliberately NOT written yet, and for ONE
+reason rather than the two first recorded here. **The push argument is withdrawn** — this entry
+originally said the monitor remote refuses this credential, which was a day-stale line; `0a5c3d9`
+is on `capstone-sbi`, so a monitor commit lands normally. What remains is a design question that is
+not a guard: for a never-shared region the monitor holds the only capability, so "refuse the
+revoke" and "nothing to revoke, proceed to the pop" are both defensible and the module's own
+contract (`module/capstone.c`, the comment above `ioctl_release_region`) does not settle it.
+
+That distinction decides whether the offset proof is unblocked at all. **Refusing** is the minimal
+safe fix — it converts an M-mode capability fault into the `-1` that `ioctl_release_region` already
+reports — but it leaves `release_region` unable to free a never-shared region, so
+`tests/runtime-qemu/offsetcycle` would still exit VOID at its first cycle and the
+`pre_mmap_offset` fix would still be unproven. Only the **proceed-to-the-pop** semantics unblock
+it, and that is a behavioural change to the region lifecycle rather than a guard. Whoever rules on
+it should know the verification hangs on the ruling and not on the code.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 

@@ -9,9 +9,11 @@ Minimal snapshot. Read first in every session.
   (the annotation branches share a hoisted one, so REV_DEFAULT/BORROWED/SHARED/TRANSFERRED are all
   covered), with the loop bound taken from `cap_end - cap_base` and **not** the cursor, so a
   cursor-at-end arrival faults instead of running zero iterations. Emulator gates green: host-call
-  12/12, linear/uninit corpus 7/7, smoke, nullblk 3/3. **`0a5c3d9` is LOCAL ONLY** — pushing it needs
-  write access to `project-starch/capstone-sbi`, which this credential does not have
-  (`403, Permission ... denied`, tried and recorded 2026-09-10).
+  12/12, linear/uninit corpus 7/7, smoke, nullblk 3/3. ~~**`0a5c3d9` is LOCAL ONLY**~~ **CORRECTED
+  2026-09-11: it is PUSHED.** `git ls-remote` — the remote itself rather than a cached
+  remote-tracking ref — shows `capstone-sbi refs/heads/capstone-bootstrap` at exactly
+  `0a5c3d9a3413`. The 403 recorded on 2026-09-10 was real then and was carried forward for a day
+  without being re-tried; nobody needs to push this.
 * **Boot sw52 — speedtest1 on capability silicon vs native, plus the fill-cost pair.** Control
   `k800` = 4, zero fault tags, 10 of 11 arms. Capability/native **cycle** ratios 1.335 / 1.181 /
   1.214 for parsenumber / orm / main, with **identical verification hashes** on every pair; the cycle
