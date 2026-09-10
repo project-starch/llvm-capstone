@@ -1570,6 +1570,20 @@ def main():
                 if _lm:
                     log(f"  {dom}: ladder rung {_lm.group(1)} returned retval={_lm.group(2)}")
                     bad = False
+            # HOST-BINARY PROBE ARMS REPORT DIFFERENTLY TOO -- the same gap in this guard's
+            # SCOPE that the ladder block above documents, found the same way. A `host|probe:cycle`
+            # arm runs a host binary that reads a CSR and prints `BASELINE-PROBE <what> = <value>`;
+            # it never emits `SQ: obs=` and never emits a ladder RESULT. On boot sw52 the guard
+            # fired on an arm that had already returned rc=0 with
+            # `BASELINE-PROBE cycle = 20349224574`, and took the following arm down with it.
+            #
+            # Recognised only when the marker CARRIES A VALUE, so "the domain was never staged"
+            # still cannot masquerade as success -- the same condition the ladder block uses.
+            if not wedged and bad:
+                _pm = re.search(r"BASELINE-PROBE (\S+) = (\d+)", text)
+                if _pm:
+                    log(f"  {dom}: baseline probe {_pm.group(1)} = {_pm.group(2)}")
+                    bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
