@@ -88,8 +88,13 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 > An RTL comment on the branch still says `:421` "must be amended in the same change"; that sentence
 > was written under the full-exclusive framing and no longer applies.
 >
-> **NOT touched, and it needs its own look:** `SPLIT` (`cap-man-insn.adoc:302`, `:328`) is written in
-> half-open notation. That is a notation question, not this one.
+> **NOT touched, and it turned out NOT to be the notation question it was called here:** `SPLIT`.
+> Measured on 2026-09-10 — on silicon byte `val` lands in the **upper** half, where the spec puts it
+> in the **lower**. The same call produces a different PARTITION, which is a semantic difference. It
+> is filed as **R-32** along with `LCC` (also measured: 256 over a 256-byte region, not 255) and
+> `SHRINKTO`/`SEAL` (still source readings). **Deferred, not dropped** — the decision is the lead's
+> because whichever way it goes one of the two documents changes, and nothing we build reads bounds
+> from the prose, so it is not urgent.
 >
 > **`21a01f0` IS LOCAL ONLY.** `project-starch/capstone-academic-spec` returns
 > `403 Write access to repository not granted` for this lane's credential — attempted and recorded.

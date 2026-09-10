@@ -461,6 +461,56 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10, two of four MEASURED`
+
+> **This is the residue of the `end`-convention resolution, and it is deliberate rather than
+> overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the
+> RTL keeps an exclusive `end`, the spec an inclusive one. Every **access** bound now agrees exactly
+> — algebraically, for every region size and every access width, 4-byte scalars included. What it
+> could not align, because aligning it would mean moving a convention, is every instruction that
+> takes or returns a bound **as a value**.
+>
+> | | spec | this RTL | status |
+> |---|---|---|---|
+> | `SPLIT` at `val` | byte `val` in the **lower** half (`cap-man-insn.adoc:338`) | byte `val` in the **UPPER** half | **MEASURED** |
+> | `LCC rd, rs1, 4` over a K-byte region | `base + K − 1` (`:197`) | **`base + K`** | **MEASURED** |
+> | `SHRINKTO imm` | a region of exactly `imm` bytes (`:294`) | `imm − 1` under an exclusive end | source reading |
+> | `SEAL` minimum size | ≥ 1024 (`:486`, `end − base + 1`) | ≥ 1023 under an exclusive end | source reading |
+>
+> **The two measurements**, both directed tests on `capstone_cv64a6_imafdc_sv39`, both real
+> completions rather than the harness's SUCCESS-at-timeout:
+>
+> * `verif/tests/custom/capstone/split-cut-side.S` (`capstone-ariane` `ec320921e`), 386 cycles. Base
+>   `0x80001000`, split at `val = 0x80001040`: lower `[0x80001000, 0x80001040)`, upper starting **at**
+>   `0x80001040`. Contiguous, no gap, no overlap — and byte `val` is in the upper half. The spec's
+>   `rs1.end := val` (inclusive) with `rd.base := val + 1` is the other partition, equally gapless,
+>   one byte across.
+> * `verif/tests/custom/capstone/bound-value-readback.S` (`abe54a655`), 383 cycles. Over a region of
+>   exactly 256 bytes, LCC field 4 minus field 3 reads **256** — the exclusive end.
+>
+> **SPLIT is the one that is not a notation question.** The other three are readbacks: a caller that
+> knows the convention can adjust. SPLIT is the same call producing a **different partition**, so code
+> written from the spec that splits at `val` expecting `val` in the lower half gets it in the upper
+> half on hardware.
+>
+> **Why this is OPEN rather than a defect, and why it is not urgent.** Nothing we build reads bounds
+> from the prose: the monitor and the compiler take them from the RTL via `__capfield`, so they agree
+> with the hardware, and access enforcement — the half that governs safety — agrees exactly. The
+> exposure is to a future implementer, or to a reader of the spec. **The decision is the lead's,
+> because whichever way it goes one of the two documents changes**, and it was deferred on 2026-09-10
+> with that reasoning recorded rather than left implicit.
+>
+> **What would close it:** a ruling, plus tests of the same shape for `SHRINKTO` and `SEAL`. Note that
+> SEAL needs a *different* shape — its question is a minimum size, answered by observing which of two
+> boundary cases raises, not by reading a field back. `SHRINKTO` resisted two attempts in the readback
+> test (`UNEXPECTED_OPERAND` with `rd == rs1` and again with a distinct `rd`), so its operand
+> convention on this RTL is not what either attempt assumed; that is where the next attempt should
+> start.
+>
+> Full narrative, including the resolution this is the residue of:
+> `history/10-09-2026_19-00-00_decisions-A-and-B.md`.
+
+
 ### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated; directed arms exist (r28-interrupt-probe) but cannot reach it (see the box); the live untested route is in the commit stage; no fix`
 
 > **2026-09-09 (evening), RTL lane after a claim-auditor pass — STAYS OPEN, and the interrupt route is closed
