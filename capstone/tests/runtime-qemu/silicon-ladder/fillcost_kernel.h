@@ -58,6 +58,19 @@
 #ifndef FILL_STORES
 #define FILL_STORES 1
 #endif
+/* FILL_PASSES > 1 runs the loop again over the SAME buffer, so (that rung - fillcost) is the cost of
+   a pass over a region the fill has just touched. That is the only way to settle whether "cold"
+   drives the 23.6 cycles/store figure: this cache is write-through with NO write-allocate
+   (wt_dcache_wbuffer.sv:43-44), so a warm region is NOT obviously cheaper and the answer cannot be
+   assumed in either direction. */
+#ifndef FILL_PASSES
+#define FILL_PASSES 1
+#endif
+/* FILL_TAG keeps every rung's retval distinct, so "not compiled in" can never read as another
+   arm's pass. */
+#ifndef FILL_TAG
+#define FILL_TAG 0
+#endif
 
 #define FILLCOST_BYTES 4096
 #define FILLCOST_SLOTS (FILLCOST_BYTES / 16)
@@ -70,9 +83,14 @@ static unsigned fillcost_compute(void)
   unsigned long n = FILLCOST_SLOTS;
   unsigned long k = 0;
   unsigned r = 0;
+  unsigned pass = 0;
 
-  /* Seed slot 0 non-zero, so "reads back zero" afterwards is evidence and not the BSS. */
+  /* Seed slot 0 AND slot 255 non-zero. Slot 0 alone was not enough: it is the FIRST slot the loop
+     touches, so it reads back zero whether or not the pointer walk advanced -- the control could
+     not tell "walked 4 KiB" from "stored 256 times to the same granule". Slot 255 is reached only
+     if the walk works. (Audit, 2026-09-10.) */
   fillcost_buf[0] = (void *)fillcost_buf;
+  fillcost_buf[FILLCOST_SLOTS - 1] = (void *)fillcost_buf;
 
 /* THE GUARD MACRO IS `__CAPSTONE__`, NOT `__riscv`. The domain target is
    capstone64-unknown-elf and it does NOT predefine __riscv, so the first version of this rung
@@ -81,6 +99,9 @@ static unsigned fillcost_compute(void)
    oracle could not: the C loop stores too, so QEMU returned the same 768. Only the disassembly
    showed it. Hence the #error below -- a target that is neither the domain nor the declared
    native oracle now fails to compile instead of quietly measuring the wrong thing. */
+  for (pass = 0; pass < FILL_PASSES; pass += 1) {
+  p = fillcost_buf;
+  k = 0;
 #if defined(__CAPSTONE__)
   /* Four instructions, nothing schedulable between them, and the loop counter is an OUTPUT so
      the iteration count is measured rather than trusted. cincoffsetimm walks the pointer by 16
@@ -105,10 +126,14 @@ static unsigned fillcost_compute(void)
 #else
 #error "fillcost: neither the Capstone domain target nor a declared native oracle build"
 #endif
+  r += (unsigned)k;                             /* +256 per pass : the loop ran */
+  }
 
-  r = (unsigned)k;                              /* +256 : the loop ran */
   if (fillcost_buf[0] == 0)
-    r += 512;                                   /* +512 : the store landed */
+    r += 512;                                   /* +512 : the store landed at the FIRST slot */
+  if (fillcost_buf[FILLCOST_SLOTS - 1] == 0)
+    r += 1024;                                  /* +1024 : and at the LAST -- the walk covered 4 KiB */
+  r += FILL_TAG;                                /* per-rung sentinel */
   return r;
 }
 #endif
