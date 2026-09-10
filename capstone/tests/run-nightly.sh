@@ -43,6 +43,12 @@ LIT="$CAPSTONE_LLVM_BUILD_DIR/bin/llvm-lit"
 # benchmark suites (coremark/rv8/beebs) are the primary backend regression gate;
 # run-all-beebs boots 82 domains serially, so it carries its own long timeout.
 BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
+# SQLite moved OUT of benchmarks/ in the prep/layout merge (2026-09-10): the runners are under
+# ports/, the CVE reproducers under bug-corpora/. Both suites below kept pointing at
+# $BENCH_DIR/sqlite and had been dead since -- benchmarks/sqlite still EXISTS (it holds `probes`),
+# so the stale prefix looks right to a reader and only the missing leaf gives it away. Named
+# separately so the next move breaks one line, not two.
+SQLITE_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 CORE_SUITES=(
   # 3600 for the same reason as the two below, and this one is self-inflicted:
   # before stage 1 the suite returned on the first exhausted boot, so it "finished"
@@ -69,7 +75,7 @@ CORE_SUITES=(
   # whose boot flaked and retried, so the 1800 default carries better than 2x over
   # the worst observed. A cold run rebuilds the amalgamation and costs a few
   # minutes more, still well inside it.
-  "sqlite-memory|bash $BENCH_DIR/sqlite/run-sqlite-memory.sh"
+  "sqlite-memory|bash $SQLITE_DIR/run-sqlite-memory.sh"
   "rv8|bash $BENCH_DIR/rv8/run-all-rv8.sh|3600"
   "beebs|bash $BENCH_DIR/beebs/run-all-beebs.sh|10800"
   "revoke-matrix|bash $RUNTIME_DIR/run-revoke-matrix-probe.sh"
@@ -101,7 +107,7 @@ CORE_SUITES=(
   # 3600, not the 1800 default, and the reason is the COLD path rather than the run:
   # measured at 161 s warm, but a cold one compiles a second full amalgamation for
   # the silicon domain, links it in three passes, and fetches the corpus.
-  "sqlite-slt|bash $BENCH_DIR/sqlite/run-sqlite-slt.sh|3600"
+  "sqlite-slt|bash $SQLITE_DIR/run-sqlite-slt.sh|3600"
 )
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
@@ -343,6 +349,28 @@ if [ "$BUILD_OK" -eq 1 ]; then
   mkdir -p "$(dirname -- "$LOCK")"; : >"$LOCK" 2>/dev/null || true
   exec 9>"$LOCK"
   flock 9 || log "[warn] could not take QEMU lock; proceeding serially anyway"
+  # REGISTRY SANITY, BEFORE ANY SUITE RUNS. A suite whose script has moved exits 127, which this
+  # runner does record as FAIL(127) rather than a pass -- but it records it AFTER the run reaches
+  # that suite, indistinguishable from a genuine failure without opening the log, and only after
+  # everything before it has been spent. Two entries had been dead since the prep/layout move
+  # (2026-09-10) for exactly this reason. Check the registry up front and name the missing file.
+  _missing_suite=0
+  for entry in "${SUITES[@]}"; do
+    IFS='|' read -r name cmd stimeout <<< "$entry"
+    if [ -n "$ONLY" ] && [[ ",$ONLY," != *",$name,"* ]]; then continue; fi
+    # the script is the first token after `bash`; anything else is left to the suite itself
+    _scr=$(printf '%s\n' "$cmd" | awk '{for(i=1;i<NF;i++) if($i=="bash"){print $(i+1); exit}}')
+    if [ -n "$_scr" ] && [ ! -f "$_scr" ]; then
+      log "[registry] $name: script does not exist: $_scr"
+      _missing_suite=1
+    fi
+  done
+  if [ "$_missing_suite" -eq 1 ]; then
+    log "[registry] refusing to start: a suite names a script that is not there. Fix the registry"
+    log "[registry] (a moved path is the usual cause) -- do not let the run spend its budget first."
+    exit 2
+  fi
+
   for entry in "${SUITES[@]}"; do
     IFS='|' read -r name cmd stimeout <<< "$entry"
     if [ -n "$ONLY" ] && [[ ",$ONLY," != *",$name,"* ]]; then continue; fi
