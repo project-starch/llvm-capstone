@@ -110,7 +110,28 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    **Build it from the SEVEN-testset source** — the `speedtest1_instret.dom` in the sw52 set is the
    old three-testset workload and would answer a question about a program we no longer run.
 
-9. **A second `fillcost` draw**, plus the `fillwarm`/`fillsd` repeats and the directed tests — all
+9. **An artifact set's HOST half can drift under it from a submodule commit — nothing records
+   which base it was built against.** Found 2026-09-11 when two speedtest1 sets built from
+   identical source, defines and toolchain produced different `sqlite_host.user` bytes.
+   `build-sqlite-host.sh:27` links `caplifive-buildroot/package/modcapstone/userspace/lib/
+   libcapstone.c` by absolute path, and `1a5a591` landed at 02:57:54 — between the two builds.
+   The `.bss` delta confirms it exactly rather than plausibly: `region_mmap_offsets` is
+   `size_t[MAX_REGION_N]` and `region_mmappable` is `int[MAX_REGION_N]`, so 64→96 is
+   32×8 + 32×4 = **384 bytes**, which is the observed delta to the byte.
+
+   **Inert for that workload**, checked rather than assumed: speedtest1 uses region ids 10 and 11,
+   far below either table's bound, so neither the raised size nor the new check is reachable; the
+   size-limit message applies at 256 MiB against a 64 KiB region; and the host sits outside the
+   counter bracket regardless.
+
+   The shape is what matters. The DOMAIN half and the toolchain can sit still while the HOST half
+   moves, because the host links a file another lane commits to — and **no build gate says a word**.
+   A bake picks up whatever the tree holds at that moment. Fix is one line in
+   `build-sqlite-host.sh`: record the buildroot submodule's HEAD and dirty state beside the built
+   binary so a delivered set carries its own base. Deferred only because the script was mid-run
+   when this was found, and bash reads a script by byte offset.
+
+10. **A second `fillcost` draw**, plus the `fillwarm`/`fillsd` repeats and the directed tests — all
    cheap riders on any boot, none worth one alone. Boot sw52's lost `instret` arm is in the same
    class: the classifier defect that killed it is fixed and negative-tested.
 
