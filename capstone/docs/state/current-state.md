@@ -16,12 +16,21 @@ Minimal snapshot. Read first in every session.
   `k800` = 4, zero fault tags, 10 of 11 arms. Capability/native **cycle** ratios 1.335 / 1.181 /
   1.214 for parsenumber / orm / main, with **identical verification hashes** on every pair; the cycle
   ratio is BELOW the instruction ratio in all three because capability CPI is *lower* than native's.
-  The fill-cost matched pair gives **23.6 cycles per 16-byte capability store**, so a 4 KiB reclaim
-  is **+3.6 % instructions and ~8 % cycles** (7.3-8.8 %) at the boundary CPI this boot measured
-  (3.17-3.81), and 4.3-24.7 % across the full 1.13-6.44 spread -- it is CPI-sensitive, not "in the
-  lower half of the bracket". An adversarial audit corrected this the same day from 5.5-6.6 %: the
-  first version counted the fill loop's INSTRUCTIONS but only the stores' CYCLES, and the monitor
-  pays for the loop too.
+  Full numbers: `docs/ref/fpga-silicon-measurements-for-paper.md` §7f.
+* **Boot sw53 -- the fill-cost pair with an error bar, and both of §7e's open questions closed.**
+  9/9 arms, `k800` = 4, zero fault tags. **24.1 cycles per 16-byte capability store at n=3**
+  (within-boot spread 0.2-0.5 %; sw52's single draw of the earlier rung gave 23.6). A 4 KiB reclaim
+  is **+3.6 % instructions and 7.8-9.3 % of cycles** at speedtest1's measured CPI, 4.6-26.2 % across
+  the full 1.13-6.44 spread -- CPI-sensitive, not "in the lower half of the bracket". An adversarial
+  audit had already moved that figure from 5.5-6.6 %: the first version counted the fill loop's
+  INSTRUCTIONS but only the stores' CYCLES, and the monitor pays for the loop too.
+  - **A warm region is NOT materially cheaper** (`fillwarm`: second pass >= 87 % of the first), so
+    the cold-buffer "this is a ceiling" caveat is deleted and the figure applies to the monitor's
+    real case.
+  - **The cost is per STORE and is ~96 % not capability-specific** (`fillsd`: a plain 8-byte store on
+    the same 16-byte walk costs 23.1 against `stc`'s 24.1, writing half the bytes). It is the
+    write-through drain, not the tag.
+  - **R-3 does not bite the ladder path**: every rung repeated at its own entry VA returned.
   Full numbers: `docs/ref/fpga-silicon-measurements-for-paper.md` §7e, §7f.
 * **`RCLM:00000000` on every share (9 of 9).** Zero reclaims, as it must be where the guard cannot
   fire — and the counter's reporting path is now proven readable on silicon, which is the one
