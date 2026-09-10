@@ -125,6 +125,14 @@ def parse_args() -> argparse.Namespace:
         "(repeatable). Additive; used e.g. by the borrow-cost probe to pass "
         "-icount for a deterministic instruction count.",
     )
+    parser.add_argument(
+        "--kernel-arg",
+        action="append",
+        default=[],
+        help="Extra word for the guest kernel's command line (repeatable), "
+        "e.g. cma=1G: the CMA area a region above the buddy allocator's 4 MiB "
+        "block comes from (modcapstone create_region).",
+    )
     args = parser.parse_args()
     if not args.domains and not args.guest_command:
         parser.error("provide at least one domain path or one --guest-command")
@@ -256,7 +264,7 @@ def main() -> int:
         "-kernel",
         str(kernel),
         "-append",
-        "root=/dev/vda ro",
+        " ".join(["root=/dev/vda ro"] + args.kernel_arg),
         "-snapshot",
         "-drive",
         f"file={rootfs},format=raw,id=hd0",
