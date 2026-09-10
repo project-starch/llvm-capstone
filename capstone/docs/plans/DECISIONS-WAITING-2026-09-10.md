@@ -47,6 +47,56 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## 1. The `end` convention — ONE TOKEN EACH SIDE, no convention change
 
+> ## ⏳ NOT RULED. A spec edit is PREPARED LOCALLY and is waiting on the lead — do not read it as adopted.
+>
+> **This decision is still open.** It is the lead's, with the spec's owners, and no ruling has been
+> given on the corrected framing. A lane prepared the spec half on its own initiative and committed
+> it **locally**; that commit is a PROPOSAL, not an adopted resolution, and this box said "RULED AND
+> EXECUTED" until it was corrected. Nothing references it: the parent's submodule pointer is
+> deliberately unmoved, and it cannot be pushed anyway (see the bottom of this box).
+>
+> **What is prepared** — `capstone-academic-spec` (branch `caplifive-s06`) commit **`21a01f0`**,
+> local only. The **RTL half was already on** `r30-r31-init-revoke` at `1bfff7776`
+> (`INIT`: `cursor <= end` → `<`), and that half is common to both surviving routes, so it is not
+> waiting on this decision. Under the prepared resolution neither convention moves: the RTL stays
+> exclusive, the spec stays inclusive, and one arithmetic form is corrected on each side so the two
+> describe the same machine.
+>
+> **⚠ IT TOUCHES ONLY ONE OF THE TWO SPEC CHECKOUTS.** `capstone/capstone-spec` (branch `caplifive`,
+> `ca9c84f`) carries the same two `end - CLENBYTES` bounds and is **unchanged**, so accepting this
+> means deciding which checkout is authoritative and bringing the other along. That question is part
+> of the decision, not a detail after it.
+>
+> **The spec side was FOUR tokens, not one.** The same exclusive arithmetic appeared in four access
+> bounds, not just the store bound this document named:
+>
+> | | was | now |
+> |---|---|---|
+> | `LDC`   `mem-access-insn.adoc:39`  | `[base, end - CLENBYTES]` | `[base, end - CLENBYTES + 1]` |
+> | `STC`   `mem-access-insn.adoc:93`  | `[base, end - CLENBYTES]` | `[base, end - CLENBYTES + 1]` |
+> | load    `existing-insn.adoc:66`    | `[base, end - size]`      | `[base, end - size + 1]` |
+> | store   `existing-insn.adoc:260`   | `[base, end - size]`      | `[base, end - size + 1]` |
+>
+> Fixing only the store bound would have left the document disagreeing with itself, so all four went
+> together — which is itself a reason the decision is worth a ruling rather than a nod: this document
+> named one site and the change is four. **The document already contained the correct form**, which is what settles the direction
+> rather than leaving it to argument: `prog-model.adoc:289` bounds a 4-byte instruction fetch at
+> `[pc.base, pc.end - 3]`, i.e. `end - size + 1`. The four data-access rules were the outliers.
+>
+> **`INIT`'s spec condition is NOT changed and must not be.** `cap-man-insn.adoc:446` says
+> `cursor <= end` is illegal, which is correct under inclusive `end` — a fully filled region leaves
+> the cursor at `end + 1`. It would only move under the full-exclusive route, which was not taken.
+> An RTL comment on the branch still says `:421` "must be amended in the same change"; that sentence
+> was written under the full-exclusive framing and no longer applies.
+>
+> **NOT touched, and it needs its own look:** `SPLIT` (`cap-man-insn.adoc:302`, `:328`) is written in
+> half-open notation. That is a notation question, not this one.
+>
+> **`21a01f0` IS LOCAL ONLY.** `project-starch/capstone-academic-spec` returns
+> `403 Write access to repository not granted` for this lane's credential — attempted and recorded.
+> The parent's submodule pointer is therefore **deliberately left at `fa9600f`**: bumping it would
+> make the parent reference a commit that does not exist on the remote.
+
 > **A RULING WAS ALREADY GIVEN ONCE, AND SUPERSEDED. Read this first or the history looks broken.**
 > The lead ruled `end` EXCLUSIVE at `d71d5007ee05` (2026-09-10 02:18). It was superseded the same day
 > because the framing it was decided on was mine and was wrong: one of the routes put forward would

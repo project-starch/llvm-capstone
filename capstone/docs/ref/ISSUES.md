@@ -2835,6 +2835,13 @@ undebuggable and takes the core with it.
 > **The resolution, in order, and only the first step is a decision:**
 > 1. **Declare whether `end` is inclusive or exclusive.** The spec never says and the RTL is split
 >    against itself. Recommended EXCLUSIVE — every access path and all of QEMU already assume it.
+>    **⚠ SUPERSEDED — do not act on this paragraph.** Both halves of it are wrong: the spec DOES say
+>    (inclusive, `prog-model.adoc:119`, `:289`), and the three arguments for exclusive collapsed to
+>    one. A ruling of EXCLUSIVE was given at commit `d71d5007ee05` and withdrawn the same day; that
+>    commit is still findable by its subject line and has already been read as live once. The
+>    corrected framing and the ruling actually taken are further down this file and in
+>    `plans/DECISIONS-WAITING-2026-09-10.md` item 1: **each document keeps its own convention** and
+>    one arithmetic form is corrected on each side.
 >    **The lead's, with the spec's owners.**
 > 2. **Fix `INIT`** to match (R-30): under the exclusive reading, `capstone_flu_unit.anvil:139`
 >    `<=` → `<`, with `cap-man-insn.adoc:421` changed alongside it.
