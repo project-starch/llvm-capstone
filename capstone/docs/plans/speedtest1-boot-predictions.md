@@ -59,3 +59,55 @@ the two counter probes.
 nothing between entry and return because the report lands only when the host prints it. Both are set
 from the predictions above, not left at default. The driver's abort-marker path also raises a
 "was not staged" hard stop on a domain fault return, which is false and discards every arm behind it.
+
+## Amendment, same day, still before the boot: the fill-cost pair
+
+Written after rebuilding the `fillcost` rung and before any board arm ran, so it is still a
+pre-registration and is kept separate from the table above rather than edited into it.
+
+**Why the rung was rebuilt.** The first version was a C `for` loop over a capability-typed double
+pointer. It emitted `stc`, and it measured the wrong thing: at the domain build's `-O0` everything
+spills, so the body was **nineteen instructions per store**, one of which was the store. A total
+dominated 18:1 by loop overhead cannot answer "what does the store cost" — backing the store out of
+it would have meant stacking an assumed CPI for the overhead on top of a measured total. The monitor's
+own fill is a four-instruction asm loop, so the rung is now a four-instruction asm loop.
+
+**The control is the measurement.** `fillnop` is the same loop with the capability store replaced by
+a `nop`: same iteration count, same pointer walk, same branch, **same total instruction count (242 in
+the image, verified by disassembly)** — one instruction different. So
+
+    (fillcost cycles − fillnop cycles) / 256
+
+is the marginal cost of one 16-byte capability store, with the loop overhead cancelled rather than
+assumed. Neither arm alone gives that number, which is why both are in this boot.
+
+| arm | retval must be | instructions in the bracket | predicted |
+|---|---:|---:|---|
+| `fillcost` | **768** | ~1,030 | cycles above `fillnop` by 256 × the store cost |
+| `fillnop` | **256** | ~1,030 | 1.1 – 1.5 cycles per instruction |
+
+**The retval encodes two separate facts**, so a clean-looking zero cannot hide either: `+256` is the
+asm loop's own counter, returned rather than assumed, and `+512` says slot 0 — seeded **non-zero**
+before the loop — read back as zero, i.e. the store landed. A deleted loop reads 0. This matters
+because the buffer is BSS: a rung that only checked "does it read back zero" would have passed with
+the loop removed entirely.
+
+**Predicted delta.** A per-store delta near **3 cycles** makes the reclaim a few percent of the
+boundary path; near **50** makes it a quarter of it. The measured 1024-byte copy rate of 3.52
+cycles/byte extrapolates to a 14,400-cycle ceiling for the whole fill, and that **overstates** it,
+because a copy loads and stores where a fill only stores.
+
+**One thing this pair cannot separate.** It measures the fill's *physical work* on the resident
+bitstream, where the capability is LINEAR and the pointer is walked by an explicit `cincoffsetimm`.
+The monitor's real fill walks by the **UNINIT cursor advance**, which is free in instruction count
+and is not on this silicon. So the pair gives the store cost and the monitor's loop is one
+instruction shorter per iteration than the rung's — it does not give the reclaim path end to end,
+and only the flashed bitstream can.
+
+**A miss that is worth recording because nothing else caught it.** The rewrite first guarded its asm
+on `__riscv`. The domain target is `capstone64-unknown-elf` and does **not** predefine it, so the
+build fell through to the portable C loop and produced exactly the shape the rewrite existed to
+remove. The oracle could not see it — the C loop stores too, so QEMU returned the same 768 — and the
+staging gate passed. Only the disassembly showed it. The guard is now `__CAPSTONE__`, and a target
+that is neither the domain nor the declared native oracle is a **compile error** rather than a
+silent fallback.
