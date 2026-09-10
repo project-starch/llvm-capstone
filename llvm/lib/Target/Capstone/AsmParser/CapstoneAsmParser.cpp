@@ -1356,6 +1356,58 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
     }
   }
 
+  // C-45: the REVERSE coercion, which makes the one above IDEMPOTENT.
+  //
+  // The arm above rewrites the operand IN PLACE, and the generic matcher does not
+  // restore it when the candidate it was validating subsequently fails -- it just
+  // moves to the next MatchEntry. So a failed trial LEAVES the operand rewritten
+  // and poisons every later candidate that wanted the integer class.
+  //
+  // `call` is where that bites, because it is the one mnemonic with two defs of the
+  // same SHAPE distinguished only by operand class: CAP_CALL (`$rd, $rs1`, two
+  // GPCRs) sorts before PseudoCALLReg (`$rd, $func`, GPR + symbol) since both take
+  // two operands and tie on count. For `call a0, foo` the CAP_CALL trial rewrites
+  // a0 to C10, then fails on `foo` (an expression, which no coercion can fix); the
+  // PseudoCALLReg trial then sees C10 against MCK_GPR and dies at the fallthrough
+  // below. That is the whole bug: `call a0, foo` and the real codegen shape
+  // `call t0, __riscv_save_12` (CapstoneFrameLowering.cpp, spill libcalls; and the
+  // machine outliner in CapstoneInstrInfo.cpp) could not be assembled at all, so
+  // -S output was not reassemblable.
+  //
+  // Twelve other mnemonics (fld flh flq flw fsd fsh fsq fsw sb sd sh sw) also have
+  // two defs differing GPCR-vs-GPR at one index, but their forms differ in operand
+  // COUNT and syntax (a bare-symbol pseudo vs a parenthesised address), so the GPR
+  // row sorts first, the mutation lands last, and nothing is stranded. A future
+  // TWO-OPERAND capability pseudo added to an existing integer mnemonic would
+  // re-create this exactly -- that is the shape to watch for.
+  //
+  // Mirrors the forward arm's class set exactly, one integer class per capability
+  // class, so no slot it can coerce into is left able to strand an operand. cN and
+  // xN name the SAME register (see the comment above), so accepting `c10` where an
+  // integer class is asked for is consistent with the model rather than a new
+  // spelling.
+  if (CapstoneMCRegisterClasses[Capstone::GPCRRegClassID].contains(Reg)) {
+    unsigned Idx = Reg - Capstone::C0;
+    switch (Kind) {
+    case MCK_GPR:
+    case MCK_GPRJALR:
+    case MCK_GPRTC:
+      Op.Reg.RegNum = Capstone::X0 + Idx;
+      return Match_Success;
+    case MCK_GPRNoX0:
+    case MCK_GPRJALRNonX7:
+    case MCK_GPRTCNonX7:
+    case MCK_GPRX7:
+      // Same exclusion as the forward arm's NoC0 case, mirrored onto NoX0.
+      if (Idx == 0 && Kind == MCK_GPRNoX0)
+        break;
+      Op.Reg.RegNum = Capstone::X0 + Idx;
+      return Match_Success;
+    default:
+      break;
+    }
+  }
+
   if (IsRegFPR64 && Kind == MCK_FPR128) {
     Op.Reg.RegNum = convertFPR64ToFPR128(Reg);
     return Match_Success;

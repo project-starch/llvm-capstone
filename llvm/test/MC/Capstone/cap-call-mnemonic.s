@@ -1,48 +1,80 @@
-# The register form of CAP_CALL round-trips through the MC layer.
-# Capstone issue C-38 (the register-form CAP_CALL mnemonic collision), FIXED.
+# The `call` mnemonic has THREE definitions, and all of them must assemble.
+# Capstone issues C-38 (register form) and C-45 (register+symbol form), both FIXED.
 #
-# The bug (measured 2026-09-04): assembling `call a0, a1` failed with "invalid
-# operand for instruction", because three defs share the "call" mnemonic --
-# PseudoCALL (`call $func`), PseudoCALLReg (`call $rd, $func`) and CAP_CALL
-# (`call $rd, $rs1`, two capability registers) -- and parseCallSymbol claimed any
-# identifier in the last operand position as a symbol, so `a1` became a symbol
-# named "a1" and CAP_CALL was unreachable. Meanwhile the DISASSEMBLER prints the
-# CAP_CALL encoding 0x5b 0x95 0x05 0x40 as exactly `call a0, a1`, so for this one
-# instruction object -> text -> object was impossible by construction.
+#   CAP_CALL       `call $rd, $rs1`   two capability registers (domain crossing)
+#   PseudoCALLReg  `call $rd, $func`  register + symbol
+#   PseudoCALL     `call $func`       symbol only  (pinned by cap-call-symbol.s)
 #
-# The fix (2026-09-09) is parser precedence, not a rename: parseCallSymbol now
-# declines register names, so the operand falls through to register parsing and
-# CAP_CALL matches. The mnemonic and the disassembly text are unchanged, which is
-# what makes the round-trip close.
+# C-38: parseCallSymbol claimed ANY identifier in the last operand position as a
+# symbol, so `call a0, a1` was read as a call to a symbol named "a1" and CAP_CALL
+# was unreachable -- while the DISASSEMBLER prints the CAP_CALL encoding as exactly
+# `call a0, a1`. Fixed by declining register names there.
 #
-# cap-call-symbol.s is the control: `call foo` must keep assembling to the
-# PseudoCALL expansion, so a fix that breaks the pseudo cannot pass. cap-invalid.s
-# pins that `call a0, a1, a2` still errors.
+# C-45: validateTargetOperandClass coerces an integer register to its capability
+# form IN PLACE, and the matcher does not restore it when the candidate then fails.
+# CAP_CALL sorts before PseudoCALLReg (both take two operands and tie on count), so
+# the failed CAP_CALL trial left `a0` rewritten as C10 and PseudoCALLReg then saw a
+# capability register where it wanted an integer one. Fixed by making the coercion
+# idempotent with a reverse arm. `call a0, foo` and the real codegen shape
+# `call t0, __riscv_save_12` -- emitted for spill libcalls and by the machine
+# outliner -- could not be assembled at all before that, so -S output was not
+# reassemblable.
 #
-# MUTATION: replace `call a0, a1` below with `capenter a0, a1` (a sibling CAP_OP
-# instruction that also round-trips) -> the encoding CHECK fails, which shows the
-# check is bound to this instruction and not merely to "something assembled".
+# MUTATION: replace `call a0, a1` with `capenter a0, a1` (a sibling CAP_OP that also
+# round-trips) -> it assembles to a DIFFERENT encoding and the check fails, which
+# shows these checks are bound to these instructions and not merely to "something
+# assembled".
 #
 # RUN: llvm-mc -triple capstone64 -show-encoding %s | FileCheck %s --check-prefix=ASM
-# RUN: llvm-mc -triple capstone64 -filetype=obj %s | llvm-objdump -M no-aliases -d - | FileCheck %s --check-prefix=OBJ
+# RUN: llvm-mc -triple capstone64 -filetype=obj %s | llvm-objdump -M no-aliases -d -r - | FileCheck %s --check-prefix=OBJ
 
-# The symbol path is bounded from the other side by cap-call-symbol.s (`call foo`
-# -> PseudoCALL), which this fix leaves untouched.
+# ---------------------------------------------------------------------------
+# THE PIN (C-45). A register/register `call` must stay CAP_CALL and must NEVER
+# become a call to a symbol that happens to be spelled like a register.
 #
-# NOT COVERED HERE, and NOT a regression of this fix: the register+symbol form
-# `call a0, foo` (PseudoCALLReg) does not assemble on this target. Measured on the
-# PRE-FIX binary (the 2026-09-04 main-checkout llvm-mc), which rejects all three of
-# `call a0, a1`, `call a0, a0` and `call a0, foo` identically -- so that form never
-# worked and this change neither fixes nor breaks it. Recorded as a separate gap
-# rather than folded in here; C-38 is the CAP_CALL collision only.
+# This is the guard the suite could not previously provide. On a target where the
+# operand is not restored to its integer form, `call a0, a1` matches PseudoCALLReg
+# instead and emits a PLT call against an undefined symbol literally named `a1` --
+# silently different object code from the same text the disassembler prints. The
+# encoding check plus OBJ-NOT below fail loudly if that ever happens here.
+# ---------------------------------------------------------------------------
 
 # ASM: call a0, a1
 # ASM-SAME: encoding: [0x5b,0x95,0x05,0x40]
 # OBJ: 5b 95 05 40 call a0, a1
 call a0, a1
 
-# The codegen form PseudoDomCall expands to (rd == rs1, both a0).
+# The codegen form PseudoDomCall expands to, rd == rs1.
 # ASM: call a0, a0
 # ASM-SAME: encoding: [0x5b,0x15,0x05,0x40]
 # OBJ: 5b 15 05 40 call a0, a0
 call a0, a0
+
+# The cN spelling names the same registers as aN (one register file), so this is
+# the same instruction and the same encoding.
+# ASM: call a0, a1
+# ASM-SAME: encoding: [0x5b,0x95,0x05,0x40]
+# OBJ: 5b 95 05 40 call a0, a1
+call c10, c11
+
+# ---------------------------------------------------------------------------
+# C-45: the register+symbol form reaches PseudoCALLReg and expands to auipc+jalr
+# through the named register, with a call relocation.
+# ---------------------------------------------------------------------------
+
+# ASM: call a0, foo
+# OBJ: auipc a0
+# OBJ-NEXT: R_Capstone_CALL_PLT foo
+# OBJ: jalr a0
+call a0, foo
+
+# The shape codegen actually emits: spill libcalls via t0, and the machine outliner.
+# ASM: call t0, __riscv_save_12
+# OBJ: auipc t0
+# OBJ-NEXT: R_Capstone_CALL_PLT __riscv_save_12
+# OBJ: jalr t0
+call t0, __riscv_save_12
+
+# The three register/register calls above must produce NO relocation. If one ever
+# degrades into a symbol call, a third R_Capstone_CALL_PLT appears and this fails.
+# OBJ-NOT: R_Capstone_CALL_PLT
