@@ -1,6 +1,65 @@
 # Next step
 
-## 0. CURRENT — 2026-09-10. The reclaim is implemented and measured; two things are waiting on people, not on work.
+## 0. CURRENT — 2026-09-11. A region can now be 130 MiB on silicon; what is left is waiting on people or on one boot.
+
+**Landed today.** The board kernel compiles CMA in and the device tree reserves 256 MiB at
+`0xAC000000` with `linux,cma-default`; boot sw55 created, mapped and round-tripped a **130 MiB**
+capability region — 32x the buddy allocator's `MAX_ORDER 10` ceiling, which had stood for the whole
+project. Control first and passing, 4/4 arms, zero `Oops`/`BUG:`/`WARNING:`. Evidence and the
+"verify the SIZE, not the existence" reasoning are in `ref/fpga-silicon-measurements-for-paper.md`
+§7h; §7g's closing paragraph is marked superseded rather than edited, because it is true of boot
+sw54's image and false of everything after it. The `pre_mmap_offset` leak is fixed in the same
+change (`caplifive-buildroot` `e29f21d`).
+
+**Also corrected today, all of them quietly false before:** three documents recorded the 64 MiB arm
+as failing "at map time" — it was a **create** failure at the order-10 wall, and a genuine
+`device_mmap` rejection returns `MAP_FAILED` rather than the NULL that was observed, which is the
+clincher; `board-run` SKILL.md's "BOTH `caplifive.dts` and `configs/caplifive.dts`" (there is no
+top-level one — the "both" is that the file exists once in EACH of the two buildroot checkouts,
+which are separate trees with different inodes); `HOW-TO-LAUNCH-ON-FPGA.md`'s "not even tracked"
+and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceiling.
+
+### Open, in the order they are likely to move
+
+1. **The flash of `1bfff7776`** — authorised; the `.bit` is still in-tree on the synth machine.
+   Nothing here is blocked on it, but it is the clock for item 2: it takes the board the moment it
+   lands, and it ends the comparability window that boot sw56 is using.
+2. **Boot sw56, running now** — speedtest1 across seven testsets, each measured in a capability
+   domain and as a native baseline, 15 arms on the UNCHANGED bitstream so the numbers pair with
+   sw52's. Predictions are committed by the bench lane before the boot; the falsifier is that board
+   cycles must EXCEED the instruction count by the CPI factor, and at or below it the arm did not do
+   the work.
+3. **M-6 — `revoke_region` hands `csrevoke` a non-REV capability whenever nothing shared the region
+   with a retaining share.** Found while building the check for the offset fix; filed in
+   `ref/ISSUES.md` after an audit corrected four things in my first reading. It is **both** arms of
+   `revoke_region` (`:1595` and `:1600`), not one line; `REV_SHARED` stores a NONLIN and reaches the
+   same failure, so "only the share paths make it a REV" was too generous; the trigger is any REVOKE
+   ecall, with RELEASE merely the instance observed; and on silicon it is `UNEXPECTED_CAP_TYPE`
+   raised INSIDE M-mode into a privilege-blind trap entry with no valid domain to return to —
+   terminal behaviour UNRESOLVED, not an error return. QEMU aborts outright. N=1, confirmation run
+   owed. **This is what blocks proving the `pre_mmap_offset` fix**
+   — `tests/runtime-qemu/offsetcycle` is written and fails against the old module rather than
+   passing quietly, and it cannot complete a single cycle until the guard exists.
+4. **Push monitor commit `0a5c3d9`.** Still LOCAL ONLY. `project-starch/capstone-sbi` returns
+   `403, Permission denied` for this credential — tried and recorded 2026-09-10, so this is a
+   provable blocker rather than an assumed one. Someone with write access has to push it, or the
+   credential has to gain access.
+5. **`shrinkto-size-fix`** (`a4b478754`, off `1bfff7776`) is committed with its witness test but the
+   branch is **not on the push allowlist** and **has not been synthesised**. It needs an allowlist
+   entry before it can go anywhere.
+6. **R-32's ruling** (`SPLIT`, `LCC` bound values) is the project lead's; the note is at
+   `/tmp/capstone/lane-notes-2026-09-10/decision-R32-bound-values.md`.
+7. **The CMA board half's remaining question**, and it is small: no board arm separates *which*
+   allocator served the 4 MiB arm, because 4 MiB sits exactly at the buddy ceiling and either could
+   have. The matched failing pair exists under emulation only. Worth one arm inside a boot that is
+   happening anyway, not worth a boot.
+8. **A second `fillcost` draw**, plus the `fillwarm`/`fillsd` repeats and the directed tests — all
+   cheap riders on any boot, none worth one alone. Boot sw52's lost `instret` arm is in the same
+   class: the classifier defect that killed it is fixed and negative-tested.
+
+---
+
+## (superseded) 2026-09-10. The reclaim is implemented and measured; two things are waiting on people, not on work.
 
 1. **The `end`-convention re-ruling — the project lead's.** The earlier ruling was superseded the
    same day. It gates the spec amendment and the flash. It does **not** gate the firmware change,

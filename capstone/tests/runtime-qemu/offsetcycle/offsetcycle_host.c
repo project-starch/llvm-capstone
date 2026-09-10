@@ -16,6 +16,11 @@
  * So a build carrying the old module FAILS this program. A test that could only pass would say
  * nothing about the module and something about the test.
  *
+ * IT CANNOT RUN YET. The first release aborts QEMU on
+ *     helper_csrevoke: Assertion `rs1_v->val.cap.type == CAP_TYPE_REV' failed
+ * because the monitor revokes a region whose handle is still LINEAR when nothing ever shared it.
+ * That is M-6 in the registry, found by this program. Once the guard exists, this runs unchanged.
+ *
  * WHAT WOULD MAKE IT VOID, and is therefore checked rather than assumed: a release that the
  * monitor refuses (retval 1: the slot is kept because something sits above it) frees nothing and
  * restores nothing, so a run in which any release returns non-zero measures the refusal and not

@@ -1671,8 +1671,13 @@ Memory: 693668K/985928K available (… 262144K cma-reserved)
 allocator's largest block is `MAX_ORDER 10` × 4 KiB = **4 MiB**, and the silent fallback area is
 16 MiB; 130 MiB is 32× the first and 8× the second, so that allocation cannot have come from either.
 The matched failing arm exists too, but under emulation: at 8 MiB with no CMA area the create fails,
-and with `cma=256M` on the same image it succeeds (§7e appendix). What the board arms do NOT
-separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
+and with `cma=256M` on the same image it succeeds (§7e appendix). Those four QEMU runs are
+`/tmp/capstone/bigregion-{4194304,8388608,8388608-cma=256M,136314880-cma=256M}.log`, all of them
+taken AFTER the module rebuild at 01:07:23 that put `dma_alloc_pages` into the guest — which matters
+because an earlier arm failed on a stale module that had no CMA path at all, and a failure from THAT
+is not the matched arm. The no-CMA arm carries its own control inside the log: `CmaTotal: 0 kB` and
+`0K cma-reserved`, so the area really was absent rather than merely unrequested. What the board arms
+do NOT separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
 and either could have — and that is why it is present as a probe control rather than as evidence.
 
 `linux,cma-default` is load-bearing rather than decorative. The module registers `region_dev` with

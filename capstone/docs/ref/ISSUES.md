@@ -1267,7 +1267,7 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > the third piece of this change**: fill the region and then INIT, or leave it UNINIT until something
 > does. The bitstream and the firmware land together, gated on the QEMU suites.
 >
-> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without
+> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without **[2026-09-11: safe for the RESULT type, which is what this box asked. The OPERAND type at those same two lines is M-6.]**
 > inspecting the type. That grep is not proof of completeness and an auditor has been asked to look for
 > a third consumer.
 
@@ -1656,7 +1656,7 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > the third piece of this change**: fill the region and then INIT, or leave it UNINIT until something
 > does. The bitstream and the firmware land together, gated on the QEMU suites.
 >
-> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without
+> `revoke_region`'s own two sites (`:1455`, `:1460`) are safe — they store the result back without **[2026-09-11: safe for the RESULT type, which is what this box asked. The OPERAND type at those same two lines is M-6.]**
 > inspecting the type. That grep is not proof of completeness and an auditor has been asked to look for
 > a third consumer.
 
@@ -3208,6 +3208,85 @@ result — but it cannot reach the condition and so carries no verdict about thi
 > `ILLEGAL_OPERAND_VALUE` when `rs1.cursor >= rs2.cursor`, so it cannot rescue a capability that made
 > **zero** progress. Establish which failure mode you are in before reaching for it — a partial fill
 > is recoverable, a fill that never started is not.
+
+
+### M-6 — `revoke_region` hands `csrevoke` a non-REV capability whenever the region was never shared with a retaining share `OPEN — found 2026-09-11, monitor; QEMU aborts, silicon traps INSIDE M-mode`
+
+**The defect, stated so a fix covers it.** `revoke_region` (`sbi_capstone.c:1584-1606`) reads the
+region's handle as a `__rev` and passes it to `__revoke` **on both of its arms** — `:1595` from the
+CPMP slot and `:1600` from `regions[]` — without ever inspecting the capability's type. It is not one
+line: which arm runs depends on `region_cpmp[region_id]`, which `cap_env_init` presets to 0/1/2 for
+the first three ids (`sbi_capstone_dom.c:19-26`) and which `swap_cpmp` assigns on any access fault
+into a region (`:1933`). A guard on one arm fixes nothing.
+
+**The handle is only ever a REV after a RETAINING share.** `create_region` stores what
+`split_out_cap(base, len, 1)` returned (`:1196`, `:1210`), and that is LINEAR by construction rather
+than by inference: `split_out_cap` ends in `if(linear && ty != CAP_TYPE_LINEAR) capstone_error(...)`
+(`:796-798`) and `capstone_error` spins forever (`:190-191`), so the call either returns a LINEAR
+capability or never returns. A `REV_DEFAULT` (`:1320`), `REV_BORROWED` (`:1342`) or
+`share_child_region` (`:1521`) replaces it with a REV. **`REV_SHARED` does not** — it stores a
+delinearised NONLIN at `:1354`, which reaches the same failure. `REV_TRANSFERRED` makes the slot a
+hole (`:1388`), so `revoke_region` refuses at `:1590-1592` and is safe.
+
+**Trigger surface: any `SBI_EXT_CAPSTONE_REGION_REVOKE` on a region in one of those states.**
+`IOCTL_REGION_REVOKE` reaches it directly through `libcapstone.c:557-563` with no share required.
+`IOCTL_REGION_RELEASE` is simply the instance that was observed, because it revokes before it pops.
+
+**What each target does.**
+
+| | |
+|---|---|
+| QEMU | `assert(rs1_v->val.cap.type == CAP_TYPE_REV)` at `capstone-qemu/target/riscv/op_helper.c:905` — **aborts the emulator**, taking the guest with it |
+| silicon | `raise_exception(..., ex_code::UNEXPECTED_CAP_TYPE)` at `capstone-ariane/core/anvil_build/capstone_dyn_unit.anvil:47-48` |
+
+**The silicon outcome is UNRESOLVED and is not "the monitor returns an error" — nothing in the
+source does that.** The trap is taken while already inside the monitor's own ecall handler, and
+`_cap_trap_entry` (`sbi_capstone.S:13-101`, installed by `sbi_capstone_dom.c:38`) has no
+`mstatus.MPP` check: it swaps `cscratch`/`sp` a second time on an M-mode `sp` and dispatches to
+`handle_exception`, whose default arm calls `fault_return_from_domain` → `return_from_domain`
+(`:1658-1682`) with whatever `caller_dom`/`caller_buf` the last domain call left, into
+`DOM_REENTRY_POINT` — `_dom_reentry: j _dom_reentry`, an unconditional infinite loop
+(`sbi_capstone.S:4-10`). Which of {recursive trap, wedge in `_dom_reentry`, entry into a stale
+domain, corrupted S-mode context} actually happens was not settled by reading, and depends on
+whether `ctvec` is taken at all for an M-mode-originated capability fault on this RTL. **No mcause
+number is given deliberately:** R-24 records the execute-path encoder as +1 off the spec and
+`r24-excode-base` would move it.
+
+`/dev/capstone` is created `.mode = 0666` (`module/capstone.c:553-557`), so the ecall is reachable
+from unprivileged userspace. The observed run was root, so this run demonstrates reachability from
+userspace, not specifically from an unprivileged one.
+
+**A guard tests `cap_type(r) == 2`, not 3.** `cap_type()` is `__capfield(cap,1)`, which lowers to
+`LCC` selector 1 (`capstone-c/src/codegen.rs:1442-1457`, `arch_defs.rs:53-63`), and the RTL's
+selector-1 case returns `cap_type - 1` (`capstone_dyn_unit.anvil`) — so software sees LINEAR 0,
+NONLIN 1, **REV 2**, UNINIT 3 on both targets, and QEMU's enum is already numbered that way
+(`target/riscv/cap.h:27-32`). The raw RTL ordinals in `asm_insn.h:77-83` (REV 3, UNINIT 4) are the
+WRITE side, what `CAPTYPE` takes; they are not what this guard would compare against.
+
+**Why it survived, and the residual that makes it new.** `release_region` has exactly one caller in
+the tree — `tests/runtime-qemu/offsetcycle/offsetcycle_host.c:80`, added today. Of the seventeen
+files that call `revoke_region(`, sixteen share first and the seventeenth only mentions it in a
+comment, so no existing caller has ever revoked an unshared region. It is latent by the shape of the
+corpus, which is why ~48 instrumented revokes (`:3065`) never met it. Two adjacent records exist and
+neither is this one: `design/sqlite-marshalling-feasibility.md:146-148` (2026-06-29) recorded the
+same assert from the `REV_SHARED` antecedent and was never filed as an issue; and **M-5's own box at
+`:1270` inspected these exact two lines and cleared them** — for the type of the RESULT, which is
+the UNINIT question, never for the type of the OPERAND.
+
+**N = 1**, one QEMU run (`/tmp/capstone/offsetcycle-4194304.log`). The mechanism is deterministic on
+the source reading, since the type is fixed at create by a guard that cannot return otherwise and
+nothing between create and revoke changes it; a confirmation run is still owed before this is called
+reproduced.
+
+**It blocks the `pre_mmap_offset` proof.** `tests/runtime-qemu/offsetcycle` fails against the old
+module rather than passing quietly, which is the only reason it is worth a run — and it cannot
+complete a single cycle until this guard exists. The fix is deliberately NOT written yet: the
+monitor's remote returns 403 for this credential and `0a5c3d9` is already unpushable, so every
+monitor commit lengthens a stack only someone with write access can land; and there is a design
+question inside it that is not a guard — for a never-shared region the monitor holds the only
+capability, so "refuse the revoke" and "nothing to revoke, proceed to the pop" are both defensible
+and the module's own contract (`module/capstone.c`, the comment above `ioctl_release_region`) does
+not settle it.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
