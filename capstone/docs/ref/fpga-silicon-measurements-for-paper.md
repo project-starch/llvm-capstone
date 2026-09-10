@@ -1455,9 +1455,11 @@ inside the spread.
 
 **What it means for the reclaim.** Against the measured one revoke per ~28,829 instructions, a 4 KiB
 reclaim adds ~1,024 instructions (**+3.6 % instructions**) and ~6,053 cycles. In cycles the share
-depends on the boundary path's own CPI: **~14 % at 1.5, ~8 % at 2.5**. That lands in the lower half
-of the 3–25 % bracket the decision was taken under, and it is a cost per *revoke*, not per boundary
-crossing.
+depends on the boundary path's own CPI, which **the same boot measures**: speedtest1 in a capability
+domain runs at **CPI 3.17-3.81** (§7f below). At those, the reclaim is **5.5-6.6 % of cycles** — so
+that is the figure to quote, not the 8-14 % an assumed CPI of 1.5-2.5 would give. It lands at the
+**bottom** of the 3–25 % bracket the decision was taken under, and it is a cost per *revoke*, not per
+boundary crossing.
 
 **Two things this does NOT measure.** It is a **cold** buffer, every line missing; a region the
 borrower has just been using may be partly warm, so this is closer to a ceiling than a typical case.
@@ -1469,3 +1471,39 @@ reclaim path end to end is only measurable after the flash.
 `RCLM:00000000` appears on every share (3 shares, 3 markers). Zero reclaims, as it must be on a
 bitstream where the guard cannot fire — and the reporting path is now **proven readable on silicon**,
 which is the one thing about it that could not be tested after the flash.
+
+### §7f — speedtest1 on capability silicon vs native, same boot, all three testsets (boot sw52, 2026-09-10)
+
+Every figure below was predicted before the run (`docs/plans/speedtest1-boot-predictions.md`,
+committed `c62aeb3019fe`). Control `k800` returned 4, zero fault tags in the whole transcript, and
+10 of 11 arms completed.
+
+| testset | capability cycles | native cycles | **cycle ratio** | instr ratio (predicted) | CPI cap / native | hash |
+|---|---:|---:|---:|---:|---:|---|
+| `parsenumber` | 174,709,833 | 130,838,187 | **1.335×** | 1.546× | 3.80 / 4.40 | identical |
+| `orm` | 736,453,341 | 623,670,978 | **1.181×** | 1.329× | 3.17 / 3.57 | identical |
+| `main` | 2,635,649,345 | 2,170,454,254 | **1.214×** | 1.270× | 3.81 / 3.99 | identical |
+
+**The hashes are identical between the capability and native arms of every testset**
+(`0 0e12171d`, `465769 f3699caa`, `112006 38bb59fd`), so the two sides computed the same thing and
+the ratio is like for like. `orm` and `main` also match the hashes predicted before the run.
+`parsenumber`'s hash is structurally unable to fire — it is identical at sizes 1, 5 and 20 because
+its leading field counts result rows and that testset returns none — so that arm is judged on its
+instruction count and phase lines, as the prediction said it must be.
+
+**The cycle ratio is BELOW the instruction ratio in all three cases, and that is the finding.** The
+capability build executes 1.27–1.55× the instructions and takes only 1.18–1.34× the cycles, because
+its **CPI is lower than native's in every arm**. The added capability instructions are cheaper than
+this workload's average instruction — they issue in slots a memory-bound workload otherwise wastes.
+Quoting the instruction ratio as the overhead therefore **overstates it by 5–16 %**.
+
+**Clock check, independent of any counter we control.** `main` self-reports `TOTAL 105.255s`, and
+2,635,649,345 cycles at 25 MHz is 105.4 s. The two agree to 0.1 %, confirming the 25 MHz core clock
+from inside the workload rather than from the device tree.
+
+**What did not run, and why it is not a result.** Arm 11, the `instret` counter probe, was never
+reached. The driver hard-stops after any arm producing no `RESULT … retval=` marker, and the
+host-binary probe arm emits `BASELINE-PROBE cycle = …` instead. Arm 10 itself returned `rc=0` with
+`BASELINE-PROBE cycle = 20349224574`. The stop is a **classifier false positive on a marker format**,
+not a failure of the run, and it cost only the last and cheapest arm. The `BASELINE-PROBE` form needs
+adding to the classifier's success set before the next boot that uses a probe arm.
