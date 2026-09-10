@@ -1863,6 +1863,19 @@ is what full CoreMark and Dhrystone need. Task #62.
 > `.capstone_gp_initdesc` lands at `0x11000` (base + 0x1000) versus `0x18000` (base + 0x8000). Two
 > distinct images, so the knob reaches the linker, and by the loader path above it reaches the monitor.
 >
+> **THREE PROBES DEPEND ON BEING LARGER THAN THE WINDOW, so raising the DEFAULT is not free.**
+> `gp-free-domain/captable_app.c:4`, `silicon-ladder/tagf_kernel.h:31` and `tagr_kernel.h:27` each pad
+> their image past `0x1000` deliberately, so that the monitor's `create_domain` SPLIT is not
+> degenerate — QEMU asserts in `helper_cssplit` (`mid > base && mid < end`) if it is. If the DEFAULT
+> window ever grows, all three pad below it and the assert returns. Per-image `DOMAIN_WINDOW` use is
+> unaffected; this is only about moving the default.
+>
+> *(Their comments also describe the monitor as having a "fixed base+0x1000 SPLIT", which is exactly
+> what this entry records as no longer true — the monitor uses the discovered `gpoff`. So the padding
+> may now be unnecessary, or necessary for a different reason. Not investigated: they work, and
+> nothing here depends on knowing which. Flagged so a future window change re-checks them rather than
+> trusting the comment, which is the mistake this entry is already an instance of.)*
+>
 > **What remains is not a defect.** A domain whose `.text` exceeds the window must be built with
 > `DOMAIN_WINDOW` set — that is how full CoreMark and Dhrystone should be built when someone wants
 > them, and 32 KiB is already silicon-validated.
