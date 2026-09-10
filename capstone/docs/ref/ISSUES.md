@@ -3104,28 +3104,46 @@ disagreeing with the history.
 > generic check. And it is not `isMoveReg`, while `isCopyInstrImpl` recognises only `isMoveReg` plus
 > ADD/OR/XOR-with-X0.
 >
-> **⚠ CORRECTED 2026-09-10: "marks it `isMoveReg`" is NOT a trigger, and a proposed test pinning that
-> was TRIED AND WITHDRAWN.** I asserted that because `isCopyInstrImpl` opens with
-> `if (MI.isMoveReg())`, setting that flag would immediately expose MOVC to MachineCopyPropagation, and
-> I made demonstrating it the condition for keeping the test. The compiler lane demonstrated it and
-> **nothing happened**: `isMoveReg = 1` plus a rebuild changed no codegen at all, identical MOVC counts
-> across five shapes built to give copy propagation something to remove.
+> **⚠ THIS BOX WAS ITSELF WRONG AND IS RE-CORRECTED. `isMoveReg` IS the load-bearing thing, the
+> withdrawn pin WAS guarding something real, and C-46's exposure is LARGER than this entry said.**
 >
-> **The reason is pass ORDER, and it makes reason 1 structural rather than flag-dependent.** Capability
-> copies are generic `COPY` MachineInstrs until `ExpandPostRAPseudos` lowers them through `copyPhysReg`
-> (`CapstoneInstrInfo.cpp:548-549`). In `TargetPassConfig::addMachinePasses`,
-> `addMachineLateOptimization()` — which contains `MachineCopyPropagation` (`:1540`) — is called at
-> `:1179`, and `ExpandPostRAPseudos` is added at `:1182`. The other `MachineCopyPropagation`
-> (`:1511`) is inside `addOptimizedRegAlloc()`, earlier still. **Both copy-propagation runs finish
-> before a MOVC exists.** No pass that could act on one ever holds one. Verified here by reading the
-> call order rather than the line order, which points the other way and is what I first misread.
+> The sequence, because the mistake is more instructive than the conclusion. I wrote that marking MOVC
+> `isMoveReg` would expose it to MachineCopyPropagation. The compiler lane reported that flipping the
+> flag changed nothing and gave a structural reason: copy propagation finishes before
+> `ExpandPostRAPseudos` creates a MOVC. **I checked the two generic instances, found both run earlier,
+> and wrote "both copy-propagation runs finish before a MOVC exists." That is a completeness claim
+> about a pipeline any target may extend, and I never looked at whether this one does.** It does.
 >
-> So the pinning test would have PASSED for a reason unrelated to what it asserted — the exact
-> "proven to work and still under-determining" shape this registry keeps recording. It was dropped and
-> the three inertness reasons live at the instruction definition instead.
+> **Verified here at the source, this time including the target:**
 >
-> **It becomes live if someone adds an IR pattern for MOVC or reaches it from a pre-RA pass** — not
-> from the flag.
+> * `CapstonePassConfig::addPreEmitPass()` (`CapstoneTargetMachine.cpp:593`) adds
+>   `createMachineCopyPropagationPass(true)` at **`:601`** — a THIRD instance, on by default, and
+>   `addPreEmitPass()` is called at `TargetPassConfig.cpp:1214`, **after** `ExpandPostRAPseudos` at
+>   `:1182`. It holds MOVCs.
+> * `setMachineOutliner(true)` and `setSupportsDefaultOutlining(true)` at
+>   `CapstoneTargetMachine.cpp:166-167`. **The outliner is opted in, not absent** — the opposite of
+>   what was recorded.
+>
+> Only the post-RA-scheduler reason survives.
+>
+> **Why their evidence fooled them, and it is the sharpest instance of this family yet.**
+> `-debug-only=machine-cp` printed only `$c8 = COPY $c10` and never a MOVC — but with `isMoveReg`
+> unset, `isCopyInstr` returns nothing for a MOVC, **so the pass never PRINTS one**. That log is
+> byte-identical whether the pass holds a MOVC and ignores it or never sees one: it cannot separate the
+> two hypotheses on the table. And "flipping the flag changed nothing across five shapes" was
+> unsupported rather than negative — none of the five contained a copy-propagation-removable MOVC
+> pattern, so nothing could have changed. **No positive control, and nobody noticed, myself included.**
+>
+> **The discriminating test, now committed** as `test/CodeGen/Capstone/c46-movc-not-a-copy.mir` with the
+> integer arm as its positive control: a matched pair through the real pre-emit instance, one variable.
+> Flag unset, the integer arm's copies are deleted and the capability arm **survives**. Flag set, the
+> integer arm is unchanged and the capability arm **loses both MOVCs**. So `isMoveReg` is the only thing
+> standing between copy propagation and a MOVC.
+>
+> **NET: exposure is larger, not smaller.** A live copy-propagation pass and a live outliner both
+> reasoning about an instruction whose source-destroying write they cannot see. The BOUND is unchanged
+> and is C-32's case — they can only do harm where a read of the source outlives the `movc`. Still no
+> code change; the `hasSideEffects` trade remains the lead's.
 >
 > **The post-RA half of that caveat is now CLOSED (compiler lane, 2026-09-10), by auditing the target's
 > actual pass list rather than a guess at it.** What runs after register allocation, from
