@@ -35,21 +35,20 @@ GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
 # path is broken (C-4b, cssplit tag assertion). So the bigger window does not just
 # raise a limit, it lets a whole class of rungs avoid a broken code path.
 # The code window is now produced by substituting the offset into the ONE linker
-# script, instead of maintaining a second copy of it (link-gpfree-32k.ld). That
-# second copy was the bug: the monitor had a single hardcoded 0x1000, so a 32 KiB
-# window plus the copy path silently disagreed about where the blob started.
+# script, instead of using the second copy of it (link-gpfree-32k.ld). That second
+# copy was the bug: the monitor had a single hardcoded 0x1000, so a 32 KiB window
+# plus the copy path silently disagreed about where the blob started.
+# NOTE (2026-09-10): link-gpfree-32k.ld IS STILL ON DISK beside link-gpfree.ld. No
+# build script uses it any more, but it is not deleted and the docs still warn about
+# it (HOW-TO-LAUNCH-ON-FPGA.md). Do not read this comment as "the file is gone".
 LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
 case "${DOMAIN_WINDOW:-}" in
   "")   GLOBALS_OFF_VAL=0x1000 ;;
   32k)  GLOBALS_OFF_VAL=0x8000 ;;
   *)    GLOBALS_OFF_VAL=${DOMAIN_WINDOW} ;;
 esac
-if [[ "$GLOBALS_OFF_VAL" != "0x1000" ]]; then
-  _lds=$(mktemp "${TMPDIR:-/tmp}/link-gpfree-off-XXXXXX.ld")
-  sed "s/0x10000 + 0x1000/0x10000 + $GLOBALS_OFF_VAL/" "$LINKER_SCRIPT" > "$_lds"
-  LINKER_SCRIPT=$_lds
-  echo "  globals offset -> $GLOBALS_OFF_VAL"
-fi
+# The two substitutions below (window, base VA) are applied in ONE pass, further down,
+# because doing them in sequence was a latent corruption -- see the note there.
 # DOMAIN_BASE_VA relocates the domain's entry VA (default 0x10000).
 #
 # Purpose: test whether issue R-3 is really about the entry ADDRESS. R-3 says a
@@ -63,12 +62,34 @@ fi
 # ld.lld resolves --defsym after the script is evaluated, so DEFINED() inside
 # SECTIONS would not see it and the base would silently stay 0x10000 -- exactly
 # the kind of silent wrong-config that cost us a sweep on 2026-07-27.
-DOMAIN_BASE_VA=${DOMAIN_BASE_VA:-}
-if [[ -n "$DOMAIN_BASE_VA" && "$DOMAIN_BASE_VA" != "0x10000" ]]; then
-  _relocated=$(mktemp "${TMPDIR:-/tmp}/link-gpfree-XXXXXX.ld")
-  sed "s/0x10000/$DOMAIN_BASE_VA/g" "$LINKER_SCRIPT" > "$_relocated"
-  LINKER_SCRIPT=$_relocated
-  echo "  relocated domain base VA -> $DOMAIN_BASE_VA"
+DOMAIN_BASE_VA=${DOMAIN_BASE_VA:-0x10000}
+
+# ONE PASS, VIA PLACEHOLDERS, and it has to be. Until 2026-09-10 the window was substituted
+# first (`s/0x10000 + 0x1000/0x10000 + $WIN/`) and the base second with a GLOBAL
+# `s/0x10000/$BASE/g`. The second sed cannot tell the base it should rewrite from the window
+# text it should not, so any DOMAIN_WINDOW whose TEXT CONTAINS `0x10000` was rewritten too:
+# DOMAIN_WINDOW=0x10000 with any DOMAIN_BASE_VA silently produced `$BASE + $BASE`, and
+# DOMAIN_WINDOW=0x100000 produced `$BASE + ${BASE}0`. Neither failed; both just built the
+# wrong image. Placeholders make the two substitutions unable to see each other's output.
+#
+# AND IT VERIFIES, because a sed whose pattern stops matching is a SILENT no-op: the build
+# would succeed and quietly use the default window. If link-gpfree.ld's `0x10000 + 0x1000`
+# is ever reworded, this must fail loudly rather than produce a correct-looking image.
+if [[ "$GLOBALS_OFF_VAL" != "0x1000" || "$DOMAIN_BASE_VA" != "0x10000" ]]; then
+  _lds=$(mktemp "${TMPDIR:-/tmp}/link-gpfree-XXXXXX.ld")
+  sed -e "s/0x10000 + 0x1000/@BASE@ + @WIN@/" \
+      -e "s/0x10000/@BASE@/g" \
+      -e "s/@WIN@/$GLOBALS_OFF_VAL/" \
+      -e "s/@BASE@/$DOMAIN_BASE_VA/g" "$LINKER_SCRIPT" > "$_lds"
+  if ! grep -q -- "$DOMAIN_BASE_VA + $GLOBALS_OFF_VAL" "$_lds"; then
+    echo "build-ladder-domain.sh: FAILED to substitute the linker script." >&2
+    echo "  expected a line containing '$DOMAIN_BASE_VA + $GLOBALS_OFF_VAL' in $_lds" >&2
+    echo "  the '0x10000 + 0x1000' pattern in $LINKER_SCRIPT has probably changed." >&2
+    exit 1
+  fi
+  LINKER_SCRIPT=$_lds
+  [[ "$GLOBALS_OFF_VAL" != "0x1000" ]] && echo "  globals offset -> $GLOBALS_OFF_VAL"
+  [[ "$DOMAIN_BASE_VA" != "0x10000" ]] && echo "  relocated domain base VA -> $DOMAIN_BASE_VA"
 fi
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
 # Extra -D/-f flags for one build (e.g. -DLADDER_NO_MINSTRET for the

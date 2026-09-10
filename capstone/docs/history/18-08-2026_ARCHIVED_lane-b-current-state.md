@@ -81,6 +81,14 @@ phase bisect on `matmult_int`. Trail:
 QEMU-validated at 16 KiB and 32 KiB, not yet on silicon). Needed for full
 CoreMark/Dhrystone.
 
+> **STALE — corrected 2026-09-10.** Two claims here were overtaken. (a) "not yet on silicon" is
+> false since 2026-09-05: `board-results/2026-09-05.tsv` carries three passing rows built at a
+> 32 KiB window, each with a passing `k800` control — `coremark_matrix` (`b2d072e8cbac2b41`),
+> `csm7` (`ffedb2e78f650c94`) and `beebs_nssmall` (`2fc5b371cc8c7b2a`). (b) "one hardcoded number"
+> is false since ~2026-08: the window is a per-image `DOMAIN_WINDOW` knob, discovered from the ELF
+> by the loader and honoured by the monitor. C-5 closed on that basis 2026-09-10. This note is
+> archived and left as written; read the correction, not the body.
+
 Full trail: `history/26-07-2026_19-31-06_RESULTS-three-benchmarks-on-silicon-and-the-hang-blocker.md`.
 Paper extract: `ref/fpga-silicon-measurements-for-paper.md`.
 

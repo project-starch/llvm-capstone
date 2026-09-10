@@ -1845,7 +1845,10 @@ is what full CoreMark and Dhrystone need. Task #62.
 >   layout, and this project has a documented layout sensitivity (a 2026-07-26 A/B where four added
 >   instructions flipped a passing rung). Every measured rung stays at 4 KiB so its published number
 >   stands."* The separate `link-gpfree-32k.ld` copy — the thing the monitor used to silently disagree
->   with — is gone.
+>   with — is no longer used by any build script. ⚠ **Corrected 2026-09-10: it is NOT "gone"; the
+>   file is still on disk** beside `link-gpfree.ld` (and a frozen copy lives in the R-02 repro). I
+>   wrote "gone" from the comment in `build-ladder-domain.sh:38`, which says the same thing and is
+>   also wrong. Unused is not deleted.
 > * **Load time — discovered, not assumed.** `package/modcapstone/userspace/lib/libcapstone.c:230-241`
 >   walks the section headers for `.capstone_gp_initdesc` (which the script places first in the globals
 >   region) and computes `globals_off` from its address; `:263` packs it as

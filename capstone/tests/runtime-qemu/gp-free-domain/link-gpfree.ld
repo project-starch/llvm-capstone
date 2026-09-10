@@ -28,10 +28,21 @@ SECTIONS {
   } :domain
 
   /* Globals start at GPFREE_GLOBALS_OFFSET from the image base. The monitor no
-     longer has to know this a priori -- it reads it from .capstone_domhdr above --
-     so it is a build knob rather than a shared constant. build-ladder-domain.sh
-     substitutes the token for DOMAIN_WINDOW; the default keeps every existing rung
-     byte-identical. This is what replaces link-gpfree-32k.ld, whose separate copy of
+     longer has to know this a priori, so it is a build knob rather than a shared
+     constant.
+
+     CORRECTED 2026-09-10, twice, because this comment described machinery that does
+     not exist. (a) There is NO `.capstone_domhdr` section -- the string appears
+     nowhere in the tree except in this comment. What actually happens is that the
+     loader walks the section headers for `.capstone_gp_initdesc` and computes the
+     offset from its address (libcapstone.c:230-241), packing it at :263; the monitor
+     unpacks it at sbi_capstone.c:757 and carves with it at :970-971. (b) Nothing
+     "substitutes a token" -- build-ladder-domain.sh and build-sqlite-silicon.sh do a
+     LITERAL string sed on `0x10000 + 0x1000`, which is why both now verify that the
+     substitution actually happened rather than trusting it.
+
+     This is what replaced link-gpfree-32k.ld -- which IS STILL ON DISK beside this
+     file, unused by any build script. Whose separate copy of
      the constant was the thing the monitor silently disagreed with. */
   . = 0x10000 + 0x1000;
 

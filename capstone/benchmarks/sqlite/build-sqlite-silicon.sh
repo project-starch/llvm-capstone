@@ -2795,6 +2795,13 @@ done
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
   sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  # VERIFY, because a sed whose pattern stops matching is a SILENT no-op: the build would
+  # succeed and quietly link at the DEFAULT window. (No base-VA substitution here -- SQLite
+  # images have no DOMAIN_BASE_VA knob, which is why exactly one may be staged per boot.)
+  grep -q -- "0x10000 + $1" "$lds" || {
+    echo "build-sqlite-silicon.sh: linker-script substitution FAILED (wanted '0x10000 + $1')" >&2
+    echo "  the '0x10000 + 0x1000' pattern in $GPFREE/link-gpfree.ld has probably changed." >&2
+    exit 1; }
   # INTERP_BUILD_LIMIT=<N> (diagnostic only) clamps how many carve iterations the glue
   # runs while leaving the cap-table geometry byte-identical. It is the discriminator for
   # R-12: SQLite's descriptor count is 1059, so the builder performs ~1060 `split`s against
