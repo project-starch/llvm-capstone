@@ -2488,29 +2488,33 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // COPY primitive -- copyPhysReg builds it precisely when the registers DIFFER --
 // so tying them would break every capability copy, C-14's fix first.
 //
-// It is inert today because three separate things each block it. NONE of them is
-// pinned by a test, deliberately -- see the last paragraph.
-//   1. COPY PROPAGATION NEVER SEES A MOVC. Capability copies are generic COPY
-//      MachineInstrs until ExpandPostRAPseudos lowers them through copyPhysReg,
-//      and MachineCopyPropagation has already run by then -- its trace shows
-//      `$c8 = COPY $c10`, never a MOVC. So the pass reasons about COPY, whose
-//      semantics are the generic ones, and this instruction's own flags do not
-//      enter into it.
-//   2. no post-RA scheduler -- TunePostRAScheduler ships only with named cores,
-//      and nothing here passes -mcpu, so SELECTING A TUNED -mcpu turns it on;
-//   3. no machine outliner -- enableMachineOutliner is not overridden for this
-//      target, so ENABLING THE OUTLINER makes it live.
-// 2 and 3 can only reorder or factor around the unmodelled source-write when a
-// read of the source OUTLIVES the movc, which is the case C-32 owns.
+// WHAT ACTUALLY KEEPS IT INERT -- corrected 2026-09-10 after an adversarial audit REFUTED the
+// two reasons previously recorded here. Both were wrong, and the wrong version had been merged.
+//   1. NOT A COPY, and this is the load-bearing one. isCopyInstrImpl opens with
+//      `if (MI.isMoveReg())`, and MOVC is not isMoveReg, which is the ONLY thing stopping
+//      MachineCopyPropagation from treating it as an ordinary register copy -- deleting
+//      "redundant" ones and forwarding uses across a source the hardware has already nulled.
+//      PINNED by test/CodeGen/Capstone/c46-movc-not-a-copy.mir, which carries its own positive
+//      control and was demonstrated to fail when the flag is set.
+//   2. NO POST-RA SCHEDULER. TunePostRAScheduler ships only with named cores and nothing here
+//      passes -mcpu, so selecting a tuned -mcpu turns it on. This one survived the audit.
 //
-// A lit test pinning "MOVC is not treated as a copy" was written for reason 1 and
-// then WITHDRAWN, because it could not be shown to fire: setting isMoveReg = 1
-// here and rebuilding changed no codegen at all (movc counts identical across five
-// shapes), for exactly the reason above -- there is no MOVC in hand when the pass
-// runs. Reason 1 is therefore stronger than a flag check would have been, and a
-// test asserting it would have passed for a reason unrelated to what it claimed.
-// Reasons 2 and 3 are build-configuration changes no lit test can observe. So the
-// guard for all three is this comment, not a gate.
+// RETRACTED, because leaving the reasoning wrong is worse than leaving it thin:
+//   - "MachineCopyPropagation has already run by the time MOVC exists" is FALSE. A third MCP
+//     instance runs AFTER ExpandPostRAPseudos -- TargetPassConfig adds ExpandPostRAPseudos and
+//     then addPreEmitPass, and CapstoneTargetMachine's addPreEmitPass adds
+//     createMachineCopyPropagationPass(true), enabled by default. That pass holds MOVCs.
+//     The evidence for the old claim could not have shown otherwise: with isMoveReg unset,
+//     `-debug-only=machine-cp` never PRINTS a MOVC, so its absence from that log is what you
+//     see whether the pass holds one or not. A check that cannot separate the two hypotheses.
+//   - "the machine outliner is not opted in" is FALSE. CapstoneTargetMachine.cpp calls
+//     setMachineOutliner(true) and setSupportsDefaultOutlining(true); the outliner is in the
+//     -O2 pipeline already, and getOutliningTypeImpl has no MOVC exclusion.
+//
+// So the exposure is larger than was recorded: a live copy-propagation pass and a live
+// outliner, both reasoning about an instruction whose source-destroying write is invisible to
+// them. What bounds it is that they can only hurt when a read of the source OUTLIVES the movc,
+// which is the case C-32 owns.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {

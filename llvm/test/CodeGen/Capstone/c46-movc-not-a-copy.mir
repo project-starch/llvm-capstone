@@ -1,0 +1,64 @@
+# C-46: MOVC must NOT be recognised as a copy instruction.
+#
+# On silicon MOVC CONSUMES its source (nulls rs1), and the machine model does not say so:
+# hasSideEffects=0, $rs1 a pure USE, no Constraints. The only thing preventing
+# MachineCopyPropagation from acting on that unmodelled instruction is that
+# CapstoneInstrInfo::isCopyInstrImpl opens with `if (MI.isMoveReg())` and MOVC is not
+# isMoveReg. Setting that flag makes MCP treat MOVC as an ordinary register copy, and it will
+# then delete "redundant" ones and forward uses across them -- reading a source the hardware
+# has already nulled, which is C-32's mechanism.
+#
+# THIS IS NOT A THEORETICAL PIN. A MachineCopyPropagation instance runs AFTER
+# ExpandPostRAPseudos (TargetPassConfig.cpp adds ExpandPostRAPseudos, then addPreEmitPass;
+# CapstoneTargetMachine's addPreEmitPass adds createMachineCopyPropagationPass(true), on by
+# default), so the pass genuinely holds MOVC instructions. An earlier claim that no such pass
+# could ever see a MOVC was wrong, and was retracted after this test was built.
+#
+# THE MATCHED PAIR IS THE POINT. mv_pair and movc_pair differ only in which instruction forms
+# the redundant copy pair. mv_pair is the POSITIVE CONTROL: its ADDI copies ARE recognised
+# (isCopyInstrImpl handles ADDI against x0) and MCP deletes them, which proves the pass ran and
+# is deleting in this very run. movc_pair must survive. Without the control, a passing test
+# cannot tell "MOVC was protected" from "the pass never ran".
+#
+# DEMONSTRATED 2026-09-10: setting `let isMoveReg = 1` on the MOVC definition and rebuilding
+# makes movc_pair lose BOTH movc instructions while mv_pair is unchanged. That is what makes
+# the clean run below evidence rather than an unproven gate.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m -O2 -start-after=postrapseudos -o - %s | FileCheck %s
+
+# CHECK-LABEL: mv_pair:
+# CHECK-NOT: addi
+# CHECK: cjalr
+
+# CHECK-LABEL: movc_pair:
+# CHECK: movc s0, a0
+# CHECK-NEXT: movc a0, s0
+# CHECK-NEXT: cjalr
+
+--- |
+  target triple = "capstone64"
+  define i64 @mv_pair(i64 %a) { ret i64 %a }
+  define ptr addrspace(200) @movc_pair(ptr addrspace(200) %a) { ret ptr addrspace(200) %a }
+...
+---
+name:            mv_pair
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $x10
+
+    $x8 = ADDI $x10, 0
+    $x10 = ADDI $x8, 0
+    PseudoRET implicit $x10
+...
+---
+name:            movc_pair
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $c10
+
+    $c8 = MOVC $c10
+    $c10 = MOVC $c8
+    PseudoRET implicit $c10
+...

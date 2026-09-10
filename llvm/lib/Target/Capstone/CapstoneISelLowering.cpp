@@ -2922,19 +2922,30 @@ bool CapstoneTargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
   // a planning cycle by sending a reader to line numbers that never existed at any
   // tip, which is how it survived: nobody opened the function.
   //
-  // 1. The line numbers were never valid. findOptimalMemOpLowering's three
-  //    Op.isMemcpy() guards are at roughly :25651, :25677 and :25700, and they are
-  //    THREE DIFFERENT MECHANISMS, not one avoidance wearing three hats. :25677
-  //    assigns c128 chunks so an aligned struct copy keeps its source's TAGS --
-  //    widening THAT one to a fill would materialise a 128-bit value and CAUSE the
-  //    forge. Only :25700 is the genuine i128 avoidance.
+  // 1. The line numbers were STALE, not invented -- an earlier note here said "never
+  //    valid at any tip" and that was itself wrong. They were correct for the file
+  //    BEFORE the citing comment was inserted, a uniform 15-line offset. Do not cite
+  //    line numbers in this file at all: they rot on the next edit, and this comment
+  //    has now got them wrong twice in opposite directions. Find the three
+  //    Op.isMemcpy() guards in findOptimalMemOpLowering by name. They are THREE
+  //    DIFFERENT MECHANISMS, not one avoidance wearing three hats: the second assigns
+  //    c128 chunks so an aligned struct copy keeps its source's TAGS -- widening THAT
+  //    one to a fill would materialise a 128-bit value and CAUSE the forge -- and only
+  //    the third is the genuine i128 avoidance.
   //
-  // 2. The claim itself does not reproduce. Measured 2026-09-10 on this tree:
-  //    zero forge diagnostics across 72 runs -- sizes 16/17/24/32/48/64/128/256 x
-  //    alignments 1/8/16 x {default ABI, -capstone-gp-captable, -O0} -- with the
-  //    check PROVEN LIVE in the same session (an inttoptr of a >64-bit constant
-  //    still diagnoses, and c17-wide-constant-arm.ll is green). A non-zero memset
-  //    lowers to scalar stores; it does not select i128, so it never arrives here.
+  // 2. The claim does not reproduce ON THIS TREE, but it was TRUE WHEN WRITTEN and was
+  //    closed by an unrelated change -- not, as an earlier version of this note said,
+  //    wrong all along. At the tip that carried it, i128 was still the capability
+  //    carrier (addRegisterClass(MVT::i128, GPRRegClass)) and the forge guard tested
+  //    `VT == MVT::i128`, so the generic picker's "largest legal integer type" search
+  //    could and did land on it. Retiring i128 as the carrier in favour of c128 is what
+  //    closed the route: i128 is no longer a legal type, so that search now stops at
+  //    i64 and can never reach the diagnostic.
+  //    Measured 2026-09-10: zero forges across an 8x6x4x3 sweep of size, alignment,
+  //    opt level and features, plus a C-source and an opt -O2/SROA route, with the
+  //    check PROVEN LIVE (an inttoptr of a >64-bit constant still diagnoses). Note an
+  //    earlier 72-run figure quoted here overstated itself -- half those cells emit a
+  //    libcall and never reach the inline expansion at all, so the effective N was 36.
   //
   // Not reproducible is not the same as impossible: this is an empirical result
   // over that grid, not a proof. If a memset ever does forge, the target is

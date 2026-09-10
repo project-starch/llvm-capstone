@@ -456,3 +456,53 @@ unrelated to what it asserted. The remaining two triggers are build-configuratio
 observe, so all three are recorded at the instruction definition instead of in a gate that cannot fire.
 No code change: the only honest model is `hasSideEffects = 1`, which pessimises every capability copy,
 and that trade is the lead's.
+
+### RETRACTION (2026-09-10) — the C-46 reasoning was wrong, and the withdrawn pin was guarding something real
+
+An adversarial audit, run after the lead asked whether this work had been audited, **refuted two of the
+three reasons recorded above for C-46 being inert**. The wrong version had already been merged. This is
+the correction; the block above stands as written so the error is visible rather than edited away.
+
+**What was claimed and is false.**
+- *"MachineCopyPropagation has already run by the time a MOVC exists."* A **third** copy-propagation
+  instance runs **after** `ExpandPostRAPseudos`: the generic pipeline adds `ExpandPostRAPseudos` and
+  then calls `addPreEmitPass`, and Capstone's `addPreEmitPass` adds
+  `createMachineCopyPropagationPass(true)`, enabled by default. A pass-structure dump shows copy
+  propagation at position 193, after post-RA expansion at 179. That pass holds MOVCs.
+- *"The machine outliner is not opted in."* `setMachineOutliner(true)` and
+  `setSupportsDefaultOutlining(true)` are both called; the outliner is already in the -O2 pipeline, and
+  the outlining-type hook has no MOVC exclusion. The claim was backwards.
+
+Only the post-RA scheduler reason survived.
+
+**Why the evidence looked convincing and was not.** `-debug-only=machine-cp` printed only
+`$c8 = COPY $c10` and never a MOVC, which I read as "the pass never holds one". With `isMoveReg` unset,
+`isCopyInstr` returns nothing for a MOVC, so the pass never **prints** one — that log looks identical
+whether the pass holds a MOVC and ignores it or never sees one at all. The instrument could not
+separate the two hypotheses on the table, which is the failure mode this project's own rules name.
+The five shapes I tested for "flipping the flag changes nothing" contained no
+copy-propagation-removable MOVC pattern, so that result was unsupported rather than negative.
+
+**The pin is restored, with the control it lacked.**
+`llvm/test/CodeGen/Capstone/c46-movc-not-a-copy.mir` is a matched pair differing only in which
+instruction forms a redundant copy pair. The integer arm is the positive control: its copies **are**
+recognised and deleted, proving the pass ran and is deleting in that very run. The capability arm must
+survive. **Demonstrated**: setting `isMoveReg = 1` and rebuilding makes the capability arm lose both
+instructions while the control arm is unchanged. That is what the withdrawn version never had.
+
+**Net effect on C-46: the exposure is LARGER than recorded, not smaller.** A live copy-propagation pass
+and a live outliner both reason about an instruction whose source-destroying write is invisible to
+them. What bounds it is unchanged: they can only hurt where a read of the source outlives the movc,
+which is the case C-32 owns. Still no code change; the `hasSideEffects` trade remains the lead's.
+
+**Two corrections to the C-17 entry above, from the same audit.**
+- *"The line numbers were never valid at any tip"* is **wrong**. They were correct for the file before
+  the citing comment was inserted, a uniform fifteen-line offset. My correction then reproduced the
+  identical mistake with a nineteen-line offset. The lesson is not "those numbers were bogus" but
+  **do not cite line numbers in a comment in the file they point into**.
+- *"The claim was wrong"* is **wrong**. It was true when written: i128 was then the capability carrier
+  and the forge guard tested for it, so the generic picker could reach it. Retiring i128 in favour of
+  c128 closed the route. The verdict "does not reproduce on this tree" stands; the explanation for why
+  does not.
+- The "72 runs" figure overstated itself: half those cells emit a libcall and never reach the inline
+  expansion, so the effective N was 36. The audit's own wider sweep is what carries the verdict.
