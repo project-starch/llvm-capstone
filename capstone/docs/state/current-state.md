@@ -2,7 +2,34 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-09 — CURRENT
+## 2026-09-10 — CURRENT
+
+* **The reclaim (R-30/R-31 firmware half) is implemented, gated and measured.** The lead ruled
+  *fill, then initialise*. Monitor commit `0a5c3d9` adds a `C_RECLAIM` asm loop at **five** sites
+  (the annotation branches share a hoisted one, so REV_DEFAULT/BORROWED/SHARED/TRANSFERRED are all
+  covered), with the loop bound taken from `cap_end - cap_base` and **not** the cursor, so a
+  cursor-at-end arrival faults instead of running zero iterations. Emulator gates green: host-call
+  12/12, linear/uninit corpus 7/7, smoke, nullblk 3/3. **`0a5c3d9` is LOCAL ONLY** — pushing it needs
+  write access to `project-starch/capstone-sbi`, which this credential does not have
+  (`403, Permission ... denied`, tried and recorded 2026-09-10).
+* **Boot sw52 — speedtest1 on capability silicon vs native, plus the fill-cost pair.** Control
+  `k800` = 4, zero fault tags, 10 of 11 arms. Capability/native **cycle** ratios 1.335 / 1.181 /
+  1.214 for parsenumber / orm / main, with **identical verification hashes** on every pair; the cycle
+  ratio is BELOW the instruction ratio in all three because capability CPI is *lower* than native's.
+  The fill-cost matched pair gives **23.6 cycles per 16-byte capability store**, so a 4 KiB reclaim
+  is **+3.6 % instructions and 5.5-6.6 % cycles** at the boundary CPI this boot measured (3.17-3.81).
+  Full numbers: `docs/ref/fpga-silicon-measurements-for-paper.md` §7e, §7f.
+* **`RCLM:00000000` on every share (9 of 9).** Zero reclaims, as it must be where the guard cannot
+  fire — and the counter's reporting path is now proven readable on silicon, which is the one
+  property of it that could not be tested after the flash.
+* **Still open and the lead's:** the `end`-convention re-ruling. It gates the spec amendment and the
+  flash, not the firmware change, which is identical under both surviving routes.
+* Three tools repaired and negative-tested the same day: `preflight-board-run.sh` (parsed only one of
+  the three stage forms, and could not require a host binary at all), the sw52 result parser (needed
+  the testset, cycles and hash on ONE line when they are on three), and the driver's staged-marker
+  guard (did not know the `BASELINE-PROBE` form, and cost sw52 its last arm).
+
+## 2026-09-09 — SUPERSEDED BY THE ABOVE, still accurate for what it covers
 
 * **The R-25/26/27 bitstream is on the board** (`caplifive_r25r26r27_66c4e7517.bit`, flashed persistently
   2026-09-09; `caplifive_s12fix_5097eb166.bit` stays in the console store as the restore path). Boots sw44

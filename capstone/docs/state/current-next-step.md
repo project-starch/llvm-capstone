@@ -1,5 +1,28 @@
 # Next step
 
+## 0. CURRENT — 2026-09-10. The reclaim is implemented and measured; two things are waiting on people, not on work.
+
+1. **The `end`-convention re-ruling — the project lead's.** The earlier ruling was superseded the
+   same day. It gates the spec amendment and the flash. It does **not** gate the firmware change,
+   which is identical under both surviving routes, so that did not wait.
+2. **Push monitor commit `0a5c3d9`.** It is LOCAL ONLY. `project-starch/capstone-sbi` returns
+   `403, Permission denied` for this credential — tried and recorded 2026-09-10, so this is a
+   provable blocker rather than an assumed one. Someone with write access there has to push it, or
+   the credential has to gain access.
+3. **What is runnable without either.** The R-30/R-31 RTL pair (`1bfff7776`) is built and clean with
+   all three pre-registered falsifiers held, and the firmware half is now gated, so a flash is a
+   decision with both halves in hand rather than an emergency. After a flash, the reclaim path
+   becomes measurable end to end for the first time — `RCLM` climbs instead of reading zero — and
+   the `fillcost`/`fillnop` pair should be re-run, because the monitor's loop is one instruction
+   shorter per iteration there (the UNINIT cursor advance walks the pointer for free).
+4. **A second `fillcost` draw.** The 23.6 cycles/store figure is N=1 on a system with known
+   nondeterminism, and the rung is now cheap to re-run inside any boot that is happening anyway.
+5. Boot sw52's lost arm — the `instret` counter probe — needs no new work: the classifier defect
+   that killed it is fixed and negative-tested, so it rides along on the next boot.
+
+---
+
+
 ## 0. CURRENT — 2026-09-09. Phase B closed on the shipping firmware (boot sw38); follow-ups in `docs/plans/after-phase-b.md`.
 
 The unification (one branch `capstone-bootstrap`, `make TARGET=fpga|qemu`) is done, pushed and
