@@ -384,8 +384,17 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 >
 > **The resolution, in order, and only the first step is a decision:**
 > 1. **Declare whether `end` is inclusive or exclusive.** The spec never says and the RTL is split
->    against itself. Recommended EXCLUSIVE — every access path and all of QEMU already assume it.
+>    against itself. ~~Recommended EXCLUSIVE — every access path and all of QEMU already assume it.~~
 >    **The lead's, with the spec's owners.**
+>
+>    > ⚠ **THAT RECOMMENDATION IS SUPERSEDED — see the correction further down this entry
+>    > (search "THE RULING WAS MADE ON A FRAMING THAT IS WRONG IN BOTH DIRECTIONS").** The question
+>    > is not one question, the three arguments for exclusive collapse to one, and the ruling commit
+>    > **`d71d5007ee05`** was withdrawn the same day it was made. It is still findable by its subject
+>    > line and has already been read as live by another lane once, which is why this pointer sits
+>    > here rather than 500 lines below where the correction is. The surviving resolution fixes **one
+>    > token on each side** and moves no convention. Nothing is decided until the lead re-rules on the
+>    > corrected framing.
 > 2. **Fix `INIT`** to match (R-30): under the exclusive reading, `capstone_flu_unit.anvil:139`
 >    `<=` → `<`, with `cap-man-insn.adoc:421` changed alongside it.
 > 3. **Fix REVOKE's permission clause** (R-31) — but NOT before step 2, or a silent disclosure becomes
