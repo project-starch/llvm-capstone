@@ -405,6 +405,29 @@ Board time starts when you take the lock. Everything below is free.
 
 ---
 
+### A BASELINE dying in M-mode is probably reading a machine-mode CSR, not hitting a monitor bug
+
+**2026-09-10, bench lane, found while building the speedtest1 riscv64 baseline.** The binary died in
+M-mode **after both of its counter probes had already succeeded**. That ordering is what makes it
+convincing: the probes work, then the real run dies at a higher privilege level, which reads exactly
+like the monitor mishandling something.
+
+**It was a userspace read of `mcycle`, CSR `0xB00`.** `capstone_sqlite_os.c` reads it because the board
+gates the *unprivileged* `cycle` counter for domains, so domain code must use the M-mode one. A Linux
+userspace baseline cannot. The CSR read traps, and with no handler the process dies at M-mode.
+
+**Why this is worth a section rather than a line.** The two halves of a paired measurement do NOT have
+the same privilege. A capability domain reads `mcycle`; an ordinary Linux baseline must read `cycle`
+and `instret`. Sharing the timing header between them is the natural thing to do and is wrong, and the
+failure appears in the arm you are least likely to suspect, because the domain side is the exotic one.
+
+**Signature to match:** baseline or host-side binary, dies in M-mode, counter probes passed first,
+no monitor marker implicating a domain. **Check the CSR number before anything else.**
+
+**Corollary for any board arm:** probe each counter in its OWN invocation. A gated CSR traps with no
+handler, so only that invocation dies and the rest of the run still yields data. That is the same
+"make every run RETURN" rule applied to privilege rather than to control flow.
+
 ## 6. Telling "this is an RTL bug" from "this is our bug"
 
 The default assumption is **ours**. On this project, attribution has been revised more often than any other kind of claim — C-14 went "the RTL is buggy" → "the spec mandates it, the RTL is conforming, QEMU deviates" → "the spec is under-specified; the weight of evidence favours scalars being exempt, so the RTL's `MOVC` is probably an oversight — **but this must be put to the board owner as a QUESTION, not an accusation**" in a single day (`ISSUES.md:1222-1240`). R-2 was filed as an RTL defect and later re-explained as C-13, i.e. ours (`ISSUES.md:75`).

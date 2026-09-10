@@ -61,6 +61,20 @@ fi
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 
+# ...AND THE HEADER, which this line has always claimed to do and never did (found 2026-09-10 by the
+# bench lane). `capstone_sqlite_vfs.h:4` does `#include "sqlite3.h"`, and NO -I directory carried one,
+# so it resolved to the HOST's /usr/include/sqlite3.h -- a DIFFERENT SQLite (3.45.1 on this machine
+# against the 3.53.3 we build). It is INERT in the amalgam translation unit, because
+# sqlite3-capstone.c is included first and defines SQLITE3_H at its :355, so the host header expands
+# to nothing. It is NOT inert for any TU that includes the VFS header WITHOUT the amalgamation ahead
+# of it: that compiles against another version's declarations and nothing warns.
+_amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+if [[ -n "$_amalg_h" ]]; then
+  cp -f "$_amalg_h" "$OBJ_DIR/sqlite3.h"
+else
+  echo "note: no fetched sqlite3.h; \"sqlite3.h\" falls through to the HOST header" >&2
+fi
+
 # BUILTIN_LIMIT=<n> -- DIAGNOSTIC ONLY. Clamp how many builtin functions
 # sqlite3RegisterBuiltinFunctions processes, so the count can be bisected on the board.
 #
