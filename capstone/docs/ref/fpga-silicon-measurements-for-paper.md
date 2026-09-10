@@ -1418,10 +1418,16 @@ Provenance: cheri lane (package, test, analysis) and board lane (console), 2026-
 
 ### §7e — What a capability-store fill costs on silicon, measured by a matched pair (boot sw52, 2026-09-10)
 
+> **CORRECTED 2026-09-10, hours after first writing, by an adversarial audit of this section.** Four
+> things were wrong and are fixed below: the cache-line count (off by 4×), the direction of the
+> cold-buffer caveat, the impact arithmetic (it counted the loop's instructions but not its cycles),
+> and a claim that the monitor's loop is shorter than the rung's — it is the same length. The
+> headline **23.6 cycles per store survives**; the impact figure moves from 5.5–6.6 % to **7.3–8.8 %**.
+
 **Why this number was needed.** The R-30/R-31 firmware half overwrites a revoked region before
 reusing it. Whether that is affordable was the open question in the reclaim decision, and the answer
-had to be given as a bracket — roughly 3 % to 25 % of the boundary path — because one quantity in it
-had never been measured: what 4 KiB of capability stores costs on this silicon. This closes it.
+had to be given as a bracket because one quantity in it had never been measured: what 4 KiB of
+capability stores costs on this silicon.
 
 **Instrument.** Two ladder rungs that differ by exactly one instruction, run in the same boot on the
 resident `caplifive_r25r26r27_66c4e7517.bit`:
@@ -1431,46 +1437,92 @@ resident `caplifive_r25r26r27_66c4e7517.bit`:
 | `fillcost` | `stc zero,0(p)` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 768 (768) | **8,196** | 1,131 | 7.25 |
 | `fillnop` | `nop` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 256 (256) | **2,143** | 1,125 | 1.90 |
 
-Control `k800` returned 4 in the same boot, so the boot carries a verdict. Both retvals are the ones
-their oracles demand, and each encodes two facts — `+256` the asm loop's own iteration counter,
-returned as an output rather than assumed, and `+512` slot 0 read back as zero after being seeded
-**non-zero**, i.e. the store landed. A deleted loop reads 0.
+Control `k800` returned 4 in the same boot. A normalised disassembly diff of the two `.dom` files
+shows **exactly one differing instruction** in the whole `.text` (`nop` ↔ `stc zero,0(a4)`); both
+loops sit at image offset `0x36c`, so they occupy the same byte offset within a cache line and index
+the same sets, and alignment cannot be the confound.
 
-**Result.**
+**The load-bearing evidence is the instruction census, not the return value.** Static count of
+`fillcost_compute`: prologue 16, seed 1, three hoisted reloads 3, loop 4 × 256 = 1024, post-loop 6,
+the `+512` path 6 (fillcost only), epilogue 6 — **1,062 / 1,056**. Measured instret 1,131 and 1,125
+leave a **residual of 69 in both arms**, the harness bracket. That proves, independently of any
+return value, that the four-instruction loop retired 1,024 instructions in each arm, that nothing
+extra ran in either, and that the entire 6-instruction difference is the `+512` path. It matters
+that this is the evidence: the *old* 19-instruction C loop also returned 768 under emulation, so the
+retval has already failed once as a discriminator between the two implementations.
+
+**Result — the marginal cost of the store.**
 
     8,196 - 2,143 = 6,053 cycles for 256 capability stores over 4 KiB
                   = 23.6 cycles per 16-byte capability store
-                  = 1.48 cycles per byte filled
 
-The loop overhead is **cancelled, not assumed**: the two arms have the same iteration count and
-within 6 instructions the same instruction count (the 6 are the `+512` branch fillcost takes and
-fillnop does not). 1.48 cycles/byte for a fill sits below the separately measured 3.52 cycles/byte
-for a 1024-byte **copy**, which is the expected direction — a copy loads and stores where a fill
-only stores.
+The loop overhead is **cancelled, not assumed**: same iteration count, and within 6 instructions the
+same instruction count. **N = 1** — one boot, one draw of each arm, no variance estimate. The only
+repeatability evidence available is a `k800` that read 4,421 on an earlier boot and 4,430 here
+(0.2 %), and that is a compute-bound rung, so it says nothing about a write-buffer-bound one.
 
-**`fillcost`'s CPI of 7.25 is above the 1.13–6.44 on-silicon spread, and that is the finding, not a
-failure.** The arm is 256 stores walking 64 cold cache lines with almost no other work; it is
-memory-system-bound by construction. `fillnop`, the same loop without the store, sits at 1.90 and
-inside the spread.
+**The cache line here is 16 BYTES, so this is one line per store — 256 lines over 4 KiB, not 64.**
+`CVA6ConfigDcacheLineWidth = 128` (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:50` at `66c4e7517`)
+is in **bits**, as `build_config_pkg.sv:25`'s `$clog2(DcacheLineWidth / 8)` shows. An earlier version
+of this section said 64 lines and was wrong by 4×.
 
-**What it means for the reclaim.** Against the measured one revoke per ~28,829 instructions, a 4 KiB
-reclaim adds ~1,024 instructions (**+3.6 % instructions**) and ~6,053 cycles. In cycles the share
-depends on the boundary path's own CPI, which **the same boot measures**: speedtest1 in a capability
-domain runs at **CPI 3.17-3.81** (§7f below). At those, the reclaim is **5.5-6.6 % of cycles** — so
-that is the figure to quote, not the 8-14 % an assumed CPI of 1.5-2.5 would give. It lands at the
-**bottom** of the 3–25 % bracket the decision was taken under, and it is a cost per *revoke*, not per
-boundary crossing.
+**The cache is write-through with NO write-allocate**, so "the buffer was cold, therefore this is a
+ceiling" does not follow and has been withdrawn. `CVA6ConfigDcacheType = WT` (`:76`), and
+`wt_dcache_wbuffer.sv:43-44`: a returning write ACK updates the cache only *if the word is present*,
+and "if the word is not allocated to the cache, it is just evicted from the write buffer." A store
+to a resident line still writes through. **Whether a warm region is cheaper to fill is therefore
+OPEN**, not conservative-by-assumption; the cheap way to settle it is a `fillwarm` rung that runs the
+same loop twice and reports only the second pass.
 
-**Two things this does NOT measure.** It is a **cold** buffer, every line missing; a region the
-borrower has just been using may be partly warm, so this is closer to a ceiling than a typical case.
-And the monitor's own loop is one instruction shorter per iteration — it gets the pointer walk free
-from the UNINIT cursor advance, which this bitstream does not provide for a LINEAR capability. The
-reclaim path end to end is only measurable after the flash.
+**Cost to the reclaim — count the LOOP, not only the stores.** The monitor executes the whole loop,
+so the marginal-store figure is the wrong numerator for an impact estimate. The monitor's own
+`C_RECLAIM` body is `beq / stc / addi / j` — **four instructions, the same as this rung's**; an
+earlier version of this section claimed it was one shorter, which is wrong. Subtracting fillcost's
+~140 cycles of non-loop code, the fill itself is:
 
-**Also from this boot, and it is the reason the counter is in the firmware at all:**
-`RCLM:00000000` appears on every share (3 shares, 3 markers). Zero reclaims, as it must be on a
-bitstream where the guard cannot fire — and the reporting path is now **proven readable on silicon**,
-which is the one thing about it that could not be tested after the flash.
+    ~8,060 cycles per 4 KiB reclaim   (of which 6,053 the stores, ~2,010 the loop the monitor also pays)
+     1,024 instructions
+
+Against **1 revoke per 28,829 instructions**, which is a **native x86, gcc -O2** measurement of
+speedtest1 `main/size100` (`docs/history/22-07-2026_00-27-29_…-tier1-frequency-…md:26-27,43`) and
+**not** a silicon measurement of the domain — the domain runs more instructions for the same work, so
+every percentage below is **overstated** on that axis:
+
+| baseline CPI | reclaim's share of cycles |
+|---|---:|
+| 3.17–3.81 — **this boot's measured range** (§7f) | **7.3 – 8.8 %** |
+| 2.5 | 11.2 % |
+| 1.5 | 18.6 % |
+| 1.13 – 6.44 (the full on-silicon spread, §4) | 4.3 – 24.7 % |
+
+So the figure to quote is **~8 % of cycles and +3.6 % of instructions at this workload's measured
+CPI** — and the honest statement is that it is CPI-sensitive across the whole 3–25 % bracket the
+decision was taken under, not that it "lands in the lower half" of it.
+
+**Rate comparison, like for like.** `fillcost`'s **total** is 8,196 / 4,096 = **2.00 cycles per byte**,
+against the separately measured **3.52** cycles/byte for a 1024-byte **copy** (line 122) — also a
+total. The fill is cheaper than the copy, in the expected direction, since a copy loads and stores
+where a fill only stores. (1.48 cycles/byte is the *marginal* rate and must not be compared against
+that 3.52.)
+
+**What the retval control does NOT cover.** `+512` keys on `fillcost_buf[0]`, the first slot the loop
+touches and the one that reads back zero whether or not the pointer advanced. If the walk were a
+no-op the retval would still be 768 and instret still 1,131, and on a write-through cache 256 stores
+to one granule would still drain one at a time. The walk is visible in the disassembly
+(`cincoffsetimm a4, a4, 0x10`) but the *control* does not prove it; seeding slot 255 as well and
+adding `+1024` when both read zero would close it.
+
+**A mechanism this does not isolate.** The AXI adapter maintains a shadow tag memory with a separate
+transaction per data-region access (`wt_axi_adapter.sv:108-123,153,413-442`), and `needs_tag` fires
+for plain loads and stores too — so it is an FPGA memory-system cost, not a capability-store premium.
+23.6 cycles/store is best read as **the write-through drain cost per store on this bitstream**, which
+is consistent with the cost scaling per *store* rather than per line. A `fillsd` arm — the identical
+loop with a plain `sd` — would isolate whatever part is capability-specific. Not measured.
+
+**Also from this boot, and the reason the counter is in the firmware at all:** `RCLM:00000000`
+appears on every share (9 of 9). Zero reclaims, as it must be where the guard cannot fire — and the
+reporting path is now **proven readable on silicon**, which is the one property of it that could not
+be tested after the flash.
 
 ### §7f — speedtest1 on capability silicon vs native, same boot, all three testsets (boot sw52, 2026-09-10)
 

@@ -17,7 +17,11 @@ Minimal snapshot. Read first in every session.
   1.214 for parsenumber / orm / main, with **identical verification hashes** on every pair; the cycle
   ratio is BELOW the instruction ratio in all three because capability CPI is *lower* than native's.
   The fill-cost matched pair gives **23.6 cycles per 16-byte capability store**, so a 4 KiB reclaim
-  is **+3.6 % instructions and 5.5-6.6 % cycles** at the boundary CPI this boot measured (3.17-3.81).
+  is **+3.6 % instructions and ~8 % cycles** (7.3-8.8 %) at the boundary CPI this boot measured
+  (3.17-3.81), and 4.3-24.7 % across the full 1.13-6.44 spread -- it is CPI-sensitive, not "in the
+  lower half of the bracket". An adversarial audit corrected this the same day from 5.5-6.6 %: the
+  first version counted the fill loop's INSTRUCTIONS but only the stores' CYCLES, and the monitor
+  pays for the loop too.
   Full numbers: `docs/ref/fpga-silicon-measurements-for-paper.md` §7e, §7f.
 * **`RCLM:00000000` on every share (9 of 9).** Zero reclaims, as it must be where the guard cannot
   fire — and the counter's reporting path is now proven readable on silicon, which is the one

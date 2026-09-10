@@ -99,10 +99,14 @@ because a copy loads and stores where a fill only stores.
 
 **One thing this pair cannot separate.** It measures the fill's *physical work* on the resident
 bitstream, where the capability is LINEAR and the pointer is walked by an explicit `cincoffsetimm`.
-The monitor's real fill walks by the **UNINIT cursor advance**, which is free in instruction count
-and is not on this silicon. So the pair gives the store cost and the monitor's loop is one
-instruction shorter per iteration than the rung's — it does not give the reclaim path end to end,
-and only the flashed bitstream can.
+The monitor's real fill walks by the **UNINIT cursor advance** instead. It does not give the reclaim
+path end to end, and only the flashed bitstream can.
+
+> **CORRECTED after the run.** This paragraph originally went on to say the monitor's loop is "one
+> instruction shorter per iteration than the rung's". It is not: `C_RECLAIM` is
+> `beq / stc / addi / j` and the rung is `stc / cincoffsetimm / addi / bltu` — **both four**. The
+> monitor spends its fourth instruction on a second branch where the rung spends it on the pointer
+> walk. Nothing downstream depended on the difference, but the sentence was wrong and is withdrawn.
 
 **A miss that is worth recording because nothing else caught it.** The rewrite first guarded its asm
 on `__riscv`. The domain target is `capstone64-unknown-elf` and does **not** predefine it, so the
