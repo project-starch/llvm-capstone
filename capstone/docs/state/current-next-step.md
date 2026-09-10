@@ -68,7 +68,29 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    allocator served the 4 MiB arm, because 4 MiB sits exactly at the buddy ceiling and either could
    have. The matched failing pair exists under emulation only. Worth one arm inside a boot that is
    happening anyway, not worth a boot.
-8. **A second `fillcost` draw**, plus the `fillwarm`/`fillsd` repeats and the directed tests — all
+8. **The instrumented domain image gets its OWN boot — the base-VA knob is refused, on evidence.**
+   Three separate questions tonight came down to the same missing measurement: whether the board's
+   domain instruction count equals the emulated one (a claim asserted and retracted the same day),
+   whether `cte`'s anomaly is a real effect or a bad prediction for that one testset, and which
+   denominator the paper may use. All three are decidable with a board-side domain `instret` and
+   none without it.
+
+   Every SQLite image links at `0x10000` with no base-VA knob, so the instrumented image cannot
+   share a boot with the pairs. The proposal was to add a `DOMAIN_BASE_VA` knob to the SQLite build
+   — three lines — so it rides along. **Refused.** R-17 is open and not root-caused: *a ~1.6 MB
+   domain hangs after ANY perturbation of its image*, with **nine** structurally different
+   perturbations built and every one hanging, silently, no trap and no marker, while QEMU runs them
+   all identically. A relink to a different base VA is that class of perturbation on that size of
+   image, and its failure mode is indistinguishable from a result.
+
+   The build's own log already says the same: `minstret bracket ON -- separate image, stage it
+   LAST`, and the image is 112 bytes larger than the plain one — R-17's exact shape. That risk
+   exists either way; a dedicated boot only decides what a hang costs. Run it as control first,
+   then the seven instret arms ascending, so a hang costs the expensive end and nothing cheaper.
+   **Build it from the SEVEN-testset source** — the `speedtest1_instret.dom` in the sw52 set is the
+   old three-testset workload and would answer a question about a program we no longer run.
+
+9. **A second `fillcost` draw**, plus the `fillwarm`/`fillsd` repeats and the directed tests — all
    cheap riders on any boot, none worth one alone. Boot sw52's lost `instret` arm is in the same
    class: the classifier defect that killed it is fixed and negative-tested.
 
