@@ -40,10 +40,18 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    sizes. **This is what blocks proving the `pre_mmap_offset` fix**
    — `tests/runtime-qemu/offsetcycle` is written and fails against the old module rather than
    passing quietly, and it cannot complete a single cycle until the guard exists.
-4. **Push monitor commit `0a5c3d9`.** Still LOCAL ONLY. `project-starch/capstone-sbi` returns
-   `403, Permission denied` for this credential — tried and recorded 2026-09-10, so this is a
-   provable blocker rather than an assumed one. Someone with write access has to push it, or the
-   credential has to gain access.
+4. **Two repositories this credential cannot push, both tried and recorded rather than assumed.**
+   - monitor `0a5c3d9` — `project-starch/capstone-sbi` returns `403, Permission denied`
+     (2026-09-10);
+   - `caplifive-system` `e873811` — `project-starch/caplifive-system-dev` returns
+     `Permission to … denied to <this account>` / 403 (2026-09-11). That commit only moves the
+     `sw/buildroot` pointer to `1a5a591`, which IS pushed, so nothing is lost — but **the parent's
+     `capstone/caplifive-system` gitlink is deliberately NOT bumped**, because bumping it would
+     make `dev` reference a commit that does not exist on any remote.
+
+   Both need someone with write access, or the credential needs it. Until then the board tree's
+   state is reproducible only by re-running the fast-forward, which is one command and is written
+   down here.
 5. **`shrinkto-size-fix`** (`a4b478754`, off `1bfff7776`) is committed with its witness test but the
    branch is **not on the push allowlist** and **has not been synthesised**. It needs an allowlist
    entry before it can go anywhere.

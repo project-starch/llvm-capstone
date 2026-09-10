@@ -97,6 +97,17 @@ make TARGET=fpga build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(rea
 `A=linux-rebuild` **first**: buildroot does not track `overlay/` → cpio, so an OpenSBI-only
 relink silently ships the OLD initramfs.
 
+**A change to the kernel MODULE or the userspace library needs `A=modcapstone-rebuild` BEFORE
+those two.** The pair above rebuilds the kernel and relinks the firmware and does *not* re-rsync
+the `package/modcapstone/` sources: buildroot has already stamped `.stamp_rsynced`, so the bake
+succeeds, the cpio is rebuilt, and it carries the PREVIOUS `.ko`. Caught 2026-09-11 by checking
+the built artifact — the module string added that day was absent from a `.ko` whose bake reported
+rc=0 on both targets, and only the size differed (31,144 vs 31,504 bytes). Order is
+`modcapstone-rebuild` → `linux-rebuild` → `opensbi-rebuild`, and the Makefile explains why
+(`Makefile:102-118`): module and domain targets FEED the rootfs, OpenSBI CONSUMES the Image.
+**Verify from the artifact, not the bake's exit status** — grep the built `.ko` and the cpio for a
+string that exists only in the new code, with a string present in both as the positive control.
+
 **Retire before you stage, every time — the image is DERIVED from the run, not accumulated:**
 
 ```bash
