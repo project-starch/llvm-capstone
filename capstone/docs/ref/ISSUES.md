@@ -3273,10 +3273,13 @@ same assert from the `REV_SHARED` antecedent and was never filed as an issue; an
 `:1270` inspected these exact two lines and cleared them** — for the type of the RESULT, which is
 the UNINIT question, never for the type of the OPERAND.
 
-**N = 1**, one QEMU run (`/tmp/capstone/offsetcycle-4194304.log`). The mechanism is deterministic on
-the source reading, since the type is fixed at create by a guard that cannot return otherwise and
-nothing between create and revoke changes it; a confirmation run is still owed before this is called
-reproduced.
+**N = 3, and the confirmation is in.** The original run
+(`/tmp/capstone/offsetcycle-4194304.log`) plus two deliberate replications at TWO sizes —
+`/tmp/capstone/m6-confirm-4194304.log` and `m6-confirm-1048576.log`, both carrying
+`helper_csrevoke: Assertion` exactly once. All three abort at cycle 0 having printed the same
+`id=9 mmap_offset=33947648`, which is what a defect fixed at create time and independent of size
+should look like. The second size is there because a byte-identical repeat of one run confirms the
+run, not the mechanism.
 
 **It blocks the `pre_mmap_offset` proof.** `tests/runtime-qemu/offsetcycle` fails against the old
 module rather than passing quietly, which is the only reason it is worth a run — and it cannot

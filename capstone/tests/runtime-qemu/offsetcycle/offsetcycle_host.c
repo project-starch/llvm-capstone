@@ -21,6 +21,12 @@
  * because the monitor revokes a region whose handle is still LINEAR when nothing ever shared it.
  * That is M-6 in the registry, found by this program. Once the guard exists, this runs unchanged.
  *
+ * SO ITS FAIL PATH IS PROVEN AND ITS PASS PATH IS NOT. Every run so far has aborted at cycle 0, which
+ * exercises the create/query half and none of the comparison. When the guard lands, read the three
+ * printed mmap_offset values by eye on the first successful run rather than trusting
+ * __OFFSETCYCLE_PASSED__: a program that has only ever failed has an unproven idea of what passing
+ * looks like.
+ *
  * WHAT WOULD MAKE IT VOID, and is therefore checked rather than assumed: a release that the
  * monitor refuses (retval 1: the slot is kept because something sits above it) frees nothing and
  * restores nothing, so a run in which any release returns non-zero measures the refusal and not

@@ -36,8 +36,8 @@ and its withdrawn uncommitted-submodule policy; `run-sqlite-slt.sh`'s 1 MiB ceil
    same failure, so "only the share paths make it a REV" was too generous; the trigger is any REVOKE
    ecall, with RELEASE merely the instance observed; and on silicon it is `UNEXPECTED_CAP_TYPE`
    raised INSIDE M-mode into a privilege-blind trap entry with no valid domain to return to —
-   terminal behaviour UNRESOLVED, not an error return. QEMU aborts outright. N=1, confirmation run
-   owed. **This is what blocks proving the `pre_mmap_offset` fix**
+   terminal behaviour UNRESOLVED, not an error return. QEMU aborts outright. Reproduced 3/3 at two
+   sizes. **This is what blocks proving the `pre_mmap_offset` fix**
    — `tests/runtime-qemu/offsetcycle` is written and fails against the old module rather than
    passing quietly, and it cannot complete a single cycle until the guard exists.
 4. **Push monitor commit `0a5c3d9`.** Still LOCAL ONLY. `project-starch/capstone-sbi` returns
