@@ -452,6 +452,54 @@ emulator.
 
 ---
 
+## 5c. Should `c10` be accepted wherever an INTEGER register is asked for?
+
+**You asked to see this discussed first, then explained, then put back to you. This is the technical
+half; the decision is yours and neither lane has taken it.**
+
+C-45's fix made the operand coercion idempotent, and as a **side effect** the assembler now accepts a
+capability spelling in every integer slot in the ISA. Measured on the pushed binary — all three were
+errors before:
+
+    sd  c10, 0(c11)    ->  sd  a0, 0(a1)
+    ld  c10, 0(c11)    ->  ld  a0, 0(a1)
+    add c10, c11, c12  ->  add a0, a1, a2
+
+| option | what it does | cost |
+|---|---|---|
+| **(a) keep it** | either spelling accepted everywhere | none, already shipped |
+| **(b) undo only the mutation** — a "was coerced" bit, restore just those operands | fixes C-45, leaves the accepted language **byte-for-byte** as it was | one flag on `CapstoneOperand` |
+| **(c) narrow to the call classes** | smaller | **rejected by both lanes** — leaves the identical bug latent behind any future two-operand capability pseudo |
+
+**Board lane's view: (b).** Three findings, each read from source rather than reasoned:
+
+* **(b) is mechanically sound, and the bug proves it.** The generated match loop (`:9971`) dereferences
+  the operand vector directly (`:10006`) and on a failed candidate just continues — it never copies,
+  clears or rebuilds it. That is *why* a mutation from a failed trial survives into the next one, which
+  is C-45. A flag in the same struct cannot be dropped by a mechanism that demonstrably does not drop
+  the register number beside it.
+* **No prior intent covers this.** The one-register-file comment (`CapstoneAsmParser.cpp:1332-1338`)
+  justifies the FORWARD direction only — it says a *capability* operand is written with its integer
+  name. `cap-regnames.s` is scoped the same way, to "a **capability operand**". **No test anywhere
+  asserts `cN` in an integer slot.** So (a) would extend a decision rather than apply one.
+* **(a) makes a FUTURE hazard worse.** Twelve other mnemonics have competing capability/integer rows
+  and are safe because their paren and symbol tokens are themselves operand classes, so a mistyped
+  register cannot make one row look like another. `call` had no such protection, which is why it broke.
+  A future two-operand capability pseudo on an integer mnemonic re-creates that — and under (a) it
+  re-creates it where a stray `cN` **satisfies** an integer slot instead of failing. (b) keeps the
+  blast radius at exactly the operands that were mutated.
+
+**The argument for (a), stated fairly:** it works, it is shipped, and it is what a genuinely symmetric
+one-register-file model would look like. **If the model was always meant to be symmetric, (a) is the
+honest expression of it and (b)'s extra flag buys nothing.** Nothing either lane has read settles that,
+because it is a question about the language being designed rather than about the parser.
+
+**What (b) buys you specifically: it decouples the bug fix from the language decision.** You would not
+have to rule on spelling to have C-45 fixed, and could still choose (a) later — deliberately, with a
+test asserting it and a line in `cap-regnames.s` saying so, rather than acquiring it as a side effect.
+
+---
+
 ## 6. Smaller, and safe to defer
 
 * **R-4** — retitled RECORD ONLY. Closure as *"not reproducible"* was rejected as overstating: nobody
