@@ -1,0 +1,19 @@
+date            2026-09-10T05:48:09Z
+platform        Capstone domain on QEMU virt-capstone, purecap image (capstone64-unknown-elf), freestanding
+sqlite          3.53.3 (sqlite-src-3530300), the platform port in llvm-capstone capstone/ports/sqlite
+speedtest1      --memdb --size 100 --testset main --verify --stats
+arms            memsys5: unprotected, SQLITE_CONFIG_HEAP over a 134217728-byte host region (2097152 atoms of 64 bytes), lookaside 1200,40 as shipped
+                sublet: the port of both allocators (adapted/sublet-3530300.patch), the pool a 136314880-byte host region (the same 2097152 atoms plus memsys5's control block), memsys5's tables in a second host region
+regions         sqlite_host.user --pool / --arena and --tables, physically contiguous, from the kernel's CMA area (cma=1G), released after the run (rc=0 both)
+reps            3 per arm, bit-identical within each arm
+images          344afe28174836c64efc6b7580ab77704cd787c3228cc2bd2bfeafe199e446f2  memsys5.dom
+                a839b9032ff513fc889ce625c3cb8da6d189aaa32f4c8eacc441c6bf2bbe868f  sublet.dom
+llvm-capstone   branch sublet-eval f4d2f6a2e7b8 (the port 9a35ed0b4834, the review's fixes c83197436897, the grain probes d4e24a33c412, the regions 60eb8d430c5c, the buildroot merge 368ea8e6cb52); its README, section speedtest1 and the Sublet port
+buildroot       caplifive-buildroot branch infra/cma-regions 9a5f80f (the kernel with CMA, the module with DMA-backed regions and release)
+qemu            capstone-qemu branch sublet-diag d32f678278 (the tag-map index; 8a66051364 CAPSTONE_REV_NODES, the runner sets 8388608; 1d7f203621 diagnostics), CAPSTONE_GP_NONLIN=1
+port            0e84409953fb986c7369433902db3b26d09b876eef40778c376b0c4f32d71263  capstone/ports/sqlite/adapted/sublet-3530300.patch
+primitives      f0a33bc558f28ba7821c039442dcd78f3fd42f71779b7f96f48678200b135792  capstone/ports/sqlite/adapted/sublet.h
+hook            a1_memhook.c, two levels from inside the domain; adapted/hook-3530300.patch (memsys5 arm), adapted/hook-3530300-sublet.patch (sublet arm)
+counters        sublet arm: split=498013 mrev=3027344 delin=2529498 revoke=3027344 init=497846 (the domain's last line)
+probes          SPEEDTEST1_UAF=1 (a column name read after sqlite3_finalize) and =2 (a memsys5 block read after sqlite3_free), re-run on this build with the size-100 regions: under sublet the read halts the domain, cause 24 (pc 0x101d0b388 and 0x101d08658); the memsys5 arm reads through and prints NOTRAP. The probe runs in place of the benchmark, so --size does not enter it; the faulting lines, speedtest1_domain.c:297 and :313, were located in the size-1 pass (20260910T014839Z, fault-locate.py)
+review          2026-09-10, an independent read of the port against the emulator and the specification, at --size 1 (20260910T014839Z); its findings and the limits they name are in capstone/README.md

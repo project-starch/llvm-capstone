@@ -1,0 +1,624 @@
+memhook: two levels recorded from inside the domain
+
+@alloc[0, lookaside]: 17
+@free[0, lookaside]: 230
+@bytes[0, lookaside]: 5004
+@peak[0, lookaside]: 7
+@alloc[0, memsys5]: 27
+@free[0, memsys5]: 7028
+@bytes[0, memsys5]: 66343
+@peak[0, memsys5]: 23
+@escaped[0]: 4
+@alloc[1, lookaside]: 100086
+@free[1, lookaside]: 100080
+@bytes[1, lookaside]: 40809953
+@peak[1, lookaside]: 48
+@alloc[1, memsys5]: 799
+@free[1, memsys5]: 108
+@bytes[1, memsys5]: 3117476
+@realloc[1, memsys5]: 8
+@peak[1, memsys5]: 717
+@escaped[1]: 104
+@tnum[1]: 100
+@tname[1]: %d INSERTs into table with no index
+@alloc[2, lookaside]: 200089
+@free[2, lookaside]: 200082
+@bytes[2, lookaside]: 79594755
+@peak[2, lookaside]: 50
+@alloc[2, memsys5]: 3261
+@free[2, memsys5]: 2438
+@bytes[2, memsys5]: 37213007
+@realloc[2, memsys5]: 5
+@peak[2, memsys5]: 1545
+@escaped[2]: 71
+@tnum[2]: 110
+@tname[2]: %d ordered INSERTS with one index/PK
+@alloc[3, lookaside]: 200089
+@free[3, lookaside]: 200082
+@bytes[3, lookaside]: 79602552
+@peak[3, lookaside]: 50
+@alloc[3, memsys5]: 4882
+@free[3, memsys5]: 4062
+@bytes[3, memsys5]: 60870361
+@realloc[3, memsys5]: 5
+@peak[3, memsys5]: 2364
+@escaped[3]: 71
+@tnum[3]: 120
+@tname[3]: %d unordered INSERTS with one index/PK
+@alloc[4, lookaside]: 284
+@free[4, lookaside]: 270
+@bytes[4, lookaside]: 48448
+@peak[4, lookaside]: 50
+@alloc[4, memsys5]: 75
+@free[4, memsys5]: 74
+@bytes[4, memsys5]: 32719
+@realloc[4, memsys5]: 50
+@peak[4, memsys5]: 2357
+@escaped[4]: 2
+@tnum[4]: 130
+@tname[4]: %d SELECTS, numeric BETWEEN, unindexed
+@alloc[5, lookaside]: 681
+@free[5, lookaside]: 666
+@bytes[5, lookaside]: 101925
+@peak[5, lookaside]: 58
+@alloc[5, memsys5]: 140
+@free[5, memsys5]: 139
+@bytes[5, memsys5]: 24656323
+@realloc[5, memsys5]: 94
+@peak[5, memsys5]: 2357
+@escaped[5]: 32
+@tnum[5]: 140
+@tname[5]: %d SELECTS, LIKE, unindexed
+@alloc[6, lookaside]: 543
+@free[6, lookaside]: 530
+@bytes[6, lookaside]: 85861
+@peak[6, lookaside]: 48
+@alloc[6, memsys5]: 153783
+@free[6, memsys5]: 153782
+@bytes[6, memsys5]: 12426273
+@peak[6, memsys5]: 26007
+@escaped[6]: 22
+@tnum[6]: 142
+@tname[6]: %d SELECTS w/ORDER BY, unindexed
+@alloc[7, lookaside]: 535
+@free[7, lookaside]: 522
+@bytes[7, lookaside]: 86749
+@peak[7, lookaside]: 50
+@alloc[7, memsys5]: 116
+@free[7, memsys5]: 115
+@bytes[7, memsys5]: 261367
+@peak[7, memsys5]: 2364
+@escaped[7]: 22
+@tnum[7]: 145
+@tname[7]: %d SELECTS w/ORDER BY and LIMIT, unindexed
+@alloc[8, lookaside]: 351
+@free[8, lookaside]: 351
+@bytes[8, lookaside]: 66799
+@peak[8, lookaside]: 52
+@alloc[8, memsys5]: 262420
+@free[8, memsys5]: 260346
+@bytes[8, memsys5]: 86711673
+@realloc[8, memsys5]: 10
+@peak[8, memsys5]: 53826
+@escaped[8]: 199
+@tnum[8]: 150
+@tname[8]: CREATE INDEX five times
+@alloc[9, lookaside]: 98528
+@free[9, lookaside]: 98511
+@bytes[9, lookaside]: 18713016
+@peak[9, lookaside]: 50
+@alloc[9, memsys5]: 14727
+@free[9, memsys5]: 14725
+@bytes[9, memsys5]: 1109906
+@realloc[9, memsys5]: 7113
+@peak[9, memsys5]: 4432
+@escaped[9]: 2
+@tnum[9]: 160
+@tname[9]: %d SELECTS, numeric BETWEEN, indexed
+@alloc[10, lookaside]: 98528
+@free[10, lookaside]: 98511
+@bytes[10, lookaside]: 18705771
+@peak[10, lookaside]: 50
+@alloc[10, memsys5]: 14837
+@free[10, memsys5]: 14835
+@bytes[10, memsys5]: 972076
+@realloc[10, memsys5]: 7223
+@peak[10, memsys5]: 4433
+@escaped[10]: 2
+@tnum[10]: 161
+@tname[10]: %d SELECTS, numeric BETWEEN, PK
+@alloc[11, lookaside]: 129998
+@free[11, lookaside]: 129980
+@bytes[11, lookaside]: 19500152
+@peak[11, lookaside]: 57
+@alloc[11, memsys5]: 11362
+@free[11, memsys5]: 11360
+@bytes[11, memsys5]: 1842713
+@realloc[11, memsys5]: 1280
+@peak[11, memsys5]: 4434
+@escaped[11]: 77
+@tnum[11]: 170
+@tname[11]: %d SELECTS, text BETWEEN, indexed
+@alloc[12, lookaside]: 242
+@free[12, lookaside]: 242
+@bytes[12, lookaside]: 47671
+@peak[12, lookaside]: 50
+@alloc[12, memsys5]: 19460
+@free[12, memsys5]: 17829
+@bytes[12, memsys5]: 171045606
+@realloc[12, memsys5]: 9
+@peak[12, memsys5]: 6095
+@escaped[12]: 150
+@tnum[12]: 180
+@tname[12]: %d INSERTS with three indexes
+@alloc[13, lookaside]: 42
+@free[13, lookaside]: 42
+@bytes[13, lookaside]: 9295
+@peak[13, lookaside]: 23
+@alloc[13, memsys5]: 17769
+@free[13, memsys5]: 17690
+@bytes[13, memsys5]: 163938901
+@peak[13, memsys5]: 6177
+@escaped[13]: 2
+@tnum[13]: 190
+@tname[13]: DELETE and REFILL one table
+@alloc[14, lookaside]: 1067
+@free[14, lookaside]: 1067
+@bytes[14, lookaside]: 198308
+@peak[14, lookaside]: 68
+@alloc[14, memsys5]: 45566
+@free[14, memsys5]: 45855
+@bytes[14, memsys5]: 152454125
+@realloc[14, memsys5]: 34
+@peak[14, memsys5]: 35968
+@escaped[14]: 549
+@tnum[14]: 200
+@tname[14]: VACUUM
+@alloc[15, lookaside]: 87
+@free[15, lookaside]: 87
+@bytes[15, lookaside]: 15042
+@peak[15, lookaside]: 48
+@alloc[15, memsys5]: 393
+@free[15, memsys5]: 322
+@bytes[15, memsys5]: 77532
+@realloc[15, memsys5]: 20
+@peak[15, memsys5]: 5980
+@escaped[15]: 320
+@tnum[15]: 210
+@tname[15]: ALTER TABLE ADD COLUMN, and query
+@alloc[16, lookaside]: 35254
+@free[16, lookaside]: 35246
+@bytes[16, lookaside]: 16231880
+@peak[16, lookaside]: 31
+@alloc[16, memsys5]: 3607
+@free[16, memsys5]: 3448
+@bytes[16, memsys5]: 7914003
+@peak[16, memsys5]: 8808
+@escaped[16]: 2
+@tnum[16]: 230
+@tname[16]: %d UPDATES, numeric BETWEEN, indexed
+@alloc[17, lookaside]: 176294
+@free[17, lookaside]: 176287
+@bytes[17, lookaside]: 81111637
+@peak[17, lookaside]: 21
+@alloc[17, memsys5]: 3385
+@free[17, memsys5]: 3381
+@bytes[17, memsys5]: 3537952
+@peak[17, memsys5]: 9448
+@escaped[17]: 2
+@tnum[17]: 240
+@tname[17]: %d UPDATES of individual rows
+@alloc[18, lookaside]: 20
+@free[18, lookaside]: 20
+@bytes[18, lookaside]: 3894
+@peak[18, lookaside]: 16
+@alloc[18, memsys5]: 3392
+@free[18, memsys5]: 3392
+@bytes[18, memsys5]: 3579024
+@peak[18, memsys5]: 9451
+@escaped[18]: 2
+@tnum[18]: 250
+@tname[18]: One big UPDATE of the whole %d-row table
+@alloc[19, lookaside]: 24
+@free[19, lookaside]: 24
+@bytes[19, lookaside]: 4577
+@peak[19, lookaside]: 20
+@alloc[19, memsys5]: 3
+@free[19, memsys5]: 3
+@bytes[19, memsys5]: 1543
+@peak[19, memsys5]: 6086
+@escaped[19]: 1
+@tnum[19]: 260
+@tname[19]: Query added column after filling
+@alloc[20, lookaside]: 34792
+@free[20, lookaside]: 34782
+@bytes[20, lookaside]: 23250537
+@peak[20, lookaside]: 25
+@alloc[20, memsys5]: 9768
+@free[20, memsys5]: 9768
+@bytes[20, memsys5]: 22428280
+@peak[20, memsys5]: 12812
+@escaped[20]: 1
+@tnum[20]: 270
+@tname[20]: %d DELETEs, numeric BETWEEN, indexed
+@alloc[21, lookaside]: 148112
+@free[21, lookaside]: 148104
+@bytes[21, lookaside]: 96252400
+@peak[21, lookaside]: 14
+@alloc[21, memsys5]: 5734
+@free[21, memsys5]: 5733
+@bytes[21, memsys5]: 6002259
+@peak[21, memsys5]: 11792
+@escaped[21]: 1
+@tnum[21]: 280
+@tname[21]: %d DELETEs of individual rows
+@alloc[22, lookaside]: 78
+@free[22, lookaside]: 78
+@bytes[22, lookaside]: 14457
+@peak[22, lookaside]: 29
+@alloc[22, memsys5]: 31970
+@free[22, memsys5]: 31903
+@bytes[22, memsys5]: 225296022
+@peak[22, memsys5]: 11991
+@escaped[22]: 5
+@tnum[22]: 290
+@tname[22]: Refill two %d-row tables using REPLACE
+@alloc[23, lookaside]: 107
+@free[23, lookaside]: 107
+@bytes[23, lookaside]: 19456
+@peak[23, lookaside]: 39
+@alloc[23, memsys5]: 19768
+@free[23, memsys5]: 19768
+@bytes[23, memsys5]: 169606646
+@peak[23, memsys5]: 8070
+@escaped[23]: 6
+@tnum[23]: 300
+@tname[23]: Refill a %d-row table using (b&1)==(a&1)
+@alloc[24, lookaside]: 90094
+@free[24, lookaside]: 90080
+@bytes[24, lookaside]: 54585715
+@peak[24, lookaside]: 67
+@alloc[24, memsys5]: 10
+@free[24, memsys5]: 7
+@bytes[24, memsys5]: 8491
+@peak[24, memsys5]: 6158
+@escaped[24]: 4
+@tnum[24]: 310
+@tname[24]: %d four-ways joins
+@alloc[25, lookaside]: 87
+@free[25, lookaside]: 76
+@bytes[25, lookaside]: 12782
+@peak[25, lookaside]: 59
+@alloc[25, memsys5]: 6
+@free[25, memsys5]: 4
+@bytes[25, memsys5]: 8173
+@peak[25, memsys5]: 6157
+@escaped[25]: 4
+@tnum[25]: 320
+@tname[25]: subquery in result set
+@alloc[26, lookaside]: 140085
+@free[26, lookaside]: 140079
+@bytes[26, lookaside]: 56744509
+@peak[26, lookaside]: 48
+@alloc[26, memsys5]: 8565
+@free[26, memsys5]: 8152
+@bytes[26, memsys5]: 55850598
+@realloc[26, memsys5]: 1
+@peak[26, memsys5]: 6580
+@escaped[26]: 43
+@tnum[26]: 400
+@tname[26]: %d REPLACE ops on an IPK
+@alloc[27, lookaside]: 140016
+@free[27, lookaside]: 140010
+@bytes[27, lookaside]: 56752653
+@peak[27, lookaside]: 16
+@alloc[27, memsys5]: 3
+@free[27, memsys5]: 3
+@bytes[27, memsys5]: 1557
+@peak[27, memsys5]: 6569
+@escaped[27]: 1
+@tnum[27]: 410
+@tname[27]: %d SELECTS on an IPK
+@alloc[28, lookaside]: 140087
+@free[28, lookaside]: 140079
+@bytes[28, lookaside]: 56806621
+@peak[28, lookaside]: 48
+@alloc[28, memsys5]: 7642
+@free[28, memsys5]: 7209
+@bytes[28, memsys5]: 48567543
+@realloc[28, memsys5]: 3
+@peak[28, memsys5]: 7010
+@escaped[28]: 70
+@tnum[28]: 500
+@tname[28]: %d REPLACE on TEXT PK
+@alloc[29, lookaside]: 140019
+@free[29, lookaside]: 140011
+@bytes[29, lookaside]: 56003084
+@peak[29, lookaside]: 18
+@alloc[29, memsys5]: 4
+@free[29, memsys5]: 3
+@bytes[29, memsys5]: 1563
+@peak[29, memsys5]: 7003
+@escaped[29]: 1
+@tnum[29]: 510
+@tname[29]: %d SELECTS on a TEXT PK
+@alloc[30, lookaside]: 41
+@free[30, lookaside]: 41
+@bytes[30, lookaside]: 9360
+@peak[30, lookaside]: 15
+@alloc[30, memsys5]: 9343
+@free[30, memsys5]: 9343
+@bytes[30, memsys5]: 79423424
+@peak[30, memsys5]: 7417
+@escaped[30]: 2
+@tnum[30]: 520
+@tname[30]: %d SELECT DISTINCT
+@alloc[31, lookaside]: 129
+@free[31, lookaside]: 129
+@bytes[31, lookaside]: 9560
+@peak[31, lookaside]: 124
+@alloc[31, memsys5]: 8
+@free[31, memsys5]: 8
+@bytes[31, memsys5]: 64715
+@realloc[31, memsys5]: 3
+@peak[31, memsys5]: 7005
+@escaped[31]: 1
+@tnum[31]: 980
+@tname[31]: PRAGMA integrity_check
+@alloc[32, lookaside]: 111
+@free[32, lookaside]: 111
+@bytes[32, lookaside]: 20634
+@peak[32, lookaside]: 49
+@alloc[32, memsys5]: 157
+@free[32, memsys5]: 149
+@bytes[32, memsys5]: 50105
+@realloc[32, memsys5]: 5
+@peak[32, memsys5]: 7100
+@escaped[32]: 131
+@tnum[32]: 990
+@tname[32]: ANALYZE
+
+@hook_alloc[lookaside]: 1876517
+@hook_free[lookaside]: 1876517
+@hook_bytes[lookaside]: 755425057
+@hook_realloc[lookaside]: 0
+@hook_inplace[lookaside]: 0
+@hook_peak[lookaside]: 124
+@peakrun[lookaside]: 124
+@maxreuse[lookaside]: 140091
+@distinct[lookaside]: 154
+@hook_fbytes[lookaside]: 755425057
+@beyond254[lookaside]: 1864117
+@poison16[lookaside]: 47542511
+@size_lookaside: 
+[1]                             1 |
+[2, 4)                        242 |
+[4, 8)                      50826 |
+[8, 16)                     83238 |
+[16, 32)                    27550 |
+[32, 64)                   737098 |
+[64, 128)                   40349 |
+[128, 256)                   2159 |
+[256, 512)                    823 |
+[512, 1K)                  934032 |
+[1K, 2K)                      199 |
+
+@reuse_lookaside: 
+[1]                        615314 |
+[2, 4)                     831053 |
+[4, 8)                     343299 |
+[8, 16)                     81278 |
+[16, 32)                     2991 |
+[32, 64)                     1331 |
+[64, 128)                     213 |
+[128, 256)                    190 |
+[256, 512)                    201 |
+[512, 1K)                      67 |
+[1K, 2K)                        8 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       0 |
+[16K, 32K)                      0 |
+[32K, 64K)                      8 |
+[64K, 128K)                   144 |
+[128K, 256K)                  137 |
+[256K, 512K)                  106 |
+[512K, 1M)                     23 |
+
+@reusebytes_lookaside: 
+[1]                             0 |
+[2, 4)                         15 |
+[4, 8)                         20 |
+[8, 16)                       121 |
+[16, 32)                     8583 |
+[32, 64)                   181438 |
+[64, 128)                   50559 |
+[128, 256)                  50201 |
+[256, 512)                    415 |
+[512, 1K)                 1136134 |
+[1K, 2K)                   284514 |
+[2K, 4K)                   100513 |
+[4K, 8K)                    57833 |
+[8K, 16K)                    4595 |
+[16K, 32K)                    508 |
+[32K, 64K)                    247 |
+[64K, 128K)                   172 |
+[128K, 256K)                   59 |
+[256K, 512K)                   17 |
+[512K, 1M)                      1 |
+[1M, 2M)                        0 |
+[2M, 4M)                        0 |
+[4M, 8M)                        0 |
+[8M, 16M)                       8 |
+[16M, 32M)                     76 |
+[32M, 64M)                    105 |
+[64M, 128M)                   167 |
+[128M, 256M)                   37 |
+[256M, 512M)                   25 |
+
+@prior_lookaside: 
+[0]                           154 |
+[1]                            82 |
+[2, 4)                        153 |
+[4, 8)                        301 |
+[8, 16)                       569 |
+[16, 32)                     1075 |
+[32, 64)                     1960 |
+[64, 128)                    2940 |
+[128, 256)                   5248 |
+[256, 512)                  10351 |
+[512, 1K)                   20480 |
+[1K, 2K)                    40960 |
+[2K, 4K)                    81920 |
+[4K, 8K)                   161457 |
+[8K, 16K)                  280324 |
+[16K, 32K)                 436279 |
+[32K, 64K)                 570785 |
+[64K, 128K)                252460 |
+[128K, 256K)                 9019 |
+
+@addresses_lookaside: 
+[1]                            72 |
+[2, 4)                          6 |
+[4, 8)                          3 |
+[8, 16)                         3 |
+[16, 32)                        5 |
+[32, 64)                        7 |
+[64, 128)                      17 |
+[128, 256)                      0 |
+[256, 512)                      1 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        3 |
+[8K, 16K)                       6 |
+[16K, 32K)                     10 |
+[32K, 64K)                     10 |
+[64K, 128K)                    10 |
+[128K, 256K)                    1 |
+
+@hook_alloc[memsys5]: 652982
+@hook_free[memsys5]: 652982
+@hook_bytes[memsys5]: 1339138299
+@hook_realloc[memsys5]: 15863
+@hook_inplace[memsys5]: 0
+@hook_peak[memsys5]: 53826
+@peakrun[memsys5]: 53826
+@maxreuse[memsys5]: 14086
+@distinct[memsys5]: 145815
+@hook_fbytes[memsys5]: 1339138299
+@beyond254[memsys5]: 127491
+@poison16[memsys5]: 83933911
+@size_memsys5: 
+[1]                             0 |
+[2, 4)                        262 |
+[4, 8)                      25486 |
+[8, 16)                       116 |
+[16, 32)                      414 |
+[32, 64)                   108470 |
+[64, 128)                  295660 |
+[128, 256)                  14353 |
+[256, 512)                   1431 |
+[512, 1K)                     571 |
+[1K, 2K)                    55378 |
+[2K, 4K)                      187 |
+[4K, 8K)                    97389 |
+[8K, 16K)                   33090 |
+[16K, 32K)                  20115 |
+[32K, 64K)                     12 |
+[64K, 128K)                     8 |
+[128K, 256K)                    8 |
+[256K, 512K)                   12 |
+[512K, 1M)                     12 |
+[1M, 2M)                        5 |
+[2M, 4M)                        3 |
+
+@reuse_memsys5: 
+[1]                         90005 |
+[2, 4)                      64705 |
+[4, 8)                      16063 |
+[8, 16)                      5973 |
+[16, 32)                     2542 |
+[32, 64)                     1450 |
+[64, 128)                    1433 |
+[128, 256)                   2423 |
+[256, 512)                   4505 |
+[512, 1K)                    8578 |
+[1K, 2K)                    17054 |
+[2K, 4K)                    31441 |
+[4K, 8K)                    55265 |
+[8K, 16K)                   74733 |
+[16K, 32K)                  53460 |
+[32K, 64K)                  45102 |
+[64K, 128K)                 29507 |
+[128K, 256K)                 2796 |
+[256K, 512K)                  119 |
+[512K, 1M)                     13 |
+
+@reusebytes_memsys5: 
+[1]                             0 |
+[2, 4)                         24 |
+[4, 8)                      10402 |
+[8, 16)                         6 |
+[16, 32)                      116 |
+[32, 64)                       87 |
+[64, 128)                      15 |
+[128, 256)                  25473 |
+[256, 512)                   2471 |
+[512, 1K)                    1538 |
+[1K, 2K)                      785 |
+[2K, 4K)                      947 |
+[4K, 8K)                    66899 |
+[8K, 16K)                   38947 |
+[16K, 32K)                  17472 |
+[32K, 64K)                  14784 |
+[64K, 128K)                 12144 |
+[128K, 256K)                14547 |
+[256K, 512K)                31133 |
+[512K, 1M)                  58861 |
+[1M, 2M)                    50709 |
+[2M, 4M)                    39537 |
+[4M, 8M)                    34853 |
+[8M, 16M)                   38488 |
+[16M, 32M)                  37948 |
+[32M, 64M)                    629 |
+[64M, 128M)                  1166 |
+[128M, 256M)                 6384 |
+[256M, 512M)                  217 |
+[512M, 1G)                    557 |
+[1G, 2G)                       28 |
+
+@prior_memsys5: 
+[0]                        145815 |
+[1]                         83101 |
+[2, 4)                      92444 |
+[4, 8)                      92270 |
+[8, 16)                     78004 |
+[16, 32)                     8463 |
+[32, 64)                     7083 |
+[64, 128)                    8045 |
+[128, 256)                  10404 |
+[256, 512)                  12647 |
+[512, 1K)                   18123 |
+[1K, 2K)                    24471 |
+[2K, 4K)                    32352 |
+[4K, 8K)                    25574 |
+[8K, 16K)                   14186 |
+
+@addresses_memsys5: 
+[1]                         62714 |
+[2, 4)                      46186 |
+[4, 8)                      18311 |
+[8, 16)                     17653 |
+[16, 32)                      611 |
+[32, 64)                      174 |
+[64, 128)                      61 |
+[128, 256)                     36 |
+[256, 512)                     26 |
+[512, 1K)                      13 |
+[1K, 2K)                       10 |
+[2K, 4K)                       12 |
+[4K, 8K)                        4 |
+[8K, 16K)                       4 |
+
+sublet: split=498013 mrev=3027344 delin=2529498 revoke=3027344 init=497846
