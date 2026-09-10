@@ -6,10 +6,10 @@ source capstone/tests/capstone-test-env.sh >/dev/null 2>&1
 
 echo "== build uc (unmodified) and dp0 (uc + one dead never-called function) =="
 SQLITE_STATIC_BUILTINS=0 DOMAIN_EXTRA_DEFS="-DCAPSTONE_SQLITE_STAGE=0" \
-  OUT_DIR=/tmp/capstone/uc  bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh \
+  OUT_DIR=/tmp/capstone/uc  bash capstone/ports/sqlite/build-sqlite-silicon.sh \
   >/tmp/capstone/uc.log 2>&1 || { echo "uc build failed"; exit 1; }
 SQLITE_STATIC_BUILTINS=0 CAPSTONE_DOMAIN_PAD=0 DOMAIN_EXTRA_DEFS="-DCAPSTONE_SQLITE_STAGE=0" \
-  OUT_DIR=/tmp/capstone/dp0 bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh \
+  OUT_DIR=/tmp/capstone/dp0 bash capstone/ports/sqlite/build-sqlite-silicon.sh \
   >/tmp/capstone/dp0.log 2>&1 || { echo "dp0 build failed"; exit 1; }
 sha256sum /tmp/capstone/uc/sqlite_silicon.dom /tmp/capstone/dp0/sqlite_silicon.dom
 echo "  (IMAGE-HASHES.txt records what these were; a mismatch means the toolchain moved --"

@@ -7,7 +7,7 @@
  * __float128, struct _IO_FILE negative padding, __int64_t long-vs-long-long).
  * Freestanding clang still supplies stddef/stdarg/stdint/limits/float itself.
  *
- * Same mechanism as capstone/benchmarks/sqlite/adapted/capstone_sqlite_libc.h,
+ * Same mechanism as capstone/ports/sqlite/adapted/capstone_sqlite_libc.h,
  * extended with the surface the Lua core + base/string/table/math libs need
  * (math, setjmp, locale, snprintf, strtod, the full ctype set). Only
  * DECLARATIONS live here; implementations are separate TUs (most reused from the

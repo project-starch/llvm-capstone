@@ -15,7 +15,7 @@
 
 Board: Genesys2 CVA6+Capstone, bitstream `working-caplifive-captype-fixed.bit`.
 Measured 2026-07-31. gp-captable ABI, domains built by
-`capstone/benchmarks/sqlite/build-sqlite-silicon.sh`.
+`capstone/ports/sqlite/build-sqlite-silicon.sh`.
 
 ## The four variants and what they show
 
@@ -97,7 +97,7 @@ Rebuild from this tree:
     export SQLITE_SUPPORT_OPT_LEVEL=-O1
     for S in 18 20 21 22; do
       OUT_DIR=/tmp/capstone/sqlite-s$S DOMAIN_EXTRA_DEFS="-DCAPSTONE_SQLITE_STAGE=$S" \
-        bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh
+        bash capstone/ports/sqlite/build-sqlite-silicon.sh
     done
 
     stage 18 -> variant A   WEDGES
@@ -107,4 +107,4 @@ Rebuild from this tree:
 
 `strline_struct_repro.c` in this directory is the extracted, standalone form of those four
 variants; the live versions are `run_sqlite_staged()` in
-`capstone/benchmarks/sqlite/sqlite_capstone_domain.c`.
+`capstone/ports/sqlite/sqlite_capstone_domain.c`.

@@ -5,7 +5,7 @@ the two longest open items in a file agents are told to read before re-investiga
 Nothing here is deleted; this is the full investigation trail as it stood at archival.
 
 **Why they were closed.** The workload that passed 3/3 on `caplifive_s07fix.bit` IS their failure
-site (`benchmarks/sqlite/sqlite_capstone_domain.c:2014-2027`):
+site (`ports/sqlite/sqlite_capstone_domain.c:2014-2027`):
 
     sqlite3_initialize();                                            <- S-02's wedge site
     sqlite3_open(":memory:", &db);

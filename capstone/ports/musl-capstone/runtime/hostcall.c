@@ -21,7 +21,7 @@
 #include <errno.h>
 #include <sys/syscall.h>
 
-#include "../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
 
 /* shared_region_annotated() enters the domain with func == 1 and the region
    capability as the first argument. */

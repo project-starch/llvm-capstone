@@ -14,8 +14,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
-#include "../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
+#include "../../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
 
 #define YIELD_PROBE_MAX_ROUNDS 8
 #define YIELD_PROBE_REGION_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE

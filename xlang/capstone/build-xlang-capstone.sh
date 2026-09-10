@@ -29,7 +29,7 @@ CLANG=${CLANG:-$CAPSTONE_CLANG}
 LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 START_SRC=${START_SRC:-$CAPSTONE_REPO_ROOT/capstone/my_first_domain/start.S}
 LINKER_SCRIPT=${LINKER_SCRIPT:-$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld}
-ROF_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite"   # revoke_on_free_alloc.h
+ROF_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"   # revoke_on_free_alloc.h
 
 SUFFIX=""
 EXTRA=()

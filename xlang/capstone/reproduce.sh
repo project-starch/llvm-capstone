@@ -77,7 +77,7 @@ done
 echo "== building host =="
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
 LIBCAPSTONE="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
-"$GUEST_CC" -O2 -I"$HERE" -I"$CAPSTONE_REPO_ROOT/capstone/benchmarks/sqlite" \
+"$GUEST_CC" -O2 -I"$HERE" -I"$CAPSTONE_REPO_ROOT/capstone/ports/sqlite" \
   -o "$SHARE/xlang_host.user" "$HERE/xlang_shim_host.c" "$LIBCAPSTONE" \
   || { echo "HOST BUILD FAILED" >&2; exit 1; }
 

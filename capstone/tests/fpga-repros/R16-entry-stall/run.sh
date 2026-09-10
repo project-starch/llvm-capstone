@@ -32,7 +32,7 @@ export FPGA_URL="${FPGA_URL:-$(cat ~/.claude-c/secrets/fpga-console-url)}"
 if [[ "$BUILD" == "1" ]]; then
   echo "== building the reproducer (SQLITE_STATIC_BUILTINS=1)"
   SQLITE_STATIC_BUILTINS=1 OUT_DIR="$OUT_DIR_1" \
-    bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh >/tmp/capstone/r16-build.log 2>&1 || {
+    bash capstone/ports/sqlite/build-sqlite-silicon.sh >/tmp/capstone/r16-build.log 2>&1 || {
       echo "BUILD FAILED -- tail:"; tail -20 /tmp/capstone/r16-build.log; exit 1; }
 
   src="$OUT_DIR_1/sqlite_silicon.dom"

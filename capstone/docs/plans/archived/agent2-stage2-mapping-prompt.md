@@ -16,9 +16,9 @@ build the probes.
 
 ## What already exists (read these)
 
-- `capstone/benchmarks/sqlite/cve-repros/row*/README.md` — the 19 defects, each
+- `capstone/bug-corpora/sqlite/cve-repros/row*/README.md` — the 19 defects, each
   with its Class and one-line Essence (you wrote these).
-- `capstone/benchmarks/sqlite/cve-repros/api-classification.csv` — direction +
+- `capstone/bug-corpora/sqlite/cve-repros/api-classification.csv` — direction +
   primitive per API (you wrote this).
 - `capstone/tests/runtime-qemu/sqlite-borrow-revoke-probe/README.md` — the ONE
   validated Stage-2 template (row 3): a borrow that is **revoked** at a lifecycle
@@ -48,7 +48,7 @@ primitives L/R/H/U/S):
 
 ## Output — one file
 
-Create **`capstone/benchmarks/sqlite/cve-repros/stage2-mapping.md`**: a Markdown
+Create **`capstone/bug-corpora/sqlite/cve-repros/stage2-mapping.md`**: a Markdown
 table, one row per `row*/` directory (19 rows), columns:
 
 | Row id | Class | Stage-2 shape | Lifecycle point that revokes | Primitive | Reuses row-3 template? | Note |
@@ -87,7 +87,7 @@ use it and say why in the Note.
 
 ## STRICT ground rules
 
-- **Only create** `capstone/benchmarks/sqlite/cve-repros/stage2-mapping.md`. Touch
+- **Only create** `capstone/bug-corpora/sqlite/cve-repros/stage2-mapping.md`. Touch
   nothing else.
 - **Do NOT commit.** Leave the file; the supervising agent reviews and commits.
 - Do not build or run anything. This is a desk task.

@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$SCRIPT_DIR/../tests/capstone-test-env.sh"
+source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 MUSL_VERSION=${MUSL_VERSION:-1.2.5}
 # SHA-256 is what the musl ecosystem publishes for its releases, so this pin is

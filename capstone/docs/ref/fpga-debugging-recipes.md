@@ -42,7 +42,7 @@ The consequence that drives everything else: **a board session that returns one 
 
 ### Step 0 — Reproduce under QEMU through the *identical* controller, first
 
-If it also fails under QEMU, stop: it is not a silicon question and the board is the wrong instrument. The gate is `capstone/benchmarks/sqlite/run-sqlite-silicon.sh`, which runs the silicon-config domain through `run-domain-smoke.py` with the same five success markers the board run uses (`run_sqlite_baked_fpga.py:143-146` — "same criterion here so a silicon pass means the same thing a QEMU pass does").
+If it also fails under QEMU, stop: it is not a silicon question and the board is the wrong instrument. The gate is `capstone/ports/sqlite/run-sqlite-silicon.sh`, which runs the silicon-config domain through `run-domain-smoke.py` with the same five success markers the board run uses (`run_sqlite_baked_fpga.py:143-146` — "same criterion here so a silicon pass means the same thing a QEMU pass does").
 
 "Identical controller" is load-bearing. `capstone/docs/ref/ISSUES.md:769` (I-3) records that diagnostic probes were *board-only* for weeks because the QEMU loader entered the domain through the plain call path while the board entered through an annotated region share — "the share IS the entry". Four fixes were attempted before the actual cause (a trailing `call_dom`) was found. Two board boots produced one data point between them because of it.
 
@@ -50,7 +50,7 @@ If it also fails under QEMU, stop: it is not a silicon question and the board is
 
 A wedged domain emits nothing. The only thing a failed run tells you is "somewhere after the last marker." Before anything else, ensure the host side prints phase markers that can physically escape:
 
-- `write(2)`, never `fprintf` — `capstone/benchmarks/sqlite/sqlite_host.c:9-29`. stderr **resets the core** on this board; fd 1 does not.
+- `write(2)`, never `fprintf` — `capstone/ports/sqlite/sqlite_host.c:9-29`. stderr **resets the core** on this board; fd 1 does not.
 - every marker **≤ 16 bytes**, the 8250 TX FIFO depth, so one FIFO load carries a whole marker (`sqlite_host.c:13-24`). The observed failure mode was `"sqlite-host: cre"` — exactly 16 bytes — followed by the bootrom banner.
 - values go on their own following line, so a lost value never costs a lost phase.
 
@@ -78,7 +78,7 @@ Rules for writing the set (`sqlite_capstone_domain.c:239-247`, `CLAUDE.md:131-13
 for N in 7 8 9 10; do
   OUT_DIR=/tmp/capstone/sqlite-stage$N \
   DOMAIN_EXTRA_DEFS=-DCAPSTONE_SQLITE_STAGE=$N \
-    bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh > /tmp/capstone/build-stage$N.log 2>&1 &
+    bash capstone/ports/sqlite/build-sqlite-silicon.sh > /tmp/capstone/build-stage$N.log 2>&1 &
 done; wait
 ```
 
@@ -93,7 +93,7 @@ Each variant must run to its expected marker under QEMU. A staged build that wou
 ### Step 5 — Stage them all into ONE firmware generation
 
 ```bash
-CARVE_BUDGET=1000 bash capstone/benchmarks/sqlite/stage-sqlite-in-rootfs.sh   # canonical pair, gated
+CARVE_BUDGET=1000 bash capstone/ports/sqlite/stage-sqlite-in-rootfs.sh   # canonical pair, gated
 cp /tmp/capstone/sqlite-stage$N/sqlite_silicon.dom \
    capstone/caplifive-system/sw/buildroot/overlay/test-domains/sqlite_stage$N.dom   # each variant
 sha256sum capstone/caplifive-system/sw/buildroot/overlay/test-domains/sqlite_stage*.dom \
@@ -466,11 +466,11 @@ Write it as a question to the board owner, with the minimal reproducer and the c
 | — progressing-vs-spinning, wall-clock sampling | `probe_sqlite_progress.py` |
 | — bounded teardown, sentinels, `hard_exit` | `safe_cleanup.py` |
 | Console protocol | `capstone/tests/rtl-smoke/socketio-api.md`, `fpga_driver/PROTOCOL.md` |
-| Staged-return domain source | `capstone/benchmarks/sqlite/sqlite_capstone_domain.c:238-386, 505-517` |
-| FIFO-safe host markers | `capstone/benchmarks/sqlite/sqlite_host.c:9-33` |
+| Staged-return domain source | `capstone/ports/sqlite/sqlite_capstone_domain.c:238-386, 505-517` |
+| FIFO-safe host markers | `capstone/ports/sqlite/sqlite_host.c:9-33` |
 | Clamp / linear-safe string primitives | `capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:112-192` |
-| Build + stage + QEMU gate | `capstone/benchmarks/sqlite/{build,stage,run}-sqlite-*.sh` |
-| Static artifact guard | `capstone/benchmarks/sqlite/gp-carve-count.py` |
+| Build + stage + QEMU gate | `capstone/ports/sqlite/{build,stage,run}-sqlite-*.sh` |
+| Static artifact guard | `capstone/ports/sqlite/gp-carve-count.py` |
 | RTL sources (read these before asking) | `capstone/capstone-ariane/core/anvil_build/*.anvil`, `capstone/capstone-ariane/vendor/pulp-platform/axi/src/*.sv` |
 
 **Two things this playbook does not yet have, and the next person should add:**

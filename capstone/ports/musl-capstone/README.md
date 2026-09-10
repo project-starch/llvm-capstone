@@ -95,8 +95,8 @@ cancellation points route through our hostcall like any other syscall.
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-bash capstone/musl-capstone/survey-musl-capstone.sh          # fetch, prepare, survey
-bash capstone/musl-capstone/survey-musl-capstone.sh --list-failures
+bash capstone/ports/musl-capstone/survey-musl-capstone.sh          # fetch, prepare, survey
+bash capstone/ports/musl-capstone/survey-musl-capstone.sh --list-failures
 ```
 
 Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the

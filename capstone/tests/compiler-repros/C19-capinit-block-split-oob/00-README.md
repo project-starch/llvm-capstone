@@ -97,7 +97,7 @@ it needs a build path with a larger code window.
 The SQLite domain is the working reproducer.
 
 ```
-cd capstone/benchmarks/sqlite
+cd capstone/ports/sqlite
 bash bake-sqlite-doms.sh S7T:SQLITE_S07_CURSOR_SELFTEST=1
 cd ../../tests/rtl-smoke
 export FPGA_URL=<FPGA-CONSOLE-URL>  FPGA_BITSTREAM=caplifive_s06s08fix_s07tag2_618f4ce.bit

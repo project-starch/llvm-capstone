@@ -116,8 +116,8 @@ Whichever arm first fails to return **is** the minimization result; symbolise it
 ## Files
 
 * **Reuse, no edits:** `llvm/lib/Target/Capstone/CapstoneLdcRetry.cpp` (+ its lit test);
-  `CAPSTONE_EXT_STOP` in `benchmarks/sqlite/sqlite_capstone_domain.c`;
-  `benchmarks/sqlite/bake-sqlite-doms.sh`; `fpga_driver/run_sqlite_stages_fpga.py`;
+  `CAPSTONE_EXT_STOP` in `ports/sqlite/sqlite_capstone_domain.c`;
+  `ports/sqlite/bake-sqlite-doms.sh`; `fpga_driver/run_sqlite_stages_fpga.py`;
   `tests/runtime-qemu/silicon-ladder/tagsweep_kernel.h`
 * **New, small:** `CAPSTONE_MIN_OPEN` / `CAPSTONE_MIN_ROLLBACK` blocks in
   `sqlite_capstone_domain.c`, wired in `build-sqlite-silicon.sh` **above** the `_domain_defs` read

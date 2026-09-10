@@ -159,7 +159,7 @@ No compiler, `libcapstone`, or kernel-module change is required.
 | 5 | **Untagged store clears tag** — `stc` untagged over a slot that previously held a capability, then `ldc`; result must be untagged | untagged (correct today) | still untagged (no false tag) |
 
 Case 1 is a tiny new runtime probe (the decisive unit test for the QEMU change).
-Case 2 reuses the committed `benchmarks/sqlite/probes/runtime-bytecopy-capability.c`.
+Case 2 reuses the committed `ports/sqlite/probes/runtime-bytecopy-capability.c`.
 Case 3 is the existing SQLite memory driver. Case 4 is the standing aggregate gate.
 Case 5 guards against over-tagging.
 

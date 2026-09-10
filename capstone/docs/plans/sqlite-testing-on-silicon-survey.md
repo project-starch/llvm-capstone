@@ -23,7 +23,7 @@ seven-file SQLLogicTest set is identical to native on silicon as of today
 **The page's framing matters for us:** TH3's 100 % branch coverage is measured "in an as-deployed
 configuration". **[audit — this paragraph was wrong in the first draft, and the project had already
 made and corrected the same mistake once (`build-slt-native.sh:18-21`).]** The deployed configuration
-is the always-active `SQLITE_DEFINES` list in `benchmarks/sqlite/build-sqlite-capstone.sh:94-118`:
+is the always-active `SQLITE_DEFINES` list in `ports/sqlite/build-sqlite-capstone.sh:94-118`:
 `SQLITE_OS_OTHER`, `THREADSAFE=0`, `TEMP_STORE`, `ZERO_MALLOC` + `ENABLE_MEMSYS5`, `UNTESTABLE`,
 `DQS`, `DEFAULT_LOOKASIDE`, `DEFAULT_MEMSTATUS`, and **sixteen `SQLITE_OMIT_*`**: LOAD_EXTENSION,
 LOCALTIME, MMAP, WAL, SHARED_CACHE, TEMPDB, AUTOINIT, COMPILEOPTION_DIAGS, **FLOATING_POINT**, UTF16,
@@ -36,7 +36,7 @@ no UTF-16 — any suite we run measures *that*, and any coverage claim must say 
 ## 2. What we have, precisely
 
 - **SLT, seven files, identical to native on silicon** (this week). One draw each. Runner
-  `benchmarks/sqlite/slt/slt_runner.h`, `sqlite3_open(":memory:")` (`:306`), file delivered whole in
+  `ports/sqlite/slt/slt_runner.h`, `sqlite3_open(":memory:")` (`:306`), file delivered whole in
   the shared payload region (input in the top half; 1/2/4 MiB region classes; memsys5 heap 256 KiB by
   default, 1 MiB or 2 MiB per class — a 2 MiB heap only fits with the stack cut to 1 MiB).
 - Silicon rate **[audit: a range, not a number]**: `select3` 3,351 records in ~300 s = 11.2 records/s;

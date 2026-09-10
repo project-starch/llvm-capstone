@@ -115,7 +115,7 @@ Side benefit: the fold makes the probe inherit the on-board `sha256sum` STALE BO
 
 ### R3 — Prune the overlay. **GATED. Medium. ~175 s/session (I from M fits) — the single largest lever, and the most dangerous.**
 
-Measured cost of accumulation, from today's own logs: JTAG 128.9 KiB/s × (30.05 − 17.47 MB) = **96 s** (I), unpack 2.224 s/MB × (45.89 − 10.49 MB) = **79 s** (I). Nothing prunes: `benchmarks/sqlite/stage-sqlite-in-rootfs.sh:95-100` is a bare `cp -f` loop and the file contains no `rm`. The overlay now holds 28 files including `sqlite_lim1/lim512/nocapinit.dom` dated **Jul 30 21:39** — the very `INTERP_BUILD_LIMIT` diagnostics whose fake signature `stage-sqlite-in-rootfs.sh:74-83` records being "investigated as a hardware defect for hours".
+Measured cost of accumulation, from today's own logs: JTAG 128.9 KiB/s × (30.05 − 17.47 MB) = **96 s** (I), unpack 2.224 s/MB × (45.89 − 10.49 MB) = **79 s** (I). Nothing prunes: `ports/sqlite/stage-sqlite-in-rootfs.sh:95-100` is a bare `cp -f` loop and the file contains no `rm`. The overlay now holds 28 files including `sqlite_lim1/lim512/nocapinit.dom` dated **Jul 30 21:39** — the very `INTERP_BUILD_LIMIT` diagnostics whose fake signature `stage-sqlite-in-rootfs.sh:74-83` records being "investigated as a hardware defect for hours".
 
 **Why it is gated and not a recommendation.** Every variant `.dom` is *outside every freshness gate*:
 

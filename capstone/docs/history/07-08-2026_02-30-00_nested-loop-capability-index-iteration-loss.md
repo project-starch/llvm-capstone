@@ -82,7 +82,7 @@ that request is still open.
 Reproduce with:
 
     OUT_DIR=/tmp/capstone/sq-l31d4 DOMAIN_EXTRA_DEFS="-DCAPSTONE_SQLITE_QUICKRET=31 -DQR_DRAW=4" \
-      bash capstone/benchmarks/sqlite/build-sqlite-silicon.sh
+      bash capstone/ports/sqlite/build-sqlite-silicon.sh
     # stage as q31.dom, k800 FIRST in the boot; expect obs 0x9E310237 (567) against QEMU 0x9E310240
 
 

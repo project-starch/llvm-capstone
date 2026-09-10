@@ -61,7 +61,7 @@
 > neither does this.
 >
 > **New site: `sqlite3WhereCodeOneLoopStart + 0x8c`**, reached from a 588-byte SQLLogicTest
-> reproducer (`benchmarks/sqlite/slt/q_one.test` vs `q_two.test`, differing by one line:
+> reproducer (`ports/sqlite/slt/q_one.test` vs `q_two.test`, differing by one line:
 > `SELECT t1.a FROM t1` vs `SELECT t1.a FROM t1, t1 AS y`, over an EMPTY table).
 >
 >     memcpy+0x2a8  (instance 1)          sqlite3WhereCodeOneLoopStart+0x8c  (this site)

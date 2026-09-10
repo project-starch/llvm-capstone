@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$SCRIPT_DIR/../tests/capstone-test-env.sh"
+source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-build}
 OBJ_DIR="$OUT_DIR/obj"

@@ -2026,9 +2026,9 @@ State these with the measurement, because each makes an *absence* mean less than
 
 ## Reproduction
 
-    binary   sqrt.dom, sha ee9a9a86ed12f06b, built by benchmarks/sqlite/build-sqlite-silicon.sh
+    binary   sqrt.dom, sha ee9a9a86ed12f06b, built by ports/sqlite/build-sqlite-silicon.sh
              (UN-probed: any added in-domain probe removes the fault)
-    input    benchmarks/sqlite/slt/q_two.test -- SELECT t1.a FROM t1, t1 AS y over an EMPTY table
+    input    ports/sqlite/slt/q_two.test -- SELECT t1.a FROM t1, t1 AS y over an EMPTY table
              (q_one.test is the matched pair: identical but for the second table reference)
     driver   tests/rtl-smoke/fpga_driver/run_sqlite_stages_fpga.py
              SQLITE_STAGE_DOMS="/test-domains/sqbase.dom,/test-domains/sqrt.dom:--slt /test-domains/q_two.test"

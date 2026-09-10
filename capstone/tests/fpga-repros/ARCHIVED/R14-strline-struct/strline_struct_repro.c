@@ -3,7 +3,7 @@
  *
  * Four variants, identical except for ONE variable each. Board-measured 2026-07-31 on
  * bitstream working-caplifive-captype-fixed.bit, gp-captable ABI, domain built by
- * capstone/benchmarks/sqlite/build-sqlite-silicon.sh (-O0 amalgam, -O1 string primitives).
+ * capstone/ports/sqlite/build-sqlite-silicon.sh (-O0 amalgam, -O1 string primitives).
  *
  *   A  16 distinct literals, STRAIGHT-LINE, struct{2 ptr}[64]  -> WEDGE (no return, no trap)
  *   B   4 distinct literals, straight-line + loop filler, same -> RETURNS 4, expected 16

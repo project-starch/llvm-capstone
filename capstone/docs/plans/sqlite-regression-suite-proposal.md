@@ -4,7 +4,7 @@
 
 ## The gap, stated plainly
 
-What we have today is `benchmarks/sqlite/sqlite_capstone_domain.c` — **written by this project**,
+What we have today is `ports/sqlite/sqlite_capstone_domain.c` — **written by this project**,
 first landed `3c5815ee45d8` (2026-06-30). It drives the genuine upstream **SQLite 3.53.3
 amalgamation**, but the assertions are ours: **10 `exec_ok` + 8 `query_scalar_eq`**, ~18 checks.
 

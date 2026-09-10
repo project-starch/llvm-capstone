@@ -1519,7 +1519,7 @@ the commits themselves are authored and stay as they are.
   and `build-rv8-primes-capstone.sh:56`; `build-sqlite-capstone.sh:125` (default ABI);
   `tests/rtl-smoke/build-ladder-base-bare.sh:75` (a second plain-riscv64 baseline half, not
   only `-fpga`); `tests/runtime-qemu/build-coremark-core-init-state-repro.sh:61` and `:66`;
-  `musl-capstone/yield-probe/build-yield-probe.sh:27`; and THREE frozen copies under
+  `ports/musl-capstone/yield-probe/build-yield-probe.sh:27`; and THREE frozen copies under
   `tests/fpga-repros/` (R01, R02, S12), not two. The BEEBS, rv8 aes/primes, default-ABI SQLite
   and core-init-state pins are retired in the September sweep (W-15 residue), each with its own
   validation; the baseline halves, the yield probe and the frozen sent packages stay.

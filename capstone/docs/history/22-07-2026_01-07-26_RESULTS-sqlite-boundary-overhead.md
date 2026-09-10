@@ -65,6 +65,6 @@ is already correct end to end.
 
 - Tier-1: `scratchpad/tier1/` (`count_wrap.c` + `speedtest1.c` from the SQLite source
   tree, `-D`-renamed boundary calls; `perf stat -e instructions`).
-- In-domain: `benchmarks/sqlite/sqlite_boundary_cost_domain.c`, built via
+- In-domain: `ports/sqlite/sqlite_boundary_cost_domain.c`, built via
   `build-sqlite-capstone.sh DOMAIN_SRC=…` (knob `-DBOUNDARY_ROWS`), run through
   `run-domain-smoke.py` with `-icount`.
