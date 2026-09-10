@@ -3377,7 +3377,7 @@ CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemon
 
 llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
 
-### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `FIXED 2026-09-10 (compiler lane, 8b2544a6c3e9 on compiler-validation-plan) by PARSER PRECEDENCE, not a rename: parseCallSymbol now declines register names so the operand falls through to register parsing — ⚠ QUALIFIED 2026-09-10: `8b2544a6c3e9` is NOT an ancestor of `dev`. It lives only on `compiler-validation-plan`. The fix is real and tested, but it is NOT in the mainline; this entry must not be read as "fixed on dev" until that branch merges`
+### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `FIXED 2026-09-10 (compiler lane, 8b2544a6c3e9 on compiler-validation-plan) by PARSER PRECEDENCE, not a rename: parseCallSymbol now declines register names so the operand falls through to register parsing — the qualification added earlier on 2026-09-10, that `8b2544a6c3e9` was not an ancestor of `dev`, is CLEARED: `compiler-validation-plan` was merged the same day and the commit is in the mainline`
 
 `parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.
 
