@@ -778,6 +778,28 @@ unexpected operand type.
 
 **Owner:** unassigned. Found by the helper lane during the SQLite stock-ness work, 2026-09-09.
 
+> ## ⚠ A SECOND INSTANCE OF THIS SIGNATURE, WITH A COMPLETELY DIFFERENT TRIGGER (2026-09-10)
+>
+> The bench lane hit **the same `SQ: E/share1`, cause 24, before the domain enters** while sizing
+> speedtest1 — on a **2.5 MiB heap arena**, with no build define involved at all. They reported it
+> first as a classification rule ("that signature means the heap is too large") and then **withdrew
+> that themselves within the hour**, unprompted, as an N=1 over-claim. The withdrawal is the right
+> call and is why this box says what it says.
+>
+> **What is actually known: one instance from a restored build define, one from an arena size, the
+> same signature, and NO mechanism established for either.** The tempting common factor is image or
+> `dom_data` geometry — both triggers change the image's size or layout — but nobody has shown that,
+> and this registry has a bad record with mechanisms that merely fit.
+>
+> **Consequences, both directions.** Do not read a future `E/share1` as benign because "it is just the
+> heap"; and do not read S-14 as being about `EXPLAIN` specifically until something separates the two.
+> If a board stage produces this signature it is an open defect, not a known quantity.
+>
+> **The cheap discriminator nobody has run:** build the EXPLAIN-restored image and the oversized-arena
+> image and compare their `.text` size, globals offset and `dom_data` carve. If those coincide where
+> the working images differ, geometry is the factor and both entries collapse into one. That is
+> off-board and needs no boot.
+
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — DESIGN CHOICE PENDING (lead); reproducer committed as an XFAIL, no fix attempted`
 
 **FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
