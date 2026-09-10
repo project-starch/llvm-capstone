@@ -522,11 +522,18 @@ test asserting it and a line in `cap-regnames.s` saying so, rather than acquirin
   (`precommit-scan-removed-lines-proposal.md`): removed and context lines should WARN, not BLOCK.
   Every pattern unchanged; only which lines can FAIL narrows. Six controls listed. It currently
   prevents **C-4** from being archived despite a final status.
-* **CLAUDE.md, two proposed sentences**, not added because that file is yours:
+* **CLAUDE.md, THREE proposed sentences**, not added because that file is yours:
   1. *"Name the observation that proves the triggering condition existed, and make the instrument
      refuse a verdict without it."*
   2. *"State which definition a constant or symbol comes from before acting on it; this codebase carries
      three numbering systems and two of them silently disagree."*
+  3. *"Feasibility is often arithmetic, not an experiment. Before committing a build or a board arm to
+     an OPTION, read the constants that bound it."* — proposed by the bench lane 2026-09-10, after
+     reading four constants ruled out an allocator arm in ten minutes that would otherwise have been
+     discovered a day later with a half-built binary. **Their own framing of why this is the lesson is
+     the point:** the catch was not watchfulness about a claim that had been repeated back to them, it
+     was reading source before building. The first is a reason to correct quickly; only the second
+     prevents anything.
 
 ---
 
