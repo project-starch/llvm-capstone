@@ -43,7 +43,14 @@ so every number below is a *delta*, not an absolute.
 |---|---|
 | **cycle** / `mcycle` | Clock ticks elapsed. This is **time** (at a fixed clock, 1 cycle = 1 tick). The thing we ultimately care about. |
 | **instret** / `minstret` | **Instr**uctions **ret**ired = how many instructions actually completed. This is **work done**, independent of how fast the machine ran them. |
-| **CPI** | **C**ycles **P**er **I**nstruction = `cycles ÷ instret`. How expensive the average instruction was. CPI 1 = one instruction finishes per tick (a perfect pipeline). CPI 2 = each instruction costs two ticks on average — stalls, cache misses, multi-cycle ops. **This CVA6 measures 2.0–3.2, never near 1.** |
+| **CPI** | **C**ycles **P**er **I**nstruction = `cycles ÷ instret`. How expensive the average instruction was. CPI 1 = one instruction finishes per tick (a perfect pipeline). CPI 2 = each instruction costs two ticks on average — stalls, cache misses, multi-cycle ops. **⚠ CORRECTED 2026-09-10: this CVA6 measures 1.13–6.44 across §4's own table, and two rows ARE near 1.**
+The previous wording here said "2.0–3.2, never near 1", and the table it summarises contradicts both
+halves: `beebs_aha_mont64` is 1.13 and `ctrsanity` is 1.20, while `beebs_recursion` is 6.44, twice the
+old upper bound. Computed straight from the capability column's `cycles / instret` pairs. **The spread
+is workload-dependent by a factor of nearly six, so quoting a single CPI range as a property of the
+core is the error; quote the row you mean.** This was found when the range was passed to another lane
+as an authoritative bound for a runtime estimate — it came from this glossary line rather than from the
+data eight lines below it. |
 
 Why both counters matter: cycles alone cannot tell you *why* something is slower. A build
 can be slower because it **executes more instructions** (an ABI/codegen cost) or because
