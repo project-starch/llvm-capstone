@@ -36,6 +36,16 @@ init a0, a1, a2, a3 # CHECK: :[[@LINE]]:18: error: invalid operand for instructi
 drop a0, a1 # CHECK: :[[@LINE]]:10: error: invalid operand for instruction
 revoke a0, a1 # CHECK: :[[@LINE]]:12: error: invalid operand for instruction
 call a0, a1, a2 # CHECK: :[[@LINE]]:14: error: invalid operand for instruction
+
+# C-45: fixing the operand-restoration bug must NOT widen what the assembler
+# accepts. The cN spelling is scoped to CAPABILITY operands (see cap-regnames.s);
+# it has never been valid where an INTEGER register class is asked for, and the
+# reverse coercion restores only operands the forward one actually rewrote, so
+# these stay errors exactly as they were before that fix.
+add c10, c11, c12 # CHECK: :[[@LINE]]:5: error: invalid operand for instruction
+sd c10, 0(c11) # CHECK: :[[@LINE]]:4: error: invalid operand for instruction
+ld c10, 0(c11) # CHECK: :[[@LINE]]:4: error: invalid operand for instruction
+call c10, foo # CHECK: :[[@LINE]]:11: error: invalid operand for instruction
 capenter a0, a1, a2 # CHECK: :[[@LINE]]:18: error: invalid operand for instruction
 return a0, a1, a2, a3 # CHECK: :[[@LINE]]:20: error: invalid operand for instruction
 return a0, a1 # CHECK: :[[@LINE]]:1: error: too few operands for instruction

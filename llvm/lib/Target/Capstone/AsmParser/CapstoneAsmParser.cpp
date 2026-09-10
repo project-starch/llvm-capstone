@@ -354,6 +354,12 @@ struct CapstoneOperand final : public MCParsedAsmOperand {
   struct RegOp {
     MCRegister RegNum;
     bool IsGPRAsFPR;
+    // C-45: set when validateTargetOperandClass rewrote an INTEGER register into
+    // its capability form for a candidate that was being tried. The generic match
+    // loop does not restore operands when a candidate fails, so this records what
+    // to undo -- and ONLY that, so fixing the stranding does not also change which
+    // spellings the assembler accepts. See validateTargetOperandClass.
+    bool CoercedFromGPR;
   };
 
   struct ImmOp {
@@ -1098,6 +1104,7 @@ public:
     auto Op = std::make_unique<CapstoneOperand>(KindTy::Register);
     Op->Reg.RegNum = Reg;
     Op->Reg.IsGPRAsFPR = IsGPRAsFPR;
+    Op->Reg.CoercedFromGPR = false;
     Op->StartLoc = S;
     Op->EndLoc = E;
     return Op;
@@ -1342,6 +1349,7 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
     case MCK_GPCRJALR:
     case MCK_GPCRTC:
       Op.Reg.RegNum = Capstone::C0 + Idx;
+      Op.Reg.CoercedFromGPR = true;
       return Match_Success;
     case MCK_GPCRNoC0:
     case MCK_GPCRJALRNonC7:
@@ -1350,6 +1358,7 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
       if (Idx == 0 && Kind == MCK_GPCRNoC0)
         break;
       Op.Reg.RegNum = Capstone::C0 + Idx;
+      Op.Reg.CoercedFromGPR = true;
       return Match_Success;
     default:
       break;
@@ -1381,30 +1390,54 @@ unsigned CapstoneAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp
   // TWO-OPERAND capability pseudo added to an existing integer mnemonic would
   // re-create this exactly -- that is the shape to watch for.
   //
-  // Mirrors the forward arm's class set exactly, one integer class per capability
-  // class, so no slot it can coerce into is left able to strand an operand. cN and
-  // xN name the SAME register (see the comment above), so accepting `c10` where an
-  // integer class is asked for is consistent with the model rather than a new
-  // spelling.
-  if (CapstoneMCRegisterClasses[Capstone::GPCRRegClassID].contains(Reg)) {
-    unsigned Idx = Reg - Capstone::C0;
+  // RESTORES ONLY WHAT THE ARM ABOVE REWROTE, and deliberately nothing else. The
+  // guard is `CoercedFromGPR`, not the register class: an operand the user actually
+  // WROTE as `c10` is untouched here, so it still fails against an integer class
+  // exactly as it did before this fix. That keeps the accepted assembly language
+  // byte-for-byte unchanged -- the one-register-file comment above justifies the
+  // FORWARD direction only ("the assembly names a capability operand with its
+  // integer name"), and cap-regnames.s scopes the cN spelling to CAPABILITY
+  // operands, so nothing here has ever decided that cN is writable in an integer
+  // slot. Making it so would be a language change, and is not this bug's to make.
+  //
+  // Restoring on the class instead would do it: it would accept `add c10, c11, c12`
+  // as a side effect of fixing an operand-restoration bug, and, worse, a future
+  // two-operand capability pseudo on an integer mnemonic -- the shape that would
+  // re-create C-45 -- would then find a stray cN SATISFYING a GPR slot rather than
+  // failing. The twelve load/store mnemonics that pair the two classes are safe
+  // regardless, because their forms differ by the paren and symbol tokens, which
+  // are themselves operand classes in the match row; `call` had no such separator,
+  // which is exactly why it broke.
+  //
+  // No cross-statement reset is needed: operands are parsed fresh per statement.
+  // Oscillation is self-correcting -- coerce, fail, restore for an integer slot,
+  // coerce again for a later capability slot -- because each arm only ever puts the
+  // operand into the form the candidate being tried asked for.
+  if (Op.Reg.CoercedFromGPR &&
+      CapstoneMCRegisterClasses[Capstone::GPCRRegClassID].contains(Reg)) {
+    unsigned RestoreRCID;
     switch (Kind) {
-    case MCK_GPR:
-    case MCK_GPRJALR:
-    case MCK_GPRTC:
-      Op.Reg.RegNum = Capstone::X0 + Idx;
-      return Match_Success;
-    case MCK_GPRNoX0:
-    case MCK_GPRJALRNonX7:
-    case MCK_GPRTCNonX7:
-    case MCK_GPRX7:
-      // Same exclusion as the forward arm's NoC0 case, mirrored onto NoX0.
-      if (Idx == 0 && Kind == MCK_GPRNoX0)
-        break;
-      Op.Reg.RegNum = Capstone::X0 + Idx;
-      return Match_Success;
-    default:
-      break;
+    case MCK_GPR:           RestoreRCID = Capstone::GPRRegClassID; break;
+    case MCK_GPRJALR:       RestoreRCID = Capstone::GPRJALRRegClassID; break;
+    case MCK_GPRTC:         RestoreRCID = Capstone::GPRTCRegClassID; break;
+    case MCK_GPRNoX0:       RestoreRCID = Capstone::GPRNoX0RegClassID; break;
+    case MCK_GPRJALRNonX7:  RestoreRCID = Capstone::GPRJALRNonX7RegClassID; break;
+    case MCK_GPRTCNonX7:    RestoreRCID = Capstone::GPRTCNonX7RegClassID; break;
+    case MCK_GPRX7:         RestoreRCID = Capstone::GPRX7RegClassID; break;
+    default:                RestoreRCID = ~0U; break;
+    }
+    // Restore, then let the class ITSELF decide. The forward arm returns success
+    // on the group of narrowed classes without re-checking membership, so a
+    // restore that only mirrored its shape could accept a register the requested
+    // class does not contain (x10 offered to MCK_GPRX7, say). Checking is cheap
+    // and makes the undo sound rather than merely symmetric.
+    if (RestoreRCID != ~0U) {
+      MCRegister Restored = Capstone::X0 + (Reg - Capstone::C0);
+      if (CapstoneMCRegisterClasses[RestoreRCID].contains(Restored)) {
+        Op.Reg.RegNum = Restored;
+        Op.Reg.CoercedFromGPR = false;
+        return Match_Success;
+      }
     }
   }
 
