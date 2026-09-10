@@ -47,25 +47,24 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## 1. The `end` convention — ONE TOKEN EACH SIDE, no convention change
 
-> ## ⏳ NOT RULED. A spec edit is PREPARED LOCALLY and is waiting on the lead — do not read it as adopted.
+> ## ✅ RULED 2026-09-10 (evening): adopt the resolution. Both spec checkouts edited; both LOCAL ONLY.
 >
-> **This decision is still open.** It is the lead's, with the spec's owners, and no ruling has been
-> given on the corrected framing. A lane prepared the spec half on its own initiative and committed
-> it **locally**; that commit is a PROPOSAL, not an adopted resolution, and this box said "RULED AND
-> EXECUTED" until it was corrected. Nothing references it: the parent's submodule pointer is
-> deliberately unmoved, and it cannot be pushed anyway (see the bottom of this box).
+> **The lead confirmed the resolution after it had been prepared.** The sequence is recorded because
+> it matters: a lane implemented the spec half on its own initiative and this box briefly read "RULED
+> AND EXECUTED" before any ruling existed. It was corrected to "not ruled", and the lead then ruled.
+> The edit stands because it was confirmed, not because it was already made.
 >
-> **What is prepared** — `capstone-academic-spec` (branch `caplifive-s06`) commit **`21a01f0`**,
-> local only. The **RTL half was already on** `r30-r31-init-revoke` at `1bfff7776`
+> **What landed** — `capstone-academic-spec` (branch `caplifive-s06`) **`21a01f0`** and
+> `capstone-spec` (branch `caplifive`) **`230418b`**, the same four tokens in both. Both local only. The **RTL half was already on** `r30-r31-init-revoke` at `1bfff7776`
 > (`INIT`: `cursor <= end` → `<`), and that half is common to both surviving routes, so it is not
 > waiting on this decision. Under the prepared resolution neither convention moves: the RTL stays
 > exclusive, the spec stays inclusive, and one arithmetic form is corrected on each side so the two
 > describe the same machine.
 >
-> **⚠ IT TOUCHES ONLY ONE OF THE TWO SPEC CHECKOUTS.** `capstone/capstone-spec` (branch `caplifive`,
-> `ca9c84f`) carries the same two `end - CLENBYTES` bounds and is **unchanged**, so accepting this
-> means deciding which checkout is authoritative and bringing the other along. That question is part
-> of the decision, not a detail after it.
+> **BOTH SPEC CHECKOUTS ARE EDITED, and that mattered.** `capstone/capstone-spec` (branch
+> `caplifive`) carried the same four bounds. `mem-access-insn.adoc` and `existing-insn.adoc` were
+> **byte-identical** between the two trees before the change, so fixing only one would have left them
+> disagreeing on exactly the lines under discussion. They are identical again.
 >
 > **The spec side was FOUR tokens, not one.** The same exclusive arithmetic appeared in four access
 > bounds, not just the store bound this document named:
