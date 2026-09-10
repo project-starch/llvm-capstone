@@ -1862,7 +1862,16 @@ is what full CoreMark and Dhrystone need. Task #62.
 >
 > **What remains is not a defect.** A domain whose `.text` exceeds the window must be built with
 > `DOMAIN_WINDOW` set — that is how full CoreMark and Dhrystone should be built when someone wants
-> them, and 32 KiB is already silicon-validated. Raising the *default* is deliberately not done: it
+> them, and 32 KiB is already silicon-validated.
+>
+> *(CITATION ADDED 2026-09-10 after the compiler lane challenged "silicon-validated" as uncited. They
+> were right that I wrote it without a citation, and right that two documents say the opposite —
+> `fpga-silicon-measurements-for-paper.md:24` and `18-08-2026_ARCHIVED_lane-b-current-state.md:81`
+> both say "not yet silicon-validated". **Those two are STALE, not wrong when written.** `board-results/2026-09-05.tsv` carries THREE rows at a 32 KiB window, all with a passing `k800`
+> control: `coremark_matrix` (`b2d072e8cbac2b41`, -O2), `csm7` (`ffedb2e78f650c94`, -O2) and
+> `beebs_nssmall` (`2fc5b371cc8c7b2a`, -O0). The `coremark_matrix` note says so in words: "CoreMark
+> matrix at -O2 with the 32 KiB window". Cited by hash, per the rule added 2026-09-09. **The two stale
+> documents need correcting** — that is a real defect the challenge found, with the sign reversed.)* Raising the *default* is deliberately not done: it
 > would relayout every frozen rung image, which on this platform means a fresh entry-stall draw per
 > rung (R-16) and invalidates the published cycle numbers. If that trade is ever wanted it is a
 > decision, not a bug fix.
@@ -3352,7 +3361,7 @@ CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemon
 
 llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
 
-### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `FIXED 2026-09-10 (compiler lane, 8b2544a6c3e9 on compiler-validation-plan) by PARSER PRECEDENCE, not a rename: parseCallSymbol now declines register names so the operand falls through to register parsing`
+### C-38 — the register-form `CAP_CALL` mnemonic collides with the `call` pseudo (`call a0, a1` is unassemblable) `FIXED 2026-09-10 (compiler lane, 8b2544a6c3e9 on compiler-validation-plan) by PARSER PRECEDENCE, not a rename: parseCallSymbol now declines register names so the operand falls through to register parsing — ⚠ QUALIFIED 2026-09-10: `8b2544a6c3e9` is NOT an ancestor of `dev`. It lives only on `compiler-validation-plan`. The fix is real and tested, but it is NOT in the mainline; this entry must not be read as "fixed on dev" until that branch merges`
 
 `parseCallSymbol` claims `call` first. Fix is to rename the mnemonic or lower the parser's precedence; XFAIL pin: `cap-call-mnemonic.s`. Two commit messages on the validation branch that say "C-25" for this bug mean C-38.
 

@@ -29,6 +29,14 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## 1. The `end` convention — ONE TOKEN EACH SIDE, no convention change
 
+> **A RULING WAS ALREADY GIVEN ONCE, AND SUPERSEDED. Read this first or the history looks broken.**
+> The lead ruled `end` EXCLUSIVE at `d71d5007ee05` (2026-09-10 02:18). It was superseded the same day
+> because the framing it was decided on was mine and was wrong: one of the routes put forward would
+> have opened a one-byte hole on the store path. `ISSUES.md` carries both boxes, the ruling struck
+> through and the correction above it. **What is waiting is a RE-ruling on the corrected framing, not
+> a first one.** The compiler lane found `d71d5007ee05` by its subject line today and reasonably read
+> it as a live ruling this document had missed; anyone else will do the same.
+
 **GATES: R-30, R-31, the firmware change, the QEMU change, the synthesis run, and the flash.**
 
 ### The question I asked first was wrong, in both directions

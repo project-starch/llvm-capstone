@@ -23,7 +23,10 @@ The limit is one hardcoded number, not a hardware constraint — the monitor spl
 a **runtime** `code_size` (the whole image size), `gp` is carved from `dom_data`'s
 end, and `GPFREE_GLOBALS_OFFSET` appears only in comments. QEMU-validated at 16 KiB
 (with a rung having an **initialized** global, exercising the large-RO delivery path)
-and at 32 KiB. Not yet silicon-validated. Lifting it is what would make full CoreMark
+and at 32 KiB. **SILICON-VALIDATED at 32 KiB as of 2026-09-05** — corrected 2026-09-10; this
+line previously read "Not yet silicon-validated" and was overtaken by `board-results/2026-09-05.tsv`,
+which carries three passing 32 KiB-window rows (`b2d072e8cbac2b41`, `ffedb2e78f650c94`,
+`2fc5b371cc8c7b2a`). Lifting it is what would make full CoreMark
 and Dhrystone buildable.
 
 ---

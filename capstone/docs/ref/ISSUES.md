@@ -778,6 +778,34 @@ unexpected operand type.
 
 **Owner:** unassigned. Found by the helper lane during the SQLite stock-ness work, 2026-09-09.
 
+### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — DESIGN CHOICE PENDING (lead); reproducer committed as an XFAIL, no fix attempted`
+
+**FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
+`llvm/test/CodeGen/Capstone/c32-movc-untagged-live.ll` — with **no registry entry in either half of
+the registry**. That is I-02's own failure mode and the **second** instance after C-25: an ID handed
+out in a commit and never entered, so the allocator could have reissued it and no reader could look
+it up. `tests/next-issue-id.sh` now reads committed content precisely to stop the next one.
+
+**The defect.** `inttoptr` on a c128 lowers through a bare `getTargetInsertSubreg`
+(`CapstoneISelLowering.cpp:8062-8064`) into an UNDEF capability carrying only an address, which is
+what `inttoptr` means — the tag is deliberately clear. Register allocation may then copy that value
+with `MOVC`, and the RTL faults on a `MOVC` of an untagged operand. **The spec sides with the RTL
+here**, so QEMU is the permissive divergent side and **no QEMU run can observe this class** — which is
+why it needs a codegen fix rather than an emulator one.
+
+**Two designs, neither prototyped, and the choice is the lead's:**
+
+* **A rematerializable bridge pseudo** replacing the bare `getTargetInsertSubreg` — carrying
+  `isReMaterializable`/`isAsCheapAsAMove` and expanding to `ADDI` on the `sub_cap_addr` half, mirroring
+  `PseudoTRUNC_CAP` (`CapstoneInstrInfo.td:2530-2552`). At `-O2` the bridge is already a single
+  `mv`, so remat turns both `movc` into `mv`. **Residue it cannot remove: PHI copies.**
+* **A register class distinguishing a bridged integer**, so `copyPhysReg` can choose `mv`. Weaker, and
+  possibly unworkable: *untagged* is a property of the **value**, whereas a `RegisterClass` is a set of
+  **physical registers**, and by the time `copyPhysReg` runs it sees only physical numbers.
+
+Both touch the ABI of integer-bridged pointers, which is why neither is a lane's call. Analysis by the
+compiler lane, 2026-09-10; entry placed by the board lane, whose path this file is.
+
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
 > # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
@@ -1616,7 +1644,7 @@ address. Passing rungs were only ever clean where someone looked.
 > It stays in the open registry rather than the archive because nothing about it was resolved; it is
 > retained as provenance for the sighting.
 
-### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `ROOT CAUSE of C-13, board-confirmed 2026-07-29`
+### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `OPEN — PARTIALLY FIXED; root cause of C-13, board-confirmed 2026-07-29. The secondary defect (`is_cap_req`/`st_wr_cap` decide "holds a capability" by OR-reducing the metadata word, never consulting `cap_type`) is LIVE on 66c4e7517 and is R-29's sibling account; the stage-8 discriminator is unrun`
 
 **THE MECHANISM, complete.** A capability's two halves are stored differently:
 
