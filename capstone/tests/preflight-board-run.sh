@@ -47,10 +47,17 @@ CONTROLS=capstone/docs/ref/known-good-controls.md
 # CLAUDE.md names outright: "a run parameterised by the wrong variable name, printing a pass
 # having checked nothing." Derive the names from both spellings.
 if [[ -z "$RUNGS" && "$DOMS" == *"|"* ]]; then
-  _derived=""
-  for _e in $(tr ',' ' ' <<<"$DOMS"); do
+  _derived=""; _de=()
+  # split on COMMAS ONLY: a selector may contain spaces ("--testset main --size 1"), and
+  # space-splitting turned each of its words into a bogus entry (fixed 2026-09-10).
+  IFS=',' read -ra _de <<<"$DOMS"
+  for _e in "${_de[@]}"; do
     [[ "$_e" == *"|"* ]] || continue          # "path" / "path:selector" are not ladder rungs
-    _r=${_e#*|}; _r=${_r%%:*}                  # "host|RUNG:path" -> RUNG
+    _r=${_e#*|}; _a=""; [[ "$_r" == *:* ]] && _a="${_r#*:}"; _r=${_r%%:*}
+    # A LADDER RUNG has a PATH after the colon ("host|k800:/test-domains/k800.dom"). A host-binary
+    # VERB arm has a selector there ("host|warm:--testset main") and stages no .dom of its own --
+    # deriving a rung from it made C15 demand "warm.dom" and blocked a valid boot.
+    [[ "$_a" == /* || "$_a" == *.dom ]] || continue
     [[ -n "$_r" && "$_r" != /* ]] && _derived+="$_r "
   done
   [[ -n "$_derived" ]] && RUNGS=$_derived
@@ -125,16 +132,61 @@ n=0
 # Retire with: bash capstone/tests/stage-board-domains.sh --apply <rungs...>
 OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc k800.dom rtpc"
 if [[ -d "$OVERLAY" ]]; then
+# Expand RUNGS + SQLITE_STAGE_DOMS into the files a run actually needs.
+#
+# FIXED 2026-09-10, after it blocked a boot it should have passed. Two defects, both from
+# `for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS")`:
+#
+#  1. SQLITE_STAGE_DOMS entries are COMMA-separated and a selector MAY CONTAIN SPACES
+#     ("dom:--speedtest1 --testset main --size 1"). Space-splitting turned every selector word into
+#     its own entry and fed "--size" to basename, which read it as an option and errored. Split on
+#     commas only.
+#  2. `${_d##*|}` THREW THE HOST AWAY. In the "host|dom:selector" form the host is itself a staged
+#     binary, so the gate never checked the one file some arms actually execute -- and, worse, then
+#     reported it as an unused overlay stray.
+#
+# Also: in that form the dom position may be a VERB for the host binary ("warm", "probe") rather
+# than a path. Those arms stage no .dom of their own, so requiring "warm.dom" is wrong.
+_expand_wanted() {   # prints one needed FILENAME per line
+  local _d _e _rest _bc _ac; local -a _de
+  _isfile() { [[ "$1" == /* || "$1" == *.dom ]]; }
+  # emit the FILENAME a rung stages, not the bare rung name: every caller normalises with
+  # ${x%.dom}.dom, and the requested-but-absent gate below needs a name it can stat.
+  for _d in ${RUNGS}; do _bc=$(basename -- "${_d%%:*}"); printf '%s\n' "${_bc%.dom}.dom"; done
+  if [[ -n "$DOMS" ]]; then
+    IFS=',' read -ra _de <<<"$DOMS"
+    for _e in "${_de[@]}"; do
+      [[ -n "$_e" ]] || continue
+      if [[ "$_e" == *"|"* ]]; then
+        printf '%s\n' "$(basename -- "${_e%%|*}")"     # the host binary is itself staged
+        _rest="${_e#*|}"
+      else
+        _rest="$_e"
+      fi
+      _bc="${_rest%%:*}"; _ac=""; [[ "$_rest" == *:* ]] && _ac="${_rest#*:}"
+      # THREE FORMS, and they disagree about which side of the colon holds the path:
+      #   ladder host override   host|RUNG:/path/rung.dom      -> path is AFTER the colon
+      #   sqlite stage           /path/img.dom:--selector      -> path is BEFORE it
+      #   host-binary verb arm   host|warm:--selector          -> neither; it stages no .dom
+      if _isfile "$_ac"; then printf '%s\n' "$(basename -- "$_ac")"
+      elif _isfile "$_bc"; then printf '%s\n' "$(basename -- "$_bc")"
+      fi
+    done
+  fi
+  # the SQLite host binary is executed by every default-host stage and is NOT a stray
+  [[ -n "${SQLITE_HOST:-}" ]] && printf '%s\n' "$(basename -- "$SQLITE_HOST")"
+  return 0
+}
   _wanted=" $OVERLAY_KEEP_ALWAYS "
   # BAKED_RUNGS names rungs WITHOUT the .dom suffix ("lf0"), while SQLITE_STAGE_DOMS gives full
   # paths ("/test-domains/q31.dom", optionally "host args|path:selector"). Accept both spellings
   # or the gate flags the very domains the run needs -- which it did on the first dry run.
   _req=()
-  for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do
-    _b="$(basename "${_d##*|}" | cut -d: -f1)"
-    _wanted+="$_b ${_b%.dom}.dom "
-    [[ "$_b" == *.dom ]] && _req+=("$_b")
-  done
+  while IFS= read -r _b; do
+    [[ -n "$_b" ]] || continue
+    _wanted+="$_b ${_b%.dom}.dom ${_b%.dom} "
+    _req+=("$_b")
+  done < <(_expand_wanted)
   # C15 REQUESTED-BUT-ABSENT. The gate above catches files that are present and unwanted; this
   # catches the opposite, which is the one that costs a boot. A run naming a .dom that was never
   # staged boots, reaches the arm, and dies on "ladder-perf: open .dom failed" -- and everything
@@ -149,8 +201,23 @@ if [[ -d "$OVERLAY" ]]; then
   #
   # BLOCKING, not a warning: there is no version of "the run needs a file the image lacks" that
   # is worth spending a JTAG upload and a boot to discover.
+  #
+  # HOST BINARIES COUNT TOO. Until 2026-09-10 only names ending in .dom were required, so an arm
+  # naming a host binary that was never staged ("/test-domains/ghost_baseline|warm:--testset main")
+  # passed this gate and died on the board in exactly the way it exists to prevent. A .dom must be
+  # in the OVERLAY; a host binary may legitimately be package-installed into the target only
+  # (TARGET_KEEP lists lpc/rtpc for that reason), so it is missing only if it is in neither.
   _missing=()
-  for _b in "${_req[@]}"; do [[ -f "$OVERLAY/$_b" ]] || _missing+=("$_b"); done
+  _seen=" "
+  for _b in "${_req[@]}"; do
+    [[ "$_seen" == *" $_b "* ]] && continue      # a name can be reached by two spellings
+    _seen+="$_b "
+    if [[ "$_b" == *.dom ]]; then
+      [[ -f "$OVERLAY/$_b" ]] || _missing+=("$_b")
+    else
+      [[ -f "$OVERLAY/$_b" || -f "${STAGE_TARGET:-capstone/caplifive-system/sw/buildroot/build/target/test-domains}/$_b" ]] || _missing+=("$_b")
+    fi
+  done
   if (( ${#_missing[@]} )); then
     bad "requested but NOT staged in the overlay: ${_missing[*]} -- the boot would reach the arm and die on 'open .dom failed', losing every test after it. Re-run verify-and-stage-rung.sh and confirm it prints a 'staged:' line (an oracle mismatch aborts BEFORE staging while still printing a retval)."
   else
@@ -209,9 +276,10 @@ TARGET_DIR=${STAGE_TARGET:-capstone/caplifive-system/sw/buildroot/build/target/t
 TARGET_KEEP="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc rtpc"
 if [[ -d "$TARGET_DIR" && -n "$RUNGS$DOMS" ]]; then
   _tw=" $TARGET_KEEP $OVERLAY_KEEP_ALWAYS "
-  for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do
-    _b="$(basename "${_d##*|}" | cut -d: -f1)"; _tw+="$_b ${_b%.dom}.dom "
-  done
+  while IFS= read -r _b; do
+    [[ -n "$_b" ]] || continue
+    _tw+="$_b ${_b%.dom}.dom "
+  done < <(_expand_wanted)
   _tstale=(); _tb=0
   while IFS= read -r _f; do
     [[ -n "$_f" ]] || continue
