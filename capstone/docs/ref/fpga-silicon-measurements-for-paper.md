@@ -1484,6 +1484,14 @@ worth recording separately from the measurement.
 is in **bits**, as `build_config_pkg.sv:25`'s `$clog2(DcacheLineWidth / 8)` shows. An earlier version
 of this section said 64 lines and was wrong by 4×.
 
+> **REPLICATED, boot sw54 (2026-09-10).** Every figure in this section was re-drawn on a second boot
+> — on a **different firmware**, carrying the rebuilt CMA kernel module — and every arm returned its
+> oracle with no fault tags. `fillcost` 8,626 (−0.15 %), `fillnop` 2,459 (−0.28 %), `fillwarm` 16,153
+> (**+0.12 %**), `fillsd` 8,389 (**+0.07 %**). The derived numbers move in the third significant
+> figure: per-store **24.09** against 24.12, warm pass 2 **87 %** of pass 1 against 87 %, plain `sd`
+> **96.2 %** of `stc` against 96 %. The two conclusions below were each n=1 in sw53; they are n=2 now,
+> and they replicate to a tenth of a percent.
+
 **A WARM REGION IS NOT MATERIALLY CHEAPER — measured, and the cold-buffer caveat is withdrawn.**
 The prediction was structural: `CVA6ConfigDcacheType = WT` (`:76`) and `wt_dcache_wbuffer.sv:43-44` —
 a returning write ACK updates the cache only *if the word is present*, and "if the word is not
@@ -1593,3 +1601,32 @@ host-binary probe arm emits `BASELINE-PROBE cycle = …` instead. Arm 10 itself 
 `BASELINE-PROBE cycle = 20349224574`. The stop is a **classifier false positive on a marker format**,
 not a failure of the run, and it cost only the last and cheapest arm. The `BASELINE-PROBE` form needs
 adding to the classifier's success set before the next boot that uses a probe arm.
+
+### §7g — The CMA module runs on silicon (boot sw54, 2026-09-10)
+
+The CMA merge changed the kernel module's region allocation from `__get_free_pages` to
+`dma_alloc_pages`, and **that path is not gated on `CONFIG_CMA`**: it runs for every region on every
+target, the board included, where no CMA area exists. Until this boot no board image had ever
+contained it — the last one predated the merge and shipped the old module, verified in the artifact
+(`0` occurrences of `dma_alloc_pages` in the built source against `2` in the package source). The
+next measurement boot would have carried it untested, on the path everything depends on.
+
+**It is proven by the control, not by a dedicated arm.** Every ladder rung enters through `lpc`,
+which **creates a region** — so `k800` returning its oracle *is* the module's positive control:
+allocation went through `dma_alloc_pages` on silicon and produced a working capability. A failure of
+the new path appears as a create/map failure *before* any rung result, which is distinguishable from
+a rung miscompute.
+
+| | |
+|---|---|
+| arms | **5 / 5**, every one at its oracle |
+| `k800` | **4** — the boot control and the module's positive control |
+| region/map failures | **0** |
+| fault tags | **none** |
+| the built `capstone.ko` | carries `dma_alloc_pages`, and the cpio contains that exact `.ko` — checked in the artifacts, not the source tree |
+
+**What is still not exercised**, and should not be read as covered by this: no `reserved-memory` node
+is added and `fpgakernel.config` gains no CMA, so on silicon this remains a pure allocator swap with
+no new capability — a region larger than the buddy allocator's 4 MiB still cannot be created on the
+board. The CMA half is exercised under emulation only (§7e appendix). And `ioctl_release_region`
+decrements `region_n` without rolling back `pre_mmap_offset`, leaking mmap offset space monotonically.
