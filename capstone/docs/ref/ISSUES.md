@@ -3190,7 +3190,7 @@ Until that exists this is a modelling defect by inspection, not an observed misc
 **Owner:** compiler lane. Related: **C-32** (the untagged-in-GPCR live copy), **Q-04** (whether a
 scalar source is consumed at all).
 
-### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `FIXED 2026-09-10 (compiler lane, `07bf18d4f20c` on `compiler-validation-plan`) by making the capability/integer operand coercion IDEMPOTENT — the reverse arm mirrors the forward arm's full class set. Found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically). ⚠ "low priority, no known consumer" is WITHDRAWN 2026-09-10: CODEGEN ITSELF emits `PseudoCALLReg`, so `-S` output cannot be reassembled`
+### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `FIXED 2026-09-10 (compiler lane, `d7514ed41f2c` on `compiler-validation-plan`) by making the capability/integer operand coercion IDEMPOTENT — the reverse arm restores ONLY the operands the forward arm actually rewrote. Found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically). ⚠ "low priority, no known consumer" is WITHDRAWN 2026-09-10: CODEGEN ITSELF emits `PseudoCALLReg`, so `-S` output cannot be reassembled`
 
 Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+register form
 (`call a0, a1`) by making `parseCallSymbol` decline register names; the register+**symbol** form that
@@ -3199,6 +3199,52 @@ Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+r
 **Not a regression, established rather than assumed:** the pre-fix binary of 2026-09-04 rejects
 `call a0, a1`, `call a0, a0` and `call a0, foo` identically, so this form has never worked on this
 target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
+
+> ## THE FIRST FIX WIDENED THE ASSEMBLY LANGUAGE. It was narrowed on the lead's ruling — do not re-litigate.
+>
+> `07bf18d4f20c` made the coercion idempotent by mirroring the forward arm's full class set, and as a
+> **side effect** the assembler began accepting a capability spelling in **every integer slot in the
+> ISA** — `add c10, c11, c12`, `sd c10, 0(c11)`, `ld c10, 0(c11)` all assembled where they had been
+> errors. Nobody set out to change the accepted language.
+>
+> **The lead ruled: restore ONLY what was mutated** (`d7514ed41f2c`). A "was coerced" bit on the
+> parser's operand, cleared language, bug still fixed. The deciding argument was that **no prior
+> intent covered the widening**: the one-register-file comment (`CapstoneAsmParser.cpp:1332-1338`)
+> justifies the FORWARD direction only — a *capability* operand written with its integer name — and
+> `cap-regnames.s` scopes `cN` to "a **capability operand**". No test anywhere asserted `cN` in an
+> integer slot, so keeping it would have extended a decision nobody took. A third option, narrowing to
+> the call classes alone, was rejected by both lanes because it leaves the identical bug latent behind
+> any future two-operand capability pseudo.
+>
+> **The flag survives across match trials for exactly the reason the bug exists:** the generated match
+> loop (`:9971`) dereferences the operand vector directly (`:10006`) and on a failed candidate simply
+> continues — it never copies, clears or rebuilds it.
+>
+> **Negatives that discriminate, not merely pass:** `cap-invalid.s` carries the four narrowed forms,
+> and every one of them ASSEMBLED under `07bf18d4f20c`'s build and errors under `d7514ed41f2c`. Five
+> call forms still assemble, including `call c10, c11`, which is a capability slot and legitimately
+> takes `cN`.
+>
+> ### The forward arm has a SOUNDNESS GAP, and it is UNREACHABLE — checked, not assumed
+>
+> The compiler lane flagged that the forward arm returns `Match_Success` for its narrowed classes
+> **without re-checking that the register is in the class it just claimed to satisfy**: coercing `x10`
+> for `MCK_GPCRC7` returns success with `c10`, and `C7` was what was asked for. Only `GPCRNoC0` is
+> guarded (`if (Idx == 0 && Kind == MCK_GPCRNoC0) break;`). They did not touch it, correctly, and
+> asked whether it is reachable. **It is not**, from the generated match table:
+>
+> * **`MCK_GPCRC7`, `MCK_GPCRJALRNonC7`, `MCK_GPCRTCNonC7` appear in NO `MatchTable` row at all** —
+>   only in the class enum, the name table, and a register-class lookup array (`:4700`, `:4724`, which
+>   are not match rows). No instruction ever requests them, so the looseness cannot fire.
+> * **`MCK_GPCRNoC0` IS reachable — via `mrev` (`:8129`, `{ MCK_GPCRNoC0, MCK_GPCR }`) — and it is
+>   precisely the one case the forward arm guards.**
+> * The wrong-row hazard needs **two competing rows**; `mrev` has **exactly one**, so there is no
+>   other candidate to take.
+>
+> **So: real in the code, dead in practice, and it becomes live the moment any instruction is given one
+> of those three classes.** Left unfixed deliberately. The compiler lane's restore verifies class
+> membership rather than mirroring the looseness, so the fix does not inherit it — which is why this is
+> a note and not a defect.
 
 > ## ⚠ RETRACTED — I ANALYSED THE WRONG TREE. The box below is kept because its reasoning is right about `dev` and wrong about where the fix lands.
 >

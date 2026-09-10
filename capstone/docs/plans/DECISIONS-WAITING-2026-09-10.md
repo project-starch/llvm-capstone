@@ -452,10 +452,12 @@ emulator.
 
 ---
 
-## 5c. Should `c10` be accepted wherever an INTEGER register is asked for?
+## 5c. ~~Should `c10` be accepted wherever an INTEGER register is asked for?~~ ✅ RULED
 
-**You asked to see this discussed first, then explained, then put back to you. This is the technical
-half; the decision is yours and neither lane has taken it.**
+> **RULED 2026-09-10: option (b) — restore only what was mutated.** Landed at `d7514ed41f2c`; the
+> accepted language is byte-for-byte what it was before C-45, and the bug is still fixed. The deciding
+> argument was item 3 below: no prior intent covered the widening. Kept for the record; nothing here is
+> waiting.
 
 C-45's fix made the operand coercion idempotent, and as a **side effect** the assembler now accepts a
 capability spelling in every integer slot in the ISA. Measured on the pushed binary — all three were
