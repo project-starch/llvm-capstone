@@ -9,14 +9,11 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
 
 ## WHAT MOVED AFTER THIS FILE WAS WRITTEN — read this before the items
 
-* **The synthesis build is AUTHORISED — as reported to me by the synth lane, not observed here.**
-  They say you confirmed both halves in their session. I have not seen that confirmation myself and am
-  recording it as their report, because a relayed confirmation is exactly what I spent this session
-  refusing to treat as a gate; if they misread you, this line is still true as written.
-  **The one thing still outstanding is the push**, which is yours and which no lane can do: the branch
-  is not on the allowlist and the agent credential has no write access to that repository. The synth
-  lane is watching `origin` every 60 s and will start the moment `r30-r31-init-revoke` at `1bfff7776`
-  appears; if a different SHA turns up they will stop and ask rather than build it. See item 1.
+* **✅ SYNTHESIS IS UNBLOCKED. The branch is PUSHED and the build is authorised.**
+  `r30-r31-init-revoke` is on `origin` at `1bfff77762acfb7369ccdc8d28980dbd84130e46`. You instructed
+  this lane to add the branch to the allowlist and push it, so the allowlist now carries that entry
+  with the date and the authorisation recorded beside it. The synth lane's watch picks the ref up
+  within 60 s and they were told directly as well. Nothing here is waiting on you any more.
 * **Item 2's number was wrong by a factor of 256, and the correction flips my recommendation.** I said
   65,536 stores per revoke over a 1 MiB region. Every region in the tree is 4096 bytes. It is 256
   stores, and option 1 goes from unaffordable to a page memset. **This is the single most important
@@ -104,7 +101,19 @@ not a bitstream. The one route that WOULD have changed the RTL differently, movi
 precede is the **FLASH**, which needs the firmware change (item 2) because the pair must not ship
 RTL-only. Synthesis produces a hash; flashing spends it.
 
-### ⛔ THE BUILD IS BLOCKED ON A PUSH, SEPARATELY FROM ANY AUTHORISATION
+### ✅ RESOLVED — the push happened. Kept because one claim in it was WRONG.
+
+**RETRACTION: I said twice, here and to the synth lane, that the agent credential has no write access
+to `capstone-ariane`. It has.** The push succeeded on the first attempt with no credential change of
+any kind. What was actually happening: the fail-closed pre-push hook refuses any branch not on the
+allowlist **before it ever contacts the remote**, so the credential was never exercised and could not
+be — and an untested assumption about *why* a push failed hardened into a recorded fact that has been
+repeated across sessions since. The allowlist made the credential question unfalsifiable, and nobody
+noticed that the evidence for "no write access" had never existed.
+
+The section below is what I wrote while that was believed. It is left standing as the record.
+
+### ⛔ (HISTORICAL) THE BUILD IS BLOCKED ON A PUSH, SEPARATELY FROM ANY AUTHORISATION
 
 The synth lane cannot see the branch, and checked rather than assuming I was wrong to say it exists.
 Both facts verified here:
