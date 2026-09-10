@@ -241,6 +241,33 @@ Once R-31 lands, revoke returns UNINIT-at-base and **five** monitor sites meet i
 | **2. Leave UNINIT, refuse the re-share** | turns a working path into an error return; `__mrev` needs LIN, so callers learn a new contract | cheap |
 | **3. Fill lazily in the domain** | changes the shared-region ABI; largest change | matches what the type is for; moves cost to the region's user |
 
+### ⚠ AND A CORRECTION TO THAT RETRACTION: 1 MiB regions DO exist, so 65,536 is the worst case
+
+The retraction below said every region in the tree is 4096 bytes and there is no 1 MiB region
+anywhere. **That was drawn from the `create_region()` size constants in test and benchmark code, and
+it missed the SQLite silicon path.** The RTL lane flagged it; checked against my own board
+transcripts, which is the only place it shows:
+
+| requested region length | occurrences in the sw44-era boot transcripts |
+|---|---:|
+| `0x1000` (4 KiB) | **58** |
+| `0x100000` (1 MiB) | **2** |
+
+Both are real. 4 KiB dominates by roughly thirty to one, and the two 1 MiB requests are the SQLite
+silicon stages, at `BASE:81F00000` and `BASE:82800000` in boot b44.
+
+**So the fill cost is not one number, it is two:**
+
+* **256 stores** for a 4 KiB region — the common case, and the basis of the ~2.7–3.6 % figure below.
+* **65,536 stores** for a 1 MiB region — which is the number I originally reported and then retracted
+  as fabricated. It was not fabricated; it was the **worst case**, and I retracted it too broadly.
+
+**What is NOT established, and matters more than either number:** whether a 1 MiB region is ever
+revoked *and re-shared*. The fill only runs on reclaim. A large arena created once per stage and never
+revoked costs nothing at all. Two allocations per boot is an allocation count, not a reclaim count,
+and nobody has measured the second. **Do not price the worst case as if it were the common one, and do
+not assume it never happens either.**
+
 ### ⚠ RETRACTION: the number I told you was 256 times too large, and it flips the recommendation
 
 I wrote "~65,536 stores per revoke on SQLite's 1 MiB region" and then wrote that the number IS the

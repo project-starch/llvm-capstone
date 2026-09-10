@@ -2996,6 +2996,23 @@ result — but it cannot reach the condition and so carries no verdict about thi
 > disturbing anything already measured, and becomes live at the flash.
 >
 > **Not pushed:** the `capstone-sbi` remote refuses this credential with a 403. Tried and recorded.
+>
+> ### A STUCK FILL IS RECOVERABLE — by shrinking `end` DOWN, not by moving the cursor up
+>
+> The constraint recorded elsewhere is that `STC` is the only instruction that advances an UNINIT
+> cursor, and that `CINCOFFSET` and `SCC` both reject UNINIT — from which I concluded a fill loop that
+> stops short leaves the capability permanently unusable. **That is wrong, and the RTL lane supplied
+> the missing half.**
+>
+> **`SHRINK` accepts UNINIT.** `capstone_flu_unit.anvil` raises `UNEXPECTED_CAP_TYPE` only for types
+> outside `{LINEAR, NONLIN, UNINIT}`; it takes `start` from `rs1.cursor` and `end` from `rs2.cursor`
+> and clamps. So shrinking the END DOWN to where the cursor actually reached gives `cursor == end`,
+> which `INIT` then accepts. The region is permanently smaller, which is the price.
+>
+> **THE CAVEAT IS THE LOAD-BEARING HALF: it needs at least one completed store.** `SHRINK` raises
+> `ILLEGAL_OPERAND_VALUE` when `rs1.cursor >= rs2.cursor`, so it cannot rescue a capability that made
+> **zero** progress. Establish which failure mode you are in before reaching for it — a partial fill
+> is recoverable, a fill that never started is not.
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
@@ -4407,6 +4424,16 @@ start failing). They have to move together, and the change alters every `mcause`
 This needs the board owner, not a patch.
 
 <details><summary>Superseded first analysis, kept because it was acted on</summary>
+
+> **A FOURTH INDEPENDENT WITNESS, from a different implementation (2026-09-10).** The reclaim work
+> gave one for free. `uninit_init_then_use_ok` faulted under QEMU with **cause 29** for an `INIT`
+> whose cursor had not reached `end` — the spec names *Illegal operand value* **29**, and the RTL's
+> execute path would emit `24 + ordinal` = **30** for the same fault.
+>
+> So the spec text, `commit_stage`, the load-store unit **and now the emulator** all agree the base
+> is **23**, against the two execute-path encoders. Four witnesses from three implementations is a
+> harder case to argue with than three from two, and this one was not constructed for the purpose —
+> it fell out of an unrelated gate. *(Noticed by the RTL lane, recorded here.)*
 
 ### two exception encoders disagree by one, so a single `mcause` value has two names
 
