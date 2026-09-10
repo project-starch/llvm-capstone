@@ -25,9 +25,17 @@ and deliberately uncommitted; the RTL change is committed on a local branch and 
   with the date and the authorisation recorded beside it. The synth lane's watch picks the ref up
   within 60 s and they were told directly as well. Nothing here is waiting on you any more.
 * **Item 2's number was wrong by a factor of 256, and the correction flips my recommendation.** I said
-  65,536 stores per revoke over a 1 MiB region. Every region in the tree is 4096 bytes. It is 256
-  stores, and option 1 goes from unaffordable to a page memset. **This is the single most important
-  change in the file.**
+  65,536 stores per revoke over a 1 MiB region. **Almost** every region in the tree is 4096 bytes —
+  board transcripts show `0x1000` ×58 and `0x100000` ×2 — so the common case is 256 stores and
+  option 1 goes from unaffordable to a page memset. **This is the single most important change in
+  the file.** (Sharpened 2026-09-10: this bullet first said "every region", which its own §item-2
+  correction below then contradicts. 65,536 is the WORST case, not a fabrication; do not price the
+  worst case as the common one, and do not price the common one as the only one.)
+* **AND IT IS NOW MEASURED, not reasoned about.** Boot sw52: **23.6 cycles per 16-byte capability
+  store**, so a 4 KiB reclaim is ~8,060 cycles and ~1,024 instructions — **+3.6 % instructions and
+  ~8 % cycles** at that workload's measured CPI (4.3–24.7 % across the full on-silicon CPI spread,
+  so it is CPI-sensitive). `docs/ref/fpga-silicon-measurements-for-paper.md` §7e carries the numbers,
+  the four corrections an audit made to them, and what is still N=1.
 * **Item 5 has been MEASURED**, not just reasoned about. The change also turned out not to compile,
   having been described as written.
 * **R-31's sufficiency is settled** without a board arm, and the probe built to answer it is retired.
@@ -224,9 +232,17 @@ flash (item 2).
 
 ## 2. ~~How should the monitor reclaim a revoked region?~~ ✅ RULED AND IMPLEMENTED
 
-> **RULED 2026-09-10: fill, then initialise.** Implemented in the monitor at `a006c63`, all four
-> checkouts in sync, and green on all four emulator gates including the host-call suite that actually
-> exercises the two sites. The emulator half landed with it at `72fb56be86`. Details on M-5.
+> **RULED 2026-09-10: fill, then initialise.** Implemented in the monitor at `0a5c3d9`, all four
+> checkouts byte-identical. It took THREE commits, and the earlier two are not the change: `a006c63`
+> is the first cut with the fill at only the two sites this doc named, `6d9a37b` hoists it above the
+> annotation branches so **five** sites are covered (REV_DEFAULT/BORROWED/SHARED/TRANSFERRED share
+> the hoisted one, plus `share_child_region`, two in `region_de_linear` and one in `split_out_cap`),
+> and `0a5c3d9` adds the before/after checks and the `RCLM` counter. This line said `a006c63` until
+> 2026-09-10; anyone who checked that out got a two-site fill with no counter and no precondition
+> check.
+>
+> All four checkouts are in sync and green on all four emulator gates, including the host-call suite
+> that actually exercises the sites. The emulator half landed with it at `72fb56be86`. Details on M-5.
 > **Kept below for the reasoning and the cost correction; nothing here is waiting.**
 
 **Blocked by item 1. This is the firmware half and it must ship with the RTL fix — never RTL-only.**
