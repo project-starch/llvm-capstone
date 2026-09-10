@@ -1416,29 +1416,36 @@ written down before the run, not after.
 Provenance: cheri lane (package, test, analysis) and board lane (console), 2026-09-09. Plan and full log:
 `docs/plans/cheri-cva6-on-genesys2.md`.
 
-### §7e — What a capability-store fill costs on silicon, measured by a matched pair (boot sw52, 2026-09-10)
+### §7e — What a capability-store fill costs on silicon, measured by a matched pair (boots sw52 + sw53, 2026-09-10)
 
-> **CORRECTED 2026-09-10, hours after first writing, by an adversarial audit of this section.** Four
-> things were wrong and are fixed below: the cache-line count (off by 4×), the direction of the
-> cold-buffer caveat, the impact arithmetic (it counted the loop's instructions but not its cycles),
-> and a claim that the monitor's loop is shorter than the rung's — it is the same length. The
-> headline **23.6 cycles per store survives**; the impact figure moves from 5.5–6.6 % to **7.3–8.8 %**.
+> **CORRECTED 2026-09-10 by an adversarial audit, then EXTENDED the same evening by boot sw53.**
+> The audit found four errors — the cache-line count (off by 4×), the direction of the cold-buffer
+> caveat, impact arithmetic that counted the loop's instructions but not its cycles, and a claim that
+> the monitor's loop is shorter than the rung's (it is the same length). sw53 then answered the two
+> questions the audit could only mark OPEN, and gave the figure an error bar. **Read sw53's numbers
+> as current: 24.1 cycles per store at n=3.** sw52's 23.6 came from a rung that has since changed
+> (its retval control could not prove the pointer walk), so the two are not the same instrument.
 
 **Why this number was needed.** The R-30/R-31 firmware half overwrites a revoked region before
 reusing it. Whether that is affordable was the open question in the reclaim decision, and the answer
 had to be given as a bracket because one quantity in it had never been measured: what 4 KiB of
 capability stores costs on this silicon.
 
-**Instrument.** Two ladder rungs that differ by exactly one instruction, run in the same boot on the
-resident `caplifive_r25r26r27_66c4e7517.bit`:
+**Instrument.** Four ladder rungs sharing one header, each a four-instruction loop differing only in
+its payload, all on the resident `caplifive_r25r26r27_66c4e7517.bit`:
 
-| rung | loop body | retval (oracle) | cycles | instret | CPI |
+| rung | loop body | oracle | sw52 | sw53 cycles | sw53 instret |
 |---|---|---:|---:|---:|---:|
-| `fillcost` | `stc zero,0(p)` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 768 (768) | **8,196** | 1,131 | 7.25 |
-| `fillnop` | `nop` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 256 (256) | **2,143** | 1,125 | 1.90 |
+| `fillcost` | `stc zero,0(p)` · `cincoffsetimm p,p,16` · `addi k,k,1` · `bltu k,n,1b` | 1792 | 8,196 † | **8,639** (×3) | 1,175 |
+| `fillnop` | `nop` · (same three) | 256 | 2,143 † | **2,466** (×3) | 1,163 |
+| `fillwarm` | `fillcost`'s loop, run **twice** over the same buffer | 4096 | — | **16,133** | 2,233 |
+| `fillsd` | `sd x0,0(p)` · (same three) — half the bytes, same 256 lines | 5888 | — | **8,383** | 1,179 |
 
-Control `k800` returned 4 in the same boot. A normalised disassembly diff of the two `.dom` files
-shows **exactly one differing instruction** in the whole `.text` (`nop` ↔ `stc zero,0(a4)`); both
+† sw52 ran an earlier `fillcost`/`fillnop` whose oracles were 768/256; its absolute cycles are not
+comparable with sw53's, only the derived per-store figure is. Control `k800` returned 4 in both
+boots, and sw53 completed 9/9 arms with zero fault tags.
+
+A normalised disassembly diff of the `fillcost` and `fillnop` `.dom` files shows **exactly one differing instruction** in the whole `.text` (`nop` ↔ `stc zero,0(a4)`); both
 loops sit at image offset `0x36c`, so they occupy the same byte offset within a cache line and index
 the same sets, and alignment cannot be the confound.
 
@@ -1451,28 +1458,44 @@ extra ran in either, and that the entire 6-instruction difference is the `+512` 
 that this is the evidence: the *old* 19-instruction C loop also returned 768 under emulation, so the
 retval has already failed once as a discriminator between the two implementations.
 
-**Result — the marginal cost of the store.**
+**Result — the marginal cost of the store, now with an error bar (boot sw53, 9/9 arms, `k800` = 4,
+zero fault tags).**
 
-    8,196 - 2,143 = 6,053 cycles for 256 capability stores over 4 KiB
-                  = 23.6 cycles per 16-byte capability store
+| rung | oracle | draws | cycles | spread |
+|---|---:|---:|---|---:|
+| `fillcost` | 1792 | 3 | 8,649 / 8,632 / 8,637 → **8,639** | 0.20 % |
+| `fillnop` | 256 | 3 | 2,472 / 2,466 / 2,459 → **2,466** | 0.53 % |
 
-The loop overhead is **cancelled, not assumed**: same iteration count, and within 6 instructions the
-same instruction count. **N = 1** — one boot, one draw of each arm, no variance estimate. The only
-repeatability evidence available is a `k800` that read 4,421 on an earlier boot and 4,430 here
-(0.2 %), and that is a compute-bound rung, so it says nothing about a write-buffer-bound one.
+    8,639 - 2,466 = 6,173 cycles for 256 capability stores over 4 KiB
+                  = 24.1 cycles per 16-byte capability store
+
+The loop overhead is **cancelled, not assumed**: same iteration count, and both arms' instret differ
+only by the branch bodies one takes and the other does not. sw52's single draw of the earlier rung
+gave 23.6, so the two boots agree to 2 % on a quantity neither was tuned to reproduce. **The
+within-boot spread is 0.2–0.5 %**, so the number is repeatable and the remaining uncertainty is in
+what it means, not in the reading.
+
+Each rung was also repeated at its own entry VA within the boot, and every repeat **returned** — so
+R-3 (a domain reused at a repeated entry VA silently hanging) does not bite the ladder path. That is
+worth recording separately from the measurement.
 
 **The cache line here is 16 BYTES, so this is one line per store — 256 lines over 4 KiB, not 64.**
 `CVA6ConfigDcacheLineWidth = 128` (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:50` at `66c4e7517`)
 is in **bits**, as `build_config_pkg.sv:25`'s `$clog2(DcacheLineWidth / 8)` shows. An earlier version
 of this section said 64 lines and was wrong by 4×.
 
-**The cache is write-through with NO write-allocate**, so "the buffer was cold, therefore this is a
-ceiling" does not follow and has been withdrawn. `CVA6ConfigDcacheType = WT` (`:76`), and
-`wt_dcache_wbuffer.sv:43-44`: a returning write ACK updates the cache only *if the word is present*,
-and "if the word is not allocated to the cache, it is just evicted from the write buffer." A store
-to a resident line still writes through. **Whether a warm region is cheaper to fill is therefore
-OPEN**, not conservative-by-assumption; the cheap way to settle it is a `fillwarm` rung that runs the
-same loop twice and reports only the second pass.
+**A WARM REGION IS NOT MATERIALLY CHEAPER — measured, and the cold-buffer caveat is withdrawn.**
+The prediction was structural: `CVA6ConfigDcacheType = WT` (`:76`) and `wt_dcache_wbuffer.sv:43-44` —
+a returning write ACK updates the cache only *if the word is present*, and "if the word is not
+allocated to the cache, it is just evicted from the write buffer" — so a store to a resident line
+still writes through and warm need not help. `fillwarm` runs the same loop **twice** over the same
+buffer and read **16,133** cycles against `fillcost`'s 8,639. The second pass therefore costs
+**7,494 cycles, at least 87 % of the first** (at least, because `fillcost`'s 8,639 includes prologue
+and epilogue that `fillwarm` pays only once — the true first-pass figure is lower, so the ratio is
+higher). An earlier version of this section called the cold buffer "closer to a ceiling than a
+typical case"; on this cache that is worth at most 13 %, and the sentence is gone rather than
+softened. It also means the ~8 % impact figure below applies to the monitor's real case, where the
+region has just been in use.
 
 **Cost to the reclaim — count the LOOP, not only the stores.** The monitor executes the whole loop,
 so the marginal-store figure is the wrong numerator for an impact estimate. The monitor's own
@@ -1480,7 +1503,7 @@ so the marginal-store figure is the wrong numerator for an impact estimate. The 
 earlier version of this section claimed it was one shorter, which is wrong. Subtracting fillcost's
 ~140 cycles of non-loop code, the fill itself is:
 
-    ~8,060 cycles per 4 KiB reclaim   (of which 6,053 the stores, ~2,010 the loop the monitor also pays)
+    ~8,540 cycles per 4 KiB reclaim   (of which 6,173 the stores, ~2,370 the loop the monitor also pays)
      1,024 instructions
 
 Against **1 revoke per 28,829 instructions**, which is a **native x86, gcc -O2** measurement of
@@ -1490,34 +1513,45 @@ every percentage below is **overstated** on that axis:
 
 | baseline CPI | reclaim's share of cycles |
 |---|---:|
-| 3.17–3.81 — **this boot's measured range** (§7f) | **7.3 – 8.8 %** |
-| 2.5 | 11.2 % |
-| 1.5 | 18.6 % |
-| 1.13 – 6.44 (the full on-silicon spread, §4) | 4.3 – 24.7 % |
+| 3.17–3.81 — **speedtest1's measured range** (§7f) | **7.8 – 9.3 %** |
+| 2.5 | 11.8 % |
+| 1.5 | 19.7 % |
+| 1.13 – 6.44 (the full on-silicon spread, §4) | 4.6 – 26.2 % |
 
-So the figure to quote is **~8 % of cycles and +3.6 % of instructions at this workload's measured
+So the figure to quote is **~8–9 % of cycles and +3.6 % of instructions at this workload's measured
 CPI** — and the honest statement is that it is CPI-sensitive across the whole 3–25 % bracket the
-decision was taken under, not that it "lands in the lower half" of it.
+decision was taken under, not that it "lands in the lower half" of it. The `fillwarm` result matters
+here: because a warm region costs within 13 % of a cold one, this figure applies to the monitor's
+real case and is not a cold-start artefact.
 
-**Rate comparison, like for like.** `fillcost`'s **total** is 8,196 / 4,096 = **2.00 cycles per byte**,
+**Rate comparison, like for like.** `fillcost`'s **total** is 8,639 / 4,096 = **2.11 cycles per byte**,
 against the separately measured **3.52** cycles/byte for a 1024-byte **copy** (line 122) — also a
 total. The fill is cheaper than the copy, in the expected direction, since a copy loads and stores
 where a fill only stores. (1.48 cycles/byte is the *marginal* rate and must not be compared against
-that 3.52.)
+that 3.52; the marginal rate at sw53's figures is 6,173 / 4,096 = 1.51.)
 
-**What the retval control does NOT cover.** `+512` keys on `fillcost_buf[0]`, the first slot the loop
-touches and the one that reads back zero whether or not the pointer advanced. If the walk were a
-no-op the retval would still be 768 and instret still 1,131, and on a write-through cache 256 stores
-to one granule would still drain one at a time. The walk is visible in the disassembly
-(`cincoffsetimm a4, a4, 0x10`) but the *control* does not prove it; seeding slot 255 as well and
-adding `+1024` when both read zero would close it.
+**The walk is now inside the control, and it was not on sw52.** `+512` keys on `fillcost_buf[0]` —
+the *first* slot the loop touches, which reads back zero whether or not the pointer advanced — so
+sw52's retval could not distinguish "walked 4 KiB" from "stored 256 times to one granule", and the
+"4 KiB / 256 lines" framing rests on exactly that walk. Slot 255 is now seeded too and contributes
+**+1024**, reachable only if the walk works. That is why `fillcost`'s oracle moved 768 → 1792 between
+the boots: **a sw52 reading and a sw53 reading are different instruments**, and the oracle says so
+rather than leaving it to a label.
 
-**A mechanism this does not isolate.** The AXI adapter maintains a shadow tag memory with a separate
-transaction per data-region access (`wt_axi_adapter.sv:108-123,153,413-442`), and `needs_tag` fires
-for plain loads and stores too — so it is an FPGA memory-system cost, not a capability-store premium.
-23.6 cycles/store is best read as **the write-through drain cost per store on this bitstream**, which
-is consistent with the cost scaling per *store* rather than per line. A `fillsd` arm — the identical
-loop with a plain `sd` — would isolate whatever part is capability-specific. Not measured.
+**THE COST IS PER STORE AND IS ALMOST ENTIRELY NOT CAPABILITY-SPECIFIC — measured.** `fillsd` is the
+identical loop with a plain 8-byte `sd` in place of the 16-byte `stc`: same 256 iterations, same
+16-byte walk, so the same 256 lines are touched and **half the bytes are written**. It read **8,383**
+cycles, a marginal **23.1 cycles per store** against `stc`'s 24.1 — **96 %**. So:
+
+* the cost does **not** scale with bytes written (half the bytes, 96 % of the cost), it scales with
+  **stores**, which is what a write-through drain does;
+* the capability-specific part is about **1 cycle in 24**, ~4 %. The AXI adapter's shadow-tag
+  transaction (`wt_axi_adapter.sv:108-123,153,413-442`) does not dominate, and it would not be
+  expected to: `needs_tag` at `:153` fires for `DCACHE_LOAD_REQ` **and** `DCACHE_STORE_REQ`, so a
+  plain store issues a tag transaction too — only with `tag_wr_value` 0 rather than 1.
+
+So 24.1 cycles/store is **the write-through drain cost of a store on this bitstream**, and a capability
+store costs a few percent more than a scalar one. Quoting it as a capability tax would be wrong.
 
 **Also from this boot, and the reason the counter is in the firmware at all:** `RCLM:00000000`
 appears on every share (9 of 9). Zero reclaims, as it must be where the guard cannot fire — and the
