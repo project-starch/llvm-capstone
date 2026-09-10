@@ -36,6 +36,62 @@ VCS_OBJECTS = ('AsmPrinter/AsmPrinter.cpp.o', 'lib/LTO/LTO.cpp.o', 'Object/IRSym
                'clang/lib/Basic/Version.cpp.o', 'lld/Common/Version.cpp.o')
 VCS_GENERATED = ('VCSRevision.h', 'VCSVersion.inc')
 
+# Every binary the Capstone lit suites actually invoke, not just the compiler.
+#
+# THIS LIST USED TO BE ('llc', 'clang', 'lld'), AND THAT WAS A HOLE IN THE GATE ITSELF.
+# This is a shared-library build, so a partial rebuild leaves llc fresh while the tools a test
+# pipes into are not. Measured 2026-09-10 after a merge: rebuilding only llc/clang/lld/llvm-mc
+# left llvm-readelf at its six-day-old build, and MC/Capstone/obj-relocs-cap-constant.ll failed
+# with `Machine: 103` -- EM_CR, an unrelated vendor's e_machine -- which reads as an object-writer
+# defect in whatever was merged last rather than as a stale reader. This gate reported FRESH
+# throughout, because it only ever asked ninja about those three targets.
+#
+# A PARTIAL REBUILD IS WORSE THAN NO REBUILD. No rebuild leaves a consistently old toolchain whose
+# failures are attributable to being old; a partial one leaves an INCONSISTENT toolchain whose
+# failures point at whatever changed most recently -- after a merge, someone else's work.
+#
+# Tell for this class, worth knowing: a backend that got its own e_machine wrong would emit a wrong
+# value of its own family, or zero. It would never emit another vendor's specific, valid identifier.
+# A nonsensical-but-valid-elsewhere constant means a stale reader, not a live defect.
+DEFAULT_TARGETS = ('llc', 'clang', 'lld', 'llvm-mc', 'llvm-readobj', 'llvm-readelf',
+                   'llvm-objdump', 'FileCheck', 'not', 'split-file')
+
+# Scanned to keep DEFAULT_TARGETS honest as the tests change; see drift_check.
+SUITE_DIRS = ('llvm/test/MC/Capstone', 'llvm/test/CodeGen/Capstone')
+RUN_TOOL_RE = re.compile(r'\b(llc|clang|ld\.lld|lld|llvm-[a-z0-9-]+|FileCheck|split-file|not)\b')
+# Aliases: the tool a test runs vs the ninja target that builds it.
+TOOL_TARGET = {'ld.lld': 'lld'}
+
+
+def drift_check(repo_root, suites, targets):
+    """Tools the suites invoke that `targets` does not cover.
+
+    A hardcoded list silently falls behind the tests it is meant to cover, so this makes that
+    failure loud instead of letting the gate narrow itself over time. Returns None when no suite
+    directory exists (nothing to check), else a sorted list of uncovered tool names.
+    """
+    seen, found_any = set(), False
+    for rel in suites:
+        d = os.path.join(repo_root, rel)
+        if not os.path.isdir(d):
+            continue
+        found_any = True
+        for dirpath, _, names in os.walk(d):
+            for n in names:
+                try:
+                    with open(os.path.join(dirpath, n), 'r', errors='ignore') as fh:
+                        for line in fh:
+                            if 'RUN:' not in line:
+                                continue
+                            seen.update(RUN_TOOL_RE.findall(line.split('RUN:', 1)[1]))
+                except OSError:
+                    continue
+    if not found_any:
+        return None
+    covered = set(targets)
+    return sorted(t for t in seen if TOOL_TARGET.get(t, t) not in covered)
+
+
 
 def identity(build):
     so = os.path.join(build, 'lib', 'libLLVMCapstoneCodeGen.so')
@@ -60,12 +116,24 @@ def main():
     ap.add_argument('--build', default=os.environ.get('CAPSTONE_LLVM_BUILD_DIR') or
                     (os.path.dirname(os.environ['CAPSTONE_LLVM_BIN'].rstrip('/'))
                      if os.environ.get('CAPSTONE_LLVM_BIN') else None))
-    ap.add_argument('--targets', nargs='+', default=['llc', 'clang', 'lld'])
+    ap.add_argument('--targets', nargs='+', default=list(DEFAULT_TARGETS))
+    ap.add_argument('--suite', nargs='+', default=None,
+                    help='lit dirs whose RUN lines are scanned for tools not covered by --targets')
+    ap.add_argument('--no-drift-check', action='store_true')
     ap.add_argument('--quiet-if-fresh', action='store_true')
     a = ap.parse_args()
     if not a.build or not os.path.isfile(os.path.join(a.build, 'build.ninja')):
         print(f'toolchain-fresh: cannot check: no build.ninja under {a.build!r}', file=sys.stderr)
         return 2
+    if not a.no_drift_check:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        missing = drift_check(root, a.suite or SUITE_DIRS, a.targets)
+        if missing:
+            print('toolchain-fresh: cannot check: the lit suites invoke tools this gate does not '
+                  f'verify: {" ".join(missing)}. Add them to DEFAULT_TARGETS (or pass --targets); '
+                  'reporting fresh without them is how a stale reader reads as a codegen bug.',
+                  file=sys.stderr)
+            return 2
     if not shutil.which('ninja'):
         print('toolchain-fresh: cannot check: ninja not on PATH', file=sys.stderr)
         return 2
