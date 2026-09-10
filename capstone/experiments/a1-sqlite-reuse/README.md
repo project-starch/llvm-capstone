@@ -101,16 +101,16 @@ fairness, and named the limits below.
   on the board.
 - The emulator's revoke and init. When a revoke finds a linear node below the handle (a free
   buddy, a free slot, a slot's handle) the region comes back uninitialised, and the port turns
-  it linear again with one `init`. The emulator the passes ran on leaves the cursor at the end
-  after a revoke, which its init accepts; the specification leaves it at the base and lets init
-  succeed only after the region was written through. On such hardware every merge and the pool's
-  destruction cost a write of the block. The counts here are the same either way, the cycles are
-  not. **This limit has since arrived in the emulator**: the merge line's Q-07 (capstone-qemu
-  72fb56be86) moves the cursor to the base on a revoke and makes init trap instead of aborting,
-  and under it the sublet arm halts at its first merge with cause 29, illegal operand value,
-  while the memsys5 arm is unchanged, bit-identical to the recorded pass. The port needs the
-  write-through before init that the specification asks for; until then the sublet arm runs on
-  the pre-Q-07 diagnostic build (the sublet-diag line the provenance names).
+  it linear again with one `init`. The specification lets that init succeed only after the
+  region has been written through: revoke leaves the cursor at the base, a capability-grained
+  store at the cursor advances it, and init wants it at the end. So every merge and the pool's
+  destruction cost a write of the block, and `sublet_give_to` writes it. The emulator the
+  recorded passes ran on leaves the cursor at the end instead, where that loop runs no
+  iteration and the init is the one instruction it always was; the merge line has since moved
+  to the specification's rule (Q-07, capstone-qemu 72fb56be86, which also makes init trap
+  rather than abort). The counts are the same either way, the cycles are not, and the same
+  hook text comes back on both: the sublet arm run against the recorded passes on a build of
+  `diag/domain-runs` is bit-identical to them at `--size 1` and at `--size 100`.
 - The emulator's stores of linear capabilities do not null the source register; hardware that
   enforces linearity does, which is why `sublet_take_linear` reads the base before the store and
   the readers of a slot store the capability back after loading it.
@@ -137,8 +137,8 @@ the first call returns to the entry frame. The diagnostic QEMU (capstone-qemu br
 `diag/domain-runs`, the same five commits rebased onto the merge line) has
 `CAPSTONE_GP_NONLIN=1`, which keeps the fabricated gp non-linear, the type the entry glue gives
 it on purpose. Every domain pass here runs with it, `run.sh` exports it. Which build of it a
-pass can use is the previous section's last point: the memsys5 arm and the probes run on either,
-the sublet arm on the pre-Q-07 one until the port writes a block through before `init`.
+pass can use is the previous section's last point: every arm runs on either, the sublet arm
+since the port writes a block through before `init`.
 
 ## Passes recorded
 

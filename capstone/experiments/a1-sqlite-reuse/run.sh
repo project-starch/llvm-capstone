@@ -19,9 +19,9 @@
 # Every domain run needs the diagnostic QEMU (capstone-qemu branch diag/domain-runs, built to
 # CAPSTONE_QEMU_BINARY) with CAPSTONE_GP_NONLIN=1: without it the compiler's movc of a live code
 # capability nulls its source at the first return to the entry frame. The script exports it.
-# The sublet arm also needs the emulator's revoke to leave the cursor at the end (the build the
-# passes used); on a build with Q-07's revoke, cursor at the base, the port's init after a
-# revoke traps with cause 29 -- see the README, what the numbers are scoped to.
+# Either build of it runs every arm: the port writes a block through before its init, so a
+# revoke that leaves the cursor at the base (Q-07) and one that leaves it at the end (the build
+# the passes used) both give the same run -- see the README, what the numbers are scoped to.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PORT=$(cd -- "$HERE/../../ports/sqlite" && pwd)
