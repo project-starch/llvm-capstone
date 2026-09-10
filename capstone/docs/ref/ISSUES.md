@@ -2098,7 +2098,7 @@ globals *after* ISel would silently break this positional scheme.
 >   sizes the pool: *"Revocation-node pool: 65536 nodes * 16 bytes/node"*, and `CAP_REVNODE_MEM_BASE`
 >   `0xBFF00000 + 65536*16 = 0xC0000000` abuts the tag region exactly. The 10-bit `head` this entry
 >   cited is not at `capstone_rev_node.anvil:168` or anywhere else. The same correction was already
->   made on 2026-08-27 in `benchmarks/sqlite/build-sqlite-silicon.sh:943-949` against the resident
+>   made on 2026-08-27 in `ports/sqlite/build-sqlite-silicon.sh:943-949` against the resident
 >   bitstream; it never reached this entry.
 > * **Exhaustion does NOT wrap, and it is not silent.** `capstone_rev_node.anvil:99-107` is explicit:
 >   *"rev-node pool exhausted ... deliberately drop this request instead of aliasing a new node onto
