@@ -54,6 +54,9 @@ struct sqlite_hostcall_v0 {
 
 #define SQLITE_HC_ANNOTATION_PERM_INOUT 0x1UL
 #define SQLITE_HC_ANNOTATION_REV_SHARED 0x2UL
+#define SQLITE_HC_ANNOTATION_REV_TRANSFERRED 0x3UL /* the region is the domain's outright */
+#define SQLITE_HC_ANNOTATION_REV_DEFAULT 0x0UL     /* non-linear to the domain, a handle kept by the monitor */
+#define SQLITE_HC_ANNOTATION_REV_BORROWED 0x1UL    /* linear to the domain, a handle kept by the monitor */
 
 /* ------------------------------------------------------------ SQLLogicTest transport */
 /* One call_dom per .test file: the host writes the whole file into the payload region and

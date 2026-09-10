@@ -89,6 +89,13 @@ grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_
 grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
 grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 
+# An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
+# calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed
+# there. -F0: a source the patch was not written for is refused, not patched somewhere near.
+if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"
+fi
+
 # SQLITE_LOOKASIDE=slots-size,count (default 0,0: the pool off) selects SQLite's compiled-in
 # lookaside default; the allocator chain lookaside > memsys5 that the paper measures needs
 # 1200,40, the shipped default (run-sqlite-speedtest1.sh sets it).
@@ -183,6 +190,7 @@ COMMON_FLAGS=(
   -I"$SQLITE_SRC_DIR"
   "${SQLITE_DEFINES[@]}"
   "${SQLITE_RESTORE[@]}"      # after SQLITE_DEFINES: -U must win over the -D above
+  ${SQLITE_CFLAGS_EXTRA:-}
 )
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
@@ -206,6 +214,14 @@ COMMON_FLAGS=(
 
 "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS \
   -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"
+
+# DOMAIN_EXTRA_SRC: further sources of the domain program, compiled like it and linked
+EXTRA_OBJECTS=()
+for src in ${DOMAIN_EXTRA_SRC:-}; do
+  object="$OBJ_DIR/$(basename "${src%.c}").o"
+  "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS -c "$src" -o "$object"
+  EXTRA_OBJECTS+=("$object")
+done
 
 BUILTIN_OBJECTS=()
 for builtin in adddf3 comparedf2 divdf3 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
@@ -248,6 +264,7 @@ _segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|Virtual
   "$OBJ_DIR/sqlite_vfs.o" \
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
   "${BUILTIN_OBJECTS[@]}"
 _before=$(_segs)
 
@@ -264,6 +281,7 @@ _before=$(_segs)
   "$OBJ_DIR/sqlite_vfs.o" \
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
   "${BUILTIN_OBJECTS[@]}" \
   "$OBJ_DIR/domreq.o"
 

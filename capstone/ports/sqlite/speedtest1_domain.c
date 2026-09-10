@@ -13,6 +13,7 @@
  *
  * Built by run-sqlite-speedtest1.sh: DOMAIN_SRC=this file, -DSPEEDTEST1_SRC='"<path>"'.
  */
+#include <stdint.h>
 #include "sqlite3.h"
 #include "sqlite_hostcall.h"
 
@@ -30,13 +31,39 @@
 #ifndef SPEEDTEST1_STACK_ARENA
 #define SPEEDTEST1_STACK_ARENA 0
 #endif
+/* -DSPEEDTEST1_HOOK=1: an instrument linked in beside this file (SPEEDTEST1_HOOK_SRC), called
+   from the copies of the sources SQLITE_HOOK_PATCH patched. It defines the three functions
+   below; its memsys5 table sits right above the arena in the stack region. */
+#ifdef SPEEDTEST1_HOOK
+size_t speedtest1_hook_table_bytes(size_t arena_size);
+void speedtest1_hook_install(void *arena, size_t arena_size, void *table);
+void speedtest1_hook_report(void);
+#endif
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
 static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* -DSPEEDTEST1_PAD=<bytes>: grow the image by that much and nothing else, to tell a layout effect
+   from a code change (bisection aid, 2026-09-10). */
+#ifdef SPEEDTEST1_PAD
+static unsigned char speedtest1_pad[SPEEDTEST1_PAD] __attribute__((aligned(16), used));
+#endif
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
 static volatile char *hostcall_payload;
 static unsigned shared_region_count;
+/* the host's memory for the allocators: region 2 is the pool (memsys5's heap, or under the
+   port the linear grant, which goes to memsys5's slot and not here), region 3 the tables */
+static volatile char *pool_region;
+static void *tables_region;
+
+/* base and end of a capability the domain may keep in a C variable (a non-linear one) */
+static void cap_bounds(void *cap, unsigned long *base, unsigned long *end) {
+  unsigned long b, e;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(b) : "r"(cap));
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(e) : "r"(cap));
+  *base = b;
+  *end = e;
+}
 
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
@@ -77,6 +104,11 @@ static void output_uint(unsigned long value) {
   output_text(text);
 }
 
+/* The payload writers for a source linked in beside this file (an instrument, a probe): the
+   domain has no stdout of its own. */
+void speedtest1_output_text(const char *text) { output_text(text); }
+void speedtest1_output_uint(unsigned long value) { output_uint(value); }
+
 /* The benchmark's stdio: two streams, both the payload. */
 struct capstone_sqlite_file {
   int fd;
@@ -108,6 +140,22 @@ int printf(const char *format, ...) {
   int n = vfprintf(stdout, format, ap);
   va_end(ap);
   return n;
+}
+
+int snprintf(char *buffer, size_t size, const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  sqlite3_vsnprintf((int)size, buffer, format, ap);
+  va_end(ap);
+  return (int)strlen(buffer);
+}
+
+int sprintf(char *buffer, const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  sqlite3_vsnprintf(64, buffer, format, ap); /* memhook's edge labels, 24-byte buffers */
+  va_end(ap);
+  return (int)strlen(buffer);
 }
 
 int fflush(FILE *stream) {
@@ -229,12 +277,23 @@ static int speedtest1_open_v2(const char *name, sqlite3 **db, int flags, const c
 #undef double
 #endif
 
+/* -DSPEEDTEST1_PROBE=n: a probe runs instead of the benchmark, as a matched pair with the
+   unprotected build. The probe is a source the runner links in beside this file
+   (SPEEDTEST1_PROBE_SRC). It returns only when the read it makes did not trap. */
+#ifdef SPEEDTEST1_PROBE
+void speedtest1_probe(unsigned *res);
+#endif
+
 void speedtest1_domain_main(unsigned *res, unsigned func) {
   if (func == CAPSTONE_DPI_REGION_SHARE) {
     if (shared_region_count == 0)
       hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
     else if (shared_region_count == 1)
       hostcall_payload = (volatile char *)res;
+    else if (shared_region_count == 2)
+      pool_region = (volatile char *)res;
+    else if (shared_region_count == 3)
+      tables_region = (void *)res;
     ++shared_region_count;
     return;
   }
@@ -272,16 +331,55 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     output_text("\n");
   }
   SPEEDTEST1_STOP(1, res);
-  /* memsys5's arena. In the image it is capped by the kernel module's order-10 block
-     (Q-01: create_dom fails above about 2 MB of image), and speedtest1 at --size 1 peaks at
-     843 KB on x86 before memsys5's power-of-two rounding. The stack region the module hands
-     the domain is 2.9 MB with the frame at its top (measured 2026-09-09), so
-     -DSPEEDTEST1_STACK_ARENA=<bytes> carves the arena from that region's low end instead,
-     leaving the rest to the stack. Derived pointers keep the stack capability's bounds. */
+  /* Where memsys5's memory comes from. With the host's regions (sqlite_host.user --pool or
+     --arena, and --tables), the pool is region 2 and the tables region 3: memsys5's own tables
+     under the port, then the instrument's table, and the stack region keeps only the stack.
+     Without them, the old carve from the stack region's low end (-DSPEEDTEST1_STACK_ARENA):
+     the image itself is capped by the kernel module's order-10 block (Q-01), and the stack
+     region is 2.9 MB with the frame at its top (measured 2026-09-09). */
   unsigned char *heap = sqlite_heap;
   int heap_size = (int)sizeof(sqlite_heap);
+  unsigned long arena_addr = 0, arena_size = 0;
+  unsigned char *hook_table = 0;
+  unsigned long hook_room = 0;
+  if (shared_region_count >= 4) {
+    unsigned long tables_base, tables_end, tables_size;
+    if (!tables_region) {
+      output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no tables region\n");
+      *res = 0x5117E106u;
+      return;
+    }
+    cap_bounds(tables_region, &tables_base, &tables_end);
+    tables_size = tables_end - tables_base;
+    if (!pool_region) {
+      output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no pool region\n");
+      *res = 0x5117E106u;
+      return;
+    }
+    {
+      unsigned long pool_end;
+      cap_bounds((void *)pool_region, &arena_addr, &pool_end);
+      arena_size = pool_end - arena_addr;
+      heap = (unsigned char *)pool_region;
+      heap_size = (int)arena_size;
+      output_text("regions: pool ");
+      output_uint(arena_size);
+      output_text(" bytes at ");
+      output_uint(arena_addr);
+      output_text(", tables ");
+      output_uint(tables_size);
+      output_text(" bytes\n");
+    }
+    hook_table = (unsigned char *)tables_region + (heap == tables_region ? heap_size : 0);
+    hook_room = tables_size - (heap == tables_region ? (unsigned long)heap_size : 0UL);
+    if ((unsigned long)heap_size > tables_size && heap == tables_region) {
+      output_text("__CAPSTONE_SPEEDTEST1_EXIT__ the tables region is too small for memsys5's tables\n");
+      *res = 0x5117E107u;
+      return;
+    }
+  }
 #if SPEEDTEST1_STACK_ARENA > 0
-  {
+  else {
     unsigned char *frame = __builtin_frame_address(0);
     unsigned long cur, st, en;
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cur) : "r"(frame));
@@ -289,6 +387,8 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(en) : "r"(frame));
     heap = frame - (cur - st);
     heap_size = SPEEDTEST1_STACK_ARENA;
+    arena_addr = (unsigned long)(uintptr_t)heap;
+    arena_size = (unsigned long)heap_size;
     output_text("arena: ");
     output_uint((unsigned long)heap_size);
     output_text(" bytes from the stack region's low end, region ");
@@ -296,6 +396,24 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
     output_text(" bytes, stack keeps ");
     output_uint((en - st) - (unsigned long)heap_size);
     output_text("\n");
+    hook_table = heap + heap_size;
+    hook_room = (en - st) - (unsigned long)heap_size - 393216UL; /* the stack keeps 384 KB */
+  }
+#endif
+#if defined(SPEEDTEST1_HOOK) && !defined(SPEEDTEST1_HOOK_NO_INSTALL)
+  if (hook_table) {
+    unsigned long table_bytes = speedtest1_hook_table_bytes((size_t)arena_size);
+    output_text("hook table: ");
+    output_uint(table_bytes);
+    output_text(" bytes, room ");
+    output_uint(hook_room);
+    output_text("\n");
+    if (table_bytes > hook_room) {
+      output_text("__CAPSTONE_SPEEDTEST1_EXIT__ no room for the instrument's table\n");
+      *res = 0x5117E104u;
+      return;
+    }
+    speedtest1_hook_install((void *)(uintptr_t)arena_addr, (size_t)arena_size, hook_table);
   }
 #endif
   int rc = sqlite3_config(SQLITE_CONFIG_HEAP, heap, heap_size, 64);
@@ -306,9 +424,16 @@ void speedtest1_domain_main(unsigned *res, unsigned func) {
   }
   output_text("__CAPSTONE_SPEEDTEST1_START__\n");
   SPEEDTEST1_STOP(2, res);
+#ifdef SPEEDTEST1_PROBE
+  speedtest1_probe(res); /* returns only when the read it makes did not trap */
+  return;
+#endif
   static char *argv[] = {"speedtest1", SPEEDTEST1_ARGS, 0};
   int argc = (int)(sizeof(argv) / sizeof(argv[0])) - 1;
   rc = speedtest1_main(argc, argv);
+#ifdef SPEEDTEST1_HOOK
+  speedtest1_hook_report();
+#endif
   output_text("__CAPSTONE_SPEEDTEST1_DONE__ rc=");
   output_uint((unsigned long)(unsigned)rc);
   output_text("\n");
