@@ -1684,6 +1684,35 @@ Using the board's ticked baseline lowers every ratio by ~6%. That is the §7h ti
 nothing else; the right-hand column reproduces the predicted ratios to three decimals, which follows
 from the table above rather than being independent of it.
 
+**THE FIRST REPEATABILITY BOUND THIS PROJECT HAS, and it is free.** sw57 measured cycles for the
+same seven testsets that sw56 measured, on an image 144 bytes away and with instruction counts
+differing by at most **0.00009%** — so essentially all of the cycle difference is machine rather than
+program. Nothing in §7f, §7h or §7i bounded run-to-run variation before this; every ratio published
+here was a single measurement.
+
+| testset | sw56 cycles | sw57 cycles | delta |
+|---|---:|---:|---:|
+| star | 228,836,250 | 228,700,875 | −0.059% |
+| parsenumber | 230,682,632 | 230,540,552 | −0.062% |
+| orm | 937,346,376 | 937,905,097 | +0.060% |
+| main | 2,675,472,428 | 2,670,465,463 | −0.187% |
+| fp | 4,165,418,923 | 4,163,234,642 | −0.052% |
+| cte | 6,048,111,965 | 6,027,440,964 | −0.342% |
+| rtree | 9,084,912,260 | 9,042,939,578 | −0.462% |
+
+Range **−0.462% to +0.060%**, spread 0.52 pp, population sd 0.17 pp.
+
+**What it bounds, stated precisely: run-to-run variation AND the 144-byte layout difference
+together.** With one pair per testset the two cannot be separated, so this is an upper bound on
+repeatability rather than an isolate of it. **The operational consequence is that a ratio quoted to
+three decimals is quoting precision nothing here supports — the second decimal is what this bound
+carries.**
+
+**A length trend is NOT claimed, and the check is the one that refuted `cte`'s explanation.** Signed
+delta against run length gives Pearson r = **−0.885**, which looks like a drift; removing the two
+longest arms collapses it to **−0.324**. Two leverage points, not a trend, exactly as with §7h's
+CPI correlation. The same test, applied to our own result rather than someone else's.
+
 **One pre-registered control did not transfer and is recorded as void rather than as a pass.**
 `instret − mcycle = 39`, which held on all seven arms under emulation, is unobservable on silicon by
 construction: `-icount` makes mcycle and minstret the same quantity, so a 39-instruction bracket
