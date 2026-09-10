@@ -3135,7 +3135,7 @@ Until that exists this is a modelling defect by inspection, not an observed misc
 **Owner:** compiler lane. Related: **C-32** (the untagged-in-GPCR live copy), **Q-04** (whether a
 scalar source is consumed at all).
 
-### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `OPEN — found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically); low priority, no known consumer`
+### C-45 — the register+symbol call form `call a0, foo` (`PseudoCALLReg`) does not assemble `OPEN — found 2026-09-10 while fixing C-38; NOT a regression (the pre-fix 2026-09-04 binary rejects it identically). ⚠ "low priority, no known consumer" is WITHDRAWN 2026-09-10: CODEGEN ITSELF emits `PseudoCALLReg`, so `-S` output cannot be reassembled`
 
 Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+register form
 (`call a0, a1`) by making `parseCallSymbol` decline register names; the register+**symbol** form that
@@ -3145,9 +3145,24 @@ Spun out of C-38 under the one-defect-per-commit rule. C-38 fixed the register+r
 `call a0, a1`, `call a0, a0` and `call a0, foo` identically, so this form has never worked on this
 target. Documented in `cap-call-mnemonic.s` beside the C-38 case.
 
-**No known consumer:** a search of the MC and CodeGen tests, the runtime glue and the compiler-rt
+**~~No known consumer~~ — WITHDRAWN 2026-09-10 (compiler lane), and I verified both sites myself
+rather than taking the report.** Codegen emits `PseudoCALLReg` on two live paths:
+
+* **the spill libcall**, `CapstoneFrameLowering.cpp:2190` —
+  `BuildMI(MBB, MI, DL, TII.get(Capstone::PseudoCALLReg), Capstone::X5).addExternalSymbol(SpillLibCall, ...)`
+* **the machine outliner**, `CapstoneInstrInfo.cpp:3710` —
+  `BuildMI(MF, DebugLoc(), get(Capstone::PseudoCALLReg), Capstone::X5).addGlobalAddress(...)`
+
+So `-S` output containing `call t0, __riscv_save_12` **cannot be reassembled**, which makes this a
+round-trip defect on compiler-generated text rather than a hand-written-assembly curiosity. The
+original search looked for a consumer in tests and glue and did not look at what the backend itself
+emits — the same shape as reading a name rather than the defining predicate.
+
+The superseded original follows.
+
+~~No known consumer: a search of the MC and CodeGen tests, the runtime glue and the compiler-rt
 builtins found zero occurrences of `call` followed by a bare register and a symbol. So this is a hole
-in what the assembler accepts versus what the instruction definitions declare, not a blocked user.
+in what the assembler accepts versus what the instruction definitions declare, not a blocked user.~~
 
 **DECISION 2026-09-10: land it this cycle, as its OWN commit on top of C-38's, never squashed with it.**
 
