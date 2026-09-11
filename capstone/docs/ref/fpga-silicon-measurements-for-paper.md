@@ -1010,14 +1010,19 @@ available, 66 % used.
 Staged so that the moment the R-30/R-31 flash lands, the board work is three boots and no builds.
 Every arm below is `--testset main --size 1 --verify`, `-icount shift=0`.
 
-| cell | | allocator | lookaside | image sha256 (16) | QEMU cycles |
-|---|---|---|---|---:|---:|
-| ① | native | memsys5 | off | `f4cf7caed144d952` | — |
-| ② | native | memsys5 + lookaside | **on** | `24cb59fa7dbfb8fb` | — |
-| ④ | domain | memsys5 | off | `2f4e6b73b85b569e` | 692,983,497 |
-| ⑤ | domain | memsys5 + lookaside | **on** | `ccb73bc08db39990` | 678,572,868 |
-| ⑥ | domain | Sublet (both, + discipline) | **on** | `ceeded2533a74bce` | 690,505,703 |
-| ⑥′ | domain | Sublet, lookaside forced off — **control** | off | `5f5045dbe075d458` | 705,994,514 |
+| cell | | allocator | lookaside | image sha256 (16) | `HEAP` | QEMU cycles |
+|---|---|---|---|---:|---:|---:|
+| ① | native | memsys5 | off | `f4cf7caed144d952` | — | — |
+| ② | native | memsys5 + lookaside | **on** | `24cb59fa7dbfb8fb` | — | — |
+| ④ | domain | memsys5 | off | `2f4e6b73b85b569e` | 2,097,152 | 692,983,497 |
+| ⑤ | domain | memsys5 + lookaside | **on** | `ccb73bc08db39990` | 2,097,152 | 678,572,868 |
+| ⑥ | domain | Sublet (both, + discipline) | **on** | `ceeded2533a74bce` | **910,008** | 690,505,703 |
+| ⑥′ | domain | Sublet, lookaside forced off — **control** | off | `5f5045dbe075d458` | **910,008** | 705,994,514 |
+| ⑤ᴳ | domain | ⑤ rebuilt at ⑥'s heap — **does not complete** | on | `7cc434e807570136` | 910,008 | fault, cause 24 |
+
+**READ THE `HEAP` COLUMN BEFORE ANY RATIO ACROSS IT.** ④/⑤ share a geometry and may be compared
+directly; ⑥/⑥′ share one and may be compared directly. **⑥ against ⑤ does not**, and the ⑤ᴳ row is
+the evidence that it cannot be made to.
 
 The native rows carry no QEMU cycle count by construction: they are rv64 binaries that ride along in
 the boot, not domains this runner measures.
@@ -1028,16 +1033,41 @@ image is hash-identical to `ccb73bc08db39990`, the image independently verified 
 and it confirms the new `SQLITE_LOOKASIDE` route through this runner reproduces the old hand-set
 `DOMAIN_EXTRA_DEFS` image exactly. ④'s differing hash shows the define changes the build at all.
 
-**A DEFECT FOUND AND FIXED IN THE SIXTH CELL: it was building lookaside-OFF while its own comment
-said ON.** Nothing on the `SPEEDTEST1_SUBLET` path set `SQLITE_DEFAULT_LOOKASIDE`, so ⑥ would have
+**A DEFECT FOUND AND FIXED IN THE SIXTH CELL: the runner would have built it lookaside-OFF while its
+own comment said ON.** Stated as latent rather than observed: the only prior ⑥ on record, the 43,407
+sweep, was lookaside-ON by the counter identity below, so something outside this runner — a hand-set
+`DOMAIN_EXTRA_DEFS` in the operator's shell — supplied it that time. The defect is that the runner
+did not, so the next person to run the documented invocation would have got the silent mismatch. Nothing on the `SPEEDTEST1_SUBLET` path set `SQLITE_DEFAULT_LOOKASIDE`, so ⑥ would have
 been compared against a lookaside-ON ⑤ — making the one ratio the cell exists to produce, the cost
 of the revocation discipline, a **two-variable** comparison, silently. The Sublet patch ports the
 lookaside *code*; that is not the same as the pool being *enabled*, and at `0,0` the ported code is
 compiled in and never used. Fixed in the runner and negative-tested by ⑥′ below.
 
-**THE COST OF THE DISCIPLINE, which is what cell ⑥ exists for:** ⑥/⑤ = **1.0176**, so the revocable
-sub-lease discipline costs **1.76 %** over the identical allocators without it. Read it with two
-caveats. These are `-icount` instruction counts and not board cycles, so the silicon figure will
+**~~THE COST OF THE DISCIPLINE~~ — RETRACTED THE SAME DAY IT WAS WRITTEN, 2026-09-12. ⑥/⑤ = 1.0176
+IS NOT THE COST OF THE DISCIPLINE, because the two arms do not share a geometry.** ⑤ runs
+`HEAP 2,097,152`; ⑥ reports `HEAP 910,008`, since the Sublet port hands `CONFIG_HEAP` the *tables*
+region rather than dom_data. A 2.3× difference in the arena memsys5 sees changes split and
+fragmentation behaviour, so 1.76 % is **discipline + geometry** — the same two-variable error fixed
+for lookaside two paragraphs above, one level down, and missed because the reading was taken with a
+`grep -oE "SPEEDTEST1-CYCLES [0-9]+"` that cut the line before its `HEAP` field.
+
+**THE GEOMETRY CANNOT BE EQUALISED WITH THE HEAP KNOB, AND THAT WAS TESTED RATHER THAN ASSUMED.** ⑤
+rebuilt at `SPEEDTEST1_HEAP=910008` (image `7cc434e807570136`) does not complete: it enters and then
+halts, `cause = 24, pc = 0x101c23394, badaddr = 0x101570000`, after `SQ: G/enter`. memsys5 alone
+needs the documented ≥1.5 MiB for `main --size 1`; ⑥ clears the same workload at an effective 910,008
+because lookaside absorbs the small allocations and the Sublet arena is carved differently.
+
+Note this is **not** ⑥ using less memory. ⑥ holds arena 1,419,584 + tables 1,750,285 ≈ 3.17 MB of
+host-shared regions against ⑤'s 2,097,152 of dom_data; `HEAP` names only the part memsys5 sees. The
+two arms place their allocator arena in different kinds of memory, which is why no single knob
+equalises them.
+
+**What ⑥/⑤ = 1.0176 may be quoted as:** the end-to-end cost of the Sublet *configuration* against the
+lookaside configuration at each one's own working geometry. Not as the cost of the revocation
+discipline in isolation. Isolating that needs an arm differing from ⑥ in the discipline alone, which
+this pair is not.
+
+Two further caveats apply to it either way. These are `-icount` instruction counts and not board cycles, so the silicon figure will
 differ — the reclaim is O(bytes), one store per 16 bytes, and that ratio is CPI-sensitive. And this
 number exists on QEMU *because* QEMU implements REVOKE to spec: on pre-flash silicon R-31 returns
 LINEAR, the port branches past both the write-through and the `init`, and the discipline's whole
