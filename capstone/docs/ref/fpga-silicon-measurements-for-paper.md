@@ -1004,6 +1004,69 @@ silicon it would read `init = 0` and the cost would be understated by the whole 
 rev-node budget pins that cell to `--size 1` regardless: 43,407 nodes measured against 65,532
 available, 66 % used.
 
+
+### §4g.1 — THE FIVE IMAGES ARE BUILT AND THE CAPABILITY ARMS ARE QEMU-VALIDATED (2026-09-12, `--size 1`)
+
+Staged so that the moment the R-30/R-31 flash lands, the board work is three boots and no builds.
+Every arm below is `--testset main --size 1 --verify`, `-icount shift=0`.
+
+| cell | | allocator | lookaside | image sha256 (16) | QEMU cycles |
+|---|---|---|---|---:|---:|
+| ① | native | memsys5 | off | `f4cf7caed144d952` | — |
+| ② | native | memsys5 + lookaside | **on** | `24cb59fa7dbfb8fb` | — |
+| ④ | domain | memsys5 | off | `2f4e6b73b85b569e` | 692,983,497 |
+| ⑤ | domain | memsys5 + lookaside | **on** | `ccb73bc08db39990` | 678,572,868 |
+| ⑥ | domain | Sublet (both, + discipline) | **on** | `ceeded2533a74bce` | 690,505,703 |
+| ⑥′ | domain | Sublet, lookaside forced off — **control** | off | `5f5045dbe075d458` | 705,994,514 |
+
+The native rows carry no QEMU cycle count by construction: they are rv64 binaries that ride along in
+the boot, not domains this runner measures.
+
+**⑤ CARRIES ITS OWN POSITIVE CONTROL, and it validates a script change as well as the arm.** Its
+image is hash-identical to `ccb73bc08db39990`, the image independently verified by *running* it —
+`Successful lookasides: 25010`. That matters twice over: it confirms ⑤ is genuinely a lookaside arm,
+and it confirms the new `SQLITE_LOOKASIDE` route through this runner reproduces the old hand-set
+`DOMAIN_EXTRA_DEFS` image exactly. ④'s differing hash shows the define changes the build at all.
+
+**A DEFECT FOUND AND FIXED IN THE SIXTH CELL: it was building lookaside-OFF while its own comment
+said ON.** Nothing on the `SPEEDTEST1_SUBLET` path set `SQLITE_DEFAULT_LOOKASIDE`, so ⑥ would have
+been compared against a lookaside-ON ⑤ — making the one ratio the cell exists to produce, the cost
+of the revocation discipline, a **two-variable** comparison, silently. The Sublet patch ports the
+lookaside *code*; that is not the same as the pool being *enabled*, and at `0,0` the ported code is
+compiled in and never used. Fixed in the runner and negative-tested by ⑥′ below.
+
+**THE COST OF THE DISCIPLINE, which is what cell ⑥ exists for:** ⑥/⑤ = **1.0176**, so the revocable
+sub-lease discipline costs **1.76 %** over the identical allocators without it. Read it with two
+caveats. These are `-icount` instruction counts and not board cycles, so the silicon figure will
+differ — the reclaim is O(bytes), one store per 16 bytes, and that ratio is CPI-sensitive. And this
+number exists on QEMU *because* QEMU implements REVOKE to spec: on pre-flash silicon R-31 returns
+LINEAR, the port branches past both the write-through and the `init`, and the discipline's whole
+reclaim is skipped. So **1.76 % is the prediction for what the post-flash board should show**, not a
+figure the current board could reproduce.
+
+#### The lookaside pool cuts revocation-node pressure by an eighth — a new result, from the control
+
+|  | split | mrev | delin | revoke | init | **nodes** (`split+mrev`) | **of 65,532** |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| ⑥ lookaside **on** | 5,508 | 37,899 | 32,565 | 37,899 | 5,334 | **43,407** | 66.2 % |
+| ⑥′ lookaside **off** | 8,484 | 41,115 | 32,638 | 41,115 | 8,477 | **49,599** | 75.7 % |
+
+Turning the pool off costs **6,192 extra revocation nodes, +14.3 %**, because lookaside absorbs the
+small allocations that would otherwise each become their own sub-lease. Against a budget that
+*deliberately stalls the core* on exhaustion, that is a safety margin and not a curiosity: 33.8 % of
+headroom against 24.3 %.
+
+**IT ALSO RESOLVES WHICH CONFIGURATION THE RECORDED 43,407 BELONGED TO.** ⑥ reproduces the earlier
+sweep's counters *exactly* — `split=5,508 mrev=37,899 delin=32,565 revoke=37,899 init=5,334`, every
+field. Since ⑥′ shows lookaside-off gives materially different counters, the earlier sweep was
+**lookaside-ON**, and the headroom figure carried forward is for the configuration cell ⑥ actually
+runs in. That had been an open ambiguity — the note beside it read "my sweep ran the plain arm",
+which refers to the `memhook` instrument, not to the pool.
+
+**`init` is non-zero (5,334) on every Sublet arm here, and that is expected on QEMU rather than
+evidence about the flash.** QEMU implements REVOKE to spec, so the reclaim runs. The masking
+signature to watch for on silicon is the opposite: `init = 0` beside a non-zero `revoke`.
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
