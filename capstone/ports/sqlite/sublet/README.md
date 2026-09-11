@@ -60,10 +60,13 @@ poison writes into a freed block are gone, the block is revoked memory.
 
 ## What the port relies on, and where that is written
 
-The port's `init` after a revoke assumes the region comes back with its cursor at the end,
-which the emulator the passes ran on did and the specification does not: it wants the block
-written through first, and the emulator's merge line has since moved to that (Q-07). Under
-it the port halts at its first merge with cause 29 until it writes the block through before
-`init`. That, the linearity rule the review found (`sublet_take_linear` reads the base before
-the store), and the rest of the limits are in the port README's section on speedtest1 and the
-Sublet port.
+The port writes the block through before `init`. A revoke that killed a linear node hands the
+region back uninitialised with its cursor at the base, and `init` is refused until stores at
+the cursor have carried it to the end; `sublet_give_to` in `sublet.h` is that loop, a null
+capability at a time. The emulator the first passes ran on left the cursor at the end instead
+and took the `init` at once, so there the loop runs no iteration; its merge line has since
+moved to the specification's rule (Q-07), and the port runs on both. The fill is what `init`
+costs on such a machine, not a primitive of the discipline: the counters a pass reports are
+the same on either emulator. The linearity rule the review found (`sublet_take_linear` reads
+the base before the store) and the rest of the limits are in the port README's section on
+speedtest1 and the Sublet port.
