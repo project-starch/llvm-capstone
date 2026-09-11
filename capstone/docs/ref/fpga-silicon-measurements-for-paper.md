@@ -2091,6 +2091,50 @@ two tables were evidently renamed to `z1`/`z2` without the loop being updated. S
 maximum is **nine of ten**, and the tenth is an upstream defect rather than a capability limitation.
 Stated for the version we pin; no claim is made about later releases.
 
+#### TIMING — every silicon figure in this document was measured on a bitstream that does NOT meet timing, and a pre-registered criterion for that was never applied
+
+Raised by the synth lane 2026-09-11 while handing over the R-30/R-31 bitstream. It belongs here
+rather than in that handover, because it is not about that bitstream.
+
+**The resident bitstream fails timing, and always has.** `caplifive_r25r26r27_66c4e7517.bit`:
+**WNS −12.425 ns**, **102,508 of 174,960 failing endpoints**, `Timing constraints are not met.`
+Every §7 row — §7a through §7k — was measured on it.
+
+**A criterion for exactly this was pre-registered and then not applied.** `RATE-RULE.md`, quoted in
+`ISSUES.md:234`:
+
+> *"WNS non-negative makes the S-07 validation unconditional; negative means **everything measured
+> on this bitstream needs re-reading**."*
+
+It came back negative. The registry already records, for S-07, that it "was never applied". The
+wording is general — *everything measured on this bitstream* — and it has not been applied to the
+rest of the corpus either.
+
+**What this does and does not mean, because the distinction decides how to read every row above.**
+A timing-failing design is not wrong everywhere; it is wrong *intermittently and data-dependently*.
+So it does not invalidate a number, it removes the guarantee that the number is reproducible for
+reasons intrinsic to the design. That matters most for exactly the things this project measures:
+the run-to-run spread quoted in PRECISION, and any single-draw result. It matters least for
+instruction counts, which are architectural and were shown bit-identical across boots in §7i.
+
+**And it is the same hazard the silicon investigation is trying to characterise** — intermittent,
+data-dependent misbehaviour is indistinguishable, from a board log, between "a marginal path" and
+"the defect under study". That is the strongest form of the concern and is why it is recorded rather
+than noted.
+
+**It is NOT a reason to prefer the resident bitstream over the R-30/R-31 one.** They are
+timing-identical: `1bfff7776` reports the same −12.425 and the same 102,508 failing endpoints, and
+the synthesis row records the pair as *"identical"*. Refusing the flash on timing grounds would keep
+us on a bitstream with the same timing and without the fix. The pre-registered range −15.3 … −11.7
+answered *"did the two operators move timing"* — cleanly, no — and was never capable of answering
+*"is this flashable"*; the synth lane says plainly that they reported it as PASS without separating
+those, and that is the right correction to have on the record.
+
+**What would settle it** is a timing-clean build, which is a synthesis question and not a
+measurement one. Until then: quote §7 rows with this caveat attached, prefer instruction counts to
+cycle counts where a claim can be carried by either, and treat any single-draw cycle figure as
+carrying an unquantified intermittency term on top of the spreads in PRECISION.
+
 #### CONFIGURATION — every speedtest1 figure in the §7 series was measured with SQLite's LOOKASIDE POOL OFF, and nobody chose that
 
 **This is not a defect in the numbers. It is a statement about which SQLite they describe**, and it
