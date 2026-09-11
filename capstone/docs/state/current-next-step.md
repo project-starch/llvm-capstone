@@ -1,6 +1,45 @@
 # Next step
 
-## 0. CURRENT — 2026-09-11 (afternoon). The board work is banked; six repositories cannot be pushed from this credential, and that is now the binding constraint.
+## 0. CURRENT — 2026-09-11 (evening). Everything outstanding is merged and pushed; the only work left needs the board.
+
+**All four PRs are in and `dev` is at `f727c338594a`.** llvm-capstone #7/#8/#9 (the collaborator's
+speedtest1 bring-up stack, the Sublet port, the A1 experiment) and our `speedtest1` measurement
+branch merged into `dev`; capstone-qemu #2 merged into `c128-qemu-merge` (`656cc034899f`) and the
+parent gitlink bumped after the submodule was pushed. `speedtest1`, `pr9-check` and
+`sqlite-stockness` all report 0 commits ahead of `dev`.
+
+**Two merge hazards worth carrying forward, because both were invisible to git.** In
+`sqlite_host.c`, our arena share and the collaborator's pool share both claimed shared-region
+**slot 2**, and both domains capture by ORDER — taking both sequences in either direction hands one
+domain the other's capability, with nothing for the compiler to see. Resolved `#ifdef`/`#else` plus
+a refusal before `capstone_init`. In `op_helper.c`, `GETPC()` was used at four sites inside
+`_helper_access_with_cap`, which is `static` and so has no host pc in the TCG buffer; **two of the
+four sat outside the conflict and git merged them silently**, leaving the bounds path restoring from
+one frame and raising from another. The general shape: the dangerous part of a merge is the region
+git resolves without asking.
+
+**speedtest1 `json` RUNS in a capability domain** (QEMU, image `c1ce36ac6711e194`): 6 MiB region
+arena, `TOTAL 28.988s`, `SPEEDTEST1-CYCLES 725363552`, `RC 0`, eight phases with real timings. Both
+documented reasons json "could never run" were true of a `.bss` build and neither survives the
+region arena. **This is not an S-14 fix** — per that entry, the bad reloads vanish incidentally with
+the array and any change to the global set can bring them back; gate on `capinit-reload-scan.py`.
+
+**NEXT, and it is the only thing left: the json board arm.** Artifacts built, hashed and
+QEMU-verified; spec at `/tmp/capstone/handoff/json-on-silicon.md`. One boot, control first, needs
+`cma=64M`, and it must NOT be judged on the `--verify` hash (json returns the no-rows hash three
+other testsets share). That boot turns json into §7l and takes §7k from seven testsets to eight.
+
+**Two instrument repairs landed on the way.** Five stale `benchmarks/sqlite/` includes left
+`revoke-on-free` and `hier-revoke` dead since the layout move — they reported a *build* failure as a
+suite failure, in one second, next to a 591-second PASS. Three more were latent. And a QEMU suite
+can be blocked by another lane holding the `rootfs.ext2` write lock: `authority` is the one suite
+that runs without `-snapshot`. The fix is not to wait — point `CAPSTONE_BUILDROOT_DIR` at a shadow
+tree that symlinks everything and carries its own sparse rootfs copy (56 MB on disk).
+
+**The credential claim in the section below is STALE** — it said six repositories; it was three, and
+the token was replaced. `dev`, `c128-qemu-merge` and the submodules used today all push.
+
+## 0b. EARLIER 2026-09-11 (afternoon). The board work is banked; the credential claim in this heading is superseded by section 0 above.
 
 **Banked on silicon today, four boots.** sw55: a **130 MiB** capability region created, mapped and
 round-tripped — 32x the buddy allocator's `MAX_ORDER 10` ceiling. sw56/sw57/sw58: speedtest1 across
