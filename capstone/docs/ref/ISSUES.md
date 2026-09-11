@@ -3445,6 +3445,22 @@ result — but it cannot reach the condition and so carries no verdict about thi
 
 ### M-6 — `revoke_region` hands `csrevoke` a non-REV capability whenever the region was never shared with a retaining share `FIXED 2026-09-11 (monitor, QEMU-verified); the release path it unblocks then hits M-7`
 
+> **M-6's GUARD SILENTLY DEPENDS ON AN S-06-ERA SPEC DEVIATION, and the coupling is invisible from
+> either site.** The fix works by asking `cap_type(rev)` — `LCC` selector 1 — before handing the
+> capability to `csrevoke`. That is safe only because the type query is **TOTAL**: it answers for a
+> non-capability instead of raising. Verified in the RTL at two places:
+> `capstone_unit.anvilh:469-472` never names selector 1 among the invalid multiplexings, and
+> `capstone_dyn_unit.anvil:195` conditions the NOT_CAP exception on `zimm != 64'd1`.
+>
+> That totality is **deliberate and a documented spec deviation**, made as the S-06 enabler so
+> software could ask "does this granule hold a capability?" and branch on the answer
+> (`capstone_dyn_unit.anvil:171-193`; the answer for a non-capability is 7, free because the result
+> path already computes `cap_type - 1`). `cap-man-insn.adoc` still needs amending for it.
+>
+> **So if anyone ever restores LCC's type query to the spec as written, M-6's guard begins faulting
+> on exactly the path it was added to protect.** Neither the monitor source nor the RTL says this
+> where the other would see it, which is why it is recorded here.
+
 > **FIXED, ruled "proceed to the pop" by the lead.** `revoke_region` now tests the handle's type on
 > **both** arms and returns a third value — `0` revoked, **`2` nothing to revoke**, `-1` refused —
 > and `ioctl_release_region` treats `2` as permission to pop. Monitor `2c49c41` (`capstone-sbi`) and
