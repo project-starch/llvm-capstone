@@ -64,7 +64,8 @@ from the silicon defects under investigation**.
 > 1. **Both DO-NOT-FLASH branches are clauses of the RETIMING-OFF decision, not a free-standing
 >    flash gate.** `:93-99` reads "*If this design depends on it to meet 50 MHz, disabling it yields
 >    negative slack*", and `:109-114` says "*When off, this is an ACCEPTANCE CRITERION and not
->    optional*". **Retiming is ON** (`run.tcl:87`, `RETIMING true`), so neither branch is in force.
+>    optional*". **Retiming is ON** (`RETIMING true`, `:115` on the branch that carries the rule),
+>    so neither branch is in force.
 > 2. **The text is not present at the flashed revision at all.** `git show
 >    1bfff7776:corev_apu/fpga/scripts/run.tcl | grep -c 'DO NOT FLASH'` → **0**, with `RETIMING true`
 >    at `:87`. Same for the resident `66c4e7517`. The rule commits are 2026-08-18/19 and are not
