@@ -1,6 +1,32 @@
 # Next step
 
-## 0. CURRENT — 2026-09-12. The bitstream is HERE, hash-verified, the flash is AUTHORISED, and the blocker is now a permission gate on the console upload — not a judgement call.
+## 0. CURRENT — 2026-09-12. **THE R-30/R-31 BITSTREAM IS FLASHED AND VERIFIED ON THE BOARD.**
+
+    nv_bitstream_name   caplifive_r30r31_1bfff7776.bit
+    nv_bitstream_sha256 406e12bff4da76b552c8ac152edfd500402e9be546185cd83f7e0e3c7b4dfb30   <- MATCHES
+    previous resident   caplifive_r25r26r27_66c4e7517.bit  (b03bd967…)
+
+Uploaded to the console over `/api/bitstreams/upload` (our driver never wrapped that route; the
+server has always had it, and the documented hazard was misfiling a `.bit` under **images**, which
+posting to the bitstreams route avoids). Then the documented sequence exactly: power on, settle 15 s,
+lock, flash, **power-cycle**, settle, re-read. The board reconfigured and reached its boot banner;
+board released, power off, unlocked.
+
+**Verified by CONTENT, not by the call's return.** `flash_bitstream` returning `done` is not proof —
+two documented traps both yield `None` and read identically to "a non-Capstone design is resident".
+The check that counts is `nv_bitstream_sha256` read back from a fresh `/api/state` **after** the
+power-cycle, and it is an exact match to the artifact's hash.
+
+**EVERY EARLIER BOARD RESULT IS NOW ON A DIFFERENT BITSTREAM.** Timing is byte-identical between the
+two (WNS −12.425, 102,508 failing endpoints, 169,207 LUTs on both), so this is not expected to move
+cycle counts — but "not expected" is a hypothesis, which is exactly what the first post-flash boot's
+control-plus-pair exists to test. Do not carry a pre-flash absolute forward without re-measuring.
+
+**Set `FPGA_BITSTREAM` explicitly on every run from here.** Three drivers still default to stale
+names and the resident-silicon guard will hard-stop otherwise.
+
+### Superseded below: the upload blocker, now cleared
+
 
 **UPDATE 2026-09-12, later. The timing question below is RULED and the blocker moved.** The lead
 authorised the reflash directly. What stops it now is mechanical: the `.bit` is not on the console,
