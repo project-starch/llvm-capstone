@@ -1108,6 +1108,114 @@ instructions spent inside the soft-float routines on each arm of `fp`, `cte` and
 on the baseline, compiler-rt's in the domain. Off-board, and after the pairs are recorded, not
 before: it refines a caveat that is already named, and naming it is what the paper needs first.
 
+## Measurement design for the depth axis (`--size 20`, then `--size 100`)
+
+Written before the runs, because the point of the exercise is a number that goes in a paper and the
+decisions below are the ones that make it defensible or not.
+
+### What makes a measurement valid at all
+
+Five conditions. A run missing any of them is a diagnostic, not a measurement.
+
+1. **Both arms in the SAME boot.** Position is worth 0.016 % (§7j) and run-to-run is 0.027 pp, but a
+   cross-boot pair also crosses whatever else moved between boots — image, module, monitor. Every
+   published ratio so far is within-boot and the depth arms must be too.
+2. **Both arms at the SAME arena size.** The domain reads `SPEEDTEST1_ARENA_SIZE`, the baseline reads
+   `SQLITE_HEAP_SIZE`, and the runner pins the latter to the geometry default — so a pair built the
+   obvious way is 128 MiB against 2 MiB with nothing to catch it. Use `SPEEDTEST1_HEAP`, which moves
+   both, and check the two arms' reported `HEAP` markers agree before believing the ratio.
+3. **The domain hash equals the native oracle** at the same size and define set. At size 100 `main`
+   hashes `23674002 573a4409` against size 1's `111130 1e792c9d` — 213x the result bytes, so unlike
+   `star` and `parsenumber` this hash can actually fire.
+4. **The control arm passes** in the same boot.
+5. **The result is cited by image hash**, never by label — §7f–§7k all are.
+
+### What we report, and at what precision
+
+Primary figure is the **cycle ratio**, domain over baseline, both arms' own `mcycle`. Secondary are
+the instruction ratio and each arm's CPI.
+
+Precision follows the existing rule and does not get relaxed for being a headline number: **three
+decimals within one boot** (0.027 pp, ±0.0003 on a ratio near 1.2) and **two across boots or images**
+(0.171 pp). A size-100 ratio compared against the size-1 ratio is a cross-image comparison and gets
+two.
+
+### The arena size, and the margin that will get requoted
+
+    measured need   125,829,120  (120 MiB; the ladder brackets it between 112 and 120)
+    BUILT           134,217,728  (128 MiB)
+    demonstrated    136,314,880  (130 MiB, boot sw55 -- the largest ever created, not a proven ceiling)
+    reservation     268,435,456  (256 MiB)
+
+**Built at 128, not at the measured 120, and that is deliberate on asymmetric failure costs.** An
+arena that is too small fails with `SQLITE_NOMEM` *hours into a multi-hour arm*; a region that is too
+large fails at `create_region` within the first second. Sizing up costs a startup failure, sizing
+down costs a boot.
+
+**The line to carry, because "it fits with 8 % margin" is true of the need and false of the
+artifact:** 1.5 % under the largest region demonstrated on silicon, inside a 256 MiB reservation,
+with 6.7 % headroom over the measured need.
+
+**And 128 is representable, which 120-by-measurement would not have been.** R-33 (filed 2026-09-12)
+shows that a region whose size is not a multiple of its bounds-encoding granule — `2^(bit_length(N) − 10)`,
+262,144 bytes at this magnitude — has its `end` rounded UP the first time its cursor moves, and the
+hardware then authorises stores into the rounded region. 2^27 is 512 granules exactly and widens by
+zero; so do the two 64 KiB regions. A measured, non-round arena in the 120 MiB band widens past its
+page allocation in 96.8 % of candidate sizes. **Any future arena must be a power of two, or at the
+least a multiple of its granule, and the arena gate should check that too.**
+
+### The asymmetries, now FIVE, each with its direction
+
+The first four are §7k's and are unchanged. The fifth is new at this arena size and must not be
+discovered later:
+
+| # | asymmetry | direction on the ratio |
+|---|---|---|
+| 1 | RVC — baseline has compressed encodings, the capability target has none | **overstates** |
+| 2 | optimisation level | overstates |
+| 3 | soft-float implementation — libgcc against our compiler-rt builtins | unquantified |
+| 4 | the 100 Hz periodic tick — the baseline is ticked, the domain is not | **understates** |
+| 5 | **memory residence at 120 MiB** — the baseline's arena is demand-paged `.bss`, the domain's is a pre-faulted CMA region. The two arms stop being alike in paging behaviour exactly when the arena gets large. | unquantified |
+
+Asymmetry 5 is the price of the region arena and it is worth stating plainly: it buys the depth axis
+and costs one more line of caveat.
+
+### Repetition, and why one pair is defensible here
+
+A size-100 pair is ~5.4 h of board time, so a repeat is another 5.4 h. **One pair is enough, but only
+because the run-to-run bound is already characterised independently** — sw58 gives 0.027 pp over
+fourteen same-image observations. So the ratio is quoted with that bound cited, and **not** with an
+error bar derived from a single measurement, which would be a fabrication.
+
+If a second pair is ever affordable it is worth more than a third testset, because it would turn a
+cited bound into a measured one at this size.
+
+### The `instret` decision, which needs making before the boot rather than after
+
+Domain instruction counts come from a **separate instrumented image** (§7i). Two consequences: it is a
+second image, so it cannot share a boot with the plain one (every SQLite image links at `0x10000`);
+and it is a perturbation of the image, which is R-17's shape.
+
+So at size 100 there are two options and they should be chosen deliberately:
+
+- **Cycles only** — one image, one boot, a cycle ratio with no CPI. Cheapest, and the cycle ratio is
+  the figure the paper wants.
+- **Cycles and instructions** — a second dedicated boot at ~3 h for the domain arm alone.
+
+**Recommended: cycles only at size 100.** The instruction ratio at this size is already predictable
+from emulation, which §7i showed agrees with silicon to ~1e-7, and spending 3 h of board time to
+re-confirm a relationship already established is the trade §7i was run to avoid needing again.
+
+### What would invalidate the result, stated in advance
+
+- A `DROPPED` count above zero — the output was truncated and the run's output is not what it claims.
+- A `HEAP` marker disagreeing between the arms, or either disagreeing with what the host created.
+- The instruction count not near 100x the size-1 count — the workload did not scale as assumed and
+  the ratio is about something else.
+- Any `cause =` line, or a `helper_cssplit` assert (Q-10), in either transcript.
+- `capinit-reload-scan.py` reporting a hit on either image — S-14's reloads are sensitive to the
+  global set and the arena size changes it.
+
 ## Phase 4 — the other comparisons
 
 - **Allocator arms** (memsys5, umm_malloc, the existing revoke-on-free allocator) are the cheapest
