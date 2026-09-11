@@ -4761,7 +4761,49 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
-### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `OPEN — SPEC VIOLATION, direction now determinate; NOT yet reported`
+### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `REFUTED 2026-09-11 — the spec base collides with this core's DEBUG_REQUEST; needs a ruling, not a fix`
+
+> **THE FIX CANNOT SHIP AS WRITTEN. Base 23 puts `UNEXPECTED_OPERAND` — ordinal 1, the most common
+> capability exception in the whole directed suite — on mcause 24, and `riscv_pkg.sv:348` already
+> has `DEBUG_REQUEST = 24`.** The trap logic dispatches on that value: `csr_regfile.sv:2019` gates
+> the path to `mtvec` on `cause != DEBUG_REQUEST`, and `:2208` takes it into debug mode. So after
+> R-24 the exception never reaches the handler at all — it becomes a debug-mode entry.
+>
+> **Matched pair, one variable** (RTL lane). Pre-R-24 at `1bfff7776`: `cincoffset-linear-clear`
+> PASS 686 cycles, `excode-base-audit` PASS 617. On the R-24 tree with expectations decremented to
+> match the new base, those two and six more hang at the 400013 timeout — and the trace is what
+> settles it: the test's own trap handler never retires an instruction while the core spins in the
+> low debug-ROM addresses reading `dscratch0`.
+>
+> **A second defect in the same commit, independent of the first.** The localparam block it edited
+> moved four of the six capability causes and left two behind, so `UNEXPECTED_OPERAND_TYPE` and
+> `INVALID_CAPABLITY` are now both 25, and `ILLEGAL_OPERAND_VALUE` is still 30 where it should be
+> 29. The stated reason for touching that block was to stop its constants misleading the next
+> reader.
+>
+> **What narrows the ruling, and neither is a lane's call.** The collision exists *only* at 24 —
+> every other cause under base 23 lands in 25…29 and hits nothing. And R-24 has no firmware half:
+> the monitor's trap entry dispatches only on the interrupt bit and supervisor-ecall and never
+> branches on 24…30, which is also why nothing on the firmware side would have caught this.
+>
+> **THE FLASH IS UNAFFECTED, verified by content from this side rather than taken.**
+> `git diff 1bfff7776 69658cf16 -- core/cva6.sv core/ex_stage.sv` reads `-64'd24 +64'd23` once per
+> encoder: the bitstream being flashed carries the **old base 24**, so ordinal 1 lands on mcause 25
+> and misses `DEBUG_REQUEST` entirely. `r24-excode-base` is also not an ancestor of `1bfff7776`.
+>
+> **Tests were updated anyway** at `c7b616b6e` on `r24-excode-base`, anchored
+> `backup/r24-tests-collision-2026-09-11`. Full note:
+> `docs/history/11-09-2026_19-30-00_r24-debug-request-collision.md`.
+>
+> **⚠ A RETRACTION THAT GENERALISES PAST R-24.** That commit recorded nine host-sweep timeouts as a
+> harness failure rather than as readings. They were readings, and they were this defect. The
+> standing rule is that a surprising CLEAN result should make you suspect the instrument; this is
+> the same rule run the other way — **a surprising FAILURE earns the same suspicion, and has to be
+> discharged with a control rather than assumed away.** That direction is the likelier one to go
+> wrong in, because a failure that is "obviously the harness" feels like it needs no evidence at
+> all, whereas a suspicious pass at least prompts a check. Two tells were available before any
+> rerun and both were cheap: the failure was **not uniform** (`capsbi-init` kept passing), and the
+> trace showed a **mechanism**, which a harness fault does not have.
 
 > # 2026-09-10 — R-24 IS NOT "THE RTL DEVIATES FROM THE SPEC". THE RTL DISAGREES WITH ITSELF, TODAY, ON THE FLASHED PART.
 >
