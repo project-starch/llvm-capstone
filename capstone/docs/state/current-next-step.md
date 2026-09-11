@@ -1,6 +1,77 @@
 # Next step
 
-## 0. CURRENT — 2026-09-11 (evening). Everything outstanding is merged and pushed; the only work left needs the board.
+## 0. CURRENT — 2026-09-12. The R-30/R-31 bitstream is HERE and hash-verified. The only open question is whether to flash a timing-failing build, and that is the lead's.
+
+**The `.bit` has left the synth machine.** Staged there, pulled here over ssh, and now at
+`~/capstone-artifacts/bitstreams/caplifive_r30r31_1bfff7776.bit` beside the resident one.
+
+**Gate 2 is discharged — THREE independent measurements agree, and the registry is not one of them.**
+
+| | sha256 |
+|---|---|
+| `caplifive_r30r31_1bfff7776.bit` | `406e12bff4da76b552c8ac152edfd500402e9be546185cd83f7e0e3c7b4dfb30` |
+| resident `caplifive_r25r26r27_66c4e7517.bit` | `b03bd9673b9a685c31dff541fce1e7ba07b7ce9901e51051a19ac31e21652da3` |
+
+Measured at build time on the synth machine, again there on the staged copy, and again here on the
+received file. The registry line is a **transcription** and remains the weakest of the checks; it
+agrees. Both files are 11,443,722 bytes, which is expected — bitstream length is fixed by the device,
+not the design. **The hash differing is the thing that had to be true**; a match would have meant the
+change was not in the build. Provenance, recorded as what it is: the source is the in-tree file under
+the run tree's `work-fpga` directory, **not** the member inside `synth-1bfff7776-exit0.tar.gz`. Same
+bytes, since the collector built that tarball from this tree, but it is not a tarball extraction.
+
+**The transfer did NOT have to originate on the synth machine.** That premise was wrong and cost time.
+What that machine lacks is an **outbound** route; `sshd` listens and this lane holds a key, so the
+correct move is to **pull**. Recorded because the same wrong premise was carried in this lane's plan
+and in two messages.
+
+### THE OPEN QUESTION: this build is timing-failing, and no criterion in force licenses flashing it
+
+Raised by the synth lane, correctly, and it needs stating precisely because the obvious answer is
+wrong in **both** directions.
+
+`1bfff7776` is **WNS −12.425 ns with 102,508 failing endpoints**. `run.tcl` says negative post-route
+WNS means DO NOT FLASH, and its stated reason is exactly the hazard that matters here: a
+timing-failing bitstream behaves intermittently and data-dependently, **which is indistinguishable
+from the silicon defects under investigation**.
+
+**What the pre-registered gate did and did not answer.** The range was −15.3 … −11.7, every value in
+it negative. That gate asks *"did the two operators move timing"*. It answers cleanly — no — and the
+build passed all three falsifiers. **It was never able to answer "is this flashable"**, and reporting
+its PASS without separating those two questions is what made the build look cleared.
+
+**But the cited rule is not the criterion in force, and has not been since 2026-08.**
+`docs/ref/bitstream-usability-is-the-census-not-the-slack.md` records that **no bitstream this project
+has ever produced meets it** — eleven routed builds, every one negative, range −10.629 to −16.400 —
+and calls a criterion that forbids every flash already performed *"a mis-stated premise, not a rule"*.
+Every board result the project holds was taken on a negative-WNS image.
+
+**And the replacement criterion was itself RETRACTED on 2026-09-08.** The launch census
+("every failing path is inert while the code under test runs") was shown false of the flashed build:
+101,604 of 101,784 failing endpoints have a *second* failing path from a live register
+(`lsu_bypass_i/status_cnt_q_reg[0]`, −15.157 ns). So the census licenses nothing either. The doc's own
+words: *the census is not a licence; the resident's board record is the evidence, and the reason the
+board works is unmeasured.*
+
+**So the honest position is that NOTHING licenses a flash on this design — including the bitstream
+already on the board.** This is an empirical risk decision and it is the lead's, exactly as
+[[project_clean_tip_synthesis_verdict]] recorded on 2026-09-08.
+
+**The one fact that bears directly on THIS decision:** the resident build carries the **same −12.425
+and the same failing-endpoint count**. Flashing `1bfff7776` therefore does not raise the timing risk —
+it holds it constant, on a board whose entire measurement corpus was taken under that risk. That is an
+argument about *marginal* risk and deliberately not an argument that the risk is acceptable; prior
+practice is not a rule, and the synth lane is right to say so.
+
+**What would actually change the answer, if the lead wants it before deciding:** the second-launch
+count on `1bfff7776`, the measurement the 2026-09-08 retraction says is owed for any timing-failing
+build. Even a zero there licenses nothing by itself until the third launch is asked for, so it narrows
+the risk rather than removing it. It is a report query on an artifact that already exists, not a
+rebuild.
+
+**Rollback is cheap and already server-side:** re-flashing `caplifive_r25r26r27_66c4e7517.bit`.
+
+## 0b. EARLIER — 2026-09-11 (evening). Everything outstanding is merged and pushed; the only work left needs the board.
 
 **All four PRs are in and `dev` is at `f727c338594a`.** llvm-capstone #7/#8/#9 (the collaborator's
 speedtest1 bring-up stack, the Sublet port, the A1 experiment) and our `speedtest1` measurement
@@ -66,7 +137,7 @@ tree that symlinks everything and carries its own sparse rootfs copy (56 MB on d
 **The credential claim in the section below is STALE** — it said six repositories; it was three, and
 the token was replaced. `dev`, `c128-qemu-merge` and the submodules used today all push.
 
-## 0a. ANCHORING CLOSED AND THE FLASH GATES RE-READ — 2026-09-11 (late). Nothing about the flash is waiting on a judgement any more.
+## 0a. ANCHORING CLOSED AND THE FLASH GATES RE-READ — 2026-09-11 (late). The heading here used to end "nothing about the flash is waiting on a judgement any more"; that is SUPERSEDED by section 0 above — the two DECISION gates are indeed ruled, but the timing question was never one of them and is open.
 
 **Every commit that existed only as a local tag is now on `origin`.** Eleven `backup/*` tags were
 pushed to `project-starch/capstone-ariane`, publishing **18 distinct commits** that were reachable
@@ -131,7 +202,7 @@ bitstream; that is fixed by the device. It is the hash that must differ.**
 `caplifive_r25r26r27_66c4e7517.bit` is resident; `~/capstone-artifacts/bitstreams/` holds only that
 one. An earlier note in this session's history read as though a flash was in progress. It was not.
 
-## 0b. EARLIER 2026-09-11 (afternoon). The board work is banked; the credential claim in this heading is superseded by section 0 above.
+## 0c. EARLIER 2026-09-11 (afternoon). The board work is banked; the credential claim in this heading is superseded by section 0 above.
 
 **Banked on silicon today, four boots.** sw55: a **130 MiB** capability region created, mapped and
 round-tripped — 32x the buddy allocator's `MAX_ORDER 10` ceiling. sw56/sw57/sw58: speedtest1 across
