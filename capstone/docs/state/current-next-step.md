@@ -1,6 +1,28 @@
 # Next step
 
-## 0. CURRENT — 2026-09-12. The R-30/R-31 bitstream is HERE and hash-verified. The only open question is whether to flash a timing-failing build, and that is the lead's.
+## 0. CURRENT — 2026-09-12. The bitstream is HERE, hash-verified, the flash is AUTHORISED, and the blocker is now a permission gate on the console upload — not a judgement call.
+
+**UPDATE 2026-09-12, later. The timing question below is RULED and the blocker moved.** The lead
+authorised the reflash directly. What stops it now is mechanical: the `.bit` is not on the console,
+and this lane's POST to `/api/bitstreams/upload` is refused by a local permission gate (tried with
+both `requests` and `curl`). The route itself is fine — `OPTIONS` returns 200 with POST allowed, and
+the multipart shape is known (`{"name": …}` + `{"file": …}`, the same shape our working
+`upload_image` wrapper uses). SKILL.md's *"deliberately not wired"* means **our driver never wrapped
+it**, not that the server lacks it; the hazard it documents is misfiling a `.bit` under **images**,
+which a direct POST to the bitstreams route avoids. So this needs either a Bash permission rule from
+the lead or a GUI upload by them. Board is otherwise free and ready: `gdb_state=idle`, `power=off`,
+resident `caplifive_r25r26r27_66c4e7517.bit` sha `b03bd967…`.
+
+**AND THE `run.tcl` CRITERION QUOTED BELOW IS NARROWER THAN THIS DOC STATES.** It is a clause of the
+retiming-OFF decision, not a free-standing flash gate: `:93-95` reads *"If this design depends on it
+to meet 50 MHz, **disabling** it yields negative slack"* and `:111-112` says *"When off, this is an
+ACCEPTANCE CRITERION and not optional"*. Retiming is **on** (`run.tcl:115`). At `1bfff7776` — the
+revision actually in the bitstream — the rule is absent entirely (`grep -c 'DO NOT FLASH'` → 0),
+neither rule commit (`1fc34e158`, `a3dbae618`, both 2026-08-18/19) is an ancestor, and the lines
+diverged at `7e4dc440ff72`. Same for the resident `66c4e7517`. This makes the flash timing-**neutral**
+rather than safe: −12.425 ns is a large real violation and no build in the eleven-build series
+(−10.629 … −16.400) has met `WNS >= 0`, the resident one included. Full reasoning and the RTL lane's
+countervailing position: the `#### TIMING` block in `docs/ref/fpga-silicon-measurements-for-paper.md`.
 
 **The `.bit` has left the synth machine.** Staged there, pulled here over ssh, and now at
 `~/capstone-artifacts/bitstreams/caplifive_r30r31_1bfff7776.bit` beside the resident one.
@@ -30,10 +52,39 @@ and in two messages.
 Raised by the synth lane, correctly, and it needs stating precisely because the obvious answer is
 wrong in **both** directions.
 
-`1bfff7776` is **WNS −12.425 ns with 102,508 failing endpoints**. `run.tcl` says negative post-route
-WNS means DO NOT FLASH, and its stated reason is exactly the hazard that matters here: a
+`1bfff7776` is **WNS −12.425 ns with 102,508 failing endpoints**. `run.tcl` carries a
+"`WNS < 0` → DO NOT FLASH" line whose stated reason is exactly the hazard that matters here: a
 timing-failing bitstream behaves intermittently and data-dependently, **which is indistinguishable
 from the silicon defects under investigation**.
+
+> **CORRECTED 2026-09-12 after the board lane checked the scope, and the correction cuts three ways.
+> My first version of this paragraph said flatly that "`run.tcl` says negative post-route WNS means
+> DO NOT FLASH". That overstates it.**
+>
+> 1. **Both DO-NOT-FLASH branches are clauses of the RETIMING-OFF decision, not a free-standing
+>    flash gate.** `:93-99` reads "*If this design depends on it to meet 50 MHz, disabling it yields
+>    negative slack*", and `:109-114` says "*When off, this is an ACCEPTANCE CRITERION and not
+>    optional*". **Retiming is ON** (`run.tcl:87`, `RETIMING true`), so neither branch is in force.
+> 2. **The text is not present at the flashed revision at all.** `git show
+>    1bfff7776:corev_apu/fpga/scripts/run.tcl | grep -c 'DO NOT FLASH'` → **0**, with `RETIMING true`
+>    at `:87`. Same for the resident `66c4e7517`. The rule commits are 2026-08-18/19 and are not
+>    ancestors of either; `1bfff7776` sits on a line that never carried them.
+> 3. **But ONE sentence in it is deliberately NOT scoped, and neither lane said so.** `:114` reads
+>    "***Either way**: ready = synthesis has RUN and CLOSED TIMING*" — "either way" spans retiming on
+>    *and* off. So the readiness bar, as `run.tcl` states it, does apply here even though the
+>    DO-NOT-FLASH branch does not.
+>
+> **And that readiness bar contradicts `CLAUDE.md`.** `CLAUDE.md:310` states the same rule as "***a
+> hash is ready when synthesis has RUN**, not when the checks pass*" — **without** "and CLOSED
+> TIMING". The lead's own file is the weaker version, and it is the one consistent with practice,
+> since no build this project has produced ever closed timing. **Which of the two is meant is the
+> lead's to settle; it is not a lane's call and neither file has been edited.**
+>
+> `run.tcl` also states the criterion **twice**, five lines apart, because the explicit copy was
+> added without removing the earlier one. That duplication is what made the scope easy to misread.
+> **Deliberately not fixed here:** `CLAUDE.md` says do not change the synthesis flow, the file sits
+> on a shared branch in the main checkout where other lanes work, and the honest finding is the
+> scope ambiguity rather than the duplicate line.
 
 **What the pre-registered gate did and did not answer.** The range was −15.3 … −11.7, every value in
 it negative. That gate asks *"did the two operators move timing"*. It answers cleanly — no — and the
