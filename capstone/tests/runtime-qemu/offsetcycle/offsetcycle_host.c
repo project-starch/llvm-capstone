@@ -19,12 +19,13 @@
  * IT CANNOT RUN YET. The first release aborts QEMU on
  *     helper_csrevoke: Assertion `rs1_v->val.cap.type == CAP_TYPE_REV' failed
  * because the monitor revokes a region whose handle is still LINEAR when nothing ever shared it.
- * That is M-6 in the registry, found by this program. M-6 IS NOW FIXED and the abort is gone --
- * and this program still does not complete cycle 0, because the release path had a SECOND defect
- * behind the first: after the pop, an access to the region faults into a recovery path that assumes
- * a domain is running, and this program creates none. That is M-7. "Once the guard exists, this
- * runs unchanged" is what an earlier version of this comment predicted, and it was wrong: a path
- * nothing has ever executed should be expected to have more than one defect on it.
+ * That is M-6 in the registry, and it IS NOW FIXED: the abort is gone and cycle 0 completes --
+ * create, query, release, `rc=0`. What this program still cannot do is finish cycle 1, because the
+ * first CREATE after a release faults. That is M-7, and it is NOT in the release path: a one-cycle
+ * build of this same source passes end to end. "Once the guard exists, this runs unchanged" is what
+ * an earlier version of this comment predicted, and it was wrong twice over -- a path nothing has
+ * ever executed carried two defects, and the second one is a cycle further along than the first
+ * reading of it said.
  *
  * SO ITS FAIL PATH IS PROVEN AND ITS PASS PATH IS NOT. Every run so far has aborted at cycle 0, which
  * exercises the create/query half and none of the comparison. When the guard lands, read the three
@@ -49,7 +50,21 @@
 #include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "capstone.h"
 
+/* Overridable so the run can be bisected: -DCYCLES=1 does one create/query/release and stops, which
+   separates "the release itself faults" from "the NEXT create after a release faults". Without that
+   separation the whole thing is one indivisible failure. */
+#ifndef CYCLES
 #define CYCLES 3
+#endif
+/* CYCLES=1 makes the comparison off[0] == off[0], which cannot fail and reports PASS having tested
+   nothing about offsets. That is the single most expensive mistake class on this project, and a
+   bisection arm walked straight into it -- the one-cycle run printed __OFFSETCYCLE_PASSED__ while
+   the two-cycle run of the same build faulted. Refuse it at compile time rather than trusting
+   whoever sets the define to remember. Use CYCLES=1 only to answer "does the release complete",
+   and read that answer from the `released ... rc=` line, not from the verdict. */
+#if CYCLES < 2
+#error "offsetcycle needs CYCLES >= 2: with one cycle the offset comparison cannot fail"
+#endif
 
 int main(int argc, char **argv) {
     unsigned long size = 0;
@@ -93,7 +108,14 @@ int main(int argc, char **argv) {
             printf("__OFFSETCYCLE_WRONG_REGION__\n");
             return 1;
         }
+        /* Markers either side of the release, because the monitor faults somewhere in here and a
+           program that dies between two prints tells you which side of them it died on. Without
+           these the failure is "somewhere after the query", which is one bit. */
+        printf("OFFSETCYCLE cycle=%d releasing id=%lu\n", i, (unsigned long)rid);
+        fflush(stdout);
         int rel = release_region(rid);
+        printf("OFFSETCYCLE cycle=%d released id=%lu rc=%d\n", i, (unsigned long)rid, rel);
+        fflush(stdout);
         if (rel != 0) {                        /* refused or kept: this run measures nothing */
             printf("OFFSETCYCLE RELEASE NOT FREED cycle=%d rc=%d -- run is VOID\n", i, rel);
             printf("BASELINE-PROBE offsetcycle_leak = -1\n");

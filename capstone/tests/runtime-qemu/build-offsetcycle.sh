@@ -10,6 +10,6 @@ GUEST_CC=${GUEST_CC:-$BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-g
 LIBCAPSTONE_C="$BUILDROOT_DIR/package/modcapstone/userspace/lib/libcapstone.c"
 MODCAPSTONE_INCLUDE="$BUILDROOT_DIR/package/modcapstone/include"
 mkdir -p "$OUT_DIR"
-"$GUEST_CC" -O2 -I"$MODCAPSTONE_INCLUDE" -o "$OUT_DIR/offsetcycle.user" \
+"$GUEST_CC" -O2 ${OFFSETCYCLE_DEFS:-} -I"$MODCAPSTONE_INCLUDE" -o "$OUT_DIR/offsetcycle.user" \
   "$SCRIPT_DIR/offsetcycle/offsetcycle_host.c" "$LIBCAPSTONE_C"
 printf 'Built %s\n' "$OUT_DIR/offsetcycle.user"

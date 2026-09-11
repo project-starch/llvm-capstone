@@ -3366,11 +3366,28 @@ it, and that is a behavioural change to the region lifecycle rather than a guard
 it should know the verification hangs on the ruling and not on the code.
 
 
-### M-7 — after a region is popped, an access to it faults into a recovery path that assumes a domain is running `OPEN — found 2026-09-11 by M-6's fix; mechanism NOT established`
+### M-7 — the first `create_region` AFTER a `release_region` faults; the release itself is clean `OPEN — localised 2026-09-11 by bisection; mechanism NOT established`
 
 **Newly reachable, not newly created.** `release_region` has exactly one caller in the tree — the
 `offsetcycle` probe added the same day — so the pop path had never executed. M-6 was the first defect
 on it; this is the second, and it is what the probe now hits instead.
+
+> **⚠ LOCALISED BY BISECTION, and the first filing of this entry put it in the wrong place.** It said
+> "after the pop, an access to the region faults", which implied the release path. **The release path
+> is clean.** A build of the same source with `-DCYCLES=1` runs create → query → release end to end
+> and reports `released id=9 rc=0`; a `-DCYCLES=2` build of that same source completes cycle 0
+> identically and then faults in **cycle 1's `create_region`**. So the defect is in creating a region
+> after one has been released, not in releasing one.
+>
+> That also means **M-6's fix is verified end to end** — the whole release path, revoke returning 2
+> through pop and `dma_free_pages`, completes and returns 0.
+>
+> **`pre_mmap_offset` is STILL unproven, and the one-cycle PASS is exactly why to be careful here.**
+> With `CYCLES=1` the probe's comparison is `off[0] == off[0]`, which cannot fail, and it duly
+> printed `__OFFSETCYCLE_PASSED__` and `leak_bytes=0` having tested nothing about offsets. The
+> two-cycle run is the first that could fail, and it never reaches cycle 1's query — so `off[0]` is
+> known and `off[1]` has never been observed. The probe now **refuses to compile** below two cycles
+> (`#error`, negative-tested in both directions) so that a vacuous pass cannot be produced again.
 
 **What is established, from one QEMU run:**
 
@@ -3396,14 +3413,24 @@ than inferred.
    arm (`:2060-2068` on the QEMU target) calls `fault_return_from_domain` unconditionally. That is
    correct for a faulting domain and invalid otherwise, and it converts a diagnosable fault into a
    second fault in the handler.
-2. **Why the access was unmapped at all is NOT established.** A candidate worth checking first:
-   `pop_region` clears `cpmp_region[region_cpmp[region_i]]` and `region_cpmp[region_i]` but does not
-   release the CPMP hardware entry, so the bookkeeping and the hardware disagree after a pop. **This
-   is a hypothesis from reading `pop_region`, not a measurement — it has not been tested and should
-   not be cited as the cause.**
+2. **Why the access was unmapped at all is NOT established**, and the bisection narrows where to
+   look without settling it. The fault happens during the create that FOLLOWS a release, at the
+   address the previous region occupied (`0x101c00000`), with `region_n` back down to 9. Two
+   candidates, neither tested:
+   - `pop_region` clears `cpmp_region[region_cpmp[region_i]]` and `region_cpmp[region_i]` but does
+     not release the CPMP hardware entry, so bookkeeping and hardware disagree after a pop;
+   - the popped range is never returned to the parent it was SPLIT out of, so the next
+     `create_region` over the same physical pages — which the kernel hands back, having just freed
+     them — finds no live parent covering it, and `split_out_cap`'s UNINIT reclaim (`:706`,
+     `C_DO_RECLAIM`) **writes** to a slot whose memory is gone.
 
-**N = 1.** One QEMU run. Silicon behaviour unknown and not inferred: the FPGA arm of
-`handle_exception` is a different `#ifdef` branch with its own reporting.
+   **Both are readings of the code, not measurements, and neither should be cited as the cause.**
+   The bisection makes the second more attractive, because it explains why the fault needs a
+   *subsequent create* rather than firing during the release.
+
+**N = 3 QEMU runs** — the original, and the matched `CYCLES=1` / `CYCLES=2` pair that localised it.
+Silicon behaviour unknown and not inferred: the FPGA arm of `handle_exception` is a different
+`#ifdef` branch with its own reporting.
 
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED; the title is too broad, see the 2026-09-11 box`
