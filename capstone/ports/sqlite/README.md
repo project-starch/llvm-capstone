@@ -101,6 +101,77 @@ Current result: **green** — the domain runs the base 3-row workload and the
 extended workload, emitting `__CAPSTONE_SQLITE_EXTENDED_PASSED__` then
 `__CAPSTONE_SQLITE_MEMORY_PASSED__`.
 
+## speedtest1 and the Sublet port
+
+`run-sqlite-speedtest1.sh` runs SQLite's own benchmark in a domain, `--memdb --size 1`,
+all 32 tests, with the lookaside pool on (`SQLITE_LOOKASIDE=1200,40`) and memsys5 as the
+allocator under it, and cuts SQLite's own statistics from the payload. `speedtest1_domain.c`
+includes `test/speedtest1.c` from the SQLite source tree unchanged under another `main`, with
+stdio on the hostcall payload, fixed arguments, and the double-to-int64 mapping `sqlite3.h`
+applies without floating point. Three instruments stay: the host's `--tail` mode prints the
+payload while the domain runs, with a heartbeat; `exit()` returns to the host from anywhere,
+so a fatal error's message is read instead of parking the domain in `abort()`;
+`-DSPEEDTEST1_STOP_AT=n` returns at milestone n.
+
+Two seams are the runner's, what goes in them is an experiment's: `SPEEDTEST1_HOOK=1` with
+`SPEEDTEST1_HOOK_SRC` and `SQLITE_HOOK_PATCH` links an instrument in beside the domain (it
+defines `speedtest1_hook_table_bytes`, `speedtest1_hook_install` and
+`speedtest1_hook_report`, and gets a table carved beside the arena) and patches its calls
+into copies of the sources; `SPEEDTEST1_PROBE=n` with `SPEEDTEST1_PROBE_SRC` hands the run to
+`speedtest1_probe` instead of the benchmark. The domain exports its two payload writers for
+whatever is linked in. A1's instrument and its six probes are
+`experiments/a1-sqlite-reuse/`, whose `run.sh` sets all of it.
+
+`SPEEDTEST1_SUBLET=1` runs the same benchmark on the Sublet port of both allocators. Two
+different ports live in this directory and are kept apart on purpose: everything else here
+makes SQLite compile and run on Capstone, unprotected; `sublet/` makes it protected, applied on
+top of that and counted separately, because the paper's A7 counts exactly those lines.
+
+| File | What it is |
+|---|---|
+| `sublet/` | the Sublet port: `sublet.h`, the primitives as operations on capability slots (split, take, give, handle, carve, move; no linear capability ever sits in a C variable), and `sublet-3530300.patch`, 28 hunks against the sed-adapted amalgamation, each classed in its header. Its README carries the recipe and the bookkeeping |
+| `speedtest1_domain.c` | the adapter: freestanding stdio, the exit that returns, the arena; takes memsys5's heap or the port's pool from the host's region (`sqlite3_sublet_grant`) and memsys5's tables and an instrument's table from a second, carves them from the stack region when the host lends none, prints the primitive counts |
+| `sqlite_host.c --tail [--pool <bytes> \| --arena <bytes>] [--tables <bytes>]` | creates the regions and shares them with a handle the monitor keeps, `--pool` non-linear (REV_DEFAULT), `--arena` linear (REV_BORROWED), and releases them after the run |
+
+Under the port memsys5's pool is one linear capability carved into blocks, one revocation
+node each; a split takes a handle senior to both halves first, so a merge is one revoke;
+every hand-out is mrev and delin, every free a revoke. The lookaside's block comes from
+memsys5 linear (`sqlite3MallocLinear`), is carved into slots the same way, and dies with
+one revoke when memsys5 frees it. The allocators' policies are unchanged: an instrument's
+per-test profile under the port is the unprotected build's to the allocation, plus one
+memsys5 allocation per connection for the lookaside's side table.
+
+Two things the emulator hides, found in review: its revoke leaves an uninitialised
+region's cursor at the end so one `init` reclaims it, where the specification wants the
+region written through first (a merge would cost a write of the block on such hardware);
+and its stores of linear capabilities do not null the source register, so a helper that
+reads a register after storing it works here and not there (`sublet_take_linear` reads
+first). The first has since arrived in the emulator: the merge line's Q-07 (capstone-qemu
+72fb56be86) moves the cursor to the base on a revoke and makes `init` trap, and under it the
+port halts at its first merge with cause 29 until it writes the block through before `init`.
+The passes ran on the pre-Q-07 diagnostic build. The emulator's node pool is sized at start
+(`CAPSTONE_REV_NODES`, the runner sets eight million) and reuses no node; a run at `--size 1`
+takes 43417 nodes, at `--size 100` 3525357.
+
+The allocators' memory comes from the host as regions, so the benchmark's size is not
+bounded by the domain's stack region. `SPEEDTEST1_POOL` is memsys5's heap in the unprotected
+build (`--pool`, non-linear, control bytes inside, POOL/65 atoms of 64 bytes); the port's
+pool is the same atoms times 64 (`--arena`, linear under a handle the monitor keeps); a
+tables region (`--tables`) holds memsys5's tables under the port and what sits beside the
+pool. Above 4 MiB a region comes from the kernel's CMA area (`cma=1G` on
+the guest's command line, which the runner passes), and after the run the host gives both
+back with `release_region`. For `--size 100` set `SPEEDTEST1_POOL=136314880` (2^21 atoms,
+130 MiB) and `SPEEDTEST1_ARGS` accordingly; the run takes about seven minutes on QEMU with
+the tag map indexed (capstone-qemu branch `diag/domain-runs`), over an hour without. Without
+host regions, `-DSPEEDTEST1_STACK_ARENA`
+carves 2 MiB from the stack region's low end, which fits `--size 1`.
+
+The plain benchmark at `--size 1` runs on the QEMU `dev` pins. A run with an instrument
+linked in has needed the diagnostic QEMU's `CAPSTONE_GP_NONLIN=1` (capstone-qemu branch
+`diag/domain-runs`): with the default gp fabrication every code capability is linear after
+the first return to the entry frame, and the compiler's `movc` copy of a live one then nulls
+its source, which halted the domain in `sqlite3RunVacuum`.
+
 ### Resolved blocker history (kept for reference)
 
 Init once aborted before any SQL executed, at the built-in-function registration

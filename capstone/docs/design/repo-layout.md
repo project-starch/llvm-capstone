@@ -2,23 +2,32 @@
 
 ## The rule, in one sentence
 
-**What the build reads goes in the port. What is a measurement goes in the corpus. What is
-a narrative goes in `docs/`.**
+**What the build reads goes in the port. What is a measurement goes in the corpus. What an
+experiment links into a domain and records goes in `experiments/`. What is a narrative goes in
+`docs/`.**
 
-## The three homes
+## The four homes
 
 | Directory | Holds | Answers |
 |---|---|---|
 | `capstone/ports/<program>/` | `fetch-*.sh`, `patches/`, `port/`, `adapted/`, `tools/`, `build-*-silicon.sh`, `census-*.sh`, README | does this software build and run under capabilities |
 | `capstone/bug-corpora/<program>/` | one directory per case, each with its own `run.sh` and recorded result | what does the hardware fail to catch |
 | `capstone/benchmarks/` | beebs, coremark, rv8 | how much does it cost |
+| `capstone/experiments/<experiment>/` | `run.sh`, the instrument or probes it links into a port's domain, `results/<stamp>/` raw | what did we measure, for the paper |
 
 `benchmarks/` used to hold both kinds. For five of its eight entries "benchmark" was the
 wrong word: they measure no time, they answer compatibility, and they are all shaped alike
 inside. Splitting them was cheapest while only `sqlite` had to move; with the MicroPython,
 JerryScript, WAMR and mruby ports in flight it would have cost five times as much.
 
-## Two things that are decided, so nobody re-derives them
+## Three things that are decided, so nobody re-derives them
+
+**A protection port lives apart from the compatibility port.** A port directory answers
+whether the program runs under capabilities; the Sublet port of its allocators answers what
+the discipline costs it, and the paper counts those lines. So `ports/<program>/sublet/` holds
+the primitives and the patch that protect, applied on top only when asked for, and nothing in
+`adapted/`, `patches/` or `port/` is Sublet's. The unprotected build must never read a file
+from `sublet/`.
 
 **`capstone/tests/capstone-test-env.sh` does not move. 341 files reference it.** It is the
 one path in this repository that everything sources, and a tidy-up that relocates it for
@@ -26,7 +35,9 @@ symmetry costs more than every other move here put together.
 
 **Case material never lives inside a port.** A port directory that grows a `cases/` or
 `cve-repros/` is the thing this layout exists to prevent: it makes "does it run" and "what
-did we measure" share a branch, a review and a diff.
+did we measure" share a branch, a review and a diff. The same holds for an instrument or a
+probe: the port offers the seam (`SPEEDTEST1_HOOK_SRC`, `SPEEDTEST1_PROBE_SRC` in the SQLite
+runner), the experiment supplies what goes in it.
 
 ## Moving anything
 

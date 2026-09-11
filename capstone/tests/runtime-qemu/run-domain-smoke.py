@@ -39,11 +39,22 @@ def env_float_or_default(name: str, default: float) -> float:
 
 
 class NormalizedLogWriter:
+    """Turns the console's line endings into "\n". pexpect hands over whatever one
+    read returned, so a "\r\n" can arrive split: the "\r" at the end of one chunk,
+    the "\n" at the start of the next. Normalising each chunk on its own then
+    writes two newlines for one line end, a blank line at a random place in the
+    log. The trailing "\r"s are held back until the next chunk shows what follows
+    them. flush() does not emit them: pexpect flushes after every write."""
+
     def __init__(self, sink):
         self.sink = sink
+        self.held = ""
 
     def write(self, data: str) -> None:
-        normalized = data.replace("\r\r\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
+        data = self.held + data
+        kept = data.rstrip("\r")
+        self.held = data[len(kept):]
+        normalized = kept.replace("\r\r\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
         self.sink.write(normalized)
 
     def flush(self) -> None:

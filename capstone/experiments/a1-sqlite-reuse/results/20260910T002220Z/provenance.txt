@@ -1,0 +1,11 @@
+date            2026-09-10T00:22:57Z
+platform        Capstone domain on QEMU virt-capstone, purecap image (capstone64-unknown-elf), freestanding
+sqlite          3.53.3 (sqlite-src-3530300), the platform port in llvm-capstone capstone/ports/sqlite
+speedtest1      --memdb --size 1 --testset main --verify --stats
+arms            memsys5: SQLITE_CONFIG_HEAP over a 1441792-byte arena carved from the stack region, lookaside 1200,40 as shipped, SQLITE_OMIT_FLOATING_POINT, -O1
+reps            3, bit-identical
+image           98e2d0c8c665db2cfb152c6b88e3cab2016ddc9ef99eb2ec495de78625a2a195  speedtest1_capstone.dom
+llvm-capstone   branch sublet-eval 9bc98b31f5bc, plus the log writer fix in capstone/tests/runtime-qemu/run-domain-smoke.py
+qemu            capstone-qemu branch sublet-diag 1d7f203621, CAPSTONE_GP_NONLIN=1
+patch           d6b3832447c3295e31d097e351d2a2e2b97c0270487d0c4080551562678efaa1  capstone/ports/sqlite/adapted/hook-3530300.patch
+hook            a1_memhook.c, two levels from inside the domain, the bpftrace text format of memhook.c

@@ -35,7 +35,7 @@ mkdir -p "$OUT_DIR"
 # is the backstop, the single assignment is the mechanism.
 read -r -a _host_defs <<< "${HOST_EXTRA_DEFS:-}"
 
-"$GUEST_CC" -O2 -I"$SCRIPT_DIR" "${_host_defs[@]}" \
+"$GUEST_CC" -O2 -pthread -I"$SCRIPT_DIR" "${_host_defs[@]}" \
   -o "$OUT_HOST" \
   "$HOST_SRC" \
   "$LIBCAPSTONE_C"

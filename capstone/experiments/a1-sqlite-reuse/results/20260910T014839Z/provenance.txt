@@ -1,0 +1,17 @@
+date            2026-09-10T01:48:56Z
+platform        Capstone domain on QEMU virt-capstone, purecap image (capstone64-unknown-elf), freestanding
+sqlite          3.53.3 (sqlite-src-3530300), the platform port in llvm-capstone capstone/ports/sqlite
+speedtest1      --memdb --size 1 --testset main --verify --stats
+arms            memsys5: unprotected, SQLITE_CONFIG_HEAP over a 1441792-byte carve of the stack region (22181 atoms of 64 bytes), lookaside 1200,40 as shipped
+                sublet: the port of both allocators (adapted/sublet-3530300.patch), the pool a 1419584-byte host region (the same 22181 atoms), memsys5's tables in the stack region
+reps            3 per arm, bit-identical within each arm
+images          c9a4ba8ddb5f30ce9b38dee6aa844018b494edeb1cb381366c7719e4ce2b3edc  memsys5.dom
+                b201ec9db8bd1fa45abdc144658365eec6911879c940b4007e8e4c32d7cb1703  sublet.dom
+llvm-capstone   branch sublet-eval c83197436897 (the port 9a35ed0b4834 and the review's fixes); its README, section speedtest1 and the Sublet port
+qemu            capstone-qemu branch sublet-diag 1d7f203621, CAPSTONE_GP_NONLIN=1
+port            0e84409953fb986c7369433902db3b26d09b876eef40778c376b0c4f32d71263  capstone/ports/sqlite/adapted/sublet-3530300.patch
+primitives      f0a33bc558f28ba7821c039442dcd78f3fd42f71779b7f96f48678200b135792  capstone/ports/sqlite/adapted/sublet.h
+hook            a1_memhook.c, two levels from inside the domain; adapted/hook-3530300.patch (memsys5 arm), adapted/hook-3530300-sublet.patch (sublet arm)
+counters        sublet arm: split=5508 mrev=37909 delin=32575 revoke=37909 init=5334 (the domain's last line)
+probes          SPEEDTEST1_UAF=1 (a column name read after sqlite3_finalize) and =2 (a memsys5 block read after sqlite3_free): under sublet the read halts the domain, cause 24, at the lbu of speedtest1_domain.c:297 and :313 (fault-locate.py); the memsys5 arm reads through and prints NOTRAP
+review          2026-09-10, an independent read of the port against the emulator and the specification; its findings and the limits they name are in capstone/README.md

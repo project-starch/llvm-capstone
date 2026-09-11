@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "sqlite_hostcall.h"
@@ -66,6 +67,39 @@ static int fail_cleanup(const char *message, unsigned long value) {
   return 1;
 }
 
+static int tail_payload;
+
+struct tail_state {
+  volatile struct sqlite_hostcall_v0 *metadata;
+  const char *payload;
+  unsigned long printed;
+  int stop;
+};
+
+static void tail_flush(struct tail_state *t) {
+  unsigned long length = t->metadata->length;
+  if (length > SQLITE_HC_REGION_SIZE)
+    return;
+  if (length > t->printed) {
+    (void)write(STDOUT_FILENO, t->payload + t->printed, (size_t)(length - t->printed));
+    t->printed = length;
+  }
+}
+
+static void *tail_main(void *arg) {
+  struct tail_state *t = arg;
+  unsigned ticks = 0;
+  while (!__atomic_load_n(&t->stop, __ATOMIC_ACQUIRE)) {
+    tail_flush(t);
+    /* a heartbeat every ten seconds: its absence says the host is not being scheduled while
+       the domain holds the core, which is a different finding from "the domain wrote nothing" */
+    if (++ticks % 20 == 0)
+      mark_u("SQ: tail alive, payload bytes=", t->metadata->length);
+    usleep(500000);
+  }
+  return NULL;
+}
+
 int main(int argc, char **argv) {
   int feature_probe = 0;   /* --feature-probe: ask the domain which restored APIs it carries */
   /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
@@ -73,6 +107,10 @@ int main(int argc, char **argv) {
      stage-0 selector -- a run that looks like a staged probe and tests nothing. */
   const char *slt_path = 0;
   unsigned long clamp_n = 0;
+  unsigned long arena_bytes = 0;  /* --arena: region 2, the port's pool, linear */
+  unsigned long pool_bytes = 0;   /* --pool: region 2, memsys5's heap, non-linear */
+  unsigned long tables_bytes = 0; /* --tables: region 3, the tables beside the pool */
+  region_id_t pool_region = (region_id_t)-1, tables_region = (region_id_t)-1;
   if (argc == 6 && !strcmp(argv[2], "--slt") && !strcmp(argv[4], "--clamp")) {
     slt_path = argv[3];
     clamp_n = strtoul(argv[5], NULL, 0);
@@ -80,8 +118,35 @@ int main(int argc, char **argv) {
     feature_probe = 1;
   } else if (argc == 4 && !strcmp(argv[2], "--slt")) {
     slt_path = argv[3];
+  } else if (argc == 3 && !strcmp(argv[2], "--tail")) {
+    tail_payload = 1;
+  } else if (argc >= 5 && argc % 2 == 1 && !strcmp(argv[2], "--tail")) {
+    /* --tail with the allocators' regions: --pool <bytes> (memsys5's heap, non-linear) or
+       --arena <bytes> (the port's grant, linear), and --tables <bytes> for what sits beside */
+    int i;
+    tail_payload = 1;
+    for (i = 3; i + 1 < argc; i += 2) {
+      if (!strcmp(argv[i], "--arena"))
+        arena_bytes = strtoul(argv[i + 1], NULL, 0);
+      else if (!strcmp(argv[i], "--pool"))
+        pool_bytes = strtoul(argv[i + 1], NULL, 0);
+      else if (!strcmp(argv[i], "--tables"))
+        tables_bytes = strtoul(argv[i + 1], NULL, 0);
+      else {
+        fprintf(stderr, "unknown option %s\n", argv[i]);
+        return 2;
+      }
+    }
+    if (arena_bytes && pool_bytes) {
+      fprintf(stderr, "--arena and --pool exclude each other\n");
+      return 2;
+    }
+    if (tables_bytes && !arena_bytes && !pool_bytes) {
+      fprintf(stderr, "--tables needs --pool or --arena\n");
+      return 2;
+    }
   } else if (argc != 2 && argc != 3) {
-    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
+    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage|--tail [--pool|--arena <bytes>] [--tables <bytes>]]\n"
                     "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n"
                     "       %s <sqlite-domain.dom> --feature-probe\n", argv[0], argv[0], argv[0]);
     return 2;
@@ -95,7 +160,7 @@ int main(int argc, char **argv) {
      stage, so every existing invocation behaves exactly as before. */
   unsigned long probe_stage = 0;
   int have_probe_stage = 0;
-  if (argc == 3) {
+  if (argc == 3 && !tail_payload) {
     probe_stage = strtoul(argv[2], NULL, 0);
     have_probe_stage = 1;
   }
@@ -286,14 +351,58 @@ int main(int argc, char **argv) {
   shared_region_annotated(domain, payload_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
+  /* The allocators' memory, regions above the payload's, never touched from here: once the
+     domain has revoked a lineage in a region, a host access to those pages aborts QEMU
+     (sqlite_host_row3.c). Both are shared with a handle the monitor keeps (REV_BORROWED for
+     the linear pool of the port, REV_DEFAULT for the non-linear ones), so that after the run
+     release_region() can revoke them, pop them and give the memory back. Above 4 MiB a region
+     comes from the kernel's CMA area (modcapstone create_region; cma= on the command line). */
+  if (arena_bytes || pool_bytes) {
+    mark("SQ: F2/mkregion3\n");
+    pool_region = create_region(arena_bytes ? arena_bytes : pool_bytes);
+    mark_u("SQ: r3=", (unsigned long)pool_region);
+    if ((long)pool_region < 0)
+      return fail_cleanup("create_region for the pool failed (a region above 4 MiB needs cma=)", arena_bytes ? arena_bytes : pool_bytes);
+    shared_region_annotated(domain, pool_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
+                            arena_bytes ? SQLITE_HC_ANNOTATION_REV_BORROWED
+                                        : SQLITE_HC_ANNOTATION_REV_DEFAULT);
+    mark_u(arena_bytes ? "SQ: arena=" : "SQ: pool=", arena_bytes ? arena_bytes : pool_bytes);
+  }
+  if (tables_bytes) {
+    mark("SQ: F3/mkregion4\n");
+    tables_region = create_region(tables_bytes);
+    mark_u("SQ: r4=", (unsigned long)tables_region);
+    if ((long)tables_region < 0)
+      return fail_cleanup("create_region for the tables failed", tables_bytes);
+    shared_region_annotated(domain, tables_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
+                            SQLITE_HC_ANNOTATION_REV_DEFAULT);
+    mark_u("SQ: tables=", tables_bytes);
+  }
 
   mark("SQ: G/enter\n");
+  /* --tail: a thread prints the payload WHILE the domain runs, from where it left off, every
+     half second. A domain that never returns (a wedge, a fatal error parked in abort()) then
+     still shows everything it wrote up to that point, and a long benchmark shows its
+     progress. Both regions are shared with the domain, so the length it publishes and the
+     bytes behind it are visible here as they land. */
+  struct tail_state tail = {metadata, payload, 0, 0};
+  pthread_t tail_thread;
+  int tail_started = tail_payload && pthread_create(&tail_thread, NULL, tail_main, &tail) == 0;
   unsigned long result = call_dom(domain);
+  if (tail_started) {
+    __atomic_store_n(&tail.stop, 1, __ATOMIC_RELEASE);
+    pthread_join(tail_thread, NULL);
+  }
   mark("SQ: H/return\n");
-  if (metadata->length > 0 && metadata->length <= SQLITE_HC_REGION_SIZE) {
-    (void)write(STDOUT_FILENO, payload, (size_t)metadata->length);
+  if (metadata->length > tail.printed && metadata->length <= SQLITE_HC_REGION_SIZE) {
+    (void)write(STDOUT_FILENO, payload + tail.printed, (size_t)(metadata->length - tail.printed));
     fflush(stdout);
   }
+  /* the allocators' regions go back, newest first: revoked in the monitor, popped, freed */
+  if ((long)tables_region >= 0)
+    mark_u("SQ: released tables rc=", (unsigned long)release_region(tables_region));
+  if ((long)pool_region >= 0)
+    mark_u("SQ: released pool rc=", (unsigned long)release_region(pool_region));
   /* AN SLT RUN MUST RETURN ITS OWN MARKER, AND NOTHING ELSE COUNTS -- including DONE.
      DONE here would mean the SLT dispatch never fired and the ordinary workload ran
      instead, which prints its own markers and would otherwise look like a success. The

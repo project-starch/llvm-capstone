@@ -89,6 +89,25 @@ grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_
 grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
 grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 
+# An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
+# calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed
+# there. -F0: a source the patch was not written for is refused, not patched somewhere near.
+# SQLITE_SUBLET_PATCH: the Sublet port of memsys5 and lookaside (sublet/sublet-3530300.patch),
+# a diff against the file the sed above produces, applied to the copy, before the instrument.
+# The port's primitives (sublet.h) sit beside the patch; that directory joins the include path
+# only here, so the unprotected build never sees a Sublet file.
+SUBLET_FLAGS=()
+if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
+  SUBLET_FLAGS=(-I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+fi
+if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"
+fi
+
+# SQLITE_LOOKASIDE=slots-size,count (default 0,0: the pool off) selects SQLite's compiled-in
+# lookaside default; the allocator chain lookaside > memsys5 that the paper measures needs
+# 1200,40, the shipped default (run-sqlite-speedtest1.sh sets it).
 SQLITE_DEFINES=(
   -DNDEBUG
   -DSQLITE_OS_OTHER=1
@@ -115,7 +134,7 @@ SQLITE_DEFINES=(
   -DSQLITE_UNTESTABLE=1
   -DSQLITE_ZERO_MALLOC=1
   -DSQLITE_ENABLE_MEMSYS5=1
-  -DSQLITE_DEFAULT_LOOKASIDE=0,0
+  -DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}
   -DYYSTACKDEPTH=1000
 )
 
@@ -171,12 +190,17 @@ COMMON_FLAGS=(
   -ffunction-sections
   -fdata-sections
   -include "$ADAPTED_DIR/capstone_sqlite_libc.h"
+  # host-independent: the seven glibc headers the amalgamation includes resolve here, never in
+  # the host's /usr/include (see adapted/stubinc/README, 2026-09-09)
+  -I"$ADAPTED_DIR/stubinc"
   -I"$ADAPTED_DIR"
   -I"$SCRIPT_DIR"
+  "${SUBLET_FLAGS[@]}"
   -I"$VFS_SKELETON_DIR"
   -I"$SQLITE_SRC_DIR"
   "${SQLITE_DEFINES[@]}"
   "${SQLITE_RESTORE[@]}"      # after SQLITE_DEFINES: -U must win over the -D above
+  ${SQLITE_CFLAGS_EXTRA:-}
 )
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
@@ -201,8 +225,16 @@ COMMON_FLAGS=(
 "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS \
   -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"
 
+# DOMAIN_EXTRA_SRC: further sources of the domain program, compiled like it and linked
+EXTRA_OBJECTS=()
+for src in ${DOMAIN_EXTRA_SRC:-}; do
+  object="$OBJ_DIR/$(basename "${src%.c}").o"
+  "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS -c "$src" -o "$object"
+  EXTRA_OBJECTS+=("$object")
+done
+
 BUILTIN_OBJECTS=()
-for builtin in adddf3 comparedf2 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
+for builtin in adddf3 comparedf2 divdf3 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
                floatdidf floatsidf floatunsidf fp_mode muldf3 subdf3; do
   object="$OBJ_DIR/$builtin.o"
   "$CLANG" -target capstone64-unknown-elf \
@@ -242,6 +274,7 @@ _segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|Virtual
   "$OBJ_DIR/sqlite_vfs.o" \
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
   "${BUILTIN_OBJECTS[@]}"
 _before=$(_segs)
 
@@ -258,6 +291,7 @@ _before=$(_segs)
   "$OBJ_DIR/sqlite_vfs.o" \
   "$OBJ_DIR/sqlite_os.o" \
   "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
   "${BUILTIN_OBJECTS[@]}" \
   "$OBJ_DIR/domreq.o"
 

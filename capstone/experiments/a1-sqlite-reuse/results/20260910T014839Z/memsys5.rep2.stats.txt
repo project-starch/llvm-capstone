@@ -1,0 +1,16 @@
+-- Speedtest1 for SQLite 3.53.3 2026-06-26 20:14:12 d4c0e51e4aeb96955b99185ab9cd
+-- Lookaside Slots Used:        1 (max 154)
+-- Successful lookasides:       25015
+-- Lookaside size faults:       157
+-- Lookaside OOM faults:        0
+-- Pager Heap Usage:            315200 bytes
+-- Page cache hits:             31797
+-- Page cache misses:           0
+-- Page cache writes:           0
+-- Schema Heap Usage:           16448 bytes
+-- Statement Heap Usage:        0 bytes
+-- Memory Used (bytes):         0 (max 0)
+-- Outstanding Allocations:     0 (max 0)
+-- Pcache Overflow Bytes:       0 (max 995328)
+-- Largest Allocation:          0 bytes
+-- Largest Pcache Allocation:   4592 bytes

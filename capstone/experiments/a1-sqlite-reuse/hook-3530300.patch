@@ -1,0 +1,154 @@
+# A1's instrument in the Capstone domain: the same thirty lines as the paper's
+# x86/hook-3420000.patch, at the line numbers of SQLite 3.53.3 as
+# build-sqlite-capstone.sh patches it (sqlite3-capstone.c) and of the source
+# tree's test/speedtest1.c.  Calls into memhook.c at the allocator paths:
+# the eight lookaside slot paths and the two escapes in sqlite3DbMallocRawNN,
+# sqlite3DbFreeNN and sqlite3DbNNFreeNN, the memsys5 pair every memsys5 method
+# funnels through, and the two test boundaries of speedtest1.  Nothing else
+# changes.  Derived 2026-09-09 from the x86 patch with fuzz, every hunk read.
+#
+# Apply with patch -F0 -p1 to the copies in the build directory, never to the
+# sources.
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -29626,6 +29626,13 @@
+ ** routine so there is never any chance that two or more
+ ** threads can be in this routine at the same time.
+ */
++void a1_memsys5_realloc(void);
++void a1_memsys5_free(void*);
++void *a1_memsys5_alloc(void*, size_t);
++void a1_lookaside_escape(void);
++void a1_lookaside_free(void*);
++void *a1_lookaside_alloc(void*, size_t);
++/* A1: the levels recorded from inside, see memhook.c */
+ static void *memsys5MallocUnsafe(int nByte){
+   int i;           /* Index of a mem5.aPool[] slot */
+   int iBin;        /* Index into mem5.aiFreelist[] */
+@@ -29690,13 +29697,14 @@
+ #endif
+ 
+   /* Return a pointer to the allocated memory. */
+-  return (void*)&mem5.zPool[i*mem5.szAtom];
++  return a1_memsys5_alloc((void*)&mem5.zPool[i*mem5.szAtom], (size_t)nByte);
+ }
+ 
+ /*
+ ** Free an outstanding memory allocation.
+ */
+ static void memsys5FreeUnsafe(void *pOld){
++  a1_memsys5_free(pOld);
+   u32 size, iLogsize;
+   int iBlock;
+ 
+@@ -29798,6 +29806,7 @@
+ ** routine should return 0 without freeing pPrior.
+ */
+ static void *memsys5Realloc(void *pPrior, int nBytes){
++  a1_memsys5_realloc();
+   int nOld;
+   void *p;
+   assert( pPrior!=0 );
+@@ -31911,6 +31920,7 @@
+ #endif
+         pBuf->pNext = db->lookaside.pSmallFree;
+         db->lookaside.pSmallFree = pBuf;
++        a1_lookaside_free(pBuf);
+         return;
+       }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+@@ -31922,6 +31932,7 @@
+ #endif
+         pBuf->pNext = db->lookaside.pFree;
+         db->lookaside.pFree = pBuf;
++        a1_lookaside_free(pBuf);
+         return;
+       }
+     }
+@@ -31950,6 +31961,7 @@
+ #endif
+       pBuf->pNext = db->lookaside.pSmallFree;
+       db->lookaside.pSmallFree = pBuf;
++      a1_lookaside_free(pBuf);
+       return;
+     }
+ #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
+@@ -31961,6 +31973,7 @@
+ #endif
+       pBuf->pNext = db->lookaside.pFree;
+       db->lookaside.pFree = pBuf;
++      a1_lookaside_free(pBuf);
+       return;
+     }
+   }
+@@ -32133,6 +32146,7 @@
+     }else if( db->mallocFailed ){
+       return 0;
+     }
++    a1_lookaside_escape();
+     return dbMallocRawFinish(db, n);
+   }
+ #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+@@ -32140,22 +32154,22 @@
+     if( (pBuf = db->lookaside.pSmallFree)!=0 ){
+       db->lookaside.pSmallFree = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return a1_lookaside_alloc((void*)pBuf, (size_t)n);
+     }else if( (pBuf = db->lookaside.pSmallInit)!=0 ){
+       db->lookaside.pSmallInit = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return a1_lookaside_alloc((void*)pBuf, (size_t)n);
+     }
+   }
+ #endif
+   if( (pBuf = db->lookaside.pFree)!=0 ){
+     db->lookaside.pFree = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return (void*)pBuf;
++    return a1_lookaside_alloc((void*)pBuf, (size_t)n);
+   }else if( (pBuf = db->lookaside.pInit)!=0 ){
+     db->lookaside.pInit = pBuf->pNext;
+     db->lookaside.anStat[0]++;
+-    return (void*)pBuf;
++    return a1_lookaside_alloc((void*)pBuf, (size_t)n);
+   }else{
+     db->lookaside.anStat[2]++;
+   }
+@@ -32167,6 +32181,7 @@
+     return 0;
+   }
+ #endif
++  a1_lookaside_escape();
+   return dbMallocRawFinish(db, n);
+ }
+ 
+--- a/speedtest1.c
++++ b/speedtest1.c
+@@ -79,6 +79,9 @@
+ ;
+ 
+ #include "sqlite3.h"
++/* A1: tests reported from inside, see memhook.c */
++void a1_end_test(void);
++void a1_begin_test(int, const char*);
+ #include <assert.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -420,6 +423,7 @@
+   char *zName;
+   va_list ap;
+   iTestNumber = iTestNum;
++  a1_begin_test(iTestNum, zTestName);
+   va_start(ap, zTestName);
+   zName = sqlite3_vmprintf(zTestName, ap);
+   va_end(ap);
+@@ -451,6 +455,7 @@
+ 
+ /* Complete a test case */
+ void speedtest1_end_test(void){
++  a1_end_test();
+   sqlite3_int64 iElapseTime = speedtest1_timestamp() - g.iStart;
+   if( g.doCheckpoint ) speedtest1_exec("PRAGMA wal_checkpoint;");
+   assert( iTestNumber > 0 );
