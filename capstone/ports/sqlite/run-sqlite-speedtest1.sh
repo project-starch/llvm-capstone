@@ -48,6 +48,20 @@ DOMAIN_ARGS="${SPEEDTEST1_ARGS:+-DSPEEDTEST1_ARGS=$SPEEDTEST1_ARGS} ${SPEEDTEST1
 # pool is then a region the host shares linear, SPEEDTEST1_ARENA bytes (--arena), and the tables
 # region holds memsys5's tables. SPEEDTEST1_MARKER names what counts as success.
 SUBLET=${SPEEDTEST1_SUBLET:-0}
+
+# CAPSTONE_GP_NONLIN=1 IS REQUIRED, AND ITS ABSENCE LOOKS LIKE A PORT BUG RATHER THAN A MISSING
+# EXPORT. QEMU re-fabricates gp from pc_cap at every call, and pc_cap is linear again once the first
+# call returns to the entry frame -- so without this the fabricated gp is LINEAR, the compiler's
+# `movc` of a live code capability MOVES it rather than copying, the source is nulled, and the next
+# `cjalr` through it fails with "cs.cjalr requires capability in rs1". The fault lands deep in the
+# run, post-entry, with no hint that the cause is an unset variable: two attempts died that way on
+# 2026-09-11 before the cause was found in a1-sqlite-reuse/run.sh, which is the only place that
+# exported it despite THIS script advertising SPEEDTEST1_SUBLET=1 at the top as a supported form.
+#
+# The knob keeps the fabricated gp NONLIN, which is the type the entry glue gives it on purpose.
+# It lives in the mainline emulator (capstone-qemu op_helper.c, CAPSTONE_GP_NONLIN) as of the
+# diag/domain-runs merge, so no separate "diagnostic QEMU" build is needed for it any more.
+export CAPSTONE_GP_NONLIN=${CAPSTONE_GP_NONLIN:-1}
 # The allocators' memory comes from the host as regions. SPEEDTEST1_POOL is memsys5's heap in
 # the unprotected arm, control bytes inside, so it holds POOL/65 atoms; the port's pool is
 # those atoms times 64, so both arms carve the same blocks and every address matches. The
