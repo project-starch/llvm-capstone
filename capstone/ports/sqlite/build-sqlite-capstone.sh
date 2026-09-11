@@ -139,16 +139,22 @@ SQLITE_DEFINES=(
 # chain lookaside > memsys5 that the paper measures needs 1200,40 (run-sqlite-speedtest1.sh sets
 # it). A later -D wins over an earlier one, so this overrides the 0,0 above without disturbing it.
 #
-# IT IS APPLIED HERE, OUTSIDE THE ARRAY, AND THAT PLACEMENT IS THE WHOLE POINT. Three other scripts
-# read this block as TEXT, not by running it -- build-sqlite-silicon.sh:1005 harvests it with
-# sed+grep, and build-speedtest1-native.sh and tools/speedtest1-heap-sweep.sh do the same. A shell
-# expansion written inside the array is harvested LITERALLY and handed to clang as
-# `-DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}`, which fails at the use site with
-# "use of undeclared identifier '$'" -- the whole silicon path, every board domain included. The
-# two native harvesters filter this macro out and so never saw it, which is exactly why the array
-# must stay literal: one consumer expands, three do not, and only one of the three complains.
-# Keeping the default at 0,0 in the array also keeps every recorded board result reproducible by
-# text harvest alone.
+# IT IS APPLIED HERE, OUTSIDE THE ARRAY, AND THAT PLACEMENT IS THE WHOLE POINT. SIX other scripts
+# read this block as TEXT rather than by running it -- build-sqlite-silicon.sh:1005,
+# build-speedtest1-native.sh, build-speedtest1-baseline.sh, build-slt-native.sh,
+# tools/speedtest1-heap-sweep.sh and tests/twins/build-slt-native-cap.sh, all with the same
+# sed+grep. A shell expansion written inside the array is harvested LITERALLY and handed to clang
+# as `-DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}`, which fails at the use site with
+# "use of undeclared identifier '$'". That is exactly what reached dev in the collaborator merge
+# (b47e926f296e, from the PR side; this branch's own copy was literal), and it broke the whole
+# silicon path, every board domain included. Only that one consumer complained: the others filter
+# this macro out of their harvest, so five scripts carried the same broken text in silence.
+#
+# A SECOND REASON THE ARRAY MUST STAY LITERAL, and the one that would have caught an in-array fix:
+# build-speedtest1-baseline.sh:99 gates on an EXACT harvested count, EXPECT_DEFS=27, and it has no
+# LOOKASIDE filter. Anything that changes the number of -D tokens in this block trips it.
+# Keeping the default at 0,0 here also keeps every recorded board result reproducible by text
+# harvest alone.
 if [ -n "${SQLITE_LOOKASIDE:-}" ]; then
   SQLITE_DEFINES+=( "-DSQLITE_DEFAULT_LOOKASIDE=$SQLITE_LOOKASIDE" )
 fi

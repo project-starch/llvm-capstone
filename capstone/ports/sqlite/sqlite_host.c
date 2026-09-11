@@ -458,10 +458,16 @@ int main(int argc, char **argv) {
                           SQLITE_HC_ANNOTATION_REV_SHARED);
   /* SLOT 2 IS CLAIMED BY EXACTLY ONE OF THESE TWO, AND THEY ARE NOT ADDITIVE -- which is why this
      is an #else and not a second block. Both domains key their captures on the ORDER the host
-     shares in (0 metadata, 1 payload, 2 the allocator's memory), so running both sequences hands
-     each domain the other's capability at slot 2, and nothing in the compiler can see it:
-     speedtest1_measure.c takes slot 2 as the arena, speedtest1_domain.c takes it as the pool.
-     The build-time refusal further up stops the two from being ASKED for at once. */
+     shares in: 0 metadata, 1 payload, 2 the allocator's memory. speedtest1_measure.c takes slot 2
+     as the arena, speedtest1_domain.c takes it as the pool and slot 3 as the tables.
+
+     What running both sequences would actually do, stated precisely because the first version of
+     this comment overstated it symmetrically: the arena share below is textually first, so a
+     both-sequences build shares arena=2, pool=3, tables=4. speedtest1_measure.c still finds its
+     arena at 2 and ignores 3 and 4 -- a `--pool N` the caller asked for is silently IGNORED, the
+     region created and wasted. speedtest1_domain.c is the one handed the wrong capability, taking
+     the arena as its pool. Neither outcome is visible to the compiler, and a silently ignored
+     --pool is reason enough for the refusal further up. */
 #ifdef SPEEDTEST1_REGION_ARENA
   /* THIRD, because domain_main keys on the capture ORDER: 0 metadata, 1 payload, 2 arena. Sharing
      it anywhere else in this sequence silently hands SQLite's heap to the wrong pointer. */

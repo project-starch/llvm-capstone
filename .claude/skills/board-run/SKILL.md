@@ -165,8 +165,11 @@ export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload
 `lpc` (ladder) is `lpc <name> <dom>`, so ladder entries are written `name:/path/x.dom`.
 `sqlite_host.user` is `sqlite_host.user <dom> [--slt <test>]`, so its entries are `/path/x.dom`
 or `/path/x.dom:--slt /path/case.test` — **no label**. Put a `label:` on a SQLite entry and the
-label becomes argv[1], i.e. the domain path: the loader prints `Failed to open the file.` and
-the domain never loads. Because one host serves the whole run, **a ladder rung and a SQLite
+label becomes argv[1], i.e. the domain path. **Since 2026-09-11 the host catches this earlier
+and the signature changed**: the real `.dom` path lands in argv[2], which is now required to be
+a probe-stage NUMBER, so the host exits 2 with `unrecognised option /path/x.dom` before it ever
+calls `capstone_init`. Older captures show the previous signature instead -- `Failed to open the
+file.` from the loader, with the domain never loading. Because one host serves the whole run, **a ladder rung and a SQLite
 domain cannot share a boot** — pick a control that uses the same host (for SQLite, the same
 domain with no `--slt` runs its built-in workload and returns).
 
@@ -275,7 +278,7 @@ Read the **last marker** in the run-scoped transcript, never "did not return":
 | `Proxy Error … Error reading from remote server` | the GUI is **rebooting** — transient, wait and retry |
 
 **`SQ: G/enter` does NOT mean the domain entered.** It is printed by the HOST
-(`sqlite_host.c:144`) *before* it calls in, and the monitor's `call_domain`
+(`sqlite_host.c`, the `mark("SQ: G/enter")` immediately before `call_dom`) *before* it calls in, and the monitor's `call_domain`
 (`sbi_capstone.c:838`) was uninstrumented until 2026-08-05 — every `SHA*`/`ECSZ` tag belongs to
 the region-share path. So "G/enter then silence" was consistent with dying in `call_domain`, in
 the domain switch, at the first instruction, in the carve loop, or in cap-init, and calling it
