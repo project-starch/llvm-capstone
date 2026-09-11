@@ -86,7 +86,7 @@ esac
 # this silicon, so the arms whose hashes are already verified must not carry it. Stage this one LAST.
 if [[ "${SPEEDTEST1_INSTRET:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SPEEDTEST1_INSTRET=1"
-  echo "== minstret bracket ON -- separate image, stage it LAST (see the note in speedtest1_domain.c)"
+  echo "== minstret bracket ON -- separate image, stage it LAST (see the note in speedtest1_measure.c)"
 fi
 if [[ "${SPEEDTEST1_ALLOCSTATS:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SPEEDTEST1_ALLOCSTATS=1"
@@ -112,7 +112,7 @@ if [[ "${SPEEDTEST1_REGION_ARENA:-0}" == "1" ]]; then
   echo "== arena from a REGION: $ARENA bytes, shared third; .bss array not built"
 fi
 export DOMAIN_EXTRA_DEFS HOST_EXTRA_DEFS
-export DOMAIN_SRC="$SCRIPT_DIR/speedtest1_domain.c"
+export DOMAIN_SRC="$SCRIPT_DIR/speedtest1_measure.c"
 
 bash "$SCRIPT_DIR/build-sqlite-silicon.sh"
 bash "$SCRIPT_DIR/build-sqlite-host.sh"

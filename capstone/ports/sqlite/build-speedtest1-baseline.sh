@@ -75,7 +75,7 @@ SPEEDTEST1_SRC=${SQLITE_SPEEDTEST1_SRC:-$(bash "$SCRIPT_DIR/fetch-sqlite-src.sh"
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 cp -f "$VFS_DIR/capstone_sqlite_vfs.c"    "$OBJ_DIR/capstone_sqlite_vfs.c"
 cp -f "$ADAPTED/capstone_sqlite_os.c"     "$OBJ_DIR/capstone_sqlite_os.c"
-cp -f "$SCRIPT_DIR/speedtest1_domain.c"   "$OBJ_DIR/sqlite_capstone_domain.c"
+cp -f "$SCRIPT_DIR/speedtest1_measure.c"  "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 cp -f "$SPEEDTEST1_SRC"                   "$OBJ_DIR/speedtest1.c"
 

@@ -710,7 +710,7 @@ cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 # It cannot be a separate object. speedtest1.c owns 23 file-scope statics, and under
 # -capstone-gp-captable globals are numbered per module and positionally against one runtime
 # cap-table, so a second globals-owning TU collides with SQLite's silently -- wrong data, no fault.
-# Staging it beside the amalgamation's other includes is what lets speedtest1_domain.c end with a
+# Staging it beside the amalgamation's other includes is what lets speedtest1_measure.c end with a
 # plain `#include "speedtest1.c"`.
 #
 # Set ABOVE the _domain_defs read, like every other domain knob: appended below it, the defines

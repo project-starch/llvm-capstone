@@ -147,7 +147,7 @@ argument.
    `adapted/capstone_sqlite_os.c`, not in the shared skeleton. Check whether SQLite internals use the
    other method before assuming one override suffices. Scale at **25 MHz**, and see the clock note
    below.
-4. **The domain source**, `ports/sqlite/speedtest1_domain.c`, on the boundary-cost model,
+4. **The domain source**, `ports/sqlite/speedtest1_measure.c`, on the boundary-cost model,
    selected by a new magic opcode beside the existing two. **The host needs its own result branch**:
    the `0x4EB0` family is accepted only inside the feature-probe and corpus branches, and the
    terminal arm rejects anything that is not `DONE`. "Unchanged" was false in the first draft.
@@ -474,7 +474,7 @@ and both CMA doors are gated on `ALLOC_CMA` — the balance rule at `page_alloc.
 only when `NR_FREE_CMA_PAGES > NR_FREE_PAGES / 2`) and the empty-list fallback at `:2305`. An
 UNMOVABLE order-10 allocation reaches neither, in any boot, at any free-memory level.
 
-And that block is where the arena is: `speedtest1_domain.c:41` declares
+And that block is where the arena is: `speedtest1_measure.c:41` declares
 `static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]` and `:485` hands it to
 `sqlite3_config(SQLITE_CONFIG_HEAP, …)`. memsys5 never allocates a page. `domdata-budget.py` on the
 delivered image confirms the layout — the 2 MiB arena sits inside dom_data's 2,212,656 bytes of
@@ -540,7 +540,7 @@ carries all three, and it is not a free choice in either direction:
 | heap | 2,097,152 B — `orm --size 1` needs 2 MiB and `main --size 1` needs 1.5 MiB |
 | declared stack | 1,048,576 B (`SQLITE_SILICON_STACK`) — 2 MiB does not leave room for the arena |
 | region | 65,536 B, set for BOTH halves by the run script |
-| build | `DOMAIN_SRC=ports/sqlite/speedtest1_domain.c`, `SQLITE_SPEEDTEST1_SRC` from `fetch-sqlite-src.sh` |
+| build | `DOMAIN_SRC=ports/sqlite/speedtest1_measure.c`, `SQLITE_SPEEDTEST1_SRC` from `fetch-sqlite-src.sh` |
 
 **Do not raise the heap on the strength of `domdata-budget.py` passing.** A 2.5 MiB arena passed
 that gate and then faulted at `SQ: E/share1` under QEMU, before the domain was ever entered.
