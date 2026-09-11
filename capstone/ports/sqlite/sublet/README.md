@@ -141,6 +141,33 @@ It shares its region `REV_SHARED`, which is a **non-revocable** share; `--arena`
 revocable relationship the whole discipline is about. They also claim the same slot and the host
 refuses both, so this is enforced rather than merely advised.
 
+**RESOLVED 2026-09-11 — and it dissolves the "direct contradiction" above rather than answering it.
+The two paths share slot 2 under DIFFERENT annotations, so they were never in conflict.**
+
+    SPEEDTEST1_REGION_ARENA   sqlite_host.c:475-477   REV_SHARED     -> monitor delinearises it
+    --arena  (the Sublet way) sqlite_host.c:491-493   REV_BORROWED   -> stays LINEAR
+
+The monitor is explicit: *"REV_SHARED stores a delinearised NONLIN"* (`sbi_capstone.c:1589`). So
+under `REGION_ARENA` the grant arrives **NON-linear**, the measure harness's comment claiming it
+*"arrives LINEAR and a linear capability is CONSUMED BY COPY"* is **wrong for its own
+configuration**, and its `__builtin_capstone_cap_delin` is **redundant** — it delinearises something
+the monitor already delinearised. Harmless, and demonstrably so: that path ran end-to-end on
+2026-09-11 (`SQ: C2/mkarena`, `F2/share3`, `G/enter`, `H/return`, cycles `685213787`, RC 0), so
+`delin` of a NONLIN does not trap.
+
+Under `--arena` the grant genuinely does arrive LINEAR, which is exactly what
+`sqlite3_sublet_grant` requires. **So the port does not have to choose between two irreconcilable
+requirements. It has to GATE the delin** so it does not run in the Sublet build — the `#ifdef` the
+capture already sits inside, with the Sublet case taking the grant straight through as
+`speedtest1_domain.c` does.
+
+That downgrades item 1 from "the hard edit" to a guard. Items 2, 3 and 4 are unaffected and remain
+the real work.
+
+**One correction to carry with it:** the comment in `speedtest1_measure.c` is wrong as written and
+should not be copied forward. Whatever the Sublet case does, the `REGION_ARENA` case is delinning a
+capability that is already non-linear, and saying otherwise is what made this look like a conflict.
+
 **One thing the survey could NOT settle, recorded rather than guessed.** `speedtest1_measure.c`
 asserts in a comment that its slot-2 grant "arrives LINEAR and a linear capability is CONSUMED BY
 COPY", yet the host shares that same region `REV_SHARED`, which other in-tree evidence describes as
