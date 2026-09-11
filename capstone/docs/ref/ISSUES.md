@@ -3428,7 +3428,43 @@ than inferred.
    The bisection makes the second more attractive, because it explains why the fault needs a
    *subsequent create* rather than firing during the release.
 
-**N = 3 QEMU runs** — the original, and the matched `CYCLES=1` / `CYCLES=2` pair that localised it.
+> ### ⚠ NARROWED AGAIN, and the narrowing exposes why the offset fix cannot work as written
+>
+> **OBSERVED, five QEMU runs, each a one-variable change from the last:**
+>
+> | cycle 0 | cycle 1 | outcome |
+> |---|---|---|
+> | 4 MiB | — (`CYCLES=1`) | completes, `released id=9 rc=0` |
+> | 4 MiB | 4 MiB | **faults**, `badaddr = 0x101c00000` |
+> | 1 MiB | 1 MiB | **faults**, `badaddr = 0x101600000` |
+> | 4 MiB | 1 MiB | **completes both cycles** — `id=9` then `id=10`, offsets 33,947,648 then 39,190,528 |
+>
+> Two things fall out and neither needed a mechanism. **The faulting address tracks the region
+> size**, so it is the region's own base rather than any fixed image address. And **the fault needs
+> the second create to ask for the SAME size** — a different size completes, which points at the
+> kernel handing back the same physical pages rather than at the release itself.
+>
+> **The different-size run is the first to reach the offset comparison at all, and it FAILS it:**
+> `leak_bytes = 5,242,880`, `__OFFSETCYCLE_LEAKED__`. So `pre_mmap_offset` is still leaking with the
+> restore in place.
+>
+> **Why, READ FROM THE CODE AND MARKED AS SUCH — this is an inference, not a measurement.** The
+> region ids give it away: cycle 0 got 9 and cycle 1 got **10**, so the slot was not reused even
+> though the release returned 0 ("popped and freed"). `create_region` states that it "needs up to two
+> slots (a right-hand fragment, then the region)" and refuses when `region_n + 2 > MAX`;
+> `ioctl_release_region` pops exactly **one**. So a create that splits a remainder leaves that
+> remainder behind when its region is released, and the table does not return to its prior shape.
+> The module then takes its `region_n != m_args.region_id` branch — the one that calls
+> `probe_regions()` — rather than the branch that maintains `pre_mmap_offset`.
+>
+> **Consequence for the `pre_mmap_offset` fix, and it is the useful part:** restoring the offset on
+> release is correct and cannot be sufficient. While a create may consume two monitor slots and a
+> release pops one, create/release is not idempotent in the region table, and no amount of offset
+> bookkeeping in the module makes it so. **The fix as committed is necessary, not complete**, and the
+> probe is what showed that rather than an argument.
+
+**N = 5 QEMU runs** — the original, the matched `CYCLES=1` / `CYCLES=2` pair that localised it, and
+the size-variation pair that narrowed it further.
 Silicon behaviour unknown and not inferred: the FPGA arm of `handle_exception` is a different
 `#ifdef` branch with its own reporting.
 

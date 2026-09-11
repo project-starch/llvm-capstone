@@ -16,15 +16,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../capstone-test-env.sh" >/dev/null 2>&1 || true
 BYTES=${1:-4194304}
+# optional second size, used from cycle 1 onward -- see the note in offsetcycle_host.c
+BYTES2=${2:-}
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/offsetcycle-share}
-LOG=${LOG_FILE:-$TMP_ROOT/offsetcycle-${BYTES}.log}
+LOG=${LOG_FILE:-$TMP_ROOT/offsetcycle-${BYTES}${BYTES2:+-$BYTES2}.log}
 mkdir -p "$SHARE_DIR"
 bash "$SCRIPT_DIR/build-offsetcycle.sh" "$SHARE_DIR" >/dev/null
 
 set +e
 python3 "$SCRIPT_DIR/run-domain-smoke.py" --share-dir "$SHARE_DIR" --log-file "$LOG" \
-  --guest-command "/mnt/host/offsetcycle.user $BYTES" \
+  --guest-command "/mnt/host/offsetcycle.user $BYTES ${BYTES2:-}" \
   --success-marker "__OFFSETCYCLE_PASSED__" >/dev/null 2>&1; rc=$?
 set -e
 

@@ -74,15 +74,31 @@ int main(int argc, char **argv) {
     }
     if (!size) size = 4UL << 20;               /* 4 MiB: at the buddy ceiling, so no CMA needed */
 
+    /* An optional SECOND size, used from cycle 1 onward. It separates two failures that look
+       identical when every cycle asks for the same bytes: if the fault address follows the FIRST
+       size the access is to the region that was freed, and if it follows the second it is the newly
+       created one faulting on its own setup. With one size the kernel hands back the same pages and
+       the two addresses coincide, so the question cannot be asked. */
+    unsigned long size2 = 0;
+    {
+        int seen = 0;
+        for (int a2 = 1; a2 < argc; a2++) {
+            unsigned long v = strtoul(argv[a2], NULL, 0);
+            if (v > 0) { if (seen) { size2 = v; break; } seen = 1; }
+        }
+    }
+    if (!size2) size2 = size;
+
     if (capstone_init()) { printf("OFFSETCYCLE ERROR cannot initialise Capstone\n"); return 1; }
     int fd = open(CAPSTONE_DEV_PATH, O_RDWR);
     if (fd < 0) { printf("OFFSETCYCLE ERROR cannot open %s\n", CAPSTONE_DEV_PATH); return 1; }
 
     size_t off[CYCLES];
-    printf("OFFSETCYCLE size=%lu cycles=%d\n", size, CYCLES);
+    printf("OFFSETCYCLE size=%lu size2=%lu cycles=%d\n", size, size2, CYCLES);
 
     for (int i = 0; i < CYCLES; i++) {
-        region_id_t rid = create_region(size);
+        unsigned long want = (i == 0) ? size : size2;
+        region_id_t rid = create_region(want);
         if ((long)rid < 0) {
             printf("OFFSETCYCLE CREATE FAILED cycle=%d\n", i);
             printf("BASELINE-PROBE offsetcycle_leak = -1\n");
@@ -101,9 +117,9 @@ int main(int argc, char **argv) {
         off[i] = q.mmap_offset;
         printf("OFFSETCYCLE cycle=%d id=%lu len=%lu mmap_offset=%lu\n",
                i, (unsigned long)rid, (unsigned long)q.len, (unsigned long)off[i]);
-        if (q.len != size) {                   /* the query landed on some other region */
+        if (q.len != want) {                   /* the query landed on some other region */
             printf("OFFSETCYCLE ERROR queried len %lu != requested %lu\n",
-                   (unsigned long)q.len, size);
+                   (unsigned long)q.len, want);
             printf("BASELINE-PROBE offsetcycle_leak = -1\n");
             printf("__OFFSETCYCLE_WRONG_REGION__\n");
             return 1;
