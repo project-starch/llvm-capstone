@@ -1721,6 +1721,14 @@ Domain memory region vaddr = ff60000081680000, paddr = 101880000
 CmaFree: 260096 kB before the domain, 260096 kB after
 ```
 
+**That log line no longer says "region", as of module commit `a185b65` the same day.** It reads
+`Domain block (buddy, NOT a capability region) vaddr = ..., paddr = ...`. The excerpt above is kept
+verbatim because it is what that run printed, but anyone reproducing it should grep for the new
+wording — searching for the old one now returns nothing, and an absence with no mechanism behind it
+is the trap this project keeps paying for. The rename exists precisely because calling this block a
+"region" produced a retracted claim: six capability-region base addresses in the CMA range were read
+as the domain's own memory having moved there.
+
 `0x101880000` is **24 MiB above the top of the area**, and `CmaFree` does not move by a single
 kilobyte across a domain creation whose block is at least 256 KiB. What DOES come from CMA is the
 region allocation (`dma_alloc_pages`) — on the board those show as `BASE:AC0xxxxx` tags inside the
