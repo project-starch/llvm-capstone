@@ -19,7 +19,12 @@
  * IT CANNOT RUN YET. The first release aborts QEMU on
  *     helper_csrevoke: Assertion `rs1_v->val.cap.type == CAP_TYPE_REV' failed
  * because the monitor revokes a region whose handle is still LINEAR when nothing ever shared it.
- * That is M-6 in the registry, found by this program. Once the guard exists, this runs unchanged.
+ * That is M-6 in the registry, found by this program. M-6 IS NOW FIXED and the abort is gone --
+ * and this program still does not complete cycle 0, because the release path had a SECOND defect
+ * behind the first: after the pop, an access to the region faults into a recovery path that assumes
+ * a domain is running, and this program creates none. That is M-7. "Once the guard exists, this
+ * runs unchanged" is what an earlier version of this comment predicted, and it was wrong: a path
+ * nothing has ever executed should be expected to have more than one defect on it.
  *
  * SO ITS FAIL PATH IS PROVEN AND ITS PASS PATH IS NOT. Every run so far has aborted at cycle 0, which
  * exercises the create/query half and none of the comparison. When the guard lands, read the three

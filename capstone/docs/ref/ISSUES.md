@@ -3215,7 +3215,25 @@ result — but it cannot reach the condition and so carries no verdict about thi
 > is recoverable, a fill that never started is not.
 
 
-### M-6 — `revoke_region` hands `csrevoke` a non-REV capability whenever the region was never shared with a retaining share `OPEN — found 2026-09-11, monitor; QEMU aborts, silicon traps INSIDE M-mode`
+### M-6 — `revoke_region` hands `csrevoke` a non-REV capability whenever the region was never shared with a retaining share `FIXED 2026-09-11 (monitor, QEMU-verified); the release path it unblocks then hits M-7`
+
+> **FIXED, ruled "proceed to the pop" by the lead.** `revoke_region` now tests the handle's type on
+> **both** arms and returns a third value — `0` revoked, **`2` nothing to revoke**, `-1` refused —
+> and `ioctl_release_region` treats `2` as permission to pop. Monitor `2c49c41` (`capstone-sbi`) and
+> `f633a11` (`caplifive-sbi`), module in `caplifive-buildroot`. **Neither monitor remote accepts this
+> credential (403), so both commits are local-only; the module and the buildroot pointers are
+> pushed.**
+>
+> **Verified by the disappearance of the abort, which is the only positive evidence available here.**
+> Before: `helper_csrevoke: Assertion 'rs1_v->val.cap.type == CAP_TYPE_REV' failed`, 3/3 at two sizes.
+> After: no assertion, and execution continues past the revoke into the pop. The guard is the only
+> thing that changed on that path.
+>
+> **It does NOT yet prove the `pre_mmap_offset` fix**, because the release path has a second defect
+> behind this one — see M-7. `tests/runtime-qemu/offsetcycle` still cannot complete cycle 0, and its
+> PASS path has still never executed.
+
+
 
 **The defect, stated so a fix covers it.** `revoke_region` (`sbi_capstone.c:1584-1606`) reads the
 region's handle as a `__rev` and passes it to `__revoke` **on both of its arms** — `:1595` from the
@@ -3303,6 +3321,47 @@ reports — but it leaves `release_region` unable to free a never-shared region,
 `pre_mmap_offset` fix would still be unproven. Only the **proceed-to-the-pop** semantics unblock
 it, and that is a behavioural change to the region lifecycle rather than a guard. Whoever rules on
 it should know the verification hangs on the ruling and not on the code.
+
+
+### M-7 — after a region is popped, an access to it faults into a recovery path that assumes a domain is running `OPEN — found 2026-09-11 by M-6's fix; mechanism NOT established`
+
+**Newly reachable, not newly created.** `release_region` has exactly one caller in the tree — the
+`offsetcycle` probe added the same day — so the pop path had never executed. M-6 was the first defect
+on it; this is the second, and it is what the probe now hits instead.
+
+**What is established, from one QEMU run:**
+
+```
+[CAPSTONE] Print = Scalar(0x101c00000)     <- swap_cpmp: badaddr
+[CAPSTONE] Print = Scalar(0x9)             <- swap_cpmp: region_n, i.e. the pop DID happen
+[CAPSTONE] Print = Scalar(0xdeadbeef)      <- CAPSTONE_ERR_STARTER
+[CAPSTONE] Print = Scalar(0x2)             <- CAPSTONE_NO_CPMP_REGION, not a RISC-V cause
+[CAPSTONE] Cap mem access requires capability: pc = 800239c4, rs1 = x7
+[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x800239e4, badaddr = 0x101c00000
+```
+
+An access to `0x101c00000` takes an access fault; `swap_cpmp` finds **no region covering it** and
+calls `fault_return_from_domain(CAPSTONE_NO_CPMP_REGION)`; that reaches `return_from_domain`, whose
+`*caller_buf = retval` (`sbi_capstone.c:1696`, `fw_jump.elf:0x800239e4`, `sd s0, 0x0(t2)`) faults
+because `caller_buf` is not a capability. **The probe creates no domain**, so there is nothing to
+return to — this is the privilege-blind recovery path M-6's audit named, now demonstrated rather
+than inferred.
+
+**Two defects, and they should not be conflated.**
+
+1. **The recovery path is wrong for a fault with no domain running.** `handle_exception`'s default
+   arm (`:2060-2068` on the QEMU target) calls `fault_return_from_domain` unconditionally. That is
+   correct for a faulting domain and invalid otherwise, and it converts a diagnosable fault into a
+   second fault in the handler.
+2. **Why the access was unmapped at all is NOT established.** A candidate worth checking first:
+   `pop_region` clears `cpmp_region[region_cpmp[region_i]]` and `region_cpmp[region_i]` but does not
+   release the CPMP hardware entry, so the bookkeeping and the hardware disagree after a pop. **This
+   is a hypothesis from reading `pop_region`, not a measurement — it has not been tested and should
+   not be cited as the cause.**
+
+**N = 1.** One QEMU run. Silicon behaviour unknown and not inferred: the FPGA arm of
+`handle_exception` is a different `#ifdef` branch with its own reporting.
+
 
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
