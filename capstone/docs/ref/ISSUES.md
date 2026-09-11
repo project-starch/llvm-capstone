@@ -534,11 +534,54 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 > wrong on its first day; they must move together.** The test's 1023-byte arm exists for exactly
 > that and becomes the discriminator with no rewrite.
 >
-> **What would close R-32:** a ruling on the two convention rows (`SPLIT`, `LCC`) — decision note at
-> `/tmp/capstone/lane-notes-2026-09-10/decision-R32-bound-values.md`. The other two rows need no
+> **What would close R-32:** a ruling on the two convention rows (`SPLIT`, `LCC`). The decision
+> content is reproduced below rather than left in `/tmp`, where it was written on 2026-09-10 and
+> where it would not survive a reboot. The other two rows need no
 > ruling at all: **`SHRINKTO` needs an RTL fix** (one token, `flu:237`), and **`SEAL` needs S-11
 > fixed and the `+1` fixed in the same change**. Both should be tracked as work rather than waiting
 > behind a documentation decision.
+>
+> ### The ruling, laid out — nothing here is urgent and nothing is broken
+>
+> This is a decision about which of two documents changes, and whichever way it goes, one of them
+> does. Both rows are **measured**, not read off source: `split-cut-side.S` (386 cycles) and
+> `bound-value-readback.S` (383 cycles), both real completions.
+>
+> ```
+>   SPLIT at val      spec: val in the LOWER half      RTL: val in the UPPER half
+>                     both partition with no gap and no overlap; they differ ONLY in
+>                     which side of val the cut falls
+>
+>   LCC rd, rs1, 4    spec: base + K - 1               RTL: base + K
+>   over K bytes      the spec returns the last byte, the RTL one past it
+> ```
+>
+> | option | what it means | cost |
+> |---|---|---|
+> | **(a) spec follows the RTL** | `LCC` documented as returning an exclusive `end`; `SPLIT` documented with the cut on the upper side | cheapest — the silicon is flashed and running, and the monitor and compiler already read bounds from the RTL. But the spec's `end` stops meaning "the last byte" in these two places, so the document is no longer uniform |
+> | **(b) RTL follows the spec** | change the hardware | uniform documents, but it moves silicon behaviour for an issue with **no known victim**, needs synthesis and a reflash, and every existing capability-manipulating binary wants re-checking |
+> | **(c) document and change neither** | write the difference down where implementers will hit it | free and honest — and leaves the trap in place, which is exactly how this was found |
+>
+> **Recommendation: (a) for `LCC`, (c) for `SPLIT`, and they are deliberately different.**
+>
+> `LCC` is a **readback**: a caller who knows the convention adjusts once and is correct forever, so
+> the spec is the cheaper thing to move and moving it costs nobody anything.
+>
+> `SPLIT` is not a readback. The same call with the same argument produces a **different
+> partition**, so code written from the spec silently gets a one-byte-shifted cut on real hardware —
+> the failure is in the data, not in a returned number, and it will not announce itself. That
+> deserves a wider audience than a spec footnote before anything changes, which is why the
+> recommendation stops at (c) and asks for a second opinion rather than taking (a) for both.
+>
+> **What would change the recommendation:** anything found that actually calls `SPLIT` and depends
+> on the cut side — then it stops being a documentation question. Nothing in the monitor, the
+> compiler or the LLVM backend was found to, **but that search was not exhaustive.**
+>
+> **If (a) is ruled**, the spec edits are small and go to `capstone-academic-spec` (branch
+> `capstone-bootstrap`): `parts/cap-man-insn.adoc:197`, the `LCC` field table's `4` row; and
+> `:336-339`, `SPLIT`'s operational steps if `SPLIT` is included. Prose-and-arithmetic only, no code
+> impact on our side. **Note that this credential cannot push that repository** — it returns 403 on
+> read as well as write — so the edit can be made here but not published from this lane.
 >
 > Full narrative, including the resolution this is the residue of:
 > `history/10-09-2026_19-00-00_decisions-A-and-B.md`.
