@@ -939,6 +939,23 @@ not bind.
 
 Then, in one boot: `json` at size 1 with a 6 MiB arena, and `main`/`orm` at `--size 5`.
 
+> **ANSWERED 2026-09-11 (QEMU arm). The region arena IS the lever, and `json` RUNS.**
+> `--testset json --size 1` on a 6 MiB region arena, 64 MiB CMA reserved in the guest, image
+> `c1ce36ac6711e194`: full `SQ: E/share1` -> `F2/share3` -> `G/enter` -> `H/return`,
+> `SPEEDTEST1-CYCLES 725363552`, `HEAP 6291456`, `RC 0`, `TOTAL 28.988s` across eight phases with
+> real per-phase timings (JSONB tables, JSON-expression indexes, `json_type()` queries,
+> `json_insert`/`set`/`remove`). No `UNTAGGED rs1` line and no `cause =` line: S-14 did not fire,
+> and `capinit-reload-scan.py` reports the image clean.
+>
+> **Two cautions this does NOT retire.** The `--verify` hash is the no-rows `0 0e12171d…` that
+> `json` shares with three other testsets, so it cannot discriminate — the verdict above rests on
+> `TOTAL` and the phase lines, not on the hash. And per S-14's own entry the region arena is *not*
+> a fix: it changes `__capstone_cap_init`'s codegen and the bad reloads disappear incidentally, so
+> any later change to the global set can bring them back. Gate on the reload scan.
+>
+> This is the QEMU arm only. `§7` is a silicon section, so these numbers do not go in it; the
+> board arm is still owed.
+
 **Re-derive, do not assume.** An arena drawn from a region is a different geometry, and geometry is
 S-14's suspected common factor — the fault is a *pre-entry* one at `SQ: E/share1`, and this change
 adds a third region *and* moves the image from order 10 to order 9. Both directions are live: it may

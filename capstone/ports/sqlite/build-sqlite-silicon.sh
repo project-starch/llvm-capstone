@@ -1031,11 +1031,28 @@ if [[ "$SQLITE_FLOAT" == "on" ]]; then
   echo "== SQLITE_FLOAT=on: floating point RESTORED (cte, star, fp and app become runnable)"
 fi
 if [[ "$SQLITE_FULL" == "on" ]]; then
-  # JSON IS DELIBERATELY NOT HERE. It needs a 6 MiB arena (measured by tools/speedtest1-heap-sweep.sh
-  # against a domain ceiling near 3 MiB), so it cannot run in a domain whatever the defines say, and
-  # including it pushes the image into the S-14 pre-entry fault: with json the domain halts at
-  # SQ: E/share1 with cause 24 before it is entered, on every testset. SQLITE_JSON=on adds it back
-  # for anyone measuring that fault rather than trying to run json.
+  # JSON IS OPT-IN VIA SQLITE_JSON=on, AND AS OF 2026-09-11 IT RUNS. Both reasons this comment
+  # previously gave for excluding it are now false, and they are recorded rather than deleted
+  # because each was true of a different build:
+  #
+  #   "it needs a ~6 MiB arena against a domain ceiling near 3 MiB, so it cannot run whatever the
+  #   defines say" -- that ceiling is the .bss/dom_data one (ONE __get_free_pages allocation capped
+  #   at 4 MiB by MAX_ORDER). SPEEDTEST1_REGION_ARENA=1 takes the arena out of .bss into a
+  #   CMA-backed region, so the ceiling does not apply. Measured: --testset json --size 1 on a
+  #   6 MiB region arena completes under QEMU -- full SQ: E/share1 -> G/enter -> H/return, eight
+  #   phases with real timings, TOTAL 28.988s, SPEEDTEST1-CYCLES 725363552, RC 0.
+  #
+  #   "including it pushes the image into the S-14 pre-entry fault on every testset" -- that was the
+  #   .bss json image. S-14 was root-caused on 2026-09-11 as a CODEGEN defect (a capability spill
+  #   slot written with stc and read back with a scalar ld), not geometry; the region-arena json
+  #   image scans clean under capinit-reload-scan.py and does not fault. Note the entry's own
+  #   warning: the region arena is NOT a fix for S-14. It changes __capstone_cap_init's codegen and
+  #   the bad reloads vanish incidentally, so ANY later change to the global set can bring them
+  #   back. Gate on the reload scan, never on a carve number or on this comment.
+  #
+  # A --verify hash cannot judge a json run: json is one of four testsets returning the no-rows hash
+  # 0 0e12171d..., so the hash is satisfied by a run that produced nothing. Judge on TOTAL, the
+  # per-phase lines and the instruction count.
   SQLITE_DEFINES="$SQLITE_DEFINES -DSQLITE_ENABLE_RTREE=1 -USQLITE_OMIT_INCRBLOB"
   [[ "${SQLITE_JSON:-off}" == "on" ]] && SQLITE_DEFINES="$SQLITE_DEFINES -USQLITE_OMIT_JSON"
   # FOUR MORE BUILTINS, named by the linker rather than guessed: json and rtree pull in
@@ -1043,7 +1060,10 @@ if [[ "$SQLITE_FULL" == "on" ]]; then
   # of which live inside comparesf2.c the way the double ones live inside comparedf2.c. The loop
   # deduplicates, so naming one twice across knobs is harmless.
   _full_builtins="floatundidf truncdfsf2 comparesf2 subsf3 addsf3 mulsf3 divsf3 extendsfdf2 fixsfsi floatsisf"
-  echo "== SQLITE_FULL=on: json and rtree RESTORED (all nine testsets become runnable)"
+  # TEN testsets, not nine: speedtest1.c also defines trigger, which fails identically on native
+  # and cannot run anywhere. With json working the reachable ceiling is EIGHT of ten -- app is
+  # blocked by a misaligned capability store, trigger is broken upstream.
+  echo "== SQLITE_FULL=on: json and rtree RESTORED (eight of ten testsets become runnable)"
 fi
 
 # CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
