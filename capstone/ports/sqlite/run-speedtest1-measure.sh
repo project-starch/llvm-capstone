@@ -132,10 +132,33 @@ export DOMAIN_SRC="$SCRIPT_DIR/speedtest1_measure.c"
 # handle the monitor keeps, which is the revocable relationship the discipline is about.
 # REV_SHARED is delinearised by the monitor and cannot carry it. The two claim the same slot and
 # the host refuses both, so this is enforced rather than advised.
+# SQLITE_LOOKASIDE=<n>,<sz>: the lookaside pool, routed through DOMAIN_EXTRA_DEFS because it CANNOT
+# reach the silicon build any other way. build-sqlite-silicon.sh:1003-1006 harvests SQLITE_DEFINES
+# from build-sqlite-capstone.sh as TEXT, and that script's lookaside override sits deliberately
+# OUTSIDE the harvested array -- so the harvest always yields -DSQLITE_DEFAULT_LOOKASIDE=0,0 and
+# exporting SQLITE_LOOKASIDE alone silently does nothing here. Same variable name as the other two
+# builders read, so one knob means one thing across all three.
+if [ -n "${SQLITE_LOOKASIDE:-}" ]; then
+  DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DSQLITE_DEFAULT_LOOKASIDE=$SQLITE_LOOKASIDE"
+fi
+
 SUBLET_HOST_ARGS=""
 if [[ "${SPEEDTEST1_SUBLET:-0}" == "1" ]]; then
   export SQLITE_SUBLET_PATCH=${SQLITE_SUBLET_PATCH:-$SCRIPT_DIR/sublet/sublet-3530300.patch}
   DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DSPEEDTEST1_SUBLET=1"
+  # THE COMMENT ABOVE SAYS "lookaside stays on and only the discipline changes", AND UNTIL NOW THE
+  # CODE DID NOT DO THAT. Nothing on this path set SQLITE_DEFAULT_LOOKASIDE, so the sixth cell built
+  # lookaside-OFF while the fifth was run lookaside-ON -- making the very ratio the cell exists to
+  # produce (discipline cost, sixth over fifth) a two-variable comparison, silently. The Sublet patch
+  # porting the lookaside CODE is not the same thing as the pool being ENABLED at run time; with the
+  # define at 0,0 it is compiled in and never used.
+  # So default it on here, to the same 1200,40 the fifth cell uses, overridable for a deliberate
+  # lookaside-off Sublet arm. Verify from the run output ("Successful lookasides:"), never from this
+  # script -- that is the rule the CONFIGURATION block was written about.
+  if [ -z "${SQLITE_LOOKASIDE:-}" ]; then
+    DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DSQLITE_DEFAULT_LOOKASIDE=1200,40"
+    echo "== Sublet: lookaside defaulted ON (1200,40) so cell 6 differs from cell 5 by the discipline alone"
+  fi
   SUBLET_POOL=${SPEEDTEST1_POOL:-1441792}
   _atoms=$(( SUBLET_POOL / 65 ))
   SUBLET_ARENA=$(( _atoms * 64 ))
