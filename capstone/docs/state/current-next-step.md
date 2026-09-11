@@ -191,9 +191,13 @@ tree commits.
    the CPMP entry is a hypothesis from reading code, recorded as such. The offset proof and the whole
    release path sit behind it.
 
-5. **R-32's ruling** (`SPLIT`, `LCC` bound values) is the lead's. The decision note is at
-   `/tmp/capstone/lane-notes-2026-09-10/` and **will not survive a reboot** — moving it into the repo
-   is on the list.
+5. **R-32's ruling** (`SPLIT`, `LCC` bound values) is the lead's. **The note is now in the repo** as
+   item 5d of `docs/plans/DECISIONS-WAITING-2026-09-10.md` (moved 2026-09-11); it used to live only
+   under `/tmp` and would not have survived a reboot. It carries both measured readings, the three
+   options with their costs, the split recommendation — (a) for `LCC`, (c) for `SPLIT`, and why they
+   differ — and the exclusion of `SHRINKTO` and `SEAL` from the ruling. It also records why
+   `shrinkto-size-fix` is **not** stale work: it post-dates the supersession, sits on `1bfff7776`,
+   and leaves the guard the refuted route would have changed.
 
 6. **The paper numbers resume after the silicon work**, by the lead's ordering. The other lane's
    region-arena change is the single piece of work that lifts both `json` and the depth axis; `app`

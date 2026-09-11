@@ -616,6 +616,85 @@ test asserting it and a line in `cap-regnames.s` saying so, rather than acquirin
 
 ---
 
+## 5d. R-32 — two instructions hand a bound back AS A VALUE, and the two documents disagree about it
+
+**Moved into the repo 2026-09-11 from a lane note under `/tmp`, which would not have survived a
+reboot.** Nothing about it is urgent and nothing is broken. It is a decision about which of two
+documents changes, because whichever way it goes, one of them does.
+
+**What the `end` resolution could not fix.** That resolution fixed each document's outlier
+arithmetic and moved no convention: the RTL keeps an **exclusive** `end`, the spec an **inclusive**
+one, and every **access** bound now agrees exactly, algebraically, for every region size and access
+width. What it could not align — because aligning it would mean moving a convention — is the two
+instructions that return a bound as a value:
+
+```
+   SPLIT at val      spec:  val in the LOWER half     RTL:  val in the UPPER half
+                     both partition with no gap and no overlap;
+                     they differ ONLY in which side of val the cut falls
+
+   LCC rd, rs1, 4    spec:  base + K - 1              RTL:  base + K
+   over K bytes      the spec returns the last byte, the RTL one past it
+```
+
+Both are **measured, not read off source**: `split-cut-side.S` (386 cycles) and
+`bound-value-readback.S` (383 cycles), both real completions rather than a harness
+SUCCESS-at-timeout.
+
+**Two other R-32 rows are NOT on this table and must not be bundled into the ruling.** `SHRINKTO` is
+an RTL off-by-one whose guard and effect use different conventions, so it disagrees with *itself* —
+**it needs a fix, not a ruling**. `SEAL` is inert in the generated hardware (S-11), so its ±1 is
+currently unobservable.
+
+| option | what it means | cost |
+|---|---|---|
+| **(a) spec follows the RTL** | `LCC` documented as returning an exclusive `end`; `SPLIT` documented with the cut on the upper side | cheapest — the silicon is flashed and running, and the monitor and compiler already read bounds from the RTL. But the spec's `end` stops meaning "the last byte" in these two places, so the document is no longer uniform |
+| **(b) RTL follows the spec** | change the hardware | uniform documents, but it moves silicon behaviour for an issue with **no known victim**, needs synthesis and a reflash, and every existing capability-manipulating binary wants re-checking |
+| **(c) change neither, document the difference** | write it down where implementers will hit it | free and honest, and leaves the trap in place — which is exactly how this was found |
+
+**Recommendation: (a) for `LCC`, (c) for `SPLIT`, and they are deliberately different.** `LCC` is a
+**readback** — a caller who knows the convention adjusts once and is correct forever, so the spec is
+the cheaper thing to move and moving it costs nobody anything. `SPLIT` is **not** a readback: the
+same call with the same argument produces a **different partition**, so code written from the spec
+silently gets a one-byte-shifted cut on real hardware. That failure is in the data rather than in a
+returned number and will not announce itself, which is why the recommendation stops at (c) and asks
+for a second opinion instead of taking (a) for both.
+
+**What would change the recommendation:** anything found that actually calls `SPLIT` and depends on
+the cut side. Nothing in the monitor, the compiler or the LLVM backend was found to, but **that
+search was not exhaustive** and is recorded as such rather than as a clean negative.
+
+**If you rule (a)**, the spec edits are small and go to `capstone-academic-spec` (branch
+`capstone-bootstrap`, the authoritative checkout — `capstone-spec` is being archived):
+`parts/cap-man-insn.adoc:197`, the `LCC` field table's `4` row; and `parts/cap-man-insn.adoc:336-339`,
+`SPLIT`'s operational steps, if `SPLIT` is included. Both are prose-and-arithmetic changes with no
+code impact on our side.
+
+### Where `shrinkto-size-fix` sits, since it looks adjacent and is not
+
+Asked 2026-09-11 by the compiler lane, which flagged that a branch retitling `SHRINKTO`'s size
+arithmetic might have been written under the **full-exclusive** framing that was ruled and then
+superseded on 2026-09-10. Checked rather than assumed, and it was not:
+
+* **It post-dates the supersession.** `a3b7a22c0` is 2026-09-10 23:26, `a4b478754` 23:34; the
+  supersession and the adopted one-token-each-side resolution are earlier the same day.
+* **It is based on `r30-r31-init-revoke` at `1bfff7776`**, i.e. on top of the adopted resolution, not
+  the withdrawn one.
+* **It is explicitly outside the ruling.** This item's own exclusion list calls `SHRINKTO` a fix
+  rather than a ruling, on the grounds that the instruction disagrees with itself.
+* **It does not take the refuted route.** The commit leaves the `inc > end` guard alone and says why:
+  changing it to `inc - 1 > end` would legalise `inc == end + 1` and let a child's end reach one byte
+  past the parent — the same overrun shape already refuted in the `end`-convention resolution.
+* **It moves the RTL toward the other two implementations**, not away: QEMU's `op_helper.c:1093` sets
+  `end = cursor + size` exclusively and the spec's `cap-man-insn.adoc:294` sets `end = cursor + imm - 1`
+  inclusively, and both are exactly `imm` bytes. Only the RTL was short.
+
+**So it is not stale and must not be archived as such.** What it IS: an **ungated, unsynthesised**
+RTL change. Anvil compiles and simulation is correct, and its own commit message says that settles
+nothing about synthesizability. It must not reach a bitstream on a green sim. Owner still unidentified
+— the CHERI and compiler lanes have both checked and disowned it; the content is anchored on `origin`
+at `backup/shrinkto-size-fix-2026-09-11` either way.
+
 ## 6. Smaller, and safe to defer
 
 * **R-4** — retitled RECORD ONLY. Closure as *"not reproducible"* was rejected as overstating: nobody
