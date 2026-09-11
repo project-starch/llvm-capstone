@@ -3366,7 +3366,22 @@ it, and that is a behavioural change to the region lifecycle rather than a guard
 it should know the verification hangs on the ruling and not on the code.
 
 
-### M-7 — the first `create_region` AFTER a `release_region` faults; the release itself is clean `OPEN — localised 2026-09-11 by bisection; mechanism NOT established`
+### M-7 — the first `create_region` AFTER a `release_region` faults; the release itself is clean `OPEN — PARKED 2026-09-11 with the mechanism NOT established; see "why this is parked"`
+
+> **WHY THIS IS PARKED, so a later reader does not mistake a pause for an oversight.** Nothing in the
+> tree depends on it: `release_region` has exactly **one** caller, and that caller is the probe that
+> found this. No workload, no board image and no gate reaches the path. It was localised as far as
+> one-variable QEMU runs can take it — five of them, below — and the next step needs monitor-side
+> instrumentation, which is a firmware change on a component this credential cannot publish.
+>
+> **What would restart it**, in order of cheapness: (1) a print of `region_cpmp[region_id]` inside
+> `revoke_region` would settle which arm ran, which is the one thing the bisection could not reach;
+> (2) anything in the tree gaining a second caller of `release_region` — then it stops being latent;
+> (3) the region-table asymmetry below being fixed for its own sake, which would likely take this
+> with it.
+>
+> **It does NOT block the flash, the speedtest work, or any board boot.** It blocks exactly one
+> thing: proving the `pre_mmap_offset` fix, which is itself now known to be incomplete.
 
 **Newly reachable, not newly created.** `release_region` has exactly one caller in the tree — the
 `offsetcycle` probe added the same day — so the pop path had never executed. M-6 was the first defect
