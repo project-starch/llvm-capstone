@@ -1636,6 +1636,77 @@ decrements `region_n` without rolling back `pre_mmap_offset`, leaking mmap offse
 > silicon, so the sentence above holds for boot sw54's image and for nothing after it. The
 > `pre_mmap_offset` leak is fixed in the same change. Read §7h before citing this paragraph.
 
+### §7j — Position does not move this workload, and repeatability decomposes (boot sw58, 2026-09-11)
+
+Run on the **instrumented** image, so for the first time all seven pairs carry **cycles AND
+instructions on BOTH arms in one boot** — sw56 had pairs without domain instructions, sw57 had
+domain instructions without pairs. **16/16 arms, control passed, zero failures.** This section
+supersedes §7h's table as the measurement of record; §7h stands as the first pairing and for the
+tick analysis.
+
+**POSITION DOES NOT MATTER, and this is the first comparison with exactly one variable in it.**
+`main`'s domain arm ran twice in one boot, at position 8 and again at position 16, same image, same
+memory, same allocator provenance:
+
+| | cycles | instructions |
+|---|---:|---:|
+| position 8 | 2,670,343,266 | 696,765,119 |
+| position 16 | 2,670,767,218 | 696,765,119 |
+| difference | **+0.0159%** | **identical** |
+
+The instruction counts being bit-identical is what makes the cycle number readable: the same program
+demonstrably ran both times. Every earlier attempt at this question carried three confounds at once
+(image, position, region provenance) and could not settle it. **It is settled: position is worth
+0.016%, which is smaller than run-to-run variation.** Interleaving pairs costs nothing, and the
+positional caveats attached to earlier cross-boot comparisons can be dropped.
+
+**THE DOMAIN'S INSTRUCTION COUNT IS FULLY DETERMINISTIC.** All seven arms returned instruction
+counts **bit-identical** to sw57's — not close, equal, across 59 M to 2.4 G instructions and two
+separate boots. That is a stronger instrument check than any pre-registered falsifier asked for.
+
+**REPEATABILITY DECOMPOSES, and the old bound was mostly not repeatability.** §7i bounded
+run-to-run variation and a 144-byte layout difference together at ±0.462%, because one pair per
+testset could not separate them. sw58 separates them: it re-measures the **same** images sw57 and
+sw56 used, so its deltas are run-to-run alone.
+
+| comparison | observations | range | \|max\| | sd |
+|---|---:|---|---:|---:|
+| **same image**, different boot (sw58 vs sw57 domain, sw58 vs sw56 baseline) | 14 | −0.065% to +0.040% | **0.065%** | **0.027 pp** |
+| different image (+144 B), different boot — §7i's bound | 7 | −0.462% to +0.060% | 0.462% | 0.171 pp |
+
+**6.4x apart. The layout difference dominated the old figure; genuine run-to-run variation is a
+sixth of it.** So §7i's "upper bound, not an isolate" caveat was exactly right, and this is the
+measurement that isolates it.
+
+**Consequence for how many digits may be quoted, which cuts the other way from §7i.** A ratio pairs
+two single measurements, so within one image it carries about 0.027 pp — **±0.0003 on a ratio near
+1.2, not ±0.0021.** Three decimals ARE supported for a ratio measured within one boot on one image,
+which is what §7j's table is. §7i's two-decimal rule was correct for the bound then available and is
+too conservative for this measurement. **It still applies unchanged to any comparison ACROSS
+images**, where 0.171 pp is the right figure.
+
+**The seven pairs:**
+
+| testset | domain cycles | baseline cycles | cycle ratio | instr ratio | domain CPI | baseline CPI |
+|---|---:|---:|---:|---:|---:|---:|
+| star | 228,711,030 | 182,914,247 | 1.2504 | 1.2494 | 3.848 | 3.845 |
+| parsenumber | 230,632,786 | 181,904,586 | 1.2679 | 1.3535 | 3.785 | 4.040 |
+| orm | 938,018,036 | 790,674,212 | 1.1864 | 1.2740 | 3.416 | 3.669 |
+| main | 2,670,343,266 | 2,193,564,038 | 1.2174 | 1.1974 | 3.832 | 3.770 |
+| fp | 4,162,524,273 | 3,349,560,200 | 1.2427 | 1.2767 | 4.457 | 4.580 |
+| cte | 6,027,572,213 | 5,186,457,627 | 1.1622 | 1.0927 | 2.985 | 2.807 |
+| rtree | 9,042,959,076 | 7,646,394,787 | 1.1826 | 1.3169 | 3.736 | 4.160 |
+| **TOTAL** | 23,370,760,681 | 19,595,469,697 | **1.1930** | | | |
+
+Instruction ratios here use the baseline's own **ticked** board count; against a tick-free count they
+are 1.3263 / 1.4412 / 1.3487 / 1.2698 / 1.3720 / 1.1407 / 1.4050. The denominator question is §7i's
+and is unchanged by this boot.
+
+**The tick model holds on a third boot**, six of seven arms inside the pre-registered
+0.01500–0.01520 band. `cte` is outside again at 0.014992, the same arm and the same direction as
+sw56 — which is consistent with it being the emulated-tick subtraction artefact already identified
+rather than anything new.
+
 ### §7i — The domain's instruction count is measurable on silicon, and it matches the emulator (boot sw57, 2026-09-11)
 
 Every "domain CPI" in this document before today divided **board cycles by an emulator instruction
