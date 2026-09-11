@@ -119,6 +119,32 @@ fi
 export DOMAIN_EXTRA_DEFS HOST_EXTRA_DEFS
 export DOMAIN_SRC="$SCRIPT_DIR/speedtest1_measure.c"
 
+# SPEEDTEST1_SUBLET=1: build the domain on the Sublet port of memsys5 and the lookaside pool, and
+# lend it the pool and tables as REVOCABLE regions. This is the sixth matrix cell -- the same
+# allocators with the discipline applied -- so lookaside stays on and only the discipline changes.
+#
+# THE REGION OPTIONS GO AS SEPARATE ARGV ELEMENTS, BEFORE the benchmark's quoted command line.
+# Everything inside those quotes is handed to speedtest1 itself, so `--arena` written there is a
+# speedtest1 flag, not a region request: the host lifts these pairs out of argv before the join,
+# and it can only do that if they arrive as their own arguments.
+#
+# --arena, NOT SPEEDTEST1_REGION_ARENA: --arena shares REV_BORROWED, the linear borrow under a
+# handle the monitor keeps, which is the revocable relationship the discipline is about.
+# REV_SHARED is delinearised by the monitor and cannot carry it. The two claim the same slot and
+# the host refuses both, so this is enforced rather than advised.
+SUBLET_HOST_ARGS=""
+if [[ "${SPEEDTEST1_SUBLET:-0}" == "1" ]]; then
+  export SQLITE_SUBLET_PATCH=${SQLITE_SUBLET_PATCH:-$SCRIPT_DIR/sublet/sublet-3530300.patch}
+  DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DSPEEDTEST1_SUBLET=1"
+  SUBLET_POOL=${SPEEDTEST1_POOL:-1441792}
+  _atoms=$(( SUBLET_POOL / 65 ))
+  SUBLET_ARENA=$(( _atoms * 64 ))
+  SUBLET_TABLES=$(( _atoms * 57 + _atoms * 16 + 131072 ))
+  SUBLET_HOST_ARGS=" --arena $SUBLET_ARENA --tables $SUBLET_TABLES"
+  echo "== Sublet: pool $SUBLET_ARENA bytes (arena, REV_BORROWED), tables $SUBLET_TABLES bytes"
+fi
+
+
 bash "$SCRIPT_DIR/build-sqlite-silicon.sh"
 bash "$SCRIPT_DIR/build-sqlite-host.sh"
 
@@ -178,7 +204,7 @@ python3 "$ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   "${ICOUNT_ARGS[@]}" \
   "${CMA_ARGS[@]}" \
   --guest-command \
-    "cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && /tmp/h.user /mnt/host/sqlite_silicon.dom --speedtest1 '$SPEEDTEST1_ARGS'" \
+    "cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && /tmp/h.user /mnt/host/sqlite_silicon.dom --speedtest1$SUBLET_HOST_ARGS '$SPEEDTEST1_ARGS'" \
   --success-marker 'SPEEDTEST1-CYCLES' \
   --success-marker '__CAPSTONE_SPEEDTEST1_RAN__' \
   --success-marker 'TOTAL' \

@@ -71,6 +71,54 @@ static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
 #define SPEED_ARENA_LEN ((int)sizeof(sqlite_heap))
 #endif
 
+#if defined(SPEEDTEST1_SUBLET) && !defined(CAPSTONE_SPEEDTEST1_BASELINE)
+/* THE SUBLET PORT. Every `sqlite3_sublet_*` reference in this file sits behind this guard and must
+ * keep doing so: this same source is ALSO compiled as the ordinary-RISC-V baseline
+ * (CAPSTONE_SPEEDTEST1_BASELINE), and that build has no Sublet-patched amalgamation to link
+ * against, so a single ungated declaration breaks the baseline arm rather than the domain.
+ *
+ * The pool and tables arrive as shared regions from the host's --arena/--tables, NOT from
+ * SPEEDTEST1_REGION_ARENA: --arena shares REV_BORROWED, the linear borrow under a handle the
+ * monitor keeps, and only that is revocable. REV_SHARED is delinearised by the monitor
+ * (sbi_capstone.c:1589) and cannot carry the discipline. */
+void sqlite3_sublet_grant(void *pLinear);
+void sqlite3_sublet_pool(unsigned long *pBase, unsigned long *pEnd);
+void sqlite3_sublet_stats(unsigned long *aOut);
+static void *sublet_tables;          /* slot 3: memsys5's tables, out of the freed pool */
+static int sublet_tables_len;
+
+/* WHAT CONFIG_HEAP GETS UNDER THE PORT IS THE *TABLES*, NOT THE POOL, and that is the whole
+ * difference from every other configuration in this file. The pool is held by the port itself --
+ * sqlite3_sublet_grant took it into its slot and memsys5 reaches it through the primitives -- so
+ * handing the pool to CONFIG_HEAP as well would give memsys5 two views of the same memory, one of
+ * them non-revocable. memsys5's metadata instead lives in the slot-3 tables region, which is what
+ * SQLite is told about.
+ *
+ * Sized from the pool's own bounds rather than from a define, so the domain cannot disagree with
+ * the host: 41 bytes an atom under the port (a control byte, a link, a capability per atom, and
+ * the handles of the split blocks), which is the arithmetic speedtest1_domain.c uses.
+ *
+ * Computed LAZILY because the grant arrives during region-share, before any of the three
+ * CONFIG_HEAP sites run, and those sites are in different paths -- a lazy helper covers all three
+ * without touching any of them. */
+static int sublet_ready;
+static void sublet_prepare(void) {
+  unsigned long base = 0, end = 0, atoms;
+  if (sublet_ready) return;
+  sublet_ready = 1;
+  sqlite3_sublet_pool(&base, &end);
+  if (end <= base || !sublet_tables) { sublet_tables_len = 0; return; }
+  atoms = (end - base) / 64;
+  sublet_tables_len = (int)(((atoms + 15) & ~15UL) + atoms * 8 + atoms * 16 + (atoms + 32) * 16 + 64);
+}
+static void *sublet_heap_ptr(void) { sublet_prepare(); return sublet_tables; }
+static int   sublet_heap_len(void) { sublet_prepare(); return sublet_tables_len; }
+#undef SPEED_ARENA_PTR
+#undef SPEED_ARENA_LEN
+#define SPEED_ARENA_PTR (sublet_heap_ptr())
+#define SPEED_ARENA_LEN (sublet_heap_len())
+#endif
+
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
 static volatile char *hostcall_payload;
 static unsigned shared_region_count;
@@ -455,6 +503,21 @@ static void speedtest1_report(unsigned long cycles, int aborted, int rc) {
   out(" RC ");
   out_ulong((unsigned long)(rc < 0 ? 0 : rc));
   out("\n");
+#if defined(SPEEDTEST1_SUBLET) && !defined(CAPSTONE_SPEEDTEST1_BASELINE)
+  /* The discipline's own counters, beside the cycles. `init` climbing off zero is the on-silicon
+   * proof that the reclaim actually ran; `init = 0` next to a non-zero `revoke` is the R-30/R-31
+   * masking signature and means the number above understates the cost by the whole write-through. */
+  {
+    unsigned long v[5];
+    sqlite3_sublet_stats(v);
+    out("sublet: split="); out_ulong(v[0]);
+    out(" mrev=");         out_ulong(v[1]);
+    out(" delin=");        out_ulong(v[2]);
+    out(" revoke=");       out_ulong(v[3]);
+    out(" init=");         out_ulong(v[4]);
+    out("\n");
+  }
+#endif
   out(aborted ? "__CAPSTONE_SPEEDTEST1_ABORTED__\n" : "__CAPSTONE_SPEEDTEST1_RAN__\n");
   output_in_report = 0;
 }
@@ -635,7 +698,17 @@ void domain_main(unsigned *res, unsigned func) {
       hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
     else if (shared_region_count == 1)
       hostcall_payload = (volatile char *)res;
-#if defined(CAPSTONE_SPEEDTEST1_REGION_ARENA)
+#if defined(SPEEDTEST1_SUBLET) && !defined(CAPSTONE_SPEEDTEST1_BASELINE)
+    /* NO DELIN HERE, and that is the whole difference from the REGION_ARENA case below. --arena
+     * shares REV_BORROWED, so this grant arrives LINEAR, which is exactly what
+     * sqlite3_sublet_grant requires; delinearising it would destroy the property the port exists
+     * to use. The REGION_ARENA branch delins because its grant arrives already-NONLIN from a
+     * REV_SHARED share, where the delin is redundant rather than load-bearing. */
+    else if (shared_region_count == 2)
+      sqlite3_sublet_grant((void *)res);   /* the pool, linear, into its slot and nowhere else */
+    else if (shared_region_count == 3)
+      sublet_tables = (void *)res;         /* memsys5's tables, beside the pool */
+#elif defined(CAPSTONE_SPEEDTEST1_REGION_ARENA)
     else if (shared_region_count == 2) {
       /* DELIN FIRST. The grant arrives LINEAR and a linear capability is CONSUMED BY COPY, so
        * handing it to memsys5 -- which copies it into mem5.zPool and then derives every allocation

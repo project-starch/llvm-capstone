@@ -61,6 +61,21 @@ fi
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 
+# SQLITE_SUBLET_PATCH=<patch>: the Sublet port of memsys5 and the lookaside pool, applied to THIS
+# BUILD'S PRIVATE COPY of the amalgamation, immediately after the copy above and before any
+# instrument's patch. Private is the point: $PATCHED is shared with build-sqlite-capstone.sh and
+# build-speedtest1-baseline.sh, and patching it in place would leave a Sublet-patched amalgamation
+# where those read it -- the baseline especially, which has no sublet.h on its include path and
+# would fail with a header-not-found that says nothing about the cause.
+#
+# -F0 so a source the patch was not written for is refused rather than patched somewhere near.
+SUBLET_INC=()
+if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_SUBLET_PATCH"
+  SUBLET_INC=(-I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+  echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
+fi
+
 # ...AND THE HEADER, which this line has always claimed to do and never did (found 2026-09-10 by the
 # bench lane). `capstone_sqlite_vfs.h:4` does `#include "sqlite3.h"`, and NO -I directory carried one,
 # so it resolved to the HOST's /usr/include/sqlite3.h -- a DIFFERENT SQLite (3.45.1 on this machine
@@ -2712,7 +2727,7 @@ SILICON=(-mllvm -capstone-merge-string-constants=true
 read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-} ${SQLITE_DIAG:-}"
 SILICON+=("${_extra_mllvm[@]}")
 
-COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
+COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"

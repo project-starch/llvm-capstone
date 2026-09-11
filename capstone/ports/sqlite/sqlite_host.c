@@ -172,6 +172,37 @@ int main(int argc, char **argv) {
     static char joined[512];
     unsigned long at = 0;
     int i;
+    /* THE REGION OPTIONS ARE LIFTED OUT BEFORE THE JOIN, and they have to be, because everything
+       after --speedtest1 becomes the BENCHMARK's command line. Written naively, `--arena 4194304`
+       here does not configure a region at all -- it is handed to speedtest1 as a speedtest1 flag,
+       which either errors inside the domain or is ignored, and in both cases the arena silently is
+       not the one asked for. The region creation and sharing further down is already common-path
+       and keys on `arena_bytes || pool_bytes`, so nothing else needs teaching: this is option
+       parsing only.
+
+       Sublet needs --arena specifically (REV_BORROWED, the linear borrow under a handle the
+       monitor keeps). SPEEDTEST1_REGION_ARENA is NOT a substitute -- it shares REV_SHARED, which
+       the monitor delinearises, and a non-revocable share cannot carry the discipline. The two
+       also claim the same slot and the refusal above enforces it. */
+    for (i = 3; i + 1 < argc; ) {
+      unsigned long *slot = !strcmp(argv[i], "--arena")  ? &arena_bytes
+                          : !strcmp(argv[i], "--pool")   ? &pool_bytes
+                          : !strcmp(argv[i], "--tables") ? &tables_bytes
+                          : (unsigned long *)0;
+      if (!slot) { i++; continue; }
+      *slot = strtoul(argv[i + 1], NULL, 0);
+      /* remove the pair from argv so the join below cannot see it */
+      memmove(&argv[i], &argv[i + 2], (size_t)(argc - i - 2) * sizeof *argv);
+      argc -= 2;
+    }
+    if (arena_bytes && pool_bytes) {
+      fprintf(stderr, "%s: --arena and --pool exclude each other\n", argv[0]);
+      return 2;
+    }
+    if (tables_bytes && !arena_bytes && !pool_bytes) {
+      fprintf(stderr, "%s: --tables needs --pool or --arena\n", argv[0]);
+      return 2;
+    }
     for (i = 3; i < argc; i++) {
       unsigned long len = (unsigned long)strlen(argv[i]);
       if (at && at + 1 < sizeof joined)
