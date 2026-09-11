@@ -2012,11 +2012,34 @@ asymmetries in §7f; not yet quantified.
 **Unchanged from §7f and still applying:** the RVC asymmetry, the optimisation asymmetry, and the
 `SQLITE_GRANULE_GUARD` R-29 workaround present only in the capability arm.
 
-**What does not run, and why.** `json` needs a 6 MiB arena against a 4 MiB ceiling — the arena is a
-static array in the domain's globals storage and `__get_free_pages` tops out at order 10 on this
-kernel (`MAX_ORDER` is 10 and INCLUSIVE from Linux 6.4; `CONFIG_ARCH_FORCE_MAX_ORDER` is unset) — and
-it independently triggers the S-14 pre-entry fault. `app` enters and then takes a capability access 8
-bytes off 16-byte alignment; it reproduces under emulation and is being root-caused off-board.
+**THE DENOMINATOR IS TEN, AND IT WAS NINE HERE UNTIL 2026-09-11.** This document never stated one;
+it was derived from the paragraph below, which named two exclusions beside seven results. **The
+omission was the claim.** `speedtest1.c` defines eleven `testset_*` functions, of which `debug1` is
+self-described as "a testset used for debugging speedtest1 itself", leaving **ten benchmarks**. The
+count was never taken from the source — it came from an early blocked-testset table that omitted
+`trigger`, and it propagated for a month.
+
+**What does not run, and why — three, not two.**
+
+`json` needs a 6 MiB arena against a 4 MiB ceiling — the arena is a static array in the domain's
+globals storage and `__get_free_pages` tops out at order 10 on this kernel (`MAX_ORDER` is 10 and
+INCLUSIVE from Linux 6.4; `CONFIG_ARCH_FORCE_MAX_ORDER` is unset) — and it independently triggers the
+S-14 pre-entry fault.
+
+`app` enters and then takes a capability access 8 bytes off 16-byte alignment. Root-caused: SQLite's
+`exprDup` sub-allocates `Expr` nodes out of one byte buffer in 8-byte steps (`ROUND8`), so a node
+lands 8 mod 16 and the first capability-typed field stored into it faults. That is a **porting-cost
+result** in its own right — a structure packed for an 8-byte world, addressed by a capability that
+needs 16 — and it is the same family as the R-29 granule guard.
+
+**`trigger` is broken in SQLite 3.53.3 itself and cannot run anywhere.** It was never tried until
+2026-09-11, and it fails identically on the capability domain and on a stock native build of the same
+source: `SQL error: no such table: t1`. The cause is in the benchmark, not in either platform —
+`testset_trigger` creates `z1`, `z2` and `t3`, then its insert loop writes to `t%d` for `jj` 1..3,
+i.e. `t1`, `t2`, `t3`. `CREATE TABLE t1` appears **nowhere in the file** (grep count zero); the first
+two tables were evidently renamed to `z1`/`z2` without the loop being updated. So the reachable
+maximum is **nine of ten**, and the tenth is an upstream defect rather than a capability limitation.
+Stated for the version we pin; no claim is made about later releases.
 
 #### PRECISION — how many digits any figure in the §7 series may be quoted to
 

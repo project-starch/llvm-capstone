@@ -705,6 +705,59 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 
+# SQLITE_SPEEDTEST1_SRC=<path to speedtest1.c> -- stage SQLite's own benchmark INTO THE AMALGAM TU.
+#
+# It cannot be a separate object. speedtest1.c owns 23 file-scope statics, and under
+# -capstone-gp-captable globals are numbered per module and positionally against one runtime
+# cap-table, so a second globals-owning TU collides with SQLite's silently -- wrong data, no fault.
+# Staging it beside the amalgamation's other includes is what lets speedtest1_measure.c end with a
+# plain `#include "speedtest1.c"`.
+#
+# Set ABOVE the _domain_defs read, like every other domain knob: appended below it, the defines
+# reach nothing and the image builds without the benchmark while still looking valid.
+if [[ -n "${SQLITE_SPEEDTEST1_SRC:-}" ]]; then
+  [[ -f "$SQLITE_SPEEDTEST1_SRC" ]] || {
+    echo "SQLITE_SPEEDTEST1_SRC=$SQLITE_SPEEDTEST1_SRC does not exist" >&2; exit 1; }
+  cp -f "$SQLITE_SPEEDTEST1_SRC" "$OBJ_DIR/speedtest1.c"
+  # ONE NAME COLLIDES. speedtest1 and the amalgamation each define a static randomFunc, and in one
+  # translation unit that is a redefinition error. Renaming the benchmark's copy is safe because the
+  # symbol is static and local to it; it does NOT change which SQL function `random` resolves to,
+  # since speedtest1 registers its own deliberately (a benchmark must be deterministic).
+  # Counted, not sed-and-hope: if the shape ever changes, this stops the build rather than silently
+  # renaming nothing and failing later with a confusing error.
+  python3 - "$OBJ_DIR/speedtest1.c" <<'PYRF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+n = s.count("randomFunc")
+if n != 2:
+    sys.exit("speedtest1.c: expected 2 randomFunc occurrences, found %d -- the source shape "
+             "changed, re-check the collision set against the amalgamation" % n)
+open(p, "w").write(s.replace("randomFunc", "speedtest1_randomFunc"))
+print("   renamed randomFunc -> speedtest1_randomFunc (2 sites)")
+PYRF
+  # The mcycle-backed VFS clock goes with it. Without it xCurrentTimeInt64 is the skeleton's zero
+  # stub and every per-phase time speedtest1 prints is 0.000 -- which is also how a correct run with
+  # a broken clock looks, so the two are only distinguishable by this define being set here.
+  #
+  # SPEEDTEST1_STUB_CLOCK=1 suppresses it, and exists ONLY so the matched pair can be built. The
+  # plan asks for "stub versus mcycle-backed, zeros versus not", and until this knob existed the
+  # define was unconditional, so the stub arm could not be produced and the pairing had never been
+  # run. Non-zero times were observed and taken as sufficient; a paired arm is what actually
+  # separates "the clock works" from "something produced non-zero numbers".
+  if [[ "${SPEEDTEST1_STUB_CLOCK:-0}" == "1" ]]; then
+    echo "   SPEEDTEST1_STUB_CLOCK=1: VFS clock left as the zero stub (pairing arm, NOT a measurement)"
+  else
+    DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_SQLITE_MCYCLE_CLOCK=1"
+  fi
+  # __divdf3, and only for this build. testset_cte computes `5.0/g.szTest` -- a genuine double
+  # division, because SQLITE_OMIT_FLOATING_POINT redefines the `double` KEYWORD but not the type of
+  # a floating literal. cte is not a runnable testset for us (its SQL has decimal literals the
+  # tokenizer rejects), but a reference in dead code still has to link.
+  _speedtest1_builtins="divdf3"
+  echo "== speedtest1 staged from $SQLITE_SPEEDTEST1_SRC ($(wc -l < "$OBJ_DIR/speedtest1.c") lines)"
+fi
+
 # FAILSTOP=<n> -- DIAGNOSTIC ONLY. Clamp inside fail(), which WEDGES (S-02 Site A,
 # measured 2026-08-09: nk takes the fail() path and wedges, n8 skips it and returns in 4 s
 # with an otherwise identical image).
@@ -951,6 +1004,47 @@ _blocks='/^SQLITE_DEFINES=(/,/^)/p'
 [[ "${SQLITE_FEATURE_SET:-deployed}" == restored ]] && _blocks="$_blocks;/^SQLITE_RESTORE=(/,/^)/p"
 SQLITE_DEFINES=$(sed -n "$_blocks" "$SCRIPT_DIR/build-sqlite-capstone.sh" \
                  | grep -oE '\-[DU][A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
+
+# SQLITE_FLOAT=on removes SQLITE_OMIT_FLOATING_POINT, and it is read identically here, in
+# build-speedtest1-native.sh and in tools/speedtest1-heap-sweep.sh. All three harvest the same block
+# by text, so a knob honoured by one and not the others is how a domain and its oracle drift apart
+# without a word. Off by default, so every recorded board result keeps its exact define set.
+#
+# MEASURED 2026-09-10: this ONE define takes speedtest1 from three runnable testsets to SEVEN, and
+# the amalgamation is unaffected because the sed patches are textual and the defines are applied at
+# compile time by each consumer.
+# SQLITE_FULL=on implies SQLITE_FLOAT=on and adds the last two testsets. One knob because they are
+# not independent: json uses sqlite3_value_double unconditionally and would compute integer "reals"
+# without floating point, and rtree fails to LINK without INCRBLOB and to COMPILE without floating
+# point. SQLITE_FLOAT stays separate so the 3/9-to-7/9 step can still be bisected on its own.
+SQLITE_FULL=${SQLITE_FULL:-off}
+[[ "$SQLITE_FULL" == "on" ]] && SQLITE_FLOAT=on
+
+SQLITE_FLOAT=${SQLITE_FLOAT:-off}
+if [[ "$SQLITE_FLOAT" == "on" ]]; then
+  SQLITE_DEFINES="$SQLITE_DEFINES -USQLITE_OMIT_FLOATING_POINT"
+  # ONE new builtin, measured rather than guessed. With the omission gone the amalgamation
+  # references 16 double routines against the deployed build's 9; the linked image already defines
+  # 18, so __extendsfdf2 is the only addition. __divdf3 is already added for speedtest1 builds and
+  # is named here too so a non-speedtest1 float build does not lose it.
+  _float_builtins="extendsfdf2 divdf3"
+  echo "== SQLITE_FLOAT=on: floating point RESTORED (cte, star, fp and app become runnable)"
+fi
+if [[ "$SQLITE_FULL" == "on" ]]; then
+  # JSON IS DELIBERATELY NOT HERE. It needs a 6 MiB arena (measured by tools/speedtest1-heap-sweep.sh
+  # against a domain ceiling near 3 MiB), so it cannot run in a domain whatever the defines say, and
+  # including it pushes the image into the S-14 pre-entry fault: with json the domain halts at
+  # SQ: E/share1 with cause 24 before it is entered, on every testset. SQLITE_JSON=on adds it back
+  # for anyone measuring that fault rather than trying to run json.
+  SQLITE_DEFINES="$SQLITE_DEFINES -DSQLITE_ENABLE_RTREE=1 -USQLITE_OMIT_INCRBLOB"
+  [[ "${SQLITE_JSON:-off}" == "on" ]] && SQLITE_DEFINES="$SQLITE_DEFINES -USQLITE_OMIT_JSON"
+  # FOUR MORE BUILTINS, named by the linker rather than guessed: json and rtree pull in
+  # __floatundidf, __truncdfsf2 and the single-precision comparisons __gtsf2/__ltsf2, the last two
+  # of which live inside comparesf2.c the way the double ones live inside comparedf2.c. The loop
+  # deduplicates, so naming one twice across knobs is harmless.
+  _full_builtins="floatundidf truncdfsf2 comparesf2 subsf3 addsf3 mulsf3 divsf3 extendsfdf2 fixsfsi floatsisf"
+  echo "== SQLITE_FULL=on: json and rtree RESTORED (all nine testsets become runnable)"
+fi
 
 # CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
 #
@@ -2798,12 +2892,52 @@ BUILTIN_OBJS=()
   -c "$SCRIPT_DIR/capstone_floatdidf_noglobals.c" -o "$OBJ_DIR/floatdidf_ng.o"
 BUILTIN_OBJS+=("$OBJ_DIR/floatdidf_ng.o")
 # floatdidf is replaced by our globals-free version (see the amalgam header).
+# _speedtest1_builtins is EMPTY unless speedtest1 is staged. These objects are passed to the link
+# individually, not as an archive, so every name added here lands in EVERY image -- and every board
+# result on record describes an image built from exactly the list below. Keeping the addition
+# conditional is what keeps those images byte-identical.
+# TWO SILENT SKIPS USED TO LIVE HERE, and it is worth being precise about what they cost, because
+# the standing description of them is more alarming than the evidence supports.
+#
+#   1. `2>/dev/null && BUILTIN_OBJS+=(...)` dropped a builtin that FAILED TO COMPILE, with no word.
+#   2. `[[ -f ... ]] || continue` skipped a name with no source file, also with no word.
+#
+# THE DANGEROUS CASE WAS ALREADY COVERED, by the linker rather than by anything here: a builtin that
+# is missing AND referenced fails the link loudly. That is exactly what happened on 2026-09-10, when
+# `__divdf3` was absent and ld.lld said so by name. A builtin that is missing and NOT referenced
+# costs nothing. So this change does not close a hole; it converts a confusing "undefined symbol" at
+# link time into the actual compile error at the point of failure, which matters much more once
+# floating point is on and dozens more builtins are referenced.
+#
+# The missing-FILE skip is legitimate and stays, because five of these names are not separate files:
+# eqdf2, gedf2, gtdf2, ltdf2 and nedf2 are symbols defined inside comparedf2.c. But it now SAYS which
+# names it skipped, so a typo in the list is visible instead of vanishing.
+# DEDUPLICATED, because two knobs can name the same builtin: the speedtest1 path adds divdf3 for
+# testset_cte's genuine double division, and the float path needs it too. Compiling it twice puts
+# two copies in the link and ld.lld refuses with "duplicate symbol: __divdf3" -- measured, not
+# hypothetical. Skipping a repeat is better than making each knob know what the others named.
+_builtin_seen=" "
+_builtin_skipped=()
 for b in eqdf2 fixdfdi fixdfsi gedf2 gtdf2 ltdf2 muldf3 nedf2 adddf3 subdf3 comparedf2 \
-         fixunsdfdi fixunsdfsi floatsidf floatunsidf fp_mode; do
-  [[ -f "$BUILTINS/$b.c" ]] || continue
+         fixunsdfdi fixunsdfsi floatsidf floatunsidf fp_mode ${_speedtest1_builtins:-} ${_float_builtins:-} ${_full_builtins:-}; do
+  case "$_builtin_seen" in *" $b "*) continue ;; esac
+  _builtin_seen+="$b "
+  if [[ ! -f "$BUILTINS/$b.c" ]]; then
+    _builtin_skipped+=("$b")
+    continue
+  fi
+  # No 2>/dev/null, and no `&&`: a compile failure is fatal and shows its reason.
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" -O0 \
-    -c "$BUILTINS/$b.c" -o "$OBJ_DIR/$b.o" 2>/dev/null && BUILTIN_OBJS+=("$OBJ_DIR/$b.o")
+    -c "$BUILTINS/$b.c" -o "$OBJ_DIR/$b.o" || {
+      echo "build-sqlite-silicon.sh: builtin '$b' FAILED TO COMPILE (see the error above)." >&2
+      echo "  It used to be dropped silently here, which turned into an undefined-symbol link" >&2
+      echo "  error later if anything referenced it, and into nothing at all if not." >&2
+      exit 1; }
+  BUILTIN_OBJS+=("$OBJ_DIR/$b.o")
 done
+if (( ${#_builtin_skipped[@]} )); then
+  echo "   builtins with no own source file (expected: symbols inside comparedf2.c): ${_builtin_skipped[*]}"
+fi
 
 # Two-pass link: pass 1 only to measure .text, pass 2 with the real globals offset.
 link() {  # $1 = globals offset literal, $2 = output

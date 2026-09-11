@@ -23,13 +23,42 @@ import sys, struct, subprocess, os, re
 PAGE = 4096
 
 
+def _max_order_is_inclusive(root):
+    """Which MAX_ORDER convention the kernel under `root` uses, read from its own header.
+
+    Linux 6.4 FLIPPED it. Up to 6.3, MAX_ORDER was exclusive -- orders 0..MAX_ORDER-1 were
+    allocatable and the default was 11. From 6.4 it is inclusive -- 0..MAX_ORDER, default 10.
+    Both give a 4 MiB ceiling by default, which is why nothing here ever noticed; the
+    difference only shows once CONFIG_ARCH_FORCE_MAX_ORDER is set, and then it is a factor
+    of two in the direction that reports DOES NOT FIT for an image that loads.
+
+    The discriminator is exact and needs no version parsing: mmzone.h defines
+    MAX_ORDER_NR_PAGES as (1 << MAX_ORDER) under the new convention and
+    (1 << (MAX_ORDER - 1)) under the old one.
+    """
+    import glob
+    for h in sorted(glob.glob(os.path.join(root, "build", "build", "linux-*",
+                                           "include", "linux", "mmzone.h"))):
+        with open(h) as fh:
+            src = fh.read()
+        if re.search(r"define\s+MAX_ORDER_NR_PAGES\s*\(1\s*<<\s*\(\s*MAX_ORDER\s*-\s*1\s*\)\s*\)", src):
+            return False
+        if re.search(r"define\s+MAX_ORDER_NR_PAGES\s*\(1\s*<<\s*MAX_ORDER\s*\)", src):
+            return True
+    return None
+
+
 def _max_alloc_order():
-    """__get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1.
+    """The largest order __get_free_pages(GFP_HIGHUSER, order) can serve.
 
     READ, do not hardcode. This was a literal 10 until 2026-08-19, when the kernel
     gained CONFIG_ARCH_FORCE_MAX_ORDER=13 and the literal started reporting DOES NOT
     FIT for images that load fine. A constant duplicating a config value goes stale
     silently and the staleness looks exactly like a finding.
+
+    The same is true of the CONVENTION, which is why the header is read too: returning
+    CONFIG_ARCH_FORCE_MAX_ORDER - 1 on a 6.4 kernel halves the ceiling, and halving a
+    ceiling produces a DOES NOT FIT that reads exactly like a real budget failure.
     """
     root = os.environ.get("CAPSTONE_BUILDROOT_DIR")
     if root is None:
@@ -39,13 +68,24 @@ def _max_alloc_order():
     if not os.path.exists(cfg):
         sys.exit(f"domdata-budget: cannot read {cfg}. Set CAPSTONE_BUILDROOT_DIR. "
                  f"Refusing to guess the allocation ceiling.")
+    forced = None
     with open(cfg) as fh:
         for line in fh:
             m = re.match(r"^CONFIG_ARCH_FORCE_MAX_ORDER=(\d+)\s*$", line)
             if m:
-                return int(m.group(1)) - 1
-    # Symbol absent means the kernel default applies, which is MAX_ORDER 11.
-    return 10
+                forced = int(m.group(1))
+    inclusive = _max_order_is_inclusive(root)
+    if forced is None:
+        # The default is 11-exclusive before 6.4 and 10-inclusive from 6.4, and both mean
+        # order 10. So this answer does not depend on the convention and is safe even when
+        # no unpacked kernel source is around to read it from.
+        return 10
+    if inclusive is None:
+        sys.exit("domdata-budget: kernel.config sets CONFIG_ARCH_FORCE_MAX_ORDER="
+                 f"{forced} but no unpacked kernel source was found under {root}/build/build/"
+                 "linux-*/ to read the MAX_ORDER convention from. The two conventions differ "
+                 "by a factor of two in the ceiling. Refusing to guess.")
+    return forced if inclusive else forced - 1
 
 
 MAX_ALLOC_ORDER = _max_alloc_order()

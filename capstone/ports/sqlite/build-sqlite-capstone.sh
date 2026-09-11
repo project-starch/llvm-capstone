@@ -105,9 +105,6 @@ if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"
 fi
 
-# SQLITE_LOOKASIDE=slots-size,count (default 0,0: the pool off) selects SQLite's compiled-in
-# lookaside default; the allocator chain lookaside > memsys5 that the paper measures needs
-# 1200,40, the shipped default (run-sqlite-speedtest1.sh sets it).
 SQLITE_DEFINES=(
   -DNDEBUG
   -DSQLITE_OS_OTHER=1
@@ -134,9 +131,27 @@ SQLITE_DEFINES=(
   -DSQLITE_UNTESTABLE=1
   -DSQLITE_ZERO_MALLOC=1
   -DSQLITE_ENABLE_MEMSYS5=1
-  -DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}
+  -DSQLITE_DEFAULT_LOOKASIDE=0,0
   -DYYSTACKDEPTH=1000
 )
+
+# SQLITE_LOOKASIDE=slots-size,count selects SQLite's compiled-in lookaside default; the allocator
+# chain lookaside > memsys5 that the paper measures needs 1200,40 (run-sqlite-speedtest1.sh sets
+# it). A later -D wins over an earlier one, so this overrides the 0,0 above without disturbing it.
+#
+# IT IS APPLIED HERE, OUTSIDE THE ARRAY, AND THAT PLACEMENT IS THE WHOLE POINT. Three other scripts
+# read this block as TEXT, not by running it -- build-sqlite-silicon.sh:1005 harvests it with
+# sed+grep, and build-speedtest1-native.sh and tools/speedtest1-heap-sweep.sh do the same. A shell
+# expansion written inside the array is harvested LITERALLY and handed to clang as
+# `-DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}`, which fails at the use site with
+# "use of undeclared identifier '$'" -- the whole silicon path, every board domain included. The
+# two native harvesters filter this macro out and so never saw it, which is exactly why the array
+# must stay literal: one consumer expands, three do not, and only one of the three complains.
+# Keeping the default at 0,0 in the array also keeps every recorded board result reproducible by
+# text harvest alone.
+if [ -n "${SQLITE_LOOKASIDE:-}" ]; then
+  SQLITE_DEFINES+=( "-DSQLITE_DEFAULT_LOOKASIDE=$SQLITE_LOOKASIDE" )
+fi
 
 # ---- feature set ------------------------------------------------------------------------------
 # `deployed` (the default) reproduces every recorded board result byte for byte. `restored`

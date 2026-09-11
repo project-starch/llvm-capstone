@@ -461,6 +461,88 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
+## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
+
+**Word any restatement of this carefully.** `grep -c badaddr target/riscv/op_helper.c` returns **2**,
+at `:656` and `:1002`, and a reviewer who runs the obvious grep and sees a non-zero count stops
+reading. Both occurrences are prose inside comments and neither assigns anything. Every real
+`env->badaddr =` in the tree is in `cpu_helper.c` (`:1217`, `:1262`, `:1287`, `:1990`), all on the
+ordinary MMU paths.
+
+**Consequence.** Neither the alignment check nor the bounds check below it ever wrote the field, so
+the `cause/pc/badaddr` line the monitor prints carried whatever the last ORDINARY fault had left
+there — readable-looking, plausible, and unrelated to the fault being reported. The investigated case
+reported `tval = badaddr = 0x1015b0000` against a true faulting address of `0x101fb8168`.
+
+**Verified after the fix** on the same reproducer: `tval` and `badaddr` both read `0x101fb8148`,
+equal to the address the debug line prints.
+
+**NOT a defect, recorded because both lanes inferred one from it.** The alignment path does not call
+`cpu_restore_state` and the bounds path does. That asymmetry is about the PRINT, not the trap:
+`riscv_raise_exception(env, excp, GETPC())` reaches `cpu_loop_exit_restore`, which restores state
+whenever `pc` is non-zero (`accel/tcg/cpu-exec-common.c:75-81`), so `mepc` was always correct on both
+paths. The explicit call exists only so that path's own debug print can read `env->pc`, which inside
+a helper is otherwise whatever was last synced at a translation-block boundary. **An asymmetry
+between two code paths is a question, not a finding, until you have read what the common callee
+does.**
+
+## Q-09 — a misaligned capability STORE raised `LOAD_ADDR_MIS` (cause 4) instead of `STORE_AMO_ADDR_MIS` (cause 6) `FIXED 2026-09-11 in capstone-qemu cabc953e58`
+
+The 16-byte alignment check in `op_helper.c` sat above and independent of the `is_store` branch below
+it, and raised `RISCV_EXCP_LOAD_ADDR_MIS` unconditionally. So every misaligned `stc` reported itself
+as a misaligned load. Both constants exist in this tree (`cpu_bits.h:676` and `:678`); only the load
+one was used.
+
+Filed separately from **Q-08** because it moves a reported cause number rather than a reported
+address, and separately from the diagnostic improvement that landed with it. Verified on the
+reproducer: `cause = 6`.
+
+**On reading either of these on silicon:** R-24 records the exception encoder as off by one depending
+on which unit raised the fault, so a board-side cause number is not the same claim as an emulated
+one, fixed or not.
+
+## Q-10 — `CSSPLIT` with an out-of-range `mid` ABORTS the emulator instead of raising `OPEN — QEMU divergence, filed 2026-09-11; same class as Q-07, which was fixed by trapping`
+
+`helper_cssplit` (`target/riscv/op_helper.c:1105-1131`) prints a good diagnostic and then
+`assert(mid > ...bounds.base && mid < ...bounds.end)`. The assert kills the host process. A reachable
+operand combination therefore takes the emulator down rather than raising a capability exception the
+domain could report — which is exactly the shape Q-07 records for `INIT`, and Q-07 was resolved by
+making it trap.
+
+**How it is reached, with the arithmetic, because it is not exotic.** The domain's entry glue carves
+SQLite's arena by splitting it off the **top** of a parent capability. Raise `SQLITE_HEAP_SIZE` past
+that parent's span and `mid = end - heap` falls below `base`. Observed 2026-09-11 at a 2.5 MiB arena
+on the speedtest1 path:
+
+    requested split (end - mid)   2,621,440   = SQLITE_HEAP_SIZE, exactly
+    parent capability span        2,507,248
+    shortfall                       114,192   = how far mid falls below base
+
+    capstone: CSSPLIT out of bounds -- mid=0x101d711f0 parent=[0x101d8d000,0x101ff11f0) (mid below base)
+    qemu-system-riscv64: op_helper.c:1131: helper_cssplit: Assertion `mid > ...base && mid < ...end' failed
+
+**NO THRESHOLD MAY BE DERIVED FROM THIS.** A run on 2026-09-10 (`qemu-run1.log`) issued the same
+2,621,440 request with this assert already present and did **not** trip it, so the parent's capacity
+is not a fixed number and any figure taken from one run describes that run.
+
+**What the correct behaviour is has NOT been established here.** It should raise rather than abort,
+but which exception the spec and the RTL specify for an out-of-range `CSSPLIT` is an rtl-oracle
+question and is not answered by this entry.
+
+**Two warnings about how this was found, because both are the classes this file exists to catch.**
+It was first reported as an instance of **S-14** and that was wrong: S-14's signature is
+`Cap mem access requires capability` followed by `cause = 24`, and `cause =` appears **zero** times in
+any of the five logs from that experiment while firing in eleven others in the same directory. The
+classifier that produced the misreading keyed on `SQ: E/share1` present and `SQ: G/enter` absent —
+a condition satisfied by a pre-entry capability fault **and** by an emulator abort, so it could not
+separate the two hypotheses on the table, with the diagnostic line sitting in the log. **Read the
+diagnostic, not the marker sequence.**
+
+**It may be what S-14's trigger (b) always was.** That trigger is recorded as "a 2.5 MiB heap arena,
+no define involved", reported and withdrawn within the hour as an N=1 over-claim. It has the same
+arena size and the same path. Not asserted — stated as the thing to check before trigger (b) is
+treated as an S-14 instance.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -879,7 +961,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-14 — restoring `SQLITE_OMIT_EXPLAIN` makes the SQLite domain fault at its FIRST region share, before any of its own code runs `OPEN — DEMONSTRATED 2026-09-09 under QEMU by single-define bisection with an all-deployed control; root cause NOT established and not claimed; the define is dropped from the restore set, so nothing ships broken`
+### S-14 — `__capstone_cap_init` reloads a capability spill slot with a scalar `ld`, so the tag is lost before the domain runs `ROOT CAUSE IDENTIFIED 2026-09-11 — a CODEGEN defect, not image or dom_data geometry; two triggers shown to be one defect; the compiler fix is not yet made`
 
 **What happens.** The `restored` SQLite silicon image built with all eight `-U` defines does not run:
 it faults at `SQ: E/share1` with **cause 24** (unexpected operand type), *before* the domain enters,
@@ -953,6 +1035,109 @@ unexpected operand type.
 > three unrelated causes and one signature is now a pattern rather than a coincidence, and the next
 > step is still to move ONE quantity.
 >
+> **2026-09-11 — ROOT CAUSE. A capability spill slot is written with `stc` and read back with a
+> scalar `ld`, whose result is fed straight to `cincoffsetimm`.** The tag is gone by then, so the
+> instruction faults with cause 24, "x[rs1] is not a capability". At the exact pc the emulator
+> reports, in the json/`.bss` image:
+>
+>     189204: 83 30 01 26   ld            ra, 0x260(sp)
+>     189208: db a0 f0 4c   cincoffsetimm ra, ra, 0x4cf      <- the logged fault pc
+>     18920c: 5b 48 15 06   stc           ra, 0x70(a0)
+>
+> **Slot `0x260(sp)` is a capability slot accessed BOTH ways in the same function**: 33 `ldc` and 3
+> `stc` against 7 `ld` and 4 `sd`. The scalar reloads are the defect. The function is
+> `__capstone_cap_init`, which the compiler synthesises
+> (`llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp`) and `start.S` calls before `domain_main` —
+> so this is the **domain image's own code**, not the monitor's. It is straight-line, one `ret` and no
+> branches, so a bad site is reached unconditionally and the fault is deterministic per image.
+>
+> **THE PATTERN SEPARATES FAULTING FROM RUNNING IMAGES PERFECTLY.** Counting scalar `ld` from an `sp`
+> slot whose value the next instruction consumes with `cincoffsetimm`:
+>
+>     image            trigger                    arena          bad reloads   result
+>     slt-explain      -USQLITE_OMIT_EXPLAIN      .bss 256 KiB        3        FAULTS
+>     jsonbss          json feature set           .bss 2 MiB          3        FAULTS
+>     slt-base         (control)                  .bss 256 KiB        0        RUNS
+>     json-region      json feature set           region 6 MiB        0        RUNS
+>     w3-bss           rtree                      .bss 2 MiB          0        RUNS
+>     w3-region        rtree                      region 2 MiB        0        RUNS
+>
+> In both faulting images the FIRST such site is the pc the emulator printed.
+>
+> **`slt-base` against `slt-explain` retires the geometry hypothesis.** Same path, same 256 KiB `.bss`
+> arena, same carve, one define apart — one clean, one with three bad reloads. **So triggers (a) and
+> (c) are ONE defect, and the `dom_data` carve is not the variable.** Image size, globals count and
+> carve are correlates that happened to move together in the four-build series; they are not the
+> mechanism.
+>
+> **What the region arena actually did, stated so nobody reads it as a fix.** Removing the 2 MiB
+> `sqlite_heap` array changes `__capstone_cap_init`'s codegen and the bad reloads disappear with it.
+> That is **incidental**. Any change to the global set can reintroduce them, and an image can be
+> clean today and faulty after an unrelated edit. **Gate on the reload pattern, not on a carve
+> number.**
+>
+> **Two things this entry previously said that are wrong, corrected here.** It described the fault as
+> being in "the monitor's entry glue" — it is the domain's own compiler-emitted `cap_init`. And it
+> gives the signature as `Cap mem access requires capability` followed by `cause = 24`: **that string
+> appears zero times in either faulting log.** The signature is `cincoffsetimm with an UNTAGGED rs1`
+> followed by `cause = 24`. A reader applying the old wording would reject a true instance.
+>
+> **A classifier keyed on `cause = 24` alone is not enough either.** A `cause = 24` fault was observed
+> the same day AFTER `SQ: G/enter` with no `UNTAGGED` line — post-entry, not S-14. The discriminating
+> pair is the `UNTAGGED rs1` diagnostic plus the pre-entry marker state.
+>
+> **Still open:** which LLVM component emits the scalar reload — register allocation, spill-slot
+> typing, or `CapstoneCapGlobalInit` itself. That is compiler work and is not diagnosed here.
+
+> **2026-09-11 — THE DISCRIMINATOR RAN. Trigger (a) is CONFIRMED on its own path, and the fault now
+> has a specific diagnosis. It also does NOT reproduce on the speedtest1 path.**
+>
+> Matched pair on the SLT path, which is the path this entry was recorded on — region 1 MiB, the
+> 256 KiB default arena, no declared stack:
+>
+>     slt-base      RUNS   full A..H chain, `records`, guest exit 0
+>     slt-explain   FAULTS at SQ: E/share1, no F/share2, no G/enter, after 8 CINCOFFSET gp traces
+>
+> The control is shown to have run rather than assumed. The faulting arm's diagnostic:
+>
+>     capstone-qemu: cincoffsetimm with an UNTAGGED rs1 -- pc=0x101d45174 rd=x1 rs1=x1
+>                    val=0x101fad710 priv=3
+>     [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101d45174, tval = 0x0
+>
+> **`priv=3` is M-mode (`cpu_bits.h:621`), and it corroborates "pre-entry" independently of the
+> markers.** The faulting pc sits 1,331,572 bytes into a 1,450,840-byte image — the load base is
+> `0x101c00000`, fixed by the glue's first cap-table access at `0x101c00034` — so domain-range code is
+> executing in **machine mode**, which is the monitor's entry glue before the privilege switch, not
+> the domain proper. Three independent things now agree that no SQLite instruction has run: the
+> marker sequence, the absence of `G/enter`, and the privilege level. A reader checking whether this
+> is really pre-entry should not have to take the marker's word for it.
+>
+> **Three readings, each with its warrant.** `rd` and `rs1` are both **x1**, the return-address
+> register, so it is `ra` that has arrived untagged. `cause = 24` is spec-derived on this path —
+> `op_helper.c:655-665` cites `cap-man-insn.adoc` for "Unexpected operand type (24): x[rs1] is not a
+> capability" — so the number is trustworthy *under emulation*; R-24 remains about silicon. And by the
+> instrument's own documented rule at `op_helper.c:640-646`, a **plausible non-zero** `val` means a
+> capability that LOST its tag in memory — the S-07 family — where `val=0` would have meant an
+> ordinary null pointer and a program bug. `val=0x101fad710` is plausible and non-zero.
+>
+> **Do not quote `badaddr` from this line.** That path assigns nothing to it (see **Q-08**), so it
+> holds whatever the last ordinary fault left.
+>
+> **It does not reproduce on the speedtest1 path.** Four images — `SQLITE_FULL` off and on, each with
+> and without `-USQLITE_OMIT_EXPLAIN` — all reach `H/return` with correct hashes, at region 64 KiB,
+> 2 MiB arena and 1 MiB declared stack. **This does not isolate geometry.** The two paths differ in at
+> least four respects: region size 16x, arena 8x, declared stack present versus absent, and
+> `-DCAPSTONE_SQLITE_SLT=1`, which changes the program. A one-variable comparison between them does
+> not exist yet.
+>
+> **A correction, recorded because it was circulated.** An earlier pass on 2026-09-11 reported trigger
+> (a) as REFUTED and reported a 2.5 MiB-arena image as a third S-14 instance localising the fault to
+> the `dom_data` carve. Both were wrong. The arena image had aborted QEMU on a `CSSPLIT` assert
+> (**Q-10**) and never took a capability fault — `cause =` appears zero times in all five logs of that
+> experiment and fires in eleven others in the same directory. The classifier keyed on `E/share1`
+> present and `G/enter` absent, which a capability fault and an emulator abort both satisfy. Nothing
+> from that pass reached this file.
+
 > **The cheap discriminator nobody has run:** build the EXPLAIN-restored image and the oversized-arena
 > image and compare their `.text` size, globals offset and `dom_data` carve. If those coincide where
 > the working images differ, geometry is the factor and both entries collapse into one. That is
@@ -5136,6 +5321,39 @@ unverified; the 416-byte image and the assertion text are the measurements.
 lost padding or fell under it. If so this is a latent fragility (fixed split offset vs. variable
 image size), not a miscompile, and the fix belongs in the padding or the monitor rather than in the
 compiler.
+
+## I-7 — four near-twin SQLite files, two pairs, and git will never flag either · `OPEN 2026-09-11 — a selection hazard, not a defect; no result is known to be wrong because of it`
+
+Merging the collaborator's bring-up stack alongside our measurement branch left two pairs of
+files whose names differ by a word and whose jobs differ entirely:
+
+| pair | built by | produces |
+|---|---|---|
+| `speedtest1_domain.c` | `build-sqlite-capstone.sh` | `speedtest1_capstone.dom` — bring-up: ten staged markers, compile-time testset, no cycle counting |
+| `speedtest1_measure.c` | `build-sqlite-silicon.sh` | `sqlite_silicon.dom` — measurement: cycle/instruction counts, runtime testset |
+| `run-sqlite-speedtest1.sh` | — | drives the first |
+| `run-speedtest1-measure.sh` | — | drives the second |
+
+**Why this is filed rather than fixed.** Both are wanted: one gets a large workload onto the
+hardware the first time, the other emits the numbers. The rename that produced the second name was
+the right call (it cleared an add/add conflict and git recorded it as a rename, so history follows
+the file). What is left is not a conflict at all — it is an ABSENCE of one, which is precisely why
+no tool reports it.
+
+**The hazard is provenance, and it is specific.** §7f–§7k of
+`fpga-silicon-measurements-for-paper.md` and the `board-results` rows cite measurements **by image
+hash**. The two domains are different images with different hashes, so a row is never ambiguous
+once written — but reaching for the wrong source file when REPRODUCING one yields an image that
+legitimately fails to match, and the natural reading of that is "the result did not reproduce"
+rather than "the wrong tool was built".
+
+**What would settle it:** either a comment block at the top of each of the four naming its twin
+and its output artifact, or a single runner that dispatches on a mode flag. Neither has been done.
+Until then, check which of the two `.dom` names a result cites before rebuilding it.
+
+**Positive control for anyone re-checking this entry is cheap:** `git merge-tree` reports zero
+add/add pairs on the merged tree — run it against the pre-rename tip `890c02fc0512` instead and it
+reports two. An instrument that cannot produce the non-zero answer has not cleared anything.
 
 ## How to add an entry
 
