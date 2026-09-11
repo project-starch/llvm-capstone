@@ -17,7 +17,7 @@
  * (~192 KiB at 48 B/node).
  */
 #include "revoke_cost_probe.h"
-#include "../../../benchmarks/sqlite/revoke_on_free_alloc.h"
+#include "../../../ports/sqlite/revoke_on_free_alloc.h"
 
 #ifndef ROF_COST_MODE
 #define ROF_COST_MODE ROF_COST_MODE_REVOKE

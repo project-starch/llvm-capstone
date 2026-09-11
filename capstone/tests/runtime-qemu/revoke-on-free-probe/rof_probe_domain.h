@@ -4,7 +4,7 @@
 /* Domain-side glue: the receive protocol plus the allocator under test. */
 
 #include "revoke_on_free_probe.h"
-#include "../../../benchmarks/sqlite/revoke_on_free_alloc.h"
+#include "../../../ports/sqlite/revoke_on_free_alloc.h"
 
 /* The monitor-granted arena, delivered on the func==1 entry and parked in a
  * .bss capability slot until the CALL entry. stc/ldc duplicate rather than move,

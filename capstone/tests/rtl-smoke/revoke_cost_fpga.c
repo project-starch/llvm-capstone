@@ -20,7 +20,7 @@
  */
 #include "../runtime-qemu/revoke-cost-probe/revoke_cost_probe.h"
 #include "fpga_instrument.h"
-#include "../../benchmarks/sqlite/revoke_on_free_alloc.h"
+#include "../../ports/sqlite/revoke_on_free_alloc.h"
 
 #ifndef ROF_COST_MODE
 #define ROF_COST_MODE ROF_COST_MODE_REVOKE

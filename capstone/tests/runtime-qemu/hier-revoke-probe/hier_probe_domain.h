@@ -8,7 +8,7 @@
  * the same derivation chain, not a hand-rolled shortcut. */
 
 #include "hier_revoke_probe.h"
-#include "../../../benchmarks/sqlite/revoke_on_free_hier_alloc.h"
+#include "../../../ports/sqlite/revoke_on_free_hier_alloc.h"
 
 static void *hier_probe_grant;
 
