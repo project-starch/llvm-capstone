@@ -49,7 +49,7 @@ keep their signatures, one entry is added between the levels (`sqlite3MallocLine
 three exported functions hand the pool over and read the counters.
 
 Outside the patch, and counted apart from it because they are not SQLite: the domain
-adapter `speedtest1_domain.c` has 67 lines in six `#ifdef SPEEDTEST1_SUBLET` blocks, the
+adapter `speedtest1_domain.c` has 67 lines in **five** `#ifdef SPEEDTEST1_SUBLET` blocks, the
 glue that takes the pool linear from the host, carves memsys5's tables beside it and prints
 the primitive counts; and `sqlite_host.c --arena` creates that pool as a linear region under
 a handle the monitor keeps (`REV_BORROWED`).
@@ -97,3 +97,62 @@ need reinitialisation.
 Both entries are OPEN in `docs/ref/ISSUES.md`. R-30's fix is a deliberate deviation from the
 specification's end convention and is awaiting the project lead's ruling, so neither is a matter of
 waiting for a build.
+
+## Porting it to the SILICON measurement runner — surveyed 2026-09-11, not yet done
+
+The Sublet adapter lives in `speedtest1_domain.c`, which is the QEMU/host benchmark. The silicon
+measurement path uses a different harness, `speedtest1_measure.c`, reached through `DOMAIN_SRC` and
+built by `build-sqlite-silicon.sh`. Getting the sixth matrix cell (Sublet under capabilities) onto
+silicon means porting between the two. **This section is the survey, so the next attempt starts from
+what is actually there rather than from the assumption that it is a copy-paste.** Every line number
+below was read at the revision this was written on; re-check them before relying on one.
+
+**The two harnesses are NOT variants of one file.** The differences that break a naive port:
+
+| | `speedtest1_domain.c` (QEMU) | `speedtest1_measure.c` (silicon) |
+|---|---|---|
+| shared regions expected | **four**: 0 metadata, 1 payload, 2 pool, 3 tables | **three**: 0, 1, 2 — there is no slot-3 case at all |
+| what it does with slot 2 | hands it straight to `sqlite3_sublet_grant`, never stores it | **DELINS it** (`__builtin_capstone_cap_delin`) into a plain pointer |
+| bounds | its own inline-asm `cap_bounds` helper | compiler builtins `..._cap_get_base` / `_get_end` |
+| memsys5's tables | from the slot-3 tables region, sized ~41 bytes per 64-byte atom | **nowhere** — only a `.bss` `sqlite_heap`, which the silicon build fixes at **256 KiB** |
+| also compiled as | nothing else | **ordinary Linux userspace**, via `CAPSTONE_SPEEDTEST1_BASELINE` |
+| output | unbounded | bounded, with a fixed `SPEED_REPORT_RESERVE` of 512 bytes |
+
+**The four things that make this more than moving five `#ifdef` blocks:**
+
+1. **The delin is a direct contradiction, and it is the hard edit.** The measure harness delins the
+   slot-2 grant. `sqlite3_sublet_grant` requires exactly the linearity that delin destroys. One or
+   the other has to go, per build.
+2. **Slot 3 does not exist in the measure harness and is needed.** At ~41 bytes of tables per
+   64-byte atom, a 256 KiB `.bss` heap caps the pool near **400 KiB** — too small to be a serious
+   arena. A realistic pool needs `--tables`, i.e. a slot-3 capture case that has to be written.
+3. **The baseline arm will break on any ungated extern.** `speedtest1_measure.c` is also the Linux
+   baseline, and that build has no Sublet-patched amalgamation to link against. Every
+   `sqlite3_sublet_*` declaration and call must sit behind the same guard.
+4. **`--speedtest1` parses no options.** Everything after it is joined into the benchmark's own
+   command line, so `--arena 4194304` written there silently becomes a *speedtest1* argument. Only
+   `--tail` reads `--arena` / `--pool` / `--tables` today. The region creation and sharing itself is
+   already common-path and fires on `arena_bytes || pool_bytes`, so the change is option parsing
+   only: lift those pairs out of the argv range before the join.
+
+**`SPEEDTEST1_REGION_ARENA` is NOT a substitute for `--arena`, and a Sublet run must not set it.**
+It shares its region `REV_SHARED`, which is a **non-revocable** share; `--arena` shares
+`REV_BORROWED`, the linear borrow under a handle the monitor keeps, and only that establishes the
+revocable relationship the whole discipline is about. They also claim the same slot and the host
+refuses both, so this is enforced rather than merely advised.
+
+**One thing the survey could NOT settle, recorded rather than guessed.** `speedtest1_measure.c`
+asserts in a comment that its slot-2 grant "arrives LINEAR and a linear capability is CONSUMED BY
+COPY", yet the host shares that same region `REV_SHARED`, which other in-tree evidence describes as
+non-revocable. Whether the grant genuinely arrives linear there — making the delin load-bearing — or
+arrives non-linear, making it defensive, is **UNRESOLVED** from the sources in this directory. It
+does not change the plan: under `--arena` the grant is unambiguously linear and must not be delinned.
+
+**What is already in place, so it does not need building.** The patched amalgamation is *already*
+copied to a private per-build path before any rewriting happens, and the patch applies to it
+verbatim with `-p1`; the insertion point is after that copy and before the first rewrite pass. Only
+an `-I` onto this directory has to join the common compile flags. And the same-translation-unit
+requirement is **already satisfied**: the silicon amalgam includes the patched SQLite and the
+measure harness into one TU, so the patch's `static` counters are visible to ported code placed in
+the harness. Keep them `#include`d; compiling either separately would split the counters silently
+and invert the `init` detector described above.

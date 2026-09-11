@@ -674,20 +674,29 @@ code impact on our side.
 
 Asked 2026-09-11 by the compiler lane, which flagged that a branch retitling `SHRINKTO`'s size
 arithmetic might have been written under the **full-exclusive** framing that was ruled and then
-superseded on 2026-09-10. Checked rather than assumed, and it was not:
+superseded on 2026-09-10. Checked rather than assumed, and it was not. **The evidence is ordered by
+what it can actually carry, because the obvious check is the weakest one** — a correction the
+compiler lane made to a first version of this list that led with the dates:
 
-* **It post-dates the supersession.** `a3b7a22c0` is 2026-09-10 23:26, `a4b478754` 23:34; the
-  supersession and the adopted one-token-each-side resolution are earlier the same day.
-* **It is based on `r30-r31-init-revoke` at `1bfff7776`**, i.e. on top of the adopted resolution, not
-  the withdrawn one.
+* **It DECLINES the refuted route, and says why. This is the load-bearing evidence.** The commit
+  leaves the `inc > end` guard alone on the stated grounds that changing it to `inc - 1 > end` would
+  legalise `inc == end + 1` and let a child's end reach one byte past its parent — precisely the
+  overrun the `end`-convention resolution threw out. **Someone reasoning from the withdrawn
+  full-exclusive framing would have changed that guard.** Declining it is a choice visible in the
+  source, which is what makes it something to point at rather than infer.
+* **It moves an outlier onto the agreed behaviour rather than re-litigating the convention.** QEMU's
+  `op_helper.c:1093` sets `end = cursor + size` exclusively and the spec's `cap-man-insn.adoc:294`
+  sets `end = cursor + imm - 1` inclusively — **both exactly `imm` bytes**. Only the RTL was short by
+  one. A change that converges two of three implementations onto the third is a different animal from
+  one that reopens the ruling.
 * **It is explicitly outside the ruling.** This item's own exclusion list calls `SHRINKTO` a fix
   rather than a ruling, on the grounds that the instruction disagrees with itself.
-* **It does not take the refuted route.** The commit leaves the `inc > end` guard alone and says why:
-  changing it to `inc - 1 > end` would legalise `inc == end + 1` and let a child's end reach one byte
-  past the parent — the same overrun shape already refuted in the `end`-convention resolution.
-* **It moves the RTL toward the other two implementations**, not away: QEMU's `op_helper.c:1093` sets
-  `end = cursor + size` exclusively and the spec's `cap-man-insn.adoc:294` sets `end = cursor + imm - 1`
-  inclusively, and both are exactly `imm` bytes. Only the RTL was short.
+* **It is based on `r30-r31-init-revoke` at `1bfff7776`**, i.e. on top of the adopted resolution, not
+  the withdrawn one.
+* **It post-dates the supersession — but this is CIRCUMSTANTIAL and must not be led with.**
+  `a3b7a22c0` is 2026-09-10 23:26 and `a4b478754` 23:34, both hours after. Timestamps establish
+  **opportunity only**: a commit written after a supersession can still be written by someone
+  thinking inside the withdrawn framing. Kept for completeness, ranked last deliberately.
 
 **So it is not stale and must not be archived as such.** What it IS: an **ungated, unsynthesised**
 RTL change. Anvil compiles and simulation is correct, and its own commit message says that settles
