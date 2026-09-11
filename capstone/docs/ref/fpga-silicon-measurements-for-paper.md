@@ -2130,6 +2130,43 @@ answered *"did the two operators move timing"* — cleanly, no — and was never
 *"is this flashable"*; the synth lane says plainly that they reported it as PASS without separating
 those, and that is the right correction to have on the record.
 
+**THERE IS A SECOND, BLUNTER CRITERION, AND IT IS IN THE SYNTHESIS SCRIPT, NOT IN `docs/`.**
+`corev_apu/fpga/scripts/run.tcl` says, in as many words:
+
+> `WNS <  0  -> DO NOT FLASH. Restore retiming or lower the clock, and say so.`
+
+Recorded because this lane asserted to the lead that *"the repo doesn't say that"*. It does. The
+search behind that claim covered `capstone/docs/` and never reached the synthesis scripts — a
+conclusion drawn from a filtered view, which is the failure mode this project has a standing rule
+about.
+
+**Its scope, which is what decides whether it binds the R-30/R-31 flash.** The text appears TWICE in
+`run.tcl` at `s12-ldc-rolling-filter` — `:93-99`, added by `1fc34e158` (2026-08-18) when retiming was
+set **false**, and `:109-114`, added by `a3dbae618` (2026-08-19) when it was set back **true**. Both
+are clauses of the retiming-OFF decision: `:93-95` reads *"If this design depends on it to meet
+50 MHz, **disabling** it yields negative slack"*, and `:111-112` states the condition outright —
+*"When off, this is an ACCEPTANCE CRITERION and not optional"*. Retiming is **on**
+(`run.tcl:115`, `RETIMING true`), on the resident revision and on the one awaiting flash alike.
+
+**And at the revision actually in the bitstream, the rule is not present at all.**
+
+    git show 1bfff7776:corev_apu/fpga/scripts/run.tcl | grep -c 'DO NOT FLASH'   ->  0
+    git show 1bfff7776:corev_apu/fpga/scripts/run.tcl | grep    RETIMING         ->  true   (:87)
+    1fc34e158 / a3dbae618 ancestors of 1bfff7776?                                ->  NO / NO
+    merge-base(s12-ldc-rolling-filter, 1bfff7776)                                ->  7e4dc440ff72
+
+The rule commits are 2026-08-18/19; `1bfff7776` is 2026-09-10 on a line that never carried them.
+The same holds for the resident `66c4e7517`.
+
+**None of which makes the flash safe — it makes it NEUTRAL.** −12.425 ns at 50 MHz is a large, real
+violation, and the RTL lane is right that no build in the eleven-build series (−10.629 … −16.400)
+has ever met `WNS >= 0`, the one running the board included. Their argument was never *"run.tcl
+forbids this flash"*; it was that after the 2026-09-08 census retraction **no criterion licenses any
+flash on this design, the resident bitstream included** — and they themselves concede the flash
+*"holds the timing risk constant rather than raising it."* That is an objection to operating the
+board at −12.4 ns at all. It is the lead's call rather than a discriminator against this bitstream,
+and the lead has ruled it by authorising this reflash directly.
+
 **What would settle it** is a timing-clean build, which is a synthesis question and not a
 measurement one. Until then: quote §7 rows with this caveat attached, prefer instruction counts to
 cycle counts where a claim can be carried by either, and treat any single-draw cycle figure as
