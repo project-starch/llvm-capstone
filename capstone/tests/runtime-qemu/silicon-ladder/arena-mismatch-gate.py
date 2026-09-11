@@ -14,6 +14,13 @@ THREE NUMBERS, AND THEY MUST ALL AGREE:
   1. the size compiled into the host binary          (static, read back from the artifact)
   2. `SQ: arena_bytes=<N>` in the transcript         (what the host actually created)
   3. `HEAP <N>` in the transcript                    (what the domain actually used)
+  4. `HEAP <N>` in the BASELINE arm's transcript     (--baseline-log; the other half)
+
+The fourth is the one that corrupts a RATIO rather than crashing a run. The two arms read
+their size from DIFFERENT variables -- the domain from SPEEDTEST1_ARENA_SIZE, the baseline
+from SQLITE_HEAP_SIZE, which the runner pins to the geometry default before the domain's is
+computed -- so a pair built the obvious way is 128 MiB against 2 MiB with both arms healthy
+and their hashes equal. Nothing downstream would notice.
 
 Checking only 2 against 3 would pass a run that consistently used the wrong size, which is
 precisely the fallback case; checking only 1 would pass a run that never reached the arena
@@ -95,6 +102,30 @@ MARKERS = {
 }
 
 
+def baseline_heap(log: Path):
+    """The BASELINE arm's heap, which comes from a different variable than the domain's.
+
+    This is the second half of the mismatch and the one that corrupts a RATIO rather than
+    crashing a run. The domain reads SPEEDTEST1_ARENA_SIZE; the baseline reads
+    SQLITE_HEAP_SIZE, which run-speedtest1-measure.sh pins to the geometry default before
+    the domain's is computed. A pair built the obvious way is 128 MiB against 2 MiB, both
+    arms healthy, hashes equal -- and the ratio prices two different allocators.
+    """
+    if not log.is_file():
+        raise Cannot(f"baseline transcript not found: {log}", kind="tool")
+    blob = log.read_bytes()
+    if not blob:
+        raise Cannot(f"baseline transcript is empty: {log}", kind="run")
+    hits = {int(m.group(1)) for m in MARKERS["HEAP"].finditer(blob)}
+    if not hits:
+        raise Cannot(f"no `HEAP` marker in the baseline transcript {log} -- the arm did not "
+                     "report its heap, so the pair cannot be checked", kind="run")
+    if len(hits) > 1:
+        raise Cannot(f"the baseline transcript {log} reports more than one HEAP: "
+                     f"{sorted(hits)} -- ambiguous, refusing to pick one", kind="run")
+    return hits.pop()
+
+
 def log_values(log: Path):
     if not log.is_file():
         raise Cannot(f"transcript not found: {log}", kind="tool")
@@ -129,7 +160,7 @@ def log_values(log: Path):
     return found
 
 
-def run(expect, host, log, objdump, out=sys.stdout):
+def run(expect, host, log, objdump, baseline_log=None, out=sys.stdout):
     problems, checked, tool_faults = [], [], 0
     if host is not None:
         try:
@@ -156,8 +187,21 @@ def run(expect, host, log, objdump, out=sys.stdout):
         except Cannot as exc:
             problems.append(f"TRANSCRIPT CHECK COULD NOT RUN: {exc}")
             tool_faults += exc.kind == "tool"
-    if host is None and log is None:
-        print("arena-mismatch-gate: nothing to check -- pass --host and/or --log", file=out)
+    if baseline_log is not None:
+        try:
+            got = baseline_heap(Path(baseline_log))
+            if got != expect:
+                problems.append(f"the BASELINE arm's HEAP is {got:,}, expected {expect:,} -- "
+                                "the two arms ran different allocators and their ratio is "
+                                "not a measurement of the capability ABI")
+            else:
+                checked.append(f"baseline arm's HEAP reports {expect:,}")
+        except Cannot as exc:
+            problems.append(f"BASELINE CHECK COULD NOT RUN: {exc}")
+            tool_faults += exc.kind == "tool"
+    if host is None and log is None and baseline_log is None:
+        print("arena-mismatch-gate: nothing to check -- pass --host, --log and/or "
+              "--baseline-log", file=out)
         return 2
     for line in checked:
         print(f"  ok   {line}", file=out)
@@ -214,6 +258,22 @@ def selftest(host, objdump):
         mark = "ok  " if got == want else "FAIL"
         ok &= got == want
         print(f"  {mark} {name}: exit {got} (wanted {want})")
+    pair = [
+        ("a matched pair passes",            b"HEAP 134217728\n", 134217728, 0),
+        ("a baseline arm left at the geometry default -- the silent ratio corruption",
+                                             b"HEAP 2097152\n",   134217728, 1),
+        ("a baseline transcript with no HEAP at all",
+                                             b"BASELINE-WARM CYCLES 1 INSTRS 1\n", 134217728, 1),
+    ]
+    for name, blob, expect, want in pair:
+        with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as fh:
+            fh.write(blob)
+            path = fh.name
+        got = run(expect, None, None, objdump, baseline_log=path, out=io.StringIO())
+        Path(path).unlink()
+        mark = "ok  " if got == want else "FAIL"
+        ok &= got == want
+        print(f"  {mark} {name}: exit {got} (wanted {want})")
     for name, want in missing_tool:
         got = run(134217728, host or __file__, None, "/nonexistent/llvm-objdump",
                   out=io.StringIO())
@@ -241,7 +301,10 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--expect", type=int, help="intended arena size in bytes")
     ap.add_argument("--host", help="the sqlite_host.user artifact")
-    ap.add_argument("--log", help="the run transcript")
+    ap.add_argument("--log", help="the DOMAIN arm's run transcript")
+    ap.add_argument("--baseline-log",
+                    help="the BASELINE arm's transcript; its HEAP must match too, or the "
+                         "pair's ratio prices two different allocators")
     ap.add_argument("--objdump", default="llvm-objdump")
     ap.add_argument("--selftest", action="store_true",
                     help="negative-test the gate; pass --host to exercise the static half")
@@ -250,7 +313,7 @@ def main():
         return selftest(args.host, args.objdump)
     if args.expect is None:
         ap.error("--expect is required (or use --selftest)")
-    return run(args.expect, args.host, args.log, args.objdump)
+    return run(args.expect, args.host, args.log, args.objdump, args.baseline_log)
 
 
 if __name__ == "__main__":
