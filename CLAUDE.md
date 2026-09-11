@@ -59,8 +59,13 @@ New to the project? See `capstone/docs/ONBOARDING.md`.
   commit message about the S-07 repro folder, and a 33-file archive set landed under one about a
   rate-classifier script. Both times the content was correct and the message described something
   else, which is what makes it expensive: the message is how anyone later reconstructs why a
-  change happened. `-o/--only` commits just the paths you name and leaves the rest staged. When
-  other lanes may be active, check `git show --stat` after committing.
+  change happened. `-o/--only` commits just the paths you name and leaves the rest staged.
+  **But `-o` scopes by PATH, not by AUTHORSHIP:** on a file another lane is also editing it commits
+  their uncommitted hunks too, under your message. That is not the case above and no invocation of
+  `-o` prevents it (reproduced 2026-09-12). `git status` cannot help — it says the file is modified,
+  never by whom. So when other lanes may be active: before committing a shared file read `git diff`
+  on the path and look for hunks you did not write, and afterwards read `git show`, **not**
+  `git show --stat` — the stat shows a plausible file list and hides the foreign hunks inside it.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/docs/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
