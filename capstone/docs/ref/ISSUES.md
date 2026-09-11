@@ -1242,11 +1242,32 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > timing-neutral and structurally invisible, and nothing more. The functional case rests on the
 > directed tests and the one-variable control, not on this build.
 >
-> **THE FLASH IS NOT MERELY WAITING FOR A YES.** It is gated on two OPEN decisions, not one: the
-> `end`-convention re-ruling (decisions item 1), because the spec amendment ships in the same change;
-> and the monitor reclaim shape (item 2), because the firmware half must land alongside and **this must
-> never ship RTL-only**. The `.bit` is in-tree on the synth machine — not extracted, not staged, not
-> flashed.
+> **~~THE FLASH IS NOT MERELY WAITING FOR A YES.~~ SUPERSEDED 2026-09-11 — BOTH DECISIONS ARE RULED
+> AND NOTHING IS WAITING ON A JUDGEMENT.** This box said the flash was gated on two OPEN decisions:
+> the `end`-convention re-ruling (decisions item 1, because the spec amendment ships in the same
+> change) and the monitor reclaim shape (item 2, because the firmware half must land alongside).
+> Both were ruled on **2026-09-10 (evening)** — `DECISIONS-WAITING-2026-09-10.md:50`, *"RULED
+> 2026-09-10 (evening): adopt the resolution. Both spec checkouts edited"* — and the reclaim shape
+> was implemented at monitor `0a5c3d9`, with the fill itself at `a006c63`. Left struck through
+> rather than deleted, because a stale gate reads as a live one and two lanes carried this wrong
+> state into 2026-09-11 from this paragraph.
+>
+> **The requirement it was protecting still stands and is now satisfied:** this must never ship
+> RTL-only. The monitor being flashed (`2c49c41`) contains both reclaim commits as ancestors, and
+> carries them by content — `RCLM`/`RCSH`/`RCPR` at `sbi_capstone.c:152-154`, the R-31 block at
+> `:204-212`. That matters because `REV_TRANSFERRED`'s check is a hard `while(1)` on the FPGA
+> target, so a monitor mismatch wedges rather than traps.
+>
+> **What remains is mechanical, and mostly not ours.** The timing row is read and scored — all three
+> pre-registered falsifiers PASS (see the table above: WNS −12.425, placed LUTs 169,207,
+> combinational loops 29 unmoved). The `.bit` is in-tree on the synth machine — not extracted, not
+> staged, not flashed — and the console bitstream store cannot be written by our driver, so the
+> upload is a GUI action for the board owner.
+>
+> **This bitstream is clean of R-24**, checked after R-24 was found to break exception delivery
+> outright (`docs/history/11-09-2026_19-30-00_r24-debug-request-collision.md`): `r24-excode-base` is
+> not an ancestor of `1bfff7776`, and `66c4e7517..1bfff7776` touches only the two anvil units and
+> test files — no exception encoders.
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
