@@ -2041,6 +2041,46 @@ two tables were evidently renamed to `z1`/`z2` without the loop being updated. S
 maximum is **nine of ten**, and the tenth is an upstream defect rather than a capability limitation.
 Stated for the version we pin; no claim is made about later releases.
 
+#### CONFIGURATION — every speedtest1 figure in the §7 series was measured with SQLite's LOOKASIDE POOL OFF, and nobody chose that
+
+**This is not a defect in the numbers. It is a statement about which SQLite they describe**, and it
+has to be read before any of them is placed beside a result from another system.
+
+**How it happened.** `build-sqlite-silicon.sh:1003-1006` does not own the define list — it harvests
+it, as **text**, out of `build-sqlite-capstone.sh`:
+
+```
+_blocks='/^SQLITE_DEFINES=(/,/^)/p'
+SQLITE_DEFINES=$(sed -n "$_blocks" "$SCRIPT_DIR/build-sqlite-capstone.sh" \
+                 | grep -oE '\-[DU][A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
+```
+
+The array it reads carries `-DSQLITE_DEFAULT_LOOKASIDE=0,0`. The override that turns the pool on
+sits **outside** that array (`build-sqlite-capstone.sh:158-160`), deliberately — an in-array shell
+expansion is copied *literally* by the six text harvesters and reached `dev` once, breaking every
+silicon domain with `use of undeclared identifier '$'`. So the placement is correct and the
+consequence was unintended: the harvest can only ever yield `0,0`.
+
+**Both arms were affected, which is what makes the ratios survive.** The native baseline had no way
+to carry lookaside at all until 2026-09-11 — `build-speedtest1-baseline.sh` harvests the same block
+and its compile line had no extra-defs hook. So the domain arm and its baseline were *both*
+lookaside-OFF. **The pair ratios in §7f and §7k are therefore internally consistent and stand as
+measured; what they are ratios OF is a configuration SQLite does not ship.**
+
+**Why that distinction matters outside this document.** Lookaside is a small-allocation cache above
+memsys5; with it off, every small allocation goes to memsys5 instead. Any claim about *where SQLite's
+allocations go* is a different claim under the two settings — and the project's CheriBSD comparison
+measures SQLite **as it ships, lookaside ON**, with a headline that counts slots returning to a pool
+free list. That figure requires the pool to exist. **A lookaside-OFF silicon row and a lookaside-ON
+CheriBSD row must not be blended into one story**, and neither is wrong for saying so.
+
+**Fixed on both sides as of `df3c1944b47d`**, so the configuration is now a choice rather than an
+accident: `SQLITE_LOOKASIDE` reaches the baseline through the same idiom the feature defines use,
+and the domain takes `DOMAIN_EXTRA_DEFS='-DSQLITE_DEFAULT_LOOKASIDE=1200,40'` (verified by running
+it — image `ccb73bc08db39990` reports `Successful lookasides: 25010`, not by reading the script).
+**Any new row must state which setting it used.** The rows above this block were taken with the pool
+OFF.
+
 #### PRECISION — how many digits any figure in the §7 series may be quoted to
 
 **There are two regimes and they differ by a factor of six. Which one applies depends on what is
