@@ -24,10 +24,37 @@ documented reasons json "could never run" were true of a `.bss` build and neithe
 region arena. **This is not an S-14 fix** — per that entry, the bad reloads vanish incidentally with
 the array and any change to the global set can bring them back; gate on `capinit-reload-scan.py`.
 
-**NEXT, and it is the only thing left: the json board arm.** Artifacts built, hashed and
-QEMU-verified; spec at `/tmp/capstone/handoff/json-on-silicon.md`. One boot, control first, needs
-`cma=64M`, and it must NOT be judged on the `--verify` hash (json returns the no-rows hash three
-other testsets share). That boot turns json into §7l and takes §7k from seven testsets to eight.
+**NEXT — the board ask has changed from BREADTH to DEPTH, reported by the peer lane as the lead's
+call, and the json arm is superseded.** Published speedtest1 numbers use the default `--size 100`;
+everything we have on silicon is size 1, i.e. **1 % of the benchmark's default scale**, so our
+numbers are not comparable to the literature. `main` at size 100 outranks a tenth testset. Approved
+shape is a rehearsal first: `main --size 20` built with the **size-100 arena**, so only the row
+count is smaller — it exercises a 120 MiB region as SQLite's heap on silicon, the raised timeouts
+and a multi-hour silent arm, for ~1.1 h against ~5.4 h. `main --size 100` needs a measured 120 MiB
+arena against the 130 MiB demonstrated in sw55 with a 256 MiB CMA reservation: 8 % margin, and
+reachable only because the arena now comes from a region (`.bss` caps at 4 MiB).
+
+**THE DOMAIN AND THE BASELINE TAKE THEIR ARENA SIZE FROM DIFFERENT VARIABLES, AND NOTHING GATES IT.**
+The domain reads `SPEEDTEST1_ARENA_SIZE` (`run-speedtest1-measure.sh:114`); the baseline reads
+`SQLITE_HEAP_SIZE` (`build-speedtest1-baseline.sh:46`), which the runner has already **pinned** to
+the geometry default at `:64`. Set only the first and you get a large-arena domain against a 2 MiB
+baseline, silently. **This is not hypothetical — the json pair built this evening had it**: domain
+`arena_bytes=6291456`, baseline `.bss=2168152`. The handoff spec claimed they "differ in exactly one
+dimension"; they differed in two, and the second was the allocator size, which is the dimension a
+speedtest1 ratio is most sensitive to. Spec superseded with the defect recorded; a gate is being
+added on the peer side. Compare the BUILT artifacts, not the two variables — a stale `OUT_DIR` makes
+the artifacts disagree while the variables agree.
+
+**Four board-side defaults would void a healthy size-100 run**, all verified at source and all tuned
+for 90-second arms: `SQLITE_STAGE_TIMEOUT` 90 (`run_sqlite_stages_fpga.py:47`, and it is PER DOMAIN),
+`BAKED_TIMEOUT` 120 (`run_baked_rungs_fpga.py:55`), `BAKED_IDLE_S` 25 (`:62`), `ENTRY_STALL_S` 260
+(`board-watchdog.sh:54`). The silence is structural: speedtest1's output goes into the shared region
+and the host prints it only at the end, so a multi-hour arm shows nothing on the console and the
+watchdog would read it as an entry stall. Precedent for raising the last one already exists —
+`slt-corpus/run-slt-corpus-fpga.sh:29` uses `ENTRY_STALL_S=420`.
+
+The json DOMAIN result stands on its own — it is a single-arm claim, not a ratio. Only the pairing
+was broken.
 
 **Two instrument repairs landed on the way.** Five stale `benchmarks/sqlite/` includes left
 `revoke-on-free` and `hier-revoke` dead since the layout move — they reported a *build* failure as a
