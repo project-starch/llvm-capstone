@@ -2167,6 +2167,29 @@ flash on this design, the resident bitstream included** — and they themselves 
 board at −12.4 ns at all. It is the lead's call rather than a discriminator against this bitstream,
 and the lead has ruled it by authorising this reflash directly.
 
+**WHAT SURVIVES THE SCOPE CORRECTION — raised by the RTL lane, and it is the sharper form of the
+concern.** `run.tcl` states a READINESS bar twice, and unlike the do-not-flash branch it is not
+confined to the retiming-off case:
+
+> `:100`  *"'Synthesis completed' is not the bar. Ready = synthesis has RUN and CLOSED TIMING."*
+> `:114`  *"Either way: ready = synthesis has RUN and CLOSED TIMING. 'Completed' is not the bar."*
+
+`:114`'s *"Either way"* is genuinely ambiguous — it can read as spanning the two WNS branches
+directly above it, or as spanning the retiming on/off choice the paragraph is about. Stated as
+ambiguous rather than resolved in the direction that suits the flash. On **either** reading the bar
+reaches this build, because this build has not closed timing.
+
+**AND IT CONTRADICTS `CLAUDE.md`, which carries the weaker version:** *"a hash is ready when
+synthesis has RUN, not when the checks pass"* (`CLAUDE.md:310-311`) — no closed-timing clause. The
+lead's own file states the rule without the clause, and that weaker version is the one consistent
+with every build this project has shipped. **Which is meant is the lead's to settle; neither file has
+been edited by a lane over it.**
+
+Note what this does *not* change: the readiness bar has never been met by any build in the series,
+the resident bitstream included. So it is the same objection as the RTL lane's, restated one level
+up — an argument about operating this design at all, not a discriminator that separates the pending
+bitstream from the one already flashed.
+
 **What would settle it** is a timing-clean build, which is a synthesis question and not a
 measurement one. Until then: quote §7 rows with this caveat attached, prefer instruction counts to
 cycle counts where a claim can be carried by either, and treat any single-draw cycle figure as
