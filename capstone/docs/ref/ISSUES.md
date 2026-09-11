@@ -3363,7 +3363,34 @@ than inferred.
 `handle_exception` is a different `#ifdef` branch with its own reporting.
 
 
-### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
+### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED; the title is too broad, see the 2026-09-11 box`
+
+> **⚠ 2026-09-11 — "ANY perturbation" is refuted for at least one image family, by our own boots.**
+> The seven-testset speedtest1 image is a **+176,760 byte** perturbation of the three-testset one —
+> more globals, a different define set — and it returned on the board across **all seven arms of
+> sw56**, and again in sw57 and sw58. The instrumented build is a further +144 bytes and returned
+> 8/8 in sw57 and 16/16 in sw58. So the headline claim does not govern this family in the literal
+> form it states, and quoting the nine-for-nine as a failure *probability* for a new perturbation is
+> not supported. That mistake was made and corrected the same day, in the ruling on whether to add a
+> `DOMAIN_BASE_VA` knob to the SQLite build.
+>
+> **What the entry does still establish is narrower and is the part to use.** Its own
+> tested-and-excluded list names *address of the executed code* — excluded because `sqlite3Strlen30`
+> sits at the **same** address in both the passing and the hanging build. So a build at a
+> **differing** address is **untested, not cleared**, which is the opposite of what an exclusion
+> gives you. That is the live reason to be wary of a relink, and it is a different and much weaker
+> claim than the title.
+>
+> **And read past the headline to the residual**, which changes what the entry predicts: the
+> mechanism recorded further down is **sporadic wrong `strlen` results at ~3% of calls, not
+> length-dependent** — stage 16 calling `strlen` on one literal 128 times and getting 1 back from
+> four of them. That reads as a machine-level sporadic fault which sometimes lands fatally, rather
+> than as perturbation causing hangs. A sporadic fault landing badly in nine builds of one program
+> does not transfer to a relink of another.
+>
+> Recovered into this entry on 2026-09-11 after a rewrite of `state/current-next-step.md` dropped
+> it: it had been recorded only in that file's CURRENT block, and a conservation check over the
+> rewrite showed it existed nowhere else. A correction to a registry entry belongs in the registry.
 
 **Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).
 

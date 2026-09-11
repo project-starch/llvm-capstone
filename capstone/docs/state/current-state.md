@@ -2,7 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-10 — CURRENT
+## 2026-09-10 — CURRENT for the reclaim/flash material below; **2026-09-11 is NOT in this file**
+
+> **Read `state/current-next-step.md` first for 2026-09-11.** Four boots landed that day and none of
+> them is described here: sw55 (a **130 MiB** capability region on silicon), sw56/sw57/sw58
+> (speedtest1 across seven testsets, the domain's instruction count measured on silicon, and the
+> position question settled). The measurements are `ref/fpga-silicon-measurements-for-paper.md`
+> §7f–§7k. Also that day: the CMA board half, M-6 fixed and M-7 filed, the R-30/R-31 **firmware
+> half committed at last** (all four monitor pointer paths had been committing its pre-reclaim
+> parent), and the discovery that **six repositories refuse this credential** — including both
+> copies of the monitor and the academic spec, which returns 403 on read as well as write.
+
 
 * **The reclaim (R-30/R-31 firmware half) is implemented, gated and measured.** The lead ruled
   *fill, then initialise*. Monitor commit `0a5c3d9` adds a `C_RECLAIM` asm loop at **five** sites
@@ -37,8 +47,12 @@ Minimal snapshot. Read first in every session.
 * **`RCLM:00000000` on every share (9 of 9).** Zero reclaims, as it must be where the guard cannot
   fire — and the counter's reporting path is now proven readable on silicon, which is the one
   property of it that could not be tested after the flash.
-* **Still open and the lead's:** the `end`-convention re-ruling. It gates the spec amendment and the
-  flash, not the firmware change, which is identical under both surviving routes.
+* ~~**Still open and the lead's:** the `end`-convention re-ruling.~~ **RULED 2026-09-10 (evening) —
+  adopt the resolution**; `plans/DECISIONS-WAITING-2026-09-10.md:50`. This line said "still open" for
+  a day after the ruling landed, which is the same shape as the stale 403 withdrawn on 2026-09-11: a
+  blocker asserts a fact about today, so re-verify before repeating it. The spec amendment is
+  committed in `capstone-academic-spec` (`21a01f0`, `eadaf87`) and **cannot be pushed** — that remote
+  returns 403 for this credential on read as well as write, so its branches cannot even be listed.
 * Three tools repaired and negative-tested the same day: `preflight-board-run.sh` (parsed only one of
   the three stage forms, and could not require a host binary at all), the sw52 result parser (needed
   the testset, cycles and hash on ONE line when they are on three), and the driver's staged-marker
