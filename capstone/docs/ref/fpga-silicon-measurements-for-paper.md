@@ -954,6 +954,56 @@ in `plans/sqlite-regression-suite-proposal.md`.
 
 ---
 
+## §4g — THE ALLOCATOR MATRIX: what each of SQLite's allocators costs under capabilities (QEMU, 2026-09-11)
+
+**These are QEMU `-icount` instruction counts, NOT silicon cycles.** They are in this document
+because they are the first numbers that exist for the question at all, and because one of them
+cross-checks the silicon record — but the silicon run is still owed, and CPI is the term that
+separates them (native CPI for `main` is 3.769 in §7k, so cycles and instructions part company badly
+on hardware). Read the CONFIGURATION block before placing any of these beside a §7 row.
+
+`main --size 1`, one image per cell, capability arms through `run-speedtest1-measure.sh` and native
+arms as the matched `speedtest1_baseline` **warm** pass in the same emulator under the same
+`-icount shift=0`.
+
+| | native | capability | ABI ratio |
+|---|---:|---:|---:|
+| memsys5 alone | 539,412,660 | 685,213,794 | **1.2703** |
+| lookaside over memsys5 | 529,112,120 | 670,803,165 | **1.2678** |
+| Sublet (both allocators) | — *empty by construction* | 698,224,832 | — |
+
+The sixth cell cannot exist: every primitive in `sublet.h` is opcode `0x5b`, which does not exist on
+rv64imac. A revocable sub-lease has no meaning without capabilities.
+
+**What the matrix says.**
+
+- **The capability ABI costs ~1.27x and that is essentially allocator-INDEPENDENT** — 1.2703 against
+  1.2678, a difference of 0.0025. Whatever the ABI is charging for, it does not scale with the
+  allocation rate at this size. Nobody had measured this; it was reasonable to expect the overhead
+  to track allocator traffic, and it does not.
+- **Lookaside is ~2 % FASTER on both targets** (−1.91 % native, −2.10 % capability), which is the
+  first cycle-level evidence either way. The whole recorded silicon corpus was taken with it OFF,
+  by accident of a text harvest — so every §7 figure sits on the slightly slower side of this.
+- **Sublet costs +4.09 % against the arm it actually replaces** (capability + lookaside, same
+  target, same ABI). That is the price of temporal safety in the allocator: a `revoke` per free, an
+  `mrev`+`delin` per hand-out, and a write-through of the block on reclaim.
+- Composed end to end, Sublet against the unprotected native build is **+31.96 %** — but that
+  bundles the ABI, the allocator rewrite and the revocation traffic, and the decomposition above is
+  what separates them.
+
+**CROSS-CHECK, and it is the reason to trust the apparatus rather than just the arithmetic.** The
+measured ABI ratio for `memsys5`, 1.2703, agrees with §7k's independently recorded
+*"instr ratio (predicted)"* for `main` — **1.270** — to **0.02 %**. That figure was derived on
+silicon, from different arms, on a different day, by a different route.
+
+**What these numbers are not.** Instruction counts, not cycles. Size 1 only. The Sublet cell reports
+`split=8484 mrev=41115 delin=32638 revoke=41115 init=8477` — `init` non-zero beside a non-zero
+`revoke`, so the reclaim genuinely executed rather than being skipped; on the currently flashed
+silicon it would read `init = 0` and the cost would be understated by the whole write-through
+(R-30/R-31). **A silicon Sublet number is not available until that bitstream is flashed**, and the
+rev-node budget pins that cell to `--size 1` regardless: 43,407 nodes measured against 65,532
+available, 66 % used.
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
