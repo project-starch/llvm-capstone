@@ -116,6 +116,21 @@ if [[ "$SQLITE_FULL" == "on" ]]; then
   EXPECT_DEFS=$(( EXPECT_DEFS + 2 ))
   [[ "${SQLITE_JSON:-off}" == "on" ]] && { DEFS+=(-USQLITE_OMIT_JSON); EXPECT_DEFS=$(( EXPECT_DEFS + 1 )); }
 fi
+# SQLITE_LOOKASIDE, read the way build-sqlite-capstone.sh reads it and added here for exactly the
+# reason the feature defines above were: the harvest yields -DSQLITE_DEFAULT_LOOKASIDE=0,0, because
+# the override at build-sqlite-capstone.sh:158-160 deliberately sits OUTSIDE the harvested array so
+# the text harvesters cannot copy a shell expansion literally. Without this knob a lookaside-ON
+# domain is compared against a lookaside-OFF baseline -- the same shape of mismatch as the
+# floating-point one, and semantic rather than cosmetic: lookaside changes which allocator serves
+# small allocations, which is the thing an allocator comparison is measuring.
+#
+# It is also WHY the recorded silicon corpus is lookaside-OFF. Nobody chose that; the harvest did.
+# A later -D wins over the harvested one, as in build-sqlite-capstone.sh.
+if [ -n "${SQLITE_LOOKASIDE:-}" ]; then
+  DEFS+=( "-DSQLITE_DEFAULT_LOOKASIDE=$SQLITE_LOOKASIDE" )
+  EXPECT_DEFS=$(( EXPECT_DEFS + 1 ))
+fi
+
 (( ${#DEFS[@]} == EXPECT_DEFS )) || {
   echo "ERROR: harvested ${#DEFS[@]} defines, expected $EXPECT_DEFS." >&2
   echo "  A FLOOR TEST USED TO LIVE HERE and it could not do this job: it required only more than" >&2
