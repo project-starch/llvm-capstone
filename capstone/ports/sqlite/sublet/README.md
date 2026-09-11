@@ -70,3 +70,30 @@ costs on such a machine, not a primitive of the discipline: the counters a pass 
 the same on either emulator. The linearity rule the review found (`sublet_take_linear` reads
 the base before the store) and the rest of the limits are in the port README's section on
 speedtest1 and the Sublet port.
+
+## ON THE FLASHED SILICON THE WRITE-THROUGH PATH IS UNREACHABLE — a green board arm proves nothing about it
+
+Read this before reading any board pass as validating the reclaim. On the bitstream currently
+flashed, the fill loop and the `init` behind it **cannot execute**, and the port still runs and
+still reports normally — which is exactly the shape that gets mistaken for a pass.
+
+Two open RTL defects mask it independently, so fixing either alone is not enough:
+
+- **R-31 — REVOKE's permission clause is inverted.** Revoking a linear borrow of a *writable*
+  region returns a readable **LINEAR** capability where the specification says UNINIT. That is
+  precisely the revoke `sublet_give_to` tests for, so the type check (`addi -3; bnez`) branches
+  past **both** the fill and the `init`, and the routine reports `inited = 0`. The reclaim never
+  happens and nothing says so.
+- **R-30 — `INIT` is unreachable.** Even with R-31 fixed, filling an UNINIT region leaves the
+  cursor *at* `end` while `INIT` requires it *past* `end` — a one-byte shortfall. The fill would
+  run and the `init` would still fault.
+
+So on this bitstream the counters are honest about what they counted and silent about what they
+did not: `revoke` increments, `init` does not. **Check `sublet_stats.init` against the number of
+give-backs before quoting a sublet result from a board run.** An `init` count of zero next to a
+non-zero `revoke` count is the signature of this masking, not of a workload that happened not to
+need reinitialisation.
+
+Both entries are OPEN in `docs/ref/ISSUES.md`. R-30's fix is a deliberate deviation from the
+specification's end convention and is awaiting the project lead's ruling, so neither is a matter of
+waiting for a build.
