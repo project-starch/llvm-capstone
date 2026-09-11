@@ -961,7 +961,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-14 — restoring `SQLITE_OMIT_EXPLAIN` makes the SQLite domain fault at its FIRST region share, before any of its own code runs `OPEN — DEMONSTRATED 2026-09-09 under QEMU by single-define bisection with an all-deployed control; root cause NOT established and not claimed; the define is dropped from the restore set, so nothing ships broken`
+### S-14 — `__capstone_cap_init` reloads a capability spill slot with a scalar `ld`, so the tag is lost before the domain runs `ROOT CAUSE IDENTIFIED 2026-09-11 — a CODEGEN defect, not image or dom_data geometry; two triggers shown to be one defect; the compiler fix is not yet made`
 
 **What happens.** The `restored` SQLite silicon image built with all eight `-U` defines does not run:
 it faults at `SQ: E/share1` with **cause 24** (unexpected operand type), *before* the domain enters,
@@ -1035,6 +1035,60 @@ unexpected operand type.
 > three unrelated causes and one signature is now a pattern rather than a coincidence, and the next
 > step is still to move ONE quantity.
 >
+> **2026-09-11 — ROOT CAUSE. A capability spill slot is written with `stc` and read back with a
+> scalar `ld`, whose result is fed straight to `cincoffsetimm`.** The tag is gone by then, so the
+> instruction faults with cause 24, "x[rs1] is not a capability". At the exact pc the emulator
+> reports, in the json/`.bss` image:
+>
+>     189204: 83 30 01 26   ld            ra, 0x260(sp)
+>     189208: db a0 f0 4c   cincoffsetimm ra, ra, 0x4cf      <- the logged fault pc
+>     18920c: 5b 48 15 06   stc           ra, 0x70(a0)
+>
+> **Slot `0x260(sp)` is a capability slot accessed BOTH ways in the same function**: 33 `ldc` and 3
+> `stc` against 7 `ld` and 4 `sd`. The scalar reloads are the defect. The function is
+> `__capstone_cap_init`, which the compiler synthesises
+> (`llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp`) and `start.S` calls before `domain_main` —
+> so this is the **domain image's own code**, not the monitor's. It is straight-line, one `ret` and no
+> branches, so a bad site is reached unconditionally and the fault is deterministic per image.
+>
+> **THE PATTERN SEPARATES FAULTING FROM RUNNING IMAGES PERFECTLY.** Counting scalar `ld` from an `sp`
+> slot whose value the next instruction consumes with `cincoffsetimm`:
+>
+>     image            trigger                    arena          bad reloads   result
+>     slt-explain      -USQLITE_OMIT_EXPLAIN      .bss 256 KiB        3        FAULTS
+>     jsonbss          json feature set           .bss 2 MiB          3        FAULTS
+>     slt-base         (control)                  .bss 256 KiB        0        RUNS
+>     json-region      json feature set           region 6 MiB        0        RUNS
+>     w3-bss           rtree                      .bss 2 MiB          0        RUNS
+>     w3-region        rtree                      region 2 MiB        0        RUNS
+>
+> In both faulting images the FIRST such site is the pc the emulator printed.
+>
+> **`slt-base` against `slt-explain` retires the geometry hypothesis.** Same path, same 256 KiB `.bss`
+> arena, same carve, one define apart — one clean, one with three bad reloads. **So triggers (a) and
+> (c) are ONE defect, and the `dom_data` carve is not the variable.** Image size, globals count and
+> carve are correlates that happened to move together in the four-build series; they are not the
+> mechanism.
+>
+> **What the region arena actually did, stated so nobody reads it as a fix.** Removing the 2 MiB
+> `sqlite_heap` array changes `__capstone_cap_init`'s codegen and the bad reloads disappear with it.
+> That is **incidental**. Any change to the global set can reintroduce them, and an image can be
+> clean today and faulty after an unrelated edit. **Gate on the reload pattern, not on a carve
+> number.**
+>
+> **Two things this entry previously said that are wrong, corrected here.** It described the fault as
+> being in "the monitor's entry glue" — it is the domain's own compiler-emitted `cap_init`. And it
+> gives the signature as `Cap mem access requires capability` followed by `cause = 24`: **that string
+> appears zero times in either faulting log.** The signature is `cincoffsetimm with an UNTAGGED rs1`
+> followed by `cause = 24`. A reader applying the old wording would reject a true instance.
+>
+> **A classifier keyed on `cause = 24` alone is not enough either.** A `cause = 24` fault was observed
+> the same day AFTER `SQ: G/enter` with no `UNTAGGED` line — post-entry, not S-14. The discriminating
+> pair is the `UNTAGGED rs1` diagnostic plus the pre-entry marker state.
+>
+> **Still open:** which LLVM component emits the scalar reload — register allocation, spill-slot
+> typing, or `CapstoneCapGlobalInit` itself. That is compiler work and is not diagnosed here.
+
 > **2026-09-11 — THE DISCRIMINATOR RAN. Trigger (a) is CONFIRMED on its own path, and the fault now
 > has a specific diagnosis. It also does NOT reproduce on the speedtest1 path.**
 >
