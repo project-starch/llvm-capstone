@@ -1,0 +1,73 @@
+# Board results sw55-sw58, 2026-09-11. Backfilled from each run's own transcript segment.
+# Bitstream for every row: caplifive_r25r26r27_66c4e7517.bit (RTL 66c4e7517). No flash between them.
+#
+# WHY THIS FILE WAS EMPTY FOR THESE BOOTS. The close-out rule is that readings land here WITH the
+# image hash, because a row's LABEL can name a different program -- that is R-29, found by a value
+# sitting outside its reproducer's documented range. These four boots were written up in
+# ref/fpga-silicon-measurements-for-paper.md SS7h-SS7k and never reached the corpus.
+#
+# HOW THESE ROWS WERE EXTRACTED, and what that does and does not guarantee: each transcript was
+# scoped to its OWN load_image before anything was read, because the console replays the previous
+# boot on connect. Domain and baseline arms are told apart by the marker that FOLLOWS the cycle
+# count -- the baseline binary emits SPEEDTEST1-CYCLES too, so counting that marker alone
+# over-reports the domain arms by the number of baseline arms.
+#
+# The image hash column is the DOMAIN image for domain rows and the baseline binary for baseline
+# rows. Columns with no value in the transcript are 'n/a' rather than guessed: the domain arms of
+# sw56 carry no instruction count at all (that is why sw57 was run), and bigregion rows have no
+# cycle count.
+#
+# IMAGE HASHES ARE CROSS-CHECKED, not taken from the current working copy on trust. bigregion.user
+# hashes identically (9d18522bd95579a9, 19032 B) in the live overlay and in the two copies stashed
+# independently by the sw56 and sw57 retire/restore steps, so the file the rows cite is the file
+# sw55 ran. That check exists because a hash column taken from whatever happens to be on disk today
+# would reintroduce exactly the defect it is here to prevent.
+#
+# Row counts, each matching what the boot ran: sw55 4 (control + three CMA sizes), sw56 15 (control
+# + 7 pairs), sw57 8 (control + 7 instrumented), sw58 16 (control + 7 pairs + main repeated last as
+# the position control).
+#
+# cols: label  entryVA  opt  region  image16  retval  boot  pos  status  value  cycles  note
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw55	1	OK	4	4499	control; boot valid
+bigregion	n/a	-O2	4M	9d18522bd95579a9	4194304	sw55	2	OK	4194304		CMA region create+map+first/last byte round-trip
+bigregion	n/a	-O2	8M	9d18522bd95579a9	8388608	sw55	3	OK	8388608		CMA region create+map+first/last byte round-trip
+bigregion	n/a	-O2	130M	9d18522bd95579a9	136314880	sw55	4	OK	136314880		CMA region create+map+first/last byte round-trip
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw56	1	OK	4	4508	control; boot valid
+st1-star	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	2	OK	n/a	228836250	speedtest1 domain arm
+st1-parsenumber	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	3	OK	n/a	230682632	speedtest1 domain arm
+st1-orm	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	4	OK	n/a	937346376	speedtest1 domain arm
+st1-main	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	5	OK	n/a	2675472428	speedtest1 domain arm
+st1-fp	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	6	OK	n/a	4165418923	speedtest1 domain arm
+st1-cte	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	7	OK	n/a	6048111965	speedtest1 domain arm
+st1-rtree	0x10000	-O2	64k	49994ed3185257c6	n/a	sw56	8	OK	n/a	9084912260	speedtest1 domain arm
+st1base-star	0x103e8	-O2	n/a	072595ff0866ac4b	47572050	sw56	9	OK	47572050	182846119	speedtest1 native baseline arm
+st1base-parsenumber	0x103e8	-O2	n/a	072595ff0866ac4b	45019397	sw56	10	OK	45019397	182023238	speedtest1 native baseline arm
+st1base-orm	0x103e8	-O2	n/a	072595ff0866ac4b	215519751	sw56	11	OK	215519751	791058884	speedtest1 native baseline arm
+st1base-main	0x103e8	-O2	n/a	072595ff0866ac4b	581950019	sw56	12	OK	581950019	2193595600	speedtest1 native baseline arm
+st1base-fp	0x103e8	-O2	n/a	072595ff0866ac4b	731330544	sw56	13	OK	731330544	3350136929	speedtest1 native baseline arm
+st1base-cte	0x103e8	-O2	n/a	072595ff0866ac4b	1847707052	sw56	14	OK	1847707052	5186592912	speedtest1 native baseline arm
+st1base-rtree	0x103e8	-O2	n/a	072595ff0866ac4b	1837839491	sw56	15	OK	1837839491	7646977018	speedtest1 native baseline arm
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw57	1	OK	4	4530	control; boot valid
+st1-star	0x10000	-O2	64k	c8766ec3331089ee	59443629	sw57	2	OK	59443629	228700875	speedtest1 domain arm
+st1-parsenumber	0x10000	-O2	64k	c8766ec3331089ee	60938800	sw57	3	OK	60938800	230540552	speedtest1 domain arm
+st1-orm	0x10000	-O2	64k	c8766ec3331089ee	274563817	sw57	4	OK	274563817	937905097	speedtest1 domain arm
+st1-main	0x10000	-O2	64k	c8766ec3331089ee	696765119	sw57	5	OK	696765119	2670465463	speedtest1 domain arm
+st1-fp	0x10000	-O2	64k	c8766ec3331089ee	933826300	sw57	6	OK	933826300	4163234642	speedtest1 domain arm
+st1-cte	0x10000	-O2	64k	c8766ec3331089ee	2019055631	sw57	7	OK	2019055631	6027440964	speedtest1 domain arm
+st1-rtree	0x10000	-O2	64k	c8766ec3331089ee	2420440011	sw57	8	OK	2420440011	9042939578	speedtest1 domain arm
+k800	0x20000	-O0	4k	589ceee3853c6092	4	sw58	1	OK	4	4505	control; boot valid
+st1-star	0x10000	-O2	64k	c8766ec3331089ee	59443629	sw58	2	OK	59443629	228711030	speedtest1 domain arm
+st1base-star	0x103e8	-O2	n/a	072595ff0866ac4b	47576431	sw58	3	OK	47576431	182914247	speedtest1 native baseline arm
+st1-parsenumber	0x10000	-O2	64k	c8766ec3331089ee	60938800	sw58	4	OK	60938800	230632786	speedtest1 domain arm
+st1base-parsenumber	0x103e8	-O2	n/a	072595ff0866ac4b	45021935	sw58	5	OK	45021935	181904586	speedtest1 native baseline arm
+st1-orm	0x10000	-O2	64k	c8766ec3331089ee	274563817	sw58	6	OK	274563817	938018036	speedtest1 domain arm
+st1base-orm	0x103e8	-O2	n/a	072595ff0866ac4b	215509509	sw58	7	OK	215509509	790674212	speedtest1 native baseline arm
+st1-main	0x10000	-O2	64k	c8766ec3331089ee	696765119	sw58	8	OK	696765119	2670343266	speedtest1 domain arm
+st1base-main	0x103e8	-O2	n/a	072595ff0866ac4b	581900069	sw58	9	OK	581900069	2193564038	speedtest1 native baseline arm
+st1-fp	0x10000	-O2	64k	c8766ec3331089ee	933826300	sw58	10	OK	933826300	4162524273	speedtest1 domain arm
+st1base-fp	0x103e8	-O2	n/a	072595ff0866ac4b	731409611	sw58	11	OK	731409611	3349560200	speedtest1 native baseline arm
+st1-cte	0x10000	-O2	64k	c8766ec3331089ee	2019055631	sw58	12	OK	2019055631	6027572213	speedtest1 domain arm
+st1base-cte	0x103e8	-O2	n/a	072595ff0866ac4b	1847765870	sw58	13	OK	1847765870	5186457627	speedtest1 native baseline arm
+st1-rtree	0x10000	-O2	64k	c8766ec3331089ee	2420440011	sw58	14	OK	2420440011	9042959076	speedtest1 domain arm
+st1base-rtree	0x103e8	-O2	n/a	072595ff0866ac4b	1837992109	sw58	15	OK	1837992109	7646394787	speedtest1 native baseline arm
+st1-main-repeat	0x10000	-O2	64k	c8766ec3331089ee	696765119	sw58	16	OK	696765119	2670767218	speedtest1 domain arm
