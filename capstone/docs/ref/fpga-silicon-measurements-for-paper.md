@@ -1012,8 +1012,8 @@ Every arm below is `--testset main --size 1 --verify`, `-icount shift=0`.
 
 | cell | | allocator | lookaside | image sha256 (16) | `HEAP` | QEMU cycles |
 |---|---|---|---|---:|---:|---:|
-| ① | native | memsys5 | off | `f4cf7caed144d952` | — | — |
-| ② | native | memsys5 + lookaside | **on** | `24cb59fa7dbfb8fb` | — | — |
+| ① | native | memsys5 | off | `f4cf7caed144d952` | 2,097,152 | 545,623,496 |
+| ② | native | memsys5 + lookaside | **on** | `24cb59fa7dbfb8fb` | 2,097,152 | 535,335,376 |
 | ④ | domain | memsys5 | off | `2f4e6b73b85b569e` | 2,097,152 | 692,983,497 |
 | ⑤ | domain | memsys5 + lookaside | **on** | `ccb73bc08db39990` | 2,097,152 | 678,572,868 |
 | ⑥ | domain | Sublet (both, + discipline) | **on** | `ceeded2533a74bce` | **910,008** | 690,505,703 |
@@ -1024,8 +1024,36 @@ Every arm below is `--testset main --size 1 --verify`, `-icount shift=0`.
 directly; ⑥/⑥′ share one and may be compared directly. **⑥ against ⑤ does not**, and the ⑤ᴳ row is
 the evidence that it cannot be made to.
 
-The native rows carry no QEMU cycle count by construction: they are rv64 binaries that ride along in
-the boot, not domains this runner measures.
+The native rows are `speedtest1_baseline warm` — the **warm** subcommand, which the source names as
+the denominator, not `run`. Their `sqlite_heap` is 2,097,152 bytes, read with `llvm-nm -S` and equal
+to ④/⑤'s `HEAP`, so the two ABI ratios below are geometry-matched.
+
+**THE LOOKASIDE INSTRUMENT IS PROVEN IN BOTH DIRECTIONS, on the same binaries, in a separate
+`--stats` run kept apart from the measurement so the extra output cannot perturb it:**
+
+    ② Successful lookasides: 25122      <- fires
+    ① Successful lookasides: 0          <- and returns zero when it should
+
+That is the positive *and* the negative control the CLEAN-result rule asks for, and it is what
+licenses calling ② a lookaside arm at all — the hash differing from ① proves only that the define
+reached the build, never that the pool is enabled at run time.
+
+#### The capability-ABI cost is ~27 %, and it is very nearly the same under both allocators
+
+| ratio | | value |
+|---|---|---:|
+| ④/① | memsys5, domain over native | **1.2701** |
+| ⑤/② | lookaside, domain over native | **1.2676** |
+
+**That the two agree to 0.25 pp is the result, not a null.** The plan asked whether the ABI cost
+differs by allocator; on this evidence it barely does, so the capability overhead and the allocator
+choice compose rather than interact. Under `-icount` these counts are deterministic, so 0.25 pp is a
+real difference and not run-to-run spread — it is simply a small one. The PRECISION bands below
+(0.027 pp / 0.171 pp) govern *board* readings and do not apply to these.
+
+Both are instruction counts, not board cycles. The silicon ratio will differ — this core's measured
+CPI spans 1.13 to 6.44 — and §7k's board pair ratio of 1.220 is the quantity to compare against once
+the flash lands, not these.
 
 **⑤ CARRIES ITS OWN POSITIVE CONTROL, and it validates a script change as well as the arm.** Its
 image is hash-identical to `ccb73bc08db39990`, the image independently verified by *running* it —
