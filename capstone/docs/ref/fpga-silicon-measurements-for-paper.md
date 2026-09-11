@@ -1763,6 +1763,26 @@ is not the matched arm. The no-CMA arm carries its own control inside the log: `
 do NOT separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
 and either could have — and that is why it is present as a probe control rather than as evidence.
 
+**The domain's own memory does NOT come from CMA — now observed, not only derived.** The question
+mattered because if the capability arm's working set sat in the CMA area while the native baseline's
+did not, the two arms of every pair in §7h would differ in DRAM placement. The source answer is that
+`ioctl_create_dom` allocates with `GFP_HIGHUSER | __GFP_ZERO` (`module/capstone.c:136`), which lacks
+`__GFP_MOVABLE` (`gfp_types.h:334`), so `gfp_migratetype()` returns `MIGRATE_UNMOVABLE` and
+`ALLOC_CMA` is never set (`page_alloc.c:3371-3375`) — both CMA paths are gated on that flag. Measured
+under emulation with a 256 MiB area present and default:
+
+```
+cma: Reserved 256 MiB at 0x00000000f0000000          area = 0xf0000000 .. 0xffffffff
+Domain memory region vaddr = ff60000081680000, paddr = 101880000
+CmaFree: 260096 kB before the domain, 260096 kB after
+```
+
+`0x101880000` is **24 MiB above the top of the area**, and `CmaFree` does not move by a single
+kilobyte across a domain creation whose block is at least 256 KiB. What DOES come from CMA is the
+region allocation (`dma_alloc_pages`) — on the board those show as `BASE:AC0xxxxx` tags inside the
+reserved range. So the split is: **regions from CMA, domain code/heap/stack from the buddy
+allocator**, and the SQLite arena is a static array inside the latter.
+
 `linux,cma-default` is load-bearing rather than decorative. The module registers `region_dev` with
 `platform_device_register_simple(…, NULL, 0)`, so `dev->of_node` is NULL, `dev->cma_area` is never
 assigned, and `dma_alloc_contiguous` falls through to `dma_contiguous_default_area`
