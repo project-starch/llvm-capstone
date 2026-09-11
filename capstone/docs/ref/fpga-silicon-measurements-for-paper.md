@@ -1568,6 +1568,9 @@ be tested after the flash.
 
 ### §7f — speedtest1 on capability silicon vs native, same boot, all three testsets (boot sw52, 2026-09-10)
 
+**Pair ratios here carry three decimals; a comparison with another boot carries two — see the
+PRECISION block at the end of this series.**
+
 Every figure below was predicted before the run (`docs/plans/speedtest1-boot-predictions.md`,
 committed `c62aeb3019fe`). Control `k800` returned 4, zero fault tags in the whole transcript, and
 10 of 11 arms completed.
@@ -1590,6 +1593,30 @@ capability build executes 1.27–1.55× the instructions and takes only 1.18–1
 its **CPI is lower than native's in every arm**. The added capability instructions are cheaper than
 this workload's average instruction — they issue in slots a memory-bound workload otherwise wastes.
 Quoting the instruction ratio as the overhead therefore **overstates it by 5–16 %**.
+
+**TWO ASYMMETRIES TRAVEL WITH THE CYCLE RATIO AND MUST BE NAMED BESIDE IT.** Neither affects the
+instruction ratio, and both favour the baseline, so the cycle ratios above are an upper bound on the
+capability ABI's cost rather than a clean measure of it.
+
+*Compressed encodings, and the direction is that **these ratios OVERSTATE the capability overhead**.*
+The evidence is a property of the delivered artifacts rather than of a build setting: `file` reports
+the baseline as **RVC** and the domain image as not, and they are **926,248 B against 1,684,232 B**,
+so the capability image is **1.82×** the size. The capability target has no compressed extension; the
+baseline is `-march=rv64imac` and is 44 % compressed encodings.
+
+Measured both ways on `main --size 1`, the instruction ratio moves **0.45 %** — a compressed
+instruction still retires as one instruction — while the text moves **18 %** (926,248 B against
+1,128,496 B for the same source without `c`). That difference is icache footprint: invisible to an
+emulated instruction count, visible in a board cycle count, and **in the baseline's favour**. So the
+true capability cost is LOWER than the cycle ratios above, not higher.
+
+It is deliberately NOT changed: `build-ladder-base-fpga.sh` already uses `rv64imac`, so a different
+`-march` would make these numbers incomparable with every overhead figure this project has
+published. `SPEEDTEST1_BASELINE_MARCH` exists to re-measure it, not to switch it off.
+
+*The granule guard.* `SQLITE_GRANULE_GUARD` is an R-29 workaround present only in the capability arm,
+costing +33,660 bytes of `.text` and a branch per granule — in the primitive every timing number is
+measured on. Any published ratio has to state its state.
 
 **Clock check, independent of any counter we control.** `main` self-reports `TOTAL 105.255s`, and
 2,635,649,345 cycles at 25 MHz is 105.4 s. The two agree to 0.1 %, confirming the 25 MHz core clock
@@ -1636,12 +1663,173 @@ decrements `region_n` without rolling back `pre_mmap_offset`, leaking mmap offse
 > silicon, so the sentence above holds for boot sw54's image and for nothing after it. The
 > `pre_mmap_offset` leak is fixed in the same change. Read §7h before citing this paragraph.
 
+### §7h — A 130 MiB capability region exists on silicon (boot sw55, 2026-09-11)
+
+The board kernel now compiles CMA in (`configs/fpgakernel.config`) and the device tree reserves
+256 MiB at `0xAC000000` carrying `linux,cma-default` (`configs/caplifive.dts`). **This is the first
+capability region above 4 MiB on any target other than emulation, and the ceiling it clears has been
+in place for the whole project.**
+
+| arm | size | result |
+|---|---|---|
+| `k800` (control, first in the boot) | — | **retval 4**, 4,499 cycles, 53,406 ran, 1,089 instret |
+| `bigregion` | 4 MiB | created, mapped, first+last byte round-tripped |
+| `bigregion` | 8 MiB | created, mapped, first+last byte round-tripped |
+| `bigregion` | **130 MiB** | created, mapped, first+last byte round-tripped |
+
+**4 / 4 arms**, zero `Oops`/`BUG:`/`WARNING:` counted across each allocation, no fault tags. The
+control ran first and passed, so the boot carries a verdict at all — it fails roughly one boot in
+five and a failed control voids everything after it.
+
+**The reservation is verified by SIZE, not by existence**, which is the check the whole design turns
+on: `CONFIG_CMA_SIZE_MBYTES` defaults to **16 on non-x86**, so a *rejected* device-tree node leaves a
+quiet 16 MiB default area behind, under which a small arm passes and a large one fails and the log
+still shows a CMA line. The kernel's own lines, scoped to this run's `load_image` rather than to the
+console's replay of the previous boot:
+
+```
+Reserved memory: created CMA memory pool at 0x00000000ac000000, size 256 MiB
+OF: reserved mem: initialized node linux,cma@ac000000, compatible id shared-dma-pool
+OF: reserved mem: 0x00000000ac000000..0x00000000bbffffff (262144 KiB) map reusable linux,cma@ac000000
+Memory: 693668K/985928K available (… 262144K cma-reserved)
+```
+
+**Why the 130 MiB arm settles the mechanism without a failing board arm beside it.** The buddy
+allocator's largest block is `MAX_ORDER 10` × 4 KiB = **4 MiB**, and the silent fallback area is
+16 MiB; 130 MiB is 32× the first and 8× the second, so that allocation cannot have come from either.
+The matched failing arm exists too, but under emulation: at 8 MiB with no CMA area the create fails,
+and with `cma=256M` on the same image it succeeds (§7e appendix). Those four QEMU runs are
+`/tmp/capstone/bigregion-{4194304,8388608,8388608-cma=256M,136314880-cma=256M}.log`, all of them
+taken AFTER the module rebuild at 01:07:23 that put `dma_alloc_pages` into the guest — which matters
+because an earlier arm failed on a stale module that had no CMA path at all, and a failure from THAT
+is not the matched arm. The no-CMA arm carries its own control inside the log: `CmaTotal: 0 kB` and
+`0K cma-reserved`, so the area really was absent rather than merely unrequested. What the board arms
+do NOT separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
+and either could have — and that is why it is present as a probe control rather than as evidence.
+
+**The domain's own memory does NOT come from CMA — now observed, not only derived.** The question
+mattered because if the capability arm's working set sat in the CMA area while the native baseline's
+did not, the two arms of every pair in §7k would differ in DRAM placement. The source answer is that
+`ioctl_create_dom` allocates with `GFP_HIGHUSER | __GFP_ZERO` (`module/capstone.c:136`), which lacks
+`__GFP_MOVABLE` (`gfp_types.h:334`), so `gfp_migratetype()` returns `MIGRATE_UNMOVABLE` and
+`ALLOC_CMA` is never set (`page_alloc.c:3371-3375`) — both CMA paths are gated on that flag. Measured
+under emulation with a 256 MiB area present and default:
+
+```
+cma: Reserved 256 MiB at 0x00000000f0000000          area = 0xf0000000 .. 0xffffffff
+Domain memory region vaddr = ff60000081680000, paddr = 101880000
+CmaFree: 260096 kB before the domain, 260096 kB after
+```
+
+`0x101880000` is **24 MiB above the top of the area**, and `CmaFree` does not move by a single
+kilobyte across a domain creation whose block is at least 256 KiB. What DOES come from CMA is the
+region allocation (`dma_alloc_pages`) — on the board those show as `BASE:AC0xxxxx` tags inside the
+reserved range. So the split is: **regions from CMA, domain code/heap/stack from the buddy
+allocator**, and the SQLite arena is a static array inside the latter.
+
+`linux,cma-default` is load-bearing rather than decorative. The module registers `region_dev` with
+`platform_device_register_simple(…, NULL, 0)`, so `dev->of_node` is NULL, `dev->cma_area` is never
+assigned, and `dma_alloc_contiguous` falls through to `dma_contiguous_default_area`
+(`kernel/dma/contiguous.c:313-333`) — which only a node carrying that property ever sets
+(`:430-431`). Without it the node reserves memory nothing on this system can reach.
+
+### §7i — The domain's instruction count is measurable on silicon, and it matches the emulator (boot sw57, 2026-09-11)
+
+Every "domain CPI" in this document before today divided **board cycles by an emulator instruction
+count**, because no board image reported the domain's own `minstret`. The instrumented image had
+never booted. Boot sw57 ran it: control first, then seven arms ascending, **8/8, zero failures,
+every verification hash equal to its prediction and to the plain image's**.
+
+| testset | predicted `instret` | board `instret` | delta | relative |
+|---|---:|---:|---:|---:|
+| star | 59,443,559 | 59,443,629 | +70 | 1.2e-06 |
+| parsenumber | 60,938,716 | 60,938,800 | +84 | 1.4e-06 |
+| orm | 274,563,761 | 274,563,817 | +56 | 2.0e-07 |
+| main | 696,764,734 | 696,765,119 | +385 | 5.5e-07 |
+| fp | 933,826,083 | 933,826,300 | +217 | 2.3e-07 |
+| cte | 2,019,055,526 | 2,019,055,631 | +105 | 5.2e-08 |
+| rtree | 2,420,439,710 | 2,420,440,011 | +301 | 1.2e-07 |
+
+**This is the check that was retracted on 2026-09-11 and is now actually made.** §7k records why the
+earlier version was void: sw56 carried no domain instruction count, and the apparent agreement came
+from a table that passed the predictions through as if they were readings. Here the two numbers come
+from two instruments — QEMU `-icount` and the silicon `minstret` CSR — and agree to between 5.2e-08
+and 1.4e-06 on counts up to 2.4 billion. All seven deltas are positive and range 56 to 385
+instructions, which is far below one timer tick (~3,780), so it is a handful of instructions in the
+invocation path rather than any periodic effect.
+
+**The emulator's instruction counts are sound for this workload.** All seven deltas are positive and
+between 56 and 385 instructions on counts up to 2.4 billion — far too small to be a timer tick
+(~3,780 instructions), so it is a handful in the invocation path.
+
+**Domain CPI, measured rather than mixed:** star 3.847, parsenumber 3.783, orm 3.416, main 3.833,
+fp 4.458, cte 2.985, rtree 3.736.
+
+**`cte` is confirmed as a real effect, not a bad prediction.** It is the only pair in §7k whose
+measured cycle ratio exceeds its instruction ratio (1.166 against 1.141), and the two readings were
+indistinguishable without this boot: the tick correction makes the gap worse, and the CPI route is
+closed algebraically because domain-CPI over baseline-CPI *is* cycle-ratio over instruction-ratio.
+Its prediction was right to 5.2e-08, so §7k's row stands.
+
+**The denominator question is now arithmetic instead of framing.** With both arms measured on the
+board, the instruction ratio can be taken against the baseline's own (ticked) count or against a
+tick-free one, and the two differ by the tick:
+
+| testset | vs BOARD baseline `instret` | vs tick-free count |
+|---|---:|---:|
+| star | 1.2495 | 1.3263 |
+| parsenumber | 1.3536 | 1.4412 |
+| orm | 1.2740 | 1.3487 |
+| main | 1.1973 | 1.2698 |
+| fp | 1.2769 | 1.3720 |
+| cte | 1.0927 | 1.1407 |
+| rtree | 1.3170 | 1.4050 |
+
+Using the board's ticked baseline lowers every ratio by ~6%. That is the §7k tick asymmetry and
+nothing else; the right-hand column reproduces the predicted ratios to three decimals, which follows
+from the table above rather than being independent of it.
+
+**THE FIRST REPEATABILITY BOUND THIS PROJECT HAS, and it is free.** sw57 measured cycles for the
+same seven testsets that sw56 measured, on an image 144 bytes away and with instruction counts
+differing by at most **0.00009%** — so essentially all of the cycle difference is machine rather than
+program. Nothing in §7f, §7k or §7i bounded run-to-run variation before this; every ratio published
+here was a single measurement.
+
+| testset | sw56 cycles | sw57 cycles | delta |
+|---|---:|---:|---:|
+| star | 228,836,250 | 228,700,875 | −0.059% |
+| parsenumber | 230,682,632 | 230,540,552 | −0.062% |
+| orm | 937,346,376 | 937,905,097 | +0.060% |
+| main | 2,675,472,428 | 2,670,465,463 | −0.187% |
+| fp | 4,165,418,923 | 4,163,234,642 | −0.052% |
+| cte | 6,048,111,965 | 6,027,440,964 | −0.342% |
+| rtree | 9,084,912,260 | 9,042,939,578 | −0.462% |
+
+Range **−0.462% to +0.060%**, spread 0.52 pp, population sd 0.17 pp.
+
+**What it bounds, stated precisely: run-to-run variation AND the 144-byte layout difference
+together.** With one pair per testset the two cannot be separated, so this is an upper bound on
+repeatability rather than an isolate of it. **The operational consequence is that a ratio quoted to
+three decimals is quoting precision nothing here supports — the second decimal is what this bound
+carries.**
+
+**A length trend is NOT claimed, and the check is the one that refuted `cte`'s explanation.** Signed
+delta against run length gives Pearson r = **−0.885**, which looks like a drift; removing the two
+longest arms collapses it to **−0.324**. Two leverage points, not a trend, exactly as with §7k's
+CPI correlation. The same test, applied to our own result rather than someone else's.
+
+**One pre-registered control did not transfer and is recorded as void rather than as a pass.**
+`instret − mcycle = 39`, which held on all seven arms under emulation, is unobservable on silicon by
+construction: `-icount` makes mcycle and minstret the same quantity, so a 39-instruction bracket
+asymmetry shows; on the board cycles are real and run ~3.8x instructions, so it cannot be seen. It
+neither passed nor failed here.
+
 ### §7j — Position does not move this workload, and repeatability decomposes (boot sw58, 2026-09-11)
 
 Run on the **instrumented** image, so for the first time all seven pairs carry **cycles AND
 instructions on BOTH arms in one boot** — sw56 had pairs without domain instructions, sw57 had
 domain instructions without pairs. **16/16 arms, control passed, zero failures.** This section
-supersedes §7h's table as the measurement of record; §7h stands as the first pairing and for the
+supersedes §7k's table as the measurement of record; §7k stands as the first pairing and for the
 tick analysis.
 
 **POSITION DOES NOT MATTER, and this is the first comparison with exactly one variable in it.**
@@ -1707,155 +1895,161 @@ and is unchanged by this boot.
 sw56 — which is consistent with it being the emulated-tick subtraction artefact already identified
 rather than anything new.
 
-### §7i — The domain's instruction count is measurable on silicon, and it matches the emulator (boot sw57, 2026-09-11)
+### §7k — speedtest1 on capability silicon vs native, SEVEN testsets, same boot (boot sw56, 2026-09-11)
 
-Every "domain CPI" in this document before today divided **board cycles by an emulator instruction
-count**, because no board image reported the domain's own `minstret`. The instrumented image had
-never booted. Boot sw57 ran it: control first, then seven arms ascending, **8/8, zero failures,
-every verification hash equal to its prediction and to the plain image's**.
+**SUPERSEDED AS THE MEASUREMENT OF RECORD BY §7j.** sw58 re-ran these seven pairs with BOTH arms
+instrumented, which sw56 could not do — its domain arms report cycles only. Cite §7j for the pair
+ratios. This section keeps its value as the first pairing on silicon, as the source of the four
+named asymmetries, and as where the periodic-tick analysis is derived.
 
-| testset | predicted `instret` | board `instret` | delta | relative |
-|---|---:|---:|---:|---:|
-| star | 59,443,559 | 59,443,629 | +70 | 1.2e-06 |
-| parsenumber | 60,938,716 | 60,938,800 | +84 | 1.4e-06 |
-| orm | 274,563,761 | 274,563,817 | +56 | 2.0e-07 |
-| main | 696,764,734 | 696,765,119 | +385 | 5.5e-07 |
-| fp | 933,826,083 | 933,826,300 | +217 | 2.3e-07 |
-| cte | 2,019,055,526 | 2,019,055,631 | +105 | 5.2e-08 |
-| rtree | 2,420,439,710 | 2,420,440,011 | +301 | 1.2e-07 |
+**Pair ratios here carry three decimals; a comparison with another boot carries two — see the
+PRECISION block at the end of this series.**
 
-**The emulator's instruction counts are sound for this workload.** All seven deltas are positive and
-between 56 and 385 instructions on counts up to 2.4 billion — far too small to be a timer tick
-(~3,780 instructions), so it is a handful in the invocation path.
+Same bitstream as §7f, `caplifive_r25r26r27_66c4e7517`, deliberately: seven testsets on the *same*
+silicon as the three already published is worth more than newer silicon on a result that could not be
+compared with sw52. 15 arms, 7 pairs, zero failures, `k800` control passed at both ends of the boot.
+Floating point and rtree are restored (`SQLITE_FULL=on`), which is what takes the runnable set from
+three testsets to seven. Every pair's verification hash was identical between the two arms under
+emulation on the delivered artifacts.
 
-**Domain CPI, measured rather than mixed:** star 3.847, parsenumber 3.783, orm 3.416, main 3.833,
-fp 4.458, cte 2.985, rtree 3.736.
+| testset | capability cycles | native cycles | **cycle ratio** | instr ratio (predicted) | native CPI |
+|---|---:|---:|---:|---:|---:|
+| `star` | 228,836,250 | 182,846,119 | **1.252×** | 1.326× | 3.844 |
+| `parsenumber` | 230,682,632 | 182,023,238 | **1.267×** | 1.441× | 4.043 |
+| `orm` | 937,346,376 | 791,058,884 | **1.185×** | 1.349× | 3.670 |
+| `main` | 2,675,472,428 | 2,193,595,600 | **1.220×** | 1.270× | 3.769 |
+| `fp` | 4,165,418,923 | 3,350,136,929 | **1.243×** | 1.372× | 4.581 |
+| `cte` | 6,048,111,965 | 5,186,592,912 | **1.166×** | 1.141× | 2.807 |
+| `rtree` | 9,084,912,260 | 7,646,977,018 | **1.188×** | 1.405× | 4.161 |
+| **total** | **23,370,780,834** | **19,533,230,700** | **1.196×** | 1.290× | 3.681 |
 
-**`cte` is confirmed as a real effect, not a bad prediction.** It is the only pair in §7h whose
-measured cycle ratio exceeds its instruction ratio (1.166 against 1.141), and the two readings were
-indistinguishable without this boot: the tick correction makes the gap worse, and the CPI route is
-closed algebraically because domain-CPI over baseline-CPI *is* cycle-ratio over instruction-ratio.
-Its prediction was right to 5.2e-08, so §7h's row stands.
+**The spread is the new result.** §7f had three testsets and a 1.181–1.335 range; seven give
+1.166–1.267 on cycles and 1.141–1.441 on instructions. `cte` is the only pair whose measured cycle
+ratio EXCEEDS its predicted instruction ratio (1.166 against 1.141), and it is also much the
+lowest-CPI arm at 2.807 — and it stays unexplained after
+the obvious hypothesis was tested and failed.
 
-**The denominator question is now arithmetic instead of framing.** With both arms measured on the
-board, the instruction ratio can be taken against the baseline's own (ticked) count or against a
-tick-free one, and the two differ by the tick:
+*The hypothesis and why it does not hold.* §7f's own mechanism is that the capability arm's extra
+instructions issue in slots a memory-bound workload wastes; `cte` is the least memory-bound arm, so
+it should have the fewest spare slots and the smallest advantage. That predicts
+`cycle ratio ÷ instruction ratio` falling as native CPI rises. Across the seven arms Pearson r is
+−0.727 — but **remove `cte` and it collapses to −0.278**. The trend is the point it was meant to
+explain, which is a single leverage point and not evidence. The remaining six arms show no such
+relation.
 
-| testset | vs BOARD baseline `instret` | vs tick-free count |
+*What could still settle it, and what cannot.* Correcting for the tick makes `cte` worse, not better:
+it raises every measured cycle ratio, taking `cte` from 1.166 to roughly 1.23 against its 1.141
+predicted. The CPI route is closed algebraically — domain CPI over native CPI IS cycle ratio over
+instruction ratio, so it cannot supply independent evidence about the same discrepancy. That leaves
+two possibilities, a real effect or an error in the *predicted* domain instruction count for this one
+testset, and **with no board-side domain instret they are indistinguishable**. The instrumented
+domain image is the only thing that separates them.
+
+**THE `instr ratio` COLUMN IS A PREDICTION, NOT A MEASUREMENT — sw56 carries no domain instruction
+count.** The domain marker is `SPEEDTEST1-CYCLES <n> HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0`,
+cycles only; `instret` appears once in the boot, in the `k800` control rung. Those figures are QEMU
+`-icount` counts measured on the delivered artifacts. A `speedtest1_instret.dom` image exists and is
+waiting on a boot of its own; until it runs, no statement of the form "board instructions agree with
+emulated instructions" is supported for the domain arm. (An earlier version of this claim was
+retracted on 2026-09-11: the apparent agreement came from a table that carried the predictions
+through as if they were readings.)
+
+**A THIRD ASYMMETRY, AND IT POINTS THE OPPOSITE WAY FROM THE TWO IN §7f.** The native arm is an
+ordinary Linux process and is ticked at 100 Hz throughout; the capability arm is not ticked at all.
+`handle_interrupt` (`sbi_capstone.c:1856-1861`) answers `IRQ_M_TIMER` by clearing `MTIP` in `mie` and
+setting `STIP` in `mip`, and `mie.MTIP` is re-armed only by an `SBI_EXT_TIME_SET_TIMER` call from
+S-mode (`:1772-1775`) — which Linux cannot issue while it is not running. So a domain arm takes at
+most one machine timer interrupt and then executes tick-free for the rest of its run, up to 363 s for
+`rtree`.
+
+Measured: the native arm's board instruction count runs ~6 % above its emulated count, and the excess
+tracks CYCLES rather than instructions — **3,745 to 3,787 instructions per tick across seven arms
+spanning a 44-fold range of durations**, where the same excess expressed per instruction ranges over
+4.39 % to 7.45 %. At 25 MHz and `CONFIG_HZ=100` that is one tick per 250,000 cycles.
+
+So §7f's two asymmetries make the native arm look FASTER and overstate capability cost; this one
+makes it look SLOWER and understates it. They are named separately rather than netted, because
+netting estimates of different precision produces a number with no error bar and a lot of authority.
+
+*What the tick would be worth if it were removed*, and this column is an ESTIMATE resting on an
+assumption that is not measured — that the tick handler's CPI equals the workload's. An interrupt
+handler runs cold-cache with a different instruction mix, so treat the direction as established and
+the magnitude as indicative:
+
+| testset | tick as % of native cycles | cycle ratio, tick-adjusted |
 |---|---:|---:|
-| star | 1.2495 | 1.3263 |
-| parsenumber | 1.3536 | 1.4412 |
-| orm | 1.2740 | 1.3487 |
-| main | 1.1973 | 1.2698 |
-| fp | 1.2769 | 1.3720 |
-| cte | 1.0927 | 1.1407 |
-| rtree | 1.3170 | 1.4050 |
+| `star` | 5.78 % | 1.328× |
+| `parsenumber` | 6.08 % | 1.349× |
+| `orm` | 5.54 % | 1.254× |
+| `main` | 5.71 % | 1.294× |
+| `fp` | 6.93 % | 1.336× |
+| `cte` | 4.20 % | 1.217× |
+| `rtree` | 6.26 % | 1.267× |
+| **total** | **5.54 %** | **1.267×** |
 
-Using the board's ticked baseline lowers every ratio by ~6%. That is the §7h tick asymmetry and
-nothing else; the right-hand column reproduces the predicted ratios to three decimals, which follows
-from the table above rather than being independent of it.
+**Two denominators are defensible and mixing them is not.** User work against user work (both arms
+tick-free) and whole machine against whole machine (both as they actually run) are each honest
+questions. Putting the board's native instruction count in a denominator while the capability
+numerator stays an emulated count compares a ticked machine against an unticked one and calls the
+difference capabilities. Which of the two the paper wants is a framing decision, not a measurement.
 
-**THE FIRST REPEATABILITY BOUND THIS PROJECT HAS, and it is free.** sw57 measured cycles for the
-same seven testsets that sw56 measured, on an image 144 bytes away and with instruction counts
-differing by at most **0.00009%** — so essentially all of the cycle difference is machine rather than
-program. Nothing in §7f, §7h or §7i bounded run-to-run variation before this; every ratio published
-here was a single measurement.
+**A fourth caveat, new with floating point.** Both arms are soft-float — the baseline is
+`-march=rv64imac_zicsr`, and its disassembly holds zero hardware FP instructions against a positive
+control that finds 6 of 6 in an `-march=rv64imafdc` object — so there is no hardware-FP confound. But
+the implementations differ: the baseline resolves `__divdf3` and its siblings from buildroot's libgcc,
+the domain from our compiler-rt builtins at `SQLITE_SUPPORT_OPT_LEVEL`. On `fp`, `cte` and `rtree`
+those routines may be a large share of the instructions. Same class as the RVC and optimisation
+asymmetries in §7f; not yet quantified.
 
-| testset | sw56 cycles | sw57 cycles | delta |
-|---|---:|---:|---:|
-| star | 228,836,250 | 228,700,875 | −0.059% |
-| parsenumber | 230,682,632 | 230,540,552 | −0.062% |
-| orm | 937,346,376 | 937,905,097 | +0.060% |
-| main | 2,675,472,428 | 2,670,465,463 | −0.187% |
-| fp | 4,165,418,923 | 4,163,234,642 | −0.052% |
-| cte | 6,048,111,965 | 6,027,440,964 | −0.342% |
-| rtree | 9,084,912,260 | 9,042,939,578 | −0.462% |
+**Unchanged from §7f and still applying:** the RVC asymmetry, the optimisation asymmetry, and the
+`SQLITE_GRANULE_GUARD` R-29 workaround present only in the capability arm.
 
-Range **−0.462% to +0.060%**, spread 0.52 pp, population sd 0.17 pp.
+**What does not run, and why.** `json` needs a 6 MiB arena against a 4 MiB ceiling — the arena is a
+static array in the domain's globals storage and `__get_free_pages` tops out at order 10 on this
+kernel (`MAX_ORDER` is 10 and INCLUSIVE from Linux 6.4; `CONFIG_ARCH_FORCE_MAX_ORDER` is unset) — and
+it independently triggers the S-14 pre-entry fault. `app` enters and then takes a capability access 8
+bytes off 16-byte alignment; it reproduces under emulation and is being root-caused off-board.
 
-**What it bounds, stated precisely: run-to-run variation AND the 144-byte layout difference
-together.** With one pair per testset the two cannot be separated, so this is an upper bound on
-repeatability rather than an isolate of it. **The operational consequence is that a ratio quoted to
-three decimals is quoting precision nothing here supports — the second decimal is what this bound
-carries.**
+#### PRECISION — how many digits any figure in the §7 series may be quoted to
 
-**A length trend is NOT claimed, and the check is the one that refuted `cte`'s explanation.** Signed
-delta against run length gives Pearson r = **−0.885**, which looks like a drift; removing the two
-longest arms collapses it to **−0.324**. Two leverage points, not a trend, exactly as with §7h's
-CPI correlation. The same test, applied to our own result rather than someone else's.
+**There are two regimes and they differ by a factor of six. Which one applies depends on what is
+being compared, not on which section the number sits in.**
 
-**One pre-registered control did not transfer and is recorded as void rather than as a pass.**
-`instret − mcycle = 39`, which held on all seven arms under emulation, is unobservable on silicon by
-construction: `-icount` makes mcycle and minstret the same quantity, so a 39-instruction bracket
-asymmetry shows; on the board cycles are real and run ~3.8x instructions, so it cannot be seen. It
-neither passed nor failed here.
+| comparison | what varies | sd | a ratio carries | digits |
+|---|---|---:|---:|---|
+| two arms within one boot (any pair ratio) | run-to-run only | 0.027 pp | ±0.0003 on a ratio near 1.2 | **three** |
+| the same quantity across boots or images | run-to-run **+** layout | 0.171 pp | ±0.0021 | **two** |
 
-### §7h — A 130 MiB capability region exists on silicon (boot sw55, 2026-09-11)
+Both figures are measured, not assumed. The decomposition is in §7i and §7j: sw57 against sw56
+compared the *same workload* on images 144 bytes apart and gave 0.171 pp over seven observations;
+sw58 re-measured the *same images* and gave 0.027 pp over fourteen. **The layout difference dominated
+the original bound — genuine run-to-run variation is a sixth of it.**
 
-The board kernel now compiles CMA in (`configs/fpgakernel.config`) and the device tree reserves
-256 MiB at `0xAC000000` carrying `linux,cma-default` (`configs/caplifive.dts`). **This is the first
-capability region above 4 MiB on any target other than emulation, and the ceiling it clears has been
-in place for the whole project.**
+**Every pair ratio in the record therefore supports three decimals**, including §7f's and §7k's. A
+pair ratio is domain-arm over baseline-arm — two entirely different programs — so there is no
+"two layouts of one program" term in it at all and run-to-run is the whole of the variation. An
+earlier version of this block applied the 0.171 pp figure to those ratios and called them two-decimal
+figures. That was too conservative, and a rule that was too conservative is relaxed out loud here for
+the same reason the ones that were too permissive were tightened out loud.
 
-| arm | size | result |
-|---|---|---|
-| `k800` (control, first in the boot) | — | **retval 4**, 4,499 cycles, 53,406 ran, 1,089 instret |
-| `bigregion` | 4 MiB | created, mapped, first+last byte round-tripped |
-| `bigregion` | 8 MiB | created, mapped, first+last byte round-tripped |
-| `bigregion` | **130 MiB** | created, mapped, first+last byte round-tripped |
+**Two decimals remain right for comparing the same quantity across boots or images** — §7j's total
+of 1.1930 against §7k's 1.1965 is the type case, 0.29 % apart, which is inside the cross-image figure
+and outside the same-image one, exactly as it should be for two different images.
 
-**4 / 4 arms**, zero `Oops`/`BUG:`/`WARNING:` counted across each allocation, no fault tags. The
-control ran first and passed, so the boot carries a verdict at all — it fails roughly one boot in
-five and a failed control voids everything after it.
+**THE PROPAGATION RULE, because three independent instances of getting it wrong happened in one
+session, across two lanes.** The sd of a DIFFERENCE and the sd of a RATIO are the same number here,
+because both combine two independent single measurements: if one measurement carries σ, a difference
+carries σ√2 and so does a ratio. **The tabulated 0.027 and 0.171 are already difference sds. Anyone
+reaching for √2 has already been given it.** Applying it a second time inflates the bound by 1.41×
+and produces a figure that looks defensibly conservative and is simply wrong.
 
-**The reservation is verified by SIZE, not by existence**, which is the check the whole design turns
-on: `CONFIG_CMA_SIZE_MBYTES` defaults to **16 on non-x86**, so a *rejected* device-tree node leaves a
-quiet 16 MiB default area behind, under which a small arm passes and a large one fails and the log
-still shows a CMA line. The kernel's own lines, scoped to this run's `load_image` rather than to the
-console's replay of the previous boot:
+**These are bounds, not measured error bars.** One pair per testset does not give an error bar, and
+the 0.171 pp figure in particular mixes a systematic — the layout difference is per-testset, not
+noise — with genuine variation. If anything 0.027 pp is itself conservative for a within-boot pair,
+whose two arms run minutes apart sharing thermal and DRAM state, where the fourteen observations
+behind it are across boots.
 
-```
-Reserved memory: created CMA memory pool at 0x00000000ac000000, size 256 MiB
-OF: reserved mem: initialized node linux,cma@ac000000, compatible id shared-dma-pool
-OF: reserved mem: 0x00000000ac000000..0x00000000bbffffff (262144 KiB) map reusable linux,cma@ac000000
-Memory: 693668K/985928K available (… 262144K cma-reserved)
-```
-
-**Why the 130 MiB arm settles the mechanism without a failing board arm beside it.** The buddy
-allocator's largest block is `MAX_ORDER 10` × 4 KiB = **4 MiB**, and the silent fallback area is
-16 MiB; 130 MiB is 32× the first and 8× the second, so that allocation cannot have come from either.
-The matched failing arm exists too, but under emulation: at 8 MiB with no CMA area the create fails,
-and with `cma=256M` on the same image it succeeds (§7e appendix). Those four QEMU runs are
-`/tmp/capstone/bigregion-{4194304,8388608,8388608-cma=256M,136314880-cma=256M}.log`, all of them
-taken AFTER the module rebuild at 01:07:23 that put `dma_alloc_pages` into the guest — which matters
-because an earlier arm failed on a stale module that had no CMA path at all, and a failure from THAT
-is not the matched arm. The no-CMA arm carries its own control inside the log: `CmaTotal: 0 kB` and
-`0K cma-reserved`, so the area really was absent rather than merely unrequested. What the board arms
-do NOT separately measure is *which* allocator served the 4 MiB arm — it sits exactly at the buddy ceiling
-and either could have — and that is why it is present as a probe control rather than as evidence.
-
-**The domain's own memory does NOT come from CMA — now observed, not only derived.** The question
-mattered because if the capability arm's working set sat in the CMA area while the native baseline's
-did not, the two arms of every pair in §7h would differ in DRAM placement. The source answer is that
-`ioctl_create_dom` allocates with `GFP_HIGHUSER | __GFP_ZERO` (`module/capstone.c:136`), which lacks
-`__GFP_MOVABLE` (`gfp_types.h:334`), so `gfp_migratetype()` returns `MIGRATE_UNMOVABLE` and
-`ALLOC_CMA` is never set (`page_alloc.c:3371-3375`) — both CMA paths are gated on that flag. Measured
-under emulation with a 256 MiB area present and default:
-
-```
-cma: Reserved 256 MiB at 0x00000000f0000000          area = 0xf0000000 .. 0xffffffff
-Domain memory region vaddr = ff60000081680000, paddr = 101880000
-CmaFree: 260096 kB before the domain, 260096 kB after
-```
-
-`0x101880000` is **24 MiB above the top of the area**, and `CmaFree` does not move by a single
-kilobyte across a domain creation whose block is at least 256 KiB. What DOES come from CMA is the
-region allocation (`dma_alloc_pages`) — on the board those show as `BASE:AC0xxxxx` tags inside the
-reserved range. So the split is: **regions from CMA, domain code/heap/stack from the buddy
-allocator**, and the SQLite arena is a static array inside the latter.
-
-`linux,cma-default` is load-bearing rather than decorative. The module registers `region_dev` with
-`platform_device_register_simple(…, NULL, 0)`, so `dev->of_node` is NULL, `dev->cma_area` is never
-assigned, and `dma_alloc_contiguous` falls through to `dma_contiguous_default_area`
-(`kernel/dma/contiguous.c:313-333`) — which only a node carrying that property ever sets
-(`:430-431`). Without it the node reserves memory nothing on this system can reach.
+*No conclusion in the record rests on a digit these bounds kill, checked rather than assumed:*
+`cte` exceeding its instruction ratio is 1.166 against 1.141, a gap of 0.025; §7f's
+cycle-below-instruction finding has gaps of 0.056 to 0.211; §7k's spread runs 1.166 to 1.267,
+endpoints 0.101 apart. All clear even the coarser bound by an order of magnitude.
