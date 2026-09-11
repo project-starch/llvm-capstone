@@ -213,8 +213,22 @@ int main(int argc, char **argv) {
      stage, so every existing invocation behaves exactly as before. */
   unsigned long probe_stage = 0;
   int have_probe_stage = 0;
-  if (argc == 3 && !tail_payload) {
-    probe_stage = strtoul(argv[2], NULL, 0);
+  if (argc == 3 && !tail_payload && !feature_probe) {
+    /* A POSITIVE TEST FOR A NUMBER, not a growing list of flags to exclude. argv[2] here is
+       whatever the dispatch chain above did not consume, and strtoul() answers 0 for every
+       non-numeric string -- so any flag-shaped argument reaching this point silently becomes
+       "probe stage 0", and the run reports a stage nobody asked for. Nothing in the compiler
+       or in a test of the flag's own feature can see it.
+       --tail was rescued by a !tail_payload guard; --speedtest1 in its bare argc==3 form was
+       not, and the board driver ships its invocation as a shell string through three quoting
+       layers, which is exactly how `--speedtest1 ''` arrives as a bare `--speedtest1`.
+       Requiring a digit ends the class instead of adding a third exclusion. */
+    char *end = NULL;
+    probe_stage = strtoul(argv[2], &end, 0);
+    if (end == argv[2] || *end) {
+      fprintf(stderr, "%s: unrecognised option %s\n", argv[0], argv[2]);
+      return 2;
+    }
     have_probe_stage = 1;
   }
 #ifdef SPEEDTEST1_REGION_ARENA
