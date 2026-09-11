@@ -238,7 +238,7 @@ static unsigned long rd_minstret(void) {
  * that lands at the ILLX site, which still ends in while(1).
  *
  * WHAT ACTUALLY KEEPS A RUN ALIVE is not this path -- it is not reaching it. The heap minimum for
- * each testset and size is measured (see run-sqlite-speedtest1.sh), the host refuses an invocation
+ * each testset and size is measured (see run-speedtest1-measure.sh), the host refuses an invocation
  * that cannot name a testset, and a stage that might abort goes LAST in a boot.
  *
  * The report is still written into the payload before faulting. It costs nothing, and it is the
@@ -417,7 +417,7 @@ static void speedtest1_report(unsigned long cycles, int aborted, int rc) {
      paying for. Enabling the accounting costs a counter update per allocation, i.e. it perturbs the
      thing being measured, so it is opt-in and the reading is absent rather than false by default.
      The heap MINIMUM per testset and size is measured natively instead; see
-     run-sqlite-speedtest1.sh. */
+     run-speedtest1-measure.sh. */
 #ifdef CAPSTONE_SPEEDTEST1_INSTRET
   out(" INSTRS ");
   out_ulong(speed_instrs);

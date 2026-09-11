@@ -21,13 +21,13 @@
 # fails with "no such table: config" at any arena size. This tool did exactly that until 2026-09-10
 # and reported "app DOES NOT COMPLETE at any arena up to 33554432 bytes", which reads as a finding
 # about memory and is a finding about the argument shape. The domain passes no positional name
-# either (run-sqlite-speedtest1.sh), so omitting it is also what makes this sweep match the thing it
+# either (run-speedtest1-measure.sh), so omitting it is also what makes this sweep match the thing it
 # is measuring.
 #
 # WHAT IT MEASURES AND WHAT IT DOES NOT. Empirical pass/fail per arena size, not a high-water
 # reading: memsys5 is a buddy allocator and fragments, so "the peak was N bytes" does not imply an
 # N-byte arena works. The two are separately interesting and the domain's own allocation census
-# (SPEEDTEST1_ALLOCSTATS=1 on run-sqlite-speedtest1.sh) reports the peak.
+# (SPEEDTEST1_ALLOCSTATS=1 on run-speedtest1-measure.sh) reports the peak.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PORT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
