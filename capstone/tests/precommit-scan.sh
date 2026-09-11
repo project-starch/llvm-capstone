@@ -40,6 +40,7 @@ cd "$REPO_ROOT" || exit 2
 
 # ---- gather the text under scrutiny -----------------------------------------------
 TMP=$(mktemp) ; trap 'rm -f "$TMP"' EXIT
+SKIPPED_BINARY=()
 # THE SCANNER DOES NOT SCAN ITSELF. Its own detector patterns necessarily contain the
 # very strings it looks for ('ngrok', 'token', 'user@host'), so including this file makes
 # every commit that touches it fail on its own regexes. Excluding it is not a weakened
@@ -68,8 +69,49 @@ else
   while IFS= read -r -d '' f; do
     [[ "$f" == "$SELF" ]] && continue
     printf '=== untracked: %s ===\n' "$f" >> "$TMP"
-    cat -- "$f" >> "$TMP" 2>/dev/null
+    # BINARY UNTRACKED FILES ARE SKIPPED BY CONTENT AND NAMED OUT LOUD -- never silently
+    # swallowed. Catting one in raw used to disable EVERY content check below: ugrep classifies
+    # the whole temp file as binary, prints "binary file matches" to stderr and NOTHING to
+    # stdout, so each `M=$(grep ...)` came back empty and the scan printed CLEAN having read
+    # nothing. Demonstrated 2026-09-11 with a matched pair -- the same attribution trailer in
+    # the same message BLOCKED in a clean tree and passed CLEAN with one 200 KB untracked blob
+    # present.
+    #
+    # Scanning them AS TEXT instead was tried and is worse in practice: a build directory that
+    # is not gitignored (capstone-qemu's build-q07/, 3769 files) puts the user's home path
+    # inside every .ninja_deps, so the gate blocks every lane that has one. A gate that blocks
+    # everything gets bypassed, which is the same hole by a different route. Build outputs are
+    # not candidate commit content; new TEXT files are, and those are still read in full.
+    if LC_ALL=C grep -qI . -- "$f" 2>/dev/null; then
+      cat -- "$f" >> "$TMP" 2>/dev/null
+    else
+      SKIPPED_BINARY+=("$f")
+    fi
   done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
+fi
+
+# THE SCANNER PROVES IT CAN STILL READ ITS OWN INPUT, on every run, before it reports anything.
+# The NUL strip above fixes the known cause; this catches the class. Every check below captures
+# grep's STDOUT, so any condition that makes grep stop printing matches -- binary classification,
+# an encoding it refuses, a locale fault -- turns the whole gate into a silent pass. A canary that
+# must be found tests exactly that, and tests it against the real temp file rather than a
+# synthetic one, because the failure is a property of THIS input.
+CANARY='PRECOMMIT_SCAN_SELFTEST_CANARY_a7f3'
+printf '%s\n' "$CANARY" >> "$TMP"
+if [[ -z "$(grep -nF -- "$CANARY" "$TMP" 2>/dev/null)" ]]; then
+  echo "BLOCKED: the scanner cannot read its own temp file -- grep matched nothing where a"
+  echo "  canary line was just appended. Every content check below would report CLEAN without"
+  echo "  having read a byte. Do NOT commit. Usual cause: a binary file reached \$TMP."
+  exit 1
+fi
+
+if (( ${#SKIPPED_BINARY[@]} > 0 )); then
+  echo "NOTE: ${#SKIPPED_BINARY[@]} untracked BINARY file(s) were not scanned for content."
+  printf '  %s\n' "${SKIPPED_BINARY[@]}" | head -10
+  (( ${#SKIPPED_BINARY[@]} > 10 )) && echo "  ... and $(( ${#SKIPPED_BINARY[@]} - 10 )) more"
+  echo "  Build outputs are expected here. If any of these is content you intend to COMMIT,"
+  echo "  it has not been checked -- review it by eye."
+  echo
 fi
 if git diff --cached --name-only 2>/dev/null | grep -qxF "$SELF"; then
   echo "NOTE: $SELF is staged and was EXCLUDED from its own scan. Review it by eye."
