@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Run SQLite's own speedtest1 inside the silicon-config capability domain, under QEMU.
 #
+# NEAR-TWIN: run-sqlite-speedtest1.sh (I-7). This one drives the MEASUREMENT domain
+# (speedtest1_measure.c -> build-sqlite-silicon.sh -> sqlite_silicon.dom) and takes its testset at
+# run time. The twin drives the BRING-UP domain (speedtest1_domain.c -> build-sqlite-capstone.sh
+# -> speedtest1_capstone.dom) with the testset compiled in. Different tools, similar names.
+#
 # Shaped like run-sqlite-slt.sh and for the same reason: ONE assignment sets the region size for
 # both builds, because host and domain are separate compilations of one #define and a drift between
 # them is silent. The domain also refuses to run on a mismatch, but that gate is the backstop.

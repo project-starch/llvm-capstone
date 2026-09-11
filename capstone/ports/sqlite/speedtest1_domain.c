@@ -1,5 +1,12 @@
 /* speedtest1 as a Capstone domain.
  *
+ * ITS NEAR-TWIN IS speedtest1_measure.c, AND THEY ARE DIFFERENT TOOLS (I-7). This file is the
+ * BRING-UP instrument: built by build-sqlite-capstone.sh into speedtest1_capstone.dom, driven by
+ * run-sqlite-speedtest1.sh, testset baked in at COMPILE time (SPEEDTEST1_ARGS), ten staged
+ * markers so a run that stops somewhere says where, and no cycle counting. The twin is the
+ * MEASUREMENT harness: build-sqlite-silicon.sh -> sqlite_silicon.dom, run-speedtest1-measure.sh,
+ * testset at RUN time, emits the numbers. Do not reach for one expecting the other's output.
+ *
  * SQLite's own benchmark, its source unchanged, with its stdio on the hostcall payload and
  * no files: printf and fprintf render through sqlite3_vsnprintf into the payload the host
  * prints after the domain returns, fopen refuses, unlink is a no-op, and exit writes its

@@ -1,5 +1,14 @@
 /* SQLite's own speedtest1 benchmark, run INSIDE a capability domain.
  *
+ * ITS NEAR-TWIN IS speedtest1_domain.c, AND THEY ARE DIFFERENT TOOLS (I-7). This file is the
+ * MEASUREMENT harness: built by build-sqlite-silicon.sh into sqlite_silicon.dom, driven by
+ * run-speedtest1-measure.sh, testset chosen at RUN time, emits cycle and instruction counts.
+ * The twin is a BRING-UP instrument: built by build-sqlite-capstone.sh into
+ * speedtest1_capstone.dom, driven by run-sqlite-speedtest1.sh, testset baked in at COMPILE
+ * time, ten staged markers and no counters. Results in the measurements doc are cited by IMAGE
+ * HASH, so reaching for the wrong one when reproducing yields an image that legitimately fails
+ * to match -- which reads like "the result did not reproduce" rather than "wrong tool".
+ *
  * Selected by DOMAIN_SRC, so build-sqlite-silicon.sh copies this file over
  * sqlite_capstone_domain.c and the amalgam translation unit #includes it. That placement is not
  * incidental: under -capstone-gp-captable globals are numbered per module and positionally against

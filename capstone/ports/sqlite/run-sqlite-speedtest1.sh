@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# NEAR-TWIN: run-speedtest1-measure.sh (I-7). This one drives the BRING-UP domain
+# (speedtest1_domain.c -> build-sqlite-capstone.sh -> speedtest1_capstone.dom) with the testset
+# compiled in. The twin drives the MEASUREMENT domain (speedtest1_measure.c ->
+# build-sqlite-silicon.sh -> sqlite_silicon.dom) and emits cycle/instruction counts.
+#
 # speedtest1 in a Capstone domain on QEMU: SQLite's own benchmark with fixed arguments and the
 # lookaside pool on, the allocator chain the paper measures. Output arrives on the hostcall
 # payload the host prints when the domain returns; the domain ends with

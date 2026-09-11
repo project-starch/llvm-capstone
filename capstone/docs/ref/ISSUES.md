@@ -5322,39 +5322,6 @@ lost padding or fell under it. If so this is a latent fragility (fixed split off
 image size), not a miscompile, and the fix belongs in the padding or the monitor rather than in the
 compiler.
 
-## I-7 — four near-twin SQLite files, two pairs, and git will never flag either · `OPEN 2026-09-11 — a selection hazard, not a defect; no result is known to be wrong because of it`
-
-Merging the collaborator's bring-up stack alongside our measurement branch left two pairs of
-files whose names differ by a word and whose jobs differ entirely:
-
-| pair | built by | produces |
-|---|---|---|
-| `speedtest1_domain.c` | `build-sqlite-capstone.sh` | `speedtest1_capstone.dom` — bring-up: ten staged markers, compile-time testset, no cycle counting |
-| `speedtest1_measure.c` | `build-sqlite-silicon.sh` | `sqlite_silicon.dom` — measurement: cycle/instruction counts, runtime testset |
-| `run-sqlite-speedtest1.sh` | — | drives the first |
-| `run-speedtest1-measure.sh` | — | drives the second |
-
-**Why this is filed rather than fixed.** Both are wanted: one gets a large workload onto the
-hardware the first time, the other emits the numbers. The rename that produced the second name was
-the right call (it cleared an add/add conflict and git recorded it as a rename, so history follows
-the file). What is left is not a conflict at all — it is an ABSENCE of one, which is precisely why
-no tool reports it.
-
-**The hazard is provenance, and it is specific.** §7f–§7k of
-`fpga-silicon-measurements-for-paper.md` and the `board-results` rows cite measurements **by image
-hash**. The two domains are different images with different hashes, so a row is never ambiguous
-once written — but reaching for the wrong source file when REPRODUCING one yields an image that
-legitimately fails to match, and the natural reading of that is "the result did not reproduce"
-rather than "the wrong tool was built".
-
-**What would settle it:** either a comment block at the top of each of the four naming its twin
-and its output artifact, or a single runner that dispatches on a mode flag. Neither has been done.
-Until then, check which of the two `.dom` names a result cites before rebuilding it.
-
-**Positive control for anyone re-checking this entry is cheap:** `git merge-tree` reports zero
-add/add pairs on the merged tree — run it against the pre-rename tip `890c02fc0512` instead and it
-reports two. An instrument that cannot produce the non-zero answer has not cleared anything.
-
 ## How to add an entry
 
 **When an entry's status becomes final, move it to `ISSUES-ARCHIVE.md` in the same commit that records the finding, verbatim. IDs are never reused, so an ID absent from this file is in the archive.**
