@@ -24,7 +24,14 @@ GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-li
 # at mepc 0x1e84, 52 bytes into create_region, word 8ae7905b.
 #
 # So: keep this file, and compile the counters out via the macro below.
-LIBCAPSTONE_C="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
+# RESOLVED FROM $CAPSTONE_BUILDROOT_DIR, not from the repo root. capstone-test-env.sh:54 already
+# exports it, defaulting to the same path, so this is identical in a normal checkout. It matters
+# in a WORKTREE, where submodules are empty: the workaround was to symlink caplifive-buildroot
+# into the worktree, and git then sees a type change whose content is the user's home path, so
+# precommit-scan blocks every commit in that tree while a build is in flight -- including another
+# lane's commit, on a hit that has nothing to do with their diff. Using the env var removes the
+# need for the symlink instead of teaching the scanner to ignore it.
+LIBCAPSTONE_C="$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib/libcapstone.c"
 
 mkdir -p "$OUT_DIR"
 
@@ -40,4 +47,26 @@ read -r -a _host_defs <<< "${HOST_EXTRA_DEFS:-}"
   "$HOST_SRC" \
   "$LIBCAPSTONE_C"
 
+# WHICH BASE THIS BINARY WAS BUILT AGAINST, written beside it so a delivered set carries its own
+# provenance. The host links libcapstone.c out of the caplifive-buildroot submodule by absolute
+# path (see LIBCAPSTONE_C above), so the HOST half of an artifact set moves whenever that submodule
+# does -- while the domain half and the toolchain sit still, and no gate says a word about it.
+#
+# On 2026-09-11 two sets built 78 minutes apart had host binaries differing by 3,332 bytes: a
+# submodule commit raising MAX_REGION_N from 64 to 96 landed between them, adding exactly
+# 32*8 + 32*4 = 384 bytes of .bss. Source, defines and toolchain were identical and all older than
+# both builds, so nothing else could have explained it -- and it was found only by chasing an
+# unexpected hash rather than shrugging at it. The library sha is the load-bearing field: it does
+# not depend on the submodule's git state being clean or even on it being a checkout.
+_br_dir="$CAPSTONE_BUILDROOT_DIR"
+{
+  echo "host source:     $HOST_SRC"
+  echo "libcapstone.c:   $LIBCAPSTONE_C"
+  echo "libcapstone sha: $(sha256sum "$LIBCAPSTONE_C" | cut -d' ' -f1)"
+  echo "buildroot HEAD:  $(git -C "$_br_dir" rev-parse HEAD 2>/dev/null || echo NOT-A-CHECKOUT)"
+  echo "buildroot dirty: $(git -C "$_br_dir" status --porcelain 2>/dev/null | wc -l) modified path(s)"
+  echo "built:           $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$OUT_HOST.provenance"
+
 echo "Built $OUT_HOST"
+sed 's/^/  /' "$OUT_HOST.provenance"

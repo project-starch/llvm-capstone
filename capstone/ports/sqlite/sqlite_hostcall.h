@@ -58,7 +58,20 @@ struct sqlite_hostcall_v0 {
  * host creates **TWO** regions of this size, so the passing arm is two 4 MiB regions and
  * the failing arm two 8 MiB ones. **Whether the limit is per-region or on the total is
  * NOT established by these arms** -- that needs a run with two DIFFERENT sizes, which
- * nobody has done. Do not quote "4 MiB per region" from this. */
+ * nobody has done. Do not quote "4 MiB per region" from this.
+ *
+ * AND IT IS NOT A REGION LIMIT AT ALL, established 2026-09-10 after the above. The module SOURCE
+ * allocates regions with dma_alloc_pages, which draws on a reserved CMA area and is documented there
+ * as the way past the buddy allocator's 4 MiB block. But BOTH BUILT module trees
+ * (build/build/modcapstone-1.0/module/capstone.c, dated 2026-09-08) contain zero calls to it and
+ * three to __get_free_pages. So the image that produced the bracket above allocates regions from the
+ * buddy allocator and inherits its order-10 cap, and the 8 MiB failure is that cap rather than
+ * anything about regions.
+ *
+ * Reserving CMA was tried and changed nothing, as it must not: "cma: Reserved 64 MiB" appeared in
+ * the boot log and map_region still failed, because the running module never asks CMA for anything.
+ * SETTLING THIS NEEDS THE MODULE REBUILT FROM THE PACKAGE SOURCE, not a kernel argument. Until then
+ * the ceiling on a CMA-backed region is UNKNOWN rather than 4 MiB. */
 #ifndef SQLITE_HC_REGION_SIZE
 #define SQLITE_HC_REGION_SIZE 4096UL
 #endif
@@ -93,6 +106,24 @@ struct sqlite_hostcall_v0 {
 #define SQLITE_HC_OP_FEATURE      0x46454100UL
 #define SQLITE_HC_OP_FEATURE_MASK 0xFFFFFF00UL
 
+/* ------------------------------------------------------------ speedtest1 transport */
+/* "SPD\0", magic-guarded like the two above and colliding with neither, nor with the 0x5A6E00nn
+ * staged selector. It asks the domain to run SQLite's own speedtest1 benchmark.
+ *
+ * The ARGUMENTS travel the same way an SLT file does -- text in the top half of the payload region,
+ * length in `offset` -- because a domain has no command line and speedtest1's option loop is the
+ * only way to set --testset and --size. The domain splits that text into argv. Reusing the SLT
+ * layout rather than inventing one means the output bound below is already correct for it.
+ *
+ * WHICH TESTSETS ARE USABLE (measured 2026-09-10 against our define set): main, orm and
+ * parsenumber run clean. cte and star die on decimal literals, which SQLITE_OMIT_FLOATING_POINT's
+ * tokenizer rejects; fp dies on round(), which needs SQLITE_ENABLE_MATH_FUNCTIONS as well as
+ * floating point; json dies on SQLITE_OMIT_JSON; app depends on state another testset builds.
+ * The default --testset is mix1, which contains all of them, so an invocation that does not name
+ * --testset explicitly will abort. */
+#define SQLITE_HC_OP_SPEED      0x53504400UL
+#define SQLITE_HC_OP_SPEED_MASK 0xFFFFFF00UL
+
 /* THE INPUT SITS IN THE TOP HALF, THE OUTPUT GROWS FROM ZERO. They share one region, so
  * they must not collide: the domain's output limit is lowered to this offset for SLT
  * builds, which is a compile-time constant swap and therefore costs the ordinary build
@@ -100,12 +131,18 @@ struct sqlite_hostcall_v0 {
 #define SQLITE_HC_SLT_INPUT_OFF (SQLITE_HC_REGION_SIZE / 2UL)
 #define SQLITE_HC_SLT_MAX_INPUT (SQLITE_HC_REGION_SIZE - SQLITE_HC_SLT_INPUT_OFF)
 
+/* speedtest1 borrows that layout verbatim rather than inventing a second one, so the output bound
+ * above is already correct for it and there is one place to change if the split ever moves. */
+#define SQLITE_HC_SPEED_ARGS_OFF SQLITE_HC_SLT_INPUT_OFF
+#define SQLITE_HC_SPEED_MAX_ARGS SQLITE_HC_SLT_MAX_INPUT
+
 /* Distinct return markers, so a failure to START is never confused with a clean run that
  * found nothing. Every one of these means NO records were evaluated. */
 #define SQLITE_HC_ERR_REGION_MISMATCH 0x5117BAD0UL  /* host and domain disagree on size */
 #define SQLITE_HC_ERR_BAD_INPUT       0x5117BAD1UL  /* absent or oversized input         */
 #define SQLITE_HC_ERR_CONFIG_HEAP     0x5117BAD2UL  /* SQLITE_CONFIG_HEAP refused        */
 #define SQLITE_HC_ERR_INITIALIZE      0x5117BAD3UL  /* sqlite3_initialize refused        */
+#define SQLITE_HC_ERR_BAD_OPCODE      0x5117BAD4UL  /* the domain was sent someone else's opcode */
 #define SQLITE_HC_SLT_RAN             0x5117600DUL  /* the runner ran; read the payload  */
 
 #endif

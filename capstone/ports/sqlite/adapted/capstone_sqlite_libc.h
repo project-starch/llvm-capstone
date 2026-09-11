@@ -17,6 +17,25 @@
 #define _TIME_H 1
 #define _MATH_H 1
 
+/* fabs AND INFINITY, SUPPLIED ONLY WHEN FLOATING POINT IS ON.
+ *
+ * The amalgamation defines both itself, but only inside `#ifdef SQLITE_OMIT_FLOATING_POINT`
+ * (sqlite3.c:15693-15704, alongside `#define double sqlite_int64`). So the omission is what has been
+ * supplying them to this freestanding build all along, and removing it takes them away: the compile
+ * fails with two "use of undeclared identifier 'INFINITY'" and one "call to undeclared function
+ * 'fabs'", and nothing else. Measured 2026-09-10 on the capstone64 build.
+ *
+ * Guarded the other way round from the amalgamation's copy, so exactly one definition exists at any
+ * setting. This header is -include'd, so the guard sees the command-line define. */
+#ifndef SQLITE_OMIT_FLOATING_POINT
+#ifndef INFINITY
+#define INFINITY (__builtin_inf())
+#endif
+#ifndef fabs
+#define fabs(X) (__builtin_fabs(X))
+#endif
+#endif
+
 typedef struct capstone_sqlite_file FILE;
 typedef long time_t;
 

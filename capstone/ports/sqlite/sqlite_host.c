@@ -66,12 +66,30 @@ static int fail_cleanup(const char *message, unsigned long value) {
   return 1;
 }
 
+/* Is `needle` anywhere in the first n bytes of the payload? Written out rather than calling memmem,
+   which needs _GNU_SOURCE -- and a feature-test macro that silently is not set here would make this
+   fail to compile, or worse, resolve to something else. The payload is not NUL-terminated. */
+static int payload_has_marker(const char *payload, unsigned long n, const char *needle) {
+  unsigned long m = (unsigned long)strlen(needle);
+  unsigned long i;
+  if (n == 0 || n > SQLITE_HC_REGION_SIZE || m == 0 || m > n)
+    return 0;
+  for (i = 0; i + m <= n; i++)
+    if (memcmp(payload + i, needle, (size_t)m) == 0)
+      return 1;
+  return 0;
+}
+
 int main(int argc, char **argv) {
   int feature_probe = 0;   /* --feature-probe: ask the domain which restored APIs it carries */
   /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
      strtoul'd as a probe stage, so a bare path would parse to 0 and quietly publish the
      stage-0 selector -- a run that looks like a staged probe and tests nothing. */
   const char *slt_path = 0;
+  /* --speedtest1 "<args>": the whole speedtest1 command line as ONE argument, delivered to the
+     domain in the payload's top half exactly as an SLT file is. A domain has no command line and
+     speedtest1's option loop is the only way to set --testset and --size. */
+  const char *speed_args = 0;
   unsigned long clamp_n = 0;
   if (argc == 6 && !strcmp(argv[2], "--slt") && !strcmp(argv[4], "--clamp")) {
     slt_path = argv[3];
@@ -80,10 +98,45 @@ int main(int argc, char **argv) {
     feature_probe = 1;
   } else if (argc == 4 && !strcmp(argv[2], "--slt")) {
     slt_path = argv[3];
+  } else if (argc >= 4 && !strcmp(argv[2], "--speedtest1")) {
+    /* EVERYTHING AFTER --speedtest1 IS THE BENCHMARK'S COMMAND LINE, joined with single spaces.
+       One quoted string works too, and is what the QEMU script passes; accepting the split form as
+       well is what makes the BOARD path safe. The board driver builds its invocation as a shell
+       string ("{host} {host_args}") that then travels through the console, so a form whose meaning
+       depends on quotes surviving three layers is a fragility with no upside. */
+    static char joined[512];
+    unsigned long at = 0;
+    int i;
+    for (i = 3; i < argc; i++) {
+      unsigned long len = (unsigned long)strlen(argv[i]);
+      if (at && at + 1 < sizeof joined)
+        joined[at++] = ' ';
+      if (at + len >= sizeof joined) {
+        fprintf(stderr, "%s: --speedtest1 arguments exceed %lu bytes\n",
+                argv[0], (unsigned long)sizeof joined);
+        return 2;
+      }
+      memcpy(joined + at, argv[i], (size_t)len);
+      at += len;
+    }
+    joined[at] = 0;
+    speed_args = joined;
   } else if (argc != 2 && argc != 3) {
     fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
                     "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n"
-                    "       %s <sqlite-domain.dom> --feature-probe\n", argv[0], argv[0], argv[0]);
+                    "       %s <sqlite-domain.dom> --feature-probe\n"
+                    "       %s <sqlite-domain.dom> --speedtest1 --testset main --size 1\n",
+                    argv[0], argv[0], argv[0], argv[0]);
+    return 2;
+  }
+  /* REFUSE AN INVOCATION WITHOUT --testset, HERE, BEFORE A BOOT IS SPENT. The default testset is
+     mix1, which contains json (omitted), rtree (not enabled), cte and star (decimal literals the
+     tokenizer rejects under SQLITE_OMIT_FLOATING_POINT) and fp (needs round()). Any of those
+     reaches fatal_error, so a default invocation is guaranteed to abort. That is a precondition,
+     not a preference, and finding it out from a board transcript costs a stage. */
+  if (speed_args && !strstr(speed_args, "--testset")) {
+    fprintf(stderr, "%s: --speedtest1 args must name --testset explicitly; the default (mix1) "
+                    "cannot run under this build's defines\n", argv[0]);
     return 2;
   }
   /* RUNTIME PROBE SELECTION (optional 2nd argument).
@@ -197,6 +250,18 @@ int main(int argc, char **argv) {
   region_id_t metadata_region = create_region(SQLITE_HC_REGION_SIZE);
   mark("SQ: C/mkregion2\n");
   region_id_t payload_region = create_region(SQLITE_HC_REGION_SIZE);
+#ifdef SPEEDTEST1_REGION_ARENA
+  /* THE THIRD REGION IS SQLite's ARENA, and it is deliberately NEVER MAPPED here. The host has no
+     business reading it, and sqlite_host_row3_b2.c records that mapping an arena it does not touch
+     is what made an earlier probe's failure ambiguous. Creating it is enough: the domain reaches it
+     through the grant, and reads its size off the grant's own bounds. */
+  mark("SQ: C2/mkarena\n");
+  region_id_t arena_region = create_region(SPEEDTEST1_ARENA_SIZE);
+  if ((long)arena_region < 0)
+    return fail_cleanup("create_region(arena) failed -- above 4 MiB this needs a CMA area",
+                        (unsigned long)SPEEDTEST1_ARENA_SIZE);
+  mark_u("SQ: arena_bytes=", (unsigned long)SPEEDTEST1_ARENA_SIZE);
+#endif
   mark("SQ: D/mapped\n");
   mark_u("SQ: r1=", (unsigned long)metadata_region);
   mark_u("SQ: r2=", (unsigned long)payload_region);
@@ -278,6 +343,20 @@ int main(int argc, char **argv) {
     metadata->opcode = SQLITE_HC_OP_FEATURE;
     mark("SQ: feature-probe\n");
   }
+  if (speed_args) {
+    /* Same top-half layout as an SLT file, and the same reason for the bound: the domain's output
+       grows from offset 0 and must not meet the input. Refuse an oversized argument string rather
+       than truncate it -- a truncated command line silently changes what was measured. */
+    unsigned long n = (unsigned long)strlen(speed_args);
+    if (n == 0)
+      return fail_cleanup("speedtest1 args are empty", 0);
+    if (n >= SQLITE_HC_SPEED_MAX_ARGS)
+      return fail_cleanup("speedtest1 args exceed the region's input half", n);
+    memcpy(payload + SQLITE_HC_SPEED_ARGS_OFF, speed_args, (size_t)n);
+    metadata->opcode = SQLITE_HC_OP_SPEED;
+    metadata->offset = (sqlite_hostcall_u64_t)n;
+    mark_u("SQ: speedtest1=", n);
+  }
   mark("SQ: E/share1\n");
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
@@ -286,6 +365,14 @@ int main(int argc, char **argv) {
   shared_region_annotated(domain, payload_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
+#ifdef SPEEDTEST1_REGION_ARENA
+  /* THIRD, because domain_main keys on the capture ORDER: 0 metadata, 1 payload, 2 arena. Sharing
+     it anywhere else in this sequence silently hands SQLite's heap to the wrong pointer. */
+  mark("SQ: F2/share3\n");
+  shared_region_annotated(domain, arena_region,
+                          SQLITE_HC_ANNOTATION_PERM_INOUT,
+                          SQLITE_HC_ANNOTATION_REV_SHARED);
+#endif
 
   mark("SQ: G/enter\n");
   unsigned long result = call_dom(domain);
@@ -321,6 +408,30 @@ int main(int argc, char **argv) {
       mark_u("SQ: probe=", result);
     } else if (result != SQLITE_HC_SLT_RAN) {
       return fail_cleanup("slt did not run", result);
+    }
+  } else if (speed_args) {
+    /* THREE OUTCOMES, AND THE PAYLOAD IS WHAT SEPARATES TWO OF THEM.
+     *
+     * A clean run returns the 0x4EB1 marker. A run that hit speedtest1's fatal_error cannot return
+     * at all: exit() is unreachable in a domain, so the abort path writes its report and then takes
+     * a deliberate capability fault, and the monitor hands back CAPSTONE_DOMAIN_FAULT_RETVAL
+     * (0x0FA017ED). A GENUINE capability defect returns exactly the same value -- the retval cannot
+     * tell them apart, and neither can the monitor's tags. The marker the domain wrote into the
+     * payload BEFORE faulting is the only discriminator, which is why the payload is dumped above
+     * unconditionally rather than only on success.
+     *
+     * Both failure modes exit non-zero; they are distinguished by the message so a transcript reads
+     * as what it is instead of as "the domain was never staged". */
+    if ((result & 0xFFF00000UL) == 0x4EB00000UL) {
+      mark_u("SQ: speedtest1-ran=", result);
+    } else if (result == 0x0FA017EDUL) {
+      unsigned long n = (unsigned long)metadata->length;
+      int reported = payload_has_marker(payload, n, "__CAPSTONE_SPEEDTEST1_ABORTED__");
+      return fail_cleanup(reported ? "speedtest1 aborted (fatal_error; see the report above)"
+                                   : "domain faulted with no speedtest1 report",
+                          result);
+    } else {
+      return fail_cleanup("speedtest1 did not run", result);
     }
   } else if (result != SQLITE_HC_RET_DONE) {
     return fail_cleanup("unexpected domain return", result);
