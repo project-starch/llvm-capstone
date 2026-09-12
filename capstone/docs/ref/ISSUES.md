@@ -2162,7 +2162,7 @@ VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the 
 U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
 want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
 
-### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; the resulting over-permissive store has NOT been demonstrated. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
+### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store has NOT been demonstrated. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
 >
@@ -2173,10 +2173,31 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > sw62's arm 4 that authorises writes up to `base + 355,312`, whose last byte lands at
 > `base + 355,328` — **448 bytes past the 354,880 the allocator reserved.**
 >
-> **And it is not confined to UNINIT fills.** `CINCOFFSET` moves the cursor on an ordinary
-> LINEAR/NONLIN capability (`new_cursor = rs1.cursor + val`) and its result goes through the same FLU
-> writeback and the same `compress_cap`. Any capability whose cursor leaves base takes the rounding
-> branch.
+> **And it is not confined to UNINIT fills — that is now DEMONSTRATED, not inferred.** `CINCOFFSET`
+> moves the cursor on an ordinary LINEAR capability (`new_cursor = rs1.cursor + val`) and its result
+> goes through the same FLU writeback and the same `compress_cap`. The RTL lane built the directed
+> arm this entry asked for (`verif/tests/custom/capstone/r33-cincoffset-widen.S`, run on the flashed
+> `1bfff7776`, 435 cycles against a 200,000 timeout with no exceptions — a real completion, not a
+> SUCCESS-at-timeout):
+>
+> | arm | length | representable? | `End` with cursor at base | `End` after a 16-byte `CINCOFFSET` |
+> |---|---:|---|---|---|
+> | **R** (control) | 16,416 | yes (`% 32 == 0`) | `80008020` | `80008020` — **unchanged** |
+> | **W** | 16,400 | **no** (`% 32 == 16`) | `80008010` | `80008020` — **widened by 16** |
+>
+> **Matched on everything that matters:** same base, same permissions, same 16-byte cursor move, and
+> the same granule — both lengths have their highest set bit at 14, so `E = 2` and the granule is 32
+> for both arms. Only representability differs, and the predicted widenings from the granule law
+> (0 and 16) match the observations exactly.
+>
+> Two properties make that reading safe rather than suggestive. **The control did not move**, so this
+> is representability-specific and not "CINCOFFSET always re-rounds". And **arm W's first print shows
+> the exact top `80008010`**, proving the capability really was in the exact-encoded state before the
+> move — so the widening is caused by the cursor moving, not pre-existing.
+>
+> **This is what changes R-33's class.** The scope is not the reclaim routine and not the UNINIT type:
+> it is every capability whose cursor leaves its base, which is ordinary pointer arithmetic on
+> ordinary linear capabilities. That is an ISA-level defect rather than a monitor-adjacent one.
 >
 > **Which is why the defect is the ALLOCATOR and not the encoder.** A lossy compressed-bounds format
 > is standard for this class of design, and it is EXACT for a *representable* object — one whose

@@ -32,7 +32,7 @@ Minimal snapshot. Read first in every session.
   an instruction count understating a cost. Two caveats travel with these rows: the ⑥/⑤ comparison
   carries a heap-geometry term (910,008 vs 2,097,152, not equalisable), and the lookaside-ON rows
   must not be blended with the lookaside-OFF §7 corpus.
-* **R-33 is a SOUNDNESS issue, not just a reporting one, and its cause is the ALLOCATOR.** The
+* **R-33 is a SOUNDNESS issue, ISA-LEVEL, and its cause is the ALLOCATOR.** Demonstrated 2026-09-12 to reach ordinary LINEAR capabilities through `CINCOFFSET` — plain pointer arithmetic — by a matched RTL-sim pair where the representable control does not move and the non-representable arm widens by exactly the predicted amount. The
   rounded `end` is the authority bound — `STC` checks `rs1_up > metadata.end - 16` against the
   decompressed value — so a non-representable region grants writes past itself, and `CINCOFFSET`
   reaches ordinary linear capabilities by the same route. A lossy compressed-bounds format is
