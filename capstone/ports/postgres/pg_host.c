@@ -51,7 +51,20 @@
 #endif
 
 #define PERM_INOUT 0x1UL
+/* What the monitor hands the domain for a shared region, and the difference
+ * decides whether the Sublet port can work at all.
+ *
+ *   REV_DEFAULT    non-linear to the domain, a handle kept by the monitor
+ *   REV_BORROWED   linear to the domain, a handle kept by the monitor
+ *
+ * The unprotected arm wants the first: pg_level0.c walks its arena with
+ * ordinary pointer arithmetic, and a linear capability copied by ordinary C
+ * code is what the hardware refuses. The Sublet arm needs the second, because
+ * a region that is not linear cannot be split and a handle senior to it has
+ * nothing to revoke. The first run of the sub-pool test said so, type 1 where
+ * it wanted 0, and that is why this is an argument and not a constant. */
 #define REV_DEFAULT 0x0UL
+#define REV_BORROWED 0x1UL
 
 struct pg_hostcall_v0 {
     unsigned long long phase, opcode, offset, length;
@@ -158,6 +171,8 @@ int
 main(int argc, char **argv)
 {
     int want_tail = 0;
+    int linear_arena = 0;
+    unsigned long scratch_bytes = 0;
 
     if (argc < 3) {
         mark("usage: pg_host.user <domain image> <trace> [--tail]\n");
@@ -166,6 +181,18 @@ main(int argc, char **argv)
     for (int i = 3; i < argc; i++)
         if (!strcmp(argv[i], "--tail"))
             want_tail = 1;
+        else if (!strcmp(argv[i], "--linear-arena"))
+            linear_arena = 1;
+        /*
+         * A fifth region, and it comes LAST so that the four before it keep
+         * the indices every domain already keys on.  The Sublet arm needs it
+         * because its arena must arrive linear and its driver's identity
+         * tables must not: the tables are walked with ordinary pointer
+         * arithmetic, which is exactly what a linear capability refuses.  So
+         * the two cannot be one region, and the scratch is the new one.
+         */
+        else if (!strcmp(argv[i], "--scratch") && i + 1 < argc)
+            scratch_bytes = strtoul(argv[++i], NULL, 0);
 
     if (capstone_init())
         return fail("PG: capstone_init failed=", 0);
@@ -179,6 +206,7 @@ main(int argc, char **argv)
     region_id_t r_pay = create_region(PG_REPLAY_PAYLOAD_SIZE);
     region_id_t r_arena = create_region(PG_REPLAY_ARENA_SIZE);
     region_id_t r_trace = create_region(PG_REPLAY_TRACE_SIZE);
+    region_id_t r_scratch = scratch_bytes ? create_region(scratch_bytes) : 0;
     mark_u("PG: r0=", (unsigned long) r_meta);
     mark_u("PG: r1=", (unsigned long) r_pay);
     mark_u("PG: r2=", (unsigned long) r_arena);
@@ -191,6 +219,8 @@ main(int argc, char **argv)
         return fail("PG: create_region(arena) failed, wanted=", PG_REPLAY_ARENA_SIZE);
     if ((long) r_trace < 0)
         return fail("PG: create_region(trace) failed, wanted=", PG_REPLAY_TRACE_SIZE);
+    if (scratch_bytes && (long) r_scratch < 0)
+        return fail("PG: create_region(scratch) failed, wanted=", scratch_bytes);
 
     volatile struct pg_hostcall_v0 *meta =
         (struct pg_hostcall_v0 *) map_region(r_meta, PG_META_SIZE);
@@ -214,9 +244,12 @@ main(int argc, char **argv)
 
     shared_region_annotated(domain, r_meta, PERM_INOUT, REV_DEFAULT);
     shared_region_annotated(domain, r_pay, PERM_INOUT, REV_DEFAULT);
-    shared_region_annotated(domain, r_arena, PERM_INOUT, REV_DEFAULT);
+    shared_region_annotated(domain, r_arena, PERM_INOUT,
+                            linear_arena ? REV_BORROWED : REV_DEFAULT);
     shared_region_annotated(domain, r_trace, PERM_INOUT, REV_DEFAULT);
-    mark("PG: shared\n");
+    if (scratch_bytes)
+        shared_region_annotated(domain, r_scratch, PERM_INOUT, REV_DEFAULT);
+    mark(linear_arena ? "PG: shared, the arena linear\n" : "PG: shared\n");
 
     struct tail_state tail = {meta, payload, 0, 0};
     pthread_t tail_thread;
