@@ -2760,3 +2760,54 @@ behind it are across boots.
 `cte` exceeding its instruction ratio is 1.166 against 1.141, a gap of 0.025; §7f's
 cycle-below-instruction finding has gaps of 0.056 to 0.211; §7k's spread runs 1.166 to 1.267,
 endpoints 0.101 apart. All clear even the coarser bound by an order of magnitude.
+
+### §7m — THE BRIDGE HOLDS: §7f–§7k carry forward to the flashed bitstream (boot sw63, 2026-09-13)
+
+**This is the arm that was owed, and it is the first time it has actually been run.** sw59 was
+reported as the bridge and was not — it ran different images on both arms, which is retracted in
+§4g.2. The protocol was §7k's images **unchanged**, one post-flash boot, the `main` pair's ratio
+against **1.220** inside the **0.171 pp** cross-boot band.
+
+**The images were verified byte-identical to sw56's after the bake, from both `overlay/` and
+`build/target/`** — which mattered, because the overlay was holding the Sep-12 lookaside matrix
+builds under the very names the bridge wanted:
+
+| | image | sha256 (16) |
+|---|---|---|
+| domain | `speedtest1_seven.dom` | `49994ed3185257c6` |
+| native | `speedtest1_baseline` | `072595ff0866ac4b` |
+| host | `sqlite_host.user` | `db0c9f388980d86c` |
+
+Bitstream `caplifive_r30r31_1bfff7776` — the only variable. Monitor `4274268`, firmware
+`f21972371293`. 16 arms: control, seven pairs on §7k's own selector, trailing control.
+
+| testset | domain cycles | native cycles | **ratio** | §7k | Δ |
+|---|---:|---:|---:|---:|---:|
+| `star` | 228,660,057 | 182,724,408 | **1.2514** | 1.252 | +0.06 pp |
+| `parsenumber` | 230,603,162 | 181,901,068 | **1.2677** | 1.267 | +0.07 pp |
+| `orm` | 937,250,292 | 791,407,931 | **1.1843** | 1.185 | +0.07 pp |
+| **`main`** | 2,674,517,545 | 2,193,042,052 | **1.2195** | **1.220** | **+0.05 pp** |
+| `fp` | 4,163,178,943 | 3,347,924,554 | **1.2435** | — | — |
+| `cte` | 6,046,747,088 | 5,188,753,059 | **1.1654** | — | — |
+| `rtree` | 9,083,060,968 | 7,646,127,258 | **1.1879** | — | — |
+
+**Every §7k-comparable pair agrees to within 0.07 pp against a 0.171 pp band**, and `main` — the
+pair the protocol names — to 0.05 pp. **§7f–§7k carry forward to `caplifive_r30r31_1bfff7776`.**
+
+**Gates, all green.** Controls at *both* ends (`retval=4`, cycles 4476 and 4573, `instret=1089`
+matching every earlier boot on this bitstream) — §7k had only a leading control; the trailing one
+was added here and perturbs no measured arm. **7/7 pairs agree on their verification hash**, so
+each pair computed the same answer, not merely the same number of cycles; `main` reads
+`111130 1e792c9d…`, the native oracle. `DROPPED 0` on all fourteen arms. `HEAP 2,097,152` on every
+arm — the compile-time 2 MiB geometry, which is *why* the next line holds.
+
+**R-33's representability fix was inert here, and the boot proves it rather than assuming it:**
+**zero** `not representable` lines in the capture. Every constant on this path is a power of two
+(heap 2 MiB, stack 1 MiB, region 64 KiB, hostcall 4 KiB), so nothing rounded and the geometry is
+identical to §7k's. Had this run used a `--pool`-derived arena it would **not** have been inert —
+1,419,584 and 1,750,285 both round — and the bridge would have been confounded by the firmware
+rather than by the bitstream.
+
+**What this does not license.** It re-ties the *ratios*. Cross-boot *absolutes* still belong to the
+0.171 pp regime, and three of these seven testsets (`fp`, `cte`, `rtree`) have no §7k ratio recorded
+here to compare against — their values are new, not confirmations.

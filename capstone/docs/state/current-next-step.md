@@ -1,6 +1,12 @@
-# Next step
+## 0. CURRENT — 2026-09-13. **THE BRIDGE HOLDS; §7f–§7k CARRY FORWARD. The size-20 rehearsal is the next reading.**
 
-## 0. CURRENT — 2026-09-12. **R-31 FIXED ON SILICON; R-30's 1,728 BYTES SOLVED — IT IS BOUNDS RE-ENCODING, NOW FILED AS R-33.**
+> **Boot sw63 discharged the bridge.** §7k's images unchanged on `caplifive_r30r31_1bfff7776`, every
+> comparable pair within **0.07 pp** of its §7k value against a 0.171 pp band, `main` at 1.2195 vs
+> 1.220. Controls both ends, 7/7 verification hashes agree, zero R-33 rounding lines. §7m.
+>
+> **Next:** the `--size 20` rehearsal (boot sw64) buys the CPI that decides whether `--size 100` is
+> ~8.8 h or ~17.6 h. Then `--size 100` is a decision, not a default.
+
 
 Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
 

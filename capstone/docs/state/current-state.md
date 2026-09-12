@@ -2,7 +2,31 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-12 — CURRENT
+## 2026-09-13 — CURRENT
+
+> The bridge is discharged. §7f–§7k now carry forward to the flashed bitstream; the 2026-09-12 block
+> below stands for R-30/R-31/R-33.
+
+* **THE BRIDGE HOLDS (boot sw63).** §7k's images re-run **unchanged** on
+  `caplifive_r30r31_1bfff7776` — verified byte-identical after the bake, from both `overlay/` and
+  `build/target/`, which mattered because the overlay was holding the lookaside matrix builds under
+  those very names. Every §7k-comparable pair agrees to within **0.07 pp** against the 0.171 pp
+  cross-boot band, and `main`, the pair the protocol names, to **0.05 pp** (1.2195 vs 1.220).
+  Controls at both ends, **7/7 pairs agree on their verification hash**, `DROPPED 0` throughout.
+  **§7f–§7k are carried forward.** Details in §7m. This is the arm sw59 was wrongly reported as.
+* **R-33's fix was inert on that boot, and it was proven rather than assumed** — zero
+  `not representable` lines. Every constant on the path is a power of two. It would **not** have
+  been inert for a `--pool`-derived arena, where both the arena and tables round.
+* **The size-20/100 artifacts were rescued from `/tmp`** into
+  `~/capstone-artifacts/speedtest1-size100/` with a `SHA256SUMS` and a README. They were
+  single-copy, including the only record of their hashes. One set covers sizes 1, 20 and 100 — the
+  size is argv and the arena lives only in `HOST_EXTRA_DEFS`, so no rebuild is needed for depth.
+* **The `speedtest1` branch is merged into `dev`** (`5e5d9cb42318`). It was on no remote and not on
+  the push allowlist. That lands §7l **and `arena-mismatch-gate.py` with its runner wiring** — until
+  now a campaign from the main checkout ran with no arena gate at all, and the mismatch it catches
+  silently corrupts a ratio instead of crashing a run.
+
+## 2026-09-12 — superseded above for the bridge; current for R-30/R-31/R-33
 
 > Three boots on the R-30/R-31 bitstream. The 2026-09-10 block below is still accurate for the
 > firmware half; everything it says about R-30/R-31 being unverified on silicon is now superseded
