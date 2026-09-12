@@ -1,0 +1,82 @@
+Make the parse node a pointer, so a parse tree survives on a capability target.
+
+py/parse.h declares `typedef uintptr_t mp_parse_node_t; // must be pointer size` -- and the
+comment names the invariant this target breaks. Here uintptr_t is 8 bytes and a pointer is 16,
+so every link in the parse tree is a truncated, untagged address: 116 casts back to
+mp_parse_node_struct_t* and 74 uses of MP_PARSE_NODE_IS_STRUCT_KIND each dereference the result,
+and the first one to run faults. Measured independently: a domain built without this patch faults
+at mp_parse+0x6a0.
+
+The type becomes void *. The immediate cases are unchanged -- a small int, an identifier, a
+string and a token still live in the low bits, built by a cast, exactly as the object word
+already does under REPR_A. The macros that TEST those bits now read them through uintptr_t,
+which is an inspection and needs no tag. The struct case becomes a plain pointer-to-pointer
+cast with no integer in the middle, which is the whole point.
+
+No behaviour change on any target where a pointer is as wide as uintptr_t: every macro computes
+the same value it did before.
+diff --git a/py/parse.h b/py/parse.h
+index 5531e35cb..a7fb9e01f 100644
+--- a/py/parse.h
++++ b/py/parse.h
+@@ -41,13 +41,20 @@ struct _mp_lexer_t;
+ //  - xx...xx0110: a string; bits 4 and above are the qstr holding the value
+ //  - xx...xx1010: a token; bits 4 and above are mp_token_kind_t
+ 
+-#define MP_PARSE_NODE_NULL      (0)
++#define MP_PARSE_NODE_NULL      ((mp_parse_node_t)0)
+ #define MP_PARSE_NODE_SMALL_INT (0x1)
+ #define MP_PARSE_NODE_ID        (0x02)
+ #define MP_PARSE_NODE_STRING    (0x06)
+ #define MP_PARSE_NODE_TOKEN     (0x0a)
+ 
+-typedef uintptr_t mp_parse_node_t; // must be pointer size
++/* A parse node is either a POINTER to an mp_parse_node_struct_t or a tagged immediate in the
++   low bits. On a target whose pointers carry out-of-band metadata, uintptr_t is narrower than a
++   pointer, so storing the struct case in it truncates the address and drops the tag, and the
++   first dereference faults. Making the type a pointer keeps the struct case intact; the
++   immediate cases stay exactly as they were, as untagged values built by a cast, which is what
++   the object word already does. The macros below read the tag bits through uintptr_t, which is
++   an inspection and needs no tag. */
++typedef void *mp_parse_node_t;
+ 
+ typedef struct _mp_parse_node_struct_t {
+     uint32_t source_line;       // line number in source file
+@@ -59,27 +66,27 @@ typedef struct _mp_parse_node_struct_t {
+ // some of these evaluate their argument more than once
+ 
+ #define MP_PARSE_NODE_IS_NULL(pn) ((pn) == MP_PARSE_NODE_NULL)
+-#define MP_PARSE_NODE_IS_LEAF(pn) ((pn) & 3)
+-#define MP_PARSE_NODE_IS_STRUCT(pn) ((pn) != MP_PARSE_NODE_NULL && ((pn) & 3) == 0)
+-#define MP_PARSE_NODE_IS_STRUCT_KIND(pn, k) ((pn) != MP_PARSE_NODE_NULL && ((pn) & 3) == 0 && MP_PARSE_NODE_STRUCT_KIND((mp_parse_node_struct_t *)(pn)) == (k))
++#define MP_PARSE_NODE_IS_LEAF(pn) ((uintptr_t)(pn) & 3)
++#define MP_PARSE_NODE_IS_STRUCT(pn) ((pn) != MP_PARSE_NODE_NULL && ((uintptr_t)(pn) & 3) == 0)
++#define MP_PARSE_NODE_IS_STRUCT_KIND(pn, k) ((pn) != MP_PARSE_NODE_NULL && ((uintptr_t)(pn) & 3) == 0 && MP_PARSE_NODE_STRUCT_KIND((mp_parse_node_struct_t *)(pn)) == (k))
+ 
+-#define MP_PARSE_NODE_IS_SMALL_INT(pn) (((pn) & 0x1) == MP_PARSE_NODE_SMALL_INT)
+-#define MP_PARSE_NODE_IS_ID(pn) (((pn) & 0x0f) == MP_PARSE_NODE_ID)
+-#define MP_PARSE_NODE_IS_TOKEN(pn) (((pn) & 0x0f) == MP_PARSE_NODE_TOKEN)
+-#define MP_PARSE_NODE_IS_TOKEN_KIND(pn, k) ((pn) == (MP_PARSE_NODE_TOKEN | ((k) << 4)))
++#define MP_PARSE_NODE_IS_SMALL_INT(pn) (((uintptr_t)(pn) & 0x1) == MP_PARSE_NODE_SMALL_INT)
++#define MP_PARSE_NODE_IS_ID(pn) (((uintptr_t)(pn) & 0x0f) == MP_PARSE_NODE_ID)
++#define MP_PARSE_NODE_IS_TOKEN(pn) (((uintptr_t)(pn) & 0x0f) == MP_PARSE_NODE_TOKEN)
++#define MP_PARSE_NODE_IS_TOKEN_KIND(pn, k) ((uintptr_t)(pn) == (uintptr_t)(MP_PARSE_NODE_TOKEN | ((k) << 4)))
+ 
+-#define MP_PARSE_NODE_LEAF_KIND(pn) ((pn) & 0x0f)
++#define MP_PARSE_NODE_LEAF_KIND(pn) ((uintptr_t)(pn) & 0x0f)
+ #define MP_PARSE_NODE_LEAF_ARG(pn) (((uintptr_t)(pn)) >> 4)
+ #define MP_PARSE_NODE_LEAF_SMALL_INT(pn) (((mp_int_t)(intptr_t)(pn)) >> 1)
+ #define MP_PARSE_NODE_STRUCT_KIND(pns) ((pns)->kind_num_nodes & 0xff)
+ #define MP_PARSE_NODE_STRUCT_NUM_NODES(pns) ((pns)->kind_num_nodes >> 8)
+ 
+ static inline mp_parse_node_t mp_parse_node_new_small_int(mp_int_t val) {
+-    return (mp_parse_node_t)(MP_PARSE_NODE_SMALL_INT | ((mp_uint_t)val << 1));
++    return (mp_parse_node_t)(uintptr_t)(MP_PARSE_NODE_SMALL_INT | ((mp_uint_t)val << 1));
+ }
+ 
+ static inline mp_parse_node_t mp_parse_node_new_leaf(size_t kind, mp_int_t arg) {
+-    return (mp_parse_node_t)(kind | ((mp_uint_t)arg << 4));
++    return (mp_parse_node_t)(uintptr_t)(kind | ((mp_uint_t)arg << 4));
+ }
+ 
+ static inline mp_obj_t mp_parse_node_extract_const_object(mp_parse_node_struct_t *pns) {

@@ -1,0 +1,22 @@
+Handle MPZ zero before deriving an end pointer.
+
+mpz_init_zero represents zero with len=0 and dig=NULL. mpz_as_int_checked nevertheless formed
+dig + len before checking whether there were any digits. That is undefined pointer arithmetic in
+C, and Capstone correctly faults when the resulting cincoffset uses a non-capability NULL base.
+
+Return the representable zero value before forming the digit end pointer. A focused EXTRA+MPZ run
+changes int_big_mod.py, int_big_pow.py and int_big_zeroone.py from capability faults to PASS; all
+eleven adjacent tests retain their PASS status and result words.
+
+diff --git i/py/mpz.c w/py/mpz.c
+index e9fd0f45f..59834f1ab 100644
+--- i/py/mpz.c
++++ w/py/mpz.c
+@@ -1561,3 +1561,7 @@ bool mpz_as_int_checked(const mpz_t *i, mp_int_t *value) {
+ bool mpz_as_int_checked(const mpz_t *i, mp_int_t *value) {
+     mp_uint_t val = 0;
++    if (i->len == 0) {
++        *value = 0;
++        return true;
++    }
+     mpz_dig_t *d = i->dig + i->len;
