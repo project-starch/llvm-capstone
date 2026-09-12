@@ -1125,6 +1125,59 @@ which refers to the `memhook` instrument, not to the pool.
 evidence about the flash.** QEMU implements REVOKE to spec, so the reclaim runs. The masking
 signature to watch for on silicon is the opposite: `init = 0` beside a non-zero `revoke`.
 
+### §4g.2 — BOOT sw59: the first boot on `caplifive_r30r31_1bfff7776` (2026-09-12)
+
+Control first, `--tail --arena` last. **Control PASSED** — `k800 retval=4, cycles=4521, instret=1089`
+— so the boot carries a verdict. Driver rc=0, all four arms ran, board restored.
+
+| arm | | board cycles | board instret |
+|---|---|---:|---:|
+| 1 | control `k800` | 4,521 | 1,089 |
+| 2 | domain, `main --size 1 --verify` | **2,639,069,185** | — |
+| 3 | native baseline, same workload | **2,176,757,779** | 578,533,909 |
+| 4 | `--tail --arena 1419584 --tables 1750285` | — | — |
+
+**THE BRIDGE PAIR HOLDS.** Ratio **1.2124**, against §7k's board pair ratio of **1.220** — 0.76 pp
+apart, on a *different domain build* (this one carries the lookaside fix) and across a bitstream
+change, which is a term neither PRECISION regime was ever measured over. The capability/native
+relationship did not move materially across the flash. CPI is 3.81 on the domain arm and 3.76 on the
+baseline, both inside the 1.13–6.44 band, so both arms did the work.
+
+**One discrepancy recorded rather than smoothed:** the baseline's board instret is 578,533,909 where
+this session's QEMU `-icount` gave 545,623,496 for the *same binary* — 6.0 % apart, on a quantity
+that should be deterministic. Not explained here. It does not touch the ratio above, which is
+cycles/cycles on the board.
+
+#### THE R-30/R-31 ARM DID NOT TEST R-30/R-31, AND THE REASON IS STRUCTURAL
+
+Arm 4 ran clean to `SQ: H/return`, then:
+
+    SQ: released tables rc=0
+    SQ: released pool  rc=1
+    RCLM:00000000        (on all four shares, unchanged)
+
+**`rc=1` IS NOT A FAILURE.** `libcapstone.c:577` — `/* 1: revoked, the slot kept */`. The pool *was*
+revoked; only the region slot was not popped. This lane first read it as a regression against the
+pre-flash `rc=0`, which was wrong, and is corrected here rather than left standing.
+
+**`RCLM = 0` IS NOT THE MASKING SIGNATURE EITHER — the pre-registered reading was wrong about this
+arm.** The reclaim is guarded at `sbi_capstone.c:1309`, `if (cap_type(r) == 3 /* UNINIT */)`, and it
+sits on the **SHARE** path: it fires when a share finds a handle that a *previous* revoke left
+UNINIT. Arm 4's structure is create → share → enter → return → **revoke at teardown**, and nothing
+shares afterwards. So the reclaim was **unreachable by construction**, and `RCLM = 0` is the expected
+reading for this arm rather than evidence about the silicon.
+
+**What this costs and what it buys.** It costs the boot's headline: R-30/R-31 remain unverified on
+silicon. It buys the design of the arm that *would* verify them, which the "revoked, the slot kept"
+return makes possible: **revoke a REV_BORROWED region, then SHARE IT AGAIN in the same run.** The
+second share is what reaches `:1309` with an UNINIT handle. Any arm whose only revoke is at teardown
+cannot test this, which retires the `--tail --arena` invocation as the R-30/R-31 instrument.
+
+**The positive control did fire, and it is the reason this is diagnosable at all.** `RCLM` is emitted
+on every share, so the four `RCLM:00000000` lines prove the reporting path is live and readable —
+a zero here is a real zero, not silence. Without that the same output would have been indistinguishable
+from a counter that cannot be read.
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
