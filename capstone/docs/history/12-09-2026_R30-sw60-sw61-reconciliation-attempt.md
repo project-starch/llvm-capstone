@@ -392,3 +392,40 @@ postcondition remains worth having as the thing that catches it if the contract 
 * **The bottom truncation is unobserved.** `B[13:3] = {bounds.start >> E}[13:3]` has no correction
   term, so `base` can decode LOW on the same encoding. Every sw62 region was base-aligned, so nothing
   there could have shown it.
+
+## 9. The containment term recomputed, and why it expires on the NEXT planned step
+
+The board lane's containment table is **reproduced exactly** by an independent recomputation, granule
+formula included (`granule = 2^(bit_length(N) - 10)`, equivalently `2^(E+3)` with `E = leading_zeros - 12`).
+The crossover is confirmed: `bit_length 23` gives granule 8192, the first that exceeds a 4 KiB page, so
+non-representable regions at or above ~4 MiB escape their page allocation. Their zero-margin row is
+real — sw60's 1,419,584 widens by 1,728 against exactly 1,728 of page slack.
+
+**The containment is an accident of two roundings coinciding, and it is about to stop holding**, for a
+reason that is in this project's own plan rather than hypothetical:
+
+| region | granule | widened | page slack | |
+|---|---:|---:|---:|---|
+| sw55's demonstrated 130 MiB | 262,144 | **0** | 0 | granule-aligned by luck of being a round MiB count |
+| the planned 120 MiB arena | 131,072 | **0** | 0 | same |
+| a **measured** ~120 MiB arena (125,800,000) | 131,072 | **29,120** | 448 | **ESCAPES by 28,672 — seven pages** |
+
+**Every region used so far has been either small or a round multiple of a MiB**, and a round MiB count
+at these sizes is granule-aligned for free. That is the whole reason nothing has escaped.
+
+**The next step in the plan is `main --size 100`, which needs a MEASURED ~120 MiB arena**, not a round
+one. A measured value has no reason to be a multiple of 131,072, and the table above is what happens
+when it is not: tens of kilobytes of authority past the allocation, in a region sized by measurement
+precisely so it is as tight as possible.
+
+**So the ordering matters:** the representability fix at region creation should land *before* the
+size-100 arena is measured and used, not after. It is also the cheapest possible fix at that point —
+rounding the request up at `create_region` costs at most granule−1 bytes of address space, which for
+these regions is under 0.11 % — and it makes the measured value safe by construction rather than by
+inspection.
+
+The board lane's evidence-strength separation (MEASURED / READ FROM SOURCE / DERIVED / NOT
+DEMONSTRATED) is the right shape and this section is **DERIVED**: it is arithmetic over their measured
+granule law, not an observation. What is still NOT DEMONSTRATED is an actual out-of-allocation write,
+and the arm that would show it should use `CINCOFFSET` on a plain LINEAR capability, since everything
+measured so far is UNINIT and STC.
