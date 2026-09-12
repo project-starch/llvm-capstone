@@ -111,3 +111,79 @@ view: `r30-fill-init.S` fabricates its UNINIT with the Custom3 debug ops on a sm
 R-30's own entry already calls a test working around the defect rather than reporting it. A directed
 test on a small fabricated capability cannot speak to a 1.4 MB region reached through the real
 share/revoke path.
+
+---
+
+## ADDENDUM, same day: my discriminating pair is dead, the "end moved" account is REFUTED, and one live hazard
+
+Three results after the board lane built the `RCEN`/`RCCU` instrument. Two of them remove options
+rather than add them, which is the useful direction.
+
+### 1. My pre-registered pair cannot separate anything — the board lane is right
+
+The bound is `(end - base) mod 16`, **at most 15 bytes, regardless of what `end - base` is**, because
+`n` is computed from that same quantity and scales with it. So the "allocator rounded the region up
+and the request figure was the misleading number" branch **cannot produce 1,728 either**: a rounded
+region gives a proportionally larger `n` and the cursor still lands on `end`. My exact-multiple-of-4096
+versus non-multiple pair therefore predicts the same `<= 15` on both arms and would have spent a boot
+to learn nothing. Withdrawn.
+
+### 2. "END MOVED DURING THE FILL" is REFUTED from the RTL
+
+The board lane's third account — `n` computed before the loop, `end` grown by 1,728 during it, every
+store advancing correctly — is excluded at the flashed revision. `STC`'s UNINIT path is
+(`capstone_dyn_unit.anvil`, `1bfff7776`):
+
+```
+else if(rs1_v.metadata.cap_type==cap_type_t::CAP_TYPE_UNINIT){
+    let new_cursor = rs1_v.cursor + 64'd16;
+    let new_rs1 = call create_capability(rs1_v.metadata,new_cursor);
+```
+
+**The metadata — which carries `end` — is passed through unchanged and only the cursor advances, by
+exactly 16.** No path in `STC` writes `end`, the capability lives in a register nothing else in the
+loop touches, and there is no concurrent agent. So `end` cannot move during the fill.
+
+Also read while there, and it confirms the loop is correctly bounded rather than lucky: `STC`'s check
+is `rs1_up > (end - 16)` → OUT_OF_BOUNDS, so the last legal store sits at `cursor == end - 16` and its
+advance lands the cursor exactly on `end`. A fill of `(end-base)/16` stores is exactly right, and one
+more store would fault rather than silently stop.
+
+### 3. So `RCEN`/`RCCU` will narrow LESS than hoped, and the honest version of the prediction is shorter
+
+With "end moved" excluded, both surviving readings collapse into the **same** account and differ only
+in the denominator:
+
+| RCEN | RCCU | what it means |
+|---:|---:|---|
+| 1,419,584 | 1,417,856 | 88,724 stores attempted, 108 did not advance the cursor |
+| 1,421,312 | 1,419,584 | 88,832 attempted, 108 did not advance the cursor |
+| anything | `RCEN - RCCU != RCSH` | the reclaim path is mis-instrumented |
+
+**The instrument is still worth having** — the self-check is the good part, and an inconsistency
+surfacing as an inconsistency rather than a plausible number is exactly right. But it will name the
+denominator, not the mechanism. **The question it leaves is which 108 stores, and why.**
+
+**A discriminator that does work, because it does not lean on the mod-16 arithmetic:** run the same
+reclaim on **two different large region sizes**. A constant 1,728 is a fixed tail effect; a shortfall
+that scales with region size is a proportional store-failure rate. Those are different bugs and one
+pair of boots separates them.
+
+### 4. LIVE HAZARD in the fill macro, checked in the generated artifact rather than assumed
+
+`C_RECLAIM`'s outputs are declared `"=r"`, **not** `"=&r"`. There is no early-clobber, so the compiler
+is entitled to allocate an output register overlapping an input — and this template violates the
+assumption that licenses that, because it writes `%1` in its **first** instruction (`mv %1, %3`) and
+reads `%2` throughout, then writes `%0` while `%2` is still live. An overlap of `%0`/`%2` would have
+`lcc(%0, %2, 2)` destroy the capability before `lcc(%1, %2, 4)` reads `end` off it.
+
+**Measured, not reasoned:** in the shipped generated assembly all five sites allocate
+`dest=t0, scratch=a1, cap=a2, n=a3` — **disjoint**, so it did not bite and **is not the cause of the
+1,728**.
+
+**But the change just made adds two more reports inside that same halting branch**, which raises
+register pressure at exactly the site with no early-clobber. **Re-read the generated
+`sbi_capstone_dom.c.S` for all five instances after the rebuild and confirm `%0`/`%1` still do not
+overlap `%2`.** Cheap: grep the fill-loop line and read the four register names. Adding `&` to both
+output constraints would remove the hazard permanently and is a one-character change per operand,
+but it is the board lane's file.
