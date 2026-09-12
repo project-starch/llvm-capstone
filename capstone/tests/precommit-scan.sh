@@ -53,6 +53,24 @@ if [[ -n "$RANGE" ]]; then
   # including history that --msg had passed and that was already pushed. Found 2026-09-07:
   # four clean ranges, every hit an author line the scan had emitted itself. Not a weakened
   # pattern: the same name in a subject, a body or a diff still blocks (control below).
+  # A RANGE THAT DOES NOT RESOLVE MUST BLOCK, NOT PASS. Both reads below are `2>/dev/null`, so a
+  # typo, a branch that exists in a DIFFERENT repo, or a range run from the wrong working directory
+  # contributed nothing to $TMP and the scan printed CLEAN having read zero bytes -- the same
+  # "no data renders as a result" shape this file warns about three times below. Caught 2026-09-12
+  # pre-push: `--range "capstone-bootstrap --not --remotes"` was run in the PARENT, which has no
+  # such branch, and passed. The commit was independently clean, so nothing escaped; the gate
+  # simply had not looked. An EMPTY-but-valid range blocks too: a gate asked to scan nothing has
+  # checked nothing, and if the range is genuinely empty there is nothing to push either.
+  if ! git rev-list $RANGE >/dev/null 2>&1; then
+    echo "precommit-scan: BLOCKED -- range '$RANGE' does not resolve in $(pwd)" >&2
+    echo "  (a range naming a branch of a SUBMODULE must be scanned from inside that submodule)" >&2
+    exit 2
+  fi
+  if [[ -z "$(git rev-list $RANGE 2>/dev/null)" ]]; then
+    echo "precommit-scan: BLOCKED -- range '$RANGE' resolves but is EMPTY (0 commits) in $(pwd)" >&2
+    echo "  Scanning nothing is not a pass. Check the range, or there is nothing to push." >&2
+    exit 2
+  fi
   ME="$(git config user.name 2>/dev/null || true) <$(git config user.email 2>/dev/null || true)>"
   git log --format='%H%n%an <%ae>%n%cn <%ce>%n%s%n%b' "$RANGE" 2>/dev/null \
     | { if [[ "$ME" != " <>" ]]; then grep -vxF -- "$ME" || true; else cat; fi; } >> "$TMP"
