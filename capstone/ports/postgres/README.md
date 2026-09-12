@@ -62,9 +62,51 @@ into the seven files. The Sublet port of them, when it comes, goes in
 `sublet/` beside this, applied on top only when asked for, and the unprotected
 arm of every measurement stays a build that never read a file from there.
 
+## The census: what a capability build costs
+
+```
+bash census-capstone.sh
+```
+
+All seven objects compile for `capstone64`, and the cost is two lines and a
+set of headers.
+
+**Two lines, and the allocator names them itself.** `aset.c` asserts that its
+free-list link fits in the smallest chunk, because that link lives inside the
+freed chunk. A capability is sixteen bytes and the smallest chunk was eight, so
+the assertion fails. Raising the minimum to sixteen doubles the ladder, so one
+size class comes off to keep its top at the 8 KiB chunk limit, which a second
+assertion checks. `port/aset-capstone.patch` is those two lines.
+
+This is not Sublet's change and not a workaround: any machine with sixteen-byte
+pointers needs it. The consequence is real and belongs in the measurement. The
+size classes on a capability machine are 16 to 8192 and not 8 to 8192, so the
+sequence of blocks differs from the x86 run, and the host arm's exact block
+count does not carry over to the domain.
+
+**Thirteen stub headers, 125 lines.** `c.h` includes fourteen system headers
+before it declares anything of PostgreSQL's, and a freestanding build has none
+of them. `port/stubinc/` holds the declarations the seven files actually reach.
+
+**The capability-roundtrip warning is not ours.** The compiler flags
+`DatumGetPointer`, an inline function in `postgres.h` that casts an integer
+back to a pointer. Of the files in the memory manager, only `dsa.c` calls it,
+and `dsa.c` is not one of the seven.
+
+**Eleven symbols from libc**, and they are the eleven the plan predicted:
+`malloc`, `free`, `realloc`, `memcpy`, `memset`, `strlen`, `strcmp`, `strcpy`,
+`strcat`, `strnlen`, `stderr`.
+
 ## The freestanding arm
 
-Not here yet. It builds the same seven files and the same driver for a domain;
-what differs is the compiler, the level below, and the three printf helpers in
-`pg_stubs.c`. Keeping the host arm working is what makes a fault in the
-freestanding arm a fault about capabilities rather than about the port.
+Not here yet. What it still needs, in the order it will be needed:
+
+| | |
+|---|---|
+| a level below | the manager calls `malloc`, `free` and `realloc`. `memsys5` already runs freestanding in a domain in this repository, as level 0 of the SQLite pass, so the two ports would then stand on the same allocator |
+| the eleven libc symbols | eight are in `benchmarks/beebs/adapted/beebs_freestanding_string.c`; `stderr` and the printf helpers go through the domain's hostcall write, which the SQLite domain has |
+| the trace | 57 MB for pgbench's default script, handed over as a host region the way `memsys5`'s pool is, which needs `cma=` on the guest's command line |
+| the link | the globals offset sized to `.text` and the descriptor delivered into `dom_data`, which `build-sqlite-capstone.sh` does for a larger program |
+
+Keeping the host arm working is what makes a fault in the freestanding arm a
+fault about capabilities rather than about the port.
