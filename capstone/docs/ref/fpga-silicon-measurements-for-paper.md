@@ -2630,6 +2630,93 @@ it — image `ccb73bc08db39990` reports `Successful lookasides: 25010`, not by r
 **Any new row must state which setting it used.** The rows above this block were taken with the pool
 OFF.
 
+### §7l — The overhead ratio is size-robust, and the workload scales super-linearly (emulated, 2026-09-11)
+
+**Every silicon number in §7f–§7k is at `--size 1`, and speedtest1's own default is 100.** That
+makes our absolute figures incomparable to published work, which is the external collaborator's
+point and a fair one. Before spending an eight-hour board pair on the default, the question worth
+answering off-board was the cheaper one: *does the ratio we already publish depend on size?*
+
+It does, slightly, and in the direction that makes the capability arm look better.
+
+| | domain | baseline | instruction ratio |
+|---|---:|---:|---:|
+| `main --size 1` | 696,846,378 | 548,768,448 | **1.2698** |
+| `main --size 20` | 17,755,282,312 | 14,150,699,286 | **1.2547** |
+
+Emulated under `-icount shift=0`, so these are instruction counts. Both sizes hash equal to a
+native oracle built from the same define set (`111130 1e792c9d` and `3807866 2738af78`), `DROPPED 0`.
+
+**Emulator provenance.** Every count in this section ran on a `qemu-system-riscv64` built 2026-09-11
+15:18 with `capstone-qemu` HEAD at `cabc953e58` (per the submodule reflog) — possibly already carrying
+the fault-path diagnostics that landed as the merge `656cc034899f` at 15:33. The pin has since moved to
+`deb7d757565d`. Across the whole range the changes are fault-path diagnostics and `cap_rev_tree.c`;
+these arms fault zero times and execute zero `mrev` (verified with a positive control on the shipping image), so the counts should be
+unaffected by the bump — recorded as *should*, not as measured.
+
+**All four counts come from the SAME two binaries**, and that is load-bearing rather than tidy. The
+first version of this comparison put today's 128 MiB-arena arms against the size-1 arms from the old
+1.75 MiB static-heap build — which differ in memsys5 buddy-tree depth as well as in row count, so
+the pair had two variables and the ratio movement could have been either. Re-measured on the new
+binaries, size 1 gives **1.2698**, reproducing §7k's tick-free column to four decimals. The arena
+change itself costs +0.012 % on the domain arm and +0.008 % on the baseline. **So the −1.19 %
+movement is size, and only size.**
+
+**Repeatability of an emulated count, measured rather than assumed.** The size-20 baseline arm was
+run twice: 14,150,697,439 then 14,150,699,286, agreeing to 1.3e-7 relative. icount here is very
+nearly but *not* bit-exactly deterministic. At ~1e-5 pp on the ratio this is four orders of
+magnitude below the movement being reported, so the finding stands — but "the repeat is exact" was
+written once in a draft of this section and would have been wrong.
+
+#### The scaling law has curvature, and a two-point fit does not see it
+
+The board-time estimate rests entirely on how the workload scales, so it was measured at four sizes
+rather than extrapolated from two. The **baseline** arm carries this: it emulates ~6× faster than
+the domain arm, which makes the measurement affordable.
+
+| size | baseline instructions | × size 1 | predicted from the 1→20 exponent | error |
+|---:|---:|---:|---:|---:|
+| 1 | 548,768,448 | 1.00 | — | — |
+| 20 | 14,150,699,286 | 25.79 | — | — |
+| 50 | 40,505,714,995 | 73.81 | 38,236,033,773 | **+5.9 %** |
+| 100 | 90,025,541,852 | 164.05 | 81,103,098,762 | **+11.0 %** |
+
+The exponent is **1.0848** fitted 1→20 and **1.1075** fitted 1→100. Index maintenance is the
+expected mechanism. The size-100 baseline arm verifies against the native oracle
+(`23674002 573a4409`) in 157 s of emulation.
+
+#### What this means for a size-100 board pair
+
+At 25 MHz, from the measured silicon size-1 cycles of §7k (domain 2,675,472,428; baseline
+2,193,595,600), scaled on the measured curve with size-1 CPI held constant:
+
+| | domain | baseline | pair |
+|---|---:|---:|---:|
+| size 20 | 0.76 h | 0.63 h | **1.39 h** |
+| size 100 | 4.79 h | 4.00 h | **8.79 h** |
+
+**CPI is the one unknown left and it scales those hours linearly.** A 128 MiB working set on this
+core will miss where a 1.5 MiB one hit, and nothing measured so far constrains by how much; QEMU
+models it not at all. At 1.5× the size-1 CPI the pair is 13.2 h, at 2× it is 17.6 h. Any stage
+timeout for a size-100 arm has to be set against the upper end, not the estimate.
+
+#### What may and may not be claimed from this
+
+**May:** the overhead ratio this project publishes is approximately size-invariant over a 20× range,
+and `--size 1` is its *pessimistic* end. A size-100 measurement would confirm the ratio and apply a
+correction of roughly two percent in the capability arm's favour — projected 1.2467, which the
+domain arm at size 100 would replace with a measured number.
+
+**May NOT:** that any of this is a silicon result. These are emulated instruction counts. Native CPI
+for `main` is 3.769 and the capability arm's 3.840, so cycles and instructions part company on
+hardware — an emulated instruction ratio cannot stand in for a measured cycle ratio, and the case
+for the size-100 boot is comparability with published work rather than a correction to what we
+assert.
+
+**Precision.** These are deterministic counts to 1.3e-7, not silicon measurements, so the §7 PRECISION
+block does not govern them; the ratios above are quoted to four decimals because the counts support
+it. Any comparison of one of these against a *silicon* figure is a cross-instrument comparison and
+gets two decimals at most.
 #### PRECISION — how many digits any figure in the §7 series may be quoted to
 
 **There are two regimes and they differ by a factor of six. Which one applies depends on what is

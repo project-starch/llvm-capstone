@@ -233,4 +233,42 @@ python3 "$ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --success-marker 'TOTAL' \
   "${VERIFY_MARKER[@]}"
 
+# THE ARENA GATE, BEFORE the success marker rather than after it, so a run that got the wrong arena
+# does not announce itself as one that ran.
+#
+# Three numbers have to agree -- the size compiled into the host binary, the region the host
+# actually created (`SQ: arena_bytes=`), and the heap the domain actually used (`HEAP`) -- and until
+# now NOTHING compared them. The size reaches the host alone (HOST_EXTRA_DEFS above) and the domain
+# uses whatever it is handed, so a run that quietly got a smaller arena than it was built for is
+# indistinguishable from a healthy one: it dies hours into a multi-hour arm, or completes at a size
+# nobody intended and gets recorded as a measurement. On an 8-hour board pair that is the session.
+#
+# Region path only. A static-heap run emits no `SQ: arena_bytes=` marker at all, and the gate
+# BLOCKS rather than guesses -- it cannot tell that case from a region run that fell back to the
+# static heap, which is the failure it exists to catch.
+if [[ "${SPEEDTEST1_REGION_ARENA:-0}" == "1" ]]; then
+  # ABSOLUTE PATH, and no pipe between the gate and its exit status: a gate that fails to START
+  # exits 127 and reads exactly like one that ran and passed.
+  ARENA_GATE=$ROOT/capstone/tests/runtime-qemu/silicon-ladder/arena-mismatch-gate.py
+  # `|| ARENA_GATE_RC=$?` and NOT a bare call: under `set -e` a failing gate aborts the script
+  # before its status can be read, and every one of the messages below becomes unreachable.
+  ARENA_GATE_RC=0
+  python3 "$ARENA_GATE" \
+      --expect "$ARENA" \
+      --host "$OUT_DIR/sqlite_host.user" \
+      --log "${SPEEDTEST1_LOG_FILE:-$OUT_DIR/sqlite-speedtest1.log}" \
+      --objdump "$CAPSTONE_LLVM_BIN/llvm-objdump" || ARENA_GATE_RC=$?
+  # The gate defines 0 clean, 1 the RUN is wrong, 2 the GATE could not do its job. Anything else
+  # it did not define -- 127 for a gate that never started, above all -- is treated as a block.
+  case "$ARENA_GATE_RC" in
+    0) : ;;
+    1) echo "run-speedtest1-measure.sh: ARENA GATE BLOCKED -- the run's arena is not the one it "\
+            "was built for; see above" >&2; exit 1 ;;
+    2) echo "run-speedtest1-measure.sh: ARENA GATE COULD NOT CHECK (rc=2) -- this is a TOOL "\
+            "fault, not an arena fault; fix the path it names and re-run" >&2; exit 1 ;;
+    *) echo "run-speedtest1-measure.sh: ARENA GATE returned $ARENA_GATE_RC, which it does not "\
+            "define -- treating as BLOCKED (127 means it never started)" >&2; exit 1 ;;
+  esac
+fi
+
 echo "__CAPSTONE_SPEEDTEST1_QEMU_RAN__"
