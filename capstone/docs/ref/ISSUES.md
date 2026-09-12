@@ -2162,6 +2162,49 @@ VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the 
 U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
 want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
 
+> # ✅ FIXED IN FIRMWARE 2026-09-12 (unbooted). The allocator now rounds, and the reclaim's postcondition no longer conflates the two failures.
+>
+> **The representability fix is in the KERNEL, not the monitor** — `ioctl_create_region`
+> (`modcapstone/module/capstone.c`), `caplifive-buildroot` **`8da1559`**. It rounds the requested
+> length up to `2^(bit_length(len)-10)` before `PAGE_ALIGN`, passes the rounded value to the monitor
+> and stores it in the mirrored bookkeeping, so the allocation, the ecall and `dma_free_pages` agree
+> on one number. **Rounding in the monitor would have been wrong:** `dma_alloc_pages` has already run
+> with `PAGE_ALIGN` of the *unrounded* request, so a monitor-side round-up carves pages the kernel
+> never handed out — silently aliasing a later allocation that falls inside the over-carve, or
+> wedging on `SPLA` if one straddles it. Rounded requests are **logged**, not silent.
+>
+> **The rounding reserves exactly what the hardware widens to**, which is the property that makes it
+> a fix rather than a mitigation: 354,880 → 355,328 and 1,419,584 → 1,421,312 are the same numbers
+> `RCEN` measured. Verified standalone against those cases and an exhaustive 64-aligned sweep to
+> 8 MiB (zero non-representable results, none shrinking), with every power-of-two and round-MiB size
+> left untouched as the negative control.
+>
+> **The base half is NOT fixed and cannot be fixed here.** A region is representable only if its base
+> is also a granule multiple, and the base comes from `CONFIG_CMA_ALIGNMENT` — which satisfies this
+> for every region under 512 MiB on the current config, by accident of configuration rather than by
+> any invariant. A misaligned base now warns.
+>
+> **The monitor's reclaim postcondition is split into two checks** (`capstone-sbi` **`4274268`**).
+> The fill check compares the cursor against `base + 16n` — cursor reads only, so it is immune to the
+> re-encoding — and keeps `RCSH` for its true meaning. A new `RCRE` tag then tests INIT's
+> precondition explicitly, because dropping the `end` read alone would just let `csinit` trap
+> `ILLEGAL_OPERAND_VALUE` inside the monitor, which is the uninformative fault the postcondition
+> exists to prevent. On sw60's case the fill check now passes and `RCRE` reports 1,728 as the
+> widening it is.
+>
+> **⚠ TWO BUILD HAZARDS THIS TURNED UP, both of which produce a clean `rc=0` and a stale artifact.**
+> (1) **There are THREE copies of `modcapstone/module/capstone.c`**, and the FPGA image builds from
+> the `caplifive-system` one via `BR2_EXTERNAL_CAPSTONE_PATH` — not the `caplifive-buildroot` one.
+> Editing the wrong copy rebuilt a freshly-timestamped `.ko` without the change. The two are kept
+> byte-identical; `caplifive-system-dev`'s copy is a third and differs. (2) **The board drivers'
+> bake loop is `for a in linux-rebuild opensbi-rebuild`, which never rebuilds the module** —
+> `modcapstone-rebuild` must run FIRST, before the pass that rolls the cpio, or the boot ships a
+> stale `capstone.ko`. Any driver that needs this fix must add it. **Check the built `.ko` by
+> CONTENT** (`strings` for the new message, with an existing message as the control), never by
+> exit status or timestamp.
+>
+> **NEITHER IS BOOTED.** The resident firmware predates all of it.
+
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
@@ -2284,8 +2327,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > **The control is what makes this readable.** Had both arms trapped, the widening would confer no
 > authority and R-33's soundness framing would be refuted; had both been permitted, the test would be
 > measuring something other than representability. Artifacts (test, RVFI log, sim log, testlist entry)
-> under `~/capstone-artifacts/r33-store-past-end/`, test sha256 `19840b83b5d88318`, pending commit
-> beside its sibling `r33-cincoffset-widen.S` on `r30-r31-init-revoke`.
+> committed as **`eab5b196b`** on `r30-r31-init-revoke` (tag `backup/r33-store-past-end-2026-09-12`),
+> beside its sibling `r33-cincoffset-widen.S` (`cb2cd046a`); test sha256 `19840b83b5d88318`, matching
+> the handover byte for byte. **Independently re-run by the RTL lane before landing** — same 512
+> cycles, same single `OUT_OF_BOUNDS` on the control at cycle 365, same acceptance on arm B — so the
+> result has two runs by two lanes, not one.
 >
 > **What is measured, read, derived and still NOT shown — kept separate deliberately, and the
 > boundary has moved twice.** MEASURED on silicon: `RCEN` = `round_up(N, granule)`, i.e. the

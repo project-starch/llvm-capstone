@@ -8,7 +8,7 @@ Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` con
 |---|---|
 | **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
 | **R-30** | **Closed. Its one-byte precondition is FIXED** (sw61, `init=5334`), and the separate 1,728-byte shortfall it carried is **not a fill failure at all** — boot sw62 shows every store advanced and `end` re-encoded high. Re-filed as **R-33**. |
-| **R-33** | **ISA-level, and the over-permissive store is now DEMONSTRATED.** The region allocator hands out sizes that are **not representable** in the compressed bounds encoding, so moving a cursor widens a capability's authority past its own allocation by up to one granule less a byte. Two matched RTL-sim pairs at the flashed hash, each with a representable control that does not move: `CINCOFFSET` widens an ordinary LINEAR capability, and a store at the true end is **refused for the control and retires without fault for the non-representable arm** (`trap_mask 0x1`, pre-registered). Still unshown: the same on **silicon**, and the bottom-truncation half. Cause is the allocator — round region sizes to the granule at creation. |
+| **R-33** | **ISA-level; over-permissive store DEMONSTRATED; FIXED in firmware but UNBOOTED.** Non-representable region lengths let a cursor move widen a capability's authority past its own allocation. Two matched RTL-sim pairs at the flashed hash: `CINCOFFSET` widens an ordinary LINEAR capability, and a store at the true end is refused for the representable control and retires without fault for the non-representable arm. **Fix:** the kernel rounds region lengths to the granule at creation (`caplifive-buildroot 8da1559`) — reserving exactly what the hardware widens to — and the monitor's reclaim postcondition is split into a re-encoding-immune fill check plus a new `RCRE` INIT-precondition check (`capstone-sbi 4274268`). The **base** half is unfixed and rests on `CONFIG_CMA_ALIGNMENT`. Still unshown: the store on **silicon**, and bottom truncation. |
 | **the matrix** | complete on silicon. ABI cost **~1.21**, the two allocators **indistinguishable at this precision** (④/① 1.2124, ⑤/② 1.2107 — 0.17 pp against a 0.171 pp band; the deterministic QEMU pair does resolve and shows lookaside marginally cheaper, so "barely depends", not "independent"). The Sublet **configuration** costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap consistent with an O(bytes) reclaim, but both pairs carry a heap-geometry mismatch, so not "the discipline" and not a measurement of the mechanism. Corrected 2026-09-12. |
 
 **The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is
@@ -52,7 +52,16 @@ applied. See the R-30 box in `ISSUES.md` and
 >
 > `board-b59.sh`/`b60.sh`/`b61.sh` all gate on `rev-parse HEAD = 2c49c41` and will now **FAIL that
 > gate** — correctly. Update the expected hash deliberately when the next driver is written; do not
-> delete the gate.
+> delete the gate. (`board-b62.sh` gates on `d1bd7e4` and is now one commit stale for the same
+> reason.)
+>
+> **AND THE BAKE LOOP IS NOW INSUFFICIENT.** Every driver bakes with
+> `for a in linux-rebuild opensbi-rebuild`. That never rebuilds the kernel module, so a boot needing
+> R-33's representability fix would ship a **stale `capstone.ko`** with a clean `rc=0`.
+> `modcapstone-rebuild` must run FIRST — before the pass that rolls the cpio, since it installs into
+> `TARGET_DIR` — giving `modcapstone-rebuild, linux-rebuild, opensbi-rebuild`. Check the result by
+> CONTENT (`strings build/target/capstone.ko`) with an existing message as the control; the `.ko`
+> gets a fresh timestamp either way, which is how this was nearly missed.
 >
 > **The submodule POINTER chain is deliberately not bumped.** The monitor source is committed and
 > pushed on `capstone-bootstrap` in `capstone-sbi`'s own remote, but `caplifive-opensbi`,
