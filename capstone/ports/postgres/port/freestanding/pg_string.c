@@ -1,81 +1,24 @@
-/* The eleven symbols PostgreSQL's memory manager takes from libc, minus the
- * four the level below provides.
+/* The two string functions the repository's freestanding set does not carry.
  *
- * Seven functions, and the census named them rather than a guess doing it:
- * memcpy, memset, strlen, strcmp, strcpy, strcat, strnlen. memmove is here
- * too, because the compiler may lower a structure copy to it whether or not
- * the source says so.
+ * The set is capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c,
+ * and the domain build links it: memcmp, memcpy, memmove, memset, strcmp,
+ * strcpy and strlen. It is used and not reimplemented because its copies
+ * preserve capability tags, which is not a detail a second implementation
+ * would get right by accident: a byte loop copies the address bits of a
+ * pointer and drops its out-of-band tag, so the copy comes back untagged and
+ * the next dereference faults. That file copies the aligned middle one
+ * capability at a time and carries the measured workarounds for the silicon
+ * defects on that path.
  *
- * Byte at a time, on purpose. A word-at-a-time copy reads past the end of the
- * last word, which on a capability machine is a fault and not a harmless read,
- * and the manager's copies are short. If they ever show up in a measurement,
- * that is the moment to make them wider, with bounds that say why.
+ * This one was that second implementation until the first run, where the
+ * memory manager's own realloc of a block moved the block's prev and next
+ * pointers with a byte loop and the store through the copy faulted with an
+ * unexpected operand type (aset.c:1246, cause 24).
+ *
+ * strcat and strnlen are what is left: the census named eleven libc symbols
+ * and the set covers nine of them.
  */
 #include <stddef.h>
-
-void *
-memcpy(void *dst, const void *src, size_t n)
-{
-    unsigned char *d = dst;
-    const unsigned char *s = src;
-
-    while (n--)
-        *d++ = *s++;
-    return dst;
-}
-
-void *
-memmove(void *dst, const void *src, size_t n)
-{
-    unsigned char *d = dst;
-    const unsigned char *s = src;
-
-    if (d == s || n == 0)
-        return dst;
-    if (d < s) {
-        while (n--)
-            *d++ = *s++;
-    } else {
-        d += n;
-        s += n;
-        while (n--)
-            *--d = *--s;
-    }
-    return dst;
-}
-
-void *
-memset(void *dst, int c, size_t n)
-{
-    unsigned char *d = dst;
-
-    while (n--)
-        *d++ = (unsigned char) c;
-    return dst;
-}
-
-int
-memcmp(const void *a, const void *b, size_t n)
-{
-    const unsigned char *x = a, *y = b;
-
-    while (n--) {
-        if (*x != *y)
-            return *x < *y ? -1 : 1;
-        x++; y++;
-    }
-    return 0;
-}
-
-size_t
-strlen(const char *s)
-{
-    const char *p = s;
-
-    while (*p)
-        p++;
-    return (size_t) (p - s);
-}
 
 size_t
 strnlen(const char *s, size_t limit)
@@ -85,25 +28,6 @@ strnlen(const char *s, size_t limit)
     while (n < limit && s[n])
         n++;
     return n;
-}
-
-int
-strcmp(const char *a, const char *b)
-{
-    while (*a && *a == *b) {
-        a++; b++;
-    }
-    return (int) (unsigned char) *a - (int) (unsigned char) *b;
-}
-
-char *
-strcpy(char *dst, const char *src)
-{
-    char *d = dst;
-
-    while ((*d++ = *src++))
-        ;
-    return dst;
 }
 
 char *

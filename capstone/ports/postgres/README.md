@@ -161,9 +161,59 @@ the module took to `dma_alloc_pages` a region comes from the CMA area the
 kernel reserves at boot, so the cap is what `cma=` gives it. The arena and the
 trace together are what the guest's command line has to cover.
 
-**What is still missing to run it.** The run itself: the guest, the module
-loaded, `cma=` large enough, and the two binaries delivered. Both are built
-and neither has been entered yet.
+### It runs
+
+```
+bash run-pg-replay.sh <flattened trace>
+```
+
+PostgreSQL's memory manager, unchanged but for the layout its own assertions
+and the ABI force, replayed pgbench's read-only script inside a Capstone
+domain: 5 123 contexts created, 220 513 allocations, 41 039 frees, 2 000
+resets, 5 011 deletes, and it gave back everything it took.
+
+| the level below | in the backend | in the domain |
+|---|---:|---:|
+| blocks taken | 2 255 | 3 302 |
+| blocks given back | 2 070 | 3 072 |
+| blocks held at once, most | 190 | 235 |
+
+**The blocks are not expected to match, and the gap is the ABI's.** A chunk
+header is sixteen bytes here rather than eight, and the size classes run from
+sixteen to 8 192 rather than from eight, so the same objects take more bytes
+and more blocks: 1.46 times as many taken, 1.24 times the peak. The calls are
+identical, which is what says it is the same workload.
+
+### Three faults, and what each one was
+
+Each was found by running, each cost one run, and none of them was in
+PostgreSQL.
+
+1. **cause 4, unaligned capability access, at `aset.c:882.`** The free-list
+   link of a size class lives inside the freed chunk, at `sizeof(MemoryChunk)`
+   from its start. With an eight-byte header that is eight modulo sixteen, and
+   a capability stored to a slot that is not sixteen-aligned loses its tag. The
+   chunk header is padded to sixteen bytes and `MAXIMUM_ALIGNOF` is rewritten
+   from eight to sixteen in the copy of `pg_config.h` the domain compiles
+   against, because `MAXALIGN` is what every `palloc` promises its caller. The
+   repository's issue register had already written this hazard down, for a
+   different allocator, and named the cause number.
+2. **cause 24, unexpected operand type, at `aset.c:1246.`** `block->prev->next
+   = block` stored through a pointer that had lost its tag. The manager had
+   just reallocated the block, and the level below this port wrote copied it
+   with a byte loop. A byte loop copies a pointer's address bits and drops its
+   out-of-band tag. The repository's freestanding string set copies the aligned
+   middle one capability at a time and keeps the tags, so it is linked instead
+   of a second implementation, and `pg_string.c` is now only the two functions
+   that set does not carry.
+3. **An alignment done by masking an address.** Found by the compiler rather
+   than by a run: the level below aligned its region by masking the address and
+   casting it back, which discards the capability
+   (`-Wcapstone-pointer-roundtrip`). It aligns by moving the pointer now.
+
+The first two are the reason the host arm exists. Both were faults about
+capabilities, in a build whose host arm was known to be exact, so neither cost
+a minute of wondering whether the port or the recording was wrong.
 
 Keeping the host arm working is what makes a fault in the freestanding arm a
 fault about capabilities rather than about the port.

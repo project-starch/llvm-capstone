@@ -19,6 +19,7 @@
  */
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 /* A header before every block. `size` is the payload, `prev` walks backwards
    so a free can coalesce with what is behind it without a scan. */
@@ -180,10 +181,14 @@ realloc(void *p, size_t want)
     void *q = malloc(want);
     if (!q)
         return NULL;
-    char *dst = q;
-    const char *src = p;
-    for (size_t i = 0; i < h->size; i++)
-        dst[i] = src[i];
+    /* memcpy and not a byte loop, and this cost a run to learn: a byte loop
+       copies a pointer's address bits and drops its out-of-band tag, so every
+       pointer in what was copied comes back untagged. The memory manager keeps
+       its block list in the block it is reallocating, so the first store
+       through a copied prev faulted with an unexpected operand type. The
+       repository's freestanding memcpy copies the aligned middle one
+       capability at a time and keeps the tags. */
+    memcpy(q, p, h->size);
     free(p);
     return q;
 }
@@ -192,11 +197,10 @@ void *
 calloc(size_t k, size_t n)
 {
     size_t bytes = k * n;
-    char *p = malloc(bytes);
+    void *p = malloc(bytes);
 
     if (p)
-        for (size_t i = 0; i < bytes; i++)
-            p[i] = 0;
+        memset(p, 0, bytes);
     return p;
 }
 

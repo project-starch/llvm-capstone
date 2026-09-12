@@ -15,8 +15,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
-OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/pg-mmgr-host}
-OUT_HOST=${OUT_HOST:-$OUT_DIR/pg_host.user}
+# OUT, the same name the other two scripts of this port use.
+OUT=${OUT:-$CAPSTONE_TMP_ROOT/pg-mmgr-host}
+OUT_HOST=${OUT_HOST:-$OUT/pg_host.user}
 HOST_SRC=${HOST_SRC:-$SCRIPT_DIR/pg_host.c}
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
 # The caplifive-BUILDROOT copy, not the caplifive-system one: it is the only
@@ -31,7 +32,7 @@ LIBCAPSTONE_C="$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib/libcaps
 [ -x "$GUEST_CC" ] || { echo "no guest compiler at $GUEST_CC" >&2; exit 1; }
 [ -f "$LIBCAPSTONE_C" ] || { echo "no libcapstone.c at $LIBCAPSTONE_C" >&2; exit 1; }
 
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT"
 read -r -a _defs <<< "${PG_EXTRA_DEFS:-}"
 
 "$GUEST_CC" -O2 -pthread -Wall -I"$SCRIPT_DIR" \
