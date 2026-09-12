@@ -72,7 +72,8 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 SUBLET_INC=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_INC=(-I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+  SUBLET_INC=(-I"$REPO_ROOT/capstone/sublet"
+              -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
 fi
 
