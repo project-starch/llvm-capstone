@@ -168,21 +168,34 @@ bash run-pg-replay.sh <flattened trace>
 ```
 
 PostgreSQL's memory manager, unchanged but for the layout its own assertions
-and the ABI force, replayed pgbench's read-only script inside a Capstone
-domain: 5 123 contexts created, 220 513 allocations, 41 039 frees, 2 000
-resets, 5 011 deletes, and it gave back everything it took.
+and the ABI force, replays a recording of a real backend inside a Capstone
+domain. Both rungs run to the end and the manager gives back everything it
+took.
 
-| the level below | in the backend | in the domain |
+| | tpcb | read-only |
 |---|---:|---:|
-| blocks taken | 2 255 | 3 302 |
-| blocks given back | 2 070 | 3 072 |
-| blocks held at once, most | 190 | 235 |
+| contexts created | 23 096 | 5 123 |
+| allocations | 1 228 019 | 220 513 |
+| frees that are calls | 196 411 | 41 039 |
+| resets | 8 000 | 2 000 |
+| deletes | 22 982 | 5 011 |
 
-**The blocks are not expected to match, and the gap is the ABI's.** A chunk
-header is sixteen bytes here rather than eight, and the size classes run from
-sixteen to 8 192 rather than from eight, so the same objects take more bytes
-and more blocks: 1.46 times as many taken, 1.24 times the peak. The calls are
-identical, which is what says it is the same workload.
+The calls are identical to the recording, which is what says it is the same
+workload. What the manager asked of the level below is not, and the gap is the
+ABI's:
+
+| the level below | tpcb, backend | tpcb, domain | read-only, backend | read-only, domain |
+|---|---:|---:|---:|---:|
+| blocks taken | 13 301 | 15 351 | 2 255 | 3 302 |
+| blocks given back | 13 113 | 15 116 | 2 070 | 3 072 |
+| blocks held at once, most | 194 | 241 | 190 | 235 |
+
+A chunk header is sixteen bytes here rather than eight, and the size classes
+run from sixteen to 8 192 rather than from eight, so the same objects take more
+bytes and more blocks: 1.15 times as many on tpcb and 1.46 on the read-only
+script, and 1.24 times the peak on both. The two ratios differ because the
+workloads' object sizes do, and that is the shape of the cost rather than one
+number: what the padding costs depends on how small the objects are.
 
 ### Three faults, and what each one was
 
