@@ -210,6 +210,79 @@ static void released(struct level *L, void *p) {
   L->fbytes += e->size;
 }
 
+/* ---- reused before return ----------------------------------------------- */
+/* A death at the custom level is beyond any defense at level 0 for as long as
+   the block that holds the object has not gone back to level 0; once it has,
+   the block's release covers the object.  What decides whether a stale
+   pointer meets a live object is the reuse, so the question is asked there:
+   when the custom level hands an address out again, had the block containing
+   it returned to level 0 since the last object at that address died?  Level-0
+   releases stamp the addresses they cover, at 16-byte grain, with the custom
+   level's allocation clock, and a reuse compares the stamp with the death's
+   clock.  A stamp at or after the death counts as returned first, so a pool
+   whose blocks go back in the same instant as its objects die is credited to
+   level 0.  Stamps live in an mmap'd arena, because the instrument must not
+   malloc, and the freestanding build, which has no level 0, has none of this. */
+#ifndef MEMHOOK_FREESTANDING
+#define A1_PBITS 20
+static uint64_t a1_pkey[1 << A1_PBITS];
+static uint64_t *a1_pstamp[1 << A1_PBITS];
+static uint64_t *a1_stamps, a1_stamps_used, a1_stamps_cap;
+static uint64_t a1_rbr, a1_rbr_after, a1_rbr_never, a1_pages_overflow;
+static uint64_t *a1_page(uint64_t page, int create) {
+  uint64_t k = page + 1;               /* 0 is the empty key */
+  uint64_t h = (k * 0x9E3779B97F4A7C15ull) >> (64 - A1_PBITS);
+  for (uint64_t i = 0; i < ((uint64_t)1 << A1_PBITS); i++) {
+    uint64_t s = (h + i) & (((uint64_t)1 << A1_PBITS) - 1);
+    if (a1_pkey[s] == k) return a1_pstamp[s];
+    if (a1_pkey[s] == 0) {
+      if (!create) return NULL;
+      if (!a1_stamps) {
+        a1_stamps_cap = (uint64_t)1 << 28;   /* 2^28 words, 2 GiB virtual, touched as used */
+        a1_stamps = mmap(NULL, a1_stamps_cap * sizeof(uint64_t), PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if (a1_stamps == MAP_FAILED) { perror("a1: stamps"); DIE(); }
+      }
+      if (a1_stamps_used + 256 > a1_stamps_cap) { fprintf(stderr, "a1: stamp arena full\n"); DIE(); }
+      a1_pkey[s] = k; a1_pstamp[s] = a1_stamps + a1_stamps_used; a1_stamps_used += 256;
+      return a1_pstamp[s];
+    }
+  }
+  a1_pages_overflow++;
+  return NULL;
+}
+/* a level-0 release of [a, a+n): every 16-byte slot takes the clock */
+static void a1_returned_range(uint64_t a, uint64_t n) {
+  uint64_t t = L1.nalloc;
+  uint64_t end = a + (n ? ((n + 15) & ~(uint64_t)15) : 16);
+  for (uint64_t x = a & ~(uint64_t)15; x < end; x += 16) {
+    uint64_t *pg = a1_page(x >> 12, 1);
+    if (pg) pg[(x >> 4) & 255] = t;
+  }
+}
+/* the custom level is about to hand p out: was the last object at p already
+   covered by a level-0 release?  Called before returned() clears the death. */
+static void a1_reuse_check(void *p) {
+  struct ent *e = ent(&L1, ADDR(p));
+  if (!e->lastfree) return;            /* first object here, or the last one is alive */
+  uint64_t *pg = a1_page(ADDR(p) >> 12, 0);
+  uint64_t st = pg ? pg[(ADDR(p) >> 4) & 255] : 0;
+  if (st && st >= e->lastfree) a1_rbr_after++; else a1_rbr++;
+  if (!st) a1_rbr_never++;             /* the block has not returned once so far */
+}
+static void a1_report_reuse(FILE *f) {
+  fprintf(f, "@reused_before_return: %llu\n", (unsigned long long)a1_rbr);
+  fprintf(f, "@reused_after_return: %llu\n", (unsigned long long)a1_rbr_after);
+  fprintf(f, "@reused_block_never_returned: %llu\n", (unsigned long long)a1_rbr_never);
+  fprintf(f, "@page_overflow: %llu\n", (unsigned long long)a1_pages_overflow);
+}
+#else
+static void a1_returned_range(uint64_t a, uint64_t n) { (void)a; (void)n; }
+static void a1_reuse_check(void *p) { (void)p; }
+static void a1_report_reuse(FILE *f) { (void)f; }
+#endif
+/* ---- end reused before return ------------------------------------------- */
+
 /* ---- lookaside and memsys5 through the patch ---------------------------- */
 
 /* -DMEMHOOK_NO_LOOKASIDE / -DMEMHOOK_NO_MEMSYS5: one level's entry points become
@@ -219,7 +292,7 @@ void *a1_lookaside_alloc(void *p, size_t n) { (void)n; return p; }
 void a1_lookaside_free(void *p) { (void)p; }
 void a1_lookaside_escape(void) {}
 #else
-void *a1_lookaside_alloc(void *p, size_t n) { allocated(&L1, n); returned(&L1, p, n); return p; }
+void *a1_lookaside_alloc(void *p, size_t n) { allocated(&L1, n); a1_reuse_check(p); returned(&L1, p, n); return p; }
 void a1_lookaside_free(void *p) { released(&L1, p); }
 void a1_lookaside_escape(void) { escaped[cur]++; }
 #endif
@@ -337,13 +410,13 @@ static void *hk_malloc(int n) {
   return p;
 }
 static void hk_free(void *p) {
-  if (p) { kind[cur][2]++; released(&L0, p); }
+  if (p) { kind[cur][2]++; a1_returned_range(ADDR(p), ent(&L0, ADDR(p))->size); released(&L0, p); }
   orig.xFree(p);
 }
 static void *hk_realloc(void *p, int n) {
   kind[cur][1]++;
   L0.realloc++; L0.t[cur].realloc++;
-  if (p) released(&L0, p);
+  if (p) { a1_returned_range(ADDR(p), ent(&L0, ADDR(p))->size); released(&L0, p); }
   if (n) allocated(&L0, (size_t)n);
   void *q = orig.xRealloc(p, n);
   if (q && q == p) L0.inplace++;
@@ -371,6 +444,7 @@ __attribute__((destructor)) static void report(void) {
   fprintf(f, "memhook: three levels recorded from inside the process\n\n");
   report_tests(f, levels, 3);
   for (int l = 0; l < 3; l++) report_level(f, levels[l]);
+  a1_report_reuse(f);
   if (f != stderr) fclose(f);
 }
 
