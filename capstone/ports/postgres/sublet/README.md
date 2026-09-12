@@ -21,7 +21,10 @@ in them and not with the bytes.
 The recording says the design reaches it on 99.96% of the resets and deletes
 of the tpcb rung and 99.92% of the readonly rung, and that a third of them need
 no revocation at all. The section on the sub-pool's size has the numbers and
-the four events that cost more.
+the four events that cost more. The two other questions the design had are
+settled below and neither costs the claim: the keeper block needs the context
+header to leave the sub-pool, and in-place `realloc` of a large chunk becomes a
+copy, which the recording takes once per process.
 
 So "one revocation per context" is the thing to build, and the obvious port
 does not deliver it.
@@ -66,14 +69,16 @@ says: one per context. Not one for the tree.
 
 | Operation | What the port does |
 |---|---|
-| context create | the level below carves a sub-pool from its region, keeps a handle for it in its own table, and hands the context the sub-pool linear |
+| context create | the level below carves a sub-pool of 64 KiB, keeps a handle for it in its own table, and gives the context its header out of memory outside the sub-pool, because a revocation must not reach the header |
+| the keeper block | the first `sublet_carve` from the sub-pool, and its capability goes in the context's keeper field rather than being derived from the header's |
 | block from the level below | `sublet_carve` from the context's sub-pool slot: the block, linear, in the context's block slot. The sub-pool's handle is senior to it and stays with the level below |
 | carve a chunk | `sublet_carve` from the block slot to the chunk's slot, front to back, which is the bump `aset.c` already does |
 | hand a chunk out | `sublet_take` on the chunk's slot: `mrev`, then `delin`, so the program gets a copyable alias and the slot keeps the handle |
 | free a chunk | `sublet_give` on the chunk's slot: the alias the program still holds dies, and the slot holds the chunk again, linear, for the next `sublet_take` |
-| reset | `sublet_give_to` on the sub-pool's handle, except the keeper: one revocation, and none at all for a sub-pool never carved |
-| delete | the same, keeper included, and the level below takes the sub-pool back |
-| realloc that moves | `sublet_give` the old chunk after the copy, and the copy is the tag-preserving one |
+| reset | `sublet_give_to` on the sub-pool's handle, keeper included, then carve the keeper again: one revocation, and none at all for a sub-pool never carved |
+| delete | the same revocation, and then the level below takes the sub-pool back and returns the header |
+| realloc, same size class | nothing: the chunk's region and the capability handed out do not change |
+| realloc that moves | carve, copy with the tag-preserving `memcpy`, then `sublet_give` the old chunk |
 
 ## What has to move out of freed memory, and where it goes
 
@@ -159,16 +164,77 @@ than the contexts.
 of a megabyte. The per-chunk cost is real and the paper reports it, but it is
 not what decides whether the port fits.
 
+## The keeper block, decided
+
+**The context header leaves the sub-pool, and the keeper block stays in it.**
+
+`aset.c` makes the decision itself, in one macro:
+
+    #define KeeperBlock(set) \
+        ((AllocBlock) (((char *) set) + MAXALIGN(sizeof(AllocSetContext))))
+
+The header and the first block are one `malloc`, and the keeper's address is
+the header's plus a constant. A reset keeps the keeper "since it shares a
+malloc chunk with the context header", in the comment's own words.
+
+That shape cannot survive one revocation, whichever way it is taken. If the
+sub-pool covers the header, then revoking it destroys the `AllocSetContext` the
+manager is executing on. If the sub-pool spares the keeper so that the header
+survives, then every object in the keeper block survives the reset with a live
+capability, and the reset no longer means what it says. Only one arrangement is
+both safe and one revocation: the header sits in the level below's own memory,
+outside anything the handle covers, and the sub-pool holds every block
+including the keeper. A reset revokes the sub-pool, keeper included, and the
+manager carves the keeper again immediately.
+
+Splitting the sub-pool so that the header is the front of it does not rescue
+the arithmetic. A capability is bounded, so `set + MAXALIGN(sizeof(...))` is
+exactly the end of a header-sized capability and faults on the first
+dereference, adjacent region or not. The keeper has to be reached through a
+capability of its own rather than derived from the header's, which is a field:
+
+| site in `aset.c` | what the port does |
+|---|---|
+| `AllocSetContext` | one field, the keeper's capability |
+| `KeeperBlock`, `IsKeeperBlock` | read the field instead of doing arithmetic |
+| create | the header from the level below, the keeper carved from the sub-pool, `endptr` from the block rather than from the header |
+| reset | carve and initialise the keeper after the revoke, where it re-pointed a surviving block before |
+| delete | two returns rather than one free |
+| the `keepersize` assertion | a subtraction across two capabilities, and it exists only under `MEMORY_CONTEXT_CHECKING` |
+
+Fifteen to twenty lines, and every one of them is the same fact: a capability
+cannot reach out of the object it was given for. That is the change A7 counts,
+and it is a change to addressing and not to policy. The block sizes, the
+doubling, the free lists, the keeper's role and the order of the chunks are all
+untouched.
+
+## `realloc` in place, decided and priced
+
+**It becomes a copy, and the recording says it happens once per process.**
+
+`AllocSetRealloc` has three paths and Sublet keeps two of them unchanged. A new
+size in the same class returns the same pointer and does nothing, so the
+chunk's region and the capability handed out are untouched and the path is free.
+A new size in a different class already allocates, copies and frees, so Sublet
+adds a revocation and nothing else.
+
+The third path is a chunk above the context's `allocChunkLimit`, which owns its
+whole block: the manager grows it with `realloc()` on the block. A region can
+be split and not joined, so no primitive grows one, and the port has to carve a
+new block, copy, and revoke the old. That is a policy change and it is reported
+as one.
+
+`experiments/a11/postgres/reallocs.py` counts how often the recording takes it.
+Of 1 228 019 allocations on the tpcb rung there are two reallocs, and one of
+them is external: the timezone parser at startup, copying 5 120 bytes. The
+readonly rung is the same two. So the path the port cannot keep costs one
+`memcpy` of five kilobytes per process start, and the paper reports it as a
+change rather than as a cost.
+
 ## What is open
 
-- **The keeper block.** A reset keeps the first block. One revocation cannot
-  spare part of what it covers, so the keeper needs either its own handle,
-  which makes a reset two revocations by construction, or to be re-carved and
-  re-filled after the revoke, which makes it a write of the keeper. The second
-  is what `sublet_give_to` already does to a region it hands back, so it may be
-  free.
-- **`realloc` in place.** `aset.c` grows a chunk into the space after it when
-  that space is free. Under Sublet the chunk's region would have to be extended,
-  which no primitive does: a region can be split, not joined, except by
-  revoking a handle senior to both halves. The port may have to make that path
-  a copy, which is a policy change and has to be reported as one.
+Nothing the design has to settle before the patch. What is left is what the
+patch itself will say: whether the chunk header can go back to eight bytes once
+no chunk holds a capability, which would make the protected build cheaper per
+chunk than the unprotected one, and what the whole discipline costs in cycles.
+Both are measurements and neither changes a decision above.
