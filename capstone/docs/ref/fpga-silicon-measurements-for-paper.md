@@ -1203,6 +1203,58 @@ path or inside a capability domain. So this establishes that **the fix is presen
 RTL now flashed**, and does not yet establish that the monitor's reclaim fires on silicon. The board
 probe in §4g.4 is what closes that.
 
+### §4g.4 — BOOT sw60: **R-31 IS FIXED ON SILICON. R-30 IS NOT.** (2026-09-12)
+
+The first arm ever to reach the monitor's reclaim on hardware. Control passed
+(`k800 retval=4, cycles=4517`), so the boot carries a verdict.
+
+**Read the LAST block of the capture, not the first.** The console replays ~548 KB of prior boots on
+connect, and sw59 was also a four-arm boot with the same arm labels, so `### TEST 1/4 START` occurs
+four times in this log. Scoping to the first occurrence yields sw59's numbers exactly — 2,639,069,185
+and 2,176,757,779 — which look entirely plausible as sw60's. They are not.
+
+#### The probe arm, verbatim
+
+    SQ: released pool rc=1        <- precondition: revoked, slot kept (structural, pool released first)
+    SQ: RR/share-A
+    RGID:00000014  AREV:00000001  <- region 20, REV_BORROWED
+    SHA2:00000003                 <- cap_type(r) = 3 = UNINIT
+    BASE:AC100000  ALEN:0015A940  <- the 1,419,584-byte arena
+    RCLM:00000000
+    RCSH:000006C0                 <- fill shortfall, 1,728 bytes
+    BASE:AC100000                 <- then the designed while(1) halt
+
+**R-31 IS FIXED, and this is the direct evidence.** `SHA2` is `cap_type(r)`, emitted at
+`sbi_capstone.c:1276` *before* the reclaim guard. It reads **3 = UNINIT**. On the previous bitstream
+REVOKE returned LINEAR (0) — that is R-31 — and the whole reclaim was skipped. **`RCPR` did not
+fire**, so `cap_cursor == cap_base` as well: revoke returns an UNINIT capability with its cursor at
+base, exactly as the spec requires. Both halves of R-31's contract now hold on hardware.
+
+**R-30 IS NOT FIXED, and the shortfall is not the documented one.** The fill ran and stopped
+**1,728 bytes** short of `end` — `0x6C0`, which is 108 granules of 16 bytes — out of an arena of
+1,419,584. R-30's registry entry describes a **one-byte** shortfall: filling an UNINIT region leaves
+the cursor AT `end` where INIT requires PAST it. 1,728 bytes is a different quantity and is **not
+explained here**. Stated as a measurement, not a diagnosis.
+
+**What this does and does not close.** It closes the question the flash was for on the R-31 side, on
+silicon, through the monitor's real share/revoke path rather than a fabricated capability. It leaves
+R-30 open and re-characterised: the defect survives the fix, at a scale ~1,728× the documented one.
+The RTL simulation in §4g.3 passed `r30-fill-init` at this same revision — and that test fabricates
+its UNINIT with Custom3 debug ops on a small buffer, which is precisely the kind of gap between a
+directed test and the real path that this arm exists to expose.
+
+#### The lookaside pair, banked on silicon
+
+| | image | board cycles | board instret |
+|---|---|---:|---:|
+| ⑤ domain, lookaside | `ccb73bc08db39990` | 2,551,506,640 | — |
+| ② native, lookaside | `24cb59fa7dbfb8fb` | 2,107,533,496 | 567,065,689 |
+
+**⑤/② = 1.2107**, against **④/① = 1.2124** from sw59. The capability-ABI cost on silicon is
+**~1.21 and does not depend on the allocator** — 0.17 pp between the two, which mirrors the QEMU
+result (1.2701 / 1.2676, 0.25 pp) at a different absolute level. That the two independent platforms
+agree on *allocator-independence* while disagreeing on the level is the more useful of the two facts.
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
