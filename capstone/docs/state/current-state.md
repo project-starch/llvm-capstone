@@ -2,7 +2,46 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-10 — CURRENT for the reclaim/flash material below; **2026-09-11 is NOT in this file**
+## 2026-09-12 — CURRENT
+
+> Three boots on the R-30/R-31 bitstream. The 2026-09-10 block below is still accurate for the
+> firmware half; everything it says about R-30/R-31 being unverified on silicon is now superseded
+> by this block. Measurements: `ref/fpga-silicon-measurements-for-paper.md` §4g.1–§4g.5.
+
+* **The bitstream is flashed and verified BY CONTENT.** `caplifive_r30r31_1bfff7776.bit`,
+  `nv_bitstream_sha256 = 406e12bf…3b30` read back from a fresh `/api/state` after the mandatory
+  power-cycle. Control `k800` = 4 in **all three** boots (sw59/sw60/sw61), `instret` 1089 in every
+  one, cycles 4521/4517/4517 — so the flash did not move timing. `known-good-controls.md` is
+  refreshed against it; only the `k800` row, the others still carry older bitstreams.
+* **R-31 is FIXED ON SILICON** (boot sw60), through the monitor's real share/revoke path rather
+  than a fabricated capability: `SHA2:00000003` = cap_type UNINIT where the previous bitstream
+  returned LINEAR, and `RCPR` did not fire, so the cursor is at base too. Both halves of the
+  contract hold.
+* **R-30's headline is SUPERSEDED, and this was over-stated once before being narrowed.** The
+  one-byte precondition is fixed — boot sw61 performs **5,334 successful INITs**, every counter
+  bit-identical to QEMU. sw60's `RCSH:000006C0` is a *separate* large-region effect one step
+  earlier, where INIT refusing is correct. Two of the four candidate accounts are dead: the
+  monitor's own arithmetic admits a shortfall of at most 15 bytes (which also kills
+  allocator-rounding), and the RTL kills "end moved during the fill". **One account survives: 108
+  stores did not advance the cursor.** The discriminator is a pair of boots at two different large
+  region sizes — constant 1,728 = a fixed tail effect, scaling = a proportional store-failure rate.
+  Not yet run.
+* **The silicon allocator matrix is complete.** ABI cost **~1.21 and allocator-independent**
+  (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **1.0964 on silicon against 1.0176 on
+  QEMU** — 5.5×, which is what an O(bytes) reclaim predicts and the clearest case in the corpus of
+  an instruction count understating a cost. Two caveats travel with these rows: the ⑥/⑤ comparison
+  carries a heap-geometry term (910,008 vs 2,097,152, not equalisable), and the lookaside-ON rows
+  must not be blended with the lookaside-OFF §7 corpus.
+* **The resident firmware is THREE monitor commits behind and none of them has booted** —
+  `75d96d2` (define `CAP_TYPE_UNINIT`), `921f598` (`RCEN`/`RCCU` reclaim instrument), `d1bd7e4`
+  (early-clobber on both `C_RECLAIM` outputs). All boots ran `2c49c41`. `board-b59/b60/b61.sh`
+  gate on that hash and will now FAIL — correctly; update it deliberately, do not delete the gate.
+  The submodule pointer chain is deliberately unbumped, which matters only for a fresh clone.
+* **`precommit-scan.sh` had a silent-pass path** — a `--range` git could not resolve contributed
+  nothing and printed CLEAN. Fixed (unresolvable *or* empty range now blocks), negative-tested four
+  ways. Nothing had escaped it.
+
+## 2026-09-10 — superseded above for R-30/R-31; **2026-09-11 is NOT in this file**
 
 > **Read `state/current-next-step.md` first for 2026-09-11.** Four boots landed that day and none of
 > them is described here: sw55 (a **130 MiB** capability region on silicon), sw56/sw57/sw58
