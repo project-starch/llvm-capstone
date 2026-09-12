@@ -129,15 +129,41 @@ capability and faults on the first dereference
 the class that made eighteen of MicroPython's twenty-one patches, met on the
 first file written for this port.
 
-**What is still missing to run it.** A host program that makes the four
-regions, shares them, enters the domain and prints the payload. The SQLite
-port's `sqlite_host.c` is 728 lines because it also services that port's
-hostcalls; this one needs the region half of it and nothing else. Then the
-trace has to be shortened for a domain: the identity table for a million
-objects is twenty megabytes of capabilities, and the trace itself is
-fifty-seven, which fits the hundred and thirty a domain can be given but
-leaves little room. A hundred transactions still give over two thousand resets
-for the scatter plot.
+### The host side
+
+```
+bash build-pg-host.sh            # -> pg_host.user, for the guest
+```
+
+`pg_host.c` is the region half of what `sqlite_host.c` does and none of the
+rest: the memory manager makes no hostcalls, so there is no protocol to
+service. Four regions, shared in the order the domain counts them, the trace
+read into the third, one entry, and the payload printed on return. With
+`--tail` a thread prints the payload while the domain runs, so a wedge still
+says how far it got.
+
+Two things it had to be told, both of them other people's findings written
+down where they cost a day once:
+
+- **The kernel declines to `read(2)` into a shared region's mapping.** The
+  first read returns zero and nothing is written. The trace goes through a
+  staging buffer, a megabyte at a time rather than in one piece.
+- **The module's header is included by name, not by path.** A relative path
+  into the buildroot submodule works only where the submodule is checked out,
+  which a worktree is not, and the workaround there is a symlink that makes
+  the commit scanner block every commit in the tree. The build puts the lib
+  directory on the include path instead, resolved from
+  `CAPSTONE_BUILDROOT_DIR`.
+
+**The trace fits in one region now.** A region used to be capped by the buddy
+allocator's largest block, 4 MiB, and the whole trace is fifty-seven. Since
+the module took to `dma_alloc_pages` a region comes from the CMA area the
+kernel reserves at boot, so the cap is what `cma=` gives it. The arena and the
+trace together are what the guest's command line has to cover.
+
+**What is still missing to run it.** The run itself: the guest, the module
+loaded, `cma=` large enough, and the two binaries delivered. Both are built
+and neither has been entered yet.
 
 Keeping the host arm working is what makes a fault in the freestanding arm a
 fault about capabilities rather than about the port.
