@@ -32,6 +32,17 @@ Minimal snapshot. Read first in every session.
   an instruction count understating a cost. Two caveats travel with these rows: the ⑥/⑤ comparison
   carries a heap-geometry term (910,008 vs 2,097,152, not equalisable), and the lookaside-ON rows
   must not be blended with the lookaside-OFF §7 corpus.
+* **R-30's residual is SOLVED and re-filed as R-33 (boot sw62).** The 1,728 bytes were never a
+  failed fill. A capability's bounds are re-encoded once its cursor leaves `base`, and `end` then
+  reads high by up to one granule — `compress_bounds` uses an exact form only while the cursor sits
+  at the low bound (`ariane_pkg.sv:787`) and otherwise rounds the top up to `2^(E+3)`
+  (`:827-828`); `STC` is a DYN op (`decoder.sv:1309`) whose `rs1` is re-compressed on writeback
+  (`ex_stage.sv:1188`). sw62's granule-ALIGNED arenas reclaimed clean, while the unaligned arm
+  halted with `RCSH = 448` — the compression figure, pre-registered before the boot against 432 for
+  a store-failure rate — with `RCCU` showing the cursor reached the true end, so **no store failed**.
+  Two accounts were retracted on the way there, both this lane's and the RTL lane's, and both had
+  read the fat struct without the function that compresses it.
+
 * **The resident firmware is THREE monitor commits behind and none of them has booted** —
   `75d96d2` (define `CAP_TYPE_UNINIT`), `921f598` (`RCEN`/`RCCU` reclaim instrument), `d1bd7e4`
   (early-clobber on both `C_RECLAIM` outputs). All boots ran `2c49c41`. `board-b59/b60/b61.sh`

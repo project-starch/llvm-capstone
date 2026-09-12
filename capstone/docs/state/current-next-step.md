@@ -1,13 +1,14 @@
 # Next step
 
-## 0. CURRENT — 2026-09-12. **FLASHED AND MEASURED. R-31 IS FIXED ON SILICON; R-30's 1,728 BYTES LOOK LIKE BOUNDS COMPRESSION, AND BOOT sw62 IS TESTING THAT.**
+## 0. CURRENT — 2026-09-12. **R-31 FIXED ON SILICON; R-30's 1,728 BYTES SOLVED — IT IS BOUNDS RE-ENCODING, NOW FILED AS R-33.**
 
 Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
 
 | | |
 |---|---|
 | **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
-| **R-30** | **Its one-byte headline is FIXED, and a separate effect is open.** sw61's Sublet port reports **`init=5334`**, bit-identical to QEMU, so INIT is reachable and the precondition fix works. Separately, sw60's reclaim of a 1,419,584-byte region falls **1,728 bytes** short (`RCSH:000006C0`) — a *different* quantity from the documented one byte. The leading account is the RTL's **compressed bounds encoding**, which rounds the top up to a 2,048-byte granule once the cursor leaves base (`ariane_pkg.sv:827-828`) and predicts 1,728 exactly; on that account no store failed and `end` moved. Boot sw62 tests it with granule-aligned arenas, which should show NO shortfall. See ISSUES R-30. |
+| **R-30** | **Closed. Its one-byte precondition is FIXED** (sw61, `init=5334`), and the separate 1,728-byte shortfall it carried is **not a fill failure at all** — boot sw62 shows every store advanced and `end` re-encoded high. Re-filed as **R-33**. |
+| **R-33** | **NEW, demonstrated on silicon (sw62).** A capability's bounds are re-encoded when its cursor leaves `base`, and `end` then reads high by up to one granule (`ariane_pkg.sv:827-828`). Granule-ALIGNED arenas reclaim clean; the unaligned arm halted with `RCSH=448`, the pre-registered compression figure, against 432 for a store-failure rate. Mechanism traced through five quoted RTL sites. A firmware mitigation exists that does not wait on the RTL. |
 | **the matrix** | complete on silicon. ABI cost **~1.21 and allocator-independent** (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap, which is what an O(bytes) reclaim predicts. |
 
 **The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is

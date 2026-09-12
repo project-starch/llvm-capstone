@@ -1305,6 +1305,48 @@ corpus of an instruction count understating a cost, and it is why §7 is silicon
 configuration, each at its own working geometry — not the discipline in isolation. ⑤ cannot be
 rebuilt at ⑥'s heap (it faults; image `7cc434e807570136`).
 
+### §4g.6 — BOOT sw62: the 1,728 bytes are BOUNDS RE-ENCODING, not a failed fill (2026-09-12)
+
+On `caplifive_r30r31_1bfff7776`, monitor `d1bd7e4`, firmware `5c1d8fc7e40a`. Control `k800
+retval=4`. Four arms, one image (`ccb73bc08db39990`, the same cell5 image sw60's probe used), three
+arenas differing only in size — so arena size is the only variable against sw60.
+
+**The predictions were written into the driver header and into `ISSUES.md` BEFORE the boot**, because
+the two accounts on the table differed numerically and the result had to be unable to fit either
+after the fact. Bounds compression predicts `round_up(N, 2^(E+3)) − N`; a proportional store-failure
+rate predicts `1,728 × N/1,419,584`.
+
+| arm | arena | granule | compression predicted | store-failure predicted | **measured** |
+|---|---:|---:|---:|---:|---|
+| 2 | 1,419,264 | 2,048 | 0 — no halt | ~1,728 — halt | **clean, no halt** |
+| 3 | 709,632 | 1,024 | 0 — no halt | ~864 — halt | **clean, no halt** |
+| 4 | 354,880 | 512 | **448** | 432 | **`RCSH:000001C0` = 448** |
+
+Both granule-aligned arenas reclaimed cleanly and the monitor's reclaim counter advanced 0 → 1 → 2,
+so the reclaim genuinely ran and completed on each rather than being skipped.
+
+**Arm 4 is the finding in two numbers.** `RCCU:00056A40` = 354,880: the cursor reached the TRUE end,
+so all 22,180 stores advanced and **none failed**. `RCEN:00056C00` = 355,328 =
+`round_up(354,880, 512)`. Their difference is 448, equal to `RCSH`, so the instrument's self-check
+holds and the shortfall is the rounding and nothing else.
+
+**One capability reported two different `end` values inside one arm.** `ALEN` is traced on the share
+path before the fill, cursor still at base: **354,880**, the exact requested size. `RCEN` read the
+same region after the first store moved the cursor: **355,328**.
+
+Mechanism, exposure and the firmware mitigation are in **ISSUES R-33**. In one line: `compress_bounds`
+(`ariane_pkg.sv:787`) uses an exact form only while the cursor sits at the low bound, and otherwise
+rounds the top up to a `2^(E+3)` granule (`:827-828`); `STC` is a DYN op (`decoder.sv:1309`) whose
+`rs1` is re-compressed on writeback (`ex_stage.sv:1188`).
+
+**Consequences for numbers already in this document.** §4g.4's 1,728 is
+`round_up(1,419,584, 2048) − 1,419,584` exactly, and is not evidence of any failed store. §4g.5's
+5,334 successful INITs are consistent rather than anomalous: the `E == 0 && len[12] == 0` sub-case
+(`ariane_pkg.sv:818-821`) is exact, so small regions never round. **No performance figure in this
+document is affected** — every cycle count here comes from arms that completed, and this defect
+either halts the monitor or is absent.
+
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven

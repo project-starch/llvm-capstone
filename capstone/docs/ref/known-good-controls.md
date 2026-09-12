@@ -1,5 +1,12 @@
 # Known-good controls
 
+> ## refreshed AGAIN 2026-09-12 (later) — **and this one also cleared a firmware change**: boot
+> sw62 was the FIRST execution of three monitor commits that had never booted (`75d96d2`,
+> `921f598`, `d1bd7e4`; firmware `5c1d8fc7e40a`). `k800 = 4`, `instret = 1089` identical to every
+> earlier boot on this bitstream, `cycles = 4547` against 4521/4517/4517. A control is the only
+> thing separating "the experiment failed" from "the firmware I just changed failed", which is
+> why it runs first. Below, the refresh against the bitstream itself:
+>
 > ## refreshed 2026-09-12 on caplifive_r30r31_1bfff7776 (the R-30/R-31 bitstream, flashed and
 > content-verified `nv_bitstream_sha256 = 406e12bf…3b30`): **k800 = 4 in all three boots on it**
 > — sw59 `cycles=4521`, sw60 `cycles=4517`, sw61 `cycles=4517`, `instret=1089` in every one.
@@ -32,7 +39,7 @@ claim that had to be retracted, plus a reflash cycle and several boots. Hence th
 
 | rung | oracle | verified on | last verified | notes |
 |---|---|---|---|---|
-| `k800` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit`, `caplifive_s12fix_5097eb166`, **`caplifive_r30r31_1bfff7776`** | **2026-09-12** | Returned 4 in every boot on all four bitstreams. The default control. Cycles are stable to 4 parts in 4,500 across the last flash (4521/4517/4517), so it doubles as a coarse check that the flash did not move timing. |
+| `k800` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit`, `caplifive_s12fix_5097eb166`, **`caplifive_r30r31_1bfff7776`** | **2026-09-12** | Returned 4 in every boot on all four bitstreams. The default control. Cycles are stable to 4 parts in 4,500 across the last flash (4521/4517/4517, and 4547 on sw62), so it doubles as a coarse check that neither the flash nor a firmware change moved timing. Verified across FOUR firmwares on the current bitstream, sw59-sw62. |
 | `k1200` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit` | 2026-08-06 | R-14 acceptance test: fails on unfixed silicon, returns 4 with the operand-forwarding fix. Doubles as the "does this bitstream carry the fix" probe. |
 | `r14lp` | 4 | `caplifive_fixed_forward.bit` | 2026-08-04 | From the R-14 frame-pad package. |
 | `r14sl` | 4 | `caplifive_fixed_forward.bit` | 2026-08-04 | Same package. |

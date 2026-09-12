@@ -1269,7 +1269,7 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > not an ancestor of `1bfff7776`, and `66c4e7517..1bfff7776` touches only the two anvil units and
 > test files — no exception encoders.
 
-### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `HEADLINE SUPERSEDED — the one-byte precondition is FIXED and verified on silicon (boot sw61, 5,334 INITs on caplifive_r30r31_1bfff7776). A SEPARATE large-region fill shortfall of 1,728 bytes is OPEN (boot sw60) and is not what this headline describes; see the 2026-09-12 box for the three surviving accounts and the unbooted instrument that separates them`
+### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `HEADLINE SUPERSEDED, AND THE RESIDUAL IS NOW EXPLAINED AND RE-FILED. The one-byte precondition is FIXED and verified on silicon (boot sw61, 5,334 INITs on caplifive_r30r31_1bfff7776). The separate 1,728-byte shortfall this entry carried as open is NOT a fill failure at all: it is bounds re-encoding, demonstrated on silicon 2026-09-12 (boot sw62) and filed as **R-33**. Nothing about the fill remains open here`
 
 > # ⚠ THE HEADLINE "INIT IS UNREACHABLE" IS CONTRADICTED BY SILICON, 2026-09-12. Two readings on ONE bitstream, in adjacent boots, and they do not agree.
 >
@@ -1305,6 +1305,19 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > before it costs a boot:** `n` is computed from the same `end - base`, so a region rounded UP scales
 > `n` with it and the shortfall still cannot exceed 15.
 >
+> # ✅ CLOSED 2026-09-12 BY BOOT sw62: it was account (b), and the mechanism is R-33.
+>
+> Arms at granule-ALIGNED arenas (1,419,264 and 709,632) reclaimed **cleanly**, reclaim count 0 → 1 → 2.
+> The unaligned arm (354,880) halted with `RCSH = 448` — the compression prediction, written down
+> before the boot, against 432 for a proportional store-failure rate. `RCCU` shows the cursor reached
+> the true end, so **every store advanced and none failed**; `RCEN` shows `end` reading
+> `round_up(354,880, 512) = 355,328`. The shortfall is the rounding and nothing else.
+>
+> **So account (a) — "108 stores did not advance the cursor" — is REFUTED, and it was this lane's own
+> surviving account.** The full mechanism, exposure and mitigation are in **R-33**; everything below
+> this line is the trail that led there and is kept for the two retractions it records, not as live
+> analysis.
+
 > # ⚠ CORRECTION 2026-09-12 (same day, later): ACCOUNT (b) IS REINSTATED. Both refutations of it — the RTL lane's and this lane's endorsement of it — were made at the WRONG LAYER.
 >
 > **What was written, and why it is wrong.** (b) "`end` moved during the fill" was struck on the
@@ -2148,6 +2161,92 @@ If it is ever revived, the two live mechanisms are distinguishable by signature:
 VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the domain was not in
 U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
 want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
+
+### R-33 — a capability's BOUNDS are re-encoded when its cursor leaves `base`, and `end` then reads HIGH by up to one granule. Every store succeeded; the number that moved was the bound `OPEN — DEMONSTRATED ON SILICON 2026-09-12 (boot sw62, caplifive_r30r31_1bfff7776), mechanism traced through five quoted RTL sites, and the same capability observed reporting TWO different ends in one boot depending only on where its cursor sat`
+
+> **This is the mechanism behind sw60's 1,728 bytes, and it is NOT R-30.** R-30 is INIT's
+> precondition, which is fixed and verified (sw61, 5,334 INITs). This is a separate defect in bounds
+> re-encoding. It was found while investigating R-30 and cost two wrong accounts on the way — see the
+> correction box in R-30.
+>
+> **Boot sw62, four arms, one image, predictions pre-registered before the boot.** Control
+> `k800 retval=4`. Every arena a multiple of 64; the two "aligned" ones are exactly 693 × their own
+> granule:
+>
+> | arm | arena | granule | aligned? | result |
+> |---|---:|---:|---|---|
+> | 2 | 1,419,264 | 2,048 | yes | **clean** — `RR/done`, reclaim count 0 → 1 |
+> | 3 | 709,632 | 1,024 | yes | **clean** — returned `rc=1`, count 1 → 2 |
+> | 4 | 354,880 | 512 | **no** | **halted**: `RCSH:000001C0` = **448** |
+>
+> **Arm 4 is the whole finding in two numbers.** `RCCU:00056A40` = **354,880** — the cursor reached
+> the TRUE end, so all 22,180 stores advanced and **not one failed**. `RCEN:00056C00` = **355,328** —
+> which is exactly `round_up(354,880, 512)`. The shortfall is the difference and nothing else:
+> 355,328 − 354,880 = 448 = `RCSH`, so the instrument's own self-check holds.
+>
+> **The same capability reported two different `end` values in the same arm.** `ALEN` is traced on the
+> share path (`sbi_capstone.c:1302`) BEFORE the fill, while the cursor is still at base: it read
+> **354,880**, the exact requested size. `RCEN` read the same region after the first store moved the
+> cursor: **355,328**. Nothing about the region changed in between except the cursor position.
+>
+> **Pre-registration, so this cannot be read as fitting after the fact.** 448 is what bounds
+> compression predicts; a proportional store-failure rate predicts 432 (= 1,728 × ¼). Both numbers
+> were written into the driver header and into this file before the boot ran. The reading was 448.
+>
+> **Mechanism — five links, each quoted, none inferred.**
+>
+> 1. `decoder.sv:1309` — `STC` sets `instruction_o.fu = CAPSTONE_DYN`. It is a DYN op, so there is no
+>    separate store-unit path (an assumption that cost this lane an hour).
+> 2. the DYN unit advances the UNINIT cursor by 16 and passes the metadata through unchanged.
+> 3. `ex_stage.sv:1188` — `compress_cap(capstone_dyn_res.cap_rs1)`: the DYN result's `rs1` is
+>    **re-compressed on writeback**.
+> 4. `ariane_pkg.sv:873` — `compress_bounds(fat_bounds_t'{bound_start, bound_end}, cap.cursor, …)`:
+>    the cursor is an input to the encoding.
+> 5. `ariane_pkg.sv:787` selects an exact "cursorless" form **only while `bounds.start == cursor`**;
+>    otherwise `:817` takes `E = leading_zeros - 12` and `:827-828` rounds the TOP up to a `2^(E+3)`
+>    granule:
+>    `if(((bounds.base >> (E+3))<<(E+3)) != bounds.base) T[11:3] += 1;`
+>
+> **Naming trap, and probably how this was missed twice.** Inside `compress_bounds`,
+> `len = bounds.base - bounds.start` (`:807`) — so `start` is the LOW bound and `base` is the HIGH
+> one, inverted from the monitor's vocabulary. Reading the fat struct's full-width fields and
+> concluding "there is nothing to round" is exactly the error that produced the two retracted
+> refutations; the rounding is not in the struct, it is in the function that compresses it.
+>
+> **The cursor is NOT affected, and that asymmetry is useful.** `fat_cap_t` (`:582-585`) carries
+> `cursor` as a full-width `xlen_t`, and `cap_metadata_t` (`:637-642`) — what `compress_cap` returns —
+> has **no cursor field at all**. Only the bounds are lossy. So any check written in terms of cursor
+> readbacks is immune to this defect, and any check that reads a bound back after moving a cursor is
+> not.
+>
+> **What it explains.** sw60's 1,728 = `round_up(1,419,584, 2048) − 1,419,584` exactly. sw61's 5,334
+> successful INITs: the `E == 0 && len[12] == 0` sub-case at `:818-821` is exact, so small regions
+> never round and the Sublet port never met this. And why INIT still fails on a large UNALIGNED region
+> even at the flashed revision, where the R-30 fix made equality legal (`cursor < end` raises,
+> `wt-1bfff7776` `capstone_flu_unit.anvil`): the cursor stops at the true end while `end` decodes
+> higher, so `cursor < end` and INIT is refused. On an ALIGNED region the two meet and INIT succeeds —
+> which is what arms 2 and 3 demonstrate, reclaim count included.
+>
+> **Exposure.** The reclaim's own postcondition is the only place in the monitor that currently reads a
+> bound with the cursor off base — the RTL lane worked the other call sites and INIT resetting the
+> cursor to base (`new_cursor = rs2.cursor + start`, with `csinit` passing `x0`) closes them, while the
+> `ALEN` trace is safe by explicit ordering rather than luck. **That is a property of today's call
+> sites, not a guarantee:** nothing in the API warns a caller, and the region-field query
+> (`sbi_capstone.c:1755-1765`) would return a rounded `FIELD_END`/`FIELD_LEN` for any future caller
+> that asks mid-fill. Note also the encoder truncates the BOTTOM without a correction term (`:825`),
+> so `base` can read LOW by up to a granule on a non-granule-aligned base, and the length case
+> subtracts the two.
+>
+> **A firmware mitigation exists and does not wait on the RTL.** The reclaim's postcondition never
+> needs to read `end` back: it verified `cursor == base` before the fill and knows the store count, so
+> `base + 16n` is where the cursor must land. Comparing that against the cursor readback uses two
+> quantities neither of which is a re-encoded bound. Today the check cannot tell a re-encoded `end`
+> from a genuinely short fill, which is precisely what cost sw60.
+>
+> **Related.** R-30 (INIT's precondition — fixed; this is what remained underneath it) and R-32 (the
+> spec/RTL one-off on bounds taken or returned as a VALUE — a different question about a different
+> quantity, but the same family of "which number is the bound really").
+
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
