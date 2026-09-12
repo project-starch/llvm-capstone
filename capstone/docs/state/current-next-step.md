@@ -1,13 +1,13 @@
 # Next step
 
-## 0. CURRENT — 2026-09-12. **FLASHED, AND MEASURED. R-31 IS FIXED ON SILICON; R-30 IS NOT WHAT ITS ENTRY SAYS.**
+## 0. CURRENT — 2026-09-12. **FLASHED AND MEASURED. R-31 IS FIXED ON SILICON; R-30's 1,728 BYTES LOOK LIKE BOUNDS COMPRESSION, AND BOOT sw62 IS TESTING THAT.**
 
 Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
 
 | | |
 |---|---|
 | **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
-| **R-30** | **Its headline is contradicted.** sw60's monitor reclaim of a 1,419,584-byte region falls **1,728 bytes** short (`RCSH:000006C0`) — not the documented one byte. sw61's Sublet port on the same silicon reports **`init=5334`**, bit-identical to QEMU. INIT is plainly REACHABLE. Unreconciled; see ISSUES R-30. |
+| **R-30** | **Its one-byte headline is FIXED, and a separate effect is open.** sw61's Sublet port reports **`init=5334`**, bit-identical to QEMU, so INIT is reachable and the precondition fix works. Separately, sw60's reclaim of a 1,419,584-byte region falls **1,728 bytes** short (`RCSH:000006C0`) — a *different* quantity from the documented one byte. The leading account is the RTL's **compressed bounds encoding**, which rounds the top up to a 2,048-byte granule once the cursor leaves base (`ariane_pkg.sv:827-828`) and predicts 1,728 exactly; on that account no store failed and `end` moved. Boot sw62 tests it with granule-aligned arenas, which should show NO shortfall. See ISSUES R-30. |
 | **the matrix** | complete on silicon. ABI cost **~1.21 and allocator-independent** (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap, which is what an O(bytes) reclaim predicts. |
 
 **The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is
@@ -372,32 +372,33 @@ tree commits.
 
 ### Open, in the order they are likely to move
 
-1. **SIX REPOSITORIES REFUSE THIS CREDENTIAL, and the monitor is one of them.** This is the binding
-   constraint, not the board and not the work. Verified against the remotes rather than against
-   `@{u}` — three repos have no upstream configured and the tracking comparison returns zero for
-   them silently:
+1. ~~**SIX REPOSITORIES REFUSE THIS CREDENTIAL, and the monitor is one of them.**~~ **FALSE AS OF
+   2026-09-12 — five of the six are readable and fully pushed, and the sixth is a different problem.**
+   Re-established the way the original entry said to, by trying each remote (`ls-remote`) rather than
+   reading a tracking ref:
 
-   | repo | unpushed | note |
-   |---|---:|---|
-   | `capstone-sbi` / `caplifive-sbi` (the monitor, two copies) | 1 each | carries the M-6 fix AND the R-30/R-31 firmware half |
-   | `capstone-opensbi` (the wrapper, two checkouts) | 1 each | the monitor gitlink |
-   | `caplifive-system-dev` (two checkouts) | 2 + 1 | `sw/buildroot` pointers |
-   | `capstone-academic-spec` | 2 | the `end`-convention amendment; 403 on **read** too, so its branches cannot even be listed |
+   | repo | `ls-remote` | unpushed from HEAD |
+   |---|---|---:|
+   | `capstone-sbi` (the monitor) | READABLE | 0 — **pushed twice on 2026-09-12** (`921f598`, `d1bd7e4`) |
+   | `caplifive-opensbi` (the wrapper) | READABLE | 0 |
+   | `caplifive-buildroot` | READABLE | 0 |
+   | `caplifive-system-dev` | READABLE | 0 |
+   | `capstone-academic-spec` | READABLE | 0 — the "403 on read too" claim no longer holds |
+   | `capstone-spec` | **no `origin` remote configured at all** | n/a — not a credential problem |
 
-   `capstone-qemu` was in this list and is **not** — it was a misconfigured upstream, and its two
-   commits (the `badaddr` and cause-6 fault-path fixes) are now pushed. Establish access by trying
-   the remote, not by inferring from a tracking ref.
+   The credential is not the binding constraint and has not been for some time. What *is* still true
+   is the method the old entry ended with, which is why it is kept: establish access by trying the
+   remote, never by inferring from a tracking ref — `@{u}` returns an empty range when no upstream is
+   configured, and that reads exactly like "nothing to push".
 
 2. **Two branches need an allowlist entry**, which is the lead's file and no lane may edit it:
    `speedtest1` (50 commits, ~3,600 lines — the entire apparatus behind §7f and §7i–§7k, on no
    remote) and `shrinkto-size-fix`.
 
-3. **The flash of `1bfff7776`** — authorised, `.bit` still on the synth machine. It now has a
-   **batch** owed to it: control, then the bridge arm tying post-flash numbers to pre-flash ones,
-   then the M-3/M-4/Q-06 board controls, the 4 MiB allocator-provenance arm, the `fillcost` repeats
-   and sw52's lost `instret` arm, and the R-30/R-31 directed tests LAST. Seven separate items each
-   waiting on "the first post-flash boot"; one load, not seven.
-
+3. ~~**The flash of `1bfff7776`**~~ **DONE 2026-09-12.** Flashed and verified by content
+   (`nv_bitstream_sha256 = 406e12bf…3b30`), and the batch it was owed was run: boots sw59, sw60 and
+   sw61, control `k800 = 4` in every one. R-31 verified fixed on silicon, the allocator matrix
+   completed, and R-30 re-characterised. See section 0 above.
 4. **M-7's mechanism is not established.** `pop_region` clearing its bookkeeping without releasing
    the CPMP entry is a hypothesis from reading code, recorded as such. The offset proof and the whole
    release path sit behind it.

@@ -1305,28 +1305,64 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > before it costs a boot:** `n` is computed from the same `end - base`, so a region rounded UP scales
 > `n` with it and the shortfall still cannot exceed 15.
 >
-> **Accounts, after two rounds of elimination.** (a) 108 stores did not advance the cursor — the
-> serious one, and an ISA question; ~~(b) `end` MOVED during the fill~~ **REFUTED from the RTL by the
-> RTL lane the same day: STC's UNINIT path advances the cursor by exactly 16 and passes the metadata
-> through unchanged, and the metadata is what carries `end`. No path in STC writes `end`, the
-> capability sits in a register nothing else in the loop touches, and there is no concurrent agent;**
-> (c) an instrument fault in the reclaim path itself. A useful by-product of that read: STC's bound
-> check puts the last legal store at `end - 16`, whose advance lands the cursor exactly ON `end`, so a
-> fill of `(end - base) >> 4` stores is exactly right rather than lucky, and one more would fault
-> rather than silently stop.
+> # ⚠ CORRECTION 2026-09-12 (same day, later): ACCOUNT (b) IS REINSTATED. Both refutations of it — the RTL lane's and this lane's endorsement of it — were made at the WRONG LAYER.
 >
-> **With (b) gone, the instrument names the DENOMINATOR, not the mechanism.** The two remaining
-> readings are 88,724 stores attempted with 108 not advancing, or 88,832 attempted with 108 not
-> advancing — the same account with a different count, and the open question becomes *which* 108 and
-> why. **The pair that discriminates does not lean on the modulo arithmetic at all: run the same
-> reclaim at two different large region sizes.** A constant 1,728 is a fixed tail effect; a shortfall
-> that scales with the region is a proportional store-failure rate. Different bugs, one pair of boots.
-> (RTL lane, `4fa59c3643b5`.) **A refuted fourth is recorded because the fit was exact:** 1,728 is precisely
-> the distance from 1,419,584 to the next 2 KiB boundary, suggesting bounds compression rounding the
-> representable end. The RTL refutes it — capabilities here are fat, with full 64-bit start and end
-> fields, so there is nothing to round. One datapoint could not have separated 2 KiB from 4 KiB
-> either, and the size in the fit was the HOST's request rather than the capability's own report,
-> which is the very quantity in question.
+> **What was written, and why it is wrong.** (b) "`end` moved during the fill" was struck on the
+> grounds that *"STC's UNINIT path advances the cursor by exactly 16 and passes the metadata carrying
+> `end` through unchanged"*, and a bounds-compression fit was separately struck because *"capabilities
+> here are fat, with full 64-bit start and end fields, so there is nothing to round"*. **The second
+> claim is contradicted by the RTL it cites.** `ariane_pkg.sv:786` is
+> `function automatic bounds_t compress_bounds(input fat_bounds_t bounds, …)` — it takes the fat
+> bounds and *returns a compressed encoding*. Capabilities are fat **inside the pipeline** and
+> compressed **on writeback**, which is exactly the layer the first claim does not reach. The two
+> arguments and the hypothesis were never in contact.
+>
+> **The compressed encoding rounds, and it predicts 1,728 exactly.** Read in full at
+> `ariane_pkg.sv:786-845`, and note the naming trap: `len = bounds.base - bounds.start` (`:807`), so
+> in this function **`start` is the LOW bound and `base` is the HIGH one** — the opposite of the
+> monitor's vocabulary. There are two schemes:
+>
+> * `if (bounds.start == cursor)` (`:787`) — the cursorless form, taken while the cursor is still at
+>   the low bound. No round-up.
+> * otherwise (`:806`+) — `E = leading_zeros - 12` (`:817`), and then
+>   `if(((bounds.base >> (E+3))<<(E+3)) != bounds.base) T[11:3] += 1` (`:827-828`): **the TOP is
+>   rounded UP to a `2^(E+3)` granule.** (The `E==0 && len[12]==0` sub-case at `:818-821` is exact, so
+>   the effect cannot appear on small regions at all.)
+>
+> For a 1,419,584-byte region the highest set bit of `len` is 20, so `E = 8` and the granule is
+> **2,048**; the top rounds to 1,421,312, i.e. **1,728 bytes higher — `0x6C0`, sw60's `RCSH` to the
+> byte.** The round-up is applied to the ABSOLUTE top address, and sw60's `BASE:AC100000` is
+> 2048-aligned, so the length arithmetic is the right arithmetic here.
+>
+> **The timeline fits `C_RECLAIM` exactly.** `n = (end - base) >> 4` is computed BEFORE the fill,
+> while the cursor is still at the low bound and the cursorless form is in force, giving 88,724. The
+> first `stc` moves the cursor off base; the writeback re-encodes in the rounding form and `end`
+> decodes 1,728 higher. The post-loop `lcc(%1, %2, 4)` then reads `end - cursor = 1,728`. **On this
+> account every store succeeded and nothing failed to advance — `end` moved.**
+>
+> **What is NOT established, stated plainly.** This is an exact numerical match, not a proof. The LSU
+> writeback path that would re-compress `stc`'s cursor-advanced `rs1` has not been located in the
+> RTL; `ex_stage.sv:1176-1190` shows `compress_cap` on the FLU and dyn writeback paths, not the store
+> path. And at N = 1,419,584, `round_up(N, 2048)` and `round_up(N, 4096)` are the same number, so
+> sw60 alone cannot separate the granule from a page-alignment story.
+>
+> **Accounts as they now stand.** (a) 108 stores did not advance the cursor — an ISA question;
+> **(b) `end` moved during the fill — REINSTATED, and now the leading account**; (c) an instrument
+> fault in the reclaim path. Kept from the earlier read because it is independently useful: STC's
+> bound check puts the last legal store at `end - 16`, whose advance lands the cursor exactly ON
+> `end`, so a fill of `(end - base) >> 4` stores is exactly right rather than lucky.
+>
+> **Boot sw62 settles it, and its predictions are pre-registered here.** A granule-ALIGNED arena needs
+> no round-up, so compression predicts NO shortfall where any store-failure model still predicts one:
+>
+> | arena | granule | compression predicts | store-failure predicts |
+> |---:|---:|---:|---:|
+> | 1,419,264 | 2,048 | **0 — no halt** | ~1,728 — halt |
+> | 709,632 | 1,024 | **0 — no halt** | ~864 — halt |
+> | 354,880 | 512 | **448** | **432** |
+>
+> `RCEN` is the load-bearing reading, not `RCSH`: it reports `end - base` directly, which is the
+> disputed quantity itself.
 >
 > **The instrument that separates the surviving accounts is now in the monitor and unbooted** — `RCEN`
 > (`end - base`, the capability's true size) and `RCCU` (`cursor - base`, where the fill stopped)
