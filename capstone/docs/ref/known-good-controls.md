@@ -1,6 +1,13 @@
 # Known-good controls
 
-> ## refreshed 2026-09-05 on s12fix (caplifive_s12fix_5097eb166): k800 = 4 in every boot sw01-sw07, k1200 = 4, r14lp = 4 (boot sw06); worry again when the bitstream or the compiler changes -- was STALE since 2026-08-18 — 2026-08-18. Do not rely on a row without re-verifying it.
+> ## refreshed 2026-09-12 on caplifive_r30r31_1bfff7776 (the R-30/R-31 bitstream, flashed and
+> content-verified `nv_bitstream_sha256 = 406e12bf…3b30`): **k800 = 4 in all three boots on it**
+> — sw59 `cycles=4521`, sw60 `cycles=4517`, sw61 `cycles=4517`, `instret=1089` in every one.
+> Only `k800` was re-verified on this bitstream; `k1200`, `r14lp` and everything below still
+> carry OLDER bitstreams in their `verified on` column and must be re-run before being relied
+> on. The previous refresh, kept because the rule it states is the point:
+>
+> > ## refreshed 2026-09-05 on s12fix (caplifive_s12fix_5097eb166): k800 = 4 in every boot sw01-sw07, k1200 = 4, r14lp = 4 (boot sw06); worry again when the bitstream or the compiler changes -- was STALE since 2026-08-18 — 2026-08-18. Do not rely on a row without re-verifying it.
 >
 > Every row below reads `last verified 2026-08-06`, against bitstreams that have since been
 > replaced at least three times (`caplifive_s06.bit`, `caplifive_s06fixs08fix.bit`,
@@ -25,7 +32,7 @@ claim that had to be retracted, plus a reflash cycle and several boots. Hence th
 
 | rung | oracle | verified on | last verified | notes |
 |---|---|---|---|---|
-| `k800` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit` | 2026-08-06 | Returned 4 in every boot on both bitstreams. The default control. |
+| `k800` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit`, `caplifive_s12fix_5097eb166`, **`caplifive_r30r31_1bfff7776`** | **2026-09-12** | Returned 4 in every boot on all four bitstreams. The default control. Cycles are stable to 4 parts in 4,500 across the last flash (4521/4517/4517), so it doubles as a coarse check that the flash did not move timing. |
 | `k1200` | 4 | `caplifive_fixed_forward.bit`, `caplifive_65536_nodes.bit` | 2026-08-06 | R-14 acceptance test: fails on unfixed silicon, returns 4 with the operand-forwarding fix. Doubles as the "does this bitstream carry the fix" probe. |
 | `r14lp` | 4 | `caplifive_fixed_forward.bit` | 2026-08-04 | From the R-14 frame-pad package. |
 | `r14sl` | 4 | `caplifive_fixed_forward.bit` | 2026-08-04 | Same package. |

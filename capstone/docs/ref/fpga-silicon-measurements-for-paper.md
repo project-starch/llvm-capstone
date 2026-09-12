@@ -1232,7 +1232,11 @@ base, exactly as the spec requires. Both halves of R-31's contract now hold on h
 
 **R-30 IS NOT FIXED, and the shortfall is not the documented one.** The fill ran and stopped
 **1,728 bytes** short of `end` — `0x6C0`, which is 108 granules of 16 bytes — out of an arena of
-1,419,584. R-30's registry entry describes a **one-byte** shortfall: filling an UNINIT region leaves
+1,419,584. *The unit is read off the macro, not off the tag's name,* because the two ends disagree:
+`C_RECLAIM_FILL` (`sbi_capstone.c:259`) sets `n = (end - base) >> 4`, a GRANULE count, and
+`C_RECLAIM` then reuses that same register for its result — `lcc` field 2 (cursor), `lcc` field 4
+(end), `sub` — so the value that reaches `RCSH` is `end - cursor` in BYTES. In granules 1,728 would
+read as 27,648 bytes and every ratio below would be wrong by 16×. R-30's registry entry describes a **one-byte** shortfall: filling an UNINIT region leaves
 the cursor AT `end` where INIT requires PAST it. 1,728 bytes is a different quantity and is **not
 explained here**. Stated as a measurement, not a diagnosis.
 
@@ -1275,6 +1279,14 @@ adjacent boots: the monitor's reclaim of a 1,419,584-byte region falls 1,728 byt
 `RCSH:000006C0`), while the domain's own 5,334 INITs succeed. **INIT is plainly reachable.** Whatever
 sw60's shortfall is, it is not "INIT can never be satisfied", and the two readings have to be
 reconciled before R-30 is described either way. Stated as the conflict it is, not resolved here.
+
+**What that counter cannot say.** `init` increments when the domain's INIT returns without faulting,
+so 5,334 is evidence about REACHABILITY and nothing else — it does not attest to the cursor or the
+bounds INIT produced. A defect of the shape "INIT succeeds but yields wrong bounds" would print
+exactly this number, and bit-identity with QEMU does not separate them either: both sides count the
+same non-faulting returns. So **INIT is reachable** is the claim, and it is the only one the
+instrument carries; *INIT is correct* is not measured here and must not be written anywhere from
+this row.
 
 #### The discipline costs 9.6 % on silicon against 1.8 % on QEMU — and that gap is the point
 

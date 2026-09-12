@@ -1269,7 +1269,7 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > not an ancestor of `1bfff7776`, and `66c4e7517..1bfff7776` touches only the two anvil units and
 > test files — no exception encoders.
 
-### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
+### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `HEADLINE SUPERSEDED — the one-byte precondition is FIXED and verified on silicon (boot sw61, 5,334 INITs on caplifive_r30r31_1bfff7776). A SEPARATE large-region fill shortfall of 1,728 bytes is OPEN (boot sw60) and is not what this headline describes; see the 2026-09-12 box for the three surviving accounts and the unbooted instrument that separates them`
 
 > # ⚠ THE HEADLINE "INIT IS UNREACHABLE" IS CONTRADICTED BY SILICON, 2026-09-12. Two readings on ONE bitstream, in adjacent boots, and they do not agree.
 >
@@ -1288,10 +1288,41 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > prediction — that R-30 would force `init = 0` and produce the masking signature — was written down
 > before sw61 and was **wrong**.
 >
-> Recorded as an unreconciled conflict rather than a re-diagnosis. The two candidate readings are
-> that the shortfall is specific to the monitor's fill of a large region (a loop-bound or alignment
-> question, not an ISA one), or that the sim test's Custom3-fabricated UNINIT differs from the real
-> path in a way that matters. Neither is established. Evidence: §4g.3, §4g.4, §4g.5.
+> **NARROWED 2026-09-12 (RTL lane, `d1d85697d11b`, plus this lane's reading of the fill macro). The
+> two boots are NOT in conflict about the FIX, and calling them one overstated it.** R-30's one-byte
+> claim was about INIT's PRECONDITION: a filled UNINIT leaves the cursor AT `end`, and INIT demanded
+> strictly greater, so it was unreachable by one position. The fix made equality legal — and sw61 is
+> that fix working, 5,334 times. sw60 is a fill that never reached `end` at all, which is **one step
+> earlier**; with the cursor genuinely short, INIT refusing is CORRECT behaviour, not the defect.
+> **So what does not survive is this entry's WORDING, not the change.** sw60 is a second effect that
+> appears only on a large region, and it needs its own account.
+>
+> **AND THE MONITOR'S OWN ARITHMETIC CANNOT PRODUCE 1,728.** `C_RECLAIM_FILL` (`sbi_capstone.c:259`)
+> sets `n = (end - base) >> 4` and each `stc` advances the cursor one granule, so the largest
+> shortfall the loop admits is `(end - base) mod 16`, i.e. **at most 15 bytes** — and `RCPR` not
+> firing means the cursor provably started AT base, so that is measured, not assumed. 1,728 is 108
+> granules and is unreachable from this source. **This also kills the allocator-rounding account
+> before it costs a boot:** `n` is computed from the same `end - base`, so a region rounded UP scales
+> `n` with it and the shortfall still cannot exceed 15.
+>
+> **Three accounts survive, and none is established.** (a) 108 stores did not advance the cursor —
+> the serious one, and an ISA question; (b) `end` MOVED during the fill, so the cursor reached the
+> old end while the shortfall is measured against a new one — `n` is computed before the loop and the
+> shortfall after it, so this is not excluded by anything above; (c) an instrument fault in the
+> reclaim path itself. **A refuted fourth is recorded because the fit was exact:** 1,728 is precisely
+> the distance from 1,419,584 to the next 2 KiB boundary, suggesting bounds compression rounding the
+> representable end. The RTL refutes it — capabilities here are fat, with full 64-bit start and end
+> fields, so there is nothing to round. One datapoint could not have separated 2 KiB from 4 KiB
+> either, and the size in the fit was the HOST's request rather than the capability's own report,
+> which is the very quantity in question.
+>
+> **The instrument that separates (a) from (b) is now in the monitor and unbooted** — `RCEN`
+> (`end - base`, the capability's true size) and `RCCU` (`cursor - base`, where the fill stopped)
+> are reported alongside `RCSH`, inside the branch that already halts, so nothing measurable is
+> perturbed. `RCEN - RCCU` must equal `RCSH`, which makes the reading self-checking. Pre-registered:
+> `RCEN == 1,419,584` with `RCCU` 1,728 short ⇒ account (a); `RCEN == 1,421,312` ⇒ account (b);
+> `RCEN - RCCU != RCSH` ⇒ account (c). Evidence: §4g.3, §4g.4, §4g.5, and
+> `history/12-09-2026_R30-sw60-sw61-reconciliation-attempt.md`.
 
 > # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
 >

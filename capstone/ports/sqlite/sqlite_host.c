@@ -168,6 +168,11 @@ static void revoke_reshare_probe(dom_id_t domain, region_id_t pool_region,
    * that aborts, and this is the last arm of a boot, so a wedge here would also be the last thing
    * the boot could tell us.
    *
+   * THAT PARAGRAPH IS QEMU-SCOPED AND STAYS THAT WAY. `helper_csmrev` and `helper_cstighten` are
+   * QEMU helpers; the board's MREV and TIGHTEN paths are RTL and were never run in this shape. The
+   * arm does not depend on which is true -- the fresh-region readout sidesteps both -- so nothing
+   * here is evidence about silicon, and it must not be cited as any.
+   *
    * A fresh region's handle is LINEAR, so the share completes normally. It is small on purpose: it
    * is a readout vehicle, not a measurement. If the create fails, say so and stop rather than
    * reporting a counter nobody read. */

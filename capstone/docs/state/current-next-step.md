@@ -18,11 +18,42 @@ never reach it; sw59's `RCLM = 0` was structural, not evidence. The probe
 releases the pool FIRST — while `tables` is still above it, so "revoked, the slot kept" is a property
 of the region stack — then shares the revoked region, then shares a fresh one to read the counter.
 
-**Next, and it is a question rather than a task: reconcile sw60 against sw61.** 1,728 bytes is
-108 granules; the two candidate readings are a loop-bound or alignment issue specific to the
-monitor's fill of a large region, or a gap between the Custom3-fabricated UNINIT in
-`r30-fill-init.S` and the real path. Neither is established, and R-30 should not be described either
-way until one is.
+**Next, and it is a question rather than a task: reconcile sw60 against sw61.** *Narrowed on
+2026-09-12 — the framing above was too weak in one direction and too strong in the other.* The two
+boots are **not in conflict about the FIX**: R-30's one-byte claim was about INIT's precondition, the
+fix made cursor-at-`end` legal, and sw61 is that fix working 5,334 times. sw60 is a fill that never
+reached `end`, one step earlier, where INIT refusing is correct. **What did not survive is R-30's
+wording, not the change.** Going the other way: **the monitor's own arithmetic cannot produce 1,728.**
+`C_RECLAIM_FILL` sets `n = (end - base) >> 4` and each `stc` advances one granule, so the loop admits
+at most a 15-byte shortfall — and `RCPR` not firing proves the cursor started at base. That also kills
+the allocator-rounding account for free, since `n` is computed from the same `end - base`. Three
+accounts survive: 108 stores did not advance the cursor (an ISA question); `end` moved during the
+fill (`n` is computed before the loop, the shortfall after it); or the reclaim path is itself
+mis-instrumented. See the R-30 box in `ISSUES.md` and the RTL lane's
+`history/12-09-2026_R30-sw60-sw61-reconciliation-attempt.md`.
+
+> ### ⚠ THE RESIDENT FIRMWARE IS TWO MONITOR COMMITS BEHIND, AND THE BOARD SCRIPTS WILL SAY SO
+>
+> Every boot on this bitstream (sw59, sw60, sw61) ran monitor **`2c49c41`**. Two commits have landed
+> since and **neither has ever booted**: `75d96d2` (define `CAP_TYPE_UNINIT`; behaviour-neutral by
+> inspection) and the `RCEN`/`RCCU` reclaim instrument added 2026-09-12. Both compile, and the two
+> new tags are linked into `fw_payload.elf` at **5 sites each — the same five as `RCSH` and `RCPR`,
+> i.e. all five `C_DO_RECLAIM` call sites** (verified by disassembly, with `RCSH`/`RCPR`/`RCLM` as
+> positive controls, since a literal-bytes search finds none of them and reads as a clean absence).
+> **Compiles is not boots.** Treat the next board run as a monitor change: control first, and expect
+> it to carry the firmware delta as well as whatever it was launched for.
+>
+> `board-b59.sh`/`b60.sh`/`b61.sh` all gate on `rev-parse HEAD = 2c49c41` and will now **FAIL that
+> gate** — correctly. Update the expected hash deliberately when the next driver is written; do not
+> delete the gate.
+>
+> **The submodule POINTER chain is deliberately not bumped.** The monitor source is committed and
+> pushed on `capstone-bootstrap` in `capstone-sbi`'s own remote, but `caplifive-opensbi`,
+> `caplifive-buildroot`, `caplifive-system-dev` and this parent still record the pre-`75d96d2`
+> pointer. Nothing in the build path depends on it — every bake reads the working tree — so this
+> costs nothing today, and bumping it cascades commits through three shared repos. It does mean a
+> FRESH CLONE gets a monitor without these two commits: bump the chain before anyone builds from
+> one, and check it before blaming a missing tag on the firmware.
 
 ### Superseded below: the flash itself
 
