@@ -1130,23 +1130,46 @@ signature to watch for on silicon is the opposite: `init = 0` beside a non-zero 
 Control first, `--tail --arena` last. **Control PASSED** — `k800 retval=4, cycles=4521, instret=1089`
 — so the boot carries a verdict. Driver rc=0, all four arms ran, board restored.
 
-| arm | | board cycles | board instret |
-|---|---|---:|---:|
-| 1 | control `k800` | 4,521 | 1,089 |
-| 2 | domain, `main --size 1 --verify` | **2,639,069,185** | — |
-| 3 | native baseline, same workload | **2,176,757,779** | 578,533,909 |
-| 4 | `--tail --arena 1419584 --tables 1750285` | — | — |
+| arm | | image (sha256, 16) | board cycles | board instret |
+|---|---|---|---:|---:|
+| 1 | control `k800` | — | 4,521 | 1,089 |
+| 2 | domain, `main --size 1 --verify` | **`2f4e6b73b85b569e`** = cell ④ | **2,639,069,185** | — |
+| 3 | native baseline, same workload | **`f4cf7caed144d952`** = cell ① | **2,176,757,779** | 578,533,909 |
+| 4 | `--tail --arena 1419584 --tables 1750285` | `2f4e6b73b85b569e` | — | — |
 
-**THE BRIDGE PAIR HOLDS.** Ratio **1.2124**, against §7k's board pair ratio of **1.220** — 0.76 pp
-apart, on a *different domain build* (this one carries the lookaside fix) and across a bitstream
-change, which is a term neither PRECISION regime was ever measured over. The capability/native
-relationship did not move materially across the flash. CPI is 3.81 on the domain arm and 3.76 on the
-baseline, both inside the 1.13–6.44 band, so both arms did the work.
+*(Host `b576fd27f4efe6c3` on every arm. The hashes were added 2026-09-12 after an audit found this
+table cited its arms by LABEL only — the exact breach of the cite-by-hash rule that R-29 exists to
+prevent, and here it was load-bearing: without them the record could not distinguish "the bridge ran
+and failed its band" from "this was never the bridge".)*
 
-**One discrepancy recorded rather than smoothed:** the baseline's board instret is 578,533,909 where
-this session's QEMU `-icount` gave 545,623,496 for the *same binary* — 6.0 % apart, on a quantity
-that should be deterministic. Not explained here. It does not touch the ratio above, which is
-cycles/cycles on the board.
+> **⚠ RETRACTED 2026-09-12: "THE BRIDGE PAIR HOLDS" — THIS WAS NOT THE BRIDGE ARM.** The agreed
+> protocol was §7k's images unchanged, one post-flash boot, ratio against 1.220 within the 0.171 pp
+> cross-boot band. **sw59 ran different images on both arms** — `2f4e6b73b85b569e` /
+> `f4cf7caed144d952` here against sw56's `49994ed31852` / `072595ff0866` — so 1.2124 against 1.220
+> is not a bridge measurement at all, and the 0.76 pp gap (4.5× the band) is a build difference
+> rather than a band failure. The headline asserted a re-tie the arm could not deliver, while the
+> body correctly caveated the build change: the caveat was right and the headline overrode it.
+> (Found by the bench lane's audit; the hashes that settle it are in the table above.)
+
+**What sw59 actually shows.** Ratio **1.2124** on a *different domain build* (this one carries the
+lookaside fix), across a bitstream change — a term neither precision regime was ever measured over.
+That is within a percent of the old build's relationship on the old bitstream, which is **a good
+sign and not a re-tie**: it says the capability/native relationship did not move materially, and it
+does not license carrying §7f–§7k forward. CPI is 3.81 on the domain arm and 3.76 on the baseline,
+both inside the 1.13–6.44 band, so both arms did the work.
+
+**THE BRIDGE IS STILL OWED, and it is the cheapest arm on the list:** §7k's own images unchanged —
+`speedtest1_seven.dom` (`49994ed31852`) against `speedtest1_baseline` (`072595ff0866`) — one boot,
+ratio against 1.220 in the 0.171 pp band, both absolutes recorded. Note the baseline currently
+staged in the overlay is `24cb59fa7dbfb8fb`, the lookaside build, **not** §7k's.
+
+**One discrepancy, recorded rather than smoothed — and RESOLVED 2026-09-12:** the baseline's board
+instret is 578,533,909 where this session's QEMU `-icount` gave 545,623,496 for the *same binary*,
+6.0 % apart on a quantity that should be deterministic. **It is the §7k tick asymmetry and nothing
+else.** §7i derives that the board baseline's instret carries the timer tick and so lowers every
+ratio by ~6 %, predicting a ticked count **6.06 %** higher for `main`; sw59 reads
+578,533,909 / 545,623,496 = **6.03 %** higher. They agree to 0.02 pp. Cross-referenced here so the
+next reader does not reopen it. It does not touch the ratio above, which is cycles/cycles.
 
 #### THE R-30/R-31 ARM DID NOT TEST R-30/R-31, AND THE REASON IS STRUCTURAL
 
@@ -1255,9 +1278,19 @@ directed test and the real path that this arm exists to expose.
 | ② native, lookaside | `24cb59fa7dbfb8fb` | 2,107,533,496 | 567,065,689 |
 
 **⑤/② = 1.2107**, against **④/① = 1.2124** from sw59. The capability-ABI cost on silicon is
-**~1.21 and does not depend on the allocator** — 0.17 pp between the two, which mirrors the QEMU
-result (1.2701 / 1.2676, 0.25 pp) at a different absolute level. That the two independent platforms
-agree on *allocator-independence* while disagreeing on the level is the more useful of the two facts.
+**~1.21, and the two allocators are INDISTINGUISHABLE AT THIS PRECISION** — which is a weaker and
+more defensible claim than the one first written here.
+
+> **⚠ CORRECTED 2026-09-12: this said "does not depend on the allocator".** The separation is
+> **0.17 pp against a 0.171 pp cross-boot band — 0.99× the band**, so these two silicon numbers
+> cannot resolve a difference at all, in either direction. "Indistinguishable at this precision" is
+> what they support; "independent" is a claim about the world that they do not. (Bench lane's audit.)
+>
+> **And the stronger evidence points the other way, slightly.** The QEMU pair — 1.2701 vs 1.2676,
+> 0.25 pp, deterministic to 1.3e-7 — *is* resolvable, and it shows a small but real dependence, with
+> lookaside costing marginally less. So across both platforms the supportable summary is
+> **"barely depends"**, not "does not depend". The silicon pair is consistent with that and simply
+> too coarse to see it.
 
 ### §4g.5 — BOOT sw61: the Sublet cell on silicon, and INIT is NOT unreachable (2026-09-12)
 
@@ -1288,7 +1321,16 @@ same non-faulting returns. So **INIT is reachable** is the claim, and it is the 
 instrument carries; *INIT is correct* is not measured here and must not be written anywhere from
 this row.
 
-#### The discipline costs 9.6 % on silicon against 1.8 % on QEMU — and that gap is the point
+#### The Sublet CONFIGURATION costs 9.6 % on silicon against 1.8 % on QEMU — and that gap is the point
+
+> **⚠ THIS HEADING SAID "the discipline" until 2026-09-12, and that was the already-retracted
+> claim reappearing in the summary.** The QEMU 1.8 % was retracted as a *discipline* cost in
+> `ea64117a18f7` because the arms differ in heap geometry (HEAP 910,008 against 2,097,152). **The
+> silicon pair sw61/sw60 carries the identical mismatch**, and the body below has always said so —
+> but the heading, and both state-doc rows, asserted the retracted form. The body was right and the
+> summary overrode it, which is the same failure shape as the bridge headline above. **The 5.5×
+> figure inherits the caveat:** it is a ratio of two comparisons each of which carries a geometry
+> term, so it is suggestive of the O(bytes) reclaim rather than a measurement of it.
 
 | | domain cycles | vs ⑤ |
 |---|---:|---:|
@@ -2305,6 +2347,16 @@ named asymmetries, and as where the periodic-tick analysis is derived.
 
 **Pair ratios here carry three decimals; a comparison with another boot carries two — see the
 PRECISION block at the end of this series.**
+
+**IMAGES, added 2026-09-12 — this section cited its arms by label only, like §4g.2 did.** Read out
+of sw56's own log: domain `speedtest1_seven.dom` = **`49994ed31852`**, native
+`speedtest1_baseline` = **`072595ff0866`**, host **`db0c9f388980`**. **These are the images a bridge
+arm must re-run unchanged**, and without them in the record no future bridge could be checked
+against it — which is exactly how sw59 came to be reported as a bridge it was not (see §4g.2).
+**Trip hazard, and it has already caught one boot:** the `speedtest1_baseline` currently staged in
+the overlay is `24cb59fa7dbfb8fb`, which is cell ② — the **lookaside** build, not this one. Read
+both hashes back from the overlay *and* the target dir immediately before a bridge boot and require
+`49994ed31852` / `072595ff0866`, or the boot is void before it starts.
 
 Same bitstream as §7f, `caplifive_r25r26r27_66c4e7517`, deliberately: seven testsets on the *same*
 silicon as the three already published is worth more than newer silicon on a result that could not be

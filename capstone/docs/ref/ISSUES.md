@@ -2240,11 +2240,22 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > * the worst within ~256 KiB of 120 MiB escapes by **126,976 bytes — 31 pages**.
 >
 > The arena is sized by measurement precisely to be as tight as possible, which is the worst case
-> for this. **So the representability fix belongs BEFORE the size-100 arena is measured and used, not
-> after.** It is also cheapest there: rounding the request up costs at most one granule less a byte,
-> under 0.1 % at these sizes, and makes a measured value safe by construction rather than by
-> inspection. *Graded below: this paragraph is DERIVED — arithmetic over the granule law — not
-> measured.*
+> for this. **So if the arena is re-measured to a non-round value, the representability fix belongs
+> before it is used.** It is also cheapest there: rounding the request up costs at most one granule
+> less a byte, under 0.1 % at these sizes, and makes a measured value safe by construction rather
+> than by inspection.
+>
+> > **⚠ SCOPED DOWN 2026-09-12 (bench-lane audit). An earlier version of this paragraph said the fix
+> > MUST land before the size-100 run, and that is not supported.** The artifacts actually built for
+> > that run are **128 MiB = 2²⁷** plus two 64 KiB regions — all powers of two, and a power of two is
+> > representable at ANY granule, so every delivered region widens by **zero**. R-33 therefore does
+> > not gate the set in hand. The gating claim came from reading `current-next-step.md:245`'s
+> > "measured 120 MiB" as the artifact size when the delivered build is 128 MiB; the 120 MiB figure
+> > is the measured *need*, recorded on a branch this document could not see. The hazard is real and
+> > is confined to a **re-measured, non-round** arena. Whether to land the fix first anyway is the
+> > lead's call, not a consequence of this entry.
+>
+> *Graded below: this paragraph is DERIVED — arithmetic over the granule law — not measured.*
 >
 > **What is measured, read, derived and NOT shown — kept separate deliberately.** MEASURED on silicon:
 > `RCEN` = `round_up(N, granule)`, i.e. the decompressed end really is the widened value. READ FROM

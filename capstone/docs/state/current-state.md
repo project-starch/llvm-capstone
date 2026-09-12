@@ -26,10 +26,14 @@ Minimal snapshot. Read first in every session.
   stores did not advance the cursor.** The discriminator is a pair of boots at two different large
   region sizes — constant 1,728 = a fixed tail effect, scaling = a proportional store-failure rate.
   Not yet run.
-* **The silicon allocator matrix is complete.** ABI cost **~1.21 and allocator-independent**
-  (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **1.0964 on silicon against 1.0176 on
-  QEMU** — 5.5×, which is what an O(bytes) reclaim predicts and the clearest case in the corpus of
-  an instruction count understating a cost. Two caveats travel with these rows: the ⑥/⑤ comparison
+* **The silicon allocator matrix is complete.** ABI cost **~1.21**, with the two allocators
+  **indistinguishable at this precision** (④/① 1.2124, ⑤/② 1.2107 — 0.17 pp against a 0.171 pp
+  cross-boot band, so not resolvable either way; the deterministic QEMU pair *is* resolvable and
+  shows lookaside costing marginally less, so "barely depends", not "independent"). The Sublet
+  **CONFIGURATION** costs **1.0964 on silicon against 1.0176 on QEMU** — 5.5×, consistent with an
+  O(bytes) reclaim. **Not "the discipline":** both pairs carry the heap-geometry mismatch for which
+  the QEMU figure was already retracted as a discipline cost, so the 5.5× is suggestive of the
+  mechanism rather than a measurement of it. (Both corrected 2026-09-12 after a bench-lane audit.) Two caveats travel with these rows: the ⑥/⑤ comparison
   carries a heap-geometry term (910,008 vs 2,097,152, not equalisable), and the lookaside-ON rows
   must not be blended with the lookaside-OFF §7 corpus.
 * **R-33 is a SOUNDNESS issue, ISA-LEVEL, and its cause is the ALLOCATOR.** Demonstrated 2026-09-12 to reach ordinary LINEAR capabilities through `CINCOFFSET` — plain pointer arithmetic — by a matched RTL-sim pair where the representable control does not move and the non-representable arm widens by exactly the predicted amount. The

@@ -9,7 +9,7 @@ Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` con
 | **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
 | **R-30** | **Closed. Its one-byte precondition is FIXED** (sw61, `init=5334`), and the separate 1,728-byte shortfall it carried is **not a fill failure at all** — boot sw62 shows every store advanced and `end` re-encoded high. Re-filed as **R-33**. |
 | **R-33** | **NEW, and now ISA-level rather than monitor-adjacent.** The region allocator hands out sizes that are **not representable** in the compressed bounds encoding, so moving a cursor widens a capability's authority past its own allocation by up to one granule less a byte. **Demonstrated on ordinary LINEAR capabilities via `CINCOFFSET`** — plain pointer arithmetic — by a matched RTL-sim pair on the flashed hash: the representable control does not move, the non-representable arm widens by exactly the predicted 16. `STC`'s bound check consumes the widened `end`. The over-permissive store itself is still **not demonstrated**. Contained by `PAGE_ALIGN` below 4 MiB, not above; and that containment expires on the measured size-100 arena. Cause is the allocator: round region sizes to the granule at creation. |
-| **the matrix** | complete on silicon. ABI cost **~1.21 and allocator-independent** (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap, which is what an O(bytes) reclaim predicts. |
+| **the matrix** | complete on silicon. ABI cost **~1.21**, the two allocators **indistinguishable at this precision** (④/① 1.2124, ⑤/② 1.2107 — 0.17 pp against a 0.171 pp band; the deterministic QEMU pair does resolve and shows lookaside marginally cheaper, so "barely depends", not "independent"). The Sublet **configuration** costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap consistent with an O(bytes) reclaim, but both pairs carry a heap-geometry mismatch, so not "the discipline" and not a measurement of the mechanism. Corrected 2026-09-12. |
 
 **The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is
 guarded at `sbi_capstone.c:1309`, inside `shared_region_annotated` — it fires when a SHARE finds a
@@ -259,12 +259,19 @@ the artifacts disagree while the variables agree.
 
 > ### ⚠ R-33 PUTS A FIX ON THE CRITICAL PATH OF THIS WORK
 >
-> The size-100 arena is **measured**, and a measured value has no reason to be granule-aligned. In
-> the 64-aligned band just below 120 MiB, **96.8 % of candidate sizes widen past their page
-> allocation** (worst within ~256 KiB: 126,976 bytes, 31 pages). Every region used so far escaped
-> this only because round-MiB sizes are granule-aligned for free. **Land R-33's representability fix
-> — round region sizes up to the granule at creation — BEFORE the size-100 arena is measured and
-> used.** Cost is at most one granule less a byte, under 0.1 % here.
+> **Scoped correctly 2026-09-12 after a bench-lane audit — the earlier wording overstated this.**
+> The hazard is real but it does **not** apply to the artifacts currently in hand: those are built at
+> **128 MiB = 2²⁷** plus two 64 KiB regions, all powers of two, all widening by **zero** under R-33's
+> granule law. A power of two is representable at any granule. So R-33 does **not** gate the
+> delivered set, and "the fix MUST land before this run" is not supported.
+>
+> **Where it does bite is a RE-MEASURED, non-round arena.** In the 64-aligned band just below
+> 120 MiB, **96.8 % of candidate sizes widen past their page allocation** (worst within ~256 KiB:
+> 126,976 bytes, 31 pages), and an arena sized by measurement is tight by design, which is the worst
+> case. Every region used so far escaped only because round-MiB sizes are granule-aligned for free —
+> luck of the units, not a check. **So: if the arena is re-measured to a non-round value, land R-33's
+> representability fix first.** Cost is at most one granule less a byte, under 0.1 % here. Whether to
+> land it before this run anyway is the lead's call.
 
 **Four board-side defaults would void a healthy size-100 run**, all verified at source and all tuned
 for 90-second arms: `SQLITE_STAGE_TIMEOUT` 90 (`run_sqlite_stages_fpga.py:47`, and it is PER DOMAIN),
