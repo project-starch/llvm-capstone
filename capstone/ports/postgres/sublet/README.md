@@ -475,10 +475,24 @@ and the measurement has to say which it used.
 
 ## What is open
 
-The patch to `aset.c` itself, which is the next piece, and one question the
-patch will answer rather than the design.
+**The cycles, and they need the board.** C11's second half is what the
+allocator costs over a spatial-only build, and a cycle count from the emulator
+would say nothing: it does not model the pipeline and the runs here are at
+`-O0` besides. What the emulator did settle is the shape of the bill, and the
+shape is what the board arm has to be sized for. Two nodes an object means the
+resident bitstream's 65 536 cover 2.8% of the tpcb rung, so the board run is a
+slice whose length the pool sets rather than a whole rung, and the paper says
+so rather than quietly running something shorter.
 
-- **Whether the chunk header can go back to eight bytes.** Nothing in a chunk
-  holds a capability once the free-list link is an index, so the sixteen bytes
-  the capability build forced may not be needed under the port. It would mean
-  the protected build uses less memory per chunk than the unprotected one.
+That is the whole of what is left. The three questions the design had are
+decided and measured, and one of them answered itself in the patch:
+
+**The chunk header does not grow.** The question was whether the sixteen bytes
+the capability build forced could go back to eight once no chunk holds a
+capability. The answer is that they are all spent and none is wasted: the
+eight bytes of padding became the two indices the chunk needs to name its
+block and its side-table entry, because a capability cannot reach out of the
+object it was given for and so a chunk cannot name its block by a distance. So
+the protected build's chunk is exactly the unprotected capability build's
+chunk, byte for byte, and the discipline's per-object cost is the sixteen-byte
+capability in the side table and not a wider chunk.
