@@ -2162,7 +2162,7 @@ VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the 
 U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
 want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
 
-### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store has NOT been demonstrated. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
+### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
 >
@@ -2257,12 +2257,50 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 >
 > *Graded below: this paragraph is DERIVED — arithmetic over the granule law — not measured.*
 >
-> **What is measured, read, derived and NOT shown — kept separate deliberately.** MEASURED on silicon:
-> `RCEN` = `round_up(N, granule)`, i.e. the decompressed end really is the widened value. READ FROM
-> SOURCE: `STC`'s bound check consumes `rs1.metadata.end`. DERIVED: therefore stores past the
-> allocation are authorised, with the table above. **NOT DEMONSTRATED: an actual out-of-allocation
-> write on silicon.** That directed test is the next thing this entry needs, and it should also cover
-> `CINCOFFSET` on a plain linear capability, which is untested here.
+> **THE OVER-PERMISSIVE STORE IS NOW DEMONSTRATED (2026-09-12), and it was the last derived step.**
+> `verif/tests/custom/capstone/r33-store-past-end.S`, run at the flashed `1bfff7776`, 512 cycles
+> against a 200,000 timeout — a real completion, not a SUCCESS-at-timeout. Each arm moves its cursor
+> to its OWN TRUE END and attempts a 16-byte `STC` there, which writes entirely outside the region.
+> The two arms share granule 32 and granule-aligned bases, and their regions are **disjoint**, so an
+> over-write lands in memory no capability owns:
+>
+> | arm | region | len mod 32 | decoded `End` after the move | store at its true end |
+> |---|---|---:|---|---|
+> | **A** (control) | `[0x80004000, 0x80008020)` | 0 — representable | `0x80008020` *unchanged* | **`OUT_OF_BOUNDS`** |
+> | **B** | `[0x80010000, 0x80014010)` | 16 — **not** representable | `0x80014020` *widened* | **RETIRED, no fault** |
+>
+> `trap_mask = 0x1` — exactly the value pre-registered in the test header before it ran; bit 0 set is
+> the control refusing, bit 1 clear is arm B being permitted. The trace carries **one** exception in
+> the whole run, `OUT_OF_BOUNDS` at cycle 365 on `rs1 = 18` (arm A), with the monitor's own STC report
+> naming the operands. Arm B's `STC` at `0x800000bc` appears in the retired-instruction stream with
+> no exception after it.
+>
+> **Stated precisely: what is shown is that the store is ACCEPTED, not that the bytes were observed
+> landing.** The RVFI tracer does not render 128-bit capability stores as `mem` lines — neither arm's
+> `STC` produces one, and the only three `mem` lines in the run are the 32-bit `sw`s to `.data`. A
+> retired `STC` that raises nothing has passed the authority check, which is the question R-33 asks;
+> the byte-level write was not separately observed.
+>
+> **The control is what makes this readable.** Had both arms trapped, the widening would confer no
+> authority and R-33's soundness framing would be refuted; had both been permitted, the test would be
+> measuring something other than representability. Artifacts (test, RVFI log, sim log, testlist entry)
+> under `~/capstone-artifacts/r33-store-past-end/`, test sha256 `19840b83b5d88318`, pending commit
+> beside its sibling `r33-cincoffset-widen.S` on `r30-r31-init-revoke`.
+>
+> **What is measured, read, derived and still NOT shown — kept separate deliberately, and the
+> boundary has moved twice.** MEASURED on silicon: `RCEN` = `round_up(N, granule)`, i.e. the
+> decompressed end really is the widened value. READ FROM SOURCE: `STC`'s bound check consumes
+> `rs1.metadata.end`. **DEMONSTRATED in RTL simulation (was DERIVED until 2026-09-12):** the widening
+> reaches ordinary LINEAR capabilities through `CINCOFFSET`, and a store past the region's true end is
+> **accepted** — both by matched pairs with representable controls. DERIVED, and still only derived:
+> the containment table, which is arithmetic over the granule law.
+>
+> **STILL NOT SHOWN, and worth naming precisely rather than letting the entry read as closed:** (i) an
+> over-permissive store **on silicon** — both demonstrations are RTL simulation, on the flashed
+> revision but not on the board; (ii) the **bytes** of such a store observed landing outside the
+> region, since the tracer does not render capability stores as memory lines; (iii) the **bottom**
+> truncation (`ariane_pkg.sv:825`), which no arm has exercised because every region tested had a
+> granule-aligned base.
 >
 > **This is the mechanism behind sw60's 1,728 bytes, and it is NOT R-30.** R-30 is INIT's
 > precondition, which is fixed and verified (sw61, 5,334 INITs). This is a separate defect in bounds

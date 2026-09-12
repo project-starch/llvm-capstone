@@ -44,7 +44,7 @@ Minimal snapshot. Read first in every session.
   `create_region(N)` passes `N` through unchanged. **Contained by the kernel's `PAGE_ALIGN` below
   4 MiB and not contained at or above it** — no region used so far escapes (sw60's sits exactly on
   the boundary), but a 130 MiB-class region has a 262,144-byte granule. The over-permissive store is
-  **derived, not yet demonstrated**; that directed test is what R-33 needs next.
+  **DEMONSTRATED in RTL simulation 2026-09-12** — a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store retires without fault (`r33-store-past-end.S`, trap_mask 0x1 as pre-registered). Not yet shown **on silicon**, and the bottom-truncation half is still unexercised.
 
 * **R-30's residual is SOLVED and re-filed as R-33 (boot sw62).** The 1,728 bytes were never a
   failed fill. A capability's bounds are re-encoded once its cursor leaves `base`, and `end` then
