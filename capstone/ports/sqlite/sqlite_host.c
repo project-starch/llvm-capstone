@@ -154,9 +154,34 @@ static void revoke_reshare_probe(dom_id_t domain, region_id_t pool_region,
   shared_region_annotated(domain, pool_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_BORROWED);
   mark("SQ: RR/share-A-returned\n");
+  /* SHARE B READS THE COUNTER, AND IT USES A FRESH REGION TO DO IT.
+   * B exists only to PRINT the count A's reclaim incremented: capstone_report(RCLM) at
+   * sbi_capstone.c:1294 runs BEFORE the guard at :1309, so every share reports the value as it was
+   * on entry and A can never show its own effect. RCLM is emitted on EVERY share, whichever region
+   * it names -- which is what lets B read the counter without touching the revoked handle at all.
+   *
+   * WHY NOT SHARE THE POOL AGAIN. Both annotations abort on a second share, measured on QEMU
+   * 2026-09-12, because A leaves the handle REV: REV_BORROWED dies in `helper_csmrev` (its __mrev
+   * demands LINEAR) and REV_SHARED gets past its own guarded branch only to die later in
+   * `helper_cstighten`, whose assertion admits LIN, NONLIN and UNINIT but not REV. The RCLM line
+   * lands before either abort, so the reading was never at risk -- but an arm that RETURNS beats one
+   * that aborts, and this is the last arm of a boot, so a wedge here would also be the last thing
+   * the boot could tell us.
+   *
+   * A fresh region's handle is LINEAR, so the share completes normally. It is small on purpose: it
+   * is a readout vehicle, not a measurement. If the create fails, say so and stop rather than
+   * reporting a counter nobody read. */
   mark("SQ: RR/share-B\n");
-  shared_region_annotated(domain, pool_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
-                          SQLITE_HC_ANNOTATION_REV_BORROWED);
+  {
+    region_id_t probe_region = create_region(4096);
+    mark_u("SQ: RR/probe-region=", (unsigned long)probe_region);
+    if ((long)probe_region < 0) {
+      mark("SQ: RR/no-readout-region\n");
+      return;
+    }
+    shared_region_annotated(domain, probe_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
+                            SQLITE_HC_ANNOTATION_REV_DEFAULT);
+  }
   mark("SQ: RR/share-B-returned\n");
   mark("SQ: RR/done\n");
 }
@@ -603,16 +628,34 @@ int main(int argc, char **argv) {
     (void)write(STDOUT_FILENO, payload + tail.printed, (size_t)(metadata->length - tail.printed));
     fflush(stdout);
   }
-  /* the allocators' regions go back, newest first: revoked in the monitor, popped, freed */
-  if ((long)tables_region >= 0)
-    mark_u("SQ: released tables rc=", (unsigned long)release_region(tables_region));
 #ifdef SQLITE_HOST_REVOKE_RESHARE
+  /* THE REVERSE ORDER, DELIBERATELY, AND IT IS WHAT MAKES THE PRECONDITION STRUCTURAL RATHER THAN
+   * LUCK. ioctl_release_region pops only a TOP-OF-STACK region (modcapstone/module/capstone.c:359)
+   * and otherwise returns 1 with the slot kept -- which is the revoked-and-live state the reclaim
+   * guard needs. Releasing the pool FIRST, while `tables` is still above it, makes that return a
+   * property of the region stack instead of an accident of id layout.
+   *
+   * Measured, not assumed: boot sw59 released tables first and the pool then returned 1 only
+   * because a split remainder happened to sit above it (r3=20, r4=22). The same arm under QEMU
+   * returns 0 -- the pool was top-of-stack, popped, and the probe correctly REFUSED rather than
+   * share into a dead slot. One arm, two targets, opposite answers, from an ordering that was
+   * never chosen for this purpose. Hence this order.
+   *
+   * `revoke_region()` would be the obvious alternative and is worse: libcapstone.c:563-569 returns
+   * void and discards the monitor's status, so a failed revoke would be indistinguishable from an
+   * unfixed R-31 -- both would read RCLM:00000000. release_region's rc is the only status the host
+   * can actually see. */
   if ((long)pool_region >= 0) {
     unsigned long pool_release_rc = (unsigned long)release_region(pool_region);
     mark_u("SQ: released pool rc=", pool_release_rc);
     revoke_reshare_probe(domain, pool_region, pool_release_rc);
   }
+  if ((long)tables_region >= 0)
+    mark_u("SQ: released tables rc=", (unsigned long)release_region(tables_region));
 #else
+  /* the allocators' regions go back, newest first: revoked in the monitor, popped, freed */
+  if ((long)tables_region >= 0)
+    mark_u("SQ: released tables rc=", (unsigned long)release_region(tables_region));
   if ((long)pool_region >= 0)
     mark_u("SQ: released pool rc=", (unsigned long)release_region(pool_region));
 #endif
