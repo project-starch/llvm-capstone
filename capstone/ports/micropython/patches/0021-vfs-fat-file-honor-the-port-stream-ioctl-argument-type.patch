@@ -1,0 +1,27 @@
+Give the FAT file object's stream ioctl the port-configurable argument type.
+
+Patch 0012 made MICROPY_STREAM_IOCTL_ARG_TYPE configurable because uintptr_t keeps only the
+address of a 128-bit Capstone capability, and converted every ioctl slot in py/ to the new
+mp_stream_ioctl_arg_t. Patch 0020 did the same for extmod/moddeflate.c. extmod/vfs_fat_file.c
+was outside both sweeps; it is only reached when MICROPY_VFS is on, which is why this surfaced
+now rather than then.
+
+Two changes, and the second is the one that matters. file_obj_ioctl, unlike deflateio_ioctl,
+actually USES arg: it casts it to a struct mp_stream_seek_t *, and it does so through
+(uintptr_t), which on this target strips the tag and hands MP_STREAM_SEEK an untagged word.
+That is not a diagnostic, it is a capability fault at the first dereference. With arg already
+carrying the capability the intermediate cast is not merely unnecessary, it is wrong.
+
+diff --git i/extmod/vfs_fat_file.c w/extmod/vfs_fat_file.c
+--- i/extmod/vfs_fat_file.c
++++ w/extmod/vfs_fat_file.c
+@@ -99,7 +99,7 @@
+-static mp_uint_t file_obj_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
++static mp_uint_t file_obj_ioctl(mp_obj_t o_in, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode) {
+     pyb_file_obj_t *self = MP_OBJ_TO_PTR(o_in);
+ 
+     if (request == MP_STREAM_SEEK) {
+-        struct mp_stream_seek_t *s = (struct mp_stream_seek_t *)(uintptr_t)arg;
++        struct mp_stream_seek_t *s = (struct mp_stream_seek_t *)arg;
+ 
+         switch (s->whence) {

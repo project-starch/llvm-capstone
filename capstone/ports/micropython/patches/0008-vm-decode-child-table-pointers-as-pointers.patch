@@ -1,0 +1,19 @@
+diff --git a/py/vm.c b/py/vm.c
+index ed0ddd693..887f11a8e 100644
+--- a/py/vm.c
++++ b/py/vm.c
+@@ -100,9 +100,13 @@
+ 
+ #endif
+ 
++/* child_table[] already holds pointers; the cast through uintptr_t truncated one and dropped
++   its metadata on a target whose pointers are wider than uintptr_t, so the function object
++   built from it faulted on first use. This is the path MAKE_FUNCTION and MAKE_CLOSURE take,
++   i.e. every `def`. */
+ #define DECODE_PTR \
+     DECODE_UINT; \
+-    void *ptr = (void *)(uintptr_t)code_state->fun_bc->child_table[unum]
++    void *ptr = (void *)code_state->fun_bc->child_table[unum]
+ 
+ #define DECODE_OBJ \
+     DECODE_UINT; \
