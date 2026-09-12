@@ -18,7 +18,8 @@
 #     --clean            also rebuild capstone-qemu + buildroot from their build
 #                        scripts (slow); default is an incremental clang build
 #     --skip-build       run suites against the current toolchain, no rebuild
-#     --extended         also run the setup-heavier suites (sqlite/hostcall/nullblk)
+#     --extended         also run the setup-heavier suites (postgres/sqlite/
+#                        hostcall/nullblk)
 #     --only a,b,c       run only the named suites (see --list); still serial
 #     --quick            the ~3 min pre-commit tier (smoke, coremark, borrow-cost,
 #                        shared-region). To pick cases INSIDE one suite, run that
@@ -49,6 +50,7 @@ BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
 # so the stale prefix looks right to a reader and only the missing leaf gives it away. Named
 # separately so the next move breaks one line, not two.
 SQLITE_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
+POSTGRES_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/postgres"
 CORE_SUITES=(
   # 3600 for the same reason as the two below, and this one is self-inflicted:
   # before stage 1 the suite returned on the first exhausted boot, so it "finished"
@@ -111,6 +113,13 @@ CORE_SUITES=(
 )
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
+  # postgres-mmgr is the second application gate, and it is here rather than in
+  # CORE because its first run fetches and configures a PostgreSQL tree. It
+  # needs no recording: it generates its own trace, checks the manager still
+  # compiles for capstone64, checks the host build asks the level below for the
+  # blocks a known-good build asked for, replays the same trace in a domain,
+  # and checks every object it freed still held what was written into it.
+  "postgres-mmgr|bash $POSTGRES_DIR/run-pg-gate.sh|3600"
   "sqlite-borrow-revoke|bash $RUNTIME_DIR/run-sqlite-borrow-revoke-probe.sh"
   "sqlite-hier-revoke|bash $RUNTIME_DIR/run-sqlite-hier-revoke-probe.sh"
   "sqlite-sealed-callback|bash $RUNTIME_DIR/run-sqlite-sealed-callback-revoke-probe.sh"
