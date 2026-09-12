@@ -260,6 +260,15 @@ pg_subpool_reset(pg_subpool *sp)
      * revoke. A third of the resets in the recording are this case, almost all
      * of them ExprContext, which is created and deleted without ever holding
      * an object. */
+    /* A sub-pool nothing was carved from holds nothing, so there is nothing to
+     * revoke. In this manager that is rarer than the recording suggests, and
+     * the reason is worth keeping: a context's keeper block is carved when the
+     * context is created, so a context that never allocated has still had one
+     * block carved from its sub-pool and its teardown costs one revocation.
+     * What the recording counted as teardowns with nothing to revoke never
+     * reach here at all: mcxt.c does not call the reset method on a context
+     * that is already reset. The saving is the manager's own and this counter
+     * is expected to stay at zero. */
     int any = sp->carved != 0;
 
     for (struct pg_subpool *e = sp->extra; e; e = e->extra)
@@ -272,8 +281,10 @@ pg_subpool_reset(pg_subpool *sp)
     if (sp->carved)
         pool_revoke(sp);
     for (struct pg_subpool *e = sp->extra; e; e = e->extra)
-        if (e->carved)
+        if (e->carved) {
             pool_revoke(e);
+            pg_subpool_counts.extra_revocations++;
+        }
 }
 
 static void
@@ -301,8 +312,10 @@ pg_subpool_destroy(pg_subpool *sp)
     while (e) {
         struct pg_subpool *next = e->extra;
 
-        if (e->carved)
+        if (e->carved) {
             pool_revoke(e);
+            pg_subpool_counts.extra_revocations++;
+        }
         pool_return(e);
         e = next;
     }

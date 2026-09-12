@@ -1,11 +1,10 @@
 # The Sublet port of PostgreSQL's memory contexts
 
-**Design, and now partly measurement.** The level below is written and runs: it
-is `../port/freestanding/pg_subpool.c`, and `../tools/subpool_domain.c` asks
-the hardware whether it keeps its promise. Nineteen claims, every one of them
-held, and the section "What the hardware said" has them and the three things
-the run taught that no amount of reading would have. The manager itself is not
-patched yet. It is written before the patch because the patch has one decision
+**Design and measurement.** The port is written and it runs. The level below is
+`../port/freestanding/pg_subpool.c`, the manager's own change is
+`../port/aset-sublet.patch`, and both recorded pgbench rungs replay whole
+inside a Capstone domain. The sections "What the hardware said" and "What the
+run said" have the numbers. What is left is the cycle cost and the board. It is written before the patch because the patch has one decision
 in it that decides whether the claim the paper makes is true, and that decision
 is better argued than discovered. The one number the design needed, the
 sub-pool's size, is measured: the recording of the two pgbench rungs prices it,
@@ -269,6 +268,113 @@ free everything they allocate, and `ExecutorState` a third of it.
 The hand-out therefore keeps its handle. The node bill stays at about two an
 object, the board arm of A11 runs a slice of the rung whose length the pool
 sets, and the paper reports that rather than engineering it away.
+
+## What the run said
+
+`../run-pg-sublet.sh` replays a recording against the ported manager in a
+domain, through `tools/replay_core.inc`, which is the same loop the
+unprotected arm runs. So everything below differs from the unprotected domain
+only by what the port does.
+
+### The claim, as an identity
+
+The teardown cost is checked inside the domain and as an equality rather than a
+bound:
+
+    revocations == teardowns - the ones with nothing to revoke
+                   + the revocations of second sub-pools
+
+| | tpcb | readonly |
+|---|---:|---:|
+| teardowns the trace asked for | 30 982 | 7 011 |
+| teardowns that reached the level below | 21 009 | 5 009 |
+| of those, one revocation each | 21 009 | 5 009 |
+| revocations of a second sub-pool | 43 | 22 |
+| revocations in total | 21 052 | 5 031 |
+
+Both rungs satisfy the identity exactly. Two of those lines need saying.
+
+**The teardowns that never reach the level below are the manager's own saving,
+not the port's.** `mcxt.c` does not call the reset method on a context that is
+already reset, so a delete that follows a reset does nothing. That is 9 973 of
+30 982 on tpcb and 2 002 of 7 011 on readonly.
+
+The recording predicted both numbers exactly, before the port existed, from the
+allocations each context had made: `subpools.py` reports 9 973 and 2 002 events
+as acting on a context that had asked for nothing since the last one. The
+predictions were right to the event and the mechanism was the manager's.
+
+That also corrects something this document said earlier. A context that never
+allocated does not get a free teardown from the level below, because its
+keeper block is carved when the context is created. Every sub-pool that
+reaches a teardown has been carved, so `teardowns with nothing to revoke`
+stays at zero and the saving is entirely `isReset`.
+
+**The extra revocations are second sub-pools.** A context that filled its
+64 KiB was given another, and it keeps it for the rest of its life, so each of
+its later teardowns revokes both. Thirty-four second sub-pools were handed out
+over tpcb and thirty over readonly, costing 43 and 22 extra revocations, which
+is 0.2% and 0.4% of the totals. That is the cost of the sizing decision, and it
+is smaller than the recording's estimate of eight teardowns in thirty
+thousand read the other way round.
+
+### What it cost against the unprotected arm
+
+| tpcb | unprotected domain | Sublet domain |
+|---|---:|---:|
+| blocks taken, keepers apart | 15 351 | 15 291 |
+| blocks held at once, most | 241 | 183 |
+| keepers carved again after a reset | 0 | 21 009 |
+
+| readonly | unprotected domain | Sublet domain |
+|---|---:|---:|
+| blocks taken, keepers apart | 3 302 | 3 244 |
+| blocks held at once, most | 235 | 179 |
+| keepers carved again after a reset | 0 | 5 009 |
+
+The first row is the one that matters and it is why `ALLOC_BLOCKHDRSZ` stays at
+eighty bytes under the port even though no header occupies them: that number
+decides `allocChunkLimit` and therefore the whole size-class ladder, and a
+ladder that differed would make the two arms incomparable. Eighty bytes a
+block are spent to keep them comparable, and the ladder is preserved.
+
+The keeper row is work the other arm does not do at all. Upstream keeps the
+keeper across a reset; this port revokes it with everything else and carves it
+again, because a revocation cannot spare part of what it covers.
+
+### What the discipline cost in primitives
+
+| | tpcb | readonly |
+|---|---:|---:|
+| chunks carved | 1 115 832 | 197 732 |
+| chunks handed out | 1 228 021 | 220 515 |
+| chunks dropped | 196 413 | 41 041 |
+| chunk entries at the peak | 2 441 | 2 263 |
+| split | 1 147 223 | 205 074 |
+| mrev | 1 249 227 | 225 693 |
+| delin | 1 228 021 | 220 515 |
+| revoke | 217 465 | 46 072 |
+| revocation nodes spent | 2 396 450 | 430 767 |
+
+Every one of those was predicted from the trace before the port ran, and the
+predictions were within a few per cent:
+
+| predicted against measured | predicted | measured |
+|---|---:|---:|
+| carves, tpcb | 1 108 694 | 1 115 832 |
+| entries at the peak, tpcb | 2 321 | 2 441 |
+| revocation nodes, tpcb | 2 446 088 | 2 396 450 |
+| carves, readonly | 196 591 | 197 732 |
+| entries at the peak, readonly | 2 175 | 2 263 |
+| revocation nodes, readonly | 442 542 | 430 767 |
+
+The scripts are in `experiments/a11/postgres` in the paper's repository. The
+node figure is the one to carry forward: at about two an object, the board's
+65 536 covers 2.8% of the tpcb rung, so the board arm is a slice whose length
+the pool sets rather than a whole rung.
+
+The hand-outs and the dropped chunks are the trace's own counts plus two,
+which are the two reallocs: each allocates a chunk and frees one.
 
 ## What the hardware said
 

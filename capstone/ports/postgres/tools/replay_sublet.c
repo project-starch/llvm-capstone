@@ -315,9 +315,18 @@ pg_replay_domain_main(unsigned *res, unsigned func)
     row("contexts destroyed outright", 0, k->destroyed);
     row("sub-pools at the peak", 0, k->pools_peak);
     row("second sub-pools handed out", 0, k->grown);
-    row("teardowns, resets and deletes", c.reset + c.delete, k->resets);
-    row("of those, one revocation", 0, k->revocations);
-    row("of those, nothing to revoke", 0, k->resets_empty);
+    /*
+     * The trace's teardowns and the port's differ, and the difference is the
+     * manager's own: mcxt.c does not call the reset method on a context that
+     * is already reset, so a delete that follows a reset never reaches the
+     * level below. The recording predicted that number before the port
+     * existed, from the allocations each context had made.
+     */
+    row("teardowns the trace asked for", c.reset + c.delete, k->resets);
+    row("of those, one revocation each", 0, k->revocations - k->extra_revocations);
+    row("revocations of a second sub-pool", 0, k->extra_revocations);
+    row("teardowns with nothing to revoke", 0, k->resets_empty);
+    row("revocations in total", 0, k->revocations);
     row("chunks carved", 0, k->carves);
     row("chunks handed out", c.alloc, k->hands);
     row("chunks dropped", c.free, k->drops);
@@ -332,25 +341,19 @@ pg_replay_domain_main(unsigned *res, unsigned func)
 
     /*
      * The claim, checked here rather than by a host reading the numbers, and
-     * stated as what the design actually promises.
+     * as an identity rather than a bound:
      *
-     * A teardown of a context that holds something is one revocation. A
-     * teardown of one that holds nothing is none: either its sub-pool was
-     * never carved, or the manager had already reset it and the delete found
-     * nothing left, which is what aset.c does to a context it is about to
-     * cache. And a context that filled its sub-pool and was given a second
-     * costs one more.
+     *   revocations == teardowns - the ones with nothing to revoke
+     *                  + the revocations of second sub-pools
      *
-     * So the revocations cannot exceed one per teardown plus one per second
-     * sub-pool, and every teardown that reached a carved sub-pool must have
-     * spent exactly one. The first is the ceiling the paper claims. The
-     * second is the floor, and it holds by construction: pg_subpool_reset
-     * revokes once and returns.
+     * One per teardown of a context that holds something, and one more for
+     * each further sub-pool that context was given, which it keeps for the
+     * rest of its life. Nothing else can contribute, and if anything did the
+     * two sides would differ.
      */
-    unsigned long events = k->resets;
-    unsigned long ceiling = events + k->grown;
+    unsigned long expect = k->resets - k->resets_empty + k->extra_revocations;
 
-    pg_domain_text(k->revocations <= ceiling
+    pg_domain_text(k->revocations == expect
                    ? "__CAPSTONE_PG_SUBLET_ONE_EACH__\n"
                    : "__CAPSTONE_PG_SUBLET_NOT_ONE_EACH__\n");
     pg_domain_text(k->blocks == k->blocks_freed + k->blocks_live

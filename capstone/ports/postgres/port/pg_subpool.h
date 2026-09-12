@@ -201,6 +201,16 @@ void pg_subpool_header_free(void *p);
 struct pg_subpool_counts {
     unsigned long created, destroyed, resets, resets_empty;
     unsigned long revocations, handles;
+    /* Revocations of a second or later sub-pool, so that the claim can be
+     * checked as an identity rather than an inequality:
+     *
+     *   revocations == (resets - resets_empty) + extra_revocations
+     *
+     * One per teardown of a context that holds something, and one more for
+     * every further sub-pool that context was given. A context keeps a second
+     * sub-pool for the rest of its life, so this can exceed the number of
+     * times one was handed out. */
+    unsigned long extra_revocations;
     unsigned long blocks, blocks_freed, grown;
     unsigned long blocks_live, blocks_peak;
     /* Blocks carved again as a keeper after a reset, which upstream does not
