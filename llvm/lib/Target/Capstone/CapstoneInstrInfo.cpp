@@ -745,7 +745,19 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     // x1 print the same and the reload matched, which is exactly why nothing
     // noticed: -verify-machineinstrs is not run on this ABI anywhere, and the
     // default ABI never takes this arm. Found by running the verifier over musl.
-    if (capstoneGpFreeAbiActive() && SrcReg == Capstone::C1) {
+    //
+    // ONLY FOR THE FRAME SAVE, and that is issue S-14. The sentence above is
+    // true of ra when ra holds the return address, which is the prologue's save
+    // and nothing else. C1 is an ordinary allocatable capability register, so
+    // the register allocator also parks arbitrary capabilities there, and the
+    // synthesised __capstone_cap_init does exactly that: about 350 straight-line
+    // capability stores spill freely. Keying on the physical register rather
+    // than on what it holds truncated such a spill to its address half, the tag
+    // died, and the first `stc` through the reloaded register faulted with
+    // cause 24 before the domain entered. The prologue carries FrameSetup and
+    // an allocator spill carries no flag, which separates the two exactly.
+    if (capstoneGpFreeAbiActive() && SrcReg == Capstone::C1 &&
+        (Flags & MachineInstr::FrameSetup)) {
       Opcode = Capstone::SD;
       StoreReg = TRI->getSubReg(SrcReg, Capstone::sub_cap_addr);
       StoreSize = 8;
@@ -844,7 +856,9 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
   // Mirror of storeRegToStackSlot: the class decides, and gp-free's `ra` is
   // reloaded into the X half with an 8-byte LD for the reasons given there.
   if (Capstone::GPCRRegClass.hasSubClassEq(RC)) {
-    if (capstoneGpFreeAbiActive() && DstReg == Capstone::C1) {
+    // FrameDestroy for the same reason FrameSetup gates the store: see S-14 there.
+    if (capstoneGpFreeAbiActive() && DstReg == Capstone::C1 &&
+        (Flags & MachineInstr::FrameDestroy)) {
       Opcode = Capstone::LD;
       LoadReg = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
       LoadSize = 8;
