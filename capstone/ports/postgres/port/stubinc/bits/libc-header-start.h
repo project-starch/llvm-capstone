@@ -1,0 +1,3 @@
+#ifndef A11_LIBC_HEADER_START_H
+#define A11_LIBC_HEADER_START_H
+#endif
