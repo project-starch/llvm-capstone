@@ -2781,18 +2781,32 @@ builds under the very names the bridge wanted:
 Bitstream `caplifive_r30r31_1bfff7776` — the only variable. Monitor `4274268`, firmware
 `f21972371293`. 16 arms: control, seven pairs on §7k's own selector, trailing control.
 
-| testset | domain cycles | native cycles | **ratio** | §7k | Δ |
-|---|---:|---:|---:|---:|---:|
-| `star` | 228,660,057 | 182,724,408 | **1.2514** | 1.252 | +0.06 pp |
-| `parsenumber` | 230,603,162 | 181,901,068 | **1.2677** | 1.267 | +0.07 pp |
-| `orm` | 937,250,292 | 791,407,931 | **1.1843** | 1.185 | +0.07 pp |
-| **`main`** | 2,674,517,545 | 2,193,042,052 | **1.2195** | **1.220** | **+0.05 pp** |
-| `fp` | 4,163,178,943 | 3,347,924,554 | **1.2435** | — | — |
-| `cte` | 6,046,747,088 | 5,188,753,059 | **1.1654** | — | — |
-| `rtree` | 9,083,060,968 | 7,646,127,258 | **1.1879** | — | — |
+Both sides are recomputed **from their own absolutes** at full precision. An earlier version of
+this table compared sw63's 4-decimal ratio against §7k's *rounded* 3-decimal one, which manufactured
+a uniform `+0.05 .. +0.07 pp` offset that was a rounding artefact and not a measurement; and it
+marked `fp`, `cte` and `rtree` as having no §7k figure when §7k gives all seven. Both corrected
+below — the section understated its own result. (Bench-lane audit.)
 
-**Every §7k-comparable pair agrees to within 0.07 pp against a 0.171 pp band**, and `main` — the
-pair the protocol names — to 0.05 pp. **§7f–§7k carry forward to `caplifive_r30r31_1bfff7776`.**
+| testset | domain cycles | native cycles | **sw63 ratio** | §7k ratio | Δ pp |
+|---|---:|---:|---:|---:|---:|
+| `star` | 228,660,057 | 182,724,408 | **1.2514** | 1.2515 | −0.013 |
+| `parsenumber` | 230,603,162 | 181,901,068 | **1.2677** | 1.2673 | +0.041 |
+| `orm` | 937,250,292 | 791,407,931 | **1.1843** | 1.1849 | −0.064 |
+| **`main`** | 2,674,517,545 | 2,193,042,052 | **1.2195** | **1.2197** | **−0.013** |
+| `fp` | 4,163,178,943 | 3,347,924,554 | **1.2435** | 1.2434 | +0.015 |
+| `cte` | 6,046,747,088 | 5,188,753,059 | **1.1654** | 1.1661 | −0.075 |
+| `rtree` | 9,083,060,968 | 7,646,127,258 | **1.1879** | 1.1880 | −0.011 |
+
+**All SEVEN pairs agree, worst |Δ| 0.075 pp against a 0.171 pp band**, with **mixed sign** — two up,
+five down — which is what noise should look like and what the artefactual uniform `+` concealed.
+`main`, the pair the protocol names, is −0.013 pp. **§7f–§7k carry forward to
+`caplifive_r30r31_1bfff7776`.**
+
+**The absolutes moved, together and one way.** Every one of the seven domain arms is *faster* on the
+new bitstream, by 0.010–0.077 %, and four of the fourteen arms sit just outside §7j's 0.065 %
+repeatability bound. That is the protocol's "absolutes move together, ratio holds" branch: a PASS
+with a note that the flashed bitstream is uniformly ~1e-3 faster. Recorded so nobody later reads the
+0.08 % as noise.
 
 **Gates, all green.** Controls at *both* ends (`retval=4`, cycles 4476 and 4573, `instret=1089`
 matching every earlier boot on this bitstream) — §7k had only a leading control; the trailing one
@@ -2801,12 +2815,21 @@ each pair computed the same answer, not merely the same number of cycles; `main`
 `111130 1e792c9d…`, the native oracle. `DROPPED 0` on all fourteen arms. `HEAP 2,097,152` on every
 arm — the compile-time 2 MiB geometry, which is *why* the next line holds.
 
-**R-33's representability fix was inert here, and the boot proves it rather than assuming it:**
-**zero** `not representable` lines in the capture. Every constant on this path is a power of two
-(heap 2 MiB, stack 1 MiB, region 64 KiB, hostcall 4 KiB), so nothing rounded and the geometry is
-identical to §7k's. Had this run used a `--pool`-derived arena it would **not** have been inert —
-1,419,584 and 1,750,285 both round — and the bridge would have been confounded by the firmware
-rather than by the bitstream.
+**R-33's representability fix was inert here — by CONSTRUCTION, not by demonstration, and the
+distinction is one this project keeps paying for.** Every constant on this path is a power of two
+(heap 2 MiB, stack 1 MiB, region 64 KiB, hostcall 4 KiB), so the arithmetic says nothing can round,
+and the capture duly contains **zero** `not representable` lines. But **that zero carries no
+information on its own**: the `pr_info` at `modcapstone/module/capstone.c:279` landed the same day,
+sw63 was the first boot to carry it, and it **has never been observed to fire anywhere** — so a
+check that has never fired cannot distinguish "nothing rounded" from "the message never reaches the
+capture". An earlier version of this paragraph said the boot *proves* the fix inert; it does not,
+and saying so was this document's own "a clean result is not evidence until the check is known to
+fire" rule being broken in the act of invoking it. (Bench-lane audit.)
+
+**The positive control is cheap and is owed:** one `--pool`-derived arm, where 1,419,584 rounds by
+1,728, shows the line once. After that a zero means something permanently. Until then the correct
+reading is that the geometry is identical to §7k's *because the sizes are powers of two*, which is
+independently checkable and is what actually licenses the comparison.
 
 **What this does not license.** It re-ties the *ratios*. Cross-boot *absolutes* still belong to the
 0.171 pp regime, and three of these seven testsets (`fp`, `cte`, `rtree`) have no §7k ratio recorded

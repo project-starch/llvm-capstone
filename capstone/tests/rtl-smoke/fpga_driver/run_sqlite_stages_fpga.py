@@ -3523,6 +3523,23 @@ def main():
         pathlib.Path(OUT).write_text("".join(transcript))
         log(f"per-domain UART -> {OUT}")
 
+        # R-33: the kernel rounds a non-representable region length up at creation and says so
+        # (modcapstone/module/capstone.c). A round-up MOVES REGION GEOMETRY, which silently
+        # invalidates any cross-boot comparison built on the old size -- so it must never pass
+        # unnoticed. Scanned here rather than left to each driver script, because the boot that
+        # forgets to grep for it is exactly the one that needed to.
+        _rnd = [l for l in "".join(transcript).splitlines() if "not representable" in l]
+        if _rnd:
+            print(f"\n*** R-33: {len(_rnd)} REGION LENGTH(S) ROUNDED -- geometry moved this boot ***",
+                  flush=True)
+            for _l in _rnd[:8]:
+                print("    " + _l.strip()[:150], flush=True)
+            print("    Any ratio compared against a boot with different geometry is not a measurement.",
+                  flush=True)
+        else:
+            print("\nR-33 round-ups: none (note: a zero is only evidence once this line has been "
+                  "seen to fire at least once -- a --pool-derived arm shows it)", flush=True)
+
         print("\n=== STAGED BISECTION ===", flush=True)
         first_bad = None
         for dom, wedged, obs, returned, created, entered, montag in results:
