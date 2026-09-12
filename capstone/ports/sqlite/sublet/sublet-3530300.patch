@@ -2,9 +2,10 @@
 #
 # A diff against sqlite3-capstone.c as build-sqlite-capstone.sh produces it from
 # the amalgamation (its sed lines are the platform's, not this port's).  The
-# primitives are sublet.h beside this patch; the amalgamation includes it in the
-# first hunk, and the build puts this directory on the include path only when it
-# applies the patch.  Every hunk belongs to one class of the bookkeeping in
+# primitives are capstone/sublet/sublet.h, shared by every port.  The amalgamation includes
+# it in the first hunk, and the build puts that directory on the include path only when it
+# applies this patch, so the unprotected build never sees a Sublet file.
+# Every hunk belongs to one class of the bookkeeping in
 # nested-allocators-paper experiments/A7-ports.md:
 #
 #   I  interface: the block for a level that carves it arrives linear, under a
