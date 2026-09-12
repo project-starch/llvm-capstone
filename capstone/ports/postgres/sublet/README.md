@@ -235,6 +235,41 @@ readonly rung is the same two. So the path the port cannot keep costs one
 `memcpy` of five kilobytes per process start, and the paper reports it as a
 change rather than as a cost.
 
+## The hand-out keeps its handle, decided and priced
+
+**One revocation node an object, and the board arm is a slice.**
+
+A hand-out is `sublet_take`: an `mrev` for the handle the slot keeps, then a
+`delin` so the program gets a copyable alias. The `mrev` costs a node, and over
+a rung the hand-outs are half the node bill. The alternative is a hand-out that
+only delinearises: no handle, no node, and nothing can revoke the chunk until
+its context is reset. Since the node pool is what bounds a run on the board,
+that alternative is worth pricing rather than dismissing.
+
+`experiments/a11/postgres/deaths.py` follows every object in the recording to
+its death:
+
+| how an object dies | tpcb | readonly |
+|---|---:|---:|
+| reset under it | 73.04% | 72.56% |
+| deleted under it | 10.80% | 7.96% |
+| freed by a `pfree` | 15.99% | 18.61% |
+
+So the cheaper hand-out would still catch five objects in six, at their
+context's teardown, and would give up the sixth.
+
+It is the wrong trade, and the same script says why. The median freed object
+lives **one allocation** of its own context, and the ninetieth percentile is
+twenty-two. A chunk freed and immediately reused means a capability that
+outlived its `pfree` reaches another live object rather than free space, which
+is the form of the bug that corrupts rather than crashes. The frees are also
+concentrated where it matters: `TopTransactionContext` and `TopPortalContext`
+free everything they allocate, and `ExecutorState` a third of it.
+
+The hand-out therefore keeps its handle. The node bill stays at about two an
+object, the board arm of A11 runs a slice of the rung whose length the pool
+sets, and the paper reports that rather than engineering it away.
+
 ## What the hardware said
 
 `../build-subpool-test.sh` and `../run-subpool-test.sh` build the level below
@@ -309,17 +344,9 @@ and the measurement has to say which it used.
 
 ## What is open
 
-The patch to `aset.c` itself, which is the next piece, and two questions the
-node budget raises that the design did not have before it ran.
+The patch to `aset.c` itself, which is the next piece, and one question the
+patch will answer rather than the design.
 
-- **Whether a `pfree` has to revoke.** A hand-out costs a node because
-  `sublet_take` takes a handle, so that freeing the chunk kills the alias the
-  program holds. If a free did not revoke, a hand-out would be a `delin` and
-  cost nothing, the bill would halve, and what would be lost is catching a use
-  after free inside a context's lifetime. PostgreSQL's dominant pattern is the
-  reset and not the `pfree`, so the trace can say what the weaker guarantee
-  would cost in coverage. It is a claim about the paper's threat model and not
-  an optimisation, so it is decided in the open and not quietly.
 - **Whether the chunk header can go back to eight bytes.** Nothing in a chunk
   holds a capability once the free-list link is an index, so the sixteen bytes
   the capability build forced may not be needed under the port. It would mean
