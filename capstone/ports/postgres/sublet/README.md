@@ -1,7 +1,11 @@
 # The Sublet port of PostgreSQL's memory contexts
 
-**Design, not measurement, except where it says otherwise.** No line of the
-port has run. It is written before the patch because the patch has one decision
+**Design, and now partly measurement.** The level below is written and runs: it
+is `../port/freestanding/pg_subpool.c`, and `../tools/subpool_domain.c` asks
+the hardware whether it keeps its promise. Nineteen claims, every one of them
+held, and the section "What the hardware said" has them and the three things
+the run taught that no amount of reading would have. The manager itself is not
+patched yet. It is written before the patch because the patch has one decision
 in it that decides whether the claim the paper makes is true, and that decision
 is better argued than discovered. The one number the design needed, the
 sub-pool's size, is measured: the recording of the two pgbench rungs prices it,
@@ -231,10 +235,92 @@ readonly rung is the same two. So the path the port cannot keep costs one
 `memcpy` of five kilobytes per process start, and the paper reports it as a
 change rather than as a cost.
 
+## What the hardware said
+
+`../build-subpool-test.sh` and `../run-subpool-test.sh` build the level below
+into a domain of its own and run nineteen claims inside it. Every one held. The
+image carries no PostgreSQL source, which is the point: a fault inside a
+patched `aset.c` is hard to read back to its cause, and this one narrows the
+ground to one file.
+
+The claims that matter:
+
+| claim | what held |
+|---|---|
+| a reset is one revocation | one, counted by the primitive itself |
+| the sub-pool works after the reset | a block and sixteen chunks, written and read back |
+| a reset with nothing carved is no revocation | none |
+| a context that filled its sub-pool | its reset is two revocations and no more |
+| a delete of such a context | both sub-pools come back |
+| two thousand creates and deletes | no sub-pool and no entry left behind |
+
+The second row is the one only the hardware could answer. A revoke that killed
+a linear child hands the region back uninitialised and refuses `init` until it
+has been written through, so a sub-pool that carves and hands out again after a
+reset is the proof that one revocation per context is implementable rather than
+only arguable.
+
+Three things the run taught:
+
+**A region has to be shared linear, and the default is not.** The monitor hands
+a domain a shared region either non-linear with a handle kept by the monitor
+(`REV_DEFAULT`) or linear with a handle kept by the monitor (`REV_BORROWED`).
+The replay's host shared all four regions the default way, because the
+unprotected level below walks its arena with ordinary pointer arithmetic and a
+linear capability copied by ordinary C code is what the hardware refuses. A
+region that is not linear cannot be split, and a handle senior to it has
+nothing to revoke. The first run said so exactly, type 1 where it wanted 0, so
+`pg_host.c` grew a `--linear-arena` argument rather than a changed constant.
+
+**The share has to be taken in the register it arrives in.** A linear
+capability assigned to a C pointer and read back on a later call comes back
+non-linear. The second run said that too, so the arena goes into its slot
+inside the share handler and not in the body that follows.
+
+**The revocation-node pool is what bounds a run on the board, not cycles.** A
+node is allocated by every `split` and every `mrev`, from a bump head with no
+reclamation, so a run spends every node it ever made and a revoke returns none.
+The test spent 20 105 nodes for 8 040 allocations, which is two and a half
+each, and the emulator prints a watermark at the crossing of the old 10-bit
+head because on silicon a pool that wraps reuses live ids and the next
+capability store blocks with no timeout and no trap.
+
+`experiments/a11/postgres/nodes.py` prices the whole rung from the trace:
+
+| rung | nodes the port would spend | what 65 536 covers |
+|---|---:|---:|
+| tpcb | 2 446 088 | 2.77% of the trace |
+| readonly | 442 542 | 15.00% of the trace |
+
+The hand-outs and the carves are 95% of that bill, at one node each and one and
+a quarter million of them. So the board arm of A11 is a slice, and the slice is
+set by the node pool rather than by time. Either the run is cut to that length
+and says so, or the pool grows. The paper reports it either way, because it is
+a property of the hardware and not of this port: two nodes an object is what a
+per-object capability discipline costs, and the pool is the ceiling on how many
+objects one boot can see.
+
+**One more, about the toolchain.** The fork's clang asserts in
+`Value::stripAndAccumulateConstantOffsets` when it emits debug info for
+optimised code on this target. `-O1`, `-O2` and `-Og` all crash with `-g` and
+all pass without it. Every build script here uses `-O0`, which is why it had not
+been met, and it is named because a cycle count at `-O0` is not a cycle count
+and the measurement has to say which it used.
+
 ## What is open
 
-Nothing the design has to settle before the patch. What is left is what the
-patch itself will say: whether the chunk header can go back to eight bytes once
-no chunk holds a capability, which would make the protected build cheaper per
-chunk than the unprotected one, and what the whole discipline costs in cycles.
-Both are measurements and neither changes a decision above.
+The patch to `aset.c` itself, which is the next piece, and two questions the
+node budget raises that the design did not have before it ran.
+
+- **Whether a `pfree` has to revoke.** A hand-out costs a node because
+  `sublet_take` takes a handle, so that freeing the chunk kills the alias the
+  program holds. If a free did not revoke, a hand-out would be a `delin` and
+  cost nothing, the bill would halve, and what would be lost is catching a use
+  after free inside a context's lifetime. PostgreSQL's dominant pattern is the
+  reset and not the `pfree`, so the trace can say what the weaker guarantee
+  would cost in coverage. It is a claim about the paper's threat model and not
+  an optimisation, so it is decided in the open and not quietly.
+- **Whether the chunk header can go back to eight bytes.** Nothing in a chunk
+  holds a capability once the free-list link is an index, so the sixteen bytes
+  the capability build forced may not be needed under the port. It would mean
+  the protected build uses less memory per chunk than the unprotected one.

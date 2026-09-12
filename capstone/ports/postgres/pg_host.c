@@ -51,7 +51,20 @@
 #endif
 
 #define PERM_INOUT 0x1UL
+/* What the monitor hands the domain for a shared region, and the difference
+ * decides whether the Sublet port can work at all.
+ *
+ *   REV_DEFAULT    non-linear to the domain, a handle kept by the monitor
+ *   REV_BORROWED   linear to the domain, a handle kept by the monitor
+ *
+ * The unprotected arm wants the first: pg_level0.c walks its arena with
+ * ordinary pointer arithmetic, and a linear capability copied by ordinary C
+ * code is what the hardware refuses. The Sublet arm needs the second, because
+ * a region that is not linear cannot be split and a handle senior to it has
+ * nothing to revoke. The first run of the sub-pool test said so, type 1 where
+ * it wanted 0, and that is why this is an argument and not a constant. */
 #define REV_DEFAULT 0x0UL
+#define REV_BORROWED 0x1UL
 
 struct pg_hostcall_v0 {
     unsigned long long phase, opcode, offset, length;
@@ -158,6 +171,7 @@ int
 main(int argc, char **argv)
 {
     int want_tail = 0;
+    int linear_arena = 0;
 
     if (argc < 3) {
         mark("usage: pg_host.user <domain image> <trace> [--tail]\n");
@@ -166,6 +180,8 @@ main(int argc, char **argv)
     for (int i = 3; i < argc; i++)
         if (!strcmp(argv[i], "--tail"))
             want_tail = 1;
+        else if (!strcmp(argv[i], "--linear-arena"))
+            linear_arena = 1;
 
     if (capstone_init())
         return fail("PG: capstone_init failed=", 0);
@@ -214,9 +230,10 @@ main(int argc, char **argv)
 
     shared_region_annotated(domain, r_meta, PERM_INOUT, REV_DEFAULT);
     shared_region_annotated(domain, r_pay, PERM_INOUT, REV_DEFAULT);
-    shared_region_annotated(domain, r_arena, PERM_INOUT, REV_DEFAULT);
+    shared_region_annotated(domain, r_arena, PERM_INOUT,
+                            linear_arena ? REV_BORROWED : REV_DEFAULT);
     shared_region_annotated(domain, r_trace, PERM_INOUT, REV_DEFAULT);
-    mark("PG: shared\n");
+    mark(linear_arena ? "PG: shared, the arena linear\n" : "PG: shared\n");
 
     struct tail_state tail = {meta, payload, 0, 0};
     pthread_t tail_thread;
