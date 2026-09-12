@@ -18,6 +18,18 @@
 #undef vsnprintf
 #undef vfprintf
 
+int pg_vsnprintf(char *str, size_t count, const char *fmt, va_list ap)
+{
+    return vsnprintf(str, count, fmt, ap);
+}
+int pg_vfprintf(FILE *stream, const char *fmt, va_list ap)
+{
+    return vfprintf(stream, fmt, ap);
+}
+int pg_vprintf(const char *fmt, va_list ap)
+{
+    return vprintf(fmt, ap);
+}
 int pg_snprintf(char *str, size_t count, const char *fmt,...)
 {
     va_list ap; va_start(ap, fmt); int r = vsnprintf(str, count, fmt, ap); va_end(ap); return r;

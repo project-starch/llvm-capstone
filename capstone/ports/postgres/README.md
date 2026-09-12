@@ -99,14 +99,45 @@ and `dsa.c` is not one of the seven.
 
 ## The freestanding arm
 
-Not here yet. What it still needs, in the order it will be needed:
+```
+bash build-mmgr-domain.sh
+```
+
+**It links.** 160 KB of image, 107 KB loadable, no undefined symbol. That was
+the question worth answering first, because it is the one another port in this
+repository has been stuck on for three weeks, and the answer here is that the
+memory manager does not pose it: it needs no `setjmp`, it has no heap of its
+own in `.bss`, and its two lines of change are the two the allocator asks for
+itself.
 
 | | |
 |---|---|
-| a level below | the manager calls `malloc`, `free` and `realloc`. `memsys5` already runs freestanding in a domain in this repository, as level 0 of the SQLite pass, so the two ports would then stand on the same allocator |
-| the eleven libc symbols | eight are in `benchmarks/beebs/adapted/beebs_freestanding_string.c`; `stderr` and the printf helpers go through the domain's hostcall write, which the SQLite domain has |
-| the trace | 57 MB for pgbench's default script, handed over as a host region the way `memsys5`'s pool is, which needs `cma=` on the guest's command line |
-| the link | the globals offset sized to `.text` and the descriptor delivered into `dom_data`, which `build-sqlite-capstone.sh` does for a larger program |
+| `port/freestanding/pg_string.c` | the seven string functions the census named, byte at a time, because a word-at-a-time copy reads past the end of the last word and on a capability machine that is a fault |
+| `port/freestanding/pg_level0.c` | the level below: first fit over one region, with a free list and coalescing. It has to reuse, or every block would be fresh and the comparison meaningless. `memsys5` would replace it if the measurement ever turns on what level 0 does |
+| `port/freestanding/pg_printf_domain.c` | the printf helpers over the payload, with a formatter that understands what is actually emitted and copies out verbatim any conversion it does not know |
+| `tools/replay_domain.c` | the driver: four regions in, the payload out, and one way back to the monitor. A fault returns the core with the message already written, because a domain that spins is a host that never reads the payload |
+
+The loop is `tools/replay_core.inc`, the same file the host driver runs. What
+differs between the arms is the compiler, the level below, and where formatted
+output goes. Nothing else, which is what makes a difference between their
+results a difference about capabilities.
+
+**The allocator had the bug the compiler exists to find.** It aligned its
+region by masking the address and casting it back, which discards the
+capability and faults on the first dereference
+(`-Wcapstone-pointer-roundtrip`). It aligns by moving the pointer now. That is
+the class that made eighteen of MicroPython's twenty-one patches, met on the
+first file written for this port.
+
+**What is still missing to run it.** A host program that makes the four
+regions, shares them, enters the domain and prints the payload. The SQLite
+port's `sqlite_host.c` is 728 lines because it also services that port's
+hostcalls; this one needs the region half of it and nothing else. Then the
+trace has to be shortened for a domain: the identity table for a million
+objects is twenty megabytes of capabilities, and the trace itself is
+fifty-seven, which fits the hundred and thirty a domain can be given but
+leaves little room. A hundred transactions still give over two thousand resets
+for the scatter plot.
 
 Keeping the host arm working is what makes a fault in the freestanding arm a
 fault about capabilities rather than about the port.

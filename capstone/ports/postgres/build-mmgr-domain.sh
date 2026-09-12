@@ -1,0 +1,113 @@
+#!/bin/bash
+# PostgreSQL's memory manager as a Capstone domain.
+#
+#   build-mmgr-domain.sh
+#
+# The same seven files the host arm builds, for capstone64, linked into a
+# domain image with the freestanding half of the port: the string functions,
+# the level below, the printf helpers over the payload, and the replay driver.
+#
+# What differs from the host arm, and nothing else does: the compiler, the
+# level below, and where formatted output goes. The loop is the same file.
+#
+# Needs the Capstone clang and lld. CAPSTONE_LLVM_BUILD_DIR if they are not at
+# the default, and a configured PostgreSQL tree, which build-mmgr-host.sh
+# leaves behind.
+set -euo pipefail
+HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "$HERE/../../.." && pwd)
+PG_VERSION=${PG_VERSION:-17.5}
+OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
+SRC=$OUT/postgresql-$PG_VERSION
+DOM_OUT=${DOM_OUT:-$OUT/domain}
+LLVM=${CAPSTONE_LLVM_BUILD_DIR:-$REPO_ROOT/llvm/build-rel}
+CLANG=${CLANG:-$LLVM/bin/clang}
+LD_LLD=${LD_LLD:-$LLVM/bin/ld.lld}
+READOBJ=${READOBJ:-$LLVM/bin/llvm-readobj}
+
+START_SRC=$REPO_ROOT/capstone/my_first_domain/start.S
+LINKER_SCRIPT=$REPO_ROOT/capstone/my_first_domain/link.ld
+DOMREQ_SRC=$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S
+
+# The regions, and both halves must agree on their sizes, so they are build
+# parameters here and the host is told what was used.
+PG_PAYLOAD=${PG_PAYLOAD:-65536}
+PG_ARENA=${PG_ARENA:-$((32 * 1024 * 1024))}
+PG_TRACE=${PG_TRACE:-$((64 * 1024 * 1024))}
+# dom_data and the stack. The manager does not recurse on data and the replay
+# loop is flat, so this is the stack of a few frames, not an interpreter's.
+PG_DOMAIN_STACK=${PG_DOMAIN_STACK:-$((256 * 1024))}
+PG_DOMAIN_DATA=${PG_DOMAIN_DATA:-$PG_DOMAIN_STACK}
+
+FILES="aset.c mcxt.c generation.c slab.c bump.c alignedalloc.c memdebug.c"
+
+for t in "$CLANG" "$LD_LLD"; do
+  [ -x "$t" ] || { echo "no $t; set CAPSTONE_LLVM_BUILD_DIR" >&2; exit 1; }
+done
+[ -f "$SRC/src/include/pg_config.h" ] || {
+  echo "no configured PostgreSQL tree at $SRC; run build-mmgr-host.sh first" >&2; exit 1; }
+
+mkdir -p "$DOM_OUT/obj"
+FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
+       -ffreestanding -fno-builtin -O0
+       -ffunction-sections -fdata-sections
+       -nostdlibinc -isystem "$HERE/port/stubinc"
+       -I"$SRC/src/include" -I"$SRC/src/backend"
+       -I"$HERE" -I"$HERE/port" -I"$HERE/tools")
+
+echo "== the manager, for capstone64"
+OBJS=()
+for f in $FILES; do
+  src=$SRC/src/backend/utils/mmgr/$f
+  # aset.c carries the two lines a sixteen-byte pointer forces; the allocator
+  # says so itself, with a static assertion. See port/aset-capstone.patch.
+  if [ "$f" = aset.c ]; then
+    cp "$src" "$DOM_OUT/aset.c"
+    patch -s -F0 -p0 "$DOM_OUT/aset.c" < "$HERE/port/aset-capstone.patch"
+    src=$DOM_OUT/aset.c
+  fi
+  "$CLANG" "${FLAGS[@]}" -c "$src" -o "$DOM_OUT/obj/${f%.c}.o"
+  OBJS+=("$DOM_OUT/obj/${f%.c}.o")
+done
+
+echo "== the port"
+for f in port/pg_stubs.c port/freestanding/pg_string.c \
+         port/freestanding/pg_level0.c port/freestanding/pg_printf_domain.c \
+         tools/replay_domain.c; do
+  o=$DOM_OUT/obj/$(basename "${f%.c}").o
+  "$CLANG" "${FLAGS[@]}" \
+      -DPG_REPLAY_PAYLOAD_SIZE=${PG_PAYLOAD}UL \
+      -DPG_REPLAY_ARENA_SIZE=${PG_ARENA}UL \
+      -DPG_REPLAY_TRACE_SIZE=${PG_TRACE}UL \
+      -c "$HERE/$f" -o "$o"
+  OBJS+=("$o")
+done
+
+echo "== the domain's entry and its declared requirement"
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+    -ffreestanding -O0 -c "$START_SRC" -o "$DOM_OUT/obj/start.o"
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+    -DCAPSTONE_DOMREQ_DATA=$PG_DOMAIN_DATA \
+    -DCAPSTONE_DOMREQ_STACK=$PG_DOMAIN_STACK \
+    -c "$DOMREQ_SRC" -o "$DOM_OUT/obj/domreq.o"
+
+OUT_DOM=$DOM_OUT/pg_mmgr_capstone.dom
+_segs() { "$READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|VirtualAddress|FileSize|MemSize'; }
+
+echo "== linking"
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+    "$DOM_OUT/obj/start.o" "${OBJS[@]}"
+_before=$(_segs)
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+    "$DOM_OUT/obj/start.o" "${OBJS[@]}" "$DOM_OUT/obj/domreq.o"
+# The declaration is non-alloc, so nothing loaded may move. Verified and not
+# asserted: four added instructions have flipped a passing run on this project.
+if [[ "$(_segs)" != "$_before" ]]; then
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
+  exit 2
+fi
+
+echo "declared dom_data $PG_DOMAIN_DATA (stack $PG_DOMAIN_STACK)"
+echo "regions the host must make: payload $PG_PAYLOAD, arena $PG_ARENA, trace $PG_TRACE"
+"$READOBJ" --file-headers "$OUT_DOM" | grep -E "Type|Machine|Entry" | head -3
+echo "built $OUT_DOM"

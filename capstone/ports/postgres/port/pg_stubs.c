@@ -28,15 +28,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* port.h redirects the whole printf family to PostgreSQL's own, this file
-   included. Each one is undefined here, above every call, or a stub calls
-   itself through the macro and the linker asks for the rest of the family. */
-#undef printf
-#undef vprintf
-#undef snprintf
-#undef fprintf
-#undef vsnprintf
-#undef vfprintf
+/* port.h redirects the whole printf family to PostgreSQL's own, and this file
+   keeps that redirection: what it calls is pg_fprintf and pg_vsnprintf, which
+   each arm provides. Undefining them here would reach for libc's, which a
+   domain does not have, and that is the one thing this file must not know
+   about the arm it is compiled for. */
 
 /* ---- the three globals -------------------------------------------------- */
 volatile sig_atomic_t InterruptPending = false;
