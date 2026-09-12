@@ -84,9 +84,13 @@ size classes on a capability machine are 16 to 8192 and not 8 to 8192, so the
 sequence of blocks differs from the x86 run, and the host arm's exact block
 count does not carry over to the domain.
 
-**Thirteen stub headers, 125 lines.** `c.h` includes fourteen system headers
+**Eleven stub headers, 105 lines.** `c.h` includes fourteen system headers
 before it declares anything of PostgreSQL's, and a freestanding build has none
-of them. `port/stubinc/` holds the declarations the seven files actually reach.
+of them. `port/stubinc/` holds the declarations the seven files actually reach,
+and the count is exactly the headers the build opens: `clang -H` over every
+translation unit of both the manager and the port names these eleven and no
+others. Five more were there and are gone, left over from a stage when more of
+the backend was being compiled.
 
 **The capability-roundtrip warning is not ours.** The compiler flags
 `DatumGetPointer`, an inline function in `postgres.h` that casts an integer
