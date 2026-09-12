@@ -187,3 +187,37 @@ register pressure at exactly the site with no early-clobber. **Re-read the gener
 overlap `%2`.** Cheap: grep the fill-loop line and read the four register names. Adding `&` to both
 output constraints would remove the hazard permanently and is a one-character change per operand,
 but it is the board lane's file.
+
+### 5. The INPUT side was the worse hazard, and the instrument is sound for a reason nothing declares
+
+Found by the board lane while checking (4), and it is the more dangerous half of the same template.
+`C_RECLAIM` declares the capability `"r"(cap)` — **input-only** — while the hardware **advances its
+cursor**. By the constraints alone every read of `cap` after the template is stale. That is not a
+cosmetic complaint: it would have made `RCCU` report **0** and `RCEN` the pre-fill end, the
+self-check `RCEN - RCCU == RCSH` would have **fired**, and it would have pointed squarely at the
+instrument-fault branch. **The instrument would have blamed itself, plausibly, and been wrong.**
+
+**It is saved, and by nothing in the constraints.** capstone-c's linear discipline writes a
+capability back to its home slot after every use. Confirmed here in the generated assembly rather
+than argued — around the fill site the sequence is:
+
+    stc(t0, sp, 64)      ; capability spilled to its home slot
+    ldc(a2, sp, 64)      ; reloaded into the template's operand
+    <the fill template>  ; hardware advances a2's cursor
+    stc(a2, sp, 64)      ; POST-FILL capability written BACK to the same slot
+
+so any later `cap_cursor`/`cap_end` reloads the advanced capability, not a stale one.
+
+**Record the dependency, because it is invisible at the C level.** `RCCU`'s correctness rests on that
+write-back discipline and not on the asm constraints. Anyone changing how capstone-c spills
+capabilities can silently invalidate this instrument, and the failure mode is the self-check firing
+and accusing the wrong branch.
+
+The `&` early-clobber was added to both outputs anyway; the allocation comes back identical at all
+five sites, so it costs nothing and the output-side hazard stops resting on luck.
+
+**Two decode traps worth inheriting**, both of which produced a clean-looking absence: the tag
+constants are `lui`/`addiw` immediates and never stored literals, so searching a binary for their
+bytes finds **none** of them — including one that provably fired on the board; and the capability
+load/store forms are I-type and S-type, so the fields that look like `funct7` and `rs2` are immediate
+bits, and comparing them as opcodes makes four of five sites look like they have no write-back.
