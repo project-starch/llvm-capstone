@@ -2162,8 +2162,55 @@ VIRTUAL `tval` (`load_store_unit.sv:993`) means the M-gated block fired and the 
 U-mode; cause 5 with a PHYSICAL `tval` (`pmp_data_if.sv:296`) means CPMP rejected the address for
 want of window coverage, which is a monitor CPMP-setup question and not a type check at all.
 
-### R-33 — a capability's BOUNDS are re-encoded when its cursor leaves `base`, and `end` then reads HIGH by up to one granule. Every store succeeded; the number that moved was the bound `OPEN — DEMONSTRATED ON SILICON 2026-09-12 (boot sw62, caplifive_r30r31_1bfff7776), mechanism traced through five quoted RTL sites, and the same capability observed reporting TWO different ends in one boot depending only on where its cursor sat`
+### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; the resulting over-permissive store has NOT been demonstrated. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
+> # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
+>
+> **The rounded `end` is not merely *reported* high; it is the authority bound.** `STC`'s check is
+> `rs1_up > rs1.metadata.end - 16` (`capstone_dyn_unit.anvil`, flashed revision), and `rs1.metadata`
+> is decompressed from the register file (`ex_stage.sv:802`). So once the first store re-encodes the
+> bounds, every later decode yields the rounded end and the hardware **permits stores into it**. On
+> sw62's arm 4 that authorises writes up to `base + 355,312`, whose last byte lands at
+> `base + 355,328` — **448 bytes past the 354,880 the allocator reserved.**
+>
+> **And it is not confined to UNINIT fills.** `CINCOFFSET` moves the cursor on an ordinary
+> LINEAR/NONLIN capability (`new_cursor = rs1.cursor + val`) and its result goes through the same FLU
+> writeback and the same `compress_cap`. Any capability whose cursor leaves base takes the rounding
+> branch.
+>
+> **Which is why the defect is the ALLOCATOR and not the encoder.** A lossy compressed-bounds format
+> is standard for this class of design, and it is EXACT for a *representable* object — one whose
+> size and base align to the granule. The contract that allocators hand out representable objects is
+> nowhere stated or enforced here: `create_region(N)` passes `N` straight through to the monitor's
+> `__split`, so a non-representable size is silently widened. **sw62 is the experiment for that
+> reading and it already ran:** both granule-aligned arenas were clean and only the unaligned one
+> failed. **Fix: round region sizes up to the representability granule at creation**, and reserve
+> that much. The two-check postcondition then remains as what catches a breach of the contract.
+>
+> **CONTAINMENT, and it is size-dependent — this bounds how bad it is today.** The kernel allocates
+> `PAGE_ALIGN(len)` (`module/capstone.c:232`), so the widened authority may still land inside the
+> page allocation. The granule is `2^(bit_length(N)-10)`, which exceeds a page exactly when
+> **N ≥ 4 MiB**:
+>
+> | region | granule | widened by | page slack | past the allocation |
+> |---:|---:|---:|---:|---:|
+> | 354,880 (sw62 arm 4) | 512 | 448 | 1,472 | none |
+> | 1,419,584 (sw60) | 2,048 | 1,728 | 1,728 | **none, with zero margin** |
+> | 4,194,368 | 8,192 | 8,128 | 4,032 | **4,096** |
+> | 8,388,672 | 16,384 | 16,320 | 4,032 | **12,288** |
+> | 136,314,944 | 262,144 | 262,080 | 4,032 | **258,048** |
+>
+> So **no region this project has actually used escapes its allocation** — sw60's sits exactly on the
+> boundary, and the 130 MiB region of sw55 happens to be granule-aligned. The exposure is for future
+> large non-aligned allocations, and a 130 MiB-class region has a 262,144-byte granule.
+>
+> **What is measured, read, derived and NOT shown — kept separate deliberately.** MEASURED on silicon:
+> `RCEN` = `round_up(N, granule)`, i.e. the decompressed end really is the widened value. READ FROM
+> SOURCE: `STC`'s bound check consumes `rs1.metadata.end`. DERIVED: therefore stores past the
+> allocation are authorised, with the table above. **NOT DEMONSTRATED: an actual out-of-allocation
+> write on silicon.** That directed test is the next thing this entry needs, and it should also cover
+> `CINCOFFSET` on a plain linear capability, which is untested here.
+>
 > **This is the mechanism behind sw60's 1,728 bytes, and it is NOT R-30.** R-30 is INIT's
 > precondition, which is fixed and verified (sw61, 5,334 INITs). This is a separate defect in bounds
 > re-encoding. It was found while investigating R-30 and cost two wrong accounts on the way — see the

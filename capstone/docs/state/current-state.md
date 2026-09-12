@@ -32,6 +32,16 @@ Minimal snapshot. Read first in every session.
   an instruction count understating a cost. Two caveats travel with these rows: the ⑥/⑤ comparison
   carries a heap-geometry term (910,008 vs 2,097,152, not equalisable), and the lookaside-ON rows
   must not be blended with the lookaside-OFF §7 corpus.
+* **R-33 is a SOUNDNESS issue, not just a reporting one, and its cause is the ALLOCATOR.** The
+  rounded `end` is the authority bound — `STC` checks `rs1_up > metadata.end - 16` against the
+  decompressed value — so a non-representable region grants writes past itself, and `CINCOFFSET`
+  reaches ordinary linear capabilities by the same route. A lossy compressed-bounds format is
+  standard and is exact for representable objects; nothing here enforces representability, and
+  `create_region(N)` passes `N` through unchanged. **Contained by the kernel's `PAGE_ALIGN` below
+  4 MiB and not contained at or above it** — no region used so far escapes (sw60's sits exactly on
+  the boundary), but a 130 MiB-class region has a 262,144-byte granule. The over-permissive store is
+  **derived, not yet demonstrated**; that directed test is what R-33 needs next.
+
 * **R-30's residual is SOLVED and re-filed as R-33 (boot sw62).** The 1,728 bytes were never a
   failed fill. A capability's bounds are re-encoded once its cursor leaves `base`, and `end` then
   reads high by up to one granule — `compress_bounds` uses an exact form only while the cursor sits
