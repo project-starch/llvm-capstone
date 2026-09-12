@@ -30,61 +30,19 @@
 #include <stdint.h>
 #include "pg_subpool.h"
 
-#define CAPSTONE_DPI_REGION_SHARE 1U
+/* Its own marker, so a failure here is not read as a replay's. */
+#define PG_DOM_FAIL_MARKER "__CAPSTONE_PG_SUBPOOL_FAILED__\n"
 
-struct pg_hostcall_v0 {
-    unsigned long long phase, opcode, offset, length;
-    long long result, error;
-};
-
-void pg_domain_payload(char *base, unsigned long *length, unsigned long capacity);
-void pg_domain_text(const char *s);
-void pg_domain_uint(unsigned long v);
-
-#ifndef PG_REPLAY_PAYLOAD_SIZE
-#define PG_REPLAY_PAYLOAD_SIZE 65536UL
-#endif
-#ifndef PG_REPLAY_ARENA_SIZE
-#define PG_REPLAY_ARENA_SIZE (32UL * 1024UL * 1024UL)
-#endif
-
-static volatile struct pg_hostcall_v0 *meta;
-static volatile char *payload;
-static unsigned shares;
-static unsigned long arena_type = 7;    /* until the share arrives */
-
-/* ---- the way back to the monitor, as replay_domain.c does it ------------- */
-unsigned char pg_subpool_exit_frame[32] __attribute__((aligned(16), used));
-static unsigned *domain_result;
-
-__attribute__((noreturn)) static void
-give_up(unsigned code)
-{
-    pg_domain_text("__CAPSTONE_PG_SUBPOOL_FAILED__\n");
-    if (domain_result)
-        *domain_result = code;
-    __asm__ volatile(
-        "1: auipc t0, %%pcrel_hi(pg_subpool_exit_frame)\n"
-        "  addi t0, t0, %%pcrel_lo(1b)\n"
-        "  .insn r 0x5b, 0x1, 0xc, t0, gp, t0\n"
-        "  .insn i 0x5b, 0x3, sp, 0(t0)\n"
-        "  .insn i 0x5b, 0x3, ra, 16(t0)\n"
-        "  ret\n" ::: "memory");
-    for (;;)
-        ;
-}
-
-__asm__(".section .text.entry,\"ax\",@progbits\n"
-        "  .globl domain_main\n"
-        "domain_main:\n"
-        "1: auipc t0, %pcrel_hi(pg_subpool_exit_frame)\n"
-        "  addi t0, t0, %pcrel_lo(1b)\n"
-        "  .insn r 0x5b, 0x1, 0xc, t0, gp, t0\n"
-        "  .insn s 0x5b, 0x4, sp, 0(t0)\n"
-        "  .insn s 0x5b, 0x4, ra, 16(t0)\n"
-        "  j pg_subpool_domain_main\n");
+/* Everything about being a domain, shared with the two replay drivers. This
+ * file drives no replay, so it includes no loop. */
+#include "domain_frame.inc"
 
 /* ---- how a scenario reports ---------------------------------------------- */
+/* What the level below said about the arena it was handed, in the share
+ * handler, because a linear capability assigned to a C pointer and read back
+ * on a later call comes back non-linear. */
+static unsigned long arena_type = 7;
+
 static unsigned failures;
 
 static void
@@ -141,10 +99,10 @@ fill(pg_block *b, unsigned n, unsigned long bytes, unsigned epoch,
     return bad;
 }
 
-void pg_subpool_domain_main(unsigned *res, unsigned func);
+void pg_domain_entry(unsigned *res, unsigned func);
 
 void
-pg_subpool_domain_main(unsigned *res, unsigned func)
+pg_domain_entry(unsigned *res, unsigned func)
 {
     if (func == CAPSTONE_DPI_REGION_SHARE) {
         switch (shares) {

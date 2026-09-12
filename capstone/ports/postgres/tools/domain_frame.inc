@@ -26,6 +26,10 @@
  *   row(name, was, got)   one line of a markdown table
  *   the region-size macros, and the hostcall struct the metadata region holds
  *
+ * The helpers are marked unused because not every driver needs all of them:
+ * the level below's own test drives no replay, so it wants the trampoline and
+ * the way back and nothing else, and it is built with -Werror.
+ *
  * The symbol names are deliberately the same in all three images. They are
  * separate binaries, so nothing collides, and a single name means the
  * trampoline's assembly needs no preprocessor games to find its frame.
@@ -73,7 +77,7 @@ static unsigned shares;
  */
 static char *scratch_next, *scratch_end;
 
-static void *
+__attribute__((unused)) static void *
 scratch_alloc(size_t n)
 {
     n = (n + 15UL) & ~(size_t) 15UL;
@@ -101,7 +105,7 @@ scratch_alloc(size_t n)
 unsigned char pg_domain_exit_frame[32] __attribute__((aligned(16), used));
 static unsigned *domain_result;
 
-static void
+__attribute__((unused)) static void
 fail(const char *what)
 {
     pg_domain_text("pg-domain: ");
@@ -126,14 +130,14 @@ give_up(unsigned code)
         ;
 }
 
-__attribute__((noreturn)) static void
+__attribute__((noreturn, unused)) static void
 die(const char *what)
 {
     fail(what);
     give_up(0xBADCAFE0u);
 }
 
-__attribute__((noreturn)) static void
+__attribute__((noreturn, unused)) static void
 die_at(unsigned long i, const char *what, unsigned long id)
 {
     fail(what);
@@ -162,7 +166,7 @@ __asm__(
     "  .insn s 0x5b, 0x4, ra, 16(t0)\n"      /* stc ra, 16(t0) */
     "  j pg_domain_entry\n");
 
-static void
+__attribute__((unused)) static void
 row(const char *name, unsigned long was, unsigned long got)
 {
     pg_domain_text("| ");

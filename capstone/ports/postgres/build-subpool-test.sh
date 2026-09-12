@@ -20,9 +20,10 @@ CLANG=${CLANG:-$LLVM/bin/clang}
 LD_LLD=${LD_LLD:-$LLVM/bin/ld.lld}
 READOBJ=${READOBJ:-$LLVM/bin/llvm-readobj}
 
-START_SRC=$REPO_ROOT/capstone/my_first_domain/start.S
-LINKER_SCRIPT=$REPO_ROOT/capstone/my_first_domain/link.ld
-DOMREQ_SRC=$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S
+# The link and the two checks that have each cost a run are shared with the
+# two manager builds. This image carries no PostgreSQL source, so it uses that
+# part of domain-build.sh and not the rest.
+source "$HERE/domain-build.sh"
 
 # The host makes the same regions the replay makes, so one host serves both and
 # the fourth region is shared and ignored.
@@ -79,28 +80,8 @@ for f in "$HERE/port/freestanding/pg_printf_domain.c" \
   OBJS+=("$o")
 done
 
-"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-    -ffreestanding -O0 -c "$START_SRC" -o "$OUT/obj/start.o"
-"$CLANG" -target capstone64-unknown-elf -ffreestanding \
-    -DCAPSTONE_DOMREQ_DATA=$PG_DOMAIN_DATA \
-    -DCAPSTONE_DOMREQ_STACK=$PG_DOMAIN_STACK \
-    -c "$DOMREQ_SRC" -o "$OUT/obj/domreq.o"
-
-OUT_DOM=$OUT/pg_subpool_test.dom
-_segs() { "$READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|VirtualAddress|FileSize|MemSize'; }
-
-"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-    "$OUT/obj/start.o" "${OBJS[@]}"
-_before=$(_segs)
-"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-    "$OUT/obj/start.o" "${OBJS[@]}" "$OUT/obj/domreq.o"
-# The declaration is non-alloc, so nothing loaded may move. Verified and not
-# asserted: four added instructions have flipped a passing run on this project.
-if [[ "$(_segs)" != "$_before" ]]; then
-  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
-  exit 2
-fi
+pgdom_link "$OUT" "$OUT/pg_subpool_test.dom"
 
 echo "declared dom_data $PG_DOMAIN_DATA (stack $PG_DOMAIN_STACK)"
 echo "regions the host must make: payload $PG_PAYLOAD, arena $PG_ARENA, trace $PG_TRACE"
-echo "built $OUT_DOM"
+echo "built $OUT/pg_subpool_test.dom"
