@@ -1,0 +1,113 @@
+# R-30 after the flash: what sw60 and sw61 can and cannot settle, one refuted hypothesis, and the instrument gap that blocks the rest
+
+**2026-09-12, RTL lane.** The board lane handed this over as an unreconciled conflict rather than a
+re-diagnosis, which was the right call. This note is the attempt, and it ends with a **negative
+result plus a one-line instrument fix**, not an answer.
+
+## What the two readings actually say
+
+| boot | reading |
+|---|---|
+| sw60 | the monitor's reclaim of a region the host asked for as **1,419,584 bytes** falls **1,728 bytes** short of `end` (`RCSH:000006C0`, 108 granules of 16) and takes its designed `while(1)` |
+| sw61 | the Sublet port on the same silicon reports **`init=5334`**, with every counter bit-identical to QEMU |
+
+**R-30's registry headline does not survive either reading.** It says INIT is *unreachable* and that
+the shortfall is *exactly one byte*. INIT ran 5,334 times in one boot, and the observed shortfall is
+1,728 bytes. Both particulars are wrong as stated.
+
+**But the two readings are not in conflict with the R-30 FIX, and that distinction matters.** R-30's
+one-byte claim was about INIT's *precondition* — a filled UNINIT leaves the cursor **at** `end`, and
+INIT required `cursor > end` strictly, so it was unreachable by one position. The fix made INIT legal
+at `cursor == end`. sw61 is that fix working, 5,334 times. sw60 is a **fill that did not reach
+`end`**, which is a different failure at a different step: with the cursor short of `end`, INIT is
+correctly refused. **So sw60 is not evidence against the R-30 fix. It is evidence of a second,
+previously unnamed effect that only shows on a large region.**
+
+## The hypothesis that fit the arithmetic exactly, and is REFUTED
+
+1,728 is exactly the distance from 1,419,584 up to the next **2 KiB** boundary (1,421,312):
+
+    round up to  2048  -> 1421312, gap 1728   EXACT
+    round up to  4096  -> 1421312, gap 1728   EXACT (same value at this size)
+    round up to  1024  -> 1420288, gap  704
+    round up to   512  -> 1419776, gap  192
+
+That is a striking fit, and it suggested **capability bounds compression**: a compressed format's
+representable `end` is rounded up for a large object, the fill reaches the true end, and the readback
+reports the rounded one. It would also have explained sw61 for free, since small blocks are exactly
+representable and would never round.
+
+**It is wrong.** The RTL uses a `fat_cap_t` with **full 64-bit bounds** — `start : logic[64]` and
+`end : logic[64]` (`core/anvil_build/capstone_unit.anvilh:321` and the `fat_cap_metadata_t`
+constructors at `:396-442`). There is no bounds compression in the hardware capability to round
+anything. The arithmetic fit is a coincidence until something else explains it.
+
+**Two further reasons not to have shipped it even if the RTL had cooperated**, both worth keeping:
+
+* **One datapoint cannot separate 2 KiB from 4 KiB.** They give the same gap at this size. A single
+  reading that fires and still under-determines is the documented failure shape, not a finding.
+* It would have been a curve fit to **one** number, with the region size taken from what the host
+  *asked for* rather than from what the capability *reports*.
+
+## Why the loop arithmetic cannot produce 1,728 on its own
+
+The fill is `C_RECLAIM` (`sbi_capstone.c:252-256`), and it is short enough to reason about completely:
+
+    n = (cap_end(cap) - cap_base(cap)) >> 4        // C, before the asm
+    mv %1,%3 ; 1: beq %1,x0,2f ; stc(x0,%2,0) ; addi %1,%1,-1 ; j 1b
+    2: lcc(%0,%2,2) ; lcc(%1,%2,4) ; sub %1,%1,%0  // shortfall = end - cursor
+
+Every store advances the cursor by one 16-byte granule, so after `n` stores the cursor sits at
+`base + 16*((end-base)>>4)`. The **only** shortfall this arithmetic can produce is
+`(end - base) mod 16`, i.e. **at most 15 bytes**. The region is granule-aligned anyway
+(1,419,584 mod 16 = 0), so on the reported size the predicted shortfall is **0**.
+
+1,728 is 108 granules. So either 108 stores did not advance the cursor, or `n` was computed 108 too
+small — which needs `cap_end` at bound time to differ from `lcc …,4` at check time, and both are
+selector 4 on the same capability. **Nothing in the source accounts for it**, which is the honest
+state.
+
+## THE INSTRUMENT GAP, and it is one line
+
+**The reading cannot be pushed further because the macro does not report the two values that would
+settle it.** `C_DO_RECLAIM` (`sbi_capstone.c:275-280`) reports `RCSH` (the shortfall) and
+`CAPSTONE_TAG_BASE` (the base) and nothing else. So from sw60 nobody can compute:
+
+* the capability's **true size**, `end - base` — the 1,419,584 above is what the host **requested**,
+  not what the capability reports, and the whole question is whether those differ;
+* where the cursor **actually stopped**.
+
+**Fix: report `cap_cursor` and `cap_end` alongside the shortfall on the RCSH path.** It is inside a
+path that is already halting with `while(1)`, so it cannot perturb any measurement, and it converts
+the next occurrence from "1,728 short of something" into a closed arithmetic statement. This is the
+project's own rule — name in advance the observation that proves the condition — applied to firmware.
+
+## Pre-registered predictions, written BEFORE the next run
+
+With cursor and end reported, one boot separates the live accounts:
+
+| reading | what it means |
+|---|---|
+| `end - base` = 1,419,584 and cursor = base + 1,417,856 | 108 stores genuinely did not advance the cursor. A fill/STC question, and the serious one. |
+| `end - base` = 1,421,312 | the capability is **larger than the request** — the region allocator rounded, and `n` was right while the request figure was the misleading number. A monitor/allocator question, not an ISA one. |
+| `end - base` not a multiple of 16 | the truncation case after all, and then the shortfall must be < 16, so 1,728 would refute this in the same reading |
+
+**And the cheap discriminating pair, independent of the above:** run the same reclaim on a region
+whose size is an exact multiple of 4,096, and on one that is not. If the shortfall tracks the
+round-up distance it is an allocator/representation effect; if it stays 1,728 or scales with region
+size it is not.
+
+## What must NOT be written down yet
+
+* Not "R-30 is fixed" — sw61 shows INIT reachable, which is the fix working, but sw60 shows a large
+  fill still failing and that is unexplained.
+* Not "R-30 is not fixed" — sw60's failure is at the fill, one step before INIT, and the R-30 change
+  was to INIT's precondition.
+* Not the compression story above. It is recorded here **because it was refuted**, so the next reader
+  does not spend the same hour rediscovering the same attractive fit.
+
+The sim test passing at this revision an hour before the board contradicted it is worth keeping in
+view: `r30-fill-init.S` fabricates its UNINIT with the Custom3 debug ops on a small buffer, which
+R-30's own entry already calls a test working around the defect rather than reporting it. A directed
+test on a small fabricated capability cannot speak to a 1.4 MB region reached through the real
+share/revoke path.
