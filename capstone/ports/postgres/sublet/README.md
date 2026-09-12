@@ -276,6 +276,31 @@ domain, through `tools/replay_core.inc`, which is the same loop the
 unprotected arm runs. So everything below differs from the unprotected domain
 only by what the port does.
 
+### The objects hold their contents
+
+Counting the calls says the bookkeeping is consistent. It does not say the
+objects hold what was put in them, which is the contract `palloc` makes and
+the thing a discipline that revokes a chunk and hands its region out again
+could break without any counter noticing. So the loop writes a pattern into
+every object it allocates and reads it back when the trace next mentions that
+object.
+
+| | tpcb | readonly |
+|---|---:|---:|
+| objects whose contents were read back | 196 415 | 41 043 |
+| of those, wrong | 0 | 0 |
+
+That is every object the trace frees, plus the two reallocs checked twice
+each: `repalloc` promises the old contents, and under this port a large chunk
+moves by copy where upstream grew its block in place, so the second check is
+the one that says the copy was right and kept its tags.
+
+The coverage is what it is and no more. A reset and a delete do not name the
+objects they take, so there is no moment at which those can be checked, and
+nothing is swept at the end either: after a reset the driver's table points at
+memory the discipline has revoked, and reading one entry would fault rather
+than report.
+
 ### The claim, as an identity
 
 The teardown cost is checked inside the domain and as an equality rather than a
