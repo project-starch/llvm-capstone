@@ -15,11 +15,11 @@
  *                     read them see what a quiet backend would see.
  *   the stack check   a backend refuses to recurse near its stack limit.
  *                     Nothing here recurses on data, so it never is.
- *   printf helpers    PostgreSQL routes its own formatting through these, for
- *                     the sake of platforms whose printf differs. On the host
- *                     they are the platform's, by definition.
- *
- * A freestanding build replaces the last group and keeps the rest.
+ * The printf helpers are the fourth group and they are not here: PostgreSQL
+ * routes its own formatting through them, and where that formatting goes is
+ * the one thing a host and a domain do not agree on. pg_printf_host.c hands
+ * them to the platform; a domain has no stdout and writes into the payload
+ * the host prints afterwards. Everything above is the same in both.
  */
 #include "postgres.h"
 #include "miscadmin.h"
@@ -102,20 +102,4 @@ int pg_mbcliplen(const char *mbstr, int len, int limit)
 {
     (void) mbstr;
     return len < limit ? len : limit;
-}
-
-/* ---- the printf helpers ------------------------------------------------ */
-int pg_snprintf(char *str, size_t count, const char *fmt,...)
-{
-    va_list ap; va_start(ap, fmt); int r = vsnprintf(str, count, fmt, ap); va_end(ap); return r;
-}
-int pg_fprintf(FILE *stream, const char *fmt,...)
-{
-    va_list ap; va_start(ap, fmt); int r = vfprintf(stream, fmt, ap); va_end(ap); return r;
-}
-/* Not reached from the manager, but port.h redirects every caller that
-   includes it, and a program built on this port is such a caller. */
-int pg_printf(const char *fmt,...)
-{
-    va_list ap; va_start(ap, fmt); int r = vprintf(fmt, ap); va_end(ap); return r;
 }

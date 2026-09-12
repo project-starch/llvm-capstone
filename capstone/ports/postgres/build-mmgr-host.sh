@@ -50,7 +50,8 @@ for f in $FILES; do
   $CC -c -O2 -g $INC "$SRC/src/backend/utils/mmgr/$f" -o "$OUT/obj/${f%.c}.o"
 done
 $CC -c -O2 -g $INC "$HERE/port/pg_stubs.c" -o "$OUT/obj/pg_stubs.o"
-$CC -O2 -g $INC "$HERE/tools/replay.c" "$OUT/obj"/*.o -o "$OUT/replay"
+$CC -c -O2 -g $INC "$HERE/port/pg_printf_host.c" -o "$OUT/obj/pg_printf_host.o"
+$CC -O2 -g $INC -I"$HERE/tools" "$HERE/tools/replay.c" "$OUT/obj"/*.o -o "$OUT/replay"
 echo "== the manager links against $(grep -c '^[A-Za-z].*(' "$HERE/port/pg_stubs.c") definitions and libc"
 echo "   $OUT/replay"
 
