@@ -221,3 +221,62 @@ constants are `lui`/`addiw` immediates and never stored literals, so searching a
 bytes finds **none** of them — including one that provably fired on the board; and the capability
 load/store forms are I-type and S-type, so the fields that look like `funct7` and `rs2` are immediate
 bits, and comparing them as opcodes makes four of five sites look like they have no write-back.
+
+---
+
+## 6. RETRACTION: my refutation was wrong, the compression account is RIGHT, and here is the mechanism
+
+**I refuted the compression hypothesis on a narrowed view and the refutation does not stand.** I read
+`fat_cap_t`'s full 64-bit `start`/`end` and concluded there was nothing to round. Capabilities are
+**fat inside the pipeline and COMPRESSED ON WRITEBACK**; I never looked at the writeback layer. The
+board lane found `compress_bounds` (`core/include/ariane_pkg.sv:782`) and retracted their endorsement
+of my refutation at the same time. Same failure shape as the others today: a clean-looking answer read
+out of half the file.
+
+**My STC reading was correct and INCOMPLETE.** Cursor advances by 16, metadata passes through
+unchanged — true of the pipeline, and it simply does not reach the layer where compression happens.
+The two arguments were never in contact, which is why both of us thought the question closed.
+
+### The mechanism, every link quoted
+
+1. **STC advances the cursor, metadata untouched** (`capstone_dyn_unit.anvil`, UNINIT path):
+   `let new_cursor = rs1_v.cursor + 64'd16; let new_rs1 = call create_capability(rs1_v.metadata,new_cursor);`
+2. **That capability becomes the result's `cap_rs1`** (`capstone_unit.anvilh`, `create_result_pack`):
+   the third argument is assigned `cap_rs1 = rs1`, and STC passes `new_rs1` there.
+3. **The DYN unit's rs1 IS re-compressed on writeback** — this is the site the board lane could not
+   find, and it is on the dyn path rather than a separate store path, because **STC is a DYN op**
+   (`decoder.sv:1309`, `fu = CAPSTONE_DYN`). `ex_stage.sv:1227`:
+   `rs1_metadata : {(capstone_dyn_res.cap_rs1.metadata.cap_type != NOT_CAP), compress_cap(capstone_dyn_res.cap_rs1)},`
+4. **`compress_cap` calls `compress_bounds` with the cursor** (`ariane_pkg.sv:869`).
+5. **`compress_bounds` rounds the top up** when the cursor is off base (`:827-828`):
+   `if(((bounds.base >> (E+3))<<(E+3)) != bounds.base) T[11:3] += 1;` with `E = leading_zeros - 12`.
+
+### Why the timeline produces exactly 1,728, and why every store succeeded
+
+The branch at `:783` is the hinge: **`if (bounds.start == cursor)`** selects a *cursorless* scheme
+whose top is `t = (bounds.base >> E) & 21'h1FFFFF` — **no round-up term at all**.
+
+    cursor AT base   -> cursorless scheme, exact top.  cap_end reads the TRUE end.
+                        n = (end-base)>>4 = 88,724.   [RCPR confirmed cursor==base here]
+    first stc        -> cursor moves off base
+    every writeback  -> rounding scheme. len 1,419,584, top bit 20, E = 8,
+                        granule 2^(E+3) = 2048, top rounds 1,419,584 -> 1,421,312
+    after the fill   -> lcc(...,4) decodes the ROUNDED end; cursor is on the TRUE end
+                        shortfall = 1,421,312 - 1,419,584 = 1,728 = 0x6C0
+
+**So all 88,724 stores succeeded and the cursor is exactly where it should be.** "108 stores did not
+advance the cursor" — the only account I had left standing — is refuted. The shortfall is a readback
+artefact of bounds re-encoding, not a fill failure.
+
+`E == 0 && len[12] == 0` (`:818-821`) is exact, so the effect **cannot** appear on small regions. That
+is why 5,334 Sublet inits succeeded and nothing before sw60 ever showed it.
+
+### What this changes about R-30
+
+The R-30 fix is fine and sw61 is it working. sw60 is **not an R-30 failure at all**, and not a fill
+failure either: it is a **separate defect in bounds re-encoding** that makes `end` read high once the
+cursor leaves base. It deserves its own registry entry rather than more R-30 text.
+
+**Still not proven, and worth saying:** the chain above is read from source. sw62's aligned arms are
+the empirical test, and they are the right one — a granule-aligned region needs no round-up, so
+compression predicts a CLEAN reclaim exactly where any store-failure model predicts a shortfall.
