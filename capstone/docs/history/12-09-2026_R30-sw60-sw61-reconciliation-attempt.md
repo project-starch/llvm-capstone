@@ -280,3 +280,53 @@ cursor leaves base. It deserves its own registry entry rather than more R-30 tex
 **Still not proven, and worth saying:** the chain above is read from source. sw62's aligned arms are
 the empirical test, and they are the right one — a granule-aligned region needs no round-up, so
 compression predicts a CLEAN reclaim exactly where any store-failure model predicts a shortfall.
+
+## 7. Working the "what else reads a bound after moving a cursor" list — the exposure is ONE window
+
+The board lane listed six monitor sites to check and asked for the cursor state at each rather than
+treating the list as a finding. Worked, and the answer is better than feared.
+
+**INIT RESETS THE CURSOR TO BASE, which is what closes most of the list.** `capstone_flu_unit.anvil`,
+INIT's success path:
+
+    let val = rs2.cursor;
+    let rd_temp = call modify_cap_type(rs1,cap_type_t::CAP_TYPE_LINEAR);
+    let new_cursor = val + rd_temp.metadata.start;
+
+The monitor's `csinit` passes **`x0`** as rs2 (`.insn r 0x5b, 0x1, 0x9, %0, %2, x0`), so `val = 0` and
+`new_cursor = start`. **A completed reclaim therefore hands back a capability whose cursor is at base**,
+which re-selects the exact cursorless encoding. Nothing downstream of a successful reclaim inherits a
+rounded `end`.
+
+**The caller-visible region-field query is NOT exposed in practice.** `CAPSTONE_REGION_FIELD_END` and
+`..._LEN` read `regions[]` or a CPMP entry. Those capabilities are freshly created or post-INIT, so
+their cursor is at base. The worry was right to raise and does not survive the check.
+
+**The share path's `ALEN` trace is safe by explicit ordering**, not by luck — its own comment says the
+trace *"deliberately runs FIRST"*, before `C_DO_RECLAIM`, and `RCPR` verifies `cursor == base` on the
+very next line.
+
+**So the only window in the monitor where a bound is read with the cursor off base is inside
+`C_RECLAIM`'s own postcondition** — between the first store and the INIT. That is exactly where the
+defect surfaced, and nowhere else reaches it.
+
+**Two caveats, because this is a property of the current call sites and not a guarantee:**
+
+* It holds for the code as written. **Any new code that reads a bound off a mid-fill capability hits
+  this**, and nothing in the type system or the API says so.
+* `compress_bounds` truncates the **bottom** as well as rounding the top (`B[13:3] = {bounds.start >> E}[13:3]`
+  with no correction term), so `cap_base` can read **LOW** by up to granule−1 on the same encoding.
+  It did not bite on sw60 because that region's base is 2048-aligned, but a non-granule-aligned base
+  would move `cap_base` too, and `..._FIELD_LEN` subtracts the two.
+
+### A firmware-side fix that does not wait on the RTL
+
+The postcondition does not need to read `end` back at all. It already knows the answer before the
+fill: `n` stores of 16 from a cursor verified at base must land the cursor at `base + 16n`. So
+
+    shortfall = (base + 16*n_initial) - cursor_readback
+
+compares two quantities neither of which is a re-encoded `end`, and `cap_base`/`cap_cursor` are read
+either side of the same window. That makes the check immune to the re-encoding regardless of whether
+the RTL defect is ever fixed, and it keeps the postcondition doing its real job — catching a fill that
+genuinely fell short. It is the board lane's file and their call.
