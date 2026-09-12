@@ -75,7 +75,7 @@ provenance() {  # what produced the files beside it: enough to rebuild the image
     echo "buildroot       $(git -C "$CAPSTONE_BUILDROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true) $(git -C "$CAPSTONE_BUILDROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || true)"
     echo "qemu            $qemu${qdir:+; $(git -C "$qdir" rev-parse --abbrev-ref HEAD) $(git -C "$qdir" rev-parse --short=12 HEAD)}; CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN CAPSTONE_REV_NODES=$CAPSTONE_REV_NODES"
     echo "port            $(sha256sum "$PORT/sublet/sublet-3530300.patch" | cut -c1-64)  capstone/ports/sqlite/sublet/sublet-3530300.patch"
-    echo "primitives      $(sha256sum "$PORT/sublet/sublet.h" | cut -c1-64)  capstone/ports/sqlite/sublet/sublet.h"
+    echo "primitives      $(sha256sum "$HERE/../../sublet/sublet.h" | cut -c1-64)  capstone/sublet/sublet.h"
     echo "instrument      $(sha256sum "$HERE/memhook.c" | cut -c1-64)  memhook.c, called from hook-3530300.patch (memsys5 arm) and hook-3530300-sublet.patch (sublet arm)"
   } > "$f"
 }
