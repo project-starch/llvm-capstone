@@ -1,28 +1,14 @@
 /* The level below PostgreSQL's memory manager, under Sublet: one sub-pool per
  * context, one handle senior to it, and a block table beside it.
  *
- * Why a sub-pool and not a block: aset.c takes its blocks one at a time, and a
- * handle from mrev is senior to one node, so a handle kept per block would
- * make a reset cost one revocation per block and the cost of a reset would
- * grow with the objects in the context. The claim C11 makes is one revocation
- * per context, so the delegation has to be per context. sublet/README.md
- * argues it and prices the size.
+ * ../sublet/README.md argues why the delegation is per context and not per
+ * block, and why the sub-pool table, the block table and the context header
+ * all live outside the sub-pool. The short form of the last: a revocation
+ * cannot spare part of what it covers.
  *
- * Three things live outside the sub-pool, in memory no revocation reaches, and
- * each for the same reason: a revocation cannot spare part of what it covers.
- *
- *   the sub-pool table   its own capability and its handle. A revoke that
- *                        reached these would destroy the means to recover.
- *   the block table      what aset.c calls AllocBlockData. The manager reads
- *                        and writes a block's header across a reset of the
- *                        block's own contents, and it walks the block list
- *                        while tearing the context down.
- *   the context header   AllocSetContext, which the manager is executing on
- *                        when it resets. See sublet/README.md.
- *
- * So a block's header is not at the front of the block any more. That is the
- * one structural change, and it is why aset.c's own field accesses need no
- * patch: AllocBlock was always a pointer, and it still is, to an entry here.
+ * So a block's header is not at the front of the block. That is the one
+ * structural change, and it is why aset.c's own field accesses need no patch:
+ * AllocBlock was always a pointer, and it still is, to an entry here.
  */
 #ifndef PG_SUBPOOL_H
 #define PG_SUBPOOL_H
@@ -68,70 +54,47 @@ typedef struct pg_block {
     struct pg_block *pool_prev, *pool_next;
 } pg_block;
 
-/* A chunk, as the discipline needs it. aset.c keeps a freed chunk's free-list
- * link inside the chunk, and a revoked chunk cannot hold it, so the link moves
- * here. So does the size class, because the manager reads a freed chunk's class
- * when it pops it, and so does the capability itself.
- *
- * `slot` holds the chunk's region while the chunk is free and its handle while
- * the chunk is out, which is what sublet_take and sublet_give do to one slot.
- * An entry is therefore held from the carve until the reset that reclaims its
- * block, and not released by a free: the recording says 2 321 are held at the
- * peak of the tpcb rung, against 2 293 chunks alive.
- *
- * `block_next` chains an entry to the others carved from the same block, so a
- * block returns all of its entries at once. It is never walked to find
- * anything, only spliced, which is why a reset does not touch a chunk.
+/* A chunk, as the discipline needs it: what aset.c kept inside the freed chunk
+ * cannot live there when a free revokes it. `slot` holds the chunk's region
+ * while it is free and its handle while it is out, which is what sublet_take
+ * and sublet_give do to one slot, so an entry is held from the carve until the
+ * reset that reclaims its block and a free does not release it.
  */
 typedef struct pg_chunk {
     sublet_cap slot;
-    unsigned int next_free;         /* the manager's size-class list, by index */
-    /* Two lists share this field, and they never overlap: while the entry
-     * belongs to a block it is that block's chain, and while the entry is
-     * unused it is the level below's list of spare entries. An entry that
-     * belongs to no block is exactly an entry that is spare, so one field
-     * suffices and a block's entries go back in one splice rather than a walk. */
+    unsigned int next_free;    /* the manager's size-class list, by index */
+    /* Its block's chain while it belongs to one, the spare list while it does
+     * not. The two never overlap, so one field does both and a block's entries
+     * go back in one splice rather than a walk. */
     unsigned int block_next;
-    unsigned int bytes;             /* what the class gives, not what was asked */
-    /* Which block the chunk was carved from, so that a chunk which sat on a
-     * size-class free list can still say it when it goes out again. The
-     * manager wrote that into the chunk's own header before; a freed chunk is
-     * revoked here, so it cannot hold it while it waits. */
-    unsigned int block;
+    unsigned int bytes;        /* what the class gives, not what was asked */
+    unsigned int block;        /* which block, since a freed chunk cannot say */
 } pg_chunk;
 
 typedef struct pg_subpool pg_subpool;
 
-/* The arena the host gave the domain, once. Sub-pools are carved from it and
- * never joined again, so they are all one size and a returned one goes on a
- * free list. That is the second reason the size is fixed rather than a ladder:
- * a region can be split and not joined, so equal sizes make reuse exact. */
-/* Returns the type of the capability it was handed, so a caller can say what
- * went wrong instead of tripping an assertion inside the first primitive.
- * Zero is linear, which is the only type this level can carve and revoke; one
- * is non-linear, two revocable, three uninitialised, seven an empty slot. A
- * region that is not linear cannot be delegated, because a handle senior to it
- * would have nothing to revoke. */
+/* The arena the host gave the domain, once. Returns the type of the capability
+ * it was handed rather than asserting, so a caller can say what went wrong: 0
+ * linear, 1 non-linear, 2 revocable, 3 uninitialised, 7 an empty slot. Only a
+ * linear region can be delegated, because a handle senior to anything else has
+ * nothing to revoke. */
 unsigned long pg_subpool_arena(void *arena, unsigned long bytes);
 
-/* 65536, from the recording: 16.4 MiB of arena at the peak of the tpcb rung
- * and 99.96% of the resets and deletes at exactly one revocation. */
+/* Priced from the recording; ../sublet/README.md has the table. */
 #define PG_SUBPOOL_BYTES 65536u
 
 pg_subpool *pg_subpool_create(void);
 void pg_subpool_destroy(pg_subpool *sp);
 
-/* One revocation, and none at all when nothing was carved since the last one.
- * A third of the resets in the recording are that case. */
+/* One revocation, and none at all when nothing was carved since the last. */
 void pg_subpool_reset(pg_subpool *sp);
 
 /* A block of at least `bytes`, or null when the sub-pool has no room left.
  * The caller asks again after pg_subpool_grow. */
 pg_block *pg_subpool_block(pg_subpool *sp, unsigned long bytes);
 
-/* Another sub-pool for a context that filled the first: it costs one more
- * revocation at the next reset, which the recording says happens eight times
- * in thirty thousand. Returns zero when the arena is exhausted. */
+/* Another sub-pool for a context that filled the first, which costs it one
+ * more revocation at every later reset. Zero when the arena is exhausted. */
 int pg_subpool_grow(pg_subpool *sp, unsigned long bytes);
 
 /* Give one block back before a reset. aset.c does this for a block it empties
@@ -185,13 +148,8 @@ unsigned int pg_subpool_next_chunk(unsigned int i);
  * by the very reset it is executing. See sublet/README.md, "The keeper block".
  *
  * The headers are a table of equal slots in the domain's own data, because
- * they are few, they are all about the same size, and a table cannot be
- * revoked. PG_HEADER_BYTES is checked against the manager's largest context
- * struct by a static assertion in the patch, so a version that grew one would
- * fail to build rather than overrun. */
-/* sizeof(AllocSetContext) is about 290 bytes with sixteen-byte pointers, and a
- * static assertion in the patch fails the build if a version of the manager
- * grows past this. */
+ * they are few and a table cannot be revoked. A static assertion in the patch
+ * fails the build if a version of the manager grows a context past a slot. */
 #define PG_HEADER_BYTES 320u
 void *pg_subpool_header(unsigned long bytes);
 void pg_subpool_header_free(void *p);
@@ -201,23 +159,13 @@ void pg_subpool_header_free(void *p);
 struct pg_subpool_counts {
     unsigned long created, destroyed, resets, resets_empty;
     unsigned long revocations, handles;
-    /* Revocations of a second or later sub-pool, so that the claim can be
-     * checked as an identity rather than an inequality:
-     *
-     *   revocations == (resets - resets_empty) + extra_revocations
-     *
-     * One per teardown of a context that holds something, and one more for
-     * every further sub-pool that context was given. A context keeps a second
-     * sub-pool for the rest of its life, so this can exceed the number of
-     * times one was handed out. */
+    /* Counted apart so the claim is an identity and not a bound:
+     *   revocations == (resets - resets_empty) + extra_revocations   */
     unsigned long extra_revocations;
     unsigned long blocks, blocks_freed, grown;
     unsigned long blocks_live, blocks_peak;
-    /* Blocks carved again as a keeper after a reset, which upstream does not
-     * do at all: it keeps the keeper and this port revokes it with the rest
-     * and carves it again, because a revocation cannot spare part of what it
-     * covers. Counted apart so that "blocks taken" can be compared with the
-     * unprotected arm's, which is the comparison the paper makes. */
+    /* Keepers carved again after a reset, work the unprotected arm does not
+     * do, counted apart so the block totals stay comparable. */
     unsigned long keepers;
     unsigned long carves, hands, drops;
     unsigned long entries_live, entries_peak;
@@ -226,36 +174,19 @@ struct pg_subpool_counts {
 extern struct pg_subpool_counts pg_subpool_counts;
 
 /* What the primitives themselves ran, which is a different question from what
- * this level was asked to do and the one the board answers. sublet.h keeps its
- * tally per translation unit, and the primitives run in this one, so a reader
- * elsewhere has to come through here.
- *
- * The number that matters on silicon is split plus mrev. Each allocates a
- * revocation node from a bump head with no reclamation, so a run spends nodes
- * for as long as it runs and a revoke does not give any back. The resident
- * bitstream carries 65 536 of them. */
+ * this level was asked to do. sublet.h keeps its tally per translation unit
+ * and the primitives run in this one, so a reader elsewhere comes through
+ * here. split plus mrev is what a run spends in revocation nodes. */
 const struct sublet_stats *pg_subpool_primitives(void);
 
-/* The tables, sized from the recording at about four times its peak, and the
- * factor is four rather than ten for a reason that cost a run.
- *
- * They are static, in the domain image, because a table that grew would need
- * an allocator under it and that allocator would need a table. So they are the
- * image, and the image has a ceiling: the module asks the buddy allocator for
- * the image doubled, rounded up to a power-of-two page count, and that
- * allocator stops at order ten, four megabytes. An image much above two
- * megabytes therefore cannot be created at all, and it fails as
- * `create_dom failed`, which says nothing about tables. The first Sublet
- * image was 2.5 MB of which two were these tables, and that is how the
- * ceiling was found.
- *
- * The peaks the recording gives, on the tpcb rung: 120 contexts alive, 241
- * blocks held, 2 321 chunk entries held. Four times each, and the four tables
- * together are about 640 KiB.
- *
- * A table that runs out is a fault at a named place and not a corruption:
- * every allocator here returns null or zero, and the manager's own
- * out-of-memory path takes it from there. */
+/* The tables are static, because a table that grew would need an allocator
+ * under it and that allocator would need a table. So they are the image, and
+ * the image has a ceiling: the module asks the buddy allocator for the image
+ * doubled, and that allocator stops at four megabytes, so an image much above
+ * two cannot be created at all and fails as `create_dom failed`. The sizes are
+ * about four times what the recording's peaks were. A table that runs out
+ * returns null or zero and the manager's own out-of-memory path takes it.
+ */
 #ifndef PG_SUBPOOL_MAX
 #define PG_SUBPOOL_MAX    512u
 #endif

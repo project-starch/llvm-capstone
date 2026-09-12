@@ -1,18 +1,12 @@
-# The Sublet port of PostgreSQL's memory contexts
+# Why the Sublet port of PostgreSQL's memory contexts looks like this
 
-**Design and measurement.** The port is written and it runs. The level below is
-`../port/freestanding/pg_subpool.c`, the manager's own change is
-`../port/aset-sublet.patch`, and both recorded pgbench rungs replay whole
-inside a Capstone domain. The sections "What the hardware said" and "What the
-run said" have the numbers. What is left is the cycle cost and the board. It is written before the patch because the patch has one decision
-in it that decides whether the claim the paper makes is true, and that decision
-is better argued than discovered. The one number the design needed, the
-sub-pool's size, is measured: the recording of the two pgbench rungs prices it,
-and the section that reports it says which script produced it.
+Four decisions, and for each one the reason and the measurement that priced it.
+Nothing here says what the port currently does. `../run-pg-sublet-gate.sh`
+answers that by running, and the numbers are in the paper's section 6.2.
 
 What is in this directory protects. What makes the memory manager build and run
 under capabilities is the rest of `ports/postgres/` and never reads a file from
-here. The unprotected arm of every measurement is that build.
+here.
 
 ## The claim this has to make true
 
@@ -20,14 +14,6 @@ A11, C11: *a context tree dies on the pgbench trace in one revocation per
 context, and the allocator costs X% over spatial.* H1 is the sharp half: the
 cycles of a reset grow with the number of child contexts, not with the objects
 in them and not with the bytes.
-
-The recording says the design reaches it on 99.96% of the resets and deletes
-of the tpcb rung and 99.92% of the readonly rung, and that a third of them need
-no revocation at all. The section on the sub-pool's size has the numbers and
-the four events that cost more. The two other questions the design had are
-settled below and neither costs the claim: the keeper block needs the context
-header to leave the sub-pool, and in-place `realloc` of a large chunk becomes a
-copy, which the recording takes once per process.
 
 So "one revocation per context" is the thing to build, and the obvious port
 does not deliver it.
@@ -227,12 +213,9 @@ be split and not joined, so no primitive grows one, and the port has to carve a
 new block, copy, and revoke the old. That is a policy change and it is reported
 as one.
 
-`experiments/a11/postgres/reallocs.py` counts how often the recording takes it.
-Of 1 228 019 allocations on the tpcb rung there are two reallocs, and one of
-them is external: the timezone parser at startup, copying 5 120 bytes. The
-readonly rung is the same two. So the path the port cannot keep costs one
-`memcpy` of five kilobytes per process start, and the paper reports it as a
-change rather than as a cost.
+How often the recording takes it is `experiments/a11/postgres/reallocs.py`,
+and the answer is once per process start. The paper reports it as a change
+rather than as a cost.
 
 ## The hand-out keeps its handle, decided and priced
 
@@ -248,14 +231,9 @@ that alternative is worth pricing rather than dismissing.
 `experiments/a11/postgres/deaths.py` follows every object in the recording to
 its death:
 
-| how an object dies | tpcb | readonly |
-|---|---:|---:|
-| reset under it | 73.04% | 72.56% |
-| deleted under it | 10.80% | 7.96% |
-| freed by a `pfree` | 15.99% | 18.61% |
-
-So the cheaper hand-out would still catch five objects in six, at their
-context's teardown, and would give up the sixth.
+`experiments/a11/postgres/deaths.py` follows every object to its death. The
+cheaper hand-out would still catch five in six, at their context's teardown,
+and would give up the sixth.
 
 It is the wrong trade, and the same script says why. The median freed object
 lives **one allocation** of its own context, and the ninetieth percentile is
@@ -269,230 +247,3 @@ The hand-out therefore keeps its handle. The node bill stays at about two an
 object, the board arm of A11 runs a slice of the rung whose length the pool
 sets, and the paper reports that rather than engineering it away.
 
-## What the run said
-
-`../run-pg-sublet.sh` replays a recording against the ported manager in a
-domain, through `tools/replay_core.inc`, which is the same loop the
-unprotected arm runs. So everything below differs from the unprotected domain
-only by what the port does.
-
-### The objects hold their contents
-
-Counting the calls says the bookkeeping is consistent. It does not say the
-objects hold what was put in them, which is the contract `palloc` makes and
-the thing a discipline that revokes a chunk and hands its region out again
-could break without any counter noticing. So the loop writes a pattern into
-every object it allocates and reads it back when the trace next mentions that
-object.
-
-| | tpcb | readonly |
-|---|---:|---:|
-| objects whose contents were read back | 196 415 | 41 043 |
-| of those, wrong | 0 | 0 |
-
-That is every object the trace frees, plus the two reallocs checked twice
-each: `repalloc` promises the old contents, and under this port a large chunk
-moves by copy where upstream grew its block in place, so the second check is
-the one that says the copy was right and kept its tags.
-
-The coverage is what it is and no more. A reset and a delete do not name the
-objects they take, so there is no moment at which those can be checked, and
-nothing is swept at the end either: after a reset the driver's table points at
-memory the discipline has revoked, and reading one entry would fault rather
-than report.
-
-### The claim, as an identity
-
-The teardown cost is checked inside the domain and as an equality rather than a
-bound:
-
-    revocations == teardowns - the ones with nothing to revoke
-                   + the revocations of second sub-pools
-
-| | tpcb | readonly |
-|---|---:|---:|
-| teardowns the trace asked for | 30 982 | 7 011 |
-| teardowns that reached the level below | 21 009 | 5 009 |
-| of those, one revocation each | 21 009 | 5 009 |
-| revocations of a second sub-pool | 43 | 22 |
-| revocations in total | 21 052 | 5 031 |
-
-Both rungs satisfy the identity exactly. Two of those lines need saying.
-
-**The teardowns that never reach the level below are the manager's own saving,
-not the port's.** `mcxt.c` does not call the reset method on a context that is
-already reset, so a delete that follows a reset does nothing. That is 9 973 of
-30 982 on tpcb and 2 002 of 7 011 on readonly.
-
-The recording predicted both numbers exactly, before the port existed, from the
-allocations each context had made: `subpools.py` reports 9 973 and 2 002 events
-as acting on a context that had asked for nothing since the last one. The
-predictions were right to the event and the mechanism was the manager's.
-
-That also corrects something this document said earlier. A context that never
-allocated does not get a free teardown from the level below, because its
-keeper block is carved when the context is created. Every sub-pool that
-reaches a teardown has been carved, so `teardowns with nothing to revoke`
-stays at zero and the saving is entirely `isReset`.
-
-**The extra revocations are second sub-pools.** A context that filled its
-64 KiB was given another, and it keeps it for the rest of its life, so each of
-its later teardowns revokes both. Thirty-four second sub-pools were handed out
-over tpcb and thirty over readonly, costing 43 and 22 extra revocations, which
-is 0.2% and 0.4% of the totals. That is the cost of the sizing decision, and it
-is smaller than the recording's estimate of eight teardowns in thirty
-thousand read the other way round.
-
-### What it cost against the unprotected arm
-
-| tpcb | unprotected domain | Sublet domain |
-|---|---:|---:|
-| blocks taken, keepers apart | 15 351 | 15 291 |
-| blocks held at once, most | 241 | 183 |
-| keepers carved again after a reset | 0 | 21 009 |
-
-| readonly | unprotected domain | Sublet domain |
-|---|---:|---:|
-| blocks taken, keepers apart | 3 302 | 3 244 |
-| blocks held at once, most | 235 | 179 |
-| keepers carved again after a reset | 0 | 5 009 |
-
-The first row is the one that matters and it is why `ALLOC_BLOCKHDRSZ` stays at
-eighty bytes under the port even though no header occupies them: that number
-decides `allocChunkLimit` and therefore the whole size-class ladder, and a
-ladder that differed would make the two arms incomparable. Eighty bytes a
-block are spent to keep them comparable, and the ladder is preserved.
-
-The keeper row is work the other arm does not do at all. Upstream keeps the
-keeper across a reset; this port revokes it with everything else and carves it
-again, because a revocation cannot spare part of what it covers.
-
-### What the discipline cost in primitives
-
-| | tpcb | readonly |
-|---|---:|---:|
-| chunks carved | 1 115 832 | 197 732 |
-| chunks handed out | 1 228 021 | 220 515 |
-| chunks dropped | 196 413 | 41 041 |
-| chunk entries at the peak | 2 441 | 2 263 |
-| split | 1 147 223 | 205 074 |
-| mrev | 1 249 227 | 225 693 |
-| delin | 1 228 021 | 220 515 |
-| revoke | 217 465 | 46 072 |
-| revocation nodes spent | 2 396 450 | 430 767 |
-
-Every one of those was predicted from the trace before the port ran, and the
-predictions were within a few per cent:
-
-| predicted against measured | predicted | measured |
-|---|---:|---:|
-| carves, tpcb | 1 108 694 | 1 115 832 |
-| entries at the peak, tpcb | 2 321 | 2 441 |
-| revocation nodes, tpcb | 2 446 088 | 2 396 450 |
-| carves, readonly | 196 591 | 197 732 |
-| entries at the peak, readonly | 2 175 | 2 263 |
-| revocation nodes, readonly | 442 542 | 430 767 |
-
-The scripts are in `experiments/a11/postgres` in the paper's repository. The
-node figure is the one to carry forward: at about two an object, the board's
-65 536 covers 2.8% of the tpcb rung, so the board arm is a slice whose length
-the pool sets rather than a whole rung.
-
-The hand-outs and the dropped chunks are the trace's own counts plus two,
-which are the two reallocs: each allocates a chunk and frees one.
-
-## What the hardware said
-
-`../build-subpool-test.sh` and `../run-subpool-test.sh` build the level below
-into a domain of its own and run nineteen claims inside it. Every one held. The
-image carries no PostgreSQL source, which is the point: a fault inside a
-patched `aset.c` is hard to read back to its cause, and this one narrows the
-ground to one file.
-
-The claims that matter:
-
-| claim | what held |
-|---|---|
-| a reset is one revocation | one, counted by the primitive itself |
-| the sub-pool works after the reset | a block and sixteen chunks, written and read back |
-| a reset with nothing carved is no revocation | none |
-| a context that filled its sub-pool | its reset is two revocations and no more |
-| a delete of such a context | both sub-pools come back |
-| two thousand creates and deletes | no sub-pool and no entry left behind |
-
-The second row is the one only the hardware could answer. A revoke that killed
-a linear child hands the region back uninitialised and refuses `init` until it
-has been written through, so a sub-pool that carves and hands out again after a
-reset is the proof that one revocation per context is implementable rather than
-only arguable.
-
-Three things the run taught:
-
-**A region has to be shared linear, and the default is not.** The monitor hands
-a domain a shared region either non-linear with a handle kept by the monitor
-(`REV_DEFAULT`) or linear with a handle kept by the monitor (`REV_BORROWED`).
-The replay's host shared all four regions the default way, because the
-unprotected level below walks its arena with ordinary pointer arithmetic and a
-linear capability copied by ordinary C code is what the hardware refuses. A
-region that is not linear cannot be split, and a handle senior to it has
-nothing to revoke. The first run said so exactly, type 1 where it wanted 0, so
-`pg_host.c` grew a `--linear-arena` argument rather than a changed constant.
-
-**The share has to be taken in the register it arrives in.** A linear
-capability assigned to a C pointer and read back on a later call comes back
-non-linear. The second run said that too, so the arena goes into its slot
-inside the share handler and not in the body that follows.
-
-**The revocation-node pool is what bounds a run on the board, not cycles.** A
-node is allocated by every `split` and every `mrev`, from a bump head with no
-reclamation, so a run spends every node it ever made and a revoke returns none.
-The test spent 20 105 nodes for 8 040 allocations, which is two and a half
-each, and the emulator prints a watermark at the crossing of the old 10-bit
-head because on silicon a pool that wraps reuses live ids and the next
-capability store blocks with no timeout and no trap.
-
-`experiments/a11/postgres/nodes.py` prices the whole rung from the trace:
-
-| rung | nodes the port would spend | what 65 536 covers |
-|---|---:|---:|
-| tpcb | 2 446 088 | 2.77% of the trace |
-| readonly | 442 542 | 15.00% of the trace |
-
-The hand-outs and the carves are 95% of that bill, at one node each and one and
-a quarter million of them. So the board arm of A11 is a slice, and the slice is
-set by the node pool rather than by time. Either the run is cut to that length
-and says so, or the pool grows. The paper reports it either way, because it is
-a property of the hardware and not of this port: two nodes an object is what a
-per-object capability discipline costs, and the pool is the ceiling on how many
-objects one boot can see.
-
-**One more, about the toolchain.** The fork's clang asserts in
-`Value::stripAndAccumulateConstantOffsets` when it emits debug info for
-optimised code on this target. `-O1`, `-O2` and `-Og` all crash with `-g` and
-all pass without it. Every build script here uses `-O0`, which is why it had not
-been met, and it is named because a cycle count at `-O0` is not a cycle count
-and the measurement has to say which it used.
-
-## What is open
-
-**The cycles, and they need the board.** C11's second half is what the
-allocator costs over a spatial-only build, and a cycle count from the emulator
-would say nothing: it does not model the pipeline and the runs here are at
-`-O0` besides. What the emulator did settle is the shape of the bill, and the
-shape is what the board arm has to be sized for. Two nodes an object means the
-resident bitstream's 65 536 cover 2.8% of the tpcb rung, so the board run is a
-slice whose length the pool sets rather than a whole rung, and the paper says
-so rather than quietly running something shorter.
-
-That is the whole of what is left. The three questions the design had are
-decided and measured, and one of them answered itself in the patch:
-
-**The chunk header does not grow.** The question was whether the sixteen bytes
-the capability build forced could go back to eight once no chunk holds a
-capability. The answer is that they are all spent and none is wasted: the
-eight bytes of padding became the two indices the chunk needs to name its
-block and its side-table entry, because a capability cannot reach out of the
-object it was given for and so a chunk cannot name its block by a distance. So
-the protected build's chunk is exactly the unprotected capability build's
-chunk, byte for byte, and the discipline's per-object cost is the sixteen-byte
-capability in the side table and not a wider chunk.
