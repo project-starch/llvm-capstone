@@ -1178,6 +1178,31 @@ on every share, so the four `RCLM:00000000` lines prove the reporting path is li
 a zero here is a real zero, not silence. Without that the same output would have been indistinguishable
 from a counter that cannot be read.
 
+### §4g.3 — THE R-30/R-31 FIX IS VERIFIED IN THE RTL THAT IS ON THE BOARD (2026-09-12, simulation)
+
+Run at the **flashed revision** `1bfff7776` in a detached worktree, and against `66c4e7517` — the
+revision that was resident until this session — as a matched negative control. The two test binaries
+are byte-identical across the pair (`sha` checked, `ebac051fd47d3eb4` / `65f35ea4359e2c48`); the only
+difference is the RTL, and between those revisions `core/` differs in exactly two files,
+`capstone_dyn_unit.anvil` (+27) and `capstone_flu_unit.anvil` (+39).
+
+| test | `66c4e7517` (pre-fix) | `1bfff7776` (**flashed**) |
+|---|---|---|
+| `r30-fill-init` | **FAILED**, tohost=11, 506 cyc, 1 `Exception:` | **SUCCESS**, 506 cyc |
+| `r31-revoke-cursor` | **FAILED**, tohost=11, 501 cyc | **SUCCESS**, 490 cyc |
+
+**The gate discriminates, which is what makes the PASS mean anything.** A clean result is not
+evidence until the check is known to fire, and here it fires on exactly the RTL that lacks the fix.
+Every cycle count is ~500 against a `+time_out=2000000` that reports ~2,000,013 on a hang, so none of
+these is a timeout masquerading as a pass.
+
+**NECESSARY, NOT SUFFICIENT, and the limit is specific.** `r30-fill-init.S` fabricates its UNINIT
+capability with the Custom3 debug ops — R-30's own registry entry calls that "a test working around
+the defect rather than reporting it" — and neither test runs through the monitor's real share/revoke
+path or inside a capability domain. So this establishes that **the fix is present and works in the
+RTL now flashed**, and does not yet establish that the monitor's reclaim fires on silicon. The board
+probe in §4g.4 is what closes that.
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven

@@ -114,6 +114,54 @@ static int payload_has_marker(const char *payload, unsigned long n, const char *
   return 0;
 }
 
+#ifdef SQLITE_HOST_REVOKE_RESHARE
+/* R-30/R-31 ON SILICON: revoke a REV_BORROWED region, then SHARE IT AGAIN.
+ *
+ * WHY THIS SHAPE AND NOT THE --tail TEARDOWN. The monitor's reclaim is guarded at
+ * sbi_capstone.c:1309, `if (cap_type(r) == 3)`, and lives inside shared_region_annotated --
+ * it fires when a SHARE finds a handle a PREVIOUS revoke left UNINIT. Boot sw59 ran the
+ * teardown arm (create -> share -> enter -> return -> revoke) and read RCLM:00000000; that
+ * was structural, not evidence, because nothing shares after the revoke. Any arm whose only
+ * revoke is at teardown cannot reach the reclaim. This one shares again, on purpose.
+ *
+ * THE PRECONDITION IS release_region RETURNING 1, AND IT IS CHECKED RATHER THAN ASSUMED.
+ * ioctl_release_region (modcapstone/module/capstone.c:335-363) revokes, then pops ONLY if the
+ * region is top-of-stack; otherwise it returns 1 and KEEPS THE SLOT LIVE -- libcapstone.c:577
+ * calls that "revoked, the slot kept". A live slot holding a revoked (UNINIT) handle is exactly
+ * what :1309 tests for. rc=0 means the slot was popped and is gone; anything else means no
+ * revoke happened. Refuse the arm in both cases rather than share into a slot whose state we
+ * have not established -- a share that reads RCLM:00000000 for the wrong reason is the one
+ * outcome this probe exists to rule out.
+ *
+ * WHY TWO SHARES. capstone_report(RCLM) at :1294 runs BEFORE the guard at :1309, so a share
+ * prints the count as it was on ENTRY. Share A therefore prints the old value and then does the
+ * reclaim; only share B can print the incremented one. With one share there is no success
+ * readout at all.
+ *
+ * A WEDGE IS STILL A RESULT HERE, and the failure shapes survive it: RCPR and RCSH are
+ * while(1) halts INSIDE C_DO_RECLAIM (sbi_capstone.c:276, :278), which runs before the domcall
+ * at :1433. So if the fix is broken we see the tag even though the arm never returns. What a
+ * wedge costs is the RCLM:1 readout, because start-gp-captable-interp.S:330-334 records that
+ * SQLite "dies on its SECOND entry" -- which is why share A is bracketed by its own markers.
+ */
+static void revoke_reshare_probe(dom_id_t domain, region_id_t pool_region,
+                                 unsigned long release_rc) {
+  if (release_rc != 1) {
+    mark_u("SQ: RR/refused-precondition rc=", release_rc);
+    return;
+  }
+  mark("SQ: RR/share-A\n");
+  shared_region_annotated(domain, pool_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
+                          SQLITE_HC_ANNOTATION_REV_BORROWED);
+  mark("SQ: RR/share-A-returned\n");
+  mark("SQ: RR/share-B\n");
+  shared_region_annotated(domain, pool_region, SQLITE_HC_ANNOTATION_PERM_INOUT,
+                          SQLITE_HC_ANNOTATION_REV_BORROWED);
+  mark("SQ: RR/share-B-returned\n");
+  mark("SQ: RR/done\n");
+}
+#endif
+
 int main(int argc, char **argv) {
   int feature_probe = 0;   /* --feature-probe: ask the domain which restored APIs it carries */
   /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
@@ -558,8 +606,16 @@ int main(int argc, char **argv) {
   /* the allocators' regions go back, newest first: revoked in the monitor, popped, freed */
   if ((long)tables_region >= 0)
     mark_u("SQ: released tables rc=", (unsigned long)release_region(tables_region));
+#ifdef SQLITE_HOST_REVOKE_RESHARE
+  if ((long)pool_region >= 0) {
+    unsigned long pool_release_rc = (unsigned long)release_region(pool_region);
+    mark_u("SQ: released pool rc=", pool_release_rc);
+    revoke_reshare_probe(domain, pool_region, pool_release_rc);
+  }
+#else
   if ((long)pool_region >= 0)
     mark_u("SQ: released pool rc=", (unsigned long)release_region(pool_region));
+#endif
   /* AN SLT RUN MUST RETURN ITS OWN MARKER, AND NOTHING ELSE COUNTS -- including DONE.
      DONE here would mean the SLT dispatch never fired and the ordinary workload ran
      instead, which prints its own markers and would otherwise look like a success. The
