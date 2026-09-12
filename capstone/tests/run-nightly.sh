@@ -120,6 +120,10 @@ EXTENDED_SUITES=(
   # blocks a known-good build asked for, replays the same trace in a domain,
   # and checks every object it freed still held what was written into it.
   "postgres-mmgr|bash $POSTGRES_DIR/run-pg-gate.sh|3600"
+  # postgres-sublet is the protection gate for the same allocator: the level
+  # below against every claim the design makes about it, then the manager over
+  # it with the teardown cost an identity the domain checks itself.
+  "postgres-sublet|bash $POSTGRES_DIR/run-pg-sublet-gate.sh|3600"
   "sqlite-borrow-revoke|bash $RUNTIME_DIR/run-sqlite-borrow-revoke-probe.sh"
   "sqlite-hier-revoke|bash $RUNTIME_DIR/run-sqlite-hier-revoke-probe.sh"
   "sqlite-sealed-callback|bash $RUNTIME_DIR/run-sqlite-sealed-callback-revoke-probe.sh"
