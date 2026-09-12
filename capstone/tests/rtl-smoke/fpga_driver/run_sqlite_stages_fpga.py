@@ -1655,7 +1655,7 @@ def main():
             # deterministic monitor region-pool exhaustion (RGNO:0000E00C, RGNN:00000020 = 32
             # regions). They are still excluded from wedge counts -- but as a known monitor limit,
             # not as an unexplained per-image stall.
-            montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET):([0-9A-Fa-f]{8})", text)
+            montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET|RCSH|RCPR):([0-9A-Fa-f]{8})", text)
             results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
 
