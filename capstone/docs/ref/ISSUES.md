@@ -961,7 +961,7 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-14 — `__capstone_cap_init` reloads a capability spill slot with a scalar `ld`, so the tag is lost before the domain runs `ROOT CAUSE IDENTIFIED 2026-09-11 — a CODEGEN defect, not image or dom_data geometry; two triggers shown to be one defect; the compiler fix is not yet made`
+### S-14 — `__capstone_cap_init` reloads a capability spill slot with a scalar `ld`, so the tag is lost before the domain runs `FIXED 2026-09-13 — the arm keyed on the physical register $c1 instead of on what it holds; narrowed to the frame save and restore, verified on seven MicroPython images and the 421-test suite`
 
 **What happens.** The `restored` SQLite silicon image built with all eight `-U` defines does not run:
 it faults at `SQ: E/share1` with **cause 24** (unexpected operand type), *before* the domain enters,
@@ -1088,6 +1088,47 @@ unexpected operand type.
 >
 > **Still open:** which LLVM component emits the scalar reload — register allocation, spill-slot
 > typing, or `CapstoneCapGlobalInit` itself. That is compiler work and is not diagnosed here.
+>
+> **ANSWERED AND FIXED, 2026-09-13.** Neither register allocation nor
+> `CapstoneCapGlobalInit`: spill-slot typing, in `CapstoneInstrInfo::storeRegToStackSlot` and
+> its mirror. Under gp-free the 8-byte `SD`/`LD` arm was selected by asking whether the
+> register IS `$c1`, as a proxy for "this value is a return address". `C1` is an ordinary
+> allocatable `GPCR` and sits last in the allocation order, so at `-O0` — where `RegAllocFast`
+> passes the PHYSICAL register to these hooks, unlike the `-O2` spiller which passes a virtual
+> one — a capability parked in `ra` under pressure was truncated to its address half. The arm
+> is now gated on `FrameSetup` / `FrameDestroy`, which the frame save and restore carry and an
+> allocator spill does not, so the prologue and every frame size are unchanged.
+>
+> **A FOURTH AND FIFTH TRIGGER, on MicroPython rather than SQLite, with a knob that flips it.**
+> A domain built from the same source at seven test-table sizes: 4, 60 and 421 boot, 100 and
+> 300 die inside `__capstone_cap_init` with cause 24, 160 and 200 die elsewhere and are NOT
+> this defect. `capstone/tests/capinit-scan.py` finds 2 sites in the 100 image and 13 in the
+> 300 image and none in the other five, and in both the FIRST site is exactly the pc the
+> monitor printed, which is the property this entry claims for its own SQLite images.
+>
+> **THE QUIET FORM, which this entry did not describe.** When the untagged register is the
+> ADDRESS of a capability access the fault is immediate and inside `cap_init`. When it is the
+> DATA of an `stc` nothing faults there: an untagged capability-sized word lands in a global
+> and the first read through it faults arbitrarily far away. On the 421 image that was
+> `stc ra, 0x0(a7)` writing a type pointer, and the fault came 157 tests later in
+> `mp_convert_member_lookup` reading `m_type->flags`. The full suite went from
+> `PASS=269 FAULT=1` to `PASS=270 FAULT=0`.
+>
+> **WHY THE PATTERN AND NOT THE SHAPE.** This entry gives the shape it first saw, `ld <rd>,
+> <imm>(sp)` consumed by `cincoffsetimm`. Both MicroPython instances differ: the slot is
+> reached through a materialised `cincoffset sp, imm` and the consumer is an `stc`. A checker
+> written to the stated shape reported all seven images clean. The gate keys on the invariant
+> instead, that the address operand of a capability access must be a capability.
+>
+> **WHY THERE IS NO LIT TEST FOR THE DEFECT ITSELF.** It needs the physical register to reach
+> the hook, so it needs `-O0`, and three shapes tried at `-O0` do not put a spilled capability
+> in `ra`: a flat array of pointer globals up to 300 entries, a call with 24 capability
+> arguments, and inline asm with 28 live capability inputs. The real `cap_init` reaches it
+> because its initialisers are nested aggregates the pass walks recursively, holding one
+> capability live across many leaves. `cap-gp-free-ra-spill-keeps-tag.ll` pins both arms of
+> the decision so neither can be removed or widened silently, and says so in its header. The
+> machine verifier cannot catch this form: an earlier fix made the instruction well-formed by
+> storing the `X` half, so it is only semantically wrong.
 
 > **2026-09-11 — THE DISCRIMINATOR RAN. Trigger (a) is CONFIRMED on its own path, and the fault now
 > has a specific diagnosis. It also does NOT reproduce on the speedtest1 path.**
