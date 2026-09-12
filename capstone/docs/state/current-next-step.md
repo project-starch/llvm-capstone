@@ -27,9 +27,15 @@ wording, not the change.** Going the other way: **the monitor's own arithmetic c
 `C_RECLAIM_FILL` sets `n = (end - base) >> 4` and each `stc` advances one granule, so the loop admits
 at most a 15-byte shortfall — and `RCPR` not firing proves the cursor started at base. That also kills
 the allocator-rounding account for free, since `n` is computed from the same `end - base`. Three
-accounts survive: 108 stores did not advance the cursor (an ISA question); `end` moved during the
-fill (`n` is computed before the loop, the shortfall after it); or the reclaim path is itself
-mis-instrumented. See the R-30 box in `ISSUES.md` and the RTL lane's
+accounts survived that round, and the RTL lane then refuted one of them from the RTL the same day
+(`4fa59c3643b5`): `end` cannot move during the fill, because STC's UNINIT path advances the cursor by
+exactly 16 and passes the metadata carrying `end` through unchanged. **So the remaining question is
+not which mechanism but which denominator** — 88,724 stores attempted or 88,832, with 108 not
+advancing either way — and the instrument below names that, not the cause. **The experiment that
+discriminates the cause is a pair of boots at two different large region sizes:** a constant 1,728 is
+a fixed tail effect, a shortfall that scales is a proportional store-failure rate. Do NOT spend a boot
+on the exact-multiple-of-4096 pair — both arms predict the same answer once the modulo bound above is
+applied. See the R-30 box in `ISSUES.md` and
 `history/12-09-2026_R30-sw60-sw61-reconciliation-attempt.md`.
 
 > ### ⚠ THE RESIDENT FIRMWARE IS TWO MONITOR COMMITS BEHIND, AND THE BOARD SCRIPTS WILL SAY SO

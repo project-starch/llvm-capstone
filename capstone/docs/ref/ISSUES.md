@@ -1305,23 +1305,46 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 > before it costs a boot:** `n` is computed from the same `end - base`, so a region rounded UP scales
 > `n` with it and the shortfall still cannot exceed 15.
 >
-> **Three accounts survive, and none is established.** (a) 108 stores did not advance the cursor —
-> the serious one, and an ISA question; (b) `end` MOVED during the fill, so the cursor reached the
-> old end while the shortfall is measured against a new one — `n` is computed before the loop and the
-> shortfall after it, so this is not excluded by anything above; (c) an instrument fault in the
-> reclaim path itself. **A refuted fourth is recorded because the fit was exact:** 1,728 is precisely
+> **Accounts, after two rounds of elimination.** (a) 108 stores did not advance the cursor — the
+> serious one, and an ISA question; ~~(b) `end` MOVED during the fill~~ **REFUTED from the RTL by the
+> RTL lane the same day: STC's UNINIT path advances the cursor by exactly 16 and passes the metadata
+> through unchanged, and the metadata is what carries `end`. No path in STC writes `end`, the
+> capability sits in a register nothing else in the loop touches, and there is no concurrent agent;**
+> (c) an instrument fault in the reclaim path itself. A useful by-product of that read: STC's bound
+> check puts the last legal store at `end - 16`, whose advance lands the cursor exactly ON `end`, so a
+> fill of `(end - base) >> 4` stores is exactly right rather than lucky, and one more would fault
+> rather than silently stop.
+>
+> **With (b) gone, the instrument names the DENOMINATOR, not the mechanism.** The two remaining
+> readings are 88,724 stores attempted with 108 not advancing, or 88,832 attempted with 108 not
+> advancing — the same account with a different count, and the open question becomes *which* 108 and
+> why. **The pair that discriminates does not lean on the modulo arithmetic at all: run the same
+> reclaim at two different large region sizes.** A constant 1,728 is a fixed tail effect; a shortfall
+> that scales with the region is a proportional store-failure rate. Different bugs, one pair of boots.
+> (RTL lane, `4fa59c3643b5`.) **A refuted fourth is recorded because the fit was exact:** 1,728 is precisely
 > the distance from 1,419,584 to the next 2 KiB boundary, suggesting bounds compression rounding the
 > representable end. The RTL refutes it — capabilities here are fat, with full 64-bit start and end
 > fields, so there is nothing to round. One datapoint could not have separated 2 KiB from 4 KiB
 > either, and the size in the fit was the HOST's request rather than the capability's own report,
 > which is the very quantity in question.
 >
-> **The instrument that separates (a) from (b) is now in the monitor and unbooted** — `RCEN`
+> **The instrument that separates the surviving accounts is now in the monitor and unbooted** — `RCEN`
 > (`end - base`, the capability's true size) and `RCCU` (`cursor - base`, where the fill stopped)
 > are reported alongside `RCSH`, inside the branch that already halts, so nothing measurable is
 > perturbed. `RCEN - RCCU` must equal `RCSH`, which makes the reading self-checking. Pre-registered:
-> `RCEN == 1,419,584` with `RCCU` 1,728 short ⇒ account (a); `RCEN == 1,421,312` ⇒ account (b);
-> `RCEN - RCCU != RCSH` ⇒ account (c). Evidence: §4g.3, §4g.4, §4g.5, and
+> `RCEN == 1,419,584` ⇒ 88,724 stores attempted; `RCEN == 1,421,312` ⇒ 88,832 attempted; either way
+> 108 did not advance. `RCEN - RCCU != RCSH` ⇒ account (c).
+>
+> **The instrument was verified against the LINKED FIRMWARE before being believed, and it needed to
+> be.** `C_RECLAIM` declares the capability input-only (`"r"(cap)`) while the hardware advances its
+> cursor, so by the constraints alone the post-template reads are stale — `RCCU` would report 0 and
+> `RCEN` the pre-fill end, and the self-check would fire while pointing at the wrong account.
+> capstone-c's linear discipline is what saves it: a capability is written back to its home slot
+> after every use. Confirmed by decoding `fw_payload.elf` at **all five** reclaim sites — each stores
+> the post-fill capability home and reloads it from that exact slot before the reads. The same pass
+> found a latent early-clobber hazard (either output could have been allocated over the still-live
+> capability) which had not bitten but was resting on allocation; `"=&r"` on both, rebuilt, and
+> re-verified byte-identical in allocation. Evidence: §4g.3, §4g.4, §4g.5, and
 > `history/12-09-2026_R30-sw60-sw61-reconciliation-attempt.md`.
 
 > # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
