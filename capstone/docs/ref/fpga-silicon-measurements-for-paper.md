@@ -1255,6 +1255,44 @@ directed test and the real path that this arm exists to expose.
 result (1.2701 / 1.2676, 0.25 pp) at a different absolute level. That the two independent platforms
 agree on *allocator-independence* while disagreeing on the level is the more useful of the two facts.
 
+### §4g.5 — BOOT sw61: the Sublet cell on silicon, and INIT is NOT unreachable (2026-09-12)
+
+Control passed (`k800 retval=4`). Cell ⑥, image `ceeded2533a74bce`:
+
+    SPEEDTEST1-CYCLES 2797516229  HEAP 910008  RC 0
+    sublet: split=5508 mrev=37899 delin=32565 revoke=37899 init=5334
+
+**`init = 5334`, NON-ZERO ON SILICON — this lane predicted 0 and was wrong.** After sw60 showed the
+monitor's reclaim failing with `RCSH` (fill short of `end`), the expectation written down was that
+R-30 would block Sublet's `init` too and the counter would read 0, the masking signature. It does
+not. Every counter is **bit-identical to the QEMU run** — `5508 / 37899 / 32565 / 37899 / 5334`,
+every field — so the Sublet port performs 5,334 successful INITs on this silicon and the discipline
+is fully exercised.
+
+**THIS RE-OPENS R-30'S CHARACTERISATION.** The registry entry says INIT is *unreachable* — filling an
+UNINIT region leaves the cursor AT `end` where INIT requires PAST it. On the same bitstream, in
+adjacent boots: the monitor's reclaim of a 1,419,584-byte region falls 1,728 bytes short (sw60,
+`RCSH:000006C0`), while the domain's own 5,334 INITs succeed. **INIT is plainly reachable.** Whatever
+sw60's shortfall is, it is not "INIT can never be satisfied", and the two readings have to be
+reconciled before R-30 is described either way. Stated as the conflict it is, not resolved here.
+
+#### The discipline costs 9.6 % on silicon against 1.8 % on QEMU — and that gap is the point
+
+| | domain cycles | vs ⑤ |
+|---|---:|---:|
+| ⑤ lookaside (`ccb73bc08db39990`) | 2,551,506,640 | — |
+| ⑥ Sublet (`ceeded2533a74bce`) | 2,797,516,229 | **1.0964** |
+
+QEMU put the same pair at 1.0176. The silicon figure is **5.5× larger**, which is what the reclaim
+being O(bytes) predicts: one store per 16 bytes is memory-bound work that `-icount` counts as one
+instruction each and silicon pays cache and memory latency for. It is the clearest case in this
+corpus of an instruction count understating a cost, and it is why §7 is silicon-only.
+
+**The geometry caveat carries over unchanged and is not a footnote.** ⑥ runs `HEAP 910,008` against
+⑤'s `2,097,152`, so 1.0964 is the cost of the Sublet *configuration* against the lookaside
+configuration, each at its own working geometry — not the discipline in isolation. ⑤ cannot be
+rebuilt at ⑥'s heap (it faults; image `7cc434e807570136`).
+
 ## §7 — Timing closure across every routed build (2026-08-27)
 
 **No bitstream this project has ever produced has closed timing.** Seven distinct commits, **eleven
