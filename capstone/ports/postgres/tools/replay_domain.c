@@ -211,6 +211,11 @@ pg_replay_domain_main(unsigned *res, unsigned func)
     n++;                                     /* the footer is a record too */
 
     unsigned long tables = (r[n - 1].s2 + 2) * 16UL + (r[n - 1].s3 + 2) * 16UL;
+
+#ifdef REPLAY_CHECK_DATA
+    /* The data check's third table, of lengths, at four bytes an object. */
+    tables += (r[n - 1].s3 + 2) * 4UL;
+#endif
     tables = (tables + 4095UL) & ~4095UL;
     if (tables + (1UL << 20) > PG_REPLAY_ARENA_SIZE) {
         fail("the arena cannot hold the identity tables and a heap");
@@ -236,6 +241,9 @@ pg_replay_domain_main(unsigned *res, unsigned func)
     row("free", 0, c.free);
     row("reset", 0, c.reset);
     row("delete", 0, c.delete);
+#ifdef REPLAY_CHECK_DATA
+    row("objects whose contents were read back", 0, c.checked);
+#endif
     pg_domain_text("\n| the level below | in the backend | here |\n|---|---:|---:|\n");
     row("blocks taken", c.was_alloc, got_taken);
     row("blocks given back", c.was_free, got_given);

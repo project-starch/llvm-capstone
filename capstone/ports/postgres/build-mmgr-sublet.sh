@@ -42,7 +42,11 @@ DOMREQ_SRC=$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S
 PG_PAYLOAD=${PG_PAYLOAD:-65536}
 PG_ARENA=${PG_ARENA:-$((64 * 1024 * 1024))}
 PG_TRACE=${PG_TRACE:-$((64 * 1024 * 1024))}
-PG_SCRATCH=${PG_SCRATCH:-$((32 * 1024 * 1024))}
+# The identity tables plus the one the data check adds. For the tpcb rung that
+# is about twenty-five megabytes of capabilities and five of lengths, so the
+# region is sized well above it rather than exactly: a region too small is a
+# named refusal at entry, but a rebuild is minutes.
+PG_SCRATCH=${PG_SCRATCH:-$((48 * 1024 * 1024))}
 PG_DOMAIN_STACK=${PG_DOMAIN_STACK:-$((256 * 1024))}
 PG_DOMAIN_DATA=${PG_DOMAIN_DATA:-$PG_DOMAIN_STACK}
 
@@ -51,6 +55,13 @@ PG_DOMAIN_DATA=${PG_DOMAIN_DATA:-$PG_DOMAIN_STACK}
 # info for optimised code on this target. Both arms must use the same level,
 # and the run says which.
 DOMAIN_OPT=${DOMAIN_OPT:--O0 -g}
+
+# Whether the replay checks that objects hold their contents and not only that
+# the counts add up. On by default, because a discipline that revokes and
+# re-hands memory could break the contract palloc makes without any counter
+# noticing, and off with PG_CHECK_DATA= when a run is timing rather than
+# checking: it reads and writes every object's bytes twice.
+PG_CHECK_DATA=${PG_CHECK_DATA--DREPLAY_CHECK_DATA}
 
 FILES="aset.c mcxt.c generation.c slab.c bump.c alignedalloc.c memdebug.c"
 
@@ -86,6 +97,7 @@ FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
        -DPG_REPLAY_PAYLOAD_SIZE=${PG_PAYLOAD}UL
        -DPG_REPLAY_ARENA_SIZE=${PG_ARENA}UL
        -DPG_REPLAY_TRACE_SIZE=${PG_TRACE}UL
+       $PG_CHECK_DATA
        -DPG_REPLAY_SCRATCH_SIZE=${PG_SCRATCH}UL)
 
 echo "== the manager, for capstone64, with the Sublet patch"

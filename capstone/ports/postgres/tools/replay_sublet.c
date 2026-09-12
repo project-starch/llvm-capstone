@@ -63,7 +63,7 @@ void pg_domain_uint(unsigned long v);
 #define PG_REPLAY_TRACE_SIZE (64UL * 1024UL * 1024UL)
 #endif
 #ifndef PG_REPLAY_SCRATCH_SIZE
-#define PG_REPLAY_SCRATCH_SIZE (32UL * 1024UL * 1024UL)
+#define PG_REPLAY_SCRATCH_SIZE (48UL * 1024UL * 1024UL)
 #endif
 
 static volatile struct pg_hostcall_v0 *meta;
@@ -242,7 +242,14 @@ pg_replay_domain_main(unsigned *res, unsigned func)
     }
     n++;                                     /* the footer is a record too */
 
+    /* Two capability tables at sixteen bytes an entry, and with the data
+       check on a third of lengths at four. The footer says how many identities
+       were handed out, so this is exact rather than generous. */
     unsigned long tables = (r[n - 1].s2 + 2) * 16UL + (r[n - 1].s3 + 2) * 16UL;
+
+#ifdef REPLAY_CHECK_DATA
+    tables += (r[n - 1].s3 + 2) * 4UL;
+#endif
 
     tables = (tables + 4095UL) & ~4095UL;
     if (tables > PG_REPLAY_SCRATCH_SIZE) {
@@ -287,6 +294,9 @@ pg_replay_domain_main(unsigned *res, unsigned func)
     row("free", 0, c.free);
     row("reset", 0, c.reset);
     row("delete", 0, c.delete);
+#ifdef REPLAY_CHECK_DATA
+    row("objects whose contents were read back", 0, c.checked);
+#endif
 
     /*
      * Blocks are compared with the keepers taken out, and that is not a

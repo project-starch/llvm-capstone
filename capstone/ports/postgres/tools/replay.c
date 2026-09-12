@@ -131,6 +131,9 @@ main(int argc, char **argv)
         printf("| realloc | %lu |\n", c.realloc);
         printf("| reset | %lu |\n", c.reset);
         printf("| delete | %lu |\n", c.delete);
+#ifdef REPLAY_CHECK_DATA
+        printf("| objects whose contents were read back | %lu |\n", c.checked);
+#endif
         printf("\n| what the manager asked of the level below | in the backend | here |\n");
         printf("|---|---:|---:|\n");
         printf("| blocks taken | %lu | %lu |\n", c.was_alloc, got_alloc);

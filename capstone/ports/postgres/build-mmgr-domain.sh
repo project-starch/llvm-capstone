@@ -39,6 +39,13 @@ PG_TRACE=${PG_TRACE:-$((64 * 1024 * 1024))}
 PG_DOMAIN_STACK=${PG_DOMAIN_STACK:-$((256 * 1024))}
 PG_DOMAIN_DATA=${PG_DOMAIN_DATA:-$PG_DOMAIN_STACK}
 
+# Whether the replay checks that objects hold their contents and not only that
+# the counts add up. On by default, because a discipline that revokes and
+# re-hands memory could break the contract palloc makes without any counter
+# noticing, and off with PG_CHECK_DATA= when a run is timing rather than
+# checking: it reads and writes every object's bytes twice.
+PG_CHECK_DATA=${PG_CHECK_DATA--DREPLAY_CHECK_DATA}
+
 FILES="aset.c mcxt.c generation.c slab.c bump.c alignedalloc.c memdebug.c"
 
 for t in "$CLANG" "$LD_LLD"; do
@@ -104,7 +111,7 @@ for f in port/pg_stubs.c port/freestanding/pg_string.c \
   "$CLANG" "${FLAGS[@]}" \
       -DPG_REPLAY_PAYLOAD_SIZE=${PG_PAYLOAD}UL \
       -DPG_REPLAY_ARENA_SIZE=${PG_ARENA}UL \
-      -DPG_REPLAY_TRACE_SIZE=${PG_TRACE}UL \
+      -DPG_REPLAY_TRACE_SIZE=${PG_TRACE}UL $PG_CHECK_DATA \
       -c "$HERE/$f" -o "$o"
   OBJS+=("$o")
 done
