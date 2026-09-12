@@ -2204,6 +2204,27 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > boundary, and the 130 MiB region of sw55 happens to be granule-aligned. The exposure is for future
 > large non-aligned allocations, and a 130 MiB-class region has a 262,144-byte granule.
 >
+> **THE CONTAINMENT ABOVE IS ACCIDENTAL, AND IT EXPIRES ON APPROVED WORK.** (RTL lane
+> `3f587843527e`; arithmetic re-derived here.) Nothing has escaped so far because every region used
+> has been either small or a **round multiple of a MiB** — and at these magnitudes a round MiB count
+> is granule-aligned *for free*, so it widens by exactly **zero**. 2, 64, 120, 130 and 256 MiB all
+> widen by 0. That is luck of the units, not a check.
+>
+> **The next approved step removes that luck.** `current-next-step.md:245` records that
+> `main --size 100` "needs a **measured** 120 MiB" arena — and a measured value has no reason to be
+> a multiple of its granule. In the 64-aligned candidate band just below 120 MiB (granule 131,072,
+> page slack at most 4,095):
+>
+> * **96.8 %** of candidate sizes widen past their page allocation;
+> * the worst within ~256 KiB of 120 MiB escapes by **126,976 bytes — 31 pages**.
+>
+> The arena is sized by measurement precisely to be as tight as possible, which is the worst case
+> for this. **So the representability fix belongs BEFORE the size-100 arena is measured and used, not
+> after.** It is also cheapest there: rounding the request up costs at most one granule less a byte,
+> under 0.1 % at these sizes, and makes a measured value safe by construction rather than by
+> inspection. *Graded below: this paragraph is DERIVED — arithmetic over the granule law — not
+> measured.*
+>
 > **What is measured, read, derived and NOT shown — kept separate deliberately.** MEASURED on silicon:
 > `RCEN` = `round_up(N, granule)`, i.e. the decompressed end really is the widened value. READ FROM
 > SOURCE: `STC`'s bound check consumes `rs1.metadata.end`. DERIVED: therefore stores past the

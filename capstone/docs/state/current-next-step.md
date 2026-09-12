@@ -257,6 +257,15 @@ speedtest1 ratio is most sensitive to. Spec superseded with the defect recorded;
 added on the peer side. Compare the BUILT artifacts, not the two variables — a stale `OUT_DIR` makes
 the artifacts disagree while the variables agree.
 
+> ### ⚠ R-33 PUTS A FIX ON THE CRITICAL PATH OF THIS WORK
+>
+> The size-100 arena is **measured**, and a measured value has no reason to be granule-aligned. In
+> the 64-aligned band just below 120 MiB, **96.8 % of candidate sizes widen past their page
+> allocation** (worst within ~256 KiB: 126,976 bytes, 31 pages). Every region used so far escaped
+> this only because round-MiB sizes are granule-aligned for free. **Land R-33's representability fix
+> — round region sizes up to the granule at creation — BEFORE the size-100 arena is measured and
+> used.** Cost is at most one granule less a byte, under 0.1 % here.
+
 **Four board-side defaults would void a healthy size-100 run**, all verified at source and all tuned
 for 90-second arms: `SQLITE_STAGE_TIMEOUT` 90 (`run_sqlite_stages_fpga.py:47`, and it is PER DOMAIN),
 `BAKED_TIMEOUT` 120 (`run_baked_rungs_fpga.py:55`), `BAKED_IDLE_S` 25 (`:62`), `ENTRY_STALL_S` 260
