@@ -1,6 +1,31 @@
 # Next step
 
-## 0. CURRENT — 2026-09-12. **THE R-30/R-31 BITSTREAM IS FLASHED AND VERIFIED ON THE BOARD.**
+## 0. CURRENT — 2026-09-12. **FLASHED, AND MEASURED. R-31 IS FIXED ON SILICON; R-30 IS NOT WHAT ITS ENTRY SAYS.**
+
+Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
+
+| | |
+|---|---|
+| **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
+| **R-30** | **Its headline is contradicted.** sw60's monitor reclaim of a 1,419,584-byte region falls **1,728 bytes** short (`RCSH:000006C0`) — not the documented one byte. sw61's Sublet port on the same silicon reports **`init=5334`**, bit-identical to QEMU. INIT is plainly REACHABLE. Unreconciled; see ISSUES R-30. |
+| **the matrix** | complete on silicon. ABI cost **~1.21 and allocator-independent** (④/① 1.2124, ⑤/② 1.2107). The Sublet discipline costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap, which is what an O(bytes) reclaim predicts. |
+
+**The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is
+guarded at `sbi_capstone.c:1309`, inside `shared_region_annotated` — it fires when a SHARE finds a
+handle a PREVIOUS revoke left UNINIT. Every arm before sw60 revoked only at teardown and so could
+never reach it; sw59's `RCLM = 0` was structural, not evidence. The probe
+(`SQLITE_HOST_REVOKE_RESHARE`, a second binary so the measurement host stays byte-identical)
+releases the pool FIRST — while `tables` is still above it, so "revoked, the slot kept" is a property
+of the region stack — then shares the revoked region, then shares a fresh one to read the counter.
+
+**Next, and it is a question rather than a task: reconcile sw60 against sw61.** 1,728 bytes is
+108 granules; the two candidate readings are a loop-bound or alignment issue specific to the
+monitor's fill of a large region, or a gap between the Custom3-fabricated UNINIT in
+`r30-fill-init.S` and the real path. Neither is established, and R-30 should not be described either
+way until one is.
+
+### Superseded below: the flash itself
+
 
     nv_bitstream_name   caplifive_r30r31_1bfff7776.bit
     nv_bitstream_sha256 406e12bff4da76b552c8ac152edfd500402e9be546185cd83f7e0e3c7b4dfb30   <- MATCHES
