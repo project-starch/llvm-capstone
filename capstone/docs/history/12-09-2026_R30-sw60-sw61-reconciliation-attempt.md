@@ -330,3 +330,65 @@ compares two quantities neither of which is a re-encoded `end`, and `cap_base`/`
 either side of the same window. That makes the check immune to the re-encoding regardless of whether
 the RTL defect is ever fixed, and it keeps the postcondition doing its real job — catching a fill that
 genuinely fell short. It is the board lane's file and their call.
+
+## 8. sw62 confirms it, and R-33 is WORSE than "end reads high": the re-encoding WIDENS AUTHORITY
+
+sw62 settles the mechanism — arm 4 read the pre-registered compression figure (448) against 432 for a
+proportional rate, both granule-aligned arenas reclaimed clean, and `RCCU` showed the cursor reached
+the **true** end with every store advancing. `ALEN` and `RCEN` disagreeing **within one arm** —
+354,880 before the cursor moved, 355,328 after — is the defect in a single boot with no cross-boot
+comparison. Both of the surviving "stores did not advance" accounts, mine and the board lane's, are dead.
+
+**The board lane's addition to the postcondition fix is correct**, and I verified the direction rather
+than taking it. The flashed INIT raises on `cursor < end`:
+
+    if(rs1.cursor < rs1.metadata.end){
+        call raise_exception(data.trans_id,ex_code::ILLEGAL_OPERAND_VALUE)
+
+So a postcondition that stops reading `end` lets a large unaligned region reach `csinit`, whose cursor
+sits at the true end while `end` decodes higher — an `ILLEGAL_OPERAND_VALUE` trap inside the monitor,
+which is the uninformative failure the postcondition exists to prevent. Two checks with separate tags,
+as they propose, not one substitution.
+
+### The consequence neither of us has stated, and it is the serious one
+
+**The rounded end is not merely REPORTED high — the exact end is LOST, and the capability's AUTHORITY
+grows with it.** The pipeline reconstructs its fat bounds by *decompressing the register*
+(`ex_stage.sv:784-785`, `cap_rs1 : decompress_cap_tagged(...)`), so after the first store re-encodes
+the bounds every later decode yields the **rounded** end. STC's bound check then uses that end:
+
+    let rs1_end = rs1.metadata.end - 64'd16;   // dyn unit, STC
+    ... ((rs1_up>rs1_end)||(rs1_up<rs1.metadata.start))  -> OUT_OF_BOUNDS
+
+For sw62 arm 4 that authorises stores up to `base + 355,312`, whose last byte lands at
+`base + 355,328` — **448 bytes past the 354,880 the allocator actually reserved.** The hardware will
+permit those writes. They land in whatever follows the allocation.
+
+**So R-33's headline should not be "`end` reads high after the cursor moves". It should be "moving a
+cursor WIDENS a capability's bounds beyond its allocation, by up to granule−1 bytes".** The reclaim
+shortfall is a symptom; over-permissive authority is the defect, and it is a capability-soundness
+issue rather than an instrumentation nuisance.
+
+### Which makes the CAUSAL fix an allocator one, and it is cheaper than it sounds
+
+Compressed-bounds formats are lossy by construction and the standard contract is that allocators hand
+out **representable** objects. Nothing here enforces that: the monitor's region allocator passes the
+requested size straight through, so a size that is not a multiple of its own encoding granule is
+silently widened. sw62 is exactly that experiment — **both granule-aligned arenas were clean and only
+the unaligned one failed.**
+
+**Round region sizes up to the representability granule at creation** (granule `2^(E+3)` with
+`E = floor(log2(len)) - 12`, exact when `E == 0 && len[12] == 0`), and the reclaim works, the
+region-field API reads true, and no authority is widened. That fixes the cause; the two-check
+postcondition remains worth having as the thing that catches it if the contract is ever broken again.
+
+### Two limits on all of the above, stated because they bound R-33
+
+* **Only STC-advanced cursors on the DYN path are demonstrated.** `CINCOFFSET` moves a cursor too and
+  its `cap_rs1` is compressed on the FLU writeback (`ex_stage.sv:1215`), which is structurally the
+  same path — so the same widening plausibly applies to ordinary LINEAR capabilities the moment their
+  cursor leaves base. **Untested, and it should not be asserted until it is**, but if it holds the
+  scope is far wider than the reclaim.
+* **The bottom truncation is unobserved.** `B[13:3] = {bounds.start >> E}[13:3]` has no correction
+  term, so `base` can decode LOW on the same encoding. Every sw62 region was base-aligned, so nothing
+  there could have shown it.
