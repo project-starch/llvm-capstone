@@ -429,3 +429,51 @@ DEMONSTRATED) is the right shape and this section is **DERIVED**: it is arithmet
 granule law, not an observation. What is still NOT DEMONSTRATED is an actual out-of-allocation write,
 and the arm that would show it should use `CINCOFFSET` on a plain LINEAR capability, since everything
 measured so far is UNINIT and STC.
+
+## 10. CONFIRMED: R-33 reaches ORDINARY LINEAR capabilities, via CINCOFFSET
+
+The one piece of evidence still owed is now measured. Directed arm
+`verif/tests/custom/capstone/r33-cincoffset-widen.S`, run on `1bfff7776`, committed at
+`cb2cd046a` on `r30-r31-init-revoke` and anchored `backup/r33-cincoffset-widen-2026-09-12`.
+
+| arm | cursor | Start | End | |
+|---|---|---|---|---|
+| R, control | at base | `80004000` | `80008020` | |
+| R, control | base+16 | `80004000` | `80008020` | **unchanged** |
+| W, unknown | at base | `80004000` | `80008010` | exact top — precondition proven |
+| W, unknown | base+16 | `80004000` | `80008020` | **WIDENED by 16** |
+
+435 cycles against a 200,000 timeout, no exceptions — a real completion, not a
+SUCCESS-at-timeout.
+
+**Matched on everything that could otherwise explain it:** same base, same permissions, same
+16-byte cursor move, and the **same granule** — both lengths have their highest set bit at 14, so
+`E = 2` and the granule is 32 for both arms. Only representability differs. 16,416 is a multiple of
+32 and does not move; 16,400 is not and rounds up.
+
+**Two properties make it a reading rather than a suggestion.** The control **does not move**, so this
+is specific to non-representable bounds and not the instruction re-rounding everything. And the
+unknown's **first** print shows the exact top, so the capability genuinely was in the exact-encoded
+state beforehand and the widening is caused by the cursor move rather than pre-existing.
+
+**So the scope is settled: this is not the reclaim routine and not the UNINIT type. It is any
+capability whose cursor leaves its base — ordinary pointer arithmetic on ordinary linear
+capabilities.** That moves R-33 from a monitor-adjacent defect to an ISA-level one.
+
+**Still NOT demonstrated:** an actual write landing outside an allocation. This shows the authority
+widens; it does not show anything using it.
+
+### Two mistakes in building it, both mine, both the shapes catalogued above
+
+* **The first version encoded its verdict in a `TESTNUM`** and returned an even `tohost` that the
+  failure convention cannot produce, with no trace and no exception lines — unreadable. Rewriting it
+  to **CAPPRINT and report rather than judge** produced a usable answer in one run. A test that
+  decides for you can only tell you which branch it took.
+* **It put the unknown BEFORE the control and exited on it**, so the control would never have run —
+  the project's own ordering rule, broken in the one place it mattered. Fixed by running the control
+  first.
+* And a third, caught before it did damage: **the first `precommit-scan` for this commit was run from
+  the PARENT repo rather than the worktree**, so it scanned the wrong tree and returned CLEAN having
+  seen none of the files. Re-run with the toplevel asserted equal to the worktree and the diff printed
+  alongside the verdict — 117 insertions actually examined. Same family as the scan of a branch that
+  did not exist, one day later, by the other lane's own warning.
