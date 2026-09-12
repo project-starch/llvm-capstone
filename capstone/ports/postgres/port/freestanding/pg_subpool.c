@@ -40,6 +40,15 @@ struct pg_subpool {
     struct pg_subpool *free_next;
 };
 
+/* The context headers, in the domain's own data. Sixteen-byte aligned because
+ * a header holds capabilities, and a capability stored to a slot that is not
+ * sixteen-aligned loses its tag. */
+static unsigned char header_tab[PG_SUBPOOL_MAX][PG_HEADER_BYTES]
+    __attribute__((aligned(16)));
+static unsigned int header_free[PG_SUBPOOL_MAX];
+static unsigned int header_free_n;
+static unsigned int header_next;
+
 static struct pg_subpool pool_tab[PG_SUBPOOL_MAX];
 static pg_block block_tab[PG_BLOCK_MAX];
 static pg_chunk chunk_tab[PG_CHUNK_MAX];
@@ -224,6 +233,7 @@ pool_drop_blocks(struct pg_subpool *sp)
         b->pool = NULL;             /* so block_release does not walk back in */
         block_release(b);
         pg_subpool_counts.blocks_freed++;
+        pg_subpool_counts.blocks_live--;
         b = next;
     }
     sp->blocks = NULL;
@@ -319,8 +329,8 @@ block_from(struct pg_subpool *sp, unsigned long bytes)
     sp->carved++;
 
     b->base = sublet_base(&b->region);
-    b->limit = sublet_end(&b->region);
-    b->cursor = b->base;
+    b->endptr = sublet_end(&b->region);
+    b->freeptr = b->base;
     b->prev = b->next = NULL;
     b->aset = NULL;
     b->pool = sp;
@@ -332,6 +342,8 @@ block_from(struct pg_subpool *sp, unsigned long bytes)
         sp->blocks->pool_prev = b;
     sp->blocks = b;
     pg_subpool_counts.blocks++;
+    if (++pg_subpool_counts.blocks_live > pg_subpool_counts.blocks_peak)
+        pg_subpool_counts.blocks_peak = pg_subpool_counts.blocks_live;
     return b;
 }
 
@@ -375,6 +387,13 @@ pg_subpool_block_free(pg_block *b)
     sublet_clear(&b->region);
     block_release(b);
     pg_subpool_counts.blocks_freed++;
+    pg_subpool_counts.blocks_live--;
+}
+
+void
+pg_subpool_count_keeper(void)
+{
+    pg_subpool_counts.keepers++;
 }
 
 unsigned int
@@ -384,15 +403,16 @@ pg_subpool_carve(pg_block *b, unsigned long bytes)
     unsigned long end;
 
     bytes = ALIGN16(bytes);
-    end = b->cursor + bytes;
-    if (end > b->limit || !i)
+    end = b->freeptr + bytes;
+    if (end > b->endptr || !i)
         return 0;
 
     chunk_free = chunk_tab[i].block_next;
-    b->cursor = end;
+    b->freeptr = end;
     sublet_carve(&b->region, end, &chunk_tab[i].slot);
     chunk_tab[i].next_free = 0;
     chunk_tab[i].bytes = (unsigned int) bytes;
+    chunk_tab[i].block = (unsigned int) (b - block_tab);
 
     /* Onto the tail of the block's chain, so a release is one splice. */
     chunk_tab[i].block_next = 0;
@@ -431,6 +451,65 @@ pg_chunk *
 pg_subpool_entry(unsigned int i)
 {
     return &chunk_tab[i];
+}
+
+pg_block *
+pg_subpool_block_at(unsigned int i)
+{
+    return &block_tab[i];
+}
+
+unsigned int
+pg_subpool_block_index(pg_block *b)
+{
+    return (unsigned int) (b - block_tab);
+}
+
+unsigned int
+pg_subpool_first_chunk(pg_block *b)
+{
+    return b->chunk_head;
+}
+
+unsigned int
+pg_subpool_next_chunk(unsigned int i)
+{
+    return chunk_tab[i].block_next;
+}
+
+void *
+pg_subpool_header(unsigned long bytes)
+{
+    unsigned int i;
+
+    if (bytes > PG_HEADER_BYTES)
+        return NULL;
+    if (header_free_n)
+        i = header_free[--header_free_n];
+    else if (header_next < PG_SUBPOOL_MAX)
+        i = header_next++;
+    else
+        return NULL;
+    for (unsigned long k = 0; k < PG_HEADER_BYTES; k++)
+        header_tab[i][k] = 0;
+    return &header_tab[i][0];
+}
+
+void
+pg_subpool_header_free(void *p)
+{
+    unsigned char *q = (unsigned char *) p;
+    unsigned int i;
+
+    if (!q || header_free_n >= PG_SUBPOOL_MAX)
+        return;
+    /* Which slot, by subtracting one pointer from another inside the same
+     * array. The difference is an integer and no capability is made from it,
+     * which is what a cast to an integer and back would have done: the
+     * compiler refuses that here, and it is right to. */
+    i = (unsigned int) ((q - &header_tab[0][0]) / PG_HEADER_BYTES);
+    if (i < PG_SUBPOOL_MAX)
+        header_free[header_free_n++] = i;
 }
 
 const struct sublet_stats *
