@@ -1271,6 +1271,28 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `OPEN — DEMONSTRATED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517); not yet run as a directed test; the defect is INHERITED FROM THE SPEC, which has the same arithmetic`
 
+> # ⚠ THE HEADLINE "INIT IS UNREACHABLE" IS CONTRADICTED BY SILICON, 2026-09-12. Two readings on ONE bitstream, in adjacent boots, and they do not agree.
+>
+> On `caplifive_r30r31_1bfff7776`:
+>
+> * **boot sw60** — the monitor's reclaim of a **1,419,584-byte** region reports
+>   `RCSH:000006C0`: the fill stopped **1,728 bytes** (108 granules of 16) short of `end`, and halted
+>   on its own designed `while(1)`. That is a shortfall, but it is **not the one-byte shortfall this
+>   entry describes**.
+> * **boot sw61** — the Sublet port on the same silicon reports
+>   `sublet: split=5508 mrev=37899 delin=32565 revoke=37899 init=5334`. **5,334 successful INITs**,
+>   every counter bit-identical to QEMU.
+>
+> **INIT is therefore plainly REACHABLE on this silicon, 5,334 times in one run.** Whatever sw60's
+> 1,728-byte shortfall is, "INIT can never be satisfied" does not describe it, and this lane's own
+> prediction — that R-30 would force `init = 0` and produce the masking signature — was written down
+> before sw61 and was **wrong**.
+>
+> Recorded as an unreconciled conflict rather than a re-diagnosis. The two candidate readings are
+> that the shortfall is specific to the monitor's fill of a large region (a loop-bound or alignment
+> question, not an ISA one), or that the sim test's Custom3-fabricated UNINIT differs from the real
+> path in a way that matters. Neither is established. Evidence: §4g.3, §4g.4, §4g.5.
+
 > # ⚠ RETRACTION 2026-09-10 (RTL lane's auditor): R-30's FIX IS A DELIBERATE SPEC DEVIATION, NOT A CONFORMANCE FIX. This is now a DECISION in front of the lead, not a correction.
 >
 > `cap-man-insn.adoc:421` lists `x[rs1].cursor <= x[rs1].end` as INIT's illegal-operand condition.
@@ -1601,7 +1623,28 @@ was named, and it fabricates its UNINIT operand with `CINCOFFSET` past `end` *pr
 cannot reach the precondition* — a workaround, in the test suite, for a defect nobody had named. **This is a spec decision and belongs to the lead and
 the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before this one.
 
-### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `OPEN — SECURITY-RELEVANT. VERIFIED BY READING THE FLASHED RTL 2026-09-10 (66c4e7517) against the spec; not yet demonstrated by a directed test`
+### R-31 — REVOKE's permission clause is INVERTED against the spec, so revoking a linear borrow of a WRITABLE region returns a readable LINEAR capability instead of an UNINIT one — the reinitialisation step is skipped and the borrower's data is disclosed to the owner `FIXED ON SILICON — VERIFIED 2026-09-12 on caplifive_r30r31_1bfff7776, boot sw60, through the monitor's real share/revoke path`
+
+> # ✅ FIXED AND VERIFIED ON SILICON, 2026-09-12, boot sw60.
+>
+> The bitstream `caplifive_r30r31_1bfff7776` was flashed this session (`nv_bitstream_sha256`
+> `406e12bf…` read back from the board after the mandatory power-cycle). A host probe revoked a
+> `REV_BORROWED` region and then **shared it again**, which is what reaches the monitor's reclaim —
+> the guard at `sbi_capstone.c:1309` sits on the SHARE path, so an arm that revokes only at teardown
+> can never trigger it. Verbatim:
+>
+>     RGID:00000014  AREV:00000001      region 20, REV_BORROWED
+>     SHA2:00000003                     cap_type(r) = 3 = UNINIT
+>     BASE:AC100000  ALEN:0015A940
+>
+> `SHA2` is `cap_type(r)`, emitted at `:1276` **before** the guard. It reads **UNINIT**, where the
+> previous bitstream returned LINEAR — that is exactly the inversion this entry describes, and it is
+> gone. **`RCPR` did not fire either**, so `cap_cursor == cap_base`: both halves of the contract hold.
+>
+> Corroborated in simulation with a matched negative control: `r31-revoke-cursor` FAILS at
+> `66c4e7517` (tohost=11) and PASSES at `1bfff7776` (490 cycles), identical test binary, RTL the only
+> variable. Details in `fpga-silicon-measurements-for-paper.md` §4g.3 and §4g.4.
+
 
 > # AUDIT 2026-09-10: R-31 is SUPPORTED on all four attacks — and it is ALSO NOT SUFFICIENT. Both halves matter.
 >
