@@ -1,0 +1,11 @@
+# The class and level of every hunk in 0025, for capstone/tests/port-effort.py.
+#
+# NOT PART OF THE PORT EFFORT. This patch is a measurement of what the discipline would cost this
+# allocator, not a step toward applying it, and it is never built into an arm that is compared.
+# The classes are recorded anyway, because the rule is that every hunk in every patch carries one
+# and a patch that is exempt today is how a number is quietly wrong tomorrow.
+
+py/gc.h:153    metadata   allocator   the region-start bits and what they model
+py/gc.c:229    metadata   allocator   one region at the start: the whole pool
+py/gc.c:1020   hierarchy  allocator   a run may not cross a region start, which IS the split rule
+py/gc.c:1093   hierarchy  allocator   the carve leaves a remainder that is a region from here on

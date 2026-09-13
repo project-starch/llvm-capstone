@@ -1,0 +1,132 @@
+Model, with no capability work at all, the one thing the discipline forbids: joining free runs.
+
+WHY ASK THIS SEPARATELY. Sublet merges two regions through a handle taken BEFORE the split that
+separated them, and revoking that handle kills everything below it. MicroPython carves from the
+front of a free region, so the splits form a right-leaning chain and the common ancestor of two
+adjacent free regions always covers everything between and to the right of them, live objects
+included. There is therefore no handle that merges exactly two neighbours, and free space is
+reusable only inside the region it was carved from.
+
+That is a property of the allocator's shape, not of the capability machinery, so it can be
+measured without any: one bit a block saying a region begins here, and a search loop that restarts
+its run at a region start instead of continuing through it. The model is exact because the carve
+is always from a region's base, which makes a region either wholly free or wholly one object, so a
+usable free run always begins at a region start.
+
+WHAT IT COSTS, MEASURED OVER THE UPSTREAM SUITE AT THE FULL FEATURE LEVEL:
+
+                          joining        not joining
+  suite            551 pass, 1 fail   547 pass, 5 fail
+  collections                   53                475      nine times as many
+  collected per cycle         4728                541
+  allocations              369,904            363,136      6,768 of them failed
+
+The four tests that break are dict_del.py, memoryview_gc.py, set_binop.py and set_remove.py, and
+each dies with MemoryError: memory allocation failed, at 736 and 368 bytes. That is fragmentation
+and nothing else.
+
+SIBLING MERGING DOES NOT RESCUE IT, which is worth writing down because it is the obvious next
+idea. Carving from the front makes R0 into O1 and R1, then R1 into O2 and R2. By the time O1 dies
+its sibling R1 has been split again, and the handle that covers them both covers O2 as well. The
+same holds for every pair. Imposing a mergeable tree would mean changing the fit strategy, which
+is a policy change, and the arm this is measured against is the same allocator with the same
+policy.
+
+So this is not a step toward the port. It is the measurement that says what the port would cost,
+and it is the reason to spend the next week on an allocator whose freed space returns through a
+structure rather than into a flat bitmap.
+
+--- a/py/gc.h
++++ b/py/gc.h
+@@ -153,4 +153,28 @@
+ extern size_t mpy_gc_atb_len;
+ #endif
+ 
++// MPY_GC_NO_COALESCE models, with no capability work at all, the one thing the discipline would
++// impose on this allocator: a freed run cannot be joined to its neighbours, because a region can
++// be split and not joined and the handle that would merge two of them covers a whole subtree that
++// may still hold live objects.
++//
++// The question this answers on its own, before a line of Sublet is written: does MicroPython's
++// collector still run when free space is only ever reusable inside the region it was carved from?
++// If it does not, the discipline does not fit this allocator without changing its policy, and
++// that is a finding rather than a week of work.
++//
++// The model is exact because the carve is always from a region's base, so a region is either
++// wholly free or wholly one object, and a usable free run therefore always begins at a region
++// start. One bit a block, supplied by the port.
++#ifndef MPY_GC_NO_COALESCE
++#define MPY_GC_NO_COALESCE (0)
++#endif
++
++#if MPY_GC_NO_COALESCE
++extern byte *mpy_gc_rstart;
++extern size_t mpy_gc_rstart_len;
++#define MPY_RSTART_GET(b)  ((mpy_gc_rstart[(b) >> 3] >> ((b) & 7)) & 1)
++#define MPY_RSTART_SET(b)  (mpy_gc_rstart[(b) >> 3] |= (byte)(1u << ((b) & 7)))
++#endif
++
+ #endif // MICROPY_INCLUDED_PY_GC_H
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -229,6 +229,13 @@
+     area->gc_last_free_atb_index = 0;
+     area->gc_last_used_block = 0;
+ 
++    #if MPY_GC_NO_COALESCE
++    // One region at the start: the whole pool.
++    assert(mpy_gc_rstart_len >= (gc_pool_block_len + 7) / 8);
++    memset(mpy_gc_rstart, 0, (gc_pool_block_len + 7) / 8);
++    MPY_RSTART_SET(0);
++    #endif
++
+     #if MPY_SUBLET
+     // One slot per block, and the pool must not outrun it: a table that ends early would hand out
+     // an object whose handle belongs to another. This is an assert and not a raise because
+@@ -1013,12 +1020,30 @@
+             for (i = area->gc_last_free_atb_index; i < area->gc_alloc_table_byte_len; i++) {
+                 MICROPY_GC_HOOK_LOOP(i);
+                 byte a = area->gc_alloc_table_start[i];
++                #if MPY_GC_NO_COALESCE
++                // A run may not cross a region start: free space is reusable only inside the
++                // region it was carved from. Hitting a region start begins a new candidate run
++                // rather than extending the one before it.
++                for (unsigned k = 0; k < BLOCKS_PER_ATB; ++k) {
++                    size_t b = i * BLOCKS_PER_ATB + k;
++                    if (((a >> (2 * k)) & 3) != AT_FREE) {
++                        n_free = 0;
++                        continue;
++                    }
++                    n_free = MPY_RSTART_GET(b) ? 1 : n_free + 1;
++                    if (n_free >= n_blocks) {
++                        i = b;
++                        goto found;
++                    }
++                }
++                #else
+                 // *FORMAT-OFF*
+                 if (ATB_0_IS_FREE(a)) { if (++n_free >= n_blocks) { i = i * BLOCKS_PER_ATB + 0; goto found; } } else { n_free = 0; }
+                 if (ATB_1_IS_FREE(a)) { if (++n_free >= n_blocks) { i = i * BLOCKS_PER_ATB + 1; goto found; } } else { n_free = 0; }
+                 if (ATB_2_IS_FREE(a)) { if (++n_free >= n_blocks) { i = i * BLOCKS_PER_ATB + 2; goto found; } } else { n_free = 0; }
+                 if (ATB_3_IS_FREE(a)) { if (++n_free >= n_blocks) { i = i * BLOCKS_PER_ATB + 3; goto found; } } else { n_free = 0; }
+                 // *FORMAT-ON*
++                #endif
+             }
+ 
+             // No free blocks found on this heap. Mark this heap as
+@@ -1068,6 +1093,15 @@
+ 
+     area->gc_last_used_block = MAX(area->gc_last_used_block, end_block);
+ 
++    #if MPY_GC_NO_COALESCE
++    // The carve leaves a remainder, and the remainder is a region of its own from here on. This
++    // is the split; nothing ever puts the two back together.
++    MPY_RSTART_SET(start_block);
++    if (end_block + 1 < area->gc_alloc_table_byte_len * BLOCKS_PER_ATB) {
++        MPY_RSTART_SET(end_block + 1);
++    }
++    #endif
++
+     // mark first block as used head
+     ATB_FREE_TO_HEAD(area, start_block);
+ 
