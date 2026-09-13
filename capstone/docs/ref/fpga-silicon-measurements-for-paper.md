@@ -2824,7 +2824,10 @@ sw63 was the first boot to carry it, and it **has never been observed to fire an
 check that has never fired cannot distinguish "nothing rounded" from "the message never reaches the
 capture". An earlier version of this paragraph said the boot *proves* the fix inert; it does not,
 and saying so was this document's own "a clean result is not evidence until the check is known to
-fire" rule being broken in the act of invoking it. (Bench-lane audit.)
+fire" rule being broken in the act of invoking it. (Bench-lane audit.) **Closed 2026-09-13 by boot
+sw72:** the line fired once on a `bigregion.user 1419584` arm and zero times on the `4194304` arm of
+the same boot, positive and negative control together (§7o), so the zeros above now say what they
+appear to say.
 
 **The positive control is cheap and is owed:** one `--pool`-derived arm, where 1,419,584 rounds by
 1,728, shows the line once. After that a zero means something permanently. Until then the correct
@@ -3114,3 +3117,27 @@ the pre-registered band (1.17–1.27, predicted ≈1.22) written down before the
 overhead on the full workload is 1.19x native and the S-15 fix runs the real benchmark end to end on
 silicon, not merely past the share. `H/return` and the verification hash both present; the arm was
 judged on the hash, not on completion alone.
+
+**2026-09-13 late, before the size-100 pair (boot sw73): the pre-run and the controls.**
+*Size-100 pre-run on QEMU `-icount`* (fix image `f795151f`, the readback host's predecessor
+`6e3cd65c`, `cma=256M`): `--size 20` → hash `3807866 2738af78`, **17,755,282,312** instructions
+(§7l's count, reproduced); `--size 100` → hash **`23674002 573a4409`** (the native oracle),
+**111,482,174,837** instructions — the domain arm at size 100 had never run anywhere before this;
+its instruction ratio against §7l's baseline count 90,025,541,852 is **1.2383** (the projection was
+1.2467); HEAP 134217728, DROPPED 0, RC 0. On sw68's measured CPIs (native 3.831, domain 3.646) the
+board pair projects to 3.83 h + 4.52 h; the pre-registered cycle ratio for sw73 is ≈1.18, band
+1.14–1.24, two decimals.
+*Boot sw72, the controls boot* (control `retval=4`): **R-33's rounding log fired for the first time
+anywhere** — `bigregion.user 1419584` (rebuilt to count the module's "not representable" line in
+dmesg) reports `not-representable-lines=1`, and the representable `4194304` arm reports `0`, positive
+and negative control in one boot; every earlier "zero rounding lines" reading is now informative.
+**The S-15 instrument is fixed and controlled:** the measurement host now reads every REV_SHARED
+region's first word back after the share (default-on; a planted sentinel in the arena makes
+"unchanged" a positive reading). Negative control on QEMU (fix image): no trap line, sentinel
+`0x5EED0000` = 1592590336 unchanged, oracle hash. Positive control on silicon (pair image
+`214b300efd169f03`): `share-trap=4139818259` = `0xF6C09D13`, mcause 27, offset 160844, at share3, then
+`X/fail obs=3` and no `G/enter` — sw69's reading, now produced by the measurement host and terminal.
+Scope: this names a trap only for a domain that installs a trap vector; a measurement image (mtvec
+0) never returns from the faulting share, and the entry watchdog is what bounds that case. (Two
+pre-registration decimals in the drivers were mis-converted by hand — `0xF6C09D13` and `0x5EED0000` —
+and both hardware readings matched the hex exactly; decimals are now produced by machine.)

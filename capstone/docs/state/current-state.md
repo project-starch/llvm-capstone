@@ -30,18 +30,24 @@ Minimal snapshot. Read first in every session.
   — inside the pre-registered 1.17–1.27 band. The fix runs the real benchmark end to end on silicon.
 * **Watchdog fixed** (`f7f2c9030623`): liveness is `[uart]` lines; console `[event]` chatter had
   made the entry-stall abort unfireable live.
-* **PRs landed on `dev` (nine of eleven):** #15, #16 (+print fix), #11/#12/#13; and this session
-  buildroot #2/#3 (submodule `capstone-bootstrap`=`d04bd83`, module rebuilt + 3 QEMU controls: the
-  ioctl-struct grew so every board host must be rebuilt with it), #17 (+follow-up), #18 (gate
-  PASS=4). **FPGA-side #3 LANDED, proven by boot sw71** (control `retval=4` with the rebuilt controller —
-  its private ioctl struct grown, f308efe2 — and the declaring SQLite image running to the size-1
-  oracle on the new module; gitlinks bumped). The native baseline build's `-fno-common` link failure
-  is fixed separately (e78fc6ab). Eight other freestanding hosts still carry the old private struct
-  (listed in current-next-step.md); they fail loudly on the #3 module until grown. **Held:** #14 (lit test tautological; real
-  gate is capinit-scan on the large MicroPython image) — LANDED d616ea4e: rebuild-and-diff shows the
-  160-test image differs by exactly 17 instructions, all `sd ra`→`stc ra`/`ld ra`→`ldc ra` width swaps
-  (13 truncated capability spills fixed); claim-auditor SUPPORTED; lit 93/93, authority 32/32,
-  sqlite-silicon + MicroPython PASS on the rebuilt toolchain. Only capstone-qemu #3 remains (rebase).
+* **PRs landed on `dev`: ten of the eleven original, and all seventeen new ones (#19–#35).**
+  Original: #15, #16 (+print fix), #11/#12/#13, buildroot #2/#3 (submodule `capstone-bootstrap`=`d04bd83`,
+  module rebuilt + 3 QEMU controls: the ioctl-struct grew so every board host must be rebuilt with it),
+  #17 (+follow-up), #18 (gate PASS=4), #14 (`d616ea4e` + follow-up: the rebuilt 160-test image differs
+  by exactly 17 instructions, all `sd ra`→`stc ra`/`ld ra`→`ldc ra`; claim-auditor SUPPORTED; lit 93/93,
+  authority 32/32, sqlite-silicon + MicroPython PASS on the rebuilt toolchain). **FPGA-side #3 LANDED,
+  proven by boot sw71** (control `retval=4` with the rebuilt controller — its private ioctl struct
+  grown, f308efe2 — and the declaring SQLite image running to the size-1 oracle on the new module;
+  sw70 before it was VOID: the native baseline controller had been staged into the `lpc` slot). New,
+  2026-09-13/14: standalone #20/#21/#28; the nginx stack #29–#35 in order (pool gate 90/0; the
+  use-after-destroy pair reproduced, fault at pc 0x166cc; #35's replay not reproducible here — no trace
+  file locally, recorded as the collaborator's claim); the MicroPython stack #24→#25→#26→#19→#22→#23→#27
+  as plain merges of the collaborator's rebase (0 replayed commits; gates on the tip: default PASS=4;
+  full level 557 rows PASS=551 FAIL=1 FAULT=0 SKIP=5; weakref-on 563 rows PASS=552 FAIL=1 FAULT=5
+  SKIP=5 — and the gate's `MPY_GATE_TESTS=all` mode cannot fail, its judge compares to the literal
+  `all`; recorded in the merge message and the hand-off note). The eight other freestanding hosts with
+  the private ioctl struct are grown (B2, 2026-09-14). **Held:** capstone-qemu #3 (rebase); #14/#18's
+  force-pushed rebases are to be CLOSED, not re-merged (landed by content).
 * **The toolchain binary is STALE** per `toolchain-fresh` (now that #15 lets it say so): the
   `opt`/`llvm-symbolizer` targets were never built. Rebuild at #14's step, never during a suite.
 

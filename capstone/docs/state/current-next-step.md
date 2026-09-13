@@ -1,4 +1,6 @@
-## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3); #3 is on the FPGA image, proven by sw71.**
+## 0. CURRENT — 2026-09-14 (night). **Boot sw73 (`main --size 100` pair, overnight) is RUNNING; sw72 gave the R-33 rounding log its positive control and the S-15 share-trap instrument its positive control; all seventeen new collaborator PRs (#19–#35) are landed; S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27).** Earlier header follows.
+
+> CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3); #3 is on the FPGA image, proven by sw71.**
 
 > **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
 > control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
@@ -83,20 +85,35 @@
   domain ≈4.6 h; the domain count is projected), not the 8.8–17.6 h quoted below. The lead said GO
   (2026-09-13); the plan `docs/plans/2026-09-13-pr-queue-and-sqlite-experiments.md` §2.4 carries the
   pre-run, budget and invalidators.
-* **Hosts with a PRIVATE copy of `ioctl_dom_create_args` must be grown by hand for the #3 module** (the
-  struct's size is in the ioctl number; a rebuild alone changes nothing): `ladder_perf_ctl.c` is done
-  (f308efe2, QEMU pair: old ctl `Unrecognised IOCTL`, new ctl `RESULT k800 retval=4`). Still old-shape:
-  `borrow_cost_fpga_ctl.c`, `borrow_cost_fpga_nogp_ctl.c`, `borrow_breakdown_fpga_nogp_ctl.c`,
-  `gpfree_fpga_ctl.c`, `rev_transferred_probe_ctl.c`, the R01/R02/R16 repro copies, and the
-  `caplifive-buildroot-domain-sizing.patch`. They fail LOUDLY (create_dom failed) on the #3 module, so
-  no wrong number can come of them; grow each before its next use, and note the hash change, since
-  their binaries are cited instruments. Also stale on the board overlay: `rtpc`, `bigregion.user`,
-  `sqlite_host_rr.user` (libcapstone-linked; rebuild).
+* **Hosts with a PRIVATE copy of `ioctl_dom_create_args` — ALL GROWN (B2, 2026-09-14).** The struct's
+  size is in the ioctl number, so a rebuild alone changes nothing: `ladder_perf_ctl.c` (f308efe2, QEMU
+  pair: old ctl `Unrecognised IOCTL`, new ctl `RESULT k800 retval=4`) and, in one commit, the same two
+  zeroed fields in `borrow_cost_fpga_ctl.c`, `borrow_cost_fpga_nogp_ctl.c`,
+  `borrow_breakdown_fpga_nogp_ctl.c`, `gpfree_fpga_ctl.c`, `rev_transferred_probe_ctl.c` and the
+  R01/R02/R16 repro copies (the R01 copy proven as a QEMU pair against `rawhazard5.dom`; the prebuilt
+  `images/ladder_perf_ctl` in R01/R02 is still the pre-#3 binary and is labelled so in their READMEs).
+  Their binaries are cited instruments: the hash of each changes at its next build, note it beside the
+  measurement row. `caplifive-buildroot-domain-sizing.patch` is historical and left as is. Board overlay
+  still to rebuild: `rtpc`, `sqlite_host_rr.user` (`bigregion.user` was rebuilt for sw72).
 * **Boot sw70 is VOID, not a #3 reading:** `ladder_base_ctl` (the native baseline controller, no
   `/dev/capstone`) was staged into the `lpc` slot -- same name, different program, 6x the size -- the
   board reset under it and no RESULT came back. Its fixes: the native build's `-fno-common` link
   (e78fc6ab), the controller's private struct (f308efe2), and a same-program staging gate in the
   driver (marker strings + size class, not just the hash of what was built). sw71 reruns it.
+* **Boot sw72 (controls, 2026-09-13 late) PASSED:** control `retval=4`; `bigregion.user 4194304` →
+  `not-representable-lines=0`, `bigregion.user 1419584` → `1` (R-33's rounding log fired for the first
+  time anywhere); the pair image `214b300efd169f03` with the readback host (2af56927) at `--size 1` →
+  `SQ: share-trap=4139818259` (`0xF6C09D13`, mcause 27, off 160844, at share3), `X/fail obs=3`, no
+  `G/enter` — the S-15 instrument fix's positive control (negative control on QEMU: fix image, no trap
+  line, sentinel unchanged, oracle hash). The runner treats that designed stop as HARD STOP and writes
+  no scoped `boot.txt`; readings taken from the raw driver log after this run's own `load_image`
+  (runner follow-up owed: recognise `SQ: share-trap=` as terminal; not while sw73's driver runs).
+* **Boot sw73 (`main --size 100` pair) LAUNCHED 2026-09-14 00:11** via `board-b73.sh` (bare launcher,
+  Monitor scoped after its own `load_image`): control → `speedtest1_baseline|warm --size 100` → control
+  → `speedtest1.dom --speedtest1 --size 100` LAST; `BUDGET=43200`; image f795151f, host 2af56927,
+  baseline ed548785. Pre-registered: both hashes `23674002 573a4409`, `DROPPED 0`, ratio ≈1.18 (band
+  1.14–1.24, two decimals), NOMEM the named hours-in failure, invalidator #3 re-registered at ~164× the
+  size-1 count. Pre-run under QEMU icount: size 100 = 111,482,174,837 instructions at the oracle.
 * `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
   hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
   `SQLITE_STAGE_DOMS` image.

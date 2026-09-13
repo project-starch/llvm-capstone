@@ -984,7 +984,7 @@ one bitstream; the rung's 66 → 64 on the board is the acceptance.
 > turns the hang into a run; the region's residency and size are unchanged in that image.** Mechanism, evidence and the
 > fix in §7o. **The fix** (the REGION_ARENA branch no longer delins; both comments corrected) is on
 > `dev`; the silicon proof is sw68, the fixed image without a trap vector passing share3 and
-> running. **Instrument fix owed:** a trap in a share entry must be reported where the host reads.
+> running. **Instrument fix LANDED 2026-09-13 (0f150add):** the host reads every REV_SHARED region's first word back after the share and reports a packed trap word (`SQ: share-trap=…`), stopping there; positive control sw72 (pair image → `0xF6C09D13`, mcause 27 at share3, no `G/enter`), negative control on QEMU (fix image → sentinel unchanged, oracle hash). Scope: trap-vector images only — a measurement image never returns from the faulting share; the entry watchdog bounds that case.
 >
 > **Boot sw66 (2026-09-13, later) closes the question from the other side.** The exact redraw of
 > sw64's image stalled at share3's `SHA5` again, so sw64's stall is deterministic and lives in the
@@ -2581,6 +2581,14 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > **Related.** R-30 (INIT's precondition — fixed; this is what remained underneath it) and R-32 (the
 > spec/RTL one-off on bounds taken or returned as a VALUE — a different question about a different
 > quantity, but the same family of "which number is the bound really").
+>
+> **2026-09-13 late, boot sw72 — the module's "not representable" log line has its positive control.**
+> `bigregion.user 4194304` reports `not-representable-lines=0` and `bigregion.user 1419584` reports
+> `1` in the same boot (the host counts the module's dmesg line across its own create_region;
+> commit 0f150add), so the line reaches the capture and fires exactly when the arithmetic says it
+> must. Every earlier "zero rounding lines" reading (sw63/66/68/71) is now informative rather than
+> uninformative. The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
+> up front, mirroring `capstone_repr_granule`; 1,419,584 is its negative control.
 
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
