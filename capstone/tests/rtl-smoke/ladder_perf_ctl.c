@@ -144,6 +144,11 @@ struct ioctl_dom_create_args {
   void *code_begin; size_t_ code_len; size_t_ entry_offset;
   void *s_load_begin; size_t_ s_load_len; size_t_ s_entry_offset; size_t_ s_size;
   dom_id_t dom_id;
+  /* Appended by caplifive-buildroot #2/#3 (module d04bd83): the domain's declared requirement,
+     both zero = "declares nothing", the historical sizing rule. The struct's size is part of the
+     ioctl number, so this copy MUST match the module's or DOM_CREATE is "Unrecognised" and every
+     create fails. create_dom() memsets the struct, so ladder domains declare nothing. */
+  size_t_ domreq_data; size_t_ domreq_stack;
 };
 struct ioctl_region_create_args { size_t_ len; region_id_t region_id; size_t_ mmap_offset; };
 struct ioctl_region_share_annotated_args {
