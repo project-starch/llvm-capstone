@@ -1,0 +1,22 @@
+# One line per hunk, per the rule in capstone/tests/port-effort.py: file:new_start, class, level,
+# and why. Classes are hierarchy, metadata, workaround; levels are allocator, application.
+#
+# A note on the split here. The slot table is the metadata rule made concrete: a block's region
+# and its two handles may not live in the block, because the block is what the revocation takes
+# away. Everything that carves, takes, hands back or revokes is hierarchy. No hunk is a
+# workaround: nothing in this port is here because a compiler or an RTL defect demanded it, and
+# the two upstream lines that did need changing are in adapted/ngx_shim.h, outside this patch and
+# outside this count, because they are what makes nginx build freestanding at all and the
+# unprotected arm carries them too.
+
+ngx_palloc.c:9      metadata     allocator    the slot table: a block's region, its two handles and what is left of it, held outside the block because the revocation takes the block away. Carries ngx_pool_carve too, which is hierarchy, and is classed by the change that drove it
+ngx_palloc.c:197    hierarchy    allocator    ngx_create_pool takes a linear block from the level below, carves its header, and takes the inner handle behind it
+ngx_palloc.c:225    hierarchy    allocator    ngx_destroy_pool is one revocation per block and one per large allocation, in place of ngx_free
+ngx_palloc.c:283    hierarchy    allocator    ngx_reset_pool revokes the inner handle, so the header its caller is holding survives, and takes a fresh one
+ngx_palloc.c:307    hierarchy    allocator    ngx_palloc_small carves from the block's region instead of bumping d.last, and the alignment step goes away
+ngx_palloc.c:353    hierarchy    allocator    ngx_palloc_block takes its own block and its own inner handle
+ngx_palloc.c:373    metadata     allocator    the large list records which slot backs the allocation
+ngx_palloc.c:384    hierarchy    allocator    a failed large allocation gives its block back by revocation
+ngx_palloc.c:401    hierarchy    allocator    ngx_pmemalign takes its own block, and refuses an alignment stricter than a capability
+ngx_palloc.c:444    hierarchy    allocator    ngx_pfree revokes the large allocation's block
+ngx_palloc.h:43     metadata     allocator    ngx_pool_data_t trades last and end for a slot index, ngx_pool_large_s gains one: the bounds now live in the capability, and the handles outside the block

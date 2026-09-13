@@ -32,9 +32,22 @@ sed -i 's|#include <ngx_config.h>|#include "ngx_shim.h"|; s|#include <ngx_core.h
 sed -i 's|#include <ngx_config.h>||; s|#include <ngx_core.h>||' "$OBJ/ngx_palloc.h"
 cp "$SCRIPT_DIR/adapted/ngx_shim.h" "$OBJ/"
 
+# NGX_SUBLET=1 is the protected arm: the same upstream file, plus patches/, and the level below
+# that hands out linear blocks. Applied here rather than kept as a second copy of ngx_palloc.c so
+# that the port-effort count in capstone/tests/port-effort.py has exactly one thing to count.
+if [ "${NGX_SUBLET:-0}" = 1 ]; then
+  for pf in "$SCRIPT_DIR"/patches/*.patch; do
+    patch -s -p1 -d "$OBJ" < "$pf" || { echo "patch failed: $pf" >&2; exit 1; }
+  done
+  CFLAGS_SUBLET=(-DNGX_SUBLET=1)
+else
+  CFLAGS_SUBLET=()
+fi
+
 CFLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-gp-captable -ffreestanding -fno-jump-tables
-        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc" -I"$REPO/capstone/sublet")
+        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc" -I"$REPO/capstone/sublet"
+        "${CFLAGS_SUBLET[@]}" ${EXTRA_CFLAGS:-})
 
 # ONE TRANSLATION UNIT, and not for build speed. Under -capstone-gp-captable the image gets a
 # .capstone_gp_initdesc block per translation unit that has globals, and the entry glue reads only
@@ -54,6 +67,9 @@ AMALGAM=$OBJ/ngx_all.c
   echo "#include \"$PG/pg_string.c\""
   echo "#include \"$REPO/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c\""
   echo "#include \"$SCRIPT_DIR/port/ngx_level0_wrap.c\""
+  if [ "${NGX_SUBLET:-0}" = 1 ]; then
+    echo "#include \"$SCRIPT_DIR/port/ngx_subpool.c\""
+  fi
   echo "#include \"$OBJ/ngx_palloc.c\""
   if [ "$NGX_DOMAIN" = subpool ]; then
     echo "#include \"$SCRIPT_DIR/port/ngx_subpool.c\""
