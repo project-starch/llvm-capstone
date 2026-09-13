@@ -961,7 +961,44 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `OPEN — ACCOUNT, not yet a reading: it explains boot sw64's hang exactly and is traced through quoted code end to end, but the confirming mcause/mepc arm has not been run. QEMU cannot reproduce it by construction`
+### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `WEAKENED 2026-09-13 BY ITS OWN CONFIRMING ARM: boot sw65 ran a build that exercises this exact branch, with a trap vector installed, and NO TRAP OCCURRED — share3 completed, the domain entered, and it failed far later at sqlite3_initialize. The predicted fault did not happen. The account is NOT refuted for sw64, because sw65's image is not sw64's, but it no longer stands on its own`
+
+> # ⚠ THE CONFIRMING ARM DID NOT CONFIRM IT (boot sw65, 2026-09-13). Read this before citing the chain below.
+>
+> The arm this entry asked for was run: the domain rebuilt with `INTERP_DOMAIN_MTVEC=1`, same
+> REGION_ARENA configuration, 128 MiB arena. The glue packs a trap into the return value with **bits
+> 31..28 = 0xF**. The arm returned **`obs = 0x5117BAD3`** — top nibble `0x5`, so **no trap was taken
+> at all**. That value is `SQLITE_HC_ERR_INITIALIZE` (`sqlite_hostcall.h:147`), "sqlite3_initialize
+> refused".
+>
+> **And sw64's hang did not reproduce.** `SQ: F2/share3ECSA:00000001`, then
+> `SQ: G/enterENT0:00000001`, then `SQ: H/return` — share3 **completed**, the domain **entered**, and
+> the run got as far as SQLite's own initialisation before failing. Control `k800 retval=4`,
+> cycles 4558. Arm returned in 26 s.
+>
+> **So the predicted fault did not occur in a build that compiles the very branch this entry
+> blames.** The REGION_ARENA branch — and therefore the `cap_delin` at `speedtest1_measure.c:722` —
+> was compiled in (the build logged "arena from a REGION: 134217728 bytes, shared third"). The domain
+> de-linearised a `REV_SHARED` grant and did **not** fault. Either the monitor's `__delin` at
+> `sbi_capstone.c:1396-1399` did not fire for this grant, or a second delin is tolerated — and this
+> entry asserted the opposite.
+>
+> **What this does NOT establish, stated so the entry is not over-corrected.** sw65's domain is
+> **not** sw64's image — 1,684,352 bytes against 1,861,088, a different build — so non-reproduction
+> is not proof that sw64's hang was something else. It removes the *general* claim, not the specific
+> one. Two readings now sit open for sw64: a per-image entry/share stall (R-16's family), or a
+> build-specific difference between the two domains that this lane has not identified.
+>
+> **A genuinely new positive, and it further undermines the retracted size story:** a **128 MiB
+> `REV_SHARED` arena CAN be shared to a domain and the domain CAN enter** on this silicon. That was
+> unknown before sw65 — the path had never completed at any size.
+>
+> **Also learned, and it blocks the instrument this entry proposed:** `trapctl`, the control the
+> source requires beside any `INTERP_DOMAIN_MTVEC` build, **cannot earn a QEMU pass**. Its deliberate
+> out-of-bounds `ldc` kills QEMU (register dump, EOF) rather than raising a trappable fault, so the
+> staged preflight blocks it permanently — the same class of divergence as this entry's own QEMU
+> caveat. sw65 ran without it on the narrower ground that trapctl disambiguates a *negative*, and a
+> returning arm is self-proving.
 
 > **The chain, each link quoted.** The host shares SQLite's arena with annotation **`REV_SHARED`**
 > (`ports/sqlite/sqlite_host.c:584-586`). The monitor **de-linearises it before handing it over** —
