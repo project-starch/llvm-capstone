@@ -4458,6 +4458,41 @@ None of this is hypothetical: it already cost two benchmarks their `-O2` verdict
 they had no `-O2` verdict at all was read for a while as a compiler defect.
 
 
+### I-8 — under `-capstone-gp-captable` an image built from SEVERAL translation units gets a capability table for the globals of ONE of them `FOUND 2026-09-13 on the nginx port; GATED, capstone/tests/gp-initdesc-blocks.py`
+
+**What happens.** `.capstone_gp_initdesc` carries a 32-byte header, `(built, count)`, followed by
+24 bytes per global. The linker concatenates one such block per translation unit that has globals.
+The entry glue and `domdata-budget.py` both read the FIRST header and stop. So an image with more
+than one block gets a table carved for whichever object the linker put first, every global past
+that has no slot, and the first access to one walks off the end of `gp`.
+
+**What it looks like.** Not a link error, not a warning. The nginx port's image linked, and every
+gate the MicroPython build accumulated passed: `cjalr=0  gp-accesses=76  gp_table sections=1
+gct_end=1`. The domain then faulted inside the entry glue before a line of the program ran:
+
+```
+[CAPSTONE] Cap mem access OOB: insn = 0401b5db, pc = 101583644, pcc_base = 101580000,
+           va = 3644, rs1 = x3, cursor = 1015bffc0, imm = 64, addr = 1015c0000
+[CAPSTONE] domain halted by capability fault: cause = 5, tval = 0x101600000
+```
+
+`cursor + 0x40` is exactly the end of what was carved. The section held three blocks of 4, 2 and 9
+globals; fifteen were in use and four had slots.
+
+**Why no existing port hit it.** They all amalgamate. SQLite uses the upstream amalgamation, and
+the MicroPython build says so in its own words, "amalgamating py/ + the port into one translation
+unit". That reads as a convenience about build time. It is a requirement of this ABI, and until
+now it was written nowhere.
+
+**What to do.** Build the image as one translation unit with globals. The gate
+`capstone/tests/gp-initdesc-blocks.py` refuses an image that is not, names every block and its
+count, and says what the glue will carve. Run it after linking, beside the gp-table header check.
+
+**What is NOT established.** Whether the glue could be taught to walk every block instead, which
+would remove the constraint rather than gate it. That is a change to the entry glue and to
+`domdata-budget.py` together, since the two must agree about what a domain asked for, and it is
+not attempted here.
+
 ### I-02 — an allocated issue ID can be missing from this file, so grepping it is not a safe way to pick one `OPEN — needs an allocation convention`
 
 **Found 2026-09-04** when a lane proposed reusing **C-25** for a newly found defect. C-25 is
