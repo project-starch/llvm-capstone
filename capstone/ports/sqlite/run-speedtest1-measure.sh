@@ -203,6 +203,19 @@ esac
 # route caps around 4 MiB" is architectural or just an unreserved area. QEMU takes the LAST -append,
 # so root= is repeated here rather than lost.
 CMA_ARGS=()
+# A REGION ARENA ABOVE 4 MiB GETS ITS CMA AREA WITHOUT BEING ASKED. Until 2026-09-13 the area was
+# reserved only on SPEEDTEST1_QEMU_EXTRA=cma, so a 128 MiB region-arena build run without that knob
+# died at C2/mkarena ("above 4 MiB this needs a CMA area") AFTER the image was written -- and the
+# image went to the board unexercised (boot sw65). The size is derived from the arena itself, twice
+# over so the two 64 KiB regions and the kernel's own CMA users fit beside it, never below 64 MiB;
+# SPEEDTEST1_CMA_MB still overrides, and SPEEDTEST1_QEMU_EXTRA=cma still forces the area on for a
+# static-heap run that wants to probe the module's region route.
+if [[ "${SPEEDTEST1_REGION_ARENA:-0}" == "1" && "${ARENA:-0}" -gt $((4 * 1024 * 1024)) ]]; then
+  _cma_auto=$(( (ARENA * 2 + 1024 * 1024 - 1) / (1024 * 1024) ))
+  [[ "$_cma_auto" -lt 64 ]] && _cma_auto=64
+  SPEEDTEST1_CMA_MB=${SPEEDTEST1_CMA_MB:-$_cma_auto}
+  SPEEDTEST1_QEMU_EXTRA=cma
+fi
 if [[ "${SPEEDTEST1_QEMU_EXTRA:-}" == "cma" ]]; then
   CMA_ARGS=(--qemu-extra-arg=-append --qemu-extra-arg="root=/dev/vda ro cma=${SPEEDTEST1_CMA_MB:-64}M")
   echo "== reserving a ${SPEEDTEST1_CMA_MB:-64} MiB CMA area in the guest"
@@ -271,4 +284,14 @@ if [[ "${SPEEDTEST1_REGION_ARENA:-0}" == "1" ]]; then
   esac
 fi
 
+# RECORD THE PASS, KEYED BY THE IMAGE'S HASH, where the board preflight can find it. A label can
+# name a different program; a hash cannot. The record is written only here, after every gate above
+# has passed, and it names the run so a reader can tell a size-1 licence from a size-20 one.
+QEMU_PASS_DIR=${CAPSTONE_QEMU_PASS_DIR:-$HOME/capstone-artifacts/qemu-pass}
+mkdir -p "$QEMU_PASS_DIR"
+_dom_sha=$(sha256sum "$DOM" | cut -d' ' -f1)
+printf '%s  sqlite_silicon.dom\nargs=%s\ncma_mb=%s\nlog=%s\nwhen=%s\n' "$_dom_sha" "$SPEEDTEST1_ARGS" \
+  "${SPEEDTEST1_CMA_MB:-none}" "${SPEEDTEST1_LOG_FILE:-$OUT_DIR/sqlite-speedtest1.log}" "$(date -u +%FT%TZ)" \
+  > "$QEMU_PASS_DIR/$_dom_sha"
+echo "== QEMU pass recorded: $QEMU_PASS_DIR/${_dom_sha:0:16}..."
 echo "__CAPSTONE_SPEEDTEST1_QEMU_RAN__"

@@ -510,4 +510,31 @@ elif [[ -d "$OVERLAY" ]]; then
   bad "C15: cannot check entry VAs -- llvm-readelf not found at $READELF (set CAPSTONE_LLVM_READELF). A check that cannot run is not a pass."
 fi
 
+# C16 QEMU-PASS FOR STAGED SQLITE IMAGES. C13 above covers BAKED_RUNGS only, so an SQLITE_STAGE_DOMS
+# image -- the one a measurement boot runs for an hour -- reached the board with no QEMU record at
+# all: boot sw65 (2026-09-13) staged 33399c3629281d88 whose only QEMU run had died at C2/mkarena
+# before the domain existed. run-speedtest1-measure.sh now records a pass under the image's sha256
+# in $CAPSTONE_QEMU_PASS_DIR (default ~/capstone-artifacts/qemu-pass), written only after every
+# gate of that run has passed; a staged sqlite image without one BLOCKS. Keyed by content, never by
+# name: a label can vouch for a different program, a hash cannot. PREFLIGHT_ALLOW_UNPASSED_DOM=1
+# downgrades THIS check to a warning and touches nothing else.
+if [[ -n "$DOMS" ]]; then
+  _qpd=${CAPSTONE_QEMU_PASS_DIR:-$HOME/capstone-artifacts/qemu-pass}
+  IFS=',' read -ra _de16 <<<"$DOMS"
+  for _e in "${_de16[@]}"; do
+    [[ -n "$_e" && "$_e" != *"|"* ]] || continue          # the sqlite-stage form only: /path/img.dom:selector
+    _img="${_e%%:*}"; [[ "$_img" == *.dom ]] || continue
+    _f="$OVERLAY/$(basename -- "$_img")"
+    [[ -f "$_f" ]] || continue                              # absence is C15's finding, not this one's
+    _sha=$(sha256sum "$_f" | cut -d' ' -f1)
+    if [[ -f "$_qpd/$_sha" ]]; then
+      ok "C16: $(basename -- "$_img") ${_sha:0:12} has a recorded QEMU pass ($(grep -m1 '^args=' "$_qpd/$_sha" 2>/dev/null || echo 'args unrecorded'))"
+    elif [[ "${PREFLIGHT_ALLOW_UNPASSED_DOM:-0}" == "1" ]]; then
+      say "warn" "C16: $(basename -- "$_img") ${_sha:0:12} has NO recorded QEMU pass in $_qpd -- overridden by PREFLIGHT_ALLOW_UNPASSED_DOM=1"
+    else
+      bad "C16: $(basename -- "$_img") ${_sha:0:12} has NO recorded QEMU pass in $_qpd -- run it under QEMU first (run-speedtest1-measure.sh records the pass); a boot is not the place to find out"
+    fi
+  done
+fi
+
 [[ "$FAIL" -eq 0 ]] && { echo "preflight: GO"; exit 0; } || { echo "preflight: BLOCKED"; exit 1; }
