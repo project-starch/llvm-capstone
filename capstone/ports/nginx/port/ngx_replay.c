@@ -143,6 +143,11 @@ static void obj_unhash(int32_t i) {
     while (*slot >= 0 && *slot != i) slot = &objs[*slot].hnext;
     if (*slot == i) *slot = objs[i].hnext;
     objs[i].id = 0;
+    /* The capability goes too, and not for tidiness. A replay's own bookkeeping is the one thing
+       in this image that holds capabilities to objects it no longer has any business with, and
+       what a revocation tree counts is what is still reachable. Clearing the id alone would leave
+       the port measured through a table the port does not have. */
+    objs[i].p = NULL;
     objs[i].free = ofree_head; ofree_head = i;
     objs_live--;
 }
@@ -177,6 +182,7 @@ static void pool_drop(int32_t pi) {
     while (*slot >= 0 && *slot != pi) slot = &pools[*slot].hnext;
     if (*slot == pi) *slot = pools[pi].hnext;
     pools[pi].id = 0;
+    pools[pi].p = NULL;
     pools[pi].free = pfree_head; pfree_head = pi;
     pools_live--;
 }
