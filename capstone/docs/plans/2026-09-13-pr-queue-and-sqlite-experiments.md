@@ -145,6 +145,17 @@ all inside `__capstone_cap_init`; **if N = 0 the compiler change never reached t
 re-measure measures nothing** — say so and stop. Record the post-#14 row in §4g with both hashes;
 then rebuild ⑤ with the same knob so the two order-11 cells load on #3 again.
 
+*Adjustment found in execution (2026-09-13):* the #14 whole-image diff is exactly 17 instructions,
+all in `__capstone_cap_init`, which runs once (the claim-auditor's finding, `ISSUES.md` S-14), so the
+steady-state icount is provably unmoved to within those 17 on a 693 M count — the static argument
+alone answers "did #14 move the ratio". The declared-stack knob was confirmed byte-neutral (a
+default build with and without `SPEEDTEST1_STACK=385024` produced byte-identical LOAD ranges). A full
+④/① re-measurement is therefore optional, and it needs the matrix cell-4 build recipe (memsys5,
+lookaside off, the static heap giving carve 2,316,880), which the archived provenance does not
+record — the default `build-sqlite-silicon.sh` builds a different, smaller-carve program
+(declares 2,496,432). Recover the recipe from the matrix driver before attempting it; do not
+substitute the default build.
+
 ### 2.2 R-33's rounding-log positive control — image-free, seconds; prerequisite B3
 
 The module's "not representable" line (`capstone.c:279`) has never fired (§7m `:2822-2827`), so

@@ -22,8 +22,8 @@ Minimal snapshot. Read first in every session.
   where sw66 hangs, then `sqlite3_initialize` fails (`0x5117BAD3`, = sw65). S-15's account
   strengthened** — audited as not yet a measured root cause (share3 also differs in region residency
   and size), but its mechanism is now sourced at the RTL commit (DELIN raises on any non-LINEAR
-  operand; the only type-sensitive instruction in the branch). The trap word went into the arena,
-  unread; reading it back is owed. Fix on `dev`,
+  operand; the only type-sensitive instruction in the branch). The trap word went into the arena
+  and sw69 READ IT BACK: `arena0=0xF6C09D13`, mcause field 27 (§7o). Fix on `dev`,
   **proven on silicon by sw68**: the image with the delin removed and nothing else, no trap vector,
   passes share3 and enters where sw64/sw66 hang, and ran size-20 to completion: domain
   **64,732,455,367 cycles**, hash `3807866 2738af78`, **ratio 1.1940** on the 54,214,856,567 baseline

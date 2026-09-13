@@ -72,10 +72,17 @@
 
 ### Open, carried forward explicitly
 
-* sw67's reading decides the next instrument for sw64's share-entry stall; if it does not trap, the
-  hang is below the domain's first instruction (switch-level) and needs the RTL, not another boot.
-* R-33 still owes its `--pool` positive control for the rounding log and the bottom-truncation arm.
-* `--size 100` is a decision after sw67, not a default; the size-20 baseline is now measured.
+* ~~sw67's reading decides the next instrument~~ DISCHARGED: sw69 read the fault back (mcause 27) and
+  sw68 proved the fix; S-15 is closed end to end (§7o).
+* R-33 still owes its rounding-log positive control (one arm where 1,419,584 rounds by 1,728 must
+  show the "not representable" line once) and the bottom-truncation arm. The control cannot be a
+  `--pool` arm of the REGION_ARENA host (it refuses `--pool`); it is `bigregion.user 1419584`,
+  rebuilt for the #3 module, read in the capture channel and in its own count.
+* `--size 100`: the precondition fired (sw68 measured the CPIs: native 3.83, domain 3.65 — DERIVED
+  from §7l's size-20 counts and §7o's cycles), so the pair costs ≈8.4 h of arm time (baseline ≈3.8 h,
+  domain ≈4.6 h; the domain count is projected), not the 8.8–17.6 h quoted below. The lead said GO
+  (2026-09-13); the plan `docs/plans/2026-09-13-pr-queue-and-sqlite-experiments.md` §2.4 carries the
+  pre-run, budget and invalidators.
 * **Hosts with a PRIVATE copy of `ioctl_dom_create_args` must be grown by hand for the #3 module** (the
   struct's size is in the ioctl number; a rebuild alone changes nothing): `ladder_perf_ctl.c` is done
   (f308efe2, QEMU pair: old ctl `Unrecognised IOCTL`, new ctl `RESULT k800 retval=4`). Still old-shape:
