@@ -1,4 +1,4 @@
-## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3).**
+## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3); #3 is on the FPGA image, proven by sw71.**
 
 > **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
 > control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
@@ -43,14 +43,18 @@
 > control on real images: cell5 DOES NOT FIT o11, fix image o10), **#18** (MicroPython; run-nightly
 > resolved to keep both PG and MPY gates; gate `PASS=4 FAIL=0`). **Nine of eleven landed.**
 >
-> **Deferred (board-free, but blocked): FPGA-side #3 bake.** The `caplifive-system/sw/buildroot` copy
-> was fast-forwarded to `d04bd83` and reverted to `8da1559` again, because rebuilding the board hosts
-> for the skew hit a PRE-EXISTING breakage: `build-ladder-base-fpga.sh` fails under buildroot GCC 12.3
-> with `multiple definition of bp_slot`/`g` (the `-fno-common` default; the ladder kernels carry
-> tentative globals). So the FPGA tree is back to a CONSISTENT pre-#3 state (no skew landmine). To
-> finish: fix that build (add `-fcommon` or make the globals `static`), rebuild `lpc` + `sqlite_host`,
-> ff, bake, `.ko` by content, and a control boot with the fix image (not lpc/k800 until lpc builds).
-> The parent gitlinks are intentionally NOT bumped, matching the un-baked image.
+>**FPGA-side #3 LANDED and PROVEN on silicon (boot sw71, 22:07).** `caplifive-system/sw/buildroot`
+> fast-forwarded to `d04bd83`, the module rebaked (`.ko ed807a292aaad3f6`, both markers), and the two
+> board hosts rebuilt for the grown ioctl struct: the board's `lpc` is `ladder_perf_ctl`, a
+> freestanding controller with a PRIVATE copy of the struct, grown by hand (f308efe2; QEMU pair: the
+> old controller, bit-identical to the board's previous lpc, `Unrecognised IOCTL`; the new one
+> `RESULT k800 retval=4`), and `sqlite_host` rebuilt against the merged libcapstone (6e3cd65c, the
+> same binary that passed the QEMU control). Control-first boot, every pre-registered reading met:
+> `RESULT k800 retval=4` (skew closed on silicon); the declaring image f795151f: `Domain requirement =
+> 1281952 (stack 1048576)`, `A/dom-ok`, shares, `G/enter`, `H/return`, `Verification Hash: 111130
+> 1e792c9d`, 2,669,560,340 cycles at `--size 1`, HEAP 134217728, zero rounding lines. The native
+> baseline build's `-fno-common` link failure was real and is fixed too (e78fc6ab). The submodule and
+> parent gitlinks are bumped to record the landed state.
 >
 > **#14 LANDED** (merge `d616ea4e` + a follow-up correcting the lit test's claim). The tautology was
 > a STALE-BINARY artifact: the checkout `llc` was 73 objects behind source, so every "unpatched llc"
@@ -72,6 +76,20 @@
   hang is below the domain's first instruction (switch-level) and needs the RTL, not another boot.
 * R-33 still owes its `--pool` positive control for the rounding log and the bottom-truncation arm.
 * `--size 100` is a decision after sw67, not a default; the size-20 baseline is now measured.
+* **Hosts with a PRIVATE copy of `ioctl_dom_create_args` must be grown by hand for the #3 module** (the
+  struct's size is in the ioctl number; a rebuild alone changes nothing): `ladder_perf_ctl.c` is done
+  (f308efe2, QEMU pair: old ctl `Unrecognised IOCTL`, new ctl `RESULT k800 retval=4`). Still old-shape:
+  `borrow_cost_fpga_ctl.c`, `borrow_cost_fpga_nogp_ctl.c`, `borrow_breakdown_fpga_nogp_ctl.c`,
+  `gpfree_fpga_ctl.c`, `rev_transferred_probe_ctl.c`, the R01/R02/R16 repro copies, and the
+  `caplifive-buildroot-domain-sizing.patch`. They fail LOUDLY (create_dom failed) on the #3 module, so
+  no wrong number can come of them; grow each before its next use, and note the hash change, since
+  their binaries are cited instruments. Also stale on the board overlay: `rtpc`, `bigregion.user`,
+  `sqlite_host_rr.user` (libcapstone-linked; rebuild).
+* **Boot sw70 is VOID, not a #3 reading:** `ladder_base_ctl` (the native baseline controller, no
+  `/dev/capstone`) was staged into the `lpc` slot -- same name, different program, 6x the size -- the
+  board reset under it and no RESULT came back. Its fixes: the native build's `-fno-common` link
+  (e78fc6ab), the controller's private struct (f308efe2), and a same-program staging gate in the
+  driver (marker strings + size class, not just the hash of what was built). sw71 reruns it.
 * `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
   hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
   `SQLITE_STAGE_DOMS` image.
