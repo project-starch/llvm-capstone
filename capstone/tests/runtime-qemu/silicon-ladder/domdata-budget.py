@@ -21,6 +21,9 @@ The arithmetic mirrors, and must stay in step with:
 import sys, struct, subprocess, os, re
 
 PAGE = 4096
+# Flip to True in the same commit that teaches the loader and the module to read
+# .capstone_domreq. Until then a declaration changes nothing at run time.
+DOMREQ_IS_CONSUMED = False
 
 
 def _max_order_is_inclusive(root):
@@ -209,11 +212,35 @@ def main():
     #      carve arithmetic this script reports on.
     # Keep BOTH in step with the module. A predictor that cannot say DOES NOT FIT for
     # an unloadable image is not a predictor.
+    # CORRECTED 2026-09-13, and this is the third drift the comment above predicted.
+    # The module's arithmetic, module/capstone.c:130-134, is:
+    #     dom_headroom = max(code_len, DOMAIN_DATA_SIZE)
+    #     dom_tot_size = code_len + dom_headroom
+    #     dom_pages    = ceil(dom_tot_size / PAGE)
+    #     order        = ceil(log2(dom_pages))
+    # There is no DOMAIN_MIN_FREE and no widening loop. This script modelled both, so
+    # for every image under 512 KiB of code it reported order 9 where the module
+    # allocates order 8, and then computed a comfortable stack from twice the dom_data
+    # that exists. Measured on a MicroPython image at seven test-table sizes: at 160 and
+    # 200 tests it reported 981,216 and 943,216 bytes of stack while the real dom_data
+    # was 68,864 and 125,296 bytes SHORT of the carve, and the domain died in its entry
+    # glue with the globals blob overwritten. Predicting the wrong order is not a
+    # cosmetic error here: the whole verdict rests on it.
     dom_data_size = 4096 * 16                          # DOMAIN_DATA_SIZE
     req = domreq(path)
-    pages = (code_len + dom_data_size - 1) // PAGE + 1
+    dom_headroom = code_len if code_len > dom_data_size else dom_data_size
+    pages = (code_len + dom_headroom - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
     data_order = None
+    if req is not None and not DOMREQ_IS_CONSUMED:
+        # DEAD PATH, kept only so it comes back with the consumer. .capstone_domreq is
+        # emitted by domreq.S and by the SQLite build, and read by NOBODY: not the
+        # userspace loader, not the kernel module, not the monitor (grepped 2026-09-13).
+        # Modelling the two-region plan made this script report a declaring image as
+        # comfortable when the module was still applying its fallback rule to it, which
+        # is the same class of lie as the order drift above. A declaration is treated as
+        # absent until something reads it.
+        req = None
     if req is not None:
         # A declaring image gets TWO regions (module/capstone.c, ioctl_create_dom):
         # code alone in one, seal + dom_data in the other. The point is that neither
@@ -230,10 +257,6 @@ def main():
         dom_data = (1 << data_order) * PAGE - MONITOR_SEAL_SIZE
         need = data_need
     else:
-        dom_min_free = max(2 * code_len, 512 * 1024)   # DOMAIN_MIN_FREE
-        need = code_len + dom_data_size + dom_min_free
-        while (1 << order) * PAGE < need:
-            order += 1
         tot_size = (1 << order) * PAGE
         dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
 
