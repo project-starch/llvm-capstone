@@ -45,6 +45,10 @@ int main(int argc, char **argv) {
     shared_region_annotated(dom, arena, NGX_PERM_INOUT,
                             linear ? NGX_REV_TRANSFERRED : NGX_REV_SHARED);
 
+    /* Rung 0 is the anchor: the domain returns its own &domain_main, and fault-locate.py needs
+       that line, in exactly this wording, to turn a fault pc into a symbol. */
+    printf("Called dom (1-th time) retval = %lu\n", call_dom(dom));
+
     unsigned long v = call_dom(dom);
     printf("ngx retval = %lu\n", v);
     capstone_cleanup();

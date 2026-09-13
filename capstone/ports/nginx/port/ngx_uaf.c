@@ -43,6 +43,21 @@ static unsigned char *arena_base;
 static size_t arena_bytes;
 #endif
 
+void domain_main(unsigned *res, unsigned func);
+
+/* Rung 0 returns &domain_main, masked to 32 bits, which is the convention
+   capstone/tests/runtime-qemu/fault-locate.py needs to turn a fault pc into a symbol. Without it
+   the load base has to be guessed, and a guessed base reads a fault into whatever function the
+   arithmetic lands in. It read one into ngx_palloc_block+0x3fd68 here, an offset no function has,
+   which is how the guess announced itself. */
+static unsigned rungs;
+#define NGX_ANCHOR_RUNG() do {                                                  \
+    if (++rungs == 1) {                                                         \
+        *res = (unsigned) (unsigned long) (void *) &domain_main;                \
+        return;                                                                 \
+    }                                                                           \
+} while (0)
+
 void domain_main(unsigned *res, unsigned func) {
     if (func == 1) {
 #ifdef NGX_SUBLET
@@ -55,6 +70,8 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
         return;
     }
+
+    NGX_ANCHOR_RUNG();
 
 #ifdef NGX_SUBLET
     if (sublet_type(&arena_slot) != 0) {

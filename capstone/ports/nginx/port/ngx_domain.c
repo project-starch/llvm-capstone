@@ -148,6 +148,66 @@ static void scenario_small_and_blocks(void) {
     STEP();                       /* 8: destroy */
 }
 
+/* The three entry points the other two scenarios never call, and they are not obscure: nginx has
+   328 calls to ngx_pnalloc, 46 to ngx_pool_cleanup_add, and two to ngx_pmemalign, both of which
+   ask for an alignment far stricter than a capability. A port that answered only what its own
+   driver happened to touch would be a port of six functions out of nine. */
+static int cleanup_ran;
+
+static void note_cleanup(void *data) {
+    cleanup_ran = (int) (unsigned long) (*(unsigned char *) data);
+}
+
+static void scenario_api_surface(void) {
+    ngx_pool_t *pool = ngx_create_pool(4096, NULL);
+    CHECK(pool != NULL);
+    if (pool == NULL) {
+        return;
+    }
+
+    /* unaligned by contract, and the only thing promised is that it is usable */
+    unsigned char *n1 = ngx_pnalloc(pool, 33);
+    unsigned char *n2 = ngx_pnalloc(pool, 33);
+    CHECK(n1 != NULL && n2 != NULL && n1 != n2);
+    CHECK(write_read(n1, 33, 0x77));
+    CHECK(write_read(n2, 33, 0x88));
+
+    STEP();                       /* 9: pnalloc */
+
+    /* A page, which is what ngx_radix_tree asks for. The address is only READ here. Casting it
+       to an integer and back would hand over an address with no tag, which is cause 24 and a
+       lesson this port has already paid for twice. */
+    unsigned char *pg = ngx_pmemalign(pool, 4096, 4096);
+    CHECK(pg != NULL);
+    if (pg != NULL) {
+        CHECK(((unsigned long) (void *) pg & 4095UL) == 0);
+        CHECK(write_read(pg, 4096, 0x99));
+    }
+
+    /* And the direct IO case, a 512 byte boundary out of a block that starts wherever it starts */
+    unsigned char *dio = ngx_pmemalign(pool, 1024, 512);
+    CHECK(dio != NULL);
+    if (dio != NULL) {
+        CHECK(((unsigned long) (void *) dio & 511UL) == 0);
+        CHECK(write_read(dio, 1024, 0xAA));
+    }
+
+    STEP();                       /* 10: pmemalign, at a page and at a sector */
+
+    cleanup_ran = 0;
+    ngx_pool_cleanup_t *c = ngx_pool_cleanup_add(pool, 1);
+    CHECK(c != NULL);
+    if (c != NULL) {
+        *(unsigned char *) c->data = 0x5C;
+        c->handler = note_cleanup;
+    }
+
+    ngx_destroy_pool(pool);
+    CHECK(cleanup_ran == 0x5C);   /* the handler ran, and its data was still readable when it did */
+
+    STEP();                       /* 11: a cleanup handler, run at destroy, reading pool memory */
+}
+
 /* A thousand cycles, and what nginx holds from the level below must end where it started. A
    pool's blocks come from there, so a port that lost one would show here and nowhere else. */
 static void scenario_balance(void) {
@@ -181,6 +241,21 @@ static void scenario_balance(void) {
 
 /* ---- being a domain ------------------------------------------------------ */
 
+void domain_main(unsigned *res, unsigned func);
+
+/* Rung 0 returns &domain_main, masked to 32 bits, which is the convention
+   capstone/tests/runtime-qemu/fault-locate.py needs to turn a fault pc into a symbol. Without it
+   the load base has to be guessed, and a guessed base reads a fault into whatever function the
+   arithmetic lands in. It read one into ngx_palloc_block+0x3fd68 here, an offset no function has,
+   which is how the guess announced itself. */
+static unsigned rungs;
+#define NGX_ANCHOR_RUNG() do {                                                  \
+    if (++rungs == 1) {                                                         \
+        *res = (unsigned) (unsigned long) (void *) &domain_main;                \
+        return;                                                                 \
+    }                                                                           \
+} while (0)
+
 void domain_main(unsigned *res, unsigned func) {
     if (func == 1) {
 #ifdef NGX_SUBLET
@@ -196,6 +271,8 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
         return;
     }
+
+    NGX_ANCHOR_RUNG();
 
 #ifdef NGX_SUBLET
     /* A REV_SHARED share arrives NONLIN and csmrev would refuse it, three calls later and
@@ -249,6 +326,9 @@ void domain_main(unsigned *res, unsigned func) {
     ran = 0;
 
     scenario_small_and_blocks();
+    if (!stopped) {
+        scenario_api_surface();
+    }
     if (!stopped) {
         scenario_balance();
     }

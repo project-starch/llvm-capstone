@@ -1,6 +1,6 @@
 --- a/ngx_palloc.c
 +++ b/ngx_palloc.c
-@@ -9,26 +9,141 @@
+@@ -9,26 +9,169 @@
  
  
  
@@ -116,6 +116,34 @@
 +}
 +
 +
++/*
++ * An object aligned harder than a capability. ngx_pmemalign is asked for ngx_pagesize by the
++ * radix tree and for the direct IO alignment by the output chain, so refusing anything above 16
++ * would have taken two real call sites out of nginx rather than costing a comment.
++ *
++ * A block starts wherever the level below cut it, so the padding is carved off and let go. It
++ * comes back when the block does, at the revocation, which is the one place it can come back.
++ * The caller asks the level below for size plus alignment so that an aligned start is certain to
++ * lie inside.
++ */
++static void *
++ngx_pool_carve_aligned(ngx_uint_t n, size_t size, size_t alignment)
++{
++    unsigned long   base, want;
++    size_t          pad;
++
++    base = sublet_base(&ngx_pool_slots[n].region);
++    want = (base + alignment - 1) & ~(unsigned long) (alignment - 1);
++    pad = (size_t) (want - base);
++
++    if (pad != 0 && ngx_pool_carve(n, pad) == NULL) {
++        return NULL;
++    }
++
++    return ngx_pool_carve(n, size);
++}
++
++
  ngx_pool_t *
  ngx_create_pool(size_t size, ngx_log_t *log)
  {
@@ -145,7 +173,7 @@
  
      size = size - sizeof(ngx_pool_t);
      p->max = (size < NGX_MAX_ALLOC_FROM_POOL) ? size : NGX_MAX_ALLOC_FROM_POOL;
-@@ -82,12 +197,18 @@
+@@ -82,12 +225,18 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -166,7 +194,7 @@
  
          if (n == NULL) {
              break;
-@@ -104,12 +225,26 @@
+@@ -104,12 +253,26 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -195,7 +223,7 @@
          p->d.failed = 0;
      }
  
-@@ -148,21 +283,16 @@
+@@ -148,21 +311,16 @@
  static ngx_inline void *
  ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
  {
@@ -221,7 +249,7 @@
              return m;
          }
  
-@@ -177,26 +307,35 @@
+@@ -177,26 +335,35 @@
  static void *
  ngx_palloc_block(ngx_pool_t *pool, size_t size)
  {
@@ -238,16 +266,16 @@
 -    if (m == NULL) {
 +    n = ngx_pool_slot_get(psize);
 +    if (n == NGX_POOL_NO_SLOT) {
-+        return NULL;
-+    }
-+
-+    new = ngx_pool_carve(n, sizeof(ngx_pool_data_t));
-+    if (new == NULL) {
-+        ngx_pool_slot_put(n);
          return NULL;
      }
  
 -    new = (ngx_pool_t *) m;
++    new = ngx_pool_carve(n, sizeof(ngx_pool_data_t));
++    if (new == NULL) {
++        ngx_pool_slot_put(n);
++        return NULL;
++    }
++
 +    sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
  
 -    new->d.end = m + psize;
@@ -266,7 +294,7 @@
  
      for (p = pool->current; p->d.next; p = p->d.next) {
          if (p->d.failed++ > 4) {
-@@ -214,11 +353,18 @@
+@@ -214,11 +381,18 @@
  ngx_palloc_large(ngx_pool_t *pool, size_t size)
  {
      void              *p;
@@ -287,7 +315,7 @@
          return NULL;
      }
  
-@@ -227,6 +373,7 @@
+@@ -227,6 +401,7 @@
      for (large = pool->large; large; large = large->next) {
          if (large->alloc == NULL) {
              large->alloc = p;
@@ -295,7 +323,7 @@
              return p;
          }
  
-@@ -237,11 +384,12 @@
+@@ -237,11 +412,12 @@
  
      large = ngx_palloc_small(pool, sizeof(ngx_pool_large_t), 1);
      if (large == NULL) {
@@ -309,25 +337,24 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -253,20 +401,33 @@
+@@ -253,20 +429,32 @@
  ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment)
  {
      void              *p;
 +    ngx_uint_t         s;
++    size_t             slack;
      ngx_pool_large_t  *large;
  
 -    p = ngx_memalign(alignment, size, pool->log);
-+    /* a carve is 16 aligned; anything stricter has no answer here and is refused */
-+    if (alignment > NGX_POOL_ALIGNMENT) {
-+        return NULL;
-+    }
++    /* room for the padding a block that starts anywhere may need */
++    slack = (alignment > NGX_POOL_ALIGNMENT) ? alignment : 0;
 +
-+    s = ngx_pool_slot_get(size);
++    s = ngx_pool_slot_get(size + slack);
 +    if (s == NGX_POOL_NO_SLOT) {
 +        return NULL;
 +    }
 +
-+    p = ngx_pool_carve(s, size);
++    p = ngx_pool_carve_aligned(s, size, alignment);
      if (p == NULL) {
 +        ngx_pool_slot_put(s);
          return NULL;
@@ -345,7 +372,7 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -283,7 +444,7 @@
+@@ -283,7 +471,7 @@
          if (p == l->alloc) {
              ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, pool->log, 0,
                             "free: %p", l->alloc);
