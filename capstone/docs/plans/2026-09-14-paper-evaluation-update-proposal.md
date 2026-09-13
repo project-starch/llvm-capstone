@@ -43,7 +43,7 @@ than a range.
 the live paper (the four "timing" mentions in `evaluation.tex` are about cycle-accuracy, not closure):
 * the bitstream does not meet timing — WNS −12.425 ns, 102,508 of 174,960 endpoints failing, on every
   §7 row including sw68's (`:2489-2522`); the doc's rule is to prefer instruction counts where a
-  claim can be carried by either (`:2586-2588`);
+  claim can be carried by either (`:2589`);
 * every §7 speedtest1 row was measured with SQLite's lookaside pool OFF, a configuration SQLite does
   not ship (`:2593-2632`; both arms, so the ratios stand; sw68's image is built by the same path with
   no lookaside override, so OFF by construction — the transcript carries no lookaside line to read it

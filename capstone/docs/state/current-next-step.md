@@ -117,12 +117,18 @@
 * `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
   hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
   `SQLITE_STAGE_DOMS` image.
-* #14's `capinit-scan.py` positive control: NO image at hand trips its FAULTING verdict. The SQLite
-  images scan clean (no faulting, no quiet); the pre-#14 MicroPython GATE image (4-test default) shows
-  "no faulting, 76 QUIET" (exit 0). The hard S-14 fault was observed at the 160/200-test sizes (more
-  register pressure), so the control must be the LARGE MicroPython image built on the pre-#14 compiler
-  — build it before #14's toolchain rebuild, confirm it FAULTS, then confirm the post-#14 image is
-  clean. Without that, #14 lands on the mechanism + the observed silicon deaths, not on a fired gate.
+* **#14's `capinit-scan.py` positive control — CLOSED as "cannot fire on the spill form" (B4,
+  2026-09-14).** The LARGE (160-test) MicroPython image built on the pre-#14 compiler
+  (`9c9448d2a096ac11`) and the one built after (`3e2326daeeb669c7`) both scan to the same four
+  `quiet` lines (scalar `stc a0` into a global) and no FAULTING verdict — the scan flags scalar bases,
+  not truncated spills, so it is not the gate. The gate of record is the spill count over the whole
+  `__capstone_cap_init` span (5,419 instructions, local labels included): `sd ra` 15 → 2 and
+  `stc ra` 23 → 36 (13 spills widened) plus 4 `ld ra` → `ldc ra` reloads = the 17-instruction static
+  diff. Counting only up to the first local label reads 1 → 1 and misses all of it.
+* **⑤ᴳ heap sweep (2.5) DONE 2026-09-14:** memsys5 + lookaside completes at 1,572,864 (oracle,
+  678,529,384 cycles) and faults at 1,310,720 and below; the fault is the exit handler's deliberate
+  UNEXPECTED_CAP_TYPE after `fatal_error` (`capstone_stdio_on_exit+0x6c`), identical at every size —
+  ⑤ᴳ is the abort path, not S-14; ⑥'s 910,008 geometry cannot be matched by the knob (§4g).
 * The toolchain binary is STALE by `toolchain-fresh` (the `opt`/`llvm-symbolizer` targets #15 added
   were never built; the only `llvm/` commit since is a citation re-point) — rebuilt at #14's step.
 

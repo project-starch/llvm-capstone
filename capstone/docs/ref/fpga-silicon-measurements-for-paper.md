@@ -1090,6 +1090,21 @@ host-shared regions against ⑤'s 2,097,152 of dom_data; `HEAP` names only the p
 two arms place their allocator arena in different kinds of memory, which is why no single knob
 equalises them.
 
+**Heap sweep, 2026-09-14 (QEMU, #14 toolchain, #3 module; lookaside `1200,40`, memsys5 static heap,
+stack declaration 385,024 so the image loads under the one-region rule — diagnostics-only, the loaded
+bytes do not change):** `SPEEDTEST1_HEAP` 910,008 (`f8a92251ec139724`, the ⑤ᴳ control) FAULTS;
+1,048,576 (`8bde09363d2dcf03`) FAULTS; 1,310,720 (`6ca730db4883462a`) FAULTS; **1,572,864
+(`e89ad882a93b9e01`) COMPLETES** at the off/off oracle `112006 38bb59fd`, `HEAP 1572864 DROPPED 0
+RC 0`, **678,529,384 cycles** — 0.006 % below ⑤'s 678,572,868 at 2 MiB. So memsys5's minimum for
+`main --size 1` in the domain is in (1.25, 1.5] MiB, where the native measurement put it (1.5 MiB,
+`run-speedtest1-measure.sh` header), and ⑥'s 910,008 cannot be reached by the knob. The three faults
+are one fault: `cause = 24, pc = 0x101c23394, badaddr = 0x101570000` at every size, and that pc is
+`capstone_stdio_on_exit+0x6c` — the exit handler's DELIBERATE `ldc` through an integer
+(`speedtest1_measure.c:340-341`, "rs1 holds an integer, so the capability load raises
+UNEXPECTED_CAP_TYPE"), taken after `fatal_error` on memsys5 exhaustion writes the report. **⑤ᴳ's
+"fault" is the abort path by design, not a capability defect and not an S-14 case**; the post-#14
+rebuild reproduces it exactly, as predicted. ⑥/⑤ stays a two-variable comparison.
+
 **What ⑥/⑤ = 1.0176 may be quoted as:** the end-to-end cost of the Sublet *configuration* against the
 lookaside configuration at each one's own working geometry. Not as the cost of the revocation
 discipline in isolation. Isolating that needs an arm differing from ⑥ in the discipline alone, which
