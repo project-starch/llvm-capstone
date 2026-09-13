@@ -1,0 +1,10 @@
+# The class and level of every hunk in 0024, for capstone/tests/port-effort.py.
+# Written with the patch. All four hunks are the metadata-layout class in its purest form: the rule
+# that drives them is that bookkeeping may not live in memory the allocator hands away, because
+# that memory is revoked. It is the same rule that moved memsys5's free-list links into aLink and
+# PostgreSQL's into a side table.
+
+py/gc.h:137   metadata   allocator   the table is declared outside the pool, and why both arms get it
+py/gc.c:159   metadata   allocator   the region becomes pool only; the table and the gap byte are the port's
+py/gc.c:211   metadata   allocator   the upstream carve of pool out of the block is closed off
+py/gc.c:224   metadata   allocator   the upstream clear of tables inside the block is closed off

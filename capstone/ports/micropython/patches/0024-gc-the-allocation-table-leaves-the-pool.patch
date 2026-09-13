@@ -1,0 +1,95 @@
+The allocation table leaves the pool, because bookkeeping may not live in memory that is given away.
+
+Step two of putting this heap under Sublet, first half, and like step one it is meant to change
+nothing: the table moves, nothing is carved and nothing is revoked yet. If the suite moves here,
+it is the relayout and not the discipline.
+
+WHY IT HAS TO MOVE. gc_setup_area carves the allocation table out of the front of the same block
+it then allocates from. That is correct when the block is only memory. It is wrong when the block
+is a region that gets carved into objects and given back, because a revocation cannot spare part
+of what it covers, and the table is the one thing the collector must still be able to read after
+a block dies. It is the metadata-layout class of the port recipe, the same rule that moves
+memsys5's free-list links into aLink and PostgreSQL's into a side table.
+
+WHAT IT SIMPLIFIES. Upstream solves for a table length such that table plus pool exactly fills the
+block, which is the arithmetic in the #if MICROPY_ENABLE_FINALISER branch. With the table outside,
+the pool IS the region and there is nothing to solve: blocks are (end - start) / BYTES_PER_BLOCK
+and the table is one byte per four of them, plus the gap byte that has to read AT_FREE so the mark
+phase cannot walk off the last block.
+
+The port supplies the storage, as it supplies the handle slots, and carries the same invariant as
+a file-scope assertion where both sizes are constants. gc_init asserts it too, because an
+assertion is all it may do there: it runs before there is an NLR handler and a raise would hang
+BOTH ARMS, NOT JUST THE PROTECTED ONE. The guard is MPY_HEAP_FROM_REGION and not MPY_SUBLET, and
+the counters say why. Taking the table out of the pool makes the pool larger by the table's size,
+and a larger pool collects less often: the same suite runs 54 cycles and collects 250,171 objects
+with the table inside, and 53 and 250,593 with it outside. The program allocates exactly the same
+either way, 369,904 times. If only the protected arm moved the table, it would be compared against
+a collector that ran a different number of cycles, and every per-cycle number in the experiment
+would carry that difference.
+
+--- a/py/gc.h
++++ b/py/gc.h
+@@ -137,4 +137,20 @@
+ extern size_t mpy_gc_handles_len;
+ #endif
+ 
++// MPY_HEAP_FROM_REGION: the pool arrives as a region and the allocation table therefore leaves it,
++// because bookkeeping may not live in memory the allocator hands away. This is NOT guarded by
++// MPY_SUBLET on purpose. Taking the table out of the pool makes the pool bigger by the table's
++// size, which changes when collections happen: with the table inside, the suite runs 54 cycles
++// and collects 250,171 objects; with it outside, 53 and 250,593. Both arms of the experiment have
++// to be on the same side of that, or the arm with the discipline would be compared against a
++// collector that ran a different number of times.
++#ifndef MPY_HEAP_FROM_REGION
++#define MPY_HEAP_FROM_REGION (0)
++#endif
++
++#if MPY_HEAP_FROM_REGION
++extern byte *mpy_gc_atb;
++extern size_t mpy_gc_atb_len;
++#endif
++
+ #endif // MICROPY_INCLUDED_PY_GC_H
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -159,6 +159,20 @@
+     //     P = A * BLOCKS_PER_ATB * BYTES_PER_BLOCK
+     // => T = A * (1 + BLOCKS_PER_ATB / BLOCKS_PER_FTB + BLOCKS_PER_ATB / BLOCKS_PER_WTB + BLOCKS_PER_ATB * BYTES_PER_BLOCK)
+     size_t total_byte_len = (byte *)end - (byte *)start;
++    #if MPY_HEAP_FROM_REGION
++    // The region is pool and nothing else; the table is the port's. One byte of ATB covers
++    // BLOCKS_PER_ATB blocks, and the byte past the end has to read AT_FREE so that gc_mark_tree
++    // cannot walk off the last block, which is what ALLOC_TABLE_GAP_BYTE is for upstream.
++    size_t pool_blocks = total_byte_len / BYTES_PER_BLOCK;
++    area->gc_alloc_table_byte_len =
++        (pool_blocks + BLOCKS_PER_ATB - 1) / BLOCKS_PER_ATB;
++    assert(mpy_gc_atb_len >= area->gc_alloc_table_byte_len + ALLOC_TABLE_GAP_BYTE);
++    area->gc_alloc_table_start = mpy_gc_atb;
++    memset(mpy_gc_atb, 0, area->gc_alloc_table_byte_len + ALLOC_TABLE_GAP_BYTE);
++    area->gc_pool_start = (byte *)start;
++    area->gc_pool_end = (byte *)end;
++    size_t gc_pool_block_len = pool_blocks;
++    #else
+     #if MICROPY_ENABLE_FINALISER || MICROPY_PY_WEAKREF
+     area->gc_alloc_table_byte_len = (total_byte_len - ALLOC_TABLE_GAP_BYTE)
+         * MP_BITS_PER_BYTE
+@@ -197,8 +211,10 @@
+     area->gc_pool_start = (byte *)end - gc_pool_block_len * BYTES_PER_BLOCK;
+     area->gc_pool_end = end;
+     assert(area->gc_pool_start >= next_table);
++    #endif  // MPY_HEAP_FROM_REGION
+ 
+     // Clear ATB's, and FTB's and WTB's if they are enabled.
++    #if !MPY_HEAP_FROM_REGION
+     memset(area->gc_alloc_table_start, 0,
+         area->gc_alloc_table_byte_len + ALLOC_TABLE_GAP_BYTE
+         #if MICROPY_ENABLE_FINALISER
+@@ -208,6 +224,7 @@
+         + gc_weakref_table_byte_len
+         #endif
+         );
++    #endif  // !MPY_HEAP_FROM_REGION
+ 
+     area->gc_last_free_atb_index = 0;
+     area->gc_last_used_block = 0;

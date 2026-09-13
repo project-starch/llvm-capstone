@@ -57,6 +57,23 @@ size_t mpy_gc_handles_len = MPY_HEAP_SIZE / MPY_GC_BLOCK_BYTES;
    typedef form can, and its name is what the compiler prints when the array size goes negative. */
 typedef char mpy_gc_handles_cover_the_heap[
     (MPY_HEAP_SIZE % MPY_GC_BLOCK_BYTES == 0) ? 1 : -1];
+
+#endif
+
+#if MPY_HEAP_FROM_REGION
+/* The allocation table, out of the pool for the reason the recipe gives: bookkeeping may not live
+   in memory the allocator hands away. Two bits a block, so one byte covers four, plus the byte
+   past the end that has to read AT_FREE so the mark phase cannot walk off the last block.
+
+   Both arms get this, not only the protected one: moving the table out enlarges the pool, and a
+   larger pool collects less often, so an arm that kept the table inside would be compared against
+   a collector that ran a different number of cycles. */
+#define MPY_GC_BLOCK_BYTES_R (4 * MP_BYTES_PER_OBJ_WORD)
+#define MPY_GC_BLOCKS (MPY_HEAP_SIZE / MPY_GC_BLOCK_BYTES_R)
+unsigned char mpy_gc_atb_storage[MPY_GC_BLOCKS / 4 + 1];
+unsigned char *mpy_gc_atb = mpy_gc_atb_storage;
+size_t mpy_gc_atb_len = sizeof(mpy_gc_atb_storage);
+typedef char mpy_gc_atb_covers_the_heap[(MPY_GC_BLOCKS % 4 == 0) ? 1 : -1];
 #endif
 
 /* ---- output: the hostcall shared region, same shape as benchmarks/sqlite */
