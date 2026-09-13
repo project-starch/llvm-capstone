@@ -20,7 +20,13 @@ typedef struct ngx_pool_s   ngx_pool_t;
 #define NGX_OK        0
 #define NGX_ERROR    -1
 #define NGX_DECLINED -5
-#define NGX_ALIGNMENT   sizeof(unsigned long)
+/* UPSTREAM SAYS sizeof(unsigned long), "platform word", which is eight here. A capability is
+   sixteen and must be stored sixteen-aligned, and ngx_palloc_small aligns to this when asked. A
+   ngx_pool_large_t is two capabilities, so an eight-aligned one puts a capability on an odd
+   sixteen-byte boundary and the store faults. It has not faulted yet, which is worse than if it
+   had: whether it does depends on where the bump pointer happens to stand. The platform word on
+   this target is the capability. */
+#define NGX_ALIGNMENT   16
 /* UPSTREAM'S DEFINITION LOSES THE TAG, and this is the only line of nginx this port has to
    change to run at all. ngx_config.h:101 rounds a pointer by casting it to uintptr_t, masking,
    and casting back. On a capability target that yields the right ADDRESS and no tag, and the
