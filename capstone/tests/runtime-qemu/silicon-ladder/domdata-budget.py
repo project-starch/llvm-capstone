@@ -23,7 +23,13 @@ import sys, struct, subprocess, os, re
 PAGE = 4096
 # Flip to True in the same commit that teaches the loader and the module to read
 # .capstone_domreq. Until then a declaration changes nothing at run time.
-DOMREQ_IS_CONSUMED = False
+DOMREQ_IS_CONSUMED = True
+# The module sizes ONE region from the declaration (module/capstone.c): code_len +
+# MONITOR_SPLIT_SLACK + domreq_data, rounded to a power-of-two page count. Two
+# regions are a later change, for images where one such block passes the buddy
+# allocator's order ceiling; until then modelling two would be the same class of
+# lie this flag was added to stop.
+MONITOR_SPLIT_SLACK = 8 * 1024
 
 
 def _max_order_is_inclusive(root):
@@ -232,6 +238,19 @@ def main():
     pages = (code_len + dom_headroom - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
     data_order = None
+    if req is not None and DOMREQ_IS_CONSUMED:
+        # ONE region, sized from the declaration, matching module/capstone.c.
+        need_alloc = code_len + MONITOR_SPLIT_SLACK + req[0]
+        pages = (need_alloc - 1) // PAGE + 1
+        order = 0 if pages == 1 else (pages - 1).bit_length()
+        while (1 << order) * PAGE < need_alloc:
+            order += 1
+        tot_size = (1 << order) * PAGE
+        dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
+        req = None                       # the branches below are the undeclared shape
+        declared_alloc = True
+    else:
+        declared_alloc = False
     if req is not None and not DOMREQ_IS_CONSUMED:
         # DEAD PATH, kept only so it comes back with the consumer. .capstone_domreq is
         # emitted by domreq.S and by the SQLite build, and read by NOBODY: not the
@@ -256,7 +275,7 @@ def main():
         tot_size = (1 << order) * PAGE
         dom_data = (1 << data_order) * PAGE - MONITOR_SEAL_SIZE
         need = data_need
-    else:
+    elif not declared_alloc:
         tot_size = (1 << order) * PAGE
         dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
 
