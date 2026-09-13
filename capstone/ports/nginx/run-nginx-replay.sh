@@ -22,7 +22,7 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 SHARE=${SHARE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share}; mkdir -p "$SHARE"
 ARENA=${NGX_ARENA_BYTES:-$((1<<20))}
 if [ "${NGX_SUBLET:-0}" = 1 ]; then NGX_ARENA_LINEAR=1; fi
-export NGX_SUBLET NGX_ARENA_LINEAR
+export NGX_SUBLET NGX_ARENA_LINEAR NGX_SUBLET_BLOCK
 
 # Whatever a previous run left, BEFORE the build. A build that fails must not leave a stale image
 # for the boot to pick up, and one that writes a different name must not leave the old one to be

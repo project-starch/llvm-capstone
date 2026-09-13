@@ -35,11 +35,19 @@ cp "$SCRIPT_DIR/adapted/ngx_shim.h" "$OBJ/"
 # NGX_SUBLET=1 is the protected arm: the same upstream file, plus patches/, and the level below
 # that hands out linear blocks. Applied here rather than kept as a second copy of ngx_palloc.c so
 # that the port-effort count in capstone/tests/port-effort.py has exactly one thing to count.
+# 0002 is the WEAKER arm and is applied only when asked for: the block stays linear and dies in
+# one revocation, but the objects inside it are offsets in a single alias rather than capabilities
+# of their own. The two arms are the same port with one difference, which is what makes the
+# revocation node counts comparable.
 if [ "${NGX_SUBLET:-0}" = 1 ]; then
-  for pf in "$SCRIPT_DIR"/patches/*.patch; do
-    patch -s -p1 -d "$OBJ" < "$pf" || { echo "patch failed: $pf" >&2; exit 1; }
-  done
+  patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/0001-pool-under-sublet.patch" \
+    || { echo "patch 0001 failed" >&2; exit 1; }
   CFLAGS_SUBLET=(-DNGX_SUBLET=1)
+  if [ "${NGX_SUBLET_BLOCK:-0}" = 1 ]; then
+    patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/0002-objects-inside-one-alias.patch" \
+      || { echo "patch 0002 failed" >&2; exit 1; }
+    CFLAGS_SUBLET+=(-DNGX_SUBLET_BLOCK=1)
+  fi
 else
   CFLAGS_SUBLET=()
 fi
