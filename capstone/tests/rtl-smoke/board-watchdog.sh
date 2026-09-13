@@ -62,7 +62,13 @@ last_change=$SECONDS
 while true; do
   sleep "$INTERVAL"
   now_elapsed=$(( SECONDS - start ))
-  size=$( [ -f "$LOG" ] && stat -c%s "$LOG" 2>/dev/null || echo 0 )
+  # LIVENESS IS UART LINES, NOT FILE SIZE. The driver log also carries the console's
+  # `[fpga] [event] user_count` / `led_state` chatter, which arrives whenever anyone has the
+  # console page open and says nothing about the board. Measured on boot sw66 (2026-09-13): after
+  # the share3 SHA5 the log grew by 233 event lines and ONE uart line, so a size-based idle clock
+  # reset every few seconds and the ENTRY-STALL abort below -- proven in replay -- could not fire
+  # live; the stalled arm sat for 23 minutes until it was killed by hand. Count `[uart]` lines.
+  size=$( [ -f "$LOG" ] && { grep -ac '\[uart\]' "$LOG" 2>/dev/null || true; } || echo 0 )
 
   # kill -0 tests existence of a specific process. No name matching, so nothing can match
   # this script itself. With no PID given, assume alive and rely on the idle limit alone.
@@ -75,7 +81,7 @@ while true; do
     delta=$(( size - (last_size < 0 ? size : last_size) ))
     last_size=$size
     last_change=$SECONDS
-    echo "ALIVE   ${now_elapsed}s  +${delta}B"
+    echo "ALIVE   ${now_elapsed}s  +${delta} uart line(s)"
   else
     idle=$(( SECONDS - last_change ))
     # NO-BOOT: load_image issued but the board never printed a boot banner. Seen when the
