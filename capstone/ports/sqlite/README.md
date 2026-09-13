@@ -129,7 +129,7 @@ top of that and counted separately, because the paper's A7 counts exactly those 
 
 | File | What it is |
 |---|---|
-| `sublet/` | the Sublet port: `sublet.h`, the primitives as operations on capability slots (split, take, give, handle, carve, move; no linear capability ever sits in a C variable), and `sublet-3530300.patch`, 28 hunks against the sed-adapted amalgamation, each classed in its header. Its README carries the recipe and the bookkeeping |
+| `sublet/` | the Sublet port: `sublet-3530300.patch`, 28 hunks against the sed-adapted amalgamation, each classed in its header. Its README carries the recipe and the bookkeeping. The primitives it calls are shared, in `capstone/sublet/` |
 | `speedtest1_domain.c` | the adapter: freestanding stdio, the exit that returns, the arena; takes memsys5's heap or the port's pool from the host's region (`sqlite3_sublet_grant`) and memsys5's tables and an instrument's table from a second, carves them from the stack region when the host lends none, prints the primitive counts |
 | `sqlite_host.c --tail [--pool <bytes> \| --arena <bytes>] [--tables <bytes>]` | creates the regions and shares them with a handle the monitor keeps, `--pool` non-linear (REV_DEFAULT), `--arena` linear (REV_BORROWED), and releases them after the run |
 

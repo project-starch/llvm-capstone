@@ -1,0 +1,60 @@
+# What the Sublet port needs from the chunk header, on top of the padding the
+# capability build already forced.
+#
+# A chunk's header says which block it belongs to by the offset from the chunk
+# back to the block: MemoryChunkSetHdrMask stores `chunk - block` and
+# MemoryChunkGetBlock recovers the block by subtracting it again. Under the
+# port neither half works, and for two independent reasons.
+#
+# The block's header is not at the front of the block any more. It is an entry
+# in a table beside the sub-pool, because the manager reads and writes a
+# block's header across a reset of the block's own contents, and one
+# revocation cannot spare part of what it covers. So the distance from a chunk
+# to its block is not a small offset inside one allocation; it is the distance
+# between two unrelated regions, and it does not fit the thirty bits the field
+# has.
+#
+# And a capability cannot be made to reach out of the object it was given for.
+# Even if the distance fitted, subtracting it from the chunk's capability would
+# produce a capability outside its bounds, and the first dereference would
+# fault. This is the same fact that moved the keeper block to a field, and it
+# is the fact the whole port is about.
+#
+# So the header carries two indices instead, into the port's block table and
+# its chunk table. They cost nothing: the padding a sixteen-byte capability
+# already forced is eight bytes, and two indices are eight bytes, so the
+# header does not grow by one byte over the unprotected capability build.
+# That is worth stating plainly, because the discipline's per-object cost is
+# the sixteen-byte capability in the side table and not a wider chunk.
+--- memutils_memorychunk.h
++++ memutils_memorychunk.h
+@@ -128,18 +128,19 @@
+ #endif
+ 
+ 	/*
+-	 * A capability is sixteen bytes and loses its tag if it is stored to a
+-	 * slot that is not sixteen-aligned.  The payload of a chunk begins at
+-	 * sizeof(MemoryChunk), so with an eight-byte header it lands at eight
+-	 * modulo sixteen and the first pointer the program stores into what
+-	 * palloc gave it faults.  aset.c writes such a pointer itself: the
+-	 * free-list link of a size class lives inside the freed chunk.
++	 * The eight bytes a sixteen-byte capability forced as padding, spent
++	 * rather than wasted.  The chunk says which block and which side-table
++	 * entry it belongs to by index, because it cannot say it by offset: a
++	 * block's header is not at the front of the block under the Sublet port,
++	 * and a capability cannot be made to reach out of the object it was given
++	 * for.  See port/memorychunk-sublet.patch.
+ 	 *
+-	 * Padding rather than widening hdrmask, which must stay last and stay
+-	 * one word: MemoryChunkSetHdrMask and its readers are written against
+-	 * a single sixty-four-bit field.
++	 * They come before hdrmask, which must stay last and stay one word:
++	 * MemoryChunkSetHdrMask and its readers are written against a single
++	 * sixty-four-bit field.
+ 	 */
+-	uint64		capstone_pad;
++	uint32		capstone_slot;	/* its entry in the chunk table */
++	uint32		capstone_block;	/* its block's entry in the block table */
+ 	/* bitfield for storing details about the chunk */
+ 	uint64		hdrmask;		/* must be last */
+ } MemoryChunk;

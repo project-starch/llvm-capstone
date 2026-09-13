@@ -7,11 +7,12 @@ measurement is that build. `SPEEDTEST1_SUBLET=1` in `run-sqlite-speedtest1.sh`, 
 
 | File | What it is |
 |---|---|
-| `sublet.h` | the primitives, as operations on capability slots: split, take, give, handle, carve, move. No linear capability ever sits in a C variable, so a copy the compiler makes cannot move one away |
 | `sublet-3530300.patch` | the port of memsys5 and the lookaside pool: 28 hunks against `sqlite3-capstone.c` as the build produces it from the amalgamation, each hunk classed in the header (I interface, H hierarchy, M metadata layout). Applied with `patch -F0 -p1` to the copy in the build directory, before any instrument's patch |
 
-The primitives are not SQLite's. When the second allocator is ported they move to a shared
-home and only the patch stays here.
+The primitives are not SQLite's and do not live here. They are
+[`capstone/sublet/sublet.h`](../../../sublet/sublet.h), shared by every port, and the build
+puts that directory on the include path only when a Sublet patch is applied. What stays here
+is the patch and this bookkeeping.
 
 ## The recipe, as it lands in the two allocators
 
@@ -62,7 +63,7 @@ poison writes into a freed block are gone, the block is revoked memory.
 
 The port writes the block through before `init`. A revoke that killed a linear node hands the
 region back uninitialised with its cursor at the base, and `init` is refused until stores at
-the cursor have carried it to the end; `sublet_give_to` in `sublet.h` is that loop, a null
+the cursor have carried it to the end; `sublet_give_to` in the shared `sublet.h` is that loop, a null
 capability at a time. The emulator the first passes ran on left the cursor at the end instead
 and took the `init` at once, so there the loop runs no iteration; its merge line has since
 moved to the specification's rule (Q-07), and the port runs on both. The fill is what `init`
