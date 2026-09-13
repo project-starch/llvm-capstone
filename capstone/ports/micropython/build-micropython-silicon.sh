@@ -130,6 +130,38 @@ LD_LLD=${CAPSTONE_LD_LLD}
 # port is mirrored into the MicroPython tree and MicroPython's own machinery generates them, with
 # a STOCK host compiler -- none of this reaches the domain, only the headers do.
 MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
+# MPY_FEATURE_LEVEL -- a name for a set of defines, because the interesting ones are not
+# all the ROM level. mpconfigport.h starts from "nothing optional is enabled" so that a test
+# failing for want of a builtin says nothing about capabilities, and that stays the default.
+# The levels below are what the upstream test set answers to, measured in a domain, 421
+# tests, every count from one round with no restart:
+#
+#   minimum   270 pass  151 fail  0 fault      the default, as mpconfigport.h ships
+#   core      349 pass   72 fail  0 fault      MICROPY_CONFIG_ROM_LEVEL=CORE_FEATURES
+#   extra     417 pass    4 fail  0 fault      + EXTRA_FEATURES and mpz long integers
+#   full      420 pass    1 fail  0 fault      + the three remaining feature switches
+#
+# The four failures at `extra` are not one thing: three are single switches that upstream
+# gates at EVERYTHING or FULL_FEATURES, and `full` turns exactly those three on. The fourth,
+# fun_code_full.py, needs MICROPY_PY_BUILTINS_CODE at FULL, which is reachable only through
+# MICROPY_PY_SYS_SETTRACE -- and that is NOT offered here, deliberately. Turning it on builds
+# and then takes the suite to 312 pass with 89 FAULTS, 85 of them at one site,
+# mp_emit_common_populate_module_context+0x1b0, where the compiler fills a module's constant
+# table. That is a capability defect in a code path only settrace reaches, and it wants the
+# same treatment S-14 got rather than a knob that hands someone 89 faults.
+#
+# ROM_LEVEL_EVERYTHING is also not offered: it does not compile at this pin, wanting
+# QSTR_LAST_STATIC and a qstr_table member that persistentcode.c expects and this port's
+# configuration does not produce.
+case "${MPY_FEATURE_LEVEL:-minimum}" in
+  minimum) MPY_LEVEL_DEFS="" ;;
+  core)    MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_CORE_FEATURES" ;;
+  extra)   MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES -DMICROPY_LONGINT_IMPL=MICROPY_LONGINT_IMPL_MPZ" ;;
+  full)    MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES -DMICROPY_LONGINT_IMPL=MICROPY_LONGINT_IMPL_MPZ -DMICROPY_PY_BUILTINS_RANGE_BINOP=1 -DMICROPY_PY_ALL_INPLACE_SPECIAL_METHODS=1 -DMICROPY_PY_FUNCTION_ATTRS_CODE=1" ;;
+  *) echo "MPY_FEATURE_LEVEL must be minimum, core, extra or full" >&2; exit 1 ;;
+esac
+DOMAIN_EXTRA_DEFS="${MPY_LEVEL_DEFS}${DOMAIN_EXTRA_DEFS:+ $DOMAIN_EXTRA_DEFS}"
+
 echo "== generating this port's headers (stock toolchain, host only)"
 rm -rf "$MPY_PORT_DIR"
 cp -r "$PORT" "$MPY_PORT_DIR"
@@ -163,6 +195,7 @@ SILICON=(-mllvm -capstone-gp-captable
          ${MPY_VFS:+-DMICROPY_VFS=1 -DFFCONF_H=\"ffconf.h\" -I$MPY_SRC_DIR/lib/oofatfs}
          ${DOMAIN_EXTRA_DEFS:-}
          "${FLOAT_DEFS[@]}")
+
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -ffreestanding
         # -nostdlibinc, or clang searches /usr/include even for a bare-metal triple and
