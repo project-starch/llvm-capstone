@@ -123,10 +123,27 @@
 // no clock, no filesystem, no device. sys.exit only raises SystemExit, which the test runner
 // already handles as the target-skip convention.
 //
-// MICROPY_PY_WEAKREF is NOT among them: it needs a second GC side table, and with
-// MICROPY_ENABLE_FINALISER off upstream's gc_sweep_run_finalisers does not even compile (it takes
-// BLOCKS_PER_FTB and the declaration of `block` from the finaliser branch). Enabling both is a GC
-// change, and the GC is where this port's capability fixes already live.
+// MICROPY_PY_WEAKREF is NOT among them, and this is now measured rather than feared. It needs a
+// second GC side table, and with MICROPY_ENABLE_FINALISER off upstream's gc_sweep_run_finalisers
+// does not even compile (it takes BLOCKS_PER_FTB and the declaration of `block` from the finaliser
+// branch). Turning BOTH on does compile, links, fits and boots, and it admits five of the six
+// weakref tests the selection otherwise refuses (the sixth has a regex .exp and so no hashable
+// expectation). Four of those five then FAULT, cause 24 in every case, at two sites:
+//
+//   mp_obj_get_type+0x4c                    `ldc a0, 0x0(a0)`, reading the type out of an object
+//   finalize_peek_detach_helper+0xcc        `cincoffset a3, a0, a1`, self->args + self->n_args
+//                                           with self->args just loaded by `ldc` from the object
+//
+// Both read a capability out of GC-managed memory and get back something untagged, and both are
+// reached only once a finaliser runs. WHICH of the two is at fault is NOT established: it could be
+// the collector invalidating the block before the finaliser is called on it, or the object being
+// reached through a stale path. A conventional machine reads a plausible word at both sites and
+// carries on, which is why upstream does not see it.
+//
+// The measurement: full level, 559 tests selected instead of 554, PASS=549 FAIL=1 FAULT=4 SKIP=5.
+// One extra test passes and four take the domain down, so this is not a trade worth making until
+// the fault is understood. Reproduce with
+//   DOMAIN_EXTRA_DEFS="-DMICROPY_PY_WEAKREF=1 -DMICROPY_ENABLE_FINALISER=1" MPY_FEATURE_LEVEL=full
 #define MICROPY_PY_IO_BUFFEREDWRITER      (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 
 #define MICROPY_PY_SYS_MODULES            (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
