@@ -7,8 +7,12 @@
 # one, and this project has published wrong findings behind exactly that. Run this
 # after touching repro-lib.sh.
 set -uo pipefail
-source "$(git rev-parse --show-toplevel)/capstone/ports/micropython/repro-lib.sh"
-REPRO_OUT_DIR=$(git rev-parse --show-toplevel)/capstone/ports/micropython/repro-selftest
+# Anchored on this file and not on the caller's working directory. git rev-parse resolves to
+# whichever checkout the caller happens to stand in, and with several worktrees of this repo on
+# one machine that is how a gate ends up scoring a different tree than the one it is testing.
+HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$HERE/repro-lib.sh"
+REPRO_OUT_DIR=$HERE/repro-selftest
 
 fail=0
 expect() {  # $1 = expected exit, $2 = label, rest = check_row args

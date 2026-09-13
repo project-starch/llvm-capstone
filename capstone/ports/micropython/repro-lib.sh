@@ -16,7 +16,12 @@
 #                  IS the other arm, and it runs first.
 set -uo pipefail
 
-REPO=$(git rev-parse --show-toplevel) || { echo "not in a git repo"; exit 1; }
+# Anchored on this file and not on the caller's working directory, because every path below is
+# relative to REPO and git rev-parse answers for whichever checkout the caller stands in. With
+# several worktrees of this repo on one machine that is how a run scores a different tree than
+# the one it was pointed at.
+REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd) || exit 1
+[[ -d $REPO/capstone/ports/micropython ]] || { echo "$REPO is not this repo's root"; exit 1; }
 cd "$REPO" || exit 1
 export CAPSTONE_REPO_ROOT="$REPO"
 # capstone-test-env.sh uses BASH_SOURCE and resolves the root wrongly under zsh, which
