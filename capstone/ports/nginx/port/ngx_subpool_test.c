@@ -78,6 +78,21 @@ static int carve_write_read(sublet_cap *region, size_t bytes, unsigned char seed
 
 static sublet_cap arena_slot;
 
+void domain_main(unsigned *res, unsigned func);
+
+/* Rung 0 returns &domain_main, masked to 32 bits, which is the convention
+   capstone/tests/runtime-qemu/fault-locate.py needs to turn a fault pc into a symbol. Without it
+   the load base has to be guessed, and a guessed base reads a fault into whatever function the
+   arithmetic lands in. It read one into ngx_palloc_block+0x3fd68 here, an offset no function has,
+   which is how the guess announced itself. */
+static unsigned rungs;
+#define NGX_ANCHOR_RUNG() do {                                                  \
+    if (++rungs == 1) {                                                         \
+        *res = (unsigned) (unsigned long) (void *) &domain_main;                \
+        return;                                                                 \
+    }                                                                           \
+} while (0)
+
 void domain_main(unsigned *res, unsigned func) {
     if (func == 1) {
         /* The arena, and it must arrive LINEAR or nothing below can ever be revoked. The type is
@@ -86,6 +101,8 @@ void domain_main(unsigned *res, unsigned func) {
         sublet_store(&arena_slot, res);
         return;
     }
+
+    NGX_ANCHOR_RUNG();
 
     if (sublet_type(&arena_slot) != 0) {         /* 0 = CAP_TYPE_LIN */
         NGX_DOM_MARK(0xFD0000u | (unsigned) sublet_type(&arena_slot));

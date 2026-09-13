@@ -42,22 +42,13 @@ run sublet 1 C10000
 run sublet 2 C20000
 run sublet 3 FAULT
 
-# Where the fault landed. A fault anywhere else would pass the line above and mean nothing.
-pc=$(grep -m1 -oE 'pc = 0x[0-9a-f]+' "$OUT_DIR/boot.log" | grep -oE '0x[0-9a-f]+')
-sym=$("$CAPSTONE_LLVM_BIN/llvm-objdump" -d --no-show-raw-insn "$OUT_DIR/ngx-uaf-sublet.dom" |
-      "${PYTHON:-python3}" -c '
-import re, sys
-pc = int(sys.argv[1], 16)
-link = 0x10000 + (pc - 0x101580000)
-best = None
-for line in sys.stdin:
-    m = re.match(r"^([0-9a-f]+) <(.+)>:", line)
-    if m and not m.group(2).startswith(".L"):
-        a = int(m.group(1), 16)
-        if a <= link: best = (a, m.group(2))
-        else: break
-print("%s+0x%x" % (best[1], link - best[0]) if best else "unknown")' "$pc")
-printf "fault at %s in %s\n" "$pc" "$sym"
-case "$sym" in domain_main*) ;; *) echo "the fault is not at the touch" >&2; fail=1 ;; esac
+# Where the fault landed. A fault anywhere else would pass the line above and mean nothing, and
+# working the address out by hand does not survive an image whose load base moved: a guessed base
+# once read this very fault into ngx_palloc_block+0x3fd68, an offset no function has.
+# fault-locate.py takes the base from the anchor rung and refuses rather than guessing.
+loc=$("${PYTHON:-python3}" "$REPO/capstone/tests/runtime-qemu/fault-locate.py" \
+      "$OUT_DIR/boot.log" "$OUT_DIR/ngx-uaf-sublet.dom" 2>&1)
+printf '%s\n' "$loc"
+printf '%s' "$loc" | grep -q 'domain_main' || { echo "the fault is not at the touch" >&2; fail=1; }
 
 exit $fail
