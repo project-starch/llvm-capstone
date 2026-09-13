@@ -2,7 +2,39 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-13 — CURRENT
+## 2026-09-13 (evening) — CURRENT
+
+> sw64's stall reproduces on an exact redraw and is in the domain's share entry; the mtvec pair
+> is proven matched and on the board (sw67); six collaborator PRs landed. The morning block below
+> stands for the bridge and R-30/R-31/R-33.
+
+* **sw66 reproduced sw64's stall exactly** — `F2/share3 → SHA5`, no `SHA6`, no `G/enter` — on the
+  manifest-verified artifacts, second draw. Deterministic for this image; per the monitor's own
+  marker definitions the hang is inside the domain's share-entry execution with `mtvec = 0`. Its
+  baseline arm returned the **size-20 denominator: 54,230,566,323 cycles, hash `3807866 2738af78`**.
+* **sw65 said nothing about sw64** (three variables changed; its image had never run on QEMU —
+  the runner's QEMU phase had no `cma=` and died before entry, and the image was staged anyway; it
+  runs clean there today at `cma=256M`). **The S-15 double delin is not the discriminator**: same
+  code in both images, and sw65's passed share3 with it.
+* **The pair is proven, not asserted:** `cc55013c2106` from the worktree reflog; the no-flag rebuild
+  hit `23da3b126a304585` / `7c27697818b0abe0`; the mtvec image `214b300efd169f03` has its QEMU
+  licence. Banked at `~/capstone-artifacts/sw64-pair/`. **sw67 ran it: share3 RETURNS (`SHA6`)
+  where sw66 hangs, then `sqlite3_initialize` fails (`0x5117BAD3`, = sw65). S-15's account
+  strengthened** — audited as not yet a measured root cause (share3 also differs in region residency
+  and size), but its mechanism is now sourced at the RTL commit (DELIN raises on any non-LINEAR
+  operand; the only type-sensitive instruction in the branch). The trap word went into the arena,
+  unread; reading it back is owed. Fix on `dev`,
+  **proven on silicon by sw68**: the image with the delin removed and nothing else, no trap vector,
+  passes share3 and enters where sw64/sw66 hang (size-20 run in progress at the time of writing).
+* **Watchdog fixed** (`f7f2c9030623`): liveness is `[uart]` lines; console `[event]` chatter had
+  made the entry-stall abort unfireable live.
+* **PRs landed on `dev`:** #15, #16 (+print fix), #11/#12/#13 (byte-neutral `sublet.h` move; both
+  PostgreSQL gates PASS under QEMU). Held for the board-free window: buildroot #2/#3, #17, #18, #14;
+  capstone-qemu #3 needs a rebase (two commits already landed in superset form).
+* **The toolchain binary is STALE** per `toolchain-fresh` (now that #15 lets it say so): the
+  `opt`/`llvm-symbolizer` targets were never built. Rebuild at #14's step, never during a suite.
+
+## 2026-09-13 (morning) — EARLIER
 
 > The bridge is discharged. §7f–§7k now carry forward to the flashed bitstream; the 2026-09-12 block
 > below stands for R-30/R-31/R-33.

@@ -1,4 +1,62 @@
-## 0. CURRENT — 2026-09-13. **BRIDGE HOLDS. The size-20 rehearsal FAILED at the 128 MiB arena's SHARE, and cost 8 h to a timeout that should have been a 3-minute abort.**
+## 0. CURRENT — 2026-09-13 (evening). **sw64's stall REPRODUCES on an exact redraw and is inside the domain's share entry; the matched pair is proven and on the board; six of eleven collaborator PRs landed.**
+
+> **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
+> control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
+> **54,230,566,323 cycles**, 36 min; the domain image stalled at `F2/share3 → SHA5`, no `SHA6`, no
+> `G/enter` — **the same point as sw64, second draw, so deterministic for this image.** By the
+> monitor's own SHA5/SHA6 definitions the hang is in the domain's share-entry execution, with
+> `mtvec = 0`. §7o.
+>
+> **sw65 tested nothing about sw64.** Three variables changed at once (mtvec, `SQLITE_FULL/FLOAT`,
+> source state), and its image had never run on QEMU: the runner passes `cma=` only on request, its
+> QEMU phase died at `C2/mkarena` after the image was written, and the preflight's QEMU-pass gate
+> covers `BAKED_RUNGS` only. Run today under QEMU with `cma=256M` the sw65
+> image completes cleanly (`RC 0`), so its `sqlite3_initialize refused` is not reproducible off-board
+> and is not sw64's failure. **The S-15 double delin is NOT sw64's discriminator**: the arena branch
+> is code-identical across both images and sw65's passed share3 with it.
+>
+> **The pair is proven.** sw64's commit recovered from the worktree reflog (`cc55013c2106`); the
+> recipe without the flag reproduced `23da3b126a304585` / `7c27697818b0abe0` exactly; the mtvec
+> image is `214b300efd169f03` with a QEMU size-1 licence at `cma=256M`. **sw67 RETURNED from share3**
+> (`SHA6`, where sw66 hangs), entered, and died at `sqlite3_initialize` (`0x5117BAD3` = sw65). By the
+> glue's own discriminator rule the share3 entry faults — **audited as an account, not yet a
+> measured root cause** (share3 also differs in region residency and size; the handler has no
+> positive control here), while the mechanism is now sourced at the RTL commit: DELIN raises
+> UNEXPECTED_CAP_TYPE on a non-LINEAR operand and is the only type-sensitive instruction in the
+> branch. The trap word went into the arena's first word, where nothing reads it; reading it back
+> (predicted `0xF6C09D13`) is owed to the next boot. Fix applied on `dev` (no domain delin of the
+> monitor-delinearised grant); **sw68 (the fixed image, no trap vector) PASSED share3 and entered** — the fix is proven on
+> silicon; its size-20 run was in progress at the time of writing. sw69 (the pair image + a host that
+> reads the trap word out of `arena[0]`) names the faulting address next. §7o.
+>
+> **Third instrument failure on this question, fixed:** the entry watchdog counted console
+> `[event]` chatter as liveness and could not fire live (`f7f2c9030623`).
+>
+> **PRs (plain merges, scanned over the push range, pushed):** #15 (control before/after), #16 (+ one
+> print fix; model now says order 10 where the module allocates order 10), #11→#13 (PostgreSQL;
+> `sublet.h` move byte-neutral, both PG gates PASS under QEMU). **Held for the board-free window,
+> in order:** buildroot #2/#3 (merge, mirror into `caplifive-system/sw/buildroot`, bake, `.ko` by
+> content), #17 (after #3's module), #18 (gate run), then #14 last (toolchain rebuild + lit + QEMU
+> suites + `capinit-scan` control; its lit test does not gate the defect at any opt level);
+> capstone-qemu #3 held for a collaborator rebase (two of its four commits are already on our branch
+> in superset form; the conflicts would revert `cabc953e58`). Hand-off note under `/tmp/capstone/`.
+
+### Open, carried forward explicitly
+
+* sw67's reading decides the next instrument for sw64's share-entry stall; if it does not trap, the
+  hang is below the domain's first instruction (switch-level) and needs the RTL, not another boot.
+* R-33 still owes its `--pool` positive control for the rounding log and the bottom-truncation arm.
+* `--size 100` is a decision after sw67, not a default; the size-20 baseline is now measured.
+* `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
+  hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
+  `SQLITE_STAGE_DOMS` image.
+* #14's `capinit-scan.py` positive control cannot be a SQLite image: none at hand trips its
+  FAULTING verdict (the json image yields only "quiet" findings). The control is the MicroPython image
+  built on the pre-#14 compiler, so #18's build precedes #14's toolchain rebuild — the plan's order.
+* The toolchain binary is STALE by `toolchain-fresh` (the `opt`/`llvm-symbolizer` targets #15 added
+  were never built; the only `llvm/` commit since is a citation re-point) — rebuilt at #14's step.
+
+## 0z. EARLIER — 2026-09-13 (morning). **BRIDGE HOLDS. The size-20 rehearsal FAILED at the 128 MiB arena's SHARE, and cost 8 h to a timeout that should have been a 3-minute abort.**
 
 > **sw63 discharged the bridge.** §7k's images unchanged, all seven pairs within 0.075 pp of their
 > §7k values against a 0.171 pp band. §7f–§7k carry forward. §7m.

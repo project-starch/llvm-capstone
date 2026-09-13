@@ -584,6 +584,27 @@ int main(int argc, char **argv) {
   shared_region_annotated(domain, arena_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
+#ifdef SPEEDTEST1_ARENA_READBACK
+  /* READ THE TRAP WORD BACK. The interp glue's INTERP_DOMAIN_MTVEC handler reports a fault by
+     writing a packed word (bits 31..28 = 0xF, then mcause & 0x3F, then (mepc - _start) >> 2)
+     THROUGH the region capability it saved at entry -- which for a SHARE entry is the shared
+     region itself, so a fault in the share3 handler lands in the arena's first word and the host
+     never sees it (boots sw65 and sw67, 2026-09-13: `obs` showed only the later call's result).
+     Mapping the arena here, AFTER the share has returned and BEFORE the domain is entered, reads
+     that word without touching anything the share depended on; the domain overwrites it as heap
+     once it runs, which is why the read is sited exactly here. Predicted for the unfixed domain on
+     the r30r31 bitstream: 0xF6C09D13 (mcause 27 = UNEXPECTED_CAP_TYPE at the delin). Any other 0xF
+     word names the real site; no 0xF/0xE marker means the handler never ran. Off by default: the
+     production host maps only what it touches. */
+  {
+    volatile unsigned *arena0 = (volatile unsigned *)map_region(arena_region, SPEEDTEST1_ARENA_SIZE);
+    /* map_region returns mmap()'s value raw: a rejected mapping is (void *)-1, not NULL. */
+    if ((void *)arena0 == (void *)-1 || arena0 == 0)
+      mark("SQ: arena0=UNMAPPED\n");
+    else
+      mark_u("SQ: arena0=", (unsigned long)arena0[0]);
+  }
+#endif
 #else
   /* The allocators' memory, regions above the payload's, never touched from here: once the
      domain has revoked a lineage in a region, a host access to those pages aborts QEMU

@@ -2922,3 +2922,170 @@ earlier drivers that also never started the watchdog, where it was equally decor
 conflict: reaching `SQ: G/enter` (or a share's `SHA6`) must be bounded in **minutes**, and only after
 that should the long idle budget apply. A single idle number cannot serve both, and setting it for
 the silent arm is what made an 8-hour loss out of a 3-minute answer.
+
+### §7o — sw64's stall REPRODUCES on an exact redraw and sits in the domain's share entry; the matched pair is built and PROVEN matched (boots sw66 + sw67, 2026-09-13)
+
+**Off-board first, and it moved the question.** Before any board time, three things were settled
+under QEMU:
+
+1. **sw65's image runs clean at 128 MiB.** The exact sw65 artifacts (`33399c3629281d88` +
+   host `ec5abac09a602404`) with `--kernel-arg cma=256M`, `main --size 1 --verify`: `A/dom-ok …
+   F2/share3 → G/enter → H/return`, `RC 0`, `SPEEDTEST1-CYCLES 9867027194`, verification hash
+   `112006 38bb59fd…`. So sw65's `sqlite3_initialize refused` (`ENT2:5117BAD3`, a constant that
+   carries no SQLite rc) does **not** reproduce off-board. It never could have been checked before
+   the boot: the runner's QEMU phase (`run-speedtest1-measure.sh`) passes `cma=` only when
+   `SPEEDTEST1_QEMU_EXTRA=cma` is set by hand, so sw65's build ran it without one, the host died at
+   `C2/mkarena` ("above 4 MiB this needs a CMA area", `__EXIT_CODE__1`) after the image was already
+   written, and the driver staged the image anyway; and `preflight-board-run.sh`'s QEMU-pass-by-hash
+   gate (C13) loops over `BAKED_RUNGS` only — an `SQLITE_STAGE_DOMS` image is never checked. **sw65 went
+   to the board unexercised.** (A hash trap for the record: the `main --size 1` verification hash
+   is `111130 1e792c9d…` for a `SQLITE_FULL=on SQLITE_FLOAT=on` build and `112006 38bb59fd…` for the
+   default `off/off` build. Both are correct; they are different programs.)
+2. **sw65 was never a matched pair for sw64.** It changed three things at once: the mtvec flag,
+   the feature set (sw64's image has rtree and `__extendsfdf2`, i.e. `SQLITE_FULL=on
+   SQLITE_FLOAT=on`; sw65's has neither) and the source state (`dev` of 2026-09-13 06:00 UTC,
+   thirteen port commits past sw64's build; the module beneath both was `8da1559`). Its result therefore said nothing about sw64's stall — exactly the "measures
+   whichever difference you did not intend" failure the debugging rules name.
+3. **The real pair, proven rather than asserted.** sw64's build commit was recovered from the
+   worktree reflog (HEAD at the build timestamp: `cc55013c2106`), its flags read off the artifact,
+   and the same recipe **without** the flag rebuilt on the unchanged toolchain binary reproduced
+   sw64's artifacts hash for hash: `sqlite_silicon.dom 23da3b126a304585`, `sqlite_host.user
+   7c27697818b0abe0`. Only then was `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1` added: the pair
+   image is **`214b300efd169f03`** (1,861,120 B; `.text` +0x60 with `domain_main` displaced by exactly
+   that and every data/bss/gct address identical; one `csrw mtvec` site vs none; host byte-identical). Its licence to be staged is a QEMU size-1 pass at `cma=256M` with the
+   oracle hash `111130 1e792c9d…`, `RC 0`. Banked with a manifest at `~/capstone-artifacts/sw64-pair/`.
+
+**Boot sw66 — the exact redraw of sw64 (same artifacts by manifest, monitor `4274268`, module
+source `8da1559`; sw64's own bake already carried both, so this is a redraw with no known
+difference; `fw_payload` `ce4abf775707` vs sw64's `cadc8f2c4470` — the bake is not
+byte-deterministic, the inputs were).** Control first, then the native baseline at `--size 20`,
+then sw64's domain image at `--size 20` last.
+
+| arm | result |
+|---|---|
+| `k800` control | `retval=4` — boot valid |
+| native baseline, `main --size 20` | **RETURNED**: `TOTAL 2168.979 s`, verification hash **`3807866 2738af78`** (the size-20 oracle), **`SPEEDTEST1-CYCLES 54,230,566,323`**, `HEAP 134217728`, `DROPPED 0`. This is the size-20 denominator sw64 was meant to buy: 36 minutes on silicon, `TOTAL` = cycles / 25 MHz to four digits, i.e. the port's clock is plumbed and nothing more |
+| sw64's domain image, `main --size 20` | **STALLED AT THE SAME POINT AS sw64**: `A/dom-ok, B, C, C2/mkarena, D/mapped, E/share1` (SHA0…SHA6 all present), `F/share2` (SHA0…SHA6), `F2/share3`: `SHA0:1 SHA2:0 SHA3:2 SHA4:1 SHA5:1` — and nothing after. No `SHA6`, no `G/enter`. `RCLM:00000000`; the share trace shows the arena's `:08000000`. Zero `not representable` lines |
+
+**Reading.** Second draw of the same image, same host, same point: **the stall is deterministic for
+this image, not a draw.** Where it is, the monitor says itself (`sbi_capstone.c:126-127`): `SHA5` =
+"about to leave M-mode for the domain", `SHA6` = "the domain returned from the share entry". So
+the core hangs **inside the domain's share-entry execution for share3** — the interp glue's `test`
+entry (`stc ra`, then `RUN_CAP_INIT`, then the dispatch to the share handler's arena branch) —
+with `mtvec = 0`, which is M-1's silent re-fault shape. Two corrections this forces:
+
+* **The S-15 double delin is NOT the discriminator.** The share handler's arena branch is
+  code-identical between sw64's commit and `dev` (the only non-comment drift is the Sublet blocks);
+  sw65's image carries the same `__builtin_capstone_cap_delin` on the same NONLIN grant and
+  **passed share3 on silicon** (`SHA6`, `G/enter`). So whatever faults in sw64's share entry, it
+  is not that call.
+* **What does differ is the feature set and hence the image**: `FULL=on FLOAT=on` brings rtree and
+  the float builtins, 1,861,088 vs 1,684,352 B, more globals under `RUN_CAP_INIT` and a different
+  layout. The pair image carries exactly that feature set plus a trap vector, installed by the glue
+  **before** cap-init and on share entries too (`start-gp-captable-interp.S:779`, common to every
+  entry kind) — so a trappable fault in that path returns with `mcause`/`mepc` instead of hanging.
+
+**The watchdog, again.** The entry watchdog was wired (§7n's fix) and its detector fired in replay —
+and it still could not fire live: it measured idle by driver-log growth, and the console's
+`[fpga] [event] user_count` chatter (233 lines after share3, against ONE uart line) reset it every
+few seconds. The stalled arm sat 23 minutes and was ended by hand. Fixed the same day
+(`f7f2c9030623`: liveness is `[uart]` lines), with the positive control replayed on sw66's own log
+and a negative control for an empty log. This is the third instrument on the same 3-minute
+question that read as working and was not.
+
+**Boot sw67 — the pair image (`214b300efd169f03`), control first, `--size 20` last.** Control
+`retval=4`. The domain arm: `E/share1` and `F/share2` as before, then **`F2/share3 → SHA5 → SHA6`**
+— the pair image **passed share3**, where its twin without a trap vector hangs — then `G/enter`,
+`H/return`, **`obs = 0x5117BAD3`** (`SQLITE_HC_ERR_INITIALIZE`), "speedtest1 did not run". No trap
+marker in `obs` (top nibble `0x5`). That is sw65's result, now on an image that differs from sw64's
+in exactly one variable.
+
+**The reading — an account whose mechanism is traced through the RTL, with its confirming
+measurement still owed.** The trap handler exists for one discriminator
+(`start-gp-captable-interp.S`, at `.Ldomain_trap`): *if a build with this handler RETURNS where
+the build without it HANGS, the domain faulted.* sw66 hangs at share3; sw67 returns from share3.
+That is an elimination argument, and an audit of it (2026-09-13, evening) found it broader than its
+evidence: the handler has never been seen to fire on this bitstream (`board-b65.sh` said so before
+its boot), and share3 differs from shares 1 and 2 in **three** respects, not one — the domain's
+delin, a table-resident region (`SHA1:FFFFFFFF`) where shares 1/2 are CPMP-resident, and 128 MiB
+against 64 KiB. What the audit *did* establish, at the bitstream's own RTL commit `1bfff7776`:
+`func DELIN` raises `UNEXPECTED_CAP_TYPE` for any operand that is not LINEAR (mcause 27 — DYN base
+24 + code 3, so it is trappable, unlike R-24's base), the two `lcc` selectors in that branch are
+legal on a NONLIN operand, so **the delin is the only type-sensitive instruction in the share3
+handler**; and the monitor at `4274268` really does hand the domain a NONLIN grant
+(`sbi_capstone.c:1396-1408`; the trace shows `AREV:00000002`, `SHA2:00000000`). Why `obs` shows no trap is in the handler's last
+three instructions — `ldc(a0, sp, 80); sw t0, 0(a0)`: it writes its packed `mcause`/`mepc` word
+*through the region capability saved at entry*, which for a share entry is the shared region
+itself — for share3, the first word of the 128 MiB arena, which nothing reads. The share entry then
+takes the shared unwind and `domreturn`s; the monitor prints `SHA6` (its value is `dom_id`, not a
+return code) and the host proceeds to `enter`. So *if* the discriminator fired, its word landed
+where no instrument looks — and sw65's "did not confirm" was this same gap, not a negative. The
+reading that names the site is the host printing `arena[0]` after share3 returns, with the pair
+image unchanged: **predicted `0xF6C09D13`** (marker 0xF, mcause 27, offset of the displaced delin
+`(0x373ec + 0x60 − 0x10000) >> 2`); any other 0xF word names the real site; no 0xF/0xE word means
+the handler never ran and the mtvec correlation needs another explanation. Owed to the next boot.
+
+Downstream is then forced by SQLite itself: the arena branch's assignment `sqlite_arena = …` never
+executed, so the domain calls `sqlite3_config(SQLITE_CONFIG_HEAP, NULL, 0, 64)`; SQLite's
+documented behaviour for a NULL heap pointer is to *revert to its default allocator*
+(`sqlite3.c:187958`, `memset(&sqlite3GlobalConfig.m, 0, …)`), and this domain's default `malloc`
+is the freestanding stub that returns `NULL` (`adapted/capstone_sqlite_libc.c:116`) — so
+`sqlite3_initialize()` fails and the port returns `SQLITE_HC_ERR_INITIALIZE`. One mechanism accounts for
+four boots: **S-15's double delin faults on silicon** — as an account with its mechanism sourced, not
+yet as a measured root cause. With `mtvec = 0` (M-1) the fault re-faults
+forever and reads as a hang at share3's `SHA5` (sw64, sw66); with the trap vector installed the
+share entry returns and the run dies at `sqlite3_initialize` (sw65, sw67). QEMU cannot see any of
+it because its `helper_csdelin` returns early on a NONLIN operand.
+
+(All four boots ran with `FPGA_BITSTREAM_UNVERIFIED=1`; the bitstream is asserted, not re-read,
+and the same assertion holds across the pair, so the comparison stands.) Two things follow. The fix
+is the one the S-15 entry named before sw65 clouded it: the domain
+must not delin a grant the monitor has already de-linearised (`speedtest1_measure.c`, the
+REGION_ARENA branch; the comment that said "the grant arrives LINEAR" was the error). And the
+instrument has a hole to close: a trap taken in a *share* entry must be reported somewhere the
+host reads, not written into the shared region. **The proof of the fix is a fifth boot**: the
+fixed image, without a trap vector, must pass share3 and run — pre-registered as sw68 below.
+
+**Boot sw68 — the fix, one variable against sw66.** The fix image `f795151f3ed4883b` is built
+from `dev` with sw64's flags and **no trap vector** (`csrw mtvec` sites: 0; the boot's driver
+refuses an image that installs one), same size as sw64's (1,861,088 B). Its instruction stream is
+sw64's **minus exactly one instruction** — the `delin a2` at #40,190 of 373,094; after normalising
+the 4-byte shift of every later PC-relative immediate, zero other instruction positions differ
+(delin sites 2 → 1). It is staged with sw64's
+**own** host and baseline by content (`7c27697818b0abe0`, `ed54878519b96816`) — so the set differs
+from sw66's in the removed delin and nothing else. Its QEMU licence at `cma=256M`: hash
+`111130 1e792c9d…`, `RC 0` (QEMU proves the image runs, not that the fix works — it cannot see the
+fault). Pre-registered before the boot: **`share3 → SHA6, G/enter, H/return`, hash
+`3807866 2738af78`** = the delin was the fault (the region's residency and size are unchanged in this image, so a
+pass exonerates them as the sole cause) *and* the fix works on silicon, with the domain arm's cycle
+count as the size-20 measurement against the baseline arm in the same boot — pre-registered
+numerically: the silicon ratio at size 1 is 1.2195–1.2201 (§7k, §7m) and the emulated §7l says the
+ratio is size-robust, so against sw66's baseline of 54,230,566,323 cycles the domain arm is
+predicted at **≈66.1 G cycles (ratio ≈1.22, ~44 min at 25 MHz)**; a ratio outside 1.17–1.27 is a
+finding about scaling, not a pass; **`SHA5` last again** = the
+fault is not the delin but something else in the share3 handler (the `get_base`/`get_end` reads on
+the NONLIN grant are the only other type-sensitive operations), and the next instrument is a host
+that reads the trap word back out of the arena's first word after an mtvec build; any other `obs`
+after `G/enter` = a different, real result. Control `retval=4` or the boot is void.
+
+**Boot sw69 — the reading the audit asked for: the trap word read back.** The pair image
+**unchanged** (`214b300efd169f03`) with a host that maps the arena *after* share3 returns and
+*before* the domain is entered, and prints its first word (`sqlite_host.c`, `SPEEDTEST1_ARENA_READBACK`,
+off by default; host `ae9e0ba31fa4e634`; its QEMU plumbing control prints `SQ: arena0=0`, the value
+no trap can leave). `--size 1`, so the arm returns in seconds either way. Pre-registered from the
+glue's packing and the RTL at `1bfff7776`: **`arena0 = 4139621651` (`0xF6C09D13`)** = marker 0xF,
+mcause 27 (`UNEXPECTED_CAP_TYPE`), offset `0x9D13` = the pair image's delin at
+`(0x373ec + 0x60 − 0x10000) >> 2` → S-15 as claimed, site named; any other word with top nibble
+0xF/0xE names a different site at `_start + 4·(word & 0x3FFFFF)`; `0` means the handler never ran and
+"returned ⇒ trapped" is void; `UNMAPPED` is an instrument fault. Together with sw68 this closes the
+audit's two open alternatives from both sides: sw68 removes the delin and keeps the region's
+residency and size; sw69 reads the fault's own address.
+
+**Boot sw68 — RESULT (the fix side).** Control `retval=4`. Baseline arm: hash `3807866 2738af78`,
+**54,214,856,567 cycles** (sw66: 54,230,566,323 — 0.03 % apart; the size-20 denominator is
+repeatable). The fixed domain arm: `E/share1` SHA5→SHA6, `F/share2` SHA5→SHA6, **`F2/share3`
+SHA5→SHA6**, then **`SQ: G/enter`** — the image that is sw64's minus one instruction, with no trap
+vector, **passes the share on which sw64 and sw66 hang** and enters. Region residency and size are
+unchanged in this image, so of the audit's three differences only the delin was removed and only
+the outcome changed. *(The size-20 run itself was in progress at the time of writing; its cycle
+count and ratio go here.)*

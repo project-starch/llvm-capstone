@@ -961,9 +961,37 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `WEAKENED 2026-09-13 BY ITS OWN CONFIRMING ARM: boot sw65 ran a build that exercises this exact branch, with a trap vector installed, and NO TRAP OCCURRED — share3 completed, the domain entered, and it failed far later at sqlite3_initialize. The predicted fault did not happen. The account is NOT refuted for sw64, because sw65's image is not sw64's, but it no longer stands on its own`
+### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `ACCOUNT STRENGTHENED BY THE MATCHED PAIR 2026-09-13 (sw66 hangs at share3, sw67 with a trap vector returns from it and dies at sqlite3_initialize); MECHANISM TRACED THROUGH THE RTL AT THE BITSTREAM COMMIT (DELIN raises UNEXPECTED_CAP_TYPE on any non-LINEAR operand; the delin is the only type-sensitive instruction in the branch); the mcause/mepc reading is OWED (the handler wrote it into the arena); FIX PROVEN ON SILICON 2026-09-13 (sw68: the image with the delin removed and nothing else, no trap vector, passes share3 and enters where sw64/sw66 hang)`
 
 > # ⚠ THE CONFIRMING ARM DID NOT CONFIRM IT (boot sw65, 2026-09-13). Read this before citing the chain below.
+>
+> **RESOLVED THE SAME EVENING (sw67, the proven matched pair).** sw66 re-ran sw64's exact image and
+> hung at share3's `SHA5` again; sw67 ran the same image plus `INTERP_DOMAIN_MTVEC=1` (proven: the
+> recipe without the flag reproduces `23da3b126a304585`) and **returned from share3** (`SHA6`),
+> entered, and died at `sqlite3_initialize` -- `obs = 0x5117BAD3`, exactly sw65. The glue's own rule
+> for its trap handler is "returns where the handler-less build hangs ⇒ the domain faulted", and it
+> applies to the share entry -- an elimination argument, audited the same evening as broader than its
+> evidence (share3 also differs in region residency and size, and the handler has no positive control
+> on this bitstream), while the mechanism itself is now sourced at the RTL commit `1bfff7776`. The trap
+> word is invisible because the handler writes it
+> `sw t0, 0(a0)` through the region capability saved at entry -- for a share entry, the shared
+> region itself, i.e. the arena's first word. Then `sqlite_arena` stays NULL, `CONFIG_HEAP(NULL, 0)`
+> reverts SQLite to its default allocator (`sqlite3.c:187958`), the port's `malloc` stub returns
+> NULL, and `initialize` fails. So the box below records an instrument gap, not a refutation: the
+> arm asked for was run, and its answer went where nothing reads. **Owed:** the host reading `arena[0]`
+> after share3 with the pair image unchanged -- predicted `0xF6C09D13` (mcause 27 at the delin).
+> **sw68 (the fix, no trap vector): share3 `SHA5→SHA6`, `G/enter` -- the delin removed and nothing else
+> turns the hang into a run; the region's residency and size are unchanged in that image.** Mechanism, evidence and the
+> fix in §7o. **The fix** (the REGION_ARENA branch no longer delins; both comments corrected) is on
+> `dev`; the silicon proof is sw68, the fixed image without a trap vector passing share3 and
+> running. **Instrument fix owed:** a trap in a share entry must be reported where the host reads.
+>
+> **Boot sw66 (2026-09-13, later) closes the question from the other side.** The exact redraw of
+> sw64's image stalled at share3's `SHA5` again, so sw64's stall is deterministic and lives in the
+> domain's share-entry execution — but the arena branch that calls `__builtin_capstone_cap_delin`
+> is code-identical between sw64's commit and `dev`, and sw65's image carried it and PASSED share3.
+> So the double delin is not what sw64 hits either. The mechanism this entry names has no silicon
+> evidence for it and one arm against it. §7o.
 >
 > The arm this entry asked for was run: the domain rebuilt with `INTERP_DOMAIN_MTVEC=1`, same
 > REGION_ARENA configuration, 128 MiB arena. The glue packs a trap into the return value with **bits
@@ -3578,7 +3606,7 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 > which says exactly this in its own comment). Two-halves would silently drop the high half — **worse
 > than today's diagnostic**, which is correct and should stand.
 
-### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one`
+### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one — and 2026-09-13 evening: sw64 and sw66 were the SAME fault as sw65/sw67 (S-15), read as a hang only because mtvec was 0`
 
 > **2026-09-09, board lane — the remaining half is RTL-side, ownership moves to the RTL lane.** The
 > firmware half (the trap-vector context slot written by `create_domain`) has been on silicon since

@@ -699,27 +699,35 @@ void domain_main(unsigned *res, unsigned func) {
     else if (shared_region_count == 1)
       hostcall_payload = (volatile char *)res;
 #if defined(SPEEDTEST1_SUBLET) && !defined(CAPSTONE_SPEEDTEST1_BASELINE)
-    /* NO DELIN HERE, and that is the whole difference from the REGION_ARENA case below. --arena
-     * shares REV_BORROWED, so this grant arrives LINEAR, which is exactly what
-     * sqlite3_sublet_grant requires; delinearising it would destroy the property the port exists
-     * to use. The REGION_ARENA branch delins because its grant arrives already-NONLIN from a
-     * REV_SHARED share, where the delin is redundant rather than load-bearing. */
+    /* NO DELIN HERE. --arena shares REV_BORROWED, so this grant arrives LINEAR, which is exactly
+     * what sqlite3_sublet_grant requires; delinearising it would destroy the property the port
+     * exists to use. (The REGION_ARENA branch below does not delin either, since 2026-09-13: its
+     * grant arrives already-NONLIN, and a delin on a NONLIN capability is a fault on silicon.) */
     else if (shared_region_count == 2)
       sqlite3_sublet_grant((void *)res);   /* the pool, linear, into its slot and nowhere else */
     else if (shared_region_count == 3)
       sublet_tables = (void *)res;         /* memsys5's tables, beside the pool */
 #elif defined(CAPSTONE_SPEEDTEST1_REGION_ARENA)
     else if (shared_region_count == 2) {
-      /* DELIN FIRST. The grant arrives LINEAR and a linear capability is CONSUMED BY COPY, so
-       * handing it to memsys5 -- which copies it into mem5.zPool and then derives every allocation
-       * from it -- would destroy the original. sqlite_row5_domain.c:71-75 is the worked example.
+      /* NO DELIN. The grant arrives NONLIN: the host shares the arena REV_SHARED, and the monitor
+       * de-linearises a REV_SHARED grant before the share entry (sbi_capstone.c, `r = __delin(r)`
+       * when the type is LINEAR). This branch used to delin it AGAIN on the strength of a comment
+       * that said "the grant arrives LINEAR" -- and on silicon DELIN of a NONLIN capability is an
+       * UNEXPECTED_CAP_TYPE fault, which QEMU hides (its helper_csdelin returns early on NONLIN).
+       * That fault is S-15, and it explains four boots at once: with mtvec = 0 (M-1) it re-faults
+       * forever and reads as a hang at share3's SHA5 (sw64, sw66); with the glue's trap vector
+       * installed the SHARE ENTRY unwinds and returns (SHA6), the handler writes its packed
+       * mcause/mepc word through the region capability -- i.e. into the arena's first word, where
+       * nobody reads it -- this assignment never happens, sqlite3_config(HEAP, NULL, 0) silently
+       * reverts SQLite to its default allocator, and sqlite3_initialize fails on the port's
+       * NULL-returning malloc (sw65, sw67). A NONLIN capability is copied freely, so memsys5 can
+       * take it as it is.
        *
        * The LENGTH comes from the grant's own bounds, so the domain cannot disagree with the host
-       * about the arena size the way the region-size define once let it. Taken BEFORE the delin,
-       * while the bounds are still on the capability we were handed. */
+       * about the arena size the way the region-size define once let it. */
       unsigned long base = (unsigned long)__builtin_capstone_cap_get_base((void *)res);
       unsigned long end = (unsigned long)__builtin_capstone_cap_get_end((void *)res);
-      sqlite_arena = (unsigned char *)__builtin_capstone_cap_delin((void *)res);
+      sqlite_arena = (unsigned char *)res;
       sqlite_arena_len = (end > base) ? (end - base) : 0UL;
     }
 #endif
