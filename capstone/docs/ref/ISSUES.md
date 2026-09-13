@@ -3117,6 +3117,43 @@ globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
 
+
+> **THE WORKLOAD THIS ENTRY SAYS IS NOT KNOWN, 2026-09-13: nginx's own request traffic crosses the
+> threshold at about a thousand HTTP requests.** This entry asks for "a monitor-side split
+> counter" and records that "nothing currently approaches the threshold on any known workload".
+> The counter is now available from the guest side instead, and the workload does approach it.
+>
+> `capstone/ports/nginx` replays a recording of a real nginx worker under wrk, made by
+> `experiments/a11/nginx` in the paper repository. Only SPLIT and MREV allocate, which this entry
+> establishes and which the correction above does not touch, so the count is `split + mrev`:
+>
+> | replayed pool calls | `split` | `mrev` | allocations | of 65532 |
+> |---:|---:|---:|---:|---:|
+> | 1 000 | 1 012 | 1 144 | 2 156 | 3.3 % |
+> | 10 000 | 10 010 | 12 714 | 22 724 | 34.7 % |
+> | 25 000 | 25 012 | 32 002 | 57 014 | **87.0 %** |
+>
+> 2.28 allocations per pool call, so 65 532 falls at about 28 700 calls. The recording is 28
+> records per HTTP request, which puts the threshold at roughly **1 000 requests**. Beside it,
+> SQLite's entry glue does ~1 060 splits, 1.6 %, which is why six weeks of SQLite work never met
+> this.
+>
+> The consequence is this entry's own: a deliberate stall, SPLIT blocking forever, a wedge with no
+> trap. So a server under the discipline serves about a thousand requests and then stops, without
+> a fault to say why.
+>
+> **What this does NOT establish.** That the port is the cheapest possible in allocations. It takes
+> two handles per pool and carves every object, and a design that shared one handle across a
+> pool's blocks would spend fewer. The number stands as what THIS discipline costs, which is what
+> a paper claims, and not as a floor.
+>
+> **A diagnostic that carries the withdrawn account.** `capstone-qemu/target/riscv/cap_rev_tree.c`
+> prints, at cumulative allocation 1022, that "on silicon (10-bit bump head from 3, no
+> reclamation) this is where the head WRAPS to 0 and starts reusing LIVE ids". That is the account
+> this entry withdrew on 2026-09-10, in a message a reader meets at exactly the moment it will
+> mislead them. It misled this measurement for an afternoon. Not changed here, because the
+> emulator is a shared submodule and the change is a sentence, not a fix.
+
 > **CORRECTED 2026-09-10 (board lane), read against the FLASHED bitstream's own source
 > (`capstone-ariane` `66c4e7517`), not against this entry's cited lines.** Both halves of the
 > original account are false on this RTL, and they fail in opposite directions -- the threshold is
