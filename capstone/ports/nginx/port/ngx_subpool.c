@@ -94,11 +94,17 @@ int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle) {
 }
 
 /* One revocation, and every object the level above carved out of this block dies with it. The
-   block itself comes back whole and goes on its size's free list. */
-void ngx_subpool_release(size_t bytes, sublet_cap *region, sublet_cap *handle) {
+   block itself comes back whole and goes on its size's free list.
+
+   The size is NOT a parameter. A block that has come back is whole again by definition, so it
+   measures itself, and the caller above cannot file a block on the wrong list by passing a size
+   that no longer matches. nginx's pool would otherwise have had to carry the block size along its
+   whole chain to get it back here. */
+void ngx_subpool_release(sublet_cap *region, sublet_cap *handle) {
     sublet_give_to(handle, region);
     ++ngx_subpool_returned;
     --ngx_subpool_live;
+    size_t bytes = (size_t) (sublet_end(region) - sublet_base(region));
     struct free_list *fl = list_for(bytes, 1);
     if (fl == NULL || fl->count == NGX_SUBPOOL_FREE_PER_SIZE) {
         sublet_clear(region);                       /* nowhere to keep it: let it go */

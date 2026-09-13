@@ -5,7 +5,7 @@
  * because a fault inside a patched ngx_palloc.c would be much harder to read back to its cause.
  * The PostgreSQL port tests its own level below the same way and for the same reason.
  *
- * Six scenarios, each a claim the design makes:
+ * Seven scenarios, each a claim the design makes:
  *
  *   1  a block comes out linear, objects carve from it, and what is written through an object
  *      reads back
@@ -17,6 +17,12 @@
  *   4  a different size carves a new block instead of reusing the wrong one
  *   5  a hundred cycles leave nothing outstanding
  *   6  an arena that is spent refuses rather than returning something that looks like a block
+ *   7  a SECOND handle, taken on what is left of a block after something was carved off its
+ *      front, revokes only that remainder, and the first handle still takes the whole block back
+ *      afterwards. nginx's ngx_reset_pool needs exactly this and cannot be written without it:
+ *      the pool header sits at the front of its own block and the caller keeps pointing at it
+ *      across a reset, so a reset that revoked the whole block would invalidate the pointer its
+ *      caller is about to use again
  *
  * A phase counter rides in bits 16..23 of the result. It is not decoration: a build that silently
  * kept an older image, or a run that read an older log, reported a plausible count and no failures
@@ -35,7 +41,7 @@
 
 void ngx_subpool_init(sublet_cap *region);
 int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle);
-void ngx_subpool_release(size_t bytes, sublet_cap *region, sublet_cap *handle);
+void ngx_subpool_release(sublet_cap *region, sublet_cap *handle);
 extern unsigned long ngx_subpool_carved, ngx_subpool_reused, ngx_subpool_returned,
                      ngx_subpool_live;
 
@@ -95,7 +101,7 @@ void domain_main(unsigned *res, unsigned func) {
     CHECK(ngx_subpool_carved == 1 && ngx_subpool_live == 1);
 
     phase = 2;
-    ngx_subpool_release(1024, &r1, &h1);
+    ngx_subpool_release(&r1, &h1);
     CHECK(ngx_subpool_returned == 1 && ngx_subpool_live == 0);
 
     /* The same size again: reused, not carved. And WHOLE, which is the claim the port rests on:
@@ -113,8 +119,8 @@ void domain_main(unsigned *res, unsigned func) {
     CHECK(ngx_subpool_carved == 2);
     CHECK(carve_write_read(&r2, 128, 0x44));
 
-    ngx_subpool_release(4096, &r2, &h2);
-    ngx_subpool_release(1024, &r1, &h1);
+    ngx_subpool_release(&r2, &h2);
+    ngx_subpool_release(&r1, &h1);
     CHECK(ngx_subpool_live == 0);
 
     /* A hundred cycles, nothing outstanding at the end and no new carves after the first of each
@@ -129,7 +135,7 @@ void domain_main(unsigned *res, unsigned func) {
         if (!carve_write_read(&r1, 32, (unsigned char) i)) {
             ++failures;
         }
-        ngx_subpool_release(1024, &r1, &h1);
+        ngx_subpool_release(&r1, &h1);
     }
     ++ran;
     if (ngx_subpool_live != 0 || ngx_subpool_carved != carved_before) {
@@ -141,6 +147,34 @@ void domain_main(unsigned *res, unsigned func) {
     sublet_cap r3, h3;
     CHECK(ngx_subpool_block((size_t) 1 << 30, &r3, &h3) == 0);
     CHECK(ngx_subpool_live == 0);
+
+    /* Two handles on one block, the second junior to the first. Asked of the hardware here rather
+       than assumed in the port, because the port's reset is built on the answer. */
+    phase = 7;
+    sublet_cap blk, outer, inner, hdrslot;
+    CHECK(ngx_subpool_block(2048, &blk, &outer) == 1);
+    unsigned long bb = sublet_base(&blk), be = sublet_end(&blk);
+
+    sublet_carve(&blk, bb + 64, &hdrslot);          /* the pool header, off the front */
+    unsigned char *hdr = (unsigned char *) sublet_take(&hdrslot);
+    CHECK(hdr != NULL);
+    hdr[0] = 0x5A;
+
+    sublet_handle(&blk, &inner);                    /* senior to what follows, junior to outer */
+    CHECK(carve_write_read(&blk, 128, 0x66));
+    CHECK(sublet_base(&blk) == bb + 64 + 128);
+
+    sublet_give_to(&inner, &blk);                   /* a reset */
+    CHECK(sublet_base(&blk) == bb + 64 && sublet_end(&blk) == be);
+    CHECK(hdr[0] == 0x5A);                          /* the header outlived the reset */
+
+    sublet_give_to(&outer, &blk);                   /* a destroy */
+    CHECK(sublet_base(&blk) == bb && sublet_end(&blk) == be);
+
+    /* Taken back by hand rather than through release, which has already had its give_to done, so
+       this block is dropped and the live counter is expected to still show it. */
+    sublet_clear(&blk);
+    CHECK(ngx_subpool_live == 1);
 
     NGX_DOM_MARK(((phase & 0xFF) << 16) | ((ran & 0xFF) << 8) | (failures & 0xFF));
 }
