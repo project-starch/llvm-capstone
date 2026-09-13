@@ -133,19 +133,39 @@ MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
 # MPY_FEATURE_LEVEL -- a name for a set of defines, because the interesting ones are not
 # all the ROM level. mpconfigport.h starts from "nothing optional is enabled" so that a test
 # failing for want of a builtin says nothing about capabilities, and that stays the default.
-# The levels below are what the upstream test set answers to, measured in a domain, 421
-# tests, every count from one round with no restart:
+# The levels below are what the upstream test set answers to, measured in a domain, one round
+# each with no restart, scored with output capture so a test that declares itself inapplicable is
+# not read as a failure. The corpus is NOT fixed across the four: the selection asks this build
+# which modules it registers, so a higher level admits more tests as well as passing more.
 #
-#   minimum   270 pass  151 fail  0 fault      the default, as mpconfigport.h ships
-#   core      349 pass   72 fail  0 fault      MICROPY_CONFIG_ROM_LEVEL=CORE_FEATURES
-#   extra     417 pass    4 fail  0 fault      + EXTRA_FEATURES and mpz long integers
-#   full      420 pass    1 fail  0 fault      + the three remaining feature switches
+#   level     selected  pass  fail  self-skip  fault
+#   minimum      495     303   118      73       1
+#   core         545     425    56      64       0
+#   extra        554     543     1      10       0
+#   full         554     546     1       7       0
 #
-# The four failures at `extra` are not one thing: three are single switches that upstream
-# gates at EVERYTHING or FULL_FEATURES, and `full` turns exactly those three on. The fourth,
-# fun_code_full.py, needs MICROPY_PY_BUILTINS_CODE at FULL, which is reachable only through
-# MICROPY_PY_SYS_SETTRACE -- and that is NOT offered here, deliberately. Turning it on builds
-# and then takes the suite to 312 pass with 89 FAULTS, 85 of them at one site,
+# tests/basics holds 576. The 22 the selection never offers at any level are 6 that need weakref
+# (upstream gates it at EVERYTHING and it wants a GC side table this port does not build), 6 that
+# need a filesystem or a module on disk, 3 unittest, 2 uctypes, 2 whose .exp is a regex template
+# with no hashable expectation, and one each for machine, traceback and threads.
+#
+# THE ONE FAIL is the same test at both top levels, string_tstring_errors1.py, and it is one line
+# of sixty. The test compiles a malformed f-string only when sys.implementation._mpy exists, and
+# it does not here because the port does not load precompiled bytecode. Defining _mpy anyway would
+# make the line appear and the statement behind it false.
+#
+# THE ONE FAULT is at minimum only, self_type_check.py, and it is the platform working.
+# MICROPY_BUILTIN_METHOD_CHECK_SELF_ARG is off below CORE_FEATURES, and upstream's own comment on
+# that switch reads "without this check such calls will have undefined behaviour (usually
+# segfault) if the first argument is the wrong type". The test then calls list.append(1) on
+# purpose. mp_obj_list_append+0x38 is `ld a0, 0x18(a1)` with a1 holding the integer 1, so the
+# domain halts with cause 24 where a conventional machine reads address 0x18 and carries on.
+#
+# Three of the ten self-skips at `extra` are single switches that upstream gates at EVERYTHING or
+# FULL_FEATURES, and `full` turns exactly those three on. Of the seven left at `full`, two
+# (fun_code_full.py, fun_code_colines.py) need MICROPY_PY_BUILTINS_CODE at FULL, which is
+# reachable only through MICROPY_PY_SYS_SETTRACE -- and that is NOT offered here, deliberately.
+# Turning it on builds and then takes the suite to 312 pass with 89 FAULTS, 85 of them at one site,
 # mp_emit_common_populate_module_context+0x1b0, where the compiler fills a module's constant
 # table. That is a capability defect in a code path only settrace reaches, and it wants the
 # same treatment S-14 got rather than a knob that hands someone 89 faults.
@@ -221,9 +241,26 @@ if [[ -n $MPY_TESTS ]]; then
   if [[ -n ${MPY_TEST_EXPECT_TIMEOUT:-} ]]; then
     TEST_GEN_EXTRA+=(--expect-timeout "$MPY_TEST_EXPECT_TIMEOUT")
   fi
+  # WHICH MODULES THE SELECTION MAY ASSUME comes from the header MicroPython's own machinery just
+  # generated for this configuration, not from a list kept by hand here. moduledefs.h holds exactly
+  # the modules this image registers, so raising MPY_FEATURE_LEVEL widens the corpus by itself and
+  # a module that silently leaves the build cannot leave a test behind that now fails to import.
+  MODULEDEFS="$MPY_PORT_DIR/build/genhdr/moduledefs.h"
+  [[ -f $MODULEDEFS ]] || { echo "no $MODULEDEFS -- header generation did not run" >&2; exit 1; }
+  while read -r mod; do
+    TEST_GEN_EXTRA+=(--have-module "$mod")
+  done < <(grep -oE 'MP_QSTR_[a-zA-Z_]+' "$MODULEDEFS" | sed 's/MP_QSTR_//' | sort -u)
+  # uctypes is registered and does not work: its contract is addressof() -> int -> pointer, and a
+  # 64-bit integer cannot carry a 128-bit capability, so every reconstructed pointer arrives
+  # untagged. See the note in port/mpconfigport.h for why it is nevertheless left compiled in.
+  TEST_GEN_EXTRA+=(--exclude-module uctypes)
+  if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
+    TEST_GEN_EXTRA+=(--have-float)
+  fi
   python3 "$SCRIPT_DIR/tools/gen-test-table.py" "$MPY_SRC_DIR/tests/$MPY_TEST_BASE_DIR" \
       "$OBJ_DIR/mpy_tests.h" ${MPY_TESTS:+--limit ${MPY_TESTS/all/0}} \
       --offset "$MPY_TEST_OFFSET" \
+      --max-bytes "${MPY_TEST_MAX_BYTES:-0}" \
       "${TEST_GEN_EXTRA[@]}"
 fi
 
