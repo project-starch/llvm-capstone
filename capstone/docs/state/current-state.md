@@ -5,7 +5,7 @@ Minimal snapshot. Read first in every session.
 ## 2026-09-13 (evening) — CURRENT
 
 > sw64's stall reproduces on an exact redraw and is in the domain's share entry; the mtvec pair
-> is CONFIRMED end to end (sw68 fix + sw69 mcause-27 readback); nine collaborator PRs landed. The morning block below
+> is CONFIRMED end to end (sw68 fix + sw69 mcause-27 readback); ten collaborator PRs landed (all but capstone-qemu #3). The morning block below
 > stands for the bridge and R-30/R-31/R-33.
 
 * **sw66 reproduced sw64's stall exactly** — `F2/share3 → SHA5`, no `SHA6`, no `G/enter` — on the
@@ -36,7 +36,10 @@ Minimal snapshot. Read first in every session.
   PASS=4). **Deferred:** the FPGA-side #3 bake — `build-ladder-base-fpga.sh` fails under GCC 12.3
   (`-fno-common`, `bp_slot`/`g`), so the `caplifive-system` copy was reverted to a consistent pre-#3
   state; finish by fixing that build + rebuilding hosts. **Held:** #14 (lit test tautological; real
-  gate is capinit-scan on the large MicroPython image), capstone-qemu #3 (collaborator rebase).
+  gate is capinit-scan on the large MicroPython image) — LANDED d616ea4e: rebuild-and-diff shows the
+  160-test image differs by exactly 17 instructions, all `sd ra`→`stc ra`/`ld ra`→`ldc ra` width swaps
+  (13 truncated capability spills fixed); claim-auditor SUPPORTED; lit 93/93, authority 32/32,
+  sqlite-silicon + MicroPython PASS on the rebuilt toolchain. Only capstone-qemu #3 remains (rebase).
 * **The toolchain binary is STALE** per `toolchain-fresh` (now that #15 lets it say so): the
   `opt`/`llvm-symbolizer` targets were never built. Rebuild at #14's step, never during a suite.
 

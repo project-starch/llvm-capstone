@@ -1,4 +1,4 @@
-## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); nine of eleven collaborator PRs landed.**
+## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3).**
 
 > **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
 > control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
@@ -52,12 +52,19 @@
 > ff, bake, `.ko` by content, and a control boot with the fix image (not lpc/k800 until lpc builds).
 > The parent gitlinks are intentionally NOT bumped, matching the un-baked image.
 >
-> **Held:** #14 last (needs a toolchain rebuild; its lit test is tautological — the current unpatched
-> llc already emits `stc ra 16-byte` for the allocator spill, so patched==unpatched for that shape;
-> the real gate is `capinit-scan` on the LARGE MicroPython image, see below); capstone-qemu #3 for a
-> collaborator rebase (two of four commits already on our branch; conflicts would revert
-> `cabc953e58`). Hand-off note under `/tmp/capstone/` carries the skew, over-declaration, #14 and lpc
-> findings.
+> **#14 LANDED** (merge `d616ea4e` + a follow-up correcting the lit test's claim). The tautology was
+> a STALE-BINARY artifact: the checkout `llc` was 73 objects behind source, so every "unpatched llc"
+> read was about the wrong compiler. Rebuilt pre-fix and post-fix and diffed: the whole 160-test image
+> differs by EXACTLY 17 instructions, every one an in-place `sd ra`→`stc ra` / `ld ra`→`ldc ra` width
+> swap in `__capstone_cap_init` — 13 capability spills (each preceded by `ldc ra, N(gp)`) truncated
+> pre-fix, correct post-fix, plus the reloads; the 1 surviving `sd ra` is the prologue save. Neither
+> the lit test (byte-identical both ways) nor `capinit-scan` (flags scalar bases, not truncated spills)
+> gates it; the direct gate is the `sd ra` spill count, 14→1. claim-auditor SUPPORTED (refuted
+> incidental-shift, wrong-widen and wrong-truncate). Regression on the post-fix toolchain, artifacts
+> saved: lit 93/93 (1 XFAIL), authority 32/32 + sentinel, sqlite-silicon PASS, MicroPython PASS=4/0.
+> **Only capstone-qemu #3 remains** (collaborator rebase; two of four commits already on our branch;
+> conflicts would revert `cabc953e58`). Hand-off note under `/tmp/capstone/` carries the skew,
+> over-declaration, #14, lpc and default-build findings.
 
 ### Open, carried forward explicitly
 
