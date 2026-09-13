@@ -86,7 +86,10 @@ Selector `:0` returns before any ladder code runs, so it isolates entry from eve
 Images are **not committed**: each is ~1.5 MB, and the package policy in `../README.md` is
 that multi-MB SQLite builds ship as source plus recipe. `src/` carries the pieces the stall
 actually lives in — the interp glue that builds the cap table, its generator, the domain
-header and the controller.
+header and the controller. (`src/ladder_perf_ctl.c` was grown 2026-09-14 to the domain-loader
+module's post-#2/#3 `ioctl_dom_create_args` — two zeroed fields; on the FPGA image since boot sw71 —
+because the struct's size is part of the ioctl number; a controller built from the old source prints
+`create_dom failed` on that module and creates nothing.)
 
 ```bash
 source capstone/tests/capstone-test-env.sh

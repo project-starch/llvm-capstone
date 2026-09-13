@@ -112,12 +112,24 @@ tar xzf capstone-lsu-hazard-repro.tar.gz && cd capstone-lsu-hazard-repro
 # One image per clean boot (a second domain at the same entry VA within one boot
 # hangs regardless, unrelated to this).
 #   transfer images/ladder_perf_ctl and images/rawhazard5.dom to the target
-#   ./ladder_perf_ctl rawhazard5.dom
+#   ./ladder_perf_ctl rawhazard5 rawhazard5.dom     # <name> <rung.dom>; one argument prints usage and exits 2
 ```
 
 It prints a `DEBUG` line of raw slot values. Correct hardware gives `5 5 5 5 5`; we see
 `5 5 1 1 1` — the first two are the single-ingredient controls, the last three are the failing
 combinations.
+
+**Controller and the domain-loader module (2026-09-14).** `images/ladder_perf_ctl` was built against
+the module's ORIGINAL `ioctl_dom_create_args`. Since caplifive-buildroot #2/#3 (module `d04bd83`,
+on the FPGA image since boot sw71) the struct carries two more fields and its size is part of the
+ioctl number, so on that module the prebuilt controller prints `create_dom failed` (the kernel logs
+`Unrecognised IOCTL command`) and creates nothing — a loud failure, never a wrong reading.
+`src/ladder_perf_ctl.c` is grown to the new struct (the two fields zeroed: the reproducer's domains
+declare nothing, so the module sizes them by the historical rule and the images are unchanged);
+rebuild it with `build-ladder-fpga.sh`'s controller line (buildroot cross-gcc, `-Os -static -nostdlib
+-ffreestanding -march=rv64imac -mabi=lp64`) for a #3 module, or use the prebuilt binary on a pre-#3
+one. Verified as a pair on QEMU against the #3 module: the prebuilt binary `create_dom failed`; the
+rebuilt one runs the image (R01: `RESULT rawhazard5 retval=48879`, slots `5 5 5 5 5`).
 
 `rawhazard6.dom` is the seven-workaround sweep and `rawhazard7.dom` the pointer-walk variants, if
 the detail is useful. `src/` has everything needed to rebuild rather than trust our binaries. The

@@ -84,9 +84,21 @@ tar xzf capstone-delin-repro.tar.gz && cd capstone-delin-repro
 # One image per clean boot (a second domain at the same entry VA within one boot
 # hangs regardless, unrelated to this).
 #   transfer images/ladder_perf_ctl and images/<delin|nop>.dom to the target
-#   ./ladder_perf_ctl <image>.dom
+#   ./ladder_perf_ctl <name> <image>.dom              # <name> <rung.dom>; one argument prints usage and exits 2
 # nop.dom prints a result line with retval=9; delin.dom prints nothing.
 ```
+
+**Controller and the domain-loader module (2026-09-14).** `images/ladder_perf_ctl` was built against
+the module's ORIGINAL `ioctl_dom_create_args`. Since caplifive-buildroot #2/#3 (module `d04bd83`,
+on the FPGA image since boot sw71) the struct carries two more fields and its size is part of the
+ioctl number, so on that module the prebuilt controller prints `create_dom failed` (the kernel logs
+`Unrecognised IOCTL command`) and creates nothing — a loud failure, never a wrong reading.
+`src/ladder_perf_ctl.c` is grown to the new struct (the two fields zeroed: the reproducer's domains
+declare nothing, so the module sizes them by the historical rule and the images are unchanged);
+rebuild it with `build-ladder-fpga.sh`'s controller line (buildroot cross-gcc, `-Os -static -nostdlib
+-ffreestanding -march=rv64imac -mabi=lp64`) for a #3 module, or use the prebuilt binary on a pre-#3
+one. Verified as a pair on QEMU against the #3 module: the prebuilt binary `create_dom failed`; the
+rebuilt one runs the image (R01: `RESULT rawhazard5 retval=48879`, slots `5 5 5 5 5`).
 
 `src/` has the full build inputs if you'd rather rebuild than trust our binaries. The domain is
 built `-O0`, 32 KiB code window, `-capstone-gp-captable`, shrink off, `-fno-jump-tables`, `+m`.

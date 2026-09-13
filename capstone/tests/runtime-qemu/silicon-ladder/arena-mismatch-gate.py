@@ -16,6 +16,14 @@ THREE NUMBERS, AND THEY MUST ALL AGREE:
   3. `HEAP <N>` in the transcript                    (what the domain actually used)
   4. `HEAP <N>` in the BASELINE arm's transcript     (--baseline-log; the other half)
 
+AND THE SIZE ITSELF MUST BE REPRESENTABLE. The module rounds a region request UP to the
+compressed-bounds granule (modcapstone/module/capstone.c: capstone_repr_granule, R-33), so an
+arena of 1,419,584 bytes is created at 1,421,312 and logged as "not representable"; the
+domain then reports a HEAP the host never asked for, hours in. --expect is checked against
+the module's rule before anything else (a power of two always passes; a granule multiple such
+as 786,432 = 3 x 2^18 passes; 1,419,584 is refused -- that value is the R-33 rounding control
+of boot sw72 and must stay refusable here).
+
 The fourth is the one that corrupts a RATIO rather than crashing a run. The two arms read
 their size from DIFFERENT variables -- the domain from SPEEDTEST1_ARENA_SIZE, the baseline
 from SQLITE_HEAP_SIZE, which the runner pins to the geometry default before the domain's is
@@ -96,6 +104,18 @@ def static_sites(dis: str, expect: int):
     return [ln.strip() for ln in dis.splitlines() if pat.search(ln)]
 
 
+def repr_granule(n: int) -> int:
+    """The module's rule, mirrored: modcapstone/module/capstone.c capstone_repr_granule().
+    Below 4096 the encoder takes its exact branch (granule 1); above, 2^(ilog2(n) - 9)."""
+    if n < 4096:
+        return 1
+    return 1 << (n.bit_length() - 1 - 9)
+
+
+def representable(n: int) -> bool:
+    return n > 0 and n % repr_granule(n) == 0
+
+
 MARKERS = {
     "arena_bytes": re.compile(rb"SQ: arena_bytes=(\d+)"),
     "HEAP":        re.compile(rb"\bHEAP (\d+)"),
@@ -162,6 +182,15 @@ def log_values(log: Path):
 
 def run(expect, host, log, objdump, baseline_log=None, out=sys.stdout):
     problems, checked, tool_faults = [], [], 0
+    if not representable(expect):
+        g = repr_granule(expect)
+        rounded = -(-expect // g) * g
+        problems.append(f"--expect {expect:,} is not representable: the module's granule at this "
+                        f"size is {g:,} and the remainder {expect % g:,}; the module would create "
+                        f"{rounded:,} and log it as not representable (R-33), so no arm can report "
+                        f"{expect:,} back")
+    else:
+        checked.append(f"{expect:,} is representable (granule {repr_granule(expect):,})")
     if host is not None:
         try:
             sites = static_sites(disassemble(Path(host), objdump), expect)
@@ -246,6 +275,11 @@ def selftest(host, objdump):
         ("an empty transcript is an ERROR, not a zero",  b"",  134217728, 1),
         ("the right transcript against the wrong --expect",
          good, 6291456, 1),
+        ("a non-representable arena is BLOCKED even when every number agrees "
+         "(1,419,584: sw72's R-33 rounding control)",
+         b"SQ: arena_bytes=1419584\nHEAP 1419584\n",           1419584,   1),
+        ("a representable non-power-of-two passes (786,432 = 3 x 2^18, granule 2^10)",
+         b"SQ: arena_bytes=786432\nHEAP 786432\n",             786432,    0),
     ]
     missing_tool = [("a missing disassembler is CANNOT CHECK (2), not BLOCKED (1)", 2)]
     ok = True
