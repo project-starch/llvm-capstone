@@ -51,6 +51,10 @@ MPY_TEST_BASE_DIR=${MPY_TEST_BASE_DIR:-basics}
 # knob rather than a default because it adds a global and five increments, so an image built
 # without it is byte for byte the image from before the counters existed.
 MPY_GC_STATS=${MPY_GC_STATS:-}
+# MPY_SUBLET=1 puts the collector's heap under the discipline. Built in steps, each of which
+# leaves the suite where it found it until the step that cannot: storage, then taking, then
+# giving. Needs capstone/sublet/sublet.h on the include path.
+MPY_SUBLET=${MPY_SUBLET:-}
 # MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
 # generation and the amalgam cannot disagree) plus lib/oofatfs. Needed only by MPY-T14 and
 # MPY-T15, whose reproductions define their block device in PYTHON, so this needs no host
@@ -225,6 +229,7 @@ SILICON=(-mllvm -capstone-gp-captable
          ${MPY_STAGE:+-DMPY_STAGE=$MPY_STAGE}
          ${MPY_TESTS:+-DMPY_TEST_RUNNER}
          ${MPY_GC_STATS:+-DMPY_GC_STATS=1}
+         ${MPY_SUBLET:+-DMPY_SUBLET=1 -I$SCRIPT_DIR/../../sublet}
          # Extra -D flags for one build, word-split on purpose. Without this a
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the

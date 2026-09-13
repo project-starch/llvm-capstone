@@ -28,6 +28,22 @@
 #endif
 static unsigned char mpy_heap[MPY_HEAP_SIZE] __attribute__((aligned(32)));
 
+#if MPY_SUBLET
+/* One revocation handle per block of the pool, beside the heap rather than inside it, so that the
+   arm with the discipline and the arm without collect the same number of bytes. The pool is never
+   larger than the heap, so a slot per heap block is always enough, and the static assertion says
+   so where both numbers are constants: gc_init only asserts it, because at that point there is no
+   handler to raise into. */
+#define MPY_GC_BLOCK_BYTES (4 * MP_BYTES_PER_OBJ_WORD)
+sublet_cap mpy_gc_handles_storage[MPY_HEAP_SIZE / MPY_GC_BLOCK_BYTES];
+sublet_cap *mpy_gc_handles = mpy_gc_handles_storage;
+size_t mpy_gc_handles_len = MPY_HEAP_SIZE / MPY_GC_BLOCK_BYTES;
+/* MicroPython's MP_STATIC_ASSERT expands to an expression, so it cannot stand at file scope. The
+   typedef form can, and its name is what the compiler prints when the array size goes negative. */
+typedef char mpy_gc_handles_cover_the_heap[
+    (MPY_HEAP_SIZE % MPY_GC_BLOCK_BYTES == 0) ? 1 : -1];
+#endif
+
 /* ---- output: the hostcall shared region, same shape as benchmarks/sqlite */
 #define MPY_DPI_REGION_SHARE 1U
 #define MPY_TEST_START_MAGIC 0x4d50595354415254ULL /* "MPYSTART" */
