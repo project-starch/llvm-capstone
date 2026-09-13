@@ -48,6 +48,15 @@ if [ "${NGX_SUBLET:-0}" = 1 ]; then
       || { echo "patch 0002 failed" >&2; exit 1; }
     CFLAGS_SUBLET+=(-DNGX_SUBLET_BLOCK=1)
   fi
+  # An ABLATION and not a port. It removes the inner handle, so a reset cannot be expressed at
+  # all, and it exists only to price that handle against a workload that never resets. Its patches
+  # are named apart from the numbered ones so that port-effort does not count them.
+  if [ "${NGX_ABLATE_INNER:-0}" = 1 ]; then
+    if [ "${NGX_SUBLET_BLOCK:-0}" = 1 ]; then abl=weak; else abl=strong; fi
+    patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/ablation-no-inner-handle-$abl.patch" \
+      || { echo "ablation patch failed" >&2; exit 1; }
+    CFLAGS_SUBLET+=(-DNGX_ABLATE_INNER=1)
+  fi
 else
   CFLAGS_SUBLET=()
 fi

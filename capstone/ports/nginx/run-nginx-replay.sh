@@ -22,7 +22,7 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 SHARE=${SHARE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share}; mkdir -p "$SHARE"
 ARENA=${NGX_ARENA_BYTES:-$((1<<20))}
 if [ "${NGX_SUBLET:-0}" = 1 ]; then NGX_ARENA_LINEAR=1; fi
-export NGX_SUBLET NGX_ARENA_LINEAR NGX_SUBLET_BLOCK
+export NGX_SUBLET NGX_ARENA_LINEAR NGX_SUBLET_BLOCK NGX_ABLATE_INNER
 
 # Whatever a previous run left, BEFORE the build. A build that fails must not leave a stale image
 # for the boot to pick up, and one that writes a different name must not leave the old one to be
@@ -61,6 +61,9 @@ val() { grep -m1 "^replay $1 " "$OUT_DIR/boot.log" | awk '{print $NF}'; }
 fail=0
 [ "$(val failures)" = 0 ] || { echo "failures: $(val failures)" >&2; fail=1; }
 [ "$(val tables)" = 0 ]   || { echo "an identity table ran out, so the run means nothing" >&2; fail=1; }
+# The ablation is valid only for a workload that never resets, checked here rather than
+# assumed from the op census.
+[ "$(val noreset)" = 0 ]  || { echo "the ablation met $(val noreset) resets it cannot express" >&2; fail=1; }
 [ "$(val level0)" = 0 ]   || { echo "the level below still holds $(val level0)" >&2; fail=1; }
 ex=$(grep -m1 '^replay executed' "$OUT_DIR/boot.log" | awk '{print $NF}')
 rc=$(grep -m1 '^replay records' "$OUT_DIR/boot.log" | awk '{print $NF}')

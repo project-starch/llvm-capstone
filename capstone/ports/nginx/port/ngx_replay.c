@@ -34,6 +34,9 @@ void pg_level0_init(void *region, size_t bytes);
 #endif
 
 extern unsigned long ngx_level0_live;
+#ifdef NGX_ABLATE_INNER
+extern ngx_uint_t ngx_pool_reset_unsupported;
+#endif
 
 #define NGX_DOM_MARK(n) do { *res = 0x4E000000u | ((unsigned) (n) & 0x00FFFFFFu); return; } while (0)
 
@@ -64,6 +67,7 @@ struct ngx_replay_out {
        allocator of about a thousand with no reclamation, so these are not curiosities: they say
        whether a workload fits on the silicon at all, and SQLite's 183 carves did. */
     uint64_t n_split, n_mrev, n_delin, n_revoke, n_init;
+    uint64_t reset_unsupported;  /* the ablation met a reset, so the run means nothing */
 };
 
 /* ---- identities ----------------------------------------------------------
@@ -382,6 +386,9 @@ void domain_main(unsigned *res, unsigned func) {
     out->level0_live = ngx_level0_live;
 #endif
     out->tables_full = tables_full;
+#ifdef NGX_ABLATE_INNER
+    out->reset_unsupported = ngx_pool_reset_unsupported;
+#endif
 #ifdef NGX_SUBLET
     out->n_split = sublet_stats.split;
     out->n_mrev = sublet_stats.mrev;
