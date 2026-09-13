@@ -74,6 +74,14 @@ unsigned char mpy_gc_atb_storage[MPY_GC_BLOCKS / 4 + 1];
 unsigned char *mpy_gc_atb = mpy_gc_atb_storage;
 size_t mpy_gc_atb_len = sizeof(mpy_gc_atb_storage);
 typedef char mpy_gc_atb_covers_the_heap[(MPY_GC_BLOCKS % 4 == 0) ? 1 : -1];
+
+#if MPY_GC_NO_COALESCE
+/* One bit a block: does a region begin here. See the note in py/gc.h for what this models and why
+   it is worth answering before any capability work. */
+unsigned char mpy_gc_rstart_storage[(MPY_GC_BLOCKS + 7) / 8];
+unsigned char *mpy_gc_rstart = mpy_gc_rstart_storage;
+size_t mpy_gc_rstart_len = sizeof(mpy_gc_rstart_storage);
+#endif
 #endif
 
 /* ---- output: the hostcall shared region, same shape as benchmarks/sqlite */

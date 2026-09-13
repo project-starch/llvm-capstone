@@ -61,6 +61,11 @@ MPY_SUBLET=${MPY_SUBLET:-}
 # static heap can never be revocable. It also takes 384 KiB out of dom_data, so the image's
 # declared requirement shrinks by that much.
 MPY_HEAP_FROM_REGION=${MPY_HEAP_FROM_REGION:-}
+# MPY_GC_NO_COALESCE=1 models the one thing the discipline imposes on this allocator, with no
+# capability work: a freed run is reusable only inside the region it was carved from. It answers
+# on its own whether the collector survives that, which decides whether the port is a week of work
+# or a finding. Needs MPY_HEAP_FROM_REGION for the block count it sizes its bit table from.
+MPY_GC_NO_COALESCE=${MPY_GC_NO_COALESCE:-}
 # MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
 # generation and the amalgam cannot disagree) plus lib/oofatfs. Needed only by MPY-T14 and
 # MPY-T15, whose reproductions define their block device in PYTHON, so this needs no host
@@ -237,6 +242,7 @@ SILICON=(-mllvm -capstone-gp-captable
          ${MPY_GC_STATS:+-DMPY_GC_STATS=1}
          ${MPY_SUBLET:+-DMPY_SUBLET=1 -I$SCRIPT_DIR/../../sublet}
          ${MPY_HEAP_FROM_REGION:+-DMPY_HEAP_FROM_REGION=1}
+         ${MPY_GC_NO_COALESCE:+-DMPY_GC_NO_COALESCE=1}
          # Extra -D flags for one build, word-split on purpose. Without this a
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the
