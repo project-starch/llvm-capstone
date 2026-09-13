@@ -180,6 +180,28 @@ static unsigned mpy_test_idx;
 
 static void mpy_run_one_test(unsigned *res) {
     if (mpy_test_idx >= MPY_TEST_COUNT) {
+        #if MPY_GC_STATS
+        /* The sentinel call is the readout: the runner asks for one call past the last test and
+           the guest dumps its output like any other, so the counters land in the round log without
+           a channel of their own and without disturbing a scored test's expectation. */
+        /* ONE VALUE PER CALL, deliberately. The first version passed all nine to a single
+           mp_printf and the last fields came back wrong: live_objects read smaller than
+           max_live_objects, which cannot happen because one is the sum of what the other is the
+           maximum of, and the final field came back as an address. Whatever the variadic path
+           does with nine 8-byte arguments under this ABI, an instrument must not depend on it. */
+        const mpy_gc_stats_t *g = mpy_gc_stats();
+        mpy_cap_len = 0;
+        mp_printf(&mp_plat_print, "GCSTATS");
+        mp_printf(&mp_plat_print, " alloc_calls=%lu", g->alloc_calls);
+        mp_printf(&mp_plat_print, " alloc_blocks=%lu", g->alloc_blocks);
+        mp_printf(&mp_plat_print, " cycles=%lu", g->cycles);
+        mp_printf(&mp_plat_print, " swept_objects=%lu", g->swept_objects);
+        mp_printf(&mp_plat_print, " swept_blocks=%lu", g->swept_blocks);
+        mp_printf(&mp_plat_print, " live_objects=%lu", g->live_objects);
+        mp_printf(&mp_plat_print, " live_blocks=%lu", g->live_blocks);
+        mp_printf(&mp_plat_print, " max_live_objects=%lu", g->max_live_objects);
+        mp_printf(&mp_plat_print, " max_swept_objects=%lu\n", g->max_swept_objects);
+        #endif
         *res = 0xFFFFFFFFu;              /* past the end: the driver asked for too many calls */
         return;
     }
