@@ -11,26 +11,75 @@ EXPECTED OUTPUT comes from the test's own .exp file when it has one, and otherwi
 the test under the HOST python3. A test whose expectation cannot be produced is SKIPPED with its
 reason recorded, never silently included -- an unverifiable pass is worse than an absent test.
 
-SELECTION is deliberately narrow and stated in the generated header: tests that need float,
-imports, a filesystem or threading are excluded, because this port is built without them. The
-exclusion list is emitted alongside the table so a coverage number can never be read as if it
-covered the whole suite.
+SELECTION is stated in the generated header, and it follows what the build actually enables.
+A test is excluded when it imports a module this build does not have, when it needs a construct
+the port does not compile, or when no expectation can be produced. The caller names the modules
+it built in with --have-module, so raising the feature level widens the corpus by itself instead
+of leaving the selection behind. The exclusion list is emitted alongside the table so a coverage
+number can never be read as if it covered the whole suite.
 """
 import argparse
+import ast
 import base64
 import pathlib
+import re
 import subprocess
 import sys
 
 # Constructs this port does not build. Matching is on the source text, which is crude but
 # fails SAFE: a test wrongly excluded shows up as a smaller corpus, never as a false pass.
 UNSUPPORTED = [
-    ("float", ("float(", "1.0", "0.5", "math.", "complex(")),
-    ("import", ("import ",)),
-    ("filesystem", ("open(", "os.", "vfs")),
     ("thread", ("_thread",)),
     ("native emitter", ("@micropython.native", "@micropython.viper", "@micropython.asm")),
+    ("a filesystem", ("open(", "vfs")),
 ]
+
+# Only consulted when the build did not pass --have-float.
+FLOAT_PATTERNS = ("float(", "1.0", "0.5", "math.", "complex(")
+
+# Reachable without the caller saying so: the module every test already runs in.
+ALWAYS_AVAILABLE = {"__main__"}
+
+FROM_RE = re.compile(r"^[ \t]*from[ \t]+([\w.]+)[ \t]+import", re.M)
+IMPORT_RE = re.compile(r"^[ \t]*import[ \t]+([^\n#]+)", re.M)
+
+
+def imported_modules(src: str) -> set:
+    """Top-level module names a test imports.
+
+    Parsed, not grepped. A substring match on "import " throws away every test that does nothing
+    worse than import sys, and 73 of the 83 excluded that way import only modules this port has
+    built in. A test whose syntax this host python cannot parse falls back to the line-anchored
+    regex, which sees the same imports for every shape the suite uses.
+    """
+    mods = set()
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        for m in FROM_RE.finditer(src):
+            mods.add(m.group(1).split(".")[0])
+        for m in IMPORT_RE.finditer(src):
+            for part in m.group(1).split(","):
+                part = part.strip().split(" as ")[0].strip()
+                if part:
+                    mods.add(part.split(".")[0])
+        return mods
+    # A branch on sys.implementation is CPython's path and MicroPython never reaches it. Three
+    # async tests import `types` there and nowhere else, and dropping them for a module the
+    # target never asks for is a skip with nothing behind it.
+    cpython_only = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and "sys.implementation" in ast.unparse(node.test):
+            cpython_only.update(id(sub) for sub in ast.walk(node))
+    for node in ast.walk(tree):
+        if id(node) in cpython_only:
+            continue
+        if isinstance(node, ast.Import):
+            mods |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            mods.add(node.module.split(".")[0])
+    return mods
+
 
 # MicroPython's runner treats these .exp files as line-oriented regex templates rather than
 # literal output. Preserve the template in the expected table so the resumable runner can apply
@@ -97,7 +146,14 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="0 = no limit")
     ap.add_argument("--offset", type=int, default=0,
                     help="skip this many sorted candidates before applying --limit")
-    ap.add_argument("--max-bytes", type=int, default=1500, help="skip tests larger than this")
+    ap.add_argument("--max-bytes", type=int, default=1500,
+                    help="skip tests larger than this; 0 = no limit")
+    ap.add_argument("--have-module", action="append", default=[],
+                    help="a module this build has compiled in (repeatable)")
+    ap.add_argument("--exclude-module", action="append", default=[],
+                    help="a module the build registers but which cannot work here (repeatable)")
+    ap.add_argument("--have-float", action="store_true",
+                    help="this build has float objects, so float tests are candidates")
     ap.add_argument("--expect-timeout", type=float, default=20,
                     help="seconds allowed for the host-Python oracle")
     ap.add_argument("--include-unsupported", action="store_true",
@@ -117,13 +173,22 @@ def main():
         sys.exit("--offset must be non-negative")
     candidates = candidates[args.offset:]
 
+    excluded = set(args.exclude_module)
+    have = (ALWAYS_AVAILABLE | set(args.have_module)) - excluded
     kept, skipped = [], []
     for label, t in candidates:
         src = t.read_text(encoding="utf8", errors="replace")
-        if not args.include_unsupported and len(src) > args.max_bytes:
+        if not args.include_unsupported and args.max_bytes and len(src) > args.max_bytes:
             skipped.append((label, f"larger than {args.max_bytes} B"))
             continue
+        missing = sorted(imported_modules(src) - have)
+        if missing and not args.include_unsupported:
+            how = ", ".join(m + " (excluded)" if m in excluded else m for m in missing)
+            skipped.append((label, "needs module " + how))
+            continue
         why = next((name for name, pats in UNSUPPORTED if any(p in src for p in pats)), None)
+        if why is None and not args.have_float and any(p in src for p in FLOAT_PATTERNS):
+            why = "float"
         if why and not args.include_unsupported:
             skipped.append((label, f"needs {why}"))
             continue
@@ -138,6 +203,11 @@ def main():
     with open(args.out_header, "w") as f:
         f.write("/* GENERATED by tools/gen-test-table.py -- do not edit.\n")
         f.write(f" * {len(kept)} tests kept, {len(skipped)} skipped.\n")
+        f.write(f" * Modules the selection was told this build has: {' '.join(sorted(have)) or 'none'}\n")
+        if excluded:
+            f.write(f" * Registered but excluded: {' '.join(sorted(excluded))}\n")
+        f.write(f" * Size limit: {args.max_bytes or 'none'}; float tests: "
+                f"{'candidates' if args.have_float else 'excluded'}\n")
         f.write(" * Skipped, with the reason, so a coverage number cannot be read as full coverage:\n")
         for name, why in skipped:
             f.write(f" *   {name:<40s} {why}\n")
