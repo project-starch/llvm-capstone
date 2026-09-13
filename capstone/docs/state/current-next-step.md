@@ -1,4 +1,4 @@
-## 0. CURRENT — 2026-09-13 (evening). **sw64's stall REPRODUCES on an exact redraw and is inside the domain's share entry; the matched pair is proven and on the board; six of eleven collaborator PRs landed.**
+## 0. CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); nine of eleven collaborator PRs landed.**
 
 > **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
 > control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
@@ -23,25 +23,41 @@
 > measured root cause** (share3 also differs in region residency and size; the handler has no
 > positive control here), while the mechanism is now sourced at the RTL commit: DELIN raises
 > UNEXPECTED_CAP_TYPE on a non-LINEAR operand and is the only type-sensitive instruction in the
-> branch. The trap word went into the arena's first word, where nothing reads it; reading it back
-> (predicted `0xF6C09D13`) is owed to the next boot. Fix applied on `dev` (no domain delin of the
-> monitor-delinearised grant); **sw68 (the fixed image, no trap vector) PASSED share3 and entered** — the fix is proven on
-> silicon; its size-20 run then COMPLETED at **64,732,455,367 cycles**, hash `3807866 2738af78`,
-> **ratio 1.1940** (baseline 54,214,856,567; pre-registered band 1.17–1.27) — the fix runs the full
-> benchmark on silicon, not just past the share. sw69 (the pair image + a host that
-> reads the trap word out of `arena[0]`) names the faulting address next. §7o.
+> branch. Fix applied on `dev` (no domain delin of the monitor-delinearised grant); **sw68 (the fixed
+> image, no trap vector) PASSED share3 and RAN size-20 to completion** — **64,732,455,367 cycles**,
+> hash `3807866 2738af78`, **ratio 1.1940** (baseline 54,214,856,567; pre-registered band 1.17–1.27).
+> **sw69 read the trap word back: `arena0 = 4139818259 = 0xF6C09D13`, mcause field 27 =
+> UNEXPECTED_CAP_TYPE**, written during the share3 domcall; then `obs = 0x5117BAD3` = the
+> sqlite3_initialize failure sw67 died on. S-15 confirmed end to end: mechanism sourced in the RTL,
+> fault read back as mcause 27, fix proven. §7o and the ISSUES.md S-15 heading carry it. (The driver
+> header's decimal `4139621651` was a mis-decimalisation of `0xF6C09D13`; hardware matched the hex.)
 >
 > **Third instrument failure on this question, fixed:** the entry watchdog counted console
 > `[event]` chatter as liveness and could not fire live (`f7f2c9030623`).
 >
-> **PRs (plain merges, scanned over the push range, pushed):** #15 (control before/after), #16 (+ one
-> print fix; model now says order 10 where the module allocates order 10), #11→#13 (PostgreSQL;
-> `sublet.h` move byte-neutral, both PG gates PASS under QEMU). **Held for the board-free window,
-> in order:** buildroot #2/#3 (merge, mirror into `caplifive-system/sw/buildroot`, bake, `.ko` by
-> content), #17 (after #3's module), #18 (gate run), then #14 last (toolchain rebuild + lit + QEMU
-> suites + `capinit-scan` control; its lit test does not gate the defect at any opt level);
-> capstone-qemu #3 held for a collaborator rebase (two of its four commits are already on our branch
-> in superset form; the conflicts would revert `cabc953e58`). Hand-off note under `/tmp/capstone/`.
+> **PRs LANDED (plain merges, scanned over the push range, pushed):** #15, #16 (+print fix), #11→#13
+> (PostgreSQL); this session — **buildroot #2/#3** (merged in `caplifive-buildroot`, pushed
+> `capstone-bootstrap`=`d04bd83`; the QEMU-side module rebuilt and three controls run: new host works,
+> an OLD host trips `Unrecognised IOCTL` = the ioctl-struct grew and every board host must be rebuilt,
+> an over-declaring image is refused at order 11), **#17** (+follow-up dropping the dead blocks;
+> control on real images: cell5 DOES NOT FIT o11, fix image o10), **#18** (MicroPython; run-nightly
+> resolved to keep both PG and MPY gates; gate `PASS=4 FAIL=0`). **Nine of eleven landed.**
+>
+> **Deferred (board-free, but blocked): FPGA-side #3 bake.** The `caplifive-system/sw/buildroot` copy
+> was fast-forwarded to `d04bd83` and reverted to `8da1559` again, because rebuilding the board hosts
+> for the skew hit a PRE-EXISTING breakage: `build-ladder-base-fpga.sh` fails under buildroot GCC 12.3
+> with `multiple definition of bp_slot`/`g` (the `-fno-common` default; the ladder kernels carry
+> tentative globals). So the FPGA tree is back to a CONSISTENT pre-#3 state (no skew landmine). To
+> finish: fix that build (add `-fcommon` or make the globals `static`), rebuild `lpc` + `sqlite_host`,
+> ff, bake, `.ko` by content, and a control boot with the fix image (not lpc/k800 until lpc builds).
+> The parent gitlinks are intentionally NOT bumped, matching the un-baked image.
+>
+> **Held:** #14 last (needs a toolchain rebuild; its lit test is tautological — the current unpatched
+> llc already emits `stc ra 16-byte` for the allocator spill, so patched==unpatched for that shape;
+> the real gate is `capinit-scan` on the LARGE MicroPython image, see below); capstone-qemu #3 for a
+> collaborator rebase (two of four commits already on our branch; conflicts would revert
+> `cabc953e58`). Hand-off note under `/tmp/capstone/` carries the skew, over-declaration, #14 and lpc
+> findings.
 
 ### Open, carried forward explicitly
 
@@ -52,9 +68,12 @@
 * `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
   hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
   `SQLITE_STAGE_DOMS` image.
-* #14's `capinit-scan.py` positive control cannot be a SQLite image: none at hand trips its
-  FAULTING verdict (the json image yields only "quiet" findings). The control is the MicroPython image
-  built on the pre-#14 compiler, so #18's build precedes #14's toolchain rebuild — the plan's order.
+* #14's `capinit-scan.py` positive control: NO image at hand trips its FAULTING verdict. The SQLite
+  images scan clean (no faulting, no quiet); the pre-#14 MicroPython GATE image (4-test default) shows
+  "no faulting, 76 QUIET" (exit 0). The hard S-14 fault was observed at the 160/200-test sizes (more
+  register pressure), so the control must be the LARGE MicroPython image built on the pre-#14 compiler
+  — build it before #14's toolchain rebuild, confirm it FAULTS, then confirm the post-#14 image is
+  clean. Without that, #14 lands on the mechanism + the observed silicon deaths, not on a fired gate.
 * The toolchain binary is STALE by `toolchain-fresh` (the `opt`/`llvm-symbolizer` targets #15 added
   were never built; the only `llvm/` commit since is a citation re-point) — rebuilt at #14's step.
 

@@ -5,7 +5,7 @@ Minimal snapshot. Read first in every session.
 ## 2026-09-13 (evening) — CURRENT
 
 > sw64's stall reproduces on an exact redraw and is in the domain's share entry; the mtvec pair
-> is proven matched and on the board (sw67); six collaborator PRs landed. The morning block below
+> is CONFIRMED end to end (sw68 fix + sw69 mcause-27 readback); nine collaborator PRs landed. The morning block below
 > stands for the bridge and R-30/R-31/R-33.
 
 * **sw66 reproduced sw64's stall exactly** — `F2/share3 → SHA5`, no `SHA6`, no `G/enter` — on the
@@ -30,9 +30,13 @@ Minimal snapshot. Read first in every session.
   — inside the pre-registered 1.17–1.27 band. The fix runs the real benchmark end to end on silicon.
 * **Watchdog fixed** (`f7f2c9030623`): liveness is `[uart]` lines; console `[event]` chatter had
   made the entry-stall abort unfireable live.
-* **PRs landed on `dev`:** #15, #16 (+print fix), #11/#12/#13 (byte-neutral `sublet.h` move; both
-  PostgreSQL gates PASS under QEMU). Held for the board-free window: buildroot #2/#3, #17, #18, #14;
-  capstone-qemu #3 needs a rebase (two commits already landed in superset form).
+* **PRs landed on `dev` (nine of eleven):** #15, #16 (+print fix), #11/#12/#13; and this session
+  buildroot #2/#3 (submodule `capstone-bootstrap`=`d04bd83`, module rebuilt + 3 QEMU controls: the
+  ioctl-struct grew so every board host must be rebuilt with it), #17 (+follow-up), #18 (gate
+  PASS=4). **Deferred:** the FPGA-side #3 bake — `build-ladder-base-fpga.sh` fails under GCC 12.3
+  (`-fno-common`, `bp_slot`/`g`), so the `caplifive-system` copy was reverted to a consistent pre-#3
+  state; finish by fixing that build + rebuilding hosts. **Held:** #14 (lit test tautological; real
+  gate is capinit-scan on the large MicroPython image), capstone-qemu #3 (collaborator rebase).
 * **The toolchain binary is STALE** per `toolchain-fresh` (now that #15 lets it say so): the
   `opt`/`llvm-symbolizer` targets were never built. Rebuild at #14's step, never during a suite.
 
