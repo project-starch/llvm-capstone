@@ -26,7 +26,9 @@
 > branch. The trap word went into the arena's first word, where nothing reads it; reading it back
 > (predicted `0xF6C09D13`) is owed to the next boot. Fix applied on `dev` (no domain delin of the
 > monitor-delinearised grant); **sw68 (the fixed image, no trap vector) PASSED share3 and entered** — the fix is proven on
-> silicon; its size-20 run was in progress at the time of writing. sw69 (the pair image + a host that
+> silicon; its size-20 run then COMPLETED at **64,732,455,367 cycles**, hash `3807866 2738af78`,
+> **ratio 1.1940** (baseline 54,214,856,567; pre-registered band 1.17–1.27) — the fix runs the full
+> benchmark on silicon, not just past the share. sw69 (the pair image + a host that
 > reads the trap word out of `arena[0]`) names the faulting address next. §7o.
 >
 > **Third instrument failure on this question, fixed:** the entry watchdog counted console

@@ -2837,6 +2837,11 @@ here to compare against — their values are new, not confirmations.
 
 ### §7n — BOOT sw64: the size-20 rehearsal FAILED, and it failed at the 128 MiB arena's SHARE, not at entry (2026-09-13)
 
+> **Superseded the same day by §7o.** sw64's stall was reproduced on an exact redraw (sw66), placed in
+> the domain's share-entry code by the monitor's own SHA5/SHA6 definitions, and removed by deleting the
+> domain's second `delin` (sw68). The "size vs per-image" framing below and the "hung inside the
+> share without a cause" reading are the pre-audit picture; read §7o before citing anything here.
+
 **No CPI was measured and no ratio exists.** The rehearsal did not complete. Recorded because the
 failure is specific and useful, and because the way it cost 8 hours is a process defect of this
 lane's making.
@@ -3068,8 +3073,9 @@ the NONLIN grant are the only other type-sensitive operations), and the next ins
 that reads the trap word back out of the arena's first word after an mtvec build; any other `obs`
 after `G/enter` = a different, real result. Control `retval=4` or the boot is void.
 
-**Boot sw69 — the reading the audit asked for: the trap word read back.** The pair image
-**unchanged** (`214b300efd169f03`) with a host that maps the arena *after* share3 returns and
+**Boot sw69 — the reading the audit asked for: the trap word read back. An instrument arm, not a
+pair member:** its host is `dev`'s with the readback compiled in, not sw64's, so it is judged on the
+`arena0` word alone. The pair image **unchanged** (`214b300efd169f03`) with a host that maps the arena *after* share3 returns and
 *before* the domain is entered, and prints its first word (`sqlite_host.c`, `SPEEDTEST1_ARENA_READBACK`,
 off by default; host `ae9e0ba31fa4e634`; its QEMU plumbing control prints `SQ: arena0=0`, the value
 no trap can leave). `--size 1`, so the arm returns in seconds either way. Pre-registered from the
@@ -3087,5 +3093,10 @@ repeatable). The fixed domain arm: `E/share1` SHA5→SHA6, `F/share2` SHA5→SHA
 SHA5→SHA6**, then **`SQ: G/enter`** — the image that is sw64's minus one instruction, with no trap
 vector, **passes the share on which sw64 and sw66 hang** and enters. Region residency and size are
 unchanged in this image, so of the audit's three differences only the delin was removed and only
-the outcome changed. *(The size-20 run itself was in progress at the time of writing; its cycle
-count and ratio go here.)*
+the outcome changed. The domain arm then ran size-20 to completion: hash **`3807866 2738af78`**
+(the same size-20 oracle the baseline verified to, so the domain computed the identical program),
+**64,732,455,367 cycles**, **ratio 1.1940** against the baseline denominator above. That is inside
+the pre-registered band (1.17–1.27, predicted ≈1.22) written down before the boot, so the capability
+overhead on the full workload is 1.19x native and the S-15 fix runs the real benchmark end to end on
+silicon, not merely past the share. `H/return` and the verification hash both present; the arm was
+judged on the hash, not on completion alone.
