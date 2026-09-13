@@ -46,7 +46,7 @@ fi
 
 CFLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-gp-captable -ffreestanding -fno-jump-tables
-        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc" -I"$REPO/capstone/sublet"
+        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc" -I"$REPO/capstone/sublet" -I"$SCRIPT_DIR"
         "${CFLAGS_SUBLET[@]}" ${EXTRA_CFLAGS:-})
 
 # ONE TRANSLATION UNIT, and not for build speed. Under -capstone-gp-captable the image gets a
@@ -76,6 +76,8 @@ AMALGAM=$OBJ/ngx_all.c
     echo "#include \"$SCRIPT_DIR/port/ngx_subpool_test.c\""
   elif [ "$NGX_DOMAIN" = uaf ]; then
     echo "#include \"$SCRIPT_DIR/port/ngx_uaf.c\""
+  elif [ "$NGX_DOMAIN" = replay ]; then
+    echo "#include \"$SCRIPT_DIR/port/ngx_replay.c\""
   else
     echo "#include \"$SCRIPT_DIR/port/ngx_domain.c\""
   fi

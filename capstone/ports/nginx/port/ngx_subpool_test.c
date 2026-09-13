@@ -5,7 +5,7 @@
  * because a fault inside a patched ngx_palloc.c would be much harder to read back to its cause.
  * The PostgreSQL port tests its own level below the same way and for the same reason.
  *
- * Eight scenarios, each a claim the design makes:
+ * Twelve scenarios, each a claim the design makes, numbered in the order they run:
  *
  *   1  a block comes out linear, objects carve from it, and what is written through an object
  *      reads back
@@ -23,7 +23,22 @@
  *      the pool header sits at the front of its own block and the caller keeps pointing at it
  *      across a reset, so a reset that revoked the whole block would invalidate the pointer its
  *      caller is about to use again
- *   8  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
+ *   8  a block of a size that is not a whole number of capabilities is rounded up rather than
+ *      carved as asked. A carve of 4280 bytes leaves the arena 8 aligned, and from then on every
+ *      block is misaligned and the first capability stored in one faults. Real nginx asks for
+ *      4280; no driver written here ever did
+ *   9  two thousand objects taken with at most twenty alive: a block's revocation takes back the
+ *      nodes of the objects carved out of it, or the run does not reach the end
+ *  10  six hundred objects alive AT ONCE out of ten blocks, which is the shape real nginx has.
+ *      Nine and ten together say whether the revocation node ceiling is on what is alive or on
+ *      what has ever been taken, and a replay of real traffic hit that ceiling with neither
+ *      question answered
+ *  11  three thousand cycles of a block taken with an outer handle, a header carved off its
+ *      front and an inner handle taken behind it, which is exactly what the port does per pool.
+ *      nginx creates fourteen thousand pools where the pool driver's balance scenario creates a
+ *      thousand and passes, so handle churn was the third candidate for the ceiling a replay of
+ *      real traffic hit. It is not the ceiling either: this passes
+ *  12  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
  *      a carve that reaches exactly to the end of a region moves the whole of it out and leaves
  *      the slot empty, so the request after the one that spent the arena would have asked an
  *      empty slot for its base, which is a fault and not a refusal
@@ -50,8 +65,10 @@ extern unsigned long ngx_subpool_carved, ngx_subpool_reused, ngx_subpool_returne
                      ngx_subpool_live;
 extern size_t ngx_subpool_arena_left;
 
-static unsigned ran, failures, phase;
-#define CHECK(cond) do { ++ran; if (!(cond)) { ++failures; } } while (0)
+static unsigned ran, failures, phase, failphase;
+/* The first phase that failed, because a count says how many and not which, and the
+   scenarios here exist to tell two explanations apart. */
+#define CHECK(cond) do { ++ran; if (!(cond)) { ++failures; if (!failphase) failphase = phase; } } while (0)
 
 /* Carve one object out of a block and write through it, the way the pool above will. */
 static int carve_write_read(sublet_cap *region, size_t bytes, unsigned char seed) {
@@ -109,7 +126,7 @@ void domain_main(unsigned *res, unsigned func) {
     }
 
     ngx_subpool_init(&arena_slot);
-    ran = failures = phase = 0;
+    ran = failures = phase = failphase = 0;
 
     sublet_cap r1, h1, r2, h2;
 
@@ -201,7 +218,90 @@ void domain_main(unsigned *res, unsigned func) {
     /* Spend the arena to the last byte, then ask again. Before the count replaced the query this
        faulted with cause 24 instead of refusing, and scenario 6 could not see it: 6 asks for more
        than is left, which the size test catches, and this asks for exactly what is left. */
+    /* An odd size, before the arena is spent, because what it breaks is everything AFTER it. */
     phase = 8;
+    sublet_cap ro, rh2;
+    unsigned long before_left = ngx_subpool_arena_left;
+    CHECK(ngx_subpool_block(4280, &ro, &rh2) == 1);
+    CHECK((sublet_end(&ro) - sublet_base(&ro)) == 4288);       /* rounded, not as asked */
+    CHECK((ngx_subpool_arena_left % 16) == 0);
+    CHECK(before_left - ngx_subpool_arena_left == 4288);
+    ngx_subpool_release(&ro, &rh2);
+    /* and the next block still starts where a capability may be stored */
+    sublet_cap rn, hn;
+    CHECK(ngx_subpool_block(64, &rn, &hn) == 1);
+    CHECK((sublet_base(&rn) % 16) == 0);
+    CHECK(carve_write_read(&rn, 64, 0xBB));
+    ngx_subpool_release(&rn, &hn);
+
+    /* Does a block's revocation take back the nodes of the objects carved out of it? Two
+       thousand takes with at most twenty alive. The revocation node pool is a fixed bump
+       allocator of about a thousand, so if a take's handle were not reclaimed when its block goes
+       back, this would not reach the end. */
+    phase = 9;
+    {
+        int ok = 1;
+        for (int cyc = 0; cyc < 100 && ok; cyc++) {
+            sublet_cap rc, hc;
+            /* Marked on the spot rather than counted, because a scenario meant to tell two
+               explanations apart has to say WHERE it stopped. Payload: 0x09 then the cycle, then
+               1 if the block was refused and 2 if an object was. */
+            if (!ngx_subpool_block(2048, &rc, &hc)) NGX_DOM_MARK(0x090000u | ((unsigned) cyc << 4) | 1u);
+            for (int i = 0; i < 20; i++) {
+                if (!carve_write_read(&rc, 64, (unsigned char) (cyc + i))) {
+                    NGX_DOM_MARK(0x090000u | ((unsigned) cyc << 4) | 2u);
+                }
+            }
+            ngx_subpool_release(&rc, &hc);
+        }
+        CHECK(ok);
+        CHECK(ngx_subpool_live == 1);   /* 7 dropped one block by hand and says so */
+    }
+
+    /* And the other half of the question: six hundred objects alive AT ONCE out of ten blocks,
+       which is the shape a trace of real nginx has. If the ceiling is on what is alive rather than
+       on what has ever been taken, this is where it shows and the scenario above does not. */
+    phase = 10;
+    {
+        sublet_cap blk[10], hnd[10];
+        int nb = 0, ok = 1, taken = 0;
+        for (; nb < 10; nb++) {
+            if (!ngx_subpool_block(4096, &blk[nb], &hnd[nb])) { ok = 0; break; }
+        }
+        for (int i = 0; i < nb && ok; i++) {
+            for (int j = 0; j < 60; j++) {
+                if (!carve_write_read(&blk[i], 64, (unsigned char) j)) { ok = 0; break; }
+                taken++;
+            }
+        }
+        CHECK(ok);
+        CHECK(taken == nb * 60);
+        for (int i = 0; i < nb; i++) ngx_subpool_release(&blk[i], &hnd[i]);
+        CHECK(ngx_subpool_live == 1);
+    }
+
+    /* Neither of those reached a ceiling, so the remaining difference between them and a replay
+       of real nginx is the number of HANDLES. The port takes two per pool, one senior to the
+       block and one behind the header, and nginx creates fourteen thousand pools where the
+       driver's own balance scenario creates one thousand and passes. Three thousand cycles of
+       exactly that shape, and if the ceiling is handle churn this is where it shows. */
+    phase = 11;
+    {
+        for (int cyc = 0; cyc < 3000; cyc++) {
+            sublet_cap rb, ho, hi;
+            if (!ngx_subpool_block(1024, &rb, &ho)) NGX_DOM_MARK(0x0B0000u | ((unsigned) cyc << 4) | 1u);
+            sublet_carve(&rb, sublet_base(&rb) + 128, &hi);   /* a header, as the port carves one */
+            if (sublet_take(&hi) == NULL)          NGX_DOM_MARK(0x0B0000u | ((unsigned) cyc << 4) | 2u);
+            sublet_handle(&rb, &hi);                          /* the inner handle, behind it */
+            if (!carve_write_read(&rb, 64, (unsigned char) cyc))
+                                                   NGX_DOM_MARK(0x0B0000u | ((unsigned) cyc << 4) | 3u);
+            ngx_subpool_release(&rb, &ho);                    /* the outer takes all of it back */
+        }
+        ++ran;
+        if (ngx_subpool_live != 1) { ++failures; if (!failphase) failphase = phase; }
+    }
+
+    phase = 12;
     size_t rest = ngx_subpool_arena_left;
     CHECK(rest > 0);
     sublet_cap rr, rh, r4, h4;
@@ -209,5 +309,8 @@ void domain_main(unsigned *res, unsigned func) {
     CHECK(ngx_subpool_arena_left == 0);
     CHECK(ngx_subpool_block(16, &r4, &h4) == 0);
 
-    NGX_DOM_MARK(((phase & 0xFF) << 16) | ((ran & 0xFF) << 8) | (failures & 0xFF));
+    /* The phase field carries WHERE it first failed when something did, and how far it got
+       when nothing did. A count of failures without a place is not a result. */
+    NGX_DOM_MARK((((failures ? failphase : phase) & 0xFF) << 16)
+                 | ((ran & 0xFF) << 8) | (failures & 0xFF));
 }
