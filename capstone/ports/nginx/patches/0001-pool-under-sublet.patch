@@ -1,0 +1,375 @@
+--- a/ngx_palloc.c
++++ b/ngx_palloc.c
+@@ -9,26 +9,141 @@
+ 
+ 
+ 
++#include "ngx_subpool.h"
++
+ static ngx_inline void *ngx_palloc_small(ngx_pool_t *pool, size_t size,
+     ngx_uint_t align);
+ static void *ngx_palloc_block(ngx_pool_t *pool, size_t size);
+ static void *ngx_palloc_large(ngx_pool_t *pool, size_t size);
+ 
+ 
++/*
++ * A block's capabilities live OUTSIDE the block, and they have to. The handle must survive the
++ * revocation it performs, and the region it restores must be written somewhere that revocation
++ * did not just invalidate. So a block keeps an index here and nothing else.
++ *
++ * Two handles per block, not one. The outer is senior to the whole block and is what destroy
++ * uses. The inner is taken after the header has been carved off the front, so it is senior to
++ * every object and to nothing else, and it is what reset uses. Without the inner one, a reset
++ * would revoke the header its caller is holding, and every ngx_reset_pool call site in nginx
++ * would have had to change.
++ *
++ * The cost is this table, 64 bytes per block. Against nginx's 16 KiB default pool that is 0.4
++ * per cent, and it is per BLOCK rather than per object because a pool's objects share one
++ * revocation.
++ */
++#define NGX_POOL_SLOTS    256
++#define NGX_POOL_NO_SLOT  ((ngx_uint_t) -1)
++
++typedef struct {
++    sublet_cap   region;
++    sublet_cap   handle;
++    sublet_cap   inner;
++    size_t       bytes;
++    size_t       left;
++    ngx_uint_t   used;
++} ngx_pool_slot_t;
++
++static ngx_pool_slot_t  ngx_pool_slots[NGX_POOL_SLOTS];
++
++ngx_uint_t  ngx_pool_slots_live;
++ngx_uint_t  ngx_pool_slots_peak;
++
++
++static ngx_uint_t
++ngx_pool_slot_get(size_t bytes)
++{
++    ngx_uint_t  n;
++
++    for (n = 0; n < NGX_POOL_SLOTS; n++) {
++        if (ngx_pool_slots[n].used) {
++            continue;
++        }
++
++        if (!ngx_subpool_block(bytes, &ngx_pool_slots[n].region,
++                               &ngx_pool_slots[n].handle))
++        {
++            return NGX_POOL_NO_SLOT;
++        }
++
++        ngx_pool_slots[n].bytes = bytes;
++        ngx_pool_slots[n].left = bytes;
++        ngx_pool_slots[n].used = 1;
++
++        if (++ngx_pool_slots_live > ngx_pool_slots_peak) {
++            ngx_pool_slots_peak = ngx_pool_slots_live;
++        }
++
++        return n;
++    }
++
++    return NGX_POOL_NO_SLOT;
++}
++
++
++static void
++ngx_pool_slot_put(ngx_uint_t n)
++{
++    ngx_subpool_release(&ngx_pool_slots[n].region, &ngx_pool_slots[n].handle);
++    ngx_pool_slots[n].used = 0;
++    ngx_pool_slots_live--;
++}
++
++
++/*
++ * One object out of a block. The size is rounded to 16 because a capability is 16 bytes and must
++ * be 16 aligned, which is also why ngx_align_ptr has nothing left to do on this path: a carve
++ * from a 16 aligned block in 16 byte steps is aligned by construction.
++ *
++ * What is left is COUNTED, not asked of the region. A carve that reaches exactly to the end of a
++ * region moves the whole of it out and leaves the slot empty, and asking an empty slot for its
++ * base is an untagged operand, cause 24. A 1024 byte pool has 896 bytes behind its header and
++ * hands out exactly fourteen 64 byte objects, so the fifteenth request faulted rather than
++ * chaining a block. A count can be read when a slot cannot.
++ */
++static void *
++ngx_pool_carve(ngx_uint_t n, size_t size)
++{
++    sublet_cap        obj;
++    ngx_pool_slot_t  *sl;
++
++    sl = &ngx_pool_slots[n];
++    size = (size + 15) & ~(size_t) 15;
++
++    if (sl->left < size) {
++        return NULL;
++    }
++
++    sublet_carve(&sl->region, sublet_base(&sl->region) + size, &obj);
++    sl->left -= size;
++
++    return sublet_take(&obj);
++}
++
++
+ ngx_pool_t *
+ ngx_create_pool(size_t size, ngx_log_t *log)
+ {
+     ngx_pool_t  *p;
++    ngx_uint_t   n;
++
++    n = ngx_pool_slot_get(size);
++    if (n == NGX_POOL_NO_SLOT) {
++        return NULL;
++    }
+ 
+-    p = ngx_memalign(NGX_POOL_ALIGNMENT, size, log);
++    p = ngx_pool_carve(n, sizeof(ngx_pool_t));
+     if (p == NULL) {
++        ngx_pool_slot_put(n);
+         return NULL;
+     }
+ 
+-    p->d.last = (u_char *) p + sizeof(ngx_pool_t);
+-    p->d.end = (u_char *) p + size;
++    /* after the header, so a reset leaves the header alone */
++    sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
++
+     p->d.next = NULL;
+     p->d.failed = 0;
++    p->d.slot = n;
+ 
+     size = size - sizeof(ngx_pool_t);
+     p->max = (size < NGX_MAX_ALLOC_FROM_POOL) ? size : NGX_MAX_ALLOC_FROM_POOL;
+@@ -82,12 +197,18 @@
+ 
+     for (l = pool->large; l; l = l->next) {
+         if (l->alloc) {
+-            ngx_free(l->alloc);
++            ngx_pool_slot_put(l->slot);
++            l->alloc = NULL;
+         }
+     }
+ 
++    /*
++     * One revocation per block, and every object the pool handed out of that block dies with it.
++     * Upstream already reads d.next before it frees the block it is standing on, so the walk
++     * needs no change: n names a different block than the one being revoked.
++     */
+     for (p = pool, n = pool->d.next; /* void */; p = n, n = n->d.next) {
+-        ngx_free(p);
++        ngx_pool_slot_put(p->d.slot);
+ 
+         if (n == NULL) {
+             break;
+@@ -104,12 +225,26 @@
+ 
+     for (l = pool->large; l; l = l->next) {
+         if (l->alloc) {
+-            ngx_free(l->alloc);
++            ngx_pool_slot_put(l->slot);
++            l->alloc = NULL;
+         }
+     }
+ 
++    /*
++     * The inner handle, so the header a caller is holding across this call stays valid while
++     * everything the pool handed out is revoked. The handle is spent by the revocation and a
++     * fresh one is taken for what follows.
++     *
++     * Upstream rewinds every block to sizeof(ngx_pool_t), including the chained ones whose header
++     * is only sizeof(ngx_pool_data_t), and so leaks the difference on each of them at every
++     * reset. Here the bound comes back from the revocation, so it is right by construction.
++     */
+     for (p = pool; p; p = p->d.next) {
+-        p->d.last = (u_char *) p + sizeof(ngx_pool_t);
++        ngx_pool_slot_t  *sl = &ngx_pool_slots[p->d.slot];
++
++        sublet_give_to(&sl->inner, &sl->region);
++        sublet_handle(&sl->region, &sl->inner);
++        sl->left = (size_t) (sublet_end(&sl->region) - sublet_base(&sl->region));
+         p->d.failed = 0;
+     }
+ 
+@@ -148,21 +283,16 @@
+ static ngx_inline void *
+ ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
+ {
+-    u_char      *m;
++    void        *m;
+     ngx_pool_t  *p;
+ 
++    /* align is moot: a carve is 16 aligned by construction, which is what NGX_ALIGNMENT is now */
+     p = pool->current;
+ 
+     do {
+-        m = p->d.last;
+-
+-        if (align) {
+-            m = ngx_align_ptr(m, NGX_ALIGNMENT);
+-        }
+-
+-        if ((size_t) (p->d.end - m) >= size) {
+-            p->d.last = m + size;
++        m = ngx_pool_carve(p->d.slot, size);
+ 
++        if (m != NULL) {
+             return m;
+         }
+ 
+@@ -177,26 +307,35 @@
+ static void *
+ ngx_palloc_block(ngx_pool_t *pool, size_t size)
+ {
+-    u_char      *m;
++    void        *m;
+     size_t       psize;
+     ngx_pool_t  *p, *new;
++    ngx_uint_t   n;
+ 
+-    psize = (size_t) (pool->d.end - (u_char *) pool);
++    psize = ngx_pool_slots[pool->d.slot].bytes;
+ 
+-    m = ngx_memalign(NGX_POOL_ALIGNMENT, psize, pool->log);
+-    if (m == NULL) {
++    n = ngx_pool_slot_get(psize);
++    if (n == NGX_POOL_NO_SLOT) {
++        return NULL;
++    }
++
++    new = ngx_pool_carve(n, sizeof(ngx_pool_data_t));
++    if (new == NULL) {
++        ngx_pool_slot_put(n);
+         return NULL;
+     }
+ 
+-    new = (ngx_pool_t *) m;
++    sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
+ 
+-    new->d.end = m + psize;
+     new->d.next = NULL;
+     new->d.failed = 0;
++    new->d.slot = n;
+ 
+-    m += sizeof(ngx_pool_data_t);
+-    m = ngx_align_ptr(m, NGX_ALIGNMENT);
+-    new->d.last = m + size;
++    m = ngx_pool_carve(n, size);
++    if (m == NULL) {
++        ngx_pool_slot_put(n);
++        return NULL;
++    }
+ 
+     for (p = pool->current; p->d.next; p = p->d.next) {
+         if (p->d.failed++ > 4) {
+@@ -214,11 +353,18 @@
+ ngx_palloc_large(ngx_pool_t *pool, size_t size)
+ {
+     void              *p;
+-    ngx_uint_t         n;
++    ngx_uint_t         n, s;
+     ngx_pool_large_t  *large;
+ 
+-    p = ngx_alloc(size, pool->log);
++    /* its own block, so that freeing it is a revocation like any other */
++    s = ngx_pool_slot_get(size);
++    if (s == NGX_POOL_NO_SLOT) {
++        return NULL;
++    }
++
++    p = ngx_pool_carve(s, size);
+     if (p == NULL) {
++        ngx_pool_slot_put(s);
+         return NULL;
+     }
+ 
+@@ -227,6 +373,7 @@
+     for (large = pool->large; large; large = large->next) {
+         if (large->alloc == NULL) {
+             large->alloc = p;
++            large->slot = s;
+             return p;
+         }
+ 
+@@ -237,11 +384,12 @@
+ 
+     large = ngx_palloc_small(pool, sizeof(ngx_pool_large_t), 1);
+     if (large == NULL) {
+-        ngx_free(p);
++        ngx_pool_slot_put(s);
+         return NULL;
+     }
+ 
+     large->alloc = p;
++    large->slot = s;
+     large->next = pool->large;
+     pool->large = large;
+ 
+@@ -253,20 +401,33 @@
+ ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment)
+ {
+     void              *p;
++    ngx_uint_t         s;
+     ngx_pool_large_t  *large;
+ 
+-    p = ngx_memalign(alignment, size, pool->log);
++    /* a carve is 16 aligned; anything stricter has no answer here and is refused */
++    if (alignment > NGX_POOL_ALIGNMENT) {
++        return NULL;
++    }
++
++    s = ngx_pool_slot_get(size);
++    if (s == NGX_POOL_NO_SLOT) {
++        return NULL;
++    }
++
++    p = ngx_pool_carve(s, size);
+     if (p == NULL) {
++        ngx_pool_slot_put(s);
+         return NULL;
+     }
+ 
+     large = ngx_palloc_small(pool, sizeof(ngx_pool_large_t), 1);
+     if (large == NULL) {
+-        ngx_free(p);
++        ngx_pool_slot_put(s);
+         return NULL;
+     }
+ 
+     large->alloc = p;
++    large->slot = s;
+     large->next = pool->large;
+     pool->large = large;
+ 
+@@ -283,7 +444,7 @@
+         if (p == l->alloc) {
+             ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, pool->log, 0,
+                            "free: %p", l->alloc);
+-            ngx_free(l->alloc);
++            ngx_pool_slot_put(l->slot);
+             l->alloc = NULL;
+ 
+             return NGX_OK;
+--- a/ngx_palloc.h
++++ b/ngx_palloc.h
+@@ -43,14 +43,14 @@
+ struct ngx_pool_large_s {
+     ngx_pool_large_t     *next;
+     void                 *alloc;
++    ngx_uint_t            slot;
+ };
+ 
+ 
+ typedef struct {
+-    u_char               *last;
+-    u_char               *end;
+     ngx_pool_t           *next;
+     ngx_uint_t            failed;
++    ngx_uint_t            slot;
+ } ngx_pool_data_t;
+ 
+ 

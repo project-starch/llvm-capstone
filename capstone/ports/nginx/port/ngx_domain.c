@@ -34,12 +34,20 @@
    which is what the first bisecting run reported and what cost a second look at a correct run. */
 #define NGX_DOM_MARK(n) do { *res = 0x4E000000u | ((unsigned) (n) & 0x00FFFFFFu); return; } while (0)
 
-/* The arena the host shares, and what the level below was told about it. */
+/* The arena the host shares, and what the level below was told about it. The two arms differ
+   here and only here: the unprotected one takes a plain region and pg_level0 carves ordinary
+   pointers out of it, the Sublet one takes a LINEAR region so that what the pool carves can be
+   revoked. Everything after this point, including all seven scenarios, is the same code. */
+#ifdef NGX_SUBLET
+#include "ngx_subpool.h"
+static sublet_cap arena_slot;
+#else
 void pg_level0_init(void *region, size_t bytes);
-extern unsigned long ngx_level0_live;
-
 static unsigned char *arena_base;
 static size_t arena_bytes;
+#endif
+
+extern unsigned long ngx_level0_live;
 
 /* ---- the scenarios ------------------------------------------------------- */
 
@@ -143,7 +151,13 @@ static void scenario_small_and_blocks(void) {
 /* A thousand cycles, and what nginx holds from the level below must end where it started. A
    pool's blocks come from there, so a port that lost one would show here and nowhere else. */
 static void scenario_balance(void) {
+    /* Whichever level this arm stands on. Under the discipline the pool never calls ngx_alloc, so
+       ngx_level0_live would sit at zero and the check would pass without checking anything. */
+#ifdef NGX_SUBLET
+    unsigned long before = ngx_subpool_live;
+#else
     unsigned long before = ngx_level0_live;
+#endif
     for (int i = 0; i < 1000; i++) {
         ngx_pool_t *p = ngx_create_pool(1024, NULL);
         if (p == NULL) {
@@ -156,7 +170,11 @@ static void scenario_balance(void) {
         ngx_destroy_pool(p);
     }
     ++ran;
+#ifdef NGX_SUBLET
+    if (ngx_subpool_live != before) {
+#else
     if (ngx_level0_live != before) {
+#endif
         ++failures;
     }
 }
@@ -165,6 +183,9 @@ static void scenario_balance(void) {
 
 void domain_main(unsigned *res, unsigned func) {
     if (func == 1) {
+#ifdef NGX_SUBLET
+        sublet_store(&arena_slot, res);
+#else
         /* The arena. Its end comes from the base by pointer arithmetic and never from a cast of
            the builtin's integer: a cast carries the address and no tag, and everything carved
            from it afterwards would be untagged. The MicroPython port paid for that lesson. */
@@ -172,14 +193,58 @@ void domain_main(unsigned *res, unsigned func) {
         unsigned long hi = __builtin_capstone_cap_get_end((void *) res);
         arena_base = (unsigned char *) res;
         arena_bytes = (size_t) (hi - lo);
+#endif
         return;
     }
 
+#ifdef NGX_SUBLET
+    /* A REV_SHARED share arrives NONLIN and csmrev would refuse it, three calls later and
+       wearing a different face. Asked here instead. */
+    if (sublet_type(&arena_slot) != 0) {
+        NGX_DOM_MARK(0xFD0000u | (unsigned) sublet_type(&arena_slot));
+    }
+    ngx_subpool_init(&arena_slot);
+
+#ifdef NGX_SUBLET_STAGE
+    /* One pool API call per stage, each marking before the next runs, so a fault names the call
+       that caused it rather than an address inside sublet.h. The MicroPython port's MPY_STAGE,
+       for the same reason and with the same payoff. */
+    {
+        ngx_pool_t *sp; unsigned char *a, *b, *c; int st = NGX_SUBLET_STAGE;
+        #define STAGE(n) do { if (st < (n)) { NGX_DOM_MARK(0xB00000u | (unsigned) st); } } while (0)
+        STAGE(1);
+        sp = ngx_create_pool(16384, NULL);
+        STAGE(2);
+        if (sp == NULL) { NGX_DOM_MARK(0xB1FFFFu); }
+        a = ngx_palloc(sp, 64);  if (a == NULL) { NGX_DOM_MARK(0xB2FFFFu); }
+        a[0] = 0x11; a[63] = 0x22;
+        STAGE(3);
+        b = ngx_palloc(sp, 4000); if (b == NULL) { NGX_DOM_MARK(0xB3FFFFu); }
+        b[0] = 0x33;
+        STAGE(4);
+        b = ngx_palloc(sp, 8000); if (b == NULL) { NGX_DOM_MARK(0xB4FFFFu); }  /* forces a block */
+        STAGE(5);
+        c = ngx_palloc(sp, 100000); if (c == NULL) { NGX_DOM_MARK(0xB5FFFFu); } /* large path */
+        c[0] = 0x44;
+        STAGE(6);
+        ngx_pfree(sp, c);
+        STAGE(7);
+        ngx_reset_pool(sp);
+        STAGE(8);
+        a = ngx_palloc(sp, 64); if (a == NULL) { NGX_DOM_MARK(0xB8FFFFu); }
+        a[0] = 0x55;
+        STAGE(9);
+        ngx_destroy_pool(sp);
+        NGX_DOM_MARK(0xBF0000u | (unsigned) st);
+    }
+#endif
+#else
     if (arena_base == NULL) {
         NGX_DOM_MARK(0xFE);          /* no arena: the host never shared one */
     }
 
     pg_level0_init(arena_base, arena_bytes);
+#endif
     failures = 0;
     ran = 0;
 

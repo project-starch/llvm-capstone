@@ -10,6 +10,9 @@ source "$REPO/capstone/tests/capstone-test-env.sh"
 DOM_NAME=${DOM_NAME:-ngx-pool}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 SHARE=${SHARE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share}; mkdir -p "$SHARE"
+# The protected arm cannot work on a NONLIN arena, so it never has to be asked for twice.
+if [ "${NGX_SUBLET:-0}" = 1 ]; then NGX_ARENA_LINEAR=1; fi
+export NGX_SUBLET NGX_ARENA_LINEAR
 
 # Fatal on purpose. Without it a failed build leaves the previous image in the share
 # directory, the run starts THAT, and a stale pass is reported for code that never
