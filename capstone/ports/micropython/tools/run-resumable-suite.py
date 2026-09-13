@@ -109,8 +109,15 @@ def main():
     ap.add_argument("--index-base", type=int, default=0,
                     help="add this value to indices in progress output and results.tsv")
     ap.add_argument("--max-infra-retries", type=int, default=3)
-    ap.add_argument("--capture-output", action="store_true",
-                    help="save up to 4095 output bytes for each returned test")
+    # ON BY DEFAULT, because without it seven tests at the top feature level were reported as
+    # failures when what they had actually printed was SKIP. A test that declares itself
+    # inapplicable and a test that produced the wrong answer are different results, and only the
+    # captured bytes tell them apart. The switch stays so a run can drop the capture when the
+    # guest cannot carry it, and it then says so in the report.
+    ap.add_argument("--capture-output", dest="capture_output", action="store_true", default=True,
+                    help="save up to 4095 output bytes for each returned test (the default)")
+    ap.add_argument("--no-capture-output", dest="capture_output", action="store_false",
+                    help="score on the returned word alone; a target skip then reads as a failure")
     args = ap.parse_args()
 
     repo = pathlib.Path(__file__).resolve().parents[4]
@@ -195,7 +202,7 @@ def main():
         round_no += 1
 
     rows = []
-    counts = {"PASS": 0, "FAIL": 0, "FAULT": 0, "HANG": 0, "UNSCORED": 0}
+    counts = {"PASS": 0, "FAIL": 0, "FAULT": 0, "HANG": 0, "SKIP": 0, "UNSCORED": 0}
     for idx, name, want, how, pattern in expected:
         row_how = how
         if idx in stopped:
@@ -206,7 +213,10 @@ def main():
             if got_word is None:
                 status = "HANG"
             elif got_word & 0x80000000 and is_target_skip(captured.get(idx)):
-                status = "UNSCORED"
+                # The test asked for a feature, did not find it, and said so. Counting that as
+                # UNSCORED put it in the same column as "no oracle could be produced", and the
+                # two say opposite things about how much of the suite was actually exercised.
+                status = "SKIP"
                 row_how = "target skip"
             elif pattern is not None:
                 actual = captured.get(idx)

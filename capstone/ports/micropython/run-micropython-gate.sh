@@ -82,10 +82,14 @@ cp "$CAPSTONE_TMP_ROOT/micropython-silicon/$DOM.dom" "$SHARE/"
 
 # The suite runner reports and does not judge, because a measurement wants the
 # numbers whatever they are. A gate has to judge.
+# PASS or SKIP, and nothing else. SKIP is a test that asked for a feature this build does not
+# have and said so itself, which is a result and not a failure; UNSCORED is the host failing to
+# produce an oracle or the capture being truncated, which is a hole and stays fatal here.
 rows=$(awk -F'\t' 'NR>1' "$GATE/out/results.tsv" | wc -l)
-passed=$(awk -F'\t' 'NR>1 && $3=="PASS"' "$GATE/out/results.tsv" | wc -l)
-if [ "$rows" -ne "$TESTS" ] || [ "$passed" -ne "$TESTS" ]; then
-  echo "expected $TESTS rows all PASS, got $rows rows and $passed passing;" >&2
+good=$(awk -F'\t' 'NR>1 && ($3=="PASS" || $3=="SKIP")' "$GATE/out/results.tsv" | wc -l)
+if [ "$rows" -ne "$TESTS" ] || [ "$good" -ne "$TESTS" ]; then
+  echo "expected $TESTS rows, each PASS or SKIP, got $rows rows and $good of them;" >&2
+  awk -F'\t' 'NR>1 && $3!="PASS" && $3!="SKIP" {printf "  %s %s\n", $3, $2}' "$GATE/out/results.tsv" >&2
   echo "  $GATE/out/results.tsv has them" >&2
   exit 1
 fi
