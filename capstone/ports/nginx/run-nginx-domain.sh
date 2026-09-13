@@ -34,13 +34,43 @@ rm -f "$OUT_DIR/boot.log"
   --success-marker "ngx retval" > "$OUT_DIR/smoke.txt" 2>&1 || true
 
 line=$(grep -m1 'ngx retval' "$OUT_DIR/boot.log" 2>/dev/null || true)
+fault=$(grep -m1 'domain halted' "$OUT_DIR/boot.log" 2>/dev/null || true)
+
+# NGX_EXPECT_FAULT inverts the gate, for the one image whose result IS the fault. A return is then
+# the failure, and a fault still has to be a capability fault and not a dead domain, so the line
+# itself is printed rather than counted.
+if [ "${NGX_EXPECT_FAULT:-0}" = 1 ]; then
+  if [ -n "$line" ]; then
+    printf "NO FAULT: %s\n" "$line" >&2
+    exit 1
+  fi
+  if [ -z "$fault" ]; then
+    echo "neither a return nor a fault; $OUT_DIR/boot.log says why" >&2
+    tail -3 "$OUT_DIR/smoke.txt" >&2
+    exit 1
+  fi
+  printf "FAULTED as required\n  %s\n" "$fault"
+  exit 0
+fi
+
 if [ -z "$line" ]; then
   echo "no return; $OUT_DIR/boot.log says why" >&2
-  grep -m1 'domain halted' "$OUT_DIR/boot.log" >&2 || tail -3 "$OUT_DIR/smoke.txt" >&2
+  printf '%s\n' "${fault:-$(tail -3 "$OUT_DIR/smoke.txt")}" >&2
   exit 1
 fi
 v=$(echo "$line" | grep -oE '[0-9]+$')
 printf "%s\n" "$line"
+
+# NGX_EXPECT_MARK is for an image whose return is a marker and not a check count. The expectation
+# is exact, because "the domain came back" is not a result: the whole question in the
+# use-after-destroy image is WHICH of three marks came back.
+if [ -n "${NGX_EXPECT_MARK:-}" ]; then
+  got=$(( v & 0xFFFFFF ))
+  want=$(( NGX_EXPECT_MARK ))
+  printf "  mark     0x%06X  expected 0x%06X\n" "$got" "$want"
+  [ "$got" -eq "$want" ]
+  exit $?
+fi
 printf "  steps    %d\n  checks   %d\n  failures %d\n" \
     $(( (v >> 16) & 0xFF )) $(( (v >> 8) & 0xFF )) $(( v & 0xFF ))
 # A run that did nothing must not read as a pass, so a zero check count fails too.
