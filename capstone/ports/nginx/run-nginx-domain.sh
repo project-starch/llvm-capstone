@@ -11,7 +11,10 @@ DOM_NAME=${DOM_NAME:-ngx-pool}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 SHARE=${SHARE:-$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share}; mkdir -p "$SHARE"
 
-bash "$SCRIPT_DIR/build-nginx-domain.sh"
+# Fatal on purpose. Without it a failed build leaves the previous image in the share
+# directory, the run starts THAT, and a stale pass is reported for code that never
+# compiled. It happened once, with a toolchain path that did not exist.
+bash "$SCRIPT_DIR/build-nginx-domain.sh" || exit 1
 cp "$OUT_DIR/$DOM_NAME.dom" "$SHARE/"
 
 GCC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
@@ -19,15 +22,18 @@ U=$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace
 "$GCC" -O2 -I "$CAPSTONE_BUILDROOT_DIR/package/modcapstone/include" -I "$U" \
     -o "$SHARE/ngx-guest" "$SCRIPT_DIR/tools/ngx-guest.c" "$U/lib/libcapstone.c"
 
+# Removed, not truncated by the runner: if the run never starts, the grep below must find
+# nothing rather than the previous run's answer. Both halves of that trap have bitten here.
+rm -f "$OUT_DIR/boot.log"
 "${PYTHON:-python3}" "$REPO/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" --log-file "$OUT_DIR/boot.log" --timeout-multiplier 2 \
-  --guest-command "/mnt/host/ngx-guest /mnt/host/$DOM_NAME.dom" \
+  --guest-command "/mnt/host/ngx-guest /mnt/host/$DOM_NAME.dom${NGX_ARENA_LINEAR:+ --arena-linear}" \
   --success-marker "ngx retval" > "$OUT_DIR/smoke.txt" 2>&1 || true
 
 line=$(grep -m1 'ngx retval' "$OUT_DIR/boot.log" 2>/dev/null || true)
 if [ -z "$line" ]; then
   echo "no return; $OUT_DIR/boot.log says why" >&2
-  grep -m1 'domain halted' "$OUT_DIR/boot.log" >&2 || true
+  grep -m1 'domain halted' "$OUT_DIR/boot.log" >&2 || tail -3 "$OUT_DIR/smoke.txt" >&2
   exit 1
 fi
 v=$(echo "$line" | grep -oE '[0-9]+$')

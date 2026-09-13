@@ -15,6 +15,10 @@ NGX_SRC_DIR=${NGX_SRC_DIR:-$CAPSTONE_TMP_ROOT/nginx-${NGX_VERSION:-1.28.0}}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 OBJ=$OUT_DIR/obj; mkdir -p "$OBJ"
 DOM_NAME=${DOM_NAME:-ngx-pool}
+# NGX_DOMAIN=subpool builds the level below's own test instead of the pool driver. Separate images
+# on purpose: a fault ends a domain, so a driver that provoked one could not report the results
+# beside it, and the level below is the piece to prove first.
+NGX_DOMAIN=${NGX_DOMAIN:-pool}
 CLANG=$CAPSTONE_CLANG
 LD_LLD=$CAPSTONE_LD_LLD
 LADDER=$REPO/capstone/tests/runtime-qemu/silicon-ladder
@@ -30,7 +34,7 @@ cp "$SCRIPT_DIR/adapted/ngx_shim.h" "$OBJ/"
 
 CFLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -mllvm -capstone-gp-captable -ffreestanding -fno-jump-tables
-        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc")
+        -std=c99 -O0 -w ${NGX_STOP_AFTER:+-DNGX_STOP_AFTER=$NGX_STOP_AFTER} -I"$OBJ" -I"$SCRIPT_DIR/port" -I"$PG/../stubinc" -I"$REPO/capstone/sublet")
 
 # ONE TRANSLATION UNIT, and not for build speed. Under -capstone-gp-captable the image gets a
 # .capstone_gp_initdesc block per translation unit that has globals, and the entry glue reads only
@@ -51,7 +55,12 @@ AMALGAM=$OBJ/ngx_all.c
   echo "#include \"$REPO/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c\""
   echo "#include \"$SCRIPT_DIR/port/ngx_level0_wrap.c\""
   echo "#include \"$OBJ/ngx_palloc.c\""
-  echo "#include \"$SCRIPT_DIR/port/ngx_domain.c\""
+  if [ "$NGX_DOMAIN" = subpool ]; then
+    echo "#include \"$SCRIPT_DIR/port/ngx_subpool.c\""
+    echo "#include \"$SCRIPT_DIR/port/ngx_subpool_test.c\""
+  else
+    echo "#include \"$SCRIPT_DIR/port/ngx_domain.c\""
+  fi
 } > "$AMALGAM"
 printf "   amalgam: %s lines\n" "$(cat "$OBJ/ngx_palloc.c" "$PG/pg_level0.c" "$PG/pg_string.c" \
     "$REPO/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c" \
