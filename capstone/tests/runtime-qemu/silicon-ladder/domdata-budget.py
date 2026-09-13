@@ -285,7 +285,7 @@ def main():
     if req is not None:
         print(f"  declared        dom_data>={req[0]:>10}  (stack {req[1]})")
     else:
-        print(f"  declared        nothing -- module falls back to max(2*code_len, 512K)")
+        print(f"  declared        nothing -- module sizes it as code_len + max(code_len, DOMAIN_DATA_SIZE)")
     print(f"  image           code_len={code_len:>10}  code_size={code_size:>10}")
     if data_order is None:
         print(f"  allocation      pages={pages:<6} order={order:<3} tot_size={tot_size:>10}")
