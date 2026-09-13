@@ -3085,7 +3085,21 @@ mcause 27 (`UNEXPECTED_CAP_TYPE`), offset `0x9D13` = the pair image's delin at
 0xF/0xE names a different site at `_start + 4·(word & 0x3FFFFF)`; `0` means the handler never ran and
 "returned ⇒ trapped" is void; `UNMAPPED` is an instrument fault. Together with sw68 this closes the
 audit's two open alternatives from both sides: sw68 removes the delin and keeps the region's
-residency and size; sw69 reads the fault's own address.
+residency and size; sw69 reads the fault's own address. 
+
+**Boot sw69 — RESULT.** Control `retval=4`. The readback arm returned **`SQ: arena0=4139818259`**,
+which is **`0xF6C09D13`** — bit-for-bit the pre-registered word (the decimal `4139621651` written
+above and in the driver header was a mis-decimalisation of that same hex; `0xF6C09D13` is
+`4139818259`). Its **mcause field (bits 27:22) is 27** = DYN base 24 + code 3 = `UNEXPECTED_CAP_TYPE`,
+exactly the trap the RTL raises when `func DELIN` gets a non-LINEAR operand. Read from the run-scoped
+`boot.txt` (line 128), immediately after `F2/share3` and **before** `G/enter` — so the trap word was
+written during the share3 domcall, which is where sw64 and sw66 hang, not in the main entry. After
+it, the same host printed **`SQ: obs=1360509651` = `0x5117BAD3`** = `SQLITE_HC_ERR_INITIALIZE`, the
+initialize failure sw65 and sw67 died on. So the readback names S-15's fault on silicon end to end:
+the domain's redundant delin at share3 raises `UNEXPECTED_CAP_TYPE`, the glue's handler packs the
+cause into the shared arena's first word, and the run then fails exactly where the trap-vector boots
+did. The mcause is the audit's owed reading; the exact `mepc` offset is `word & 0x3FFFFF` and lands
+in the pair image's arena-branch delin as predicted.
 
 **Boot sw68 — RESULT (the fix side).** Control `retval=4`. Baseline arm: hash `3807866 2738af78`,
 **54,214,856,567 cycles** (sw66: 54,230,566,323 — 0.03 % apart; the size-20 denominator is
