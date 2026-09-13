@@ -1,0 +1,34 @@
+# The class and level of every hunk in sublet-3530300.patch, for capstone/tests/port-effort.py.
+# The vocabulary is the experiment's: class is hierarchy, metadata or workaround; level is
+# allocator or application. The patch header already names its own I/H/M scheme, and I folds into
+# hierarchy, because an interface that hands a block over linear under a handle IS the hierarchy
+# annotation. A hunk that does two things takes the class that drove it and says so in its note.
+
+sqlite3-capstone.c:25       hierarchy   allocator   the primitives arrive in the amalgamation
+sqlite3-capstone.c:18608    metadata    allocator   aSlot, one entry per slot BESIDE the pool
+sqlite3-capstone.c:18625    metadata    allocator   the slot's capability lives in that entry
+sqlite3-capstone.c:21730    hierarchy   allocator   sqlite3MallocLinear, the block from below
+sqlite3-capstone.c:29508    metadata    allocator   zPool becomes poolBase, memory moves to aCap
+sqlite3-capstone.c:29543    metadata    allocator   aCap, aPar and aLink, the tables beside the pool
+sqlite3-capstone.c:29592    metadata    allocator   MEM5LINK reads aLink, not the freed block
+sqlite3-capstone.c:29653    metadata    allocator   index from poolBase, the pool is not a byte array
+sqlite3-capstone.c:29669    hierarchy   allocator   the carve returns an index, the caller takes
+sqlite3-capstone.c:29679    hierarchy   allocator   the same signature change, the failure value
+sqlite3-capstone.c:29701    hierarchy   allocator   the same signature change, the failure value
+sqlite3-capstone.c:29710    hierarchy   allocator   sublet_handle then sublet_split at the split
+sqlite3-capstone.c:29731    hierarchy   allocator   returns the index; also drops the debug poison
+sqlite3-capstone.c:29760    metadata    allocator   index from poolBase in the free path
+sqlite3-capstone.c:29784    hierarchy   allocator   sublet_give, the object goes back
+sqlite3-capstone.c:29805    hierarchy   allocator   sublet_give_to merges; also drops the poison
+sqlite3-capstone.c:29949    metadata    allocator   the configured heap holds only the tables now
+sqlite3-capstone.c:29977    hierarchy   allocator   sublet_carve, one node per atom
+sqlite3-capstone.c:31887    metadata    allocator   lookasideEntry finds the entry beside the pool
+sqlite3-capstone.c:31988    hierarchy   allocator   sublet_give on the lookaside free path
+sqlite3-capstone.c:32029    hierarchy   allocator   sublet_give on the other lookaside free path
+sqlite3-capstone.c:32228    hierarchy   allocator   sublet_take, the slot goes out as an alias
+sqlite3-capstone.c:188234   hierarchy   allocator   the block field, linear while it is carved
+sqlite3-capstone.c:188246   hierarchy   allocator   an application buffer is refused, it is not linear
+sqlite3-capstone.c:188265   hierarchy   allocator   the pool comes from sqlite3MallocLinear
+sqlite3-capstone.c:188286   metadata    allocator   the aSlot table is allocated beside the pool
+sqlite3-capstone.c:188301   hierarchy   allocator   sublet_carve per slot; the walk moves to aSlot
+sqlite3-capstone.c:188952   metadata    allocator   the aSlot table is released with the pool
