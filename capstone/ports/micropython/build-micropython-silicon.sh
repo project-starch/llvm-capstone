@@ -148,12 +148,13 @@ MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
 #   minimum      495     303   118      73       1
 #   core         545     425    56      64       0
 #   extra        554     543     1      10       0
-#   full         554     548     1       5       0
+#   full         557     551     1       5       0
 #
-# tests/basics holds 576. The 22 the selection never offers at any level are 6 that need weakref
-# (upstream gates it at EVERYTHING and it wants a GC side table this port does not build), 6 that
-# need a filesystem or a module on disk, 3 unittest, 2 uctypes, 2 whose .exp is a regex template
-# with no hashable expectation, and one each for machine, traceback and threads.
+# tests/basics holds 576. The 19 the selection never offers at `full` are 6 that need weakref
+# (upstream gates it at EVERYTHING, and enabling it with the finaliser faults: see the note in
+# port/mpconfigport.h), 6 that need a filesystem or a module on disk, 3 unittest, 2 uctypes, and
+# one each for machine and traceback. The lower levels offer fewer because they register fewer
+# modules, which is the point of asking the build rather than keeping a list.
 #
 # THE ONE FAIL is the same test at both top levels, string_tstring_errors1.py, and it is one line
 # of sixty. The test compiles a malformed f-string only when sys.implementation._mpy exists, and

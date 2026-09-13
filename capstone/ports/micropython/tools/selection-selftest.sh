@@ -10,7 +10,9 @@ set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GEN=$HERE/gen-test-table.py
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
-T=$WORK/tests; mkdir -p "$T"
+# Named basics/ because gen-test-table.py keys its regex-expectation set on <dir>/<name>,
+# and the regex case below has to match a real entry rather than a name of its own.
+T=$WORK/basics; mkdir -p "$T"
 
 cat > "$T/plain.py"        <<'PY'
 print(1 + 1)
@@ -55,12 +57,43 @@ cat > "$T/relative.py"     <<'PY'
 from . import sibling
 print(sibling)
 PY
+# A regex .exp, which is an expectation without a hash. The runner matches it line by line, so the
+# selection must keep the test rather than refuse it for having no oracle. The name is one of the
+# real entries in the generator's REGEX_OUTPUT set, because that set is keyed on <dir>/<name>.
+cat > "$T/bytes_compare3.py" <<'PY'
+print("a line the host cannot reproduce")
+PY
+printf '########\nok\n' > "$T/bytes_compare3.py.exp"
 cat > "$T/uses_float.py"   <<'PY'
 print(1.0 + 1.0)
 PY
 cat > "$T/uses_thread.py"  <<'PY'
 import _thread
 print(_thread)
+PY
+# Names a module without importing it. sys1.py does exactly this and was excluded for
+# threading by a bare substring match, which is the same mistake as excluding for "import ".
+cat > "$T/mentions_thread.py" <<'PY'
+import sys
+if hasattr(sys.implementation, '_thread'):
+    print(sys.implementation._thread in ("GIL", "unsafe"))
+print("done")
+PY
+cat > "$T/calls_open.py"   <<'PY'
+try:
+    f = open("somefile")
+except OSError:
+    print("no file")
+PY
+# A method of its own named open, which a bare "open(" match counted as the builtin.
+cat > "$T/method_open.py"  <<'PY'
+class Door:
+    def open(self):
+        return "ajar"
+    def reopen(self):
+        return self.open()
+d = Door()
+print(d.open(), d.reopen())
 PY
 { echo "# padding to exceed a small size limit"; for i in $(seq 40); do
     echo "print('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"; done; } > "$T/oversize.py"
@@ -95,8 +128,12 @@ expect excluded_mod.py "needs module uctypes (excluded)"
 expect guarded_try.py  "needs module nosuchmodule"
 expect unparsable.py   "needs module nosuchmodule"
 expect relative.py     "host python exits non-zero"
+expect bytes_compare3.py KEPT
 expect uses_float.py   "needs float"
 expect uses_thread.py  "needs module _thread"
+expect mentions_thread.py KEPT
+expect method_open.py  KEPT
+expect calls_open.py   "needs the builtin open()"
 
 echo "== with a size limit"
 run --max-bytes 200

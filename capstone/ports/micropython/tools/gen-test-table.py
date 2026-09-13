@@ -10,6 +10,8 @@ boot. This script produces the table; port/mpy_domain.c walks it one test per ca
 EXPECTED OUTPUT comes from the test's own .exp file when it has one, and otherwise from running
 the test under the HOST python3. A test whose expectation cannot be produced is SKIPPED with its
 reason recorded, never silently included -- an unverifiable pass is worse than an absent test.
+The one expectation that is kept without a hash is MicroPython's regex .exp template, because the
+runner matches the captured output against it line by line and so can still score the test.
 
 SELECTION is stated in the generated header, and it follows what the build actually enables.
 A test is excluded when it imports a module this build does not have, when it needs a construct
@@ -26,13 +28,22 @@ import re
 import subprocess
 import sys
 
-# Constructs this port does not build. Matching is on the source text, which is crude but
-# fails SAFE: a test wrongly excluded shows up as a smaller corpus, never as a false pass.
+# Constructs this port does not build that are NOT imports, so the module rule cannot see them.
+# Everything here is anchored: a bare substring is how sys1.py was excluded for threading when
+# what it contains is hasattr(sys.implementation, '_thread'), and how the selection used to drop
+# 83 tests for containing the word import.
+#
+# `_thread` and `vfs` were in this list and are gone: both are modules, so a test that actually
+# wants one says `import` and the module rule refuses it by name, against what the build
+# registers. Keeping them here as text only added false positives.
 UNSUPPORTED = [
-    ("thread", ("_thread",)),
     ("native emitter", ("@micropython.native", "@micropython.viper", "@micropython.asm")),
-    ("a filesystem", ("open(", "vfs")),
 ]
+
+# The fallback for a file this host python cannot parse. Anchored against a method call, a name
+# that merely ends in open, and a definition of a method called open, each of which a bare
+# "open(" counted as the builtin.
+BUILTIN_OPEN_RE = re.compile(r"(?<!def )(?<![\w.])open\s*\(")
 
 # Only consulted when the build did not pass --have-float.
 FLOAT_PATTERNS = ("float(", "1.0", "0.5", "math.", "complex(")
@@ -136,6 +147,21 @@ def c_string(text: str) -> str:
     return "\n".join(out) if out else '        ""'
 
 
+def uses_builtin_open(src: str) -> bool:
+    """True when the test CALLS the builtin open(), which needs a filesystem under it.
+
+    Parsed, not grepped, for the same reason the imports are: `open(` also appears in
+    `def open(self)` and in `f.open()`, and neither is the builtin. Not a module, so the module
+    rule cannot see it.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return bool(BUILTIN_OPEN_RE.search(src))
+    return any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open"
+               for n in ast.walk(tree))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tests_dir")
@@ -187,13 +213,18 @@ def main():
             skipped.append((label, "needs module " + how))
             continue
         why = next((name for name, pats in UNSUPPORTED if any(p in src for p in pats)), None)
+        if why is None and uses_builtin_open(src):
+            why = "the builtin open()"
         if why is None and not args.have_float and any(p in src for p in FLOAT_PATTERNS):
             why = "float"
         if why and not args.include_unsupported:
             skipped.append((label, f"needs {why}"))
             continue
         exp, how = expectation(t, args.python, args.expect_timeout)
-        if exp is None and not args.include_unsupported:
+        # A regex .exp is an expectation, just not a hashable one. The runner reconstructs the
+        # template from this row and matches the captured output against it line by line, so
+        # dropping these was the selection refusing a test the scoring can handle.
+        if exp is None and not how.startswith("regex-exp:") and not args.include_unsupported:
             skipped.append((label, how))
             continue
         kept.append((label, src, exp, how))
