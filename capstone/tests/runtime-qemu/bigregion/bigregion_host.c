@@ -60,6 +60,11 @@ int main(int argc, char **argv) {
     if (capstone_init()) { printf("BIGREGION ERROR cannot initialise Capstone\n"); return 1; }
 
     unsigned long oops0 = dmesg_count("Oops"), bug0 = dmesg_count("BUG:"), warn0 = dmesg_count("WARNING:");
+    /* R-33's rounding log (modcapstone create_region: "... not representable ..."), counted here so
+       the reading does not depend on whether the module's pr_info reaches the console. A size that
+       is not a multiple of its representability granule must add exactly one line; a representable
+       size must add zero -- the two arms of the control, in one boot. */
+    unsigned long nr0 = dmesg_count("not representable");
     printf("BIGREGION request bytes=%lu (%lu MiB)\n", size, size >> 20);
 
     region_id_t rid = create_region(size);
@@ -71,6 +76,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("BIGREGION created id=%lu\n", (unsigned long)rid);
+    printf("BIGREGION not-representable-lines=%lu\n", dmesg_count("not representable") - nr0);
 
     unsigned char *p = (unsigned char *)map_region(rid, size);
     if (!p || p == (unsigned char *)-1) {

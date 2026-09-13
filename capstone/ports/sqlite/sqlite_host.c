@@ -53,6 +53,40 @@ static void mark_u(const char *prefix, unsigned long v) {
   mark("\n");
 }
 
+/* SHARE-ENTRY TRAP READBACK -- default-on since 2026-09-13 (the S-15 instrument gap). The interp
+   glue's INTERP_DOMAIN_MTVEC handler reports a fault by writing a packed word (bits 31..28 = 0xF,
+   or 0xE for the INTERP_TRAP_A4 variant; then mcause & 0x3F; then (mepc - _start) >> 2) THROUGH the
+   region capability it saved at entry. For a SHARE entry that is the shared region itself, so a
+   trap taken while the domain handles a share lands in that region's FIRST WORD and, until this
+   check existed, nothing read it (boots sw65/sw67: `obs` showed only the later call's result;
+   sw69 read the word back by hand: 0xF6C09D13 = mcause 27 at the delin).
+   Scope, stated honestly: this fires only for a domain that INSTALLS a trap vector. A measurement
+   image runs with mtvec = 0, its fault re-faults forever and the share never returns, so this
+   code is never reached -- the entry watchdog is what bounds that case. And it is applied only to
+   the REV_SHARED shares the host itself maps (metadata, payload, the region arena); the static-heap
+   pool/tables shares are linear and the host must never touch them (see the comment at their
+   share site), and on silicon a linear grant's source slot is cleared by the domain's `ldc`, so
+   the handler's own store would re-fault there. The read is scoped by a KNOWN expected value: the
+   word the host wrote before the share (phase = clamp_n; 0 after memset; a sentinel in the arena),
+   so "unchanged" is a positive reading, "changed but not a marker" is reported, and a marker
+   nibble is a named trap. */
+static int share_trap_check(const char *at, volatile unsigned *w0, unsigned expect) {
+  unsigned w = *w0;
+  unsigned nib = w >> 28;
+  if (nib == 0xFu || nib == 0xEu) {
+    mark_u("SQ: share-trap=", (unsigned long)w);
+    mark_u("SQ: share-trap-mcause=", (unsigned long)((w >> 22) & 0x3Fu));
+    mark_u("SQ: share-trap-off=", (unsigned long)((w & 0x3FFFFFu) << 2));
+    mark(at);
+    return 1;
+  }
+  if (w != expect) {
+    mark_u("SQ: share-word-changed=", (unsigned long)w);
+    mark_u("SQ: share-word-expected=", (unsigned long)expect);
+  }
+  return 0;
+}
+
 static int fail_cleanup(const char *message, unsigned long value) {
   /* X FIRST, on purpose. "sqlite-host: create_dom failed (observed=...)",
      "sqlite-host: create_dom ok (id=...)" and "sqlite-host: create_region #1" all
@@ -561,10 +595,15 @@ int main(int argc, char **argv) {
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
+  /* word 0 of the metadata region is the low half of `phase`, which the host set to clamp_n. */
+  if (share_trap_check("SQ: share-trap-at=share1\n", (volatile unsigned *)metadata, (unsigned)clamp_n))
+    return fail_cleanup("a trap was taken while the domain handled share1 (word above)", 1);
   mark("SQ: F/share2\n");
   shared_region_annotated(domain, payload_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
+  if (share_trap_check("SQ: share-trap-at=share2\n", (volatile unsigned *)payload, 0u))
+    return fail_cleanup("a trap was taken while the domain handled share2 (word above)", 2);
   /* SLOT 2 IS CLAIMED BY EXACTLY ONE OF THESE TWO, AND THEY ARE NOT ADDITIVE -- which is why this
      is an #else and not a second block. Both domains key their captures on the ORDER the host
      shares in: 0 metadata, 1 payload, 2 the allocator's memory. speedtest1_measure.c takes slot 2
@@ -581,30 +620,23 @@ int main(int argc, char **argv) {
   /* THIRD, because domain_main keys on the capture ORDER: 0 metadata, 1 payload, 2 arena. Sharing
      it anywhere else in this sequence silently hands SQLite's heap to the wrong pointer. */
   mark("SQ: F2/share3\n");
+  /* Map the arena BEFORE sharing it and plant a sentinel in its first word (top nibble 5, never a
+     marker), so after the share "unchanged" is a positive reading rather than a page that happened
+     to be zero. sw69's readback mapped AFTER the share and read a 0 for "the handler never ran";
+     that 0 was indistinguishable from an untouched page. The domain overwrites this word as heap
+     once it runs, which is why the read is sited exactly here, before entry. SPEEDTEST1_ARENA_READBACK
+     is accepted for compatibility and is now a no-op: this is default-on. */
+  volatile unsigned *arena0 = (volatile unsigned *)map_region(arena_region, SPEEDTEST1_ARENA_SIZE);
+  /* map_region returns mmap()'s value raw: a rejected mapping is (void *)-1, not NULL. */
+  if ((void *)arena0 == (void *)-1 || arena0 == 0)
+    return fail_cleanup("map_region(arena) failed before share3", (unsigned long)SPEEDTEST1_ARENA_SIZE);
+  arena0[0] = 0x5EED0000u;
   shared_region_annotated(domain, arena_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
-#ifdef SPEEDTEST1_ARENA_READBACK
-  /* READ THE TRAP WORD BACK. The interp glue's INTERP_DOMAIN_MTVEC handler reports a fault by
-     writing a packed word (bits 31..28 = 0xF, then mcause & 0x3F, then (mepc - _start) >> 2)
-     THROUGH the region capability it saved at entry -- which for a SHARE entry is the shared
-     region itself, so a fault in the share3 handler lands in the arena's first word and the host
-     never sees it (boots sw65 and sw67, 2026-09-13: `obs` showed only the later call's result).
-     Mapping the arena here, AFTER the share has returned and BEFORE the domain is entered, reads
-     that word without touching anything the share depended on; the domain overwrites it as heap
-     once it runs, which is why the read is sited exactly here. Predicted for the unfixed domain on
-     the r30r31 bitstream: 0xF6C09D13 (mcause 27 = UNEXPECTED_CAP_TYPE at the delin). Any other 0xF
-     word names the real site; no 0xF/0xE marker means the handler never ran. Off by default: the
-     production host maps only what it touches. */
-  {
-    volatile unsigned *arena0 = (volatile unsigned *)map_region(arena_region, SPEEDTEST1_ARENA_SIZE);
-    /* map_region returns mmap()'s value raw: a rejected mapping is (void *)-1, not NULL. */
-    if ((void *)arena0 == (void *)-1 || arena0 == 0)
-      mark("SQ: arena0=UNMAPPED\n");
-    else
-      mark_u("SQ: arena0=", (unsigned long)arena0[0]);
-  }
-#endif
+  mark_u("SQ: arena0=", (unsigned long)arena0[0]);   /* sw69's marker, kept for continuity */
+  if (share_trap_check("SQ: share-trap-at=share3\n", arena0, 0x5EED0000u))
+    return fail_cleanup("a trap was taken while the domain handled share3 (word above)", 3);
 #else
   /* The allocators' memory, regions above the payload's, never touched from here: once the
      domain has revoked a lineage in a region, a host access to those pages aborts QEMU
