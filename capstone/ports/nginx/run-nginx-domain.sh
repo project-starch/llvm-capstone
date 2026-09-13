@@ -32,5 +32,7 @@ if [ -z "$line" ]; then
 fi
 v=$(echo "$line" | grep -oE '[0-9]+$')
 printf "%s\n" "$line"
-printf "  checks  %d\n  failures %d\n" $(( (v >> 8) & 0xFF )) $(( v & 0xFF ))
+printf "  steps    %d\n  checks   %d\n  failures %d\n" \
+    $(( (v >> 16) & 0xFF )) $(( (v >> 8) & 0xFF )) $(( v & 0xFF ))
+# A run that did nothing must not read as a pass, so a zero check count fails too.
 [ $(( v & 0xFF )) -eq 0 ] && [ $(( (v >> 8) & 0xFF )) -gt 0 ]

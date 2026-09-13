@@ -21,8 +21,17 @@ typedef struct ngx_pool_s   ngx_pool_t;
 #define NGX_ERROR    -1
 #define NGX_DECLINED -5
 #define NGX_ALIGNMENT   sizeof(unsigned long)
-#define ngx_align_ptr(p, a) \
-    (u_char *) (((uintptr_t) (p) + ((uintptr_t) (a) - 1)) & ~((uintptr_t) (a) - 1))
+/* UPSTREAM'S DEFINITION LOSES THE TAG, and this is the only line of nginx this port has to
+   change to run at all. ngx_config.h:101 rounds a pointer by casting it to uintptr_t, masking,
+   and casting back. On a capability target that yields the right ADDRESS and no tag, and the
+   next cincoffset through it faults with cause 24 -- which is exactly where the first run of
+   this domain stopped, at ngx_palloc_small+0x1b4.
+   Adding the DIFFERENCE to the original pointer keeps the tag, because the result is derived
+   from the pointer rather than rebuilt from an integer. MicroPython's patch 0002 fixes the same
+   shape in PTR_FROM_BLOCK, and it is the third time this class has come up in this port. */
+#define ngx_align_ptr(p, a)                                                    \
+    ((u_char *) (p) + ((((uintptr_t) (p) + ((uintptr_t) (a) - 1))              \
+                        & ~((uintptr_t) (a) - 1)) - (uintptr_t) (p)))
 #define ngx_align(d, a)  (((d) + (a - 1)) & ~(a - 1))
 #define ngx_memzero(buf, n)  (void) memset(buf, 0, n)
 void ngx_free_wrap(void *);

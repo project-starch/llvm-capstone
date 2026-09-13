@@ -9,8 +9,7 @@
  * every payload to sixteen already, so plain malloc satisfies it. If a caller ever asks for more,
  * the wrapper refuses rather than returning something that merely looks aligned.
  */
-#include <stddef.h>
-#include <stdint.h>
+#include "ngx_shim.h"
 
 void *malloc(size_t);
 void free(void *);
@@ -23,8 +22,6 @@ unsigned long ngx_level0_live;
 /* nginx reads this to decide what counts as a large allocation. The domain has no page table to
  * ask, and the number only has to be the same in both arms. */
 uintptr_t ngx_pagesize = 4096;
-
-typedef struct { int unused; } ngx_log_t;
 
 void *ngx_alloc(size_t size, ngx_log_t *log) {
     (void) log;
