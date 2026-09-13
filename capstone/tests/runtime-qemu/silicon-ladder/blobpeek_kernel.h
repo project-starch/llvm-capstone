@@ -33,7 +33,7 @@
    `ldc gp[i]`, and the build gate rejects the domain (ldc-gp=0). The whole point is that
    this word is written BEHIND the compiler's back, by the entry glue. volatile forces the
    load; external linkage keeps it in the cap table. */
-volatile unsigned long bp_slot;
+static volatile unsigned long bp_slot;
 
 static unsigned bp_compute(void) {
   /* Truncate to 32 bits because the harness's retval is unsigned. The values that matter
