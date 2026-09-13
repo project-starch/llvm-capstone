@@ -472,6 +472,28 @@ void domain_main(unsigned *res, unsigned func) {
                                   so it does NOT prove the carve loop or the blob copy worked */
 #endif
 
+#if MPY_STAGE == 20 && MPY_SUBLET
+    /* Can the heap be put under the discipline AT ALL, or does it have to come from the level
+       below as a region? Sublet splits a LINEAR capability. The heap here is a static array, and
+       what the entry glue carves for a global may well be an ordinary alias, in which case no
+       amount of allocator work will make this heap carvable and the pool has to arrive as a share
+       the way SQLite's and PostgreSQL's do.
+
+       This asks rather than tries: sublet_type only reads the type field, so it cannot fault,
+       whereas an attempted split on the wrong type would take the domain down and tell us less.
+       The marker carries the type in its low byte and, in bit 8, whether the capability's base is
+       the array's own address, which says the slot holds what we think it holds. */
+    {
+        sublet_cap probe;
+        unsigned long ty, base;
+        probe.c = (void *)mpy_heap;
+        ty = sublet_type(&probe);
+        base = sublet_base(&probe);
+        MPY_MARK(0x2000u | ((unsigned)(base == (unsigned long)(void *)mpy_heap) << 8)
+                         | (unsigned)(ty & 0xFFu));
+    }
+#endif
+
 #if MPY_STAGE == 15
     /* Publish sp.BASE and sp.END from domain_main with the SAME instruction the glue's
        diagnostic uses, so the two sets of numbers are directly comparable. */
