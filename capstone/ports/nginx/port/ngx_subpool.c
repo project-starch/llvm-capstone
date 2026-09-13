@@ -76,6 +76,15 @@ static struct free_list *list_for(size_t bytes, int create) {
 /* A block, linear, with its handle. The caller keeps both: the region to carve from and the
    handle that will revoke everything carved out of it. */
 int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle) {
+    /* A REGION HAS TO BE A WHOLE NUMBER OF CAPABILITIES LONG. sublet.h says so where it explains
+       the give: a region that is not cannot be written through, because the fill loop stops at
+       the last whole capability and the init behind it traps. memsys5 never trips over this,
+       because it hands out powers of two of a 64 byte atom. nginx does: six of its blocks over
+       two hundred thousand calls are 4280 bytes, and one such carve leaves the arena's base
+       8 aligned, so EVERY later block is misaligned and the first capability stored in one is an
+       unaligned access. The synthetic driver never asked for an odd size. */
+    bytes = (bytes + 15) & ~(size_t) 15;
+
     struct free_list *fl = list_for(bytes, 0);
     if (fl != NULL && fl->count > 0) {
         sublet_move(&fl->slot[--fl->count], region);

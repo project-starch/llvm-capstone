@@ -1,6 +1,6 @@
 --- a/ngx_palloc.c
 +++ b/ngx_palloc.c
-@@ -9,26 +9,169 @@
+@@ -9,26 +9,184 @@
  
  
  
@@ -105,6 +105,21 @@
 +    sl = &ngx_pool_slots[n];
 +    size = (size + 15) & ~(size_t) 15;
 +
++    /*
++     * A REQUEST FOR NOTHING still costs a capability. nginx asks for zero bytes, and upstream
++     * answers with the bump pointer where it stands, which is a pointer to no bytes and is legal
++     * because a pointer has no length. A capability has one, and a carve of zero length is a
++     * split at the region's own base, which the hardware refuses as degenerate. So the smallest
++     * object is sixteen bytes even when nothing was asked for.
++     *
++     * This is a cost of the discipline and not a detail of this port, and no driver I wrote found
++     * it: a trace of real nginx did, at the first zero-length allocation of two hundred thousand
++     * calls.
++     */
++    if (size == 0) {
++        size = 16;
++    }
++
 +    if (sl->left < size) {
 +        return NULL;
 +    }
@@ -149,13 +164,13 @@
  {
      ngx_pool_t  *p;
 +    ngx_uint_t   n;
-+
+ 
+-    p = ngx_memalign(NGX_POOL_ALIGNMENT, size, log);
 +    n = ngx_pool_slot_get(size);
 +    if (n == NGX_POOL_NO_SLOT) {
 +        return NULL;
 +    }
- 
--    p = ngx_memalign(NGX_POOL_ALIGNMENT, size, log);
++
 +    p = ngx_pool_carve(n, sizeof(ngx_pool_t));
      if (p == NULL) {
 +        ngx_pool_slot_put(n);
@@ -173,7 +188,7 @@
  
      size = size - sizeof(ngx_pool_t);
      p->max = (size < NGX_MAX_ALLOC_FROM_POOL) ? size : NGX_MAX_ALLOC_FROM_POOL;
-@@ -82,12 +225,18 @@
+@@ -82,12 +240,18 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -194,7 +209,7 @@
  
          if (n == NULL) {
              break;
-@@ -104,12 +253,26 @@
+@@ -104,12 +268,26 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -223,7 +238,7 @@
          p->d.failed = 0;
      }
  
-@@ -148,21 +311,16 @@
+@@ -148,21 +326,16 @@
  static ngx_inline void *
  ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
  {
@@ -249,7 +264,7 @@
              return m;
          }
  
-@@ -177,26 +335,35 @@
+@@ -177,26 +350,35 @@
  static void *
  ngx_palloc_block(ngx_pool_t *pool, size_t size)
  {
@@ -294,7 +309,7 @@
  
      for (p = pool->current; p->d.next; p = p->d.next) {
          if (p->d.failed++ > 4) {
-@@ -214,11 +381,18 @@
+@@ -214,11 +396,18 @@
  ngx_palloc_large(ngx_pool_t *pool, size_t size)
  {
      void              *p;
@@ -315,7 +330,7 @@
          return NULL;
      }
  
-@@ -227,6 +401,7 @@
+@@ -227,6 +416,7 @@
      for (large = pool->large; large; large = large->next) {
          if (large->alloc == NULL) {
              large->alloc = p;
@@ -323,7 +338,7 @@
              return p;
          }
  
-@@ -237,11 +412,12 @@
+@@ -237,11 +427,12 @@
  
      large = ngx_palloc_small(pool, sizeof(ngx_pool_large_t), 1);
      if (large == NULL) {
@@ -337,7 +352,7 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -253,20 +429,32 @@
+@@ -253,20 +444,32 @@
  ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment)
  {
      void              *p;
@@ -372,7 +387,7 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -283,7 +471,7 @@
+@@ -283,7 +486,7 @@
          if (p == l->alloc) {
              ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, pool->log, 0,
                             "free: %p", l->alloc);

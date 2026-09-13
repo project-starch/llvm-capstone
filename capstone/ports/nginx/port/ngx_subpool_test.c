@@ -23,6 +23,10 @@
  *      the pool header sits at the front of its own block and the caller keeps pointing at it
  *      across a reset, so a reset that revoked the whole block would invalidate the pointer its
  *      caller is about to use again
+ *   9  a block of a size that is not a whole number of capabilities is rounded up rather than
+ *      carved as asked. A carve of 4280 bytes leaves the arena 8 aligned, and from then on every
+ *      block is misaligned and the first capability stored in one faults. Real nginx asks for
+ *      4280; no driver written here ever did
  *   8  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
  *      a carve that reaches exactly to the end of a region moves the whole of it out and leaves
  *      the slot empty, so the request after the one that spent the arena would have asked an
@@ -201,6 +205,22 @@ void domain_main(unsigned *res, unsigned func) {
     /* Spend the arena to the last byte, then ask again. Before the count replaced the query this
        faulted with cause 24 instead of refusing, and scenario 6 could not see it: 6 asks for more
        than is left, which the size test catches, and this asks for exactly what is left. */
+    /* An odd size, before the arena is spent, because what it breaks is everything AFTER it. */
+    phase = 9;
+    sublet_cap ro, rh2;
+    unsigned long before_left = ngx_subpool_arena_left;
+    CHECK(ngx_subpool_block(4280, &ro, &rh2) == 1);
+    CHECK((sublet_end(&ro) - sublet_base(&ro)) == 4288);       /* rounded, not as asked */
+    CHECK((ngx_subpool_arena_left % 16) == 0);
+    CHECK(before_left - ngx_subpool_arena_left == 4288);
+    ngx_subpool_release(&ro, &rh2);
+    /* and the next block still starts where a capability may be stored */
+    sublet_cap rn, hn;
+    CHECK(ngx_subpool_block(64, &rn, &hn) == 1);
+    CHECK((sublet_base(&rn) % 16) == 0);
+    CHECK(carve_write_read(&rn, 64, 0xBB));
+    ngx_subpool_release(&rn, &hn);
+
     phase = 8;
     size_t rest = ngx_subpool_arena_left;
     CHECK(rest > 0);
