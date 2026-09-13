@@ -26,7 +26,22 @@
 #ifndef MPY_HEAP_SIZE
 #define MPY_HEAP_SIZE (384U * 1024U)
 #endif
+#if MPY_HEAP_FROM_REGION
+/* THE HEAP COMES FROM THE LEVEL BELOW, as SQLite's memsys5 grant and PostgreSQL's sub-pool do,
+   and for a reason that was measured rather than assumed: MPY_STAGE=20 reads the type of the
+   capability the entry glue carves for a static array and gets CAP_TYPE_NONLIN. cssplit accepts
+   that, but csmrev asserts CAP_TYPE_LIN, and csmrev is what turns a region into a revocation
+   handle. A static array can therefore carry the geometry of the discipline and none of its
+   content, so the pool has to arrive as a share.
+
+   It also takes 384 KiB out of dom_data, which the image declares and the module sizes from. */
+static unsigned char *mpy_pool_base;
+static unsigned char *mpy_pool_end;
+#define MPY_GC_INIT() gc_init(mpy_pool_base, mpy_pool_end)
+#else
 static unsigned char mpy_heap[MPY_HEAP_SIZE] __attribute__((aligned(32)));
+#define MPY_GC_INIT() gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap))
+#endif
 
 #if MPY_SUBLET
 /* One revocation handle per block of the pool, beside the heap rather than inside it, so that the
@@ -231,7 +246,7 @@ static void mpy_run_one_test(unsigned *res) {
        makes an OOM in test N attributable to test N. sp is re-recorded because the stack limit
        must be measured from THIS call's frame, not the first call's. */
     mp_cstack_init_with_sp_here(mpy_cstack_size());
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
     mp_init();
     int rc = do_str(mpy_tests[idx], MP_PARSE_FILE_INPUT);
     mp_deinit();
@@ -416,7 +431,7 @@ void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_T07_LEXER_UAF
     (void)func;
     mp_cstack_init_with_sp_here(mpy_cstack_size());
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
     mp_init();
     mpy_t07_lexer_uaf(res);
     return;
@@ -424,7 +439,7 @@ void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_T16_DEINIT_AFTER_SWEEP
     (void)func;
     mp_cstack_init_with_sp_here(mpy_cstack_size());
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
     mp_init();
     mpy_t16_deinit_after_sweep(res);
     return;
@@ -432,7 +447,7 @@ void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_T29_HIDDEN_ROOT
     (void)func;
     mp_cstack_init_with_sp_here(mpy_cstack_size());
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
     mp_init();
     mpy_t29_hidden_root(res);
     return;
@@ -440,7 +455,7 @@ void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_SPATIAL_OVERFLOW
     (void)func;
     mp_cstack_init_with_sp_here(mpy_cstack_size());
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
     mp_init();
     mpy_spatial_overflow(res);
     return;
@@ -457,6 +472,25 @@ void domain_main(unsigned *res, unsigned func) {
             #endif
         }
         else if (hc_share_count == 1) hc_payload = (volatile char *)res;
+        #if MPY_HEAP_FROM_REGION
+        /* Share 2 is the collector's pool. The order is the guest's and it is fixed there:
+           0 control, 1 output, 2 pool, with the output share unconditional so that the index of
+           the pool does not depend on whether anyone asked for output. The region's own bounds
+           are what gc_init gets, so the guest and the image cannot silently disagree about how
+           big the heap is -- whatever arrives is the heap. */
+        else if (hc_share_count == 2) {
+            /* The end is derived from the base by POINTER arithmetic, never cast back from the
+               integer the builtin returns. A cast produces the right address and no tag, and
+               gc_setup_area computes gc_pool_start from gc_pool_end, so one untagged end makes
+               every object pointer in the heap untagged and the first collection faults with
+               cause 24. Patch 0002 fixed the same mistake inside the collector; this is the same
+               mistake one level out. */
+            unsigned long lo = (unsigned long)(void *)res;
+            unsigned long hi = __builtin_capstone_cap_get_end((void *)res);
+            mpy_pool_base = (unsigned char *)res;
+            mpy_pool_end = mpy_pool_base + (hi - lo);
+        }
+        #endif
         ++hc_share_count;
         return;
     }
@@ -619,7 +653,7 @@ void domain_main(unsigned *res, unsigned func) {
     MPY_MARK(0xA1);            /* the stack limit is set */
 #endif
 
-    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    MPY_GC_INIT();
 #if MPY_STAGE == 2
     MPY_MARK(0xA2);            /* the heap exists */
 #endif

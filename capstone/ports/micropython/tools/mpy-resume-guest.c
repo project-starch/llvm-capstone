@@ -14,7 +14,12 @@
 #define MPY_TEST_START_MAGIC 0x4d50595354415254ULL
 #define MPY_CONTROL_PERM_INOUT 0x1UL
 #define MPY_CONTROL_REV_SHARED 0x2UL
+#define MPY_CONTROL_REV_TRANSFERRED 0x3UL
 #define MPY_OUTPUT_SIZE 4096UL
+/* The collector's heap, matching MPY_HEAP_SIZE in port/mpy_domain.c. They are not required to
+   agree: the domain takes the region's own bounds, so a larger region is simply a larger heap and
+   a smaller one is a smaller heap. */
+#define MPY_POOL_SIZE (384UL * 1024UL)
 
 struct mpy_hostcall_v0 {
     unsigned long long phase, opcode, offset, length;
@@ -22,13 +27,17 @@ struct mpy_hostcall_v0 {
 };
 
 int main(int argc, char **argv) {
-    if (argc != 4 && argc != 5) {
-        fprintf(stderr, "usage: %s DOMAIN START COUNT [--dump-output]\n", argv[0]);
-        return 2;
+    int dump_output = 0, pool_linear = 0;
+    for (int i = 4; i < argc; ++i) {
+        if (strcmp(argv[i], "--dump-output") == 0) dump_output = 1;
+        else if (strcmp(argv[i], "--pool-linear") == 0) pool_linear = 1;
+        else {
+            fprintf(stderr, "unknown option: %s\n", argv[i]);
+            return 2;
+        }
     }
-    int dump_output = argc == 5 && strcmp(argv[4], "--dump-output") == 0;
-    if (argc == 5 && !dump_output) {
-        fprintf(stderr, "unknown option: %s\n", argv[4]);
+    if (argc < 4) {
+        fprintf(stderr, "usage: %s DOMAIN START COUNT [--dump-output] [--pool-linear]\n", argv[0]);
         return 2;
     }
 
@@ -56,19 +65,35 @@ int main(int argc, char **argv) {
     shared_region_annotated(dom_id, control_id, MPY_CONTROL_PERM_INOUT,
                             MPY_CONTROL_REV_SHARED);
 
-    unsigned char *output = NULL;
-    if (dump_output) {
-        region_id_t output_id = create_region(MPY_OUTPUT_SIZE);
-        output = map_region(output_id, MPY_OUTPUT_SIZE);
-        if (output == NULL) {
-            fprintf(stderr, "Failed to map output capture region\n");
-            capstone_cleanup();
-            return 3;
-        }
-        memset(output, 0, MPY_OUTPUT_SIZE);
-        shared_region_annotated(dom_id, output_id, MPY_CONTROL_PERM_INOUT,
-                                MPY_CONTROL_REV_SHARED);
+    /* SHARE ORDER IS THE CAPTURE ORDER IN THE DOMAIN: 0 control, 1 output, 2 pool. The output
+       region is shared even when nobody asked to dump it, because otherwise the index of the pool
+       would depend on a command-line flag, and a pool that lands where the domain expects output
+       is the kind of mistake that reports as a capability fault three layers away. Four kilobytes
+       is the price of that not being possible. */
+    region_id_t output_id = create_region(MPY_OUTPUT_SIZE);
+    unsigned char *output = map_region(output_id, MPY_OUTPUT_SIZE);
+    if (output == NULL) {
+        fprintf(stderr, "Failed to map output capture region\n");
+        capstone_cleanup();
+        return 3;
     }
+    memset(output, 0, MPY_OUTPUT_SIZE);
+    shared_region_annotated(dom_id, output_id, MPY_CONTROL_PERM_INOUT,
+                            MPY_CONTROL_REV_SHARED);
+
+    /* The collector's heap. REV_SHARED arrives NONLIN and is ordinary memory, which is what the
+       arm without the discipline wants; --pool-linear hands it over REV_TRANSFERRED instead, the
+       annotation SQLite's arena uses, so it arrives LIN and csmrev will accept it. One binary
+       serves both arms and the flag says which. */
+    region_id_t pool_id = create_region(MPY_POOL_SIZE);
+    if (map_region(pool_id, MPY_POOL_SIZE) == NULL) {
+        fprintf(stderr, "Failed to map the collector's pool region\n");
+        capstone_cleanup();
+        return 3;
+    }
+    shared_region_annotated(dom_id, pool_id, MPY_CONTROL_PERM_INOUT,
+                            pool_linear ? MPY_CONTROL_REV_TRANSFERRED
+                                        : MPY_CONTROL_REV_SHARED);
 
     for (unsigned long i = 0; i < count; ++i) {
         unsigned long dom_retval = call_dom(dom_id);

@@ -55,6 +55,12 @@ MPY_GC_STATS=${MPY_GC_STATS:-}
 # leaves the suite where it found it until the step that cannot: storage, then taking, then
 # giving. Needs capstone/sublet/sublet.h on the include path.
 MPY_SUBLET=${MPY_SUBLET:-}
+# MPY_HEAP_FROM_REGION=1 takes the collector's heap out of the image and has the guest share it as
+# a region instead. Measured, not assumed: MPY_STAGE=20 reads the type of the capability the entry
+# glue carves for a static array and gets CAP_TYPE_NONLIN, and csmrev asserts CAP_TYPE_LIN, so a
+# static heap can never be revocable. It also takes 384 KiB out of dom_data, so the image's
+# declared requirement shrinks by that much.
+MPY_HEAP_FROM_REGION=${MPY_HEAP_FROM_REGION:-}
 # MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
 # generation and the amalgam cannot disagree) plus lib/oofatfs. Needed only by MPY-T14 and
 # MPY-T15, whose reproductions define their block device in PYTHON, so this needs no host
@@ -230,6 +236,7 @@ SILICON=(-mllvm -capstone-gp-captable
          ${MPY_TESTS:+-DMPY_TEST_RUNNER}
          ${MPY_GC_STATS:+-DMPY_GC_STATS=1}
          ${MPY_SUBLET:+-DMPY_SUBLET=1 -I$SCRIPT_DIR/../../sublet}
+         ${MPY_HEAP_FROM_REGION:+-DMPY_HEAP_FROM_REGION=1}
          # Extra -D flags for one build, word-split on purpose. Without this a
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the
