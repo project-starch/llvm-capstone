@@ -38,6 +38,7 @@ struct free_list {
 };
 
 static sublet_cap arena;                            /* what is left of the region, linear */
+size_t ngx_subpool_arena_left;                      /* and how much of it, counted rather than asked */
 static struct free_list lists[NGX_SUBPOOL_SIZES];
 static unsigned n_lists;
 
@@ -49,6 +50,7 @@ unsigned long ngx_subpool_live;                     /* handed out and not yet ba
 
 void ngx_subpool_init(sublet_cap *region) {
     sublet_move(region, &arena);
+    ngx_subpool_arena_left = (size_t) (sublet_end(&arena) - sublet_base(&arena));
     n_lists = 0;
     ngx_subpool_carved = ngx_subpool_reused = ngx_subpool_returned = ngx_subpool_live = 0;
     for (unsigned i = 0; i < NGX_SUBPOOL_SIZES; i++) {
@@ -79,11 +81,16 @@ int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle) {
         sublet_move(&fl->slot[--fl->count], region);
         ++ngx_subpool_reused;
     } else {
-        unsigned long base = sublet_base(&arena);
-        if (sublet_end(&arena) - base < bytes) {
+        /* Counted, not asked. A carve that reaches exactly to the end of a region moves the whole
+           of it out and leaves the slot EMPTY, and asking an empty slot for its base is an
+           untagged operand, cause 24. So the arena that is exactly spent would have faulted on
+           the request after the one that spent it, which is the opposite of refusing. A count can
+           be read when a slot cannot. */
+        if (ngx_subpool_arena_left < bytes) {
             return 0;                               /* the arena is spent */
         }
-        sublet_carve(&arena, base + bytes, region);
+        sublet_carve(&arena, sublet_base(&arena) + bytes, region);
+        ngx_subpool_arena_left -= bytes;
         ++ngx_subpool_carved;
     }
     /* Senior to everything the level above will carve out of this block, taken BEFORE the first

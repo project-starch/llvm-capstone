@@ -5,7 +5,7 @@
  * because a fault inside a patched ngx_palloc.c would be much harder to read back to its cause.
  * The PostgreSQL port tests its own level below the same way and for the same reason.
  *
- * Seven scenarios, each a claim the design makes:
+ * Eight scenarios, each a claim the design makes:
  *
  *   1  a block comes out linear, objects carve from it, and what is written through an object
  *      reads back
@@ -23,6 +23,10 @@
  *      the pool header sits at the front of its own block and the caller keeps pointing at it
  *      across a reset, so a reset that revoked the whole block would invalidate the pointer its
  *      caller is about to use again
+ *   8  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
+ *      a carve that reaches exactly to the end of a region moves the whole of it out and leaves
+ *      the slot empty, so the request after the one that spent the arena would have asked an
+ *      empty slot for its base, which is a fault and not a refusal
  *
  * A phase counter rides in bits 16..23 of the result. It is not decoration: a build that silently
  * kept an older image, or a run that read an older log, reported a plausible count and no failures
@@ -44,6 +48,7 @@ int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle);
 void ngx_subpool_release(sublet_cap *region, sublet_cap *handle);
 extern unsigned long ngx_subpool_carved, ngx_subpool_reused, ngx_subpool_returned,
                      ngx_subpool_live;
+extern size_t ngx_subpool_arena_left;
 
 static unsigned ran, failures, phase;
 #define CHECK(cond) do { ++ran; if (!(cond)) { ++failures; } } while (0)
@@ -175,6 +180,17 @@ void domain_main(unsigned *res, unsigned func) {
        this block is dropped and the live counter is expected to still show it. */
     sublet_clear(&blk);
     CHECK(ngx_subpool_live == 1);
+
+    /* Spend the arena to the last byte, then ask again. Before the count replaced the query this
+       faulted with cause 24 instead of refusing, and scenario 6 could not see it: 6 asks for more
+       than is left, which the size test catches, and this asks for exactly what is left. */
+    phase = 8;
+    size_t rest = ngx_subpool_arena_left;
+    CHECK(rest > 0);
+    sublet_cap rr, rh, r4, h4;
+    CHECK(ngx_subpool_block(rest, &rr, &rh) == 1);
+    CHECK(ngx_subpool_arena_left == 0);
+    CHECK(ngx_subpool_block(16, &r4, &h4) == 0);
 
     NGX_DOM_MARK(((phase & 0xFF) << 16) | ((ran & 0xFF) << 8) | (failures & 0xFF));
 }
