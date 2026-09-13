@@ -23,6 +23,7 @@ written down.
     usage: gp-initdesc-blocks.py IMAGE...
     exit 0 one block, 1 more than one, 2 the section is unreadable or absent
 """
+import os
 import re
 import struct
 import subprocess
@@ -31,8 +32,25 @@ import sys
 REFUSED, BROKEN = 1, 2
 
 
+def readelf():
+    """The build's own llvm-readelf when the environment names one, PATH otherwise. Bare
+    llvm-readelf is not enough: everything else in the ports reaches into the build directory, so
+    a caller with a working toolchain and an unprepared PATH used to get a traceback here rather
+    than a verdict, and the caller above it read the previous run's answer."""
+    prefix = os.environ.get("CAPSTONE_LLVM_BIN")
+    if prefix:
+        cand = os.path.join(prefix, "llvm-readelf")
+        if os.path.exists(cand):
+            return cand
+    return "llvm-readelf"
+
+
 def section(path, name):
-    out = subprocess.run(["llvm-readelf", "-SW", path], capture_output=True, text=True).stdout
+    try:
+        out = subprocess.run([readelf(), "-SW", path], capture_output=True, text=True).stdout
+    except FileNotFoundError:
+        print("llvm-readelf not found; set CAPSTONE_LLVM_BIN or put it on PATH", file=sys.stderr)
+        sys.exit(BROKEN)
     m = re.search(re.escape(name) + r"\s+\S+\s+(\S+)\s+(\S+)\s+(\S+)", out)
     return None if m is None else tuple(int(m.group(i), 16) for i in (1, 2, 3))
 
