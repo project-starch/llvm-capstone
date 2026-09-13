@@ -293,7 +293,8 @@ link() {  # $1 = globals offset literal, $2 = output
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
   "$LD_LLD" -T "$lds" -o "$2" \
     "$OBJ_DIR/start.o" "$OBJ_DIR/mpy.o" "$OBJ_DIR/beebs_string.o" \
-    "$OBJ_DIR/setjmp.o" "$OBJ_DIR/str_extra.o" "${FLOAT_OBJS[@]}" "$OBJ_DIR/gct.o"
+    "$OBJ_DIR/setjmp.o" "$OBJ_DIR/str_extra.o" "${FLOAT_OBJS[@]}" "$OBJ_DIR/gct.o" \
+    ${DOMREQ_OBJ:+"$DOMREQ_OBJ"}
 }
 
 echo "== pass 1: link at a provisional 8 MiB offset, only to measure .text"
@@ -328,6 +329,46 @@ echo "   cjalr=$NCJALR  ldc-gp=$NLDCGP  cincoffset-gp=$NCINCGP"
 NHDR=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/$DOM_NAME.dom" | grep -c "capstone_gp_table" || true)
 echo "   .capstone_gp_table sections: $NHDR (must be 1)"
 [[ "$NHDR" == "1" ]] || { echo "FAIL: expected exactly one gp-table header, got $NHDR" >&2; exit 1; }
+
+# THE DOMAIN DECLARES WHAT IT NEEDS, instead of leaving the module to infer it from the
+# CODE size. That fallback holds only while text >= cap table + carved storage + stack.
+# SQLite satisfies it with 2.2 MB of text against a modest carve. This port does not:
+# 390 KB of text against ~500 KB of storage, because the GC heap is a 384 KiB global and
+# under gp-captable a global's storage comes out of dom_data. Measured over seven
+# test-table sizes, two came up 68,864 and 125,296 bytes short and died in the entry glue
+# with the globals blob overwritten.
+#
+# THE CARVE is computed from the linked image, which is the only place that knows it.
+# THE STACK is the one number a build has to choose, and it is MEASURED, not guessed: the
+# full upstream test set in a domain, 421 tests, has its deepest stack write 61,416 bytes
+# below the top (capstone-qemu CAPSTONE_STOREWATCH_LOW). 128 KiB is that doubled. It is
+# not a bound -- this pin of MicroPython has no reachable recursion guard, MP_STACK_CHECK()
+# appears zero times in the built translation unit -- so a script that recurses deeper than
+# this will still run past it. Bounding that needs the stack's own capability to stop at
+# the blob, which is a separate change.
+#
+# EXPECT A BIGGER ALLOCATION, and that is the requirement becoming visible rather than a
+# regression: at 60 tests the image runs today on 71,824 bytes of stack against 61,416
+# measured use, ten kilobytes of margin by accident. Declaring an honest stack does not fit
+# 1 MiB, so most sizes move to 2 MiB.
+MPY_DOMAIN_STACK=${MPY_DOMAIN_STACK:-$((128 * 1024))}
+CARVE=$(CAPSTONE_BUILDROOT_DIR="$CAPSTONE_BUILDROOT_DIR" \
+        python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" --carve)
+[[ "$CARVE" =~ ^[0-9]+$ ]] || { echo "could not compute the carve requirement: $CARVE" >&2; exit 1; }
+DOMREQ_DATA=$((CARVE + MPY_DOMAIN_STACK))
+echo "== pass 3: declare dom_data >= $DOMREQ_DATA (carve $CARVE + stack $MPY_DOMAIN_STACK)"
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -DCAPSTONE_DOMREQ_DATA=$DOMREQ_DATA -DCAPSTONE_DOMREQ_STACK=$MPY_DOMAIN_STACK \
+  -c "$LADDER/../domreq.S" -o "$OBJ_DIR/domreq.o"
+# The declaration is non-alloc, so relinking with it must not move a loaded byte. That
+# check is why it is safe to add after the two passes that fix the layout.
+_loaded() { "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$1" | awk '/LOAD/ {print $3, $5, $6}'; }
+_before=$(_loaded "$OUT_DIR/$DOM_NAME.dom")
+DOMREQ_OBJ="$OBJ_DIR/domreq.o" link "$(printf '0x%x' $GOFF)" "$OUT_DIR/$DOM_NAME.dom"
+_after=$(_loaded "$OUT_DIR/$DOM_NAME.dom")
+[[ "$_before" == "$_after" ]] || {
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
+  echo "  before: $_before" >&2; echo "  after:  $_after" >&2; exit 1; }
 
 BUDGET=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" 2>&1 || true)
 echo "$BUDGET"
