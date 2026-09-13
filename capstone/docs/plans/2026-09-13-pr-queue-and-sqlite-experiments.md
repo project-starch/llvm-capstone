@@ -156,6 +156,12 @@ record — the default `build-sqlite-silicon.sh` builds a different, smaller-car
 (declares 2,496,432). Recover the recipe from the matrix driver before attempting it; do not
 substitute the default build.
 
+*Done (2026-09-14):* the recipe is `run-speedtest1-measure.sh` with `SPEEDTEST1_HEAP=2097152` (the
+smaller-carve program was a direct `build-sqlite-silicon.sh` call without the measure script's
+geometry), plus `SPEEDTEST1_STACK=385024`. Rebuilt on the #14 toolchain: oracle hash, identical LOAD
+headers, **692,983,497 = the archived ④ exactly**. ① environment control: −5,993 (1.1e-5), the same
+absolute noise as §7l's size-20 repeat. §4g carries both.
+
 ### 2.2 R-33's rounding-log positive control — image-free, seconds; prerequisite B3
 
 The module's "not representable" line (`capstone.c:279`) has never fired (§7m `:2822-2827`), so

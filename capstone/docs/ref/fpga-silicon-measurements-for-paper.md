@@ -1024,6 +1024,25 @@ Every arm below is `--testset main --size 1 --verify`, `-icount shift=0`.
 directly; ⑥/⑥′ share one and may be compared directly. **⑥ against ⑤ does not**, and the ⑤ᴳ row is
 the evidence that it cannot be made to.
 
+**Post-#14 re-measurement of the pair (2.1, 2026-09-14).** ④ rebuilt on the #14 (S-14 spill fix)
+toolchain with the recovered recipe — `run-speedtest1-measure.sh` defaults (memsys5, lookaside
+`0,0`), `SPEEDTEST1_HEAP=2097152`, and `SPEEDTEST1_STACK=385024` so it loads under the #3 module's
+one-region rule (declares 2,701,904 = the same 2,316,880 of data + the smaller stack figure; LOAD
+headers identical to the archived ④; the knob is diagnostics-only) — image `6cf8edf637f72063`:
+`112006 38bb59fd`, `HEAP 2097152 DROPPED 0 RC 0`, **692,983,497 — identical to the archived ④ to
+the instruction** (pre-registered: identical within icount jitter; the 17 changed instructions all
+sit in `__capstone_cap_init`, which runs once, and 13 of them are 1:1 width swaps). The ① environment
+control — the ARCHIVED native binary `f4cf7caed144d952`, same arguments, today's rootfs, module and
+QEMU pin — hashes to the oracle and reads `BASELINE-WARM CYCLES 545,617,503`, **5,993 below the
+archived 545,623,496 (1.1e-5)**; the inner `SPEEDTEST1-CYCLES` moved by the same 5,993, so the
+difference is inside the run (kernel activity under a native process), not in the wrapper. The
+pre-registration said ~1e-7, which is §7l's size-20 two-run figure (1,847 instructions absolute on
+14.15 G); on a 545 M count the same absolute noise is 1e-5, and the domain arm — which runs under
+the monitor with no kernel interleaving — reproduces to zero. Both figures are far inside the 0.17 pp
+the matrix ratios are quoted to. Reconciled while at it: the ① row's 545,623,496 is the outer
+`BASELINE-WARM CYCLES` of the archived run and the 545,609,572 in the same log is speedtest1's inner
+`SPEEDTEST1-CYCLES` (13,924 apart, the warm wrapper's own work); one run, two counters.
+
 The native rows are `speedtest1_baseline warm` — the **warm** subcommand, which the source names as
 the denominator, not `run`. Their `sqlite_heap` is 2,097,152 bytes, read with `llvm-nm -S` and equal
 to ④/⑤'s `HEAP`, so the two ABI ratios below are geometry-matched.

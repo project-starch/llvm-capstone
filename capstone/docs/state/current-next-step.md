@@ -125,6 +125,11 @@
   `__capstone_cap_init` span (5,419 instructions, local labels included): `sd ra` 15 → 2 and
   `stc ra` 23 → 36 (13 spills widened) plus 4 `ld ra` → `ldc ra` reloads = the 17-instruction static
   diff. Counting only up to the first local label reads 1 → 1 and misses all of it.
+* **2.1 (post-#14 icount pair) DONE 2026-09-14, recipe recovered:** ④ = measure-script defaults +
+  `SPEEDTEST1_HEAP=2097152` (+ `SPEEDTEST1_STACK=385024` to load on #3): `6cf8edf637f72063` hashes to
+  the oracle and counts **692,983,497 — identical to the archived ④**. ① environment control (archived
+  native binary, today's environment): 545,617,503, 5,993 below the archived count (1.1e-5; the
+  pre-registered ~1e-7 was §7l's size-20 figure, 1,847 absolute — same absolute noise). §4g.
 * **⑤ᴳ heap sweep (2.5) DONE 2026-09-14:** memsys5 + lookaside completes at 1,572,864 (oracle,
   678,529,384 cycles) and faults at 1,310,720 and below; the fault is the exit handler's deliberate
   UNEXPECTED_CAP_TYPE after `fatal_error` (`capstone_stdio_on_exit+0x6c`), identical at every size —
