@@ -2873,12 +2873,42 @@ reading of it as a failure signature was wrong.
 domain never ran". Here the domain *did* receive control, inside the share, and hung there. Those
 need different fixes.
 
-**What is NOT established.** Whether this is size-dependent or per-image. §7k's three shares — with a
-**2 MiB** arena — all returned, which is suggestive, but those are different images. §7h's 130 MiB
-region was created and mapped but, as far as this document records, never *shared to a domain*. So
-"sharing a large region to a domain" may simply be untested territory rather than a size threshold.
-N=1, and the discriminator is a redraw (for per-image) or the same image at a smaller arena (for
-size), which needs a host rebuild since the arena is compiled in.
+> **⚠ CORRECTED 2026-09-13, SAME DAY: THIS IS NOT A SIZE QUESTION, AND THE "2 MiB WORKS"
+> COMPARISON WAS A MISCOUNT.** The paragraph here originally offered "size-dependent or per-image"
+> and cited §7k's "three shares with a 2 MiB arena" as a working counter-example. **§7k did not have
+> three shares.** `share3` is `#ifdef SPEEDTEST1_REGION_ARENA` (`sqlite_host.c:580-587`), and sw56's
+> own capture reads `share1=7, share2=7, **share3=0**` — two shares per arm, no region arena at all.
+> The same is true of §7m's bridge, sw63. It was a fourth, non-SQLite `SHA` block being read as a
+> share. **So there is no known-good point for this path at ANY size, and sw64 was the first board
+> exercise of the `REV_SHARED` region-arena share, ever.** The right third option — which the
+> original paragraph did not list — is **branch-dependent**.
+
+**The account that fits, and it is not about size.** The host shares the arena `REV_SHARED`
+(`sqlite_host.c:584-586`). The monitor **de-linearises it before the domcall**
+(`sbi_capstone.c:1396-1399`: `if (cap_type(r) == CAP_TYPE_LINEAR) r = __delin(r);`), so the domain
+receives a **NONLIN** capability. The domain then de-linearises it **again**
+(`speedtest1_measure.c:722`). On this RTL `DELIN` raises `UNEXPECTED_CAP_TYPE` for any non-LINEAR
+operand, and a domain runs with **`mtvec = 0`** — so the fault vectors to pc 0, lands outside PCC and
+re-faults forever, silently. `SHA5` then nothing is exactly that shape.
+
+**QEMU cannot see this, by construction.** Its `helper_csdelin` was patched to return early when the
+capability is already NONLIN, so a double de-linearise is silent under emulation and fatal on
+silicon — which is why every emulated run of this configuration is green.
+
+**The source carries the contradiction that let it ship.** `speedtest1_measure.c:705` says the
+REGION_ARENA grant "arrives already-NONLIN from a REV_SHARED share, where the delin is redundant";
+`:713`, *inside that branch*, says "The grant arrives LINEAR". The monitor settles it for `:705`.
+
+**Nothing on the SHA5→SHA6 path scales with size**, which is the other half of why the size framing
+was wrong. The only length-bounded loop in the monitor is the reclaim fill, gated on
+`cap_type == UNINIT` and sitting *before* SHA3/SHA4/SHA5 — all of which printed. The domain side is
+three O(1) instructions. No constant was found that 134,217,728 exceeds and 2,097,152 does not.
+
+**Still N=1 and still an account rather than a reading.** The discriminator is **not** a size sweep:
+an `--arena N` ladder shares `REV_BORROWED` (`sqlite_host.c:601`), which the monitor does *not*
+de-linearise, so it exercises a path that cannot reproduce this fault and would return a clean sweep
+proving nothing. The cheap discriminator is one arm with a trap vector installed
+(`INTERP_DOMAIN_MTVEC=1`), which converts the silent re-fault into a labelled `mcause`/`mepc`.
 
 **HOW THIS COST 8 HOURS, which is the part worth carrying forward.** `SQLITE_IDLE_S` was set to
 28,800 s deliberately, to protect an arm that is *legitimately* silent for hours — speedtest1's

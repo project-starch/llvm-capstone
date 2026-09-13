@@ -184,10 +184,33 @@ BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
 
 `FPGA_FW` has no default on purpose — an implicit one silently boots whatever was built last.
 
-**If you supervise the run with `board-watchdog.sh` (the SQLite staged path does), keep
-`ENTRY_STALL_S` ≥ 260.** The JTAG upload is **133–227 s of entirely legitimate UART silence**
-(~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. The old 45 s default did
-exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
+**START `board-watchdog.sh` YOURSELF. Nothing starts it for you, and `ENTRY_STALL_S` does
+NOTHING without it.** This sentence used to read "(the SQLite staged path does)" and that was
+false: `run_sqlite_stages_fpga.py` never references `ENTRY_STALL_S` at all — only the watchdog
+reads it. Exporting it into a driver and believing you were covered is what cost **boot sw64
+eight hours** on a domain that faulted in its first seconds. Launch it beside the runner:
+
+```bash
+python3 -m fpga_driver.run_sqlite_stages_fpga > $OUT/driver.log 2>&1 &   RUNNER=$!
+ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=420 \
+  bash board-watchdog.sh "$OUT/driver.log" 900 "$RUNNER" > $OUT/watchdog.log 2>&1 &
+```
+
+Point it at the **live `driver.log`** — `PROBE_SCOPED_OUT`/`PROBE_RAW_OUT` are only written when
+the run ends, which is too late to abort anything.
+
+**It is safe beside a legitimately silent multi-hour arm**, so there is no trade-off to agonise
+over: it kills only when the last share marker is `SHA5` with no `SHA6`. Plain idle-limit
+exceeded merely prints `STALE`. That distinction is the whole point — a workload arm can be
+silent for hours *after* `SHA6`, and an entry stall is silent *at* `SHA5`.
+
+**Afterwards, confirm it actually ran** (`grep -c '^ALIVE\|^QUIET' watchdog.log`), because
+"configured but never started" is precisely the failure it exists to prevent, and it is invisible
+otherwise.
+
+**Keep `ENTRY_STALL_S` ≥ 260.** The JTAG upload is **133–227 s of entirely legitimate UART
+silence** (~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. The old 45 s
+default did exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
 "firmware is broken" diagnoses. Scope any log scan to **this run's own `load_image`** — the
 console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
 stale markers.

@@ -961,6 +961,51 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
+### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `OPEN — ACCOUNT, not yet a reading: it explains boot sw64's hang exactly and is traced through quoted code end to end, but the confirming mcause/mepc arm has not been run. QEMU cannot reproduce it by construction`
+
+> **The chain, each link quoted.** The host shares SQLite's arena with annotation **`REV_SHARED`**
+> (`ports/sqlite/sqlite_host.c:584-586`). The monitor **de-linearises it before handing it over** —
+> `sbi_capstone.c:1396-1399`, `if (cap_type(r) == CAP_TYPE_LINEAR) r = __delin(r);` — so the domain
+> receives a **NONLIN** capability. The domain then de-linearises it **again**
+> (`ports/sqlite/speedtest1_measure.c:722`, `__builtin_capstone_cap_delin`). This RTL's `DELIN`
+> raises **`UNEXPECTED_CAP_TYPE`** for any non-LINEAR operand.
+>
+> **Why that presents as a hang rather than a fault — this is [[M-1]]'s first measured cost.** A
+> domain runs with `mtvec = 0`, so the fault vectors to pc 0, lands outside PCC, and re-faults
+> forever in silence. Boot sw64 showed `SHA5` (the monitor about to enter the domain) and never
+> `SHA6`, then **eight hours** of nothing. M-1 has been `OPEN — OURS, FIX FIRST` for some time on
+> principle; this is the first time it has been billed.
+>
+> **QEMU cannot see it, by construction.** `helper_csdelin` was patched to return early when the
+> capability is already NONLIN, so the double de-linearise is silent under emulation and fatal on
+> silicon. Every emulated run of this configuration is green, including the size-20 pair that was
+> used to justify the board run.
+>
+> **The source contains the contradiction that let it ship.** `speedtest1_measure.c:705` states the
+> REGION_ARENA grant "arrives already-NONLIN from a REV_SHARED share, where the delin is redundant";
+> `:713`, *inside that very branch*, states "The grant arrives LINEAR". The monitor settles it in
+> favour of `:705`. The wrong comment is what made a redundant call look load-bearing, so the fix has
+> to correct both.
+>
+> **It is NOT a region-size problem, and an earlier reading of it as one is retracted in §7n.**
+> `share3` is `#ifdef SPEEDTEST1_REGION_ARENA`; sw56's capture reads `share3=0`, so §7k never shared
+> a region arena at all and neither did §7m's bridge. **There is no known-good point for this path at
+> any size — sw64 was its first board exercise, ever.** Nothing on the `SHA5`→`SHA6` path scales with
+> length: the only length-bounded loop in the monitor is the reclaim fill, gated on
+> `cap_type == UNINIT` and sitting before SHA3/SHA4/SHA5, all of which printed.
+>
+> **What would settle it, and what would NOT.** Build the domain with `INTERP_DOMAIN_MTVEC=1` and
+> re-run the same configuration at the same size: a trap vector converts the silent re-fault into a
+> labelled return, and the prediction is `mcause & 0x3F == UNEXPECTED_CAP_TYPE` with
+> `(mepc − _start) >> 2` landing on `:722`. **An `--arena N` size ladder would NOT settle it** —
+> `--arena` shares `REV_BORROWED` (`sqlite_host.c:601`), which the monitor does not de-linearise, so
+> the domain's delin is legal there and the ladder would return a clean sweep that proves nothing
+> about this fault.
+>
+> **Fix, once the reading confirms:** delete the delin at `speedtest1_measure.c:722` and correct the
+> comment at `:713`. Related: [[M-1]] (the silence), §7n (the boot), §7m (unaffected — the bridge used
+> the static-heap build, two shares, and its seven pairs stand).
+
 ### S-14 — `__capstone_cap_init` reloads a capability spill slot with a scalar `ld`, so the tag is lost before the domain runs `ROOT CAUSE IDENTIFIED 2026-09-11 — a CODEGEN defect, not image or dom_data geometry; two triggers shown to be one defect; the compiler fix is not yet made`
 
 **What happens.** The `restored` SQLite silicon image built with all eight `-U` defines does not run:
@@ -3496,7 +3541,7 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 > which says exactly this in its own comment). Two-halves would silently drop the high half — **worse
 > than today's diagnostic**, which is correct and should stand.
 
-### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
+### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one`
 
 > **2026-09-09, board lane — the remaining half is RTL-side, ownership moves to the RTL lane.** The
 > firmware half (the trap-vector context slot written by `create_domain`) has been on silicon since
