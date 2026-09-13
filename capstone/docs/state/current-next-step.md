@@ -1,4 +1,21 @@
-## 0. CURRENT — 2026-09-13. **THE BRIDGE HOLDS; §7f–§7k CARRY FORWARD. The size-20 rehearsal is the next reading.**
+## 0. CURRENT — 2026-09-13. **BRIDGE HOLDS. The size-20 rehearsal FAILED at the 128 MiB arena's SHARE, and cost 8 h to a timeout that should have been a 3-minute abort.**
+
+> **sw63 discharged the bridge.** §7k's images unchanged, all seven pairs within 0.075 pp of their
+> §7k values against a 0.171 pp band. §7f–§7k carry forward. §7m.
+>
+> **sw64 did NOT produce a rehearsal.** No CPI, no ratio. Control passed; then `share3` — the
+> 128 MiB arena — reached `SHA5` (monitor handing control to the domain) and never reached `SHA6`, so
+> the host never got to its own `enter`. **Creation of the 128 MiB arena WORKS**
+> (`SQ: arena_bytes=134217728`); it is the SHARE that hangs. Not the generic R-16 "never ran": the
+> domain got control and hung inside it. §7n.
+>
+> **Two things before any further board time.** (1) **The entry gate must be separate from the idle
+> budget.** `SQLITE_IDLE_S=28800` was correct for a legitimately silent multi-hour arm and is what
+> turned this into an 8-hour loss; `ENTRY_STALL_S=420` was exported but is read ONLY by
+> `board-watchdog.sh`, which the driver never started, so it did nothing. Reaching `SHA6`/`G/enter`
+> must be bounded in minutes, then the long budget applies. (2) **Decide size vs per-image** before
+> re-running: a redraw tests per-image, a smaller arena tests size and needs a host rebuild.
+
 
 > **Boot sw63 discharged the bridge.** §7k's images unchanged on `caplifive_r30r31_1bfff7776`, every
 > comparable pair within **0.07 pp** of its §7k value against a 0.171 pp band, `main` at 1.2195 vs

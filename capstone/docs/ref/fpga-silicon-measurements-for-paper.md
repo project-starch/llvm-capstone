@@ -2834,3 +2834,61 @@ independently checkable and is what actually licenses the comparison.
 **What this does not license.** It re-ties the *ratios*. Cross-boot *absolutes* still belong to the
 0.171 pp regime, and three of these seven testsets (`fp`, `cte`, `rtree`) have no §7k ratio recorded
 here to compare against — their values are new, not confirmations.
+
+### §7n — BOOT sw64: the size-20 rehearsal FAILED, and it failed at the 128 MiB arena's SHARE, not at entry (2026-09-13)
+
+**No CPI was measured and no ratio exists.** The rehearsal did not complete. Recorded because the
+failure is specific and useful, and because the way it cost 8 hours is a process defect of this
+lane's making.
+
+**What ran.** `caplifive_r30r31_1bfff7776`, monitor `4274268`, firmware `cadc8f2c4470`, the manifested
+size-100 artifact set (`23da3b126a304585` / `ed54878519b96816` / `7c27697818b0abe0`, verified by hash
+from both `overlay/` and `build/target/` after the bake). Control first: **`k800 retval=4`,
+cycles 4486, instret 1089** — the boot carries a verdict. Then the `--size 20` domain arm.
+
+**The one genuinely new positive result: a 128 MiB arena is CREATED on silicon.**
+`SQ: C2/mkarena` then **`SQ: arena_bytes=134217728`**. Creation of a region that large, as SQLite's
+heap, works. §7h had shown a 130 MiB region created and mapped; this shows one created *as the
+speedtest1 arena*.
+
+**Where it stopped, read from the monitor's own share trace rather than inferred.** The host prints
+each marker *before* the corresponding call, so a printed marker is an attempt, not a success. The
+`SHA0..SHA6` sequence (`SHA5` = about to leave M-mode for the domain, `SHA6` = the domain returned)
+appears four times:
+
+| block | `SHA1` = `region_cpmp[id]` | ends at |
+|---|---|---|
+| 1 | 7 | `SHA6` — returned |
+| 2 → `share1`, metadata | 0x0B | `SHA6` — returned |
+| 3 → `share2`, payload | 0x0C | `SHA6` — returned |
+| **4 → `share3`, the 128 MiB arena** | **−1** | **`SHA5`, and no `SHA6`** |
+
+So the monitor handed control to the domain on the arena's share and **never got it back**. That is
+why there is no `SQ: G/enter`: the host never reached its own `enter` call at `sqlite_host.c:617`,
+because `shared_region_annotated` at `:584` did not return. `SHA1 = −1` is **not** a fault — it means
+the region is read from `regions[]` rather than a CPMP slot (`sbi_capstone.c:1749`), and an earlier
+reading of it as a failure signature was wrong.
+
+**The driver classified this as an R-16 entry stall, and that label is too coarse.** R-16 is "the
+domain never ran". Here the domain *did* receive control, inside the share, and hung there. Those
+need different fixes.
+
+**What is NOT established.** Whether this is size-dependent or per-image. §7k's three shares — with a
+**2 MiB** arena — all returned, which is suggestive, but those are different images. §7h's 130 MiB
+region was created and mapped but, as far as this document records, never *shared to a domain*. So
+"sharing a large region to a domain" may simply be untested territory rather than a size threshold.
+N=1, and the discriminator is a redraw (for per-image) or the same image at a smaller arena (for
+size), which needs a host rebuild since the arena is compiled in.
+
+**HOW THIS COST 8 HOURS, which is the part worth carrying forward.** `SQLITE_IDLE_S` was set to
+28,800 s deliberately, to protect an arm that is *legitimately* silent for hours — speedtest1's
+output goes into the shared region and prints only at the end. That same setting turned a failure
+that was decidable in minutes into a full 8-hour timeout. **And the protection that should have
+caught it was inert:** `ENTRY_STALL_S=420` was exported, but `ENTRY_STALL_S` is read **only** by
+`board-watchdog.sh`, which this driver never started — so it did nothing. The value was copied from
+earlier drivers that also never started the watchdog, where it was equally decorative.
+
+**The fix is a separate short gate, not a smaller budget**, because the two requirements genuinely
+conflict: reaching `SQ: G/enter` (or a share's `SHA6`) must be bounded in **minutes**, and only after
+that should the long idle budget apply. A single idle number cannot serve both, and setting it for
+the silent arm is what made an 8-hour loss out of a 3-minute answer.
