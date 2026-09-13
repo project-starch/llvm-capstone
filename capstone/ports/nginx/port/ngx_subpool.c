@@ -1,0 +1,108 @@
+/* The level below nginx's pool, under Sublet: blocks that arrive LINEAR, so the pool above can
+ * carve objects out of them and one revocation can take a whole pool's objects with it.
+ *
+ * WHY A SECOND LEVEL 0 AND NOT pg_level0.c. That one is a real allocator over a region and it is
+ * what the unprotected arm uses, deliberately, so that a difference between the arms is never the
+ * level below being different in kind. What it cannot do is hand out a LINEAR block: it returns
+ * ordinary pointers into one arena, and csmrev refuses anything that is not CAP_TYPE_LIN, so
+ * nothing carved from such a block could ever be revoked. This file is the same allocator with
+ * that one difference.
+ *
+ * IT NEVER MERGES, and it does not need to. nginx asks for blocks of a handful of distinct sizes,
+ * the pool size it was created with, and gives each one back whole at ngx_destroy_pool. So a
+ * freed block goes on a free list for its own size and is handed out again as it is. That is the
+ * property the MicroPython collector did not have and could not be given: there, free space came
+ * back one object at a time and had to be joined, and joining needs a handle senior to exactly two
+ * neighbours, which a front-carving allocator never has.
+ *
+ * The arena arrives once, as one linear region, and is carved forward. What is carved is never
+ * returned to it -- only to the free list -- so the arena's own cursor only moves one way.
+ */
+#include <stddef.h>
+#include <stdint.h>
+
+#include "sublet.h"
+
+#ifndef NGX_SUBPOOL_SIZES
+#define NGX_SUBPOOL_SIZES 8       /* distinct block sizes; nginx uses one or two */
+#endif
+#ifndef NGX_SUBPOOL_FREE_PER_SIZE
+#define NGX_SUBPOOL_FREE_PER_SIZE 64
+#endif
+
+/* One entry per free block: the region itself, linear, ready to be handed out again. */
+struct free_list {
+    size_t bytes;                                   /* what this list's blocks measure */
+    unsigned count;
+    sublet_cap slot[NGX_SUBPOOL_FREE_PER_SIZE];
+};
+
+static sublet_cap arena;                            /* what is left of the region, linear */
+static struct free_list lists[NGX_SUBPOOL_SIZES];
+static unsigned n_lists;
+
+/* Counters, so the test and the measurement can both ask what happened rather than infer it. */
+unsigned long ngx_subpool_carved;                   /* blocks cut from the arena */
+unsigned long ngx_subpool_reused;                   /* blocks handed out from a free list */
+unsigned long ngx_subpool_returned;                 /* blocks given back */
+unsigned long ngx_subpool_live;                     /* handed out and not yet back */
+
+void ngx_subpool_init(sublet_cap *region) {
+    sublet_move(region, &arena);
+    n_lists = 0;
+    ngx_subpool_carved = ngx_subpool_reused = ngx_subpool_returned = ngx_subpool_live = 0;
+    for (unsigned i = 0; i < NGX_SUBPOOL_SIZES; i++) {
+        lists[i].bytes = 0;
+        lists[i].count = 0;
+    }
+}
+
+static struct free_list *list_for(size_t bytes, int create) {
+    for (unsigned i = 0; i < n_lists; i++) {
+        if (lists[i].bytes == bytes) {
+            return &lists[i];
+        }
+    }
+    if (!create || n_lists == NGX_SUBPOOL_SIZES) {
+        return NULL;
+    }
+    lists[n_lists].bytes = bytes;
+    lists[n_lists].count = 0;
+    return &lists[n_lists++];
+}
+
+/* A block, linear, with its handle. The caller keeps both: the region to carve from and the
+   handle that will revoke everything carved out of it. */
+int ngx_subpool_block(size_t bytes, sublet_cap *region, sublet_cap *handle) {
+    struct free_list *fl = list_for(bytes, 0);
+    if (fl != NULL && fl->count > 0) {
+        sublet_move(&fl->slot[--fl->count], region);
+        ++ngx_subpool_reused;
+    } else {
+        unsigned long base = sublet_base(&arena);
+        if (sublet_end(&arena) - base < bytes) {
+            return 0;                               /* the arena is spent */
+        }
+        sublet_carve(&arena, base + bytes, region);
+        ++ngx_subpool_carved;
+    }
+    /* Senior to everything the level above will carve out of this block, taken BEFORE the first
+       carve, because that is the only moment at which such a handle can be had. */
+    sublet_handle(region, handle);
+    ++ngx_subpool_live;
+    return 1;
+}
+
+/* One revocation, and every object the level above carved out of this block dies with it. The
+   block itself comes back whole and goes on its size's free list. */
+void ngx_subpool_release(size_t bytes, sublet_cap *region, sublet_cap *handle) {
+    sublet_give_to(handle, region);
+    ++ngx_subpool_returned;
+    --ngx_subpool_live;
+    struct free_list *fl = list_for(bytes, 1);
+    if (fl == NULL || fl->count == NGX_SUBPOOL_FREE_PER_SIZE) {
+        sublet_clear(region);                       /* nowhere to keep it: let it go */
+        return;
+    }
+    sublet_move(region, &fl->slot[fl->count++]);
+}

@@ -11,10 +11,19 @@
 #define NGX_ARENA_BYTES (1UL << 20)   /* one mebibyte: the driver's thousand cycles fit easily */
 #define NGX_PERM_INOUT  0x1UL
 #define NGX_REV_SHARED  0x2UL
+/* The annotation SQLite's arena uses. A region shared this way arrives LINEAR, which csmrev
+   requires and REV_SHARED cannot give, so the Sublet arm needs it and the plain arm does not. */
+#define NGX_REV_TRANSFERRED 0x3UL
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s DOMAIN\n", argv[0]);
+    int linear = 0;
+    for (int i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--arena-linear") == 0) { linear = 1; continue; }
+        fprintf(stderr, "unknown option: %s\n", argv[i]);
+        return 2;
+    }
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s DOMAIN [--arena-linear]\n", argv[0]);
         return 2;
     }
     int rc = capstone_init();
@@ -33,7 +42,8 @@ int main(int argc, char **argv) {
         return 3;
     }
     memset(mapped, 0, NGX_ARENA_BYTES);
-    shared_region_annotated(dom, arena, NGX_PERM_INOUT, NGX_REV_SHARED);
+    shared_region_annotated(dom, arena, NGX_PERM_INOUT,
+                            linear ? NGX_REV_TRANSFERRED : NGX_REV_SHARED);
 
     unsigned long v = call_dom(dom);
     printf("ngx retval = %lu\n", v);
