@@ -15,9 +15,9 @@ NGX_SRC_DIR=${NGX_SRC_DIR:-$CAPSTONE_TMP_ROOT/nginx-${NGX_VERSION:-1.28.0}}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/nginx-domain}
 OBJ=$OUT_DIR/obj; mkdir -p "$OBJ"
 DOM_NAME=${DOM_NAME:-ngx-pool}
-# NGX_DOMAIN=subpool builds the level below's own test instead of the pool driver. Separate images
-# on purpose: a fault ends a domain, so a driver that provoked one could not report the results
-# beside it, and the level below is the piece to prove first.
+# NGX_DOMAIN picks the driver: pool is the 78-check one, subpool is the level below's own test,
+# uaf is the one that touches an object after its pool was destroyed. Separate images on purpose:
+# a fault ends a domain, so a driver that provoked one could not report the results beside it.
 NGX_DOMAIN=${NGX_DOMAIN:-pool}
 CLANG=$CAPSTONE_CLANG
 LD_LLD=$CAPSTONE_LD_LLD
@@ -74,6 +74,8 @@ AMALGAM=$OBJ/ngx_all.c
   if [ "$NGX_DOMAIN" = subpool ]; then
     echo "#include \"$SCRIPT_DIR/port/ngx_subpool.c\""
     echo "#include \"$SCRIPT_DIR/port/ngx_subpool_test.c\""
+  elif [ "$NGX_DOMAIN" = uaf ]; then
+    echo "#include \"$SCRIPT_DIR/port/ngx_uaf.c\""
   else
     echo "#include \"$SCRIPT_DIR/port/ngx_domain.c\""
   fi
