@@ -46,6 +46,11 @@ MPY_TEST_OFFSET=${MPY_TEST_OFFSET:-0}
 MPY_TEST_MAX_BYTES=${MPY_TEST_MAX_BYTES:-0}
 # Additional direct children of tests/, space-separated. The default remains basics-only.
 MPY_TEST_BASE_DIR=${MPY_TEST_BASE_DIR:-basics}
+# MPY_GC_STATS=1 counts what the collector does: objects allocated, cycles run, and per cycle how
+# many objects survive and how many the sweep collects. It is the instrument for A18, and it is a
+# knob rather than a default because it adds a global and five increments, so an image built
+# without it is byte for byte the image from before the counters existed.
+MPY_GC_STATS=${MPY_GC_STATS:-}
 # MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
 # generation and the amalgam cannot disagree) plus lib/oofatfs. Needed only by MPY-T14 and
 # MPY-T15, whose reproductions define their block device in PYTHON, so this needs no host
@@ -219,6 +224,7 @@ SILICON=(-mllvm -capstone-gp-captable
          -DCAPSTONE_GP_CAPTABLE_ABI=1
          ${MPY_STAGE:+-DMPY_STAGE=$MPY_STAGE}
          ${MPY_TESTS:+-DMPY_TEST_RUNNER}
+         ${MPY_GC_STATS:+-DMPY_GC_STATS=1}
          # Extra -D flags for one build, word-split on purpose. Without this a
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the

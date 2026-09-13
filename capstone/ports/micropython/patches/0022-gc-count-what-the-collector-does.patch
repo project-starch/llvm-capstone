@@ -1,0 +1,151 @@
+Count what the collector does, behind MPY_GC_STATS.
+
+The nested-allocator claim rests on a number nobody has: how many objects live inside the single
+capability this heap occupies. The machine sees one 384 KiB global among 634; the program sees
+every Python object ever allocated, and the collector decides when each one dies without the
+program saying anything. Counting them is the measurement, and A18's design fork needs a second
+number beside it -- what fraction of the live set a cycle collects -- because a revocation per
+collected object and a revocation per cycle have opposite cost curves.
+
+The sweep already distinguishes exactly the three cases this needs, in the pass it runs anyway:
+AT_HEAD is an object the cycle collects, AT_MARK is one that survives it, and a tail follows its
+head. So the instrument is three increments in an existing switch and two in gc_alloc, with no
+second pass over the heap and no new side table. Adding a table would move the pool and change the
+image layout, which this port has a recorded hazard about.
+
+OFF unless the build asks for it. Without MPY_GC_STATS the preprocessor removes every field and
+every increment, so the image is byte for byte the one without this patch.
+
+--- a/py/gc.h
++++ b/py/gc.h
+@@ -90,4 +90,29 @@
+ void gc_dump_info(const mp_print_t *print);
+ void gc_dump_alloc_table(const mp_print_t *print);
+ 
++// MPY_GC_STATS: count what the collector does, for the nested-allocator measurement. The
++// question it answers is how many objects live inside the single capability this heap occupies,
++// and what fraction of them a cycle collects, because those two decide whether a revocation
++// belongs per object or per cycle. OFF unless the build asks, so an image without it is byte for
++// byte the image without this patch.
++#ifndef MPY_GC_STATS
++#define MPY_GC_STATS (0)
++#endif
++
++#if MPY_GC_STATS
++typedef struct _mpy_gc_stats_t {
++    unsigned long alloc_calls;       // gc_alloc calls that handed out memory
++    unsigned long alloc_blocks;      // blocks handed out, cumulative
++    unsigned long cycles;            // sweeps run
++    unsigned long swept_objects;     // heads the sweep returned to FREE, cumulative
++    unsigned long swept_blocks;      // blocks the sweep returned to FREE, cumulative
++    unsigned long live_objects;      // heads that survived a sweep, summed over cycles
++    unsigned long live_blocks;       // blocks that survived a sweep, summed over cycles
++    unsigned long max_live_objects;  // the most that survived any one cycle
++    unsigned long max_swept_objects; // the most any one cycle collected
++} mpy_gc_stats_t;
++
++const mpy_gc_stats_t *mpy_gc_stats(void);
++#endif
++
+ #endif // MICROPY_INCLUDED_PY_GC_H
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -30,6 +30,14 @@
+ #include <string.h>
+ 
+ #include "py/gc.h"
++
++#if MPY_GC_STATS
++static mpy_gc_stats_t mpy_gc_stats_v;
++
++const mpy_gc_stats_t *mpy_gc_stats(void) {
++    return &mpy_gc_stats_v;
++}
++#endif
+ #include "py/runtime.h"
+ 
+ #if MICROPY_DEBUG_VALGRIND
+@@ -715,6 +723,12 @@
+     MP_STATE_MEM(gc_collected) = 0;
+     #endif
+     int free_tail = 0;
++    #if MPY_GC_STATS
++    // Per cycle, folded into the totals at the end. The sweep already distinguishes the three
++    // cases this needs, so counting them costs three increments and no second pass: AT_HEAD is an
++    // object the cycle collects, AT_MARK is one that survives it, and the tails follow their head.
++    unsigned long swept_objects = 0, swept_blocks = 0, live_objects = 0, live_blocks = 0;
++    #endif
+     #if MICROPY_GC_SPLIT_HEAP_AUTO
+     mp_state_mem_area_t *prev_area = NULL;
+     #endif
+@@ -732,17 +746,26 @@
+                     #if MICROPY_PY_GC_COLLECT_RETVAL
+                     MP_STATE_MEM(gc_collected)++;
+                     #endif
++                    #if MPY_GC_STATS
++                    swept_objects++;
++                    #endif
+                     // fall through to free the head
+                     MP_FALLTHROUGH
+ 
+                 case AT_TAIL:
+                     if (free_tail) {
+                         ATB_ANY_TO_FREE(area, block);
++                        #if MPY_GC_STATS
++                        swept_blocks++;
++                        #endif
+                         #if CLEAR_ON_SWEEP
+                         memset((void *)PTR_FROM_BLOCK(area, block), 0, BYTES_PER_BLOCK);
+                         #endif
+                     } else {
+                         last_used_block = block;
++                        #if MPY_GC_STATS
++                        live_blocks++;
++                        #endif
+                     }
+                     break;
+ 
+@@ -750,6 +773,10 @@
+                     ATB_MARK_TO_HEAD(area, block);
+                     free_tail = 0;
+                     last_used_block = block;
++                    #if MPY_GC_STATS
++                    live_objects++;
++                    live_blocks++;
++                    #endif
+                     break;
+             }
+         }
+@@ -767,6 +794,20 @@
+         prev_area = area;
+         #endif
+     }
++
++    #if MPY_GC_STATS
++    mpy_gc_stats_v.cycles++;
++    mpy_gc_stats_v.swept_objects += swept_objects;
++    mpy_gc_stats_v.swept_blocks += swept_blocks;
++    mpy_gc_stats_v.live_objects += live_objects;
++    mpy_gc_stats_v.live_blocks += live_blocks;
++    if (swept_objects > mpy_gc_stats_v.max_swept_objects) {
++        mpy_gc_stats_v.max_swept_objects = swept_objects;
++    }
++    if (live_objects > mpy_gc_stats_v.max_live_objects) {
++        mpy_gc_stats_v.max_live_objects = live_objects;
++    }
++    #endif
+ }
+ 
+ // Address sanitizer needs to know that the access to ptrs[i] must always be
+@@ -1014,6 +1055,11 @@
+     void *ret_ptr = (void *)(area->gc_pool_start + start_block * BYTES_PER_BLOCK);
+     DEBUG_printf("gc_alloc(%p)\n", ret_ptr);
+ 
++    #if MPY_GC_STATS
++    mpy_gc_stats_v.alloc_calls++;
++    mpy_gc_stats_v.alloc_blocks += n_blocks;
++    #endif
++
+     #if MICROPY_GC_ALLOC_THRESHOLD
+     MP_STATE_MEM(gc_alloc_amount) += n_blocks;
+     #endif
