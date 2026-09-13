@@ -1,0 +1,20 @@
+diff --git a/py/gc.c b/py/gc.c
+index a75d26eca..923c8595b 100644
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -236,7 +236,14 @@ static void gc_setup_area(mp_state_mem_area_t *area, void *start, void *end) {
+ 
+ void gc_init(void *start, void *end) {
+     // align end pointer on block boundary
+-    end = (void *)((uintptr_t)end & (~(BYTES_PER_BLOCK - 1)));
++    // Subtract the misalignment rather than masking the address: on a target whose
++    // pointers carry out-of-band metadata, masking produces a plain integer and the
++    // result is unusable. The volatile stops the optimizer folding this back into a
++    // mask, which it otherwise does.
++    {
++        volatile uintptr_t gc_misalign = (uintptr_t)end & (BYTES_PER_BLOCK - 1);
++        end = (void *)((byte *)end - gc_misalign);
++    }
+     DEBUG_printf("Initializing GC heap: %p..%p = " UINT_FMT " bytes\n", start, end, (byte *)end - (byte *)start);
+ 
+     #if MICROPY_GC_SPLIT_HEAP

@@ -1,0 +1,23 @@
+Give deflate's stream ioctl the port-configurable argument type.
+
+Patch 0012 made MICROPY_STREAM_IOCTL_ARG_TYPE configurable because uintptr_t keeps only the
+address of a 128-bit Capstone capability, and converted every ioctl slot in py/ to the new
+mp_stream_ioctl_arg_t. extmod/moddeflate.c was outside that sweep and still declares uintptr_t,
+so on a port that selects a different carrier the initialiser of deflateio_stream_p is an
+incompatible function pointer -- a diagnostic upstream, and a wrong call ABI in practice.
+
+deflateio_ioctl reads only `request`, never `arg`, so this is the declaration alone.
+
+diff --git i/extmod/moddeflate.c w/extmod/moddeflate.c
+index 920b898b2..5255b48bb 100644
+--- i/extmod/moddeflate.c
++++ w/extmod/moddeflate.c
+@@ -306,7 +306,7 @@ static inline void put_be32(char *buf, uint32_t value) {
+ }
+ #endif
+ 
+-static mp_uint_t deflateio_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
++static mp_uint_t deflateio_ioctl(mp_obj_t self_in, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode) {
+     if (request == MP_STREAM_CLOSE) {
+         mp_obj_deflateio_t *self = MP_OBJ_TO_PTR(self_in);
+ 

@@ -1,0 +1,39 @@
+Avoid pointer arithmetic on an empty ordered map's NULL table.
+
+New ordered dictionaries start with used=0, alloc=0 and table=NULL. mp_map_lookup nevertheless
+formed both &table[0] and &table[used] before discovering that the search range was empty. Although
+this often behaves like a harmless NULL + 0 operation on conventional targets, it is undefined C;
+on Capstone it lowers to cincoffset with a non-capability NULL base and raises capability cause 24.
+
+Skip directly to the existing not-found path when the ordered map is empty. This preserves normal
+MicroPython behaviour and lets insertion allocate the first table before any pointer arithmetic.
+
+Across the first 600 EXTRA+MPZ direct tests, exactly the five mp_map_lookup faults change status:
+builtin_help.py reaches its pre-existing semantic mismatch, while class_ordereddict.py,
+ordereddict1.py, ordereddict_eq.py and slice_optimise.py pass. All other statuses and result words
+remain unchanged.
+
+diff --git i/py/map.c w/py/map.c
+index d40e3dc4d..f07811c80 100644
+--- i/py/map.c
++++ w/py/map.c
+@@ -191,5 +191,11 @@ mp_map_elem_t *MICROPY_WRAP_MP_MAP_LOOKUP(mp_map_lookup)(mp_map_t * map, mp_obj_
+     // if the map is an ordered array then we must do a brute force linear search
+     if (map->is_ordered) {
++        // Avoid pointer arithmetic on the NULL table of an empty ordered map.
++        // This is undefined in C and capability machines cannot represent the
++        // otherwise-benign NULL + 0 operation as a valid pointer.
++        if (map->used == 0) {
++            goto ordered_not_found;
++        }
+         for (mp_map_elem_t *elem = &map->table[0], *top = &map->table[map->used]; elem < top; elem++) {
+             if (elem->key == index || (!compare_only_ptrs && mp_obj_equal(elem->key, index))) {
+                 #if MICROPY_PY_COLLECTIONS_ORDEREDDICT
+@@ -209,6 +215,7 @@ mp_map_elem_t *MICROPY_WRAP_MP_MAP_LOOKUP(mp_map_lookup)(mp_map_t * map, mp_obj_
+                 return elem;
+             }
+         }
++    ordered_not_found:
+         #if MICROPY_PY_COLLECTIONS_ORDEREDDICT
+         if (MP_LIKELY(lookup_kind != MP_MAP_LOOKUP_ADD_IF_NOT_FOUND)) {
+             return NULL;

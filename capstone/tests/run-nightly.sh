@@ -18,7 +18,7 @@
 #     --clean            also rebuild capstone-qemu + buildroot from their build
 #                        scripts (slow); default is an incremental clang build
 #     --skip-build       run suites against the current toolchain, no rebuild
-#     --extended         also run the setup-heavier suites (postgres/sqlite/
+#     --extended         also run the setup-heavier suites (micropython/postgres/sqlite/
 #                        hostcall/nullblk)
 #     --only a,b,c       run only the named suites (see --list); still serial
 #     --quick            the ~3 min pre-commit tier (smoke, coremark, borrow-cost,
@@ -51,6 +51,7 @@ BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
 # separately so the next move breaks one line, not two.
 SQLITE_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/sqlite"
 POSTGRES_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/postgres"
+MICROPYTHON_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/micropython"
 CORE_SUITES=(
   # 3600 for the same reason as the two below, and this one is self-inflicted:
   # before stage 1 the suite returned on the first exhausted boot, so it "finished"
@@ -124,6 +125,12 @@ EXTENDED_SUITES=(
   # below against every claim the design makes about it, then the manager over
   # it with the teardown cost an identity the domain checks itself.
   "postgres-sublet|bash $POSTGRES_DIR/run-pg-sublet-gate.sh|3600"
+  # micropython is the third application gate, and it is here rather than in
+  # CORE because its first run clones MicroPython at its pin. Three steps: the
+  # verdict logic refuses wrong answers, the image links in two passes and
+  # fits what the module can create, and a fixed set of upstream tests runs in
+  # a domain scored against what the host Python produced.
+  "micropython|bash $MICROPYTHON_DIR/run-micropython-gate.sh|3600"
   "sqlite-borrow-revoke|bash $RUNTIME_DIR/run-sqlite-borrow-revoke-probe.sh"
   "sqlite-hier-revoke|bash $RUNTIME_DIR/run-sqlite-hier-revoke-probe.sh"
   "sqlite-sealed-callback|bash $RUNTIME_DIR/run-sqlite-sealed-callback-revoke-probe.sh"

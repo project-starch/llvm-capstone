@@ -1,0 +1,68 @@
+Resolve built-in subpackages without external import support.
+
+The reduced importer used when MICROPY_ENABLE_EXTERNAL_IMPORT is disabled only looked up the full
+requested name in the built-in module tables. It therefore could not import a built-in subpackage
+such as string.templatelib, even when MICROPY_MODULE_BUILTIN_SUBPACKAGES was enabled and the parent
+module exposed that submodule in its fixed globals.
+
+Walk dotted names through built-in modules in the reduced importer, using the same fixed-globals
+contract as the external importer. Preserve Python's top-level-versus-leaf return rule according
+to whether a from-list was supplied.
+
+diff --git i/py/builtinimport.c w/py/builtinimport.c
+index dfdb6e297..1c2566529 100644
+--- i/py/builtinimport.c
++++ w/py/builtinimport.c
+@@ -654,3 +654,51 @@ mp_obj_t mp_builtin___import___default(size_t n_args, const mp_obj_t *args) {
+     }
+-
++    #if MICROPY_MODULE_BUILTIN_SUBPACKAGES
++    // Resolve dotted names through the fixed globals of built-in packages.
++    // The external importer has the same path in process_import_at_level(),
++    // but this reduced importer must not require filesystem support for it.
++    size_t full_name_len;
++    const char *full_name = mp_obj_str_get_data(args[0], &full_name_len);
++    size_t component_start = 0;
++    mp_obj_t top_module_obj = MP_OBJ_NULL;
++    mp_obj_t leaf_module_obj = MP_OBJ_NULL;
++    for (size_t i = 0; i <= full_name_len; ++i) {
++        if (i != full_name_len && full_name[i] != '.') {
++            continue;
++        }
++        qstr component = qstr_find_strn(full_name + component_start, i - component_start);
++        if (component == MP_QSTRnull) {
++            leaf_module_obj = MP_OBJ_NULL;
++            break;
++        }
++        if (top_module_obj == MP_OBJ_NULL) {
++            leaf_module_obj = mp_module_get_builtin(component, false);
++            #if MICROPY_HAVE_REGISTERED_EXTENSIBLE_MODULES
++            if (leaf_module_obj == MP_OBJ_NULL) {
++                leaf_module_obj = mp_module_get_builtin(component, true);
++            }
++            #endif
++            top_module_obj = leaf_module_obj;
++            if (leaf_module_obj == MP_OBJ_NULL) {
++                break;
++            }
++        } else {
++            mp_obj_module_t *module = MP_OBJ_TO_PTR(leaf_module_obj);
++            if (!module->globals->map.is_fixed) {
++                leaf_module_obj = MP_OBJ_NULL;
++                break;
++            }
++            elem = mp_map_lookup(&module->globals->map, MP_OBJ_NEW_QSTR(component), MP_MAP_LOOKUP);
++            if (elem == NULL || !mp_obj_is_type(elem->value, &mp_type_module)) {
++                leaf_module_obj = MP_OBJ_NULL;
++                break;
++            }
++            leaf_module_obj = elem->value;
++        }
++        component_start = i + 1;
++    }
++    if (leaf_module_obj != MP_OBJ_NULL) {
++        return n_args >= 4 && args[3] != mp_const_none ? leaf_module_obj : top_module_obj;
++    }
++    #endif
++
+     // Try the name directly as a non-extensible built-in (e.g. `micropython`).
