@@ -25,7 +25,8 @@ typedef struct ngx_pool_s   ngx_pool_t;
     (u_char *) (((uintptr_t) (p) + ((uintptr_t) (a) - 1)) & ~((uintptr_t) (a) - 1))
 #define ngx_align(d, a)  (((d) + (a - 1)) & ~(a - 1))
 #define ngx_memzero(buf, n)  (void) memset(buf, 0, n)
-#define ngx_free            free
+void ngx_free_wrap(void *);
+#define ngx_free            ngx_free_wrap
 #define NGX_LOG_ALERT 1
 #define NGX_LOG_DEBUG_ALLOC 0
 #define NGX_FILE_ERROR -1
