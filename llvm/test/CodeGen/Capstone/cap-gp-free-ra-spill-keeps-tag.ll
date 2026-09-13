@@ -37,9 +37,19 @@
 ; globals at up to 300 entries, a call with 24 capability arguments, and inline asm
 ; with 28 live capability inputs. The real __capstone_cap_init reaches it because its
 ; initialisers are nested aggregates the cap-global pass walks recursively, which
-; keeps a holder capability live across many leaves. The gate that does catch the
-; defect is capstone/tests/capinit-scan.py, run over a built domain image, which is
-; also what issue S-14 asks for: gate on the pattern, not on a geometry number.
+; keeps a holder capability live across many leaves.
+;
+; CORRECTED 2026-09-13 when this landed: this test is BYTE-IDENTICAL through the
+; pre-fix and post-fix llc (both rebuilt from source, not the stale binary), so it
+; does not gate the fix -- its 20-global shape never spills a capability into ra.
+; And capinit-scan.py does NOT catch this defect either: it flags a scalar BASE
+; feeding an ldc/stc, whereas S-14 is a truncated SPILL (sd ra for a capability),
+; so it reads "no faulting" on both the pre-fix and post-fix images. The gate that
+; actually fires is the count of `sd ra`/`sd c1` 8-byte Folded Spills in a
+; high-pressure __capstone_cap_init: the 160-test MicroPython image has 14 pre-fix
+; (13 truncating a capability) and 1 post-fix (the prologue save). Reproduce the
+; defect with pressure, measure it by the spill count -- not with this test and not
+; with capinit-scan's faulting verdict.
 ;
 ; WHICH ABI CARRIES THE CHECK. capstoneGpFreeAbiActive() is true under gp-free and
 ; under gp-captable, so both take the arm and one reproducer locks it for both. Only
