@@ -1,0 +1,87 @@
+Give the collector a slot per block for a revocation handle, supplied from outside the pool.
+
+The first step of putting this heap under Sublet, and deliberately the step that changes no
+behaviour: the storage exists, gc_init clears it, and nothing reads it yet. If the suite moves at
+this commit, the cause is the storage and not the discipline, which is the only reason to split
+the two.
+
+WHY ONE SLOT PER BLOCK. The measurement behind it is in the counters patch: over the upstream
+suite this heap allocates 369,904 objects and collects 250,171 of them in 54 cycles, a mean of 34
+survivors against 4,633 collected. The cheaper-looking design, one revocation of a handle senior
+to the whole pool per cycle, would be 54 revocations instead of 250,171, and it does not work
+here: revoking the senior handle kills every alias below it including the survivors', and those
+aliases are held by the program inside other objects, in registers and on the stack. A non-moving
+collector cannot hand replacements to pointers it does not own. So each object carries its own
+handle, and the handle needs somewhere to live.
+
+WHY NOT CARVED FROM THE HEAP, the way the finaliser and weakref tables are. The experiment
+compares this arm against the same collector without the discipline. A table taken out of the pool
+would leave the two arms with different amounts of memory to collect, and the comparison would
+carry that difference for the rest of its life. The port hands the slots in from outside instead,
+so the pool is byte for byte the same in both arms and the only thing that differs is what happens
+to a pointer. The cost moves to the domain's data region, which declares its own size and can
+afford it, and the cost is larger than a first estimate said. A block is
+4 * MP_BYTES_PER_OBJ_WORD, and mp_uint_t here is uintptr_t at eight bytes rather than the width of
+a capability, so a block is 32 bytes and not 64. A 384 KiB heap is 12,288 blocks, and a handle
+apiece is 192 KiB: HALF the heap, beside it. Measured on the built image, mpy_gc_handles_storage
+is 0x30000 bytes and the domain's storage grows from 852,480 to 1,049,120, leaving 564,224 bytes
+of stack where there were 761,008.
+
+Most of those slots are never used, because only a block that begins an object needs a handle and
+an object averages 2.3 blocks. A denser table would need an index that does not exist, and raising
+MICROPY_BYTES_PER_GC_BLOCK would halve the table at the price of internal fragmentation, which is
+a POLICY change and this experiment's condition is that the policy does not move. So the table
+stays dense, and its size is reported rather than engineered away.
+
+The size check is an assertion rather than a raise. gc_init runs before there is an NLR handler,
+so raising there would hang the domain instead of reporting, and the port carries the same
+invariant as a static assertion where both sizes are compile-time constants.
+
+--- a/py/gc.h
++++ b/py/gc.h
+@@ -115,4 +115,26 @@
+ const mpy_gc_stats_t *mpy_gc_stats(void);
+ #endif
+ 
++// MPY_SUBLET: the heap under the discipline. Every object leaves this collector as an alias of
++// its own rather than as an offset into the one capability the whole heap occupies, and the
++// handle that revokes it lives in a slot the port supplies, one per block.
++//
++// WHY THE TABLE IS NOT CARVED FROM THE HEAP, the way the finaliser and weakref tables are: the
++// experiment compares this arm against the same collector without the discipline, and a table
++// taken out of the pool would leave the two arms with different amounts of memory to collect. The
++// port hands the slots in from outside, so the pool is byte for byte the same in both arms and the
++// only thing that differs is what happens to a pointer.
++#ifndef MPY_SUBLET
++#define MPY_SUBLET (0)
++#endif
++
++#if MPY_SUBLET
++#include "sublet.h"
++
++// One slot per block of the pool, supplied by the port. gc_init checks that it is large enough
++// and refuses rather than running with a table that ends before the pool does.
++extern sublet_cap *mpy_gc_handles;
++extern size_t mpy_gc_handles_len;
++#endif
++
+ #endif // MICROPY_INCLUDED_PY_GC_H
+--- a/py/gc.c
++++ b/py/gc.c
+@@ -212,6 +212,16 @@
+     area->gc_last_free_atb_index = 0;
+     area->gc_last_used_block = 0;
+ 
++    #if MPY_SUBLET
++    // One slot per block, and the pool must not outrun it: a table that ends early would hand out
++    // an object whose handle belongs to another. This is an assert and not a raise because
++    // gc_init runs before there is an NLR handler to catch anything, so raising here would hang
++    // the domain instead of reporting. The port carries the same invariant as a static assertion,
++    // where both sizes are compile-time constants and the mistake cannot reach a build.
++    assert(mpy_gc_handles_len >= gc_pool_block_len);
++    memset(mpy_gc_handles, 0, gc_pool_block_len * sizeof(sublet_cap));
++    #endif
++
+     #if MICROPY_GC_SPLIT_HEAP
+     area->next = NULL;
+ 

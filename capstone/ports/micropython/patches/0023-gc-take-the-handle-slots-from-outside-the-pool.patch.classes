@@ -1,0 +1,10 @@
+# The class and level of every hunk in 0023, for capstone/tests/port-effort.py.
+# Written with the patch, not after it, which is the rule this experiment insists on.
+#
+# Both hunks are metadata layout. The handle that revokes an object is bookkeeping the collector
+# did not have to keep before, it cannot live in the object it revokes, and the whole change is
+# deciding where it lives instead. The include of sublet.h rides along in the first hunk; the
+# tie-break gives a hunk the class that drove it, and the storage drove this one.
+
+py/gc.h:115   metadata   allocator   the slot table is declared, and where it may not live is why
+py/gc.c:212   metadata   allocator   gc_init clears it and asserts the pool cannot outrun it
