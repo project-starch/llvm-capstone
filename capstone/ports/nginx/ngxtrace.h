@@ -48,7 +48,12 @@ enum {
   NGXT_BLOCKS,       /* not a call: what the pool took from level 0 over this
                         file, aux = most held at once, s1 taken, s2 given back,
                         s3 asked for with an alignment of its own              */
-  NGXT_END,          /* s1 = records, s2 = pools, s3 = objects                 */
+  NGXT_END,          /* s1 = records, s2 = pools, s3 = objects, aux = calls that
+                        reached a wrapped entry point from inside another one and
+                        were therefore NOT recorded. Expected zero. Reported rather
+                        than asserted, because a recorder that took the process down
+                        would lose the run, and a reader can refuse a file that has
+                        a nonzero here.                                          */
 };
 
 /* A worker is forked from the master without exec, so its history begins in another process's
