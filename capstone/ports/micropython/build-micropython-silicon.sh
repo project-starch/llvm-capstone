@@ -336,6 +336,18 @@ echo "$BUDGET"
 # faults on EVERY normal call -- 200 tests, 200 reboots, no results. Not fatal (a 4 MiB chunk has
 # also run clean), so this warns rather than stops; a runner that would spend an hour on the image
 # should refuse it instead.
+# REFUSE A BUILD THE BUDGET SAYS DOES NOT FIT. This used to print the verdict and carry
+# on, so an image whose carve overruns dom_data got built, shipped to a runner and died in
+# its entry glue with the globals blob overwritten -- a fault that looks like a compiler or
+# monitor defect and costs a day. Two of seven test-table sizes were in that state
+# (160 and 200 tests, short by 68,864 and 125,296 bytes) and the budget line said "fits",
+# because the predictor modelled an allocation rule the kernel module does not have.
+# The predictor is fixed; this is the half that makes its answer count.
+if grep -q 'DOES NOT FIT' <<<"$BUDGET"; then
+  echo "FAIL: the carve does not fit dom_data for this image. Lower MPY_HEAP_SIZE or the" >&2
+  echo "      test count, or raise the domain allocation. The budget above has the numbers." >&2
+  exit 1
+fi
 if grep -qE 'order=1[0-9]' <<<"$BUDGET"; then
   echo "   WARNING: domain allocation is larger than 2 MiB -- images this size have faulted on" >&2
   echo "            every call despite VERDICT: fits. Prefer smaller test chunks." >&2
