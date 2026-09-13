@@ -237,47 +237,24 @@ def main():
     dom_headroom = code_len if code_len > dom_data_size else dom_data_size
     pages = (code_len + dom_headroom - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
-    data_order = None
-    if req is not None and DOMREQ_IS_CONSUMED:
-        # ONE region, sized from the declaration, matching module/capstone.c.
-        need_alloc = code_len + MONITOR_SPLIT_SLACK + req[0]
+    # The module (module/capstone.c, ioctl_create_dom) now READS .capstone_domreq, so a
+    # declaring image is sized from its declaration and an undeclared one keeps the old
+    # rule. DOMREQ_IS_CONSUMED is True permanently; the "declared but ignored" path this
+    # file used to carry -- and the two-region shape it modelled -- described a module that
+    # did not exist, and are gone. When the module grows a genuine second region (the case
+    # #17's comment names, an image whose single power-of-two block clears the order
+    # ceiling), model it HERE, from that code, not ahead of it.
+    declared = req if (req is not None and DOMREQ_IS_CONSUMED) else None
+    if declared is not None:
+        # ONE region: code_len + MONITOR_SPLIT_SLACK + domreq_data, rounded to a
+        # power-of-two page count -- the module's own arithmetic.
+        need_alloc = code_len + MONITOR_SPLIT_SLACK + declared[0]
         pages = (need_alloc - 1) // PAGE + 1
         order = 0 if pages == 1 else (pages - 1).bit_length()
         while (1 << order) * PAGE < need_alloc:
             order += 1
-        tot_size = (1 << order) * PAGE
-        dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
-        req = None                       # the branches below are the undeclared shape
-        declared_alloc = True
-    else:
-        declared_alloc = False
-    if req is not None and not DOMREQ_IS_CONSUMED:
-        # DEAD PATH, kept only so it comes back with the consumer. .capstone_domreq is
-        # emitted by domreq.S and by the SQLite build, and read by NOBODY: not the
-        # userspace loader, not the kernel module, not the monitor (grepped 2026-09-13).
-        # Modelling the two-region plan made this script report a declaring image as
-        # comfortable when the module was still applying its fallback rule to it, which
-        # is the same class of lie as the order drift above. A declaration is treated as
-        # absent until something reads it.
-        req = None
-    if req is not None:
-        # A declaring image gets TWO regions (module/capstone.c, ioctl_create_dom):
-        # code alone in one, seal + dom_data in the other. The point is that neither
-        # is sized by the other, so an image that needed a single 16 MiB block needs
-        # two 4 MiB ones -- both inside the stock allocator's reach.
-        while (1 << order) * PAGE < code_size:
-            order += 1
-        data_need = MONITOR_SEAL_SIZE + req[0]
-        dpages = (data_need - 1) // PAGE + 1
-        data_order = 0 if dpages == 1 else (dpages - 1).bit_length()
-        while (1 << data_order) * PAGE < data_need:
-            data_order += 1
-        tot_size = (1 << order) * PAGE
-        dom_data = (1 << data_order) * PAGE - MONITOR_SEAL_SIZE
-        need = data_need
-    elif not declared_alloc:
-        tot_size = (1 << order) * PAGE
-        dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
+    tot_size = (1 << order) * PAGE
+    dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
 
     secs = sections(path)
     gbase = secs.get(".capstone_gp_initdesc", (None,))[0]
@@ -301,22 +278,19 @@ def main():
 
     stack = dom_data - blob - table - storage
 
-    if req is not None:
-        print(f"  declared        dom_data>={req[0]:>10}  (stack {req[1]})")
+    if declared is not None:
+        print(f"  declared        dom_data>={declared[0]:>10}  (stack {declared[1]})  "
+              f"-- one region: code_len + {MONITOR_SPLIT_SLACK} slack + dom_data")
     else:
         print(f"  declared        nothing -- module sizes it as code_len + max(code_len, DOMAIN_DATA_SIZE)")
     print(f"  image           code_len={code_len:>10}  code_size={code_size:>10}")
-    if data_order is None:
-        print(f"  allocation      pages={pages:<6} order={order:<3} tot_size={tot_size:>10}")
-    else:
-        print(f"  allocation      TWO regions: code order={order} ({tot_size}), "
-              f"data order={data_order} ({(1 << data_order) * PAGE})")
+    print(f"  allocation      pages={pages:<6} order={order:<3} tot_size={tot_size:>10}")
     print(f"  dom_data        {dom_data:>10}")
     print(f"    - blob        {blob:>10}   (globals_off=0x{globals_off:x} .. code_size)")
     print(f"    - cap table   {table:>10}   ({count} globals)")
     print(f"    - storage     {storage:>10}")
     print(f"    = STACK       {stack:>10}")
-    worst = order if data_order is None else max(order, data_order)
+    worst = order
     if worst > MAX_ALLOC_ORDER:
         biggest = largest_code_len()
         print(f"  VERDICT: DOES NOT FIT -- order {worst} exceeds the kernel's maximum "
