@@ -39,6 +39,11 @@ MPY_TESTS=${MPY_TESTS:-}
 # Zero-based offset into the sorted candidate list. This permits a suite that is too large for
 # one domain image to be covered by several independently runnable chunks.
 MPY_TEST_OFFSET=${MPY_TEST_OFFSET:-0}
+# A source-size ceiling per test, 0 for none, which is the default. The 1500-byte ceiling this
+# once carried dropped 69 of the 576 for no stated reason; the image declares its own dom_data
+# requirement now, and the build refuses one whose carve does not fit, so size is checked where
+# it can actually be measured rather than guessed at in the selection.
+MPY_TEST_MAX_BYTES=${MPY_TEST_MAX_BYTES:-0}
 # Additional direct children of tests/, space-separated. The default remains basics-only.
 MPY_TEST_BASE_DIR=${MPY_TEST_BASE_DIR:-basics}
 # MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
@@ -134,15 +139,16 @@ MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
 # all the ROM level. mpconfigport.h starts from "nothing optional is enabled" so that a test
 # failing for want of a builtin says nothing about capabilities, and that stays the default.
 # The levels below are what the upstream test set answers to, measured in a domain, one round
-# each with no restart, scored with output capture so a test that declares itself inapplicable is
-# not read as a failure. The corpus is NOT fixed across the four: the selection asks this build
-# which modules it registers, so a higher level admits more tests as well as passing more.
+# each with no restart, with MPY_FLOAT_CORE=1 (which is what admits the float tests), and scored
+# with output capture so a test that declares itself inapplicable is not read as a failure. The
+# corpus is NOT fixed across the four: the selection asks this build which modules it registers,
+# so a higher level admits more tests as well as passing more of them.
 #
 #   level     selected  pass  fail  self-skip  fault
 #   minimum      495     303   118      73       1
 #   core         545     425    56      64       0
 #   extra        554     543     1      10       0
-#   full         554     546     1       7       0
+#   full         554     548     1       5       0
 #
 # tests/basics holds 576. The 22 the selection never offers at any level are 6 that need weakref
 # (upstream gates it at EVERYTHING and it wants a GC side table this port does not build), 6 that
@@ -161,11 +167,15 @@ MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
 # purpose. mp_obj_list_append+0x38 is `ld a0, 0x18(a1)` with a1 holding the integer 1, so the
 # domain halts with cause 24 where a conventional machine reads address 0x18 and carries on.
 #
-# Three of the ten self-skips at `extra` are single switches that upstream gates at EVERYTHING or
-# FULL_FEATURES, and `full` turns exactly those three on. Of the seven left at `full`, two
-# (fun_code_full.py, fun_code_colines.py) need MICROPY_PY_BUILTINS_CODE at FULL, which is
-# reachable only through MICROPY_PY_SYS_SETTRACE -- and that is NOT offered here, deliberately.
-# Turning it on builds and then takes the suite to 312 pass with 89 FAULTS, 85 of them at one site,
+# Five of the ten self-skips at `extra` are single switches that upstream gates at EVERYTHING or
+# FULL_FEATURES and that need nothing this domain lacks, so `full` turns exactly those five on.
+# The five that remain at `full` each have a reason that is not a switch. Two (fun_code_full.py,
+# fun_code_colines.py) need MICROPY_PY_BUILTINS_CODE at FULL, which is reachable only through
+# MICROPY_PY_SYS_SETTRACE -- and that is NOT offered here, deliberately. nanbox_smallint.py asks
+# for the nan-boxing object representation, which a 128-bit capability cannot have. sys_stdio.py
+# and sys_stdio_buffer.py want sys.stdout as an object, and MICROPY_PY_SYS_STDFILES takes its
+# type from the VFS file objects, so it costs the filesystem stack to satisfy two tests.
+# Turning settrace on builds and then takes the suite to 312 pass with 89 FAULTS, 85 at one site,
 # mp_emit_common_populate_module_context+0x1b0, where the compiler fills a module's constant
 # table. That is a capability defect in a code path only settrace reaches, and it wants the
 # same treatment S-14 got rather than a knob that hands someone 89 faults.
@@ -177,7 +187,7 @@ case "${MPY_FEATURE_LEVEL:-minimum}" in
   minimum) MPY_LEVEL_DEFS="" ;;
   core)    MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_CORE_FEATURES" ;;
   extra)   MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES -DMICROPY_LONGINT_IMPL=MICROPY_LONGINT_IMPL_MPZ" ;;
-  full)    MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES -DMICROPY_LONGINT_IMPL=MICROPY_LONGINT_IMPL_MPZ -DMICROPY_PY_BUILTINS_RANGE_BINOP=1 -DMICROPY_PY_ALL_INPLACE_SPECIAL_METHODS=1 -DMICROPY_PY_FUNCTION_ATTRS_CODE=1" ;;
+  full)    MPY_LEVEL_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES -DMICROPY_LONGINT_IMPL=MICROPY_LONGINT_IMPL_MPZ -DMICROPY_PY_BUILTINS_RANGE_BINOP=1 -DMICROPY_PY_ALL_INPLACE_SPECIAL_METHODS=1 -DMICROPY_PY_FUNCTION_ATTRS_CODE=1 -DMICROPY_PY_SYS_GETSIZEOF=1 -DMICROPY_PY_COLLECTIONS_NAMEDTUPLE__ASDICT=1" ;;
   *) echo "MPY_FEATURE_LEVEL must be minimum, core, extra or full" >&2; exit 1 ;;
 esac
 DOMAIN_EXTRA_DEFS="${MPY_LEVEL_DEFS}${DOMAIN_EXTRA_DEFS:+ $DOMAIN_EXTRA_DEFS}"
