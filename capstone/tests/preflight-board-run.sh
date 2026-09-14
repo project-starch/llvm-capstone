@@ -395,7 +395,12 @@ if [[ -n "$RUNGS" ]]; then
   # version of this grepped the whole file and therefore matched matmult_int in the DO-NOT-USE
   # table, returning GO for the exact mistake this gate exists to catch. A gate that cannot
   # fail its own negative test is worse than no gate: it grants false confidence.
-  if [[ -f "$CONTROLS" ]] && sed '/^## NOT controls/,$d' "$CONTROLS" | grep -qE "^\| *\`?$first\`? "; then
+  # `grep -c`, NOT `grep -q`: under `pipefail` an early `grep -q` exit on the match SIGPIPEs sed while
+  # it still has a block to write, and the pipeline reads as BLOCK on a PRESENT control. Measured, not
+  # guessed: the refusal diagnostic below recorded `pipestatus=[141 0] rows=1` on 2026-09-15 05:51
+  # (E1 rep 2 boot 4), after the same false refusal took arm C at 02:25 and R1 boot 5 at 03:45.
+  # Counting reads the whole input, so the writer always finishes; the verdict is unchanged.
+  if [[ -f "$CONTROLS" ]] && sed '/^## NOT controls/,$d' "$CONTROLS" | grep -cE "^\| *\`?$first\`? " >/dev/null; then
     ok "control '$first' has a published passing record"
   else
     _ps="${PIPESTATUS[*]}"

@@ -3905,7 +3905,13 @@ rewrite of the controls file in the shared checkout (none in the reflog, mtime u
 hand every time). The gate now prints, at that refusal only, what it saw rather than what it concluded —
 pwd, `PIPESTATUS`, the file's stat, its own row count re-run, the grep and sed binaries, the load —
 verified to fire on the negative control; the next refusal is diagnosable, and the drivers' `done`
-marker after a refused run is a separate mis-marker to fix.)
+marker after a refused run is a separate mis-marker to fix.) **Diagnosed at the third refusal (E1
+repetition 2, boot 4, 05:51): `pipestatus=[141 0] rows=1` — sed killed by SIGPIPE when `grep -q`
+exited on the match, `pipefail` turning that into a BLOCK on a present control.** The mechanism the
+by-hand trials could not force (they never let sed be preempted between its two writes); the
+gate's own record did. Fixed with `grep -c` (the whole input is read, so the writer always finishes;
+the verdict is unchanged, both controls re-verified). Cost tonight: three refused launches, each
+rerun. A gate that records what it saw at refusal is what turned "unexplained" into "measured".
 
 **Arm C (boot sw8x-optC2, 02:46–02:57): the prediction holds to the unit.** Image `2b9e4d0d3ed523c9`
 (`setupLookaside` alone `optnone, noinline` inside the otherwise -O2 build; emulator 338,503,051 at the
