@@ -3407,7 +3407,7 @@ native OFF 54,214,856,567 (sw68) / ON 53,142,976,993 (sw77); domain OFF 64,732,4
 63,437,512,052; ratios 1.1940 / 1.1937. Every caveat of §7p applies (timing not met, cycles only, N = 1
 per arm).
 
-### §7r — E1 of the Sublet-paper plan: the S1/S2 safety matrix on hardware, repetition 1 (boots sw78 r1b1–r1b3, 2026-09-14 evening)
+### §7r — E1 of the Sublet-paper plan: the S1/S2 safety matrix on hardware, repetition 1 (boots sw78 r1b1–r1b5, 2026-09-14 evening to 2026-09-15 00:1x)
 
 **What ran.** The three probe families of the collaborator's `s2/3-manager-hierarchy` branch (`d5954cc0e7e7`),
 built in a detached worktree of that branch with one addition, a `DOMAIN_BASE_VA` knob for
@@ -3482,9 +3482,11 @@ after it, `656cc03489`, does not touch `helper_cslcc`):
   where ISSUES R-31's 2026-09-10 block already settled the gate from source" and "an untagged base, the
   2026-08-04 NOT_CAP result re-observed" — is read by two diagnostic stages added tonight (stop 10: the
   reloaded pointer's type before the touch, emulator 7 as predicted; stop 11: the type and the touch in
-  one run, faults on the emulator): r1b4/r1b5, PENDING. Either way, on the deployed configuration a
-  data access through a stale pointer inside a domain is not stopped by a trap; capability-manipulating
-  instructions are. The paper's three `tab:safety` rows that say "stops at access" rest on emulator
+  one run, faults on the emulator): r1b4 read s10 as **CA0180** and r1b5 read s11 as **CB0100** — the
+  base is TAGGED (type 1) on silicon, so the LSU let a load through a capability under a revoked node
+  retire, the never-before-measured domain-side reading of the M-mode gate. On the deployed
+  configuration a data access through a stale pointer inside a domain is not stopped by a trap (s3
+  reads the fill, s5 reads the new occupant); capability-manipulating instructions are (s9). The paper's three `tab:safety` rows that say "stops at access" rest on emulator
   evidence — the lead's framing call, raised in the 2026-09-14 report.
 
 Caveats: N = 1 per cell (repetitions 2 and 3 follow); s9 is single-source board evidence; the boots'
@@ -3502,7 +3504,34 @@ the block's extent held. The PostgreSQL subpool test `91d23730153d6a18` @0x11000
 board monitor delivers already non-linear (the S-15 class); the nginx images use the ladder's
 `start-gp-captable-interp.S` and enter. Recorded `unsupported` (implementation-unavailable); the fix is
 the port's. The hierarchy test (`7284f2f8db444e87`, the same glue) and s5 were behind it and run in
-boots r1b4/r1b5: PENDING.
+boots r1b4/r1b5.
+
+**Boot r1b4 (23:34–23:55, after a two-hour wait for the machine memory lock held by another project's
+build).** The diagnostic stage s10 (`ccd06246ba515b4a` @0x390000, board-lane addition: the reloaded
+stale pointer's type before the touch, packed with the address's low byte) → **CA0180** on silicon
+against **CA0780** on the emulator: the pointer reloaded from its stack slot after the pool's destroy is
+**tagged, type 1 (non-linear)**, on the RTL, and untagged (7) on the emulator. So stop 3's byte load
+went through a tagged capability whose node was revoked, and the LSU let it retire: the node-validity
+clause is inapplicable below M-mode, as ISSUES R-31's 2026-09-10 block derived from source — a
+domain-side measurement, not the 2026-08-04 untagged-base result re-observed. The hierarchy test
+(`7284f2f8db444e87` @0x190000) did not enter: trap log `0x99` (mcause 25), mepc 0x81A00044 = image+0x44,
+the same `delin gp` (M-8, confirmed on a second image). The banner count of this run's summary read 0
+because the console split "OpenSBI v" across two UART chunks; the kernel banner is there once, and the
+control returned after this run's own `load_image`.
+
+**Boot r1b5 (23:58–00:1x).** s11 (`5d3a8cc4cbd4913a` @0x390000, the type read and the touch in ONE run;
+faults on the emulator like stop 3) → **CB0100**, exactly as pre-registered: the reloaded pointer is
+tagged type 1 and the byte load through it retired with 0x00 — tag present, load retired, no trap, in one
+mark. Then s5 (`d453bbc16109b690` @0x310000, the reused-read on the protected arm, FAULT on the
+emulator) → **C5005B**: after the same address was handed to a new object, the old pointer read the new
+occupant's first byte 0x5B on silicon, exactly what the plain arm reads (p5). This is the sharpest form
+of the finding: on the deployed configuration a stale pointer inside a domain reads another object's
+data, and nothing traps.
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full 19 × 3 matrix; the cause numbering note in the manifest: the RTL
+numbers capability causes 25–31 (`riscv_pkg.sv`), the emulator from the spec base, so causes are compared
+by name).
 
 **Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
 cell and repetition; `points.csv` the full 19 × 3 matrix; the cause numbering note in the manifest: the RTL

@@ -2397,7 +2397,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > (`sublet.h:138-142`, run when the revoke hands back UNINIT), not hardware. Whether the reloaded base
 > was TAGGED on the board — the difference between "the LSU's node-validity clause
 > (`load_store_unit.sv`, cause 25) never applies below M-mode" and "the base was an untagged integer, the
-> 2026-08-04 NOT_CAP result re-observed" — is read by stops 10/11 (r1b4/r1b5): PENDING.
+> 2026-08-04 NOT_CAP result re-observed" — was read by stops 10/11 (r1b4/r1b5, 2026-09-15 00:0x): **TAGGED, type 1** — s10 `CA0180` (the
+> emulator: `CA0780`), s11 `CB0100` (type 1 and the byte 0x00 from the same run). So the load retired
+> through a tagged capability under a revoked node: the LSU's node-validity clause does not apply below
+> M-mode, measured from inside a domain. And s5 on the protected arm read the NEW occupant's byte
+> (`C5005B`, r1b5) where the emulator faults.
 > Audited before entry (claim-auditor, 2026-09-14): the hash-cited image, the fault pc on QEMU, the
 > destroy→revoke chain (`ngx_destroy_pool → ngx_pool_slot_put → ngx_subpool_release → sublet_give_to →
 > revoke`, unconditional), the `--arena-linear` guard (a non-linear arena marks FD00xx, not C3xxxx).
@@ -4584,7 +4588,8 @@ of `test` after `_start` (`my_first_domain/start.S`): `delin gp`, mcause 25 UNEX
 before any scenario. The monitor delivers gp already non-linear on the board (the S-15 class: the
 sw64 image de-linearised an arena grant the monitor had de-linearised); the nginx images use
 `start-gp-captable-interp.S` and enter. QEMU passes the same image (GOOD). `pg_hierarchy.dom`
-(`7284f2f8db444e87`, r1b4): PENDING — predicted the same trap. Cells recorded `unsupported`,
+(`7284f2f8db444e87`, r1b4, 2026-09-14 23:5x): the same trap, mepc image+0x44, cause 25 — confirmed on a
+second image. Cells recorded `unsupported`,
 reason implementation-unavailable. Fix is the port's: drop or guard the `delin` as the S-15 fix did.
 
 ## Infrastructure / procedure
