@@ -3717,6 +3717,30 @@ allocator's own optimised code and the per-function bisection follows; if not, i
 callers (the 73 extra `sublet_take`s would then be 73 extra allocation REQUESTS, and the per-test
 localisation through the A1 hook's test boundaries is the tool).
 
+**Bisection arm A (boot sw8x-optA, 01:39–01:49): the allocator set is EXCLUDED.** The -O2 image with
+the twenty functions that touch a Sublet primitive or belong to memsys5 (`memsys5CarveUnsafe/
+FreeUnsafe/Init/MallocUnsafe/Parent/Unlink/Link/Malloc/Free/Realloc/Size/Roundup/Log/Shutdown`,
+`sqlite3DbFreeNN/DbMallocRawNN/DbNNFreeNN`, `sqlite3MallocLinear`, `sqlite3_sublet_grant/pool`) compiled
+`optnone, noinline` (`SQLITE_OPTNONE_FUNCS`, verified on all twenty definitions), image
+`edac11e54d2b0a09`, its own emulator counts 345,603,485 at the default arena and 347,936,559 at 2 MiB
+with the emulator's counters `5568/37966/32565/37966/5401`: on the board, controls 4 and 4, `112006
+38bb59fd`, **`SPEEDTEST1-CYCLES 1600582499`** (CPI 4.60 on its own emulator count), `HEAP 1344064`,
+**`sublet: split=8654 mrev=41293 delin=32638 revoke=41287 init=8649`** — sw80b's counters to the unit.
+So compiling every function that executes a Sublet primitive, and the whole of memsys5, as -O0 code
+inside the -O2 image changes nothing: the divergence is not in the allocator's own codegen, the halves
+(`9a8d8b93f6869fac`, `cfdde8ab0f470435`, built with the emulator's counters) do not need boots, and the
+73 extra `sublet_take`s are 73 extra requests REACHING memsys5 from code outside that set. Two ways
+that can happen with identical SQL results, and the next boot separates them: (a) 73 extra
+allocation calls from SQLite's callers (a size or count computation in optimised core code that
+reads differently on the RTL); (b) the same calls, but 73 more of them MISSING the lookaside and
+falling through to memsys5 (the lookaside's free list and slot accounting under the port). The
+`Successful lookasides` counter distinguishes them and needs no new image: the -O2 image again with
+`--stats` (boot sw8x-o2stats, queued after R1 boot 2; the emulator's count for this image with
+`--stats` is being taken first). If the board's lookaside hits are the emulator's minus ~73, (b);
+if equal, (a) and the per-function bisection moves to `malloc.c`'s size deciders and the
+`StrAccum`/`VdbeMem` growth paths. Each board reading here is against the emulator count of ITS OWN
+image hash, never against another build's.
+
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
 **Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and
@@ -3826,9 +3850,21 @@ bookkeeping 301 / 199 / 431 / 1,649 / 7,217 and reissue 348 / 169 / 285 / 462 / 
   already dead). R1's "report node-linear work if observed": observed.
 * **The fill the UNINIT rule forces is byte-linear at 1.76–1.81 cycles/byte** — 28.2 / 28.7 / 28.9 /
   29.0 / 29.0 cycles per 16-byte `stc` at B = 4 KiB … 1 MiB — and does NOT bend with B: the slope is the
-  same below and above the 32 KiB data cache, so it is not a working-set effect, it is the write path
-  (the cache is write-through, no write-allocate). Pre-registered 1.5 c/B from the July fillcost rung's
-  23.6 cycles per store; the harness's loop is five instructions per store (CPI ≈ 5.8 on the fill).
+  same below and above the 32 KiB data cache — a 2.8 % spread between fully cache-resident and far
+  past it, where a cache-latency-bound fill would show far more — so the fill is bound by the store
+  path's bandwidth, not by cache latency: capability-grained stores retire through the write-through,
+  no-write-allocate cache regardless of residency, and the small rise from 4 KiB is loop overhead
+  amortising, not a cache knee (do not read 1.76 as the start of a curve). That also scopes the claim:
+  1.81 c/B is a property of THIS memory system's store path and transfers to another implementation
+  only as far as its store bandwidth does. Pre-registered 1.5 c/B from the July fillcost rung's 23.6
+  cycles per store; the harness's loop is five instructions per store (CPI ≈ 5.8 on the fill).
+* **The terms are separable, so the release cost is a sum, not a fit.** REVOKE is flat in B at fixed
+  n (724–822 cycles at n = 16 for every B; the nodes-series slope predicts 22.66 × 32 = 725 at the low
+  end exactly) and the fill is flat in n at fixed B (474,817 at every n for B = 256 KiB); each term
+  depends only on its own variable, which licenses writing, for this RTL and store path,
+  **release ≈ 1.81·B + 22.7·nd + 58.9·n + O(1)** (bytes filled, nodes killed, leaves cleared) — a model a
+  reader can apply to their own geometry, where a grid fit could not be, and the thing to put where
+  the manuscript's constant-time claim stands.
   The fill is 94.5 % (n = 256) to 99.5 % (n = 1) of the release at B = 256 KiB and 99.9 % at 1 MiB; the
   node-linear REVOKE overtakes it only past nd ≈ 20,900 nodes at B = 256 KiB (B-conditional).
 * **INIT itself costs 5–6 cycles** — 0.001 % of the release. The expensive thing is the write-through
