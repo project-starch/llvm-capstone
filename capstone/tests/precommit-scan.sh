@@ -228,14 +228,26 @@ M=$(grep -inE '(fpga|board|console)[^\n]{0,40}https?://' "$TMP" \
     | grep -viF '<FPGA-CONSOLE-URL>' || true)
 [[ -n "$M" ]] && hit "a board/FPGA URL appears -- use the placeholder <FPGA-CONSOLE-URL>" "$M"
 
-# If the real URL is available locally, check for it verbatim. Never printed.
-URL_FILE="$HOME/.claude-kisp/secrets/fpga-console-url"
+# The real URL, checked for verbatim. Never printed. A MISSING file is a BLOCK, not a skip:
+# with the file absent this check used to not run at all and the scan printed CLEAN having
+# never looked for the host -- the "no data renders as a result" shape the --range fix
+# (2ec0bf5b31dd) closed on another input, flagged on this one by the kisp lane 2026-09-14. The
+# path can be pointed elsewhere with CAPSTONE_FPGA_URL_FILE; a host that genuinely has no
+# console file says so out loud with PRECOMMIT_SCAN_NO_URL_FILE=1, which is printed, never
+# silent.
+URL_FILE="${CAPSTONE_FPGA_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}"
 if [[ -f "$URL_FILE" ]]; then
   HOSTPART=$(sed -E 's#^https?://##; s#/.*##' "$URL_FILE" | tr -d '[:space:]')
-  if [[ -n "$HOSTPART" ]] && grep -qiF -- "$HOSTPART" "$TMP"; then
+  if [[ -z "$HOSTPART" ]]; then
+    hit "the FPGA console file $URL_FILE is empty, so the host check cannot run -- not a pass" ""
+  elif grep -qiF -- "$HOSTPART" "$TMP"; then
     hit "the actual FPGA console host appears in the staged content (value withheld)" \
         "  <redacted -- matched the host in $URL_FILE>"
   fi
+elif [[ "${PRECOMMIT_SCAN_NO_URL_FILE:-0}" == "1" ]]; then
+  echo "!! FPGA console host check SKIPPED on purpose (PRECOMMIT_SCAN_NO_URL_FILE=1): $URL_FILE is absent on this host" >&2
+else
+  hit "the FPGA console file $URL_FILE is missing, so the host check cannot run -- not a pass (set CAPSTONE_FPGA_URL_FILE, or PRECOMMIT_SCAN_NO_URL_FILE=1 on a host that has no console)" ""
 fi
 
 # ---- 4. files that must never be committed -----------------------------------------
