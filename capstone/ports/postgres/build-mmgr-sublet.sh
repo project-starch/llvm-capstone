@@ -32,6 +32,11 @@ PG_VERSION=${PG_VERSION:-17.5}
 OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
 SRC=$OUT/postgresql-$PG_VERSION
 DOM_OUT=${DOM_OUT:-$OUT/sublet}
+# Which driver sits on top of the manager, and what the image is called. The replay is the default
+# and the measurement; tools/hierarchy_sublet.c asks the context TREE the delegation questions the
+# level below cannot be asked, because a region does not create regions.
+PG_DRIVER=${PG_DRIVER:-tools/replay_sublet.c}
+PG_DOM_IMAGE=${PG_DOM_IMAGE:-pg_mmgr_sublet.dom}
 
 PG_PAYLOAD=${PG_PAYLOAD:-65536}
 PG_ARENA=${PG_ARENA:-$((64 * 1024 * 1024))}
@@ -80,13 +85,13 @@ pgdom_manager "$DOM_OUT" "$HERE/port/aset-capstone.patch" \
 echo "== the port"
 for f in port/pg_stubs.c port/freestanding/pg_string.c \
          port/freestanding/pg_subpool.c port/freestanding/pg_subpool_libc.c \
-         port/freestanding/pg_printf_domain.c tools/replay_sublet.c; do
+         port/freestanding/pg_printf_domain.c "$PG_DRIVER"; do
   o=$DOM_OUT/obj/$(basename "${f%.c}").o
   "$CLANG" "${FLAGS[@]}" -c "$HERE/$f" -o "$o"
   OBJS+=("$o")
 done
 
-pgdom_link "$DOM_OUT" "$DOM_OUT/pg_mmgr_sublet.dom"
+pgdom_link "$DOM_OUT" "$DOM_OUT/$PG_DOM_IMAGE"
 
 echo "declared dom_data $PG_DOMAIN_DATA (stack $PG_DOMAIN_STACK)"
 echo "regions the host must make: payload $PG_PAYLOAD, arena $PG_ARENA (linear), trace $PG_TRACE, scratch $PG_SCRATCH"
@@ -94,4 +99,4 @@ echo "regions the host must make: payload $PG_PAYLOAD, arena $PG_ARENA (linear),
 # header states the split between code and comment, which is the honest form,
 # since a line of explanation is not a line of change.
 sed -n '/^# *added/,/^# *removed/p' "$HERE/port/aset-sublet.patch" | sed 's/^# *//'
-echo "built $DOM_OUT/pg_mmgr_sublet.dom"
+echo "built $DOM_OUT/$PG_DOM_IMAGE"
