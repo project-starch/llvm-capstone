@@ -506,3 +506,34 @@ which is the case C-32 owns. Still no code change; the `hasSideEffects` trade re
   does not.
 - The "72 runs" figure overstated itself: half those cells emit a libcall and never reach the inline
   expansion, so the effective N was 36. The audit's own wider sweep is what carries the verdict.
+
+---
+
+### CLOSE-OUT 2026-09-14 — the "two i64 halves" decision is settled, with evidence
+
+The recommendation above ("no mechanism; recommend closing permanently") was reached by reading the
+lowering. It has now been settled empirically, from the opposite direction: the decision arrived back
+at this lane as B6, a task to *write* that lowering so SQLite would build at `-O1`/`-O2`. The premise
+was false. See `docs/history/14-09-2026_21-00-00_b6-i128-select-not-the-blocker.md` and commit
+`6cd85bcba799`.
+
+* **The domain already builds at both levels** — `BUILD_EXIT=0`, budget gate included, zero backend
+  diagnostics — and **runs correctly**: `-O0`/`-O1`/`-O2` all hit the off/off oracle
+  `112006 38bb59fd…3925d8518` at 692,983,497 / 342,161,746 / 336,067,501 cycles (2.03x / 2.06x).
+  Images `6cf8edf637f72063`, `50ca86aa70b3e425`, `ec061577fb008e18`; artifacts in
+  `~/capstone-artifacts/b6-2026-09-14/`.
+* **The `-O0` control validates the harness on two axes**, which is what makes the negative usable: it
+  reproduces the archived oracle hash AND its exact cycle count (`docs/ref/fpga-silicon-measurements-for-paper.md:1032`).
+* **The forge diagnostic was proven still live** on the same toolchain, under the build's own flags, so
+  the clean builds are a real negative and not a silent instrument.
+
+**Correction to the C-17 entry above:** the `wide_arm` reproducer no longer fails as
+`Cannot select: i128 SELECT_CC`. It fails with the forge diagnostic, because `MVT::i128` is no longer a
+legal type (`CapstoneISelLowering.cpp:201` registers `c128`; there is no `addRegisterClass` for i128),
+so the node cannot form. The stakes drop from backend crash to correct refusal; "reachable from C"
+stays UNRESOLVED and is not worth further spend.
+
+So the decision closes not as "declined for lack of mechanism" but as **"must not be built"**: a
+constant needing more than XLen bits is carrying bounds/permission/tag bits, and materialising it as
+two halves would forge a capability. The board lane has acknowledged and P1's O2 arms are proceeding;
+they are not compiler-blocked. One of the six open lead decisions is therefore closed.
