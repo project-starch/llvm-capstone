@@ -44,13 +44,37 @@ the sw60/sw61 rows needed re-basing.
 |---|---|---|---|---|---|---|
 | ⑥ Sublet, lookaside on | `ceeded2533a74bce` | 911,104 | **2,794,183,730** | 2,797,516,229 (sw61) | −0.12 % | 690,051,663 (archived 690,505,703) |
 | ⑤ memsys5, lookaside on, 2 MiB static heap | `e6ee5255c896aa21` | 2,097,152 | **2,551,483,818** | 2,551,506,640 (sw60) | −0.0009 % | 678,572,868 (= archived) |
-| ② native, lookaside on | `d95dd98c0de73c68` | 2,097,152 | **2,108,202,651** | 2,107,533,496 (sw60, pool off) | +0.03 % | 538,409,766 |
+| ② native, lookaside on | `d95dd98c0de73c68` | 2,097,152 | **2,108,202,651** | 2,107,533,496 (sw60, same recipe) | +0.03 % | 535,283,834 |
 
 Re-based Sublet-over-memsys5 on silicon: **⑥/⑤ = 1.0951** (was 1.0964), still a two-geometry
 "configuration" comparison (a 1.42 MiB rounded arena against a 2 MiB static heap). The pool is live in
 both domain cells: 25,010 successful lookasides for ⑤ (sw75 arm 4, its second run, 2,552,134,789
 cycles) and for ⑥ (sw74b, as the boot's first run). ⑤ is unmoved by the module change and by the
 stack-declaration knob (the loaded bytes are the same; the block is order 10 either way).
+
+### 2a. The whole allocator matrix — native × capability, three allocator rows (`main --size 1`)
+
+"Native" is the same SQLite amalgam and speedtest1, compiled by the same clang at the same `-O` for
+`riscv64-unknown-elf` (rv64imac/lp64, no capability flags), run as an ordinary Linux user process on
+the same core and bitstream: plain RISC-V on the same silicon, no domain, no monitor, no hostcall
+boundary. "Capability" is the same source for `capstone64` with the gp-captable ABI, loaded into a
+capability domain by the kernel module and entered through the monitor. QEMU columns are `-icount`
+instruction counts; silicon columns are `mcycle` cycles; ratios are capability / native.
+
+| allocator | native, QEMU | capability, QEMU | ratio | native, silicon | capability, silicon | ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| memsys5, pool off (① / ④) | 545,623,496 | 692,983,497 | 1.2701 | 2,176,757,779 (sw59) | 2,639,069,185 (sw59) | 1.2124 |
+| memsys5 + lookaside (② / ⑤) | 535,283,834 | 678,572,868 | 1.2677 | 2,108,202,651 (sw74) | 2,551,483,818 (sw75) | 1.2103 |
+| Sublet, lookaside on (⑥) | none by construction | 690,051,663 | — | none | 2,794,183,730 (sw74) | — |
+
+The native Sublet cell cannot exist: every Sublet primitive is a capability instruction (opcode
+`0x5b`), so there is no non-capability build of it. Sublet is compared with the arm it replaces,
+capability + lookaside: ⑥/⑤ = 1.0169 on QEMU and **1.0951** on silicon; against the unprotected
+native build, ⑥/② = 1.2891 on QEMU and 1.3254 on silicon. The Sublet control with the pool
+forced off (⑥′) is 705,997,303 instructions on QEMU. All three rows are pinned to size 1 by Sublet's
+rev-node budget (43,355 nodes minted per run of 65,532); the memsys5 rows continue to sizes 20 and
+100 in the §7 image family (128 MiB region arena) as the table in §1 — pool off at 1, 20, 100 and
+pool on at 20.
 
 ## 3. R-33: the rounded arena's reclaim, on silicon
 
