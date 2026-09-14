@@ -398,7 +398,12 @@ if [[ -n "$RUNGS" ]]; then
   if [[ -f "$CONTROLS" ]] && sed '/^## NOT controls/,$d' "$CONTROLS" | grep -qE "^\| *\`?$first\`? "; then
     ok "control '$first' has a published passing record"
   else
+    _ps="${PIPESTATUS[*]}"
     bad "first rung '$first' is not listed in $CONTROLS as a known-good control -- a boot whose control is invalid carries no verdict (matmult_int is a documented MISCOMPILE, not a control)"
+    # Evidence at the moment of refusal (this check refused a control that passes by hand twice on
+    # 2026-09-15, 02:25 and 03:45; a by-hand re-run is a different execution and cannot tell a flaky
+    # gate from a condition that was present and passed): what the gate saw, not what it concluded.
+    say "diag" "C4 at refusal: pwd=$(pwd) pipestatus=[$_ps] first='$first' file=$(ls -la --time-style=+%T "$CONTROLS" 2>&1 | tr -s ' ') rows=$(sed '/^## NOT controls/,$d' "$CONTROLS" 2>/dev/null | grep -cE "^\| *\`?$first\`? ") grep=$(command -v grep) sed=$(command -v sed) load=$(cut -d' ' -f1-3 /proc/loadavg)"
   fi
   shas=""
   for r in $RUNGS; do

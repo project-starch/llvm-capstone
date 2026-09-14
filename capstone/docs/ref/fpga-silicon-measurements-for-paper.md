@@ -3896,8 +3896,16 @@ return register) and is deferred until the lead's choice turns on the number.
 
 **Arm C is therefore a prediction, not a bisection**, and is queued with the ⑤ `--stats` boots behind
 R1 boot 3 (arm C's first launch at 02:25 was refused by the preflight's control check on a control it
-had passed fourteen minutes earlier and passes by hand; a single unexplained false BLOCK, the driver's
-`done` marker notwithstanding — noted, not diagnosed).
+had passed fourteen minutes earlier and passes by hand; the same refusal took R1 boot 5 at 03:45 —
+two unexplained false BLOCKs in twelve gate runs tonight, each followed by a GO on the next run with
+nothing changed. What was tried and did not reproduce it: an early `grep -q` exit SIGPIPE-ing `sed`
+under `pipefail` (the control row sits at byte 2,866 of a 4,941-byte section, so the shape exists, but
+2,000 trials under load and a writer forced to outlive grep all returned status 0); a branch switch or
+rewrite of the controls file in the shared checkout (none in the reflog, mtime unchanged, one row by
+hand every time). The gate now prints, at that refusal only, what it saw rather than what it concluded —
+pwd, `PIPESTATUS`, the file's stat, its own row count re-run, the grep and sed binaries, the load —
+verified to fire on the negative control; the next refusal is diagnosable, and the drivers' `done`
+marker after a refused run is a separate mis-marker to fix.)
 
 **Arm C (boot sw8x-optC2, 02:46–02:57): the prediction holds to the unit.** Image `2b9e4d0d3ed523c9`
 (`setupLookaside` alone `optnone, noinline` inside the otherwise -O2 build; emulator 338,503,051 at the
@@ -3970,6 +3978,22 @@ So the stock `setupLookaside` keeps its lookaside at both optimisation levels on
 source and the scan said it would, and the -O0 pair (sw79, 1.1024) rests on a read configuration
 on both sides: ⑥-O0's counters are the emulator's, ⑤-O0's lookaside is on. The whole exposure named
 at 02:30 is closed: every ratio on record now has both operands' lookaside state READ, not inferred.
+
+**Precision of the ⑥/⑤/native family across boots (tonight's repeats, controls either side of every arm):**
+
+| image | boots | spread | half-range |
+|---|---|---|---|
+| native -O2 `b36eb3814c3cefce` (sw80a, sw8x-b80s-O2, sw8x-b80s-O0) | 3 | 0.043 % | 0.022 % |
+| ⑤ -O2 `d61c8bf784f2bbd1` (sw80a, sw8x-b80s-O2) | 2 | 0.045 % | 0.022 % |
+| ⑤ -O0 `e6ee5255c896aa21` (sw75, sw8x-b80s-O0) | 2 | 0.027 % | 0.014 % |
+| ⑥ -O2 `c506694f9f6f6889`, the lookaside-off run repeated (sw80b, sw81) | 2 | 0.034 % | 0.017 % |
+
+This is the measured precision of the whole family, not an anecdote about one pair, and it is the
+answer to the fair question the TIMING caveat above invites — a design that does not meet timing is
+wrong intermittently and data-dependently, so how much do these numbers move? Under half a tenth of a
+percent across boots for this workload, with the controls passing. It bounds the caveat rather than
+refuting it, and the ratios it underlies (1.3624, 1.1797, 1.607, 1.1024) rest on differences three
+orders of magnitude larger than the spread.
 
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
