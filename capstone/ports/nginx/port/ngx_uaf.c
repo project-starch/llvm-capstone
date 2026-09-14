@@ -21,6 +21,9 @@
  *   4  the same-sized pool is created again and lands on the same block
  *   5  the old pointer is read while a NEW object occupies its address
  *   6  the old pointer is offered to ngx_pfree of the pool that owns it now
+ *   7  an ancestor revokes while a nested handle is alive, and the nested handle is asked what
+ *      it is afterwards. No unprotected arm: a level below that hands out ordinary pointers has
+ *      no nested authority to end
  *
  * Stage 3 is the only one that may fault, and only in the protected arm. A fault at stage 1 or 2,
  * or in the unprotected arm at all, is a defect in the port and not a result.
@@ -181,5 +184,52 @@ void domain_main(unsigned *res, unsigned func) {
     big[0] = 0x7C;
 
     ngx_int_t rc = ngx_pfree(pool2, a);
-    NGX_DOM_MARK(0xC60000u | ((unsigned) rc & 0xFFu));
+    if (NGX_UAF_STOP < 7) {
+        NGX_DOM_MARK(0xC60000u | ((unsigned) rc & 0xFFu));
+    }
+
+#ifdef NGX_SUBLET
+    /* ---- does an ancestor's revoke end a nested authority ------------------
+     *
+     * tab:safety's last hierarchy row. Scenario 7 of the level below's own test already shows
+     * that the ancestor takes back the TERRITORY a nested handle governed, and stage 3 above
+     * shows that an object carved under that handle is dead. What neither shows is what becomes
+     * of the nested handle ITSELF.
+     *
+     * This stage has no unprotected arm and cannot have one: a level below that hands out
+     * ordinary pointers has no nested authority to end. It is a question about the mechanism
+     * rather than a difference between two arms, and the mark carries the answer.
+     */
+    sublet_cap nblk, nout, nin, nobj;
+    if (!ngx_subpool_block(2048, &nblk, &nout)) {
+        NGX_DOM_MARK(0xE70000u);
+    }
+    sublet_handle(&nblk, &nin);                  /* the nested authority */
+    sublet_carve(&nblk, sublet_base(&nblk) + 64, &nobj);
+    unsigned char *nd = (unsigned char *) sublet_take(&nobj);
+    if (nd == NULL) {
+        NGX_DOM_MARK(0xE80000u);
+    }
+    nd[0] = 0x9E;
+
+    unsigned before = (unsigned) sublet_type(&nin);   /* REV while it is alive */
+
+    sublet_give_to(&nout, &nblk);                     /* the ancestor revokes */
+
+    /* What the nested handle is now. Reading its slot is itself the question: if the revoke
+       invalidated it, this is where the domain ends, and that is an answer. If it comes back
+       with a type, the mark says which. */
+    unsigned after = (unsigned) sublet_type(&nin);
+
+    /* The control, without which `after` is a number and not a result: what a slot that is KNOWN
+       to hold nothing reports. If the two agree, the ancestor's revoke left the nested handle
+       holding no capability, which is the row's answer. Valid types are 0 to 5. */
+    sublet_cap empty;
+    sublet_clear(&empty);
+    unsigned none = (unsigned) sublet_type(&empty);
+
+    NGX_DOM_MARK(0xC70000u | ((before & 0xFu) << 8) | ((after & 0xFu) << 4) | (none & 0xFu));
+#else
+    NGX_DOM_MARK(0xC7FF00u);     /* no nested authority exists on this arm */
+#endif
 }
