@@ -3950,6 +3950,26 @@ The prediction (source: stock `pStart` is a tagged non-linear pointer; scan: no 
 **⑤-O2 / native-O2 = 1.3624 here (1.3627 in sw80a) is a lookaside-on against lookaside-on pair, and
 ⑥(arm C)/⑤ = 1.1791 is on-against-on** — the exposure carried since 02:30 is closed for both. The -O0
 half of the account (⑤-O0 with `--stats`, predicted ON as well) is the next boot.
+Labelling, so that a ratio's two operands never come from different boots unsaid: the on-against-on
+demonstration attaches to THIS boot's ⑤ reading, so the matched-configuration figure is **⑥(arm C) /
+⑤(sw8x-b80s-O2) = 1,376,190,813 / 1,166,594,074 = 1.1797** (compound against this boot's native
+856,305,453: 1.6071); 1.1791 is the same ratio against sw80a's ⑤, whose lookaside state is inferred
+by the same mechanism with this boot as the evidence — immaterial in magnitude, and both are named.
+Reproducibility, worth its own sentence: ⑤-O2 repeats across boots to −0.045 % and native -O2 to
+−0.017 %, controls either side — the tightest statement this corpus has made about board stability,
+and a bound (not a refutation) on how much the TIMING caveat's "wrong intermittently and
+data-dependently" can perturb these particular figures.
+
+**Boot sw8x-b80s-O0 (03:12–03:23): ⑤-O0's lookaside is ON too — the -O0 side of the account read
+directly.** Cell ⑤ at -O0 (`e6ee5255c896aa21`, the sw75 image) with `--stats`: controls 4 and 4, one
+banner, `112006 38bb59fd`, **Successful lookasides 25,010, Slots Used 1 (max 154), size faults 157, OOM 0**,
+pager heap 315,200, cache hits 31,797, schema heap 16,448, largest pcache 4,592 — the same block as ⑤-O2
+and as the ⑥ emulator, line for line — and **`SPEEDTEST1-CYCLES 2552179361`** (+0.027 % on sw75's
+2,551,483,818, CPI 3.761); native -O2 in the same boot 856,676,117 warm (+0.026 % on sw80a), 25,122 hits.
+So the stock `setupLookaside` keeps its lookaside at both optimisation levels on silicon, as the
+source and the scan said it would, and the -O0 pair (sw79, 1.1024) rests on a read configuration
+on both sides: ⑥-O0's counters are the emulator's, ⑤-O0's lookaside is on. The whole exposure named
+at 02:30 is closed: every ratio on record now has both operands' lookaside state READ, not inferred.
 
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
