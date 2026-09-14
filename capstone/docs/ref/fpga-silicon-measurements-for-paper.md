@@ -4189,3 +4189,28 @@ REVOKE medians over two repetitions 76 / 209 / 782 / 2,942 / 11,833 for n = 1 �
 every B = 256 KiB point of both repetitions, 1,900,225 at 1 MiB), so the RTL's release cost is
 deterministic to the cycle and the protocol's five repetitions will not widen an interval, only
 confirm one. Boots 4–8 (repetitions 3–5) follow the two ⑤ `--stats` boots and arm C (§7s).
+
+**Boots 4–8 and the rerun of 5 (03:25–04:58): E3 complete — 420 records over eight boots, 84 cases at
+five repetitions each, no warning.** Every boot: controls 4 and 4, every point line `ok=1 bad=0`, no
+refused line, no `create_region` failure (boot 5's first launch was refused by the preflight's control
+check, §7s, and rerun last). Medians over five repetitions, `custom-sublet`, shared pattern, B = 256 KiB
+unless stated:
+
+| series | points | REVOKE | fill | bookkeeping | reissue | total |
+|---|---|---|---|---|---|---|
+| nodes n = 1 / 4 / 16 / 64 / 256 (nd = 2n) | 5 | 102 / 201 / 817 / 2,931 / 11,811 | 474,921 / 474,817 ×4 | 455 / 360 / 919 / 3,628 / 14,972 | 925 / 785 / 792 / 877 / 916 | 476,417 … 502,406 |
+| bytes B = 4 K / 16 K / 64 K / 256 K / 1 M | 5 | 697 / 796 / 794 / 799 / 794 | 7,209 / 29,377 / 118,465 / 474,817 / 1,900,225 | 1,276 / 915 ×4 | 925 / 793 ×4 | 10,119 / 31,903 / 120,975 / 477,329 / 1,902,732 |
+| heap U = 0 / 64 K / 256 K / 1 M / 4 M | 5 | 701 / 790 / 808 / 804 / 807 | 474,921 / 474,817 / 474,812 ×3 | 1,291 / 948 / 931 ×3 | 960 / 800 / 792 / 793 / 797 | 477,874 / 477,366 / 477,350 / 477,353 / 477,353 |
+| depth c = 1 / 2 / 4 / 8 (nd = 47) | 4 | 958 / 993 / 994 / 994 | 474,812 ×4 | 1,779 / 1,515 / 1,452 / 1,455 | 1,026 / 800 / 793 / 800 | 478,634 / 478,130 / 478,082 / 478,067 |
+| object S = 16 / 64 / 256 / 4096 B | 4 | 45 / 51 / 62 / 45 | 7 / 12 ×3 | 308 / 166 / 189 / 185 | 651 / 355 / 347 / 347 | 1,013 / 593 / 612 / 608 |
+
+The slopes the manuscript's figure wants, from the five-repetition medians: **REVOKE 23.0 cycles per
+revocation node** ((11,811 − 102) / 510; the combined pattern 8,985 at n = 256 = 17.6 per minted node,
+the walk being over live descendants); **the fill 1.81 cycles per byte** at every B from 4 KiB to 1 MiB
+(28.2–29.0 per 16-byte `stc`); heap and depth flat within 0.02 % from the second point of each series;
+the first point of every invocation carries a few hundred cycles of cold bookkeeping and reissue and
+is not a series effect. The spatial arm (`custom-spatial`) at the same points: 368–1,066 cycles in
+total everywhere except the node series (7,681 at n = 256, its bookkeeping), and it repeats to the
+cycle. **Bundle:** `experiments/results/R1/fpga-2026-09-15/` in the paper repository's record shape
+(manifest, points.csv, runs.jsonl, raw transcripts per boot, summary), on the local board branch beside
+the E1 bundle; capacity-bounded and labelled so (node identifiers not recycled).
