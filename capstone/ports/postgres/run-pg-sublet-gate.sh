@@ -14,11 +14,16 @@
 #   2  the manager over it, replaying a generated trace, with the teardown cost
 #      an identity the domain checks itself and every freed object's contents
 #      read back
+#   3  the context TREE, which neither of the two above has: a sub-pool is a
+#      region and a region does not create regions, and a replay of a recording
+#      contains whatever hierarchy the backend happened to build. So an
+#      ancestor withdraws from a child and a grandchild that are never asked,
+#      a sibling has to keep working, and a chain is priced by depth
 #
 # It needs no recording, for the reason run-pg-gate.sh gives: the workload is
 # tools/make-fixture-trace.py and the file is generated.
 #
-# Exit 0 if both hold, non-zero otherwise, as the nightly expects.
+# Exit 0 if all three hold, non-zero otherwise, as the nightly expects.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
@@ -57,5 +62,11 @@ if grep -q '__CAPSTONE_PG_REPLAY_FAILED__' "$GATE/domain.log"; then
 fi
 
 echo
-echo "the level below keeps every claim, a teardown is one revocation, and"
-echo "every object the manager freed held what was written into it"
+echo "== 3. the context tree, an ancestor withdrawing from levels that are not asked"
+OUT="$OUT" SHARE_DIR="$GATE/share-hierarchy" LOG_FILE="$GATE/hierarchy.log" \
+  bash "$SCRIPT_DIR/run-pg-hierarchy.sh"
+
+echo
+echo "the level below keeps every claim, a teardown is one revocation, an"
+echo "ancestor's withdrawal stops at the sibling, and every object the manager"
+echo "freed held what was written into it"
