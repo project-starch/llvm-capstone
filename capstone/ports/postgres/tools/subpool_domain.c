@@ -6,7 +6,11 @@
  * to call it, because a fault inside a patched aset.c would be hard to read
  * back to its cause.
  *
- * Seven scenarios, each one a claim the design makes:
+ * Eight scenarios, each one a claim the design makes:
+ *
+ *   8  a chunk given back does not take its neighbour with it, which is
+ *      tab:safety's "inner free preserves live sibling" and the only one of
+ *      its pending rows that expects no fault
  *
  *   1  a sub-pool hands out blocks, and chunks out of the blocks, and what is
  *      written through a handed-out alias reads back
@@ -249,6 +253,75 @@ pg_domain_entry(unsigned *res, unsigned func)
     claim("a freed block returns its eight entries", 8,
           entries - pg_subpool_counts.entries_live);
     pg_subpool_destroy(c);
+
+    /* 8: a chunk given back does not take its neighbour with it.
+     *
+     * tab:safety in the paper calls this "inner free preserves live sibling",
+     * and it is the only one of its pending rows that expects no fault: what
+     * has to hold is that the sibling still READS. A discipline that handed
+     * out one capability per chunk could get this wrong in two ways, by
+     * revoking a bound that covers both, or by returning the neighbour's
+     * entry with the dropped one, and the second is why the entry count is
+     * claimed and not only the bytes. */
+    pg_subpool *sib = pg_subpool_create();
+    pg_block *b5 = sib ? pg_subpool_block(sib, 8192) : NULL;
+
+    claim("a sub-pool and a block for the sibling scenario", 1, b5 != NULL);
+    if (!b5)
+        give_up(0xBAD8BAD8u);
+
+    unsigned int keep = pg_subpool_carve(b5, 64);
+    unsigned int go = pg_subpool_carve(b5, 64);
+
+    claim("two chunks out of one block", 1, keep != 0 && go != 0);
+
+    unsigned long *pk = (unsigned long *) pg_subpool_hand(keep);
+    unsigned long *pg_ = (unsigned long *) pg_subpool_hand(go);
+
+    claim("both chunks handed out", 1, pk != NULL && pg_ != NULL);
+    if (!pk || !pg_)
+        give_up(0xBAD8BAD9u);
+
+    for (unsigned k = 0; k < 8; k++) {
+        pk[k] = pattern(5, k);
+        pg_[k] = pattern(6, k);
+    }
+
+    unsigned long before_entries = pg_subpool_counts.entries_live;
+    unsigned long before_drops = pg_subpool_counts.drops;
+
+    pg_subpool_drop(go);
+
+    /* The entry STAYS, and that is the design rather than a leak: an entry is
+     * where the chunk lives while it waits on its size-class list, so a drop
+     * gives back the alias and not the slot. Scenario 7 is where entries come
+     * back, at block granularity. Claimed here because an expectation of one
+     * returned entry is what this scenario was first written with, and the
+     * run said so. */
+    claim("a drop is counted", before_drops + 1, pg_subpool_counts.drops);
+    claim("and the entry stays, because the chunk waits in it", 0,
+          before_entries - pg_subpool_counts.entries_live);
+
+    /* The sibling, read through the capability it was handed BEFORE its
+     * neighbour went away, which is the question. */
+    unsigned bad_sib = 0;
+    for (unsigned k = 0; k < 8; k++) {
+        if (pk[k] != pattern(5, k))
+            bad_sib++;
+    }
+    claim("the sibling still reads what it was given", 0, bad_sib);
+
+    /* And it is still writable, because a bound that survived a read could
+     * still have lost its store permission. */
+    for (unsigned k = 0; k < 8; k++)
+        pk[k] = pattern(7, k);
+    for (unsigned k = 0; k < 8; k++) {
+        if (pk[k] != pattern(7, k))
+            bad_sib++;
+    }
+    claim("and is still writable", 0, bad_sib);
+
+    pg_subpool_destroy(sib);
 
     /* What the run spent in revocation nodes, which is the constraint the
      * board imposes and not the emulator: the node allocator is a bump head
