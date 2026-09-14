@@ -22,6 +22,7 @@ estimate approximates is now measured directly on silicon and absent from the pa
 | seven testsets, silicon (`main` 1.2195, `star` 1.2514, `parsenumber` 1.2677, `orm` 1.1843, `fp` 1.2435, `cte` 1.1654, `rtree` 1.1879) | 1.17–1.27 | §7k/§7m |
 | allocator matrix, QEMU `-icount`, memsys5 | 1.2703 | §4g |
 | `main --size 100`, silicon, boot sw73 (2026-09-14; pre-registered ≈1.18, band 1.14–1.24) | **1.1819** (337,235,381,252 → 398,572,346,349 cycles) | §7p |
+| `main --size 20`, silicon, **lookaside pool ON on both arms**, boot sw77 (2026-09-14; pre-registered 1.19) | **1.1937** (53,142,976,993 → 63,437,512,052 cycles); the OFF pair of the same size and image family 1.1940 | §7q |
 
 These are not the same quantity as the estimate: the estimate prices the boundary borrows only; the
 ratio is the whole pure-capability domain's cost, spatial safety and ABI included. The proposal is
@@ -45,10 +46,15 @@ the live paper (the four "timing" mentions in `evaluation.tex` are about cycle-a
 * the bitstream does not meet timing — WNS −12.425 ns, 102,508 of 174,960 endpoints failing, on every
   §7 row including sw68's (`:2489-2522`); the doc's rule is to prefer instruction counts where a
   claim can be carried by either (`:2589`);
-* every §7 speedtest1 row was measured with SQLite's lookaside pool OFF, a configuration SQLite does
-  not ship (`:2593-2632`; both arms, so the ratios stand; sw68's image is built by the same path with
-  no lookaside override, so OFF by construction — the transcript carries no lookaside line to read it
-  from); and every §7f–§7k row is `--size 1` against speedtest1's default of 100 (`:2635`) — sw68 is
+* every §7 speedtest1 row up to sw73 was measured with SQLite's lookaside pool OFF, a configuration
+  SQLite does not ship (`:2593-2632`; both arms, so the ratios stand; sw68's image is built by the same
+  path with no lookaside override, so OFF by construction — the transcript carries no lookaside line to
+  read it from). **Measured since (boot sw77, 2026-09-14, §7q): the same `main --size 20` pair with the
+  pool ON on both arms reads 1.1937 against the OFF pair's 1.1940; the pool takes 1.98 % off the native
+  arm's cycles and 2.00 % off the domain's, and the native arm's `--stats` reports 25,122 lookasides on
+  silicon.** The caveat is therefore a measured non-effect on the ratio, which is the stronger sentence:
+  state the OFF configuration of the rows the paper quotes and cite the ON pair as showing the ratio does
+  not depend on it; and every §7f–§7k row is `--size 1` against speedtest1's default of 100 (`:2635`) — sw68 is
   size 20 and sw73 is size 100 (speedtest1's default), at 1.18.
 
 ## Corrections the audit found in the live text (each re-read at its line; no edit made)

@@ -3355,8 +3355,12 @@ signal), ran its release (`gdb_stop`, power off), and the run-scoped log carries
 after this run's `load_image` — no reset in the window. This is the first time the abort has fired on a
 live board; every earlier "it would have caught sw64" was a replay. A first attempt of this boot was
 blocked by the preflight's control-record check (`first rung 'k800' is not listed …`) although the
-same check had passed on sw74/74b/75 minutes before and passes on re-run; unexplained, recorded as a
-transient of that gate (the file was present and unchanged), and the boot cost nothing but a bake.
+same check had passed on sw74/74b/75 minutes before and passes on re-run. Ruled out afterwards: the
+controls file is unchanged since 2026-09-12 (content and mtime), the HEAD and stash reflogs of the shared
+checkout record no git operation between 13:46 and 14:23, the driver's stderr carries no fork or exec
+error, and the check re-run from the wrapper's cwd two minutes later matched `k800`. Unexplained; the one
+hypothesis the evidence cannot exclude is a momentary rewrite of the file by the other lane that works in
+this checkout. The boot cost nothing but a bake.
 
 **Boot D (sw77, 14:24–17:53, fw `a6458cb568fe`): the lookaside-ON pair at `main --size 20` — SQLite as it
 ships, on silicon.** Domain `90ef29431abdbdee` (sw64's recipe: FULL/FLOAT, 128 MiB region arena,
@@ -3388,7 +3392,11 @@ marker after it, no capability trap latched and the rev-node head at 289. The RE
 not release its arena at teardown (only the static-heap pool/tables paths call `release_region`), so
 the second `create_region` of 128 MiB is asked of a 256 MiB CMA area that still holds the first;
 whether that allocation blocks or the ioctl wedges is not established (N = 1, host-side, no UART). Not
-M-7 (no `release_region` preceded it) and not the Sublet cell's node budget. **Driver rule, added to
+M-7 (no `release_region` preceded it) and not the Sublet cell's node budget. The runner's own summary
+line for this arm reads "R-16 entry stall; markers stop at SHA5 with no SHA6": that was the fixed text of
+its never-entered branch, not a reading — the transcript carries no share tag at all — and the raw
+`driver.log` keeps it. The branch now keys on the transcript's last share tag (`stall_shape`, self-tested
+on this arm's and sw76's real transcripts) and prints a host-side stop as one. **Driver rule, added to
 the state doc: a REGION_ARENA image runs ONCE per boot**; its `--stats` positive check belongs on
 QEMU or in a boot of its own. Placed last by design, so the pair cost nothing.
 

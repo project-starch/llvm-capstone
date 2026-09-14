@@ -240,6 +240,36 @@ def _selftest_switch_path():
 _selftest_switch_path()
 
 
+def stall_shape(text):
+    """The shape of a NON-RETURNING arm's transcript: (last share tag, last host marker).
+
+    WHY THIS EXISTS. The wedge verdict has one sentence for "created, never entered", and it named
+    the R-16 shape -- `SHA5:` with no `SHA6:` -- as fixed text, whatever the transcript held.
+    sw77 arm 6 (2026-09-14) stopped at `SQ: C2/mkarena`, the HOST's second 128 MiB create_region
+    of the boot, with no share attempted and no SHA tag at all, and the summary still read "R-16
+    entry stall; markers stop at SHA5" -- a host-side stop printed as a per-image monitor stall,
+    which sends the next reader to REDRAW an image that has nothing wrong with it. The verdict
+    now keys on what the transcript actually ends with.
+    """
+    tags = re.findall(r"\b(SHA[0-9]):[0-9A-Fa-f]{8}", text)
+    marks = re.findall(r"SQ: [A-Z0-9]+/[A-Za-z0-9_-]+", text)
+    return (tags[-1] if tags else None, marks[-1] if marks else None)
+
+
+def _selftest_stall_shape():
+    # The two real shapes in the real format (uart payloads joined): sw76 arm 2 (sw64's image:
+    # two complete shares, share3 stops at SHA5) and sw77 arm 6 (the host stops at C2/mkarena).
+    r16 = ("SQ: E/share1\r\nSHA0:00000001\r\nSHA5:00000000\r\nSHA6:00000000\r\nSQ: F/share2\r\n"
+           "SHA5:00000000\r\nSHA6:00000000\r\nSQ: F2/share3\r\nSHA0:00000001\r\nSHA5:00000000\r\n")
+    host = "SQ: A/dom-ok\r\nSQ: id=3\r\nSQ: B/mkregion1\r\nSQ: C/mkregion2\r\nSQ: C2/mkarena\r\n"
+    assert stall_shape(r16) == ("SHA5", "SQ: F2/share3"), stall_shape(r16)
+    assert stall_shape(host) == (None, "SQ: C2/mkarena"), stall_shape(host)
+    assert stall_shape("") == (None, None)
+
+
+_selftest_stall_shape()
+
+
 # The physical switch value the board is holding, as far as this process knows. None means
 # "unknown", which is the state at connect: the board keeps whatever the last run left.
 _SW_CURRENT = None
@@ -856,7 +886,8 @@ def main():
     console.connect()
     install_resilient_emit(console)
     results, transcript = [], []
-    share_traps = {}   # dom -> (word, mcause, share) when the host reported a share-entry trap
+    share_traps = {}   # label -> (word, mcause, share) when the host reported a share-entry trap
+    stall_shape_of = {}  # label -> stall_shape(text) for every arm; read by the wedge verdict
     try:
         console.lock()
         install_release_on_signal(console)
@@ -1631,7 +1662,10 @@ def main():
                     f" mcause={_mc.group(1) if _mc else '?'} at={_at.group(1) if _at else '?'}"
                     f" -- a result (the S-15 instrument), not a staging failure; the domain was"
                     f" never entered.")
-                share_traps[dom] = (_st.group(1), _mc.group(1) if _mc else "?",
+                # Keyed by LABEL (dom + selector), which is what the verdict loop below iterates:
+                # keyed by the bare dom, the lookup missed every arm that carries a selector --
+                # i.e. every SQLite arm -- and the summary's share-trap line could never fire.
+                share_traps[label] = (_st.group(1), _mc.group(1) if _mc else "?",
                                     _at.group(1) if _at else "?")
                 bad = False
             if not wedged and bad:
@@ -1706,6 +1740,7 @@ def main():
             # regions). They are still excluded from wedge counts -- but as a known monitor limit,
             # not as an unexplained per-image stall.
             montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET|RCSH|RCPR):([0-9A-Fa-f]{8})", text)
+            stall_shape_of[label] = stall_shape(text)
             results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
 
@@ -3655,7 +3690,7 @@ def main():
                 f"{pathlib.Path(d).stem}=?" for d, _, o, _, _, _, _ in results)
             if share_traps:
                 print(f"\n{len(share_traps)} arm(s) stopped at a share-entry trap reported by the host "
-                      f"({', '.join(pathlib.Path(k).stem for k in share_traps)}) and did NOT "
+                      f"({', '.join(pathlib.Path(k.split(':', 1)[0]).stem for k in share_traps)}) and did NOT "
                       f"return; every other domain returned ({got}). No domain wedged.", flush=True)
             else:
                 print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
@@ -3668,12 +3703,22 @@ def main():
                     why.append("no `SQ: A/dom-ok` -- create_dom never returned, so the domain "
                                "was never created and NOTHING in it executed")
                 elif not entered:
-                    why.append("no `SQ: G/enter` -- the domain was CREATED but never ENTERED "
-                               "(R-16 entry stall; markers stop at SHA5 with no SHA6), so "
-                               "NOTHING of the code under test ran. R-16 is PER-IMAGE, so "
-                               "retrying this binary is futile -- REDRAW: rebuild with a "
-                               "harmless constant varied so the code under test is "
-                               "byte-identical across draws, and sha256sum the set")
+                    last_tag, last_mark = stall_shape_of.get(dom, (None, None))
+                    if last_tag == "SHA5":
+                        why.append("no `SQ: G/enter` -- the domain was CREATED but never ENTERED "
+                                   "(R-16 entry stall; markers stop at SHA5 with no SHA6), so "
+                                   "NOTHING of the code under test ran. R-16 is PER-IMAGE, so "
+                                   "retrying this binary is futile -- REDRAW: rebuild with a "
+                                   "harmless constant varied so the code under test is "
+                                   "byte-identical across draws, and sha256sum the set")
+                    else:
+                        why.append(f"no `SQ: G/enter`, and the transcript does NOT end at SHA5 "
+                                   f"(last share tag: {last_tag or 'none'}; last host marker: "
+                                   f"{last_mark or 'none'}) -- the run stopped on the HOST side "
+                                   f"or in the monitor's share path, NOT at domain entry; this is "
+                                   f"not the R-16 shape and says nothing about the image. Read the "
+                                   f"marker: `SQ: C2/mkarena` is create_region for the 128 MiB "
+                                   f"arena (a SECOND one in a boot stalled there on sw77, 2026-09-14)")
                 if montag:
                     why.append(f"monitor spin tag {montag} -- the wedge is in M-mode, in the "
                                f"MONITOR, before/outside the domain")

@@ -144,12 +144,16 @@
   the representable-arena probe control clean; re-based silicon ⑥/⑤ = 1.0951. sw76 (Boot C) — the entry
   watchdog's live positive control FIRED on sw64's stall (`ENTRY-STALL … no SHA6 for 421s`, runner
   terminated, board released, no reset in the window); its first attempt had been blocked by a
-  transient of the preflight's control-record check (passes on re-run, unexplained). sw77 (Boot D) — the
+  transient of the preflight's control-record check (passes on re-run; file unchanged, no git operation
+  on record in the window — unexplained). sw77 (Boot D) — the
   lookaside-ON size-20 pair: native 53,142,976,993, domain 63,437,512,052, **1.1937 → 1.19** at the
   oracle on both arms (sw68's OFF pair 1.1940); the trailing `--stats` re-run of the domain image
   stopped at its second 128 MiB `mkarena` of the boot (not R-12: head 289; not M-7: nothing was
   released) — **one REGION_ARENA workload per boot** from now on, its lookaside check done on QEMU
-  (25,010). Owed from the plan: the R-33 settling arm (monitor 4274268 + a pre-rounding `.ko`), the
+  (25,010). The runner's summary had printed that arm as an R-16 entry stall (the fixed text of its
+  never-entered branch); it now keys on the transcript's last share tag, and its S-15 share-trap
+  summary line, keyed by the bare domain path, could never have fired for a selector-bearing arm —
+  both fixed, self-tested on the sw76/sw77 transcripts. Owed from the plan: the R-33 settling arm (monitor 4274268 + a pre-rounding `.ko`), the
   size-100 instret image, seven testsets at size 20 — none scheduled.
 * **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
   domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
