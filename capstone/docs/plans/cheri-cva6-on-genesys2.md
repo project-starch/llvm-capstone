@@ -452,7 +452,8 @@ one artifact directory each, never in parallel. Results, all from each build's o
 Core-level B − A: +44 % LUTs, +43 % FFs, of which half is the issue stage (merged register file of
 151-bit register-format capabilities, and forwarding); the +32 RAMB36 are the tagged data cache; the FPU is flat; the tag controller (7.5 k
 LUTs, 32 RAMB36) is in both builds. Full table and the reading rules in
-`docs/ref/fpga-silicon-measurements-for-paper.md` §7c. Prediction check: A ≈ 45–55 % LUTs → 45.1 %; B
+`docs/ref/fpga-silicon-measurements-for-paper.md`, section "CHERI-CVA6 and Capstone-CVA6 on the same
+part, flow and constraint" (unnumbered on this branch; the number is assigned when it merges). Prediction check: A ≈ 45–55 % LUTs → 45.1 %; B
 +25–40 % over A → +29.4 %; timing met at 40 ns → both met.
 
 Two incidents. **A's first attempt failed at elaboration** on `[63:64]` in `store_unit.sv:129`, a

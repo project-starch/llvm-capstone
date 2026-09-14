@@ -1217,7 +1217,7 @@ design.
 
 Provenance: board and RTL lanes, 2026-09-04.
 
-### §7c — CHERI-CVA6 and Capstone-CVA6 on the same part, flow and constraint (2026-09-08)
+### §7-cheri-synth (number assigned at merge, NOT pre-assigned) — CHERI-CVA6 and Capstone-CVA6 on the same part, flow and constraint (2026-09-08)
 
 **First hardware-cost comparison with a CHERI core on our own board.** Three routed builds on the
 Genesys2's `xc7k325tffg900-2`, Vivado 2024.2, the same `run.tcl` settings (retiming on, `RuntimeOptimized`),
