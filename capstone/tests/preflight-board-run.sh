@@ -168,8 +168,15 @@ _expand_wanted() {   # prints one needed FILENAME per line
       #   ladder host override   host|RUNG:/path/rung.dom      -> path is AFTER the colon
       #   sqlite stage           /path/img.dom:--selector      -> path is BEFORE it
       #   host-binary verb arm   host|warm:--selector          -> neither; it stages no .dom
-      if _isfile "$_ac"; then printf '%s\n' "$(basename -- "$_ac")"
-      elif _isfile "$_bc"; then printf '%s\n' "$(basename -- "$_bc")"
+      # A fourth form, 2026-09-14: host ARGUMENTS that begin with a path,
+      #   pg host              host|/path/img.dom:/path/input.bin --tail --linear-arena
+      # The ladder form's path is ONE token; a selector with spaces is arguments, the image is
+      # before the colon, and its first word may name a staged input. Read as the ladder form it
+      # dropped its .dom from the wanted set and blocked sw78 r1b3 for "not using" that image.
+      if _isfile "$_ac" && [[ "$_ac" != *" "* ]]; then printf '%s\n' "$(basename -- "$_ac")"
+      else
+        _isfile "$_bc" && printf '%s\n' "$(basename -- "$_bc")"
+        [[ "$_ac" == *" "* ]] && _isfile "${_ac%% *}" && printf '%s\n' "$(basename -- "${_ac%% *}")"
       fi
     done
   fi

@@ -3406,3 +3406,119 @@ QEMU or in a boot of its own. Placed last by design, so the pair cost nothing.
 native OFF 54,214,856,567 (sw68) / ON 53,142,976,993 (sw77); domain OFF 64,732,455,367 / ON
 63,437,512,052; ratios 1.1940 / 1.1937. Every caveat of §7p applies (timing not met, cycles only, N = 1
 per arm).
+
+### §7r — E1 of the Sublet-paper plan: the S1/S2 safety matrix on hardware, repetition 1 (boots sw78 r1b1–r1b3, 2026-09-14 evening)
+
+**What ran.** The three probe families of the collaborator's `s2/3-manager-hierarchy` branch (`d5954cc0e7e7`),
+built in a detached worktree of that branch with one addition, a `DOMAIN_BASE_VA` knob for
+`build-nginx-domain.sh` and the PostgreSQL `pgdom_link` (`3a7be75437e9`), so that several probe images
+share one boot at distinct entry VAs (R-3, preflight C15). Every image ran on capstone-qemu first at its
+board VA (the run-scoped log is its pass record; the s9 cell aborts the emulator, capstone-qemu PR #4, and
+is board-only). The 16 nginx cells are the gate `run-nginx-uaf.sh` defines: one image per compile-time
+stop, 13 returning a mark (`NGX_DOM_MARK`, low 24 bits of `ngx retval`) and 3 expected to fault. On this
+RTL a capability fault inside a domain is a wedge (M-1), so each FAULT cell is the last arm of its boot and
+is read from the debug mux's trap log. Control `k800 = 4` opened every boot; one boot banner after each
+run's `load_image`; bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`.
+
+**Two facts about the harness found on the way.** (1) The entry VA has a ceiling on QEMU: an nginx image
+linked at `0x610000` never reaches the guest shell, at `0x410000` and below it runs; the slots are now
+512 KiB apart from `0x10000` (`0x10000 … 0x310000`). (2) Two builds of the same host from the same sources
+differ in bytes because `libcapstone.c`'s `__FILE__` (an assert string) embeds the path the build resolved
+(the worktree symlink or the main checkout), shifting `.rodata` and every offset into it; the same-program
+gate pins the sources and tolerates exactly that one string.
+
+**Boot r1b1 (20:19–20:36), group 1: the plain arm, stops 1–6, and the stale handle offered back.**
+
+| arm | image (sha256/16, entry) | pre-registered | read |
+|---|---|---|---|
+| p1 stop 1 | `fc5e120bc2134bef` @0x10000 | C10000 | **C10000** |
+| p2 stop 2 | `af9df7048efbc207` @0x90000 | C20000 | **C20000** |
+| p3 stop 3 (the byte survives the destroy) | `9d55128c0eb91875` @0x110000 | C300A0 | **C300A0** |
+| p4 stop 4 (the address comes back) | `6f9ffe9eee9924ed` @0x190000 | C40001 | **C40001** |
+| p5 stop 5 (old pointer reads the new occupant) | `5b9ae11930ceb166` @0x210000 | C5005B | **C5005B** |
+| p6 stop 6 (stale free declined, −5) | `4155e787cf4af493` @0x290000 | C600FB | **C600FB** |
+| s9 stop 9, Sublet: the stale subordinate handle offered back to REVOKE (no QEMU pass: the emulator aborts on it, capstone-qemu PR #4) | `05cd076b6392196f` @0x310000 | FAULT | **no return in 300 s; trap log `0x9a` = seen, mcause 26; mepc 0x81B03D2C − DBAS 0x81B00000 = +0x3D2C = `revoke t0` in `sublet_give_to`** |
+
+**Boot r1b2 (20:41–20:53), group 2: the plain stop 7 and the Sublet arm's returning stops.**
+
+| arm | image | pre-registered (emulator) | read |
+|---|---|---|---|
+| p7 stop 7 (no nested authority on the plain arm) | `c18075469db438e2` @0x10000 | C7FF00 | **C7FF00** |
+| s4 stop 4 | `199d3d0e669178c8` @0x90000 | C40001 | **C40001** |
+| s6 stop 6 (stale free declined on the protected arm too) | `03e015237c488f50` @0x110000 | C600FB | **C600FB** |
+| s7 stop 7 (nested handle's type before / after the ancestor's revoke) | `65ba5490a7271ec3` @0x190000 | C70277 | **C70227** |
+| s8 stop 8 (stale handle vs the block's new owner) | `62bb132a448e88b0` @0x210000 | C80071 | **C80021** |
+| s1 stop 1 | `83f70385307f1bfe` @0x290000 | C10000 | **C10000** |
+| s3 stop 3, Sublet: the object touched after the destroy | `103998ef04d6c342` @0x310000 | FAULT | **returned C30000: the load retired and read 0x00** |
+
+**Readings.** Eleven of fourteen cells read exactly the emulator's mark, and the stale-handle REVOKE
+faults on silicon with an identified site and cause: mcause 26 is produced by two units on this RTL
+(the execute path's `INVALID_CAPABILITY`, `capstone_unit.anvilh:304`, and the LSU's own table,
+`load_store_unit.sv:995`), and the latched mepc names the `revoke` — the execute path. Three cells
+differ from the emulator, and all three are the same two mechanisms (RTL-oracle reading, claim-audited;
+the QEMU binary is the 2026-09-11 15:18 build of `c128-qemu-merge` and the one `op_helper.c` commit
+after it, `656cc03489`, does not touch `helper_cslcc`):
+
+* **The type read of a revoked handle is 2 on the RTL and 7 on the emulator** (s7's "after" byte, s8's
+  "stale handle" byte, and the four `== SUBLET_TYPE_NONE` checks of `ngx_subpool_test.c` phase 13, r1b3).
+  Both type queries just read the register's type field (`LCC` selector 1, `capstone_dyn_unit.anvil:
+  206-208`; `helper_cslcc` case 1, `op_helper.c:894-896`); the difference is `ldc`: QEMU's writeback
+  (`helper_reg_set_cap_compressed`, `op_helper.c:1583-1591`) clears the tag of a loaded capability whose
+  node is revoked, so the later type read takes the untagged short-circuit (`:856-858`, 7); the RTL's
+  `LDC` (`capstone_dyn_unit.anvil:355-357`) validates only the addressing capability's node and
+  `check_load_data` (`capstone_unit.anvilh:583-609`) forwards the loaded value verbatim. Encoding is not
+  the cause (both number the post-shift types LIN 0, NONLIN 1, REV 2, UNINIT 3; the RTL's 7 is
+  `NOT_CAP − 1` wrapped, the emulator's 7 its untagged fallback). On silicon a revoked-but-present handle
+  (2) and an empty slot (7) are therefore distinguishable, which is what `sublet.h:175-176`'s model
+  says; the emulator collapses both to 7, and phase 13's four expectations encode that. Enforcement on
+  use agrees on both machines (s9). Found on the way: QEMU's `LCC` validity selector (imm 0) is a stub
+  returning 1 (`op_helper.c:891-893`); nothing in the ports uses it.
+* **A byte load after the pool's destroy retired inside the domain** (s3): the Sublet arm's touch
+  returned 0x00 where the plain arm reads its own 0xA0 (p3) and the emulator faults the same image at
+  the same `lbu` (image+0x66cc) with cause 24 NOT_CAP — because its `ldc` had untagged the reloaded
+  pointer. The 0x00 is the port's own `stc zero` fill (`sublet.h:138-142`, run when the revoke hands
+  back UNINIT), not hardware. Whether the reloaded base was still TAGGED on the board — which decides
+  between "the LSU's node-validity clause (`load_store_unit.sv`, cause 25) never applies below M-mode,
+  where ISSUES R-31's 2026-09-10 block already settled the gate from source" and "an untagged base, the
+  2026-08-04 NOT_CAP result re-observed" — is read by two diagnostic stages added tonight (stop 10: the
+  reloaded pointer's type before the touch, emulator 7 as predicted; stop 11: the type and the touch in
+  one run, faults on the emulator): r1b4/r1b5, PENDING. Either way, on the deployed configuration a
+  data access through a stale pointer inside a domain is not stopped by a trap; capability-manipulating
+  instructions are. The paper's three `tab:safety` rows that say "stops at access" rest on emulator
+  evidence — the lead's framing call, raised in the 2026-09-14 report.
+
+Caveats: N = 1 per cell (repetitions 2 and 3 follow); s9 is single-source board evidence; the boots'
+S-07 displacement self-test reported itself unproven (it does not touch the marks); the rev-node head
+read VOID on r1b2 (the nginx probes mint tens of nodes each, so exhaustion is not a live concern, but
+it is not measured).
+
+**Boot r1b3 (21:00–21:15), group 3.** s2 `d049522634d2b111` @0x10000 → **C20000** (pre-registered
+C20000). The 14-phase nginx subpool test `f91bb7a72096e043` @0x90000 → **0D3E04** against the emulator's
+0E3E00: 62 checks ran, four failed, the first in phase 13 — the four `sublet_type(...) ==
+SUBLET_TYPE_NONE` checks after the two-level withdrawal (the mechanism above); the neighbour's bytes and
+the block's extent held. The PostgreSQL subpool test `91d23730153d6a18` @0x110000 (GOOD on QEMU) did
+**not enter**: trap log `0x99` = mcause 25, mepc 0x81A00044 − DBAS 0x81A00000 = image+0x44, the
+`delin gp` that opens `test` in `my_first_domain/start.S` — the entry glue de-linearises gp, which the
+board monitor delivers already non-linear (the S-15 class); the nginx images use the ladder's
+`start-gp-captable-interp.S` and enter. Recorded `unsupported` (implementation-unavailable); the fix is
+the port's. The hierarchy test (`7284f2f8db444e87`, the same glue) and s5 were behind it and run in
+boots r1b4/r1b5: PENDING.
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full 19 × 3 matrix; the cause numbering note in the manifest: the RTL
+numbers capability causes 25–31 (`riscv_pkg.sv`), the emulator from the spec base, so causes are compared
+by name).
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full planned matrix; a differing mark is `completed` with
+`oracle.match=false`, a returning FAULT cell `unsafe-success`, an image that does not enter
+`unsupported`; the RTL's cause numbers are named, the emulator's differ). The QEMU pre-run of E2 the
+same evening: cell ⑥ (`ceeded2533a74bce`) at `--arena 2097152` counts **692,392,094** (+0.339 % on the
+1,419,584 arena's 690,051,663, re-run the same minute and reproduced exactly), `HEAP 1344064` — the port
+carves 64.1 % of the Sublet arena for memsys5 (911,104 / 1,421,312 is the same 64.1 %), so P1's "one
+arena limit" gives the Sublet arm a 1.34 MiB memsys5 heap against cell ⑤'s 2 MiB — and the node counts
+move with the carve (5,568 splits, 37,966 mrevs). And P1's O2 arms exist on QEMU (the compiler lane's
+B6 note: the SQLite domain builds and runs at -O1/-O2, C-17 corrected): cell ⑤ at -O2
+`d61c8bf784f2bbd1` 330,723,308; cell ⑥ at -O2 `c506694f9f6f6889` 338,496,909 (the -O0 node counts,
+unchanged); native at -O2 `b36eb3814c3cefce` 240,654,449 with 25,122 lookasides — all at the oracle.
+Their boots (sw79 the -O0 2 MiB arena, sw80a/b the -O2 arms) follow E1's remaining boots.

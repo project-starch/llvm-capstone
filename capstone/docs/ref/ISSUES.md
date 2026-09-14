@@ -543,6 +543,32 @@ no define involved", reported and withdrawn within the hour as an N=1 over-claim
 arena size and the same path. Not asserted — stated as the thing to check before trigger (b) is
 treated as an S-14 instance.
 
+## Q-11 — capstone-qemu's `ldc` untags a loaded capability whose node is revoked; the RTL forwards it unchanged, so a type read after an ancestor's revoke is 7 there and 2 on silicon `OPEN — for the collaborator (capstone-qemu); found by E1 on hardware 2026-09-14; enforcement on use agrees on both`
+
+Three S2 cells of the nginx probe (`ngx_uaf.c` stops 7 and 8, `ngx_subpool_test.c` phase 13) read
+the TYPE of a subordinate handle after its ancestor's REVOKE: the emulator reports 7, the FPGA reports
+2 (r1b2: C70227 vs C70277, C80021 vs C80071; r1b3: 0D3E04 vs 0E3E00, the four `== SUBLET_TYPE_NONE`
+checks of phase 13). RTL-oracle reading, quoted: both type queries (`LCC` selector 1,
+`capstone_dyn_unit.anvil:206-208`; `helper_cslcc` case 1, `op_helper.c:894-896`) return the register's
+stored type field; the difference is `ldc`: QEMU's writeback `helper_reg_set_cap_compressed`
+(`op_helper.c:1583-1591`) calls `capstone_cap_revoked` and clears the tag of a loaded capability
+whose node is invalid, so the later type read takes the untagged short-circuit (`:856-858`, returns 7);
+the RTL's `LDC` (`capstone_dyn_unit.anvil:355-357`) validates only the ADDRESSING capability's node and
+`check_load_data` (`capstone_unit.anvilh:583-609`) forwards the loaded value verbatim. Encoding is
+ruled out (both number the post-shift types LIN 0, NONLIN 1, REV 2, UNINIT 3; the RTL's 7 is
+`NOT_CAP(0) - 1` wrapped, the emulator's 7 is its untagged fallback). Enforcement on use agrees:
+stop 9 offers the stale handle to REVOKE and both machines refuse it (FPGA: wedge with mcause 26
+`INVALID_CAPABILITY` latched at `revoke t0` in `sublet_give_to`, mepc 0x81B03D2C − DBAS
+0x81B00000 = +0x3D2C; emulator: cause 24 under its own numbering, and it aborts before capstone-qemu
+PR #4). Consequences: (1) `sublet.h:175-176`'s model ("type 7 means the slot is empty") holds on
+silicon, where a revoked-but-present handle (2) and an empty slot (7) are distinguishable, and the
+emulator collapses both to 7; (2) `ngx_subpool_test.c` phase 13's four `SUBLET_TYPE_NONE` expectations
+encode the emulator's behaviour and pass there for the wrong reason — the port's owners' fix; (3) the
+paper's tab:safety hierarchy rows that rest on "reads NONE after withdrawal" are emulator evidence.
+A second divergence found on the way: QEMU's `LCC` VALIDITY selector (imm 0) is a stub
+(`op_helper.c:891-893`, "always valid for now") where the RTL queries the revocation node; nothing in
+the ports uses selector 0 today. For the collaborator (capstone-qemu).
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -2361,6 +2387,22 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 >
 > **NEITHER IS BOOTED.** The resident firmware predates all of it.
 
+> **2026-09-14 (E1, boots sw78 r1b2/r1b4/r1b5): the domain-side reading the block above said only a
+> U/S-mode probe could give.** `ngx_uaf.c` stop 3 on the Sublet arm (image `103998ef04d6c342`, entry
+> 0x310000) — the object touched after `ngx_destroy_pool` has revoked its pool — RETURNED on the FPGA
+> with mark C30000: the byte load retired and read 0x00 (the plain arm's stop 3 reads its own 0xA0,
+> `9d55128c0eb91875` → C300A0; the Sublet arm's stop 1 reads 0xA0 before the destroy). The emulator
+> faults the same image at the same `lbu` (pc image+0x66cc) with cause 24 NOT_CAP, because its `ldc`
+> untagged the reloaded pointer (Q-11 above). The 0x00 is the port's own `stc zero` fill
+> (`sublet.h:138-142`, run when the revoke hands back UNINIT), not hardware. Whether the reloaded base
+> was TAGGED on the board — the difference between "the LSU's node-validity clause
+> (`load_store_unit.sv`, cause 25) never applies below M-mode" and "the base was an untagged integer, the
+> 2026-08-04 NOT_CAP result re-observed" — is read by stops 10/11 (r1b4/r1b5): PENDING.
+> Audited before entry (claim-auditor, 2026-09-14): the hash-cited image, the fault pc on QEMU, the
+> destroy→revoke chain (`ngx_destroy_pool → ngx_pool_slot_put → ngx_subpool_release → sublet_give_to →
+> revoke`, unconditional), the `--arena-linear` guard (a non-linear arena marks FD00xx, not C3xxxx).
+> N = 1 per platform; the boots' S-07 self-test reported itself unproven (irrelevant to the marks).
+
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
@@ -3726,6 +3768,26 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 > which says exactly this in its own comment). Two-halves would silently drop the high half — **worse
 > than today's diagnostic**, which is correct and should stand.
 
+> **2026-09-14 (compiler lane, note `docs/history/14-09-2026_21-00-00_b6-i128-select-not-the-blocker.md`):
+> the SQLite domain BUILDS AND RUNS at `-O1` and `-O2`.** `MVT::i128` is no longer a legal type
+> (`CapstoneISelLowering.cpp:201` registers c128; no `addRegisterClass` for i128), so the `SELECT_CC`
+> node cannot form; the `wide_arm` reproducer now hits the forge diagnostic ("Cannot materialize
+> arbitrary >64-bit constants as capabilities"), a correct refusal — a constant arm needing more than
+> XLen bits is by construction carrying bounds/permission/tag bits and materialising it as two i64
+> halves would forge a capability. B6 (the two-halves lowering) is therefore NOT to be written.
+> Images: -O0 `6cf8edf637f72063` (692,983,497, reproduces the archived cell ④ exactly), -O1
+> `50ca86aa70b3e425` (342,161,746), -O2 `ec061577fb008e18` (336,067,501), all at the oracle, in
+> `~/capstone-artifacts/b6-2026-09-14/`. The board lane's -O2 builds of the P1 arms the same evening:
+> cell ⑤ (lookaside on, 2 MiB) `d61c8bf784f2bbd1` 330,723,308; cell ⑥ (Sublet) `c506694f9f6f6889`
+> 338,496,909 with the -O0 node counts unchanged (5,481 / 37,874); native `b36eb3814c3cefce`
+> 240,654,449 (25,122 lookasides). Stakes drop from "backend crash" to "reachable from C is UNRESOLVED
+> and not worth further spend".
+>
+> **Geometry line for the -O0 measurement image (same note):** `code_len 1,483,656 + 8 KiB + dom_data
+> 2,701,904 = 4,193,752` of the order-10 ceiling's 4,194,304 — 552 bytes of headroom. Any growth of
+> the -O0 arm, instrumentation above all, fails at domain CREATION with no compiler error. -O1 has
+> 260,080 bytes of headroom.
+
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one — and 2026-09-13 evening: sw64 and sw66 were the SAME fault as sw65/sw67 (S-15), read as a hang only because mtvec was 0`
 
 > **2026-09-14 (boot sw76): the entry watchdog's LIVE positive control fired.** sw64's image
@@ -4514,6 +4576,16 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 `granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)` rule with the base truncated down —
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
+
+### M-8 — the PostgreSQL test images (`my_first_domain/start.S` glue) do not ENTER on the board monitor: `delin gp` at image+0x44 traps UNEXPECTED_OPERAND_TYPE because gp arrives already non-linear `OPEN — the port's fix (the S-15 shape); found by E1 boot sw78 r1b3, 2026-09-14`
+
+`pg_subpool_test.dom` (`91d23730153d6a18`, r1b3 arm 4) trapped at image+0x44, the first instruction
+of `test` after `_start` (`my_first_domain/start.S`): `delin gp`, mcause 25 UNEXPECTED_OPERAND_TYPE,
+before any scenario. The monitor delivers gp already non-linear on the board (the S-15 class: the
+sw64 image de-linearised an arena grant the monitor had de-linearised); the nginx images use
+`start-gp-captable-interp.S` and enter. QEMU passes the same image (GOOD). `pg_hierarchy.dom`
+(`7284f2f8db444e87`, r1b4): PENDING — predicted the same trap. Cells recorded `unsupported`,
+reason implementation-unavailable. Fix is the port's: drop or guard the `delin` as the S-15 fix did.
 
 ## Infrastructure / procedure
 
