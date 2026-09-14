@@ -34,6 +34,14 @@ Minimal snapshot. Read first in every session.
   ratio 1.2383 × CPI ratio 0.954. Size series on silicon: 1.2195 / 1.1940 / 1.1819 at sizes 1/20/100.
   Every invalidator checked before the ratio was written; §7p carries the caveats (timing, lookaside off,
   cycles only).
+* **2026-09-14, the plan's four boots (§7q):** the Sublet cell re-based on the #3 module (2,794,183,730
+  cycles at HEAP 911104; silicon ⑥/⑤ 1.0951), the lookaside-ON arms on silicon (baseline 2,108,202,651 at
+  size 1 with 25,122 lookasides), the rounded-arena reclaim completing through csinit (audited: R-33's
+  account, attribution inferred), the entry watchdog firing live on sw64's stall, and **`main --size 20`
+  with lookaside ON on both arms at 1.1937 → 1.19** (the OFF pair: 1.1940) — SQLite as it ships costs the
+  same on this silicon. Two per-boot rules learned the hard way: one Sublet workload per boot (R-12,
+  43k rev-node mints per run) and one REGION_ARENA workload per boot (a second 128 MiB arena creation
+  stalls the host; mechanism open).
 * **Watchdog fixed** (`f7f2c9030623`): liveness is `[uart]` lines; console `[event]` chatter had
   made the entry-stall abort unfireable live.
 * **PRs landed on `dev`: ten of the eleven original, and all seventeen new ones (#19–#35).**

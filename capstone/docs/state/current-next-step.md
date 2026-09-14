@@ -1,4 +1,6 @@
-## 0. CURRENT — 2026-09-14 (afternoon). **Boots A/A' (sw74, sw74b) done: cell 6 re-based on the #3 module (2,794,183,730 cycles at HEAP 911104), the lookaside-ON baseline (2,108,202,651, 25,122 lookasides on silicon), the rounded-arena reclaim completing through csinit twice (R-33 account, attribution inferred — audited), and a second Sublet run per boot exhausting the rev-node pool (R-12, head 0xFFFF) — ONE Sublet workload per boot from now on. Boots B/C/D next (drivers written). sw73: `main --size 100` at 1.18 (§7p).** Earlier headers follow.
+## 0. CURRENT — 2026-09-14 (evening). **The 2026-09-14 plan's boots are done: sw77 = `main --size 20` with lookaside ON on both arms, ratio 1.1937 → 1.19 (pre-registered 1.19; the OFF pair read 1.1940) — the first "as shipped" SQLite rows on silicon; sw76 = the entry watchdog fired live; sw74/74b/75 = the Sublet cell re-based on the #3 module (⑥/⑤ 1.0951), cell 5 unmoved, the rounded-arena reclaim completing (audited: inferred attribution), and two per-boot rules: ONE Sublet workload per boot (R-12, 43k mints) and ONE REGION_ARENA workload per boot (sw77 arm 6, mechanism open). sw73: size 100 at 1.18 (§7p).** Earlier headers follow.
+
+> CURRENT — 2026-09-14 (afternoon). **Boots A/A' (sw74, sw74b) done: cell 6 re-based on the #3 module (2,794,183,730 cycles at HEAP 911104), the lookaside-ON baseline (2,108,202,651, 25,122 lookasides on silicon), the rounded-arena reclaim completing through csinit twice (R-33 account, attribution inferred — audited), and a second Sublet run per boot exhausting the rev-node pool (R-12, head 0xFFFF) — ONE Sublet workload per boot from now on. Boots B/C/D next (drivers written). sw73: `main --size 100` at 1.18 (§7p).** Earlier headers follow.
 
 > CURRENT — 2026-09-14 (morning). **Boot sw73 DONE: `main --size 100` on silicon, both arms at the native oracle, ratio 1.1819 → 1.18, exactly the pre-registered value (§7p); sw72 gave the R-33 rounding log and the S-15 share-trap instrument their positive controls; all seventeen new collaborator PRs (#19–#35) landed; S-15 CONFIRMED end to end (sw68 size 20 at 1.19x; sw69 mcause 27).** Earlier headers follow.
 
@@ -142,8 +144,13 @@
   the representable-arena probe control clean; re-based silicon ⑥/⑤ = 1.0951. sw76 (Boot C) — the entry
   watchdog's live positive control FIRED on sw64's stall (`ENTRY-STALL … no SHA6 for 421s`, runner
   terminated, board released, no reset in the window); its first attempt had been blocked by a
-  transient of the preflight's control-record check (passes on re-run, unexplained). sw77 (Boot D, the
-  lookaside-ON size-20 pair) running.
+  transient of the preflight's control-record check (passes on re-run, unexplained). sw77 (Boot D) — the
+  lookaside-ON size-20 pair: native 53,142,976,993, domain 63,437,512,052, **1.1937 → 1.19** at the
+  oracle on both arms (sw68's OFF pair 1.1940); the trailing `--stats` re-run of the domain image
+  stopped at its second 128 MiB `mkarena` of the boot (not R-12: head 289; not M-7: nothing was
+  released) — **one REGION_ARENA workload per boot** from now on, its lookaside check done on QEMU
+  (25,010). Owed from the plan: the R-33 settling arm (monitor 4274268 + a pre-rounding `.ko`), the
+  size-100 instret image, seven testsets at size 20 — none scheduled.
 * **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
   domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
   1.1819 → 1.18** (pre-registered ≈1.18, band 1.14–1.24); all five invalidators checked; rounding lines

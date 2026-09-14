@@ -4254,6 +4254,13 @@ it should know the verification hangs on the ruling and not on the code.
 
 ### M-7 — the first `create_region` AFTER a `release_region` faults; the release itself is clean `OPEN — PARKED 2026-09-11 with the mechanism NOT established; see "why this is parked"`
 
+> **Not this entry, recorded so it is not mistaken for it (2026-09-14, boot sw77 arm 6):** a REGION_ARENA
+> image's SECOND run in a boot stopped after `SQ: C2/mkarena` — the host's second 128 MiB arena
+> `create_region` of the boot — with no `release_region` having run (that host never releases its
+> arena), no trap latched, rev-node head 289. Filed in §7q as "one REGION_ARENA workload per boot";
+> mechanism not established (a second 128 MiB allocation from the 256 MiB CMA area that still holds
+> the first is the obvious candidate, N = 1).
+
 > **WHY THIS IS PARKED, so a later reader does not mistake a pause for an oversight.** Nothing in the
 > tree depends on it: `release_region` has exactly **one** caller, and that caller is the probe that
 > found this. No workload, no board image and no gate reaches the path. It was localised as far as

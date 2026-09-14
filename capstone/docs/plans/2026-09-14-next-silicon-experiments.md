@@ -137,6 +137,21 @@ size 20 (~9 h, seven boots); R-33's bottom-truncation arm (its shape is not writ
 * Collaborator queue: land capstone-qemu #3 when the rebase arrives (plain merge, storewatch runs on
   QEMU as its control); close #14/#18; record the llvm #2/#3 decision.
 
+## Outcome (2026-09-14, evening) — every item above ran; readings in §7q
+
+E1 done (the measure-script rebuilds reproduced the archived Sublet images byte for byte; the
+lookaside-ON arms built and QEMU-passed). Boot A (sw74) + its discriminator (sw74b): cell 6 re-based
+(2,794,183,730 at HEAP 911104), the lookaside-ON baseline (2,108,202,651), the rounded-arena reclaim
+completing (audited: R-33's account, attribution inferred, the settling arm owed); a SECOND Sublet run
+per boot exhausts the rev-node pool (R-12, head 0xFFFF) — a rule now. Boot B (sw75): cell 5 unmoved
+(2,551,483,818), its `--stats` re-run fine (25,010), the representable-arena probe clean; silicon
+⑥/⑤ 1.0951. Boot C (sw76): the watchdog fired live at 421 s, no reset. Boot D (sw77): the
+lookaside-ON pair at size 20 = **1.1937 → 1.19**, the pre-registered value, beside sw68's 1.1940; the
+trailing domain `--stats` re-run stalled at its second 128 MiB arena creation — one REGION_ARENA
+workload per boot, a second rule. Not scheduled, still owed: the R-33 settling arm, the size-100
+instret image, seven testsets at size 20. Decisions still with the lead: the paper proposal, M-1's
+default, closing #14/#18, llvm #2/#3.
+
 ## Verification
 
 * E1: each run hashes to the off/off oracle `112006 38bb59fd`; ⑥/⑥′ report `HEAP 911104`; ⑤ reports

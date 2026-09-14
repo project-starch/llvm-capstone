@@ -2693,7 +2693,9 @@ accident: `SQLITE_LOOKASIDE` reaches the baseline through the same idiom the fea
 and the domain takes `DOMAIN_EXTRA_DEFS='-DSQLITE_DEFAULT_LOOKASIDE=1200,40'` (verified by running
 it — image `ccb73bc08db39990` reports `Successful lookasides: 25010`, not by reading the script).
 **Any new row must state which setting it used.** The rows above this block were taken with the pool
-OFF.
+OFF. **The first lookaside-ON silicon rows exist since 2026-09-14** (§7q: boot sw74's baseline and
+sw75's cell 5 at size 1; boot sw77's `main --size 20` pair at 1.1937 against the OFF pair's 1.1940) —
+the pool moves both arms by about 2 % and the ratio by 0.0003 at that size.
 
 ### §7l — The overhead ratio is size-robust, and the workload scales super-linearly (emulated, 2026-09-11)
 
@@ -3355,3 +3357,42 @@ live board; every earlier "it would have caught sw64" was a replay. A first atte
 blocked by the preflight's control-record check (`first rung 'k800' is not listed …`) although the
 same check had passed on sw74/74b/75 minutes before and passes on re-run; unexplained, recorded as a
 transient of that gate (the file was present and unchanged), and the boot cost nothing but a bake.
+
+**Boot D (sw77, 14:24–17:53, fw `a6458cb568fe`): the lookaside-ON pair at `main --size 20` — SQLite as it
+ships, on silicon.** Domain `90ef29431abdbdee` (sw64's recipe: FULL/FLOAT, 128 MiB region arena,
+`mtvec = 0`, the S-15 fix, plus `SQLITE_DEFAULT_LOOKASIDE=1200,40`), host 2af56927, native
+`78e523cb05cbb91f` (sw64's baseline recipe plus lookaside). Both images QEMU-passed at size 20 before the
+boot (§4g's lookaside-ON rows).
+
+| arm | what | reading | pre-registered |
+|---|---|---|---|
+| 1, 3 | controls | `retval=4`, `retval=4` | 4 |
+| 2 | native, lookaside ON, `warm --size 20` | `3807866 2738af78`, **53,142,976,993** cycles (2,171 s) | oracle; ~53.65 G ±3 % |
+| 4 | domain, lookaside ON, `--size 20` | `3807866 2738af78`, **63,437,512,052** cycles, `HEAP 134217728 DROPPED 0 RC 0`, no share-trap line | oracle; ~63.97 G |
+| 5 | native, `--size 1 --stats` | `111130 1e792c9d`, **`Successful lookasides: 25122`** | lookasides > 0 |
+| 6 | domain, `--size 1 --stats` — the image's SECOND run in the boot | `A/dom-ok`, regions 1 and 2, `C2/mkarena`, then nothing for 7,200 s: no `D/mapped`, no shares; wedge read: trap log 0x83, `rev_node_head` 0x0121 (289 nodes, not R-12) | lookasides > 0 (lost) |
+
+**Ratio 63,437,512,052 / 53,142,976,993 = 1.1937 → 1.19 at two decimals**, the pre-registered value
+(band 1.15–1.24). sw68's lookaside-OFF pair of the same size and image family read 1.1940: the pool
+changes the ratio by 0.0003 and takes 1.98 % off the native arm's cycles and 2.00 % off the domain's.
+Decomposition on the QEMU icount counts of the same binaries (native 14,003,848,190, domain
+17,544,109,561): instruction ratio 1.2528, CPI native 3.795 / domain 3.616, CPI ratio 0.953.
+**This closes the CONFIGURATION block's gap: a silicon speedtest1 row with the lookaside pool ON now
+exists**, and it says the same thing the OFF rows said. The domain image's lookaside is proven on
+QEMU (`Successful lookasides: 25010` at size 1) because its silicon `--stats` arm was lost to the wedge
+below; the native binary's is proven on silicon (arm 5).
+
+**Arm 6 is a third second-run shape, and it is not R-12.** The image's second run stopped after
+`SQ: C2/mkarena` — the host creating its second 128 MiB arena region of the boot — with no domain
+marker after it, no capability trap latched and the rev-node head at 289. The REGION_ARENA host does
+not release its arena at teardown (only the static-heap pool/tables paths call `release_region`), so
+the second `create_region` of 128 MiB is asked of a 256 MiB CMA area that still holds the first;
+whether that allocation blocks or the ioctl wedges is not established (N = 1, host-side, no UART). Not
+M-7 (no `release_region` preceded it) and not the Sublet cell's node budget. **Driver rule, added to
+the state doc: a REGION_ARENA image runs ONCE per boot**; its `--stats` positive check belongs on
+QEMU or in a boot of its own. Placed last by design, so the pair cost nothing.
+
+**Where the size-20 numbers now stand on silicon** (same image family, same bitstream, cycles):
+native OFF 54,214,856,567 (sw68) / ON 53,142,976,993 (sw77); domain OFF 64,732,455,367 / ON
+63,437,512,052; ratios 1.1940 / 1.1937. Every caveat of §7p applies (timing not met, cycles only, N = 1
+per arm).
