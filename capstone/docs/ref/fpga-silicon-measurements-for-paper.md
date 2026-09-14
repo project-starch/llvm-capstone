@@ -3318,3 +3318,40 @@ variable. **Rule for every driver from here: at most ONE Sublet-cell workload pe
 cell's mints are its boundary borrows and shares, far below the pool (sw73 ran size 100 in one boot),
 so its second run is safe.** The two `--tail` probe arms and the trailing control were lost in both
 boots; the representable-arena control moves to Boot B's last arm.
+
+**Boot B (sw75, 13:48–13:59, fw `10d84925dfe2`): cell 5 on the #3 module, its `--stats` re-run, and the
+representable-arena probe control — all five arms returned.**
+
+| arm | what | reading | pre-registered |
+|---|---|---|---|
+| 1, 3 | controls | `retval=4`, `retval=4` | 4 |
+| 2 | cell 5 (memsys5, lookaside ON, 2 MiB static heap; `e6ee5255c896aa21` = the archived recipe + the stack declaration 385,024) `--size 1` | `112006 38bb59fd`, `HEAP 2097152`, **2,551,483,818** cycles, `DROPPED 0 RC 0` | oracle; ~2,551.5 M ±1 % (sw60: 2,551,506,640) — **−0.0009 %** |
+| 4 | the same image, second run, `--stats` | `112006 38bb59fd`, **`Successful lookasides: 25010`**, 2,552,134,789 cycles (+0.026 %, the statistics print) | returns (a memsys5 cell mints only shares and boundary borrows) |
+| 5 | probe, `--tail --arena 4194304 --tables 1750285` (the control Boot A lost) | arena `ALEN:00400000` (no rounding, a power of two), tables `ALEN:001AB800` (rounded), `RR/share-A … RR/done`, **RCLM 0 → 1**, no RCPR/RCSH/RCRE, then the designed end (`released tables rc=1`, `obs=0x5117BAD4`) | exactly this |
+
+**Readings.** The static-heap cell is unmoved by the module change and the declaration knob (the loaded
+bytes are the same; the block is order 10 either way): −0.0009 % against sw60. The re-based silicon
+Sublet-over-memsys5 ratio on the #3 module is **⑥/⑤ = 2,794,183,730 / 2,551,483,818 = 1.0951** (sw61/sw60
+read 1.0964) — still the two-geometry "configuration" comparison (§4g.5's caveat stands: ⑥'s arena is
+the rounded 1,421,312 in a shared region, ⑤'s is a 2 MiB static heap). The second run of the memsys5
+cell returning is the negative control for the R-12 account of the Sublet wedges: it is the Sublet
+cell's 43k mints per run, not "a second run", that exhausts the pool. The representable-arena probe
+reclaims exactly as the rounded one did, so nothing in the reclaim path depends on the arena having
+been rounded — the attribution question in ISSUES R-33 (module rounding vs the monitor's new check)
+stays as the auditor left it, and its settling arm stays owed.
+
+**Boot C (sw76, 14:08–14:21, fw `f80c301f8cd2`): the entry watchdog's live positive control — it fires.**
+Control `retval=4`, then sw64's image `23da3b126a304585` (the pre-fix image that stalls at share3, the
+readback host 2af56927, `--size 1`) last. Reading, all as pre-registered: `Domain requirement =
+1281952 (stack 1048576)`, `A/dom-ok`, share1 `SHA5 → SHA6`, share2 `SHA5 → SHA6`, share3 (`ALEN:08000000`,
+the 128 MiB arena) `SHA5:00000001` and nothing after — no `SHA6`, no `G/enter`, no share-trap line
+(the readback runs after a share returns; this one never does — the instrument's scope, as stated).
+The watchdog: **`ENTRY-STALL 781s  last share marker=SHA5:00000001, no SHA6 for 421s -> domain never
+ran; the rest of this boot is worthless. Aborting runner.`** — 421 s after the last UART line, exactly
+the configured `ENTRY_STALL_S=420`; it sent `TERM`, the runner ended (rc 130, its own handling of the
+signal), ran its release (`gdb_stop`, power off), and the run-scoped log carries exactly one boot banner
+after this run's `load_image` — no reset in the window. This is the first time the abort has fired on a
+live board; every earlier "it would have caught sw64" was a replay. A first attempt of this boot was
+blocked by the preflight's control-record check (`first rung 'k800' is not listed …`) although the
+same check had passed on sw74/74b/75 minutes before and passes on re-run; unexplained, recorded as a
+transient of that gate (the file was present and unchanged), and the boot cost nothing but a bake.

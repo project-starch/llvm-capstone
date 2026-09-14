@@ -3728,6 +3728,13 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one — and 2026-09-13 evening: sw64 and sw66 were the SAME fault as sw65/sw67 (S-15), read as a hang only because mtvec was 0`
 
+> **2026-09-14 (boot sw76): the entry watchdog's LIVE positive control fired.** sw64's image
+> (`23da3b126a304585`, the stall at share3) as the last arm: `SHA5` with no `SHA6`, then
+> `ENTRY-STALL 781s … no SHA6 for 421s -> Aborting runner` at the configured 420 s, `TERM` to the
+> runner, board released, one boot banner in the window (no reset). Until this boot the abort had only
+> been replayed against sw64's log. §7q. The bound M-1 costs a measurement boot is now the watchdog's
+> `ENTRY_STALL_S`, proven live, not the idle budget.
+
 > **Question for the project lead (2026-09-14, not decided here): should MEASUREMENT images carry the
 > trap vector by default now?** Boot sw69 showed the handler is reachable after a real fault on this
 > RTL (the pair image `214b300efd169f03` took UNEXPECTED_CAP_TYPE at share3 and returned to the host

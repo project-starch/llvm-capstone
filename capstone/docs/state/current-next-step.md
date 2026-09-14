@@ -132,6 +132,18 @@
   `SQ: share-trap=` as a terminal result (logs word, mcause, share) instead of HARD-STOPPING on
   "obs=3, not a staged marker", so the transcript is written; regexes checked against sw72's raw
   log (positive) and sw73's (negative); exercised on the board by the next probe boot.
+* **Boots of the 2026-09-14 plan (§7q):** sw74 (Boot A) — cell 6 on the #3 module 2,794,183,730 cycles
+  at HEAP 911104 (−0.12 % vs sw61), the lookaside-ON baseline 2,108,202,651 (+0.03 % vs sw60's cell 2),
+  the rounded-arena reclaim completing through csinit (RCLM 0 → 1, no RCPR/RCSH/RCRE; audited: R-33's
+  account, attribution to the rounding inferred, the settling arm owed); its arm 4 and sw74b's arm 4
+  — a SECOND Sublet workload in one boot — wedged with `rev_node_head = 0xFFFF` (R-12: 43k mints per
+  run). sw74b also showed `--stats` innocent (25,010 lookasides on silicon as the first run). sw75
+  (Boot B) — cell 5 on the #3 module 2,551,483,818 (−0.0009 % vs sw60), its `--stats` second run fine,
+  the representable-arena probe control clean; re-based silicon ⑥/⑤ = 1.0951. sw76 (Boot C) — the entry
+  watchdog's live positive control FIRED on sw64's stall (`ENTRY-STALL … no SHA6 for 421s`, runner
+  terminated, board released, no reset in the window); its first attempt had been blocked by a
+  transient of the preflight's control-record check (passes on re-run, unexplained). sw77 (Boot D, the
+  lookaside-ON size-20 pair) running.
 * **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
   domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
   1.1819 → 1.18** (pre-registered ≈1.18, band 1.14–1.24); all five invalidators checked; rounding lines
