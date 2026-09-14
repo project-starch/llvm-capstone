@@ -21,11 +21,12 @@ estimate approximates is now measured directly on silicon and absent from the pa
 | `main --size 1`, silicon pair, post-flash bridge (sw63) | 1.2195 | §7m |
 | seven testsets, silicon (`main` 1.2195, `star` 1.2514, `parsenumber` 1.2677, `orm` 1.1843, `fp` 1.2435, `cte` 1.1654, `rtree` 1.1879) | 1.17–1.27 | §7k/§7m |
 | allocator matrix, QEMU `-icount`, memsys5 | 1.2703 | §4g |
-| `main --size 100`, silicon (boot sw73, running as this is written; pre-registered ≈1.18, band 1.14–1.24) | pending | §7p when it lands |
+| `main --size 100`, silicon, boot sw73 (2026-09-14; pre-registered ≈1.18, band 1.14–1.24) | **1.1819** (337,235,381,252 → 398,572,346,349 cycles) | §7p |
 
 These are not the same quantity as the estimate: the estimate prices the boundary borrows only; the
 ratio is the whole pure-capability domain's cost, spatial safety and ABI included. The proposal is
-to say exactly that, with the size-20 row as the headline and the size-1 row beside it — not to
+to say exactly that, with the size-100 row (the default size, 1.18) as the headline and the size-20
+and size-1 rows beside it — not to
 present 1.19 as "the real answer where 1% was estimated". Framing the doc leaves to the paper:
 user-work-vs-user-work denominators (`main` 1.294 tick-adjusted) versus whole-machine (§7 preamble).
 
@@ -48,7 +49,7 @@ the live paper (the four "timing" mentions in `evaluation.tex` are about cycle-a
   not ship (`:2593-2632`; both arms, so the ratios stand; sw68's image is built by the same path with
   no lookaside override, so OFF by construction — the transcript carries no lookaside line to read it
   from); and every §7f–§7k row is `--size 1` against speedtest1's default of 100 (`:2635`) — sw68 is
-  size 20, sw73 will be size 100.
+  size 20 and sw73 is size 100 (speedtest1's default), at 1.18.
 
 ## Corrections the audit found in the live text (each re-read at its line; no edit made)
 

@@ -832,6 +832,7 @@ def main():
     console.connect()
     install_resilient_emit(console)
     results, transcript = [], []
+    share_traps = {}   # dom -> (word, mcause, share) when the host reported a share-entry trap
     try:
         console.lock()
         install_release_on_signal(console)
@@ -1602,6 +1603,8 @@ def main():
                     f" mcause={_mc.group(1) if _mc else '?'} at={_at.group(1) if _at else '?'}"
                     f" -- a result (the S-15 instrument), not a staging failure; the domain was"
                     f" never entered.")
+                share_traps[dom] = (_st.group(1), _mc.group(1) if _mc else "?",
+                                    _at.group(1) if _at else "?")
                 bad = False
             if not wedged and bad:
                 raise SystemExit(
@@ -3580,6 +3583,10 @@ def main():
                               if b else ""))
             elif returned:
                 verdict = f"returned, obs={obs} (not a staged marker)"
+            elif dom in share_traps:
+                _w, _m, _a = share_traps[dom]
+                verdict = (f"SHARE-ENTRY TRAP reported by the host (S-15 instrument): word={_w} "
+                           f"mcause={_m} at={_a} -- created, NEVER ENTERED, did not return")
             else:
                 verdict = f"no marker (obs={obs})"
             name = STAGE_NAMES.get(decode(obs)[0] if d else -1, "")
@@ -3615,8 +3622,13 @@ def main():
             got = ", ".join(
                 f"{pathlib.Path(d).stem}=rc{decode(o)[1]}" if decode(o) else
                 f"{pathlib.Path(d).stem}=?" for d, _, o, _, _, _, _ in results)
-            print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
-                  f"are CORRECT is the caller's judgement, not this runner's.", flush=True)
+            if share_traps:
+                print(f"\n{len(share_traps)} arm(s) stopped at a share-entry trap reported by the host "
+                      f"({', '.join(pathlib.Path(k).stem for k in share_traps)}) and did NOT "
+                      f"return; every other domain returned ({got}). No domain wedged.", flush=True)
+            else:
+                print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
+                      f"are CORRECT is the caller's judgement, not this runner's.", flush=True)
         else:
             dom, wedged, d, created, entered, montag = first_bad
             if wedged and (not created or not entered or montag):

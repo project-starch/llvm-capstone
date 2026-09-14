@@ -98,12 +98,22 @@
   measurement row. `caplifive-buildroot-domain-sizing.patch` is a snapshot `vendor-patches/refresh.sh`
   regenerates, left as is. Board overlay: `bigregion.user` rebuilt for sw72 (383779bdef8c6d6e);
   `rtpc` rebuilt 2026-09-14 after sw73 (d595cb24 → `4f1fe8f67ddf6830`, 8768 B both, markers
-  `/dev/capstone`/`RESULT`/`retval=` present, the grown struct proven on the R01 sibling controller
-  as a QEMU pair) and `sqlite_host_rr.user` (the default-mode SQLite host that takes `--tail/--arena/
-  --tables/--pool`; c1d06da8 → `e47b07986f7744ea`, 27,768 → 27,808 B, now linked to the merged
-  libcapstone — reads the declaration — and carrying the share readback) — both staged in `overlay/`
-  and `build/target/`, baked into the image at the next boot's bake step. No old-struct host remains
-  on the overlay.
+  `/dev/capstone`/`RESULT`/`retval=` present; QEMU pair with the rebuilt `rev_transferred_probe.dom`:
+  the pre-B2 source's build `create_dom failed`, the new one `RESULT revxfer retval=574619742` — the
+  pre-B2 build is b7f76fe1, not the retired d595cb24, so the pair is source-old vs source-new) and
+  `sqlite_host_rr.user` (the default-mode SQLite host that takes `--tail/--arena/--tables/--pool`;
+  c1d06da8 → `e03e61268e941241`, 27,768 → 27,808 B, built with `HOST_EXTRA_DEFS=-DSQLITE_HC_REGION_SIZE=65536`
+  — the first rebuild without that define passed the string gate and then failed both images at the
+  region check ("speedtest1 did not run"), which is what the QEMU pair is for; the correct build is
+  byte-identical to the host the measure script builds). QEMU pair for it: the old binary
+  `create_dom failed`; the new one runs the 1.5 MiB static-heap image to the oracle (`HEAP 1572864`)
+  and ⑥'s Sublet image with `--arena 1419584 --tables 1750285` to the oracle. **Observation:** ⑥'s
+  image on the #3 module reports `HEAP 911104`, not the 910,008 of its §4g row — R-33's rounding of
+  the non-representable 1,419,584 arena moved the Sublet geometry by 1,096 bytes; any new Sublet row
+  must be re-based on the #3 module, and ⑥'s archived count is not comparable to a #3-module run.
+  Both hosts are staged in `overlay/` and `build/target/` (git-ignored there, as every staged host is;
+  the drivers pin them by hash), baked into the image at the next boot's bake step. No old-struct host
+  remains on the overlay.
 * **Boot sw70 is VOID, not a #3 reading:** `ladder_base_ctl` (the native baseline controller, no
   `/dev/capstone`) was staged into the `lpc` slot -- same name, different program, 6x the size -- the
   board reset under it and no RESULT came back. Its fixes: the native build's `-fno-common` link
