@@ -24,9 +24,12 @@
  *   7  an ancestor revokes while a nested handle is alive, and the nested handle is asked what
  *      it is afterwards. No unprotected arm: a level below that hands out ordinary pointers has
  *      no nested authority to end
+ *   8  the same block is then re-issued, to a new handle and a new object, so that the stale
+ *      handle stage 9 offers back is a handle to memory somebody else owns
+ *   9  that stale handle is offered back, which is the operation a double free is made of
  *
- * Stage 3 is the only one that may fault, and only in the protected arm. A fault at stage 1 or 2,
- * or in the unprotected arm at all, is a defect in the port and not a result.
+ * Stages 3, 5 and 9 are the ones that may fault, and only in the protected arm. A fault at stage
+ * 1 or 2, or in the unprotected arm at all, is a defect in the port and not a result.
  */
 #include <stddef.h>
 #include <stdint.h>
@@ -228,8 +231,67 @@ void domain_main(unsigned *res, unsigned func) {
     sublet_clear(&empty);
     unsigned none = (unsigned) sublet_type(&empty);
 
-    NGX_DOM_MARK(0xC70000u | ((before & 0xFu) << 8) | ((after & 0xFu) << 4) | (none & 0xFu));
+    if (NGX_UAF_STOP < 8) {
+        NGX_DOM_MARK(0xC70000u | ((before & 0xFu) << 8) | ((after & 0xFu) << 4) | (none & 0xFu));
+    }
+
+    /* ---- a retained release handle, offered back ---------------------------
+     *
+     * The hierarchy test in the paper asks what an allocator that KEPT a release handle across
+     * an ancestor's revoke can still do with it. Under this discipline it cannot keep one at
+     * all, and that is worth measuring rather than arguing: a revocation capability is linear,
+     * so it lives in exactly one slot and a copy would null the original. Stage 7 shows the
+     * revoke empties that one slot. This stage asks what using it afterwards does.
+     *
+     * AND IT ONLY HAS TEETH IF THE SPACE HAS AN OWNER AGAIN. Offering back a handle to memory
+     * nobody wants proves nothing either way, so the block is re-issued first: a new handle, a
+     * new object, a byte written and read back. Stage 8 reports that the re-issue worked and
+     * that the stale handle is still empty. Stage 9 then makes the offer. Were it to revoke,
+     * it would take the new owner's object with it.
+     */
+    sublet_cap sblk, sout, sstale, sobj;
+    if (!ngx_subpool_block(2048, &sblk, &sout)) {
+        NGX_DOM_MARK(0xE90000u);
+    }
+    sublet_handle(&sblk, &sstale);
+    sublet_carve(&sblk, sublet_base(&sblk) + 64, &sobj);
+    unsigned char *sd = (unsigned char *) sublet_take(&sobj);
+    if (sd == NULL) {
+        NGX_DOM_MARK(0xEA0000u);
+    }
+    sd[0] = 0x8A;
+
+    sublet_give_to(&sout, &sblk);                /* the ancestor revokes, and sstale is emptied */
+
+    /* the space gets a new owner */
+    sublet_cap sin2, sobj2;
+    sublet_handle(&sblk, &sin2);
+    sublet_carve(&sblk, sublet_base(&sblk) + 64, &sobj2);
+    unsigned char *sd2 = (unsigned char *) sublet_take(&sobj2);
+    if (sd2 == NULL) {
+        NGX_DOM_MARK(0xEB0000u);
+    }
+    sd2[0] = 0xD1;
+
+    unsigned stale = (unsigned) sublet_type(&sstale);
+    unsigned live = (sd2[0] == 0xD1) ? 1u : 0u;
+
+    if (NGX_UAF_STOP < 9) {
+        NGX_DOM_MARK(0xC80000u | ((stale & 0xFu) << 4) | live);
+    }
+
+    /* The offer. If the domain ends here, the stale handle could not be replayed. If it returns,
+       the mark says what landed in the destination slot and whether the new owner's byte is
+       still there, because a revoke that succeeded would have taken it. */
+    sublet_cap sdst;
+    sublet_clear(&sdst);
+    sublet_give_to(&sstale, &sdst);
+
+    NGX_DOM_MARK(0xC90000u | (((unsigned) sublet_type(&sdst) & 0xFu) << 4)
+                 | ((sd2[0] == 0xD1) ? 1u : 0u));
 #else
-    NGX_DOM_MARK(0xC7FF00u);     /* no nested authority exists on this arm */
+    /* No nested authority exists on this arm, and the mark says so rather than leaving a gap.
+       Stages 7 to 9 are all about authority the unprotected level below never had. */
+    NGX_DOM_MARK(0xC70000u + (((unsigned) NGX_UAF_STOP - 7u) << 16) + 0xFF00u);
 #endif
 }
