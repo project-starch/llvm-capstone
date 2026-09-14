@@ -7,7 +7,14 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 bash "$SCRIPT_DIR/fetch-nginx.sh" >/dev/null
 NGX_SRC_DIR=${NGX_SRC_DIR:-/tmp/capstone/nginx-${NGX_VERSION:-1.28.0}}
 OUT=${OUT_DIR:-/tmp/capstone/nginx-census}; mkdir -p "$OUT"
-CLANG=${CAPSTONE_CLANG:-${CAPSTONE_LLVM_BUILD_DIR:-/home/biecho/llvm-capstone/llvm/build-rel}/bin/clang}
+# The fallback is REPO-RELATIVE, which is the only kind that can be right on a machine
+# nobody has seen. It was a contributor's home directory until 2026-09-14 -- a path that
+# exists on no machine in this project, and whose failure names neither the cause nor the
+# path: with it in force the census reports "-O0 FAILED, 0 errors" for every level and then
+# prints nothing under "first errors:", because there is no compiler to produce any.
+# capstone-test-env.sh:48 already computes this default; sourcing it is better still.
+CAPSTONE_REPO_ROOT=${CAPSTONE_REPO_ROOT:-$(cd -- "$SCRIPT_DIR/../../.." && pwd)}
+CLANG=${CAPSTONE_CLANG:-${CAPSTONE_LLVM_BUILD_DIR:-$CAPSTONE_REPO_ROOT/llvm/cmake-build-debug}/bin/clang}
 NM=${CAPSTONE_LLVM_NM:-$(dirname "$CLANG")/llvm-nm}
 
 # The allocator and its header, with ngx_config.h and ngx_core.h replaced by the shim beside this
