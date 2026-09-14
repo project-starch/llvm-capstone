@@ -4610,6 +4610,50 @@ chased (the cells are `unsupported` either way). Fix is the port's: link the Pos
 with the gp-free/cap-table glue and linker script the nginx port uses (`DOMAIN_BASE_VA` already
 reaches `pgdom_link`), or drop the `delin`.
 
+### M-9 — a linear (REV_BORROWED) region released while TOP-OF-STACK is popped, and the next `create_region` in the same boot faults inside the monitor `OPEN — emulator evidence (chain18 run 2, 2026-09-15); workaround: keep a region above it`
+
+Found while chaining harness invocations through `sqlite_host_rr.user --speedtest1 --arena N` in one
+emulator boot (the R1 harness, `capstone/sublet/r1`). Invocation 1 shares its 4 MiB arena
+`REV_BORROWED` (linear to the domain), runs, returns; the host's `release_region(pool)` returns **0**
+— the pool was top-of-stack, so `ioctl_release_region` revoked AND popped it (the SQLite host's
+comment at `sqlite_host.c:161-168` documents the two return values: 0 = popped and gone, 1 = revoked
+and the slot kept). Invocation 2 then dies at its own `F2/mkregion3`: `[CAPSTONE] Cap mem access
+requires capability: pc = 800239e4, rs1 = x7, imm = 0, value = 0`, `domain halted by capability
+fault: cause = 24, pc = 0x800239e4, tval = 0x0, badaddr = 0xf0300000` — the pc is the MONITOR's
+(`pc_cap = C(8002006c [8001a1d0,8002ff10))`), the bad address is the NEW region's base, and the
+operand the monitor used to touch it was the integer 0: the slot the pop freed hands the next
+create a null where a capability should be. The same chain with a 64 KiB `--tables` region above
+each pool (the SQLite cells' shape) makes every release return 1 (revoked, slot kept) and the next
+create works — 14 invocations in a row (chain18 run 4), until the region table runs out.
+Consequences: (1) every study that carves fresh regions per invocation must keep a region above the
+linear one it releases, or the boot ends at the second invocation; (2) because the kept slots are
+never reclaimed within a boot, the boot's region budget is finite: ~14 region-bearing invocations of
+four regions each (metadata, payload, pool, tables) before `create_region` fails (`MAX_REGION_N 96`
+in the module, `modcapstone/module/capstone.c:43`; the monitor's own table is smaller, the failures
+started at the 15th invocation = 56 + the controls' regions). Board drivers cap it at 12. Not yet
+reproduced on silicon (the boards ran the SQLite shape, which never pops a pool). The faulting
+instruction in the emulator's monitor (`caplifive-buildroot/build/images/fw_jump.elf`, the same
+bytes as the opensbi-custom generic build, `bb0d91c4ef20010f`): `800239e4: sd s0, 0x0(t2)` after
+`ldc t2, 0xc0(gp); ldc t2, 0x0(t2)` — a store through a capability read from a table the monitor
+keeps at `gp+0xc0`, whose entry read back as the integer 0; `nm` places it at `_return_from_domain.1
++ 0xa`. The source site is unread — next, with the RTL oracle. The SQLite cells read
+`released pool rc=1 / released tables rc=1` on both platforms (sw79; c6o2-2mib), so they never took
+the pop path.
+
+### M-10 — the emulator console truncates a guest command longer than its line buffer, silently; the run looks complete and is not `OPEN — procedure; chain18 run 3, 2026-09-15`
+
+`run-domain-smoke.py --guest-command '<text>'` types the text at the guest shell. A chained
+command of 18 harness invocations (~3.4 KB) ran five of them and stopped with no error, no marker
+and smoke rc 1: the shell received the line cut at the console's buffer, the cut fell inside the
+sixth invocation, and everything after it was never typed. Twelve `echo R1_INVOKE` lines were
+visible in the transcript (the console echoes what it received), which is what made it look like a
+run that had started everything. Rule: a guest command of more than a few hundred bytes goes into a
+script file in the share directory (`sh /mnt/host/run.sh`), and the run's completeness is proven by
+counting the per-invocation return markers against the list, never by the presence of the command
+text in the log. The board path (`run_sqlite_stages_fpga.py`) sends one stage string per invocation
+and is not affected by this shape, but its stage strings are typed the same way — keep each under a
+few hundred bytes.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`

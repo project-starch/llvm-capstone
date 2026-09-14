@@ -51,10 +51,11 @@ static ulong out_used, out_limit;     /* the host declares its region size in me
                                          sqlite_host.user, 65536 for the readback host); the args sit
                                          at half of it, and this sink owns the whole region once the
                                          args are copied out */
+static ulong out_lines;               /* newlines written: `R1 end lines=N` lets a chunked transcript prove itself complete */
 static void out(const char *s) {
   char *p = (char *)payload;
   if (!meta || !payload || !out_limit) return;
-  while (*s && out_used + 1 < out_limit) p[out_used++] = *s++;
+  while (*s && out_used + 1 < out_limit) { if (*s == '\n') out_lines++; p[out_used++] = *s++; }
   meta->length = out_used;
 }
 static void outu(ulong v) {
@@ -87,8 +88,13 @@ static void *stale_alias;               /* one leaf alias kept past its withdraw
 
 static ulong minted(void) { return sublet_stats.split + sublet_stats.mrev; }
 
+static ulong root_short;                /* set when the arena could not supply a carve: the run stops */
 static void carve_root(ulong bytes, sublet_cap *to) {
-  ulong base = sublet_base(&root);
+  ulong base, end;
+  if (root_short) return;
+  if (sublet_type(&root) == SUBLET_TYPE_NONE) { root_short = bytes; return; }   /* the root was spent */
+  base = sublet_base(&root); end = sublet_end(&root);
+  if (end - base < bytes + 16UL) { root_short = bytes; return; }               /* keep the root non-empty */
   sublet_carve(&root, base + bytes, to);
 }
 
@@ -199,6 +205,7 @@ static ulong issue_objects(const struct point *pt) {
 }
 
 static ulong nodes_minted_total;
+static unsigned objects_live;           /* the individual pattern's seventeen objects are issued */
 
 static int run_point(const struct point *pt, unsigned rep, ulong budget) {
   ulong c0, c1, c2, c3, c4, c5, i0, i1, fb = 0, ini = 0, ty = 7, tdn = 0;
@@ -212,7 +219,12 @@ static int run_point(const struct point *pt, unsigned rep, ulong budget) {
   }
   /* 1. construct: the pool is linear in its slot (fresh from the root, or back from the last
      withdrawal); issue leaves, fill payloads, keep the aliases. */
-  if (streq(pt->pattern, "individual")) nd = issue_objects(pt); else nd = issue(pt);
+  if (streq(pt->pattern, "individual")) {
+    /* the sixteen live objects and the released one are issued ONCE per point; every repetition
+       releases object 16 and reissues it, so it is taken again when the next repetition starts */
+    if (rep == 1) { nd = issue_objects(pt); objects_live = 1; }
+    else nd = 1;                                          /* the reissued object's own take handle */
+  } else nd = issue(pt);
   for (i = 0; i < (streq(pt->pattern, "individual") ? 17u : pt->n); i++)
     if (alias[i]) touch((volatile char *)alias[i], (streq(pt->pattern, "individual") ? (i == 16 ? pt->S : 64UL) : pt->B / pt->n), 0x11);
   /* 2. touch the unrelated region once, in order (or leave it reserved and untouched: the control) */
@@ -263,11 +275,8 @@ static int run_point(const struct point *pt, unsigned rep, ulong budget) {
      (outside the bracket, reported as td=) */
   if (pt->U) bad = pt->touch_unrel ? verify((volatile char *)unrel_alias, pt->U, 0x33) : 0;
   t = cyc();
-  if (pt->arm_sublet) {
-    if (streq(pt->pattern, "individual")) { alias[16] = 0; sublet_give(&leaf[16]); /* objects stay issued */ }
-    else { alias[0] = 0; sublet_give(&pool); }
-  }
-  tdn = cyc() - t;
+  if (pt->arm_sublet && !streq(pt->pattern, "individual")) { alias[0] = 0; sublet_give(&pool); }
+  tdn = cyc() - t;                                        /* individual: the reissued object stays taken */
   if (pt->arm_sublet && !streq(pt->pattern, "individual") && sublet_type(&pool) != SUBLET_TYPE_LIN) ok = 0;
   nodes_minted_total += minted() - minted_at_issue;
   out("R1"); out(" s="); out(pt->series); out(" p="); out(pt->pattern); out(pt->arm_sublet ? " a=S" : " a=P");
@@ -308,13 +317,18 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
       if (pt.U) { carve_root(pt.U, &unrel); unrel_alias = sublet_take(&unrel); }
     }
     pool_bytes = pt.B; unrel_bytes = pt.U;
+    if (root_short) {                                    /* a reading, not a fault: the arena ran out */
+      out("R1 refused: arena"); out(" s="); out(pt.series); kv("n", pt.n); kv("B", pt.B); kv("U", pt.U); kv("need", root_short);
+      kv("left", sublet_type(&root) == SUBLET_TYPE_NONE ? 0 : sublet_end(&root) - sublet_base(&root)); out("\n");
+      break;
+    }
     out("R1 plan"); out(" s="); out(pt.series); out(" p="); out(pt.pattern); out(arm_sublet ? " a=S" : " a=P");
     kv("n", pt.n); kv("B", pt.B); kv("U", pt.U); kv("S", pt.S); kv("chain", pt.chain); kv("reps", reps);
     kv("minted", nodes_minted_total); out("\n");
     for (r = 1; r <= reps; r++) if (!run_point(&pt, r, budget)) break;
     /* the individual pattern leaves its 17 objects issued: hand them back so the next point's
        fixture starts from a clean table (their region is not reused) */
-    if (arm_sublet && streq(pt.pattern, "individual")) { unsigned i; for (i = 0; i < 17; i++) { alias[i] = 0; sublet_give(&leaf[i]); } }
+    if (arm_sublet && streq(pt.pattern, "individual") && objects_live) { unsigned i; for (i = 0; i < 17; i++) { alias[i] = 0; sublet_give(&leaf[i]); } objects_live = 0; }
   }
 }
 
@@ -383,7 +397,7 @@ void domain_main(unsigned *res, unsigned func) {
   }
   run_series(series, pattern, arm_sublet, reps, touch_unrel, budget);
   out("R1 end"); kv("minted", nodes_minted_total); kv("split", sublet_stats.split); kv("mrev", sublet_stats.mrev);
-  kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); out("\n");
+  kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); kv("lines", out_lines + 1); out("\n");
   if (stale && arm_sublet && stale_alias) {
     /* the companion probe, LAST: a load through a leaf alias whose ancestor was withdrawn. The
        emulator faults here (the alias sat in a C variable, reloaded through a slot the same way

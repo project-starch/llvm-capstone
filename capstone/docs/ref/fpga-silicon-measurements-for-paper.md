@@ -3679,3 +3679,40 @@ host, launched 00:53): (a) a deterministic RTL-vs-emulator divergence the -O2 co
 repeat sw80b's; (b) a run-to-run hazard of the R-29 class (a plain store to a granule's high word right
 before a 128-bit `ldc` returning it stale) that -O2's tighter scheduling triggers — a third set of
 counters. The -O1 image follows on the emulator and then the board.
+
+**Boot sw81 (00:52–01:02): the same -O2 image again — the counters REPEAT sw80b's exactly.** Control 4 →
+cell ⑥ at -O2 (`c506694f9f6f6889`, the same host, arena, arguments) → control 4 → probe (`RR/done`), one
+boot banner: `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES 1520848707`** (+0.034 % on sw80b's
+1,520,327,895), **`sublet: split=8654 mrev=41293 delin=32638`** — the same three counters to the unit.
+So the divergence is DETERMINISTIC: the -O2 image runs one allocator history on the RTL and another on
+the emulator, every time, and hypothesis (b) (a run-to-run hazard) is out for this image. The
+discriminating figure is the smallest one: `delin` moves by +73, and `delin` is incremented only by
+`sublet_take`, so the board handed out 73 more objects than the emulator for the same SQL results;
+the ~3.1 k extra splits and inits are buddy-allocator churn downstream of that (the deltas are against the
+emulator's 2 MiB-arena counts, `5568/37966/32565`; against its default-arena counts, `5481/37874/32565`,
+the split and mrev deltas move by 87 and 92 while `delin` stays +73 — the emulator's `delin` is 32,565 at
+both arenas, so the workload requests the same objects whatever the pool geometry, and the +73 is a
+statement about allocation events, not geometry). Next: sw82 (the -O1
+image `902822a8f303dbaa`, emulator 346,344,966 at this arena with the emulator's counters) says
+whether it is -O2-specific; then a software bisection (the SQLite build's patch hooks can mark the
+memsys5/sublet functions `optnone` inside an otherwise -O2 image: if that image matches the emulator
+on the board, the divergence is in the allocator's own codegen) narrows it to an instruction sequence
+for the RTL oracle. The emulator's -O0 and -O2 records at this arena both read all five counters
+`5568/37966/32565/37966/5401` (`arena-2097152.log`, `c6o2-2mib.log`), and sw79's board line reads the
+same five for the -O0 image.
+
+**Boot sw82 (01:04–01:14): the -O1 image diverges IDENTICALLY.** Control 4 → cell ⑥ at -O1
+(`902822a8f303dbaa`, `SQLITE_OPT_LEVEL=-O1`, emulator 346,344,966 at this arena with the emulator's
+counters) → control 4 → probe, one banner: `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES
+1553040466`** (CPI 4.484, in band), **`sublet: split=8654 mrev=41293 delin=32638`** — the same three
+counters as the -O2 image's two boots, to the unit. So the divergence is not -O2-specific and not a
+scheduling-distance effect (the -O1 and -O2 images schedule differently and R-29's shape is absent
+from both, scanned 01:1x: zero `sd`→`ldc` same-granule pairs within two instructions in either, eleven
+low-word pairs in the -O0 image as the scan's positive control): it is a deterministic semantic
+difference between the RTL and the emulator in code that -O1 and -O2 emit and -O0 does not, reached
+at exactly the same 73 allocation events in both optimised images. The optnone bisection is next: the
+memsys5 functions compiled without optimisation inside an otherwise -O2 image, on the emulator for
+its counts and then one boot — if the counters return to the emulator's, the site is in the
+allocator's own optimised code and the per-function bisection follows; if not, it is in SQLite's
+callers (the 73 extra `sublet_take`s would then be 73 extra allocation REQUESTS, and the per-test
+localisation through the A1 hook's test boundaries is the tool).
