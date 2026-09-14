@@ -3857,10 +3857,65 @@ stand in for the board on any path that casts integers to pointers, until Q-04 a
 an optimised image's board result needs an emulator-independent check (here the port's counters and
 `--stats`).
 
+Three readings of the candidate list (paper lane's questions, 03:00). (1) The ⑤ prediction now rests on
+two independent lines: stock `setupLookaside`'s `pStart` is a tagged non-linear pointer, which `movc`
+copies without touching on both machines (source), AND the scan finds no qualifying site in that
+function in the ⑤ -O2 image — so the ⑤ `--stats` boots confirm a doubly-supported prediction, and a
+zero there would be a sharp conflict rather than a surprise. (2) `renameResolveTrigger` is dormant BY
+WORKLOAD, not by reachability: the main testset does run `ALTER TABLE z2 ADD COLUMN` (test 210), whose
+rename check reaches that function only per trigger, and the main testset defines no trigger
+(`testset_trigger` does) — it becomes live under a different testset or any schema with triggers.
+(3) The `main` site (`movc a1, s5` before one call, `mv a1, s5` before a later one; `s5` holds a
+pointer in one phase of `main` and integers in others, hence "mixed") is UNREAD: whether an integer
+definition reaches that copy on the executed path is the one open item on ⑤'s -O2 numbers, handed to
+the compiler lane with the scan — and then read (03:10): both calls the copy feeds are `fatal_error`
+(0x30178, resolved from the `auipc`/`addi` pairs), so the site lies on `main`'s error-exit paths and is
+dormant for every run that completes; a firing there could only misprint a fatal message. Every
+non-lookaside line of the ⑥ -O2 `--stats` block equalled the emulator's, which bounds what a firing
+elsewhere could have changed in that run. (4) The bound has a stated blind channel: the scan classifies
+a source only when its reaching definitions are statically integer- or capability-producing; a source
+that is a call's return value or a function argument is not classifiable (a callee may return an
+integer cast to a pointer, exactly what `sqlite3MallocLinear` does when it is not inlined), and the
+-O2 image holds **1,780** such copies that are read again (⑤ -O2 1,781; -O0 556, and the -O0 image reads
+clean on the board). So the honest form is: at least one live site, three statically visible
+candidates, and a call-return/argument channel of ~1,800 sites per optimised image that static analysis
+cannot classify — "not a class" is a statement about the visible channel only. That channel is bounded
+EMPIRICALLY, per run, and better than any count could bound it: every board run whose non-lookaside
+`--stats` lines (pager heap, cache hits, schema heap, largest pcache allocation) equal the emulator's
+is an outcome measurement over the whole channel at once, and two such runs are already on record —
+the ⑥ -O2 `--stats` boot, and the -O0 image with 556 such sites of its own, which reads exactly the
+emulator's counters. The ⑤ `--stats` boots bound 1.3627 the same way: if their hits read ~25,010 and
+their other lines match, none of ⑤'s 1,781 sites broke that run, whatever they are.
+The compiler lane's independent workload (the B6 memsys5 images) gives the same bucket: -O0 556 —
+identical to this port's -O0 count, so the bucket is shared amalgamation and support code, not anything
+port-specific — and -O1/-O2 1,980/1,818 beside this port's 1,780. The honest residual on C-32's exposure
+is therefore the ~1,300 sites an optimised build adds over -O0, and the sub-case that bucket can hide is
+exactly the observed one with a CALL in place of the inline-asm `lcc`: a callee returning an integer the
+caller casts to a pointer. Narrowing it is interprocedural (resolve the direct callee, classify its
+return register) and is deferred until the lead's choice turns on the number.
+
 **Arm C is therefore a prediction, not a bisection**, and is queued with the ⑤ `--stats` boots behind
 R1 boot 3 (arm C's first launch at 02:25 was refused by the preflight's control check on a control it
 had passed fourteen minutes earlier and passes by hand; a single unexplained false BLOCK, the driver's
 `done` marker notwithstanding — noted, not diagnosed).
+
+**Arm C (boot sw8x-optC2, 02:46–02:57): the prediction holds to the unit.** Image `2b9e4d0d3ed523c9`
+(`setupLookaside` alone `optnone, noinline` inside the otherwise -O2 build; emulator 338,503,051 at the
+default arena, 340,823,328 at 2 MiB, counters unchanged), controls 4 and 4, one banner, `112006
+38bb59fd`, `HEAP 1344064`, **`sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401`** — the
+emulator's counters exactly (read from the transcript with the driver's chunk framing and the
+monitor's markers removed; the driver's own summary regex loses a line split across chunks) — and
+**`SPEEDTEST1-CYCLES 1376190813`** (CPI 4.038 on this image's emulator count), against 1,520,327,895 for
+the same code with `setupLookaside` at -O2. Restoring -O0 codegen in that one function, which runs once
+at open, puts the lookaside back and removes ~144 M cycles of buddy splitting, merging and filling; so
+the site is that function's optimised code, and the mechanism (the block's integer base nulled by the
+`movc` that passes it, then re-read) is confirmed end to end: primary sources on both machines, the
+disassembly, the counters' decomposition, the `--stats` block and this arm. **What this number is:** the
+first -O2 Sublet run on silicon with the lookaside on. Against ⑤ -O2 (sw80a, 1,167,116,810; its own
+lookaside state read in the next boot) it gives ⑥/⑤ = **1.1791** at -O2 on matched 2 MiB backing, and
+against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnostic, -O2, size 1, one
+setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
+the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
 
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
@@ -4048,5 +4103,11 @@ warning.
   noise is a few cycles and the repetitions the protocol asks for are a check on the RTL's
   determinism, not on a distribution.
 
-Boots 3–8 (repetitions 2–5 of the Sublet series, 3–5 of the spatial) are queued behind one bisection
-boot of the E2 -O2 question (§7s); the bundle is regenerated after each.
+**Boot 3 of 8 (02:27–02:45): repetition 2 of every Sublet series and of the spatial depth/object series.**
+Lines 25–36, controls 4 and 4, 54 point lines, 12 end lines, no refused line; the bundle over three boots
+holds 168 records with no warning. The Sublet arm repeats like the spatial one: at every point the
+second repetition's REVOKE, bookkeeping and reissue are within a few cycles of the first (nodes/shared
+REVOKE medians over two repetitions 76 / 209 / 782 / 2,942 / 11,833 for n = 1 … 256; the fill 474,817 at
+every B = 256 KiB point of both repetitions, 1,900,225 at 1 MiB), so the RTL's release cost is
+deterministic to the cycle and the protocol's five repetitions will not widen an interval, only
+confirm one. Boots 4–8 (repetitions 3–5) follow the two ⑤ `--stats` boots and arm C (§7s).

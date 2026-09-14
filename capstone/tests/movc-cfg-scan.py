@@ -49,7 +49,7 @@ def defs_reads(op,ops):
     if op=='<unknown>': return None,r
     return r[0],r[1:]
 def scan(path,label):
-    funcs=parse(path); n_movc=0; strong=[]; mixed=0; sinks_total=0
+    funcs=parse(path); n_movc=0; strong=[]; mixed=0; sinks_total=0; opaque=0
     for f,insns in funcs.items():
         if not insns: continue
         succ,pred=analyse(insns)
@@ -64,7 +64,7 @@ def scan(path,label):
                 j=stack.pop()
                 if j in seen: continue
                 seen.add(j); a2,op2,ops2=insns[j]; d,_=defs_reads(op2,ops2)
-                if op2 in ('jal','jalr','call') and rs in CALLER_SAVED: kinds.add('call'); continue
+                if op2 in ('jal','jalr','call','cjalr','cjal') and rs in CALLER_SAVED: kinds.add('call'); continue
                 if d==rs:
                     if op2 in INT_OPS and not (op2=='li' and re.search(r',\s*(0x0|0)$',ops2)): kinds.add('int')
                     elif op2=='li': kinds.add('zero')
@@ -82,11 +82,15 @@ def scan(path,label):
                 seen.add(j); a2,op2,ops2=insns[j]; d,reads=defs_reads(op2,ops2)
                 if rs in reads: hit=(a2,op2,ops2); break
                 if d==rs: continue
-                if op2 in ('jal','jalr','call') and rs in CALLER_SAVED: continue
+                if op2 in ('jal','jalr','call','cjalr','cjal') and rs in CALLER_SAVED: continue
                 stack.extend(succ[j])
             if hit: sinks_total+=1
             if hit and src=='int': strong.append((f,a,rd,rs,hit,'INT-ONLY'))
             elif hit and src=='mixed': mixed+=1; strong.append((f,a,rd,rs,hit,'MIXED '+','.join(sorted(kinds))))
-    print(f"== {label}: {n_movc} movc(rd!=rs); {sinks_total} with the source read again on some path; of those {len(strong)} have ONLY integer reaching definitions, {mixed} mixed (integer on some path)")
+            elif hit and (kinds & {'call','entry'}) and 'cap' not in kinds: opaque+=1   # a call return or a function argument: taggedness not static
+    print(f"== {label}: {n_movc} movc(rd!=rs); {sinks_total} with the source read again on some path; of those {len(strong)-mixed} have ONLY integer reaching definitions, {mixed} mixed (integer on some path), {opaque} whose source is only a call return or a function argument (taggedness not static; not classified)")
     for f,a,rd,rs,h,k in strong: print(f"   [{k}] {f}+{a:#x}: movc {rd}, {rs}  -> read @{h[0]:#x} {h[1]} {h[2]}")
-for p,l in zip(sys.argv[1::2],sys.argv[2::2]): scan(p,l)
+args=sys.argv[1:]
+if not args or len(args)%2:
+    sys.exit("usage: movc-cfg-scan.py <image> <label> [<image> <label> ...]  -- pairs; a lone path would otherwise print nothing and exit 0, which reads like a clean image")
+for p,l in zip(args[0::2],args[1::2]): scan(p,l)

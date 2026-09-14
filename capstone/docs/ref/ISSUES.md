@@ -1381,8 +1381,11 @@ RETURN" rule applied to privilege rather than to control flow.
 > a0` at 0x267f0-0x267f4) and for `a = (uptr)pStart` (0x26884). On the RTL the `movc` writes `cnull`
 > into `s3` (`capstone_flu_unit.anvil:6-27`: any source that is not a tagged NONLIN capability is
 > nulled; no exception is raised), so the test reads `pStart == 0` and the function takes its
-> no-lookaside exit with the block already taken and never freed; on capstone-qemu the source
-> survives (Q-04) and the lookaside is set up. No fault on either machine — this instance differs from
+> no-lookaside exit with the block already taken and never freed — the free on that path is
+> `sqlite3_free(pStart)` through a second `movc a0, s3` (0x26a20/0x26a4c), which on the RTL frees a
+> null, so the same nulling that disables the lookaside also leaks its block (the six unrevoked
+> handles at the end of the run); on capstone-qemu the source survives (Q-04) and the lookaside is
+> set up. No fault on either machine — this instance differs from
 > the reproducer's fault only in what the nulled register is used for next.
 >
 > **How it read on the board.** The same image, same arguments, oracle hash on both machines; the
