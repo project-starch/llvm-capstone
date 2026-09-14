@@ -1878,7 +1878,8 @@ Provenance: board and RTL lanes, 2026-09-04.
 ### §7d — The CHERI-CVA6 bitstream RUNS on our Genesys2 (2026-09-09)
 
 **First non-Capstone core executed on this board, and the first silicon evidence for the CHERI tag
-path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`, §7c) was written
+path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`; the synthesis comparison is in
+`docs/plans/cheri-cva6-on-genesys2.md`, not yet in this file) was written
 to the board's config memory **non-volatile**, and a bare-metal UART smoke test ran on it. Driven by the
 board lane from `~/capstone-artifacts/cheri-cva6/board-package/`; records in
 `~/capstone-artifacts/cheri-cva6/board-run-1/`. One session under the console lock, 14:48–14:54.
@@ -1899,7 +1900,8 @@ table at `0xBFC00000` and the MIG address path work (this was the single largest
 fork constant overflowed DRAM and was fixed for these builds); an integer store clears the tag; the
 capability exception path traps with cause `0x1c` and `mtval` naming the faulting register; the UART at
 57600 from the 25 MHz core clock; JTAG and debug-module access to this SoC. The core ran at the 25 MHz the
-bitstream was constrained for, i.e. the clock at which §7c measured its +6.5 ns of slack.
+bitstream was constrained for, i.e. the clock the synthesis comparison in
+`docs/plans/cheri-cva6-on-genesys2.md` measured its +6.5 ns of slack at.
 
 **What it does NOT establish.** Nothing about performance: no benchmark, no cycle counts, no `mcycle`
 readings. Nothing purecap and nothing Linux-level — no CHERI Linux or CheriBSD port for this SoC is in the
