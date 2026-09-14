@@ -3741,6 +3741,81 @@ if equal, (a) and the per-function bisection moves to `malloc.c`'s size deciders
 `StrAccum`/`VdbeMem` growth paths. Each board reading here is against the emulator count of ITS OWN
 image hash, never against another build's.
 
+**Boot sw8x-o2stats (02:11–02:21): the -O2 Sublet run on silicon had NO lookaside — pre-registered at
+02:15 from the counters alone, read exactly.** The same image `c506694f9f6f6889` (`--stats` is a host
+argument; there is no second build) at the 2 MiB arena: control 4, `112006 38bb59fd`, **`SPEEDTEST1-CYCLES
+1521280360`** (CPI 4.463 on this image's own `--stats` emulator count 340,864,115), one banner, and the
+statistics block beside the emulator's for the same image and arguments:
+
+| `--stats` line | emulator | board |
+|---|---|---|
+| Successful lookasides | 25,010 | **0** |
+| Lookaside size faults | 157 | **0** |
+| Lookaside OOM faults | 0 | 0 |
+| Lookaside Slots Used | 1 (max 154) | **0 (max 0)** |
+| Pager Heap Usage / Largest Pcache Allocation | 315,200 / 4,592 | 315,200 / 4,592 |
+| Page cache hits / misses / writes | 31,797 / 0 / 0 | 31,797 / 0 / 0 |
+| Schema Heap Usage / Statement Heap Usage | 16,448 / 0 | 16,448 / 0 |
+| `sublet:` split / mrev / delin / revoke / init | 5568 / 37970 / 32569 / 37970 / 5401 | **8654 / 41297 / 32642 / 41291 / 8649** |
+
+Every Sublet counter is sw80b's plus the four takes `--stats` itself adds on the emulator (+0/+4/+4/+4/+0
+on both machines), and the lookaside lines say what the counters had already said: the database ran
+with **zero lookaside slots** (`nSlot = 0`, so no request was ever tested against a slot, and neither
+fault counter could move), and the 32,642 takes are every allocation of the run served by memsys5.
+This is neither of the two readings pre-registered at 01:49 (73 extra requests; 73 requests missing
+the lookaside): it is a fifth branch, found by decomposing the counters before the boot (02:15 note in
+the run directory, and the paper lane's sharper form of it):
+
+* From `sublet.h` and the port's call sites, `split` = buddy splits (each preceded by a `sublet_handle`,
+  which counts `mrev`) + carve splits (`sublet_carve`, no handle), `mrev` = buddy splits + takes + linear
+  takes, `delin` = takes alone (memsys5 mallocs AND lookaside hits both go through `sublet_take`).
+  Emulator: 5,400 buddy + 168 carve (the 1200,40 lookaside is rounded by `memsys5Size` to 64 KiB =
+  41 big + 127 small slots, and every carve splits) + 1 linear take — exact. Board (8,654 / 41,293 /
+  32,638): `carve = linear − 1`, so **at least one linear take happened and the carve count is 0, 1 or
+  2 for any plausible number of linear takes, against 168** — the lookaside block was taken and not
+  carved. And `delin` 32,638 = 7,555 (the emulator's memsys5 requests; the census read 7,560) +
+  25,010 (its lookaside hits) + 73 — the 73 are the requests the lookaside absorbs in place (a
+  `sqlite3DbRealloc` of a slot-sized object returns the slot) and memsys5 must serve afresh; the
+  +3,254 buddy splits, merges and fills are the buddy allocator absorbing 25,000 small requests.
+* One sub-prediction of the 02:15 note MISSED: it expected `Schema Heap Usage` well above 16,448, and
+  the board reads exactly 16,448. That was a wrong reading of SQLite's accounting, not of the story:
+  `SQLITE_DBSTATUS_SCHEMA_USED` sums `sqlite3DbMallocSize` over the schema's objects whichever
+  allocator holds them (a lookaside slot counts at its slot size), so it cannot separate the two.
+  Recorded as missed.
+
+**What it means for the numbers already on record.** sw80b/sw81's 1,520 M cycles, sw82's -O1 1,553 M and
+arm A's 1,600 M are all **lookaside-off** Sublet runs; ⑤-O2 (sw80a, 1,167 M) is a lookaside-on memsys5
+run (its lookaside state on the board is inferred from the stock `setupLookaside` it compiles, not
+read — a `--stats` boot of `d61c8bf784f2bbd1` reads it and is queued behind the R1 boots). So the
+⑥/⑤ ratio at -O2 is not a Sublet-vs-memsys5 comparison on matched configurations and is NOT cited;
+the -O0 pair (sw79, 1.1024) is, its counters being the emulator's.
+
+**Where the divergence now sits.** Not in the allocator (arm A), not in 73 requests from the core: the
+port's `setupLookaside` ended with `pStart = 0` on the board after a successful linear take — the
+function's -O1+ code takes its "no lookaside" exit on the RTL and its "lookaside" exit on the emulator
+from the same instruction stream. Its -O2 body (0x26518, 0x5ac bytes, 371 lines disassembled) inlines
+`sqlite3MallocLinear` and `sqlite3MallocSize` and, where the -O0 code moves every pointer through
+memory (`stc`, then `ld` of the cursor word), does four things in registers: it tests pointers by the
+integer view of a capability register (`addi rd, rs, 0` then `beqz` — the `aSlot == 0` test at
+0x26844 is the one that routes to `sqlite3_free(pStart); pStart = 0`), it passes the block's base as
+the pointer argument through `movc` of an integer register (`lcc s3, t0, 3` … `movc a0, s3`), it
+compares `p` against `aSlot + nBig` by the integer views of two capability registers (`beq a5, a4` at
+0x268d0), and it stores integers into pointer fields with `stc` of an integer register and with two
+`sd`s. On the emulator the integer view of a capability register is its cursor
+(`helper_cslcc`: `val.scalar` aliases `val.cap.bounds.cursor`); what the RTL's integer datapath reads
+from a register holding a tagged capability, and whether `split`/`mrev`/`cincoffset`/`movc` leave the
+cursor where the emulator does, is the rtl-oracle question in flight.
+
+**Arm C, pre-registered.** Image `2b9e4d0d3ed523c9`: the -O2 build with `SQLITE_OPTNONE_FUNCS=
+"setupLookaside"` alone (one definition marked, count-verified); on the emulator at the default arena
+338,503,051 cycles, `HEAP 911104`, `sublet: split=5481 mrev=37874 delin=32565` — the -O2 image's own
+default-arena counters, so the attribute changes no count there; its 2 MiB pass is being taken and
+the boot follows (queued ahead of R1 boots 3–8). Readings: **`5568/37966/32565/37966/5401`** (or this
+image's own 2 MiB counters) → the site is inside `setupLookaside`'s optimised code and the 371 lines
+are the whole search space; **`8654/41293/32638/41287/8649`** → outside it, and since arm A already
+holds the callees at -O0, the next arm is the -O2 code the `aSlot` allocation runs through
+(`sqlite3MallocZero`/`sqlite3Malloc`/`mallocWithAlarm`), whose `aSlot == 0` verdict is the exit taken.
+
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
 **Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and
@@ -3887,3 +3962,45 @@ top-of-stack is popped and the next `create_region` in the boot faults inside th
 `--tables` region above every arena; the region slots are never reclaimed within a boot, ~14
 region-bearing invocations before `create_region` fails — hence twelve per boot; the emulator console
 truncates a long guest command silently — hence the invocation list in a script.
+
+**Boot 2 of 8 (01:52–02:09): the unrelated-heap, depth and object series under Sublet, and the spatial
+arm's second repetition.** Invocation lines 13–24 (Sublet bytes/combined, heap shared + combined, depth
+shared + combined, object shared; spatial nodes/bytes/heap shared + combined, repetition 2), the same
+image `6a569a7e5e34178b`, controls 4 and 4, 57 point lines and 12 end lines, no refused line, no bad
+column, no `create_region` failure; the bundle regenerated over both boots holds 114 records with no
+warning.
+
+* **The release cost does not depend on the unrelated heap.** With n = 16, B = 256 KiB and U = 64 KiB,
+  256 KiB, 1 MiB, 4 MiB of live, unrelated regions beside the released one: 477,207 / 477,200 /
+  477,198 / 477,203 cycles (combined), 477,377 / 477,353 / 477,353 / 477,355 (shared) — flat to
+  0.005 % across a 64× range of heap. The walk is over the handle's descendants, not the heap. The
+  U = 0 point reads 477,744 / 477,872, ~550 higher, and it is the first point of its invocation: its
+  bookkeeping and reissue carry the cold cost (bk 1,242 vs 1,095, re 1,018 vs 731; the fill also +106,
+  as boot 1's n = 1 point was) — a warm-up, not a heap effect, and the reason every series here is read
+  from its second point on.
+* **Depth does not change the cost at a fixed set of affected nodes.** Nesting depth 1 / 2 / 4 / 8 with
+  the same n = 16, B = 256 KiB: nd = 47 at every depth, REVOKE 852 / 815 / 812 / 845 (combined) and
+  958 / 1,004 / 1,021 / 1,003 (shared), totals 478,340 / 478,011 / 477,986 / 477,989 and 478,658 /
+  478,130 / 478,082 / 478,067 — within 0.1 %, the depth-1 point again first in its invocation (and the
+  only one whose INIT reads 62 cycles instead of 5: cold). The revocation walk is priced per node it
+  kills, not per level it crosses.
+* **A single object's release-to-reuse under Sublet is 578–658 cycles at 64 B–4 KiB** (bookkeeping
+  166–224, REVOKE 45–62, fill 7–12, INIT 2, reissue 347–375) against the spatial arm's 192–215 — the
+  discipline adds ~390–440 cycles per object, almost all of it the reissue's take and checked access,
+  and the byte-linear fill is ABSENT: an object goes out as a non-linear alias, so its revoke hands the
+  region back initialised (fill bytes 0, the 7–12 cycles are the loop's test), exactly the behaviour
+  the SQLite counters show (`init` climbs with merges, not with frees). The 16 B point (1,013 vs 527)
+  is first-in-invocation. So the cost the paper's object-free series wants is a few hundred cycles,
+  and the fill that dominates the region series does not enter it.
+* The Sublet bytes series in the combined pattern: 9,851 / 31,784 / 120,868 / 477,248 / 1,902,631
+  cycles for 4 KiB … 1 MiB, its fill 7,221 / 29,402 / 118,490 / 474,827 / 1,900,250 — the shared
+  pattern's fill to within 25 cycles at every B, so the combined pattern's freed-and-reissued leaves
+  change bookkeeping (1,017–1,202 vs 914–1,274) and nothing else.
+* **The spatial arm repeats to the cycle.** Repetition 2's medians equal repetition 1's at every point
+  that is not first in its invocation (nodes/shared bookkeeping 303 / 215 / 431 / 1,665 / 7,217, reissue
+  347 / 169 / 285 / 460 / 486; the bytes and heap points 704–759 in total), so the board's per-point
+  noise is a few cycles and the repetitions the protocol asks for are a check on the RTL's
+  determinism, not on a distribution.
+
+Boots 3–8 (repetitions 2–5 of the Sublet series, 3–5 of the spatial) are queued behind one bisection
+boot of the E2 -O2 question (§7s); the bundle is regenerated after each.
