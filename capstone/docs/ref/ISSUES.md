@@ -4703,6 +4703,25 @@ text in the log. The board path (`run_sqlite_stages_fpga.py`) sends one stage st
 and is not affected by this shape, but its stage strings are typed the same way — keep each under a
 few hundred bytes.
 
+### M-11 — the board drivers' summaries lose a result line split across two UART chunks (or by a monitor marker), so a present result reads as absent — and the control rung's own line is not exempt `OPEN — procedure; audited 2026-09-15 over all 85 archived transcripts: 63 split result lines in 40 boots, five of them the control's; no recorded verdict or cited number affected`
+
+The console delivers the UART in chunks and the driver frames each as `[fpga] [uart] '...'`; a domain's
+line that straddles two chunks is two lines in `driver.log`, and the monitor's share markers
+(`ECSA:00000004` ...) land mid-token besides. A summary that greps the framed log line by line then
+prints `0x []` for a present result (arm C's `sublet:` counters, sw8x-optC2), "no result line" for a
+present mark (E1 r3b3's subpool test, 0D3E04 in the transcript), or a TRUNCATED number as the value
+(`SPEEDTEST1-CYCLES 8562` in sw8x-b80s-O2's summary for 1,166,594,074). In five boots the control's
+`RESULT k800 retval=4` itself was readable only after joining (sw55, sw65, sw74, sw74b, sw78 r3b4): a
+summary-only reader calls those boots VOID.
+
+**Rule:** the transcript is the record and a driver's summary is a view of it; before any line-based
+read, join the seams (`re.sub(r"'\n\[fpga\] \[uart\] '", "", log)`), unescape the newlines, delete
+the markers (`[A-Z0-9]{4}:[0-9A-F]{8}\n?`), then parse — as `capstone/sublet/r1/r1-bundle.py` and
+`capstone/ports/nginx/e1-bundle/e1-bundle.py` do. A summary's `0x []` or "no result" is a prompt to read
+the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): no recorded verdict
+changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
+truncation of a long command), the transcript-marker note in the board-run skill.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`

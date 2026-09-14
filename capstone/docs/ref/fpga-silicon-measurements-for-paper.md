@@ -3582,6 +3582,24 @@ repetition 1's 21 records are unchanged. **Bundle:** `experiments/results/S1S2/s
 supersedes `sw78-rep1` on the local board branch (paper worktree commit db99ad2, `make
 experiments-check` passing); generator and cell table at `capstone/ports/nginx/e1-bundle/`.
 
+**Retrospective on the seam (08:10, no board time): how far back the split-line reading reaches.** The
+paper lane asked whether earlier "no result" or entry-stall classifications could be marks lost at a
+chunk seam. Every archived run directory (85 with a transcript) was re-read with and without
+seam-joining and the drivers' own summaries were listed for declared absences. Result: **split result
+lines are common — 63 (directory, kind) cases across 40 boots — and in FIVE boots the control rung's
+own `RESULT k800 retval=4` was readable only after joining (sw55, sw65, sw74, sw74b, sw78 r3b4), where a
+summary-only reader would have called the boot VOID.** No recorded verdict changes: sw74/sw74b's
+controls were read from the transcript at the time ("sw74b carries the control"), sw55's §7h reading
+was taken from the transcript, sw65 was void on other grounds, and r3b4 is read by the fixed
+generator; the only "no result line" summaries are the control rung's row in the nginx mark table
+(its result lives elsewhere) and r3b3's subpool cell, recovered above. No cited number is a truncated
+fragment: for every boot with a split cycle line, each value the doc cites appears in full in the
+joined transcript (the uncited ones are the native arm's duplicate `SPEEDTEST1-CYCLES` line beside the
+cited `BASELINE-WARM`, or sw74b's uncited repeat). Entry-stall classifications are drawn from the
+monitor's share markers by the watchdog, not from a domain's result line, so they are not exposed to
+this. Registered as M-11: the transcript is the record, a driver's summary is a view, and the seam
+join precedes any line-based read.
+
 ### §7s — E2 of the Sublet-paper plan: cell ⑥ at P1's matched backing limit (boot sw79, 2026-09-15 00:08–00:19)
 
 **What ran.** One boot, the E2 shape of the plan: control `k800` → cell ⑥ (the Sublet arm, image
