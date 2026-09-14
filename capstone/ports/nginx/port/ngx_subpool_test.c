@@ -5,7 +5,7 @@
  * because a fault inside a patched ngx_palloc.c would be much harder to read back to its cause.
  * The PostgreSQL port tests its own level below the same way and for the same reason.
  *
- * Thirteen scenarios, each a claim the design makes, numbered in the order they run:
+ * Fourteen scenarios, each a claim the design makes, numbered in the order they run:
  *
  *   1  a block comes out linear, objects carve from it, and what is written through an object
  *      reads back
@@ -42,7 +42,13 @@
  *      revokes its own authority. The other child's objects still read and still write, and the
  *      revoked child's region comes back to ITS bounds and not to the block's, which is what
  *      makes a revoke downward rather than sideways
- *  13  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
+ *  13  a GRANDCHILD, and a block that has nothing to do with any of it. A block is carved into a
+ *      child, the child into a grandchild, and the grandchild into an object. The block's own
+ *      handle then revokes, without asking either level below it. Both nested handles, and both
+ *      nested regions, hold nothing afterwards, which is two levels and not one. A second block
+ *      taken from the same arena before all this still reads and still writes, because a revoke
+ *      that reached it would be a revoke that followed the ARENA rather than the block
+ *  14  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
  *      a carve that reaches exactly to the end of a region moves the whole of it out and leaves
  *      the slot empty, so the request after the one that spent the arena would have asked an
  *      empty slot for its base, which is a fault and not a refusal
@@ -350,6 +356,57 @@ void domain_main(unsigned *res, unsigned func) {
     }
 
     phase = 13;
+    {
+        /* The sibling is taken FIRST and from the same arena, so that it is a neighbour of the
+           nest rather than something allocated after the dust settled. */
+        sublet_cap oblk, ohnd, oobj;
+        CHECK(ngx_subpool_block(1024, &oblk, &ohnd) == 1);
+        sublet_carve(&oblk, sublet_base(&oblk) + 64, &oobj);
+        unsigned char *op = (unsigned char *) sublet_take(&oobj);
+        CHECK(op != NULL);
+        if (op != NULL) { op[0] = 0x51; op[63] = 0x5F; }
+
+        sublet_cap gblk, gout, ch, chh, gc, gch, gobj;
+        CHECK(ngx_subpool_block(4096, &gblk, &gout) == 1);
+
+        sublet_carve(&gblk, sublet_base(&gblk) + 2048, &ch);   /* the child */
+        sublet_handle(&ch, &chh);
+        sublet_carve(&ch, sublet_base(&ch) + 512, &gc);        /* the grandchild */
+        sublet_handle(&gc, &gch);
+        sublet_carve(&gc, sublet_base(&gc) + 64, &gobj);       /* and its object */
+        unsigned char *gp = (unsigned char *) sublet_take(&gobj);
+        CHECK(gp != NULL);
+        if (gp != NULL) { gp[0] = 0x61; gp[63] = 0x6F; }
+
+        /* Alive, so that what they report afterwards is a change and not a constant. */
+        CHECK(sublet_type(&chh) == SUBLET_TYPE_REV);
+        CHECK(sublet_type(&gch) == SUBLET_TYPE_REV);
+
+        sublet_give_to(&gout, &gblk);        /* the block's own handle, two levels above the object */
+
+        /* Both nested authorities, and both nested regions, hold nothing. SUBLET_TYPE_NONE is
+           what a slot known to be empty reports, which scenario 7 of the image measures against
+           a control rather than assuming. */
+        CHECK(sublet_type(&chh) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&gch) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&ch) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&gc) == SUBLET_TYPE_NONE);
+
+        /* The block came back whole, so the revoke went down two levels and stopped. */
+        CHECK(sublet_end(&gblk) - sublet_base(&gblk) == 4096);
+
+        /* And the neighbour never noticed. */
+        if (op != NULL) {
+            CHECK(op[0] == 0x51 && op[63] == 0x5F);
+            op[0] = 0x71; op[63] = 0x7F;
+            CHECK(op[0] == 0x71 && op[63] == 0x7F);
+        }
+
+        sublet_clear(&gblk);
+        ngx_subpool_release(&oblk, &ohnd);
+    }
+
+    phase = 14;
     size_t rest = ngx_subpool_arena_left;
     CHECK(rest > 0);
     sublet_cap rr, rh, r4, h4;

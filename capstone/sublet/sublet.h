@@ -172,6 +172,16 @@ static inline void sublet_store(sublet_cap *slot, void *cap) {
   __asm__ volatile(".insn s 0x5b, 0x4, %1, 0(%0)\n" : : "r"(slot), "r"(cap) : "memory");
 }
 
+/* What sublet_type reports. The five valid types are the hardware's own
+   (capstone-qemu target/riscv/cap.h); SUBLET_TYPE_NONE is not one of them and is
+   what a slot holding nothing reports, which is how a revoke that emptied a slot
+   is told from one that left something unusable in it. */
+#define SUBLET_TYPE_LIN    0
+#define SUBLET_TYPE_NONLIN 1
+#define SUBLET_TYPE_REV    2
+#define SUBLET_TYPE_UNINIT 3
+#define SUBLET_TYPE_NONE   7
+
 /* the type and bounds of the capability in [slot]; type 7 means the slot is
    empty. A load of a linear capability moves it out of memory on hardware that
    enforces linearity, so every reader stores it back. */
