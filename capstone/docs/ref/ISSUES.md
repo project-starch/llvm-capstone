@@ -3694,6 +3694,17 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one — and 2026-09-13 evening: sw64 and sw66 were the SAME fault as sw65/sw67 (S-15), read as a hang only because mtvec was 0`
 
+> **Question for the project lead (2026-09-14, not decided here): should MEASUREMENT images carry the
+> trap vector by default now?** Boot sw69 showed the handler is reachable after a real fault on this
+> RTL (the pair image `214b300efd169f03` took UNEXPECTED_CAP_TYPE at share3 and returned to the host
+> with the packed trap word), and sw72 showed the host-side readback names that trap at the share.
+> Against it: the measurement images of record (§7 rows, sw68's 1.194) were all taken with
+> `mtvec = 0`, so a vector-carrying image is a different binary from every published row and would
+> need its own bridge pair; and a vector that returns a value where the old image wedged converts an
+> entry-watchdog abort into a completed-with-a-trap-word run, which the drivers must then refuse to
+> read as a result. The instrument (host readback) is landed either way; this is only about the
+> default the build ships.
+
 > **2026-09-09, board lane — the remaining half is RTL-side, ownership moves to the RTL lane.** The
 > firmware half (the trap-vector context slot written by `create_domain`) has been on silicon since
 > 2026-09-02 (`tests/fpga-repros/RTL-domain-trap-vector-unset/`). Boot sw39 showed what the other half

@@ -3175,3 +3175,57 @@ Scope: this names a trap only for a domain that installs a trap vector; a measur
 0) never returns from the faulting share, and the entry watchdog is what bounds that case. (Two
 pre-registration decimals in the drivers were mis-converted by hand — `0xF6C09D13` and `0x5EED0000` —
 and both hardware readings matched the hex exactly; decimals are now produced by machine.)
+
+### §7p — `main --size 100` ON SILICON: the pair completes, ratio **1.18**, exactly the pre-registered value (boot sw73, 2026-09-14)
+
+**Setup.** One boot, driver `board-b73.sh` (bare launcher, pre-registrations in its header, `BUDGET=43200`
+per arm, entry watchdog on), image f795151f3ed4883b (the S-15 fix image, `mtvec = 0`, staged by hash —
+the same bytes as sw68's), measurement host 2af56927aaf907e9 (the share-readback build validated on sw72
+and on QEMU), native baseline ed54878519b96816 (sw64's, 128 MiB heap), control `k800`, the #3 module in
+the initramfs. Arms in order: control → `speedtest1_baseline warm --testset main --size 100 --verify` →
+control → `speedtest1.dom --speedtest1 --testset main --size 100 --verify` LAST. Launched 00:11
+(bake waited for the machine lock), booted 00:19, driver rc=0 at 08:53. Readings from the run-scoped
+driver log after this run's own `load_image`, and the driver's own end summary agrees line for line.
+
+| arm | hash | `SPEEDTEST1-CYCLES` | wall (speedtest1 `TOTAL`) | `HEAP` | `DROPPED` | `RC` |
+|---|---|---:|---:|---:|---:|---:|
+| control (before / after baseline) | `RESULT k800 retval=4` / `retval=4` | — | 1 s / 1 s | | | |
+| native `warm`, size 100 | **`23674002 573a4409`** | **337,235,381,252** | 13,488.6 s = 3.75 h | 134217728 | 0 | 0 |
+| domain, size 100 | **`23674002 573a4409`** | **398,572,346,349** | 15,941.9 s = 4.43 h | 134217728 | 0 | 0 |
+
+**Ratio 398,572,346,349 / 337,235,381,252 = 1.1819 → 1.18 at two decimals.** Pre-registered before the
+boot: ≈1.18, band 1.14–1.24 (§7l's projected instruction ratio 1.2467 × sw68's CPI ratio 3.646/3.831).
+Both arms hash to the native oracle, so the ratio is of one program producing one answer.
+
+**Decomposition** (instruction counts from the QEMU `-icount` pre-run of the same two binaries, §7o:
+native 90,025,541,852, domain 111,482,174,837): instruction ratio **1.2383**; CPI native
+337.24 G / 90.03 G = **3.746**, domain 398.57 G / 111.48 G = **3.575**, CPI ratio **0.954**; and
+1.2383 × 0.9545 = 1.182, the measured cycle ratio. The domain retires 24 % more instructions and
+runs them at a 4.6 % lower CPI, as at size 20 (sw68: 1.2547 × 0.952 = 1.194). The board's own native
+instret, `BASELINE-WARM INSTRS 95,113,570,125`, is 1.0565× the icount (the same +6 % board-vs-icount
+offset §4g records: kernel work is inside a native process's count and outside a domain's); the
+domain arm is the cycles-only image and prints no instret by design (§7l).
+
+**Size robustness on silicon, three points now:** size 1 **1.2195** (sw63, §7m), size 20 **1.1940**
+(sw68, §7o), size 100 **1.1819** (this boot) — the ratio falls slowly with size, and the emulated
+instruction ratios fall the same way (1.2547 at 20, 1.2383 at 100, §7l/§7o). Cost of the pair: 8.18 h
+of core time + one boot, against the 8.4 h derived in the plan.
+
+**The five invalidators, checked before the ratio was written:** (1) both hashes equal the size-100
+oracle — yes; (2) `DROPPED 0` on both arms — yes; (3) the count is ~164× size 1, not 100× — the
+native board instret is 164.4× §4g's size-1 board instret (578,533,909) and 1.0565× the size-100
+icount, consistent; (4) NOMEM, the named hours-in failure (128 MiB built against 120 MiB measured
+need) — absent: `RC 0` and the oracle hash on the domain arm; (5) `capinit-reload-scan` — satisfied by
+staging the scanned image by hash (the driver's manifest check). Also read: the module's rounding line
+fired 0 times (informative since sw72's positive control); the share-readback instrument printed no
+`share-trap` line and read the arena sentinel back unchanged (`SQ: arena0=1592590336` = `0x5EED0000`)
+before `G/enter` — the negative reading on silicon for a measurement image; all three shares returned
+(`SHA5`→`SHA6`); watchdog never fired.
+
+**What it may be quoted as, and its caveats.** The capability domain runs SQLite's `speedtest1 main`
+at its default size on this silicon at **1.18× the native cycle count**, whole program, one boot,
+N = 1 per arm (§7j's run-to-run spread on the same image is 0.027 pp, so two decimals are honest).
+Every caveat bound to the §7 rows applies: the bitstream does not meet timing (§7 TIMING block);
+lookaside OFF on both arms (§7 CONFIGURATION block — this image is built by the same path, no
+override); memsys5 in a 128 MiB region arena on both arms (arena-matched); cycles only, at 25 MHz.
+Not comparable to the §4g emulated matrix (different heap geometry and vehicle).

@@ -1,4 +1,6 @@
-## 0. CURRENT — 2026-09-14 (night). **Boot sw73 (`main --size 100` pair, overnight) is RUNNING; sw72 gave the R-33 rounding log its positive control and the S-15 share-trap instrument its positive control; all seventeen new collaborator PRs (#19–#35) are landed; S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27).** Earlier header follows.
+## 0. CURRENT — 2026-09-14 (morning). **Boot sw73 DONE: `main --size 100` on silicon, both arms at the native oracle, ratio 1.1819 → 1.18, exactly the pre-registered value (§7p); sw72 gave the R-33 rounding log and the S-15 share-trap instrument their positive controls; all seventeen new collaborator PRs (#19–#35) landed; S-15 CONFIRMED end to end (sw68 size 20 at 1.19x; sw69 mcause 27).** Earlier headers follow.
+
+> CURRENT — 2026-09-14 (night). **Boot sw73 (`main --size 100` pair, overnight) is RUNNING; sw72 gave the R-33 rounding log its positive control and the S-15 share-trap instrument its positive control; all seventeen new collaborator PRs (#19–#35) are landed; S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27).** Earlier header follows.
 
 > CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3); #3 is on the FPGA image, proven by sw71.**
 
@@ -108,7 +110,11 @@
   line, sentinel unchanged, oracle hash). The runner treats that designed stop as HARD STOP and writes
   no scoped `boot.txt`; readings taken from the raw driver log after this run's own `load_image`
   (runner follow-up owed: recognise `SQ: share-trap=` as terminal; not while sw73's driver runs).
-* **Boot sw73 (`main --size 100` pair) LAUNCHED 2026-09-14 00:11** via `board-b73.sh` (bare launcher,
+* **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
+  domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
+  1.1819 → 1.18** (pre-registered ≈1.18, band 1.14–1.24); all five invalidators checked; rounding lines
+  0, share-trap lines 0, sentinel read back. Size series on silicon: 1.2195 (1), 1.1940 (20), 1.1819 (100).
+* Boot sw73 (`main --size 100` pair) LAUNCHED 2026-09-14 00:11 via `board-b73.sh` (bare launcher,
   Monitor scoped after its own `load_image`): control → `speedtest1_baseline|warm --size 100` → control
   → `speedtest1.dom --speedtest1 --size 100` LAST; `BUDGET=43200`; image f795151f, host 2af56927,
   baseline ed548785. Pre-registered: both hashes `23674002 573a4409`, `DROPPED 0`, ratio ≈1.18 (band

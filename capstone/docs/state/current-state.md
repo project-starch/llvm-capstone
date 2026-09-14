@@ -28,6 +28,12 @@ Minimal snapshot. Read first in every session.
   passes share3 and enters where sw64/sw66 hang, and ran size-20 to completion: domain
   **64,732,455,367 cycles**, hash `3807866 2738af78`, **ratio 1.1940** on the 54,214,856,567 baseline
   — inside the pre-registered 1.17–1.27 band. The fix runs the real benchmark end to end on silicon.
+* **Boot sw73 (2026-09-14): `main --size 100` on silicon, the default size, both arms complete at the
+  native oracle `23674002 573a4409`: native 337,235,381,252 cycles (3.75 h), domain 398,572,346,349
+  (4.43 h), **ratio 1.1819 → 1.18**, exactly the pre-registered value (band 1.14–1.24); instruction
+  ratio 1.2383 × CPI ratio 0.954. Size series on silicon: 1.2195 / 1.1940 / 1.1819 at sizes 1/20/100.
+  Every invalidator checked before the ratio was written; §7p carries the caveats (timing, lookaside off,
+  cycles only).
 * **Watchdog fixed** (`f7f2c9030623`): liveness is `[uart]` lines; console `[event]` chatter had
   made the entry-stall abort unfireable live.
 * **PRs landed on `dev`: ten of the eleven original, and all seventeen new ones (#19–#35).**

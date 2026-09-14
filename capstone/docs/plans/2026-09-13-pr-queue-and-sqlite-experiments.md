@@ -354,6 +354,8 @@ keeps them tracked against any new PR that answers them:
   BEFORE the boot; on the board: same boot, arena 128 MiB, both hashes equal that oracle,
   `DROPPED 0`, ratio inside 1.14–1.24 at two decimals, NOMEM and the re-registered invalidator #3
   checked before the ratio is written, cited by hash from `boot.txt`.
+  *Done 2026-09-14 (boot sw73): both hashes `23674002 573a4409`, `DROPPED 0`, ratio 1.1819 → 1.18,
+  all five invalidators checked; §7p.*
 * **Landings**: every merge is a plain merge of commits already on `origin/*`, scanned by absolute
   path over `<branch> --not --remotes` and gated on the scan's exit status; `git show` read in full,
   not `--stat`; submodule pushed before the parent references it; no `Co-Authored-By`; no names.
