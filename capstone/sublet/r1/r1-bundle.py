@@ -15,15 +15,35 @@ STUDY = "R1"; SEED = 20260914
 inv = [l.split() for l in LIST.read_text().splitlines() if l.strip()]          # rep arm series pattern arena
 
 def reassemble(t):
-    """R1 lines split by UART chunking: a point line ends at ' ok=N'; other R1 lines are single."""
-    flat = t.replace("\r", ""); lines = []; buf = None
+    """R1 lines as the board transcript delivers them: split by UART chunking, and spliced by the monitor's
+    share-trace marker lines (ECSA:/EXTC:/SHA0:/RGID:/... printed while the host prints the payload) and by
+    the host's own SQ: lines. Marker and SQ: lines are dropped; an R1 line is accumulated across fragments
+    until its terminal token appears (at most eight fragments)."""
+    # the driver's event log escapes the UART text (`[fpga] [uart] '...\r\n...'`); the run-scoped boot.txt is raw
+    if "[fpga] [uart] '" in t:
+        t = "".join(m.group(1) for m in re.finditer(r"\[fpga\] \[uart\] '((?:[^'\\]|\\.)*)'", t))
+        t = t.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "").replace("\\'", "'")
+    flat = t.replace("\r", "")
+    # the monitor's share-trace markers (`ECSA:00000004`, ...) and the host's `SQ:` marks are written into the
+    # stream wherever the UART was, including the middle of a harness token (`re=355 ttECSA:...\n=1054`);
+    # deleting each marker WITH its newline rejoins the fragment it split
+    flat = re.sub(r"[A-Z0-9]{4}:[0-9A-F]{8}\n", "", flat)
+    flat = re.sub(r"SQ: [^\n]*\n", "", flat)
+    term = {"R1 s=": r" ok=[01]$", "R1 end": r" lines=\d+$", "R1 plan": r" minted=\d+$", "R1 start": r" root_type=\d+$|NO-ARENA$",
+            "R1 entry": r" phase=\d+$", "R1 refused": r"$", "R1 calib": r" ret_ret=\d+$", "R1 stale": r" byte=\d+$"}
+    lines = []; buf = None; key = None; frags = 0
     for l in flat.split("\n"):
+        if re.match(r"^[A-Z0-9]{4}:[0-9A-F]{8}$", l) or l.startswith("SQ: ") or l.startswith("[fpga]") or l.startswith("[stages]"): continue
         if buf is not None:
-            buf += l
-            if re.search(r" ok=[01]$", buf): lines.append(buf); buf = None
+            buf += l; frags += 1
+            if re.search(term[key], buf) or frags > 8: lines.append(buf); buf = None
             continue
-        if l.startswith("R1 s=") and not re.search(r" ok=[01]$", l): buf = l; continue
-        if l.startswith("R1 "): lines.append(l)
+        if l.startswith("R1 "):
+            k = next((k for k in term if l.startswith(k)), None)
+            if k is None: lines.append(l); continue
+            if re.search(term[k], l): lines.append(l)
+            else: buf, key, frags = l, k, 0
+    if buf is not None: lines.append(buf)
     return lines
 
 def kvs(line):

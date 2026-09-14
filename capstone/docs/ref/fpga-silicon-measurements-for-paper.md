@@ -3716,3 +3716,138 @@ its counts and then one boot — if the counters return to the emulator's, the s
 allocator's own optimised code and the per-function bisection follows; if not, it is in SQLite's
 callers (the 73 extra `sublet_take`s would then be 73 extra allocation REQUESTS, and the per-test
 localisation through the A1 hook's test boundaries is the tool).
+
+### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
+
+**Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and
+is never a cycle row) on the emulator: cell ⑤ (memsys5 + lookaside `1200,40`, 2 MiB static heap; census
+image `9de2fc4e0db934ee` at -O1 because the -O0 image has 552 bytes of headroom under the order-10 ceiling
+and the census does not fit) reads `CARVED 6235136 PEAK 1349056 ALLOCS 7560`, `Successful lookasides
+25010`, `Lookaside Slots Used 1 (max 154)`, `Lookaside size faults 157`, `Largest Pcache Allocation 4592`,
+`Pcache Overflow Bytes max 995328`; cell ⑥ (Sublet, census image `649ccb58f7ff8508`, the 1,419,584 pool)
+(at -O0, the measure script's default; the two arms' census images therefore differ in optimisation level,
+and `ALLOCS` equal at 7,560 says the census does not) reads `CARVED 6177792 PEAK 1291712 ALLOCS 7560` with
+the same lookaside and pcache figures. `CARVED` and `PEAK` both differ by exactly 57,344 bytes between the
+arms — one constant offset in two independently counted quantities, which is what the removal of memsys5's
+in-heap control array from the Sublet pool looks like, and evidence the census counts what it says. `ALLOCS`
+(memsys5 allocations after lookaside) is 7,560 on both arms and the emulator's `delin` is 32,565 at both
+pool sizes, so the census is pool-independent: the workload asks for the same objects whatever the
+geometry. `CARVED` is every byte ever handed out (what a never-coalescing allocator would need);
+`PEAK` the largest live payload. Image sizes are `llvm-size` of the measured images; the loader's
+`Domain requirement` lines are the P1 boots' own; the node and tag figures are the RTL lane's
+(2026-09-14: 16 bytes per node, 65,536 entries, one shadow byte per 16-byte granule, a 2,048-bit
+on-chip array); the tables formula is the port's (`speedtest1_measure.c:105-119`).
+
+| category | cell ② native (lookaside ON) | cell ⑤ memsys5 + lookaside, 2 MiB static | cell ⑥ Sublet, 2 MiB pool |
+|---|---|---|---|
+| payload, occupied (peak live) | ≈ the same workload: 7,560 allocations, `PEAK` ≈ 1.3 MB (native has no census build; its lookaside 25,122 hits) | **1,349,056** (`PEAK`, memsys5 rounding included) | **1,291,712** (`PEAK`) |
+| payload, reserved | 2 MiB static heap (in `.bss`: 2,168,144 with the rest) | **2,097,152** static heap (`SPEEDTEST1_HEAP`, in `.bss` → dom_data) | **2,097,152** pool region (`--arena 2097152`; the §4g row used 1,421,312) |
+| allocator control inside the payload region | memsys5's own: 1 byte per 64-byte atom + link heads | **≈ 32,768 + links** (`aCtrl` 1 B/atom, `Mem5Link` per free block), inside the 2 MiB | none: the pool is payload only |
+| side metadata (tables beside the pool) | — | — | **1,344,064** reserved (`--tables`): `aCtrl` 32,768 + `aLink` 262,144 + `aCap` 524,288 (one capability per atom) + `aPar` 524,800 (the split-block handles) + 64; occupied part not instrumented |
+| lookaside pool (inside the payload region) | 48,000 (1,200 × 40) | 48,000 | 48,000 |
+| revocation-node metadata (RTL, platform) | — | — | **693,680 occupied** by the run (43,355 nodes × 16 B, never reclaimed) of **1,048,576 reserved** (65,536 × 16 B) |
+| tag storage | — | — (no capabilities minted for payload) | **131,072** shadow bytes for the 2 MiB pool + **84,004** for the tables (1 B per 16-B granule, 6.25 %); platform: 60.18 MiB shadow reserved for 1 GiB, 256 B on chip |
+| runtime: domain stack, glue, hostcall regions | process stack (Linux) | stack **385,024** (declared), hostcall 2 × 65,536 (readback host) | stack **1,048,576** (the measured image's declaration), hostcall 2 × 65,536 |
+| code + rodata / data / bss | 806,036 / 7,952 / 2,168,144 | 1,463,600 / 15,616 / 2,103,072 | 1,468,548 / 15,616 / 6,160 |
+| loader `Domain requirement` (dom_data) | — | 2,701,904 (= heap 2,097,152 + stack 385,024 + globals) | 1,268,832 (stack 1,048,576 + globals; the pool and tables are regions) |
+
+**Reading.** Occupied payload is the same to within memsys5's rounding on both capability arms (7,560
+allocations, ≈ 1.3 MB peak) and both reserve 2 MiB for it; what Sublet ADDS is entirely outside the
+payload region, and it is larger than the payload it protects: **the discipline's metadata for this
+run is 2,252,820 bytes against a peak live payload of 1,291,712 — 1.74×** (tables 1,344,064 + the
+run's node-table consumption 693,680 + tag shadow 215,076). The three parts, as ratios, since each is
+geometry-independent by construction: the tables are **41 bytes per 64-byte atom = 64.09 % of the
+backing pool** at any pool size (the design's cost model; the earlier misreading of this figure as "the
+heap" is retracted in §7s); the node table is **monotone consumption, not a peak** — 693,680 of
+1,048,576 bytes = 66.2 % spent by one size-1 run and never returned, the M1 dependency expressed in
+bytes (a second run in the boot exhausts it, R-12), so it is reserved-that-never-returns rather than an
+occupancy; the tag shadow is 6.25 % of every byte a capability can address. What Sublet REMOVES is
+memsys5's control array from inside the heap (the 57,344-byte offset above). Reserved-vs-occupied is
+kept apart in every row; the tables' occupied fraction and the tag array's occupied lines are not
+instrumented and are reported as reserved. Cell ⑥'s census at the 2 MiB pool (the same census image through the readback host at
+`--arena 2097152`, 01:39) reads `CARVED 6177792 PEAK 1291712 ALLOCS 7560` — identical to the
+1,419,584-pool figures to the byte, as `ALLOCS` and `delin` said it would be.
+
+### §7t — E3 of the Sublet-paper plan: R1's release-to-reuse cost on silicon, boot 1 of 8 (2026-09-15 01:20–01:37)
+
+**What ran.** The R1 slots-and-pools harness (`capstone/sublet/r1/r1_slots_pools.c`, image
+`6a569a7e5e34178b`, -O1, entry 0x410000) through the readback host `2c9e82d101b48160` on the SQLite
+host's `--speedtest1` protocol: one invocation = one fresh domain and one fresh `--arena` grant (4 MiB;
+8 MiB for the unrelated-heap series, 2 MiB for object-free) with a 64 KiB `--tables` region above it
+(M-9), one repetition of one (arm, series, pattern) per invocation, twelve invocations per boot from a
+90-line repetition-major list (5 repetitions × 18), controls first and last. Boot 1 = repetition 1 of the
+spatial arm's nine invocations and the Sublet arm's affected-nodes shared/combined and released-bytes
+shared. Bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`. Pre-registered in
+the driver header: retval 4 twice; twelve `speedtest1-ran=0x4EB1xxxx`; twelve `released pool rc=1`;
+every point `ok=1 bad=0`; `nd = 2n` on shared nodes points; `fb = B` and type 3 (UNINIT) on
+shared/combined; the fill ~1.5 cycles/byte (24 per 16-byte `stc`, the July fillcost figure); REVOKE
+flat in n if the RTL's revoke is O(1), "a rise with n is the node-linear finding R1 asks about".
+
+Read: controls 4 and 4; twelve ran codes, all distinct for the Sublet arm (the low 16 bits are the
+nodes minted); twelve releases `rc=1`; 57 point lines, all `ok=1 bad=0` (the driver's own summary
+counted one `bad≠0` because a monitor share marker spliced that line mid-token; the bundle generator
+deletes markers before reassembly and reads 57/57 clean, every invocation's line count equal to the
+harness's own `lines=` declaration); no HARD STOP, no entry stall, no fault, no `create_region`
+failure; the boot banner is chunk-split in the run-scoped transcript (as in sw78 r1b4) and the
+fresh-run evidence is the twelve new ran codes after this run's `load_image`. Exclusive cycles
+(mcycle in the domain), the Sublet arm, repetition 1:
+
+| series | pattern | n | B | nd | bookkeeping | REVOKE | fill | INIT | reissue | total | fill bytes | type |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| nodes | shared | 1 | 256 KiB | 2 | 475 | 76 | 474,921 | 6 | 925 | 476,403 | 262,144 | 3 |
+| nodes | shared | 4 | 256 KiB | 8 | 358 | 213 | 474,817 | 5 | 800 | 476,193 | 262,144 | 3 |
+| nodes | shared | 16 | 256 KiB | 32 | 996 | 748 | 474,817 | 5 | 814 | 477,380 | 262,144 | 3 |
+| nodes | shared | 64 | 256 KiB | 128 | 3,693 | 2,931 | 474,817 | 5 | 901 | 482,347 | 262,144 | 3 |
+| nodes | shared | 256 | 256 KiB | 512 | 15,072 | 11,634 | 474,817 | 5 | 797 | 502,325 | 262,144 | 3 |
+| nodes | combined | 1 | 256 KiB | 2 | 379 | 55 | 474,921 | 6 | 875 | 476,236 | 262,144 | 3 |
+| nodes | combined | 4 | 256 KiB | 8 | 512 | 133 | 474,884 | 6 | 711 | 476,246 | 262,144 | 3 |
+| nodes | combined | 16 | 256 KiB | 32 | 1,068 | 636 | 474,817 | 5 | 773 | 477,299 | 262,144 | 3 |
+| nodes | combined | 64 | 256 KiB | 128 | 3,723 | 2,348 | 474,817 | 5 | 738 | 481,631 | 262,144 | 3 |
+| nodes | combined | 256 | 256 KiB | 512 | 14,964 | 9,005 | 474,817 | 5 | 986 | 499,777 | 262,144 | 3 |
+| bytes | shared | 16 | 4 KiB | 32 | 1,274 | 724 | 7,208 | 6 | 993 | 10,205 | 4,096 | 3 |
+| bytes | shared | 16 | 16 KiB | 32 | 914 | 818 | 29,377 | 5 | 789 | 31,903 | 16,384 | 3 |
+| bytes | shared | 16 | 64 KiB | 32 | 915 | 817 | 118,465 | 5 | 785 | 120,987 | 65,536 | 3 |
+| bytes | shared | 16 | 256 KiB | 32 | 915 | 816 | 474,817 | 5 | 785 | 477,338 | 262,144 | 3 |
+| bytes | shared | 16 | 1 MiB | 32 | 915 | 822 | 1,900,225 | 5 | 785 | 1,902,752 | 1,048,576 | 3 |
+
+The exclusive brackets sum to the outer bracket with zero residual on every row (the instrument
+accounts for the whole measurement, which is what makes the decomposition citable). The spatial arm's
+rows (the same fixtures as plain pointers into one alias; bookkeeping and reissue only) read
+bookkeeping 301 / 199 / 431 / 1,649 / 7,217 and reissue 348 / 169 / 285 / 462 / 486 cycles for n = 1
+… 256 (shared); they are in the bundle.
+
+**Readings (N = 1; repetitions 2–5 follow in boots 2–8).**
+
+* **REVOKE is node-linear on the RTL.** Against the pre-registered "flat if O(1)": 76 → 213 → 748 →
+  2,931 → 11,634 cycles for 2 → 512 nodes under the handle, (11,634 − 76) / (512 − 2) = **22.7 cycles per
+  revocation node** the withdrawal kills; the emulator counts 2 instructions for it at every n. The
+  combined pattern (every even leaf freed and reissued before the withdrawal) reads 9,005 at n = 256 =
+  17.6 per minted node, i.e. the walk is over the LIVE descendants (the freed leaves' handle nodes were
+  already dead). R1's "report node-linear work if observed": observed.
+* **The fill the UNINIT rule forces is byte-linear at 1.76–1.81 cycles/byte** — 28.2 / 28.7 / 28.9 /
+  29.0 / 29.0 cycles per 16-byte `stc` at B = 4 KiB … 1 MiB — and does NOT bend with B: the slope is the
+  same below and above the 32 KiB data cache, so it is not a working-set effect, it is the write path
+  (the cache is write-through, no write-allocate). Pre-registered 1.5 c/B from the July fillcost rung's
+  23.6 cycles per store; the harness's loop is five instructions per store (CPI ≈ 5.8 on the fill).
+  The fill is 94.5 % (n = 256) to 99.5 % (n = 1) of the release at B = 256 KiB and 99.9 % at 1 MiB; the
+  node-linear REVOKE overtakes it only past nd ≈ 20,900 nodes at B = 256 KiB (B-conditional).
+* **INIT itself costs 5–6 cycles** — 0.001 % of the release. The expensive thing is the write-through
+  the specification's UNINIT rule requires before INIT succeeds, not the instruction: a rule, and so
+  addressable by design (an INIT that accepts a region without the capability-grained walk, or a bulk
+  clear), which the number argues for — 474,817 cycles per 256 KiB release to establish a property.
+* Bookkeeping is ~58 cycles per leaf (a capability-slot clear plus a pointer null; the `stc` itself is
+  ~29), reissue (a take, a checked store and load in the returned region) ~800–1,000.
+* For the manuscript's two formulations of the release cost (the intro's "time independent of the
+  objects inside it", the motivation's O(children)): the first is refuted outright — three terms
+  scale, none is flat; the second is consistent with REVOKE and bookkeeping; but the term that
+  dominates, the byte-linear fill, is one the paper does not model — the sharper statement is "95–99 %
+  of measured release time is a dimension the paper's cost argument does not discuss", not "R3 is
+  wrong". The lead's framing call, as with tab:safety.
+* The n = 1 fill (474,921) is 104 cycles above the others' 474,817 (0.02 %); noted, to be read against
+  repetitions 2–5.
+
+**Harness findings on the way to this boot** (registry M-9, M-10): a pool released while
+top-of-stack is popped and the next `create_region` in the boot faults inside the monitor — hence the
+`--tables` region above every arena; the region slots are never reclaimed within a boot, ~14
+region-bearing invocations before `create_region` fails — hence twelve per boot; the emulator console
+truncates a long guest command silently — hence the invocation list in a script.
