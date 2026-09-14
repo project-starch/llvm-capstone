@@ -3816,6 +3816,52 @@ are the whole search space; **`8654/41293/32638/41287/8649`** → outside it, an
 holds the callees at -O0, the next arm is the -O2 code the `aSlot` allocation runs through
 (`sqlite3MallocZero`/`sqlite3Malloc`/`mallocWithAlarm`), whose `aSlot == 0` verdict is the exit taken.
 
+**The mechanism (02:45, from the RTL and emulator sources, the -O2 disassembly and the registry) — C-32,
+live; Q-04 masking it; no spec ruling.** The rtl-oracle's reading, verified line by line by the paper lane:
+the RTL's `MOVC` writes `cnull` into its SOURCE whenever the source is not a tagged non-linear capability
+(`capstone_flu_unit.anvil:6-27`; MOVC raises no exception), while capstone-qemu nulls the source only
+when it is tagged and not copyable (`op_helper.c:570-586`, `rs1_v->tag && !captype_is_copyable`). The two
+disagree on exactly one case: an UNTAGGED source — a plain integer — is destroyed by `movc` on the RTL
+and kept on the emulator. In the port's `setupLookaside` at -O2 the block's base is an integer (`lcc s3,
+t0, 0x3` at 0x2677c, the port's `(void*)base`), the pointer argument to `sqlite3MallocSize` is
+materialised by **`movc a0, s3`** (0x2679c), and `s3` is read again for the `if (pStart)` test (`mv a0,
+s3; bnez a0` at 0x267f0) and, on the free path, moved again (0x26a20/0x26a4c): on the RTL `pStart` reads
+0 after the copy, the function takes its no-lookaside exit, and the `sqlite3_free(pStart)` on that path
+frees a null — the block is taken and never freed, which is the arithmetic's "one linear take, six
+unrevoked handles at the end" to the letter. At -O0 the same cast goes through memory (`stc` of the
+integer register, `ld` of the cursor word) and no `movc` source outlives its copy. The registry already
+held every piece: **C-32** ("`MOVC` is emitted for an integer-bridged (untagged) pointer where a plain
+`mv` would do", open since 2026-09-10 with its two fix designs pending the lead), **Q-04** (the emulator
+side; its 2026-09-10 ruling that "the spec sides with the RTL" was RETRACTED the same day — whether a
+scalar source must be consumed is an open spec question, the lead's, and nothing here rules it; the
+heading now says so), and **C-46** (the machine model treats the source as a pure use; its "only where
+a read of the source outlives the movc" bound is this instance). I nearly re-made Q-04's retracted
+ruling from the same spec paragraph before reading the registry — caught before it was written
+anywhere; recorded because it is the second time that paragraph has produced it.
+
+**How wide is it — a static bound over the corpus (`capstone/tests/movc-cfg-scan.py`, control-flow-graph reachability
+per function: a `movc rd, rs`, rd ≠ rs, whose source has an integer-producing reaching definition and
+is read again on some path before being redefined; tagged-ness is dynamic, so this is necessary, not
+sufficient).** Positive control: the live site is found in both optimised images (integer-only at -O2;
+"mixed" at -O1 only because the failure path's `movc s2, zero` counts as a capability definition in the
+classifier). Per image, of ~17,000 `movc` with distinct operands and ~10,000 whose source is read
+again (tagged pointer copies, the normal case): Sublet -O2 **4 sites** (`setupLookaside` ×2 — the live
+one and its free path; `main`+0x3aab4, mixed; `renameResolveTrigger`+0x10b5b8, a self-loop on the ALTER
+TABLE path); Sublet -O1 4 (`setupLookaside` ×2, `main`, `whereLoopAddBtreeIndex` behind a call); arm C
+2 (`main`, `renameResolveTrigger` — `setupLookaside` gone, as its -O0 body predicts); cell ⑤ -O2 **2**
+(`main`, `renameResolveTrigger`); Sublet -O0 **0**; native -O2 has no `movc` at all. So it is one live
+site plus a handful of candidates, not a class — with the caveat that the `main` candidate sits in the
+domain's own `main` in every optimised image, ⑤'s included, and has not been read. The standing
+methodological constraint, which outlives this bug: **an emulator pass of an optimised image cannot
+stand in for the board on any path that casts integers to pointers, until Q-04 and C-32 are resolved**;
+an optimised image's board result needs an emulator-independent check (here the port's counters and
+`--stats`).
+
+**Arm C is therefore a prediction, not a bisection**, and is queued with the ⑤ `--stats` boots behind
+R1 boot 3 (arm C's first launch at 02:25 was refused by the preflight's control check on a control it
+had passed fourteen minutes earlier and passes by hand; a single unexplained false BLOCK, the driver's
+`done` marker notwithstanding — noted, not diagnosed).
+
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
 **Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and

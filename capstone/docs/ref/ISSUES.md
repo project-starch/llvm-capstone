@@ -295,7 +295,18 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass`
+
+> **2026-09-15: this divergence MASKED C-32 on every emulator pass of the SQLite Sublet port at -O1/-O2.**
+> The port's `setupLookaside` moves an integer-bridged block base through `movc` and re-reads the
+> source; QEMU keeps it, the RTL nulls it, and the lookaside was silently OFF on silicon for every
+> optimised-image board run (sw80b–sw82, arm A) while the emulator's counters said it was on. Found
+> from the port's own counters, confirmed by `--stats` on the board and by the RTL/QEMU sources (see
+> C-32's 2026-09-15 box). Whether a scalar source SHOULD be consumed remains this entry's open spec
+> question, the lead's; nothing here rules it — but until the emulator agrees with the RTL on this
+> point, an optimised image's emulator pass cannot stand in for the board on any path that casts
+> integers to pointers.
+
 
 > # ⚠ RETRACTED 2026-09-10, the same day it was made. THE RULING BELOW IS WRONG AND Q-04 REMAINS A GENUINE SPEC QUESTION.
 >
@@ -1358,7 +1369,42 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — DESIGN CHOICE PENDING (lead); reproducer committed as an XFAIL, no fix attempted`
+### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN CHOICE STILL PENDING (lead), now blocking P1's O2 arms; reproducer committed as an XFAIL`
+
+> # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
+>
+> **The instance.** The SQLite Sublet port's `setupLookaside`, compiled at -O2 (image `c506694f9f6f6889`,
+> function at 0x26518): the lookaside's 64 KiB linear block comes back from the inlined
+> `sublet_take_linear` as an INTEGER base (`lcc s3, t0, 0x3` at 0x2677c — the port casts it with
+> `(void*)base`), the pointer argument to `sqlite3MallocSize` is materialised by **`movc a0, s3`**
+> (0x2679c), and `s3` is **re-read** afterwards for the function's `if (pStart)` test (`mv a0, s3; bnez
+> a0` at 0x267f0-0x267f4) and for `a = (uptr)pStart` (0x26884). On the RTL the `movc` writes `cnull`
+> into `s3` (`capstone_flu_unit.anvil:6-27`: any source that is not a tagged NONLIN capability is
+> nulled; no exception is raised), so the test reads `pStart == 0` and the function takes its
+> no-lookaside exit with the block already taken and never freed; on capstone-qemu the source
+> survives (Q-04) and the lookaside is set up. No fault on either machine — this instance differs from
+> the reproducer's fault only in what the nulled register is used for next.
+>
+> **How it read on the board.** The same image, same arguments, oracle hash on both machines; the
+> port's own counters `split/mrev/delin/revoke/init` 8654/41293/32638/41287/8649 on silicon against
+> 5568/37966/32565/37966/5401 on the emulator — decomposed, "one linear take, no slot carved, every
+> small request served by memsys5"; then `--stats` read **zero lookaside slots** on the board against
+> 25,010 hits on the emulator (boot sw8x-o2stats). The -O1 image diverges identically; the -O0 image
+> does not (its int-to-pointer cast goes through memory: `stc` of the integer, `ld` of the cursor
+> word, and no `movc` source outlives the copy). Bisection: twenty allocator functions at -O0 inside
+> the -O2 image changed nothing (arm A); `setupLookaside` alone at -O0 (arm C, `2b9e4d0d3ed523c9`)
+> is the pre-registered confirmation and is queued. Consequence for the corpus: sw80b, sw81, sw82 and
+> arm A are lookaside-OFF Sublet runs and their ratios are not cited.
+>
+> **What it changes here.** The design choice above is no longer insurance against a latent case: the
+> live-source read after a `movc` of an integer-bridged value is emitted by -O1 and -O2 for ordinary C
+> (an `unsigned long` cast to `void*` and tested for null), and every QEMU pass of such code is blind
+> to it. Until the bridge is fixed, an optimised image of any port that casts integers to pointers
+> carries this risk on silicon, and its board result needs an emulator-independent check (here: the
+> port's counters and `--stats`). **Related:** Q-04 (the emulator side; still the open spec question
+> and NOT ruled here), C-46 (the machine model's blindness to the consumed source — its "only where a
+> read of the source outlives the movc" bound is exactly this instance).
+
 
 **FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
 `llvm/test/CodeGen/Capstone/c32-movc-untagged-live.ll` — with **no registry entry in either half of
@@ -4777,6 +4823,10 @@ disagreeing with the history.
 ## Compiler / toolchain (ours)
 
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
+
+> **2026-09-15: the read-after-copy precondition this entry defers to C-32 is OBSERVED on silicon** —
+> `movc a0, s3` of an integer-bridged base with `s3` live afterwards, emitted by -O1 and -O2 in the
+> SQLite Sublet port's `setupLookaside`, and the machine model saw a plain copy. See C-32's box.
 
 > **CORRECTED 2026-09-10 by the compiler lane, on both counts that matter. The premise holds; the
 > severity and the fix do not.**
