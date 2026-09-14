@@ -3917,6 +3917,40 @@ against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnosti
 setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
 the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
 
+Two readings the paper lane drew from the same numbers, recorded with their caveats. **The compound,
+full stack against native**, is what a reader multiplies: 1.2103 × 1.1024 = **1.334** at -O0 (directly
+2,812,763,422 / 2,108,202,651 = 1.3342) and 1.3627 × 1.1791 = **1.607** at -O2 (directly 1,376,190,813 /
+856,450,080 = 1.6069); both factors rise with optimisation because the native baseline optimises and
+the capability work does not, so the -O0 compound understates the stack by 27 points and P1's own rule
+already excludes the -O0 replays as timing baselines. **The lookaside's worth under the discipline** is
+an incidental measurement: the two -O2 Sublet runs differ only in whether the lookaside survived setup,
+and the run without it costs **+10.5 %** (1,520,327,895 / 1,376,190,813 = 1.1047) — a direct reading of
+what SQLite's custom allocator layer is worth in time, with the caveat that the arms also differ in one
+function's optimisation level (a setup function that runs once per open). Dependency carried with
+1.1791: it shares 1.3627's exposure — arm C's lookaside is demonstrably on, so if ⑤-O2 reads
+lookaside-OFF in the boot now running, the pair is on-against-off and neither ratio is matched; one
+reading settles both claims.
+
+**Boot sw8x-b80s-O2 (02:59–03:10): ⑤-O2's lookaside is ON, and both ratios are matched pairs.** Cell ⑤
+at -O2 (`d61c8bf784f2bbd1`, the sw80a image) with `--stats`, the readback host, then native -O2 with
+`--stats` as the in-boot positive control; controls 4 and 4, one banner, both arms at `112006 38bb59fd`:
+
+| `--stats` line | ⑤ -O2 on silicon | predicted | native -O2 on silicon |
+|---|---|---|---|
+| Successful lookasides | **25,010** | ~25,010 | 25,122 (sw80a's 25,122) |
+| Lookaside Slots Used | 1 (max **154**) | max ~154 | 1 (max 134) |
+| size faults / OOM faults | **157** / 0 | ~157 / 0 | 15 / 0 |
+| Pager Heap / page cache hits | 315,200 / 31,797 | | 301,056 / 31,797 |
+| Schema Heap / Largest Pcache | 16,448 / 4,592 | | 9,920 / 4,368 |
+| `SPEEDTEST1-CYCLES` | **1,166,594,074** (−0.045 % on sw80a's 1,167,116,810; CPI 3.527) | | warm 856,305,453 (−0.017 % on sw80a) |
+
+The prediction (source: stock `pStart` is a tagged non-linear pointer; scan: no qualifying site in ⑤'s
+`setupLookaside`) reads exactly, ⑤'s block is the ⑥ emulator block line for line on the shared core
+(pager heap, cache hits, schema heap, largest pcache), and the run repeats sw80a to 0.05 %. So
+**⑤-O2 / native-O2 = 1.3624 here (1.3627 in sw80a) is a lookaside-on against lookaside-on pair, and
+⑥(arm C)/⑤ = 1.1791 is on-against-on** — the exposure carried since 02:30 is closed for both. The -O0
+half of the account (⑤-O0 with `--stats`, predicted ON as well) is the next boot.
+
 ### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
 
 **Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and
