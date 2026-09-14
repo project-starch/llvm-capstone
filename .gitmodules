@@ -22,3 +22,7 @@
 [submodule "capstone/capstone-academic-spec"]
 	path = capstone/capstone-academic-spec
 	url = https://github.com/project-starch/capstone-academic-spec.git
+[submodule "capstone/paper-nested-allocators"]
+	path = capstone/paper-nested-allocators
+	url = https://github.com/project-starch/nested-allocators-paper.git
+	branch = main
