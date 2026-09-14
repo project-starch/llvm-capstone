@@ -6036,7 +6036,7 @@ distinct-hash count so a silently-cached build cannot pass as fresh. Common prea
 
     cd <REPO-ROOT>            # the llvm-capstone checkout
     source capstone/tests/capstone-test-env.sh
-    export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"
+    export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"
     export FPGA_FW="$PWD/capstone/caplifive-system/sw/buildroot/build/build/opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin"
 
 **Before any run:** confirm the resident bitstream is `working-caplifive-captype-fixed.bit`.

@@ -28,7 +28,7 @@ for D in uc dp0; do
   printf "  QEMU %-4s %s\n" "$D" "$(grep -oE 'SQ: obs=[0-9]+' /tmp/capstone/s01-qemu-$D.log 2>/dev/null | tail -1)"
 done
 
-: "${FPGA_URL:?set FPGA_URL from ~/.claude-c/secrets/fpga-console-url}"
+: "${FPGA_URL:?set FPGA_URL from ~/.claude-kisp/secrets/fpga-console-url}"
 : "${FPGA_FW:?set FPGA_FW to the built fw_payload.bin}"
 echo "== board: uc FIRST as the live control, then dp0, in ONE boot =="
 export SQLITE_STAGE_TIMEOUT=150 SQLITE_IDLE_S=30

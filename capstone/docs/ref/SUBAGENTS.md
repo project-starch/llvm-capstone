@@ -88,5 +88,5 @@ must be deterministic and fail identically every time; "usually right" is the wr
 property. Never delegate it, and never weaken a pattern to make a commit pass.
 
 Its exact-name denylist lives **outside the repo** at
-`~/.claude-c/secrets/name-denylist.txt` (mode 600) — hardcoding the names in a committed
+`~/.claude-kisp/secrets/name-denylist.txt` (mode 600) — hardcoding the names in a committed
 script would itself be the violation it is meant to prevent.

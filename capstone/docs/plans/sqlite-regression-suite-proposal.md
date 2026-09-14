@@ -507,7 +507,7 @@ a candidate cause before the runner is.
 
 ```bash
 cd capstone/tests/rtl-smoke
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential; never commit or echo
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"   # credential; never commit or echo
 export FPGA_FW=<caplifive-system>/.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 H=/test-domains/sqlite_host_slt.user
 SQLITE_STAGE_DOMS="\

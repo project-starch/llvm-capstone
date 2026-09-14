@@ -58,7 +58,7 @@ difference could be timing rather than function.
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"
 export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 bash capstone/tests/fpga-repros/S01-image-perturbation-hang/run.sh
 ```

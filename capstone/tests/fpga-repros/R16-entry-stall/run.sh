@@ -27,7 +27,7 @@ T=capstone/caplifive-system/sw/buildroot/build/target/test-domains
 
 : "${FPGA_FW:?set FPGA_FW to the built fw_payload.bin}"
 # FPGA_URL is a CREDENTIAL: read it from the secret file, never hardcode, never echo it.
-export FPGA_URL="${FPGA_URL:-$(cat ~/.claude-c/secrets/fpga-console-url)}"
+export FPGA_URL="${FPGA_URL:-$(cat ~/.claude-kisp/secrets/fpga-console-url)}"
 
 if [[ "$BUILD" == "1" ]]; then
   echo "== building the reproducer (SQLITE_STATIC_BUILTINS=1)"

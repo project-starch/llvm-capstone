@@ -17,7 +17,7 @@ echo "== QEMU reference: tagr returns 1017, tagf ABORTS in helper_cslcc =="
     DOMAIN_GLUE=interp DOMAIN_OPT_LEVEL=-O1 bash run-ladder-qemu.sh $g 2>&1 \
       | grep -oE "retval = [0-9]+|Assertion .* failed" | tail -1
   done )
-: "${FPGA_URL:?set FPGA_URL from ~/.claude-c/secrets/fpga-console-url}"
+: "${FPGA_URL:?set FPGA_URL from ~/.claude-kisp/secrets/fpga-console-url}"
 : "${FPGA_FW:?set FPGA_FW to the built fw_payload.bin}"
 export LADDER_FPGA_DIR=/tmp/capstone/ladder-fpga BAKED_TIMEOUT=150
 echo 1017 > "$LADDER_FPGA_DIR/tagr.oracle"; echo 1011 > "$LADDER_FPGA_DIR/tagf.oracle"

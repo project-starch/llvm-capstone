@@ -125,7 +125,7 @@ recorded:
    addition.
 
 Use a fake credential that matches the pattern but is obviously not real, and never a value from
-`~/.claude-c/secrets/`.
+`~/.claude-kisp/secrets/`.
 
 ## What I did instead, and why the record is worse for it
 

@@ -18,13 +18,13 @@
 # itself write those names into a committed file -- exactly the thing the rule forbids.
 # So the denylist lives OUTSIDE the repo, one name or pattern per line:
 #
-#     ~/.claude-c/secrets/name-denylist.txt      (mode 600, never committed)
+#     ~/.claude-kisp/secrets/name-denylist.txt      (mode 600, never committed)
 #
 # If that file is absent the script still runs its name-independent heuristics and warns
 # that the exact-name check was skipped. Keep the file populated.
 set -uo pipefail
 
-DENYLIST="${CAPSTONE_NAME_DENYLIST:-$HOME/.claude-c/secrets/name-denylist.txt}"
+DENYLIST="${CAPSTONE_NAME_DENYLIST:-$HOME/.claude-kisp/secrets/name-denylist.txt}"
 MSG_FILE=""
 RANGE=""
 while [[ $# -gt 0 ]]; do
@@ -229,7 +229,7 @@ M=$(grep -inE '(fpga|board|console)[^\n]{0,40}https?://' "$TMP" \
 [[ -n "$M" ]] && hit "a board/FPGA URL appears -- use the placeholder <FPGA-CONSOLE-URL>" "$M"
 
 # If the real URL is available locally, check for it verbatim. Never printed.
-URL_FILE="$HOME/.claude-c/secrets/fpga-console-url"
+URL_FILE="$HOME/.claude-kisp/secrets/fpga-console-url"
 if [[ -f "$URL_FILE" ]]; then
   HOSTPART=$(sed -E 's#^https?://##; s#/.*##' "$URL_FILE" | tr -d '[:space:]')
   if [[ -n "$HOSTPART" ]] && grep -qiF -- "$HOSTPART" "$TMP"; then

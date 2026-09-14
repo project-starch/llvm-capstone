@@ -61,7 +61,7 @@ our favour, which is why it survived so long. It also silently inverted the
 ```bash
 # baseline (bare-metal, no OS)
 bash capstone/tests/rtl-smoke/build-ladder-base-bare.sh
-FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)" \
+FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)" \
   python fpga_driver/run_base_bare_fpga.py
 
 # capability half

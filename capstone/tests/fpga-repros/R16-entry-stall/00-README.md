@@ -136,7 +136,7 @@ See `run.sh`, or `../../docs/ref/HOW-TO-LAUNCH-ON-FPGA.md` and the `board-run` s
 Domains are **baked into the buildroot image** — never shipped over UART.
 
 ```bash
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # secret; never commit or echo
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"   # secret; never commit or echo
 export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 export SQLITE_STAGE_DOMS="/test-domains/f10.dom:0,/test-domains/sb1.dom:0"
 export PROBE_SCOPED_OUT=/tmp/capstone/r16.txt

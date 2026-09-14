@@ -24,7 +24,7 @@ ARTIFACTS="sqslt1m.dom sqslt3.dom sqslt4.dom sqslt5.dom sqlite_host_1m.user sqli
 DEFAULT_BOOTS="negctl:sqlite_host_1m.user:sqslt1m.dom:negctl.test:900 aggfunc:sqlite_host_1m.user:sqslt1m.dom:aggfunc.test:900 select2:sqlite_host_1m.user:sqslt1m.dom:select2.test:2400 select5:sqlite_host_2m5.user:sqslt5.dom:select5.test:3000 select3:sqlite_host_2m.user:sqslt3.dom:select3.test:4800 select4:sqlite_host_4m.user:sqslt4.dom:select4.test:5400"
 BOOTS=${*:-$DEFAULT_BOOTS}
 CORPUS=$(bash "$ROOT/capstone/ports/sqlite/fetch-sqllogictest.sh" 2>/dev/null | tail -1)
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"; export FPGA_FW=$FW
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"; export FPGA_FW=$FW
 export FPGA_BITSTREAM=${FPGA_BITSTREAM:-caplifive_s12fix_5097eb166.bit} FPGA_BITSTREAM_UNVERIFIED=1 PREFLIGHT_ALLOW_SHORT=1
 export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
 TOOL="CodeGen.so $(sha256sum "$ROOT/llvm/cmake-build-debug/lib/libLLVMCapstoneCodeGen.so" | cut -c1-16) $(stat -c %y "$ROOT/llvm/cmake-build-debug/lib/libLLVMCapstoneCodeGen.so" | cut -c1-16)"

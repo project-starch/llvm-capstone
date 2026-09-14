@@ -4135,7 +4135,7 @@ holes; one guard line.
 
 **Found 2026-09-04 by negative-testing it, which is the only way this class surfaces.**
 
-The pre-push allowlist gate is a symlink to `~/.claude-c/secrets/pre-push-allowlist.sh`. Measured
+The pre-push allowlist gate is a symlink to `~/.claude-kisp/secrets/pre-push-allowlist.sh`. Measured
 coverage:
 
 | repository | pre-push hook |

@@ -18,7 +18,7 @@
 #     LOG            where to write     (default: /tmp/capstone/board-<date>.log)
 #     anything else  passed straight through (INTERP_*, LADDER_EXEC_*, ...)
 #
-# The console URL is read from ~/.claude-c/secrets/fpga-console-url and is NEVER echoed,
+# The console URL is read from ~/.claude-kisp/secrets/fpga-console-url and is NEVER echoed,
 # logged, or exported into anything that gets captured. It is secret.
 set -uo pipefail
 
@@ -59,7 +59,7 @@ ENVSH="$REPO/capstone/tests/capstone-test-env.sh"
 source "$ENVSH" >/dev/null 2>&1
 [[ -n "${CAPSTONE_CLANG:-}" ]] || { echo "FATAL: env did not export CAPSTONE_CLANG" >&2; exit 1; }
 
-URLFILE="$HOME/.claude-c/secrets/fpga-console-url"
+URLFILE="$HOME/.claude-kisp/secrets/fpga-console-url"
 [[ -f "$URLFILE" ]] || { echo "FATAL: no board URL at $URLFILE" >&2; exit 1; }
 FPGA_URL=$(tr -d '[:space:]' < "$URLFILE"); export FPGA_URL
 [[ -n "$FPGA_URL" ]] || { echo "FATAL: board URL file is empty" >&2; exit 1; }

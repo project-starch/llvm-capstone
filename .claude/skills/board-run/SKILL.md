@@ -152,7 +152,7 @@ different images routinely have identical sizes.
 ## 2. Run it
 
 ```bash
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential — never commit/echo
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"   # credential — never commit/echo
 export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 ```
 

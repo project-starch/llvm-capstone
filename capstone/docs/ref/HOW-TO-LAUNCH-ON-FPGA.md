@@ -164,7 +164,7 @@ artifact from the shell:
 | SQLite / staged probes | `fpga_driver/run_sqlite_stages_fpga.py` | `/test-domains/sqlite_host.user <dom> [selector]` |
 
 ```bash
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential, never commit
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"   # credential, never commit
 export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 BAKED_RUNGS="clp1 clp8 r14sl" python3 -m fpga_driver.run_baked_rungs_fpga
 ```
@@ -345,7 +345,7 @@ this path for SQLite and for anything else that needs more than a single pass/fa
 ### The runner and its inputs
 
 ```bash
-export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential, never commit
+export FPGA_URL="$(cat ~/.claude-kisp/secrets/fpga-console-url)"   # credential, never commit
 export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
 export SQLITE_STAGE_DOMS="/test-domains/f10.dom:0,/test-domains/f10.dom:9,/test-domains/f10.dom:10"
 export SQLITE_STAGE_TIMEOUT=200
