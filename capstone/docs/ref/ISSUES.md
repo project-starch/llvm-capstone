@@ -4581,16 +4581,34 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
 
-### M-8 — the PostgreSQL test images (`my_first_domain/start.S` glue) do not ENTER on the board monitor: `delin gp` at image+0x44 traps UNEXPECTED_OPERAND_TYPE because gp arrives already non-linear `OPEN — the port's fix (the S-15 shape); found by E1 boot sw78 r1b3, 2026-09-14`
+### M-8 — the PostgreSQL test images (`my_first_domain/start.S` glue) do not ENTER on the board monitor: `delin gp` at image+0x44 traps UNEXPECTED_OPERAND_TYPE because the image declares NO globals boundary, so the monitor delivers NO gp `OPEN — the port's fix (link with a `.capstone_gp_initdesc`, or drop the delin); found by E1 boot sw78 r1b3, 2026-09-14; mechanism corrected from source 2026-09-15`
 
 `pg_subpool_test.dom` (`91d23730153d6a18`, r1b3 arm 4) trapped at image+0x44, the first instruction
 of `test` after `_start` (`my_first_domain/start.S`): `delin gp`, mcause 25 UNEXPECTED_OPERAND_TYPE,
-before any scenario. The monitor delivers gp already non-linear on the board (the S-15 class: the
-sw64 image de-linearised an arena grant the monitor had de-linearised); the nginx images use
-`start-gp-captable-interp.S` and enter. QEMU passes the same image (GOOD). `pg_hierarchy.dom`
-(`7284f2f8db444e87`, r1b4, 2026-09-14 23:5x): the same trap, mepc image+0x44, cause 25 — confirmed on a
-second image. Cells recorded `unsupported`,
-reason implementation-unavailable. Fix is the port's: drop or guard the `delin` as the S-15 fix did.
+before any scenario. `pg_hierarchy.dom` (`7284f2f8db444e87`, r1b4, 2026-09-14 23:5x): the same trap,
+mepc image+0x44, cause 25 — confirmed on a second image. Cells recorded `unsupported`, reason
+implementation-unavailable. QEMU passes both images (GOOD).
+
+**Mechanism, corrected 2026-09-15 from source (the first write-up said "gp arrives already
+non-linear, the S-15 class" — an analogy, and the cause number refutes it: a capability of the
+wrong TYPE raises 27 UNEXPECTED_CAPABILITY_TYPE, which is what S-15 produced; 25 is raised when the
+operand is NOT A CAPABILITY, `capstone_unit.anvilh` / R-31's oracle reading).** The PostgreSQL
+images have no `.capstone_gp_initdesc` section (`llvm-readelf -S`: `pg_subpool_test.dom` and
+`pg_hierarchy.dom` carry only `.gct`; `ngx-uaf-p1.dom` and `sqlite_silicon.dom` carry both). The
+loader (`libcapstone.c:292-296`) then packs `globals_off = 0`; the monitor
+(`sbi_capstone.c:928-934`, the 2026-09-07 fix that removed the 0x1000 fallback) takes `gpoff = 0`,
+and carves no gp at all for `gpoff == 0` (`sbi_capstone.c:1123-1126`, "0 means THE IMAGE DECLARES
+NO GLOBALS REGION"), so nothing is stored in the cscratch top slot. The glue's `delin gp` at the
+head of `test` (`start.S:41`) therefore operates on a register that holds no capability → 25. The
+nginx and SQLite images are linked by `link-gpfree.ld`, which places the descriptor first in the
+globals region, so they enter. `libcapstone.c:235-237`'s comment ("absent section => 0 => the
+monitor keeps its historical 0x1000 default") describes the fallback the monitor no longer has and
+is stale. Why the emulator enters the same image is NOT settled here: QEMU's `helper_csdelin`
+(`op_helper.c:1192`, `assert(rd_v->tag)`) would abort on an untagged gp, so under QEMU gp is
+tagged at that point from some other source — a register-state difference at domain entry, not
+chased (the cells are `unsupported` either way). Fix is the port's: link the PostgreSQL domain
+with the gp-free/cap-table glue and linker script the nginx port uses (`DOMAIN_BASE_VA` already
+reaches `pgdom_link`), or drop the `delin`.
 
 ## Infrastructure / procedure
 

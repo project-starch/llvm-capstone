@@ -3452,7 +3452,13 @@ gate pins the sources and tolerates exactly that one string.
 | s3 stop 3, Sublet: the object touched after the destroy | `103998ef04d6c342` @0x310000 | FAULT | **returned C30000: the load retired and read 0x00** |
 
 **Readings.** Eleven of fourteen cells read exactly the emulator's mark, and the stale-handle REVOKE
-faults on silicon with an identified site and cause: mcause 26 is produced by two units on this RTL
+faults on silicon with an identified site and cause (and, since 2026-09-15 00:5x, on the emulator too: run on
+the helper lane's merged capstone-qemu tip `acaa44c228` — `c128-qemu-merge` with PR #4, "REVOKE raises 24 and 26
+instead of aborting" — built apart from the pinned binary, the same image `05cd076b6392196f` halts with
+`cause = 24, pc = 0x101583d2c` = image+0x3D2C, the SAME `revoke t0` the FPGA's mepc names; the emulator's 24
+is its NOT_CAP, the handle having been untagged by its `ldc` (Q-11), the RTL's 26 INVALID_CAPABILITY the
+tagged handle under a revoked node — enforcement agrees, the cause names differ for the Q-11 reason; the
+parent's QEMU pin is unchanged): mcause 26 is produced by two units on this RTL
 (the execute path's `INVALID_CAPABILITY`, `capstone_unit.anvilh:304`, and the LSU's own table,
 `load_store_unit.sv:995`), and the latched mepc names the `revoke` — the execute path. Three cells
 differ from the emulator, and all three are the same two mechanisms (RTL-oracle reading, claim-audited;
@@ -3500,9 +3506,13 @@ C20000). The 14-phase nginx subpool test `f91bb7a72096e043` @0x90000 → **0D3E0
 SUBLET_TYPE_NONE` checks after the two-level withdrawal (the mechanism above); the neighbour's bytes and
 the block's extent held. The PostgreSQL subpool test `91d23730153d6a18` @0x110000 (GOOD on QEMU) did
 **not enter**: trap log `0x99` = mcause 25, mepc 0x81A00044 − DBAS 0x81A00000 = image+0x44, the
-`delin gp` that opens `test` in `my_first_domain/start.S` — the entry glue de-linearises gp, which the
-board monitor delivers already non-linear (the S-15 class); the nginx images use the ladder's
-`start-gp-captable-interp.S` and enter. Recorded `unsupported` (implementation-unavailable); the fix is
+`delin gp` that opens `test` in `my_first_domain/start.S` — cause 25 is "operand is not a capability"
+(a wrong capability type would be 27, the S-15 reading), and the source says why: the PostgreSQL
+images carry no `.capstone_gp_initdesc` section, so the loader packs a globals offset of 0 and the
+monitor carves no gp at all (`sbi_capstone.c:1123-1126`); the nginx images are linked by
+`link-gpfree.ld`, which places that descriptor, and enter (ISSUES M-8, mechanism corrected from
+source on 2026-09-15 — the first write-up's "gp arrives already non-linear" was an analogy the
+cause number refutes). Recorded `unsupported` (implementation-unavailable); the fix is
 the port's. The hierarchy test (`7284f2f8db444e87`, the same glue) and s5 were behind it and run in
 boots r1b4/r1b5.
 
@@ -3543,11 +3553,129 @@ cell and repetition; `points.csv` the full planned matrix; a differing mark is `
 `oracle.match=false`, a returning FAULT cell `unsafe-success`, an image that does not enter
 `unsupported`; the RTL's cause numbers are named, the emulator's differ). The QEMU pre-run of E2 the
 same evening: cell ⑥ (`ceeded2533a74bce`) at `--arena 2097152` counts **692,392,094** (+0.339 % on the
-1,419,584 arena's 690,051,663, re-run the same minute and reproduced exactly), `HEAP 1344064` — the port
-carves 64.1 % of the Sublet arena for memsys5 (911,104 / 1,421,312 is the same 64.1 %), so P1's "one
-arena limit" gives the Sublet arm a 1.34 MiB memsys5 heap against cell ⑤'s 2 MiB — and the node counts
-move with the carve (5,568 splits, 37,966 mrevs). And P1's O2 arms exist on QEMU (the compiler lane's
+1,419,584 arena's 690,051,663, re-run the same minute and reproduced exactly), `HEAP 1344064` — which is
+**the tables region, not a payload heap** (RETRACTED 2026-09-15 01:00, see §7s: the first reading of this
+line said "the port carves 64.1 % of the arena for memsys5's heap"; the Sublet-patched `memsys5Init`
+says "the pool is the grant, linear, from the level below; the configured heap holds only the tables
+beside it: control bytes, links, one capability per atom and the handles of the split blocks", and the
+`HEAP` token prints `sublet_tables_len` = 41 bytes per 64-byte atom of the pool, `speedtest1_measure.c:
+105-119`) — and the node counts move with the pool size (5,568 splits, 37,966 mrevs). And P1's O2 arms exist on QEMU (the compiler lane's
 B6 note: the SQLite domain builds and runs at -O1/-O2, C-17 corrected): cell ⑤ at -O2
 `d61c8bf784f2bbd1` 330,723,308; cell ⑥ at -O2 `c506694f9f6f6889` 338,496,909 (the -O0 node counts,
 unchanged); native at -O2 `b36eb3814c3cefce` 240,654,449 with 25,122 lookasides — all at the oracle.
 Their boots (sw79 the -O0 2 MiB arena, sw80a/b the -O2 arms) follow E1's remaining boots.
+
+### §7s — E2 of the Sublet-paper plan: cell ⑥ at P1's matched backing limit (boot sw79, 2026-09-15 00:08–00:19)
+
+**What ran.** One boot, the E2 shape of the plan: control `k800` → cell ⑥ (the Sublet arm, image
+`ceeded2533a74bce`, the same program as sw74/sw75's row) run by the readback host `2c9e82d101b48160`
+with `--arena 2097152 --tables 1750285 --testset main --size 1 --verify` → control → the RR probe.
+Bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`, firmware
+`152f525ddf43`. P1's rule is one backing limit held constant across arms; cell ⑤ (memsys5 + pool,
+sw75) has a 2 MiB static heap, so the Sublet arena is set to 2 MiB — a host argument, no new image.
+Pre-registered in the driver header before the boot: retval 4; `112006 38bb59fd`; `HEAP 1344064`;
+`sublet: split=5568 mrev=37966 delin=32565` (the QEMU pre-run's counts at this arena, §7r); cycles
+2,803,660,693 ± 1 % (the QEMU count 692,392,094 at sw74's CPI); teardown `released pool rc=1`,
+RCLM 0 → 1, no RCPR/RCSH/RCRE; probe `ALEN:00200000`, `RR/done`.
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4` |
+| cell ⑥ `--arena 2097152`, `--size 1` | `Verification Hash: 112006 38bb59fd`, `HEAP 1344064 DROPPED 0 RC 0`, **`SPEEDTEST1-CYCLES 2812763422`**, `sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401`, `released pool rc=1`, RCLM `00000000` → `00000001` |
+| control after | `RESULT k800 retval=4 cycles=4436` |
+| probe | `ALEN:00200000`, `RR/share-A-returned`, `RR/share-B-returned`, `RR/done`; `share-trap` 0 |
+
+One boot banner after this run's `load_image`; runner rc = 0 after 661 s; no HARD STOP / ENTRY-STALL.
+
+**Readings.** 2,812,763,422 cycles is inside the band (+0.32 % of the predicted centre), every
+pre-registered token matched. CPI against the QEMU count at the same arena: 4.0624. Against the
+1,419,584-arena reading (2,794,183,730, sw74) the 2 MiB arena costs +0.66 % on silicon where QEMU's
+count moved +0.34 % — the extra 87 splits and 92 mrevs the larger carve produces, plus whatever the
+larger heap does to the caches. **P1's `protection_cost` at size 1 on the matched backing limit:
+⑥/⑤ = 2,812,763,422 / 2,551,483,818 = 1.1024** (the two-geometry value of the CONFIGURATION block
+was 1.0951). Label: bounded-prototype diagnostic, `-O0`, size 1, single run (P1's five runs over three
+boots are still owed; the -O0 row is a diagnostic under P1's own rule, and the -O2 arms are on the
+board next).
+
+**What "matched" means here, exactly — corrected 2026-09-15 01:00 (RETRACTION of the first
+reading of `HEAP`).** The first version of this paragraph, and §7r's E2 pre-run sentence, read
+`HEAP 1344064` as "the port carves 64.1 % of the arena for memsys5's heap" and concluded the pair
+still compared a 1.34 MiB heap with a 2 MiB one. That is wrong, from the primary source: the
+Sublet-patched `memsys5Init` (the cell ⑥ build's `sqlite3-capstone.c`, "The pool is the grant,
+linear, from the level below. The configured heap holds only the tables beside it: control bytes,
+links, one capability per atom and the handles of the split blocks") serves EVERY payload
+allocation from the pool — the whole `--arena` grant — and keeps its tables in the `--tables` region;
+the `HEAP` token in the Sublet build prints `sublet_tables_len` (`speedtest1_measure.c:105-119`,
+`SPEED_ARENA_LEN`), which is `((atoms+15)&~15) + 8·atoms + 16·atoms + 16·(atoms+32) + 64` for
+`atoms = pool/64` — 1,344,064 for a 2 MiB pool (32,768 atoms) and 911,104 for the 1,421,312-byte pool
+the #3 module makes of a 1,419,584 request (22,208 atoms; R-33's rounding — exactly 1,419,584 would
+give 910,008, the figure in the 2026-09-14 material, so the pre- and post-re-base Sublet arms did not
+hold the pool constant to the byte: 1,728 bytes apart). The "64.1 %" is 41 bytes of tables per
+64-byte atom, not a carve. So at `--arena 2097152` the Sublet arm's payload
+backing is 2 MiB, the same as cell ⑤'s 2 MiB static heap; what still differs is that ⑤'s memsys5
+keeps its own control bytes and links INSIDE its 2 MiB (~1.6 % of it: one byte per atom plus the
+link array) while ⑥'s 1,344,064 bytes of tables live outside the pool — a memory-ledger entry for
+M3, not a payload-capacity difference. The state doc's "configuration vs discipline" caveat closes
+to that sentence. Two consequences: the ⑤ᴳ "heap sweep" of 2026-09-14 (a plain arm at static heaps
+of 910,008 … 1,572,864, "⑥'s 910,008 cannot be reached by the knob") was chasing the same
+misreading — its result stands as a fact about plain memsys5's minimum heap for `main --size 1`
+(in (1.25, 1.5] MiB), but it was never the matched pair it was framed as; and a 2026-09-15 00:29
+QEMU pilot of ⑤ at a 1,344,064-byte static heap (`ba2778a05ffe1d5c`, made before the misreading was
+found) aborts on memsys5 exhaustion (`__CAPSTONE_SPEEDTEST1_ABORTED__`), which narrows that minimum
+to (1,344,064, 1,572,864] and is otherwise moot. The QEMU count of the -O2 Sublet image at this arena, for
+sw80b's denominator: `c506694f9f6f6889` at `--arena 2097152` → **340,817,186** (+0.69 % on its
+1,419,584-arena count 338,496,909), `HEAP 1344064`, `sublet: 5568/37966/32565` — the same counts as
+the -O0 image at this arena, the oracle hash, 2026-09-15 00:10.
+
+**Boot sw80a (00:23–00:33): P1's cell ⑤ and native arms at -O2.** Control → cell ⑤ at -O2
+(`d61c8bf784f2bbd1`: memsys5 + lookaside `1200,40`, 2 MiB static heap, `SQLITE_OPT_LEVEL=-O2`, read by
+the readback host `2af56927aaf907e9`) `--testset main --size 1 --verify` → control → native at -O2
+(`b36eb3814c3cefce`, the plain riscv64 build of the same translation unit, `warm --testset main
+--size 1 --verify --stats`). Pre-registered: retval 4 twice; cell ⑤ `112006 38bb59fd`, `HEAP 2097152
+DROPPED 0`, cycles in 1.06–1.62 G (CPI 3.2–4.9 on the QEMU count 330,723,308); native `112006
+38bb59fd`, `Successful lookasides 25122`, warm cycles in 0.72–1.20 G (CPI 3.0–5.0 on 240,654,449).
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4` |
+| cell ⑤ at -O2 | `Verification Hash: 112006 38bb59fd`, `HEAP 2097152 DROPPED 0 RC 0`, **`SPEEDTEST1-CYCLES 1167116810`** |
+| control after | `RESULT k800 retval=4 cycles=4436` |
+| native at -O2 (warm) | `Verification Hash: 112006 38bb59fd`, `Successful lookasides: 25122`, **`BASELINE-WARM CYCLES 856450080 INSTRS 253525314`** |
+
+One boot banner after this run's `load_image`; no HARD STOP / ENTRY-STALL. CPI: cell ⑤ 3.529, native
+3.559 (both inside their bands). **cell ⑤-O2 / native-O2 = 1,167,116,810 / 856,450,080 = 1.3627** —
+the capability-domain cost of SQLite's own memsys5 + lookaside arm at -O2, against the same pair at
+-O0, sw75's cell ⑤ over sw74's lookaside-ON native, 2,551,483,818 / 2,108,202,651 = 1.2103. Both sides
+retire far fewer instructions at -O2 (native: 253,525,314 instructions here), and the capability
+ABI's share of what remains is larger. Labelled the same way as the -O0 row — bounded-prototype
+diagnostic, size 1, single run — and, unlike the -O0 row, at the optimisation level P1 asks for. The
+Sublet arm at -O2 (sw80b) follows.
+
+**Boot sw80b (00:36–00:46): cell ⑥ at -O2 — returned at the oracle, and its Sublet counters are NOT the
+emulator's.** Control → cell ⑥ at -O2 (`c506694f9f6f6889`, `SQLITE_OPT_LEVEL=-O2 SPEEDTEST1_SUBLET=1`, stack
+declaration 385,024) `--arena 2097152 --tables 1750285 --testset main --size 1 --verify` by the readback host
+`2c9e82d101b48160` → control → the RR probe. Pre-registered: retval 4 twice; `112006 38bb59fd`; `HEAP
+1344064`; `sublet: split=5568 mrev=37966 delin=32565` (the emulator's counts for this image at this arena,
+00:10); cycles 1.09–1.67 G (CPI 3.2–4.9 on 340,817,186).
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4 cycles=4540` |
+| cell ⑥ at -O2, 2 MiB arena | `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES 1520327895`**, **`sublet: split=8654 mrev=41293 delin=32638 revoke=41287 init=8649`**, `released pool rc=1`, RCLM +1 (the `HEAP` token straddled two UART chunks in this transcript and is not quoted) |
+| control after | `RESULT k800 retval=4 cycles=4526` |
+| probe | `ALEN:00200000`, `RR/done` |
+
+One boot banner; runner rc 0; no HARD STOP / ENTRY-STALL. The cycles are inside the band (CPI 4.461 on the
+emulator's count) and the verification hash is the oracle's, so the SQL results are identical — but the
+allocator's revocation bookkeeping took a different path on silicon than on the emulator for this image:
++3,086 splits, +3,327 mrevs, +73 delins, +3,321 revokes, +3,248 inits, where the -O0 image at the same arena
+reproduced the emulator's five counters exactly on the board (sw79) and the -O2 image reproduces them on
+the emulator. The pattern (splits ≈ inits, mrevs ≈ revokes, both ≈ +3.1–3.3 k) is ~3,100 extra
+split-then-merge cycles of the buddy allocator, i.e. a different free-list history, not a different
+workload. **1,520,327,895 is recorded and is NOT citable as ⑥'s -O2 protection cost until this is
+understood**; the patched `memsys5Free` branches only on `aCtrl` bytes (plain loads), so Q-11's type-read
+divergence is not on the path. Two hypotheses, separated by boot sw81 (the same image, same arena, same
+host, launched 00:53): (a) a deterministic RTL-vs-emulator divergence the -O2 code exposes — the counters
+repeat sw80b's; (b) a run-to-run hazard of the R-29 class (a plain store to a granule's high word right
+before a 128-bit `ldc` returning it stale) that -O2's tighter scheduling triggers — a third set of
+counters. The -O1 image follows on the emulator and then the board.

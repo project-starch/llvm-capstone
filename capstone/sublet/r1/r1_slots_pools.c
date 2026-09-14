@@ -1,0 +1,395 @@
+/* r1_slots_pools.c — the R1 release-to-reuse cost harness of the Sublet paper
+ * (paper-nested-allocators/experiments/R1-release-cost.md), as a Capstone domain.
+ *
+ * One root region (the host's `--arena` grant, linear), one pool of B bytes carved from it, n
+ * leaves partitioning the pool, an unrelated region of U bytes beside it, and three lifetime
+ * patterns: `shared` (one ancestor withdrawal ends every leaf), `combined` (every even-indexed
+ * leaf is freed and reissued first, then the ancestor withdrawal), `individual` (one object of S
+ * bytes among sixteen live 64-byte objects is freed and reissued). Two arms: `S` (custom-sublet:
+ * the primitives of sublet.h) and `P` (custom-spatial: the same fixture as plain pointers into one
+ * alias, bookkeeping only). Every release is timed in EXCLUSIVE intervals — bookkeeping, the
+ * REVOKE, the fill the RTL's uninitialised-region rule forces, INIT, reissue up to a checked load
+ * and store in the returned region — plus the outer bracket, with mcycle/minstret read in the
+ * domain as ladder_perf_domain.h and speedtest1_measure.c do.
+ *
+ * Host protocol: sqlite_host.user's `--speedtest1` path (metadata region 0, payload region 1, the
+ * arena as region 2; the `--speedtest1 '<args>'` text at SQLITE_HC_SPEED_ARGS_OFF of the payload,
+ * its length in metadata->offset). This harness reads its arguments once, then owns the whole
+ * payload as its output sink (the host prints payload[0..length)). It returns 0x4EB1xxxx so the
+ * host's speedtest1 branch prints `SQ: speedtest1-ran=` and does not classify the run as a fault.
+ *
+ * Arguments (one line, space separated):
+ *   --arm S|P  --series nodes|bytes|heap|depth|object  --pattern shared|combined|individual
+ *   --reps N (default 5)  --touch 0|1 (touch the unrelated region before each measurement, 1)
+ *   --budget N (refuse a point that would push the run's minted nodes past N, default 50000)
+ *   --calib (print the empty-bracket cost and return)  --stale (dereference one stale alias last)
+ *
+ * Output: one `R1 ...` line per point and repetition, `R1 plan ...` before each point, `R1 end ...`.
+ * The node figure `nd=` is the number of revocation nodes minted for the fixture whose death the
+ * timed release causes (splits + mrevs since the fixture was issued), which is what the RTL's
+ * table pays for it; the cycle figures are exclusive, `tt=` the outer bracket.
+ */
+#include "sublet.h"
+#include "sqlite_hostcall.h"
+
+#define CAPSTONE_DPI_REGION_SHARE 1U   /* the monitor's share selector, as sqlite_capstone_domain.c */
+
+typedef unsigned long ulong;
+
+/* ------------------------------------------------------------------ freestanding runtime -- */
+void *memset(void *d, int c, ulong n) { unsigned char *p = d; while (n--) *p++ = (unsigned char)c; return d; }
+void *memcpy(void *d, const void *s, ulong n) { unsigned char *p = d; const unsigned char *q = s; while (n--) *p++ = *q++; return d; }
+static int streq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
+static ulong atou(const char *s) { ulong v = 0; while (*s >= '0' && *s <= '9') v = v * 10 + (ulong)(*s++ - '0'); return v; }
+
+/* ------------------------------------------------------------------ the host's regions ---- */
+static volatile struct sqlite_hostcall_v0 *meta;
+static volatile char *payload;
+static unsigned nshare;
+static sublet_cap root;                 /* the arena grant, linear; carved front to back */
+static ulong out_used, out_limit;     /* the host declares its region size in meta->result (4096 for
+                                         sqlite_host.user, 65536 for the readback host); the args sit
+                                         at half of it, and this sink owns the whole region once the
+                                         args are copied out */
+static void out(const char *s) {
+  char *p = (char *)payload;
+  if (!meta || !payload || !out_limit) return;
+  while (*s && out_used + 1 < out_limit) p[out_used++] = *s++;
+  meta->length = out_used;
+}
+static void outu(ulong v) {
+  char d[24], t[24]; unsigned n = 0, i = 0;
+  do { d[n++] = (char)('0' + v % 10UL); v /= 10UL; } while (v);
+  while (n) t[i++] = d[--n];
+  t[i] = 0; out(t);
+}
+static void kv(const char *k, ulong v) { out(" "); out(k); out("="); outu(v); }
+
+/* ------------------------------------------------------------------ counters -------------- */
+static inline ulong cyc(void) { ulong v; __asm__ volatile("csrr %0, mcycle" : "=r"(v)); return v; }
+static inline ulong ret(void) { ulong v; __asm__ volatile("csrr %0, minstret" : "=r"(v)); return v; }
+
+/* ------------------------------------------------------------------ the fixture ----------- */
+#define MAXN 256
+#define MAXDELEG 16
+static sublet_cap pool;                 /* the released region, linear between repetitions */
+static sublet_cap H;                    /* the handle senior to the pool: the shared death */
+static sublet_cap leaf[MAXN + 1];
+static sublet_cap deleg[MAXDELEG];      /* unary delegations (depth series), one chain per branch */
+static void *alias[MAXN + 1];           /* what the fixture's users hold */
+static sublet_cap unrel;                /* the unrelated region */
+static void *unrel_alias;
+static ulong pool_base, pool_bytes, unrel_bytes;
+/* the spatial arm: the same regions as plain pointers into one alias each */
+static char *pool_ptr, *unrel_ptr;
+static ulong minted_at_issue;           /* splits + mrevs when the fixture was issued */
+static void *stale_alias;               /* one leaf alias kept past its withdrawal, for --stale */
+
+static ulong minted(void) { return sublet_stats.split + sublet_stats.mrev; }
+
+static void carve_root(ulong bytes, sublet_cap *to) {
+  ulong base = sublet_base(&root);
+  sublet_carve(&root, base + bytes, to);
+}
+
+/* Touch every 64th byte of a region through an alias, in order (protocol step 2). */
+static ulong touch(volatile char *p, ulong bytes, unsigned char pat) {
+  ulong i, sum = 0;
+  for (i = 0; i < bytes; i += 64) { p[i] = (char)(pat + (unsigned char)(i >> 6)); sum += (unsigned char)p[i]; }
+  return sum;
+}
+static ulong verify(volatile char *p, ulong bytes, unsigned char pat) {
+  ulong i, bad = 0;
+  for (i = 0; i < bytes; i += 64) if ((unsigned char)p[i] != (unsigned char)(pat + (unsigned char)(i >> 6))) bad++;
+  return bad;
+}
+
+/* The timed withdrawal, sublet_give_to's instruction sequence with mcycle read at every phase
+ * boundary. c1 before REVOKE (after the handle's load), c2 after it, c3 after the fill the
+ * uninitialised region asks for (or at once when the region came back initialised), c4 after INIT.
+ * fb = the bytes the fill wrote (end - cursor after the revoke), ini = whether INIT ran, ty = the
+ * type the region came back as (3 = UNINIT is the fill path). Same selector encodings as sublet.h:
+ * rs2 = x1 type, x2 cursor, x4 end. */
+static inline void timed_give_to(sublet_cap *handle, sublet_cap *slot, ulong *c1, ulong *c2, ulong *c3,
+                                 ulong *c4, ulong *fb, ulong *ini, ulong *ty) {
+  ulong a, b, c, d, f, i, t;
+  __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%[h])\n"
+                   "csrr %[a], mcycle\n"
+                   ".insn r 0x5b, 0x1, 0x00, x0, t0, x0\n"
+                   "csrr %[b], mcycle\n"
+                   ".insn r 0x5b, 0x1, 0x04, %[t], t0, x1\n"
+                   "addi t3, %[t], -3\n"
+                   "bnez t3, 3f\n"
+                   ".insn r 0x5b, 0x1, 0x04, t1, t0, x2\n"
+                   ".insn r 0x5b, 0x1, 0x04, t2, t0, x4\n"
+                   "sub %[f], t2, t1\n"
+                   "1: addi t3, t1, 16\n"
+                   "bgtu t3, t2, 2f\n"
+                   ".insn s 0x5b, 0x4, x0, 0(t0)\n"
+                   "mv t1, t3\n"
+                   "j 1b\n"
+                   "2: csrr %[c], mcycle\n"
+                   ".insn r 0x5b, 0x1, 0x09, t0, t0, x0\n"
+                   "li %[i], 1\n"
+                   "j 4f\n"
+                   "3: li %[i], 0\n"
+                   "li %[f], 0\n"
+                   "csrr %[c], mcycle\n"
+                   "4: csrr %[d], mcycle\n"
+                   ".insn s 0x5b, 0x4, x0, 0(%[h])\n"
+                   ".insn s 0x5b, 0x4, t0, 0(%[s])\n"
+                   : [a] "=&r"(a), [b] "=&r"(b), [c] "=&r"(c), [d] "=&r"(d), [f] "=&r"(f), [i] "=&r"(i), [t] "=&r"(t)
+                   : [h] "r"(handle), [s] "r"(slot)
+                   : "t0", "t1", "t2", "t3", "memory");
+  sublet_stats.revoke++;
+  sublet_stats.init += i;
+  *c1 = a; *c2 = b; *c3 = c; *c4 = d; *fb = f; *ini = i; *ty = t;
+}
+
+/* ------------------------------------------------------------------ one point ------------- */
+struct point {
+  const char *series, *pattern; int arm_sublet;
+  unsigned n;            /* leaves partitioning the pool (individual: 16 unrelated objects + 1) */
+  ulong B;               /* pool bytes (individual: 16*64 + S) */
+  ulong U;               /* unrelated region bytes */
+  ulong S;               /* the individually released object's bytes */
+  unsigned chain;        /* longest unary-delegation chain (depth series) */
+  unsigned ndeleg;       /* delegations in total (15 in the depth series) */
+  unsigned touch_unrel;
+};
+
+/* Issue the fixture from a linear pool: the shared handle, the partition, the delegations, the
+ * takes. Returns the nodes minted for it. */
+static ulong issue(const struct point *pt) {
+  ulong m0 = minted();
+  unsigned i, k, d = 0;
+  ulong sz = pt->B / pt->n;
+  if (pt->arm_sublet) {
+    sublet_handle(&pool, &H);
+    for (i = 0; i + 1 < pt->n; i++) sublet_carve(&pool, pool_base + (ulong)(i + 1) * sz, &leaf[i]);
+    sublet_move(&pool, &leaf[pt->n - 1]);
+    if (pt->ndeleg) {
+      /* chains of `chain` delegations on as many branches as 15 allow, the remainder on one more */
+      unsigned left = pt->ndeleg;
+      for (i = 0; i < pt->n && left; i++) {
+        unsigned c = left < pt->chain ? left : pt->chain;
+        for (k = 0; k < c; k++) { sublet_handle(&leaf[i], &deleg[d]); d++; left--; }
+      }
+    }
+    for (i = 0; i < pt->n; i++) alias[i] = sublet_take(&leaf[i]);
+  } else {
+    for (i = 0; i < pt->n; i++) alias[i] = pool_ptr + (ulong)i * sz;
+  }
+  minted_at_issue = m0;
+  return minted() - m0;
+}
+
+/* The individual pattern's fixture: 16 objects of 64 bytes and one of S, all taken. */
+static ulong issue_objects(const struct point *pt) {
+  ulong m0 = minted(); unsigned i;
+  if (pt->arm_sublet) {
+    for (i = 0; i < 16; i++) sublet_carve(&pool, pool_base + (ulong)(i + 1) * 64UL, &leaf[i]);
+    sublet_move(&pool, &leaf[16]);                       /* the S-byte object */
+    for (i = 0; i < 17; i++) alias[i] = sublet_take(&leaf[i]);
+  } else {
+    for (i = 0; i < 17; i++) alias[i] = pool_ptr + (ulong)i * 64UL;
+  }
+  minted_at_issue = m0;
+  return minted() - m0;
+}
+
+static ulong nodes_minted_total;
+
+static int run_point(const struct point *pt, unsigned rep, ulong budget) {
+  ulong c0, c1, c2, c3, c4, c5, i0, i1, fb = 0, ini = 0, ty = 7, tdn = 0;
+  ulong inner_free = 0, inner_reissue = 0, nd, bad = 0, t;
+  unsigned i, ok = 1;
+  volatile ulong *q;
+  ulong est = pt->arm_sublet ? (ulong)(2 * pt->n + pt->ndeleg + 4) : 0;
+  if (nodes_minted_total + est > budget) {
+    out("R1 refused"); out(" s="); out(pt->series); kv("rep", rep); kv("need", est); kv("minted", nodes_minted_total); out("\n");
+    return 0;
+  }
+  /* 1. construct: the pool is linear in its slot (fresh from the root, or back from the last
+     withdrawal); issue leaves, fill payloads, keep the aliases. */
+  if (streq(pt->pattern, "individual")) nd = issue_objects(pt); else nd = issue(pt);
+  for (i = 0; i < (streq(pt->pattern, "individual") ? 17u : pt->n); i++)
+    if (alias[i]) touch((volatile char *)alias[i], (streq(pt->pattern, "individual") ? (i == 16 ? pt->S : 64UL) : pt->B / pt->n), 0x11);
+  /* 2. touch the unrelated region once, in order (or leave it reserved and untouched: the control) */
+  if (pt->U && pt->touch_unrel) touch((volatile char *)unrel_alias, pt->U, 0x33);
+  /* combined: free and reissue every even-indexed leaf before the timed ancestor withdrawal */
+  if (streq(pt->pattern, "combined")) {
+    for (i = 0; i < pt->n; i += 2) {
+      if (pt->arm_sublet) {
+        t = cyc(); alias[i] = 0; sublet_give(&leaf[i]); inner_free += cyc() - t;
+        t = cyc(); alias[i] = sublet_take(&leaf[i]); inner_reissue += cyc() - t;
+      } else {
+        t = cyc(); alias[i] = 0; inner_free += cyc() - t;
+        t = cyc(); alias[i] = pool_ptr + (ulong)i * (pt->B / pt->n); inner_reissue += cyc() - t;
+      }
+    }
+  }
+  /* 3. the timed release: bookkeeping | revoke | fill | init | reissue to a checked load+store */
+  stale_alias = alias[pt->n > 1 ? 1 : 0];                /* kept for the companion probe */
+  i0 = ret();
+  c0 = cyc();
+  if (streq(pt->pattern, "individual")) {
+    alias[16] = 0;                                       /* bookkeeping: the user's pointer */
+    if (pt->arm_sublet) {
+      timed_give_to(&leaf[16], &leaf[16], &c1, &c2, &c3, &c4, &fb, &ini, &ty);
+      alias[16] = sublet_take(&leaf[16]);                /* reissue the same object */
+    } else {
+      c1 = c2 = c3 = c4 = cyc();
+      alias[16] = pool_ptr + 16UL * 64UL;
+    }
+    q = (volatile ulong *)alias[16];
+  } else {
+    for (i = 0; i < pt->n; i++) { alias[i] = 0; if (pt->arm_sublet) sublet_clear(&leaf[i]); }
+    if (pt->arm_sublet) {
+      for (i = 0; i < pt->ndeleg; i++) sublet_clear(&deleg[i]);
+      timed_give_to(&H, &pool, &c1, &c2, &c3, &c4, &fb, &ini, &ty);
+      alias[0] = sublet_take(&pool);                     /* reissue: the returned region, whole */
+    } else {
+      c1 = c2 = c3 = c4 = cyc();
+      alias[0] = pool_ptr;
+    }
+    q = (volatile ulong *)alias[0];
+  }
+  *q = 0x5A5A5A5AUL;                                     /* the first use: a checked store and load */
+  if (*q != 0x5A5A5A5AUL) ok = 0;
+  c5 = cyc();
+  i1 = ret();
+  /* 4. survivors, and the drain that hands the region back linear for the next repetition
+     (outside the bracket, reported as td=) */
+  if (pt->U) bad = pt->touch_unrel ? verify((volatile char *)unrel_alias, pt->U, 0x33) : 0;
+  t = cyc();
+  if (pt->arm_sublet) {
+    if (streq(pt->pattern, "individual")) { alias[16] = 0; sublet_give(&leaf[16]); /* objects stay issued */ }
+    else { alias[0] = 0; sublet_give(&pool); }
+  }
+  tdn = cyc() - t;
+  if (pt->arm_sublet && !streq(pt->pattern, "individual") && sublet_type(&pool) != SUBLET_TYPE_LIN) ok = 0;
+  nodes_minted_total += minted() - minted_at_issue;
+  out("R1"); out(" s="); out(pt->series); out(" p="); out(pt->pattern); out(pt->arm_sublet ? " a=S" : " a=P");
+  kv("n", pt->n); kv("B", pt->B); kv("U", pt->U); kv("S", pt->S); kv("chain", pt->chain); kv("rep", rep);
+  kv("nd", nd); kv("bk", c1 - c0); kv("rv", c2 - c1); kv("fl", c3 - c2); kv("in", c4 - c3); kv("re", c5 - c4);
+  kv("tt", c5 - c0); kv("ir", i1 - i0); kv("ty", ty); kv("ini", ini); kv("fb", fb); kv("inf", inner_free);
+  kv("inr", inner_reissue); kv("td", tdn); kv("bad", bad); kv("ok", ok); out("\n");
+  return 1;
+}
+
+/* ------------------------------------------------------------------ the series ------------ */
+static const ulong KIB = 1024UL;
+
+static void run_series(const char *series, const char *pattern, int arm_sublet, unsigned reps, unsigned touch_unrel, ulong budget) {
+  struct point pt; unsigned r, k;
+  static const unsigned n_pts[5] = {1, 4, 16, 64, 256};
+  static const ulong b_pts[5] = {4 * 1024UL, 16 * 1024UL, 64 * 1024UL, 256 * 1024UL, 1024 * 1024UL};
+  static const ulong u_pts[5] = {0, 64 * 1024UL, 256 * 1024UL, 1024 * 1024UL, 4096 * 1024UL};
+  static const unsigned d_chain[4] = {1, 2, 4, 8};       /* 15 delegations as 15x1, 7x2+1, 3x4+3, 1x8+7 */
+  static const ulong s_pts[4] = {16, 64, 256, 4096};
+  unsigned npts = streq(series, "depth") || streq(series, "object") ? 4 : 5;
+  for (k = 0; k < npts; k++) {
+    memset(&pt, 0, sizeof pt);
+    pt.series = series; pt.pattern = pattern; pt.arm_sublet = arm_sublet; pt.touch_unrel = touch_unrel;
+    pt.n = 16; pt.B = 256 * KIB; pt.U = 256 * KIB;
+    if (streq(series, "nodes")) pt.n = n_pts[k];
+    else if (streq(series, "bytes")) pt.B = b_pts[k];
+    else if (streq(series, "heap")) pt.U = u_pts[k];
+    else if (streq(series, "depth")) { pt.chain = d_chain[k]; pt.ndeleg = 15; }
+    else if (streq(series, "object")) { pt.S = s_pts[k]; pt.n = 17; pt.B = 16 * 64UL + pt.S; pt.U = 0; pt.pattern = "individual"; }
+    else { out("R1 unknown series\n"); return; }
+    /* fresh regions for the point: the pool and the unrelated region, carved from the root */
+    if (arm_sublet) {
+      carve_root(pt.B, &pool); pool_base = sublet_base(&pool);
+      if (pt.U) { carve_root(pt.U, &unrel); unrel_alias = sublet_take(&unrel); }
+    } else {
+      carve_root(pt.B, &pool); pool_base = sublet_base(&pool); pool_ptr = sublet_take(&pool);
+      if (pt.U) { carve_root(pt.U, &unrel); unrel_alias = sublet_take(&unrel); }
+    }
+    pool_bytes = pt.B; unrel_bytes = pt.U;
+    out("R1 plan"); out(" s="); out(pt.series); out(" p="); out(pt.pattern); out(arm_sublet ? " a=S" : " a=P");
+    kv("n", pt.n); kv("B", pt.B); kv("U", pt.U); kv("S", pt.S); kv("chain", pt.chain); kv("reps", reps);
+    kv("minted", nodes_minted_total); out("\n");
+    for (r = 1; r <= reps; r++) if (!run_point(&pt, r, budget)) break;
+    /* the individual pattern leaves its 17 objects issued: hand them back so the next point's
+       fixture starts from a clean table (their region is not reused) */
+    if (arm_sublet && streq(pt.pattern, "individual")) { unsigned i; for (i = 0; i < 17; i++) { alias[i] = 0; sublet_give(&leaf[i]); } }
+  }
+}
+
+/* ------------------------------------------------------------------ entry ----------------- */
+void domain_main(unsigned *res, unsigned func) {
+  static char args[256];
+  ulong len, i;
+  const char *arm = "S", *series = "nodes", *pattern = "shared";
+  unsigned reps = 5, touch_unrel = 1, calib = 0, stale = 0;
+  ulong budget = 50000UL;
+  int arm_sublet;
+  if (func == CAPSTONE_DPI_REGION_SHARE) {
+    if (nshare == 0) meta = (volatile struct sqlite_hostcall_v0 *)res;
+    else if (nshare == 1) payload = (volatile char *)res;
+    else if (nshare == 2) sublet_store(&root, (void *)res);     /* the arena, linear, into its slot */
+    nshare++;
+    return;
+  }
+  if (!meta || !payload) { *res = 0x4EB1FFFCu; return; }
+  /* the host declares its region size; a sane declaration (a power of two, 4 KiB .. 1 MiB) sizes the
+     sink and locates the args at its half, as sqlite_hostcall.h derives SQLITE_HC_SPEED_ARGS_OFF */
+  {
+    ulong region = (ulong)meta->result;
+    if (region < 4096UL || region > (1UL << 20) || (region & (region - 1))) { *res = 0x4EB1FFFDu; return; }
+    out_limit = region - 64UL;
+    len = (ulong)meta->offset;
+    for (i = 0; i < len && i + 1 < sizeof args; i++) args[i] = payload[region / 2UL + i];
+    args[i] = 0;
+    out_used = 0; meta->length = 0;
+    out("R1 entry"); kv("shares", nshare); kv("region", region); kv("opcode", (ulong)meta->opcode);
+    kv("offset", len); kv("phase", (ulong)meta->phase); out("\n");
+    if ((ulong)meta->opcode != SQLITE_HC_OP_SPEED) { out("R1 refused: opcode\n"); *res = 0x4EB1FFFBu; return; }
+    if (len == 0 || len + 1 >= sizeof args) { out("R1 refused: args length\n"); *res = 0x4EB1FFFAu; return; }
+  }
+  /* split the args in place */
+  {
+    char *p = args; char *tok[32]; unsigned nt = 0;
+    while (*p && nt < 32) {
+      while (*p == ' ') p++;
+      if (!*p) break;
+      tok[nt++] = p;
+      while (*p && *p != ' ') p++;
+      if (*p) *p++ = 0;
+    }
+    for (i = 0; i < nt; i++) {
+      if (streq(tok[i], "--arm") && i + 1 < nt) arm = tok[++i];
+      else if (streq(tok[i], "--series") && i + 1 < nt) series = tok[++i];
+      else if (streq(tok[i], "--pattern") && i + 1 < nt) pattern = tok[++i];
+      else if (streq(tok[i], "--reps") && i + 1 < nt) reps = (unsigned)atou(tok[++i]);
+      else if (streq(tok[i], "--touch") && i + 1 < nt) touch_unrel = (unsigned)atou(tok[++i]);
+      else if (streq(tok[i], "--budget") && i + 1 < nt) budget = atou(tok[++i]);
+      else if (streq(tok[i], "--calib")) calib = 1;
+      else if (streq(tok[i], "--stale")) stale = 1;
+    }
+  }
+  arm_sublet = streq(arm, "S");
+  if (reps > 20) reps = 20;
+  out("R1 start arm="); out(arm); out(" series="); out(series); out(" pattern="); out(pattern);
+  kv("reps", reps); kv("touch", touch_unrel); kv("budget", budget);
+  if (sublet_type(&root) == SUBLET_TYPE_NONE) { out(" NO-ARENA\n"); *res = 0x4EB1FFFEu; return; }
+  kv("arena", sublet_end(&root) - sublet_base(&root)); kv("root_type", sublet_type(&root)); out("\n");
+  if (calib) {
+    ulong a = cyc(), b = cyc(), c = cyc(), d = ret(), e = ret();
+    out("R1 calib"); kv("cyc_cyc", b - a); kv("cyc_cyc2", c - b); kv("ret_ret", e - d); out("\n");
+    *res = 0x4EB10000u; return;
+  }
+  run_series(series, pattern, arm_sublet, reps, touch_unrel, budget);
+  out("R1 end"); kv("minted", nodes_minted_total); kv("split", sublet_stats.split); kv("mrev", sublet_stats.mrev);
+  kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); out("\n");
+  if (stale && arm_sublet && stale_alias) {
+    /* the companion probe, LAST: a load through a leaf alias whose ancestor was withdrawn. The
+       emulator faults here (the alias sat in a C variable, reloaded through a slot the same way
+       the S1 probes' pointers are); E1 measured that the RTL's LSU lets such a load retire. */
+    volatile unsigned char *p = (volatile unsigned char *)stale_alias;
+    out("R1 stale"); kv("byte", *p); out("\n");
+  }
+  *res = 0x4EB10000u | (unsigned)(nodes_minted_total & 0xFFFFu);
+}

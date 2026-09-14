@@ -127,6 +127,26 @@ void domain_main(unsigned *res, unsigned func) {
         unsigned char v = a[0];
         NGX_DOM_MARK(0xC30000u | (unsigned) v);
     }
+    if (NGX_UAF_STOP == 10) {
+        /* DIAGNOSTIC, board-lane addition 2026-09-14, not one of the gate's cells: what TYPE does the
+           stale pointer carry when it is reloaded from its stack slot right before the touch? The
+           emulator's ldc untags a capability whose node was revoked (so the touch faults on the
+           NOT_CAP clause, cause 24, and this reads 7); the RTL's ldc forwards it unchanged. The mark
+           carries the type in bits 8..15 and the low address byte in bits 0..7, and it returns on
+           both machines. */
+        sublet_cap probe; sublet_store(&probe, a);
+        unsigned long t = sublet_type(&probe);
+        NGX_DOM_MARK(0xCA0000u | (((unsigned) t & 0xFFu) << 8) | (unsigned) ((unsigned long) a & 0xFFu));
+    }
+    if (NGX_UAF_STOP == 11) {
+        /* DIAGNOSTIC, board-lane addition 2026-09-14: stop 10's type read AND the touch in one run, so
+           one mark says whether the reloaded pointer carried a tag (type != 7) and that the load
+           retired (the byte it returned). Faults on the emulator like stop 3; returns on the RTL. */
+        sublet_cap probe; sublet_store(&probe, a);
+        unsigned long t = sublet_type(&probe);
+        unsigned char v = a[0];
+        NGX_DOM_MARK(0xCB0000u | (((unsigned) t & 0xFFu) << 8) | (unsigned) v);
+    }
 
     /* ---- the same address again, which is a different question ------------
      *
