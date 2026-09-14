@@ -95,8 +95,15 @@
   R01/R02/R16 repro copies (the R01 copy proven as a QEMU pair against `rawhazard5.dom`; the prebuilt
   `images/ladder_perf_ctl` in R01/R02 is still the pre-#3 binary and is labelled so in their READMEs).
   Their binaries are cited instruments: the hash of each changes at its next build, note it beside the
-  measurement row. `caplifive-buildroot-domain-sizing.patch` is historical and left as is. Board overlay
-  still to rebuild: `rtpc`, `sqlite_host_rr.user` (`bigregion.user` was rebuilt for sw72).
+  measurement row. `caplifive-buildroot-domain-sizing.patch` is a snapshot `vendor-patches/refresh.sh`
+  regenerates, left as is. Board overlay: `bigregion.user` rebuilt for sw72 (383779bdef8c6d6e);
+  `rtpc` rebuilt 2026-09-14 after sw73 (d595cb24 → `4f1fe8f67ddf6830`, 8768 B both, markers
+  `/dev/capstone`/`RESULT`/`retval=` present, the grown struct proven on the R01 sibling controller
+  as a QEMU pair) and `sqlite_host_rr.user` (the default-mode SQLite host that takes `--tail/--arena/
+  --tables/--pool`; c1d06da8 → `e47b07986f7744ea`, 27,768 → 27,808 B, now linked to the merged
+  libcapstone — reads the declaration — and carrying the share readback) — both staged in `overlay/`
+  and `build/target/`, baked into the image at the next boot's bake step. No old-struct host remains
+  on the overlay.
 * **Boot sw70 is VOID, not a #3 reading:** `ladder_base_ctl` (the native baseline controller, no
   `/dev/capstone`) was staged into the `lpc` slot -- same name, different program, 6x the size -- the
   board reset under it and no RESULT came back. Its fixes: the native build's `-fno-common` link
@@ -108,8 +115,11 @@
   `SQ: share-trap=4139818259` (`0xF6C09D13`, mcause 27, off 160844, at share3), `X/fail obs=3`, no
   `G/enter` — the S-15 instrument fix's positive control (negative control on QEMU: fix image, no trap
   line, sentinel unchanged, oracle hash). The runner treats that designed stop as HARD STOP and writes
-  no scoped `boot.txt`; readings taken from the raw driver log after this run's own `load_image`
-  (runner follow-up owed: recognise `SQ: share-trap=` as terminal; not while sw73's driver runs).
+  no scoped `boot.txt`; readings taken from the raw driver log after this run's own `load_image`.
+  Runner follow-up LANDED 2026-09-14 after sw73: `run_sqlite_stages_fpga.py` recognises
+  `SQ: share-trap=` as a terminal result (logs word, mcause, share) instead of HARD-STOPPING on
+  "obs=3, not a staged marker", so the transcript is written; regexes checked against sw72's raw
+  log (positive) and sw73's (negative); exercised on the board by the next probe boot.
 * **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
   domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
   1.1819 → 1.18** (pre-registered ≈1.18, band 1.14–1.24); all five invalidators checked; rounding lines

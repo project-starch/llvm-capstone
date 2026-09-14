@@ -1584,6 +1584,25 @@ def main():
                 if _pm:
                     log(f"  {dom}: baseline probe {_pm.group(1)} = {_pm.group(2)}")
                     bad = False
+            # A SHARE-ENTRY TRAP NAMED BY THE HOST IS A RESULT, AND A TERMINAL ONE. Since
+            # 0f150add the SQLite host reads every shared region's first word back after the
+            # share and, on a packed trap word (0xF/0xE top nibble), prints
+            # `SQ: share-trap=<w>`, `SQ: share-trap-mcause=<n>`, `SQ: share-trap-off=<n>`, `SQ: share-trap-at=<share>`
+            # and stops (fail_cleanup -> `SQ: X/fail`, obs=3, no G/enter). Boot sw72's positive
+            # control (pair image 214b300efd169f03: mcause 27 at share3) hit this guard as
+            # "obs=3, not a staged marker" and the run was HARD STOPPED with no scoped boot.txt,
+            # so the reading had to be taken from the raw driver log. The domain was staged and
+            # created (A/dom-ok precedes the share), so "nothing ran" is not what happened; the
+            # instrument fired as designed. Record it and let the transcript be written.
+            if not wedged and bad and "SQ: share-trap=" in text:
+                _st = re.search(r"SQ: share-trap=(\d+)", text)
+                _mc = re.search(r"SQ: share-trap-mcause=(\d+)", text)
+                _at = re.search(r"SQ: share-trap-at=(\S+)", text)
+                log(f"  {dom}: SHARE-ENTRY TRAP reported by the host: word={_st.group(1)}"
+                    f" mcause={_mc.group(1) if _mc else '?'} at={_at.group(1) if _at else '?'}"
+                    f" -- a result (the S-15 instrument), not a staging failure; the domain was"
+                    f" never entered.")
+                bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
