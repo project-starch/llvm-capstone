@@ -10,6 +10,18 @@
 #                                                                   sublet FAULTS, and that is
 #                                                                   the result
 #
+# WHY STAGE 6 EXPECTS THE SAME MARK ON BOTH ARMS, which is a result and not a gap. Revocation
+# catches a DEREFERENCE. ngx_pfree walks the large list comparing the pointer it was given against
+# each entry and never reads through it, so offering it a revoked capability is answered
+# NGX_DECLINED on both arms. Stage 5 reads through the same pointer one line earlier and the
+# protected arm halts. The pair is the bound on the claim: a stale free is caught when the
+# allocator touches the object, and nginx's does not. An allocator whose free reads a header
+# behind the pointer would be caught, and that is the vehicle this row still wants.
+#
+# The first version of stage 6 gave pool2 no large allocation, so the loop ran zero times and the
+# pointer was never even compared. Both arms answered NGX_DECLINED then too, for a different and
+# much weaker reason, and the stage proved nothing.
+
 # The expectations are exact. "The domain came back" is not one of them: the question is which of
 # three marks came back. And the fault has to be AT THE TOUCH, so its pc is mapped back to a
 # function rather than counted.
@@ -38,9 +50,15 @@ run() {   # arm stop expectation
 run plain  1 C10000
 run plain  2 C20000
 run plain  3 C300A0      # the byte survives the destroy, which is the blindspot this paper is about
+run plain  4 C40001      # the address really came back, so the stages after this are not empty
+run plain  5 C5005B      # the old pointer reads the NEW object's first byte, not its own 0xA0
+run plain  6 C600FB      # -5, NGX_DECLINED, from a free offered the stale pointer
+run sublet 4 C40001
+run sublet 6 C600FB      # the SAME answer as the plain arm, and that is the result: see below
 run sublet 1 C10000
 run sublet 2 C20000
 run sublet 3 FAULT
+run sublet 5 FAULT       # last, so the locator below reads this cell's log
 
 # Where the fault landed. A fault anywhere else would pass the line above and mean nothing, and
 # working the address out by hand does not survive an image whose load base moved: a guessed base
