@@ -30,5 +30,6 @@ tools/replay.c                      test     the replay driver
 tools/replay_domain.c               test     the same in a domain
 tools/replay_sublet.c               test     the same under the discipline
 tools/subpool_domain.c              test     the level below's own test
+tools/hierarchy_sublet.c            test     the context tree's own test, an ancestor withdrawing from levels never asked
 
 port/aset-sublet.patch                    allocator  the classified patch, counted by port-effort.py
