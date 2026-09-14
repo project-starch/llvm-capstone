@@ -4214,3 +4214,21 @@ total everywhere except the node series (7,681 at n = 256, its bookkeeping), and
 cycle. **Bundle:** `experiments/results/R1/fpga-2026-09-15/` in the paper repository's record shape
 (manifest, points.csv, runs.jsonl, raw transcripts per boot, summary), on the local board branch beside
 the E1 bundle; capacity-bounded and labelled so (node identifiers not recycled).
+
+**What the completed series say about the manuscript's release-cost claims — a correction of the
+boot-1 reading, from the paper lane's re-read of the object series.** Boot 1's bullet said the intro's
+formulation is refuted outright and the motivation's `O(children)` is consistent; the five-repetition
+object series sharpens that into three statements, and one of them is a confirmation the earlier
+wording did not give the paper: (i) **`O(1)` per object — CONFIRMED**: 593 / 612 / 608 cycles at 64 /
+256 / 4096 B, a 64× size range moving the cost 2.5 %, with no fill because revoking an alias returns
+the region already initialised. (ii) **`O(children)` per block — incomplete rather than wrong**: REVOKE
+(23.0 cycles per node) and bookkeeping (58.9 per leaf) ARE `O(children)`; what the paper does not model
+is the byte-linear fill that dominates them. (iii) **"time independent of the objects inside it" —
+refuted**: three terms scale. Two of the flat series are positive findings about the design, not
+controls: **release is bounded by the subtree, not by the pool** — 477,350 to 477,366 cycles across
+64 KiB to 4 MiB of unrelated live regions, a 0.0034 % spread over a 64× range — and **a node's cost does
+not depend on where it sits in the tree** — 478,067 to 478,130 across depth 1 to 8 at fixed nd,
+0.013 %. Those are the two objections a reviewer raises against any revocation scheme ("does it scan
+the world?", "does nesting cost more?"), answered with flat lines over wide ranges. And because the
+machine repeats to a few cycles, the medians ARE the values: the five repetitions establish
+determinism, and no confidence interval is implied or needed.
