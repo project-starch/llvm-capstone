@@ -1,0 +1,56 @@
+# SQLite: what the adaptation cost beside the allocator, for I1.
+# One line per file: <path>  <bucket>  <why>. Buckets: allocator, compat, glue, test.
+#
+# The allocator itself is sublet/sublet-3530300.patch, counted by port-effort.py against
+# its own .classes file and not recounted here. That patch covers BOTH of SQLite's
+# allocators, lookaside and memsys5, and I1 says not to split it without a validated
+# classification, so this ledger does not split it either.
+#
+# READ THE TEST BUCKET CAREFULLY. It is nine thousand lines, and 7 306 of them are
+# sqlite_capstone_domain.c, which accumulated a probe per compiler and RTL question over the whole
+# bring-up. That is the history of getting SQLite onto this hardware, not the cost of adapting its
+# allocator. The buckets exist so the two cannot be read as one number.
+
+adapted/capstone_sqlite_libc.c                 compat   the libc SQLite calls and a domain has none of
+adapted/capstone_sqlite_libc.h                 compat   the libc SQLite calls and a domain has none of
+adapted/capstone_sqlite_os.c                   compat   the VFS SQLITE_OS_OTHER leaves to the port
+adapted/capstone_sqlite_stdio.c                compat   the formatting SQLite calls and a domain has none of
+adapted/capstone_sqlite_stdio.h                compat   the formatting SQLite calls and a domain has none of
+adapted/stubinc/assert.h                       compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/ctype.h                        compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/math.h                         compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/stdio.h                        compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/stdlib.h                       compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/string.h                       compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/sys/types.h                    compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/time.h                         compat   a header the freestanding build needs to exist and not to do anything
+adapted/stubinc/unistd.h                       compat   a header the freestanding build needs to exist and not to do anything
+capstone_floatdidf_noglobals.c                 compat   one libgcc routine rewritten without globals, which gp-captable forbids
+probes/local-cap-aggregate.c                   test     one probe each for a compiler or RTL question
+probes/nested-cap-global.c                     test     one probe each for a compiler or RTL question
+probes/runtime-bytecopy-capability.c           test     one probe each for a compiler or RTL question
+revoke_on_free_alloc.h                         glue     the revoke-on-free arm the reuse experiment compares against
+revoke_on_free_hier_alloc.h                    glue     the revoke-on-free arm the reuse experiment compares against
+slt/slt_md5.h                                  test     the sqllogictest runner, upstream's own correctness suite
+slt/slt_native.c                               test     the sqllogictest runner, upstream's own correctness suite
+slt/slt_runner.h                               test     the sqllogictest runner, upstream's own correctness suite
+speedtest1_baseline.c                          test     SQLite's own benchmark, the workload both arms run
+speedtest1_domain.c                            test     SQLite's own benchmark, the workload both arms run
+speedtest1_measure.c                           test     SQLite's own benchmark, the workload both arms run
+sqlite_boundary_cost_domain.c                  test     the boundary-cost probe
+sqlite_capstone_domain.c                       test     the domain the reuse experiment runs in
+sqlite_host.c                                  test     the guest that creates the domain
+sqlite_host_row3.c                             test     the guest that creates the domain
+sqlite_host_row3_b2.c                          test     the guest that creates the domain
+sqlite_hostcall.h                              glue     what the guest and the domain agree to call each other
+sqlite_row11_domain.c                          test     one image per row of the experiment matrix
+sqlite_row14_domain.c                          test     one image per row of the experiment matrix
+sqlite_row2_domain.c                           test     one image per row of the experiment matrix
+sqlite_row3_b2_domain.c                        test     one image per row of the experiment matrix
+sqlite_row3_domain.c                           test     one image per row of the experiment matrix
+sqlite_row5_domain.c                           test     one image per row of the experiment matrix
+sqlite_row7_domain.c                           test     one image per row of the experiment matrix
+sqlite_row9_domain.c                           test     one image per row of the experiment matrix
+sqlite_silicon_amalgam.c                       glue     the amalgamation the silicon build links, one translation unit
+
+sublet/sublet-3530300.patch               allocator  the classified patch, counted by port-effort.py, and it covers BOTH allocators
