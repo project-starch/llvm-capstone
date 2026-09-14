@@ -76,3 +76,64 @@ document and discuss rather than build. A peer lane's request does not change th
 offered instead because it informs the choice without pre-empting it. The relevant new input for the
 decision is that the residue argument now has a number against it: a fix that leaves PHI copies behind
 is leaving part of a ~190-site class in place, and that is worth knowing before choosing.
+
+---
+
+## RETRACTED 2026-09-15, same day: "~190 sites, a class" — the harm-shaped count is a HANDFUL
+
+The headline number above is wrong and I withdraw it. The board lane rebuilt the scan over a real
+control-flow graph (`capstone/tests/movc-cfg-scan.py`, `f2ae79db7ad5` on dev). Run on the **same three
+B6 images** this note reports on:
+
+| image | movc | source re-read on some path | INT-ONLY | mixed |
+|---|---:|---:|---:|---:|
+| -O0 | 6,755 | 2,978 | 0 | 0 |
+| -O1 | 17,442 | 10,350 | **0** | 2 |
+| -O2 | 17,721 | 10,371 | **1** | 1 |
+
+So the harm-shaped class is a handful per image, not ~190. **The -O0 = 0 result and the "this is
+opt-level gated" conclusion both survive; the SCALE does not.**
+
+**Why my count was high, precisely.** Not the re-read condition — that was applied (measured: 717
+integer-defined `movc` in the -O2 image, of which my scan reported 227, excluding 490 dead-source
+copies). The error is that my forward and backward searches walk the disassembly in **linear address
+order**, which is not the control-flow graph. Linearly, the instruction after a `movc` is frequently on
+a different path, so a "read" that never executes after the copy is counted, and a redefinition on an
+unrelated path terminates the search early. Both directions are wrong, and the net effect here was a
+two-orders-of-magnitude over-count. A CFG is not a refinement of a linear scan; it is the only correct
+instrument for a reaching-definitions question, and the note above should have said so rather than
+listing "does not follow control flow" as a caveat and then quoting a number as if the caveat were
+small.
+
+**The lesson, which is the reusable part:** I did label the linear scan's limitation correctly and
+still published the count as the headline. A stated caveat that is not allowed to change the claim is
+decoration. Where the caveat names the exact mechanism that could invalidate the number, the number
+does not go out until it is measured with the caveat removed.
+
+`capstone/tests/c32-movc-scan.py` is kept, because its DEF-side classification is what separates the
+defect from `real_cap_copy` and that part held up — the CFG tool adopts the same discriminator, and
+both agree on the reproducer (1 hit at `bridged_copied_live+0x1c`, control excluded). Its header now
+has to be read with this retraction: **use `movc-cfg-scan.py` for counts.**
+
+### Two corrections back to the CFG tool
+
+1. **Its summary line over-reports INT-ONLY.** `strong` accumulates INT-ONLY *and* MIXED entries, but
+   the printed line labels `len(strong)` as *"have ONLY integer reaching definitions"*. True INT-ONLY
+   is `len(strong) - mixed`. My -O1 image prints "2 have ONLY integer" and is really 0 INT-ONLY + 2
+   mixed. The per-site tags are right; only the summary conflates, so any count quoted from that line
+   (including the board images') needs the subtraction.
+2. **It takes `<path> <label>` PAIRS** (`argv[1::2]`/`argv[2::2]`). Invoked with a path alone it prints
+   NOTHING and exits 0, which reads exactly like a clean image.
+
+### The PHI question, answered on the sites rather than as a rate
+
+With only two -O2 sites, a "PHI share" statistic would be noise. Characterised individually:
+
+* `renameResolveTrigger+0x111ce0` — `movc s8, s11` at a **block entry** (preceded by an unconditional
+  `j`), source live around a back-edge; the read the tool finds is the copy itself on the next
+  iteration. **PHI-shaped: remat cannot remove it.**
+* `main+0x3ab18` — `movc a1, s5` before a call, `mv a1, s5` before a later call, straight-line.
+  **Not PHI-shaped.**
+
+One of two. The residue the bridge pseudo cannot reach is real and present at this scale, which is the
+input the design choice needs — but it is one site in this image, not a share of ~190.
