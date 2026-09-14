@@ -88,8 +88,16 @@ printf "   amalgam: %s lines\n" "$(cat "$OBJ/ngx_palloc.c" "$PG/pg_level0.c" "$P
 "$CLANG" "${CFLAGS[@]}" -c -o "$OBJ/ngx_all.o" "$AMALGAM"
 
 link() {  # $1 = globals offset literal, $2 = output
-  local lds="$OBJ/link.ld"
-  sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  local lds="$OBJ/link.ld" base="${DOMAIN_BASE_VA:-0x10000}"
+  # DOMAIN_BASE_VA relocates the entry VA (default 0x10000), the same literal sed as
+  # build-ladder-domain.sh, so several probe images can share ONE board boot: distinct
+  # images at one entry VA cannot (R-3, preflight C15). Verified, not trusted: the
+  # substituted line must exist, or the build stops here.
+  # @WIN@ first: a globals offset that is itself 0x10000 (this build's usual value) would
+  # otherwise be rewritten to the base by the second sed and yield `$base + $base`.
+  sed -e "s/0x10000 + 0x1000/@BASE@ + @WIN@/" -e "s/0x10000/@BASE@/g" -e "s/@WIN@/$1/" \
+      -e "s/@BASE@/$base/g" "$GPFREE/link-gpfree.ld" > "$lds"
+  grep -q -- "$base + $1" "$lds" || { echo "build-nginx-domain.sh: linker-script substitution FAILED ($base + $1 absent)" >&2; exit 1; }
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
       -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ/start.o"
   # Ends the .gct section so the entry glue can compute the table's extent. Without it

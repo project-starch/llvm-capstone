@@ -93,6 +93,16 @@ pgdom_link() {
   local start=$REPO_ROOT/capstone/my_first_domain/start.S
   local script=$REPO_ROOT/capstone/my_first_domain/link.ld
   local domreq=$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S
+  # DOMAIN_BASE_VA relocates the entry VA (default 0x10000) so that several probe images
+  # can share one board boot (distinct images at one entry VA cannot: R-3, preflight C15).
+  # Same literal sed as build-ladder-domain.sh; the result is verified, not trusted.
+  if [[ -n "${DOMAIN_BASE_VA:-}" && "$DOMAIN_BASE_VA" != "0x10000" ]]; then
+    sed "s/0x10000/$DOMAIN_BASE_VA/g" "$script" > "$dom_out/obj/link.ld"
+    grep -q -- "\. = $DOMAIN_BASE_VA;" "$dom_out/obj/link.ld" \
+      || { echo "pgdom_link: linker-script substitution FAILED (. = $DOMAIN_BASE_VA; absent)" >&2; return 1; }
+    script=$dom_out/obj/link.ld
+    echo "  relocated domain base VA -> $DOMAIN_BASE_VA"
+  fi
 
   echo "== the domain's entry and its declared requirement"
   "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
