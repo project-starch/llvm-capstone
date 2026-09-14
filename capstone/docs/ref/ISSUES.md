@@ -1422,6 +1422,11 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 
 ### R-30 — `INIT` is UNREACHABLE on silicon: filling an UNINIT region leaves the cursor at `end`, and `INIT` faults unless the cursor is PAST `end`. The shortfall is exactly one byte, and it kills the whole reason the UNINIT type exists `HEADLINE SUPERSEDED, AND THE RESIDUAL IS NOW EXPLAINED AND RE-FILED. The one-byte precondition is FIXED and verified on silicon (boot sw61, 5,334 INITs on caplifive_r30r31_1bfff7776). The separate 1,728-byte shortfall this entry carried as open is NOT a fill failure at all: it is bounds re-encoding, demonstrated on silicon 2026-09-12 (boot sw62) and filed as **R-33**. Nothing about the fill remains open here`
 
+> **2026-09-14 (sw74/sw74b):** the 1,419,584-byte reclaim that wedged sw60 with `RCSH:000006C0` now
+> completes through csinit on the #3 module + monitor 4274268 (RCLM 0 → 1, no RCPR/RCSH/RCRE, twice).
+> That shortfall was R-33's re-encoding, not this entry's; the audited account, the confound (the
+> monitor moved too) and the owed control are under R-33.
+
 > # ⚠ THE HEADLINE "INIT IS UNREACHABLE" IS CONTRADICTED BY SILICON, 2026-09-12. Two readings on ONE bitstream, in adjacent boots, and they do not agree.
 >
 > On `caplifive_r30r31_1bfff7776`:
@@ -2589,6 +2594,25 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > must. Every earlier "zero rounding lines" reading (sw63/66/68/71) is now informative rather than
 > uninformative. The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
 > up front, mirroring `capstone_repr_granule`; 1,419,584 is its negative control.
+>
+> **2026-09-14, boots sw74 / sw74b — the reclaim of the rounded arena completes (twice), and what that
+> does and does not show (claim-auditor SPLIT verdict recorded verbatim in substance).** The
+> "shortfall" sw60 (`RCSH:000006C0` = 1,728) and sw62 (`RCSH:000001C0` = 448) reported was never a
+> short fill: sw62's `RCEN:00056C00 / RCCU:00056A40` show the cursor reaching the full 354,880-byte
+> request while the re-encoded `end` read 448 high, exactly `round_up(354880, 512) − 354880`, and 1,728
+> is the same gap for 1,419,584 — this entry's mechanism, already filed here (the R-30 header points
+> at it). On the #3 module (d04bd83, which rounds the request: the monitor reports `ALEN:0015B000` =
+> 1,421,312 for the 1,419,584 request) with monitor 4274268, the revoke-reshare probe on that request
+> reclaims and re-shares through csinit: `released pool rc=1`, `RR/share-A … RR/done`, **RCLM 0 → 1,
+> no RCPR / RCSH / RCRE** — sw74 arm 2's teardown and sw74b arm 3's, both `--speedtest1` teardowns.
+> **Attribution to the rounding is inferred, not controlled:** the monitor also moved 2c49c41 → 4274268
+> (RCSH now measures cursor advance; RCRE, new, reports the re-encode gap), so RCSH's disappearance is
+> explained by the monitor alone; the pass through csinit is not, but RCRE has never been observed to
+> fire. **The settling control (owed, one arm):** monitor 4274268 + a pre-rounding `.ko` + the same
+> 1,419,584 request, predicted `RCRE:000006C0` and a wedge — it positively controls RCRE and proves
+> the attribution at once. Two smaller notes: the module's "not representable" `pr_info` is not in the
+> UART capture (dmesg only; `ALEN` is the on-console evidence), and host stdout is buffered, so the
+> `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
@@ -3124,6 +3148,16 @@ Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6
 globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
+
+> **2026-09-14 (boots sw74 / sw74b): the budget bit a measurement boot, twice, and the read-out is
+> unambiguous.** A second full workload run of the Sublet cell (`ceeded2533a74bce`, `main --size 1`)
+> in one boot entered and never returned; the wedge tracer read `rev_node_head[15:0] = 0xFFFF` at both
+> wedges (sw74 arm 4 with `--stats`, sw74b arm 4 without — the discriminator that also cleared the
+> `--stats` path). One Sublet run mints split + mrev = 5,481 + 37,874 = 43,355 nodes; two runs cross the
+> 65,535 sentinel mid-workload. Driver rule, now in the state doc: ONE Sublet-cell workload per boot;
+> memsys5 cells and the §7 measurement images mint only shares and boundary borrows (sw73 ran
+> `--size 100` in one boot), so their second runs are safe. The first run's `--tail` teardown probe
+> (a few mints) is not what exhausts it.
 
 
 > **THE WORKLOAD THIS ENTRY SAYS IS NOT KNOWN, 2026-09-13: nginx's own request traffic crosses the

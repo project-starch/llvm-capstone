@@ -551,6 +551,30 @@ def decode_s07_verdict(v):
     return ("unclassified", bits, False)
 
 
+# THE HOST'S OWN REFUSAL SENTINELS, 0x5117BADn. sqlite_host.c returns these from fail_cleanup()
+# when a run stops before or after the workload for a NAMED reason (sqlite3_initialize refused,
+# an unexpected domain return after a probe's teardown, an SLT/feature probe that never ran). Their
+# top byte 0x51 collides with the S-07 cursor-probe family, and on boot sw62 the R-30 probe's
+# designed end state (RR/done, then the tail's `unexpected domain return` = 0x5117BAD4) was
+# summarised as "S-07 CURSOR PROBE -- H1: cursor[23:0]=0x17bad4 NON-ZERO -- a real capability
+# arrived", which is the low bits of BAD4 read as a cursor. Decode the family first.
+HOST_REFUSALS = {
+    0x5117BAD0: "the host refused to start the workload",
+    0x5117BAD1: "the host's shared-region setup failed",
+    0x5117BAD2: "the domain did not report the workload marker",
+    0x5117BAD3: "sqlite3_initialize refused (the sw65/sw67 reading)",
+    0x5117BAD4: "unexpected domain return after the workload/probe (the tail's teardown call)",
+}
+
+
+def decode_host_refusal(obs):
+    """0x5117BADn -> a one-line meaning, or None. The meanings above are the host's; when a
+    value is not in the table the family is still named, so it can never be read as a probe."""
+    if obs is None or (obs >> 4) != 0x5117BAD:
+        return None
+    return HOST_REFUSALS.get(obs, f"host refusal sentinel 0x{obs:08X} (not in the table)")
+
+
 def decode_s07_cursor(obs):
     """The S-07 H1/H2 verdict read from the pMethods MEMORY SLOT. Returns (verdict, detail).
 
@@ -1525,6 +1549,10 @@ def main():
             # exactly as line 313 and line 330 already do it. Passing the match here raised
             # TypeError inside decode_probe and killed a boot at the first probe arm.
             _retry = decode_s07_retry(int(m_obs.group(1))) if m_obs is not None else None
+            if not wedged and bad and decode_host_refusal(int(m_obs.group(1)) if m_obs else None):
+                log(f"  {dom}: host refusal sentinel obs=0x{int(m_obs.group(1)):08X} -- "
+                    f"{decode_host_refusal(int(m_obs.group(1)))}; a named stop, not a staging failure")
+                bad = False
             if not wedged and bad and _retry is not None:
                 a, b, c = _retry
                 _tag = int(m_obs.group(1)) >> 24
@@ -3570,6 +3598,9 @@ def main():
                 verdict = "WEDGED (no return)"
             elif d:
                 verdict = f"returned stage={d[0]} rc={d[1]}"
+            elif decode_host_refusal(obs):
+                verdict = (f"HOST STOPPED: obs=0x{obs:08X} -- {decode_host_refusal(obs)}; the SQ: "
+                           f"markers before it are the arm's reading (for the R-30 probe: RR/done)")
             elif decode_s07_cursor(obs):
                 _v, _d = decode_s07_cursor(obs)
                 verdict = f"S-07 CURSOR PROBE -- {_v}: {_d}"

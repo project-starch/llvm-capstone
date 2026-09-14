@@ -1043,6 +1043,37 @@ the matrix ratios are quoted to. Reconciled while at it: the ① row's 545,623,4
 `BASELINE-WARM CYCLES` of the archived run and the 545,609,572 in the same log is speedtest1's inner
 `SPEEDTEST1-CYCLES` (13,924 apart, the warm wrapper's own work); one run, two counters.
 
+**The #3-module rows (2026-09-14, QEMU `-icount`, the same rootfs and pin as the post-#14 re-measurement above).**
+Under the #3 module the region allocator rounds a non-representable request up (R-33), so the Sublet
+cells' 1,419,584-byte arena is created at 1,421,312 and their `HEAP` reads **911104**, not 910,008;
+the tables region (1,750,285) is rounded to 1,751,040 the same way. The archived images, byte for
+byte, on this module:
+
+| cell | image | `HEAP` | QEMU cycles, #3 module | archived (pre-rounding) | Δ |
+|---|---|---:|---:|---:|---:|
+| ⑥ Sublet, lookaside on | `ceeded2533a74bce` | 911,104 | **690,051,663** | 690,505,703 | −0.066 % |
+| ⑥′ Sublet, lookaside off (control) | `5f5045dbe075d458` | 911,104 | **705,997,303** | 705,994,514 | +0.0004 % |
+| ⑤ memsys5, lookaside on, stack declaration 385,024 | `e6ee5255c896aa21` | 2,097,152 | **678,572,868** | 678,572,868 | 0 |
+| ② native, lookaside on (rebuilt, same recipe) | `d95dd98c0de73c68` | 2,097,152 | **535,283,834** | 535,335,376 | −0.0096 % |
+
+⑥'s `sublet:` counters moved with the geometry — `split=5481 mrev=37874 delin=32565 revoke=37874
+init=5309` against the archived 5508/37899/32565/37899/5334 — and ⑥′'s are 8610/41243/32638/41243/8605.
+**The measure script rebuilt ⑥ and ⑥′ byte-identical to the archived images on the #14 toolchain**
+(the S-14 spill fix changes nothing in these programs, as it changed nothing in ④), which is what
+makes their QEMU pass records legitimate for a board boot. ⑤ needed only the diagnostics-only stack
+declaration to load under the one-region rule and counts the archived value to the instruction. The
+lookaside instrument, re-proven on these binaries in separate `--stats` runs: ⑥ `Successful
+lookasides: 25010`, the rebuilt ② `25122` (the archived ②'s value). ⑥/⑤ on this module is
+**1.0169** (was 1.0176) — still a two-geometry comparison, labelled "configuration" as before.
+
+*The lookaside-ON arms of sw64's image family (for the size-20 pair, Boot D):* domain
+`90ef29431abdbdee` (sw64's recipe + `SQLITE_DEFAULT_LOOKASIDE=1200,40`, host 2af56927): size 1
+682,301,888 at `111130 1e792c9d`, size 20 **17,544,109,561** at `3807866 2738af78`, `HEAP 134217728
+DROPPED 0 RC 0`, both with pass records; native `78e523cb05cbb91f` (sw64's baseline recipe +
+lookaside): size 1 538,409,766, size 20 **14,003,848,190**, same oracles. Instruction ratio at size
+20 with lookaside ON on both arms: **1.2528** (OFF/OFF was 1.2547, §7l); lookaside saves 1.04 % of
+native instructions and 1.19 % of the domain's at this size.
+
 The native rows are `speedtest1_baseline warm` — the **warm** subcommand, which the source names as
 the denominator, not `run`. Their `sqlite_heap` is 2,097,152 bytes, read with `llvm-nm -S` and equal
 to ④/⑤'s `HEAP`, so the two ABI ratios below are geometry-matched.
@@ -3229,3 +3260,61 @@ Every caveat bound to the §7 rows applies: the bitstream does not meet timing (
 lookaside OFF on both arms (§7 CONFIGURATION block — this image is built by the same path, no
 override); memsys5 in a 128 MiB region arena on both arms (arena-matched); cycles only, at 25 MHz.
 Not comparable to the §4g emulated matrix (different heap geometry and vehicle).
+
+### §7q — Boot A of the 2026-09-14 plan (boot sw74): the Sublet cell re-based on the #3 module, the lookaside-ON baseline, and the R-30 reclaim filling at the rounded arena
+
+**Setup.** Driver `board-b74.sh` (bare launcher, pre-registrations in its header), the #3 module
+(d04bd83) and monitor 4274268, control `k800`; host `sqlite_host_rr.user` 2c9e82d101b48160 — the
+default-mode SQLite host rebuilt against the merged libcapstone with `-DSQLITE_HOST_REVOKE_RESHARE=1`
+(it runs the revoke-reshare probe on every teardown) and `-DSQLITE_HC_REGION_SIZE=65536` (the first
+rebuild without that define passed the string gate and failed both images at the region check on QEMU;
+the pair is what caught it) and proven as a QEMU pair; cell 6 image `ceeded2533a74bce` (sw61's bytes,
+reproduced byte-identical by the measure script on the #14 toolchain, pass record written by that run);
+the lookaside-ON native baseline `d95dd98c0de73c68` (cell 2's recipe rebuilt). Boot 12:44, driver rc=0
+13:12; eight arms staged, four ran.
+
+| arm | what | reading | pre-registered |
+|---|---|---|---|
+| 1 | control | `RESULT k800 retval=4` | 4 |
+| 2 | cell 6 (Sublet, lookaside ON) `--size 1`, `--arena 1419584 --tables 1750285` | `112006 38bb59fd`, **`HEAP 911104`**, **2,794,183,730** cycles, `DROPPED 0 RC 0`, `sublet: split=5481 mrev=37874 delin=32565 …` | oracle; 911104; ~2,795.7 M ±1 % (sw61: 2,797,516,229 at HEAP 910008); the QEMU counters |
+| 2, teardown | the revoke-reshare probe on the 1,419,584 request (the arm sw60/sw62 wedged on) | the module creates the region at `ALEN:0015B000` = 1,421,312 (the R-33 rounding, executed); `SQ: released pool rc=1`, `RR/share-A`, `RR/share-B`, `RR/probe-region=22`, `RR/done`; **RCLM 00000000 → 00000001 around the pool-release ecall**; **no RCSH, no RCPR, no RCRE** | exactly this; sw60 read `RCSH:000006C0` here |
+| 3 | native baseline, lookaside ON, `warm --size 1` | `112006 38bb59fd`, **2,108,202,651** cycles (`BASELINE-WARM 2,108,267,102`), `HEAP 2097152` | oracle; ~2,107.5 M ±1 % (sw60's cell 2: 2,107,533,496) |
+| 4 | cell 6 `--size 1 --stats` — the SAME image's second run | `A/dom-ok`, four shares returned, `G/enter`, then **no return in 900 s**; trap latch 0x89 (a stale ecall, no capability trap latched); no monitor tag | return + `Successful lookasides: 25010` |
+| 5–8 | baseline `--stats`, control, probe @4194304, probe @1419584 | not run (a wedged domain takes the core) | — |
+
+**Readings.** Cell 6 on the #3 module runs 0.12 % faster than sw61's reading and reports the rounded
+arena's `HEAP 911104`; its counters equal today's QEMU run's, as sw61's equalled theirs. The
+lookaside-ON baseline reproduces sw60's cell-2 reading to 0.03 %. **The reclaim of the rounded arena completes through csinit on this module + monitor, twice** (sw74
+arm 2's teardown and sw74b arm 3's): RCLM climbs 0 → 1 and none of the three reclaim traps (RCPR, RCSH,
+RCRE) fires. **What that is and is not (claim-auditor, 2026-09-14):** the "shortfall" sw60 and sw62
+reported was never a short fill — it was R-33's bounds re-encoding, and ISSUES already says so
+(sw62's `RCEN:00056C00 / RCCU:00056A40 / RCSH:000001C0`: the cursor reached the full 354,880 while the
+re-encoded `end` read 448 high, exactly `round_up(354880, 512) − 354880`; sw60's 1,728 is the same gap
+for 1,419,584). Two things changed between those boots and this one: the module now rounds the request
+before the monitor sees it (`ALEN:0015B000`), and the monitor moved 2c49c41 → 4274268, which changed
+what RCSH measures and added RCRE for the re-encode gap. **The pass is therefore inferred to be the
+rounding's doing, not controlled:** RCRE has never been observed to fire, and the one arm that would
+settle the attribution — monitor 4274268 with a pre-rounding `.ko` and the same request, predicted
+`RCRE:000006C0` + wedge — has not been run. The `--tail` probe arms of this boot (the representable
+4,194,304 control and the 1,419,584 repeat) were lost to arm 4's wedge; sw74b carries the control.
+Also a pre-registered miss: the module's "not representable" line is a `pr_info` (dmesg), so it is not
+in the UART capture; `ALEN` is the evidence the rounding ran. Recorded under R-33 in ISSUES, with a
+pointer from R-30.
+
+**⑥/⑤ on silicon is not re-based by this boot:**
+cell 5's #3-module run is Boot B.
+
+**The arm-4 wedge is R-12's budget, not a new defect — settled by boot sw74b (13:17–13:45, same
+firmware set, fw `17112c3863fb`).** sw74b ran the same cell-6 image with `--stats` as the FIRST domain
+run: it returned — `112006 38bb59fd`, `HEAP 911104`, **`Successful lookasides: 25010`** on silicon (the
+lookaside-ON positive check for the Sublet cell), the probe to `RR/done` with RCLM 0 → 1 and no trap,
+plus the native baseline with `--stats`: `Successful lookasides: 25122`. Then the plain run as the
+SECOND domain run entered (`A/dom-ok`, four shares with `ALEN:0015B000`, `G/enter`) and wedged
+exactly as sw74's arm 4 had. **Both wedge reads show `rev_node_head[15:0] = 0xFFFF`** — the 16-bit
+bump head at its sentinel, R-12's deliberate stall on rev-node exhaustion. The arithmetic: one Sublet
+run mints `split + mrev` = 5,481 + 37,874 = 43,355 nodes and nothing reclaims them (R-12: no
+reclamation), so a second run crosses 65,535 mid-workload. The `--stats` path was never the
+variable. **Rule for every driver from here: at most ONE Sublet-cell workload per boot; a memsys5
+cell's mints are its boundary borrows and shares, far below the pool (sw73 ran size 100 in one boot),
+so its second run is safe.** The two `--tail` probe arms and the trailing control were lost in both
+boots; the representable-arena control moves to Boot B's last arm.
