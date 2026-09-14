@@ -3565,6 +3565,23 @@ B6 note: the SQLite domain builds and runs at -O1/-O2, C-17 corrected): cell ⑤
 unchanged); native at -O2 `b36eb3814c3cefce` 240,654,449 with 25,122 lookasides — all at the oracle.
 Their boots (sw79 the -O0 2 MiB arena, sw80a/b the -O2 arms) follow E1's remaining boots.
 
+**Repetitions 2 and 3 (boots sw78 r2b1–r3b5, 2026-09-15 05:00–07:38): the matrix is complete and every
+cell reads the same all three times.** Ten boots plus one rerun (repetition 2's boot 4 was refused at
+launch by the preflight's control check — the SIGPIPE-under-pipefail false BLOCK of §7s, since fixed —
+and rerun last), control 4 and one banner in every boot, no void boot. 63 records, 21 cells × 3
+repetitions, **21 of 21 cells identical across the three**: 48 `completed` (the plain arm's seven marks
+and the Sublet arm's returning marks, including the two that differ from the emulator by the type-2
+reading), 6 `unsafe-success` (s3's touch after destroy retiring through a tagged stale pointer and
+s5's reused read returning the new occupant, three times each — the domain-side reading of the
+M-mode gate is now a repeated measurement), 3 `enforced-fault` (s9, mcause 26 at the same `revoke`
+in every boot), 6 `unsupported` (the two PostgreSQL images not entering, M-8, every time). The bundle
+generator now joins the transcript's chunk seams before reading a mark (a mark's digits can straddle
+two UART chunks; repetition 3's boot 3 printed the subpool test's mark across one, and the driver's own
+summary read "no result line" while the transcript held 0D3E04); its regression check is that
+repetition 1's 21 records are unchanged. **Bundle:** `experiments/results/S1S2/sw78-rep1-3/`
+supersedes `sw78-rep1` on the local board branch (paper worktree commit db99ad2, `make
+experiments-check` passing); generator and cell table at `capstone/ports/nginx/e1-bundle/`.
+
 ### §7s — E2 of the Sublet-paper plan: cell ⑥ at P1's matched backing limit (boot sw79, 2026-09-15 00:08–00:19)
 
 **What ran.** One boot, the E2 shape of the plan: control `k800` → cell ⑥ (the Sublet arm, image
