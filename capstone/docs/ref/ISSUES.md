@@ -2604,6 +2604,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > reaches ordinary LINEAR capabilities through `CINCOFFSET`, and a store past the region's true end is
 > **accepted** — both by matched pairs with representable controls. DERIVED, and still only derived:
 > the containment table, which is arithmetic over the granule law.
+> *(2026-09-15, from the RTL lane's third arm at `2c59a355b`: the encoding widens at the BOTTOM too — a base that is not
+> granule-aligned reads low once the cursor moves, the mirror of the top's round-up. The containment table above measured
+> the TOP only; the kernel's page rounding rounds the SIZE up, not the start down, so it covers none of the bottom. Whether
+> any allocator hands out a non-granule-aligned base is not established — every region tested so far was base-aligned,
+> which is why it went unnoticed.)*
 >
 > **STILL NOT SHOWN, and worth naming precisely rather than letting the entry read as closed:** (i) an
 > over-permissive store **on silicon** — both demonstrations are RTL simulation, on the flashed
@@ -2761,7 +2766,12 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > For the paper: the four plain-data-access rows of the safety matrix are not supported on this configuration for
 > two independent reasons, and "satisfy the gate" would not have enforced them either.
 >
-> **What would settle the residuals.** (a) The translation-on path (S-mode, Linux) is argued from source only
+> **What would settle the residuals** *(2026-09-15 later: (b) CLOSED by the RTL lane at the flashed revision — a store at
+> `bound_end` through the same capability the load arm uses takes no trap and the guard word past the buffer holds the
+> stored value, the corrupting direction; (a) MOOT for the capability clauses — translation through MPRV needs MPP below
+> M and the load-store privilege is then that MPP, so translation on takes the gate out of its satisfied state, and
+> S-mode fails it anyway; what (a) still covers is the MISALIGNED causes with translation on, which the RTL lane owns).*
+> (a) The translation-on path (S-mode, Linux) is argued from source only
 > (`cva6_mmu.sv:539` skips the translation branch on a misaligned request and leaves `:514` in force): a directed
 > test with `satp` set, or a board arm. (b) A store bounds arm. (c) After an RTL fix, this test must FAIL its last
 > arm by design — the untagged load then enters debug mode (R-24), and so would `RVTEST_PASS`'s own `sw` to
