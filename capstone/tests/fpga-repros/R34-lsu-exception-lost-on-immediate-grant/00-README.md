@@ -158,3 +158,47 @@ pass). Readings are the `[Cycle N] Reg[k]: …` lines of the `.log.iss` and the 
 the waveform extract (`TRACE_FAST=1`, read with `sim/readvcd.py`). The audited artifact set is the run of
 2026-09-15 13:51:55: `.log.iss` sha256 `e9495d5e2ff104ce…`, RVFI `.log` `5670a53503d9c6af…` (a live
 `verif/sim/out_*` directory is overwritten by every run; capture the hashes when you read).
+
+## RTL lane, 2026-09-15: the store-bounds residual is CLOSED, and the translation residual is NARROWER than it looks
+
+Taken over by the RTL lane. Run at the **flashed `1bfff7776`**, not at `f6ec6c198` — and the two were
+checked to agree on the thing that matters rather than assumed to: the delivery condition
+`ex_i.valid && (state_q inside {SEND_TAG, SEND_TAG_LDC}) && !…is_dom_switch` is **byte-identical text**
+at `load_unit.sv:718` and `:699` respectively. The files do differ, by the S-07 probe ports and some
+LDC-path comments, so "the files are identical" would have been wrong; the delivery logic is not.
+**Every arm of run C reproduced first**, before anything was added.
+
+### Residual (b), the store bounds arm — CLOSED, and it is the corrupting direction
+
+`arm 4b` is added to `src/lsu-mmode-gate.S`: a `sd` at `bound_end` through the **same** RW capability
+`arm 4` loads through. Same capability, same address, opposite direction, so a difference between the
+two arms is about load-versus-store and nothing else.
+
+    Reg[ 8]  arm 4b cause        0                 <- NO TRAP
+    Reg[29]  guard word after    0x5B0             <- the store LANDED, past the buffer
+    SUCCESS after 1303 cycles, 0 exceptions        (timeout 200000, so a real completion)
+
+A store entirely outside the region is neither refused nor reported, and it overwrites the word past
+the buffer. **The bounds clause is raised-and-dropped for stores exactly as for loads** — and this is
+the direction that corrupts rather than merely leaks, which is why it was worth closing separately
+rather than being assumed symmetric with `arm 4`.
+
+### Residual (a), the translation-on path — MOOT for the capability clauses, live only for misaligned
+
+The residual asks for a directed test with `satp` set. **For the capability clauses that test cannot
+exist**, because translation-on and the gate are mutually exclusive by construction:
+
+* data-access translation through MPRV requires `mstatus.mpp != PRIV_LVL_M`
+  (`csr_regfile.sv:2292`);
+* the load/store privilege is `mprv ? mstatus.mpp : priv_lvl` (`:2298`);
+* so whenever MPRV turns translation on, `ld_st_priv_lvl != M` and
+  `cap_violation_detection`'s gate **fails**. Without MPRV, M-mode data accesses are untranslated, and
+  in S-mode the gate fails on privilege anyway.
+
+**So no configuration reaches the capability clauses with translation enabled.** Writing that test
+would have produced a clean-looking null result about the half it cannot reach — the shape this
+project keeps paying for.
+
+**What the residual does still cover is the misaligned causes 4/6**, which are not gated on capmode or
+privilege at all and therefore *can* be exercised with `satp` set. That is the test worth building,
+and it is a different test from the one the residual's wording implies. Not yet built.

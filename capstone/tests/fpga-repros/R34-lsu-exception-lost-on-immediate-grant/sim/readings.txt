@@ -63,3 +63,20 @@ core   0: 0x0000000000000890 (0x7b200073) dret
 ## stock riscv-tests rv64mi-p-ma_addr on the same RTL, capmode never set (14:08):
 #  *** FAILED *** (tohost = 10) after 719 cycles: tests 2-9 (lh/lw/lwu inside one 8-byte word) pass on the cache's shifted bytes,
 #  TESTNUM 10 (ld at +1, crossing the word) returns wrong data with no trap -- the loss predates the capability check
+
+## RUN D — arm 4b added (STORE at bound_end), RTL lane, 2026-09-15, at the FLASHED 1bfff7776
+# Reproduced run C's every arm first on this revision before adding anything: Reg[18] 4c535550,
+# Reg[19] 0, Reg[20] 2, Reg[21] 4c535550, Reg[23] 4c535550, Reg[24] 0, Reg[25] 0badb0b0, Reg[31] 0,
+# Reg[27] 1, Reg[20] 1150, Reg[22] 5ec0de, Reg[7] 1150, Reg[26] 0.  SUCCESS at 1276 cycles, 0 exceptions.
+# Delivery conditions verified identical between f6ec6c198 and 1bfff7776 by content, not line number:
+#   load_unit.sv  'ex_i.valid && (state_q inside {SEND_TAG, SEND_TAG_LDC}) && !...is_dom_switch'
+#   at :718 (f6ec6c198) and :699 (1bfff7776), byte-identical text; the files differ only by the
+#   S-07 probe ports and LDC-path comments.
+# New registers: Reg[8]=s0 arm 4b cause, Reg[29]=t4 arm 4b guard word (t4 reused after its first print).
+[Cycle       1252] Reg[ 8]: 0000000000000000      <- arm 4b cause: NO TRAP
+[Cycle       1257] Reg[29]: 00000000000005b0      <- the guard word PAST the buffer: the store LANDED
+*** SUCCESS *** after 1303 cycles, 0 exceptions   (timeout was 200000, so a real completion)
+# READING: a store at bound_end through a valid in-bounds capability -- entirely outside the region --
+# is neither refused nor reported, and it overwrites the word past the buffer. The bounds clause is
+# raised-and-dropped for STORES exactly as arm 4 showed for loads. This is the direction that
+# CORRUPTS rather than merely leaks, which is why the store side was worth closing separately.

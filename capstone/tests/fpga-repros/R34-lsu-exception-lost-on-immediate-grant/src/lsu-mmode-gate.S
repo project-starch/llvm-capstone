@@ -193,13 +193,28 @@ _start:
   sw   t3, 0(t1)                # misaligned store: cause 6 if live
   mv   t6, s10                  # cause seen (expect 6 if live)    [t6 reused: printed above already]
   li   s10, 0
+
+# arm 4b: the STORE side of the bounds clause. arm 4 covers the LOAD at bound_end; without this
+# the entry says nothing about a store PAST the top, which is the direction that corrupts rather
+# than merely leaks. Same capability, same address, opposite direction -- so a difference between
+# arm 4 and arm 4b is about load-vs-store and nothing else.
+  li   t3, 0x5B0
+  sd   t3, 64(a1)               # ea = bound_end through the RW cap: cause 28 if the clause is live
+  mv   s0, s10                  # cause seen (expect 28 if live)   [s0: unused until here]
+  li   s10, 0
+
   la   t1, buf
   ld   s4, 0(t1)                # buf[0] after the stores (sentinel if neither store landed)
   ld   s6, 8(t1)                # buf[1] after the stores (0 if the RO-cap store was refused)
+  la   t1, buf_end
+  ld   t4, 0(t1)                # arm 4b guard word: 0x0BADB0B0 if refused, 0x5B0 if it LANDED
+                                #   [t4 reused: its arm-1b value was printed at the first report]
   CAPPRINT(s3)                  # arm 4s cause (sd via RO cap)
   CAPPRINT(t6)                  # arm 4s cause (misaligned sw)
   CAPPRINT(s4)                  # buf[0] after
   CAPPRINT(s6)                  # buf[1] after
+  CAPPRINT(s0)                  # arm 4b cause (sd at bound_end)
+  CAPPRINT(t4)                  # arm 4b guard word: LANDED means the store went outside the region
 
 # ---------------------------------------------------------------- arm 5: NOT_CAP clause, LAST
   la   t1, buf
