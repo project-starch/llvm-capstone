@@ -103,9 +103,13 @@ copy it to your host, and you may read it there if you share the filesystem — 
 * Toolchain bring-up on a fresh host: build `DEFAULT_TARGETS` **plus `llvm-config` and `llvm-readelf`**
   (without them `llvm-lit` runs zero tests and the stale-reader test fails; `DEFAULT_TARGETS` itself is not
   to be changed). Your build matches: harness hash `9a01b12a4db639b6` at `49b40607817e` (report item 3).
-* Prerequisites still open on your host, the lead's to authorise: `pip install` of
-  `tests/rtl-smoke/fpga_driver/requirements.txt` (python-socketio[client], aiohttp — without them no board
-  connection), and a re-login for the `docker` group (RTL simulation; the `cva6-build-rv` image is staged).
+* Prerequisites still open on your host, the lead's to authorise: the board driver's Python dependencies
+  from `tests/rtl-smoke/fpga_driver/requirements.txt` — **`python-socketio[client]`, whose `[client]` extra is
+  `websocket-client`, NOT aiohttp** (`fpga_console.py:129` builds a synchronous `socketio.Client`; a distro
+  `python3-socketio` alone imports clean and then fails to connect), plus `aiohttp` for the offline dry-run and
+  mock server. On a PEP 668 distribution `pip install --user` is refused, so this is a system package or a
+  virtual environment and it is the lead's call. And a re-login for the `docker` group (RTL simulation; the
+  `cva6-build-rv` image is staged).
 
 ## 4. Artifact lineage, by hash (cite these; a rebuild is a new hash)
 
@@ -124,7 +128,7 @@ copy it to your host, and you may read it there if you share the filesystem — 
 
 **Q0 — prove the environment, then one control-only boot.** Your eleven-line report stands at: PASS 1
 (after the fast-forward), 2, 3, 4, 5–6 (with the layout knobs), 7, 8, 11-bitstreams; OPEN 9 (pip) and 10
-(docker re-login), the lead's; 11-paper by bundle. Then, with the readback host rebuilt with `HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1"` and verified
+(docker re-login), the lead's; 11-paper by bundle. Then, with the readback host rebuilt with `HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1 -DSQLITE_HC_REGION_SIZE=65536"` (both: the second one silently truncates the domain's output at 4 KiB, see `drivers/README.md`) and verified
 (`strings | grep -c 'RR/share'` ≥ 1; pass its hash by `R1_HOST_HASH`), `lpc` copied from `drivers/artifacts/` into the overlay,
 the wrapper monitor copy at `4274268`, the ladder rebuilt and its oracle regenerated, the harness image's
 emulator pass on record: `R1_BOOT=1 R1_OUT_TAG=q0 R1_IMG=<build11> R1_HASH=<its hash> R1_LIST=<an empty file>

@@ -24,7 +24,7 @@ Optional knobs, every driver: `CAPSTONE_ARTIFACTS` (default `~/capstone-artifact
 `CAPSTONE_BR_OVERLAY`, `CAPSTONE_BR_BUILD`, `CAPSTONE_KO` (the buildroot per-target layout: defaults are
 `build-fpga/...` and `overlay/test-domains`, which is what both the original host and the apollo server have),
 `ENTRY_STALL_S` (420; the JTAG upload is up to 227 s of legitimate silence), `WD_IDLE` (900),
-`R1_HOST_HASH` (default `2c9e82d101b48160`, the host these drivers were run with).
+`R1_HOST_HASH` (default `2c9e82d101b48160`, the host these drivers were run with; a correct rebuild reproduces it — see the recipe below before overriding).
 
 ## Gates the drivers keep (do not weaken any of them)
 
@@ -50,12 +50,28 @@ and `f4-linear.txt` are E4's and F4's.
 * the R1 harness image: `OUT_DIR=... R1_OPT=-O1 bash capstone/sublet/r1/build-r1-silicon.sh` (ends
   `VERDICT: fits`); then the emulator pass `R1_DOM=... R1_HOST=... OUT=... bash capstone/sublet/r1/run-r1-qemu.sh "<args>" <arena>`;
 * the readback host `sqlite_host_rr.user`: `capstone/ports/sqlite/build-sqlite-host.sh` from
-  `sqlite_host.c` with the module's `libcapstone.c`, **with `HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1"`**
-  (without it the probe behind `#ifdef SQLITE_HOST_REVOKE_RESHARE` compiles out, the binary builds clean
-  and fails the `RR/share` gate silently) and the same `-DSQLITE_HC_REGION_SIZE` as the domain build; its
-  provenance recorded beside it (source, libcapstone sha, buildroot HEAD, dirty count, the defs); verify
-  `strings | grep -c 'RR/share'` ≥ 1 (the reference host reads 4); a rebuilt host is a new hash, passed by
-  `R1_HOST_HASH`, and needs its own emulator pass;
+  `sqlite_host.c` with the module's `libcapstone.c` and **BOTH defines**:
+
+      HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1 -DSQLITE_HC_REGION_SIZE=65536"
+
+  With both, the build reproduces `2c9e82d101b48160` byte-for-byte (verified on a second host,
+  2026-09-15), so `R1_HOST_HASH` needs no override. Each define has a SILENT failure mode, and neither
+  is caught by the driver's `RR/share` check:
+  * without `-DSQLITE_HOST_REVOKE_RESHARE=1` the probe behind its `#ifdef` compiles out and the binary
+    has zero `RR/share` strings — a clean build that fails the gate with no explanation;
+  * without `-DSQLITE_HC_REGION_SIZE=65536` the host declares the 4 KiB default
+    (`sqlite_hostcall.h`; `build-sqlite-host.sh:38` states the rule in a comment) while the harness
+    treats `meta->result` as the size of its whole output sink (`sublet/r1/r1_slots_pools.c:48-60`).
+    The domain runs correctly and its OUTPUT IS TRUNCATED: on the M1 flow check every arm emitted
+    exactly 3,965 bytes from `R1 start` to the resume, cut mid-word at a different field each time, so
+    the terminal `R1 m1 end` line — emitted after the loop — never appeared and the driver's emulator
+    gate read 0 on all four arms. **A `grep -c` of the end line cannot separate that from an early
+    exit; a byte count can** (identical lengths across arms with different content is a fixed buffer,
+    not a program failure). Both builds read 4 `RR/share` strings, so that gate never separated them.
+
+  Record the defs in the host's provenance file beside source, libcapstone sha, buildroot commit and
+  dirty count. A host built differently is a new hash, passed by `R1_HOST_HASH`, and needs its own
+  emulator pass;
 * the control rung `lpc`: PINNED, `artifacts/lpc` (`3b93a2b6e2adfa36`, see `artifacts/README.md` — it cannot
   be rebuilt); `k800.dom`: `capstone/tests/runtime-qemu/silicon-ladder/` and the ladder's verify step
   (`verify-and-stage-rung.sh`), which writes the preflight's oracle and `.qemu-pass` under `PREFLIGHT_ORACLES`
