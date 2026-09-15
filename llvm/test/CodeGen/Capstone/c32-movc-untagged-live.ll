@@ -16,9 +16,12 @@
 ; CHECK-NOT cannot tell "remat fired" from "the pseudo exists but remat never
 ; ran and the copy happened to be elsewhere".  The bridge must appear at EACH
 ; use, which is what remat doing its job looks like; that is the positive half of
-; this test.  isReallyTriviallyReMaterializable's Capstone override is what makes
-; it fire -- the generic check refuses any instruction with a register use -- so
-; without that override these `mv` lines disappear and the movc returns.
+; this test.  What makes it fire is the pseudo's isReMaterializable /
+; isAsCheapAsAMove pair: drop both, rebuild, and these `mv` lines become `movc`
+; again.  (An earlier draft of this comment credited a Capstone override of
+; isReallyTriviallyReMaterializable.  There is no such override -- one was
+; written, measured to produce a byte-identical -O2 image, and removed.  See the
+; pseudo's definition in CapstoneInstrInfo.td.)
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,O2
