@@ -4836,7 +4836,7 @@ or it regressed. Re-run stage 13 on a current build before trusting either numbe
 bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
 in minutes what no software-visible observable here can.
 
-### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit — and "QEMU never does" is NOT corroboration: QEMU has no `cursorless` encoding at all (zero occurrences in capstone-qemu/target/riscv/), so it cannot exhibit the branch this entry is about. See the 2026-09-15 box`
 
 > **RUN 2026-09-10, with the positive control the earlier attempt lacked. Still NOT HIT, and now that
 > statement means something.** The 2026-09 sweep logged `check-repr.py` as NOT RUN; an audit then ran it
@@ -4868,6 +4868,43 @@ in minutes what no software-visible observable here can.
 >
 > *(Method note: the earlier clean run is the exact shape this registry keeps paying for — a check that
 > returns OK because its detection code never executed. Running it is not the same as exercising it.)*
+
+> # 2026-09-15 — "QEMU NEVER DOES" IS AN ABSENCE OF THE FEATURE, NOT AN INDEPENDENT WITNESS
+>
+> This entry's title contrasts the RTL against QEMU. That contrast does not carry the weight it reads
+> as carrying, because **the two do not implement the same encoding.**
+>
+> `grep -rn cursorless capstone/capstone-qemu/target/riscv/` returns **zero hits**. The RTL has a whole
+> cursorless branch — `ariane_pkg.sv:625` `bounds_cursorless_t`, `:633` the `cursorless` flag, and
+> `:666-670` the branch that reconstructs `base` from it, which is precisely the path this entry is
+> about. So QEMU "never does" the truncation because **QEMU cannot**: the encoding in which it happens
+> does not exist in the model. That is not a reference implementation disagreeing with the RTL; it is a
+> reference implementation that does not model the field.
+>
+> **The two compressed layouts differ from bit 27 upward, by exactly one**, and this was found while
+> auditing something else:
+>
+> | field | QEMU (`cap_compress.c:30-37`) | RTL (`ariane_pkg.sv:630-638`) |
+> |---|---|---|
+> | bounds | bits 0-26, **27 bits** | bits 0-27, **28 bits** (the extra bit is `cursorless`) |
+> | type | 27-29 | 28-30 |
+> | perm | 30-32 | 31-33 |
+> | revnode_id | 33-63, **31 bits** | 34-63, **30 bits** |
+>
+> `verif/tests/custom/capstone/asm_insn.h:64`'s `NODE_ID_INVALID = ((-1) & ((1 << 31) - 1))` follows
+> QEMU's 31 bits, not the RTL's 30. The two QEMU copies are byte-identical, so this is model-versus-RTL
+> and not copy-versus-copy.
+>
+> **No artifact was found in which the two exchange a compressed metadata word, so present harm is
+> UNRESOLVED** — this is recorded before someone builds on it rather than after. The check that would
+> settle it: does any differential test compare a compressed metadata word, or a `CAPNODE` result,
+> across QEMU and silicon? If one does, it has been comparing misaligned fields.
+>
+> **Two consequences worth carrying beyond this entry.** Any claim of the form "the emulator does not
+> show X" is weak evidence about capability *bounds* behaviour until it is known whether the emulator
+> models the encoding X lives in. And R-33's containment reasoning is unaffected — that rests on sizes
+> being exactly representable, which is an allocator property and holds on both — but the general
+> emulator-versus-silicon caveat that the safety-table decision turns on is sharper than it looked.
 
 > # 2026-09-15 — THE STATED TRIGGER IS ONE DOUBLING TOO LOW, AND R-33's FIX CLOSES THIS ENTRY TOO
 >
