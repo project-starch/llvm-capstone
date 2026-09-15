@@ -80,3 +80,27 @@ core   0: 0x0000000000000890 (0x7b200073) dret
 # is neither refused nor reported, and it overwrites the word past the buffer. The bounds clause is
 # raised-and-dropped for STORES exactly as arm 4 showed for loads. This is the direction that
 # CORRUPTS rather than merely leaks, which is why the store side was worth closing separately.
+
+## RUN E — residual (a), the translation-on path. RTL lane, 2026-09-15, at the FLASHED 1bfff7776
+# Test: src/r34-misaligned-xlate.S. M-mode execution throughout; DATA accesses translated via
+# MPRV=1 + MPP=S + an sv39 identity map (one 1 GiB megapage, root[2]).
+[Cycle        482] Reg[18]: 00000000004c5355   <- X0 misaligned ld, translation OFF: shifted value
+[Cycle        483] Reg[19]: 0000000000000000   <- X0 cause: NO TRAP (the known R-34 case)
+[Cycle        484] Reg[20]: 0000000a00020800   <- witness: MPRV set (0x20000), MPP = S (0x0800)
+[Cycle        485] Reg[21]: 000000004c535550   <- PRECONDITION: aligned ld through the translated
+                                               #    path returns the sentinel, so the map WORKS
+[Cycle        486] Reg[22]: 0000000000000000   <- precondition cause 0
+[Cycle        491] Reg[23]: 00000000004c5355   <- X1 misaligned ld, translation ON: same shifted value
+[Cycle        493] Reg[24]: 0000000000000000   <- X1 cause: NO TRAP
+[Cycle        494] Reg[27]: 0000000000000000   <- zero traps in the whole run
+*** SUCCESS *** after 537 cycles                (timeout 200000, so a real completion)
+# READING: both arms silent with the mapping witnessed working -- the first branch of the pair
+# written down before the run. THE MISALIGNED DROP IS INDEPENDENT OF TRANSLATION, which matches the
+# mechanism: the MMU forwards misaligned_ex_i unregistered either way.
+#
+# THE FIRST RUN OF THIS TEST WAS REFUSED BY ITS OWN PRECONDITION and is recorded because the
+# refusal is the point. The aligned load returned 0 with cause 5 (access fault), so translation was
+# NOT working, and X1's cause 4 in that run was read under a broken mapping. Reported as-is it would
+# have said "misaligned IS delivered under translation", which it does not show. Cause: MPRV+MPP=S
+# makes the effective privilege S for data accesses, so PMP starts applying where it did not, and
+# the `p` environment configures none because it never leaves M-mode. One NAPOT entry fixes it.

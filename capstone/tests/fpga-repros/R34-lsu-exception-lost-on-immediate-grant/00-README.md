@@ -201,4 +201,28 @@ project keeps paying for.
 
 **What the residual does still cover is the misaligned causes 4/6**, which are not gated on capmode or
 privilege at all and therefore *can* be exercised with `satp` set. That is the test worth building,
-and it is a different test from the one the residual's wording implies. Not yet built.
+and it is a different test from the one the residual's wording implies.
+
+### Built, and residual (a) is now CLOSED for the part a test can reach
+
+`src/r34-misaligned-xlate.S`, run E. M-mode execution throughout so the harness, the vector and
+`tohost` behave normally; **data accesses only** are translated, via `MPRV=1` with `MPP=S` and an
+sv39 identity map (one 1 GiB megapage at `root[2]` covers code, stack, page table and buffer).
+
+    X0   misaligned ld, translation OFF   shifted value, cause 0, no trap
+    witness  mstatus                      0x20800 -- MPRV set, MPP = S
+    precondition  aligned ld, translated  returns the sentinel, cause 0  <- the map WORKS
+    X1   misaligned ld, translation ON    shifted value, cause 0, no trap
+    total traps                           0            537 cycles / 200000 timeout
+
+**Both arms silent with the mapping witnessed working — the first branch of the pair written down
+before the run. The misaligned drop is INDEPENDENT of translation**, which is what the mechanism
+predicts, since the MMU forwards `misaligned_ex_i` unregistered either way.
+
+**The first run was refused by its own precondition, and the refusal is the point.** The aligned load
+returned 0 with cause 5 (access fault), so translation was not working, and that run's X1 cause of 4
+was taken under a broken mapping — reported as-is it would have said *"misaligned IS delivered under
+translation"*, which it does not show. The cause was `MPRV`+`MPP=S` making the effective privilege S
+for data accesses, so **PMP began applying where it had not**, and the `p` environment configures
+none because it never leaves M-mode. One NAPOT entry covering everything fixes it. Recorded rather
+than quietly patched: a reader building a similar test will hit the same thing.
