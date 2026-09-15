@@ -2770,7 +2770,13 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `bound_end` through the same capability the load arm uses takes no trap and the guard word past the buffer holds the
 > stored value, the corrupting direction; (a) MOOT for the capability clauses — translation through MPRV needs MPP below
 > M and the load-store privilege is then that MPP, so translation on takes the gate out of its satisfied state, and
-> S-mode fails it anyway; what (a) still covers is the MISALIGNED causes with translation on, which the RTL lane owns).*
+> S-mode fails it anyway; what (a) still covered was the MISALIGNED causes with translation on — CLOSED by the RTL lane (dev `1e205738c667`):
+> with MPRV set, MPP supervisor and an sv39 identity map witnessed working by an aligned translated load, the misaligned
+> load is dropped both with and without translation (shifted value, cause 0, 0 traps in 537 cycles), so the drop is
+> independent of translation, as the unregistered forward implies. The run before it had REFUSED its own precondition —
+> the translated aligned load access-faulted (no PMP entry once data accesses ran at supervisor privilege) and that run's
+> misaligned arm reported cause 4, which read alone would have been a clean, wrong "delivered under translation". Both
+> residuals are closed; what remains is the fix decision, sequenced with R-24).*
 > (a) The translation-on path (S-mode, Linux) is argued from source only
 > (`cva6_mmu.sv:539` skips the translation branch on a misaligned request and leaves `:514` in force): a directed
 > test with `satp` set, or a board arm. (b) A store bounds arm. (c) After an RTL fix, this test must FAIL its last

@@ -4411,8 +4411,9 @@ configuration for two independent reasons — the privilege gate keeps domains o
 block's exceptions at every privilege — and enabling the gate would not have enforced them. The reading "live
 for the monitor's own accesses" (the RTL lane's note, endorsed in the first version of the S1S2 scope note) is
 superseded. The capability-access rows stand: `LDC`/`STC` run the DYN unit's node-validity query with no
-privilege gate and no LSU exception (E1's s9 REVOKE fault in every repetition). Not measured: the translation-on
-path (argued from source), the board itself, store bounds. History note:
+privilege gate and no LSU exception (E1's s9 REVOKE fault in every repetition). Later the same day the RTL lane closed both
+residuals at the flashed revision: a store at the bound lands past the buffer (the corrupting direction), and the
+misaligned drop is independent of translation (witnessed identity map; R-34's folder). Not measured: the board itself. History note:
 `docs/history/15-09-2026_lsu-exception-lost-on-immediate-grant.md`.
 
 ### §7y — F5 of the follow-on plan: M2's bounded diagnostic, the dependent chase on silicon (boots sw8x-r1f5-b1…b4, 2026-09-15 13:18–14:32)
