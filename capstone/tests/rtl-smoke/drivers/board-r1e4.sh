@@ -119,6 +119,9 @@ done < <(sed -n "${FROM},${TO}p" $LIST)
 D="$D,/test-domains/lpc|k800:/test-domains/k800.dom"
 export SQLITE_STAGE_DOMS="$D" PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/boot-raw.txt
 say "=== boot ${R1_BOOT_TAG:-sw8x-e4} = ${R1_BOOT_DESC:-E4/H1 calibration}: control, $NINV harness invocations (list lines $FROM-$TO of $R1_LIST), control ==="
+# R1_PREREG REPLACES the series-specific default rather than appending to it: an m1 boot that advertised
+# the E4 default ("4-5 point lines per invocation") reads as under-reporting when its terminal record is
+# the end line instead (apollo, 2026-09-15). The two universal expectations stay in front of it.
 say "=== pre-registered: retval=4 twice; $NINV x speedtest1-ran=0x4EB1xxxx; ${R1_PREREG:-R1 lat per-load: 4 and 16 KiB in the D$ (a few cycles), 64 KiB..1 MiB at DRAM latency (tens of cycles, flat from 256 KiB); R1 calib cyc_cyc = the mcycle read-to-read cost; nodes regression nd=2n}; $NINV x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb = B on shared/combined, 0 on individual; no refused lines; no create_region failure (<= 12 region-bearing invocations per boot: the module ran out at the 15th on the emulator, chain18 run 4) ==="
 for i in $(seq 1 30); do c=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "$FPGA_URL" 2>/dev/null); [ "$c" != "000" ] && break; say "console down ($i)"; sleep 60; done
 cd $R/capstone/tests/rtl-smoke

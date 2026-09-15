@@ -11,11 +11,17 @@ Read the `board-run` skill first; it is the decision procedure these scripts imp
 | script | what it does | mandatory knobs |
 |---|---|---|
 | `board-r1e4.sh` | **the live entry point**: bake (three rebuilds under the memory lock) → stage the R1 harness image and the readback host → control (`lpc\|k800`) → the boot's 12 invocations from the list → control → summary through `fpga_driver.transcript` → marker (`done` / `failed` / `refused`) → restore-bake in the exit trap | `R1_BOOT` (1-based), `R1_IMG`, `R1_HASH` (sha256/16), `R1_LIST`, `R1_QEMU_LOG`, `R1_HOST` (the readback host) |
-| `chain-r1.sh` | N boots of `board-r1e4.sh` over one list, ends with `CHAIN_<TAG>_DONE` | `CHAIN_TAG`, `CHAIN_BOOTS`, the `R1_*` set, `R1_BOOT_TAG`, `R1_BOOT_DESC`, `R1_PREREG` |
+| `chain-r1.sh` | N boots of `board-r1e4.sh` over one list, ends with `CHAIN_<TAG>_DONE` | `CHAIN_TAG`, `CHAIN_BOOTS`, the six mandatory `R1_*` below, `R1_BOOT_TAG`, `R1_BOOT_DESC`, `R1_PREREG` |
 | `chain-m1.sh` | the no-reclamation baseline: three boots at the diagnostic capacity (three repetitions of each of the four patterns per boot = nine per pattern, the measurement standard's five-over-three with margin) plus one deployed-table boot; prepared and NOT launched | `M1_IMG`, `M1_HASH`, `M1_QEMU_LOG` |
 | `qemu-m1-flowcheck.sh` | the emulator flow check of the M1 series (writes the qemu-pass record) | `R1_DOM`, `R1_HOST` |
 | `board-c6var.sh` | F1's boot shape: control, a cell-6 variant image at the 2 MiB arena, control, probe | `C6_TAG`, `C6_IMG`, `C6_HASH`, `C6_QEMU_DEFAULT`, `C6_QEMU_DEFAULT_LOG`, `C6_QEMU_2MIB`, `C6_QEMU_2MIB_LOG`, `R1_HOST` |
 | `board-b80s.sh`, `board-b80a.sh`, `board-b80b.sh`, `board-b79.sh`, `board-b78-w2h.sh` | the P1 -O2 cells, the `--stats` boot, E2's boot and E1's per-arm boot — **references for the record shape**; their images live in a scratchpad that is gone, so they fail loudly on the named knob (`CELL_IMG`, `NATIVE_BASELINE`, `QEMU_LOG_*`, `E1_DIR`) rather than on a dead path | see each header |
+
+**`board-r1e4.sh`'s six mandatory variables, in one place** (each is `:?`, so a missing one aborts before
+anything is staged): `R1_BOOT`, `R1_IMG`, `R1_HASH`, `R1_HOST`, `R1_LIST`, `R1_QEMU_LOG`. A chain script must
+set or forward every one of them; `chain-m1.sh` omitted `R1_HOST` and lost four boots to it in three seconds
+on its first real execution (2026-09-15 — no board time, it fails above the bake), which is why both chains
+now check all six at their own first line.
 
 Optional knobs, every driver: `CAPSTONE_ARTIFACTS` (default `~/capstone-artifacts`; results land in
 `unify/board-<tag>/`, pass records in `qemu-pass/`), `CAPSTONE_FPGA_URL_FILE` (default

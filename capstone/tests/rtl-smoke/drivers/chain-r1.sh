@@ -4,7 +4,8 @@
 # the last boot has exited. This is how the R1 (E3), E4, F4 and M2 (F5) boots were run; the M2 chain
 # (2026-09-15) was exactly this with TAG=F5, BOOTS=4, IMG=build9 fdd3029ff0f96680, LIST=lists/f5-chase.txt.
 #
-#   CHAIN_TAG=f5 CHAIN_BOOTS=4 R1_IMG=<dom> R1_HASH=<sha256/16> R1_LIST=<list> R1_QEMU_LOG=<emulator log> \
+#   CHAIN_TAG=f5 CHAIN_BOOTS=4 R1_IMG=<dom at DOMAIN_BASE_VA=0x410000> R1_HASH=<sha256/16> R1_HOST=<sqlite_host_rr.user> \
+#   R1_LIST=<list> R1_QEMU_LOG=<emulator log> \
 #   R1_BOOT_TAG=sw8x-f5 R1_BOOT_DESC="..." R1_PREREG="..." [R1_QEMU_GATE='R1 lat'] [R1_QEMU_GATE_MIN=5] \
 #   [R1_OUT_TAG=r1f5] [MEMLOCK=<lock file>] bash chain-r1.sh
 #
@@ -16,7 +17,9 @@ set -u
 R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify; mkdir -p "$U"
 TAG=${CHAIN_TAG:?set CHAIN_TAG=<short name, e.g. f5>}; BOOTS=${CHAIN_BOOTS:?set CHAIN_BOOTS=<number of boots>}
-: "${R1_IMG:?}" "${R1_HASH:?}" "${R1_LIST:?}" "${R1_QEMU_LOG:?}" "${R1_BOOT_TAG:?}" "${R1_BOOT_DESC:?}" "${R1_PREREG:?}"
+: "${R1_IMG:?}" "${R1_HASH:?}" "${R1_LIST:?}" "${R1_QEMU_LOG:?}" "${R1_BOOT_TAG:?}" "${R1_BOOT_DESC:?}" "${R1_PREREG:?}" "${R1_HOST:?set R1_HOST=<path to sqlite_host_rr.user>}"
+# every one of board-r1e4.sh's six mandatory variables is checked HERE too, so a chain fails at its own
+# first line rather than four boots deep: R1_BOOT is set per iteration below, the other five above.
 OUTTAG=${R1_OUT_TAG:-r1$TAG}
 cd "$R"
 for k in $(seq 1 "$BOOTS"); do
