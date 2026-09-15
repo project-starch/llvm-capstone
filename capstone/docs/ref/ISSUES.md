@@ -2471,6 +2471,14 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
+> **R-11 IS THE SAME CONTRACT, AND THIS FIX CLOSES IT TOO (added 2026-09-15).** R-11 is
+> `compress_bounds`' OTHER branch — the cursorless one, losing an unaligned TOP past its window —
+> and it is open only because nothing we ship is large enough to trigger it. Rounding region sizes
+> up to the representability granule at creation makes tops granule-aligned at any size, which is
+> exactly the condition R-11 needs. The two entries' containment edges agree: the granule reaches
+> 8192 B at 4 MiB, so 4 KiB `PAGE_ALIGN` stops covering it there, which is this entry's stated
+> 4 MiB edge derived independently from R-11's granule arithmetic. Do not work R-11 separately.
+
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
 >
 > **The rounded `end` is not merely *reported* high; it is the authority bound.** `STC`'s check is
@@ -4774,6 +4782,40 @@ in minutes what no software-visible observable here can.
 >
 > *(Method note: the earlier clean run is the exact shape this registry keeps paying for — a check that
 > returns OK because its detection code never executed. Running it is not the same as exercising it.)*
+
+> # 2026-09-15 — THE STATED TRIGGER IS ONE DOUBLING TOO LOW, AND R-33's FIX CLOSES THIS ENTRY TOO
+>
+> **Re-running at a 2–4 MiB image will produce another uninformative OK**, which is the same shape the
+> method note above warns about — one level further in. 2 MiB is where the truncation BRANCH starts
+> executing (`tot > WINDOW`); it is not where the branch can FIND anything. The granule is
+> `2^(E+3)` with `E = bit_length(len) − 13`, so:
+>
+> | region | granule | 4 KiB `PAGE_ALIGN` covers it |
+> |---|---|---|
+> | 1 MiB | 2048 B | yes |
+> | **2 MiB** | **4096 B** | **yes — exactly at the edge; the branch runs and must report OK** |
+> | 3 MiB | 4096 B | yes |
+> | **4 MiB** | **8192 B** | **NO — the first size where an unaligned top is possible** |
+> | 8 MiB | 16384 B | no |
+>
+> Below 4 MiB every page-aligned carve is granule-aligned by construction, so the top is exact and the
+> checker cannot fire however large the image is within that range. **The informative threshold is
+> 4 MiB, not 2 MiB.** That also explains the `pass1.dom` reading above without appealing to luck: at
+> 8.6 MiB the branch both executes and could fire, and its "exact only because every top happens to be
+> aligned" note is the checker observing page alignment, not a coincidence.
+>
+> **Cross-check, and the reason this is recorded rather than merely reasoned:** the 4 MiB edge derived
+> here from the granule formula is the same edge R-33 states independently from its own containment
+> analysis ("contained by the kernel's `PAGE_ALIGN` below 4 MiB and NOT contained at or above it").
+> Two separate derivations landing on the same number is what makes this worth acting on.
+>
+> **So R-11 and R-33 are one contract seen from two branches of `compress_bounds`** — R-11 the
+> cursorless branch losing an unaligned top, R-33 the other branch widening both ends for a
+> non-representable size — and **R-33's fix closes both**: rounding region sizes up to the
+> representability granule at creation makes tops granule-aligned at any size, which is precisely the
+> condition R-11 needs and cannot otherwise guarantee above 4 MiB. Anyone about to work R-11
+> separately should do R-33's allocator fix instead and then re-run `check-repr.py` on a 4 MiB+ image
+> as its verification.
 
 `compress_bounds` has two branches selected by `bounds.start == cursor`
 (`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
