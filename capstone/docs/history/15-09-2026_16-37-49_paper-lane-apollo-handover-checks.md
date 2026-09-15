@@ -147,6 +147,21 @@ those 400 commits**. The script's existing mitigation drops only the committing 
 configured identity, which by construction can never drop the other identities present in shared
 history.
 
+**Observed live, not hypothetically, on 2026-09-15.** A `--range` over six commits another lane had
+just pushed exits 1 with **two** kinds of hit mixed together: three `user@host` hits from that
+lane's own commit message and from removed lines of their fix (benign, and the lane diagnosed
+these), and **four hits that are author/committer identity lines the scan emitted itself** — two
+commits' worth of `%an <%ae>` and `%cn <%ce>`, tripping the name detector and the email detector
+simultaneously. The lane attributed the block to its message alone and did not see the identity
+lines, which were the larger share.
+
+That mixture is the dangerous property, and it is worth stating separately from the count: **a gate
+that blocks on unfixable author metadata while also reporting real content hits trains its
+operators to read every block as noise.** The project's own scanner comments record that reasoning
+already — a gate that blocks everything gets bypassed, which is the same hole by another route. The
+benign hits here were genuinely benign; the point is that nobody can tell without reading all of
+them every time, and the identity hits can never be cleared.
+
 This is the lead's ruling and is listed as decision 3 of the handover. It is recorded here with
 numbers so that the ruling is cheap to make, and because the tempting local fix — relaxing a
 pattern until a push succeeds — is forbidden by both the script's own closing message and
