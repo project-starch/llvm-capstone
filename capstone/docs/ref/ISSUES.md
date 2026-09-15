@@ -2487,18 +2487,36 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > than something allocated after the dust settled"* (`:359-361`). Phase 12 carves two 1024-byte
 > children from one 4096-byte block with a 64-byte object in each.
 >
-> **Representability closes it anyway.** This defect needs a size that is NOT a multiple of its
-> granule, and the granule is `2^(E+3)` with `E = max(0, bit_length(len) − 13)` — i.e. **8 bytes for
-> every length below 8192**. Every size the fixture uses is 8-aligned:
+> **Representability closes it, and the reason is STRUCTURAL rather than a property of the sizes this
+> fixture happens to use.** (First stated as an enumeration of the fixture's sizes; corrected
+> 2026-09-15 to the stronger form, which survives a fixture change — an enumeration would have to be
+> redone every time the fixture moves.)
 >
-> | sizes used | 16, 64, 128, 512, 1024, 2048, 4096, 4280 |
+> The allocator rounds **every** request: `ports/nginx/port/ngx_subpool.c:86`
+> `bytes = (bytes + 15) & ~(size_t) 15;`, with the comment explaining why — an odd carve leaves the
+> arena 8-aligned and "EVERY later block is misaligned and the first capability stored in one is an
+> unaligned access". The fixture asserts it directly at phase 8: a 4280-byte request yields extent
+> **4288**, *"rounded, not as asked"*.
+>
+> So the quantity that matters is the **granted extent, not the requested size**; every granted extent
+> is a multiple of 16; and for every extent below 16384 the granule is 8 or 16, both of which divide
+> 16 (checked exhaustively: zero counterexamples). **Widening therefore cannot occur at these sizes
+> for ANY request whatsoever**, not merely the ones this fixture chooses.
+>
+> **The margin is 3.8×, not the 1024× first recorded here.** That figure was the threshold at which
+> the granule exceeds *page* alignment, which is a different boundary and the wrong one for this
+> question. What governs is where the granule stops dividing the allocator's own 16-byte rounding:
+>
+> | | |
 > |---|---|
-> | granule at each | 8 |
-> | the only non-power-of-two | 4280 = 535 × 8, exact |
+> | first request whose granted extent is not a multiple of its granule | **16385** → extent 16400, granule 32, remainder 16 |
+> | fixture's largest granted extent | 4288 |
+> | headroom | **3.8×** |
 >
-> So `compress_bounds` is exact for every region the fixture creates, the widening never occurs, and
-> both cells hold. **The margin is 1024×**: the largest region is 4096 B and the first size at which
-> the granule exceeds `PAGE_ALIGN` is 4 MiB. This is not a near miss a fixture change could tip.
+> The conclusion is unchanged and 3.8× is real headroom, but the distinction matters for what may be
+> said next to it: **an nginx port allocating a 16 KiB buffer sits at that boundary.** "Not a near miss
+> a fixture change could tip" was supported by the wrong number; the reason to stop worrying is the
+> structural argument above, not the size of the gap.
 >
 > **The emulator-versus-silicon question is moot here**, which is worth recording because it was the
 > proposed discriminator: the precondition is a property of the sizes the fixture chooses, not of the
