@@ -12,7 +12,7 @@ Read the `board-run` skill first; it is the decision procedure these scripts imp
 |---|---|---|
 | `board-r1e4.sh` | **the live entry point**: bake (three rebuilds under the memory lock) → stage the R1 harness image and the readback host → control (`lpc\|k800`) → the boot's 12 invocations from the list → control → summary through `fpga_driver.transcript` → marker (`done` / `failed` / `refused`) → restore-bake in the exit trap | `R1_BOOT` (1-based), `R1_IMG`, `R1_HASH` (sha256/16), `R1_LIST`, `R1_QEMU_LOG`, `R1_HOST` (the readback host) |
 | `chain-r1.sh` | N boots of `board-r1e4.sh` over one list, ends with `CHAIN_<TAG>_DONE` | `CHAIN_TAG`, `CHAIN_BOOTS`, the `R1_*` set, `R1_BOOT_TAG`, `R1_BOOT_DESC`, `R1_PREREG` |
-| `chain-m1.sh` | F6: the no-reclamation baseline, two boots, prepared and NOT launched | `M1_IMG`, `M1_HASH`, `M1_QEMU_LOG` |
+| `chain-m1.sh` | the no-reclamation baseline: three boots at the diagnostic capacity (three repetitions of each of the four patterns per boot = nine per pattern, the measurement standard's five-over-three with margin) plus one deployed-table boot; prepared and NOT launched | `M1_IMG`, `M1_HASH`, `M1_QEMU_LOG` |
 | `qemu-m1-flowcheck.sh` | the emulator flow check of the M1 series (writes the qemu-pass record) | `R1_DOM`, `R1_HOST` |
 | `board-c6var.sh` | F1's boot shape: control, a cell-6 variant image at the 2 MiB arena, control, probe | `C6_TAG`, `C6_IMG`, `C6_HASH`, `C6_QEMU_DEFAULT`, `C6_QEMU_DEFAULT_LOG`, `C6_QEMU_2MIB`, `C6_QEMU_2MIB_LOG`, `R1_HOST` |
 | `board-b80s.sh`, `board-b80a.sh`, `board-b80b.sh`, `board-b79.sh`, `board-b78-w2h.sh` | the P1 -O2 cells, the `--stats` boot, E2's boot and E1's per-arm boot — **references for the record shape**; their images live in a scratchpad that is gone, so they fail loudly on the named knob (`CELL_IMG`, `NATIVE_BASELINE`, `QEMU_LOG_*`, `E1_DIR`) rather than on a dead path | see each header |
@@ -41,9 +41,32 @@ Optional knobs, every driver: `CAPSTONE_ARTIFACTS` (default `~/capstone-artifact
 
 One line per harness invocation: `run arm series pattern arena extra...` — `run` the repetition number,
 `arm` S/P/D (or the M1 pattern name), `series`, `pattern`, the arena in bytes, then the harness's own
-arguments. `board-r1e4.sh` takes list lines `12*(R1_BOOT-1)+1 .. 12*R1_BOOT`. `f5-chase.txt` is M2's
-45-line seeded permutation (four boots); `m1-diag.txt` / `m1-capacity.txt` are F6's; `e4-calibration.txt`
-and `f4-linear.txt` are E4's and F4's.
+arguments. **`board-r1e4.sh` takes list lines `12*(R1_BOOT-1)+1 .. 12*R1_BOOT`**, so `R1_BOOT` is an
+index into the list, not a boot counter: a single-line list is always slice 1, and a boot that reuses a
+slice must be given a different `R1_OUT_TAG` or it writes into the earlier boot's directory (never
+overwrite a run — `EXECUTION.md`). A boot with **no** invocations in its slice is refused, so there is no
+control-only boot: the smallest real boot is control, one invocation, control.
+
+`f5-chase.txt` is M2's 45-line seeded permutation (four boots); `m1-diag.txt` is the baseline's 36 lines
+(three boots × three repetitions of each of the four retention patterns) and `m1-capacity.txt` its single
+deployed-table run; `e4-calibration.txt` and `f4-linear.txt` are E4's and F4's.
+
+## Pushing a board result
+
+`precommit-scan.sh --msg` and its staged-diff mode are unaffected by any of this. `--range` scans author
+and committer identity lines DELIBERATELY (`precommit-scan.sh:49-56`: a cherry-picked collaborator commit
+carries a name) and drops only the committing user's OWN configured identity, guarded by
+`if [[ "$ME" != " <>" ]]`. Two consequences, both measured 2026-09-15:
+
+* **Set `git config user.name` and `user.email` on a new host before the first commit.** Without them
+  `git commit` refuses outright, and `ME` collapses to `" <>"` so the filter is bypassed by design and
+  every identity line in the range is fed to the denylist.
+* **With an identity configured, a range blocks when it reaches commits authored by a DIFFERENT
+  identity.** On the reference host `--range dev~40..dev` is CLEAN while `--range dev~70..dev` BLOCKS,
+  22 hits, every one of them an identity line the scan emitted itself, no message or diff text. A board
+  result's push range is `origin/dev..HEAD` — your own commits — and stays clean. If a range does reach
+  the other identity, that is the project lead's open ruling: **do not weaken a pattern, do not bypass
+  the gate, and do not push with `--no-verify`.**
 
 ## Inputs the successor must produce (a rebuild is a new hash; cite the new one)
 

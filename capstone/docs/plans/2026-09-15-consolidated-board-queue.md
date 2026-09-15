@@ -16,7 +16,14 @@ unpushed, travelling to apollo as a git bundle. The board is one serialized reso
 **Environment prerequisites are assumed complete** (the lead's call): the driver's Python dependencies
 on the apollo host — `python-socketio[client]`, whose `[client]` extra is `websocket-client`, plus
 `aiohttp` for the dry-run — and the `docker` group re-login for RTL simulation. If a boot cannot open
-the console, that is the cause and it is not a board fault.
+the console, that is the cause and it is not a board fault. **One more, found 2026-09-15 and not
+optional: set `git config user.name` and `user.email` on that host.** Without them `git commit` refuses
+outright, and `precommit-scan.sh --range` bypasses its own committer-identity filter by design (`ME`
+collapses to `" <>"`), so every author line in a range is fed to the denylist — which is what
+`apollo-paper` measured there as "399 of 400 commits". With an identity configured, a range is clean
+until it reaches commits by a *different* identity; on the reference host `dev~40..dev` passes and
+`dev~70..dev` blocks with 22 hits, all identity lines, no message or diff text. A board result's push
+range is `origin/dev..HEAD` and stays clean.
 
 **Delivery.** This plan lands in the repository as `docs/plans/2026-09-15-consolidated-board-queue.md`
 (one commit, scanned by absolute path before commit and `--range` before push), and is then handed to
@@ -47,6 +54,67 @@ handover, which stays authoritative for *how* to work.
    requires a store to the host interface through an integer base, which the fix correctly traps —
    the timeout after the last print is the healthy shape, not a lost run.
 
+## The paper's experiment catalogue, read 2026-09-15 (and what it changed here)
+
+`experiments/` in the paper repository is the consolidated experiment specification and it has been
+**restructured** since our board branch's base: nineteen studies under
+`experiments/protocols/{host,emulator,hardware}/`, `studies.json` driving a generated execution map,
+beside `METHODS.md`, `EXECUTION.md` and `WORK-ORDER.md`. It is unreachable over the network for these
+accounts (403); read it locally with
+`git -C <paper worktree> show origin/main:experiments/<file>` at `7f83725`, which the transfer bundle
+carries. Five things in it bear on this queue:
+
+* **The sanctioned order** (`protocols/hardware/README.md`): *"The central order is H1, S1, S2, M1, then
+  sustained timing. M1 needs a reclamation implementation. Available board time alone does not unblock
+  it. Capacity-bounded R1/M2 diagnostics and a bounded P1/M3 comparison may begin earlier within their
+  protocols. Record those limits in the result bundle."* Our bounded work is sanctioned in the
+  catalogue's own words, and the baseline is explicitly not M1.
+* **The repetition rule** (`METHODS.md`, *Repetitions and Timing*): *"For primary FPGA timing, use five
+  measured runs per arm or point, spanning at least three boots. A repetition completes the whole
+  declared workload. The default is a fresh process or domain, with no workload warm-up."* M2 (15 runs
+  per point over 4 boots) and R1 (5 over 8) comply; **the baseline as first scheduled did not**, which
+  is why P1 below is now four boots.
+* **The capacity rule** (`METHODS.md` rule 5): at most 80 % of usable nodes unless exhaustion is being
+  tested explicitly, a no-reclamation point must fit cumulatively including warm-up, *"a shortened point
+  has its own configuration label"* — which is what `stop=budget` is.
+* **The publication rule**, which settles half of a question this lane had been holding for the lead:
+  *"An enforcement or oracle failure stops dependent performance publication. It does not erase the run.
+  Small bounded diagnostics may proceed without M1 completion, but cannot establish sustainable
+  full-workload performance."* Bounded diagnostics may proceed. The open half is narrower and should be
+  asked that way: are S1/S2's `unsafe-success` cells an *enforcement failure* in that sentence's sense?
+* **A cross-cutting blocker that is a ruling, not board time.** `EXECUTION.md` requires fault reporting to
+  have an independently tested positive control; the `trapctl` rung is that control and `H1-platform.md`
+  records that it *"has not returned on the bitstream of record. Its deliberate out-of-bounds load ends
+  QEMU without a trap, so it cannot earn the recorded QEMU pass that the preflight's check 13 demands for
+  every baked rung, and the same holds for any rung whose intended outcome is a fault. Until the lead
+  rules how a fault rung earns that record, the fault half of the FPGA matrix is blocked and the control
+  half is not."* So every invalid-operation cell in S1, S2 and H1's fault half waits on that ruling, and
+  no amount of board time produces it. It is compounded by M-1 (a domain runs with `mtvec` 0, so a
+  capability fault looks like a hang) — which is exactly why M-1 is chronic rather than cosmetic.
+* **Three hardware studies this queue never named**, all `fpga: required` in `studies.json`: **P3**
+  (attribution of a measured P1 cost — Optional, needs P1's frozen pair and validated H1 counters,
+  *"creates no new performance headline"*), **P4** (cache effects of release — Optional, needs H1 and
+  R1's fixture plus a survivor-window adapter that does not exist, and must not be fed P2's reuse
+  histograms), and **R2** (PostgreSQL context replay — needs H1/S1/S2/**M1** and the real tpcb and
+  readonly traces from the artifact owner, which are not committed; do not launch a replay with a
+  stand-in). P3 and P4 are board-runnable on the current bitstream **only on an explicit Optional
+  assignment**, which `EXECUTION.md` requires and both protocols gate on. R2 is blocked.
+
+Two more rules that bind every boot in this queue: **a run may not be stitched** — *"Full runs cannot be
+assembled by rebooting and concatenating prefixes"* (`METHODS.md`), and *"Fresh boots between independent
+repetitions are valid. Reboots inside one claimed complete workload, or concatenated prefixes, are not"*
+(`EXECUTION.md`) — and **one run is one sample**: *"Do not relabel one run as five samples."* The
+arithmetic consequence is worth stating plainly, because it sets expectations for every request for board
+time: **one more boot adds at most one repetition toward a point and cannot close any primary timing cell
+in any study.**
+
+Also from `EXECUTION.md`: a result bundle is **seven** files — `work-order.md`, `manifest.json`,
+`points.csv` (every planned cell *including unsupported ones*), `runs.jsonl`, `raw/` with hashes,
+`analysis/` with its reproduction command, `summary.md` — and *"the reviewer regenerates the summary
+from raw records"*. E1, R1 and M2 have six of the seven; H1 has one. And `studies.json` on the remote
+still reads **R1 `pending`** and **M2 `pending`** although both bundles are committed on the board
+branch: owed edits, and they are the paper lane's.
+
 ## The board queue, in gate order
 
 ### P0 — the hand-over boot (runnable now)
@@ -66,7 +134,16 @@ Pass = both controls at `retval=4`, one `ran` code, marker `done`, and no runner
 task list). Report it; the state doc header then names `apollo-board` the board lane, and this session
 becomes backup, hands-off. No work order needed: P0 is an instrument proof, not a measurement.
 
-### P1 — the no-reclamation baseline, two boots (runnable now, on the lead's word)
+### P1 — the no-reclamation baseline, FOUR boots (runnable now, on the lead's word)
+
+**Rescheduled 2026-09-15 against `METHODS.md`'s repetition rule**, which the original two-boot schedule
+missed: boots 1–3 each run **three repetitions of each of the four retention patterns** (12 invocations,
+the M-9 cap exactly) for **nine runs per pattern over three boots**, and boot 4 is the single
+deployed-table run to the 80 % budget — a *shortened point* under rule 5, carrying its own configuration
+label (`stop=budget`), reported as the bound and a corroborating curve rather than primary timing (five
+runs of that point would cost five more boots; that is the lead's call, not a default). `lists/m1-diag.txt`
+is now 36 lines and `chain-m1.sh` loops over four boots, giving the capacity boot its own output tag so
+it cannot write into boot 1's directory.
 
 `drivers/chain-m1.sh` with the apollo build11 image and the flow check's log. Everything is
 pre-registered in the driver header: **primary** = `take_cyc/n + give_cyc/n` flat in cumulative
@@ -99,7 +176,11 @@ no `SQLITE_OPTNONE_FUNCS`), run `tests/movc-cfg-scan.py` — gate: **0 integer-o
 `renameResolveTrigger`'s block-entry copy live around its back-edge, named by function**, mixed and
 opaque buckets reported beside — then SQLLogicTest on the `-O2` image as the emulator pass with the
 `movc` density read back (about 17.3k, not about 6.7k), then one `drivers/board-c6var.sh` boot.
-Pre-registered: counters 5568/37966/32565/37966/5401 and cycles within 0.1 % of arm C's 1,376,190,813.
+Pre-registered: counters 5568/37966/32565/37966/5401 and cycles within 0.1 % of arm C's 1,376,190,813. One caution the protocol states and this boot must respect
+(`P1-application-cost.md`): *"The existing 911104-byte effective Sublet heap versus 2097152-byte static
+heap is not an isolated protection-cost comparison."* The 2 MiB arena staged here is the matched-backing
+configuration E2 established for exactly that reason; say so in the §7 entry rather than leaving the
+reader to assume it.
 
 Two constraints from the compiler lane, both of which would otherwise waste the boot:
 * **Do not stage the before/after pair in one boot.** Two Sublet SQLite workloads exhaust the
@@ -109,7 +190,9 @@ Two constraints from the compiler lane, both of which would otherwise waste the 
   Not the allocation census, not the `minstret` bracket: both perturb, and the second is a separate
   image by design.
 
-Write into the §7 entry what this boot does **not** establish: it does not exercise the PHI residue
+Write into the §7 entry what this boot does **not** establish: it **verifies a pre-registered value** and is
+not new primary P1 timing (that would need five runs over three boots per `METHODS.md`); and it does not
+exercise the PHI residue
 (`renameResolveTrigger` is reached per trigger and the main testset defines none), so a pass says the
 fix works and says nothing about whether the residue bites.
 
@@ -127,10 +210,20 @@ ways (the directed simulation with both gate inputs witnessed, the stock `rv64mi
 with capmode never set, and the monitor's `rdtime` path as uncontrived silicon on every clock read) —
 so if the reflash is spent, it should be for the RTL lane's reasons, not the paper's.
 
+### P5 — the two Optional studies: a proposal, not a launch
+
+`P3-cost-attribution` is runnable on the current bitstream the day the lead names the P1 cost to explain
+and H1's counters are validated; it explains a measured cost and creates no headline of its own.
+`P4-cache-effects` needs a survivor-window adapter written on top of R1's fixture first — desk work
+before any boot. Neither may start without an explicit Optional assignment. Put them to the lead as
+available capacity once P1 is running; do not queue them unasked.
+
 ## Desk work (no board time), in parallel with the queue
 
-* **D1 — finish H1's bundle.** It is one file (`manifest.json`) where E1, R1 and M2 carry manifest,
-  `points.csv`, `runs.jsonl`, `summary.md`, `raw/` and `analysis/`. E4's instruction tests and
+* **D1 — finish H1's bundle to `EXECUTION.md`'s seven-item shape**: it is one file (`manifest.json`)
+  today, and needs `points.csv` listing every planned cell *including the unsupported ones*,
+  `runs.jsonl` linking each attempt to its point, repetition, boot and oracle, `raw/` with hashes,
+  `analysis/` with a reproduction command, and a `summary.md` that states what did not run. E4's instruction tests and
   calibration are real readings, already in §7v, with the transcript captured: completing the bundle
   from data in hand costs no boot and is the paper lane's explicit request. (The **missing work
   orders** on E1/R1/H1/M2 stay stated, not backfilled — a template exists to be filled before
@@ -176,6 +269,14 @@ so if the reflash is spent, it should be for the RTL lane's reasons, not the pap
 2. **P1's go/no-go** (the paper lane recommends taking it, headline the cost curves).
 3. **Whether P3's reflash is worth spending** on the paper's account (the paper lane says no).
 4. **A reviewer's name** for D4's work orders.
+5. **Optional assignments for `P3-cost-attribution` and `P4-cache-effects`**, or explicitly not yet.
+6. **How a fault rung earns its recorded QEMU pass** (`H1-platform.md`, quoted above). Until it is ruled,
+   the fault half of the FPGA matrix is blocked — S1's and S2's invalid-operation cells and H1's fault
+   family — while the control half runs. This is the ruling with the widest reach in the catalogue, and
+   it is not a board-time question.
+7. The METHODS question, now narrowed to one sentence: **are S1/S2's `unsafe-success` cells an
+   *enforcement failure* that stops dependent performance publication?** The rest of that rule is
+   answered in the catalogue — bounded diagnostics may proceed.
 
 ## Verification
 
