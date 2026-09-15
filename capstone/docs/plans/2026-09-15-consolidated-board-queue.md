@@ -301,8 +301,21 @@ available capacity once P1 is running; do not queue them unasked.
   and capmode is sticky from the init `CAPENTER`, so any of it executing afterwards in M-mode is
   exposed. The boot order suggests it has finished — the `CAPENTER` is the last thing
   `sbi_hart_switch_mode` does before entering S-mode (`sbi_hart.c:1085`) — but *suggests* is not
-  measured, and the RTL lane's sweep has `capsbi-init` timing out, which is the monitor's own init.
-  That is the next question and it is reading plus simulation, not board time.
+  measured. **CLOSED 2026-09-15, statically, three legs each with its own control:** (1) across the
+  1,158 functions in `.cap_text` there are 672 resolvable call targets and **none** lands outside the
+  region (control: the scan does resolve targets); (2) `.cap_text` contains 37 indirect transfers and
+  **all 37 are `ret`** — not one `jalr` or `jr` (control: 57,568 of them outside the region, so the
+  scan is not blind to the class); (3) the decisive one, since a trap handler is not init —
+  `_cap_env_init` writes **CCSR 0 (CTVEC)** with an `auipc`/`addi` pair resolving to `0x80020060`,
+  which is `_cap_trap_entry`, **in `.cap_text`**, so an M-mode trap after capability init lands in the
+  monitor's own handler rather than generic `sbi_trap_handler`, and interrupts follow the same vector
+  (`_handle_ints` is also in the region). The generic text's 7,115 accesses are therefore unreachable
+  in capmode. `capsbi-init` could never have decided this either way: it is a directed mimic that
+  never links generic text (RTL lane), and its single fault is the harness's own `tohost` store.
+  **So D3 is ONE site**: `_handle_non_ecall`'s `add t5, t5, sp` then `sd a0, 0x10(t5)`, hand-written,
+  fixable with `CINCOFFSET` on the capability instead of integer arithmetic. Limits: a static argument
+  over the image built from this tree, and silent about any target reached through a capability rather
+  than a PC-relative form.
 
   **The instrument failed before it worked, which is worth more than the number:** the first scan
   restricted itself to functions that adjust their frame with a capability instruction, which
