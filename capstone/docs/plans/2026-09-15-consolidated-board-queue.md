@@ -279,8 +279,19 @@ available capacity once P1 is running; do not queue them unasked.
   `analysis/` with a rerunnable script), parsing `R1 m1 start` / `R1 m1 snap` / `R1 m1 end` and
   emitting the two cost curves per snapshot interval. Write it before P1's boots so the bundle is not
   improvised afterwards.
-* **D3 — the monitor's readiness for R-34's fix, which is now a prerequisite for that bitstream
-  rather than a follow-up.** The RTL lane's early sweep has `capsbi-init`, `ccsrrw` and `cbnz` timing
+* **D3 — the monitor's readiness for R-34's fix. SCOPE WIDENED 2026-09-15, and it may not be a monitor
+  edit at all.** It looked like one assembly site (`sbi_capstone.S:113`, `add t5, sp, t5` then a store
+  through `t5`). But the monitor's C is compiled by capstone-c, whose own limitation is recorded in the
+  monitor's header (`sbi_capstone.h:65-70`: capstone-c "emits a plain `addi` for the offset into
+  `regions[]`", which is why the region table caps at 96). An `addi` on a capability register is an integer
+  op, and the RTL clears the destination's metadata on any non-capability result — the metadata bank is
+  written with the GPR write enable and `cap_result.valid ? metadata : '0`
+  (`commit_stage.sv:279`, `issue_read_operands.sv:1879`, `:1899-1900`) — so the base is UNTAGGED. If
+  capstone-c reaches indexed globals that way throughout, every such access in the monitor becomes a
+  `NOT_CAP` plain access in M-mode with capmode set under the fix, which matches the RTL lane's sweep
+  (`capsbi-init` times out). That makes D3 an **investigation in an external compiler this project does
+  not own** before it is a change, with **no landing date**. The consequence for sequencing is in the
+  dependency table below. (Original scope, still the smallest instance: The RTL lane's early sweep has `capsbi-init`, `ccsrrw` and `cbnz` timing
   out under the delivery fix: with delivery working, the `NOT_CAP` clause fires on every plain access
   through an integer-derived base in machine mode with capmode set, and the monitor does exactly that
   — `sbi_capstone.S:113` computes `add t5, sp, t5` and then stores `sd a0, 16(t5)` through the
@@ -290,7 +301,7 @@ available capacity once P1 is running; do not queue them unasked.
   obvious and matters: on the DEPLOYED bitstream the change is untestable, because with delivery broken the
   before and the after both run clean — only simulation of the RTL lane's fix branch can show the monitor
   surviving live enforcement** (RTL lane, 2026-09-15). Validate it there, and separately confirm it is a
-  no-op on the current bitstream so the change can land ahead of the reflash. Wait for the RTL lane's
+  no-op on the current bitstream so the change can land ahead of the reflash.) Wait for the RTL lane's
   full sweep numbers before scoping it — they promised a count rather than an impression.
 * **D4 — a work order per measurement**, now that `experiments/EXECUTION.md` and
   `experiments/WORK-ORDER.md` are visible (paper remote `7f83725`, absent from the pinned submodule,
@@ -306,7 +317,7 @@ available capacity once P1 is running; do not queue them unasked.
 | lane | state today | what unblocks the board |
 |---|---|---|
 | compiler | design A at `46c53b7b6ae2`, `19bc05cf21b1` (pushed, their branch); the dev merge `d257f1abad4f` is **performed, verified, lit 106/106, unpushed** — the scan's range mode blocks on the collaborator's author lines, and the scan is working as designed (author identity is scanned deliberately) | the lead's ruling, then their push, then they give the dev hash → P2 |
-| RTL | `9a7bd598c` on `r34-r24-exception-delivery` (**pushed**, the lead allowlisted it; boundary and miss-path sufficiency both measured, so no companion RTL change is needed)| their clean sweep + D3's monitor work → synthesis → the lead's reflash → P3 |
+| RTL | `88f374d1c` on `r34-r24-exception-delivery` (**pushed**, not synthesised; boundary and miss-path sufficiency both measured, so no companion RTL change is needed). **This lane's recommendation for the NEXT bitstream is R-12 reclamation ALONE, not this batch**: D3 has no date and may be a compiler question, a bitstream the monitor cannot boot costs the reflash and the board, R-12 moves a headline (M1, which board time alone cannot unblock) with no monitor-readiness dependency, and P1's superlinear release curve is the before measurement a reclaimer is meant to flatten. **The two must not be batched:** M1's method is isolated stale probes at checkpoints, and changing fault delivery underneath them confounds every one — a stale probe that silently reads and one that traps are different readings | their clean sweep + D3's monitor work → synthesis → the lead's reflash → P3 |
 | paper → `apollo-paper` | handover sent; `studies.json` still has M2 `pending` though its bundle is committed; most states are blocked on non-board work (M1's reclaimer, M-8's port fix, S3's corpus), and P1 addresses only the resource half | nothing; address `apollo-paper` from now on |
 | synth | per-module area for H1 done; next is a bitstream when a hash exists | nothing |
 
