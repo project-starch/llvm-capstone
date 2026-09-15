@@ -332,6 +332,38 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
   }
 }
 
+/* ------------------------------------------------------------------ latency (E4/H1) ------- */
+/* A dependent-load chase over a B-byte region taken as one plain alias: every 64-byte line holds the
+   index of the next line in a single random cycle (Sattolo), and the loop's load address depends on
+   the previous load, so the cycles per load are the load-to-use latency at that working set — L1 for
+   4 and 16 KiB (the D$ is 32 KiB), DRAM beyond. The chain is built in the region itself (no other
+   memory), the first traversal warms, the second is timed. Plain 8-byte loads: the figure `tab:hardware`
+   asks for and M2's calibration, not a capability-load figure. */
+static ulong rng_state = 0x9E3779B97F4A7C15UL;
+static ulong rng(void) { ulong x = rng_state; x ^= x << 13; x ^= x >> 7; x ^= x << 17; return rng_state = x; }
+static void run_latency(unsigned reps) {
+  static const ulong b_pts[5] = {4 * 1024UL, 16 * 1024UL, 64 * 1024UL, 256 * 1024UL, 1024 * 1024UL};
+  unsigned k, r;
+  for (k = 0; k < 5; k++) {
+    ulong B = b_pts[k], lines = B / 64UL, i, cur, steps, t0, t1, sum = 0;
+    volatile ulong *m;
+    carve_root(B, &pool); pool_base = sublet_base(&pool); pool_ptr = sublet_take(&pool);
+    if (root_short) { out("R1 refused: arena"); out(" s=latency"); kv("B", B); kv("need", root_short); out("\n"); return; }
+    m = (volatile ulong *)pool_ptr;
+    for (i = 0; i < lines; i++) m[i * 8] = i;                       /* identity, one index per line */
+    for (i = lines - 1; i >= 1; i--) {                                /* Sattolo: one cycle through every line */
+      ulong j = rng() % i, t = m[i * 8]; m[i * 8] = m[j * 8]; m[j * 8] = t;
+    }
+    steps = lines * 4UL; if (steps < 65536UL) steps = 65536UL;        /* every line at least four times */
+    for (r = 0; r <= reps; r++) {                                     /* r = 0 warms; r >= 1 is timed */
+      cur = 0; t0 = cyc();
+      for (i = 0; i < steps; i++) cur = m[cur * 8];
+      t1 = cyc(); sum += cur;
+      if (r) { out("R1 lat"); kv("B", B); kv("lines", lines); kv("loads", steps); kv("rep", r); kv("cyc", t1 - t0); kv("per", (t1 - t0) / steps); kv("sink", sum & 0xFF); out("\n"); }
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ entry ----------------- */
 void domain_main(unsigned *res, unsigned func) {
   static char args[256];
@@ -395,6 +427,7 @@ void domain_main(unsigned *res, unsigned func) {
     out("R1 calib"); kv("cyc_cyc", b - a); kv("cyc_cyc2", c - b); kv("ret_ret", e - d); out("\n");
     *res = 0x4EB10000u; return;
   }
+  if (streq(series, "latency")) run_latency(reps); else
   run_series(series, pattern, arm_sublet, reps, touch_unrel, budget);
   out("R1 end"); kv("minted", nodes_minted_total); kv("split", sublet_stats.split); kv("mrev", sublet_stats.mrev);
   kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); kv("lines", out_lines + 1); out("\n");

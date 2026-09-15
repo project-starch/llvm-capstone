@@ -4273,3 +4273,41 @@ not depend on where it sits in the tree** — 478,067 to 478,130 across depth 1 
 the world?", "does nesting cost more?"), answered with flat lines over wide ranges. And because the
 machine repeats to a few cycles, the medians ARE the values: the five repetitions establish
 determinism, and no confidence interval is implied or needed.
+
+### §7v — E4 of the Sublet-paper plan: H1's calibration on silicon — the timer's cost and the memory latency (boot sw8x-e4, 2026-09-15 11:24–11:36)
+
+**What ran.** The R1 harness with one added series (`--series latency`, `capstone/sublet/r1/`: a
+dependent-load chase over a B-byte region taken as one plain alias, every 64-byte line holding the index
+of the next in a single random cycle built by Sattolo's shuffle inside the region, one warming
+traversal then the timed ones, 65,536 plain 8-byte loads per traversal — the figure `tab:hardware` asks
+for and M2's calibration, not a capability-load figure), image `3d6c24a64bceef00` at 0x410000, emulator
+passes on record (the chase shows the loop's five instructions per load at every size, the flat shape
+an emulator gives). Boot: control 4 → the chase at 4 KiB, 16 KiB, 64 KiB, 256 KiB, 1 MiB, three timed
+traversals each → `--calib` three times (fresh domain each) → one nodes/shared Sublet invocation as the
+regression of the unchanged code → control 4; five `speedtest1-ran`, no refusal, one banner.
+
+| working set | lines | cycles per dependent load (three traversals) |
+|---|---|---|
+| 4 KiB | 64 | **9.00 / 9.00 / 9.00** |
+| 16 KiB | 256 | **9.00 / 9.00 / 9.00** |
+| 64 KiB | 1,024 | 40.81 / 40.78 / 40.76 |
+| 256 KiB | 4,096 | 48.16 / 48.14 / 48.12 |
+| 1 MiB | 16,384 | **48.17 / 48.17 / 48.17** |
+
+**Readings.** (1) **A dependent load costs 9.00 cycles when the working set sits in the 32 KiB data
+cache and 48.2 cycles when it does not** — flat from 256 KiB to 1 MiB, so 48.2 is the DRAM-resident
+figure for this core and memory system (the loop's own five instructions are inside both numbers;
+the difference, 39 cycles, is the miss cost), and 64 KiB reads 40.8 as the partial-residency point
+between them. Deterministic to 0.05 cycles across three traversals; the emulator has no such
+structure. (2) **The timer costs 2 cycles**: back-to-back `csrr mcycle` reads differ by 2, three
+domains out of three (the emulator says 1), and back-to-back `minstret` reads by 1 — so every
+bracket in §7t is inflated by 2 cycles, which is 0.0004 % of a 474,817-cycle fill and 2 % of a
+102-cycle REVOKE (the n = 1 point; noted, not corrected, since the brackets are reported raw). (3) The
+regression invocation reads the unchanged code unchanged: nd = 2n, the fill 474,817 at every point,
+REVOKE 126 / 182 / 731 / 2,838 / 11,714 for n = 1 … 256 (a single cold repetition, within the
+five-repetition medians' first-point spread). **What E4 does not deliver:** a directed hardware test of
+the forbidden linear copy (simulation coverage only, marked pending in the manifest), and the
+synth lane's per-module area extraction; the exhaustion diagnostic is sw74b's (§7q) and the
+instruction families are exercised by the S1S2 and R1 cells (the manifest lists which, with
+repetitions). Manifest: `experiments/results/H1/fpga-2026-09-15/manifest.json` on the local board
+branch, calibration and instruction tests filled.
