@@ -4162,7 +4162,7 @@ bookkeeping 301 / 199 / 431 / 1,649 / 7,217 and reissue 348 / 169 / 285 / 462 / 
   the manuscript's constant-time claim stands.
   The fill is 94.5 % (n = 256) to 99.5 % (n = 1) of the release at B = 256 KiB and 99.9 % at 1 MiB; the
   node-linear REVOKE overtakes it only past nd ≈ 20,900 nodes at B = 256 KiB (B-conditional).
-* **INIT itself costs 5–6 cycles** — 0.001 % of the release. The expensive thing is the write-through
+* **INIT itself costs 5–6 cycles as bracketed, 3–6 net of the timer's 2-cycle floor (§7v)** — 0.001 % of the release. The expensive thing is the write-through
   the specification's UNINIT rule requires before INIT succeeds, not the instruction: a rule, and so
   addressable by design (an INIT that accepts a region without the capability-grained walk, or a bulk
   clear), which the number argues for — 474,817 cycles per 256 KiB release to establish a property.
@@ -4299,10 +4299,17 @@ cache and 48.2 cycles when it does not** — flat from 256 KiB to 1 MiB, so 48.2
 figure for this core and memory system (the loop's own five instructions are inside both numbers;
 the difference, 39 cycles, is the miss cost), and 64 KiB reads 40.8 as the partial-residency point
 between them. Deterministic to 0.05 cycles across three traversals; the emulator has no such
-structure. (2) **The timer costs 2 cycles**: back-to-back `csrr mcycle` reads differ by 2, three
+structure. **This is the positive control E3's fill reading needed:** on the same memory system and
+boot family, a dependent load is 5.36× residency-sensitive (9.00 → 48.2) while the fill is 1.03×
+(1.760 → 1.812 cycles per byte from 4 KiB to 1 MiB) — loads are 5.2× more sensitive to residency than
+the fill is. §7t's "store-path bound, not cache-latency bound" was an inference from an absent
+effect; E4 shows the effect exists on this hardware and the fill does not see it, which turns "it did
+not bend" into "it cannot bend, and here is what it is immune to". (2) **The timer costs 2 cycles**: back-to-back `csrr mcycle` reads differ by 2, three
 domains out of three (the emulator says 1), and back-to-back `minstret` reads by 1 — so every
 bracket in §7t is inflated by 2 cycles, which is 0.0004 % of a 474,817-cycle fill and 2 % of a
-102-cycle REVOKE (the n = 1 point; noted, not corrected, since the brackets are reported raw). (3) The
+102-cycle REVOKE (the n = 1 point) and 33–40 % of the INIT bracket, the smallest in the table — so INIT's
+absolute value is **3–6 cycles** with the floor stated, wherever it is quoted; the brackets are reported
+raw and no conclusion moves (INIT is negligible against the fill at 3 as at 6). (3) The
 regression invocation reads the unchanged code unchanged: nd = 2n, the fill 474,817 at every point,
 REVOKE 126 / 182 / 731 / 2,838 / 11,714 for n = 1 … 256 (a single cold repetition, within the
 five-repetition medians' first-point spread). **What E4 does not deliver:** a directed hardware test of
