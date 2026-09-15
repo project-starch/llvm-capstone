@@ -441,6 +441,71 @@ plain-data-access rows. The gate still excludes domains. §6c's conclusion stand
 asking precisely because the answer could have been either — that is the go/no-go rule working
 rather than being recited.
 
+## 6e. The miss path is measured too — R-34's fix has no open sufficiency condition, and the blocker is now the MONITOR
+
+*Reported by the RTL lane; **not reproduced here** — the test `r34-coldmiss-deliver.S` is not yet on
+`dev` and its commit `9a7bd598c` is not fetchable from apollo. Recorded as their reading.*
+
+The second of the two adjacent items I raised — that `load_unit.sv:718`'s delivery is nested inside
+`:698`'s `req_port_i.data_rvalid`, leaving the miss / `kill_req` path at `:702` unchecked — is now
+measured, and **it holds**: the exception is delivered on a cold line. Their matched pair, one
+variable (whether the faulting line was brought in first), every precondition witnessed in the same
+run because "cold" is a claim about cache contents the test cannot otherwise see:
+
+| reading | value | what it witnesses |
+|---|---|---|
+| warming value | `0x4c535550` | the warm line really is resident |
+| warming cause | 0 | the warming access did not itself trap |
+| ARM W cause | `0x1b` = 27 | warm line, delivered |
+| line separation | `0x1000` | the two lines really are distinct |
+| ARM C value | 0 | trapped — no data returned through a forbidding capability |
+| **ARM C cause** | **`0x1b` = 27** | **cold line, DELIVERED** |
+| total traps | 2 | one per arm, none spurious |
+
+Identical at memory delay 40 and delay 0; only the cycle counts move (1287 vs 499).
+
+**So the R-34 fix has no open sufficiency condition left.** Boundary measured (§6d), miss path
+measured (here), renumber measured (`debug_mode_q` 0 across four cause-24 deliveries), lint at
+baseline, the fifteen class-A tests bit-identical to baseline (§6c). **The remaining blocker before
+a bitstream is the MONITOR, not the RTL** — and §6c's caveat 2 is what governs it: the monitor fix
+cannot be validated on the deployed bitstream, because with delivery broken the before and the after
+both run clean. **Sequencing consequence, which is the operationally useful part: the monitor fix
+must be validated in simulation of the fix branch BEFORE a bitstream is spent, not after.**
+
+### The instrument lesson, which is a sharpening of an existing project rule rather than a new one
+
+Their first attempt at this measurement rebuilt at `S12_MEM_DELAY=40` and reran the existing gate
+test. **All thirteen printed readings came back identical to the zero-latency run, value for value,
+with only the cycle counts moving (868 → 2485).** That reads like a robustness result. It is void:
+the test hammers a single buffer, so the line is resident after the first access and the faulting
+arms still **hit**. The delay slowed the program down while leaving the arms under test exactly
+where they were.
+
+CLAUDE.md already says a synthetic test *"must CREATE the triggering condition, not merely contain
+the shape"*, and gives S-12 as the case — a reproducer that read zero for a day because the
+testbench defaulted to **zero** memory latency. This is the **mirror image of that**, and it matters
+because the obvious reading of the existing rule is the thing that failed: the latency knob **was**
+turned on, and the condition still was not created. **Setting the knob is a precondition for the
+triggering condition, not the condition itself** — a miss requires an access to a line that is not
+resident, which is a property of the access pattern, not of the delay setting.
+
+It also has the "surprisingly clean → suspect the instrument" shape twice over: thirteen readings
+identical value-for-value across a 3x change in run time is not robustness, it is the arms not
+having moved. Worth pairing with §7's finding, which is the same family at the opposite polarity —
+there a gate was correct about everything it was shown and silent about what it was never shown;
+here a knob was set correctly and the thing under test was never placed where the knob could reach
+it.
+
+### One correction to my own reading, in my favour but worth stating precisely
+
+I flagged `load_unit.sv:715-717`'s comment as **stale**. It is subtler: the comment was **false
+only between #2528 and this fix**. #2528 deleted the MMU register, so the exception arrived in the
+request cycle — which is exactly how ISSUES.md could record `ex_i.valid = 1` together with
+`state_q = IDLE`, a combination the comment says cannot occur. Restoring the register makes the
+comment **true again**. So my reading was right for the tree I was reading and wrong as a general
+statement about the comment, and the RTL lane has written the conditionality into the file rather
+than simply correcting it.
+
 ## 7. A tree-wide name sweep found four committed violations, and why the gate never saw them
 
 `precommit-scan.sh` is a **flow** gate: it reads the staged diff, the unstaged diff, the untracked
@@ -477,8 +542,24 @@ unchanged build string of the form *root-account at a generic build host* — a 
 person, and the false-positive class
 the script's own closing message invites you to confirm by eye.
 
-**STATUS, and read this before trusting the paragraph above.** The scrub exists **only in the
-working tree on apollo. It is not committed and not on `origin`.** Its commit was refused twice by
+**STATUS — RESOLVED 2026-09-15, later the same day.** *(The paragraph below is kept because it
+was true when written and because the resolution is not mine; it is struck, not deleted. This is
+itself the stale-status-line failure the shared-folder rules warn about — written in the present
+tense, falsified by someone else's edit, and it would have gone on reading as current.)*
+
+**The scrub is now COMMITTED AND ON `origin/dev`**, as `0a58c9b91dfa` — landed by another lane,
+not by this one. A sweep of the committed tree at that revision finds **exactly one** denylisted
+name left, `docs/history/SQLiteProposal.tex:497`, which is the exempt citation URL. The hard
+constraint is satisfied on `dev`. Their wording differs from the working-tree version this lane
+had prepared (they kept a `<user>@focs-server` placeholder where this lane rewrote the phrase to
+drop the `user@host` shape, and they dropped the commit attribution where this lane replaced it
+with "the external collaborator"); this lane **discarded its own variant** rather than churn a
+committed fix over wording. One consequence worth passing on: a placeholder of the form
+`<user>@host` still matches the scanner's own `user@host` detector, so a future diff touching
+those lines will block on it.
+
+*What follows was the state before that landed:* the scrub existed **only in the working tree on
+apollo, not committed and not on `origin`**. Its commit was refused twice by
 this session's permission classifier — reasons *"Security Test Removal"* and *"Out-of-Place
 Publication"* — and I stopped rather than reword the change to get past a refusal. So a reader who
 runs the sweep against `origin/dev` today finds **five** hits, not one, and the four files still
