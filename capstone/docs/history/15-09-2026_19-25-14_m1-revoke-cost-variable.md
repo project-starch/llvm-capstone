@@ -112,7 +112,10 @@ Minting is **not** "near-flat" as first reported: `take_cyc/n` holds 66-69 and t
 5. **It is live on the FLASHED bitstream.**
    `git diff --quiet 1bfff7776 f6ec6c198 -- core/anvil_build/capstone_rev_node.anvil` returns 0, and
    the instrument was positive-controlled (the same command on a file that *did* change returns 1).
-   `1bfff7776` is the flashed bitstream of record. **Caveat:** the generated
+   `1bfff7776` is the flashed **bitstream** of record (`caplifive_r30r31_1bfff7776.bit`,
+   hash-verified, `docs/state/current-state.md:127-128`). Note this is a different label from the
+   **sweep** baseline, which the RTL lane records as `4cc068572` — byte-identical RTL, but the two
+   labels answer different questions and should not be interchanged. **Caveat:** the generated
    `core/capstone_rev_node.anvil.sv` that synthesis actually consumes is **untracked**, so a `git
    diff` on it would be vacuous; this rests on anvil's determinism, which was not verified.
    **Line numbers above are head's** — at the flashed commit the corresponding sites are
@@ -179,7 +182,10 @@ boot. The prediction sharpens: cost is a function of **minted / M1_LIVE**, so at
 excess over the base scales as 1/(slot count) — the 64-slot arm at minted 2591 should read like
 today's minted-640 point, and the 4-slot arm should saturate about four times earlier. A pure
 address-spread account predicts no dependence on the slot count. `M1_LIVE` is a compile-time
-`#define`, so this needs an image rebuild on the toolchain host, not on apollo.
+`#define`, so this needs an image rebuild — **which does run on apollo**: this host has clang
+18.1.3 and ninja, and the board lane builds these images here daily (including the boots' own image
+`079b1f3a2801205a`). An earlier version of this note said otherwise, from a stale memory of the
+host, and it was wrong; S2 has no cross-host scheduling dependency.
 
 ## Bring-up: this host runs RTL simulation now
 
