@@ -2728,7 +2728,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
-### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `DEMONSTRATED IN RTL SIMULATION 2026-09-15 (read at f6ec6c198; the gate and exception lines of load_store_unit.sv are identical at the flashed 1bfff7776); mechanism from source, timing from a waveform, AUDITED (the exception is RAISED 21 times in the run and delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check; NOT run on the board; handed to the RTL lane as one folder`
+### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324) — the MMU exception register upstream #2528 (23355d29f) deleted is restored exactly as deleted; delivery measured end to end at the ex_stage boundary for causes 4/6/24/27/28, load and store side, each ex_o.valid one cycle wide; lint at baseline. SHIPS WITH R-24 AND CANNOT SHIP WITHOUT IT. NOT synthesised, NOT on the board, and the monitor faults in its own trap handler until sbi_capstone.S:113 is fixed — see WHAT THE FIX EXPOSES. Originally: demonstrated at f6ec6c198, mechanism from source, timing from a waveform, AUDITED (raised 21 times, delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check`
 
 > **Folder (the report):** `capstone/tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/` — the directed
 > test `lsu-mmode-gate.S`, the runner, the three runs' result lines and the waveform extract.
@@ -2779,6 +2779,46 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > R-34's delivery must ship together**: unrenumbered, those four would enter the debug ROM. Scope, stated
 > precisely: the block is gated `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`, so what the fix makes
 > enforceable is **M-mode code only** — the monitor and the test harness — not domain code.
+>
+> **WHAT THE FIX EXPOSES, and why 12 tests are left failing on purpose.** With delivery working, the
+> suite sweep (RTL lane, 2026-09-15, against baseline `4cc068572`) has 12 tests that passed before
+> now timing out. They are **one pattern, not twelve bugs**: a plain load or store through an
+> INTEGER-derived, untagged base while capmode is set in M-mode. Every one of the twelve calls
+> CAPENTER; not one of R-24's 15 cause-assertion tests does, which is the discriminator.
+>
+> Ten fault on the test harness's own success convention rather than on anything the test does —
+> `verif/tests/riscv-tests/env/p/riscv_test.h:239` is `sw TESTNUM, tohost, t5`, which the assembler
+> expands to `auipc t5, %pcrel_hi(tohost)` then a store through that integer base. Matched pair from
+> the same sweep, one variable:
+>
+> | | epilogue | outcome |
+> |---|---|---|
+> | `cap-overwrite` (no CAPENTER) | `auipc t5` / `sw gp,-334(t5)` | retires, `mem 0x80001000` written |
+> | `cld` (CAPENTER) | `auipc t5` / `sw gp, off(t5)` | exception |
+>
+> Two fault earlier, in the test body, and are the same rule firing sooner: `data-transfer` on a
+> `c.ld` immediately after CAPENTER, `cpmp-if-check` 3102 times.
+>
+> **Cause 24 is MEASURED here, not inferred.** `cpmp-if-check` installs `mtvec` before it faults, so
+> its handler reads the value: `csrrs t0, mcause` returns `0x18`.
+>
+> **The monitor is the same pattern and is the one that matters.** `sbi_capstone.S:112-114` computes
+> `add t5, sp, t5` and stores `sd a0, 16(t5)` through the integer result — that is the emulated-CSR
+> writeback, so it runs at every `rdtime`. It is the ONLY site of this shape in the file, and the C
+> half adds none (`mtime`/`mtimecmp` are capabilities minted by `split_out_cap`). The fix is three
+> instructions using a macro the file already defines seven times: `CINCOFFSET(sp, sp, t5)` IN PLACE
+> (rd == rs1, which sidesteps the R-25 source-consumption question entirely), the store, then the
+> negated offset back.
+>
+> **That fix cannot be validated on the deployed bitstream**, and this is the trap to write down: on
+> the current silicon the exception is never delivered, so before and after both run clean. An
+> emulator pass against the flashed bitstream proves only that nothing broke, never that the change
+> is correct. Only simulation of the fix branch can validate it.
+>
+> **Fixing the monitor does NOT make the plain-data-access safety rows hold.** The gate is
+> `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` and domains run in S-mode, so the check still never
+> applies to domain code. It makes the M-mode arm enforceable instead of self-faulting. "R-34 is
+> fixed" must not be read as "the plain-data rows now hold".
 >
 > **What would settle the residuals** *(2026-09-15 later: (b) CLOSED by the RTL lane at the flashed revision — a store at
 > `bound_end` through the same capability the load arm uses takes no trap and the guard word past the buffer holds the
@@ -5814,7 +5854,59 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
-### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `REFUTED 2026-09-11 — the spec base collides with this core's DEBUG_REQUEST; needs a ruling, not a fix`
+### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324, residuals e97b7e7ab) — the REFUTATION below stands and was answered rather than overturned: the collision is real, and the fix is to move the DEBUG_REQUEST sentinel off 24 (to 32) so the capability causes can sit on the spec's 24..29. Measured, not argued: debug_mode_q stays 0 across four cause-24 deliveries. SHIPS WITH R-34 AND CANNOT SHIP WITHOUT IT. Not synthesised, not on the board`
+
+> # 2026-09-15 — THE RULING THE ENTRY ASKED FOR, AND THE FIX THAT FOLLOWS FROM IT
+>
+> The refutation below is correct and is not withdrawn: base 23 does put `UNEXPECTED_OPERAND` on 24,
+> and 24 was `DEBUG_REQUEST`. What was missing was that **`DEBUG_REQUEST` is an internal sentinel on
+> the exception bus, never an architectural `mcause`** — `csr_regfile.sv:2019` gates it out of the
+> normal trap path and `:2208` consumes it into dcsr/dpc. Nothing requires it to be 24. So the
+> collision is resolved from the other side: the sentinel moves to **32** (the block ends at 31, and
+> no encoder ordinal reaches it), and the capability causes take the spec's **24…29**.
+>
+> That makes the two execute-path encoders agree with everything else in the tree for the first
+> time. The four-way agreement on base 23 was already recorded here on 2026-09-10 and is unchanged;
+> the only correction to it is that the LSU block and `commit_stage.sv:216-226` are **one authorial
+> decision** (same author, both 2026-05-10), not two independent witnesses — the genuinely
+> independent pair is the spec text and QEMU's `cpu_bits.h`.
+>
+> **R-24 AND R-34 CANNOT BE SPLIT.** `DebugEn` is 1 in
+> `capstone_cv64a6_imafdc_sv39_config_pkg.sv:146`, so on an unrenumbered tree a delivered LSU
+> `NOT_CAP` — cause 24, the commonest one — enters the debug ROM instead of trapping. It has never
+> bitten only because R-34 means those exceptions are almost never delivered (raised 21 times,
+> delivered once, in the audited run). Fix delivery without moving the sentinel and every one of
+> them becomes a debug-mode entry. The waveform is the counterfactual made visible: `debug_mode_q`
+> stays 0 across all four cause-24 deliveries on the renumbered tree.
+>
+> **The suite, swept against the baseline** (`4cc068572`; `core/load_store_unit.sv` byte-identical
+> to the flashed `1bfff7776`). 27 tests regress, in exactly two groups and nothing left over:
+>
+> * **15 are cause-number assertions** and ALL FIFTEEN now pass, at cycle counts **bit-identical**
+>   to baseline — 686=686, 617=617, 967=967, 673=673, 31043=31043 and so on, the three untouched
+>   controls included. Identical counts, not merely green: the renumber changes nothing about how
+>   they execute, only the number they assert. `c7b616b6e`'s updates applied unchanged, plus one
+>   line that commit missed (`init-rs1-ne-rd.S:164`, code constant left at 25 while its header
+>   comment was moved to 24 — it failed with its own "unexpected cause" exit code 20).
+> * **12 are R-34's new enforcement**, not R-24's: see that entry.
+>
+> A third group of 15 was rechecked at a 10x timeout, because a shared 50,000-cycle budget can MASK
+> a regression. Two were never broken — `s07-ldc-chain-forward` 276,242 and `stc-counter-pair`
+> 215,359, identical on both trees — and the other 13 sit at 500,013 on both. The three groups are
+> pairwise disjoint; the two of size 15 are a coincidence of count.
+>
+> **Residuals closed in `e97b7e7ab`:** `INSUFFICIENT_SYSTEM_RESOURCES` was left at 31 leaving a hole
+> at 30 (spec and QEMU both say 30) — the same "moved four, left two behind" miss this entry
+> criticises below, made again; `capstone_unit.anvilh`'s `ex_code` comments still read base 24; and
+> that file's NOTE calling `commit_stage`'s base 23 "an off-by-one in its own right" is resolved the
+> other way round — `commit_stage` was right.
+>
+> **One claim corrected in this entry's own favour, and one against.** The elaboration assertion
+> added in `c77c65324` is **simulation-only** — it sits inside `//pragma translate_off`, so
+> synthesis strips it and it does not protect the bitstream; the commit message that called it an
+> elaboration check overstated it. And "the LSU is a newly found independent witness" was a
+> re-derivation: this registry had it from 2026-09-10, and it was read again from scratch because
+> the registry was not searched first.
 
 > **THE FIX CANNOT SHIP AS WRITTEN. Base 23 puts `UNEXPECTED_OPERAND` — ordinal 1, the most common
 > capability exception in the whole directed suite — on mcause 24, and `riscv_pkg.sv:348` already
