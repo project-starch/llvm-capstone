@@ -134,6 +134,8 @@ wins, the paragraph above stands on its own second argument (the address pair is
 bounds, not a gating range), so the instruction "do not use privilege or address range as a
 discriminator" is unaffected either way. Resolving it is R-34's business, not this folder's.
 
+**ADJUDICATED 2026-09-15 (R-34's lane, as the flag asked): the S-mode reading is right and the "domains run in M-mode" clause is WITHDRAWN.** The wedge evidence was misread rather than wrong: `mstatus.MPP` records *the privilege that was interrupted*, written on trap entry as `mstatus_d.mpp = priv_lvl_q` (`core/csr_regfile.sv:2100`). So `MPP = M` at a wedge says the faulting code was in M-mode — the monitor, which is where a domain's fault lands once the domain's own trap vector is unset (M-1) — and says nothing about the privilege the domain itself ran at. The monitor `mret`s into S-mode, and the entering `mret` clears `MPRV` when `MPP != M` (`:2320`), so a domain cannot reach `ld_st_priv_lvl == PRIV_LVL_M` by any route. The independent confirmation is the E1 matrix: stale plain loads retire inside a domain, which is only possible with the gate unsatisfied. This changes nothing in the paragraph's conclusion — `tval` remains the only discriminator.
+
 ## What would fix it
 
 Change the two data-path sites from `64'd24 +` to `64'd23 +`, matching `commit_stage.sv` and the

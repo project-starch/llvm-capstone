@@ -136,6 +136,27 @@ arm, so an unknown cause keeps the previous string.)
   and leaves `:514` in force, and `lsu_dtlb_hit_o` is the same-cycle lookup). The board has not run
   this test. Stores were driven for the permission and misaligned clauses only.
 
+## The fix is SUFFICIENT at the execute-stage boundary — measured 2026-09-15 (`sim/vcd-fix-boundary.txt`)
+
+A sufficiency condition was raised against any R-34 fix: `ex_stage.sv:1013-1015` re-sources
+`load_valid_o` from the DYN unit's load syncer (`forward_normal_load_valid`) and MASKS the LSU's
+exception with it — `load_exception_o = forward_normal_load_valid ? load_exception : '0` — and the
+syncer's message type carries only `trans_id` and `cap_result`, no exception. A one-cycle lag between
+the syncer's valid and the LSU's exception would therefore lose every SINGLE-CYCLE exception while
+every load still retired with correct data. Nothing in this folder discriminated it: the only delivery
+ever observed here was a multi-cycle hold, and a restored SEND_TAG delivery is exactly the one-cycle
+shape.
+
+Measured on the RTL lane's fix branch (`r34-r24-exception-delivery` at `c77c65324`) with this folder's
+own test: **it is not lost.** Each `i_load_unit.ex_o.valid` is high for exactly one cycle and is
+followed, one cycle later, by `load_exception_o.valid` carrying the same cause, and one cycle after
+that by `csr_regfile_i.ex_i.valid` — for causes 4, 24, 27 and 28 on the load side, with 6, 27 and 28
+reaching the CSR from the store side. The reason is that the LSU registers `load_exception_o` in the
+same spill register as `load_valid_o` (`load_store_unit.sv:685`), so the exception and the syncer's
+forwarded valid arrive together and the mask never zeroes a live exception. `debug_mode_q` stays 0
+across all four cause-24 deliveries, which is the renumber in the same batch doing its job — on the
+unrenumbered tree those four would have entered the debug ROM.
+
 ## Fix direction (the RTL lane's call, not decided here)
 
 Restore the pre-#2528 register in the MMU — carry the exception with `lsu_req_q` and mute it when
@@ -155,7 +176,9 @@ and `verif/tests/` of capstone-ariane; `run.sh` is the exact container command (
 skill; delete the previous run's artifacts first, and note that `SUCCESS` at the timeout is not a
 pass). Readings are the `[Cycle N] Reg[k]: …` lines of the `.log.iss` and the `x<rd> <value> mem
 <addr>` lines of the RVFI `.log`; `sim/readings.txt` holds the three runs' lines, `sim/vcd-timing.txt`
-the waveform extract (`TRACE_FAST=1`, read with `sim/readvcd.py`). The audited artifact set is the run of
+the original waveform extract, `sim/vcd-baseline-loadunit.txt` the load-unit signals on the unfixed tree
+(21 fires, every one with `ex_i.valid = 1`, `state_q` IDLE, `ex_o.valid = 0`) and `sim/vcd-fix-boundary.txt`
+the boundary reading on the fix branch (`TRACE_FAST=1`, read with `sim/readvcd.py`). The audited artifact set is the run of
 2026-09-15 13:51:55: `.log.iss` sha256 `e9495d5e2ff104ce…`, RVFI `.log` `5670a53503d9c6af…` (a live
 `verif/sim/out_*` directory is overwritten by every run; capture the hashes when you read).
 

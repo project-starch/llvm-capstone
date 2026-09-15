@@ -2751,7 +2751,10 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > UNREGISTERED (`cva6_mmu/cva6_mmu.sv:514`) while asserting `lsu_valid_o = lsu_req_q` a cycle later (`:513`,
 > `:741`); the units emit `ex_o.valid` in that later cycle only (`load_unit.sv:718` SEND_TAG — its own contract at
 > `:715-717`; `store_unit.sv:349` `state_q != IDLE`), when `lsu_ctrl` is already empty. At every fire the waveform
-> shows `ex_i.valid = 1`, `state_q = IDLE`, `ex_o.valid = 0`. Upstream `23355d29f` (#2528, "extracted PMP") removed
+> shows `ex_i.valid = 1`, `state_q = IDLE`, `ex_o.valid = 0` — **re-derived 2026-09-15 into a committed
+> artifact** (`sim/vcd-baseline-loadunit.txt`: 21 fires up to t = 3,000 ps, every one of that shape, the single
+> delivery at 1,167–1,173 being the three-cycle hold; the earlier `sim/vcd-timing.txt` selected 14 signals and
+> contained none of these three, so the sentence had rested on a waveform nobody could reopen). Upstream `23355d29f` (#2528, "extracted PMP") removed
 > the MMU's `misaligned_ex_q` register that used to carry the exception with the request; the non-MMU configuration
 > still registers (`load_store_unit.sv:459`), the MMU one does not. **Not capability-specific:** the stock
 > `rv64mi-p-ma_addr` fails on this RTL with capmode never set (TESTNUM 10, the `ld` crossing an 8-byte word,
@@ -2765,6 +2768,17 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > unaffected. Misaligned plain accesses silently complete with shifted data (wrong data across an 8-byte word) unless a second exception is presented one cycle later.
 > For the paper: the four plain-data-access rows of the safety matrix are not supported on this configuration for
 > two independent reasons, and "satisfy the gate" would not have enforced them either.
+>
+> **THE FIX IS SUFFICIENT AT THE `ex_stage` BOUNDARY (measured 2026-09-15, `sim/vcd-fix-boundary.txt`).** A
+> sufficiency condition was raised against any fix: `ex_stage.sv:1015` masks the LSU's exception with the DYN
+> load syncer's valid, whose message carries no exception, so a one-cycle lag would lose every single-cycle
+> exception. On the RTL lane's `c77c65324` each one-cycle `ex_o.valid` is followed by `load_exception_o.valid`
+> with the same cause and then by `csr_regfile_i.ex_i.valid` — causes 4/24/27/28 on the load side, 6/27/28 on
+> the store side — because the LSU registers the exception in the same spill register as the valid
+> (`load_store_unit.sv:685`). `debug_mode_q` stays 0 across four cause-24 deliveries, so **R-24's renumber and
+> R-34's delivery must ship together**: unrenumbered, those four would enter the debug ROM. Scope, stated
+> precisely: the block is gated `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`, so what the fix makes
+> enforceable is **M-mode code only** — the monitor and the test harness — not domain code.
 >
 > **What would settle the residuals** *(2026-09-15 later: (b) CLOSED by the RTL lane at the flashed revision — a store at
 > `bound_end` through the same capability the load arm uses takes no trap and the guard word past the buffer holds the
