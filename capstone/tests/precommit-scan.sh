@@ -117,7 +117,23 @@ elif [[ -n "$RANGE" ]]; then
     echo "  Scanning nothing is not a pass. Check the range, or there is nothing to push." >&2
     exit 2
   fi
+  # THIS MAKES --range OPERATOR-DEPENDENT, AND THAT HAS TO BE SAID OUT LOUD. The drop below is
+  # keyed to the LOCAL git config, so the SAME RANGE can block for one lane and pass for another:
+  # a lane whose configured identity matches the denylist has its own commits' author lines dropped
+  # and sees nothing; a lane configured differently sees every one of them as foreign identity and
+  # blocks. Found 2026-09-15 when two lanes scanned the identical six commits and disagreed -- one
+  # reported no name hits, the other four, and both were reading their own output correctly.
+  # A clean --range is therefore NOT evidence that a range is clean; it is evidence about the range
+  # AND the operator. The line printed below makes that visible at the point of use, because the
+  # alternative is a rule telling people to remember it.
   ME="$(git config user.name 2>/dev/null || true) <$(git config user.email 2>/dev/null || true)>"
+  if [[ "$ME" != " <>" ]]; then
+    NDROP=$(git log --format='%an <%ae>%n%cn <%ce>' "$RANGE" 2>/dev/null | grep -cxF -- "$ME" || true)
+    echo "precommit-scan: --range dropped ${NDROP:-0} identity line(s) matching THIS checkout's own git config." >&2
+    echo "  A lane configured differently would scan those lines instead of skipping them, so this" >&2
+    echo "  verdict is operator-dependent. Sync the ref first, too: a range read while behind shows" >&2
+    echo "  the commits you lack in the REVERTING direction." >&2
+  fi
   git log --format='%H%n%an <%ae>%n%cn <%ce>%n%s%n%b' "$RANGE" 2>/dev/null \
     | { if [[ "$ME" != " <>" ]]; then grep -vxF -- "$ME" || true; else cat; fi; } >> "$TMP"
   git diff "$RANGE" -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
