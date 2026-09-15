@@ -237,7 +237,64 @@ lead and should be made before the RTL, not discovered after the measurement dis
 prediction. The paper lane's independent caveat, that a reclaimer may *complicate* P1 rather than
 improve it, is the same worry approached from the other side.
 
-### The generation field lands in the HIGH half of the granule, which is this core's worst neighbourhood
+### ~~The generation field lands in the HIGH half~~ — RETRACTED 2026-09-15, I MISREAD THE PACKING
+
+**The section below is wrong about the field order and is kept only so the error is visible.** I read
+the generated `[93:0]` slice — which is a **width** — and inferred the field **order** from the
+declaration sequence in `capstone_unit.anvilh:543-549`, assuming first-declared occupies the low bits.
+Anvil packs MSB-first, like a SystemVerilog `struct packed`: first-declared takes the **top**.
+
+Settled from the consumer rather than from the declaration. `ex_stage.sv:1207` is
+`revnode_invalidation_valid_o = mem_rev_wr_req_valid && !node_wr_req[31]`, and
+`commit_stage.sv:242` says *"Invalidate if rev_node is writing valid=0 for our tracked node ID"* — so
+`node_wr_req[31]` **is** `valid`. With `msg_pack_t = {node_o, node_id[29:0]}`, that bit is `node_o[1]`,
+which is `valid` only under MSB-first. Under my assumed order it would be `depth[1]`, and the broadcast
+would fire on nearly every node write. Corroborated by `node_update_b = {34'd1, node_wr_req[123:94]}`,
+which is `depth[31:2]` going into the high word.
+
+    CORRECT:  depth node_o[93:62] | prev [61:32] | next [31:2] | valid [1] | linear [0]
+    slot low word  = node_o[63:0]              -> next, valid, linear, prev, depth[1:0]
+    slot high word = {34'd1, node_o[93:64]}    -> depth[31:2] plus 34 constant bits
+
+**What survives:** the padding IS slot bits 94..127, and slot bit 94 is a hard constant 1.
+**What is retracted:** `next`, `prev`, `valid` and `linear` are all in the **low** word. My claim that
+"`next` straddles bit 64 and the node already depends on high-half integrity today" is **withdrawn** —
+the only node field in the high word is `depth[31:2]`. I passed that claim to the paper lane and it
+was built on before being withdrawn there too.
+**And the escape is backwards:** narrowing `depth` frees bits in the **high** half, not the low. Landing
+a generation below bit 64 would mean narrowing `prev`/`next` (30 bits each, only 16 reachable), which
+frees 28 bits inside `node_o[63:0]`. I argued the opposite and argued it as the preferred option.
+
+**The error is the one this project documents.** A field's position in a struct declaration is not its
+position in the generated slice — the standing example is a `trans_id` read at `[2:0]` from the
+declaration when the generated code reads it at `[255 +: 3]`. My own auditor derived the packing
+correctly from a bootstrap literal; I overwrote its answer with my earlier inference instead of
+reconciling them.
+
+### THE PROPOSAL IS INCOMPLETE, NOT MERELY UNSAFE: nothing in it ever reuses an index
+
+The most fundamental finding, and neither audit's four named targets would have caught it. `head` is
+written in exactly three places — `capstone_rev_node.anvil:79` and `:141`, both `*head+16'd1`, and
+`:179`, the reset to `16'd3`. **It is never decremented, and there is no free list, reclaim queue or
+reuse scan anywhere in the file.** So with this design exactly as written, **no index is ever reused,
+the generation is never consulted, and the invariant is vacuously true while doing nothing.**
+
+The document specifies the safety *property* of reuse and the *condition* under which an index becomes
+reclaimable. It never specifies the *mechanism* that reuses one. The free list it rules out in its
+opening paragraph is the missing half of the proposal, not a rejected alternative — ruling it out
+without supplying a replacement leaves no allocator at all. That is also why the capacity figure has
+nothing behind it.
+
+### And "the AXI address arithmetic is untouched" is false in a way that matters
+
+`node_query_full_addr = CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr, 4'd0}` shifts the **full 30-bit
+id** left by four, so id bit 16 is worth 2^20 bytes: **generation 1 alone addresses 0xC000_0000**, past
+the top of the DRAM this document's own memory table ends at, and generation 0x3FFF reaches ~16 GiB
+past base. It works today precisely because `#{14'd0,*head}` makes the top fourteen bits hard zeros —
+**the design proposes putting data in exactly the bits whose being zero is load-bearing.** Every call
+site passing a capability-supplied id must mask to `[15:0]`.
+
+### The original high-half section, kept for the record and wrong about field order
 
 Raised by the paper lane and **measured here rather than assumed**. `rev_node_t` is
 `depth:32, prev:30, next:30, valid:1, linear:1` (`capstone_unit.anvilh:543-549`), and the generated
