@@ -118,21 +118,23 @@ staged; until it reports, any `mcause 25` on this platform is ambiguous between 
 **Do NOT try to use privilege or address range as a second discriminator.** An earlier version of
 this file argued that because the PC-capability check is gated on `priv_lvl_i == PRIV_LVL_M`
 (`core/commit_stage.sv:208`), a faulting PC outside the monitor's range could not be a pc_cap
-fault. That is wrong twice over: capability domains on this platform run **in M-mode** (the
-documented S-12 wedge state is `MPP=M`), so the gate is satisfied *by* the domain; and the
-`0x80000000`–`0x80800000` pair at `:200-201` is a constructed capability's bounds, not a gating
-range. `tval` is the only discriminator, and it is sufficient on its own.
+fault. That is wrong twice over. ~~Capability domains on this platform run **in M-mode** (the
+documented S-12 wedge state is `MPP=M`), so the gate is satisfied *by* the domain~~ — **that first
+reason is WITHDRAWN, see below; domains run in S-mode and the gate is never satisfied by them.**
+The second reason stands and is sufficient on its own: the `0x80000000`–`0x80800000` pair at
+`:200-201` is a constructed capability's bounds, not a gating range. `tval` is the only
+discriminator.
 
-**OPEN CONFLICT on the privilege half, flagged 2026-09-15 and deliberately NOT adjudicated here.**
-The "domains run in M-mode" clause above is contradicted by
-`docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`, which argues from
-monitor source (`sbi_capstone.S:177-194`, `csr_regfile.sv:2284`, and the entering `mret` clearing
-MPRV at `:2331`) that domains run in **S-mode** and therefore cannot satisfy a
-`PRIV_LVL_M` gate at all. The two rest on different kinds of evidence — an inference from an
-observed wedge state here, quoted monitor source there — and they cannot both be right. Whichever
-wins, the paragraph above stands on its own second argument (the address pair is a capability's
-bounds, not a gating range), so the instruction "do not use privilege or address range as a
-discriminator" is unaffected either way. Resolving it is R-34's business, not this folder's.
+The instruction in bold above is UNCHANGED by the withdrawal. It is if anything stronger: a domain
+cannot satisfy the privilege gate at all, so privilege still cannot separate the two paths.
+
+**How it was resolved, kept because the shape recurs.** On 2026-09-15 this file's "domains run in
+M-mode" clause was found to contradict
+`docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`, which argued from
+monitor source that domains run in **S-mode** and can never satisfy a `PRIV_LVL_M` gate. The
+conflict was flagged here rather than decided, because the two sides rested on different KINDS of
+evidence — an inference from an observed wedge state against quoted source — and the folder that
+owns the question is R-34's, not this one. It was adjudicated the same day, below.
 
 **ADJUDICATED 2026-09-15 (R-34's lane, as the flag asked): the S-mode reading is right and the "domains run in M-mode" clause is WITHDRAWN.** The wedge evidence was misread rather than wrong: `mstatus.MPP` records *the privilege that was interrupted*, written on trap entry as `mstatus_d.mpp = priv_lvl_q` (`core/csr_regfile.sv:2100`). So `MPP = M` at a wedge says the faulting code was in M-mode — the monitor, which is where a domain's fault lands once the domain's own trap vector is unset (M-1) — and says nothing about the privilege the domain itself ran at. The monitor `mret`s into S-mode, and the entering `mret` clears `MPRV` when `MPP != M` (`:2320`), so a domain cannot reach `ld_st_priv_lvl == PRIV_LVL_M` by any route. The independent confirmation is the E1 matrix: stale plain loads retire inside a domain, which is only possible with the gate unsatisfied. This changes nothing in the paragraph's conclusion — `tval` remains the only discriminator.
 
