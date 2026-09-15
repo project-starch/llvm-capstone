@@ -4703,7 +4703,7 @@ text in the log. The board path (`run_sqlite_stages_fpga.py`) sends one stage st
 and is not affected by this shape, but its stage strings are typed the same way — keep each under a
 few hundred bytes.
 
-### M-11 — the board drivers' summaries lose a result line split across two UART chunks (or by a monitor marker), so a present result reads as absent — and the control rung's own line is not exempt `OPEN — procedure; audited 2026-09-15 over all 85 archived transcripts: 63 split result lines in 40 boots, five of them the control's; no recorded verdict or cited number affected`
+### M-11 — the board drivers' summaries lose a result line split across two UART chunks (or by a monitor marker), so a present result reads as absent — and the control rung's own line is not exempt `GATED 2026-09-15 — every driver summary and the watchdog now read through fpga_driver/transcript.py (positive control: test_transcript.py); audited over all 85 archived transcripts: no recorded verdict or cited number was affected`
 
 The console delivers the UART in chunks and the driver frames each as `[fpga] [uart] '...'`; a domain's
 line that straddles two chunks is two lines in `driver.log`, and the monitor's share markers
@@ -4714,6 +4714,26 @@ present mark (E1 r3b3's subpool test, 0D3E04 in the transcript), or a TRUNCATED 
 `RESULT k800 retval=4` itself was readable only after joining (sw55, sw65, sw74, sw74b, sw78 r3b4): a
 summary-only reader calls those boots VOID.
 
+> **GATED 2026-09-15 (afternoon).** The join is now one module, `capstone/tests/rtl-smoke/fpga_driver/transcript.py`:
+> every `[fpga] [uart] <repr>` frame through `ast.literal_eval` (the archive holds 2,107 double-quoted frames the
+> single-quote extractors silently dropped, and frames of one line are routinely separated by `[event]` lines,
+> which an adjacency-only seam join misses), scoped after this run's `monitor load_image`, joined, the markers
+> deleted for domain lines and KEPT for the marker rows and the stall marker, per-arm segments on the
+> `[stages] --> TEST` lines, full-match `find_all`, and `require` so that no data is an error. Its positive
+> control `test_transcript.py` asserts the OLD reading wrong and the new one right on a synthetic log
+> (a control split with an event line between the chunks, a double-quoted frame, a marker mid-token in a cycle
+> count, a SHA6 split across chunks, a mark split after four digits → the old reading `00051D`). The six
+> drivers' summaries (`board-c6var/b80s/b80a/b78-w2h/r1/r1e4.sh`) read through it, the per-arm mark regex is
+> anchored on its line terminator so a cut number can never print as a mark, the marker is `refused`/`failed`/
+> `done` by the runner's status and the driver exits non-zero on the first two, and `board-watchdog.sh` reads
+> its last SHA5/SHA6 marker through the module's CLI (a split SHA6 read as a stall before). Replayed over the
+> archive: the only deltas are the predicted recoveries (arm C's `sublet:` row, sw8x-b80s-O2's 8,562 →
+> 1,166,594,074, E1 r3b3's subpool mark, r3b4's control, R1's banner count, R1 boot 1's false `bad`), and a
+> refused launch now prints `ERROR: no UART after this run's load_image` instead of a table of zeros. Two
+> findings on the way: `boot.txt` (PROBE_SCOPED_OUT) carries no boot banner at all, so the R1 drivers' "must be
+> 1" line was a structural zero on every boot; and `ENTRY-STALL` is written to `watchdog.log` only, so a
+> summary grepping `driver.log` for it can never fire. The bundle generators import the module too.
+>
 **Rule:** the transcript is the record and a driver's summary is a view of it; before any line-based
 read, join the seams (`re.sub(r"'\n\[fpga\] \[uart\] '", "", log)`), unescape the newlines, delete
 the markers (`[A-Z0-9]{4}:[0-9A-F]{8}\n?`), then parse — as `capstone/sublet/r1/r1-bundle.py` and

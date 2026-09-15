@@ -167,7 +167,17 @@ spatial arm), which is the study's question; stale-data ENFORCEMENT on the plain
 not measure. No node-cache knee or node-size inference is made (`M2:57-58, 63-65`). Enabling the LSU
 check below M-mode is an RTL edit (one hardcoded privilege literal), a synthesis run and an ask-first
 reflash, not a knob, and the RTL lane notes capmode and M-mode may be mutually exclusive there — to
-confirm before anyone designs around it. Bundle at `experiments/results/M2/fpga-<date>/` in the record shape.
+confirm before anyone designs around it. **Pre-registered shape and two controls (the RTL lane's reading of the node unit):** the
+validity query is ONE indexed 16-byte read (`get_rev_node`, no walk — REVOKE walks, the query does not), so
+its cost is flat in the number of live nodes algorithmically, and what grows is the node table's footprint
+against the 32 KiB data cache (2,048 nodes if nothing competes). Pre-register flat-then-inflect, with the
+inflection near two thousand live nodes; the alternative (a slope from the first point) is distinguishable
+in one series. Controls: (a) a spatial arm carrying the SAME number of live nodes as the sublet arm (leaves
+minted and held, not used), so both arms share the node-table footprint and the per-access difference is
+isolated from the footprint effect; (b) points below two thousand live nodes so the flat region is visible
+(16 / 64 / 256 / 1024 records are below it, 4096 above). The finding to write, if it reads so: the temporal
+check costs one indexed read, and the cost of a growing alias set is a locality cost in the node table,
+not a mechanism cost. Bundle at `experiments/results/M2/fpga-<date>/` in the record shape.
 
 ### F6 — Prepared for M1's day (desk, no board)
 

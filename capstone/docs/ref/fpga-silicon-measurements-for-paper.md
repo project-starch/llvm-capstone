@@ -3599,6 +3599,11 @@ cited `BASELINE-WARM`, or sw74b's uncited repeat). Entry-stall classifications a
 monitor's share markers by the watchdog, not from a domain's result line, so they are not exposed to
 this. Registered as M-11: the transcript is the record, a driver's summary is a view, and the seam
 join precedes any line-based read.
+M-11 is GATED the same afternoon (registry): one module (`fpga_driver/transcript.py`, positive control
+`test_transcript.py`) that every driver summary and the watchdog read through, replayed over the archive
+with only the predicted recoveries as deltas — and two more findings on the way: `boot.txt` carries no boot
+banner (the R1 drivers' "must be 1" was a structural zero every boot), and `ENTRY-STALL` lives only in
+`watchdog.log`.
 
 ### §7s — E2 of the Sublet-paper plan: cell ⑥ at P1's matched backing limit (boot sw79, 2026-09-15 00:08–00:19)
 
