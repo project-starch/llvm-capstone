@@ -232,6 +232,15 @@ docker API"* — the account has no passwordless sudo. Verilator 5.008 **is** pr
 which comes from a container image. The run therefore belongs to a lane on the host that owns the
 toolchain; it is handed over rather than dropped.
 
+*Provenance of the lines in this section:* `scoreboard.sv:215`/`:236`,
+`capstone_unit.anvilh:565-568`, `ex_stage.sv:1013`/`:1015`/`:1017`/`:721`/`:1014`/`:1016`,
+`base_isa_tests.sh:53-58` and the `testlist_capstone.yaml` counts were **re-read here**. One
+citation in the report this came from was wrong and was corrected by re-reading — the message type
+is at `capstone_unit.anvilh:565-568`, not `:470-473`. The remaining citations —
+`issue_read_operands.sv:648`, `load_unit.sv:698`/`:702`/`:715-717`, `capstone_dyn_unit.anvil:589-595`
+and the `sim/vcd-timing.txt` signal list — are **reported, not re-read by this lane**, and should be
+checked before anything is built on them.
+
 Two adjacent items for whoever fixes R-34, from the same reading: `load_unit.sv:718`'s delivery is
 nested inside `:698`'s `req_port_i.data_rvalid`, so a restored exception is delivered only when
 rvalid coincides with `SEND_TAG` (the miss / `kill_req` path is unchecked); and the comment at
@@ -244,10 +253,11 @@ uncontamination argument, which never uses the attribution and holds either way.
 evidence that the attribution is false. What I found is that one of its three legs is currently
 unauditable, and that a fix targeting only the LSU/MMU has an unverified sufficiency condition.
 
-**One more thing the fork's own gate cannot tell you.** `verif/regress/base_isa_tests.sh:53-58`
+**One more thing the fork's own gate cannot tell you** (re-read against the files, not taken on the
+auditor's word). `verif/regress/base_isa_tests.sh:53-58`
 runs five tests — `rv64ui-v-{add,ld,sd,beq,jal}` — and the list it drives
-(`verif/tests/testlist_capstone.yaml`, 121 tests) contains **zero `rv64mi-*` of any kind**, so no
-machine-mode exception test at all. The commit messages "Non Interference with Base ISA verified"
+(`verif/tests/testlist_capstone.yaml`) contains **121 tests and zero `rv64mi` of any kind** — both
+counts re-derived here — so no machine-mode exception test at all. The commit messages "Non Interference with Base ISA verified"
 and "Tests passing" therefore carry no information about `rv64mi-p-ma_addr` in either direction.
 That does not show the fork broke it — whether the pre-fork parent passed it is **UNRESOLVED**, and
 nothing in-tree records a result for any revision — but it is why a defect of this shape could sit
@@ -280,8 +290,17 @@ unchanged build string of the form *root-account at a generic build host* — a 
 person, and the false-positive class
 the script's own closing message invites you to confirm by eye.
 
-**What this does not fix, and is the lead's:** the names remain in git history, on `dev` and 27
-other remote branches. Scrubbing forward does not touch that, and the remedy CLAUDE.md prescribes
+**STATUS, and read this before trusting the paragraph above.** The scrub exists **only in the
+working tree on apollo. It is not committed and not on `origin`.** Its commit was refused twice by
+this session's permission classifier — reasons *"Security Test Removal"* and *"Out-of-Place
+Publication"* — and I stopped rather than reword the change to get past a refusal. So a reader who
+runs the sweep against `origin/dev` today finds **five** hits, not one, and the four files still
+carry the name. It also means the scrub sits **unstaged in a checkout other lanes on this host may
+share**, where a broad `git commit` from any of them would carry it under their own message. This
+needs the lead: either approve the commit, or discard the working-tree change.
+
+**What a commit would still not fix, and is also the lead's:** the names remain in git history, on
+`dev` and 27 other remote branches. Scrubbing forward does not touch that, and the remedy CLAUDE.md prescribes
 for an already-pushed name — rewrite and force-push — is irreversible and outward-facing.
 
 ## 8. Method notes, because several of these were nearly mistakes
