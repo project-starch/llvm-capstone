@@ -11,6 +11,27 @@
 #     bash capstone/tests/precommit-scan.sh                    # scan staged diff
 #     bash capstone/tests/precommit-scan.sh --msg <file>       # also scan a commit message
 #     bash capstone/tests/precommit-scan.sh --range A..B       # scan a commit range
+#     bash capstone/tests/precommit-scan.sh --tree             # scan ALL TRACKED FILE CONTENT
+#
+# WHY --tree EXISTS. The other three modes read what a commit CHANGES. They are FLOW gates, and a
+# flow gate is silent about everything it is never shown: content that entered before this script
+# existed, or by a path it never saw, stays invisible however many commits pass. On 2026-09-15 a
+# whole-tree scan found FIVE tracked files carrying a denylisted name while every commit had been
+# passing -- two `<name>@host` build strings, a git author attribution, a personal path, and one
+# legitimate published-paper citation URL. That is a third failure shape beyond "the detector
+# cannot fire" and "the instrument cannot distinguish": every positive control you can think to
+# run comes back correct, because the gate IS right about everything it is shown. The question
+# that catches it is what is this check NEVER shown. Run --tree periodically; it is not part of
+# the commit or push path and is not meant to be.
+#
+# WHAT --tree IS GOOD FOR, AND WHAT IT IS NOISY AT. The NAME check is the one it exists for and it
+# is precise: on 2026-09-15 it found five files and four were real. The SECRETS heuristics are
+# flow-shaped and go noisy over a whole source tree -- `token` as an ordinary identifier
+# (`token: Optional[str]`, `handle token = %llu`), a help string containing the placeholder form of
+# the board URL, a loopback test stub. All of those were confirmed false positives by eye the day
+# this mode was written. They are deliberately NOT suppressed: this mode reports every check and
+# exits 1 on any hit, because silencing a check inside a new mode is how a pattern gets weakened by
+# increments. Read the output; do not wire --tree into a hook.
 #
 # Exit 0 = clean. Exit 1 = BLOCKED, do not commit or push.
 #
@@ -27,10 +48,12 @@ set -uo pipefail
 DENYLIST="${CAPSTONE_NAME_DENYLIST:-$HOME/.claude-kisp/secrets/name-denylist.txt}"
 MSG_FILE=""
 RANGE=""
+TREE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --msg)   MSG_FILE="$2"; shift 2 ;;
     --range) RANGE="$2";    shift 2 ;;
+    --tree)  TREE=1;        shift 1 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -46,7 +69,30 @@ SKIPPED_BINARY=()
 # every commit that touches it fail on its own regexes. Excluding it is not a weakened
 # pattern -- a detector's rule list is not a violation. Announced below, never silent.
 SELF='capstone/tests/precommit-scan.sh'
-if [[ -n "$RANGE" ]]; then
+if [[ "$TREE" == "1" ]]; then
+  # Every TRACKED file's full content. Binary is skipped by content and named out loud, exactly as
+  # the untracked path below does, and for the same reason: catting a blob in raw makes ugrep treat
+  # the whole temp file as binary and silently disables every content check.
+  # SCOPED TO THE PATHS THIS PROJECT OWNS. The repo is an LLVM fork: `git ls-files` is ~100k files,
+  # almost all of them upstream llvm/, clang/ and lldb/, whose author names are explicitly NOT ours
+  # to police. Scanning them takes minutes and every hit is a false positive, which is how a gate
+  # stops being run at all. `capstone/` is the project's own tree.
+  TREE_SCOPE="${CAPSTONE_TREE_SCOPE:-capstone/}"
+  while IFS= read -r f; do
+    [[ "$f" == "$SELF" ]] && continue
+    if [[ -f "$f" ]] && LC_ALL=C grep -qI . "$f" 2>/dev/null; then
+      printf '=== tracked: %s ===\n' "$f" >> "$TMP"
+      cat -- "$f" >> "$TMP" 2>/dev/null
+    else
+      SKIPPED_BINARY+=("$f")
+    fi
+  done < <(git ls-files -- "$TREE_SCOPE")
+  echo "precommit-scan: --tree scanned tracked text under '$TREE_SCOPE' (override with CAPSTONE_TREE_SCOPE)" >&2
+  if [[ ! -s "$TMP" ]]; then
+    echo "precommit-scan: BLOCKED -- --tree read ZERO bytes in $(pwd). Scanning nothing is not a pass." >&2
+    exit 2
+  fi
+elif [[ -n "$RANGE" ]]; then
   # Author and committer identity ARE scanned (a cherry-picked collaborator commit carries a
   # name), but the committing user's OWN configured identity is dropped first: it is on every
   # commit in every repo, so feeding it in made --range block on any range whatsoever --
