@@ -180,12 +180,16 @@ the R-34 work; runs no boot. Its unpushed board branch is carried to you as a gi
 
 ## 8. The paper repository's operator procedure — read it before your first bundle (found 2026-09-15, 16:10)
 
-The paper repository's LIVE branch is **`drafts`** (`7f83725`, 20 commits ahead of `main`; the board branch's base
-`b0d7510c` is under it). It carries two files that no checkout of the board lane ever contained and that the
-bundles of the last two days were made without: **`experiments/EXECUTION.md`** (the operator instructions) and
-**`experiments/WORK-ORDER.md`** (the work-order template). The platform repo's submodule pointer is `main`, which
-lacks them, so read them from `origin/drafts` of the paper repository (the bundle the lead carries to you holds
-both `board/e1-s1s2-hardware` and `origin/drafts`). What they require, and what changes for you:
+The paper repository's remote is at **`7f83725` on BOTH `main` and `drafts`** (identical trees; an earlier
+version of this section said `drafts` was 20 commits ahead — that compared a stale LOCAL `main`, and was wrong).
+What is 20 commits behind is the platform repo's submodule gitlink for `capstone/paper-nested-allocators`
+(`b0d7510c`) and the board branch's base. `7f83725` carries two files that no checkout of the board lane ever
+contained and that the bundles of the last two days were made without: **`experiments/EXECUTION.md`** (the
+operator instructions) and **`experiments/WORK-ORDER.md`** (the work-order template); read them from the paper
+repository's remote (the bundle the lead carries to you holds `board/e1-s1s2-hardware` and `origin/drafts`,
+which is that commit). **Landing the board branch is a MERGE, never a fast-forward:** relative to `7f83725` it
+would delete `EXECUTION.md`, `WORK-ORDER.md`, `sections/`, `appendices/`, `macros/` and the rest of the
+restructure that happened above its base. What the two files require, and what changes for you:
 
 * **A work order per bundle, filled BEFORE measurement**, every pre-launch field marked REQUIRED resolved at launch:
   the study and protocol, the scope (audit / implementation / bounded measurement / full study), the question and
