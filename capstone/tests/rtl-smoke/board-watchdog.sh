@@ -131,7 +131,12 @@ while true; do
       scan=$(awk '/emit gdb_input .*monitor load_image/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$LOG" 2>/dev/null)
       # require the image to have been handed over in THIS run before any stall verdict
       case "$scan" in *load_image*) ;; *) lastmark=""; scan="";; esac
-      lastmark=$(printf '%s' "$scan" | sed -n 's/.*\(SHA[56]:[0-9A-F]*\).*/\1/p' | tail -1)
+      # The share marker is read on the seam-JOINED UART (fpga_driver/transcript.py, ISSUES M-11): a SHA6 split
+  # across two console chunks is invisible to a per-line match and would read as a stall that is not one
+  # (a missed abort has the opposite shape, a SHA5 split the same way). The per-line sed stays as the
+  # fallback if the module cannot run, never as "no marker".
+  lastmark=$(printf '%s' "$scan" | python3 "$(dirname "$0")/fpga_driver/transcript.py" last-marker 2>/dev/null) \
+    || lastmark=$(printf '%s' "$scan" | sed -n 's/.*\(SHA[56]:[0-9A-F]*\).*/\1/p' | tail -1)
       case "$lastmark" in
         SHA5:*)
           if [ -n "$RUNNER_PID" ] && ! kill -0 "$RUNNER_PID" 2>/dev/null; then

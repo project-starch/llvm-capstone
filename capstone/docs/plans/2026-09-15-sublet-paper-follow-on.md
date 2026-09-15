@@ -156,13 +156,18 @@ turnover). Node budget per boot: a 4096-record sublet point mints 8,192 nodes, s
 invocations per boot beside spatial ones; schedule 3 seeds × 5 runs per point as fresh-domain
 invocations over ≥ 3 boots (METHODS:92), ~45 invocations, ~6 boots, the invocation list in a script
 (M-10), `--tables` above every arena (M-9). Report per run: raw and calibrated cycles per access,
-`minstret`, the node count, working-set bytes, and E4's latency calibration beside it. **Caveat written
-into the bundle and §7:** on this bitstream the LSU's node-validity check is M-mode-gated (E1: stale
-loads retire in a domain), so the sublet arm's access path carries no temporal query — the delta
-measures the alias/capability access cost as deployed, the "queries per access" count is 0 by
-construction, and no node-cache knee or node-size inference is made (`M2:57-58, 63-65`). Whether the
-check is enabled in domains is a configuration question for the RTL lane and the lead, stated in the
-hand-off. Bundle at `experiments/results/M2/fpga-<date>/` in the record shape.
+`minstret`, the node count, working-set bytes, and E4's latency calibration beside it. **The claim line, written
+into the harness, the bundle and §7 (corrected by the RTL lane's reading):** each access reads the next
+INDEX with a plain load, which carries no temporal query on this bitstream (the LSU's check for plain
+loads through a capability base is M-mode-gated — E1 measured stale loads retiring in a domain), and
+then fetches the next record's capability from the lookup array with an LDC, which DOES run the DYN
+unit's node-validity query at every privilege level — so the series measures that query under a
+growing set of live nodes (one alias per record in the sublet arm against one per region in the
+spatial arm), which is the study's question; stale-data ENFORCEMENT on the plain load is what it does
+not measure. No node-cache knee or node-size inference is made (`M2:57-58, 63-65`). Enabling the LSU
+check below M-mode is an RTL edit (one hardcoded privilege literal), a synthesis run and an ask-first
+reflash, not a knob, and the RTL lane notes capmode and M-mode may be mutually exclusive there — to
+confirm before anyone designs around it. Bundle at `experiments/results/M2/fpga-<date>/` in the record shape.
 
 ### F6 — Prepared for M1's day (desk, no board)
 
