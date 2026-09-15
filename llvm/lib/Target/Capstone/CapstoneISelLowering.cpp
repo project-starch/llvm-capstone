@@ -8090,8 +8090,17 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     // recoverCapabilityFromAddressArith; anything reaching here has none.
     if (VT == MVT::c128 && Op0VT == MVT::i128) {
       SDValue Addr = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op0);
-      return DAG.getTargetInsertSubreg(Capstone::sub_cap_addr, DL, MVT::c128,
-                                       DAG.getUNDEF(MVT::c128), Addr);
+      // C-32 (lead's design A, 2026-09-15): a REMATERIALIZABLE pseudo, not a bare
+      // INSERT_SUBREG into an undef capability. Both produce the same ADDI on the
+      // address half, but the bare sub-register write leaves a GPCR value that
+      // register allocation may COPY -- and a GPCR copy is `movc`, which on the
+      // RTL nulls any source that is not a NONLIN capability. Bridged integers
+      // are untagged by construction, so such a copy destroys the source when it
+      // is read again (observed on silicon in the Sublet port's setupLookaside;
+      // invisible under QEMU, which is the permissive side here -- Q-04).
+      // Remat re-bridges at each use instead, so no capability copy is formed.
+      return SDValue(
+          DAG.getMachineNode(Capstone::PseudoBRIDGE_CAP, DL, MVT::c128, Addr), 0);
     }
     if (Op0VT == MVT::i16 &&
         ((VT == MVT::f16 && Subtarget.hasStdExtZfhminOrZhinxmin()) ||

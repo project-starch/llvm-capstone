@@ -58,6 +58,8 @@ private:
                   MachineBasicBlock::iterator &NextMBBI);
   bool expandVMSET_VMCLR(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI, unsigned Opcode);
+  bool expandBridgeCap(MachineBasicBlock &MBB,
+                       MachineBasicBlock::iterator MBBI);
   bool expandCapGlobalBase(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MBBI);
   bool expandMV_FPR16INX(MachineBasicBlock &MBB,
@@ -122,6 +124,8 @@ bool CapstoneExpandPseudo::expandMI(MachineBasicBlock &MBB,
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
+  case Capstone::PseudoBRIDGE_CAP:
+    return expandBridgeCap(MBB, MBBI);
   case Capstone::PseudoCapGlobalBase:
     return expandCapGlobalBase(MBB, MBBI);
   case Capstone::PseudoMV_FPR16INX:
@@ -308,6 +312,48 @@ bool CapstoneExpandPseudo::expandVMSET_VMCLR(MachineBasicBlock &MBB,
 //
 // One pseudo, because the cincoffset result is a LINEAR capability and the ISA
 // consumes a non-NONLIN source on copy. Keeping the delin welded to it means the
+// C-32: an integer becomes an UNTAGGED capability -- `addi <rd's addr half>, rs, 0`.
+// This is byte-for-byte what copyPhysReg's GPR->GPCR arm emits
+// (CapstoneInstrInfo.cpp), and the integer write is what clears the tag.
+//
+// The IMPLICIT DEFINE of the full capability register is required, not cosmetic:
+// without it the machine verifier sees every later use of $rd reading a register
+// that nothing defined (the ADDI defines only the sub-register), and
+// -verify-machineinstrs fails.
+//
+// On why this runs here and not in CapstonePostRAExpandPseudo, see the pseudo's
+// definition: MachineCopyPropagation would delete the expansion in the rd == rs
+// case, taking the shadow-clearing write with it.
+bool CapstoneExpandPseudo::expandBridgeCap(MachineBasicBlock &MBB,
+                                           MachineBasicBlock::iterator MBBI) {
+  DebugLoc DL = MBBI->getDebugLoc();
+  const TargetRegisterInfo *TRI = STI->getRegisterInfo();
+  Register DstReg = MBBI->getOperand(0).getReg();
+  Register SrcReg = MBBI->getOperand(1).getReg();
+  Register DstAddr = TRI->getSubReg(DstReg, Capstone::sub_cap_addr);
+
+  // SAME HARDWARE REGISTER: emit nothing, exactly as copyPhysReg's GPR->GPCR arm
+  // does for this case. `addi a0, a0, 0` would be a self-move, and here it is
+  // genuinely redundant rather than a shadow-clearing write worth keeping: this
+  // pseudo's source is a GPR by construction, so whatever last wrote that
+  // physical register was an INTEGER write, which already left the metadata
+  // shadow clear. Emitting it anyway costs an instruction on every masked-address
+  // round trip -- cap-addr-bitmask.ll caught precisely that, as `mv a0, a0` after
+  // an `andi`.
+  if (DstAddr == SrcReg) {
+    MBBI->eraseFromParent();
+    return true;
+  }
+
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), DstAddr)
+      .addReg(SrcReg)
+      .addImm(0)
+      .addReg(DstReg, RegState::ImplicitDefine);
+
+  MBBI->eraseFromParent();
+  return true;
+}
+
 // LINEAR value never becomes an SSA value the register allocator can copy. See
 // CapstoneInstrInfo.td, PseudoCapGlobalBase.
 bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,

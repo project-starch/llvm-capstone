@@ -2590,6 +2590,56 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
                       PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
 
+// PseudoBRIDGE_CAP: the other direction -- an INTEGER becomes an UNTAGGED
+// capability (`inttoptr`). It is the mirror of PseudoTRUNC_CAP above and exists
+// for C-32, the lead's design A (2026-09-15).
+//
+// WHY A PSEUDO AND NOT THE BARE INSERT_SUBREG IT REPLACES. The lowering used to
+// emit `getTargetInsertSubreg(sub_cap_addr, undef c128, addr)`. That is a
+// sub-register write into an UNDEF capability, and register allocation is free to
+// COPY the result -- which, for a GPCR, is `movc`. The RTL's movc writes cnull to
+// any source that is not a NONLIN capability, so copying a bridged integer whose
+// source is read afterwards LOSES THE SOURCE on silicon while QEMU keeps it
+// (Q-04). Observed live in the Sublet port's setupLookaside at -O2.
+//
+// As a rematerializable pseudo the value is instead RE-BRIDGED at each use, so no
+// capability copy of it is ever created and the integer stays in an integer
+// register. It expands to the same `ADDI` on $rd's sub_cap_addr that
+// copyPhysReg's GPR->GPCR arm already emits, which clears the tag as a side
+// effect -- exactly what inttoptr means.
+//
+// IT EXPANDS LATE, IN CapstoneExpandPseudoInsts (addPreEmitPass2), NOT IN
+// CapstonePostRAExpandPseudo (addPreSched2), and that is load-bearing: when
+// regalloc gives $rd the capability whose address half IS $rs, the expansion is
+// `addi rs, rs, 0`, and MachineCopyPropagation -- added by addPreEmitPass at -O2
+// with UseCopyInstr -- DELETES `addi rd, rs, 0` when rd == rs. That write is not
+// redundant: it is what clears the metadata shadow on the RTL (C-31, and the same
+// reason PseudoTRUNC_CAP stays a pseudo until MC lowering). Expanding after
+// addPreEmitPass puts it out of that pass's reach.
+//
+// PseudoInstExpansion cannot be used here: it maps operands 1:1 and cannot write
+// a sub-register, hence the manual expansion.
+//
+// THE TWO REMAT FLAGS ARE LOAD-BEARING, MEASURED, NOT ASSUMED. Dropping both and
+// rebuilding brings the defect straight back -- bridged_copied_live returns to
+// `movc a0, s0` twice around the call instead of `mv`. That is the mutation
+// control for this pseudo, and c32-movc-untagged-live.ll's `mv` lines are what
+// fail when it is run.
+//
+// WHAT IS *NOT* NEEDED, recorded so it is not re-added on the strength of
+// plausible reasoning: an override in CapstoneInstrInfo::isReallyTriviallyRe-
+// MaterializableImpl for this opcode. The generic check refuses any instruction
+// with a virtual-register use ("Don't allow any virtual-register uses",
+// TargetInstrInfo.cpp), and this pseudo HAS one, so an override looks obviously
+// required. It is not: one was written, and building the -O2 SQLite silicon image
+// with and without it produced BYTE-IDENTICAL output, sha256 a1f8f209..., 1.2 MB
+// of real code. Whatever consumes isAsCheapAsAMove here does not route through
+// that hook. An override was therefore removed rather than shipped with a comment
+// asserting a mechanism that does not run.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4,
+    isReMaterializable = 1, isAsCheapAsAMove = 1 in
+def PseudoBRIDGE_CAP : Pseudo<(outs GPCR:$rd), (ins GPR:$rs), []>;
+
 // THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
 
 // Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.
