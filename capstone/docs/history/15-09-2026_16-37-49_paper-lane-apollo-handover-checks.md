@@ -147,20 +147,37 @@ email field — and they account for **399 of those 400 commits**."* Challenged 
 measured a different number; re-measured here on `origin/dev`, and **they were right that mine was
 too high**:
 
-| | |
-|---|---|
-| distinct author identities in the last 400 `capstone/` commits | **3** |
-| unambiguously the personal identity (its **name field** matches) | **317** commits |
-| matches **only** via the email local part | 74 commits — **probably a false positive**, see below |
-| matches nothing | 9 commits |
+**⚠⚠ AND THE CORRECTION ITSELF WAS CORRECTED.** A first revision of this paragraph called the
+74-commit identity a probable false positive. **It is not — those are personal emails**, and the
+final numbers are below. Both wrong versions are recorded because the sequence is the point: the
+first figure was too high, the second resolved the ambiguity the wrong way, and only the third
+separates the question that actually decides the scope.
 
-The 74-commit identity's display name matches **no** denylist pattern, and its email hit is a
-**5-character pattern at position [0:5] of a 13-character local part**, with the display name not a
-prefix of that local part. That is the shape of a substring coincidence rather than a person, and
-the lane that can read the actual strings classifies it as a role name. **So the defensible number
-for the lead is one identity and ~317 of 400 — about four fifths — not two identities and
-effectively all of them.** The classification of those 74 is the one thing still open, and it should
-be settled by someone who can see the strings, not inferred from structure.
+| | last 400 commits touching `capstone/` |
+|---|---|
+| personal **name** in the author line (one identity) | **316** |
+| personal **email** only, under a role display name (a second identity) | **74** |
+| matches nothing | **10** |
+
+*Independently re-measured here, agreeing with the RTL lane's figures exactly. Author identities
+number 3; counting author-or-committer pairs gives 4, which is where an earlier 3-vs-4 disagreement
+came from — a measurement difference, not a conflict.*
+
+**Why the 74 are personal and not a coincidence.** The denylist pattern matches at **offset 0** of
+the 13-character local part — the address *begins* with the name, with 8 characters following — and
+the display name is a role word. A coincidence sits at an arbitrary offset inside an unrelated word;
+a name at offset 0 followed by the rest of an address is an address **built from** that name. My
+earlier reading noted the offset and failed to weight it: I treated "the display name doesn't match"
+as evidence against, when it only means the person used a role display name.
+
+**THE SCOPE DEPENDS ON WHAT THE REWRITE IS FOR, AND THAT IS THE DECISION — NOT THE COUNT.**
+
+* removing personal **names** from authorship → **~316 commits, one identity**;
+* removing personal **identifiers**, emails included → **~390 commits, two identities**.
+
+Quoting a single figure is what went wrong twice here: "one identity, ~317" understates it if the
+lead means identifiers, and overstates the name problem if they mean names. The lead should be asked
+which, and the number follows from the answer rather than the other way round.
 
 **And the bigger finding, which is why the two lanes disagreed at all: `--range`'s verdict is
 OPERATOR-DEPENDENT.** `precommit-scan.sh:120-122` builds `ME` from the **local** `git config
@@ -172,6 +189,15 @@ foreign and trips the name **and** email detectors, while on theirs *this* lane'
 foreign and trips the email detector, and their own is dropped so the name section never appears.
 **The same range blocks for one operator and passes for another, and both get a confident answer
 with no indication which they are.**
+
+**Now enforced rather than remembered.** The RTL lane has since made `--range` print, on every run,
+how many identity lines it dropped as matching this checkout's own git config, that the verdict is
+therefore operator-dependent, and that a range read while behind shows the missing commits in the
+reverting direction (`960b8c752278`; counts only, no names, on stderr). They also gave the scanner a
+**`--tree` mode** (`fbcc8d30d724`) — §7's finding turned into a check rather than a rule, which is
+the right direction. Verified here: `--tree`'s **name** check reports exactly **one** hit, the
+exempt citation URL, agreeing with the independent sweep in §7; its other sections are noisy by
+design and the script's own header says so.
 
 The compound rule that falls out, and it is worth more than either count: **a range scan's verdict
 depends on things that are not in the range** — the operator's git config, and whether the local ref
