@@ -54,19 +54,45 @@ paths and are NOT affected.
 
 ## Why it matters more than an off-by-one usually does
 
-**`mcause = 25` has FOUR sources that mean different things, and nothing in `mcause` separates
-them.** An earlier version of this file said two; that was wrong, and the two it missed are not
-theoretical:
+**`mcause = 25` has THREE sources that mean different things, and nothing in `mcause` separates
+them.** This count has now been wrong twice in this file: an earlier version said two, a later one
+said four. Three is the number, and the retraction of the fourth is recorded below because it
+changes what this folder claims about the LSU.
 
     1  core/ex_stage.sv:479,488          FLU     24 + code   tval = fu_data_i[0].operand_a
     2  core/commit_stage.sv:226,604      pc_cap  23 + 2      tval = commit_instr_i[0].pc
     3  core/cva6.sv:1516,1521            DYN     24 + code   tval = capstone_dyn_ftval
-    4  core/load_store_unit.sv:1005-1009 LSU     hardcoded `cap_exception.cause = 64'd25`
 
-Source 4 is the worst of them: it is the LSU's **bounds** check — `lsu_ea_full < bound_start ||
-lsu_ea_full + access_sz > bound_end` — reporting cause 25, where the reference number for
-`CAP_OOB` is 28 and for `INVALID_CAP` is 25. So an out-of-bounds access on this silicon is
-indistinguishable by `mcause` from a revocation failure and from a not-a-capability operand.
+**RETRACTED 2026-09-15 — the former source 4.** This file said
+`core/load_store_unit.sv:1005-1009` was "the LSU's **bounds** check reporting cause 25" and called
+it "the worst of them". Both halves are wrong, and were wrong at the date they were written.
+`:1005-1009` is the `always_ff` reset block, not a cause assignment. The actual clauses, read at
+`6fe7a49ab` and unchanged since, are:
+
+    load_store_unit.sv:974   NOT_CAP                      64'd24
+    load_store_unit.sv:977   not LINEAR/NONLIN            64'd26
+    load_store_unit.sv:980   LOAD  && !perm[2]            64'd27
+    load_store_unit.sv:983   STORE && !perm[1]            64'd27
+    load_store_unit.sv:987   out of bounds                64'd28
+    load_store_unit.sv:990   revocation node not valid    64'd25
+
+So the LSU's bounds check reports **28**, which is correct, and the clause that reports 25 is the
+**revocation-node validity** check, for which 25 is also correct. The LSU is not a fourth
+mis-numbered source; it is numbered right. An out-of-bounds access is NOT indistinguishable from a
+revocation failure on this silicon — that sentence is withdrawn.
+
+**And the LSU is evidence, not a defect.** Its literals are base 23 + ordinal throughout, they are
+original to 2026-05-10 and were never edited, and `commit_stage.sv:216-226` carries the same
+numbering with the arithmetic spelled out in its comments ("23 + 3", "23 + 4", "23 + 5"). Together
+with the spec (`capstone-academic-spec/parts/int-except.adoc:21-27`) and QEMU
+(`capstone-qemu/target/riscv/cpu_bits.h:693-699`, `0x18..0x1e`) that is four sources on base 23
+against the two execute-path encoders on base 24. `docs/ref/ISSUES.md` recorded this under R-24 on
+2026-09-10; this file had not caught up.
+
+How the error happened is worth one line, because it is this project's most expensive shape: the
+line range was read from a stale offset and the clause identified from the line ABOVE the one that
+sets the cause. The check that would have caught it is reading the assignment and its guard
+together rather than the line number alone.
 
 Source 3 carries a further hazard for anyone reading `tval`: `capstone_dyn_ftval` is a LATCHED
 register, so it reads zero when it was never armed. A `tval == 0` from the DYN path is genuinely
@@ -96,6 +122,17 @@ fault. That is wrong twice over: capability domains on this platform run **in M-
 documented S-12 wedge state is `MPP=M`), so the gate is satisfied *by* the domain; and the
 `0x80000000`–`0x80800000` pair at `:200-201` is a constructed capability's bounds, not a gating
 range. `tval` is the only discriminator, and it is sufficient on its own.
+
+**OPEN CONFLICT on the privilege half, flagged 2026-09-15 and deliberately NOT adjudicated here.**
+The "domains run in M-mode" clause above is contradicted by
+`docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`, which argues from
+monitor source (`sbi_capstone.S:177-194`, `csr_regfile.sv:2284`, and the entering `mret` clearing
+MPRV at `:2331`) that domains run in **S-mode** and therefore cannot satisfy a
+`PRIV_LVL_M` gate at all. The two rest on different kinds of evidence — an inference from an
+observed wedge state here, quoted monitor source there — and they cannot both be right. Whichever
+wins, the paragraph above stands on its own second argument (the address pair is a capability's
+bounds, not a gating range), so the instruction "do not use privilege or address range as a
+discriminator" is unaffected either way. Resolving it is R-34's business, not this folder's.
 
 ## What would fix it
 
