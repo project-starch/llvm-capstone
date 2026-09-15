@@ -5,13 +5,35 @@ FPGA. The dated notes in `history/` are the investigation trail; **this file is 
 a paper author lifts from**. Each entry states the number, the exact conditions, what
 it supersedes in the current draft, and what it does **not** establish.
 
-Vehicle throughout: Genesys 2 CVA6, bitstream `working-caplifive-captype-fixed.bit`
-(**superseded 2026-08-04** by `caplifive_fixed_forward.bit`; every number below predates
-that reflash and must be re-measured before it is compared with anything taken after),
-`mcycle`/`minstret` read in-domain (the unprivileged counters are gated for the
-domain). Single core.
+Vehicle: Genesys 2 CVA6, single core, `mcycle`/`minstret` read in-domain throughout (the
+unprivileged counters are gated for the domain). **The bitstream is NOT constant across this
+file — take it from the entry you are citing, never from this header.**
 
-Last updated 2026-07-27.
+**⚠ CORRECTED 2026-09-15.** This paragraph previously read *"Vehicle throughout: Genesys 2
+CVA6, bitstream `working-caplifive-captype-fixed.bit` (**superseded 2026-08-04** by
+`caplifive_fixed_forward.bit`; every number below predates that reflash and must be re-measured
+before it is compared with anything taken after)"*. That was accurate for §1–§4c and is false for
+most of the file, which matters because a paper author following it would discard or re-measure
+results that are current:
+
+* **§4e is dated 2026-08-14** — it already postdates the 2026-08-04 reflash the old paragraph
+  treated as the end of the file.
+* At least **five** bitstreams appear below, not two: the two named above, then
+  `caplifive_s12fix_5097eb166`, `caplifive_r25r26r27_66c4e7517`, and
+  `caplifive_r30r31_1bfff7776`.
+* Even within §7 the vehicle changes: §7b–§7c ran on `caplifive_s12fix_5097eb166`, §7e–§7l on
+  `caplifive_r25r26r27_66c4e7517`, and **everything from §7m (2026-09-13) onward — including every
+  Sublet number in §7r–§7y — on `caplifive_r30r31_1bfff7776`**, which those entries name themselves.
+* The last two **do not meet timing**, identically: WNS −12.425 ns, 102,508 of 174,960 failing
+  endpoints (§7). §7s bounds what that costs instead of arguing it away — cross-boot reproducibility
+  is 0.02–0.05 % on this workload family, far below the differences its ratios rest on.
+* The pre-flash numbers were **carried forward by measurement, not by assumption**: §7m re-ran
+  §7f–§7k's images unchanged on the flashed bitstream and is the bridge.
+
+Found by the paper lane on 2026-09-15 while checking a draft audit's result table against this
+file. The numbers reproduced; the header did not.
+
+Last updated 2026-09-15.
 
 **Benchmark scope is capped by a 4 KiB code window — but the cap is liftable.**
 `link-gpfree.ld` forces globals to image offset `0x1000`, so every domain's `.text`
