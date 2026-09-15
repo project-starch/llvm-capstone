@@ -248,8 +248,9 @@ type + STC ×2. Predicted from R1's 64-byte object medians (revoke 51, type 12, 
 36): PRIMARY, what the boots test — `take_cyc/n + give_cyc/n` FLAT in cumulative allocations (least-squares slope
 times the run's allocation range below 1 % of the mean; last quarter within 1 % of the first); SECONDARY, scored
 apart — the sum in the band **384–391** raw cycles per allocation (384 from R1's phase medians; 391 = R1's total 593
-minus bookkeeping 166 minus the checked first use 36, the seven between them being R1's six timer reads against
-these brackets' four), where outside the band refutes the magnitude model and leaves the primary result untouched.
+minus bookkeeping 166 minus the checked first use 36; of the seven between them, two extra timer reads in R1's
+bracket account for about 4 at E4's 2-cycle floor and about 3 are a residual between two independently assembled
+estimates), where outside the band refutes the magnitude model and leaves the primary result untouched.
 The split between the two brackets is reported, not predicted. Boot 1's curve at the 256-entry capacity is labelled diagnostic, not a hardware result — by
 capacity, not by platform (`M1-node-reclamation.md`).
 
