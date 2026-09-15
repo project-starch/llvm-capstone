@@ -4385,8 +4385,10 @@ hardware, as a passing test for the instructions exercised.
 **Headline: a stock RISC-V compliance test fails on this core.** `rv64mi-p-ma_addr`, with no Capstone instruction and
 capmode never set, returns wrong data without a trap for the `ld` that crosses an 8-byte word: the LSU raises its
 exceptions and the load unit drops them (R-34). The capability clauses ride on the same path. The measurements are
-not contaminated by it — every run matched an oracle that wrong data would have changed (the argument is in the R-34
-folder) — but it is a base-core defect, not an extension's.
+not contaminated by it: the computed results match a machine WITHOUT the defect (the `112006 38bb59fd` speedtest1 hash
+under capstone-qemu, §7c, and the 10,807-record SQLLogicTest corpus identical to native x86 — arm-vs-arm agreement on
+the same core would not have shown it), and the cycle and counter values are CSR reads, not loads through the LSU path
+(the argument is in the R-34 folder). It is a base-core defect, not an extension's.
 
 The paper lane's request after E1 — run the `obn` probe from M-mode with capmode set, to separate "the
 plain-access checker is unreachable from a domain" from "the checker is broken" — was answered without a

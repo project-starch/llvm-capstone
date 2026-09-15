@@ -24,12 +24,17 @@ the in-word cases on the data cache's shifted bytes. That is a base CVA6 LSU exc
 capability clauses are swallowed by the same drop, so nothing about Capstone is needed to see it.
 
 **Are the published measurements contaminated?** The risk is silent wrong data on a misaligned access, not a
-missing trap. The evidence that the corpus is unaffected is empirical, not "nobody noticed": every measurement
-run was matched against an oracle that wrong data would have changed — SQLite `speedtest1` at sizes 1/20/100
-reproduced the native result on both arms (§7l–§7p), the seven SQLLogicTest files (10,807 records) were identical
-to native on silicon (2026-09-07), E1's 21 cells were identical across three repetitions (§7r), and R1's 420
-records are deterministic to the cycle (§7t). The weaker half of the argument: the rv64imac toolchain rarely
-emits misaligned accesses, and none of the ported allocators does.
+missing trap, and R-34 is a base-core defect with no capmode dependence — so two arms agreeing on the same core
+cannot detect it, and neither can run-to-run determinism (a deterministic bug returns the same wrong value every
+time). What closes it is CROSS-MACHINE agreement with a machine that has no such defect: SQLite `speedtest1`'s
+result hash `112006 38bb59fd` is produced under capstone-qemu (the ④ cell, `fpga-silicon-measurements-for-paper.md`
+§7c) and on silicon by every measured cell, and the seven SQLLogicTest files (10,807 records, 8,746 checked
+answers) are identical to the native x86 baseline on silicon and under the emulator (2026-09-07). The board's own
+native-vs-Sublet arm agreement, E1's identical repetitions and R1's cycle-exact determinism are corroboration
+only. Separately, the MEASUREMENT values — cycles and counters — are CSR reads and aligned counters, not loads
+through the LSU path, so they are not exposed to this mechanism at all; the oracle argument is about the computed
+results. The weaker half: the rv64imac toolchain rarely emits misaligned accesses, and none of the ported
+allocators does.
 
 **Readings elsewhere that rested on an absent plain-access trap (swept 2026-09-15):** the 2026-08-04 bounds
 probes (`ob3`/`ob5`/`obb`/`oba`/`obn`, SILICON-BLOCKER.md, "the entire block is inert in our domains"), R-30's
