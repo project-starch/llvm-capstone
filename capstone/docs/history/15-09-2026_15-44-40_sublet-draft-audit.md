@@ -209,3 +209,35 @@ node validity rather than bounds encoding. Present harm is **UNRESOLVED**: no ar
 found in which the two sides exchange a compressed metadata word. The check that would settle it
 is whether any differential test compares a compressed word or a `CAPNODE` result across QEMU and
 silicon.
+
+### An intermediate representation you built yourself is not evidence
+
+Contributed by the RTL lane from two of its own errors the same day, and placed here at its request
+because the other two rules live here.
+
+Both errors were the same move: take a **representation** of the thing, read it carefully, and treat
+the reading as the measurement — without returning to the source that would settle it.
+
+* A generated slice printed as `[93:0]` was read as a field **order**. It is a **width**. The order
+  came from the declaration sequence, assumed low-bits-first; Anvil packs MSB-first. Settled in one
+  line by the consumer that reads the field — `ex_stage.sv:1207` broadcasts on `!node_wr_req[31]`,
+  and the consumer's comment says that fires when validity is written to zero, so that bit is `valid`,
+  which holds only under MSB-first.
+* A `sed -n '1147,1150p' | cat -n` range was labelled by hand — *"printed line 1 = file line 1147"* —
+  and the third printed line read as 1148. It is 1149. Settled by `grep -n`, which carries the line
+  numbers with it.
+
+**What makes it actionable rather than a reminder to be careful: in both cases the authoritative form
+was cheaper than the one used.** `grep -n` costs the same keystrokes as a `sed` range. Reading the
+consumer costs one line against reconstructing a packing. The rule is not "check your work" but
+**prefer the form that carries its own provenance**, because it removes the step where your own label
+can be wrong.
+
+**It is adjacent to the narrowed-view rule and not the same.** Narrowed view: the query shows you what
+you went looking for. This one: the artifact is faithful and your reading of it is not.
+
+**And the uncomfortable half, which the contributing lane volunteered and which no review protects
+against.** In the packing case its own auditor had derived the answer correctly, hours earlier, in the
+same session. The two were never put side by side — not because either was hidden, but because the
+question had stopped being treated as open. Adversarial review runs on questions someone is still
+asking; this failure is upstream of it.
