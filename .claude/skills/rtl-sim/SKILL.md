@@ -77,8 +77,18 @@ These are not inconveniences; each one has been read as a result.
    applying it are different things:
 
    ```bash
+   # directive-word shape (unterminated #if in prose) AND macro-expansion shape (NAME(...) in a comment)
    grep -nE '^#[[:space:]]+(if|ifdef|ifndef|else|elif|endif|define|include|undef|error|pragma|line)\b' <test>.S
+   grep -nE '^#.*\b[A-Z][A-Z0-9_]{2,}[[:space:]]*\(' <test>.S
    ```
+
+   **Both shapes have now cost a build on the same day, which is what makes this a pattern rather than
+   one person's slip.** The macro form did so hours earlier, in `lsu-mmode-gate.S`: a comment reading
+   `CAPENTER (capmode sticky)` expanded as an invocation and the assembler stopped with
+   `error: macro "CAPENTER" requires 2 arguments, but only 1 given` — in a file whose own header
+   carried the warning, exactly as the directive-word instance did. Knowing the rule does not prevent
+   it; the greps do, and the second one is why the macro half is listed here rather than assumed
+   covered by the prose above.
 
 3. **`SUCCESS` AT THE TIMEOUT IS NOT A PASS.** The harness prints
    `*** SUCCESS *** (tohost = 0) after N cycles` even when nothing ever wrote `tohost`. If
