@@ -157,6 +157,24 @@ forwarded valid arrive together and the mask never zeroes a live exception. `deb
 across all four cause-24 deliveries, which is the renumber in the same batch doing its job — on the
 unrenumbered tree those four would have entered the debug ROM.
 
+## And the MISS path: also sufficient (RTL lane, `9a7bd598c`, `r34-coldmiss-deliver.S`)
+
+One module below the boundary sat a second condition: the load unit delivers inside the
+`req_port_i.data_rvalid` block while SEND_TAG asserts `kill_req` on `ex_i.valid`, so a faulting access that
+MISSED would be killed, never see a response, and drop its exception — on the load side a silent read through
+a capability that forbids it. **No run in this folder could answer that**, because the testbench's
+`S12_MEM_DELAY` defaults to 0 and a response is always available in the tag cycle: the miss had never been
+created. Nor does simply enabling the delay answer it — `lsu-mmode-gate` at delay 40 reproduces all thirteen
+readings value for value with only the cycle count moving (868 → 2485), because the test hammers one buffer so
+its faulting arms still HIT. **Turning the delay on is not the same as making the access miss**, and the first
+reads like robustness. The matched pair that does answer it faults twice through the same write-only
+capability, differing only in whether the line was brought in first, with every precondition witnessed in the
+same run (the warm line resident, the warming access not itself trapping, the lines `0x1000` apart): warm arm
+cause 27, **cold arm cause 27**, no data delivered on either, exactly two traps, identical at delay 0 and 40.
+So the fix needs no companion RTL change. What stands between it and a bitstream is the monitor (this lane's
+D3), and that cannot be validated on the deployed bitstream: with delivery broken the before and the after
+both run clean, so only simulation of the fix branch can validate a monitor change.
+
 ## Fix direction (the RTL lane's call, not decided here)
 
 Restore the pre-#2528 register in the MMU — carry the exception with `lsu_req_q` and mute it when

@@ -241,8 +241,11 @@ available capacity once P1 is running; do not queue them unasked.
   — `sbi_capstone.S:113` computes `add t5, sp, t5` and then stores `sd a0, 16(t5)` through the
   integer result, and the `rdtime` emulation does the same at every clock read. The monitor is this
   lane's file. The shape of the fix is to keep the capability base: `CINCOFFSET`/`CINCOFFSETIMM` on
-  the capability register instead of integer arithmetic that untags it, audited and validated on the
-  emulator against the current bitstream first (it must be a no-op there). Wait for the RTL lane's
+  the capability register instead of integer arithmetic that untags it. **Where it can be validated is not
+  obvious and matters: on the DEPLOYED bitstream the change is untestable, because with delivery broken the
+  before and the after both run clean — only simulation of the RTL lane's fix branch can show the monitor
+  surviving live enforcement** (RTL lane, 2026-09-15). Validate it there, and separately confirm it is a
+  no-op on the current bitstream so the change can land ahead of the reflash. Wait for the RTL lane's
   full sweep numbers before scoping it — they promised a count rather than an impression.
 * **D4 — a work order per measurement**, now that `experiments/EXECUTION.md` and
   `experiments/WORK-ORDER.md` are visible (paper remote `7f83725`, absent from the pinned submodule,
@@ -258,7 +261,7 @@ available capacity once P1 is running; do not queue them unasked.
 | lane | state today | what unblocks the board |
 |---|---|---|
 | compiler | design A at `46c53b7b6ae2`, `19bc05cf21b1` (pushed, their branch); the dev merge `d257f1abad4f` is **performed, verified, lit 106/106, unpushed** — the scan's range mode blocks on the collaborator's author lines, and the scan is working as designed (author identity is scanned deliberately) | the lead's ruling, then their push, then they give the dev hash → P2 |
-| RTL | `c77c65324` on `r34-r24-exception-delivery` (renumber audited, delivery fix restored from upstream #2528's diff, lint at baseline); sweep early and already showing monitor-side timeouts; **no hash to synth today** | their clean sweep + D3's monitor work → synthesis → the lead's reflash → P3 |
+| RTL | `9a7bd598c` on `r34-r24-exception-delivery` (**pushed**, the lead allowlisted it; boundary and miss-path sufficiency both measured, so no companion RTL change is needed)| their clean sweep + D3's monitor work → synthesis → the lead's reflash → P3 |
 | paper → `apollo-paper` | handover sent; `studies.json` still has M2 `pending` though its bundle is committed; most states are blocked on non-board work (M1's reclaimer, M-8's port fix, S3's corpus), and P1 addresses only the resource half | nothing; address `apollo-paper` from now on |
 | synth | per-module area for H1 done; next is a bitstream when a hash exists | nothing |
 
