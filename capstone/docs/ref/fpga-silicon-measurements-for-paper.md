@@ -4451,17 +4451,22 @@ a legal but different shape) is deferred behind M1.
 | 4096 | 88.45 | 88.44 (8,196) | 0.9999 | 49.25 |
 
 1. **The cost of a node-validity query does not depend on how many nodes exist in the table.** Custom-sublet and
-   custom-spatial are equal to within 0.03 % at every working set while the sublet arm carries 36 to 8,196 live
-   nodes against the spatial arm's 6 — three orders of magnitude of occupancy, a flat line. That is direct
+   custom-spatial are INDISTINGUISHABLE at every working set — deviations 0.000 / 0.000 / 0.000 / 0.033 / 0.011 %
+   against cross-boot spreads of 0.00 / 0.00 / 0.03 / 0.25 / 1.25 %, every deviation inside its own spread — while
+   the sublet arm carries 36 to 8,196 live nodes against the spatial arm's 6: occupancy varied 1,366× with no
+   measurable cost difference. That is direct
    evidence the query is an indexed read (the RTL lane's `get_rev_node`: one 16-byte read, no walk), and it
    answers "does this get slower as the table fills?" with a measured no, up to 8,196 live nodes (12.5 % of the
    65,532-node table). It says nothing about a growing QUERIED set (one node was queried per access) and nothing
    about node-cache sizing, which the protocol forbids inferring from a mixed knee.
-2. **The lookup LDC costs one dependent capability load, and at DRAM sizes exactly one more DRAM access.** In the
-   data cache the capability arms pay 8.0 cycles over data-only (18.00 vs 10.00; 7 vs 6 instructions per
-   access) — the 16-byte load plus its query, within a cycle of E4's 9.0-cycle dependent load. At 4096 records
-   (records 256 KiB, lookup 64 KiB) the gap is 39.2 cycles, which is E4's DRAM-minus-L1 latency (48.2 − 9.0 =
-   39.2): the lookup array misses beside the records and the query adds nothing measurable on top. At 1024
+2. **The lookup LDC costs one dependent capability load, and at DRAM sizes exactly one more DRAM access — and this
+   is a mutual validation with E4, not a consistency check.** At 4096 records (records 256 KiB, lookup 64 KiB)
+   M2's derived extra cost is 88.44 − 49.25 = **39.19** cycles; E4's independently measured dependent-load delta
+   is 48.2 − 9.0 = **39.2**. Two harnesses, two access shapes, different boots, agreeing to 0.03 %: E4's
+   calibration and M2's decomposition validate each other. In the data cache the capability arms pay 8.00
+   cycles over data-only (18.00 vs 10.00; 7 vs 6 instructions per access) against E4's 9.00-cycle dependent
+   load — the weaker of the two comparisons. The query adds nothing measurable on top of the load in either
+   regime. At 1024
    records (records 64 KiB, lookup 16 KiB) the gap is 19.5, half a miss: the lookup array partly survives in the
    32 KiB cache beside the records.
 3. **The data-only arm reproduces E4's calibration** (10.00 / 41.84 / 49.25 against E4's 9.00 / 40.8 / 48.2 plus
@@ -4469,13 +4474,13 @@ a legal but different shape) is deferred behind M1.
    residency here as it did there. Cold first traversals (28 / 15 / 24 / 56 / 81 cycles per access for the
    capability arms, 24 / 7 / 14 / 38 / 46 for data-only) are in the bundle and not interpreted.
 4. Cross-boot precision: spread 0.00–0.03 % below 1024 records, 0.25 % at 1024, 1.25 % at 4096 (DRAM); the
-   points are read as their medians.
+   points are read as their medians, and no ratio is quoted tighter than its point's spread.
 
 **Claim scope for the paper (the bundle's `claim_scope`):** the record's index load carries no temporal query on
 this bitstream; the lookup's LDC runs the DYN unit's query on the lookup array's node at every privilege level;
 the series measures that one query under a growing number of LIVE nodes, not a growing queried set; no
 node-cache knee or node-size inference. The finding to carry: **the temporal check on the access path costs one
 indexed read whose price does not grow with the table's occupancy; a growing alias set costs nothing on the
-access path at this scale.** Node budget per boot ≤ 80 % of 65,532 (the four boots minted 12, 12, 12 and 9
+access path at this scale (indistinguishable arms, not "flat to 0.03 %").** Node budget per boot ≤ 80 % of 65,532 (the four boots minted 12, 12, 12 and 9
 invocations' worth, well under). Firmware hashes per boot are in the manifest (each boot was re-baked); the
 domain image is build9 in all four.
