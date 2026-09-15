@@ -2045,6 +2045,7 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > is *"about to leave M-mode INTO the domain"* (`sbi_capstone.c:126`, `:129`). So the only capability-type
 > check on the SCALAR load/store path is inapplicable to domain code **by construction**.
 >
+> *(2026-09-15: half of the explanation — the other half is **R-34**, the LSU's exceptions being raised and dropped at every privilege; the conclusion below stands.)*
 > That explains the 2026-08-04 "inert" measurement completely, and it reclassifies it: not a check that
 > fails to fire, but a check that was never in scope for the code we run. **It also makes R-31's
 > insufficiency structural rather than contingent** — an UNINIT capability held by a domain is readable
@@ -3994,6 +3995,7 @@ undebuggable and takes the core with it.
 > exists: `C_INIT(r, r, 0)` succeeds on QEMU without any rewrite, so the shortcut was never wrong under
 > the emulator anyone develops against. **Consequence: the disclosure R-31 closes on silicon remains
 > open on QEMU by that route until QEMU is aligned** — so "R-31 closes the disclosure" is false for the
+> *(the "inert LSU" here is the privilege gate plus **R-34**'s dropped delivery, 2026-09-15)*
 > emulator even after the RTL fix, which is a second reason beyond the inert-LSU one not to describe it
 > that way.
 

@@ -4382,6 +4382,12 @@ hardware, as a passing test for the instructions exercised.
 
 ### §7x — The M-mode arm of the LSU gate question, answered at the desk: R-34 (RTL simulation, 2026-09-15 13:40–13:55)
 
+**Headline: a stock RISC-V compliance test fails on this core.** `rv64mi-p-ma_addr`, with no Capstone instruction and
+capmode never set, returns wrong data without a trap for the `ld` that crosses an 8-byte word: the LSU raises its
+exceptions and the load unit drops them (R-34). The capability clauses ride on the same path. The measurements are
+not contaminated by it — every run matched an oracle that wrong data would have changed (the argument is in the R-34
+folder) — but it is a base-core defect, not an extension's.
+
 The paper lane's request after E1 — run the `obn` probe from M-mode with capmode set, to separate "the
 plain-access checker is unreachable from a domain" from "the checker is broken" — was answered without a
 boot. Two desk facts first: cause 24 is this core's `DEBUG_REQUEST` (R-24), so a live untagged-base clause

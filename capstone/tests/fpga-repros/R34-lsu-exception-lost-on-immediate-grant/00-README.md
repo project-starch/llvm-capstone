@@ -16,6 +16,28 @@ makes the untagged-base clause enter debug mode instead of trapping; **R-10 / R-
 monitor's own accesses" reading this folder supersedes. This folder is one issue: the exception is
 generated and then not delivered.
 
+## Headline, and whether the measurements are contaminated
+
+**A stock RISC-V compliance test fails on this core.** `rv64mi-p-ma_addr` — no Capstone instruction, capmode
+never set — returns wrong data without a trap for the `ld` that crosses an 8-byte word (TESTNUM 10) and passes
+the in-word cases on the data cache's shifted bytes. That is a base CVA6 LSU exception-delivery defect; the
+capability clauses are swallowed by the same drop, so nothing about Capstone is needed to see it.
+
+**Are the published measurements contaminated?** The risk is silent wrong data on a misaligned access, not a
+missing trap. The evidence that the corpus is unaffected is empirical, not "nobody noticed": every measurement
+run was matched against an oracle that wrong data would have changed — SQLite `speedtest1` at sizes 1/20/100
+reproduced the native result on both arms (§7l–§7p), the seven SQLLogicTest files (10,807 records) were identical
+to native on silicon (2026-09-07), E1's 21 cells were identical across three repetitions (§7r), and R1's 420
+records are deterministic to the cycle (§7t). The weaker half of the argument: the rv64imac toolchain rarely
+emits misaligned accesses, and none of the ported allocators does.
+
+**Readings elsewhere that rested on an absent plain-access trap (swept 2026-09-15):** the 2026-08-04 bounds
+probes (`ob3`/`ob5`/`obb`/`oba`/`obn`, SILICON-BLOCKER.md, "the entire block is inert in our domains"), R-30's
+and R-31's citation of that measurement, M-5's "inert-LSU" clause, and E1's s3/s5/s10/s11 (§7r). Each concluded
+"no enforcement of plain accesses in a domain", and each conclusion SURVIVES — the mechanism now has two
+independent halves (the privilege gate; this drop) where those entries name one. R-18 ("silently zeroed — no
+trap") is a write-buffer data defect whose evidence is the zeroing, not the absent trap, and is unaffected.
+
 ## What it shows
 
 In M-mode, with capmode set (witnessed) and `mstatus.MPRV = 0` (witnessed), so that the block's gate
