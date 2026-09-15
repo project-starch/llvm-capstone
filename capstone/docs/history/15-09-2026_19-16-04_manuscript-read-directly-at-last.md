@@ -185,3 +185,43 @@ without touching the allocator at all.
 
 **So R-32 and R-33 converge on one question rather than being two** — the same shape the RTL lane
 found when R-33 turned out to close R-11.
+
+### R-29's fix costs a combinational loop, and the paper gives no reason to pay it
+
+Reported by the RTL lane from the registry survey: a written fix exists,
+`r29-granule-data-overlay` at `00e89d968`, functionally correct, and it **fails the lint gate** —
+`UNOPTFLAT` 40 → 41, a new combinational loop. Their entry says the fork is explicitly not a lane's
+call, so it is a question for the lead. It also gates R-10, whose live half is **not independent**:
+R-29's separation arms decide whether the OR-reduce is in the path at all, and if it is, R-10 closes
+with R-29's fix rather than on its own.
+
+**This is the edit class `CLAUDE.md` singles out as the most dangerous available** — *"Never feed a
+new signal into a cone that already carries a combinational loop… every check we have is blind to
+it. If a change does that, it goes to synthesis before it goes anywhere else."* So accepting it
+means spending a synthesis cycle to find out whether it is synthesizable at all.
+
+**The paper's input to that decision is one-sided and worth stating plainly: R-29 changes no
+sentence, and neither does R-10.** Both greps returned zero (§6 above). So the whole R-29 → R-10
+chain is **paper-neutral**, and there is no manuscript claim that would be weakened by deferring it
+or strengthened by landing it.
+
+That is not an argument against fixing a correctness defect — wrong data returned from a load is
+worth fixing on its own terms, and the paper's silence is not an endorsement of the bug. It is an
+argument about **ordering under a scarce resource**: a bitstream costs ~90 minutes plus a reflash,
+the reclaimer (§5) converts a typeset hole into a measured paragraph, and R-29's fix would spend the
+same cycle on the highest-risk edit class we have for a defect the manuscript never cites. If the
+lead is choosing what rides the next build, the paper points at W1 and says nothing in R-29's
+favour.
+
+### A pattern worth naming: this registry carries duplicates that only surface from the claim side
+
+The RTL lane observed it after the second instance in one day: R-33 turned out to close R-11 (one
+representability contract seen from the two branches of `compress_bounds`), and R-33 and R-32 turn
+out to be one question (both can only falsify the same two extent cells). Their formulation is the
+useful one — **the duplicates surface when you ask "which sentence does this threaten" rather than
+"what is the mechanism"**, because two mechanisms that differ can still have exactly one consequence.
+
+That is the same family as the project's standing rule to search prior art and read *past* the
+root-cause box, and it suggests a cheap habit for this lane specifically: when a new defect arrives,
+grep the manuscript **before** reading the mechanism. A zero-hit grep costs a minute and either
+closes the paper's interest or names the cell the mechanism has to reach.
