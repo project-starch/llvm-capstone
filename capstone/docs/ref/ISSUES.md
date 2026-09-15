@@ -759,10 +759,37 @@ Related: R-21, R-22 (resolved on silicon), Q-04.
 > what lies below, so revoking a node does **not** invalidate the node itself. The PC capability's node
 > has to lie in the junior run of the node being revoked.
 >
-> **Construction:** create a child node (MREV or SPLIT on the initial capability), `CAPENTER` with the
-> **child** so the PC capability carries the child's id, keep the **parent** capability live across the
-> enter, then REVOKE the parent. The walk reaches the child, the broadcast clears
-> `pc_revnode_valid_d`, and the REVOKE fails the PC check.
+> **~~Construction: CAPENTER with a child capability.~~ RETRACTED within the hour — `CAPENTER` does not
+> take a capability, and the route is NOT reachable from a bare-metal test at all.**
+>
+> `CAPENTER` mints its capabilities with **hard-coded node ids**: `capstone_flu_unit.anvil:455` gives
+> the returned revoke capability `revnode_id = 30'd1` and `:471` gives the data capability `30'd2`, and
+> `commit_stage.sv:197` gives the **PC capability `30'd1`**. Nothing the program holds influences any of
+> them. So "enter with the child" is not a thing `CAPENTER` can do.
+>
+> **And no obtainable capability is rooted above the PC's node.** `depth_bound := node_in.depth`
+> (`capstone_rev_node.anvil:154`), the walk starts at `node_in.next` and stops once
+> `node_in.depth <= *depth_bound` (`:18`), so a REVOKE invalidates **strictly deeper** nodes only —
+> never the revoked node itself. Nodes 1 and 2 are both depth 1 (`:173`, `:175`) and are siblings
+> (`node_1.next = 2`). Therefore: revoking through the node-1 capability sets `depth_bound = 1`, walks
+> to node 2, finds `1 <= 1`, and terminates having invalidated nothing. MREV/SPLIT only ever produce
+> **deeper** nodes, so they cannot manufacture an ancestor either. The only node above depth 1 is node 0,
+> the depth-0 sentinel, which is created with `valid = 1'd0`.
+>
+> **This is very likely why the earlier 37 arms never reached the condition.** The entry records that
+> as a timing problem — no arm had a measured chance of landing an interrupt on an in-flight op. The
+> structural reading is simpler: **in the bare-metal configuration the required state cannot be
+> constructed at all**, so no amount of timing would have produced it.
+>
+> **What the route actually needs** is a PC capability carrying a node the program can revoke from
+> above, which happens on a **domain switch** — `commit_stage.sv:235` names CALL/RETURN alongside
+> CAPENTER, and a CALL's PC capability comes from a sealed domain capability whose node the monitor
+> created as a descendant. That is monitor-level setup, not a directed `.S`. Anyone attempting this
+> should budget for it as a domain test, and the oracle design below still applies unchanged.
+>
+> *(Recorded as a retraction rather than an edit because the wrong construction was published first and
+> may have been read. The feasibility check that refuted it cost minutes; writing the arm would have
+> cost a day and produced a clean, meaningless pass.)*
 >
 > **THE ORACLE, and it sidesteps the idempotence problem this entry records.** The entry states that no
 > end-state oracle works for DROP/REVOKE because invalidation is idempotent. That is true and it does
