@@ -273,10 +273,17 @@ rounding, i.e. granule > 16, i.e. `bit_length(extent) >= 15`:
 
 | | |
 |---|---|
-| first request whose granted extent is not an exact multiple of its granule | **16392** |
+| first request whose granted extent is not an exact multiple of its granule | **16385** |
 | its granted extent / granule / remainder | 16400 / 32 / 16 |
 | fixture's largest region | 4288 |
 | **actual headroom** | **3.8x**, not 1024x |
+
+*(**Corrected**: this table first said 16392. My scan stepped through requests in steps of **8**,
+so it could only ever report a multiple of 8 — I had sampled the way the fixture's sizes happen to
+look, which assumes the conclusion in the sampling. The RTL lane rescanned and got **16385**, which
+is right: requests 16385..16400 all round to extent 16400. The extent, granule, remainder and the
+3.8x headroom were unaffected. A step size chosen to match the data you expect is the same family of
+instrument error as the rest of this note, and it is mine.)*
 
 The conclusion is unaffected — 3.8x is still real headroom and the cells still hold. But the
 correction matters for the sentence it was used to support, *"this is not a near miss that a fixture
