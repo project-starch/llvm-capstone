@@ -239,8 +239,16 @@ minting: `mrev`) and in the gives (`give_cyc`, release: revoke + fill + init) wi
 the two cost curves against cumulative allocations come out of the same boots (build11 `9a01b12a4db639b6`); on the
 deployed table the retention pattern varies nothing (no reclamation: one node per allocation whatever is retained), so
 if the two boots go they are labelled **no-reclamation baseline**, never M1, and their headline is the minting and
-release cost as the table fills — pre-registered flat for both (a head allocation plus a parent link; a childless
-revoke plus a 64-byte fill) — with the bound as corroboration and the pattern comparison void until a reclaimer exists.
+release cost as the table fills — pre-registered flat for both — with the bound as corroboration and the pattern
+comparison void until a reclaimer exists. *Reconciled with R1 (15:20, after the paper lane's check):* the shape is R1's
+`individual` one — a carved LINEAR leaf handed out as a delin'd NONLIN alias under a REV handle in its slot — so the
+release has NO fill (the alias's revoke returns the region LIN; R1 measured `fb = 0`), and the earlier "plus a 64-byte
+fill" was wrong. Brackets by primitive: `take_cyc` = LDC + MREV + STC + DELIN; `give_cyc` = LDC handle + REVOKE + LCC
+type + STC ×2. Predicted from R1's 64-byte object medians (revoke 51, type 12, init 2, reissue 355 − the spatial arm's
+36): `take_cyc/n + give_cyc/n` ≈ 384 cycles per allocation, flat; R1's 593 is the same primitives plus C-level
+bookkeeping (166) and the checked first use (36), both outside these brackets. The split between the two brackets is
+reported, not predicted. Boot 1's curve at the 256-entry capacity is labelled diagnostic, not a hardware result — by
+capacity, not by platform (`M1-node-reclamation.md`).
 
 ## Hand-offs (cross-session messages, roles only)
 
