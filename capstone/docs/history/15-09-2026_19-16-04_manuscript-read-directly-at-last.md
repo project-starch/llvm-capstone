@@ -134,3 +134,54 @@ capability tag. Nothing rests on tag integrity in a way the refill OR-reduce tou
 
 **R-29, R-26, R-27, R-32: not checked against the manuscript, and not guessed at.** Now that the
 repository is readable, each takes minutes given a one-line symptom.
+
+## 6. Which RTL defects touch a manuscript claim — four grepped, and two cells named
+
+Asked by the RTL lane for their plan. All greps are against `sections/` and `appendices/` at
+`origin/main`.
+
+**None of the four touches a claim by name.**
+
+| defect | symptom (the RTL lane's words) | manuscript hits |
+|---|---|---|
+| **R-32** | spec and RTL disagree by one on every bound taken or returned as a **value**; `SHRINKTO` a genuine RTL off-by-one | **zero** — no `shrinkto`, no `tighten`, in any case |
+| **R-29** | plain 8-byte `sd` into the high word of a 16-byte granule, then an untagged `ldc`, returns the high half zeroed | **zero** — no granule, 16-byte or LDC |
+| **R-26** | CCSRRW stale read (recollection, not citation) | **zero** |
+| **R-27** | rev-node orphan deadlock (recollection, not citation) | **zero** |
+
+Two near-misses checked and rejected, recorded so nobody re-derives them:
+`appendices/a-evidence-status.tex:64` (*"a stale free is declined by comparison rather than caught,
+which **bounds** the claim"*) and `:186` (*"identify weaker block **bounds**"*) both use "bounds" in
+the scoping sense — a limit on a claim, and future work on block-size bounds for the nginx replay.
+Neither is a capability bound.
+
+### The indirect exposure, which is real: two cells assert EXTENT
+
+R-33's over-permissive store (and, on the same axis, R-32's off-by-one) would not *add* a claim but
+could *invalidate* one. The only cells in `tab:safety` that assert anything about extent are
+
+* `appendices/c-validation-and-accounting.tex:41` — **"Inner free preserves live sibling & Sibling
+  intact, block extent unchanged"**
+* `:42` — "Sibling survives uncooperative child & Sibling still reads and writes"
+
+with the prose at `:66-69` making it explicit: *"Inner release preserves the sibling's data **and the
+block extent** … preserves the sibling **and parent extent** …"*. R-33's over-permission is a
+representability **rounding**, so the window is up to the granule rather than one byte — a store
+landing in an adjacent sibling is exactly "block extent unchanged" being false while the discipline
+reports success.
+
+**The discriminating question is cheap and decides it: does the over-permissive store reproduce on
+the PINNED EMULATOR, or only on silicon?** The table is emulator-scoped (§2), so:
+
+* **reproduces on the emulator** → the cell is wrong within its own scope, and a claim is
+  invalidated;
+* **silicon only** → the cell stays true of what it claims, and this widens the same
+  emulator-vs-silicon gap decision 1 already turns on, with `METHODS.md:89` governing instead.
+
+Either answer is publishable-relevant, so the reading qualifies under the go/no-go rule. What
+settles it first is whether the fixture places siblings **adjacently within one rounded region** — a
+fixture property not readable from the paper, and if siblings are never adjacent the question closes
+without touching the allocator at all.
+
+**So R-32 and R-33 converge on one question rather than being two** — the same shape the RTL lane
+found when R-33 turned out to close R-11.
