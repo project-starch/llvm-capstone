@@ -1,0 +1,65 @@
+# R-34 readings, RTL simulation at f6ec6c198, 2026-09-15 (run C = the folder's src/ test: witnesses, loads, misaligned lw, stores, untagged ld last)
+# audited artifact set: .log.iss sha256 e9495d5e2ff104ce..., RVFI .log 5670a53503d9c6af... (run of 13:51:55; a live out_* dir is overwritten by every run)
+# NOTE: the RVFI line 'ILLEGAL_INSTR exception @ 0x80000198' is a stale label (rvfi_tracer.sv:129-139 has no default arm); the cause was 24.
+# register map: Reg[17]=a7 capmode witness (CSCRATCH round trip), Reg[30]=t5 mstatus, Reg[11]=a1 RW cap, Reg[15]=a5 WO cap,
+#   Reg[18]=s2 arm0 value, Reg[19]=s3 arm0 traps / later arm4s cause (sd via RO cap), Reg[20]=s4 arm1 cause / later buf[0] after the stores,
+#   Reg[9]=s1 arm1b cause (misaligned lw), Reg[29]=t4 arm1b value, Reg[21]=s5 arm2 value, Reg[22]=s6 arm2 cause / later buf[1] after the stores,
+#   Reg[23]=s7 arm3 value (WO cap), Reg[24]=s8 arm3 cause, Reg[25]=s9 arm4 value (bounds), Reg[31]=t6 arm4 cause / later arm4s cause (misaligned sw),
+#   Reg[27]=s11 total traps before the stores, Reg[7]=t2 arm5 value (untagged base), Reg[26]=s10 arm5 cause
+## .log.iss ($display lines)
+[Cycle        371] Reg[17]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        376] Reg[30]: 0000000a00000000
+[Cycle        450] Reg[11]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        474] Reg[15]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 2 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        493] Reg[18]: 000000004c535550
+[Cycle        494] Reg[19]: 0000000000000000
+[Cycle        501] Reg[20]: 0000000000000002
+[Cycle        503] Reg[ 9]: 0000000000000000
+[Cycle        504] Reg[29]: 00000000004c5355
+[Cycle        505] Reg[21]: 000000004c535550
+[Cycle        510] Reg[22]: 0000000000000000
+[Cycle        512] Reg[23]: 000000004c535550
+[Cycle        513] Reg[24]: 0000000000000000
+[Cycle        514] Reg[25]: 000000000badb0b0
+[Cycle        519] Reg[31]: 0000000000000000
+[Cycle        521] Reg[27]: 0000000000000001
+RAW-DBG2: b-occupancy=0 b-consumers=0 b-NOFORWARD=0 | c-occupancy=125 c-HA/workdir/verif/sim/out_2026-09-15/directed_tests/lsu-mmode-gate.o *** SUCCESS *** (tohost = 0) after 1263 cycles
+[Cycle       1209] Reg[19]: 0000000000000000
+[Cycle       1211] Reg[31]: 0000000000000000
+[Cycle       1212] Reg[20]: 0000000000001150
+[Cycle       1213] Reg[22]: 00000000005ec0de
+[Cycle       1224] Reg[ 7]: 0000000000001150
+[Cycle       1227] Reg[26]: 0000000000000000
+## RVFI trace: every load/store retire with value and address, the exception line and the debug-ROM dret
+3 0x0000000080000024 (0x00033903) x18 0x000000004c535550 mem 0x0000000080003000
+ILLEGAL_INSTR exception @ 0x000000008000007c (0x0000)
+3 0x0000000080000098 (0x00032e83) x29 0x00000000004c5355 mem 0x0000000080003001
+3 0x00000000800000d0 (0x0005ba83) x21 0x000000004c535550 mem 0x0000000080003000
+3 0x00000000800000fc (0x0007bb83) x23 0x000000004c535550 mem 0x0000000080003000
+3 0x000000008000010c (0x0405bc83) x25 0x000000000badb0b0 mem 0x0000000080003040
+3 0x0000000080000168 (0x01c83423) mem 0x0000000080003008 0x00000000005ec0de
+3 0x0000000080000184 (0x01c32023) mem 0x0000000080003001 0x0000000000000011
+ILLEGAL_INSTR exception @ 0x0000000080000198 (0x00033a03)
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000000 mem 0x0000000000000400
+2 0x0000000000000844 (0x40044403) x 8 0x0000000000000001 mem 0x0000000000000400
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000001 mem 0x0000000000000400
+2 0x0000000000000870 (0x10052223) mem 0x0000000000000104 0x0000000000000000
+2 0x0000000000000348 (0x38853023) mem 0x0000000000000380 0x0000000080000000
+BREAKPOINT exception @ 0x000000000000035c (0x00100073)
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000002 mem 0x0000000000000400
+2 0x0000000000000844 (0x40044403) x 8 0x0000000000000002 mem 0x0000000000000400
+2 0x0000000000000884 (0x10852423) mem 0x0000000000000108 0x0000000000000000
+core   0: 0x0000000000000890 (0x7b200073) dret
+3 0x0000000080000198 (0x00033a03) x20 0x0000000000001150 mem 0x0000000080003000
+3 0x000000008000019c (0x00833b03) x22 0x00000000005ec0de mem 0x0000000080003008
+3 0x00000000800001b8 (0x00033383) x 7 0x0000000000001150 mem 0x0000000080003000
+3 0x00000000800001d0 (0xe23f2a23) mem 0x0000000080001000 0x0000000000000001
+## earlier runs of the same file (before the misaligned and store arms were added):
+#  run A (witnesses + loads only): SUCCESS after 545 cycles; identical readings for arms 0..5; exactly one trap (cause 2)
+#  run B (+ misaligned lw at buf+1): SUCCESS after 561 cycles; the lw returned 0x004C5355 with no trap
+## stock riscv-tests rv64mi-p-ma_addr on the same RTL, capmode never set (14:08):
+#  *** FAILED *** (tohost = 10) after 719 cycles: tests 2-9 (lh/lw/lwu inside one 8-byte word) pass on the cache's shifted bytes,
+#  TESTNUM 10 (ld at +1, crossing the word) returns wrong data with no trap -- the loss predates the capability check

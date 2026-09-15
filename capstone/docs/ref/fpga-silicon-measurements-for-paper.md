@@ -4379,3 +4379,30 @@ the emulator and loses it on silicon; `sublet.h`'s primitives were written for t
 The regression invocation reads unchanged (nd = 2n; REVOKE 96 / 190 / 885 / 3,014 / 11,741 for
 n = 1 … 256, a single cold repetition). H1's forbidden-linear-copy family is therefore MEASURED on
 hardware, as a passing test for the instructions exercised.
+
+### §7x — The M-mode arm of the LSU gate question, answered at the desk: R-34 (RTL simulation, 2026-09-15 13:40–13:55)
+
+The paper lane's request after E1 — run the `obn` probe from M-mode with capmode set, to separate "the
+plain-access checker is unreachable from a domain" from "the checker is broken" — was answered without a
+boot. Two desk facts first: cause 24 is this core's `DEBUG_REQUEST` (R-24), so a live untagged-base clause
+halts rather than traps and the pre-registered "traps, cause 24" was unmeasurable; and the monitor's own
+rdtime emulation stores through an untagged base in M-mode at every Linux clock read without halting. The
+arm then ran as a directed RTL test (`tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/`): with
+both gate inputs witnessed and the block demonstrably running, a load through a write-only capability, a load
+at `bound_end`, a store through a read-only capability, a misaligned load, a misaligned store and a load
+through an untagged base all retired with values and no trap. The claim-auditor read the waveform independently:
+the block FIRES (21 exceptions raised, causes 24/27/28) and the load unit drops them — it pops the request in
+the cycle the exception is presented and looks for one only in the next (`load_unit.sv:423-424`, `:718`; the
+store unit `:349`; the MMU forwards unregistered, `cva6_mmu.sv:514`). One was delivered, because a second
+faulting load held the signal across the boundary. **Every exception the LSU generates itself is lost unless
+something re-asserts it one cycle later**, and the stock `rv64mi-p-ma_addr` fails the same way with capmode
+never set: the loss predates the capability check.
+
+**For the safety matrix (§7r's four plain-data-access rows, the S1S2 bundle's scope note):** unsupported on this
+configuration for two independent reasons — the privilege gate keeps domains off the block, and R-34 loses the
+block's exceptions at every privilege — and enabling the gate would not have enforced them. The reading "live
+for the monitor's own accesses" (the RTL lane's note, endorsed in the first version of the S1S2 scope note) is
+superseded. The capability-access rows stand: `LDC`/`STC` run the DYN unit's node-validity query with no
+privilege gate and no LSU exception (E1's s9 REVOKE fault in every repetition). Not measured: the translation-on
+path (argued from source), the board itself, store bounds. History note:
+`docs/history/15-09-2026_lsu-exception-lost-on-immediate-grant.md`.

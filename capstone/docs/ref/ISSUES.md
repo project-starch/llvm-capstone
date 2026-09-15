@@ -2722,6 +2722,53 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
+### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `DEMONSTRATED IN RTL SIMULATION 2026-09-15 (read at f6ec6c198; the gate and exception lines of load_store_unit.sv are identical at the flashed 1bfff7776); mechanism from source, timing from a waveform, AUDITED (the exception is RAISED 21 times in the run and delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check; NOT run on the board; handed to the RTL lane as one folder`
+
+> **Folder (the report):** `capstone/tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/` — the directed
+> test `lsu-mmode-gate.S`, the runner, the three runs' result lines and the waveform extract.
+>
+> **What it is.** In M-mode with capmode set (witnessed by a CSCRATCH round trip) and `mstatus.MPRV = 0`
+> (witnessed), so that `cap_violation_detection`'s gate (`load_store_unit.sv:966-967`) is satisfied and the
+> block demonstrably runs (its revnode tracking at `:985-989` updates), a plain `ld` through a WRITE-ONLY
+> tagged capability, a plain `ld` at exactly `bound_end`, a plain `sd` through a READ-ONLY tagged capability, a
+> misaligned `lw` and a misaligned `sw`, and a plain `ld` through an untagged base ALL retire with a value and no
+> trap; the two stores LAND (the misaligned one corrupts the neighbouring bytes). The single access the cache did
+> present one cycle after its request — the first of two back-to-back untagged loads after the stores, whose
+> successor held `cap_exception.valid` across the boundary — had its exception delivered: cause 24, which is this
+> core's `DEBUG_REQUEST` (R-24), so the core entered the debug ROM with no debug request pending and on `dret`
+> the same pair re-ran as two separate pulses and completed silently. **The clauses are live (raised 21 times in
+> the audited run, delivered once); delivery depends on whether the exception is still asserted one cycle later.**
+>
+> **Mechanism.** The exceptions are combinational on `lsu_ctrl` (`:225`; `:820-951` misaligned, `:957-1015`
+> capability, merged at `:951`); on an immediate grant the load unit pops that entry in the request cycle without
+> consulting `ex_i.valid` (`load_unit.sv:423-424`); the MMU forwards `lsu_exception_o = misaligned_ex_i`
+> UNREGISTERED (`cva6_mmu/cva6_mmu.sv:514`) while asserting `lsu_valid_o = lsu_req_q` a cycle later (`:513`,
+> `:741`); the units emit `ex_o.valid` in that later cycle only (`load_unit.sv:718` SEND_TAG — its own contract at
+> `:715-717`; `store_unit.sv:349` `state_q != IDLE`), when `lsu_ctrl` is already empty. At every fire the waveform
+> shows `ex_i.valid = 1`, `state_q = IDLE`, `ex_o.valid = 0`. Upstream `23355d29f` (#2528, "extracted PMP") removed
+> the MMU's `misaligned_ex_q` register that used to carry the exception with the request; the non-MMU configuration
+> still registers (`load_store_unit.sv:459`), the MMU one does not. **Not capability-specific:** the stock
+> `rv64mi-p-ma_addr` fails on this RTL with capmode never set (TESTNUM 10, the `ld` crossing an 8-byte word,
+> returns wrong data without a trap; the in-word cases pass on the cache's shifted bytes).
+>
+> **What it changes.** The reading in `docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`
+> that the block is "live for the trusted monitor's own accesses" is superseded: the privilege gate keeps DOMAINS
+> off the block, and R-34 loses the block's exceptions everywhere else, so plain data accesses are unenforced at
+> EVERY privilege on this RTL (the monitor's rdtime emulation stores through an untagged base at every Linux clock
+> read and does not halt: this is why). Capability accesses (`LDC`/`STC`) are the DYN unit's path and are
+> unaffected. Misaligned plain accesses silently complete with shifted data (wrong data across an 8-byte word) unless a second exception is presented one cycle later.
+> For the paper: the four plain-data-access rows of the safety matrix are not supported on this configuration for
+> two independent reasons, and "satisfy the gate" would not have enforced them either.
+>
+> **What would settle the residuals.** (a) The translation-on path (S-mode, Linux) is argued from source only
+> (`cva6_mmu.sv:539` skips the translation branch on a misaligned request and leaves `:514` in force): a directed
+> test with `satp` set, or a board arm. (b) A store bounds arm. (c) After an RTL fix, this test must FAIL its last
+> arm by design — the untagged load then enters debug mode (R-24), and so would `RVTEST_PASS`'s own `sw` to
+> `tohost` (it raised cause 24 in the run) and the debug ROM's accesses — and the write-only/bounds/misaligned
+> arms must trap with 27/28/4/6; `rv64mi-p-ma_addr` must pass. (d) The `trans_id` mis-attribution the delivery
+> path implies (`load_unit.sv:718-721`: the responding load's id, the next request's cause) needs two DIFFERENT
+> causes back to back to show.
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
