@@ -6377,6 +6377,13 @@ compiler.
 
 ## How to add an entry
 
+> **Source-read entries carry the commit they were read at.** An entry whose evidence is "I read the RTL /
+> the emulator / the compiler and it does X" has a shelf life nothing tracks: when the source moves, the entry
+> stays as written, and an OPEN status reads as caution rather than as staleness — the safe-looking direction.
+> R-21/R-22 sat OPEN for a month after `b047f32eb` had fixed them (2026-09-15: the board's pre-registration
+> followed the stale status and lost). So: name the commit the source was read at (`read at <sha>`), and when a
+> board reading contradicts an entry, re-read the source at the deployed revision before anything else.
+
 **When an entry's status becomes final, move it to `ISSUES-ARCHIVE.md` in the same commit that records the finding, verbatim. IDs are never reused, so an ID absent from this file is in the archive.**
 
 One heading per issue with: a one-line statement of the behaviour, a **runnable repro**, the
