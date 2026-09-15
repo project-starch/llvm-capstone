@@ -1,0 +1,4 @@
+1 drop m1 shared 2097152 --cap 256 --budget 52425
+1 ring m1 shared 2097152 --cap 256 --budget 52425
+1 pressure m1 shared 2097152 --cap 256 --budget 52425
+1 release m1 shared 2097152 --cap 256 --budget 52425
