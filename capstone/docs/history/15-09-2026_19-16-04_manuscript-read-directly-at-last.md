@@ -225,3 +225,75 @@ That is the same family as the project's standing rule to search prior art and r
 root-cause box, and it suggests a cheap habit for this lane specifically: when a new defect arrives,
 grep the manuscript **before** reading the mechanism. A zero-hit grep costs a minute and either
 closes the paper's interest or names the cell the mechanism has to reach.
+
+## 7. W2 closed: R-33 cannot reach `tab:safety` — confirmed, strengthened, and one figure corrected
+
+The RTL lane answered the question §6 posed and closed it. Verified here rather than accepted,
+because a clean result that closes a **safety** question is the exact shape this project has been
+burned by.
+
+**Their conclusion is right.** `compress_bounds` never widens a region this fixture creates, so no
+store can land in the adjacent sibling by R-33's mechanism, and `c-validation-and-accounting.tex:41`
+and `:42` hold.
+
+**Their step 1 came back the "bad" way and it does not matter.** Siblings *are* adjacent, on purpose
+— `ports/nginx/port/ngx_subpool_test.c`, phase 13: *"The sibling is taken FIRST and from the same
+arena, so that it is a neighbour of the nest rather than something allocated after the dust
+settled."* Confirmed verbatim in the file. Adjacency does not close the question; representability
+does.
+
+**The granule arithmetic reproduces exactly.** `granule(len) = 2^(max(0, bit_length(len)-13) + 3)`,
+so it is 8 for every length below 8192, and every size the fixture asks for is a multiple of 8 —
+including the one odd-looking 4280, which is 535 x 8.
+
+### The reason is STRUCTURAL, not fixture-dependent — a stronger closure than the one argued
+
+The lane's argument enumerates the sizes the fixture happens to use, which is fragile: a fixture
+change would require re-checking, and two numbers in the file are not in their list (`30`, which is
+a **shift count** in `(size_t) 1 << 30` on a call asserted to *fail*, and `4288`, which is a granted
+extent rather than a request). A stronger argument is available from the allocator itself:
+
+**`ports/nginx/port/ngx_subpool.c:86` — `bytes = (bytes + 15) & ~(size_t) 15;`** — rounds **every**
+request up to 16 bytes, unconditionally, and its comment says why: otherwise *"EVERY later block is
+misaligned and the first capability stored in one is an unaligned access."* The fixture asserts this
+behaviour directly at phase 8: a 4280-byte request yields extent **4288**, commented *"rounded, not
+as asked"*.
+
+So the relevant quantity is the **granted extent, not the requested size**, and every granted extent
+is a multiple of 16. For any extent below 16384 the granule is 8 or 16, both of which divide 16.
+**Widening therefore cannot occur at these sizes for any request whatsoever**, not merely for the
+ones this fixture chooses.
+
+### The margin is 3.8x, not 1024x
+
+The lane reported the first size where R-33 bites as 4 MiB, "1024x larger" than the fixture's 4096.
+That is the threshold at which the granule exceeds *page* alignment, which is a different question.
+The threshold that matters here is where the granule exceeds the allocator's own **16-byte**
+rounding, i.e. granule > 16, i.e. `bit_length(extent) >= 15`:
+
+| | |
+|---|---|
+| first request whose granted extent is not an exact multiple of its granule | **16392** |
+| its granted extent / granule / remainder | 16400 / 32 / 16 |
+| fixture's largest region | 4288 |
+| **actual headroom** | **3.8x**, not 1024x |
+
+The conclusion is unaffected — 3.8x is still real headroom and the cells still hold. But the
+correction matters for the sentence it was used to support, *"this is not a near miss that a fixture
+change could tip"*: an nginx port allocating a 16 KiB buffer would sit at the boundary, and 1024x
+would tell a reader not to think about it again. **Structural is the reason to stop worrying;
+1024x is not.**
+
+**Step 2 is moot**, as the lane says: the emulator-versus-silicon discriminator this lane proposed
+would have decided it only if the precondition ever occurred, and it does not occur on either
+platform, because it is a property of sizes and allocator rounding rather than of hardware. So this
+does not widen the gap decision 1 turns on either.
+
+**Residual, theirs, stated not buried:** the *base* half of R-33 — whether an allocator can hand out
+a non-granule-aligned base — is not established in general. Here the bases are 8-aligned if the root
+arena base is, and any arena holding capabilities is at least 16-byte aligned, so it is safe by
+argument rather than by measurement.
+
+**R-32 drops off the paper's critical path with it**, by the same reasoning: its exposure was the
+same two extent cells, and an off-by-one cannot falsify a cell whose regions are exactly
+representable. Both stay open as soundness defects; neither threatens a claim.
