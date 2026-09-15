@@ -4408,9 +4408,18 @@ hardware, as a passing test for the instructions exercised.
 capmode never set, returns wrong data without a trap for the `ld` that crosses an 8-byte word: the LSU raises its
 exceptions and the load unit drops them (R-34). The capability clauses ride on the same path. The measurements are
 not contaminated by it: the computed results match a machine WITHOUT the defect (the `112006 38bb59fd` speedtest1 hash
-under capstone-qemu, §7c, and the 10,807-record SQLLogicTest corpus identical to native x86 — arm-vs-arm agreement on
-the same core would not have shown it), and the cycle and counter values are CSR reads, not loads through the LSU path
-(the argument is in the R-34 folder). It is a base-core defect, not an extension's.
+under capstone-qemu, **§4g.1**, and the 10,807-record SQLLogicTest corpus identical to native x86, §7c — arm-vs-arm
+agreement on the same core would not have shown it), and the cycle and counter values are CSR reads, not loads through
+the LSU path (the argument is in the R-34 folder). It is a base-core defect, not an extension's.
+
+*(Two corrections, 2026-09-15, paper lane. **The citation was wrong:** this sentence cited §7c for the speedtest1
+hash, and §7c is the SQLLogicTest corpus — it contains no occurrence of `112006 38bb59fd`, `speedtest1` or
+`38bb59fd` anywhere. The hash is in §4g.1 (`:1054`). §7c remains the right cite for the corpus half, and both
+are now named. **And the scope of "not contaminated" needs saying out loud:** that oracle compares computed
+RESULTS against machines that do not model a CVA6 LSU, so it covers every number whose reading is a value. It
+cannot cover a measurement whose reading is *"no trap occurred"* — which is exactly the four plain-data-access
+rows of the safety matrix, conceded two paragraphs below. As written the sentence sits in the headline paragraph
+and reads as covering all of §7; it does not, and the exception is not a small one.)*
 
 The paper lane's request after E1 — run the `obn` probe from M-mode with capmode set, to separate "the
 plain-access checker is unreachable from a domain" from "the checker is broken" — was answered without a
