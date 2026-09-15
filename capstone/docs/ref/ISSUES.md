@@ -743,6 +743,43 @@ Related: R-21, R-22 (resolved on silicon), Q-04.
 > non-idempotent mutation, which is why MREV and SPLIT are the two ops testable that way; DELIN is a plain
 > gap. Detail: the fix-cycle history note, R-28 section.
 
+> # 2026-09-15 — THE COMMIT-STAGE ROUTE IS CONSTRUCTIBLE IN BARE METAL. Design, so nobody re-derives it.
+>
+> Read out of the RTL rather than reasoned: the trap the route needs is `commit_stage.sv:225-227`,
+> `else if (!pc_revnode_valid_d) → cause 64'd25`, gated at `:208-209` on
+> `priv_lvl_i == PRIV_LVL_M && capmode_i`. Its input is `pc_revnode_tracking` (`:231-247`), which latches
+> `pc_cap.metadata.revnode_id` and **assumes valid on any change**, clearing only when
+> `revnode_invalidation_id_i == pc_revnode_id_d` — the broadcast produced at `ex_stage.sv:1207-1208`
+> **during a write op's own execution**. So a REVOKE whose walk reaches the PC capability's node
+> invalidates it mid-flight, the commit head is the REVOKE itself, and it traps instead of retiring —
+> having already mutated node state in EX. R-28's shape with no interrupt and no debug flush.
+>
+> **It must be a DESCENDANT, and that is a constraint not a detail.** `REVOKE_NODE`
+> (`capstone_rev_node.anvil:15-31`) terminates on `node_in.depth <= *depth_bound` and invalidates only
+> what lies below, so revoking a node does **not** invalidate the node itself. The PC capability's node
+> has to lie in the junior run of the node being revoked.
+>
+> **Construction:** create a child node (MREV or SPLIT on the initial capability), `CAPENTER` with the
+> **child** so the PC capability carries the child's id, keep the **parent** capability live across the
+> enter, then REVOKE the parent. The walk reaches the child, the broadcast clears
+> `pc_revnode_valid_d`, and the REVOKE fails the PC check.
+>
+> **THE ORACLE, and it sidesteps the idempotence problem this entry records.** The entry states that no
+> end-state oracle works for DROP/REVOKE because invalidation is idempotent. That is true and it does
+> not block this route, because **the observable here is a PAIR, not an end state**: (a) did the REVOKE
+> trap with cause 25 — read from a `mtvec` handler that latches `mcause`/`mepc` and steps `mepc` by 4 so
+> the run does not spin on itself; and (b) was the node mutated anyway — read with `LCC(rd, cap, 0)`,
+> selector 0 being validity (`capstone_dyn_unit.anvil:231-240`). Mutation observed **together with**
+> non-retirement is the demonstration. Neither half alone is.
+>
+> Expect the run to reach its report and then time out, for the usual reason: completing needs a store
+> to `tohost` through an `auipc`-derived integer base, which the R-34 delivery fix refuses under capmode.
+>
+> **Two things to get right or the arm is void.** The handler must step `mepc`, or the trap re-executes
+> the REVOKE, traps again and hangs — a hang here is indistinguishable from the wedge this entry is
+> about. And validity must be sampled **before** as well as after, or "invalid" cannot be told from
+> "never valid".
+
 Named by the claim-auditor while attacking the R-27 fix (same history note). The write ops are held until they
 are the oldest instruction (`issue_read_operands.sv:1525-1533`), but an interrupt or a debug flush can still land
 after their request has reached the node, which may by then have mutated state — a minted node, a cleared
