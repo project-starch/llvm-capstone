@@ -115,8 +115,8 @@ copy it to your host, and you may read it there if you share the filesystem — 
 
 | artifact | sha256/16 or commit | used for |
 |---|---|---|
-| R1 harness build7 / build8 / build9 | `3d6c24a64bceef00` / `55e6a187d52e5cc8` / `fdd3029ff0f96680` | E4 (§7v) / F4 (§7w) / M2's four boots (§7y) |
-| R1 harness build10 / build11 | `848887ae81b8c0e3` / `9a01b12a4db639b6` | F6 flow checks; build11 = the timed M1 series (your rebuild matches it) |
+| R1 harness build7 / build8 / build9 | `3d6c24a64bceef00` / `55e6a187d52e5cc8` / `fdd3029ff0f96680` | E4 (§7v) / F4 (§7w) / M2's four boots (§7y); **all three at entry `0x410000`** |
+| R1 harness build10 / build11 | `848887ae81b8c0e3` / `9a01b12a4db639b6` | F6 flow checks; build11 = the timed M1 series. **Both built at the script's DEFAULT entry VA `0x10000`, so both are EMULATOR-ONLY**: staged on the board they collide with the `k800` control at the same VA and preflight C15 refuses the boot. A board run rebuilds the same source at `DOMAIN_BASE_VA=0x410000`, re-validates it so it earns its own emulator-pass record, and cites its own hash — every recorded R1/E4/F4/M2 board image was built that way |
 | readback host `sqlite_host_rr.user` | `2c9e82d101b48160` | every R1/M2 boot; provenance: `sqlite_host.c` + the module's `libcapstone.c` at buildroot `d04bd83` |
 | control rung `lpc` / `k800.dom` | `3b93a2b6e2adfa36` (PINNED: `tests/rtl-smoke/drivers/artifacts/lpc`, cannot be rebuilt) / (rebuilt; oracle `RESULT k800 retval=4`) | first and last in every boot |
 | SQLite cells ⑤ -O2 / ⑥ -O2 / ⑥ -O1 / ⑥ E2 | `d61c8bf784f2bbd1` / `c506694f9f6f6889` / `902822a8f303dbaa` / `ceeded2533a74bce` | P1 (§7s) |

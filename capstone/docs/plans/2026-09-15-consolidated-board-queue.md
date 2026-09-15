@@ -119,8 +119,10 @@ branch: owed edits, and they are the paper lane's.
 
 ### P0 — the hand-over boot (runnable now)
 
-One invocation between the two controls, using the M1 image already validated on the apollo host
-(`9a01b12a4db639b6`) and a one-line list, e.g. `1 drop m1 shared 2097152 --cap 16 --budget 4000`:
+One invocation between the two controls, using the M1 image **rebuilt at `DOMAIN_BASE_VA=0x410000`** and
+re-validated so it carries its own emulator-pass record (the prepared `9a01b12a4db639b6` was built at the
+script's default `0x10000`, which is the `k800` control's own entry VA: preflight C15 refuses that boot
+before the board is touched, as it did on the first attempt) and a one-line list, e.g. `1 drop m1 shared 2097152 --cap 16 --budget 4000`:
 
 ```
 R1_BOOT=1 R1_OUT_TAG=q0 R1_BOOT_TAG=q0 R1_BOOT_DESC="apollo hand-over: control, one trivial harness run, control" \
@@ -145,7 +147,7 @@ runs of that point would cost five more boots; that is the lead's call, not a de
 is now 36 lines and `chain-m1.sh` loops over four boots, giving the capacity boot its own output tag so
 it cannot write into boot 1's directory.
 
-`drivers/chain-m1.sh` with the apollo build11 image and the flow check's log. Everything is
+`drivers/chain-m1.sh` with the harness rebuilt at entry `0x410000` (not the prepared default-base build11) and that image's own flow-check log. Everything is
 pre-registered in the driver header: **primary** = `take_cyc/n + give_cyc/n` flat in cumulative
 allocations (least-squares slope × the run's allocation range below 1 % of the mean; last quarter's
 mean within 1 % of the first's); **secondary, scored apart** = the sum in the band 384–391 raw cycles

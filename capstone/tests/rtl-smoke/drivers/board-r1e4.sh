@@ -12,6 +12,12 @@
 # ~390 k at B=256 KiB and ~1.57 M at 1 MiB; rv flat in n if the RTL's revoke is O(1) (~100-200) -- a rise with n is
 # the node-linear finding R1 asks about; bk ~ 10-20 per slot cleared; re a few hundred.
 # BUDGET 300 s per stage; ENTRY_STALL_S 420.
+# ENTRY VA: every image this driver stages must be linked at DOMAIN_BASE_VA=0x410000. The k800 control
+# rung occupies the build script's DEFAULT base 0x10000, so a harness built with the default collides
+# with the control and preflight C15 refuses the boot (R-3 hangs a second domain at a reused VA). The
+# hash named above is the E3/R1 vintage of the harness; the image itself arrives by R1_IMG/R1_HASH.
+# An image validated ONLY on the emulator can carry the default base, because nothing is staged beside
+# it there -- the emulator-validated build and the bootable build are then not the same file.
 set -u; R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify
 B=$R/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/capstone-sbi
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}

@@ -70,8 +70,14 @@ carries a name) and drops only the committing user's OWN configured identity, gu
 
 ## Inputs the successor must produce (a rebuild is a new hash; cite the new one)
 
-* the R1 harness image: `OUT_DIR=... R1_OPT=-O1 bash capstone/sublet/r1/build-r1-silicon.sh` (ends
-  `VERDICT: fits`); then the emulator pass `R1_DOM=... R1_HOST=... OUT=... bash capstone/sublet/r1/run-r1-qemu.sh "<args>" <arena>`;
+* the R1 harness image: **`DOMAIN_BASE_VA=0x410000`** `OUT_DIR=... R1_OPT=-O1 bash capstone/sublet/r1/build-r1-silicon.sh`
+  (ends `VERDICT: fits`); then the emulator pass `R1_DOM=... R1_HOST=... OUT=... bash capstone/sublet/r1/run-r1-qemu.sh "<args>" <arena>`.
+  **The base VA is not optional for a board image.** The build script defaults to `0x10000`, which is where the
+  `k800` control rung lands, so a default-base harness collides with the control and preflight C15 refuses the
+  boot before the board is touched (R-3 hangs a second domain at a reused entry VA). Every recorded R1/E4/F4/M2
+  board image was built at `0x410000`. An image validated only on the emulator may carry the default, because
+  nothing is staged beside it there — which means **the emulator-validated build and the bootable build are then
+  not the same file, and the bootable one needs its own emulator pass and its own hash**;
 * the readback host `sqlite_host_rr.user`: `capstone/ports/sqlite/build-sqlite-host.sh` from
   `sqlite_host.c` with the module's `libcapstone.c` and **BOTH defines**:
 

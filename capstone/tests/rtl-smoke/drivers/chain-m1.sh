@@ -15,8 +15,11 @@
 #   M1_IMG=<r1_slots_pools.dom built from a tree at or after dev c3dc9068d50c> M1_HASH=<sha256/16> \
 #   M1_QEMU_LOG=<the emulator flow check's boot.log, from qemu-m1-flowcheck.sh> [MEMLOCK=<lock>] bash chain-m1.sh
 #
-# On the toolchain that prepared it the image was build11 = 9a01b12a4db639b6; another toolchain gives another
-# hash, which needs its own flow check (qemu-m1-flowcheck.sh writes the qemu-pass record) before this runs.
+# THE IMAGE MUST BE LINKED AT DOMAIN_BASE_VA=0x410000. The prepared build11 (9a01b12a4db639b6) was built at the
+# script's DEFAULT 0x10000 for emulator validation only; staged on the board it collides with the k800 control
+# at the same VA and preflight C15 refuses the boot. Rebuild at 0x410000, re-run qemu-m1-flowcheck.sh so the
+# relocated image earns its OWN qemu-pass record rather than inheriting build11's, and pass that hash as M1_HASH.
+# A different toolchain gives a different hash again; the same rule applies.
 set -u
 R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify; mkdir -p "$U"
