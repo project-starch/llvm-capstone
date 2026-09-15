@@ -364,12 +364,113 @@ static void run_latency(unsigned reps) {
   }
 }
 
+/* ------------------------------------------------------------------ linear (R-21 / R-22) ----- */
+/* Does this hardware clear the LINEAR source of a capability move? The spec says cincoffset/scc/... and
+   stc write cnull to a linear source (they are "MOVC rd, rs1" plus a step); registry R-21/R-22 say the RTL
+   does not, from a 12-second simulation repro (linear-clear-audit.S), never read on silicon. Every arm
+   returns a type read (7 = not a capability, i.e. cleared; 0 = LINEAR; 1 = NONLIN) and none can fault:
+   arm 0 MOVC of a LINEAR source (rd != rs)   -- the INSTRUMENT control: must read 7, else no arm below can see a clear
+   arm 1 CINCOFFSET, NONLIN source            -- the CONFORMANCE control: must read 1 (a copyable source survives)
+   arm 2 CINCOFFSET, LINEAR source (rd != rs) -- spec 7; R-21 says 0
+   arm 3 SCC, LINEAR source (rd != rs)        -- spec 7; R-21 says 0
+   arm 4 LDC of a LINEAR capability           -- the memory slot after the load: spec 7 (moved out); R-21-class 0
+   arm 5 LDC of a NONLIN capability           -- control: the slot must still read 1
+   arm 6 STC of a LINEAR register             -- the register after the store: spec 7; R-22 says 0
+   arm 7 STC of a NONLIN register             -- control: must read 1
+   Operands come from the arena: fresh linear carves, and NONLIN aliases taken from them. */
+static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong arg) {
+  ulong ty = 99;
+  switch (op) {
+  case 0: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x0a, t1, t0, x0\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;        /* movc t1, t0 */
+  case 1: case 2: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x0c, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"(arg) : "t0", "t1", "memory"); break;   /* cincoffset t1, t0, arg */
+  case 3: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x05, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"(arg) : "t0", "t1", "memory"); break;           /* scc t1, t0, arg */
+  case 4: case 5: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn i 0x5b, 0x3, t1, 0(%1)\n .insn r 0x5b, 0x1, 0x04, %0, t1, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;                          /* ldc t0 <- src; park t0 in dst; ldc t1 <- src again: the slot's type after the first load */
+  case 6: case 7: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "memory"); break;                                                              /* stc t0 -> dst; the register's type after the store */
+  }
+  return ty;
+}
+static void run_linear(unsigned reps) {
+  static const char *what[8] = {"movc-LIN(instrument-control)", "cincoffset-NONLIN(conformance-control)", "cincoffset-LIN", "scc-LIN", "ldc-LIN(slot-after)", "ldc-NONLIN(slot-after,control)", "stc-LIN(reg-after)", "stc-NONLIN(reg-after,control)"};
+  static const ulong expect_spec[8] = {7, 1, 7, 7, 7, 1, 7, 1};
+  static const ulong expect_r21r22[8] = {7, 1, 0, 0, 0, 1, 0, 1};
+  unsigned r, arm;
+  for (r = 1; r <= reps; r++) {
+    for (arm = 0; arm < 8; arm++) {
+      sublet_cap src, dst, park; ulong ty, before;
+      sublet_clear(&src); sublet_clear(&dst); sublet_clear(&park);
+      carve_root(4096, &src);                                   /* a fresh LINEAR region in src */
+      if (root_short) { out("R1 refused: arena s=linear"); kv("arm", arm); kv("need", root_short); out("\n"); return; }
+      if (arm == 1 || arm == 5 || arm == 7) {                    /* the NONLIN controls: an alias of it in src */
+        void *a = sublet_take(&src); sublet_move(&src, &park); sublet_store(&src, a);
+      }
+      before = sublet_type(&src);
+      ty = lcc_type_after_op(arm, &src, &dst, 64);
+      out("R1 lin"); kv("arm", arm); out(" what="); out(what[arm]); kv("rep", r); kv("before", before); kv("type", ty);
+      kv("spec", expect_spec[arm]); kv("r21r22", expect_r21r22[arm]); out(ty == expect_spec[arm] ? " reads=spec" : (ty == expect_r21r22[arm] ? " reads=R21R22" : " reads=OTHER")); out("\n");
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ chase (M2) --------------- */
+/* M2's access path: N 64-byte records, each holding the INDEX of the next (never a capability) in a
+   single random cycle (Sattolo, seeded); the capabilities live in a separately counted lookup array.
+   One access = read the record's index (a plain ld through the record's capability), then fetch the next
+   record's capability from the lookup array (an ldc: the DYN unit's node-validity query, at every
+   privilege level), then dereference it. Arms: P (custom-spatial) = every lookup entry is one alias of the
+   whole region offset to its record, so every access touches ONE node; S (custom-sublet) = every record
+   is its own object with its own alias, so an access touches ITS node — N touched nodes, the node table's
+   footprint growing with the working set; D (data-only) = the same chase by integer arithmetic on one
+   base, no lookup ldc at all (the labelled non-protecting ablation). Two warm-up traversals, then the
+   timed accesses; the cold first traversal is reported apart; checksum and visit count verified. */
+static void run_chase(unsigned reps, ulong seed, const char *arm) {
+  static const ulong n_pts[5] = {16, 64, 256, 1024, 4096};
+  unsigned k, r;
+  for (k = 0; k < 5; k++) {
+    ulong N = n_pts[k], i, steps = 100000UL, cur, t0, t1, i0, i1, sum, m0, chk = 0, visits;
+    sublet_cap region, lreg, sreg; void **lookup; sublet_cap *leafslot; char *base = 0;
+    m0 = minted();
+    carve_root(N * 64UL, &region); carve_root(N * 16UL + 64UL, &lreg); carve_root(N * 16UL + 64UL, &sreg);
+    if (root_short) { out("R1 refused: arena s=chase"); kv("N", N); kv("need", root_short); out("\n"); return; }
+    lookup = (void **)sublet_take(&lreg); leafslot = (sublet_cap *)sublet_take(&sreg);
+    if (streq(arm, "S")) {                                   /* every record its own object: N leaves, N aliases */
+      for (i = 0; i < N; i++) { sublet_carve(&region, sublet_base(&region) + 64UL, &leafslot[i]); lookup[i] = sublet_take(&leafslot[i]); }
+    } else {                                                 /* one alias of the region, offset per record */
+      base = (char *)sublet_take(&region);
+      for (i = 0; i < N; i++) lookup[i] = base + i * 64UL;
+    }
+    for (i = 0; i < N; i++) *(volatile ulong *)lookup[i] = i;                 /* identity chain */
+    rng_state = 0x9E3779B97F4A7C15UL ^ (seed * 0x2545F4914F6CDD1DUL);
+    for (i = N - 1; i >= 1; i--) {                                             /* Sattolo: one cycle */
+      ulong j = rng() % i, a = *(volatile ulong *)lookup[i], b = *(volatile ulong *)lookup[j];
+      *(volatile ulong *)lookup[i] = b; *(volatile ulong *)lookup[j] = a;
+    }
+    /* the cold first traversal, timed and reported apart; then two warm-ups; then the timed accesses */
+    for (r = 0; r < 3; r++) {
+      cur = 0; visits = 0; t0 = cyc();
+      if (streq(arm, "D")) { for (i = 0; i < N; i++) { cur = *(volatile ulong *)(base + cur * 64UL); visits++; } }
+      else                 { for (i = 0; i < N; i++) { cur = *(volatile ulong *)lookup[cur]; visits++; } }
+      t1 = cyc();
+      if (r == 0) { out("R1 chase-cold arm="); out(arm); kv("N", N); kv("seed", seed); kv("cyc", t1 - t0); kv("per", (t1 - t0) / N); kv("cycle_ok", cur == 0 && visits == N); out("\n"); }
+    }
+    for (r = 1; r <= reps; r++) {
+      cur = 0; sum = 0; t0 = cyc(); i0 = ret();
+      if (streq(arm, "D")) { for (i = 0; i < steps; i++) { cur = *(volatile ulong *)(base + cur * 64UL); sum += cur; } }
+      else                 { for (i = 0; i < steps; i++) { cur = *(volatile ulong *)lookup[cur]; sum += cur; } }
+      t1 = cyc(); i1 = ret();
+      if (r == 1) chk = sum;
+      out("R1 chase arm="); out(arm); kv("N", N); kv("seed", seed); kv("rep", r); kv("loads", steps); kv("cyc", t1 - t0); kv("per100", (t1 - t0) * 100UL / steps);
+      kv("instret", i1 - i0); kv("touched", streq(arm, "S") ? N : (streq(arm, "P") ? 1UL : 0UL)); kv("minted", minted() - m0); kv("chk", sum); kv("chk_ok", sum == chk); out("\n");
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ entry ----------------- */
 void domain_main(unsigned *res, unsigned func) {
   static char args[256];
   ulong len, i;
   const char *arm = "S", *series = "nodes", *pattern = "shared";
   unsigned reps = 5, touch_unrel = 1, calib = 0, stale = 0;
+  ulong seed = 1;
   ulong budget = 50000UL;
   int arm_sublet;
   if (func == CAPSTONE_DPI_REGION_SHARE) {
@@ -408,6 +509,7 @@ void domain_main(unsigned *res, unsigned func) {
     for (i = 0; i < nt; i++) {
       if (streq(tok[i], "--arm") && i + 1 < nt) arm = tok[++i];
       else if (streq(tok[i], "--series") && i + 1 < nt) series = tok[++i];
+      else if (streq(tok[i], "--seed") && i + 1 < nt) seed = atou(tok[++i]);
       else if (streq(tok[i], "--pattern") && i + 1 < nt) pattern = tok[++i];
       else if (streq(tok[i], "--reps") && i + 1 < nt) reps = (unsigned)atou(tok[++i]);
       else if (streq(tok[i], "--touch") && i + 1 < nt) touch_unrel = (unsigned)atou(tok[++i]);
@@ -428,6 +530,8 @@ void domain_main(unsigned *res, unsigned func) {
     *res = 0x4EB10000u; return;
   }
   if (streq(series, "latency")) run_latency(reps); else
+  if (streq(series, "linear")) run_linear(reps); else
+  if (streq(series, "chase")) run_chase(reps, seed, arm); else
   run_series(series, pattern, arm_sublet, reps, touch_unrel, budget);
   out("R1 end"); kv("minted", nodes_minted_total); kv("split", sublet_stats.split); kv("mrev", sublet_stats.mrev);
   kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); kv("lines", out_lines + 1); out("\n");
