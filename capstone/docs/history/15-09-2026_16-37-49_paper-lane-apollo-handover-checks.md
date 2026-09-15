@@ -141,11 +141,44 @@ commits already on dev"). It is much broader than the collaborator's commits.
 is implicated. Each hit trips two independent detectors, the denylist name check and the email
 check.
 
-Of the three distinct identities authoring the last 400 `capstone/` commits on `dev`, **two match
-the denylist** — one in its name field, one in its email field — and they account for **399 of
-those 400 commits**. The script's existing mitigation drops only the committing user's *own*
-configured identity, which by construction can never drop the other identities present in shared
-history.
+**⚠ THE COUNT BELOW WAS WRONG AND IS CORRECTED. RETRACTED 2026-09-15:** this paragraph read
+*"Of the three distinct identities … **two match the denylist** — one in its name field, one in its
+email field — and they account for **399 of those 400 commits**."* Challenged by the RTL lane, who
+measured a different number; re-measured here on `origin/dev`, and **they were right that mine was
+too high**:
+
+| | |
+|---|---|
+| distinct author identities in the last 400 `capstone/` commits | **3** |
+| unambiguously the personal identity (its **name field** matches) | **317** commits |
+| matches **only** via the email local part | 74 commits — **probably a false positive**, see below |
+| matches nothing | 9 commits |
+
+The 74-commit identity's display name matches **no** denylist pattern, and its email hit is a
+**5-character pattern at position [0:5] of a 13-character local part**, with the display name not a
+prefix of that local part. That is the shape of a substring coincidence rather than a person, and
+the lane that can read the actual strings classifies it as a role name. **So the defensible number
+for the lead is one identity and ~317 of 400 — about four fifths — not two identities and
+effectively all of them.** The classification of those 74 is the one thing still open, and it should
+be settled by someone who can see the strings, not inferred from structure.
+
+**And the bigger finding, which is why the two lanes disagreed at all: `--range`'s verdict is
+OPERATOR-DEPENDENT.** `precommit-scan.sh:120-122` builds `ME` from the **local** `git config
+user.name`/`user.email` and drops lines exactly equal to it before scanning. So a lane configured as
+the personal identity has those `%an <%ae>` lines dropped and sees **no name hits at all**; a lane
+configured otherwise sees the same commits as foreign identity and the detector fires. Demonstrated
+symmetrically today without either side arranging it: on this checkout the other lane's identity is
+foreign and trips the name **and** email detectors, while on theirs *this* lane's identity is
+foreign and trips the email detector, and their own is dropped so the name section never appears.
+**The same range blocks for one operator and passes for another, and both get a confident answer
+with no indication which they are.**
+
+The compound rule that falls out, and it is worth more than either count: **a range scan's verdict
+depends on things that are not in the range** — the operator's git config, and whether the local ref
+is synced (scanning `origin/dev..dev` while *behind* reports the commits you are behind on, in the
+reverting direction; that produced a spurious block here today on content that was entirely another
+lane's). So: **sync before you scan a range, and record who scanned it.** A clean `--range` from a
+lane whose identity happens to be dropped is not evidence that the range is clean.
 
 **Observed live, not hypothetically, on 2026-09-15.** A `--range` over six commits another lane had
 just pushed exits 1 with **two** kinds of hit mixed together: three `user@host` hits from that
@@ -153,7 +186,8 @@ lane's own commit message and from removed lines of their fix (benign, and the l
 these), and **four hits that are author/committer identity lines the scan emitted itself** — two
 commits' worth of `%an <%ae>` and `%cn <%ce>`, tripping the name detector and the email detector
 simultaneously. The lane attributed the block to its message alone and did not see the identity
-lines, which were the larger share.
+lines, which were the larger share **on this operator's checkout** — on theirs the name detector
+never fired at all, which is the operator-dependence above and not a disagreement about the facts.
 
 That mixture is the dangerous property, and it is worth stating separately from the count: **a gate
 that blocks on unfixable author metadata while also reporting real content hits trains its
