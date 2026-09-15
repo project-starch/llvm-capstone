@@ -263,6 +263,121 @@ That does not show the fork broke it — whether the pre-fork parent passed it i
 nothing in-tree records a result for any revision — but it is why a defect of this shape could sit
 undetected for seventeen months, and it belongs in the R-34 box.
 
+## 6b. The R-34 fix EXISTS and has been swept — one retraction of mine, and a sharper paper question
+
+*Added after §6 was written, on the RTL lane's report of state this lane did not have. Their sweep
+results are **reported, not reproduced here** — their fix commit is not fetchable from this host.
+The two software-side facts below I verified myself and say so.*
+
+**Retraction.** §6 relays, from the auditor, that *"zero store-side exceptions have ever been
+observed traversing `:1025`"* and that stores are therefore strictly weaker than loads. **That is
+refuted by measurement.** With the fix in place (`misaligned_ex_n/_q` restored as #2528 deleted it),
+a 91-test sweep delivers exceptions on **both** sides, and roughly eleven of the twelve newly-failing
+tests fail on the **store** side. I relayed that claim to the RTL lane as part of the experiment
+hand-off; it is withdrawn. I had marked it "reported, not re-read" in §6's provenance note, which is
+why it was cheap to correct — but it was still relayed.
+
+**What the sweep establishes**, per the RTL lane: exceptions are delivered, so the total-loss case is
+excluded. Twelve tests that passed on baseline `1bfff7776` now time out, and in each the last event
+is `cap_violation_detection` firing on a **plain** load or store through an integer-derived base
+with capmode set. Cause 24 is now **measured** rather than argued: `cpmp-if-check` installs `mtvec`
+before faulting and its handler reads `mcause = 0x18` = 24 — the value R-24 predicted from
+`riscv_pkg.sv` and that the earlier pre-registration could never observe. Their matched pair differs
+by one variable: `cap-overwrite` PASSES and `cld` FAILS on an identical `auipc t5` / `sw gp,off(t5)`
+sequence, the difference being that `cld` calls CAPENTER.
+
+**What it does NOT settle, so the VCD read keeps its value.** Whether those deliveries are one-cycle
+or multi-cycle holds is exactly the `forward_normal_load_valid` question, and a lag that drops
+*some* exceptions while passing the observed ones is consistent with everything above. The RTL lane
+is running the signal list and the two pre-registered readings unchanged, on the host that has the
+Anvil toolchain.
+
+**The two software-side facts, verified here against primary source:**
+
+* the riscv-tests pass convention is `sw TESTNUM, tohost, t5` at
+  `capstone-ariane/verif/tests/riscv-tests/env/p/riscv_test.h:239` (also `:192`, `:248`), which the
+  assembler expands to an `auipc`-derived **integer** base. Every test in the suite signals success
+  this way;
+* the monitor does the same thing **inside its own trap handler**. At
+  `caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi/sbi_capstone.S:111-113`:
+  `slli t5, t4, 3` / `add  t5, sp, t5` / `sd a0, 16(t5)`. `add` is an integer op, so `t5` is
+  untagged even though `sp` is a capability — a store through an integer-derived base, in the
+  handler, at machine mode.
+
+**Why that is a paper question and not only an RTL one.** The LSU check is gated on
+`capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` (`load_store_unit.sv:966-969`, §1). Domains cannot
+satisfy that gate, so the check protects nothing about domain code no matter what R-34 does. The one
+context where it *does* fire is machine mode — which is where our own trusted monitor lives, and the
+monitor's trap handler violates the very discipline the check enforces. So the enforcement as
+currently gated is not merely "lost to a defect": once the defect is fixed it is **incompatible with
+the trusted code it would apply to**, and the harness's universal pass convention is the same
+pattern, not a second bug.
+
+That sharpens decision 1 rather than answering it. §7x's sentence *"and enabling the gate would not
+have enforced them either"* is now measured, and measured the other way for M-mode — enabling
+delivery **does** enforce, which is why twelve tests stop passing. The four plain-data-access rows
+remain unsupported on the deployed configuration for the reasons already recorded. What is new for
+the lead's ruling is that the gap is structural rather than incidental: it is not "a bug we will fix
+and then the rows hold", because the privilege gate would still exclude domains and the M-mode arm
+faults our own monitor. **Not established by this lane:** whether the monitor pattern is fixable
+cheaply, which is the RTL and monitor lanes' question, and what the manuscript should therefore say,
+which is the lead's.
+
+## 6c. The monitor's site is ONE site, and it is the rdtime writeback — an open question closed here
+
+*The RTL lane proposed a three-instruction fix for the monitor and left one caveat explicitly
+open: whether the `rdtime` emulation the board lane cited is a second site, in the C half, where
+the compiler picks the addressing mode and the asm fix would not reach. **That caveat is closed,
+in the cheap direction, from primary source on this host.***
+
+**The `.S` site IS the rdtime writeback.** `sbi_capstone.S:99-117` is `_handle_non_ecall`: it calls
+the C `handle_exception`, and then, under `#ifdef CAPSTONE_TARGET_FPGA` and only when the return
+value is not `-1`, it reads `mtval` (the offending instruction word), extracts bits [11:7] — the
+**`rd` field** — with `srli t4, t3, 7` / `andi t4, t4, 0x1F`, computes the frame slot, stores the
+returned value into it with `add t5, sp, t5` / `sd a0, 16(t5)`, and advances `mepc` by 4. That is
+emulated-CSR-read writeback, and the `time` CSR is what returns through it
+(`sbi_capstone.c:1978-1980`, `if (((badaddr & 0xFFF0707F) == CSR_TIME)) { time_val = *mtime; break; }`).
+So the board lane's "the monitor's rdtime emulation stores through an untagged base at every Linux
+clock read" and the RTL lane's ":113 is the only site in this file" are **the same site**, not two
+findings.
+
+**And the C half does not add one.** `mtime` and `mtimecmp` are **capabilities**, not integer
+pointers: `sbi_capstone_dom.c:60-63` sets `mtime = split_out_cap(SBI_MTIME_ADDR, 8, 0)` and
+`mtimecmp = split_out_cap(SBI_MTIMECMP_ADDR, 8, 0)`, and `sbi_capstone.c:343` states the invariant
+in prose — the monitor "cannot just dereference `0x10000000`... it needs a capability over the
+UART, minted exactly the way `mtime` already is". So `*mtime` and `*mtimecmp` are tagged accesses
+and never trip the check. **`sbi_capstone.S:113` is the whole exposure in the monitor**, and
+`grep` confirms it is the only `add <reg>, sp, <reg>` in the file.
+
+That makes the RTL lane's "cheap" verdict hold rather than merely stand: `CINCOFFSET(sp, sp, t5)`
+in place (the macro is already defined at `sbi_capstone.h:45`, and the file already uses
+`CINCOFFSETIMM(sp, sp, …)` at `:16`, `:53`, `:58`, `:67`, `:119`, `:122`, `:132`), two extra
+instructions in a trap handler, matching the surrounding idiom.
+
+**The caveat that must travel with it, and it is a clean-result-is-not-evidence case.** The fix
+**cannot be validated on the deployed bitstream**: there the exception is never delivered, so the
+before and the after both run clean. An emulator pass against `caplifive_r30r31_1bfff7776` would
+show that the change breaks nothing and would say **nothing whatever** about whether it is correct
+under a core that delivers. The only place it can be validated is simulation of the fix branch.
+Anyone writing "validated on the emulator" would be reporting a check that cannot fail. It also
+converts an untagged-base fault into a possible **bounds** fault (cause 28) at an address inside
+the frame `CINCOFFSETIMM(sp, sp, -32*8)` carves at `:16` — which should be in bounds, and "should"
+is exactly the word that wants a simulation rather than an argument.
+
+**The sweep, in the RTL lane's own sharper numbers** (reported; the fix commit is not fetchable
+here): 27 regressions, **15 class A + 12 class B**. All fifteen class-A tests recover to PASS once
+the cause renumber is applied, at cycle counts **bit-identical to baseline** — 686 = 686,
+617 = 617, 967 = 967, 31043 = 31043. That is a stronger statement than "they pass again": the fix
+changes nothing about how those execute, only the number they assert. The twelve class-B are the
+timeouts, and they are the integer-base pattern.
+
+**The structural reading survives the monitor fix, and the RTL lane agrees.** Even with the handler
+corrected, the gate is still `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`
+(`load_store_unit.sv:966-969`). Fixing the monitor makes the M-mode arm *enforceable instead of
+self-faulting*; it does **not** extend the check to domain code, which cannot satisfy the gate at
+all. So **"R-34 is fixed" must not be allowed to read as "the four plain-data-access rows now
+hold."** They do not, and no combination of the R-34 fix and the monitor fix makes them.
+
 ## 7. A tree-wide name sweep found four committed violations, and why the gate never saw them
 
 `precommit-scan.sh` is a **flow** gate: it reads the staged diff, the unstaged diff, the untracked
