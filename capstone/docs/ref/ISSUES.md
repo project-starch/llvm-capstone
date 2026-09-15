@@ -2780,6 +2780,38 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > precisely: the block is gated `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`, so what the fix makes
 > enforceable is **M-mode code only** — the monitor and the test harness — not domain code.
 >
+> **THE MISS PATH IS SUFFICIENT TOO, measured 2026-09-15 (`r34-coldmiss-deliver.S`, `9a7bd598c`).**
+> A second sufficiency condition, one module below the `ex_stage` one: `load_unit.sv`'s delivery site
+> is nested inside the `req_port_i.data_rvalid` block and SEND_TAG asserts `kill_req` when
+> `ex_i.valid`, so a faulting access that MISSED would have its transaction killed, never see an
+> rvalid, and drop its exception — a silent read through a capability that forbids it. Neither the
+> boundary waveform nor the full sweep could answer it: `S12_MEM_DELAY` defaults to 0, so every
+> measurement had a response available in the tag cycle and the miss path had never been created.
+>
+> **Rebuilding at delay 40 and rerunning an existing test does NOT answer it either, and this is the
+> trap worth keeping.** `lsu-mmode-gate` at `S12_MEM_DELAY=40` returns all thirteen readings
+> IDENTICAL to the zero-latency run, value for value, only the cycle counts moving (868 → 2485).
+> That reads as robustness and is not: the test hammers one buffer, so the line is resident after the
+> first access and the faulting arms still HIT. Turning the delay on is not the same as making the
+> access miss.
+>
+> A matched pair through the SAME write-only capability, one variable — whether the faulting line was
+> brought in first — with every precondition witnessed in the same run, because "cold" is a claim
+> about cache contents a test cannot otherwise see:
+>
+> | reading | value | |
+> |---|---|---|
+> | warming value | `0x4c535550` | the warm line really is resident |
+> | warming cause | 0 | the warming access did not itself trap |
+> | ARM W value / cause | 0 / `0x1b` = 27 | warm line, delivered |
+> | line separation | `0x1000` | the two lines really are distinct |
+> | ARM C value / cause | 0 / `0x1b` = 27 | **cold line, delivered; no data returned** |
+> | total traps | 2 | one per arm, none spurious |
+>
+> Identical at delay 40 and at 0; only cycles differ, 1287 against 499. So R-34's fix has **no open
+> sufficiency condition**: boundary measured, miss path measured, renumber measured. What stands
+> between it and a bitstream is the monitor, not the RTL.
+>
 > **WHAT THE FIX EXPOSES, and why 12 tests are left failing on purpose.** With delivery working, the
 > suite sweep (RTL lane, 2026-09-15, against baseline `4cc068572`) has 12 tests that passed before
 > now timing out. They are **one pattern, not twelve bugs**: a plain load or store through an
