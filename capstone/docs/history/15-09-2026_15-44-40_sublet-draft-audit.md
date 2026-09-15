@@ -158,3 +158,54 @@ permission already given.
 
 `board/e1-s1s2-hardware` is based on `b0d7510` and so *deletes* the restructure relative to the
 remote. **Landing it is a merge, not a fast-forward.**
+
+## 6. Two rules this investigation produced, for citing rather than restating
+
+Both came out of the reclamation-design audits on 2026-09-15 and generalise well past them.
+
+### A quantity constant in every variable the experiment varied, and linear in one it did not
+
+This is the shape that survives its own repetition. Two instances the same evening:
+
+* **R1's release model.** `≈ 1.81·B + 22.7·nd + 58.9·n` was established as *separable* — each term
+  depending only on its own variable — by holding topology fixed and varying unrelated heap
+  (64 KiB-4 MiB, flat to 0.0034 %) and nesting depth (1-8, flat to 0.0132 %). It never varied
+  **cumulative revocations within a domain**, and that is the variable that moves: `REVOKE_NODE`
+  re-enters its FSM per visited node with revoked nodes never spliced out, so round *r* costs
+  *r+2* dependent reads. Measured growth ~12x within a domain. The model is not wrong; it is a
+  **snapshot at low cumulative-revocation state rather than a law**, and §7t should say so.
+* **The reclamation design's capacity figure.** "≈1.07 x 10⁹ lifetimes before the first index
+  retires" holds only under perfectly uniform round-robin reissue. Under lowest-free-first or LIFO
+  a mint/revoke loop returns the same index every time and retires it after 16,384 reclaims **of
+  that index** — a figure optimistic by up to 65,532x, and **not computable at all until a reissue
+  policy exists**, which the design never states.
+
+Neither could have been caught by repeating its own measurement, because repetition varies the
+variables the design already chose. The question that catches both is asked before the run:
+**which variable does this quantity depend on that I am holding fixed?**
+
+Earlier instances of the same shape, for the record: S-12's zero-latency testbench (the store
+buffer could never fill, so the reproducer read zero for a day), and a delay-40 near-miss the same
+afternoon.
+
+### An emulator result is evidence only about mechanisms the emulator implements
+
+*"The emulator does not show X"* is weak evidence about X until someone establishes that the
+emulator **models the encoding or mechanism X lives in**. The named instance: R-11 reads *"the RTL
+truncates a capability TOP past a 2 MiB window; QEMU never does"* — but `grep -rn cursorless` over
+`capstone-qemu/target/riscv/` returns **zero hits**, while the RTL carries the whole branch
+(`ariane_pkg.sv:625`, `:633`, `:666-670`). QEMU never does it **because it cannot**. That is not a
+reference model disagreeing with silicon; it is a reference model that lacks the feature, and it
+should not be counted as a divergence.
+
+This sharpens rather than replaces the earlier rule that **neither machine can be assumed
+conservative relative to the other** — established when the divergences turned out to run in both
+directions (Q-04/C-32: the RTL nulls where the emulator keeps; Q-12: the emulator omits clears the
+RTL performs). A third case now exists: one side may not implement the thing at all.
+
+**Scope, so this is not over-read.** It bears on **bounds**-behaviour claims, where the cursorless
+encoding lives. It does not touch the temporal-safety rows of `tab:safety`, whose mechanism is
+node validity rather than bounds encoding. Present harm is **UNRESOLVED**: no artifact has been
+found in which the two sides exchange a compressed metadata word. The check that would settle it
+is whether any differential test compares a compressed word or a `CAPNODE` result across QEMU and
+silicon.
