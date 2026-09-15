@@ -148,6 +148,59 @@ not change how a fresh one is chosen. And it does not reduce the 1 MiB pool or t
 
 ---
 
+## Two findings from 2026-09-15 that change what this design claims, before any RTL exists
+
+### It does NOT flatten the revoke cost curve, and the plan must not say it does
+
+`apollo-board` measured per-allocation release cost growing **~12x within a domain**
+(`give_cyc/n` 176 -> 2115) while minting grows only ~1.5x, and located the mechanism, audited
+SUPPORTED: `core/anvil_build/capstone_rev_node.anvil:13-34`, where `REVOKE_NODE` re-enters its own
+FSM once per visited node, terminates only on `node_in.depth <= *depth_bound`, and **revoked nodes are
+never spliced out of the chain** — so round *r* performs *r+2* dependent 16-byte node reads. The
+`.anvil` source is byte-identical between the flashed revision and dev's pin, so this is measurable
+today with no synthesis.
+
+**This design does not splice.** Generation-tagged reuse makes reuse SAFE — a stale alias fails the
+two-field comparison wherever it lies — and it lifts the 65,532 ceiling to ~1.07e9 lifetimes. Neither
+of those shortens the walk. So:
+
+> **Splicing fixes the COST. Generation-tagging fixes the CAPACITY and the SAFETY of reuse. They are
+> different changes, and this document is only the second one.**
+
+Anything that reads "the reclaimer will flatten the release curve" does not follow from what is
+written here. The decision — splice only, generation-tag only, or both in one change — belongs to the
+lead and should be made before the RTL, not discovered after the measurement disagrees with the
+prediction. The paper lane's independent caveat, that a reclaimer may *complicate* P1 rather than
+improve it, is the same worry approached from the other side.
+
+### The generation field lands in the HIGH half of the granule, which is this core's worst neighbourhood
+
+Raised by the paper lane and **measured here rather than assumed**. `rev_node_t` is
+`depth:32, prev:30, next:30, valid:1, linear:1` (`capstone_unit.anvilh:543-549`), and the generated
+`capstone_rev_node.anvil.sv` packs it as a **`[93:0]`** slice. So the 94 used bits occupy bits 0..93
+and the 34 "free" bits are **94..127 — every one of them above bit 64**. A generation placed in the
+padding therefore lives wholly in the high 64-bit word of the 16-byte granule.
+
+That is the half R-29, S-06, S-10 and R-10 are all about — R-29 being a plain 8-byte store into a
+granule's high word followed by a 128-bit load returning the high half **zeroed**, still OPEN. **A
+corrupted generation is not a benign wrong number**: it is either a false match, in which case a stale
+alias confers authority, or a false mismatch. That is the entire safety property of this design.
+
+**The exposure is NOT established and must not be assumed either way.** R-29's trigger is `sd` then
+`ldc` through the LSU and the write-buffer/refill path; the node slot is reached through the rev_node
+unit's own memory endpoint (`node_query_full_addr = CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr,
+4'd0}`) and the pool is hardware-managed, not written by software stores. The shape matches; the path
+may not. **What would settle it** is a source read: do rev_node's accesses share the write-buffer
+overlay and refill leg the R-29 mechanism sits in (`wt_dcache_mem.sv:354-358`, overlay gated at word
+granularity at `:283/:335/:397`), or do they bypass the D-cache?
+
+**And if it does reach, there is a cheap alternative that should be on the table before the placement
+is baked in.** The free bits are all high only because the used fields happen to total 94.
+`depth : logic[32]` is far wider than any revocation tree needs; narrowing it to ~18 bits frees 14
+bits **inside the low half**, and the generation could live there instead, entirely below bit 64. That
+changes `rev_node_t` and the packing, so it is a design decision rather than a tweak — but it would
+make the safety property independent of the high-half defect family rather than contingent on it.
+
 ## Sequencing
 
 The figures in Part 2 are available now and unblock H1/M3 without any of Part 1. Part 1 needs the
