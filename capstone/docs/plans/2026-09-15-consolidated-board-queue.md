@@ -165,6 +165,51 @@ adding the two is a harness edit of the same shape, an emulator pass, and two ex
 boot that uses 4 of its 12 invocations. Keep it a **separate study**: its own work order, its own
 records (`study_id` H1, the same `boot_id`), its own bundle addendum — never mixed into the baseline's.
 
+### P1's OUTCOME (2026-09-15, apollo) and what it changed
+
+Four boots, all `done`. **The pre-registered primary is REFUTED in the informative direction**: scoring the
+two brackets apart (the combined metric hid it) `take` is near-flat at about 70 cycles while `give` grows
+221 → 1,558 and superlinearly, window slopes 202 / 121 / 341 / 791 / 2,570 cycles per 1,000 nodes — the rise
+against cumulative allocations that the driver header named as "the alternative that would matter". The
+secondary band (384–391) is missed at 465–707, so the accounting model is refuted and the primary stands, per
+its own terms. Range-matched over the common span the four patterns agree (308/327/305/315, sd 7–12), which
+confirms empirically that the retention comparison is void without a reclaimer. The discriminator is the
+valuable half: the same harness under the emulator has `give/n` flat at 16 with slope exactly 0.00, and
+`-icount` counts instructions, so the instruction sequence is constant and the growth is the cost of running
+a fixed sequence against a fuller table — which rules out an algorithmic walk in the monitor and does not name
+a hardware structure.
+
+**Read with M2 this is one sentence:** the node table is free to READ as it fills (the validity query is flat
+across 1,366× of occupancy) and not free to WRITE.
+
+**Three instrument defects the run exposed, fixed 2026-09-15 (harness `cf4a25172cbc521e`, built at
+`DOMAIN_BASE_VA=0x410000`; emulator-checked at the capacity that exposed them):**
+* `M1_MAXRET` was 2,048 while the target is 10·C = 2,560 at C = 256, so the retaining patterns stopped at
+  `stop=buffer` and the release arm's phase 2 — gated on reaching the target — never ran: three of the four
+  patterns were really two. **The buffer is an instrument limit, not a property of the system, and a
+  measurement must not be bounded by its own instrument**, so it is raised to 4,096 rather than C being
+  lowered (lowering C would change what the point is about). Emulator check at C = 256: `drop` reaches
+  `stop=target` at 2,560, `release` reaches it at 3,072 with `released=1`.
+* Boot 4 could never have measured the bound: a retaining pattern fills its buffer long before the table.
+  **It is now the `drop` pattern** at C = 65,532 to the 80 % budget — which, after the finding above, is also
+  the high-occupancy end of the release-cost curve and the most interesting stretch in the queue.
+* `stale_alias_type` read 1 on silicon against a pre-registered 2. **Not a Q-11 amendment** (Q-11 is a
+  subordinate handle after an ANCESTOR's revoke; this is a delin'd alias after its own object's release), and
+  the boring explanation must be excluded first: the RTL's type numbering and the numbering `sublet.h`'s
+  constants use differ by one, so 1 and 2 may be one capability in two conventions. The check is off-board —
+  the same probe under the emulator and in simulation at the flashed revision — and only if all three still
+  disagree is it a new entry.
+
+### NEW — the occupancy-versus-object pair (ahead of the ride-along, behind P2)
+
+R1 measured release as O(1) per OBJECT (593/612/608 cycles over a 64× size range) and REVOKE at 23.0 cycles
+per node, flat in heap and depth; P1's baseline has `give` growing with CUMULATIVE ALLOCATIONS. Those are
+consistent only if the growth is driven by table OCCUPANCY — an independent variable neither study varied.
+The pair: release the same object shape at about 500, 1,500 and 2,500 cumulative allocations, three
+repetitions each, everything else identical. Pre-register both readings before the boot: tracking occupancy
+with the object fixed makes "release cost depends on how full the table is" a new and publishable finding;
+not tracking it narrows the superlinear claim to something the churn varies incidentally.
+
 ### P2 — F1's C-32 confirming boot (gated on the lead's ruling, then the compiler lane's push)
 
 The paper lane ranks this **first in value**: it is the only queued run that removes a caveat from a

@@ -439,7 +439,13 @@ static void run_linear(unsigned reps) {
  * fault INVALID_CAPABILITY and, in a domain, wedges -- M-1) runs LAST and only when asked. Subordinate
  * handles retained across a release are not modelled in this version. */
 #define M1_LIVE 16
-#define M1_MAXRET 2048
+/* The retained-reference buffer is an INSTRUMENT limit, not a property of the system, and a measurement
+ * must not be bounded by its own instrument. At C = 256 the run's target is 10*C = 2560, so a 2048-entry
+ * buffer stopped the pressure and release arms at stop=buffer before either reached its target and left
+ * the release arm's phase 2 (gated on alloc >= target) unreached, so three of the four patterns were
+ * really two (apollo, 2026-09-15). 4096 covers 10*C at C = 256 with margin; a larger C needs a larger
+ * buffer again, and the run says which it hit. */
+#define M1_MAXRET 4096
 static void *m1_ring_alias[M1_LIVE];
 static void *m1_ret_alias[M1_MAXRET];
 static sublet_cap m1_tmp;
@@ -494,7 +500,7 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     t = cyc(); sublet_give(&leaf[i]); tg += cyc() - t;     /* the object's lifetime ends: revoke, fill, init */
     if (streq(arm, "drop") || releasing) { alias[i] = 0; }
     else if (streq(arm, "ring")) { k = (unsigned)(alloc % M1_LIVE); m1_ring_alias[k] = old; if (nret < M1_LIVE) nret++; oldest = m1_ring_alias[(unsigned)((alloc + 1UL) % M1_LIVE)]; if (!oldest) oldest = m1_ring_alias[0]; }
-    else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break; } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
+    else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], 64UL, (unsigned char)alloc);
     alloc++; n++;

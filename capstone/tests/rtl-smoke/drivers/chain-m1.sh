@@ -5,7 +5,7 @@
 #              per boot (12 invocations = the M-9 cap) -> NINE runs per pattern over three boots, which is
 #              what METHODS' "five measured runs per arm or point, spanning at least three boots" asks of
 #              primary FPGA timing. "Diagnostic" here is the CAPACITY, not the platform.
-#   boot 4     the pressure pattern alone to the 80 % budget on the deployed table (52,425 allocations):
+#   boot 4     the DROP pattern alone to the 80 % budget on the deployed table (52,425 allocations):
 #              the bound, and a corroborating long curve. One such run fits a boot (the budget IS 80 % of
 #              the table), so it is a SHORTENED POINT under METHODS rule 5 with its own configuration
 #              label (stop=budget) and it is NOT primary timing. Five runs over three boots for that point
@@ -36,7 +36,7 @@ for k in 1 2 3 4; do
     # boot 4 is ONE long run; its list holds a single line, so it indexes at slice 1
     # a DIFFERENT output tag, or this boot would write into boot 1's directory: never overwrite a run
     LIST=$L/m1-capacity.txt; SLICE=1; TAG=r1f6cap
-    DESC="no-reclamation baseline (NOT M1), the deployed table to the 80 % budget: the bound and a corroborating long curve -- a SHORTENED POINT under METHODS rule 5 (stop=budget), not primary timing"
+    DESC="no-reclamation baseline (NOT M1), the deployed table to the 80 % budget with the DROP pattern (a retaining pattern cannot reach it: its own buffer stops it first): the bound, and the high-occupancy end of the release-cost curve -- a SHORTENED POINT under METHODS rule 5 (stop=budget), not primary timing"
   fi
   R1_BOOT=$SLICE R1_OUT_TAG=$TAG R1_BOOT_TAG=sw8x-f6 R1_BOOT_DESC="$DESC" R1_PREREG="$PREREG" \
   R1_IMG=$M1_IMG R1_HASH=$M1_HASH R1_HOST=$R1_HOST R1_LIST=$LIST R1_QEMU_LOG=$M1_QEMU_LOG R1_QEMU_GATE='R1 m1 end' R1_QEMU_GATE_MIN=1 \
