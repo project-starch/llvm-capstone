@@ -36,6 +36,12 @@ Only field placement was unique to the paper lane's. The overlap was real and is
 * **The QEMU/RTL compressed-metadata layouts diverge from bit 27 upward**, because the RTL's
   `bounds_t` carries a `cursorless` bit QEMU lacks — `revnode_id` is 31 bits at `[63:33]` in QEMU
   against 30 bits at `[63:34]` in the RTL.
+* **The padding is not plumbed** — reached independently by both. `ex_stage.sv:1149` reads back only
+  `data_ruser[29:0]`, so anything at slot bits 94..127 is invisible to the unit; `node_update_b =
+  {34'd1, …}` makes **bit 94 a hard constant 1**, giving 33 free bits rather than 34, exactly where a
+  naive append lands. The RTL lane's audit returned it as *"CONFIRMED as storage, REFUTED as free"*.
+  *(Corrected 2026-09-15 20:55: this was first listed under the paper lane's unique findings, which
+  under-credited the RTL lane's audit. Raised by that lane against its own interest.)*
 
 ## Where they contradict each other, and who was right
 
@@ -96,9 +102,6 @@ were never compared.**
   0xC000_0000**, past the top of the DRAM the design's own memory table ends at, and a saturated
   generation reaches 16 GiB past base. It works today precisely because `#{14'd0,*head}` makes the top
   fourteen bits hard zeros. The design's *"the AXI address arithmetic is untouched"* is false.
-* **The padding is not plumbed.** `ex_stage.sv:1149` reads back only `data_ruser[29:0]`, so anything
-  at slot bits 94..127 is invisible to the unit; `node_update_b = {34'd1, …}` makes **bit 94 a hard
-  constant 1**, giving 33 free bits rather than 34, exactly where a naive append lands.
 * **`NODE_ID_INVALID` collides with the re-typing.** `verif/tests/custom/capstone/asm_insn.h:64`
   defines it as 0x7FFF_FFFF, whose bits [29:16] are all ones — precisely "retired index at maximum
   generation" under the proposal. An existing sentinel silently re-typed.
