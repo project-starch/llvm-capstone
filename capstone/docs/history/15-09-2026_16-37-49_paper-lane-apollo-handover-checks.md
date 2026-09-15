@@ -278,7 +278,10 @@ hand-off; it is withdrawn. I had marked it "reported, not re-read" in §6's prov
 why it was cheap to correct — but it was still relayed.
 
 **What the sweep establishes**, per the RTL lane: exceptions are delivered, so the total-loss case is
-excluded. Twelve tests that passed on baseline `1bfff7776` now time out, and in each the last event
+excluded. Twelve tests that passed on the sweep baseline (`4cc068572` — **corrected**: the RTL lane
+first gave this as `1bfff7776`; the four commits between touch only `verif/` and the RTL is
+byte-identical, so the comparison stands and only the label was wrong) now time out, and in each the
+last event
 is `cap_violation_detection` firing on a **plain** load or store through an integer-derived base
 with capmode set. Cause 24 is now **measured** rather than argued: `cpmp-if-check` installs `mtvec`
 before faulting and its handler reads `mcause = 0x18` = 24 — the value R-24 predicted from
@@ -377,6 +380,50 @@ corrected, the gate is still `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`
 self-faulting*; it does **not** extend the check to domain code, which cannot satisfy the gate at
 all. So **"R-34 is fixed" must not be allowed to read as "the four plain-data-access rows now
 hold."** They do not, and no combination of the R-34 fix and the monitor fix makes them.
+
+## 6d. The sufficiency condition is REFUTED by measurement — the fix is sufficient
+
+*The discriminator ran (board lane, VCD on the fix commit `c77c65324`, `TRACE_FAST`, model rebuilt
+from freshly generated Anvil sources). **Prediction A holds: same-cycle.** My concern in §6 is
+withdrawn, and this is the good direction — no bitstream was spent on it.*
+
+The readings, as reported: `i_load_unit.ex_o.valid = 1` at **t=899**, cause 4, **high for exactly
+one cycle** — precisely the shape I said no existing artifact contained; then at **t=901** both
+`forward_normal_load_valid = 1` **and** `load_exception_o.valid = 1`, cause 4; then
+`csr_regfile_i.ex_i.valid = 1` at **t=903**. Identically for cause 27 (1055/1057/1059), cause 28
+(1119/1121/1123) and cause 24 (1501/1503/1505, and again at 1557, 1623, 1707). Single-cycle
+exceptions are **not** dropped at the ex_stage boundary.
+
+**The mechanism, verified here rather than taken on report.** `load_store_unit.sv:678-686` is a
+single `shift_reg i_pipe_reg_load` whose input packs
+`{ld_result_tag, ld_result_metadata, ld_valid, ld_trans_id, ld_result, ld_ex}` and whose output
+unpacks to
+`{ld_result_tag_o, ld_result_metadata_o, load_valid_o, load_trans_id_o, load_result_o, load_exception_o}`.
+So the LSU's valid and its exception leave **the same register in the same cycle**.
+
+**What I got right and what I got wrong, stated separately, because they are different claims.**
+The message type genuinely carries no exception field (`capstone_unit.anvilh:565-568`) — that
+reading stands. What did **not** follow is the conclusion: the exception travels *beside* the
+forwarded valid on a path of matched latency rather than inside the message, so the asymmetry I
+inferred from the type does not exist in the timing. Note also that the shared spill register
+proves the **LSU-side** co-timing only; that the *syncer's* forward has matching latency is settled
+by the t=901 coincidence, not by the register. The type was the wrong instrument for a timing
+question.
+
+**Two readings that came free with it.** `debug_mode_q` stays **0** across all four cause-24
+deliveries, so the R-24 renumber does what it was meant to — measured, not argued, which is the
+first time that has been true of cause 24. And the **store side is traversed**: causes 27, 6 and 28
+reach the CSR file from store-side accesses, so `ex_stage.sv:1025` is live. Full delivered set
+across the run: **4, 6, 24, 27, 28**. That is the second, independent burial of the "zero
+store-side deliveries" claim I relayed in §6 and withdrew in §6b.
+
+**What this changes for the paper: nothing, and that is worth saying.** A fix measured sufficient
+rather than believed sufficient is better engineering, but it does not move the four
+plain-data-access rows. The gate still excludes domains. §6c's conclusion stands unaltered.
+
+**What it cost and what it bought.** One simulation, no bitstream, no board. The question was worth
+asking precisely because the answer could have been either — that is the go/no-go rule working
+rather than being recited.
 
 ## 7. A tree-wide name sweep found four committed violations, and why the gate never saw them
 
