@@ -50,11 +50,20 @@ and `f4-linear.txt` are E4's and F4's.
 * the R1 harness image: `OUT_DIR=... R1_OPT=-O1 bash capstone/sublet/r1/build-r1-silicon.sh` (ends
   `VERDICT: fits`); then the emulator pass `R1_DOM=... R1_HOST=... OUT=... bash capstone/sublet/r1/run-r1-qemu.sh "<args>" <arena>`;
 * the readback host `sqlite_host_rr.user`: `capstone/ports/sqlite/build-sqlite-host.sh` from
-  `sqlite_host.c` with the module's `libcapstone.c`, its provenance recorded beside it (source, libcapstone
-  sha, buildroot HEAD, dirty count); verify `strings | grep -c 'RR/share'` ≥ 1;
-* the control rungs `lpc` and `k800.dom`: `capstone/tests/runtime-qemu/silicon-ladder/build-ladder-domain.sh`,
-  then the verify step that writes the preflight's oracle and `.qemu-pass` under `PREFLIGHT_ORACLES`
+  `sqlite_host.c` with the module's `libcapstone.c`, **with `HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1"`**
+  (without it the probe behind `#ifdef SQLITE_HOST_REVOKE_RESHARE` compiles out, the binary builds clean
+  and fails the `RR/share` gate silently) and the same `-DSQLITE_HC_REGION_SIZE` as the domain build; its
+  provenance recorded beside it (source, libcapstone sha, buildroot HEAD, dirty count, the defs); verify
+  `strings | grep -c 'RR/share'` ≥ 1 (the reference host reads 4); a rebuilt host is a new hash, passed by
+  `R1_HOST_HASH`, and needs its own emulator pass;
+* the control rung `lpc`: PINNED, `artifacts/lpc` (`3b93a2b6e2adfa36`, see `artifacts/README.md` — it cannot
+  be rebuilt); `k800.dom`: `capstone/tests/runtime-qemu/silicon-ladder/` and the ladder's verify step
+  (`verify-and-stage-rung.sh`), which writes the preflight's oracle and `.qemu-pass` under `PREFLIGHT_ORACLES`
   (default `/tmp/capstone/ladder-fpga`) — regenerate, never copy;
+* the monitor: the drivers pin the WRAPPER copy `components/opensbi/lib/sbi/capstone-sbi` at `4274268`, held as
+  a checkout ahead of its parent's gitlink (`components/opensbi` records `2c49c41`; the bake reads the working
+  tree); the PACKAGE copy `package/capstone-sbi-domain/capstone-sbi` stays at `2c49c41` — that is how the
+  reference host holds the two checkouts (memory `opensbi_monitor_rebuild_include_wrapper`);
 * the SQLite cells for F1: `capstone/ports/sqlite/build-sqlite-silicon.sh`.
 
 ## Reading a run

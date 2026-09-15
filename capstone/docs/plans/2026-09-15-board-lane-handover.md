@@ -114,7 +114,7 @@ copy it to your host, and you may read it there if you share the filesystem — 
 | R1 harness build7 / build8 / build9 | `3d6c24a64bceef00` / `55e6a187d52e5cc8` / `fdd3029ff0f96680` | E4 (§7v) / F4 (§7w) / M2's four boots (§7y) |
 | R1 harness build10 / build11 | `848887ae81b8c0e3` / `9a01b12a4db639b6` | F6 flow checks; build11 = the timed M1 series (your rebuild matches it) |
 | readback host `sqlite_host_rr.user` | `2c9e82d101b48160` | every R1/M2 boot; provenance: `sqlite_host.c` + the module's `libcapstone.c` at buildroot `d04bd83` |
-| control rung `lpc` / `k800.dom` | `3b93a2b6e2adfa36` / (oracle `RESULT k800 retval=4`) | first and last in every boot |
+| control rung `lpc` / `k800.dom` | `3b93a2b6e2adfa36` (PINNED: `tests/rtl-smoke/drivers/artifacts/lpc`, cannot be rebuilt) / (rebuilt; oracle `RESULT k800 retval=4`) | first and last in every boot |
 | SQLite cells ⑤ -O2 / ⑥ -O2 / ⑥ -O1 / ⑥ E2 | `d61c8bf784f2bbd1` / `c506694f9f6f6889` / `902822a8f303dbaa` / `ceeded2533a74bce` | P1 (§7s) |
 | C-32 pair (compiler lane) | before `ec061577fb008e18`, after `a1f8f2093696d511` | F1's gate reading (1/0 vs 1/1) |
 | bitstream / monitor / FPGA buildroot copy | `caplifive_r30r31_1bfff7776` / `4274268` / `d04bd83` | the drivers check the last two by commit |
@@ -124,8 +124,9 @@ copy it to your host, and you may read it there if you share the filesystem — 
 
 **Q0 — prove the environment, then one control-only boot.** Your eleven-line report stands at: PASS 1
 (after the fast-forward), 2, 3, 4, 5–6 (with the layout knobs), 7, 8, 11-bitstreams; OPEN 9 (pip) and 10
-(docker re-login), the lead's; 11-paper by bundle. Then, with the readback host rebuilt and verified
-(`strings | grep -c 'RR/share'` ≥ 1), the ladder rebuilt and its oracle regenerated, the harness image's
+(docker re-login), the lead's; 11-paper by bundle. Then, with the readback host rebuilt with `HOST_EXTRA_DEFS="-DSQLITE_HOST_REVOKE_RESHARE=1"` and verified
+(`strings | grep -c 'RR/share'` ≥ 1; pass its hash by `R1_HOST_HASH`), `lpc` copied from `drivers/artifacts/` into the overlay,
+the wrapper monitor copy at `4274268`, the ladder rebuilt and its oracle regenerated, the harness image's
 emulator pass on record: `R1_BOOT=1 R1_OUT_TAG=q0 R1_IMG=<build11> R1_HASH=<its hash> R1_LIST=<an empty file>
 R1_QEMU_LOG=<the flow check's drop boot.log> R1_QEMU_GATE='R1 m1 end' R1_QEMU_GATE_MIN=1 R1_HOST=<rr host>
 R1_BOOT_TAG=q0 R1_BOOT_DESC="apollo Q0: control only" R1_PREREG="retval=4 twice" bash tests/rtl-smoke/drivers/board-r1e4.sh`.
