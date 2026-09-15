@@ -177,3 +177,39 @@ Backup, hands-off after your Q0 passes: answers questions about the runs it made
 the R-34 work; runs no boot. Its unpushed board branch is carried to you as a git bundle by the lead
 (`~/capstone-artifacts/board-branch-2026-09-15.bundle` on the original host; `git bundle verify` then
 `git fetch <bundle> board/e1-s1s2-hardware`).
+
+## 8. The paper repository's operator procedure — read it before your first bundle (found 2026-09-15, 16:10)
+
+The paper repository's LIVE branch is **`drafts`** (`7f83725`, 20 commits ahead of `main`; the board branch's base
+`b0d7510c` is under it). It carries two files that no checkout of the board lane ever contained and that the
+bundles of the last two days were made without: **`experiments/EXECUTION.md`** (the operator instructions) and
+**`experiments/WORK-ORDER.md`** (the work-order template). The platform repo's submodule pointer is `main`, which
+lacks them, so read them from `origin/drafts` of the paper repository (the bundle the lead carries to you holds
+both `board/e1-s1s2-hardware` and `origin/drafts`). What they require, and what changes for you:
+
+* **A work order per bundle, filled BEFORE measurement**, every pre-launch field marked REQUIRED resolved at launch:
+  the study and protocol, the scope (audit / implementation / bounded measurement / full study), the question and
+  the explicitly excluded claims, **operator AND reviewer** (the lead assigns both), the full paper commit, the
+  platform checkout with every submodule commit, the manifest id and the new bundle directory, the board
+  authorisation and resource budget; the inputs and gates (files and hashes, arm-to-binary mapping, sizes and
+  layout, the complete `points.csv` and expected cell count, prerequisite results, positive controls and expected
+  oracles, expected fault locations and survivor checks, counter and parser validation evidence, **peak and
+  cumulative capacity calculation** — the node budget, stop conditions and recovery); the exact commands per stage
+  with cwd and output destination; **timer start/end with exclusive nested brackets**, warm-up and deferred-work
+  treatment, repetitions with seed and the complete boot order, the per-point timeout from the pilot, the plan if
+  a control or capacity check fails; and the reviewer's acceptance at three gates before execution and one after.
+  Q1, Q2 and Q3 above each get a work order first; ask the lead for the reviewer.
+* **The parser is tested against a known-good log AND a deliberately wrong oracle** before a run (the transcript
+  module's `test_transcript.py` is the known-good half; add the wrong-oracle half to your work order).
+* **Never overwrite a previous bundle**; a superseding run is a new directory. **The FPGA launch gate names the
+  actual launcher and its complete invocation** (`board-r1e4.sh` with every knob), and a failed run is stopped,
+  released and preserved, then escalated to the reviewer with the study, point, source and image hashes.
+* **Study ids are not platform issue ids**: `M1` is the reclamation study, `M-1` is the platform's trap-reporting
+  issue, `sw74` names a boot; a record carries both `study_id` and `boot_id`. Both sets have been circulating in
+  the same messages for two days — keep them apart in yours.
+* **What the existing bundles lack against this procedure**, stated rather than repaired: E1, R1, H1 and M2 carry
+  no `work-order.md` — they predate the procedure being visible to this lane, and a retrospective copy would be
+  theatre, so they are not backfilled; no reviewer was ever assigned (the paper lane read everything, the role was
+  not named); `S1S2/sw78-rep1` was removed when `sw78-rep1-3` superseded it (its records survive inside the
+  successor; the rule is now known). The bundle path `experiments/results/<STUDY>/<RUN>/` and the manifest, runs,
+  points, summary and raw layout match the procedure as written.
