@@ -64,9 +64,21 @@ These are not inconveniences; each one has been read as a result.
    reports them. A stale log has already been read as "exception + timeout" when the run under
    test never built. If you skip the delete, check the file mtime against the wall clock.
 
-2. **`.S` FILES GO THROUGH THE C PREPROCESSOR — including comments.** Writing `CAPTYPE(...)`
-   or any other `MACRO(...)` form inside a `#` comment expands as a macro invocation and breaks
-   the assembly. Write "CAPTYPE with CAP_TYPE_UNINIT", never `CAPTYPE(CAP_TYPE_UNINIT)`.
+2. **`.S` FILES GO THROUGH THE C PREPROCESSOR — including comments.** Two distinct ways this
+   bites, and the second is the one that keeps being missed because the first is well known.
+   *Macro expansion:* writing `CAPTYPE(...)` or any other `MACRO(...)` form inside a `#` comment
+   expands as a macro invocation. Write "CAPTYPE with CAP_TYPE_UNINIT", never
+   `CAPTYPE(CAP_TYPE_UNINIT)`.
+   *Directive shape:* a comment line whose `#` is followed by a directive word **is a directive**.
+   Quoting RTL in a header — `#     if (ex_i.valid && ...)` — gives `error: token "." is not valid
+   in preprocessor expressions` and `unterminated #if`, pointing at the comment, which reads like a
+   syntax error in prose. Cost a build on 2026-09-15 in a file whose own header warned about the
+   macro form three paragraphs above. Grep before the first build, because knowing the rule and
+   applying it are different things:
+
+   ```bash
+   grep -nE '^#[[:space:]]+(if|ifdef|ifndef|else|elif|endif|define|include|undef|error|pragma|line)\b' <test>.S
+   ```
 
 3. **`SUCCESS` AT THE TIMEOUT IS NOT A PASS.** The harness prints
    `*** SUCCESS *** (tohost = 0) after N cycles` even when nothing ever wrote `tohost`. If
