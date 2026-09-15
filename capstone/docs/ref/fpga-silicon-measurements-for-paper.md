@@ -3895,7 +3895,10 @@ domain's own `main` in every optimised image, ⑤'s included, and has not been r
 methodological constraint, which outlives this bug: **an emulator pass of an optimised image cannot
 stand in for the board on any path that casts integers to pointers, until Q-04 and C-32 are resolved**;
 an optimised image's board result needs an emulator-independent check (here the port's counters and
-`--stats`).
+`--stats`). (Generalised 2026-09-15 afternoon, §7w: with Q-12 the divergences now exist in BOTH
+polarities — the RTL nulls where the emulator keeps (Q-04/C-32) and the emulator keeps where the RTL clears
+(Q-12) — so **neither machine can be assumed conservative relative to the other**; a reader's usual defence,
+treating the stricter side's result as a bound, is not available here.)
 
 Three readings of the candidate list (paper lane's questions, 03:00). (1) The ⑤ prediction now rests on
 two independent lines: stock `setupLookaside`'s `pStart` is a tagged non-linear pointer, which `movc`
@@ -4354,9 +4357,19 @@ nulled by `stc`** — identical in six readings each. So the pre-registration is
 the registry: R-21 is not present on `caplifive_r30r31_1bfff7776` for `cincoffset` (its 2026-09-05 sweep
 note had already recorded that half gone at 5097eb166) nor for `scc` (not in that note), and **R-22 is not
 present at all** — the entry's source analysis describes an earlier revision, and which change fixed it
-is not read here (the RTL lane's to confirm from source). Untested on silicon and still open by the
-entry's table: `tighten` and `shrinkto`; `init`'s duplication is R-25, fixed on silicon 2026-09-09. There
-is nothing to hand to the hardware side, so the two repro folders the plan foresaw are not written.
+is not read here (the RTL lane's to confirm from source). The scope, claim by claim, since R-21 makes five: `cincoffset` and `scc` measured conformant here;
+`tighten` and `shrinkto` NOT probed on silicon (open by the entry's source table); `init`'s DUPLICATION —
+the worst of the five, a second live copy rather than a missing clear — was not re-probed here because it
+is R-25, fixed and confirmed on silicon 2026-09-09 (boot sw41 returned through the consumed-source store on
+the r25r26r27 bitstream, an ancestor of the deployed one). **Origin (the RTL lane, from the history):** one
+commit, `b047f32eb` (2026-08-12, "Fixed some linearity enforcement issue"), an ancestor of `1bfff7776`, added
+the STC writebacks that are R-22's clear (both the UNINIT and the non-UNINIT path) and the three cnull
+writebacks on the CINCOFFSET paths that are R-21's `cincoffset`/`cincoffsetimm`/`scc` half, and shipped the
+directed tests now in the suite (`cincoffset-linear-clear.S`, `scc-linear-clear.S`, `stc-register-clear.S`,
+…); the `ldc` slot clear read here is NOT attributable to it on that evidence and stays unidentified. The
+registry's source tables for R-21/R-22 were a month behind the deployed RTL — read at the entries' filing
+and never re-read after the fix landed — which is why the pre-registration followed them and lost. There is
+nothing to hand to the hardware side, so the two repro folders the plan foresaw are not written.
 **The divergent side is the emulator:** on the same image it clears `movc`/`cincoffset`/`scc` sources
 but neither empties the slot on `ldc` (arm 4 reads 0) nor nulls the register on `stc` (arm 6 reads 0) —
 `trans_csldc`/`trans_csstc` write no `cnull`, as R-21's text noted — registered as Q-12. A port that

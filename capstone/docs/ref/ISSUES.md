@@ -5612,6 +5612,11 @@ the project lead's call.
 > conformance control survives — the spec's behaviour, so the table's first three rows do not describe the
 > deployed bitstream. `tighten` and `shrinkto` were not exercised on silicon and stay open by this entry's
 > source reading. The emulator agrees on these three; its own deviations are on `ldc`/`stc` (Q-12).
+> **Origin (RTL lane, from the history, 2026-09-15):** commit `b047f32eb` (2026-08-12, "Fixed some linearity
+> enforcement issue"), an ancestor of the deployed `1bfff7776`, added the three cnull writebacks on the
+> CINCOFFSET paths (with `cincoffsetimm` and `scc`) and shipped `cincoffset-linear-clear.S`,
+> `cincoffsetimm-linear-clear.S`, `scc-linear-clear.S`. This entry's source table was read before that commit and
+> not re-read after — a month stale by the time the board read it; the same may hold for other source tables here.
 
 
 > **Sweep 2026-09-05 — cincoffset half GONE at 5097eb166; the INIT half is R-25.** `linear-clear-audit.S` arm 2 prints NOT_CAP (the linear source is consumed); R-25 (INIT with rd ≠ rs1 duplicates the source) is confirmed by directed test, see its entry.
@@ -5689,13 +5694,18 @@ being absurd otherwise. Upstream `capstone-qemu` implements the clear for this f
 (`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
 not**, so the reference model is itself inconsistent on one instruction.
 
-### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; which RTL change fixed it is not read (the entry's analysis is of an earlier revision); the emulator still omits the clear (Q-12); nothing to report`
+### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; fixed by b047f32eb (2026-08-12), an ancestor of the deployed RTL — the entry's analysis predates it; the emulator still omits the clear (Q-12); nothing to report`
 
 > **On silicon 2026-09-15 (boot sw8x-f4, §7w):** `ldc t0 <- slot` (LINEAR), `stc t0 -> other slot`, then the
 > type of `t0`: **7** — the register source IS nulled by `stc` on `caplifive_r30r31_1bfff7776`, six readings
 > in two domains, with the NONLIN control reading 1 and the `movc` instrument control proving the read can see
-> a clear. The memory-side half (`ldc` moving a LINEAR capability out of its slot) reads 7 too. So the source
-> analysis below described an earlier revision; the change that added the clear is not identified here.
+> a clear. The memory-side half (`ldc` moving a LINEAR capability out of its slot) reads 7 too.
+> **Origin (RTL lane, from the history, 2026-09-15):** commit `b047f32eb` (2026-08-12, "Fixed some linearity
+> enforcement issue"), the only commit that ever touched `rs2_cleared` in the DYN unit: it builds a cnull and writes
+> it back in place of the stored capability on both the UNINIT and the non-UNINIT STC path (eighteen lines), and
+> shipped `stc-register-clear.S` and `r20-stc-ld-x10.S`. The `ldc` slot clear is NOT in that commit and stays
+> unidentified. The source analysis below was read before that commit and never re-read after it landed — the
+> entry stayed OPEN for a month on stale source, which is why the board's pre-registration followed it and lost.
 
 
 `capstone-academic-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
