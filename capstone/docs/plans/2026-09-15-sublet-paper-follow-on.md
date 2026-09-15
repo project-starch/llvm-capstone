@@ -245,9 +245,12 @@ comparison void until a reclaimer exists. *Reconciled with R1 (15:20, after the 
 release has NO fill (the alias's revoke returns the region LIN; R1 measured `fb = 0`), and the earlier "plus a 64-byte
 fill" was wrong. Brackets by primitive: `take_cyc` = LDC + MREV + STC + DELIN; `give_cyc` = LDC handle + REVOKE + LCC
 type + STC ×2. Predicted from R1's 64-byte object medians (revoke 51, type 12, init 2, reissue 355 − the spatial arm's
-36): `take_cyc/n + give_cyc/n` ≈ 384 cycles per allocation, flat; R1's 593 is the same primitives plus C-level
-bookkeeping (166) and the checked first use (36), both outside these brackets. The split between the two brackets is
-reported, not predicted. Boot 1's curve at the 256-entry capacity is labelled diagnostic, not a hardware result — by
+36): PRIMARY, what the boots test — `take_cyc/n + give_cyc/n` FLAT in cumulative allocations (least-squares slope
+times the run's allocation range below 1 % of the mean; last quarter within 1 % of the first); SECONDARY, scored
+apart — the sum in the band **384–391** raw cycles per allocation (384 from R1's phase medians; 391 = R1's total 593
+minus bookkeeping 166 minus the checked first use 36, the seven between them being R1's six timer reads against
+these brackets' four), where outside the band refutes the magnitude model and leaves the primary result untouched.
+The split between the two brackets is reported, not predicted. Boot 1's curve at the 256-entry capacity is labelled diagnostic, not a hardware result — by
 capacity, not by platform (`M1-node-reclamation.md`).
 
 ## Hand-offs (cross-session messages, roles only)
