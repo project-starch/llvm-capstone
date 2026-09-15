@@ -374,6 +374,22 @@ the cause renumber is applied, at cycle counts **bit-identical to baseline** —
 changes nothing about how those execute, only the number they assert. The twelve class-B are the
 timeouts, and they are the integer-base pattern.
 
+*That account was queried and **stands unchanged**.* A later 10x-timeout rerun looked at first as
+though it might supersede it, because it reported "two of the fifteen were never broken at all"
+while a different fifteen was already in play. It does not: the RTL lane verified the groups are
+**disjoint** rather than asserting it — class A (base PASS → fix FAIL, repaired by the cause
+updates, 15), class B (base PASS → fix TIMEOUT, 12), and a **third** group of tests that were
+not passing on *both* trees at the 50,000-cycle budget (15), with all three pairwise intersections
+empty. The equal count of the first and third is coincidence. In that third group the budget was
+masking two real passes — `s07-ldc-chain-forward` at 276,242 cycles and `stc-counter-pair` at
+215,359, identically on both trees — and the other thirteen sit at 500,013 on both. **Nothing in
+it is a regression in either direction.**
+
+Recording why that near-miss is worth a sentence: had the ambiguity been resolved by guessing, the
+likely guess (reading it as the class-A fifteen) would have **struck a correct result** from this
+note. Two groups of equal size in one paragraph is enough to make "two of the fifteen" unresolvable,
+and the cost of asking was one message.
+
 **The structural reading survives the monitor fix, and the RTL lane agrees.** Even with the handler
 corrected, the gate is still `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`
 (`load_store_unit.sv:966-969`). Fixing the monitor makes the M-mode arm *enforceable instead of
@@ -443,6 +459,15 @@ tree has exactly that one hit.
 **The gate works; it had simply never been pointed at the tree.** Proven rather than asserted: from
 a clean baseline (exit 0), copying one of the offending committed files in as an untracked file
 makes the same gate exit 1 and name the exact line.
+
+Stated in its strongest form, because this is the generalisable part: **a gate with no whole-tree
+mode cannot be wrong about what it is shown, and is silent about everything it is never shown.**
+This one passed every commit for months while four committed files carried a name. That is not a
+gate that failed — it is a gate whose *scope* nobody had questioned, which is harder to notice than
+a gate that cannot fire, because every positive control you can think to run comes back correct.
+The existing project rule covers detectors that cannot fire and instruments that cannot
+distinguish; this is a third shape, and the question that catches it is **"what is this check never
+shown?"** rather than "can this check fire?".
 
 **A scrub commit cannot pass a content scan**, because a diff that removes a name contains that
 name on its `-` lines. No pattern was weakened. Instead: all five name hits were checked
