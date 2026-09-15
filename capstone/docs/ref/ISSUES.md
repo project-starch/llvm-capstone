@@ -2971,7 +2971,7 @@ address. Passing rungs were only ever clean where someone looked.
 > It stays in the open registry rather than the archive because nothing about it was resolved; it is
 > retained as provenance for the sighting.
 
-### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `OPEN — PARTIALLY FIXED; root cause of C-13, board-confirmed 2026-07-29. The secondary defect (`is_cap_req`/`st_wr_cap` decide "holds a capability" by OR-reducing the metadata word, never consulting `cap_type`) is LIVE on 66c4e7517 and is R-29's sibling account; the stage-8 discriminator is unrun`
+### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `OPEN — PARTIALLY FIXED; root cause of C-13, board-confirmed 2026-07-29. The secondary defect is "holds a capability" decided by OR-REDUCING a user/metadata word rather than consulting `cap_type`. The STORE side is REPAIRED (`is_cap_req`/`st_wr_cap` now carry an explicit opcode-derived flag); the REFILL side is LIVE — `wt_dcache_mem.sv:358` and `:501` — on every tree checked including 66c4e7517, 1bfff7776, 4cc068572, dev's pin f6ec6c198 and 9a7bd598c. R-29's sibling account; the stage-8 discriminator is unrun. READ THE SECOND-READING BOX BELOW, NOT THIS LINE ALONE`
 
 **THE MECHANISM, complete.** A capability's two halves are stored differently:
 
@@ -3020,6 +3020,34 @@ capability tags, so the 128 bits round-trip unchanged" -- is FALSE on real silic
 > `:501`. Note how it was found — by reading the tip, not by sampling. The waveform probe originally
 > planned for this would have sampled `is_cap_req` and `st_wr_cap`, seen them behaving correctly, and
 > closed the entry WRONGLY.
+>
+> **2026-09-15 — THAT PREDICTION CAME TRUE, and the header line is why.** The RTL lane read the two
+> repaired sites, traced the explicit `is_cap` chain from issue to the AXI adapter, found it sound,
+> and was about to record the secondary defect as FIXED. The refill pair was missed for a reason
+> worth naming: the search was `grep is_cap`, and **neither `:358` nor `:501` contains the string
+> `is_cap`** — a narrowed view cannot show what it is not keyed to, which is the mirror of sampling
+> `is_cap_req` and seeing it behave. The box above was not read first; it says exactly this.
+>
+> The header line materially helped: it called the defect "LIVE on `66c4e7517`" while naming only the
+> two sites this box records as REPAIRED on that very commit, so a reader who checks those two and
+> finds them clean concludes the entry is stale. The header now carries the split. **Also checked
+> while refuting the claim** — the store-side repair predates `66c4e7517`, and the refill pair is
+> present at identical constructs on `66c4e7517`, `1bfff7776`, `4cc068572`, dev's pin `f6ec6c198`
+> and the R-34 branch `9a7bd598c`, so no tree separates "current" from this entry's subject.
+>
+> Two further things the refutation turned up, recorded so the next reader is not misled the same
+> way. `wt_dcache_wbuffer.sv:754` does not end where it is usually quoted: `is_cap` is STICKY across
+> a merge into an already-capability granule (`| ((|wbuffer_q[wr_ptr].valid) & wbuffer_q[wr_ptr].is_cap)`),
+> deliberate, but not what the one-line quote says. And the store side's "value-driven tag" is not an
+> independent authority for memory-sourced capabilities: the tag on an LDC result comes from
+> `req_port_i.data_rtag` ← `rd_ctag_o` ← `wt_dcache_mem.sv:358`, i.e. **the refill OR-reduce one hop
+> earlier**. The inference moved upstream of the tag; it was not removed. The tag ⇔ `cap_type`
+> equivalence that would close the gap is asserted only under `ifndef SYNTHESIS`
+> (`ex_stage.sv:807-819`), so it is inert on silicon — and that assertion's own comment names the
+> failure mode the refill OR-reduce would produce: "some path minted a tag for non-capability bits."
+>
+> The entry's literal wording also still holds: `grep -rn cap_type core/cache_subsystem/` returns
+> nothing. The cache subsystem has never consulted `cap_type`.
 >
 > **One co-location, recorded as geography and not as causation:** `:358` sits in the SAME
 > `always_comb` as the refill assignment the R-29 probe caught — that block sets `rdata`, `ruser` and
