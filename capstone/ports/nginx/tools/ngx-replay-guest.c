@@ -30,6 +30,7 @@ struct ngx_replay_out {
     uint64_t ops[16];
     uint64_t pools_at_end, objs_at_end, level0_live, carved, reused, tables_full;
     uint64_t n_split, n_mrev, n_delin, n_revoke, n_init;
+    uint64_t reset_unsupported;
 };
 #define NGX_REPLAY_MAGIC 0x4E47585245504CAull
 
@@ -132,6 +133,7 @@ int main(int argc, char **argv) {
     printf("replay blocks    carved %lu reused %lu\n", o->carved, o->reused);
     printf("replay sublet    split %lu mrev %lu delin %lu revoke %lu init %lu\n",
            o->n_split, o->n_mrev, o->n_delin, o->n_revoke, o->n_init);
+    printf("replay noreset   %lu\n", o->reset_unsupported);
     printf("replay tables    %lu\n", o->tables_full);
 
     capstone_cleanup();

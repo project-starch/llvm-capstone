@@ -295,7 +295,18 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the spec and the RTL say it must `OPEN — QEMU divergence, filed 2026-09-05`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass`
+
+> **2026-09-15: this divergence MASKED C-32 on every emulator pass of the SQLite Sublet port at -O1/-O2.**
+> The port's `setupLookaside` moves an integer-bridged block base through `movc` and re-reads the
+> source; QEMU keeps it, the RTL nulls it, and the lookaside was silently OFF on silicon for every
+> optimised-image board run (sw80b–sw82, arm A) while the emulator's counters said it was on. Found
+> from the port's own counters, confirmed by `--stats` on the board and by the RTL/QEMU sources (see
+> C-32's 2026-09-15 box). Whether a scalar source SHOULD be consumed remains this entry's open spec
+> question, the lead's; nothing here rules it — but until the emulator agrees with the RTL on this
+> point, an optimised image's emulator pass cannot stand in for the board on any path that casts
+> integers to pointers.
+
 
 > # ⚠ RETRACTED 2026-09-10, the same day it was made. THE RULING BELOW IS WRONG AND Q-04 REMAINS A GENUINE SPEC QUESTION.
 >
@@ -542,6 +553,44 @@ diagnostic, not the marker sequence.**
 no define involved", reported and withdrawn within the hour as an N=1 over-claim. It has the same
 arena size and the same path. Not asserted — stated as the thing to check before trigger (b) is
 treated as an S-14 instance.
+
+## Q-11 — capstone-qemu's `ldc` untags a loaded capability whose node is revoked; the RTL forwards it unchanged, so a type read after an ancestor's revoke is 7 there and 2 on silicon `OPEN — for the collaborator (capstone-qemu); found by E1 on hardware 2026-09-14; enforcement on use agrees on both`
+
+Three S2 cells of the nginx probe (`ngx_uaf.c` stops 7 and 8, `ngx_subpool_test.c` phase 13) read
+the TYPE of a subordinate handle after its ancestor's REVOKE: the emulator reports 7, the FPGA reports
+2 (r1b2: C70227 vs C70277, C80021 vs C80071; r1b3: 0D3E04 vs 0E3E00, the four `== SUBLET_TYPE_NONE`
+checks of phase 13). RTL-oracle reading, quoted: both type queries (`LCC` selector 1,
+`capstone_dyn_unit.anvil:206-208`; `helper_cslcc` case 1, `op_helper.c:894-896`) return the register's
+stored type field; the difference is `ldc`: QEMU's writeback `helper_reg_set_cap_compressed`
+(`op_helper.c:1583-1591`) calls `capstone_cap_revoked` and clears the tag of a loaded capability
+whose node is invalid, so the later type read takes the untagged short-circuit (`:856-858`, returns 7);
+the RTL's `LDC` (`capstone_dyn_unit.anvil:355-357`) validates only the ADDRESSING capability's node and
+`check_load_data` (`capstone_unit.anvilh:583-609`) forwards the loaded value verbatim. Encoding is
+ruled out (both number the post-shift types LIN 0, NONLIN 1, REV 2, UNINIT 3; the RTL's 7 is
+`NOT_CAP(0) - 1` wrapped, the emulator's 7 is its untagged fallback). Enforcement on use agrees:
+stop 9 offers the stale handle to REVOKE and both machines refuse it (FPGA: wedge with mcause 26
+`INVALID_CAPABILITY` latched at `revoke t0` in `sublet_give_to`, mepc 0x81B03D2C − DBAS
+0x81B00000 = +0x3D2C; emulator: cause 24 under its own numbering, and it aborts before capstone-qemu
+PR #4). Consequences: (1) `sublet.h:175-176`'s model ("type 7 means the slot is empty") holds on
+silicon, where a revoked-but-present handle (2) and an empty slot (7) are distinguishable, and the
+emulator collapses both to 7; (2) `ngx_subpool_test.c` phase 13's four `SUBLET_TYPE_NONE` expectations
+encode the emulator's behaviour and pass there for the wrong reason — the port's owners' fix; (3) the
+paper's tab:safety hierarchy rows that rest on "reads NONE after withdrawal" are emulator evidence.
+A second divergence found on the way: QEMU's `LCC` VALIDITY selector (imm 0) is a stub
+(`op_helper.c:891-893`, "always valid for now") where the RTL queries the revocation node; nothing in
+the ports uses selector 0 today. For the collaborator (capstone-qemu).
+
+## Q-12 — capstone-qemu's `ldc` leaves a loaded LINEAR capability in its memory slot and its `stc` leaves a LINEAR register source intact; the deployed RTL clears both `OPEN — QEMU divergence, found on silicon 2026-09-15 (boot sw8x-f4, §7w); for the collaborator (capstone-qemu)`
+
+The R1 harness's `--series linear` on image `55e6a187d52e5cc8`: after `ldc t0 <- slot` of a LINEAR capability
+the slot reads 0 (still LINEAR) on the emulator and 7 (empty) on silicon; after `stc t0 -> slot` of a LINEAR
+register, `t0` reads 0 on the emulator and 7 on silicon; the NONLIN controls read 1 on both, and
+`movc`/`cincoffset`/`scc` clear the linear source on both. The spec (`mem-access-insn.adoc:54-55, 105`)
+requires both clears; R-21's text already noted that `trans_csldc`/`trans_csstc` write no `cnull`. Impact: a
+port that relies on a linear capability surviving in memory after a load, or in a register after a store,
+passes on the emulator and loses it on silicon — the opposite polarity from Q-04/C-32. `sublet.h` stores
+every loaded linear capability back and reads the base before the store, so the Sublet port is unaffected.
+Related: R-21, R-22 (resolved on silicon), Q-04.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
@@ -1332,7 +1381,45 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — DESIGN CHOICE PENDING (lead); reproducer committed as an XFAIL, no fix attempted`
+### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN CHOICE STILL PENDING (lead), now blocking P1's O2 arms; reproducer committed as an XFAIL`
+
+> # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
+>
+> **The instance.** The SQLite Sublet port's `setupLookaside`, compiled at -O2 (image `c506694f9f6f6889`,
+> function at 0x26518): the lookaside's 64 KiB linear block comes back from the inlined
+> `sublet_take_linear` as an INTEGER base (`lcc s3, t0, 0x3` at 0x2677c — the port casts it with
+> `(void*)base`), the pointer argument to `sqlite3MallocSize` is materialised by **`movc a0, s3`**
+> (0x2679c), and `s3` is **re-read** afterwards for the function's `if (pStart)` test (`mv a0, s3; bnez
+> a0` at 0x267f0-0x267f4) and for `a = (uptr)pStart` (0x26884). On the RTL the `movc` writes `cnull`
+> into `s3` (`capstone_flu_unit.anvil:6-27`: any source that is not a tagged NONLIN capability is
+> nulled; no exception is raised), so the test reads `pStart == 0` and the function takes its
+> no-lookaside exit with the block already taken and never freed — the free on that path is
+> `sqlite3_free(pStart)` through a second `movc a0, s3` (0x26a20/0x26a4c), which on the RTL frees a
+> null, so the same nulling that disables the lookaside also leaks its block (the six unrevoked
+> handles at the end of the run); on capstone-qemu the source survives (Q-04) and the lookaside is
+> set up. No fault on either machine — this instance differs from
+> the reproducer's fault only in what the nulled register is used for next.
+>
+> **How it read on the board.** The same image, same arguments, oracle hash on both machines; the
+> port's own counters `split/mrev/delin/revoke/init` 8654/41293/32638/41287/8649 on silicon against
+> 5568/37966/32565/37966/5401 on the emulator — decomposed, "one linear take, no slot carved, every
+> small request served by memsys5"; then `--stats` read **zero lookaside slots** on the board against
+> 25,010 hits on the emulator (boot sw8x-o2stats). The -O1 image diverges identically; the -O0 image
+> does not (its int-to-pointer cast goes through memory: `stc` of the integer, `ld` of the cursor
+> word, and no `movc` source outlives the copy). Bisection: twenty allocator functions at -O0 inside
+> the -O2 image changed nothing (arm A); `setupLookaside` alone at -O0 (arm C, `2b9e4d0d3ed523c9`)
+> is the pre-registered confirmation and is queued. Consequence for the corpus: sw80b, sw81, sw82 and
+> arm A are lookaside-OFF Sublet runs and their ratios are not cited.
+>
+> **What it changes here.** The design choice above is no longer insurance against a latent case: the
+> live-source read after a `movc` of an integer-bridged value is emitted by -O1 and -O2 for ordinary C
+> (an `unsigned long` cast to `void*` and tested for null), and every QEMU pass of such code is blind
+> to it. Until the bridge is fixed, an optimised image of any port that casts integers to pointers
+> carries this risk on silicon, and its board result needs an emulator-independent check (here: the
+> port's counters and `--stats`). **Related:** Q-04 (the emulator side; still the open spec question
+> and NOT ruled here), C-46 (the machine model's blindness to the consumed source — its "only where a
+> read of the source outlives the movc" bound is exactly this instance).
+
 
 **FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
 `llvm/test/CodeGen/Capstone/c32-movc-untagged-live.ll` — with **no registry entry in either half of
@@ -2360,6 +2447,26 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > exit status or timestamp.
 >
 > **NEITHER IS BOOTED.** The resident firmware predates all of it.
+
+> **2026-09-14 (E1, boots sw78 r1b2/r1b4/r1b5): the domain-side reading the block above said only a
+> U/S-mode probe could give.** `ngx_uaf.c` stop 3 on the Sublet arm (image `103998ef04d6c342`, entry
+> 0x310000) — the object touched after `ngx_destroy_pool` has revoked its pool — RETURNED on the FPGA
+> with mark C30000: the byte load retired and read 0x00 (the plain arm's stop 3 reads its own 0xA0,
+> `9d55128c0eb91875` → C300A0; the Sublet arm's stop 1 reads 0xA0 before the destroy). The emulator
+> faults the same image at the same `lbu` (pc image+0x66cc) with cause 24 NOT_CAP, because its `ldc`
+> untagged the reloaded pointer (Q-11 above). The 0x00 is the port's own `stc zero` fill
+> (`sublet.h:138-142`, run when the revoke hands back UNINIT), not hardware. Whether the reloaded base
+> was TAGGED on the board — the difference between "the LSU's node-validity clause
+> (`load_store_unit.sv`, cause 25) never applies below M-mode" and "the base was an untagged integer, the
+> 2026-08-04 NOT_CAP result re-observed" — was read by stops 10/11 (r1b4/r1b5, 2026-09-15 00:0x): **TAGGED, type 1** — s10 `CA0180` (the
+> emulator: `CA0780`), s11 `CB0100` (type 1 and the byte 0x00 from the same run). So the load retired
+> through a tagged capability under a revoked node: the LSU's node-validity clause does not apply below
+> M-mode, measured from inside a domain. And s5 on the protected arm read the NEW occupant's byte
+> (`C5005B`, r1b5) where the emulator faults.
+> Audited before entry (claim-auditor, 2026-09-14): the hash-cited image, the fault pc on QEMU, the
+> destroy→revoke chain (`ngx_destroy_pool → ngx_pool_slot_put → ngx_subpool_release → sublet_give_to →
+> revoke`, unconditional), the `--arena-linear` guard (a non-linear arena marks FD00xx, not C3xxxx).
+> N = 1 per platform; the boots' S-07 self-test reported itself unproven (irrelevant to the marks).
 
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
@@ -3726,6 +3833,26 @@ numbers come from `/tmp/capstone/sqlite-silicon/` and not from the faulting bina
 > which says exactly this in its own comment). Two-halves would silently drop the high half — **worse
 > than today's diagnostic**, which is correct and should stand.
 
+> **2026-09-14 (compiler lane, note `docs/history/14-09-2026_21-00-00_b6-i128-select-not-the-blocker.md`):
+> the SQLite domain BUILDS AND RUNS at `-O1` and `-O2`.** `MVT::i128` is no longer a legal type
+> (`CapstoneISelLowering.cpp:201` registers c128; no `addRegisterClass` for i128), so the `SELECT_CC`
+> node cannot form; the `wide_arm` reproducer now hits the forge diagnostic ("Cannot materialize
+> arbitrary >64-bit constants as capabilities"), a correct refusal — a constant arm needing more than
+> XLen bits is by construction carrying bounds/permission/tag bits and materialising it as two i64
+> halves would forge a capability. B6 (the two-halves lowering) is therefore NOT to be written.
+> Images: -O0 `6cf8edf637f72063` (692,983,497, reproduces the archived cell ④ exactly), -O1
+> `50ca86aa70b3e425` (342,161,746), -O2 `ec061577fb008e18` (336,067,501), all at the oracle, in
+> `~/capstone-artifacts/b6-2026-09-14/`. The board lane's -O2 builds of the P1 arms the same evening:
+> cell ⑤ (lookaside on, 2 MiB) `d61c8bf784f2bbd1` 330,723,308; cell ⑥ (Sublet) `c506694f9f6f6889`
+> 338,496,909 with the -O0 node counts unchanged (5,481 / 37,874); native `b36eb3814c3cefce`
+> 240,654,449 (25,122 lookasides). Stakes drop from "backend crash" to "reachable from C is UNRESOLVED
+> and not worth further spend".
+>
+> **Geometry line for the -O0 measurement image (same note):** `code_len 1,483,656 + 8 KiB + dom_data
+> 2,701,904 = 4,193,752` of the order-10 ceiling's 4,194,304 — 552 bytes of headroom. Any growth of
+> the -O0 arm, instrumentation above all, fails at domain CREATION with no compiler error. -O1 has
+> 260,080 bytes of headroom.
+
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST. FIRST MEASURED COST 2026-09-13: it turned S-15's UNEXPECTED_CAP_TYPE into EIGHT HOURS of silent board time on boot sw64, because a fault and a hang are indistinguishable without a trap vector. The argument for fixing it is no longer only a principled one — and 2026-09-13 evening: sw64 and sw66 were the SAME fault as sw65/sw67 (S-15), read as a hang only because mtvec was 0`
 
 > **2026-09-14 (boot sw76): the entry watchdog's LIVE positive control fired.** sw64's image
@@ -4515,6 +4642,118 @@ The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
 that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
 instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
 
+### M-8 — the PostgreSQL test images (`my_first_domain/start.S` glue) do not ENTER on the board monitor: `delin gp` at image+0x44 traps UNEXPECTED_OPERAND_TYPE because the image declares NO globals boundary, so the monitor delivers NO gp `OPEN — the port's fix (link with a `.capstone_gp_initdesc`, or drop the delin); found by E1 boot sw78 r1b3, 2026-09-14; mechanism corrected from source 2026-09-15`
+
+`pg_subpool_test.dom` (`91d23730153d6a18`, r1b3 arm 4) trapped at image+0x44, the first instruction
+of `test` after `_start` (`my_first_domain/start.S`): `delin gp`, mcause 25 UNEXPECTED_OPERAND_TYPE,
+before any scenario. `pg_hierarchy.dom` (`7284f2f8db444e87`, r1b4, 2026-09-14 23:5x): the same trap,
+mepc image+0x44, cause 25 — confirmed on a second image. Cells recorded `unsupported`, reason
+implementation-unavailable. QEMU passes both images (GOOD).
+
+**Mechanism, corrected 2026-09-15 from source (the first write-up said "gp arrives already
+non-linear, the S-15 class" — an analogy, and the cause number refutes it: a capability of the
+wrong TYPE raises 27 UNEXPECTED_CAPABILITY_TYPE, which is what S-15 produced; 25 is raised when the
+operand is NOT A CAPABILITY, `capstone_unit.anvilh` / R-31's oracle reading).** The PostgreSQL
+images have no `.capstone_gp_initdesc` section (`llvm-readelf -S`: `pg_subpool_test.dom` and
+`pg_hierarchy.dom` carry only `.gct`; `ngx-uaf-p1.dom` and `sqlite_silicon.dom` carry both). The
+loader (`libcapstone.c:292-296`) then packs `globals_off = 0`; the monitor
+(`sbi_capstone.c:928-934`, the 2026-09-07 fix that removed the 0x1000 fallback) takes `gpoff = 0`,
+and carves no gp at all for `gpoff == 0` (`sbi_capstone.c:1123-1126`, "0 means THE IMAGE DECLARES
+NO GLOBALS REGION"), so nothing is stored in the cscratch top slot. The glue's `delin gp` at the
+head of `test` (`start.S:41`) therefore operates on a register that holds no capability → 25. The
+nginx and SQLite images are linked by `link-gpfree.ld`, which places the descriptor first in the
+globals region, so they enter. `libcapstone.c:235-237`'s comment ("absent section => 0 => the
+monitor keeps its historical 0x1000 default") describes the fallback the monitor no longer has and
+is stale. Why the emulator enters the same image is NOT settled here: QEMU's `helper_csdelin`
+(`op_helper.c:1192`, `assert(rd_v->tag)`) would abort on an untagged gp, so under QEMU gp is
+tagged at that point from some other source — a register-state difference at domain entry, not
+chased (the cells are `unsupported` either way). Fix is the port's: link the PostgreSQL domain
+with the gp-free/cap-table glue and linker script the nginx port uses (`DOMAIN_BASE_VA` already
+reaches `pgdom_link`), or drop the `delin`.
+
+### M-9 — a linear (REV_BORROWED) region released while TOP-OF-STACK is popped, and the next `create_region` in the same boot faults inside the monitor `OPEN — emulator evidence (chain18 run 2, 2026-09-15); workaround: keep a region above it`
+
+Found while chaining harness invocations through `sqlite_host_rr.user --speedtest1 --arena N` in one
+emulator boot (the R1 harness, `capstone/sublet/r1`). Invocation 1 shares its 4 MiB arena
+`REV_BORROWED` (linear to the domain), runs, returns; the host's `release_region(pool)` returns **0**
+— the pool was top-of-stack, so `ioctl_release_region` revoked AND popped it (the SQLite host's
+comment at `sqlite_host.c:161-168` documents the two return values: 0 = popped and gone, 1 = revoked
+and the slot kept). Invocation 2 then dies at its own `F2/mkregion3`: `[CAPSTONE] Cap mem access
+requires capability: pc = 800239e4, rs1 = x7, imm = 0, value = 0`, `domain halted by capability
+fault: cause = 24, pc = 0x800239e4, tval = 0x0, badaddr = 0xf0300000` — the pc is the MONITOR's
+(`pc_cap = C(8002006c [8001a1d0,8002ff10))`), the bad address is the NEW region's base, and the
+operand the monitor used to touch it was the integer 0: the slot the pop freed hands the next
+create a null where a capability should be. The same chain with a 64 KiB `--tables` region above
+each pool (the SQLite cells' shape) makes every release return 1 (revoked, slot kept) and the next
+create works — 14 invocations in a row (chain18 run 4), until the region table runs out.
+Consequences: (1) every study that carves fresh regions per invocation must keep a region above the
+linear one it releases, or the boot ends at the second invocation; (2) because the kept slots are
+never reclaimed within a boot, the boot's region budget is finite: ~14 region-bearing invocations of
+four regions each (metadata, payload, pool, tables) before `create_region` fails (`MAX_REGION_N 96`
+in the module, `modcapstone/module/capstone.c:43`; the monitor's own table is smaller, the failures
+started at the 15th invocation = 56 + the controls' regions). Board drivers cap it at 12. Not yet
+reproduced on silicon (the boards ran the SQLite shape, which never pops a pool). The faulting
+instruction in the emulator's monitor (`caplifive-buildroot/build/images/fw_jump.elf`, the same
+bytes as the opensbi-custom generic build, `bb0d91c4ef20010f`): `800239e4: sd s0, 0x0(t2)` after
+`ldc t2, 0xc0(gp); ldc t2, 0x0(t2)` — a store through a capability read from a table the monitor
+keeps at `gp+0xc0`, whose entry read back as the integer 0; `nm` places it at `_return_from_domain.1
++ 0xa`. The source site is unread — next, with the RTL oracle. The SQLite cells read
+`released pool rc=1 / released tables rc=1` on both platforms (sw79; c6o2-2mib), so they never took
+the pop path.
+
+### M-10 — the emulator console truncates a guest command longer than its line buffer, silently; the run looks complete and is not `OPEN — procedure; chain18 run 3, 2026-09-15`
+
+`run-domain-smoke.py --guest-command '<text>'` types the text at the guest shell. A chained
+command of 18 harness invocations (~3.4 KB) ran five of them and stopped with no error, no marker
+and smoke rc 1: the shell received the line cut at the console's buffer, the cut fell inside the
+sixth invocation, and everything after it was never typed. Twelve `echo R1_INVOKE` lines were
+visible in the transcript (the console echoes what it received), which is what made it look like a
+run that had started everything. Rule: a guest command of more than a few hundred bytes goes into a
+script file in the share directory (`sh /mnt/host/run.sh`), and the run's completeness is proven by
+counting the per-invocation return markers against the list, never by the presence of the command
+text in the log. The board path (`run_sqlite_stages_fpga.py`) sends one stage string per invocation
+and is not affected by this shape, but its stage strings are typed the same way — keep each under a
+few hundred bytes.
+
+### M-11 — the board drivers' summaries lose a result line split across two UART chunks (or by a monitor marker), so a present result reads as absent — and the control rung's own line is not exempt `GATED 2026-09-15 — every driver summary and the watchdog now read through fpga_driver/transcript.py (positive control: test_transcript.py); audited over all 85 archived transcripts: no recorded verdict or cited number was affected`
+
+The console delivers the UART in chunks and the driver frames each as `[fpga] [uart] '...'`; a domain's
+line that straddles two chunks is two lines in `driver.log`, and the monitor's share markers
+(`ECSA:00000004` ...) land mid-token besides. A summary that greps the framed log line by line then
+prints `0x []` for a present result (arm C's `sublet:` counters, sw8x-optC2), "no result line" for a
+present mark (E1 r3b3's subpool test, 0D3E04 in the transcript), or a TRUNCATED number as the value
+(`SPEEDTEST1-CYCLES 8562` in sw8x-b80s-O2's summary for 1,166,594,074). In five boots the control's
+`RESULT k800 retval=4` itself was readable only after joining (sw55, sw65, sw74, sw74b, sw78 r3b4): a
+summary-only reader calls those boots VOID.
+
+> **GATED 2026-09-15 (afternoon).** The join is now one module, `capstone/tests/rtl-smoke/fpga_driver/transcript.py`:
+> every `[fpga] [uart] <repr>` frame through `ast.literal_eval` (the archive holds 2,107 double-quoted frames the
+> single-quote extractors silently dropped, and frames of one line are routinely separated by `[event]` lines,
+> which an adjacency-only seam join misses), scoped after this run's `monitor load_image`, joined, the markers
+> deleted for domain lines and KEPT for the marker rows and the stall marker, per-arm segments on the
+> `[stages] --> TEST` lines, full-match `find_all`, and `require` so that no data is an error. Its positive
+> control `test_transcript.py` asserts the OLD reading wrong and the new one right on a synthetic log
+> (a control split with an event line between the chunks, a double-quoted frame, a marker mid-token in a cycle
+> count, a SHA6 split across chunks, a mark split after four digits → the old reading `00051D`). The six
+> drivers' summaries (`board-c6var/b80s/b80a/b78-w2h/r1/r1e4.sh`) read through it, the per-arm mark regex is
+> anchored on its line terminator so a cut number can never print as a mark, the marker is `refused`/`failed`/
+> `done` by the runner's status and the driver exits non-zero on the first two, and `board-watchdog.sh` reads
+> its last SHA5/SHA6 marker through the module's CLI (a split SHA6 read as a stall before). Replayed over the
+> archive: the only deltas are the predicted recoveries (arm C's `sublet:` row, sw8x-b80s-O2's 8,562 →
+> 1,166,594,074, E1 r3b3's subpool mark, r3b4's control, R1's banner count, R1 boot 1's false `bad`), and a
+> refused launch now prints `ERROR: no UART after this run's load_image` instead of a table of zeros. Two
+> findings on the way: `boot.txt` (PROBE_SCOPED_OUT) carries no boot banner at all, so the R1 drivers' "must be
+> 1" line was a structural zero on every boot; and `ENTRY-STALL` is written to `watchdog.log` only, so a
+> summary grepping `driver.log` for it can never fire. The bundle generators import the module too.
+>
+**Rule:** the transcript is the record and a driver's summary is a view of it; before any line-based
+read, join the seams (`re.sub(r"'\n\[fpga\] \[uart\] '", "", log)`), unescape the newlines, delete
+the markers (`[A-Z0-9]{4}:[0-9A-F]{8}\n?`), then parse — as `capstone/sublet/r1/r1-bundle.py` and
+`capstone/ports/nginx/e1-bundle/e1-bundle.py` do. A summary's `0x []` or "no result" is a prompt to read
+the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): no recorded verdict
+changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
+truncation of a long command), the transcript-marker note in the board-run skill.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -4638,6 +4877,10 @@ disagreeing with the history.
 ## Compiler / toolchain (ours)
 
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
+
+> **2026-09-15: the read-after-copy precondition this entry defers to C-32 is OBSERVED on silicon** —
+> `movc a0, s3` of an integer-bridged base with `s3` live afterwards, emitted by -O1 and -O2 in the
+> SQLite Sublet port's `setupLookaside`, and the machine model saw a plain copy. See C-32's box.
 
 > **CORRECTED 2026-09-10 by the compiler lane, on both counts that matter. The premise holds; the
 > severity and the fix do not.**
@@ -5361,7 +5604,20 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `OPEN — SPEC VIOLATION, confirmed in RTL simulation 2026-08-11; NOT yet reported`
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+
+> **On silicon 2026-09-15 (boot sw8x-f4, §7w of the measurements doc):** through the R1 harness's `--series
+> linear` on `caplifive_r30r31_1bfff7776`, the LINEAR source of `cincoffset` and of `scc` reads cleared (7)
+> after the operation in six readings each, the `movc` instrument control reads cleared and the NONLIN
+> conformance control survives — the spec's behaviour, so the table's first three rows do not describe the
+> deployed bitstream. `tighten` and `shrinkto` were not exercised on silicon and stay open by this entry's
+> source reading. The emulator agrees on these three; its own deviations are on `ldc`/`stc` (Q-12).
+> **Origin (RTL lane, from the history, 2026-09-15):** commit `b047f32eb` (2026-08-12, "Fixed some linearity
+> enforcement issue"), an ancestor of the deployed `1bfff7776`, added the three cnull writebacks on the
+> CINCOFFSET paths (with `cincoffsetimm` and `scc`) and shipped `cincoffset-linear-clear.S`,
+> `cincoffsetimm-linear-clear.S`, `scc-linear-clear.S`. This entry's source table was read before that commit and
+> not re-read after — a month stale by the time the board read it; the same may hold for other source tables here.
+
 
 > **Sweep 2026-09-05 — cincoffset half GONE at 5097eb166; the INIT half is R-25.** `linear-clear-audit.S` arm 2 prints NOT_CAP (the linear source is consumed); R-25 (INIT with rd ≠ rs1 duplicates the source) is confirmed by directed test, see its entry.
 
@@ -5438,7 +5694,19 @@ being absurd otherwise. Upstream `capstone-qemu` implements the clear for this f
 (`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
 not**, so the reference model is itself inconsistent on one instruction.
 
-### R-22 — `stc` does not write `cnull` to its register source `OPEN — SPEC VIOLATION; NOT yet reported`
+### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; fixed by b047f32eb (2026-08-12), an ancestor of the deployed RTL — the entry's analysis predates it; the emulator still omits the clear (Q-12); nothing to report`
+
+> **On silicon 2026-09-15 (boot sw8x-f4, §7w):** `ldc t0 <- slot` (LINEAR), `stc t0 -> other slot`, then the
+> type of `t0`: **7** — the register source IS nulled by `stc` on `caplifive_r30r31_1bfff7776`, six readings
+> in two domains, with the NONLIN control reading 1 and the `movc` instrument control proving the read can see
+> a clear. The memory-side half (`ldc` moving a LINEAR capability out of its slot) reads 7 too.
+> **Origin (RTL lane, from the history, 2026-09-15):** commit `b047f32eb` (2026-08-12, "Fixed some linearity
+> enforcement issue"), the only commit that ever touched `rs2_cleared` in the DYN unit: it builds a cnull and writes
+> it back in place of the stored capability on both the UNINIT and the non-UNINIT STC path (eighteen lines), and
+> shipped `stc-register-clear.S` and `r20-stc-ld-x10.S`. The `ldc` slot clear is NOT in that commit and stays
+> unidentified. The source analysis below was read before that commit and never re-read after it landed — the
+> entry stayed OPEN for a month on stale source, which is why the board's pre-registration followed it and lost.
+
 
 `capstone-academic-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
 not `1` (non-linear), write `cnull` to `x[rs2]`." The RTL does not.
@@ -6108,6 +6376,13 @@ image size), not a miscompile, and the fix belongs in the padding or the monitor
 compiler.
 
 ## How to add an entry
+
+> **Source-read entries carry the commit they were read at.** An entry whose evidence is "I read the RTL /
+> the emulator / the compiler and it does X" has a shelf life nothing tracks: when the source moves, the entry
+> stays as written, and an OPEN status reads as caution rather than as staleness — the safe-looking direction.
+> R-21/R-22 sat OPEN for a month after `b047f32eb` had fixed them (2026-09-15: the board's pre-registration
+> followed the stale status and lost). So: name the commit the source was read at (`read at <sha>`), and when a
+> board reading contradicts an entry, re-read the source at the deployed revision before anything else.
 
 **When an entry's status becomes final, move it to `ISSUES-ARCHIVE.md` in the same commit that records the finding, verbatim. IDs are never reused, so an ID absent from this file is in the archive.**
 

@@ -191,6 +191,16 @@ report the result when it lands.
 Running out of *leads* is not one of them. Neither is a clean result, a refuted hypothesis, a
 subagent still working, or a peer lane owing you something.
 
+## Background tasks end when their work ends
+
+**A background task or monitor is owned until it exits.** Every one is launched with an explicit
+end condition — a marker the watched process writes, its PID gone, or a bounded timeout — and
+terminates itself when that condition holds; a `persistent` watch is only for work that genuinely
+has no end. Prefer a polling loop with a file-based end test over a pipeline whose stages can
+outlive the loop: a reader that exits does not end a writer blocked on a quiet input. When the
+watched work finishes, check the task list; a task still running past its end condition is a
+defect to stop and fix the same day, not background noise.
+
 ## Capture the lesson when it is cheap — do not wait to be asked
 
 Process improvements have so far been written only when the project lead asked for them, which

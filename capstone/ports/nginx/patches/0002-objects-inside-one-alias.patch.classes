@@ -1,0 +1,20 @@
+# The weaker arm: the block stays linear and still dies in one revocation, but the objects inside
+# it are offsets in a single alias rather than capabilities of their own. Applied on top of 0001
+# when NGX_SUBLET_BLOCK is set, so the two disciplines are the same port with one difference and
+# port-effort can count each.
+#
+# What it gives up is named in the code rather than left to the reader: spatial safety BETWEEN
+# objects of one pool, which upstream does not have either. What it keeps is the claim the paper
+# makes, that a pool's contents die together, and the use-after-destroy image confirms it on this
+# arm as well.
+
+ngx_palloc.c:42     metadata     allocator    the slot carries the alias and its span, because the bump follows from what is left rather than from the region
+ngx_palloc.c:78     metadata     allocator    a slot is reused, so its alias is cleared when it is taken: a stale one would be handed out as this block's memory
+ngx_palloc.c:117    hierarchy    allocator    the carve that gives an object bounds of its own becomes ngx_pool_carve_one, kept because a header and a large allocation still need them
+ngx_palloc.c:139    hierarchy    allocator    ngx_pool_body takes the block behind its header once, as one alias, a move rather than a split because the cut reaches the end, and an object is then an offset in it
+ngx_palloc.c:219    hierarchy    allocator    an alignment stricter than a capability keeps measuring from the region in both arms, and says why: ngx_pmemalign owns its whole block and never takes a body
+ngx_palloc.c:245    hierarchy    allocator    ngx_create_pool carves its header with bounds and then takes the body
+ngx_palloc.c:255    hierarchy    allocator    and takes it once the inner handle is behind the header, so a reset can take it again
+ngx_palloc.c:362    hierarchy    allocator    a reset takes the body again, since the revocation that restored the block also killed the alias over it
+ngx_palloc.c:441    hierarchy    allocator    a chained block carves its own header with bounds and then takes its body
+ngx_palloc.c:487    hierarchy    allocator    a large allocation owns its whole block, so it keeps bounds of its own in both arms

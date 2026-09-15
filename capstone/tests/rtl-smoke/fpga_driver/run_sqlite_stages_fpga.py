@@ -270,6 +270,38 @@ def _selftest_stall_shape():
 _selftest_stall_shape()
 
 
+def probe_result(text):
+    """A result printed by a NON-SQLite, non-ladder probe host, or None.
+
+    The nginx guest (`ports/nginx/tools/ngx-guest.c`) prints `ngx retval = <decimal>` where the
+    low 24 bits are the domain's NGX_DOM_MARK; the PostgreSQL host relays the domain's own text,
+    whose verdict lines are `__CAPSTONE_PG_<TEST>_{GOOD,BAD,FAILED}__`. Without this the runner's
+    "the shell came back but nothing ran" guard hard-stopped the session on a probe that had
+    returned its mark. Returns ("ngx", mark) or ("pg", test, verdict).
+    """
+    m = re.search(r"ngx retval = (\d+)", text)
+    if m:
+        return ("ngx", int(m.group(1)) & 0xFFFFFF)
+    m = re.search(r"__CAPSTONE_PG_([A-Z]+)_(GOOD|BAD|FAILED)__", text)
+    if m:
+        return ("pg", m.group(1), m.group(2))
+    return None
+
+
+def _selftest_probe_result():
+    # The real formats: ngx-guest.c's printf and the PostgreSQL domain's markers.
+    # The decimal is COMPUTED, not typed: 0x4EC10000 is the mark word ngx-guest prints for stop 1.
+    assert probe_result(f"Created domain ID = 3\r\nngx retval = {0x4EC10000}\r\n") == ("ngx", 0xC10000)
+    assert probe_result("__CAPSTONE_PG_SUBPOOL_ENTRY__\r\n__CAPSTONE_PG_SUBPOOL_GOOD__\r\n"
+                        "__CAPSTONE_PG_SUBPOOL_DONE__\r\nPG: result=0\r\n") == ("pg", "SUBPOOL", "GOOD")
+    assert probe_result("__CAPSTONE_PG_HIER_BAD__\r\n") == ("pg", "HIER", "BAD")
+    assert probe_result("SQ: obs=1512046592\r\n") is None
+    assert probe_result("") is None
+
+
+_selftest_probe_result()
+
+
 # The physical switch value the board is holding, as far as this process knows. None means
 # "unknown", which is the state at connect: the board keeps whatever the last run left.
 _SW_CURRENT = None
@@ -1643,6 +1675,17 @@ def main():
                 _pm = re.search(r"BASELINE-PROBE (\S+) = (\d+)", text)
                 if _pm:
                     log(f"  {dom}: baseline probe {_pm.group(1)} = {_pm.group(2)}")
+                    bad = False
+            # THE nginx AND PostgreSQL PROBE HOSTS REPORT IN THEIR OWN FORMATS (S1/S2 cells on
+            # hardware, 2026-09-14): a returned mark or a GOOD/BAD verdict is a result, and the
+            # value is the caller's to judge against the cell's pre-registered mark.
+            if not wedged and bad:
+                _pr = probe_result(text)
+                if _pr and _pr[0] == "ngx":
+                    log(f"  {dom}: nginx probe returned mark 0x{_pr[1]:06X}")
+                    bad = False
+                elif _pr:
+                    log(f"  {dom}: PostgreSQL probe {_pr[1]} reported {_pr[2]}")
                     bad = False
             # A SHARE-ENTRY TRAP NAMED BY THE HOST IS A RESULT, AND A TERMINAL ONE. Since
             # 0f150add the SQLite host reads every shared region's first word back after the

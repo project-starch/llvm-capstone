@@ -2811,6 +2811,26 @@ fi
 if [[ "${SQLITE_S07_PAGER_PROBE:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_S07_PAGER_REPORT"
 fi
+# SQLITE_OPTNONE_FUNCS="f g h" -- a bisection knob for an optimisation-dependent divergence: the named
+# function DEFINITIONS in the (already patched) amalgamation get __attribute__((optnone, noinline)),
+# so they compile as -O0 code inside an otherwise -O1/-O2 image. Every name must be found exactly
+# once as a definition, or the build refuses: a name that silently matched nothing would make the
+# bisection read "not in these functions" for the wrong reason. Written 2026-09-15 for the cell-6
+# -O1/-O2 counter divergence (measurements §7s, boots sw80b/sw81/sw82).
+if [[ -n "${SQLITE_OPTNONE_FUNCS:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" $SQLITE_OPTNONE_FUNCS <<'PYOPTNONE' || exit 1
+import sys,re
+path=sys.argv[1]; names=sys.argv[2:]; s=open(path).read(); done=[]
+for n in names:
+    pat=re.compile(r'^((?:static|SQLITE_PRIVATE|SQLITE_API)\s+(?:[A-Za-z_][A-Za-z0-9_ ]*?\s*\*?\s*))(' + re.escape(n) + r')\s*\(([^;{]*)\)\s*\{', re.M)
+    hits=pat.findall(s)
+    if len(hits)!=1: sys.exit(f"SQLITE_OPTNONE_FUNCS: {n}: {len(hits)} definitions found (need exactly 1)")
+    s,k=pat.subn(lambda m: '__attribute__((optnone, noinline)) '+m.group(0), s, count=1); done.append(n)
+open(path,'w').write(s); print("   optnone+noinline on %d definitions: %s" % (len(done), ' '.join(done)))
+PYOPTNONE
+  _n=$(grep -c '__attribute__((optnone, noinline))' "$OBJ_DIR/sqlite3-capstone.c" || true)
+  [[ "$_n" -eq $(wc -w <<<"$SQLITE_OPTNONE_FUNCS") ]] || { echo "optnone gate: $_n attributes for $(wc -w <<<"$SQLITE_OPTNONE_FUNCS") names" >&2; exit 1; }
+fi
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
   -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" "${_amalgam_mllvm[@]}" \

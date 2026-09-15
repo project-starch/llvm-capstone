@@ -1,0 +1,35 @@
+# PostgreSQL: what the adaptation cost beside the allocator, for I1.
+# One line per file: <path>  <bucket>  <why>. Buckets: allocator, compat, glue, test.
+#
+# The allocator itself is port/aset-sublet.patch, counted by port-effort.py against its own
+# .classes file and not recounted here. port/aset-capstone.patch and the two memorychunk patches
+# are the UNPROTECTED arm, which is the baseline and not the port.
+
+a11trace.h                          glue     the record format, shared with the recorder in the paper repository
+port/pg_subpool.h                   glue     what the manager needs from the level below
+port/freestanding/pg_level0.c       glue     the level below both arms stand on, so a difference between them is never it
+port/freestanding/pg_subpool.c      glue     the level below that hands out linear blocks
+port/freestanding/pg_subpool_libc.c glue     the same level below, over libc, for a host-side check
+port/freestanding/pg_string.c       compat   the string functions a freestanding build leaves undefined
+port/freestanding/pg_printf_domain.c compat  the formatting the manager calls and a domain has no libc for
+port/pg_printf_host.c               compat   the same formatting on the host side
+port/pg_stubs.c                     compat   the eleven libc symbols the manager references and does not use
+port/stubinc/ctype.h                compat   a header the freestanding build needs to exist and not to do anything
+port/stubinc/errno.h                compat   the same
+port/stubinc/locale.h               compat   the same
+port/stubinc/math.h                 compat   the same
+port/stubinc/setjmp.h               compat   the same
+port/stubinc/signal.h               compat   the same
+port/stubinc/stdio.h                compat   the same
+port/stubinc/stdlib.h               compat   the same
+port/stubinc/string.h               compat   the same
+port/stubinc/strings.h              compat   the same
+port/stubinc/sys/types.h            compat   the same
+pg_host.c                           test     the guest that creates the domain and sizes its regions
+tools/replay.c                      test     the replay driver
+tools/replay_domain.c               test     the same in a domain
+tools/replay_sublet.c               test     the same under the discipline
+tools/subpool_domain.c              test     the level below's own test
+tools/hierarchy_sublet.c            test     the context tree's own test, an ancestor withdrawing from levels never asked
+
+port/aset-sublet.patch                    allocator  the classified patch, counted by port-effort.py

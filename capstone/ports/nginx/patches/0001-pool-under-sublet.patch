@@ -1,6 +1,6 @@
 --- a/ngx_palloc.c
 +++ b/ngx_palloc.c
-@@ -9,26 +9,184 @@
+@@ -9,26 +9,189 @@
  
  
  
@@ -62,7 +62,12 @@
 +        }
 +
 +        ngx_pool_slots[n].bytes = bytes;
-+        ngx_pool_slots[n].left = bytes;
++        /* what is left comes from the REGION and not from the request. The level below rounds a
++           block up to a whole number of capabilities, so a request of 4280 gets 4288, and a left
++           set from the request would refuse the very object the block was taken for. Real nginx
++           asks for 4280 six times in two hundred thousand calls, and each was refused. */
++        ngx_pool_slots[n].left =
++            (size_t) (sublet_end(&ngx_pool_slots[n].region) - sublet_base(&ngx_pool_slots[n].region));
 +        ngx_pool_slots[n].used = 1;
 +
 +        if (++ngx_pool_slots_live > ngx_pool_slots_peak) {
@@ -188,7 +193,7 @@
  
      size = size - sizeof(ngx_pool_t);
      p->max = (size < NGX_MAX_ALLOC_FROM_POOL) ? size : NGX_MAX_ALLOC_FROM_POOL;
-@@ -82,12 +240,18 @@
+@@ -82,12 +245,18 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -209,7 +214,7 @@
  
          if (n == NULL) {
              break;
-@@ -104,12 +268,26 @@
+@@ -104,12 +273,26 @@
  
      for (l = pool->large; l; l = l->next) {
          if (l->alloc) {
@@ -238,7 +243,7 @@
          p->d.failed = 0;
      }
  
-@@ -148,21 +326,16 @@
+@@ -148,21 +331,16 @@
  static ngx_inline void *
  ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
  {
@@ -264,7 +269,7 @@
              return m;
          }
  
-@@ -177,26 +350,35 @@
+@@ -177,26 +355,35 @@
  static void *
  ngx_palloc_block(ngx_pool_t *pool, size_t size)
  {
@@ -309,7 +314,7 @@
  
      for (p = pool->current; p->d.next; p = p->d.next) {
          if (p->d.failed++ > 4) {
-@@ -214,11 +396,18 @@
+@@ -214,11 +401,18 @@
  ngx_palloc_large(ngx_pool_t *pool, size_t size)
  {
      void              *p;
@@ -330,7 +335,7 @@
          return NULL;
      }
  
-@@ -227,6 +416,7 @@
+@@ -227,6 +421,7 @@
      for (large = pool->large; large; large = large->next) {
          if (large->alloc == NULL) {
              large->alloc = p;
@@ -338,7 +343,7 @@
              return p;
          }
  
-@@ -237,11 +427,12 @@
+@@ -237,11 +432,12 @@
  
      large = ngx_palloc_small(pool, sizeof(ngx_pool_large_t), 1);
      if (large == NULL) {
@@ -352,7 +357,7 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -253,20 +444,32 @@
+@@ -253,20 +449,32 @@
  ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment)
  {
      void              *p;
@@ -387,7 +392,7 @@
      large->next = pool->large;
      pool->large = large;
  
-@@ -283,7 +486,7 @@
+@@ -283,7 +491,7 @@
          if (p == l->alloc) {
              ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, pool->log, 0,
                             "free: %p", l->alloc);

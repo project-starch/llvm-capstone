@@ -1,0 +1,58 @@
+--- a/ngx_palloc.c
++++ b/ngx_palloc.c
+@@ -46,6 +46,10 @@
+ 
+ static ngx_pool_slot_t  ngx_pool_slots[NGX_POOL_SLOTS];
+ 
++/* ABLATION: resets met while the inner handle is not taken. Must be zero for a run to
++   mean anything, and the replay reports it. */
++ngx_uint_t  ngx_pool_reset_unsupported;
++
+ ngx_uint_t  ngx_pool_slots_live;
+ ngx_uint_t  ngx_pool_slots_peak;
+ 
+@@ -187,7 +191,7 @@
+     }
+ 
+     /* after the header, so a reset leaves the header alone */
+-    sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
++    /* ABLATION: no inner handle. See the note at ngx_reset_pool. */
+ 
+     p->d.next = NULL;
+     p->d.failed = 0;
+@@ -287,14 +291,18 @@
+      * is only sizeof(ngx_pool_data_t), and so leaks the difference on each of them at every
+      * reset. Here the bound comes back from the revocation, so it is right by construction.
+      */
+-    for (p = pool; p; p = p->d.next) {
+-        ngx_pool_slot_t  *sl = &ngx_pool_slots[p->d.slot];
+-
+-        sublet_give_to(&sl->inner, &sl->region);
+-        sublet_handle(&sl->region, &sl->inner);
+-        sl->left = (size_t) (sublet_end(&sl->region) - sublet_base(&sl->region));
+-        p->d.failed = 0;
+-    }
++    /*
++     * ABLATION, NOT A PORT. Without the inner handle there is no way to revoke what a pool handed
++     * out while leaving the header its caller is holding alive, so a reset cannot be expressed at
++     * all. Doing nothing here would leave the pool usable and the objects alive, and the driver's
++     * own test for a reset, that the pool serves again, would PASS while the property it is named
++     * for was gone. So it is counted instead, and the replay refuses a trace that contains one.
++     *
++     * This arm exists to price the inner handle, and it is valid only for a workload with no
++     * reset. The recorded static rung of nginx has none in 200 000 calls.
++     */
++    ngx_pool_reset_unsupported++;
++    (void) p;
+ 
+     pool->current = pool;
+     pool->chain = NULL;
+@@ -373,7 +381,7 @@
+         return NULL;
+     }
+ 
+-    sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
++    /* ABLATION: no inner handle. See the note at ngx_reset_pool. */
+ 
+     new->d.next = NULL;
+     new->d.failed = 0;

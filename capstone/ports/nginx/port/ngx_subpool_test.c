@@ -5,7 +5,7 @@
  * because a fault inside a patched ngx_palloc.c would be much harder to read back to its cause.
  * The PostgreSQL port tests its own level below the same way and for the same reason.
  *
- * Twelve scenarios, each a claim the design makes, numbered in the order they run:
+ * Fourteen scenarios, each a claim the design makes, numbered in the order they run:
  *
  *   1  a block comes out linear, objects carve from it, and what is written through an object
  *      reads back
@@ -38,7 +38,17 @@
  *      nginx creates fourteen thousand pools where the pool driver's balance scenario creates a
  *      thousand and passes, so handle churn was the third candidate for the ceiling a replay of
  *      real traffic hit. It is not the ceiling either: this passes
- *  12  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
+ *  12  two children of one block, each a region with a handle of its own, and one of them
+ *      revokes its own authority. The other child's objects still read and still write, and the
+ *      revoked child's region comes back to ITS bounds and not to the block's, which is what
+ *      makes a revoke downward rather than sideways
+ *  13  a GRANDCHILD, and a block that has nothing to do with any of it. A block is carved into a
+ *      child, the child into a grandchild, and the grandchild into an object. The block's own
+ *      handle then revokes, without asking either level below it. Both nested handles, and both
+ *      nested regions, hold nothing afterwards, which is two levels and not one. A second block
+ *      taken from the same arena before all this still reads and still writes, because a revoke
+ *      that reached it would be a revoke that followed the ARENA rather than the block
+ *  14  an arena spent to the LAST BYTE still refuses the next request. Not the same claim as 6:
  *      a carve that reaches exactly to the end of a region moves the whole of it out and leaves
  *      the slot empty, so the request after the one that spent the arena would have asked an
  *      empty slot for its base, which is a fault and not a refusal
@@ -301,7 +311,102 @@ void domain_main(unsigned *res, unsigned func) {
         if (ngx_subpool_live != 1) { ++failures; if (!failphase) failphase = phase; }
     }
 
+    /* Two children of one block, and one of them is uncooperative.
+     *
+     * tab:safety calls this "sibling survives uncooperative child". A child here is a region of
+     * the block with a handle of its own, which is what a sub-pool is. The uncooperative act is
+     * revoking that handle without telling anyone, and what has to hold is that the OTHER child's
+     * objects are untouched by it. A discipline that gave the two children overlapping authority,
+     * or that let a revoke walk sideways rather than downwards, would fail here.
+     */
     phase = 12;
+    {
+        sublet_cap fblk, fout, c1, ch1, c2, ch2, ob1, ob2;
+        CHECK(ngx_subpool_block(4096, &fblk, &fout) == 1);
+
+        sublet_carve(&fblk, sublet_base(&fblk) + 1024, &c1);
+        sublet_handle(&c1, &ch1);
+        sublet_carve(&c1, sublet_base(&c1) + 64, &ob1);
+        unsigned char *p1 = (unsigned char *) sublet_take(&ob1);
+
+        sublet_carve(&fblk, sublet_base(&fblk) + 1024, &c2);
+        sublet_handle(&c2, &ch2);
+        sublet_carve(&c2, sublet_base(&c2) + 64, &ob2);
+        unsigned char *p2 = (unsigned char *) sublet_take(&ob2);
+
+        CHECK(p1 != NULL && p2 != NULL && p1 != p2);
+        if (p1 != NULL && p2 != NULL) {
+            p1[0] = 0x11; p1[63] = 0x1F;
+            p2[0] = 0x22; p2[63] = 0x2F;
+
+            sublet_give_to(&ch1, &c1);        /* the first child revokes its own authority */
+
+            CHECK(p2[0] == 0x22 && p2[63] == 0x2F);   /* the sibling still reads */
+            p2[0] = 0x33; p2[63] = 0x3F;
+            CHECK(p2[0] == 0x33 && p2[63] == 0x3F);   /* and still writes */
+
+            /* And the first child's region came back to ITS bounds, not to the block's, which is
+               what makes the revoke downward rather than sideways. */
+            CHECK(sublet_end(&c1) - sublet_base(&c1) == 1024);
+        }
+
+        sublet_give_to(&fout, &fblk);         /* the ancestor takes the whole block back */
+        CHECK(sublet_end(&fblk) - sublet_base(&fblk) == 4096);
+        sublet_clear(&fblk);
+    }
+
+    phase = 13;
+    {
+        /* The sibling is taken FIRST and from the same arena, so that it is a neighbour of the
+           nest rather than something allocated after the dust settled. */
+        sublet_cap oblk, ohnd, oobj;
+        CHECK(ngx_subpool_block(1024, &oblk, &ohnd) == 1);
+        sublet_carve(&oblk, sublet_base(&oblk) + 64, &oobj);
+        unsigned char *op = (unsigned char *) sublet_take(&oobj);
+        CHECK(op != NULL);
+        if (op != NULL) { op[0] = 0x51; op[63] = 0x5F; }
+
+        sublet_cap gblk, gout, ch, chh, gc, gch, gobj;
+        CHECK(ngx_subpool_block(4096, &gblk, &gout) == 1);
+
+        sublet_carve(&gblk, sublet_base(&gblk) + 2048, &ch);   /* the child */
+        sublet_handle(&ch, &chh);
+        sublet_carve(&ch, sublet_base(&ch) + 512, &gc);        /* the grandchild */
+        sublet_handle(&gc, &gch);
+        sublet_carve(&gc, sublet_base(&gc) + 64, &gobj);       /* and its object */
+        unsigned char *gp = (unsigned char *) sublet_take(&gobj);
+        CHECK(gp != NULL);
+        if (gp != NULL) { gp[0] = 0x61; gp[63] = 0x6F; }
+
+        /* Alive, so that what they report afterwards is a change and not a constant. */
+        CHECK(sublet_type(&chh) == SUBLET_TYPE_REV);
+        CHECK(sublet_type(&gch) == SUBLET_TYPE_REV);
+
+        sublet_give_to(&gout, &gblk);        /* the block's own handle, two levels above the object */
+
+        /* Both nested authorities, and both nested regions, hold nothing. SUBLET_TYPE_NONE is
+           what a slot known to be empty reports, which scenario 7 of the image measures against
+           a control rather than assuming. */
+        CHECK(sublet_type(&chh) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&gch) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&ch) == SUBLET_TYPE_NONE);
+        CHECK(sublet_type(&gc) == SUBLET_TYPE_NONE);
+
+        /* The block came back whole, so the revoke went down two levels and stopped. */
+        CHECK(sublet_end(&gblk) - sublet_base(&gblk) == 4096);
+
+        /* And the neighbour never noticed. */
+        if (op != NULL) {
+            CHECK(op[0] == 0x51 && op[63] == 0x5F);
+            op[0] = 0x71; op[63] = 0x7F;
+            CHECK(op[0] == 0x71 && op[63] == 0x7F);
+        }
+
+        sublet_clear(&gblk);
+        ngx_subpool_release(&oblk, &ohnd);
+    }
+
+    phase = 14;
     size_t rest = ngx_subpool_arena_left;
     CHECK(rest > 0);
     sublet_cap rr, rh, r4, h4;

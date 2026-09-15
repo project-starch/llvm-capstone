@@ -1878,7 +1878,8 @@ Provenance: board and RTL lanes, 2026-09-04.
 ### §7d — The CHERI-CVA6 bitstream RUNS on our Genesys2 (2026-09-09)
 
 **First non-Capstone core executed on this board, and the first silicon evidence for the CHERI tag
-path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`, §7c) was written
+path.** Build B of the zero-day-labs `cheri-cva6` fork (branch `genesys2-eval` `a9568ac2`; the synthesis comparison is in
+`docs/plans/cheri-cva6-on-genesys2.md`, not yet in this file) was written
 to the board's config memory **non-volatile**, and a bare-metal UART smoke test ran on it. Driven by the
 board lane from `~/capstone-artifacts/cheri-cva6/board-package/`; records in
 `~/capstone-artifacts/cheri-cva6/board-run-1/`. One session under the console lock, 14:48–14:54.
@@ -1899,7 +1900,8 @@ table at `0xBFC00000` and the MIG address path work (this was the single largest
 fork constant overflowed DRAM and was fixed for these builds); an integer store clears the tag; the
 capability exception path traps with cause `0x1c` and `mtval` naming the faulting register; the UART at
 57600 from the 25 MHz core clock; JTAG and debug-module access to this SoC. The core ran at the 25 MHz the
-bitstream was constrained for, i.e. the clock at which §7c measured its +6.5 ns of slack.
+bitstream was constrained for, i.e. the clock the synthesis comparison in
+`docs/plans/cheri-cva6-on-genesys2.md` measured its +6.5 ns of slack at.
 
 **What it does NOT establish.** Nothing about performance: no benchmark, no cycle counts, no `mcycle`
 readings. Nothing purecap and nothing Linux-level — no CHERI Linux or CheriBSD port for this SoC is in the
@@ -3404,3 +3406,976 @@ QEMU or in a boot of its own. Placed last by design, so the pair cost nothing.
 native OFF 54,214,856,567 (sw68) / ON 53,142,976,993 (sw77); domain OFF 64,732,455,367 / ON
 63,437,512,052; ratios 1.1940 / 1.1937. Every caveat of §7p applies (timing not met, cycles only, N = 1
 per arm).
+
+### §7r — E1 of the Sublet-paper plan: the S1/S2 safety matrix on hardware, repetition 1 (boots sw78 r1b1–r1b5, 2026-09-14 evening to 2026-09-15 00:1x)
+
+**What ran.** The three probe families of the collaborator's `s2/3-manager-hierarchy` branch (`d5954cc0e7e7`),
+built in a detached worktree of that branch with one addition, a `DOMAIN_BASE_VA` knob for
+`build-nginx-domain.sh` and the PostgreSQL `pgdom_link` (`3a7be75437e9`), so that several probe images
+share one boot at distinct entry VAs (R-3, preflight C15). Every image ran on capstone-qemu first at its
+board VA (the run-scoped log is its pass record; the s9 cell aborts the emulator, capstone-qemu PR #4, and
+is board-only). The 16 nginx cells are the gate `run-nginx-uaf.sh` defines: one image per compile-time
+stop, 13 returning a mark (`NGX_DOM_MARK`, low 24 bits of `ngx retval`) and 3 expected to fault. On this
+RTL a capability fault inside a domain is a wedge (M-1), so each FAULT cell is the last arm of its boot and
+is read from the debug mux's trap log. Control `k800 = 4` opened every boot; one boot banner after each
+run's `load_image`; bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`.
+
+**Two facts about the harness found on the way.** (1) The entry VA has a ceiling on QEMU: an nginx image
+linked at `0x610000` never reaches the guest shell, at `0x410000` and below it runs; the slots are now
+512 KiB apart from `0x10000` (`0x10000 … 0x310000`). (2) Two builds of the same host from the same sources
+differ in bytes because `libcapstone.c`'s `__FILE__` (an assert string) embeds the path the build resolved
+(the worktree symlink or the main checkout), shifting `.rodata` and every offset into it; the same-program
+gate pins the sources and tolerates exactly that one string.
+
+**Boot r1b1 (20:19–20:36), group 1: the plain arm, stops 1–6, and the stale handle offered back.**
+
+| arm | image (sha256/16, entry) | pre-registered | read |
+|---|---|---|---|
+| p1 stop 1 | `fc5e120bc2134bef` @0x10000 | C10000 | **C10000** |
+| p2 stop 2 | `af9df7048efbc207` @0x90000 | C20000 | **C20000** |
+| p3 stop 3 (the byte survives the destroy) | `9d55128c0eb91875` @0x110000 | C300A0 | **C300A0** |
+| p4 stop 4 (the address comes back) | `6f9ffe9eee9924ed` @0x190000 | C40001 | **C40001** |
+| p5 stop 5 (old pointer reads the new occupant) | `5b9ae11930ceb166` @0x210000 | C5005B | **C5005B** |
+| p6 stop 6 (stale free declined, −5) | `4155e787cf4af493` @0x290000 | C600FB | **C600FB** |
+| s9 stop 9, Sublet: the stale subordinate handle offered back to REVOKE (no QEMU pass: the emulator aborts on it, capstone-qemu PR #4) | `05cd076b6392196f` @0x310000 | FAULT | **no return in 300 s; trap log `0x9a` = seen, mcause 26; mepc 0x81B03D2C − DBAS 0x81B00000 = +0x3D2C = `revoke t0` in `sublet_give_to`** |
+
+**Boot r1b2 (20:41–20:53), group 2: the plain stop 7 and the Sublet arm's returning stops.**
+
+| arm | image | pre-registered (emulator) | read |
+|---|---|---|---|
+| p7 stop 7 (no nested authority on the plain arm) | `c18075469db438e2` @0x10000 | C7FF00 | **C7FF00** |
+| s4 stop 4 | `199d3d0e669178c8` @0x90000 | C40001 | **C40001** |
+| s6 stop 6 (stale free declined on the protected arm too) | `03e015237c488f50` @0x110000 | C600FB | **C600FB** |
+| s7 stop 7 (nested handle's type before / after the ancestor's revoke) | `65ba5490a7271ec3` @0x190000 | C70277 | **C70227** |
+| s8 stop 8 (stale handle vs the block's new owner) | `62bb132a448e88b0` @0x210000 | C80071 | **C80021** |
+| s1 stop 1 | `83f70385307f1bfe` @0x290000 | C10000 | **C10000** |
+| s3 stop 3, Sublet: the object touched after the destroy | `103998ef04d6c342` @0x310000 | FAULT | **returned C30000: the load retired and read 0x00** |
+
+**Readings.** Eleven of fourteen cells read exactly the emulator's mark, and the stale-handle REVOKE
+faults on silicon with an identified site and cause (and, since 2026-09-15 00:5x, on the emulator too: run on
+the helper lane's merged capstone-qemu tip `acaa44c228` — `c128-qemu-merge` with PR #4, "REVOKE raises 24 and 26
+instead of aborting" — built apart from the pinned binary, the same image `05cd076b6392196f` halts with
+`cause = 24, pc = 0x101583d2c` = image+0x3D2C, the SAME `revoke t0` the FPGA's mepc names; the emulator's 24
+is its NOT_CAP, the handle having been untagged by its `ldc` (Q-11), the RTL's 26 INVALID_CAPABILITY the
+tagged handle under a revoked node — enforcement agrees, the cause names differ for the Q-11 reason; the
+parent's QEMU pin is unchanged): mcause 26 is produced by two units on this RTL
+(the execute path's `INVALID_CAPABILITY`, `capstone_unit.anvilh:304`, and the LSU's own table,
+`load_store_unit.sv:995`), and the latched mepc names the `revoke` — the execute path. Three cells
+differ from the emulator, and all three are the same two mechanisms (RTL-oracle reading, claim-audited;
+the QEMU binary is the 2026-09-11 15:18 build of `c128-qemu-merge` and the one `op_helper.c` commit
+after it, `656cc03489`, does not touch `helper_cslcc`):
+
+* **The type read of a revoked handle is 2 on the RTL and 7 on the emulator** (s7's "after" byte, s8's
+  "stale handle" byte, and the four `== SUBLET_TYPE_NONE` checks of `ngx_subpool_test.c` phase 13, r1b3).
+  Both type queries just read the register's type field (`LCC` selector 1, `capstone_dyn_unit.anvil:
+  206-208`; `helper_cslcc` case 1, `op_helper.c:894-896`); the difference is `ldc`: QEMU's writeback
+  (`helper_reg_set_cap_compressed`, `op_helper.c:1583-1591`) clears the tag of a loaded capability whose
+  node is revoked, so the later type read takes the untagged short-circuit (`:856-858`, 7); the RTL's
+  `LDC` (`capstone_dyn_unit.anvil:355-357`) validates only the addressing capability's node and
+  `check_load_data` (`capstone_unit.anvilh:583-609`) forwards the loaded value verbatim. Encoding is not
+  the cause (both number the post-shift types LIN 0, NONLIN 1, REV 2, UNINIT 3; the RTL's 7 is
+  `NOT_CAP − 1` wrapped, the emulator's 7 its untagged fallback). On silicon a revoked-but-present handle
+  (2) and an empty slot (7) are therefore distinguishable, which is what `sublet.h:175-176`'s model
+  says; the emulator collapses both to 7, and phase 13's four expectations encode that. Enforcement on
+  use agrees on both machines (s9). Found on the way: QEMU's `LCC` validity selector (imm 0) is a stub
+  returning 1 (`op_helper.c:891-893`); nothing in the ports uses it.
+* **A byte load after the pool's destroy retired inside the domain** (s3): the Sublet arm's touch
+  returned 0x00 where the plain arm reads its own 0xA0 (p3) and the emulator faults the same image at
+  the same `lbu` (image+0x66cc) with cause 24 NOT_CAP — because its `ldc` had untagged the reloaded
+  pointer. The 0x00 is the port's own `stc zero` fill (`sublet.h:138-142`, run when the revoke hands
+  back UNINIT), not hardware. Whether the reloaded base was still TAGGED on the board — which decides
+  between "the LSU's node-validity clause (`load_store_unit.sv`, cause 25) never applies below M-mode,
+  where ISSUES R-31's 2026-09-10 block already settled the gate from source" and "an untagged base, the
+  2026-08-04 NOT_CAP result re-observed" — is read by two diagnostic stages added tonight (stop 10: the
+  reloaded pointer's type before the touch, emulator 7 as predicted; stop 11: the type and the touch in
+  one run, faults on the emulator): r1b4 read s10 as **CA0180** and r1b5 read s11 as **CB0100** — the
+  base is TAGGED (type 1) on silicon, so the LSU let a load through a capability under a revoked node
+  retire, the never-before-measured domain-side reading of the M-mode gate. On the deployed
+  configuration a data access through a stale pointer inside a domain is not stopped by a trap (s3
+  reads the fill, s5 reads the new occupant); capability-manipulating instructions are (s9). The paper's three `tab:safety` rows that say "stops at access" rest on emulator
+  evidence — the lead's framing call, raised in the 2026-09-14 report.
+
+Caveats: N = 1 per cell (repetitions 2 and 3 follow); s9 is single-source board evidence; the boots'
+S-07 displacement self-test reported itself unproven (it does not touch the marks); the rev-node head
+read VOID on r1b2 (the nginx probes mint tens of nodes each, so exhaustion is not a live concern, but
+it is not measured).
+
+**Boot r1b3 (21:00–21:15), group 3.** s2 `d049522634d2b111` @0x10000 → **C20000** (pre-registered
+C20000). The 14-phase nginx subpool test `f91bb7a72096e043` @0x90000 → **0D3E04** against the emulator's
+0E3E00: 62 checks ran, four failed, the first in phase 13 — the four `sublet_type(...) ==
+SUBLET_TYPE_NONE` checks after the two-level withdrawal (the mechanism above); the neighbour's bytes and
+the block's extent held. The PostgreSQL subpool test `91d23730153d6a18` @0x110000 (GOOD on QEMU) did
+**not enter**: trap log `0x99` = mcause 25, mepc 0x81A00044 − DBAS 0x81A00000 = image+0x44, the
+`delin gp` that opens `test` in `my_first_domain/start.S` — cause 25 is "operand is not a capability"
+(a wrong capability type would be 27, the S-15 reading), and the source says why: the PostgreSQL
+images carry no `.capstone_gp_initdesc` section, so the loader packs a globals offset of 0 and the
+monitor carves no gp at all (`sbi_capstone.c:1123-1126`); the nginx images are linked by
+`link-gpfree.ld`, which places that descriptor, and enter (ISSUES M-8, mechanism corrected from
+source on 2026-09-15 — the first write-up's "gp arrives already non-linear" was an analogy the
+cause number refutes). Recorded `unsupported` (implementation-unavailable); the fix is
+the port's. The hierarchy test (`7284f2f8db444e87`, the same glue) and s5 were behind it and run in
+boots r1b4/r1b5.
+
+**Boot r1b4 (23:34–23:55, after a two-hour wait for the machine memory lock held by another project's
+build).** The diagnostic stage s10 (`ccd06246ba515b4a` @0x390000, board-lane addition: the reloaded
+stale pointer's type before the touch, packed with the address's low byte) → **CA0180** on silicon
+against **CA0780** on the emulator: the pointer reloaded from its stack slot after the pool's destroy is
+**tagged, type 1 (non-linear)**, on the RTL, and untagged (7) on the emulator. So stop 3's byte load
+went through a tagged capability whose node was revoked, and the LSU let it retire: the node-validity
+clause is inapplicable below M-mode, as ISSUES R-31's 2026-09-10 block derived from source — a
+domain-side measurement, not the 2026-08-04 untagged-base result re-observed. The hierarchy test
+(`7284f2f8db444e87` @0x190000) did not enter: trap log `0x99` (mcause 25), mepc 0x81A00044 = image+0x44,
+the same `delin gp` (M-8, confirmed on a second image). The banner count of this run's summary read 0
+because the console split "OpenSBI v" across two UART chunks; the kernel banner is there once, and the
+control returned after this run's own `load_image`.
+
+**Boot r1b5 (23:58–00:1x).** s11 (`5d3a8cc4cbd4913a` @0x390000, the type read and the touch in ONE run;
+faults on the emulator like stop 3) → **CB0100**, exactly as pre-registered: the reloaded pointer is
+tagged type 1 and the byte load through it retired with 0x00 — tag present, load retired, no trap, in one
+mark. Then s5 (`d453bbc16109b690` @0x310000, the reused-read on the protected arm, FAULT on the
+emulator) → **C5005B**: after the same address was handed to a new object, the old pointer read the new
+occupant's first byte 0x5B on silicon, exactly what the plain arm reads (p5). This is the sharpest form
+of the finding: on the deployed configuration a stale pointer inside a domain reads another object's
+data, and nothing traps.
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full 19 × 3 matrix; the cause numbering note in the manifest: the RTL
+numbers capability causes 25–31 (`riscv_pkg.sv`), the emulator from the spec base, so causes are compared
+by name).
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full 19 × 3 matrix; the cause numbering note in the manifest: the RTL
+numbers capability causes 25–31 (`riscv_pkg.sv`), the emulator from the spec base, so causes are compared
+by name).
+
+**Bundle.** `experiments/results/S1S2/` in the paper repository's record shape (one record per attempted
+cell and repetition; `points.csv` the full planned matrix; a differing mark is `completed` with
+`oracle.match=false`, a returning FAULT cell `unsafe-success`, an image that does not enter
+`unsupported`; the RTL's cause numbers are named, the emulator's differ). The QEMU pre-run of E2 the
+same evening: cell ⑥ (`ceeded2533a74bce`) at `--arena 2097152` counts **692,392,094** (+0.339 % on the
+1,419,584 arena's 690,051,663, re-run the same minute and reproduced exactly), `HEAP 1344064` — which is
+**the tables region, not a payload heap** (RETRACTED 2026-09-15 01:00, see §7s: the first reading of this
+line said "the port carves 64.1 % of the arena for memsys5's heap"; the Sublet-patched `memsys5Init`
+says "the pool is the grant, linear, from the level below; the configured heap holds only the tables
+beside it: control bytes, links, one capability per atom and the handles of the split blocks", and the
+`HEAP` token prints `sublet_tables_len` = 41 bytes per 64-byte atom of the pool, `speedtest1_measure.c:
+105-119`) — and the node counts move with the pool size (5,568 splits, 37,966 mrevs). And P1's O2 arms exist on QEMU (the compiler lane's
+B6 note: the SQLite domain builds and runs at -O1/-O2, C-17 corrected): cell ⑤ at -O2
+`d61c8bf784f2bbd1` 330,723,308; cell ⑥ at -O2 `c506694f9f6f6889` 338,496,909 (the -O0 node counts,
+unchanged); native at -O2 `b36eb3814c3cefce` 240,654,449 with 25,122 lookasides — all at the oracle.
+Their boots (sw79 the -O0 2 MiB arena, sw80a/b the -O2 arms) follow E1's remaining boots.
+
+**Repetitions 2 and 3 (boots sw78 r2b1–r3b5, 2026-09-15 05:00–07:38): the matrix is complete and every
+cell reads the same all three times.** Ten boots plus one rerun (repetition 2's boot 4 was refused at
+launch by the preflight's control check — the SIGPIPE-under-pipefail false BLOCK of §7s, since fixed —
+and rerun last), control 4 and one banner in every boot, no void boot. 63 records, 21 cells × 3
+repetitions, **21 of 21 cells identical across the three**: 48 `completed` (the plain arm's seven marks
+and the Sublet arm's returning marks, including the two that differ from the emulator by the type-2
+reading), 6 `unsafe-success` (s3's touch after destroy retiring through a tagged stale pointer and
+s5's reused read returning the new occupant, three times each — the domain-side reading of the
+M-mode gate is now a repeated measurement), 3 `enforced-fault` (s9, mcause 26 at the same `revoke`
+in every boot), 6 `unsupported` (the two PostgreSQL images not entering, M-8, every time). The bundle
+generator now joins the transcript's chunk seams before reading a mark (a mark's digits can straddle
+two UART chunks; repetition 3's boot 3 printed the subpool test's mark across one, and the driver's own
+summary read "no result line" while the transcript held 0D3E04); its regression check is that
+repetition 1's 21 records are unchanged. **Bundle:** `experiments/results/S1S2/sw78-rep1-3/`
+supersedes `sw78-rep1` on the local board branch (paper worktree commit db99ad2, `make
+experiments-check` passing); generator and cell table at `capstone/ports/nginx/e1-bundle/`.
+
+**Retrospective on the seam (08:10, no board time): how far back the split-line reading reaches.** The
+paper lane asked whether earlier "no result" or entry-stall classifications could be marks lost at a
+chunk seam. Every archived run directory (85 with a transcript) was re-read with and without
+seam-joining and the drivers' own summaries were listed for declared absences. Result: **split result
+lines are common — 63 (directory, kind) cases across 40 boots — and in FIVE boots the control rung's
+own `RESULT k800 retval=4` was readable only after joining (sw55, sw65, sw74, sw74b, sw78 r3b4), where a
+summary-only reader would have called the boot VOID.** No recorded verdict changes: sw74/sw74b's
+controls were read from the transcript at the time ("sw74b carries the control"), sw55's §7h reading
+was taken from the transcript, sw65 was void on other grounds, and r3b4 is read by the fixed
+generator; the only "no result line" summaries are the control rung's row in the nginx mark table
+(its result lives elsewhere) and r3b3's subpool cell, recovered above. No cited number is a truncated
+fragment: for every boot with a split cycle line, each value the doc cites appears in full in the
+joined transcript (the uncited ones are the native arm's duplicate `SPEEDTEST1-CYCLES` line beside the
+cited `BASELINE-WARM`, or sw74b's uncited repeat). Entry-stall classifications are drawn from the
+monitor's share markers by the watchdog, not from a domain's result line, so they are not exposed to
+this. Registered as M-11: the transcript is the record, a driver's summary is a view, and the seam
+join precedes any line-based read.
+M-11 is GATED the same afternoon (registry): one module (`fpga_driver/transcript.py`, positive control
+`test_transcript.py`) that every driver summary and the watchdog read through, replayed over the archive
+with only the predicted recoveries as deltas — and two more findings on the way: `boot.txt` carries no boot
+banner (the R1 drivers' "must be 1" was a structural zero every boot), and `ENTRY-STALL` lives only in
+`watchdog.log`.
+
+### §7s — E2 of the Sublet-paper plan: cell ⑥ at P1's matched backing limit (boot sw79, 2026-09-15 00:08–00:19)
+
+**What ran.** One boot, the E2 shape of the plan: control `k800` → cell ⑥ (the Sublet arm, image
+`ceeded2533a74bce`, the same program as sw74/sw75's row) run by the readback host `2c9e82d101b48160`
+with `--arena 2097152 --tables 1750285 --testset main --size 1 --verify` → control → the RR probe.
+Bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`, firmware
+`152f525ddf43`. P1's rule is one backing limit held constant across arms; cell ⑤ (memsys5 + pool,
+sw75) has a 2 MiB static heap, so the Sublet arena is set to 2 MiB — a host argument, no new image.
+Pre-registered in the driver header before the boot: retval 4; `112006 38bb59fd`; `HEAP 1344064`;
+`sublet: split=5568 mrev=37966 delin=32565` (the QEMU pre-run's counts at this arena, §7r); cycles
+2,803,660,693 ± 1 % (the QEMU count 692,392,094 at sw74's CPI); teardown `released pool rc=1`,
+RCLM 0 → 1, no RCPR/RCSH/RCRE; probe `ALEN:00200000`, `RR/done`.
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4` |
+| cell ⑥ `--arena 2097152`, `--size 1` | `Verification Hash: 112006 38bb59fd`, `HEAP 1344064 DROPPED 0 RC 0`, **`SPEEDTEST1-CYCLES 2812763422`**, `sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401`, `released pool rc=1`, RCLM `00000000` → `00000001` |
+| control after | `RESULT k800 retval=4 cycles=4436` |
+| probe | `ALEN:00200000`, `RR/share-A-returned`, `RR/share-B-returned`, `RR/done`; `share-trap` 0 |
+
+One boot banner after this run's `load_image`; runner rc = 0 after 661 s; no HARD STOP / ENTRY-STALL.
+
+**Readings.** 2,812,763,422 cycles is inside the band (+0.32 % of the predicted centre), every
+pre-registered token matched. CPI against the QEMU count at the same arena: 4.0624. Against the
+1,419,584-arena reading (2,794,183,730, sw74) the 2 MiB arena costs +0.66 % on silicon where QEMU's
+count moved +0.34 % — the extra 87 splits and 92 mrevs the larger carve produces, plus whatever the
+larger heap does to the caches. **P1's `protection_cost` at size 1 on the matched backing limit:
+⑥/⑤ = 2,812,763,422 / 2,551,483,818 = 1.1024** (the two-geometry value of the CONFIGURATION block
+was 1.0951). Label: bounded-prototype diagnostic, `-O0`, size 1, single run (P1's five runs over three
+boots are still owed; the -O0 row is a diagnostic under P1's own rule, and the -O2 arms are on the
+board next).
+
+**What "matched" means here, exactly — corrected 2026-09-15 01:00 (RETRACTION of the first
+reading of `HEAP`).** The first version of this paragraph, and §7r's E2 pre-run sentence, read
+`HEAP 1344064` as "the port carves 64.1 % of the arena for memsys5's heap" and concluded the pair
+still compared a 1.34 MiB heap with a 2 MiB one. That is wrong, from the primary source: the
+Sublet-patched `memsys5Init` (the cell ⑥ build's `sqlite3-capstone.c`, "The pool is the grant,
+linear, from the level below. The configured heap holds only the tables beside it: control bytes,
+links, one capability per atom and the handles of the split blocks") serves EVERY payload
+allocation from the pool — the whole `--arena` grant — and keeps its tables in the `--tables` region;
+the `HEAP` token in the Sublet build prints `sublet_tables_len` (`speedtest1_measure.c:105-119`,
+`SPEED_ARENA_LEN`), which is `((atoms+15)&~15) + 8·atoms + 16·atoms + 16·(atoms+32) + 64` for
+`atoms = pool/64` — 1,344,064 for a 2 MiB pool (32,768 atoms) and 911,104 for the 1,421,312-byte pool
+the #3 module makes of a 1,419,584 request (22,208 atoms; R-33's rounding — exactly 1,419,584 would
+give 910,008, the figure in the 2026-09-14 material, so the pre- and post-re-base Sublet arms did not
+hold the pool constant to the byte: 1,728 bytes apart). The "64.1 %" is 41 bytes of tables per
+64-byte atom, not a carve. So at `--arena 2097152` the Sublet arm's payload
+backing is 2 MiB, the same as cell ⑤'s 2 MiB static heap; what still differs is that ⑤'s memsys5
+keeps its own control bytes and links INSIDE its 2 MiB (~1.6 % of it: one byte per atom plus the
+link array) while ⑥'s 1,344,064 bytes of tables live outside the pool — a memory-ledger entry for
+M3, not a payload-capacity difference. The state doc's "configuration vs discipline" caveat closes
+to that sentence. Two consequences: the ⑤ᴳ "heap sweep" of 2026-09-14 (a plain arm at static heaps
+of 910,008 … 1,572,864, "⑥'s 910,008 cannot be reached by the knob") was chasing the same
+misreading — its result stands as a fact about plain memsys5's minimum heap for `main --size 1`
+(in (1.25, 1.5] MiB), but it was never the matched pair it was framed as; and a 2026-09-15 00:29
+QEMU pilot of ⑤ at a 1,344,064-byte static heap (`ba2778a05ffe1d5c`, made before the misreading was
+found) aborts on memsys5 exhaustion (`__CAPSTONE_SPEEDTEST1_ABORTED__`), which narrows that minimum
+to (1,344,064, 1,572,864] and is otherwise moot. The QEMU count of the -O2 Sublet image at this arena, for
+sw80b's denominator: `c506694f9f6f6889` at `--arena 2097152` → **340,817,186** (+0.69 % on its
+1,419,584-arena count 338,496,909), `HEAP 1344064`, `sublet: 5568/37966/32565` — the same counts as
+the -O0 image at this arena, the oracle hash, 2026-09-15 00:10.
+
+**Boot sw80a (00:23–00:33): P1's cell ⑤ and native arms at -O2.** Control → cell ⑤ at -O2
+(`d61c8bf784f2bbd1`: memsys5 + lookaside `1200,40`, 2 MiB static heap, `SQLITE_OPT_LEVEL=-O2`, read by
+the readback host `2af56927aaf907e9`) `--testset main --size 1 --verify` → control → native at -O2
+(`b36eb3814c3cefce`, the plain riscv64 build of the same translation unit, `warm --testset main
+--size 1 --verify --stats`). Pre-registered: retval 4 twice; cell ⑤ `112006 38bb59fd`, `HEAP 2097152
+DROPPED 0`, cycles in 1.06–1.62 G (CPI 3.2–4.9 on the QEMU count 330,723,308); native `112006
+38bb59fd`, `Successful lookasides 25122`, warm cycles in 0.72–1.20 G (CPI 3.0–5.0 on 240,654,449).
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4` |
+| cell ⑤ at -O2 | `Verification Hash: 112006 38bb59fd`, `HEAP 2097152 DROPPED 0 RC 0`, **`SPEEDTEST1-CYCLES 1167116810`** |
+| control after | `RESULT k800 retval=4 cycles=4436` |
+| native at -O2 (warm) | `Verification Hash: 112006 38bb59fd`, `Successful lookasides: 25122`, **`BASELINE-WARM CYCLES 856450080 INSTRS 253525314`** |
+
+One boot banner after this run's `load_image`; no HARD STOP / ENTRY-STALL. CPI: cell ⑤ 3.529, native
+3.559 (both inside their bands). **cell ⑤-O2 / native-O2 = 1,167,116,810 / 856,450,080 = 1.3627** —
+the capability-domain cost of SQLite's own memsys5 + lookaside arm at -O2, against the same pair at
+-O0, sw75's cell ⑤ over sw74's lookaside-ON native, 2,551,483,818 / 2,108,202,651 = 1.2103. Both sides
+retire far fewer instructions at -O2 (native: 253,525,314 instructions here), and the capability
+ABI's share of what remains is larger. Labelled the same way as the -O0 row — bounded-prototype
+diagnostic, size 1, single run — and, unlike the -O0 row, at the optimisation level P1 asks for. The
+Sublet arm at -O2 (sw80b) follows.
+
+**Boot sw80b (00:36–00:46): cell ⑥ at -O2 — returned at the oracle, and its Sublet counters are NOT the
+emulator's.** Control → cell ⑥ at -O2 (`c506694f9f6f6889`, `SQLITE_OPT_LEVEL=-O2 SPEEDTEST1_SUBLET=1`, stack
+declaration 385,024) `--arena 2097152 --tables 1750285 --testset main --size 1 --verify` by the readback host
+`2c9e82d101b48160` → control → the RR probe. Pre-registered: retval 4 twice; `112006 38bb59fd`; `HEAP
+1344064`; `sublet: split=5568 mrev=37966 delin=32565` (the emulator's counts for this image at this arena,
+00:10); cycles 1.09–1.67 G (CPI 3.2–4.9 on 340,817,186).
+
+| arm | read |
+|---|---|
+| control before | `RESULT k800 retval=4 cycles=4540` |
+| cell ⑥ at -O2, 2 MiB arena | `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES 1520327895`**, **`sublet: split=8654 mrev=41293 delin=32638 revoke=41287 init=8649`**, `released pool rc=1`, RCLM +1 (the `HEAP` token straddled two UART chunks in this transcript and is not quoted) |
+| control after | `RESULT k800 retval=4 cycles=4526` |
+| probe | `ALEN:00200000`, `RR/done` |
+
+One boot banner; runner rc 0; no HARD STOP / ENTRY-STALL. The cycles are inside the band (CPI 4.461 on the
+emulator's count) and the verification hash is the oracle's, so the SQL results are identical — but the
+allocator's revocation bookkeeping took a different path on silicon than on the emulator for this image:
++3,086 splits, +3,327 mrevs, +73 delins, +3,321 revokes, +3,248 inits, where the -O0 image at the same arena
+reproduced the emulator's five counters exactly on the board (sw79) and the -O2 image reproduces them on
+the emulator. The pattern (splits ≈ inits, mrevs ≈ revokes, both ≈ +3.1–3.3 k) is ~3,100 extra
+split-then-merge cycles of the buddy allocator, i.e. a different free-list history, not a different
+workload. **1,520,327,895 is recorded and is NOT citable as ⑥'s -O2 protection cost until this is
+understood**; the patched `memsys5Free` branches only on `aCtrl` bytes (plain loads), so Q-11's type-read
+divergence is not on the path. Two hypotheses, separated by boot sw81 (the same image, same arena, same
+host, launched 00:53): (a) a deterministic RTL-vs-emulator divergence the -O2 code exposes — the counters
+repeat sw80b's; (b) a run-to-run hazard of the R-29 class (a plain store to a granule's high word right
+before a 128-bit `ldc` returning it stale) that -O2's tighter scheduling triggers — a third set of
+counters. The -O1 image follows on the emulator and then the board.
+
+**Boot sw81 (00:52–01:02): the same -O2 image again — the counters REPEAT sw80b's exactly.** Control 4 →
+cell ⑥ at -O2 (`c506694f9f6f6889`, the same host, arena, arguments) → control 4 → probe (`RR/done`), one
+boot banner: `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES 1520848707`** (+0.034 % on sw80b's
+1,520,327,895), **`sublet: split=8654 mrev=41293 delin=32638`** — the same three counters to the unit.
+So the divergence is DETERMINISTIC: the -O2 image runs one allocator history on the RTL and another on
+the emulator, every time, and hypothesis (b) (a run-to-run hazard) is out for this image. The
+discriminating figure is the smallest one: `delin` moves by +73, and `delin` is incremented only by
+`sublet_take`, so the board handed out 73 more objects than the emulator for the same SQL results;
+the ~3.1 k extra splits and inits are buddy-allocator churn downstream of that (the deltas are against the
+emulator's 2 MiB-arena counts, `5568/37966/32565`; against its default-arena counts, `5481/37874/32565`,
+the split and mrev deltas move by 87 and 92 while `delin` stays +73 — the emulator's `delin` is 32,565 at
+both arenas, so the workload requests the same objects whatever the pool geometry, and the +73 is a
+statement about allocation events, not geometry). Next: sw82 (the -O1
+image `902822a8f303dbaa`, emulator 346,344,966 at this arena with the emulator's counters) says
+whether it is -O2-specific; then a software bisection (the SQLite build's patch hooks can mark the
+memsys5/sublet functions `optnone` inside an otherwise -O2 image: if that image matches the emulator
+on the board, the divergence is in the allocator's own codegen) narrows it to an instruction sequence
+for the RTL oracle. The emulator's -O0 and -O2 records at this arena both read all five counters
+`5568/37966/32565/37966/5401` (`arena-2097152.log`, `c6o2-2mib.log`), and sw79's board line reads the
+same five for the -O0 image.
+
+**Boot sw82 (01:04–01:14): the -O1 image diverges IDENTICALLY.** Control 4 → cell ⑥ at -O1
+(`902822a8f303dbaa`, `SQLITE_OPT_LEVEL=-O1`, emulator 346,344,966 at this arena with the emulator's
+counters) → control 4 → probe, one banner: `Verification Hash: 112006 38bb59fd`, **`SPEEDTEST1-CYCLES
+1553040466`** (CPI 4.484, in band), **`sublet: split=8654 mrev=41293 delin=32638`** — the same three
+counters as the -O2 image's two boots, to the unit. So the divergence is not -O2-specific and not a
+scheduling-distance effect (the -O1 and -O2 images schedule differently and R-29's shape is absent
+from both, scanned 01:1x: zero `sd`→`ldc` same-granule pairs within two instructions in either, eleven
+low-word pairs in the -O0 image as the scan's positive control): it is a deterministic semantic
+difference between the RTL and the emulator in code that -O1 and -O2 emit and -O0 does not, reached
+at exactly the same 73 allocation events in both optimised images. The optnone bisection is next: the
+memsys5 functions compiled without optimisation inside an otherwise -O2 image, on the emulator for
+its counts and then one boot — if the counters return to the emulator's, the site is in the
+allocator's own optimised code and the per-function bisection follows; if not, it is in SQLite's
+callers (the 73 extra `sublet_take`s would then be 73 extra allocation REQUESTS, and the per-test
+localisation through the A1 hook's test boundaries is the tool).
+
+**Bisection arm A (boot sw8x-optA, 01:39–01:49): the allocator set is EXCLUDED.** The -O2 image with
+the twenty functions that touch a Sublet primitive or belong to memsys5 (`memsys5CarveUnsafe/
+FreeUnsafe/Init/MallocUnsafe/Parent/Unlink/Link/Malloc/Free/Realloc/Size/Roundup/Log/Shutdown`,
+`sqlite3DbFreeNN/DbMallocRawNN/DbNNFreeNN`, `sqlite3MallocLinear`, `sqlite3_sublet_grant/pool`) compiled
+`optnone, noinline` (`SQLITE_OPTNONE_FUNCS`, verified on all twenty definitions), image
+`edac11e54d2b0a09`, its own emulator counts 345,603,485 at the default arena and 347,936,559 at 2 MiB
+with the emulator's counters `5568/37966/32565/37966/5401`: on the board, controls 4 and 4, `112006
+38bb59fd`, **`SPEEDTEST1-CYCLES 1600582499`** (CPI 4.60 on its own emulator count), `HEAP 1344064`,
+**`sublet: split=8654 mrev=41293 delin=32638 revoke=41287 init=8649`** — sw80b's counters to the unit.
+So compiling every function that executes a Sublet primitive, and the whole of memsys5, as -O0 code
+inside the -O2 image changes nothing: the divergence is not in the allocator's own codegen, the halves
+(`9a8d8b93f6869fac`, `cfdde8ab0f470435`, built with the emulator's counters) do not need boots, and the
+73 extra `sublet_take`s are 73 extra requests REACHING memsys5 from code outside that set. Two ways
+that can happen with identical SQL results, and the next boot separates them: (a) 73 extra
+allocation calls from SQLite's callers (a size or count computation in optimised core code that
+reads differently on the RTL); (b) the same calls, but 73 more of them MISSING the lookaside and
+falling through to memsys5 (the lookaside's free list and slot accounting under the port). The
+`Successful lookasides` counter distinguishes them and needs no new image: the -O2 image again with
+`--stats` (boot sw8x-o2stats, queued after R1 boot 2; the emulator's count for this image with
+`--stats` is being taken first). If the board's lookaside hits are the emulator's minus ~73, (b);
+if equal, (a) and the per-function bisection moves to `malloc.c`'s size deciders and the
+`StrAccum`/`VdbeMem` growth paths. Each board reading here is against the emulator count of ITS OWN
+image hash, never against another build's.
+
+**Boot sw8x-o2stats (02:11–02:21): the -O2 Sublet run on silicon had NO lookaside — pre-registered at
+02:15 from the counters alone, read exactly.** The same image `c506694f9f6f6889` (`--stats` is a host
+argument; there is no second build) at the 2 MiB arena: control 4, `112006 38bb59fd`, **`SPEEDTEST1-CYCLES
+1521280360`** (CPI 4.463 on this image's own `--stats` emulator count 340,864,115), one banner, and the
+statistics block beside the emulator's for the same image and arguments:
+
+| `--stats` line | emulator | board |
+|---|---|---|
+| Successful lookasides | 25,010 | **0** |
+| Lookaside size faults | 157 | **0** |
+| Lookaside OOM faults | 0 | 0 |
+| Lookaside Slots Used | 1 (max 154) | **0 (max 0)** |
+| Pager Heap Usage / Largest Pcache Allocation | 315,200 / 4,592 | 315,200 / 4,592 |
+| Page cache hits / misses / writes | 31,797 / 0 / 0 | 31,797 / 0 / 0 |
+| Schema Heap Usage / Statement Heap Usage | 16,448 / 0 | 16,448 / 0 |
+| `sublet:` split / mrev / delin / revoke / init | 5568 / 37970 / 32569 / 37970 / 5401 | **8654 / 41297 / 32642 / 41291 / 8649** |
+
+Every Sublet counter is sw80b's plus the four takes `--stats` itself adds on the emulator (+0/+4/+4/+4/+0
+on both machines), and the lookaside lines say what the counters had already said: the database ran
+with **zero lookaside slots** (`nSlot = 0`, so no request was ever tested against a slot, and neither
+fault counter could move), and the 32,642 takes are every allocation of the run served by memsys5.
+This is neither of the two readings pre-registered at 01:49 (73 extra requests; 73 requests missing
+the lookaside): it is a fifth branch, found by decomposing the counters before the boot (02:15 note in
+the run directory, and the paper lane's sharper form of it):
+
+* From `sublet.h` and the port's call sites, `split` = buddy splits (each preceded by a `sublet_handle`,
+  which counts `mrev`) + carve splits (`sublet_carve`, no handle), `mrev` = buddy splits + takes + linear
+  takes, `delin` = takes alone (memsys5 mallocs AND lookaside hits both go through `sublet_take`).
+  Emulator: 5,400 buddy + 168 carve (the 1200,40 lookaside is rounded by `memsys5Size` to 64 KiB =
+  41 big + 127 small slots, and every carve splits) + 1 linear take — exact. Board (8,654 / 41,293 /
+  32,638): `carve = linear − 1`, so **at least one linear take happened and the carve count is 0, 1 or
+  2 for any plausible number of linear takes, against 168** — the lookaside block was taken and not
+  carved. And `delin` 32,638 = 7,555 (the emulator's memsys5 requests; the census read 7,560) +
+  25,010 (its lookaside hits) + 73 — the 73 are the requests the lookaside absorbs in place (a
+  `sqlite3DbRealloc` of a slot-sized object returns the slot) and memsys5 must serve afresh; the
+  +3,254 buddy splits, merges and fills are the buddy allocator absorbing 25,000 small requests.
+* One sub-prediction of the 02:15 note MISSED: it expected `Schema Heap Usage` well above 16,448, and
+  the board reads exactly 16,448. That was a wrong reading of SQLite's accounting, not of the story:
+  `SQLITE_DBSTATUS_SCHEMA_USED` sums `sqlite3DbMallocSize` over the schema's objects whichever
+  allocator holds them (a lookaside slot counts at its slot size), so it cannot separate the two.
+  Recorded as missed.
+
+**What it means for the numbers already on record.** sw80b/sw81's 1,520 M cycles, sw82's -O1 1,553 M and
+arm A's 1,600 M are all **lookaside-off** Sublet runs; ⑤-O2 (sw80a, 1,167 M) is a lookaside-on memsys5
+run (its lookaside state on the board is inferred from the stock `setupLookaside` it compiles, not
+read — a `--stats` boot of `d61c8bf784f2bbd1` reads it and is queued behind the R1 boots). So the
+⑥/⑤ ratio at -O2 is not a Sublet-vs-memsys5 comparison on matched configurations and is NOT cited;
+the -O0 pair (sw79, 1.1024) is, its counters being the emulator's.
+
+**Where the divergence now sits.** Not in the allocator (arm A), not in 73 requests from the core: the
+port's `setupLookaside` ended with `pStart = 0` on the board after a successful linear take — the
+function's -O1+ code takes its "no lookaside" exit on the RTL and its "lookaside" exit on the emulator
+from the same instruction stream. Its -O2 body (0x26518, 0x5ac bytes, 371 lines disassembled) inlines
+`sqlite3MallocLinear` and `sqlite3MallocSize` and, where the -O0 code moves every pointer through
+memory (`stc`, then `ld` of the cursor word), does four things in registers: it tests pointers by the
+integer view of a capability register (`addi rd, rs, 0` then `beqz` — the `aSlot == 0` test at
+0x26844 is the one that routes to `sqlite3_free(pStart); pStart = 0`), it passes the block's base as
+the pointer argument through `movc` of an integer register (`lcc s3, t0, 3` … `movc a0, s3`), it
+compares `p` against `aSlot + nBig` by the integer views of two capability registers (`beq a5, a4` at
+0x268d0), and it stores integers into pointer fields with `stc` of an integer register and with two
+`sd`s. On the emulator the integer view of a capability register is its cursor
+(`helper_cslcc`: `val.scalar` aliases `val.cap.bounds.cursor`); what the RTL's integer datapath reads
+from a register holding a tagged capability, and whether `split`/`mrev`/`cincoffset`/`movc` leave the
+cursor where the emulator does, is the rtl-oracle question in flight.
+
+**Arm C, pre-registered.** Image `2b9e4d0d3ed523c9`: the -O2 build with `SQLITE_OPTNONE_FUNCS=
+"setupLookaside"` alone (one definition marked, count-verified); on the emulator at the default arena
+338,503,051 cycles, `HEAP 911104`, `sublet: split=5481 mrev=37874 delin=32565` — the -O2 image's own
+default-arena counters, so the attribute changes no count there; its 2 MiB pass is being taken and
+the boot follows (queued ahead of R1 boots 3–8). Readings: **`5568/37966/32565/37966/5401`** (or this
+image's own 2 MiB counters) → the site is inside `setupLookaside`'s optimised code and the 371 lines
+are the whole search space; **`8654/41293/32638/41287/8649`** → outside it, and since arm A already
+holds the callees at -O0, the next arm is the -O2 code the `aSlot` allocation runs through
+(`sqlite3MallocZero`/`sqlite3Malloc`/`mallocWithAlarm`), whose `aSlot == 0` verdict is the exit taken.
+
+**The mechanism (02:45, from the RTL and emulator sources, the -O2 disassembly and the registry) — C-32,
+live; Q-04 masking it; no spec ruling.** The rtl-oracle's reading, verified line by line by the paper lane:
+the RTL's `MOVC` writes `cnull` into its SOURCE whenever the source is not a tagged non-linear capability
+(`capstone_flu_unit.anvil:6-27`; MOVC raises no exception), while capstone-qemu nulls the source only
+when it is tagged and not copyable (`op_helper.c:570-586`, `rs1_v->tag && !captype_is_copyable`). The two
+disagree on exactly one case: an UNTAGGED source — a plain integer — is destroyed by `movc` on the RTL
+and kept on the emulator. In the port's `setupLookaside` at -O2 the block's base is an integer (`lcc s3,
+t0, 0x3` at 0x2677c, the port's `(void*)base`), the pointer argument to `sqlite3MallocSize` is
+materialised by **`movc a0, s3`** (0x2679c), and `s3` is read again for the `if (pStart)` test (`mv a0,
+s3; bnez a0` at 0x267f0) and, on the free path, moved again (0x26a20/0x26a4c): on the RTL `pStart` reads
+0 after the copy, the function takes its no-lookaside exit, and the `sqlite3_free(pStart)` on that path
+frees a null — the block is taken and never freed, which is the arithmetic's "one linear take, six
+unrevoked handles at the end" to the letter. At -O0 the same cast goes through memory (`stc` of the
+integer register, `ld` of the cursor word) and no `movc` source outlives its copy. The registry already
+held every piece: **C-32** ("`MOVC` is emitted for an integer-bridged (untagged) pointer where a plain
+`mv` would do", open since 2026-09-10 with its two fix designs pending the lead), **Q-04** (the emulator
+side; its 2026-09-10 ruling that "the spec sides with the RTL" was RETRACTED the same day — whether a
+scalar source must be consumed is an open spec question, the lead's, and nothing here rules it; the
+heading now says so), and **C-46** (the machine model treats the source as a pure use; its "only where
+a read of the source outlives the movc" bound is this instance). I nearly re-made Q-04's retracted
+ruling from the same spec paragraph before reading the registry — caught before it was written
+anywhere; recorded because it is the second time that paragraph has produced it.
+
+**How wide is it — a static bound over the corpus (`capstone/tests/movc-cfg-scan.py`, control-flow-graph reachability
+per function: a `movc rd, rs`, rd ≠ rs, whose source has an integer-producing reaching definition and
+is read again on some path before being redefined; tagged-ness is dynamic, so this is necessary, not
+sufficient).** Positive control: the live site is found in both optimised images (integer-only at -O2;
+"mixed" at -O1 only because the failure path's `movc s2, zero` counts as a capability definition in the
+classifier). Per image, of ~17,000 `movc` with distinct operands and ~10,000 whose source is read
+again (tagged pointer copies, the normal case): Sublet -O2 **4 sites** (`setupLookaside` ×2 — the live
+one and its free path; `main`+0x3aab4, mixed; `renameResolveTrigger`+0x10b5b8, a self-loop on the ALTER
+TABLE path); Sublet -O1 4 (`setupLookaside` ×2, `main`, `whereLoopAddBtreeIndex` behind a call); arm C
+2 (`main`, `renameResolveTrigger` — `setupLookaside` gone, as its -O0 body predicts); cell ⑤ -O2 **2**
+(`main`, `renameResolveTrigger`); Sublet -O0 **0**; native -O2 has no `movc` at all. So it is one live
+site plus a handful of candidates, not a class — with the caveat that the `main` candidate sits in the
+domain's own `main` in every optimised image, ⑤'s included, and has not been read. The standing
+methodological constraint, which outlives this bug: **an emulator pass of an optimised image cannot
+stand in for the board on any path that casts integers to pointers, until Q-04 and C-32 are resolved**;
+an optimised image's board result needs an emulator-independent check (here the port's counters and
+`--stats`). (Generalised 2026-09-15 afternoon, §7w: with Q-12 the divergences now exist in BOTH
+polarities — the RTL nulls where the emulator keeps (Q-04/C-32) and the emulator keeps where the RTL clears
+(Q-12) — so **neither machine can be assumed conservative relative to the other**; a reader's usual defence,
+treating the stricter side's result as a bound, is not available here.)
+
+Three readings of the candidate list (paper lane's questions, 03:00). (1) The ⑤ prediction now rests on
+two independent lines: stock `setupLookaside`'s `pStart` is a tagged non-linear pointer, which `movc`
+copies without touching on both machines (source), AND the scan finds no qualifying site in that
+function in the ⑤ -O2 image — so the ⑤ `--stats` boots confirm a doubly-supported prediction, and a
+zero there would be a sharp conflict rather than a surprise. (2) `renameResolveTrigger` is dormant BY
+WORKLOAD, not by reachability: the main testset does run `ALTER TABLE z2 ADD COLUMN` (test 210), whose
+rename check reaches that function only per trigger, and the main testset defines no trigger
+(`testset_trigger` does) — it becomes live under a different testset or any schema with triggers.
+(3) The `main` site (`movc a1, s5` before one call, `mv a1, s5` before a later one; `s5` holds a
+pointer in one phase of `main` and integers in others, hence "mixed") is UNREAD: whether an integer
+definition reaches that copy on the executed path is the one open item on ⑤'s -O2 numbers, handed to
+the compiler lane with the scan — and then read (03:10): both calls the copy feeds are `fatal_error`
+(0x30178, resolved from the `auipc`/`addi` pairs), so the site lies on `main`'s error-exit paths and is
+dormant for every run that completes; a firing there could only misprint a fatal message. Every
+non-lookaside line of the ⑥ -O2 `--stats` block equalled the emulator's, which bounds what a firing
+elsewhere could have changed in that run. (4) The bound has a stated blind channel: the scan classifies
+a source only when its reaching definitions are statically integer- or capability-producing; a source
+that is a call's return value or a function argument is not classifiable (a callee may return an
+integer cast to a pointer, exactly what `sqlite3MallocLinear` does when it is not inlined), and the
+-O2 image holds **1,780** such copies that are read again (⑤ -O2 1,781; -O0 556, and the -O0 image reads
+clean on the board). So the honest form is: at least one live site, three statically visible
+candidates, and a call-return/argument channel of ~1,800 sites per optimised image that static analysis
+cannot classify — "not a class" is a statement about the visible channel only. That channel is bounded
+EMPIRICALLY, per run, and better than any count could bound it: every board run whose non-lookaside
+`--stats` lines (pager heap, cache hits, schema heap, largest pcache allocation) equal the emulator's
+is an outcome measurement over the whole channel at once, and two such runs are already on record —
+the ⑥ -O2 `--stats` boot, and the -O0 image with 556 such sites of its own, which reads exactly the
+emulator's counters. The ⑤ `--stats` boots bound 1.3627 the same way: if their hits read ~25,010 and
+their other lines match, none of ⑤'s 1,781 sites broke that run, whatever they are.
+The compiler lane's independent workload (the B6 memsys5 images) gives the same bucket: -O0 556 —
+identical to this port's -O0 count, so the bucket is shared amalgamation and support code, not anything
+port-specific — and -O1/-O2 1,980/1,818 beside this port's 1,780. The honest residual on C-32's exposure
+is therefore the ~1,300 sites an optimised build adds over -O0, and the sub-case that bucket can hide is
+exactly the observed one with a CALL in place of the inline-asm `lcc`: a callee returning an integer the
+caller casts to a pointer. Narrowing it is interprocedural (resolve the direct callee, classify its
+return register) and is deferred until the lead's choice turns on the number.
+
+**Arm C is therefore a prediction, not a bisection**, and is queued with the ⑤ `--stats` boots behind
+R1 boot 3 (arm C's first launch at 02:25 was refused by the preflight's control check on a control it
+had passed fourteen minutes earlier and passes by hand; the same refusal took R1 boot 5 at 03:45 —
+two unexplained false BLOCKs in twelve gate runs tonight, each followed by a GO on the next run with
+nothing changed. What was tried and did not reproduce it: an early `grep -q` exit SIGPIPE-ing `sed`
+under `pipefail` (the control row sits at byte 2,866 of a 4,941-byte section, so the shape exists, but
+2,000 trials under load and a writer forced to outlive grep all returned status 0); a branch switch or
+rewrite of the controls file in the shared checkout (none in the reflog, mtime unchanged, one row by
+hand every time). The gate now prints, at that refusal only, what it saw rather than what it concluded —
+pwd, `PIPESTATUS`, the file's stat, its own row count re-run, the grep and sed binaries, the load —
+verified to fire on the negative control; the next refusal is diagnosable, and the drivers' `done`
+marker after a refused run is a separate mis-marker to fix.) **Diagnosed at the third refusal (E1
+repetition 2, boot 4, 05:51): `pipestatus=[141 0] rows=1` — sed killed by SIGPIPE when `grep -q`
+exited on the match, `pipefail` turning that into a BLOCK on a present control.** The mechanism the
+by-hand trials could not force (they never let sed be preempted between its two writes); the
+gate's own record did. Fixed with `grep -c` (the whole input is read, so the writer always finishes;
+the verdict is unchanged, both controls re-verified). Cost tonight: three refused launches, each
+rerun. A gate that records what it saw at refusal is what turned "unexplained" into "measured".
+
+**Arm C (boot sw8x-optC2, 02:46–02:57): the prediction holds to the unit.** Image `2b9e4d0d3ed523c9`
+(`setupLookaside` alone `optnone, noinline` inside the otherwise -O2 build; emulator 338,503,051 at the
+default arena, 340,823,328 at 2 MiB, counters unchanged), controls 4 and 4, one banner, `112006
+38bb59fd`, `HEAP 1344064`, **`sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401`** — the
+emulator's counters exactly (read from the transcript with the driver's chunk framing and the
+monitor's markers removed; the driver's own summary regex loses a line split across chunks) — and
+**`SPEEDTEST1-CYCLES 1376190813`** (CPI 4.038 on this image's emulator count), against 1,520,327,895 for
+the same code with `setupLookaside` at -O2. Restoring -O0 codegen in that one function, which runs once
+at open, puts the lookaside back and removes ~144 M cycles of buddy splitting, merging and filling; so
+the site is that function's optimised code, and the mechanism (the block's integer base nulled by the
+`movc` that passes it, then re-read) is confirmed end to end: primary sources on both machines, the
+disassembly, the counters' decomposition, the `--stats` block and this arm. **What this number is:** the
+first -O2 Sublet run on silicon with the lookaside on. Against ⑤ -O2 (sw80a, 1,167,116,810; its own
+lookaside state read in the next boot) it gives ⑥/⑤ = **1.1791** at -O2 on matched 2 MiB backing, and
+against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnostic, -O2, size 1, one
+setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
+the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
+
+Two readings the paper lane drew from the same numbers, recorded with their caveats. **The compound,
+full stack against native**, is what a reader multiplies: 1.2103 × 1.1024 = **1.334** at -O0 (directly
+2,812,763,422 / 2,108,202,651 = 1.3342) and 1.3627 × 1.1791 = **1.607** at -O2 (directly 1,376,190,813 /
+856,450,080 = 1.6069); both factors rise with optimisation because the native baseline optimises and
+the capability work does not, so the -O0 compound understates the stack by 27 points and P1's own rule
+already excludes the -O0 replays as timing baselines. **The lookaside's worth under the discipline** is
+an incidental measurement: the two -O2 Sublet runs differ only in whether the lookaside survived setup,
+and the run without it costs **+10.5 %** (1,520,327,895 / 1,376,190,813 = 1.1047) — a direct reading of
+what SQLite's custom allocator layer is worth in time, with the caveat that the arms also differ in one
+function's optimisation level (a setup function that runs once per open). Dependency carried with
+1.1791: it shares 1.3627's exposure — arm C's lookaside is demonstrably on, so if ⑤-O2 reads
+lookaside-OFF in the boot now running, the pair is on-against-off and neither ratio is matched; one
+reading settles both claims.
+
+**Boot sw8x-b80s-O2 (02:59–03:10): ⑤-O2's lookaside is ON, and both ratios are matched pairs.** Cell ⑤
+at -O2 (`d61c8bf784f2bbd1`, the sw80a image) with `--stats`, the readback host, then native -O2 with
+`--stats` as the in-boot positive control; controls 4 and 4, one banner, both arms at `112006 38bb59fd`:
+
+| `--stats` line | ⑤ -O2 on silicon | predicted | native -O2 on silicon |
+|---|---|---|---|
+| Successful lookasides | **25,010** | ~25,010 | 25,122 (sw80a's 25,122) |
+| Lookaside Slots Used | 1 (max **154**) | max ~154 | 1 (max 134) |
+| size faults / OOM faults | **157** / 0 | ~157 / 0 | 15 / 0 |
+| Pager Heap / page cache hits | 315,200 / 31,797 | | 301,056 / 31,797 |
+| Schema Heap / Largest Pcache | 16,448 / 4,592 | | 9,920 / 4,368 |
+| `SPEEDTEST1-CYCLES` | **1,166,594,074** (−0.045 % on sw80a's 1,167,116,810; CPI 3.527) | | warm 856,305,453 (−0.017 % on sw80a) |
+
+The prediction (source: stock `pStart` is a tagged non-linear pointer; scan: no qualifying site in ⑤'s
+`setupLookaside`) reads exactly, ⑤'s block is the ⑥ emulator block line for line on the shared core
+(pager heap, cache hits, schema heap, largest pcache), and the run repeats sw80a to 0.05 %. So
+**⑤-O2 / native-O2 = 1.3624 here (1.3627 in sw80a) is a lookaside-on against lookaside-on pair, and
+⑥(arm C)/⑤ = 1.1791 is on-against-on** — the exposure carried since 02:30 is closed for both. The -O0
+half of the account (⑤-O0 with `--stats`, predicted ON as well) is the next boot.
+Labelling, so that a ratio's two operands never come from different boots unsaid: the on-against-on
+demonstration attaches to THIS boot's ⑤ reading, so the matched-configuration figure is **⑥(arm C) /
+⑤(sw8x-b80s-O2) = 1,376,190,813 / 1,166,594,074 = 1.1797** (compound against this boot's native
+856,305,453: 1.6071); 1.1791 is the same ratio against sw80a's ⑤, whose lookaside state is inferred
+by the same mechanism with this boot as the evidence — immaterial in magnitude, and both are named.
+Reproducibility, worth its own sentence: ⑤-O2 repeats across boots to −0.045 % and native -O2 to
+−0.017 %, controls either side — the tightest statement this corpus has made about board stability,
+and a bound (not a refutation) on how much the TIMING caveat's "wrong intermittently and
+data-dependently" can perturb these particular figures.
+
+**Boot sw8x-b80s-O0 (03:12–03:23): ⑤-O0's lookaside is ON too — the -O0 side of the account read
+directly.** Cell ⑤ at -O0 (`e6ee5255c896aa21`, the sw75 image) with `--stats`: controls 4 and 4, one
+banner, `112006 38bb59fd`, **Successful lookasides 25,010, Slots Used 1 (max 154), size faults 157, OOM 0**,
+pager heap 315,200, cache hits 31,797, schema heap 16,448, largest pcache 4,592 — the same block as ⑤-O2
+and as the ⑥ emulator, line for line — and **`SPEEDTEST1-CYCLES 2552179361`** (+0.027 % on sw75's
+2,551,483,818, CPI 3.761); native -O2 in the same boot 856,676,117 warm (+0.026 % on sw80a), 25,122 hits.
+So the stock `setupLookaside` keeps its lookaside at both optimisation levels on silicon, as the
+source and the scan said it would, and the -O0 pair (sw79, 1.1024) rests on a read configuration
+on both sides: ⑥-O0's counters are the emulator's, ⑤-O0's lookaside is on. The whole exposure named
+at 02:30 is closed: every ratio on record now has both operands' lookaside state READ, not inferred.
+
+**Precision of the ⑥/⑤/native family across boots (tonight's repeats, controls either side of every arm):**
+
+| image | boots | spread | half-range |
+|---|---|---|---|
+| native -O2 `b36eb3814c3cefce` (sw80a, sw8x-b80s-O2, sw8x-b80s-O0) | 3 | 0.043 % | 0.022 % |
+| ⑤ -O2 `d61c8bf784f2bbd1` (sw80a, sw8x-b80s-O2) | 2 | 0.045 % | 0.022 % |
+| ⑤ -O0 `e6ee5255c896aa21` (sw75, sw8x-b80s-O0) | 2 | 0.027 % | 0.014 % |
+| ⑥ -O2 `c506694f9f6f6889`, the lookaside-off run repeated (sw80b, sw81) | 2 | 0.034 % | 0.017 % |
+
+This is the measured precision of the whole family, not an anecdote about one pair, and it is the
+answer to the fair question the TIMING caveat above invites — a design that does not meet timing is
+wrong intermittently and data-dependently, so how much do these numbers move? Under half a tenth of a
+percent across boots for this workload, with the controls passing. It bounds the caveat rather than
+refuting it, and the ratios it underlies (1.3624, 1.1797, 1.607, 1.1024) rest on differences three
+orders of magnitude larger than the spread.
+
+### §7u — E5 of the Sublet-paper plan: M3's memory ledger for P1's size-1 arms (desk work from the images, the loader, the RTL and two census runs, 2026-09-15 01:30)
+
+**Inputs.** The allocation census (`SPEEDTEST1_ALLOCSTATS=1`, a diagnostic build that perturbs timing and
+is never a cycle row) on the emulator: cell ⑤ (memsys5 + lookaside `1200,40`, 2 MiB static heap; census
+image `9de2fc4e0db934ee` at -O1 because the -O0 image has 552 bytes of headroom under the order-10 ceiling
+and the census does not fit) reads `CARVED 6235136 PEAK 1349056 ALLOCS 7560`, `Successful lookasides
+25010`, `Lookaside Slots Used 1 (max 154)`, `Lookaside size faults 157`, `Largest Pcache Allocation 4592`,
+`Pcache Overflow Bytes max 995328`; cell ⑥ (Sublet, census image `649ccb58f7ff8508`, the 1,419,584 pool)
+(at -O0, the measure script's default; the two arms' census images therefore differ in optimisation level,
+and `ALLOCS` equal at 7,560 says the census does not) reads `CARVED 6177792 PEAK 1291712 ALLOCS 7560` with
+the same lookaside and pcache figures. `CARVED` and `PEAK` both differ by exactly 57,344 bytes between the
+arms — one constant offset in two independently counted quantities, which is what the removal of memsys5's
+in-heap control array from the Sublet pool looks like, and evidence the census counts what it says. `ALLOCS`
+(memsys5 allocations after lookaside) is 7,560 on both arms and the emulator's `delin` is 32,565 at both
+pool sizes, so the census is pool-independent: the workload asks for the same objects whatever the
+geometry. `CARVED` is every byte ever handed out (what a never-coalescing allocator would need);
+`PEAK` the largest live payload. Image sizes are `llvm-size` of the measured images; the loader's
+`Domain requirement` lines are the P1 boots' own; the node and tag figures are the RTL lane's
+(2026-09-14: 16 bytes per node, 65,536 entries, one shadow byte per 16-byte granule, a 2,048-bit
+on-chip array); the tables formula is the port's (`speedtest1_measure.c:105-119`).
+
+| category | cell ② native (lookaside ON) | cell ⑤ memsys5 + lookaside, 2 MiB static | cell ⑥ Sublet, 2 MiB pool |
+|---|---|---|---|
+| payload, occupied (peak live) | ≈ the same workload: 7,560 allocations, `PEAK` ≈ 1.3 MB (native has no census build; its lookaside 25,122 hits) | **1,349,056** (`PEAK`, memsys5 rounding included) | **1,291,712** (`PEAK`) |
+| payload, reserved | 2 MiB static heap (in `.bss`: 2,168,144 with the rest) | **2,097,152** static heap (`SPEEDTEST1_HEAP`, in `.bss` → dom_data) | **2,097,152** pool region (`--arena 2097152`; the §4g row used 1,421,312) |
+| allocator control inside the payload region | memsys5's own: 1 byte per 64-byte atom + link heads | **≈ 32,768 + links** (`aCtrl` 1 B/atom, `Mem5Link` per free block), inside the 2 MiB | none: the pool is payload only |
+| side metadata (tables beside the pool) | — | — | **1,344,064** reserved (`--tables`): `aCtrl` 32,768 + `aLink` 262,144 + `aCap` 524,288 (one capability per atom) + `aPar` 524,800 (the split-block handles) + 64; occupied part not instrumented |
+| lookaside pool (inside the payload region) | 48,000 (1,200 × 40) | 48,000 | 48,000 |
+| revocation-node metadata (RTL, platform) | — | — | **693,680 occupied** by the run (43,355 nodes × 16 B, never reclaimed) of **1,048,576 reserved** (65,536 × 16 B) |
+| tag storage | — | — (no capabilities minted for payload) | **131,072** shadow bytes for the 2 MiB pool + **84,004** for the tables (1 B per 16-B granule, 6.25 %); platform: 60.18 MiB shadow reserved for 1 GiB, 256 B on chip |
+| runtime: domain stack, glue, hostcall regions | process stack (Linux) | stack **385,024** (declared), hostcall 2 × 65,536 (readback host) | stack **1,048,576** (the measured image's declaration), hostcall 2 × 65,536 |
+| code + rodata / data / bss | 806,036 / 7,952 / 2,168,144 | 1,463,600 / 15,616 / 2,103,072 | 1,468,548 / 15,616 / 6,160 |
+| loader `Domain requirement` (dom_data) | — | 2,701,904 (= heap 2,097,152 + stack 385,024 + globals) | 1,268,832 (stack 1,048,576 + globals; the pool and tables are regions) |
+
+**Reading.** Occupied payload is the same to within memsys5's rounding on both capability arms (7,560
+allocations, ≈ 1.3 MB peak) and both reserve 2 MiB for it; what Sublet ADDS is entirely outside the
+payload region, and it is larger than the payload it protects: **the discipline's metadata for this
+run is 2,252,820 bytes against a peak live payload of 1,291,712 — 1.74×** (tables 1,344,064 + the
+run's node-table consumption 693,680 + tag shadow 215,076). The three parts, as ratios, since each is
+geometry-independent by construction: the tables are **41 bytes per 64-byte atom = 64.09 % of the
+backing pool** at any pool size (the design's cost model; the earlier misreading of this figure as "the
+heap" is retracted in §7s); the node table is **monotone consumption, not a peak** — 693,680 of
+1,048,576 bytes = 66.2 % spent by one size-1 run and never returned, the M1 dependency expressed in
+bytes (a second run in the boot exhausts it, R-12), so it is reserved-that-never-returns rather than an
+occupancy; the tag shadow is 6.25 % of every byte a capability can address. What Sublet REMOVES is
+memsys5's control array from inside the heap (the 57,344-byte offset above). Reserved-vs-occupied is
+kept apart in every row; the tables' occupied fraction and the tag array's occupied lines are not
+instrumented and are reported as reserved. Cell ⑥'s census at the 2 MiB pool (the same census image through the readback host at
+`--arena 2097152`, 01:39) reads `CARVED 6177792 PEAK 1291712 ALLOCS 7560` — identical to the
+1,419,584-pool figures to the byte, as `ALLOCS` and `delin` said it would be.
+
+### §7t — E3 of the Sublet-paper plan: R1's release-to-reuse cost on silicon, boot 1 of 8 (2026-09-15 01:20–01:37)
+
+**What ran.** The R1 slots-and-pools harness (`capstone/sublet/r1/r1_slots_pools.c`, image
+`6a569a7e5e34178b`, -O1, entry 0x410000) through the readback host `2c9e82d101b48160` on the SQLite
+host's `--speedtest1` protocol: one invocation = one fresh domain and one fresh `--arena` grant (4 MiB;
+8 MiB for the unrelated-heap series, 2 MiB for object-free) with a 64 KiB `--tables` region above it
+(M-9), one repetition of one (arm, series, pattern) per invocation, twelve invocations per boot from a
+90-line repetition-major list (5 repetitions × 18), controls first and last. Boot 1 = repetition 1 of the
+spatial arm's nine invocations and the Sublet arm's affected-nodes shared/combined and released-bytes
+shared. Bitstream `caplifive_r30r31_1bfff7776`, monitor `4274268`, module `d04bd83`. Pre-registered in
+the driver header: retval 4 twice; twelve `speedtest1-ran=0x4EB1xxxx`; twelve `released pool rc=1`;
+every point `ok=1 bad=0`; `nd = 2n` on shared nodes points; `fb = B` and type 3 (UNINIT) on
+shared/combined; the fill ~1.5 cycles/byte (24 per 16-byte `stc`, the July fillcost figure); REVOKE
+flat in n if the RTL's revoke is O(1), "a rise with n is the node-linear finding R1 asks about".
+
+Read: controls 4 and 4; twelve ran codes, all distinct for the Sublet arm (the low 16 bits are the
+nodes minted); twelve releases `rc=1`; 57 point lines, all `ok=1 bad=0` (the driver's own summary
+counted one `bad≠0` because a monitor share marker spliced that line mid-token; the bundle generator
+deletes markers before reassembly and reads 57/57 clean, every invocation's line count equal to the
+harness's own `lines=` declaration); no HARD STOP, no entry stall, no fault, no `create_region`
+failure; the boot banner is chunk-split in the run-scoped transcript (as in sw78 r1b4) and the
+fresh-run evidence is the twelve new ran codes after this run's `load_image`. Exclusive cycles
+(mcycle in the domain), the Sublet arm, repetition 1:
+
+| series | pattern | n | B | nd | bookkeeping | REVOKE | fill | INIT | reissue | total | fill bytes | type |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| nodes | shared | 1 | 256 KiB | 2 | 475 | 76 | 474,921 | 6 | 925 | 476,403 | 262,144 | 3 |
+| nodes | shared | 4 | 256 KiB | 8 | 358 | 213 | 474,817 | 5 | 800 | 476,193 | 262,144 | 3 |
+| nodes | shared | 16 | 256 KiB | 32 | 996 | 748 | 474,817 | 5 | 814 | 477,380 | 262,144 | 3 |
+| nodes | shared | 64 | 256 KiB | 128 | 3,693 | 2,931 | 474,817 | 5 | 901 | 482,347 | 262,144 | 3 |
+| nodes | shared | 256 | 256 KiB | 512 | 15,072 | 11,634 | 474,817 | 5 | 797 | 502,325 | 262,144 | 3 |
+| nodes | combined | 1 | 256 KiB | 2 | 379 | 55 | 474,921 | 6 | 875 | 476,236 | 262,144 | 3 |
+| nodes | combined | 4 | 256 KiB | 8 | 512 | 133 | 474,884 | 6 | 711 | 476,246 | 262,144 | 3 |
+| nodes | combined | 16 | 256 KiB | 32 | 1,068 | 636 | 474,817 | 5 | 773 | 477,299 | 262,144 | 3 |
+| nodes | combined | 64 | 256 KiB | 128 | 3,723 | 2,348 | 474,817 | 5 | 738 | 481,631 | 262,144 | 3 |
+| nodes | combined | 256 | 256 KiB | 512 | 14,964 | 9,005 | 474,817 | 5 | 986 | 499,777 | 262,144 | 3 |
+| bytes | shared | 16 | 4 KiB | 32 | 1,274 | 724 | 7,208 | 6 | 993 | 10,205 | 4,096 | 3 |
+| bytes | shared | 16 | 16 KiB | 32 | 914 | 818 | 29,377 | 5 | 789 | 31,903 | 16,384 | 3 |
+| bytes | shared | 16 | 64 KiB | 32 | 915 | 817 | 118,465 | 5 | 785 | 120,987 | 65,536 | 3 |
+| bytes | shared | 16 | 256 KiB | 32 | 915 | 816 | 474,817 | 5 | 785 | 477,338 | 262,144 | 3 |
+| bytes | shared | 16 | 1 MiB | 32 | 915 | 822 | 1,900,225 | 5 | 785 | 1,902,752 | 1,048,576 | 3 |
+
+The exclusive brackets sum to the outer bracket with zero residual on every row (the instrument
+accounts for the whole measurement, which is what makes the decomposition citable). The spatial arm's
+rows (the same fixtures as plain pointers into one alias; bookkeeping and reissue only) read
+bookkeeping 301 / 199 / 431 / 1,649 / 7,217 and reissue 348 / 169 / 285 / 462 / 486 cycles for n = 1
+… 256 (shared); they are in the bundle.
+
+**Readings (N = 1; repetitions 2–5 follow in boots 2–8).**
+
+* **REVOKE is node-linear on the RTL.** Against the pre-registered "flat if O(1)": 76 → 213 → 748 →
+  2,931 → 11,634 cycles for 2 → 512 nodes under the handle, (11,634 − 76) / (512 − 2) = **22.7 cycles per
+  revocation node** the withdrawal kills; the emulator counts 2 instructions for it at every n. The
+  combined pattern (every even leaf freed and reissued before the withdrawal) reads 9,005 at n = 256 =
+  17.6 per minted node, i.e. the walk is over the LIVE descendants (the freed leaves' handle nodes were
+  already dead). R1's "report node-linear work if observed": observed.
+* **The fill the UNINIT rule forces is byte-linear at 1.76–1.81 cycles/byte** — 28.2 / 28.7 / 28.9 /
+  29.0 / 29.0 cycles per 16-byte `stc` at B = 4 KiB … 1 MiB — and does NOT bend with B: the slope is the
+  same below and above the 32 KiB data cache — a 2.8 % spread between fully cache-resident and far
+  past it, where a cache-latency-bound fill would show far more — so the fill is bound by the store
+  path's bandwidth, not by cache latency: capability-grained stores retire through the write-through,
+  no-write-allocate cache regardless of residency, and the small rise from 4 KiB is loop overhead
+  amortising, not a cache knee (do not read 1.76 as the start of a curve). That also scopes the claim:
+  1.81 c/B is a property of THIS memory system's store path and transfers to another implementation
+  only as far as its store bandwidth does. Pre-registered 1.5 c/B from the July fillcost rung's 23.6
+  cycles per store; the harness's loop is five instructions per store (CPI ≈ 5.8 on the fill).
+* **The terms are separable, so the release cost is a sum, not a fit.** REVOKE is flat in B at fixed
+  n (724–822 cycles at n = 16 for every B; the nodes-series slope predicts 22.66 × 32 = 725 at the low
+  end exactly) and the fill is flat in n at fixed B (474,817 at every n for B = 256 KiB); each term
+  depends only on its own variable, which licenses writing, for this RTL and store path,
+  **release ≈ 1.81·B + 22.7·nd + 58.9·n + O(1)** (bytes filled, nodes killed, leaves cleared) — a model a
+  reader can apply to their own geometry, where a grid fit could not be, and the thing to put where
+  the manuscript's constant-time claim stands.
+  The fill is 94.5 % (n = 256) to 99.5 % (n = 1) of the release at B = 256 KiB and 99.9 % at 1 MiB; the
+  node-linear REVOKE overtakes it only past nd ≈ 20,900 nodes at B = 256 KiB (B-conditional).
+* **INIT itself costs 5–6 cycles as bracketed, 3–6 net of the timer's 2-cycle floor (§7v)** — 0.001 % of the release. The expensive thing is the write-through
+  the specification's UNINIT rule requires before INIT succeeds, not the instruction: a rule, and so
+  addressable by design (an INIT that accepts a region without the capability-grained walk, or a bulk
+  clear), which the number argues for — 474,817 cycles per 256 KiB release to establish a property.
+* Bookkeeping is ~58 cycles per leaf (a capability-slot clear plus a pointer null; the `stc` itself is
+  ~29), reissue (a take, a checked store and load in the returned region) ~800–1,000.
+* For the manuscript's two formulations of the release cost (the intro's "time independent of the
+  objects inside it", the motivation's O(children)): the first is refuted outright — three terms
+  scale, none is flat; the second is consistent with REVOKE and bookkeeping; but the term that
+  dominates, the byte-linear fill, is one the paper does not model — the sharper statement is "95–99 %
+  of measured release time is a dimension the paper's cost argument does not discuss", not "R3 is
+  wrong". The lead's framing call, as with tab:safety.
+* The n = 1 fill (474,921) is 104 cycles above the others' 474,817 (0.02 %); noted, to be read against
+  repetitions 2–5.
+
+**Harness findings on the way to this boot** (registry M-9, M-10): a pool released while
+top-of-stack is popped and the next `create_region` in the boot faults inside the monitor — hence the
+`--tables` region above every arena; the region slots are never reclaimed within a boot, ~14
+region-bearing invocations before `create_region` fails — hence twelve per boot; the emulator console
+truncates a long guest command silently — hence the invocation list in a script.
+
+**Boot 2 of 8 (01:52–02:09): the unrelated-heap, depth and object series under Sublet, and the spatial
+arm's second repetition.** Invocation lines 13–24 (Sublet bytes/combined, heap shared + combined, depth
+shared + combined, object shared; spatial nodes/bytes/heap shared + combined, repetition 2), the same
+image `6a569a7e5e34178b`, controls 4 and 4, 57 point lines and 12 end lines, no refused line, no bad
+column, no `create_region` failure; the bundle regenerated over both boots holds 114 records with no
+warning.
+
+* **The release cost does not depend on the unrelated heap.** With n = 16, B = 256 KiB and U = 64 KiB,
+  256 KiB, 1 MiB, 4 MiB of live, unrelated regions beside the released one: 477,207 / 477,200 /
+  477,198 / 477,203 cycles (combined), 477,377 / 477,353 / 477,353 / 477,355 (shared) — flat to
+  0.005 % across a 64× range of heap. The walk is over the handle's descendants, not the heap. The
+  U = 0 point reads 477,744 / 477,872, ~550 higher, and it is the first point of its invocation: its
+  bookkeeping and reissue carry the cold cost (bk 1,242 vs 1,095, re 1,018 vs 731; the fill also +106,
+  as boot 1's n = 1 point was) — a warm-up, not a heap effect, and the reason every series here is read
+  from its second point on.
+* **Depth does not change the cost at a fixed set of affected nodes.** Nesting depth 1 / 2 / 4 / 8 with
+  the same n = 16, B = 256 KiB: nd = 47 at every depth, REVOKE 852 / 815 / 812 / 845 (combined) and
+  958 / 1,004 / 1,021 / 1,003 (shared), totals 478,340 / 478,011 / 477,986 / 477,989 and 478,658 /
+  478,130 / 478,082 / 478,067 — within 0.1 %, the depth-1 point again first in its invocation (and the
+  only one whose INIT reads 62 cycles instead of 5: cold). The revocation walk is priced per node it
+  kills, not per level it crosses.
+* **A single object's release-to-reuse under Sublet is 578–658 cycles at 64 B–4 KiB** (bookkeeping
+  166–224, REVOKE 45–62, fill 7–12, INIT 2, reissue 347–375) against the spatial arm's 192–215 — the
+  discipline adds ~390–440 cycles per object, almost all of it the reissue's take and checked access,
+  and the byte-linear fill is ABSENT: an object goes out as a non-linear alias, so its revoke hands the
+  region back initialised (fill bytes 0, the 7–12 cycles are the loop's test), exactly the behaviour
+  the SQLite counters show (`init` climbs with merges, not with frees). The 16 B point (1,013 vs 527)
+  is first-in-invocation. So the cost the paper's object-free series wants is a few hundred cycles,
+  and the fill that dominates the region series does not enter it.
+* The Sublet bytes series in the combined pattern: 9,851 / 31,784 / 120,868 / 477,248 / 1,902,631
+  cycles for 4 KiB … 1 MiB, its fill 7,221 / 29,402 / 118,490 / 474,827 / 1,900,250 — the shared
+  pattern's fill to within 25 cycles at every B, so the combined pattern's freed-and-reissued leaves
+  change bookkeeping (1,017–1,202 vs 914–1,274) and nothing else.
+* **The spatial arm repeats to the cycle.** Repetition 2's medians equal repetition 1's at every point
+  that is not first in its invocation (nodes/shared bookkeeping 303 / 215 / 431 / 1,665 / 7,217, reissue
+  347 / 169 / 285 / 460 / 486; the bytes and heap points 704–759 in total), so the board's per-point
+  noise is a few cycles and the repetitions the protocol asks for are a check on the RTL's
+  determinism, not on a distribution.
+
+**Boot 3 of 8 (02:27–02:45): repetition 2 of every Sublet series and of the spatial depth/object series.**
+Lines 25–36, controls 4 and 4, 54 point lines, 12 end lines, no refused line; the bundle over three boots
+holds 168 records with no warning. The Sublet arm repeats like the spatial one: at every point the
+second repetition's REVOKE, bookkeeping and reissue are within a few cycles of the first (nodes/shared
+REVOKE medians over two repetitions 76 / 209 / 782 / 2,942 / 11,833 for n = 1 … 256; the fill 474,817 at
+every B = 256 KiB point of both repetitions, 1,900,225 at 1 MiB), so the RTL's release cost is
+deterministic to the cycle and the protocol's five repetitions will not widen an interval, only
+confirm one. Boots 4–8 (repetitions 3–5) follow the two ⑤ `--stats` boots and arm C (§7s).
+
+**Boots 4–8 and the rerun of 5 (03:25–04:58): E3 complete — 420 records over eight boots, 84 cases at
+five repetitions each, no warning.** Every boot: controls 4 and 4, every point line `ok=1 bad=0`, no
+refused line, no `create_region` failure (boot 5's first launch was refused by the preflight's control
+check, §7s, and rerun last). Medians over five repetitions, `custom-sublet`, shared pattern, B = 256 KiB
+unless stated:
+
+| series | points | REVOKE | fill | bookkeeping | reissue | total |
+|---|---|---|---|---|---|---|
+| nodes n = 1 / 4 / 16 / 64 / 256 (nd = 2n) | 5 | 102 / 201 / 817 / 2,931 / 11,811 | 474,921 / 474,817 ×4 | 455 / 360 / 919 / 3,628 / 14,972 | 925 / 785 / 792 / 877 / 916 | 476,417 … 502,406 |
+| bytes B = 4 K / 16 K / 64 K / 256 K / 1 M | 5 | 697 / 796 / 794 / 799 / 794 | 7,209 / 29,377 / 118,465 / 474,817 / 1,900,225 | 1,276 / 915 ×4 | 925 / 793 ×4 | 10,119 / 31,903 / 120,975 / 477,329 / 1,902,732 |
+| heap U = 0 / 64 K / 256 K / 1 M / 4 M | 5 | 701 / 790 / 808 / 804 / 807 | 474,921 / 474,817 / 474,812 ×3 | 1,291 / 948 / 931 ×3 | 960 / 800 / 792 / 793 / 797 | 477,874 / 477,366 / 477,350 / 477,353 / 477,353 |
+| depth c = 1 / 2 / 4 / 8 (nd = 47) | 4 | 958 / 993 / 994 / 994 | 474,812 ×4 | 1,779 / 1,515 / 1,452 / 1,455 | 1,026 / 800 / 793 / 800 | 478,634 / 478,130 / 478,082 / 478,067 |
+| object S = 16 / 64 / 256 / 4096 B | 4 | 45 / 51 / 62 / 45 | 7 / 12 ×3 | 308 / 166 / 189 / 185 | 651 / 355 / 347 / 347 | 1,013 / 593 / 612 / 608 |
+
+The slopes the manuscript's figure wants, from the five-repetition medians: **REVOKE 23.0 cycles per
+revocation node** ((11,811 − 102) / 510; the combined pattern 8,985 at n = 256 = 17.6 per minted node,
+the walk being over live descendants); **the fill 1.81 cycles per byte** at every B from 4 KiB to 1 MiB
+(28.2–29.0 per 16-byte `stc`); heap and depth flat within 0.02 % from the second point of each series;
+the first point of every invocation carries a few hundred cycles of cold bookkeeping and reissue and
+is not a series effect. The spatial arm (`custom-spatial`) at the same points: 368–1,066 cycles in
+total everywhere except the node series (7,681 at n = 256, its bookkeeping), and it repeats to the
+cycle. **Bundle:** `experiments/results/R1/fpga-2026-09-15/` in the paper repository's record shape
+(manifest, points.csv, runs.jsonl, raw transcripts per boot, summary), on the local board branch beside
+the E1 bundle; capacity-bounded and labelled so (node identifiers not recycled).
+
+**What the completed series say about the manuscript's release-cost claims — a correction of the
+boot-1 reading, from the paper lane's re-read of the object series.** Boot 1's bullet said the intro's
+formulation is refuted outright and the motivation's `O(children)` is consistent; the five-repetition
+object series sharpens that into three statements, and one of them is a confirmation the earlier
+wording did not give the paper: (i) **`O(1)` per object — CONFIRMED**: 593 / 612 / 608 cycles at 64 /
+256 / 4096 B, a 64× size range moving the cost 2.5 %, with no fill because revoking an alias returns
+the region already initialised. (ii) **`O(children)` per block — incomplete rather than wrong**: REVOKE
+(23.0 cycles per node) and bookkeeping (58.9 per leaf) ARE `O(children)`; what the paper does not model
+is the byte-linear fill that dominates them. (iii) **"time independent of the objects inside it" —
+refuted**: three terms scale. Two of the flat series are positive findings about the design, not
+controls: **release is bounded by the subtree, not by the pool** — 477,350 to 477,366 cycles across
+64 KiB to 4 MiB of unrelated live regions, a 0.0034 % spread over a 64× range — and **a node's cost does
+not depend on where it sits in the tree** — 478,067 to 478,130 across depth 1 to 8 at fixed nd,
+0.013 %. Those are the two objections a reviewer raises against any revocation scheme ("does it scan
+the world?", "does nesting cost more?"), answered with flat lines over wide ranges. And because the
+machine repeats to a few cycles, the medians ARE the values: the five repetitions establish
+determinism, and no confidence interval is implied or needed.
+
+### §7v — E4 of the Sublet-paper plan: H1's calibration on silicon — the timer's cost and the memory latency (boot sw8x-e4, 2026-09-15 11:24–11:36)
+
+**What ran.** The R1 harness with one added series (`--series latency`, `capstone/sublet/r1/`: a
+dependent-load chase over a B-byte region taken as one plain alias, every 64-byte line holding the index
+of the next in a single random cycle built by Sattolo's shuffle inside the region, one warming
+traversal then the timed ones, 65,536 plain 8-byte loads per traversal — the figure `tab:hardware` asks
+for and M2's calibration, not a capability-load figure), image `3d6c24a64bceef00` at 0x410000, emulator
+passes on record (the chase shows the loop's five instructions per load at every size, the flat shape
+an emulator gives). Boot: control 4 → the chase at 4 KiB, 16 KiB, 64 KiB, 256 KiB, 1 MiB, three timed
+traversals each → `--calib` three times (fresh domain each) → one nodes/shared Sublet invocation as the
+regression of the unchanged code → control 4; five `speedtest1-ran`, no refusal, one banner.
+
+| working set | lines | cycles per dependent load (three traversals) |
+|---|---|---|
+| 4 KiB | 64 | **9.00 / 9.00 / 9.00** |
+| 16 KiB | 256 | **9.00 / 9.00 / 9.00** |
+| 64 KiB | 1,024 | 40.81 / 40.78 / 40.76 |
+| 256 KiB | 4,096 | 48.16 / 48.14 / 48.12 |
+| 1 MiB | 16,384 | **48.17 / 48.17 / 48.17** |
+
+**Readings.** (1) **A dependent load costs 9.00 cycles when the working set sits in the 32 KiB data
+cache and 48.2 cycles when it does not** — flat from 256 KiB to 1 MiB, so 48.2 is the DRAM-resident
+figure for this core and memory system (the loop's own five instructions are inside both numbers;
+the difference, 39 cycles, is the miss cost), and 64 KiB reads 40.8 as the partial-residency point
+between them. Deterministic to 0.05 cycles across three traversals; the emulator has no such
+structure. **This is the positive control E3's fill reading needed:** on the same memory system and
+boot family, a dependent load is 5.36× residency-sensitive (9.00 → 48.2) while the fill is 1.03×
+(1.760 → 1.812 cycles per byte from 4 KiB to 1 MiB) — loads are 5.2× more sensitive to residency than
+the fill is. §7t's "store-path bound, not cache-latency bound" was an inference from an absent
+effect; E4 shows the effect exists on this hardware and the fill does not see it, which turns "it did
+not bend" into "it cannot bend, and here is what it is immune to". (2) **The timer costs 2 cycles**: back-to-back `csrr mcycle` reads differ by 2, three
+domains out of three (the emulator says 1), and back-to-back `minstret` reads by 1 — so every
+bracket in §7t is inflated by 2 cycles, which is 0.0004 % of a 474,817-cycle fill and 2 % of a
+102-cycle REVOKE (the n = 1 point) and 33–40 % of the INIT bracket, the smallest in the table — so INIT's
+absolute value is **3–6 cycles** with the floor stated, wherever it is quoted; the brackets are reported
+raw and no conclusion moves (INIT is negligible against the fill at 3 as at 6). (3) The
+regression invocation reads the unchanged code unchanged: nd = 2n, the fill 474,817 at every point,
+REVOKE 126 / 182 / 731 / 2,838 / 11,714 for n = 1 … 256 (a single cold repetition, within the
+five-repetition medians' first-point spread). **What E4 does not deliver:** a directed hardware test of
+the forbidden linear copy (simulation coverage only, marked pending in the manifest), and the
+synth lane's per-module area extraction; the exhaustion diagnostic is sw74b's (§7q) and the
+instruction families are exercised by the S1S2 and R1 cells (the manifest lists which, with
+repetitions). Manifest: `experiments/results/H1/fpga-2026-09-15/manifest.json` on the local board
+branch, calibration and instruction tests filled.
+
+### §7w — F4 of the follow-on plan: does the deployed RTL clear a LINEAR source? R-21 and R-22 read on silicon (boot sw8x-f4, 2026-09-15 12:43–12:53)
+
+**What ran.** The R1 harness's `--series linear` (image `55e6a187d52e5cc8` at 0x410000): eight arms in the
+simulation repro's order (`linear-clear-audit.S`), each a type read of the operand AFTER the operation
+(7 = not a capability, i.e. cleared; 0 = LINEAR; 1 = NONLIN), none able to fault, on fresh 4 KiB linear
+carves from the arena; three repetitions in each of two fresh domains, then a nodes regression, between
+two controls (4 and 4; one banner). Pre-registered from the registry's OPEN statuses: arm 0 (`movc` of a
+LINEAR source, the instrument control) 7; arm 1 (`cincoffset` of a NONLIN source, the conformance
+control) 1; arm 2 (`cincoffset`, LINEAR) **0 per R-21**; arm 3 (`scc`, LINEAR) **0 per R-21**; arm 4 (the
+slot after `ldc` of a LINEAR capability) read; arm 5 (its NONLIN control) 1; arm 6 (the register after
+`stc` of a LINEAR capability) **0 per R-22**; arm 7 (its NONLIN control) 1.
+
+| arm | operation | operand before | on silicon (6 readings) | emulator | spec |
+|---|---|---|---|---|---|
+| 0 | `movc t1, t0`, LINEAR (instrument control) | 0 | **7** | 7 | 7 |
+| 1 | `cincoffset t1, t0, 64`, NONLIN (conformance control) | 1 | **1** | 1 | 1 |
+| 2 | `cincoffset t1, t0, 64`, LINEAR | 0 | **7** | 7 | 7 |
+| 3 | `scc t1, t0, 64`, LINEAR | 0 | **7** | 7 | 7 |
+| 4 | the slot after `ldc t0` of a LINEAR capability | 0 | **7** | **0** | 7 |
+| 5 | the slot after `ldc` of a NONLIN capability (control) | 1 | **1** | 1 | 1 |
+| 6 | the register after `stc t0` of a LINEAR capability | 0 | **7** | **0** | 7 |
+| 7 | the register after `stc` of a NONLIN capability (control) | 1 | **1** | 1 | 1 |
+
+**Reading.** The instrument can see a clear (arm 0) and does not clear unconditionally (arms 1, 5, 7),
+and every probe reads the SPECIFICATION on the deployed bitstream: **the linear source is cleared by
+`cincoffset` and by `scc`, a linear capability is moved out of its slot by `ldc`, and the register is
+nulled by `stc`** — identical in six readings each. So the pre-registration is refuted where it followed
+the registry: R-21 is not present on `caplifive_r30r31_1bfff7776` for `cincoffset` (its 2026-09-05 sweep
+note had already recorded that half gone at 5097eb166) nor for `scc` (not in that note), and **R-22 is not
+present at all** — the entry's source analysis describes an earlier revision, and which change fixed it
+is not read here (the RTL lane's to confirm from source). The scope, claim by claim, since R-21 makes five: `cincoffset` and `scc` measured conformant here;
+`tighten` and `shrinkto` NOT probed on silicon (open by the entry's source table); `init`'s DUPLICATION —
+the worst of the five, a second live copy rather than a missing clear — was not re-probed here because it
+is R-25, fixed and confirmed on silicon 2026-09-09 (boot sw41 returned through the consumed-source store on
+the r25r26r27 bitstream, an ancestor of the deployed one). **Origin (the RTL lane, from the history):** one
+commit, `b047f32eb` (2026-08-12, "Fixed some linearity enforcement issue"), an ancestor of `1bfff7776`, added
+the STC writebacks that are R-22's clear (both the UNINIT and the non-UNINIT path) and the three cnull
+writebacks on the CINCOFFSET paths that are R-21's `cincoffset`/`cincoffsetimm`/`scc` half, and shipped the
+directed tests now in the suite (`cincoffset-linear-clear.S`, `scc-linear-clear.S`, `stc-register-clear.S`,
+…); the `ldc` slot clear read here is NOT attributable to it on that evidence and stays unidentified. The
+registry's source tables for R-21/R-22 were a month behind the deployed RTL — read at the entries' filing
+and never re-read after the fix landed — which is why the pre-registration followed them and lost. There is
+nothing to hand to the hardware side, so the two repro folders the plan foresaw are not written.
+**The divergent side is the emulator:** on the same image it clears `movc`/`cincoffset`/`scc` sources
+but neither empties the slot on `ldc` (arm 4 reads 0) nor nulls the register on `stc` (arm 6 reads 0) —
+`trans_csldc`/`trans_csstc` write no `cnull`, as R-21's text noted — registered as Q-12. A port that
+relies on a linear capability surviving in memory after a load, or in a register after a store, passes on
+the emulator and loses it on silicon; `sublet.h`'s primitives were written for the silicon behaviour
+(every reader stores back), which is why the Sublet port's counters agree between the two machines.
+The regression invocation reads unchanged (nd = 2n; REVOKE 96 / 190 / 885 / 3,014 / 11,741 for
+n = 1 … 256, a single cold repetition). H1's forbidden-linear-copy family is therefore MEASURED on
+hardware, as a passing test for the instructions exercised.

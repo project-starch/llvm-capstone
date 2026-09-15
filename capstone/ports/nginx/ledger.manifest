@@ -1,0 +1,20 @@
+# nginx: what the adaptation cost beside the allocator, for I1.
+# One line per file: <path>  <bucket>  <why>. Buckets: allocator, compat, glue, test.
+#
+# The allocator itself is patches/0001-pool-under-sublet.patch and is NOT in this list: it is
+# counted by port-effort.py against its own .classes file, and a second count of it here could
+# only disagree.
+
+adapted/ngx_shim.h          compat   replaces ngx_config.h and ngx_core.h, and carries the two upstream lines a capability target needs corrected
+ngxtrace.h                  glue     the record format, shared with the recorder in the paper repository and fetched there at a pinned commit
+port/ngx_level0_wrap.c      glue     the three calls and the one variable ngx_palloc.c makes of a level below, over pg_level0.c
+port/ngx_subpool.c          glue     the level below that hands out LINEAR blocks, which pg_level0.c cannot do
+port/ngx_subpool.h          glue     what the pool needs from that level and nothing else
+port/ngx_domain.c           test     the driver, seven scenarios and ninety checks, both arms
+port/ngx_subpool_test.c     test     the level below's own test, twelve phases
+port/ngx_uaf.c              test     the image whose result is a fault, six cells over two levels below
+port/ngx_replay.c           test     the replay of a recorded worker
+tools/ngx-guest.c           test     the guest that creates the domain and shares one region
+tools/ngx-replay-guest.c    test     the guest that loads a trace into a region and reads the result back
+
+patches/0001-pool-under-sublet.patch   allocator  the classified patch, counted by port-effort.py

@@ -1,0 +1,208 @@
+--- a/ngx_palloc.c
++++ b/ngx_palloc.c
+@@ -42,6 +42,10 @@
+     size_t       bytes;
+     size_t       left;
+     ngx_uint_t   used;
++#if (NGX_SUBLET_BLOCK)
++    u_char      *body;       /* one alias over the block behind its header */
++    size_t       span;       /* how long it is, so the bump follows from what is left */
++#endif
+ } ngx_pool_slot_t;
+ 
+ static ngx_pool_slot_t  ngx_pool_slots[NGX_POOL_SLOTS];
+@@ -74,6 +78,12 @@
+         ngx_pool_slots[n].left =
+             (size_t) (sublet_end(&ngx_pool_slots[n].region) - sublet_base(&ngx_pool_slots[n].region));
+         ngx_pool_slots[n].used = 1;
++#if (NGX_SUBLET_BLOCK)
++        /* cleared, because a slot is reused and a stale alias from its previous life would be
++           handed out as this block's memory */
++        ngx_pool_slots[n].body = NULL;
++        ngx_pool_slots[n].span = 0;
++#endif
+ 
+         if (++ngx_pool_slots_live > ngx_pool_slots_peak) {
+             ngx_pool_slots_peak = ngx_pool_slots_live;
+@@ -107,25 +117,13 @@
+  * chaining a block. A count can be read when a slot cannot.
+  */
+ static void *
+-ngx_pool_carve(ngx_uint_t n, size_t size)
++ngx_pool_carve_one(ngx_uint_t n, size_t size)
+ {
+     sublet_cap        obj;
+     ngx_pool_slot_t  *sl;
+ 
+     sl = &ngx_pool_slots[n];
+     size = (size + 15) & ~(size_t) 15;
+-
+-    /*
+-     * A REQUEST FOR NOTHING still costs a capability. nginx asks for zero bytes, and upstream
+-     * answers with the bump pointer where it stands, which is a pointer to no bytes and is legal
+-     * because a pointer has no length. A capability has one, and a carve of zero length is a
+-     * split at the region's own base, which the hardware refuses as degenerate. So the smallest
+-     * object is sixteen bytes even when nothing was asked for.
+-     *
+-     * This is a cost of the discipline and not a detail of this port, and no driver I wrote found
+-     * it: a trace of real nginx did, at the first zero-length allocation of two hundred thousand
+-     * calls.
+-     */
+     if (size == 0) {
+         size = 16;
+     }
+@@ -141,6 +139,70 @@
+ }
+ 
+ 
++#if (NGX_SUBLET_BLOCK)
++
++/*
++ * THE WEAKER DISCIPLINE, and the whole point of this arm. The block is still linear and still dies
++ * in one revocation, so a pointer into a destroyed pool still faults. What it no longer does is
++ * give each object its own bounds: the block behind its header is taken ONCE as a single alias,
++ * and the objects are offsets inside it. That is plain pointer arithmetic, and per R-12 only SPLIT
++ * and MREV allocate a revocation node, so an object now costs none.
++ *
++ * What is given up is named rather than hidden. An overrun from one object into the next INSIDE
++ * one pool is invisible again, exactly as it is upstream. What is kept is the claim this paper
++ * makes, that a pool's contents die together.
++ *
++ * The sixteen byte rounding stays, although nothing on this path needs it, so that the only
++ * difference measured between the two arms is the per object carve.
++ */
++static void
++ngx_pool_body(ngx_uint_t n)
++{
++    ngx_pool_slot_t  *sl = &ngx_pool_slots[n];
++    sublet_cap        whole;
++
++    sl->span = sl->left = (size_t) (sublet_end(&sl->region) - sublet_base(&sl->region));
++    /* a carve that reaches exactly to the end is a move and not a split, so this is one mrev and
++       one delin per BLOCK where the other arm spends them per object */
++    sublet_carve(&sl->region, sublet_end(&sl->region), &whole);
++    sl->body = sublet_take(&whole);
++    if (sl->body == NULL) {
++        sl->span = sl->left = 0;
++    }
++}
++
++static void *
++ngx_pool_carve(ngx_uint_t n, size_t size)
++{
++    ngx_pool_slot_t  *sl = &ngx_pool_slots[n];
++    u_char           *p;
++
++    size = (size + 15) & ~(size_t) 15;
++    if (size == 0) {
++        size = 16;
++    }
++
++    if (sl->body == NULL || sl->left < size) {
++        return NULL;
++    }
++
++    p = sl->body + (sl->span - sl->left);
++    sl->left -= size;
++
++    return p;
++}
++
++#else
++
++static void *
++ngx_pool_carve(ngx_uint_t n, size_t size)
++{
++    return ngx_pool_carve_one(n, size);
++}
++
++#endif
++
++
+ /*
+  * An object aligned harder than a capability. ngx_pmemalign is asked for ngx_pagesize by the
+  * radix tree and for the direct IO alignment by the output chain, so refusing anything above 16
+@@ -157,15 +219,18 @@
+     unsigned long   base, want;
+     size_t          pad;
+ 
++    /* From the region in BOTH arms, because this path belongs to ngx_pmemalign, which owns its
++       whole block and therefore never takes a body. Measuring from a body that was never taken is
++       arithmetic on a null capability, which is cause 24 at the first page aligned request. */
+     base = sublet_base(&ngx_pool_slots[n].region);
+     want = (base + alignment - 1) & ~(unsigned long) (alignment - 1);
+     pad = (size_t) (want - base);
+ 
+-    if (pad != 0 && ngx_pool_carve(n, pad) == NULL) {
++    if (pad != 0 && ngx_pool_carve_one(n, pad) == NULL) {
+         return NULL;
+     }
+ 
+-    return ngx_pool_carve(n, size);
++    return ngx_pool_carve_one(n, size);
+ }
+ 
+ 
+@@ -180,7 +245,9 @@
+         return NULL;
+     }
+ 
+-    p = ngx_pool_carve(n, sizeof(ngx_pool_t));
++    /* The header keeps bounds of its own in BOTH arms: it is the pool's own state, it is what a
++       caller holds across a reset, and it is one carve per block rather than one per object. */
++    p = ngx_pool_carve_one(n, sizeof(ngx_pool_t));
+     if (p == NULL) {
+         ngx_pool_slot_put(n);
+         return NULL;
+@@ -188,6 +255,9 @@
+ 
+     /* after the header, so a reset leaves the header alone */
+     sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
++#if (NGX_SUBLET_BLOCK)
++    ngx_pool_body(n);
++#endif
+ 
+     p->d.next = NULL;
+     p->d.failed = 0;
+@@ -292,7 +362,11 @@
+ 
+         sublet_give_to(&sl->inner, &sl->region);
+         sublet_handle(&sl->region, &sl->inner);
++#if (NGX_SUBLET_BLOCK)
++        ngx_pool_body(p->d.slot);
++#else
+         sl->left = (size_t) (sublet_end(&sl->region) - sublet_base(&sl->region));
++#endif
+         p->d.failed = 0;
+     }
+ 
+@@ -367,13 +441,16 @@
+         return NULL;
+     }
+ 
+-    new = ngx_pool_carve(n, sizeof(ngx_pool_data_t));
++    new = ngx_pool_carve_one(n, sizeof(ngx_pool_data_t));
+     if (new == NULL) {
+         ngx_pool_slot_put(n);
+         return NULL;
+     }
+ 
+     sublet_handle(&ngx_pool_slots[n].region, &ngx_pool_slots[n].inner);
++#if (NGX_SUBLET_BLOCK)
++    ngx_pool_body(n);
++#endif
+ 
+     new->d.next = NULL;
+     new->d.failed = 0;
+@@ -410,7 +487,10 @@
+         return NULL;
+     }
+ 
+-    p = ngx_pool_carve(s, size);
++    /* A large allocation owns its whole block, so the object IS the block and keeps bounds of its
++       own in both arms. There is nothing to share an alias with, and one carve per large
++       allocation is what taking a body would have cost anyway. */
++    p = ngx_pool_carve_one(s, size);
+     if (p == NULL) {
+         ngx_pool_slot_put(s);
+         return NULL;

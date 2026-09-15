@@ -168,8 +168,15 @@ _expand_wanted() {   # prints one needed FILENAME per line
       #   ladder host override   host|RUNG:/path/rung.dom      -> path is AFTER the colon
       #   sqlite stage           /path/img.dom:--selector      -> path is BEFORE it
       #   host-binary verb arm   host|warm:--selector          -> neither; it stages no .dom
-      if _isfile "$_ac"; then printf '%s\n' "$(basename -- "$_ac")"
-      elif _isfile "$_bc"; then printf '%s\n' "$(basename -- "$_bc")"
+      # A fourth form, 2026-09-14: host ARGUMENTS that begin with a path,
+      #   pg host              host|/path/img.dom:/path/input.bin --tail --linear-arena
+      # The ladder form's path is ONE token; a selector with spaces is arguments, the image is
+      # before the colon, and its first word may name a staged input. Read as the ladder form it
+      # dropped its .dom from the wanted set and blocked sw78 r1b3 for "not using" that image.
+      if _isfile "$_ac" && [[ "$_ac" != *" "* ]]; then printf '%s\n' "$(basename -- "$_ac")"
+      else
+        _isfile "$_bc" && printf '%s\n' "$(basename -- "$_bc")"
+        [[ "$_ac" == *" "* ]] && _isfile "${_ac%% *}" && printf '%s\n' "$(basename -- "${_ac%% *}")"
       fi
     done
   fi
@@ -388,10 +395,20 @@ if [[ -n "$RUNGS" ]]; then
   # version of this grepped the whole file and therefore matched matmult_int in the DO-NOT-USE
   # table, returning GO for the exact mistake this gate exists to catch. A gate that cannot
   # fail its own negative test is worse than no gate: it grants false confidence.
-  if [[ -f "$CONTROLS" ]] && sed '/^## NOT controls/,$d' "$CONTROLS" | grep -qE "^\| *\`?$first\`? "; then
+  # `grep -c`, NOT `grep -q`: under `pipefail` an early `grep -q` exit on the match SIGPIPEs sed while
+  # it still has a block to write, and the pipeline reads as BLOCK on a PRESENT control. Measured, not
+  # guessed: the refusal diagnostic below recorded `pipestatus=[141 0] rows=1` on 2026-09-15 05:51
+  # (E1 rep 2 boot 4), after the same false refusal took arm C at 02:25 and R1 boot 5 at 03:45.
+  # Counting reads the whole input, so the writer always finishes; the verdict is unchanged.
+  if [[ -f "$CONTROLS" ]] && sed '/^## NOT controls/,$d' "$CONTROLS" | grep -cE "^\| *\`?$first\`? " >/dev/null; then
     ok "control '$first' has a published passing record"
   else
+    _ps="${PIPESTATUS[*]}"
     bad "first rung '$first' is not listed in $CONTROLS as a known-good control -- a boot whose control is invalid carries no verdict (matmult_int is a documented MISCOMPILE, not a control)"
+    # Evidence at the moment of refusal (this check refused a control that passes by hand twice on
+    # 2026-09-15, 02:25 and 03:45; a by-hand re-run is a different execution and cannot tell a flaky
+    # gate from a condition that was present and passed): what the gate saw, not what it concluded.
+    say "diag" "C4 at refusal: pwd=$(pwd) pipestatus=[$_ps] first='$first' file=$(ls -la --time-style=+%T "$CONTROLS" 2>&1 | tr -s ' ') rows=$(sed '/^## NOT controls/,$d' "$CONTROLS" 2>/dev/null | grep -cE "^\| *\`?$first\`? ") grep=$(command -v grep) sed=$(command -v sed) load=$(cut -d' ' -f1-3 /proc/loadavg)"
   fi
   shas=""
   for r in $RUNGS; do

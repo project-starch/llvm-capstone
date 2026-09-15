@@ -35,11 +35,28 @@ cp "$SCRIPT_DIR/adapted/ngx_shim.h" "$OBJ/"
 # NGX_SUBLET=1 is the protected arm: the same upstream file, plus patches/, and the level below
 # that hands out linear blocks. Applied here rather than kept as a second copy of ngx_palloc.c so
 # that the port-effort count in capstone/tests/port-effort.py has exactly one thing to count.
+# 0002 is the WEAKER arm and is applied only when asked for: the block stays linear and dies in
+# one revocation, but the objects inside it are offsets in a single alias rather than capabilities
+# of their own. The two arms are the same port with one difference, which is what makes the
+# revocation node counts comparable.
 if [ "${NGX_SUBLET:-0}" = 1 ]; then
-  for pf in "$SCRIPT_DIR"/patches/*.patch; do
-    patch -s -p1 -d "$OBJ" < "$pf" || { echo "patch failed: $pf" >&2; exit 1; }
-  done
+  patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/0001-pool-under-sublet.patch" \
+    || { echo "patch 0001 failed" >&2; exit 1; }
   CFLAGS_SUBLET=(-DNGX_SUBLET=1)
+  if [ "${NGX_SUBLET_BLOCK:-0}" = 1 ]; then
+    patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/0002-objects-inside-one-alias.patch" \
+      || { echo "patch 0002 failed" >&2; exit 1; }
+    CFLAGS_SUBLET+=(-DNGX_SUBLET_BLOCK=1)
+  fi
+  # An ABLATION and not a port. It removes the inner handle, so a reset cannot be expressed at
+  # all, and it exists only to price that handle against a workload that never resets. Its patches
+  # are named apart from the numbered ones so that port-effort does not count them.
+  if [ "${NGX_ABLATE_INNER:-0}" = 1 ]; then
+    if [ "${NGX_SUBLET_BLOCK:-0}" = 1 ]; then abl=weak; else abl=strong; fi
+    patch -s -p1 -d "$OBJ" < "$SCRIPT_DIR/patches/ablation-no-inner-handle-$abl.patch" \
+      || { echo "ablation patch failed" >&2; exit 1; }
+    CFLAGS_SUBLET+=(-DNGX_ABLATE_INNER=1)
+  fi
 else
   CFLAGS_SUBLET=()
 fi
@@ -88,8 +105,16 @@ printf "   amalgam: %s lines\n" "$(cat "$OBJ/ngx_palloc.c" "$PG/pg_level0.c" "$P
 "$CLANG" "${CFLAGS[@]}" -c -o "$OBJ/ngx_all.o" "$AMALGAM"
 
 link() {  # $1 = globals offset literal, $2 = output
-  local lds="$OBJ/link.ld"
-  sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  local lds="$OBJ/link.ld" base="${DOMAIN_BASE_VA:-0x10000}"
+  # DOMAIN_BASE_VA relocates the entry VA (default 0x10000), the same literal sed as
+  # build-ladder-domain.sh, so several probe images can share ONE board boot: distinct
+  # images at one entry VA cannot (R-3, preflight C15). Verified, not trusted: the
+  # substituted line must exist, or the build stops here.
+  # @WIN@ first: a globals offset that is itself 0x10000 (this build's usual value) would
+  # otherwise be rewritten to the base by the second sed and yield `$base + $base`.
+  sed -e "s/0x10000 + 0x1000/@BASE@ + @WIN@/" -e "s/0x10000/@BASE@/g" -e "s/@WIN@/$1/" \
+      -e "s/@BASE@/$base/g" "$GPFREE/link-gpfree.ld" > "$lds"
+  grep -q -- "$base + $1" "$lds" || { echo "build-nginx-domain.sh: linker-script substitution FAILED ($base + $1 absent)" >&2; exit 1; }
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
       -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ/start.o"
   # Ends the .gct section so the entry glue can compute the table's extent. Without it
