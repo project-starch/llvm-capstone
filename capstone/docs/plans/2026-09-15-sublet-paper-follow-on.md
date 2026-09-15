@@ -234,6 +234,14 @@ harness cannot read and a reclaiming build must expose: occupancy and free-node 
 a node id/generation read for the identifier-turnover witness. Subordinate handles retained across a release are not
 modelled yet.
 
+*15:05, after the paper lane's review:* every snapshot now also prints the interval's raw cycles in the takes (`take_cyc`,
+minting: `mrev`) and in the gives (`give_cyc`, release: revoke + fill + init) with the interval's allocation count, so
+the two cost curves against cumulative allocations come out of the same boots (build11 `9a01b12a4db639b6`); on the
+deployed table the retention pattern varies nothing (no reclamation: one node per allocation whatever is retained), so
+if the two boots go they are labelled **no-reclamation baseline**, never M1, and their headline is the minting and
+release cost as the table fills — pre-registered flat for both (a head allocation plus a parent link; a childless
+revoke plus a 64-byte fill) — with the bound as corroboration and the pattern comparison void until a reclaimer exists.
+
 ## Hand-offs (cross-session messages, roles only)
 
 * **Compiler lane:** F1's design A with the lead's choice, the code sites, the test's `-O0` arm, the

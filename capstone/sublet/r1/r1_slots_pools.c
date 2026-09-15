@@ -450,14 +450,20 @@ static ulong m1_alias_type(void *a) {
   return sublet_type(&m1_tmp);
 }
 
-static void m1_snap(const char *arm, ulong alloc, ulong C, ulong m0, unsigned nret, void *oldest) {
+/* per snapshot interval: the raw cycles spent in the takes (mrev: minting) and in the gives (revoke + fill +
+ * init: release), summed over the interval's allocations, so take_cyc/n and give_cyc/n against cumulative
+ * allocations are the two cost curves as the table fills. Each bracket carries the timer's own read-to-read
+ * floor (2 cycles on silicon, E4); the analysis subtracts it, the harness prints raw sums. */
+static void m1_snap(const char *arm, ulong alloc, ulong C, ulong m0, unsigned nret, void *oldest,
+                    ulong n, ulong tk, ulong tg, ulong ini) {
   out("R1 m1 snap arm="); out(arm); kv("alloc", alloc); kv("C", C); kv("minted", minted() - m0);
   kv("revoked", sublet_stats.revoke); kv("init", sublet_stats.init); kv("live", M1_LIVE); kv("retained", nret);
+  kv("n", n); kv("take_cyc", tk); kv("give_cyc", tg); kv("init_n", ini);
   kv("stale_alias_type", m1_alias_type(oldest)); kv("live_slot_type", sublet_type(&leaf[0])); out("\n");
 }
 
 static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) {
-  ulong target, alloc = 0, snap_every, next_snap, m0, phase2_end = 0;
+  ulong target, alloc = 0, snap_every, next_snap, m0, phase2_end = 0, t, tk = 0, tg = 0, n = 0, ini0;
   unsigned i, k, nret = 0, releasing = 0;
   void *old, *oldest = 0;
   const char *stop = "target";
@@ -472,7 +478,7 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   for (i = 0; i < M1_LIVE; i++) { alias[i] = sublet_take(&leaf[i]); touch((volatile char *)alias[i], 64UL, 0x11); }
   out("R1 m1 start arm="); out(arm); kv("C", C); kv("target", target); kv("fixture_nodes", minted() - m0);
   kv("budget", budget); kv("maxret", M1_MAXRET); kv("snap_every", snap_every); out("\n");
-  i = 0;
+  i = 0; ini0 = sublet_stats.init;
   for (;;) {
     if (alloc >= target && !releasing) {
       if (streq(arm, "release")) {
@@ -485,14 +491,17 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     if (releasing && alloc >= phase2_end) break;
     if (minted() + 1UL > budget) { stop = "budget"; break; }
     old = alias[i];
-    sublet_give(&leaf[i]);                                 /* the object's lifetime ends */
+    t = cyc(); sublet_give(&leaf[i]); tg += cyc() - t;     /* the object's lifetime ends: revoke, fill, init */
     if (streq(arm, "drop") || releasing) { alias[i] = 0; }
     else if (streq(arm, "ring")) { k = (unsigned)(alloc % M1_LIVE); m1_ring_alias[k] = old; if (nret < M1_LIVE) nret++; oldest = m1_ring_alias[(unsigned)((alloc + 1UL) % M1_LIVE)]; if (!oldest) oldest = m1_ring_alias[0]; }
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break; } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
-    alias[i] = sublet_take(&leaf[i]);                     /* a new object in its place: one node */
+    t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], 64UL, (unsigned char)alloc);
-    alloc++;
-    if (alloc >= next_snap) { m1_snap(arm, alloc, C, m0, nret, oldest); next_snap += snap_every; }
+    alloc++; n++;
+    if (alloc >= next_snap) {
+      m1_snap(arm, alloc, C, m0, nret, oldest, n, tk, tg, sublet_stats.init - ini0);
+      next_snap += snap_every; n = 0; tk = 0; tg = 0; ini0 = sublet_stats.init;
+    }
     i = (i + 1) % M1_LIVE;
   }
   out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
