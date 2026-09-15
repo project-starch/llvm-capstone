@@ -4414,3 +4414,68 @@ superseded. The capability-access rows stand: `LDC`/`STC` run the DYN unit's nod
 privilege gate and no LSU exception (E1's s9 REVOKE fault in every repetition). Not measured: the translation-on
 path (argued from source), the board itself, store bounds. History note:
 `docs/history/15-09-2026_lsu-exception-lost-on-immediate-grant.md`.
+
+### §7y — F5 of the follow-on plan: M2's bounded diagnostic, the dependent chase on silicon (boots sw8x-r1f5-b1…b4, 2026-09-15 13:18–14:32)
+
+**Design.** `--series chase` in the R1 harness (build9 `fdd3029ff0f96680`, the emulator pass on record): N 64-byte
+records holding the INDEX of the next in a seeded Sattolo cycle (seeds 1/2/3), a separately counted lookup array
+of capabilities, two warm-up traversals, then 100,000 timed dependent accesses; the cold first traversal reported
+apart; checksum and cycle closure verified on every point. Arms: **custom-spatial** (P: one alias per record, 6
+nodes live), **custom-sublet** (S: a leaf and an alias per record, about 2N+4 nodes live), **data-only** (D: the same
+chase by integer arithmetic on one base, no lookup, the labelled non-protecting ablation). Working sets 16 / 64 /
+256 / 1024 / 4096 records (1 KiB – 256 KiB of records; the lookup array is 16 B per record beside them). 45
+invocations over four boots, a fresh domain each, seeded permutation, at most four sublet invocations per boot
+(node budget); every boot's controls 4/4, every invocation's `ran` code `0x4EB1xxxx`; 225 records, 15 runs per
+point over four boots and three seeds, 0 warnings, all completed. Bundle: `experiments/results/M2/fpga-2026-09-15/`
+on the board branch (`analysis/medians.py` rerunnable).
+
+**The pre-registration was mis-specified, and the correction was written before the numbers were read** (the F5
+correction in the plan, 14:00; the bundle carries the original text verbatim, then the correction). The timed
+access is `cur = *lookup[cur]`: an LDC whose ADDRESS capability is the lookup array's capability, then a plain
+load through the loaded record capability. On this RTL the DYN unit's node-validity query is on the LDC's address
+capability only (Q-11: a loaded capability's node is not queried; the plain load's LSU check is gated and its
+exceptions are dropped, R-34). So the access path queries ONE node per access in both capability arms, and the
+harness's `touched=N` field for the sublet arm is a label. `M2-access-path.md:29-33` anticipated exactly this:
+"if no controlled representation exists, publish the working-set series without claiming an isolated node-cache
+knee" — the contingency clause fired as written. The queried-set series (the record holding the next capability,
+a legal but different shape) is deferred behind M1.
+
+**Reading, under the corrected scope (cycles per access, median of 15 runs; min–max in the bundle):**
+
+| records | custom-spatial (6 live nodes) | custom-sublet (2N+4 live nodes) | S/P | data-only (no lookup) |
+|---|---|---|---|---|
+| 16 | 18.00 | 18.00 (36 nodes) | 1.0000 | 10.00 |
+| 64 | 18.00 | 18.00 (132) | 1.0000 | 10.00 |
+| 256 | 18.00 | 18.00 (516) | 1.0000 | 10.00 |
+| 1024 | 61.37 | 61.39 (2,052) | 1.0003 | 41.84 |
+| 4096 | 88.45 | 88.44 (8,196) | 0.9999 | 49.25 |
+
+1. **The cost of a node-validity query does not depend on how many nodes exist in the table.** Custom-sublet and
+   custom-spatial are equal to within 0.03 % at every working set while the sublet arm carries 36 to 8,196 live
+   nodes against the spatial arm's 6 — three orders of magnitude of occupancy, a flat line. That is direct
+   evidence the query is an indexed read (the RTL lane's `get_rev_node`: one 16-byte read, no walk), and it
+   answers "does this get slower as the table fills?" with a measured no, up to 8,196 live nodes (12.5 % of the
+   65,532-node table). It says nothing about a growing QUERIED set (one node was queried per access) and nothing
+   about node-cache sizing, which the protocol forbids inferring from a mixed knee.
+2. **The lookup LDC costs one dependent capability load, and at DRAM sizes exactly one more DRAM access.** In the
+   data cache the capability arms pay 8.0 cycles over data-only (18.00 vs 10.00; 7 vs 6 instructions per
+   access) — the 16-byte load plus its query, within a cycle of E4's 9.0-cycle dependent load. At 4096 records
+   (records 256 KiB, lookup 64 KiB) the gap is 39.2 cycles, which is E4's DRAM-minus-L1 latency (48.2 − 9.0 =
+   39.2): the lookup array misses beside the records and the query adds nothing measurable on top. At 1024
+   records (records 64 KiB, lookup 16 KiB) the gap is 19.5, half a miss: the lookup array partly survives in the
+   32 KiB cache beside the records.
+3. **The data-only arm reproduces E4's calibration** (10.00 / 41.84 / 49.25 against E4's 9.00 / 40.8 / 48.2 plus
+   the chase's own index arithmetic), which is the positive control that the working-set axis measures memory
+   residency here as it did there. Cold first traversals (28 / 15 / 24 / 56 / 81 cycles per access for the
+   capability arms, 24 / 7 / 14 / 38 / 46 for data-only) are in the bundle and not interpreted.
+4. Cross-boot precision: spread 0.00–0.03 % below 1024 records, 0.25 % at 1024, 1.25 % at 4096 (DRAM); the
+   points are read as their medians.
+
+**Claim scope for the paper (the bundle's `claim_scope`):** the record's index load carries no temporal query on
+this bitstream; the lookup's LDC runs the DYN unit's query on the lookup array's node at every privilege level;
+the series measures that one query under a growing number of LIVE nodes, not a growing queried set; no
+node-cache knee or node-size inference. The finding to carry: **the temporal check on the access path costs one
+indexed read whose price does not grow with the table's occupancy; a growing alias set costs nothing on the
+access path at this scale.** Node budget per boot ≤ 80 % of 65,532 (the four boots minted 12, 12, 12 and 9
+invocations' worth, well under). Firmware hashes per boot are in the manifest (each boot was re-baked); the
+domain image is build9 in all four.
