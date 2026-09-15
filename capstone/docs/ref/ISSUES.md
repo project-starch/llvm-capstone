@@ -2471,6 +2471,46 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
+> # 2026-09-15 — R-33 CANNOT REACH THE PAPER'S SAFETY TABLE, and the reason is arithmetic
+>
+> Asked because a demonstrated over-permissive store is the one defect here that could **invalidate**
+> a published claim rather than add one. The paper's `tab:safety` has exactly two cells asserting
+> anything about extent — `appendices/c-validation-and-accounting.tex:41` "Inner free preserves live
+> sibling & Sibling intact, block extent unchanged" and `:42` "Sibling survives uncooperative child",
+> with `:66-69` making the extent claim explicit. A block rounding far enough for a store to land in
+> an adjacent sibling would be "block extent unchanged" being false while the discipline reports
+> success.
+>
+> **The siblings ARE adjacent** — that was checked first and came back the unhelpful way. The fixture
+> is `capstone/ports/nginx/port/ngx_subpool_test.c`, phases 12-13, and it is deliberate:
+> *"The sibling is taken FIRST and from the same arena, so that it is a neighbour of the nest rather
+> than something allocated after the dust settled"* (`:359-361`). Phase 12 carves two 1024-byte
+> children from one 4096-byte block with a 64-byte object in each.
+>
+> **Representability closes it anyway.** This defect needs a size that is NOT a multiple of its
+> granule, and the granule is `2^(E+3)` with `E = max(0, bit_length(len) − 13)` — i.e. **8 bytes for
+> every length below 8192**. Every size the fixture uses is 8-aligned:
+>
+> | sizes used | 16, 64, 128, 512, 1024, 2048, 4096, 4280 |
+> |---|---|
+> | granule at each | 8 |
+> | the only non-power-of-two | 4280 = 535 × 8, exact |
+>
+> So `compress_bounds` is exact for every region the fixture creates, the widening never occurs, and
+> both cells hold. **The margin is 1024×**: the largest region is 4096 B and the first size at which
+> the granule exceeds `PAGE_ALIGN` is 4 MiB. This is not a near miss a fixture change could tip.
+>
+> **The emulator-versus-silicon question is moot here**, which is worth recording because it was the
+> proposed discriminator: the precondition is a property of the sizes the fixture chooses, not of the
+> platform, so it fails on both and this does not widen the emulator/silicon gap that the safety-table
+> decision turns on.
+>
+> **R-32 drops off the same path by the same argument** — its exposure was those same two extent
+> cells, and an off-by-one at a boundary cannot falsify a cell whose regions are exactly representable.
+> Both remain open as soundness defects; neither threatens a claim. **This closes the SIZE half only.**
+> The bases here are `sublet_base(&x) + <8-aligned offset>` and so are 8-aligned if the root arena base
+> is — true of any capability-bearing arena, but that is reasoning rather than a measurement.
+
 > **R-11 IS THE SAME CONTRACT, AND THIS FIX CLOSES IT TOO (added 2026-09-15).** R-11 is
 > `compress_bounds`' OTHER branch — the cursorless one, losing an unaligned TOP past its window —
 > and it is open only because nothing we ship is large enough to trigger it. Rounding region sizes
