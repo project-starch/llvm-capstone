@@ -8,6 +8,70 @@ against the security model; and the node/tag storage figures the H1 and M3 studi
 **Nothing here is implemented.** This is the proposal, per the project rule that a substantial new
 direction gets a committed doc for review first.
 
+> # ⚠ AUDITED 2026-09-15 — THIS DESIGN DOES NOT SHIP AS WRITTEN. Four findings, one of them fatal.
+>
+> The audit this document asked for has run. **It would have shipped, passed every test, and silently
+> stopped revoking unprivileged capabilities.** Read this box before anything below it.
+>
+> **1. FATAL — the S/U-mode authority never reads a revocation node at all.**
+> `core/pmp/src/pmp_data_if.sv:82-97` caches `cpmp_revnode_valid_q[i]`, sets it to **valid on any id it
+> has not seen before** (`:90-92`), and clears it only on exact 30-bit equality with the broadcast
+> `revnode_invalidation_id_o = node_wr_req[29:0]` (`core/ex_stage.sv:1208`). It is read at `:133` and
+> gated on `ld_st_priv_lvl_i != PRIV_LVL_M` at `:289` — **this is the unprivileged boundary**, the one
+> deciding a domain's load/store authority in S/U mode. The LSU (`load_store_unit.sv:944, 965-969`) and
+> `commit_stage.sv:237-245` have the same shape and are M-mode only.
+>
+> My invariant says a stale alias "does not need to be found, because it fails the comparison wherever
+> it is". **These three sites perform no comparison.** Under the split the broadcast carries
+> `{14'd0, i}` while a tracker holds `(g, i)`, so after the first reuse of any index the match never
+> fires: revocation stops invalidating the CPMP entry, the in-flight capability and the PC capability,
+> and access is simply still permitted. **Every functional test, lit run and QEMU suite executes at
+> generation 0, where `{14'd0, i} == (0, i)` and the whole thing is correct.** A check that has only
+> ever run at generation 0 is not a passing check.
+>
+> **2. The design never says what `next`/`prev` hold, and both answers break.** Bare indices → the
+> REVOKE broadcast (`capstone_rev_node.anvil:24-25`) can never match a tracker holding a generation,
+> and DROP — which broadcasts a capability-supplied `(g,i)` (`capstone_dyn_unit.anvil:33`) — disagrees
+> with REVOKE about the id format for the same node. Full `(g,i)` → `ex_stage.sv:1160` computes
+> `0xBFF00000 + (g<<20) + (i<<4)`, up to ~16 GiB past a 1 GiB DRAM.
+>
+> **3. Invalidation never unlinks, so reclamation corrupts the tree.**
+> `capstone_unit.anvilh:563-565` preserves `prev` and `next` when clearing `valid`, and nothing removes
+> a node from the list. A reissued index therefore stays in its **old** parent's chain. A later REVOKE
+> of an unrelated ancestor then either revokes a fresh capability that merely inherited the index, or
+> terminates its walk early and silently under-revokes. **Reclamation additionally requires unlinking**
+> — two more node writes, which themselves broadcast. The subtree condition is necessary, not
+> sufficient.
+>
+> **4. DROP and DELIN mutate a node without reading `valid` at all** (`capstone_rev_node.anvil:62-75`,
+> `:44-56`; callers at `capstone_dyn_unit.anvil:24-40`, `:495-514`). Under reuse, a holder of a stale
+> `(i, g_old)` can destroy or de-linearise the **new** owner's node. My invariant covers "confers
+> authority" and says nothing about "mutates the node".
+>
+> **AND "the change is confined to the node unit and the comparison site" IS REFUTED.** The datapath is
+> 94 bits, hard-coded by literal bit index in `ex_stage.sv`, which is neither: `:1148` reads back only
+> `data_ruser[29:0]` so **the padding is never read at all**; `:1162-1163` slices `[93:30]` and
+> `[123:94]`; `:1074` declares `logic[123:0]`; `:1071` feeds a 30-bit id straight to the address adder.
+> **Slot bit 94 is a hard constant 1**, not blank — so 33 bits are free, not 34, and bit 94 is exactly
+> where a naively appended field lands.
+>
+> **THE CAPACITY HEADLINE IS WRONG AND MUST NOT BE QUOTED.** "≈1.07 × 10⁹ lifetimes before the first
+> index retires" holds only for a perfectly uniform round-robin reissue. Under lowest-free-first or
+> LIFO — the natural implementations — a mint/revoke loop gets the same index back every time, and the
+> first index retires after 16,384 reclaims **of that one index**. The size-1 Sublet run this document
+> cites contains 43,355 mints, i.e. **2.65× the reclaims needed to retire an index in a single run**,
+> not 24,700 runs. The figure is optimistic by up to 65,532×. It is **not** a DoS regression — retiring
+> the whole pool still costs ~1.07e9 mints whatever order it is attacked in, against 65,532 for today's
+> stall — but the headline number was headed for a paper table and is not computable at all until the
+> **reissue policy** is written down, which this document never states.
+>
+> **What must be settled before any RTL**, in order: whether `next`/`prev` carry the generation; then
+> the same answer applied to all three trackers *and* the broadcast; then unlinking on reclaim; then a
+> failure encoding for `init_res`/`rev_res`/`drop_res`/`delin_res`, none of which can currently express
+> "no" (`capstone_unit.anvilh:506-519`) — and the only in-file precedent for refusal is to never answer
+> and hang the core, which is R-27's failure mode. Then negative-test at generation ≥ 1.
+
+
 ---
 
 ## Part 2 first, because it is measured rather than proposed
