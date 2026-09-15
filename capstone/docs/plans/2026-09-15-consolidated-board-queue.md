@@ -290,8 +290,25 @@ available capacity once P1 is running; do not queue them unasked.
   capstone-c reaches indexed globals that way throughout, every such access in the monitor becomes a
   `NOT_CAP` plain access in M-mode with capmode set under the fix, which matches the RTL lane's sweep
   (`capsbi-init` times out). That makes D3 an **investigation in an external compiler this project does
-  not own** before it is a change, with **no landing date**. The consequence for sequencing is in the
-  dependency table below. (Original scope, still the smallest instance: The RTL lane's early sweep has `capsbi-init`, `ccsrrw` and `cbnz` timing
+  not own** before it is a change. **MEASURED 2026-09-15 and that fear is REFUTED where it mattered**
+  (`capstone/tests/monitor/scan-integer-bases.py` over the built `fw_payload.elf`): in the monitor's
+  capability-mode text there are **2,162 plain accesses and exactly ONE through an integer-derived
+  base** — the hand-written trap site itself. capstone-c's output uses the capability ABI properly
+  (`cincoffsetimm` frames, `stc`/`ldc` capability spills, `ldc` gp cap-table globals, scalar spills
+  through the tagged `sp`); the header comment that started this is about a 12-bit immediate limit,
+  not about untagging. **What keeps D3 open is a different population:** the generic OpenSBI text has
+  7,115 such accesses in 7,655 (`sbi_hart_init`, the device-tree parsers, `print`, `sbi_trap_handler`),
+  and capmode is sticky from the init `CAPENTER`, so any of it executing afterwards in M-mode is
+  exposed. The boot order suggests it has finished — the `CAPENTER` is the last thing
+  `sbi_hart_switch_mode` does before entering S-mode (`sbi_hart.c:1085`) — but *suggests* is not
+  measured, and the RTL lane's sweep has `capsbi-init` timing out, which is the monitor's own init.
+  That is the next question and it is reading plus simulation, not board time.
+
+  **The instrument failed before it worked, which is worth more than the number:** the first scan
+  restricted itself to functions that adjust their frame with a capability instruction, which
+  silently excluded the 13-instruction hand-written fragment holding the one known site, and it
+  returned a confident **zero**. The committed scan runs that site as a POSITIVE CONTROL and exits
+  non-zero if it does not appear. (Original scope, still the smallest instance: The RTL lane's early sweep has `capsbi-init`, `ccsrrw` and `cbnz` timing
   out under the delivery fix: with delivery working, the `NOT_CAP` clause fires on every plain access
   through an integer-derived base in machine mode with capmode set, and the monitor does exactly that
   — `sbi_capstone.S:113` computes `add t5, sp, t5` and then stores `sd a0, 16(t5)` through the
