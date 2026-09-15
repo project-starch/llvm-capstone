@@ -140,6 +140,11 @@ one issue per folder, each README self-contained with the hash-cited board readi
 repro and the spec lines; `ISSUES.md` R-21/R-22 → "confirmed on silicon, reported"; H1's
 forbidden-linear-copy family → measured (as the failing test it is, with the registry reference).
 
+**Outcome (12:53):** every probe read the SPECIFICATION on silicon — `cincoffset`/`scc` clear the linear source,
+`ldc` empties the slot, `stc` nulls the register — with both controls behaving; R-21 is partly resolved and R-22
+resolved on the deployed bitstream, no handover folders are needed, and the emulator is the divergent side on
+`ldc`/`stc` (Q-12). §7w.
+
 ### F5 — M2's bounded diagnostic: working-set and data-only series (about six boots, unattended)
 
 `--series chase` in the R1 harness, from E4's chase: N 64-byte records, each holding the INDEX of the

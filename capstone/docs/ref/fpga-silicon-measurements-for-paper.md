@@ -4323,3 +4323,46 @@ synth lane's per-module area extraction; the exhaustion diagnostic is sw74b's (�
 instruction families are exercised by the S1S2 and R1 cells (the manifest lists which, with
 repetitions). Manifest: `experiments/results/H1/fpga-2026-09-15/manifest.json` on the local board
 branch, calibration and instruction tests filled.
+
+### §7w — F4 of the follow-on plan: does the deployed RTL clear a LINEAR source? R-21 and R-22 read on silicon (boot sw8x-f4, 2026-09-15 12:43–12:53)
+
+**What ran.** The R1 harness's `--series linear` (image `55e6a187d52e5cc8` at 0x410000): eight arms in the
+simulation repro's order (`linear-clear-audit.S`), each a type read of the operand AFTER the operation
+(7 = not a capability, i.e. cleared; 0 = LINEAR; 1 = NONLIN), none able to fault, on fresh 4 KiB linear
+carves from the arena; three repetitions in each of two fresh domains, then a nodes regression, between
+two controls (4 and 4; one banner). Pre-registered from the registry's OPEN statuses: arm 0 (`movc` of a
+LINEAR source, the instrument control) 7; arm 1 (`cincoffset` of a NONLIN source, the conformance
+control) 1; arm 2 (`cincoffset`, LINEAR) **0 per R-21**; arm 3 (`scc`, LINEAR) **0 per R-21**; arm 4 (the
+slot after `ldc` of a LINEAR capability) read; arm 5 (its NONLIN control) 1; arm 6 (the register after
+`stc` of a LINEAR capability) **0 per R-22**; arm 7 (its NONLIN control) 1.
+
+| arm | operation | operand before | on silicon (6 readings) | emulator | spec |
+|---|---|---|---|---|---|
+| 0 | `movc t1, t0`, LINEAR (instrument control) | 0 | **7** | 7 | 7 |
+| 1 | `cincoffset t1, t0, 64`, NONLIN (conformance control) | 1 | **1** | 1 | 1 |
+| 2 | `cincoffset t1, t0, 64`, LINEAR | 0 | **7** | 7 | 7 |
+| 3 | `scc t1, t0, 64`, LINEAR | 0 | **7** | 7 | 7 |
+| 4 | the slot after `ldc t0` of a LINEAR capability | 0 | **7** | **0** | 7 |
+| 5 | the slot after `ldc` of a NONLIN capability (control) | 1 | **1** | 1 | 1 |
+| 6 | the register after `stc t0` of a LINEAR capability | 0 | **7** | **0** | 7 |
+| 7 | the register after `stc` of a NONLIN capability (control) | 1 | **1** | 1 | 1 |
+
+**Reading.** The instrument can see a clear (arm 0) and does not clear unconditionally (arms 1, 5, 7),
+and every probe reads the SPECIFICATION on the deployed bitstream: **the linear source is cleared by
+`cincoffset` and by `scc`, a linear capability is moved out of its slot by `ldc`, and the register is
+nulled by `stc`** — identical in six readings each. So the pre-registration is refuted where it followed
+the registry: R-21 is not present on `caplifive_r30r31_1bfff7776` for `cincoffset` (its 2026-09-05 sweep
+note had already recorded that half gone at 5097eb166) nor for `scc` (not in that note), and **R-22 is not
+present at all** — the entry's source analysis describes an earlier revision, and which change fixed it
+is not read here (the RTL lane's to confirm from source). Untested on silicon and still open by the
+entry's table: `tighten` and `shrinkto`; `init`'s duplication is R-25, fixed on silicon 2026-09-09. There
+is nothing to hand to the hardware side, so the two repro folders the plan foresaw are not written.
+**The divergent side is the emulator:** on the same image it clears `movc`/`cincoffset`/`scc` sources
+but neither empties the slot on `ldc` (arm 4 reads 0) nor nulls the register on `stc` (arm 6 reads 0) —
+`trans_csldc`/`trans_csstc` write no `cnull`, as R-21's text noted — registered as Q-12. A port that
+relies on a linear capability surviving in memory after a load, or in a register after a store, passes on
+the emulator and loses it on silicon; `sublet.h`'s primitives were written for the silicon behaviour
+(every reader stores back), which is why the Sublet port's counters agree between the two machines.
+The regression invocation reads unchanged (nd = 2n; REVOKE 96 / 190 / 885 / 3,014 / 11,741 for
+n = 1 … 256, a single cold repetition). H1's forbidden-linear-copy family is therefore MEASURED on
+hardware, as a passing test for the instructions exercised.

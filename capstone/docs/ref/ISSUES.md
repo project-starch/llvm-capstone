@@ -580,6 +580,18 @@ A second divergence found on the way: QEMU's `LCC` VALIDITY selector (imm 0) is 
 (`op_helper.c:891-893`, "always valid for now") where the RTL queries the revocation node; nothing in
 the ports uses selector 0 today. For the collaborator (capstone-qemu).
 
+## Q-12 — capstone-qemu's `ldc` leaves a loaded LINEAR capability in its memory slot and its `stc` leaves a LINEAR register source intact; the deployed RTL clears both `OPEN — QEMU divergence, found on silicon 2026-09-15 (boot sw8x-f4, §7w); for the collaborator (capstone-qemu)`
+
+The R1 harness's `--series linear` on image `55e6a187d52e5cc8`: after `ldc t0 <- slot` of a LINEAR capability
+the slot reads 0 (still LINEAR) on the emulator and 7 (empty) on silicon; after `stc t0 -> slot` of a LINEAR
+register, `t0` reads 0 on the emulator and 7 on silicon; the NONLIN controls read 1 on both, and
+`movc`/`cincoffset`/`scc` clear the linear source on both. The spec (`mem-access-insn.adoc:54-55, 105`)
+requires both clears; R-21's text already noted that `trans_csldc`/`trans_csstc` write no `cnull`. Impact: a
+port that relies on a linear capability surviving in memory after a load, or in a register after a store,
+passes on the emulator and loses it on silicon — the opposite polarity from Q-04/C-32. `sublet.h` stores
+every loaded linear capability back and reads the base before the store, so the Sublet port is unaffected.
+Related: R-21, R-22 (resolved on silicon), Q-04.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -5592,7 +5604,15 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `OPEN — SPEC VIOLATION, confirmed in RTL simulation 2026-08-11; NOT yet reported`
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+
+> **On silicon 2026-09-15 (boot sw8x-f4, §7w of the measurements doc):** through the R1 harness's `--series
+> linear` on `caplifive_r30r31_1bfff7776`, the LINEAR source of `cincoffset` and of `scc` reads cleared (7)
+> after the operation in six readings each, the `movc` instrument control reads cleared and the NONLIN
+> conformance control survives — the spec's behaviour, so the table's first three rows do not describe the
+> deployed bitstream. `tighten` and `shrinkto` were not exercised on silicon and stay open by this entry's
+> source reading. The emulator agrees on these three; its own deviations are on `ldc`/`stc` (Q-12).
+
 
 > **Sweep 2026-09-05 — cincoffset half GONE at 5097eb166; the INIT half is R-25.** `linear-clear-audit.S` arm 2 prints NOT_CAP (the linear source is consumed); R-25 (INIT with rd ≠ rs1 duplicates the source) is confirmed by directed test, see its entry.
 
@@ -5669,7 +5689,14 @@ being absurd otherwise. Upstream `capstone-qemu` implements the clear for this f
 (`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
 not**, so the reference model is itself inconsistent on one instruction.
 
-### R-22 — `stc` does not write `cnull` to its register source `OPEN — SPEC VIOLATION; NOT yet reported`
+### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; which RTL change fixed it is not read (the entry's analysis is of an earlier revision); the emulator still omits the clear (Q-12); nothing to report`
+
+> **On silicon 2026-09-15 (boot sw8x-f4, §7w):** `ldc t0 <- slot` (LINEAR), `stc t0 -> other slot`, then the
+> type of `t0`: **7** — the register source IS nulled by `stc` on `caplifive_r30r31_1bfff7776`, six readings
+> in two domains, with the NONLIN control reading 1 and the `movc` instrument control proving the read can see
+> a clear. The memory-side half (`ldc` moving a LINEAR capability out of its slot) reads 7 too. So the source
+> analysis below described an earlier revision; the change that added the clear is not identified here.
+
 
 `capstone-academic-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
 not `1` (non-linear), write `cnull` to `x[rs2]`." The RTL does not.
