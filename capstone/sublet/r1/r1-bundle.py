@@ -8,6 +8,9 @@ before its invocation, from the harness's own `R1 end` lines (the controls and t
 a handful more, not counted: stated in the manifest).
 """
 import sys, re, json, pathlib, hashlib, csv, statistics, datetime
+import pathlib as _pl, sys as _sys
+_sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2] / "tests" / "rtl-smoke"))
+from fpga_driver import transcript as T
 
 OUT = pathlib.Path(sys.argv[1]); LIST = pathlib.Path(sys.argv[2]); BOOTS = [pathlib.Path(b) for b in sys.argv[3:]]
 STUDY = "R1"; SEED = 20260914
@@ -20,9 +23,10 @@ def reassemble(t):
     the host's own SQ: lines. Marker and SQ: lines are dropped; an R1 line is accumulated across fragments
     until its terminal token appears (at most eight fragments)."""
     # the driver's event log escapes the UART text (`[fpga] [uart] '...\r\n...'`); the run-scoped boot.txt is raw
-    if "[fpga] [uart] '" in t:
-        t = "".join(m.group(1) for m in re.finditer(r"\[fpga\] \[uart\] '((?:[^'\\]|\\.)*)'", t))
-        t = t.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "").replace("\\'", "'")
+    if "[fpga] [uart] " in t:
+        # a framed driver.log: read it through the one parser every driver summary uses (ISSUES M-11) --
+        # both quote styles, non-adjacent chunks of one line, the +0B frames
+        t = T.uart_text(T.scope_to_run(t))
     flat = t.replace("\r", "")
     # the monitor's share-trace markers (`ECSA:00000004`, ...) and the host's `SQ:` marks are written into the
     # stream wherever the UART was, including the middle of a harness token (`re=355 ttECSA:...\n=1054`);

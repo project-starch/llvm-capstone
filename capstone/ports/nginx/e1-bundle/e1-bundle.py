@@ -6,6 +6,9 @@ One runs.jsonl record per attempted cell and repetition; points.csv is the full 
 including cells not attempted; missing values are null with a reason, never zero.
 """
 import sys, re, json, csv, os, hashlib, pathlib, shutil, datetime
+import pathlib, sys as _sys
+_sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3] / "tests" / "rtl-smoke"))
+from fpga_driver import transcript as T
 
 CELLS = sys.argv[1]; OUT = pathlib.Path(sys.argv[2]); BOOTS = sys.argv[3:]
 STUDY = {"p1":"S1","p2":"S1","p3":"S1","p4":"S1","p5":"S1","p6":"S1","p7":"S2",
@@ -35,14 +38,11 @@ records = []; attempted = set(); boots_meta = []
 for bd in BOOTS:
     bd = pathlib.Path(bd); m = re.search(r"r(\d+)b(\d+)$", bd.name)
     rep, boot = int(m.group(1)), int(m.group(2))
-    log = (bd/"driver.log").read_bytes().decode("latin1")
-    # The driver frames the UART in chunks ("...'\n[fpga] [uart] '..."), so a domain's line can straddle two
-    # chunks and a number can be cut in half; and the monitor's share markers (ECSA:00000004 ...) land
-    # mid-token. Join the seams, unescape the newlines, delete the markers, THEN read marks.
-    log = re.sub(r"'\n\[fpga\] \[uart\] '", "", log)
-    log = log.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "")
-    log = re.sub(r"[A-Z0-9]{4}:[0-9A-F]{8}\n?", "", log)
-    i = log.rfind("monitor load_image"); seg = log[i:] if i >= 0 else log
+    # The driver frames the UART in chunks and the monitor's markers land mid-token (ISSUES M-11): read the
+    # transcript through the one parser every driver summary uses. The arm split needs the FRAMED slice (the
+    # `[stages]` lines are the runner's), so arms are segmented there and their UART joined per arm.
+    framed = T.scope_to_run(T.read(bd/"driver.log"))
+    seg = T.strip_markers(T.uart_text(framed))
     fw = (bd/"fw.sha").read_text().strip() if (bd/"fw.sha").exists() else None
     control = re.findall(r"RESULT k800 retval=(-?\d+)", seg)
     # The console chunks the UART, so "OpenSBI v" can straddle two lines; count the kernel's own
@@ -53,12 +53,13 @@ for bd in BOOTS:
     void = not control or control[0] != "4"
     for raw in (bd/"boot.txt", bd/"driver.log", bd/"watchdog.log", bd/"log"):
         if raw.exists(): shutil.copy(raw, OUT/"raw"/f"{boot_id}-{raw.name}")
-    arms = re.split(r"\[stages\] --> TEST \d+/\d+\s+", seg)[1:]
     reached = {}
-    for a in arms:
-        label = a.split("\n", 1)[0].strip()
+    for arm in T.arm_segments(framed):
+        # the arm's text for the readers below: its joined UART (marks, PG markers) plus its framed slice
+        # (TRAP LOG and NO RETURN are the runner's own lines)
+        a = arm.uart + "\n" + arm.framed
         for name, c in cells.items():
-            if dom_file(name) in label:
+            if dom_file(name) in arm.label:
                 reached[name] = a
     for name, c in cells.items():
         if c["boot"] != boot: continue
@@ -79,7 +80,7 @@ for bd in BOOTS:
         elif a is None:
             rec["status"], rec["reason"] = "invalid-run", "arm not reached (an earlier arm ended the boot)"
         else:
-            m = re.search(r"ngx retval = (\d+)", a); pg = re.search(r"__CAPSTONE_PG_([A-Z]+)_(GOOD|BAD|FAILED)__", a)
+            m = re.search(r"ngx retval = (\d+)\n", a); pg = re.search(r"__CAPSTONE_PG_([A-Z]+)_(GOOD|BAD|FAILED)__", a)
             wed = "NO RETURN" in a
             tl = re.search(r"TRAP LOG \{seen,mcause\[6:0\]\}\s+(0x[0-9a-f]+)", a)
             rec["oracle"]["trap_log"] = tl.group(1) if tl else None

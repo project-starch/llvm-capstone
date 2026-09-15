@@ -170,8 +170,12 @@ reflash, not a knob, and the RTL lane notes capmode and M-mode may be mutually e
 confirm before anyone designs around it. **Pre-registered shape and two controls (the RTL lane's reading of the node unit):** the
 validity query is ONE indexed 16-byte read (`get_rev_node`, no walk — REVOKE walks, the query does not), so
 its cost is flat in the number of live nodes algorithmically, and what grows is the node table's footprint
-against the 32 KiB data cache (2,048 nodes if nothing competes). Pre-register flat-then-inflect, with the
-inflection near two thousand live nodes; the alternative (a slope from the first point) is distinguishable
+against the 32 KiB data cache (a node is 16 bytes = one 128-bit line, so 2,048 nodes if nothing competes).
+The quantity is TOUCHED nodes — one per access, the node of the capability the LDC dereferences, so one per
+record in the chase — not minted nodes (a record's carve mints about two, and the size-1 SQLite run mints
+~8 per hand-out cycle); the harness prints both, and the pre-registration names touched. Pre-register
+flat-then-inflect, with the inflection near two thousand TOUCHED nodes; keep the aliases' ids sequential
+(monotonic head allocation) so an eight-way conflict pattern does not put the knee earlier; the alternative (a slope from the first point) is distinguishable
 in one series. Controls: (a) a spatial arm carrying the SAME number of live nodes as the sublet arm (leaves
 minted and held, not used), so both arms share the node-table footprint and the per-access difference is
 isolated from the footprint effect; (b) points below two thousand live nodes so the flat region is visible
