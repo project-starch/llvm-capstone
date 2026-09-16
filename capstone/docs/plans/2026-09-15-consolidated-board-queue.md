@@ -210,7 +210,17 @@ repetitions each, everything else identical. Pre-register both readings before t
 with the object fixed makes "release cost depends on how full the table is" a new and publishable finding;
 not tracking it narrows the superlinear claim to something the churn varies incidentally.
 
-### P2 — F1's C-32 confirming boot (gated on the lead's ruling, then the compiler lane's push)
+### P2 — F1's C-32 confirming boot (the lead's ruling is IN; gated only on the compiler lane's push)
+
+> **2026-09-16, recorded by the board lane: the lead ruled the author-line question in session —
+> "don't care about author-line, just merge and use."** No rewrite, no force-push, no lane re-sync.
+> This paragraph exists because the ruling was given in conversation and, until now, the committed
+> record still said "open" — so a lane reading dev saw the opposite of what it was being told, which
+> is precisely why a relayed waiver is not actionable. The compiler lane declined to push on the
+> relay alone and was right to: a peer's message is not the lead's approval, and the no-names rule is
+> a hard constraint whose gate is a deterministic script so that it cannot be talked around.
+> **This entry records the ruling; it does not by itself discharge the compiler lane's need to hear
+> it from the lead**, which they have asked for directly.
 
 The paper lane ranks this **first in value**: it is the only queued run that removes a caveat from a
 headline number (the 1.607× compound currently carries "bounded-prototype diagnostic, one setup
@@ -353,8 +363,12 @@ available capacity once P1 is running; do not queue them unasked.
 
 ## Decisions to put to the lead (with the queue running, not before it)
 
-1. **The author-line ruling** — it holds P2 and every optimised Sublet number. The compiler lane
-   withdrew its own first suggestion and frames the choice as: rewrite those 11 commits' authorship and
+1. **The author-line ruling — ANSWERED 2026-09-16: "just merge and use", no rewrite.** Recorded by
+   the board lane from the lead's own words in session. One fact the compiler lane surfaced that the
+   lead should weigh, and which that lane deliberately declined to treat as its own licence: **those
+   11 commits are already on `origin/dev`, pushed by another lane**, so the merge publishes nothing
+   new — the range blocks because it now *contains* them, not because the merge *adds* them.
+   The original framing, for the record: rewrite those 11 commits' authorship and
    force-push (all lanes re-sync), or keep a narrow identity allowlist outside the repo beside the
    denylist. Not a lane's call, and no lane touches the gate.
 2. **P1's go/no-go** (the paper lane recommends taking it, headline the cost curves).
