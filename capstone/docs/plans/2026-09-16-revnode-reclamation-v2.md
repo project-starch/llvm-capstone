@@ -378,8 +378,15 @@ reason not to adopt a bare-index free list even if §6's grant problem were solv
 * **The reserved sentinels are not excluded from reclamation.** `commit_stage.sv:197` plants `30'd1`
   and `capstone_flu_unit.anvil:385` plants `30'd2` into capabilities as hard constants. If index 1 or 2
   ever reached generation ≥ 1 those constants become generation-0 aliases that fail every §3 check.
-  Unreachable today because nodes 1 and 2 are never invalidated — **an unstated invariant the reclaimer
-  must carry explicitly.**
+  **[PLANNING CORRECTION 2026-09-16] The first draft said this was "unreachable today because nodes 1
+  and 2 are never invalidated". That is FALSE.** `CAPENTER(x0,x0)` yields a LINEAR capability on node 2;
+  every MREV off it inserts *above* node 2 and deepens it, so node 2 is always the deepest node and
+  **every REVOKE of a handle minted on that base walks to it and invalidates it** — the S1 ladder does
+  this on every run (`r12-s1-walk-ladder.S`). Node 1 is reachable the same way through the
+  `CAPENTER(a0,a1)` form. **So the `index > 2` guard on the free-list push is load-bearing, not
+  defensive**: without it, index 2 is reissued at generation 1 on the first ladder run, and a reissue
+  of index 1 would clear the PC tracker (`commit_stage.sv:197` plants `(0,1)`) after which every
+  instruction faults. The regression arm is free — no re-minted id may ever print as `65537` or `65538`.
 * **DELIN becomes an availability attack, which makes §5 load-bearing for more than integrity.**
   `capstone_rev_node.anvil:74-83` rewrites a node with no `valid` test, preserving `valid` from the
   read. On a free-listed node that write emits a broadcast, and under an index-only compare it clears
