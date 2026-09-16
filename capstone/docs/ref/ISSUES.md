@@ -3674,6 +3674,15 @@ globals *after* ISel would silently break this positional scheme.
 > speedtest1 run mints 43,355 nodes — **21× the dcache** — so the workload is entirely in the cold regime
 > the simulation only reaches at its last rung.
 >
+> **The intercept is a FIT PARAMETER, not a fixed cost, and the sub-8 region has a measured cause.**
+> Exactly two rungs — N=6 and N=7 — sit exactly +91 cycles above the fit; everything from N=8 up is on
+> it at ten exact points. The mechanism is the write-through dcache write buffer
+> (`CVA6ConfigWtDcacheWbufDepth = 8`): halving it to 4 moved the +91 pair from {6,7} to **{2,3}**, a
+> shift of exactly 4, while every rung from N=8 upward stayed **byte-identical** between the two
+> configurations. So the anomalous pair sits at `depth−2`/`depth−1` and the perturbation does not reach
+> the fitted range. Quote `249` only as "the intercept of a fit valid for N ≥ 8", never as a fixed cost
+> of revocation. The 3.000 slope, the spliced 0.000 and the N ≈ 26 crossover are unaffected.
+>
 > **The pair is clean by construction:** the control tree's HEAD *is* the merge-base of the two branches,
 > and one source file differs. **The flat cost is a working splice, not an early exit** — a `WITNESS`
 > build behind `#ifdef` (timed path byte-identical) shows the middle handle's own node going valid → 

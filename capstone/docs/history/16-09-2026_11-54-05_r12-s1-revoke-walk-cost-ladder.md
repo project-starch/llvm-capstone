@@ -94,7 +94,9 @@ spliced side, to the cycle. A timed path that had moved could not do that.
 - The spliced cost is flat **in N**, not immune to cache pressure: at and past capacity its own small
   fixed working set goes cold and the figure moves between 328 and 777 with **no trend in N** (777 at
   2,048, 516 at 3,072 — non-monotone, i.e. noise).
-- **N=1 is ~200 cycles BELOW the fit on BOTH trees** (65 against 252; 71 against 328) and is excluded
+- **The region below N=8 is a separate regime with a measured mechanism** — see the section below; it
+  touches neither the slope, the spliced 0.000, nor the crossover. (Superseded caveat: N=1 is ~200
+  cycles BELOW the fit on BOTH trees) (65 against 252; 71 against 328) and is excluded
   from every slope quoted here. It is common-mode — the two trees step by 4.2× and 4.6× between N=1
   and N=8 — so it cannot touch the spliced-vs-unspliced comparison. But a 4× step in revoke 2's
   *fixed* cost, over a range where the spliced walk does identical work at both ends, is
@@ -136,3 +138,40 @@ more latency" gets a plausible-looking result rather than an obvious failure.
 latency changes the behaviour" stands — S-12's store-buffer result, R-26's deciding arm, R-34's
 delay-invariance check. Only the magnitude was mislabelled: those runs had an 8-cycle memory, not a
 40-cycle one.
+
+## The sub-8 anomaly, chased to its mechanism
+
+The first write-up excluded N=1 as "cold start" and called the region below N=8 an unexplained step.
+Both descriptions were wrong, and the real shape is sharper.
+
+| N | unspliced rev2 | `3N + 249` | excess |
+|---:|---:|---:|---:|
+| 2 | 59 | 255 | −196 |
+| 3 | 107 | 258 | −151 |
+| 4 | 201 | 261 | −60 |
+| 5 | 264 | 264 | 0 |
+| **6** | **358** | 267 | **+91** |
+| **7** | **361** | 270 | **+91** |
+| 8 | 273 | 273 | 0 |
+| 9, 10, 12, 16 | 276, 279, 285, 297 | — | 0, 0, 0, 0 |
+
+**Exactly two rungs sit exactly +91 cycles above the fit, and they are N = 6 and 7.** Everything from
+N=8 up is on it — ten exact points now (8, 9, 10, 12, 16, 64, 128, 160, 512, 1,024). Reproduced across
+separate runs and separate testlist files, value for value.
+
+**The mechanism is the write-through dcache write buffer, and this is measured, not inferred.**
+`CVA6ConfigWtDcacheWbufDepth = 8`. Halving it to 4 and re-running moved the +91 pair from {6, 7} to
+**{2, 3}** — a shift of exactly 4 — while **every rung from N=8 upward stayed byte-identical** between
+the two configurations. So the anomalous pair sits at `depth − 2` and `depth − 1`, tracks the buffer
+depth exactly, and the change perturbs nothing in the region the headline fit rests on. The control
+tree was then restored and re-verified by reproducing N=8 = 273.
+
+Below `depth − 2` there is a third regime, rising at ~60 cycles per node — the same 60 that `rev1`
+pays per node it kills, i.e. the cold-access cost. At the default depth its line crosses the slope-3
+line at N=5, which is why N=5 lands on the fit by coincidence rather than by being in the fitted
+regime.
+
+**What this changes: nothing in the result, and one thing in how the intercept may be quoted.** The
+3.000 slope, the spliced 0.000, and the crossover at N ≈ 26 are all inside the fitted range and
+untouched. But `249` is the intercept **of a fit valid for N ≥ 8**, not a fixed cost of revocation, and
+it should never be quoted bare.

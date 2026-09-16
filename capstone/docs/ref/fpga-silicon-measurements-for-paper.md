@@ -4537,8 +4537,11 @@ merge-base of the splice branch, and the two differ in one source file. Memory l
 | 2,048 | 7,632 | 777 |
 | 3,072 | 96,822 | 516 |
 
-**Unspliced: exactly 3.000 cycles per dead node** (`cost = 3N + 249`, exact at six consecutive rungs
-from N=8 to N=1,024). **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
+**Unspliced: exactly 3.000 cycles per dead node** (`cost = 3N + 249`, exact at ten rungs from N=8 to
+N=1,024). **The fit range is N ≥ 8 and the intercept must not be quoted bare as a fixed cost:** two
+rungs below it (N=6, 7) sit exactly +91 above the fit, caused by the write-through dcache write
+buffer — halving `WtDcacheWbufDepth` from 8 to 4 moves that pair to N=2,3 while leaving every rung
+from N=8 up byte-identical. **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
 cycle. Fixed cost of the splice ≈ 79 cycles; **crossover at N ≈ 26.**
 
 **The 3 cycles/node is an L1-hit cost and a LOWER BOUND on the saving.** The dcache holds exactly 2,048
