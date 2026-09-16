@@ -4347,6 +4347,59 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-48 — outgoing stack-passed varargs are packed at 8 bytes, `va_arg` reads them at 16: every seventh-and-later integer vararg is lost `FIXED 2026-09-16 — COMPILER, caller side; found the same day by libc-test's inet_pton, proven from disassembly`
+
+**What happens.** A variadic callee's `va_arg` advances by the 16-byte slot stride, which is what
+`lowerVAARG` documents as intended (`CapstoneISelLowering.cpp:10550`, "advance by ... the 16-byte
+slot stride") and what the register save area uses (`:24117`, `CXLenInBytes` per register, written
+with `stc` to keep tags). The **caller** places the varargs that overflow the argument registers on
+the stack at an 8-byte stride. Both sides of one ABI, disagreeing.
+
+Proof, no emulator needed. Caller with three fixed arguments and eight `int` varargs:
+
+```
+  li  t0, 0x88 ; li t1, 0x77 ; li t2, 0x66
+  sd  t2, 0x0(sp)      # vararg 6
+  sd  t1, 0x8(sp)      # vararg 7
+  sd  t0, 0x10(sp)     # vararg 8
+```
+
+Callee, `va_arg(ap, int)` in a loop:
+
+```
+  ld  a0, 0x0(a0)
+  cincoffsetimm a1, a0, 0x10     # next vararg: +16
+```
+
+So vararg 6 is read correctly, vararg 7's slot is skipped, vararg 8 is read as the seventh, and
+the eighth read lands past the caller's frame.
+
+**What it looks like.** musl's `inet_ntop` formats an IPv6 address with one `snprintf` of eight
+`%x`: `::1` came out as `::1:0` and `1:2:3:4:5:6:7:0` as `1:2:3:4:5:6::`, i.e. the seventh
+hextet gone and the eighth in its place. Any `printf` family call whose integer varargs overflow
+the registers is affected; with three fixed arguments that is the sixth vararg onward.
+
+**The fix** is in `CC_Capstone`'s generic path, `CapstoneCallingConv.cpp`: a variadic argument that
+gets no register takes `AllocateStack(16, Align(16))` instead of XLen/8, so the caller's slots sit
+where `va_arg` was already looking. Fixed arguments keep their XLen slots, they are never read
+through a `va_list`, and capability varargs already took 16-byte slots. Nothing changes for a
+callee: `LowerFormalArguments` derives the stack-vararg base as before. Changing `lowerVAARG` to 8
+instead would have broken capability varargs, which need the 16-byte, 16-aligned slot to keep
+their tag.
+
+**Second symptom, a hang rather than a wrong answer.** musl's `getmntent_r` parses a line with one
+`sscanf` carrying ten pointer varargs, eight `%n` and two `%d`, behind two fixed arguments, so four
+of them are stack-passed and mis-stepped. Its retry loop, `while (linebuf[n[0]] == '#' ||
+n[1]==len)`, keys on those `%n` results and never terminates. libc-test's `mntent` therefore spins,
+and a spinning domain holds the only hart, so the guest never runs again: the batch it was in lost
+every test after it. That is the shape to expect from this bug wherever a loop condition depends on
+a vararg beyond the registers, and it is why `mntent` sits in `libc-test/quarantine.txt`.
+
+**Gate.** `llvm/test/CodeGen/Capstone/c48-vararg-stack-stride.ll` checks the caller's stack slots
+directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on the tree before
+the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
+`capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
+
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
 
 > **CORRECTED 2026-09-10 by the compiler lane, on both counts that matter. The premise holds; the

@@ -631,6 +631,27 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
     Reg = State.AllocateReg(ArgGPRs);
   }
 
+  // C-48. A variadic argument that overflows the argument registers must take a
+  // 16-byte, 16-aligned stack slot, whatever its type: lowerVAARG advances the
+  // va_list by the 16-byte slot stride, and the register save area that
+  // LowerFormalArguments builds for the register-passed varargs is one
+  // capability-sized slot per register, written with STC to keep tags. Both of
+  // those are the callee's view of the vararg array, and the caller has to lay
+  // the stack-passed tail out the same way or the callee reads every second
+  // argument. With three fixed arguments and eight int varargs, the seventh
+  // vararg was skipped and the eighth read in its place; the ninth read landed
+  // past the caller's frame. Found through musl's inet_ntop under libc-test.
+  //
+  // Fixed arguments keep their XLen-sized slots: they are not read through a
+  // va_list and the callee's prologue lays them out by CCValAssign, so
+  // widening them would only cost stack. The slot is 16 bytes because a
+  // capability is; the vararg save area spells the same constant as
+  // CXLenInBytes.
+  if (!Reg && ArgFlags.isVarArg()) {
+    StoreSizeBytes = 16;
+    StackAlign = Align(16);
+  }
+
   int64_t StackOffset =
       Reg ? 0 : State.AllocateStack(StoreSizeBytes, StackAlign);
 
