@@ -466,3 +466,74 @@ does not exist). The "never push `capstone/paper`" hard constraint is therefore 
 hook on this host, and now that write access works, the only thing standing between a lane and an
 Overleaf-owned remote is the rule itself. That is a distribution gap for the lead rather than
 something a lane should fix by writing into the secrets directory.
+
+## 11. `board/e1-s1s2-hardware` is on the remote — the owed check run, and a gap nobody has named
+
+Decision 5 closed on 2026-09-16: the outgoing paper lane retried from focs-server after the token
+rotation and the push succeeded (15 commits, tip `7f64283`). The reconciliation this lane proposed
+held — the 403 was real when observed and stale by the time it was being quoted, and the obstacle
+was that nobody holding the branch had run `git push`.
+
+§9 said *"whoever can read that branch should run the check before it is pushed"*. It is pushed, so
+the check is run here.
+
+### Shape against EXECUTION.md's seven entries
+
+| bundle | entries | missing |
+|---|---|---|
+| `H1/fpga-2026-09-15` | **1 of 7** — `manifest.json` only | everything else |
+| `M2/fpga-2026-09-15` | 6 of 7 | **`work-order.md`** |
+| `R1/fpga-2026-09-15` | 6 of 7 | **`work-order.md`** |
+| `S1S2/sw78-rep1-3` | 6 of 7 | **`work-order.md`** |
+
+The missing work order is exactly what the handover recorded as "stated rather than backfilled", and
+the right state to leave it in — a work order written after the run is a reconstruction, not a
+pre-registration.
+
+### The gap nobody has named: none of the four has `SHA256SUMS`
+
+**Zero `SHA256SUMS` files exist on the branch.** So the dangling-hash failure §9 warned about cannot
+occur here — there is nothing to dangle — but the `raw/` acceptance check is **unmet** in a different
+way. `EXECUTION.md` requires *"Original transcripts and reports **with hashes**, no cropped
+success-only logs"*, and these bundles carry the transcripts without the hashes.
+
+That is a weaker defect than a dangling reference and a real one: nothing lets a later reader detect
+that a retained capture has been edited or replaced. `apollo-board`'s newer bundles (§9) do carry
+them, so the fix is known and already practised on the same remote; it simply has not been applied
+backwards. Worth noting this is a **shape** gap, not an evidence gap — the transcripts are present.
+
+### The `*.log` hole did not bite here, and only by naming luck
+
+The S1S2 bundle keeps per-boot captures named `sw78-r1b1-log`, `sw78-r2b3-log` and so on — **a dash,
+not a dot**. Tested both spellings:
+
+* `git check-ignore -v …/sw78-r1b1-log` → **not ignored**, and it is tracked;
+* `git check-ignore -v …/sw78-r1b1.log` → **`.gitignore:2:*.log`**.
+
+So the same content under the conventional name would have vanished from the commit silently. The
+bundle is intact by an accident of naming, and the next person who names a capture `foo.log` loses
+it. That strengthens rather than weakens §9's conclusion: **the protection has to be the check, not
+the convention**, because the convention is one character away from failing.
+
+### The scan range must describe what the push PUBLISHES
+
+`precommit-scan --range origin/main..board/e1-s1s2-hardware` **BLOCKS** — relative to `main` the
+branch reads as reverting the restructure, so the scan sees a personal name on a **removed** line.
+The range that describes what the push actually publishes starts at the merge base. Verified here:
+
+    merge-base(origin/main, board/e1-s1s2-hardware) = b0d7510cbec38a35a57b06c6de07c9b4505ab84c
+    commits from there to the branch tip          = 15
+
+— and `b0d7510c` is exactly the superproject gitlink, which is why the handover's *"landing it is a
+merge, never a fast-forward"* is the same fact. **It bites the scan before it bites the merge.**
+
+This belongs with §4's rule: a range scan's verdict depends on things that are not in the range.
+Add to "sync before you scan, and record who scanned" → **and scan from the merge base whenever the
+branch is not a fast-forward of the target**, or the gate reports on a revert nobody is proposing.
+
+### Still owed, unchanged
+
+M2's `studies.json` edit. Its bundle is now on the remote, which removes the excuse of
+unreachability but none of the constraint: `check_experiments.py:267-268` plus a live
+`appendices/a-evidence-status.tex` still make it a two-file change whose second file is manuscript
+(§3). Merging the branch into `main` is a merge and is not a lane's call either.
