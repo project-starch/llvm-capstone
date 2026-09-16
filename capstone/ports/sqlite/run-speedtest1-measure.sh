@@ -161,8 +161,22 @@ if [[ "${SPEEDTEST1_SUBLET:-0}" == "1" ]]; then
   fi
   SUBLET_POOL=${SPEEDTEST1_POOL:-1441792}
   _atoms=$(( SUBLET_POOL / 65 ))
-  SUBLET_ARENA=$(( _atoms * 64 ))
-  SUBLET_TABLES=$(( _atoms * 57 + _atoms * 16 + 131072 ))
+  # ARENA AND TABLES ARE SEPARATELY OVERRIDABLE, and that is not a convenience knob: without it
+  # this flow COULD NOT EXPRESS A CONFIGURATION THE BOARD DRIVER REQUIRES. board-c6var.sh runs the
+  # cell at `--arena 2097152 --tables 1750285` -- the arena raised to 2 MiB while tables stay at the
+  # DEFAULT arena's value -- and gates the boot on a QEMU record of exactly that run. Both numbers
+  # here derive from one atom count, so reaching a 2 MiB arena by raising SPEEDTEST1_POOL drags
+  # tables to 2,523,136 as well and produces a DIFFERENT configuration.
+  #
+  # Why that mattered enough to change the script rather than assemble the run by hand: the driver's
+  # gate greps the `SPEEDTEST1-CYCLES ... HEAP <n>` line, and that line does not carry TABLES at all
+  # (speedtest1_measure.c, the SPEEDTEST1-CYCLES printf). So the pool-raised variant prints the same
+  # HEAP, satisfies the gate exactly, and is not the denominator the boot uses -- with nothing in the
+  # transcript able to show it. A check whose passing condition is met by the wrong thing is this
+  # project's most expensive recurring shape, and here it sat in the gate rather than an instrument.
+  # Found 2026-09-16 while producing F1's records; the gate defect itself is the board lane's.
+  SUBLET_ARENA=${SPEEDTEST1_SUBLET_ARENA:-$(( _atoms * 64 ))}
+  SUBLET_TABLES=${SPEEDTEST1_SUBLET_TABLES:-$(( _atoms * 57 + _atoms * 16 + 131072 ))}
   SUBLET_HOST_ARGS=" --arena $SUBLET_ARENA --tables $SUBLET_TABLES"
   echo "== Sublet: pool $SUBLET_ARENA bytes (arena, REV_BORROWED), tables $SUBLET_TABLES bytes"
 fi
