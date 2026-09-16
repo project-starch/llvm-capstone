@@ -255,9 +255,10 @@ Seventeen bits of depth is 131,072 against a 65,536 pool — sufficient with 2×
 rebuild the record field-by-field, so they must gain the new fields or silently drop them.** Anvil has a
 record-update form, used at `capstone_dyn_unit.anvil:298`: writing them as `rev_node_t::{node with
 valid = 1'd0}` carries new fields automatically and makes the whole class of omission impossible. **Use
-it.** (Whether Anvil errors or zero-fills on a missing field is UNRESOLVED — settle it by compiling one
-literal with a field omitted. If it zero-fills, a single missed site resets a generation to 0 and the
-build ships green, which is the v1 failure mode exactly.); and in `capstone_rev_node.anvil` lines 18, 78, 112,
+it.** **SETTLED 2026-09-16 by compiling one literal with `linear` omitted: Anvil ERRORS** (`Event graph
+error` at the literal's line; no SV is generated). So a missed field fails the build rather than
+zero-filling — the site list is a hard gate, not a hazard, and the `with` form is preferred for
+clarity rather than mandatory for safety.); and in `capstone_rev_node.anvil` lines 18, 78, 112,
 152, 166, 185, 202, 204, 206 and the `reg depth_bound : logic[32]` at `:227`. The only arithmetic on
 depth anywhere is the `+32'd1` at `:166`.
 
