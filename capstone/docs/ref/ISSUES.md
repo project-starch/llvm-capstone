@@ -3648,10 +3648,16 @@ globals *after* ISel would silently break this positional scheme.
 > utilisation): `capstone_rev_node` FFs **606 → 678 (+72)** and LUTs **1,052 → 1,141 (+89)**, while
 > design-wide FFs fell **93,145 → 92,939 (−206)**. So the unit gained registers and the design lost
 > them — about **278 flops removed outside this unit**, the fingerprint of the loops actually going.
-> **Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.** So: *"a change that
-> duplicated a send site caused anvil to register that endpoint, and timing improved"* — never
-> *"unlinking revoked nodes improved timing"*. It may also not survive a single-send-site
-> reformulation of the same fix.
+> ~~**Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.**~~ **THE MIDDLE CLAUSE IS
+> RETRACTED 2026-09-17, measured by S2** (see the S2 block below): the registered endpoint bought the
+> timing and did NOT touch the loops. A semantically null duplication of the same send, with no
+> unlinking, reached **WNS −8.684 with combinational loops still at 29**. The registers are worth more
+> than 3.2 ns and zero loops. What survives: *"a change that duplicated a send site caused anvil to
+> register that endpoint, and timing improved"* — never *"unlinking revoked nodes improved timing"*.
+> The sixteen loops came from the splice commit's STRUCTURAL changes beyond the send duplication (the
+> exit splice, the cached `serving_node`/`serving_idx`/`serving_next`, the reworked walk) — **not** from
+> the endpoint registration, and not from the runtime fact of unlinking either: the opening warning
+> above stands, a dynamic property cannot move a static loop count.
 >
 > *(Two register figures are in circulation and both are right: **+133 declared flop bits** summed from
 > `_q` widths in the generated RTL — what the source asks for — against **+72 implemented flops** from
@@ -3660,7 +3666,12 @@ globals *after* ISel would silently break this positional scheme.
 >
 > **⚠ AND AN UNEXPLAINED COST THAT BELONGS IN THE SAME BREATH.** Design-wide LUTs **rose** by 731 while
 > the unit accounts for only 89 of it — so about **642 LUTs appeared OUTSIDE `capstone_rev_node`**.
-> Removing sixteen loops evidently let synthesis restructure well beyond this unit, trading registers
+> **RETRACTED IN PART 2026-09-17:** these 642 are not intrinsic to registering the endpoint. S2
+> registers it and routes to 169,637 Total LUTs — **307 BELOW the splice** and only 424 above the
+> flashed base — with `capstone_rev_node` itself smaller than the splice's (1,093 LUT / 607 FF against
+> 1,141 / 678). So the 642 belong with the structural half, alongside the loops. Original text, kept
+> because the size of the effect is still unexplained: removing sixteen loops evidently let synthesis
+> restructure well beyond this unit, trading registers
 > for logic somewhere, and **nobody has explained where or why**. Small against 169k, but not nothing
 > and not local. Any deliberate application of this lever needs that understood first: a remedy whose
 > side effects are unmeasured is an inference with one datum, not a validated technique.
@@ -3950,6 +3961,55 @@ ladder rung approaches it (bigmany: 65).~~
 > past those numbers is a stop, not a note. No bitstream, no reflash (ask-first). History note:
 > `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
 >
+
+> # 2026-09-17 — S2, THE NULL-DUPLICATION CONTROL: the timing gain reproduced, the loop drop did NOT. Prediction's dichotomy was incomplete.
+>
+> `r12-null-dup-control` at `54ac25f97` — the unspliced tree `4cc068572` with the walk's single
+> `send ep.rev_res` duplicated into two identical branches of a semantically null `if`. No unlinking, no
+> functional change of any kind. Built to decide whether the splice's timing gain came from the
+> registered endpoint anvil emits for a two-site send, or from the splice itself. Exit 0, 1h50m35s,
+> bitstream written.
+>
+> | | flashed `1bfff7776` | **S2 `54ac25f97`** | splice `379248185` |
+> |---|---|---|---|
+> | WNS clk_out1 | −12.425 | **−8.684** | −9.225 |
+> | combinational loops | 29 | **29** | **13** |
+> | routed Total LUTs | 169,213 | 169,637 | 169,944 |
+> | routed FFs | 93,145 | 93,140 | 92,939 |
+> | `capstone_rev_node` | 1,052 LUT / 606 FF | 1,093 / 607 | 1,141 / 678 |
+>
+> **The experiment happened:** the synth lane's own pre-synth check found `_ep_rev_res_valid_selector_q`
+> four times in the regenerated RTL (declaration, next-state, reset, clocked update); controls — a
+> nonsense pattern 0, `rev_res` 30. Anvil did not collapse the duplicate.
+>
+> **Reading.** The registered endpoint buys the timing and nothing else. A change that does *nothing*
+> reaches the best WNS ever recorded on this design, better than the splice's, while leaving the loop
+> count untouched at the flashed base's 29. So the 29 → 13 loop drop is attributable to the splice
+> commit's structural changes, and the timing is attributable to a duplication that could be applied to
+> any tree. **The prediction written before this build offered two arms — "the splice's 3.2 ns and 29 →
+> 13 reappear, so the gain is the endpoint" or "they do not, so the splice's gain is unexplained again"
+> — and the outcome was neither.** Recorded because an incomplete dichotomy is the kind of thing that
+> gets read as whichever arm it most resembles.
+>
+> **A measurement fact that came out of this and invalidates a gate, worth more than either.**
+> `reports/ariane.utilization.rpt` is written after synthesis and **OVERWRITTEN after routing**, so in
+> any archive of a build that routed it holds a POST-ROUTE number. S2 measured the offset directly:
+> 171,620 post-synth against 169,637 post-route, a shrink of 1,983 LUTs (−1.16 %). Consequences: the
+> 171,497 "highest ever routed" is post-route; the 173,337 of the build that failed to route is
+> genuinely post-synth; and an RTL-lane request had proposed killing S1 before implementation if
+> post-synth LUTs exceeded 171,497 — **that gate would have killed S2**, which routed to 83.24 % with
+> the router converging from 117,715 overlaps to zero. It was disarmed to reporting-only before it
+> fired. **And the premise does not survive the correction:** projecting 173,337 through the S2 offset
+> gives 171,334 post-route, i.e. the build that FAILED to route projects 163 LUTs BELOW the build that
+> routed. LUT count does not discriminate routability on this design; whatever sank `1cb22e30a` is not
+> in that quantity, and no corrected threshold should be built on it.
+>
+> Not flashed. Open and deliberately not pursued: which sixteen loops the splice removed — the artifact
+> carries only the count, and enumerating them means opening the retained routed checkpoint. M1 rests on
+> none of it.
+>
+
+
 
 
 ### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`

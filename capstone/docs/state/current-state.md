@@ -52,12 +52,23 @@ Minimal snapshot. Read first in every session.
   the two trees by exactly +4 cycles at every rung, the revoke that *walks the corpses* by over
   400,000. Synthesis exit 0, WNS **−9.225** against the flashed −12.425, combinational loops 29 → 13.
   **NOT FLASHED**, and the 65,532-node ceiling is not addressed by any of it. Box: `ISSUES.md` R-12.
-* **Two warnings travel with that synthesis result and must never be separated from it.** The timing
-  gain is **not attributable to unlinking** — a runtime property cannot move a static loop count; the
-  splice put the response send in two branches, so anvil registered the endpoint (~9 one-bit
-  registers; +72 implemented flops inside the unit, −206 design-wide). And **~642 LUTs appeared
-  OUTSIDE the unit, unexplained**. Quote implemented figures against implemented totals, never the
-  +133 declared bits.
+* **Two warnings travel with that synthesis result, and S2 has now split them apart (2026-09-17).** The
+  timing gain is **not attributable to unlinking** — a runtime property cannot move a static loop count;
+  the splice put the response send in two branches, so anvil registered the endpoint. **S2
+  (`54ac25f97`, the semantically null duplication of that send on the unspliced tree) measured which
+  half does what: WNS −8.684, better than the splice's and the best ever on this design, with
+  combinational loops STILL AT 29.** So the endpoint registration buys the timing and none of the
+  loops; the 29 → 13 drop belongs to the splice commit's structural changes. The earlier sentence
+  "nine one-bit registers removed sixteen loops and bought 3.2 ns" is **retracted in its middle
+  clause**. The ~642 LUTs outside the unit are likewise not intrinsic to the registration — S2 routes
+  307 LUTs BELOW the splice — and remain unexplained. Quote implemented figures against implemented
+  totals, never the +133 declared bits.
+* **`reports/ariane.utilization.rpt` is overwritten after routing**, so in any archive of a build that
+  routed it holds a POST-ROUTE number, not the post-synth one. Measured offset (S2): 171,620 post-synth
+  against 169,637 post-route, −1,983 LUTs. This invalidated a post-synth LUT ceiling this lane had
+  proposed for S1 — it would have killed S2, which routed fine — and the premise does not survive the
+  correction either: the build that FAILED to route projects 163 LUTs BELOW the highest that routed, so
+  **LUT count does not discriminate routability on this design**.
 * **The sub-8 anomaly is the write buffer, measured rather than inferred.** Exactly two rungs sit
   exactly +91 cycles above the fit, at N = 6 and 7; halving the write-through dcache write buffer from
   8 to 4 moved the pair to N = 2 and 3 — a shift of exactly four — while every rung from N = 8 up
