@@ -12,35 +12,48 @@ Built by the committed flow — `run-speedtest1-measure.sh` with `SPEEDTEST1_SUB
 carrying design A (`46c53b7b6ae2` + `19bc05cf21b1`, on dev at `3e105357b00c`). Toolchain rebuilt
 from that tree first.
 
-## WHAT IS NOT IN THIS BRANCH, AND WHY — read before looking for the logs
+## THE LOGS ARE REDACTED — read this before using them as evidence
 
-**The four QEMU log files are deliberately absent.** They cannot be committed: they carry the
-operator's name in file content, both as `/home/...` paths throughout the host captures and as the
-guest kernel banner `Linux version 6.1.0 (<user>@<host>)` — a user@host build string. CLAUDE.md's
-"Commit result lines, not the capture they came from" names exactly this ("a raw log is
-contaminated by construction — kernel and driver banners carry account names and emails"), and
-`precommit-scan.sh` blocks on them. That is the gate working as designed, not a misfire, and it is
-not the kind of thing to route around.
+**The four log files ARE here, and they are NOT byte-original.** They are the full transcripts
+with two identifier substitutions applied, per the lead's ruling of 2026-09-16. Nothing else was
+touched: no cropping, no trimming, no removal of uninteresting lines. Line counts are identical to
+the originals (1218 / 464 / … verified).
 
-Their sha256 are recorded here so they remain verifiable however they are moved:
+**The transformation, described so it can be checked rather than trusted.** Two literal byte
+substitutions over the whole file, nothing else:
+
+    <operator-account>@<build-host>   ->   <user>@<host>
+    /home/<operator-account>          ->   /home/<user>
+
+where `<operator-account>` is the Unix account the runs were made under and `<build-host>` the
+machine name in the guest kernel's build banner.
+
+**The removed strings are deliberately NOT reproduced here.** Writing the account name into a
+committed file is precisely what this redaction exists to prevent, and `precommit-scan.sh` blocks
+a README that quotes it — which it did, on the first attempt at this paragraph. A disclosure
+cannot contain the token it is disclosing the removal of. What makes the change verifiable instead
+is the pair of hashes below: anyone holding an original can diff it against the committed file and
+see every byte that moved, without this document having to name it.
+
+**Why:** the raw captures carry the operator's name in content — home paths through the host
+captures, and the guest kernel banner's `Linux version … (<user>@<host>)` build string.
+`precommit-scan.sh` blocks on them, correctly; CLAUDE.md's "commit result lines, not the capture
+they came from" names this exact contamination. Redaction is the route that keeps a real transcript
+in the gate's hands rather than an extract assembled to satisfy it.
+
+**Pre-redaction sha256, so a reader holding an original can verify exactly what changed:**
 
     2391bc667cd96f313f8de1c106827d141e7561a9413e9a9d34b481b359aa4f5c  default-arena.serial.log
     9c7a4a6f8c20a9e9062971d875ebb0d390838e904e057d8b2cb7e95596940c45  default-arena.stdout.log
     4431d070674695e4956b34f95235a40a95d3ed38189734f179350836499bb88e  2mib-arena.serial.log
     eef14a1c2a3aa312d7544eda856e6ec6acc984f441004a15b2336bdb92a6a332  2mib-arena.stdout.log
 
-`board-c6var.sh` needs exactly two lines out of them per record, and both lines are clean of names.
-They are reproduced verbatim below so the numbers are on record even before the files move:
+The originals are retained unmodified outside the repo. `SHA256SUMS` in this directory covers the
+files AS COMMITTED, i.e. post-redaction, so the bundle's own hash chain is intact.
 
-    default-arena.serial.log:  SPEEDTEST1-CYCLES 338496911 HIGHWATER n/a HEAP 911104 DROPPED 0 RC 0
-    default-arena.stdout.log:  == Sublet: pool 1419584 bytes (arena, REV_BORROWED), tables 1750285 bytes
-    2mib-arena.serial.log:     SPEEDTEST1-CYCLES 340817188 HIGHWATER n/a HEAP 1344064 DROPPED 0 RC 0
-    2mib-arena.stdout.log:     == Sublet: pool 2097152 bytes (arena, REV_BORROWED), tables 1750285 bytes
-
-**These four lines are quoted, not a substitute for the files.** An extract is something no tool
-emitted natively, and the gate they feed exists precisely to stop a passing condition being met by
-the wrong thing — so the receiving lane decides whether its gate may read an extract, or whether
-the raw logs must move by a route outside git. That is not this lane's call to make for them.
+**The redaction cannot disturb what the driver reads:** none of the four gated lines contains an
+identifier. Confirmed by re-running all four gate checks plus the negative control AFTER the
+substitution — `:41 :42 :59 :60` all rc=0, and the default CFG grep against the serial log rc=1.
 
 ## The two records
 

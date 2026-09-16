@@ -1,0 +1,637 @@
+Running as unit: run-r1e5254b7a04a4055a78fb5b3904d0ae5.scope; invocation ID: 6c76335ded06452ab97a86649dc09430
+ninja: Entering directory `llvm/cmake-build-debug'
+[1/170] Generating VCSRevision.h
+[2/170] Generating VCSVersion.inc
+[3/170] Building CXX object tools/clang/lib/Basic/CMakeFiles/obj.clangBasic.dir/Version.cpp.o
+[4/170] Building CXX object lib/Object/CMakeFiles/LLVMObject.dir/IRSymtab.cpp.o
+[5/170] Linking CXX shared library lib/libLLVMObject.so.22.0git
+[6/170] Creating library symlink lib/libLLVMObject.so
+[7/170] Linking CXX shared library lib/libLLVMLibDriver.so.22.0git
+[8/170] Creating library symlink lib/libLLVMLibDriver.so
+[9/170] Linking CXX shared library lib/libLLVMObjCopy.so.22.0git
+[10/170] Creating library symlink lib/libLLVMObjCopy.so
+[11/170] Linking CXX shared library lib/libLLVMDebugInfoDWARF.so.22.0git
+[12/170] Creating library symlink lib/libLLVMDebugInfoDWARF.so
+[13/170] Linking CXX shared library lib/libLLVMDebugInfoPDB.so.22.0git
+[14/170] Creating library symlink lib/libLLVMDebugInfoPDB.so
+[15/170] Linking CXX executable bin/llvm-objcopy
+[16/170] Linking CXX shared library lib/libLLVMTextAPIBinaryReader.so.22.0git
+[17/170] Creating library symlink lib/libLLVMTextAPIBinaryReader.so
+[18/170] Linking CXX shared library lib/libLLVMDebugInfoGSYM.so.22.0git
+[19/170] Creating library symlink lib/libLLVMDebugInfoGSYM.so
+[20/170] Linking CXX shared library lib/libLLVMObjectYAML.so.22.0git
+[21/170] Creating library symlink lib/libLLVMObjectYAML.so
+[22/170] Linking CXX executable bin/llvm-readobj
+[23/170] Linking CXX shared library lib/libLLVMSymbolize.so.22.0git
+[24/170] Creating library symlink lib/libLLVMSymbolize.so
+[25/170] Linking CXX shared library lib/libLLVMDebuginfod.so.22.0git
+[26/170] Creating library symlink lib/libLLVMDebuginfod.so
+[27/170] Linking CXX executable bin/llvm-nm
+[28/170] Linking CXX executable bin/llvm-symbolizer
+[29/170] Linking CXX executable bin/llvm-objdump
+[30/170] Linking CXX shared library lib/libLLVMProfileData.so.22.0git
+[31/170] Creating library symlink lib/libLLVMProfileData.so
+[32/170] Linking CXX shared library lib/libLLVMCoverage.so.22.0git
+[33/170] Creating library symlink lib/libLLVMCoverage.so
+[34/170] Linking CXX shared library lib/libLLVMAnalysis.so.22.0git
+[35/170] Creating library symlink lib/libLLVMAnalysis.so
+[36/170] Linking CXX shared library lib/libLLVMIRPrinter.so.22.0git
+[37/170] Linking CXX shared library lib/libLLVMFrontendAtomic.so.22.0git
+[38/170] Creating library symlink lib/libLLVMIRPrinter.so
+[39/170] Creating library symlink lib/libLLVMFrontendAtomic.so
+[40/170] Linking CXX shared library lib/libLLVMTarget.so.22.0git
+[41/170] Creating library symlink lib/libLLVMTarget.so
+[42/170] Linking CXX shared library lib/libLLVMBitWriter.so.22.0git
+[43/170] Creating library symlink lib/libLLVMBitWriter.so
+[44/170] Linking CXX shared library lib/libLLVMSandboxIR.so.22.0git
+[45/170] Creating library symlink lib/libLLVMSandboxIR.so
+[46/170] Linking CXX shared library lib/libLLVMCGData.so.22.0git
+[47/170] Creating library symlink lib/libLLVMCGData.so
+[48/170] Linking CXX shared library lib/libLLVMTransformUtils.so.22.0git
+[49/170] Creating library symlink lib/libLLVMTransformUtils.so
+[50/170] Linking CXX shared library lib/libLLVMHipStdPar.so.22.0git
+[51/170] Creating library symlink lib/libLLVMHipStdPar.so
+[52/170] Linking CXX shared library lib/libLLVMAggressiveInstCombine.so.22.0git
+[53/170] Linking CXX shared library lib/libLLVMLinker.so.22.0git
+[54/170] Linking CXX shared library lib/libLLVMFrontendOffloading.so.22.0git
+[55/170] Creating library symlink lib/libLLVMAggressiveInstCombine.so
+[56/170] Creating library symlink lib/libLLVMFrontendOffloading.so
+[57/170] Creating library symlink lib/libLLVMLinker.so
+[58/170] Linking CXX shared library lib/libLLVMObjCARCOpts.so.22.0git
+[59/170] Creating library symlink lib/libLLVMObjCARCOpts.so
+[60/170] Building CXX object lib/CodeGen/AsmPrinter/CMakeFiles/LLVMAsmPrinter.dir/AsmPrinter.cpp.o
+[61/170] Linking CXX shared library lib/libLLVMInstCombine.so.22.0git
+[62/170] Creating library symlink lib/libLLVMInstCombine.so
+[63/170] Linking CXX shared library lib/libLLVMInstrumentation.so.22.0git
+[64/170] Creating library symlink lib/libLLVMInstrumentation.so
+[65/170] Linking CXX shared library lib/libLLVMFrontendDriver.so.22.0git
+[66/170] Creating library symlink lib/libLLVMFrontendDriver.so
+[67/170] Building CXX object lib/LTO/CMakeFiles/LLVMLTO.dir/LTO.cpp.o
+[68/170] Linking CXX shared library lib/libLLVMVectorize.so.22.0git
+[69/170] Creating library symlink lib/libLLVMVectorize.so
+[70/170] Linking CXX shared library lib/libLLVMScalarOpts.so.22.0git
+[71/170] Creating library symlink lib/libLLVMScalarOpts.so
+[72/170] Linking CXX shared library lib/libLLVMFrontendOpenMP.so.22.0git
+[73/170] Creating library symlink lib/libLLVMFrontendOpenMP.so
+[74/170] Linking CXX shared library lib/libclangBasic.so.22.0git
+[75/170] Creating library symlink lib/libclangBasic.so
+[76/170] Linking CXX shared library lib/libclangAPINotes.so.22.0git
+[77/170] Creating library symlink lib/libclangAPINotes.so
+[78/170] Linking CXX shared library lib/libclangLex.so.22.0git
+[79/170] Creating library symlink lib/libclangLex.so
+[80/170] Linking CXX shared library lib/libclangRewrite.so.22.0git
+[81/170] Creating library symlink lib/libclangRewrite.so
+[82/170] Linking CXX shared library lib/libclangToolingCore.so.22.0git
+[83/170] Creating library symlink lib/libclangToolingCore.so
+[84/170] Linking CXX shared library lib/libclangToolingInclusions.so.22.0git
+[85/170] Creating library symlink lib/libclangToolingInclusions.so
+[86/170] Linking CXX shared library lib/libLLVMipo.so.22.0git
+[87/170] Creating library symlink lib/libLLVMipo.so
+[88/170] Linking CXX shared library lib/libclangFormat.so.22.0git
+[89/170] Creating library symlink lib/libclangFormat.so
+[90/170] Linking CXX shared library lib/libclangDriver.so.22.0git
+[91/170] Creating library symlink lib/libclangDriver.so
+[92/170] Linking CXX shared library lib/libLLVMCoroutines.so.22.0git
+[93/170] Creating library symlink lib/libLLVMCoroutines.so
+[94/170] Linking CXX shared library lib/libLLVMCodeGen.so.22.0git
+[95/170] Creating library symlink lib/libLLVMCodeGen.so
+[96/170] Generating VCSVersion.inc
+[97/170] Linking CXX shared library lib/libLLVMMIRParser.so.22.0git
+[98/170] Creating library symlink lib/libLLVMMIRParser.so
+[99/170] Building CXX object tools/lld/Common/CMakeFiles/lldCommon.dir/Version.cpp.o
+[100/170] Linking CXX shared library lib/liblldCommon.so.22.0git
+[101/170] Creating library symlink lib/liblldCommon.so
+[102/170] Linking CXX shared library lib/libLLVMAsmPrinter.so.22.0git
+[103/170] Creating library symlink lib/libLLVMAsmPrinter.so
+[104/170] Linking CXX shared library lib/libLLVMSelectionDAG.so.22.0git
+[105/170] Creating library symlink lib/libLLVMSelectionDAG.so
+[106/170] Linking CXX shared library lib/libclangAST.so.22.0git
+[107/170] Creating library symlink lib/libclangAST.so
+[108/170] Linking CXX shared library lib/libclangEdit.so.22.0git
+[109/170] Creating library symlink lib/libclangEdit.so
+[110/170] Linking CXX shared library lib/libclangInstallAPI.so.22.0git
+[111/170] Creating library symlink lib/libclangInstallAPI.so
+[112/170] Linking CXX shared library lib/libLLVMGlobalISel.so.22.0git
+[113/170] Creating library symlink lib/libLLVMGlobalISel.so
+[114/170] Linking CXX shared library lib/libclangASTMatchers.so.22.0git
+[115/170] Creating library symlink lib/libclangASTMatchers.so
+[116/170] Linking CXX shared library lib/libLLVMPasses.so.22.0git
+[117/170] Creating library symlink lib/libLLVMPasses.so
+[118/170] Linking CXX shared library lib/libclangAnalysis.so.22.0git
+[119/170] Creating library symlink lib/libclangAnalysis.so
+[120/170] Linking CXX shared library lib/libLLVMX86CodeGen.so.22.0git
+[121/170] Linking CXX shared library lib/libLLVMLTO.so.22.0git
+[122/170] Creating library symlink lib/libLLVMX86CodeGen.so
+[123/170] Creating library symlink lib/libLLVMLTO.so
+[124/170] Linking CXX shared library lib/libLLVMRISCVCodeGen.so.22.0git
+[125/170] Creating library symlink lib/libLLVMRISCVCodeGen.so
+[126/170] Linking CXX shared library lib/libLLVMCapstoneCodeGen.so.22.0git
+[127/170] Creating library symlink lib/libLLVMCapstoneCodeGen.so
+[128/170] Linking CXX shared library lib/liblldWasm.so.22.0git
+[129/170] Linking CXX shared library lib/libLLVMOptDriver.so.22.0git
+[130/170] Creating library symlink lib/liblldWasm.so
+[131/170] Creating library symlink lib/libLLVMOptDriver.so
+[132/170] Linking CXX executable bin/llc
+[133/170] Linking CXX shared library lib/liblldCOFF.so.22.0git
+[134/170] Creating library symlink lib/liblldCOFF.so
+[135/170] Linking CXX shared library lib/liblldMinGW.so.22.0git
+[136/170] Creating library symlink lib/liblldMinGW.so
+[137/170] Linking CXX shared library lib/liblldMachO.so.22.0git
+[138/170] Creating library symlink lib/liblldMachO.so
+[139/170] Linking CXX executable bin/opt
+[140/170] Linking CXX shared library lib/liblldELF.so.22.0git
+[141/170] Creating library symlink lib/liblldELF.so
+[142/170] Linking CXX executable bin/lld
+[143/170] Linking CXX shared library lib/libclangSema.so.22.0git
+[144/170] Creating library symlink lib/libclangSema.so
+[145/170] Linking CXX shared library lib/libclangParse.so.22.0git
+[146/170] Creating library symlink lib/libclangParse.so
+[147/170] Linking CXX shared library lib/libclangSerialization.so.22.0git
+[148/170] Creating library symlink lib/libclangSerialization.so
+[149/170] Linking CXX shared library lib/libclangFrontend.so.22.0git
+[150/170] Creating library symlink lib/libclangFrontend.so
+[151/170] Linking CXX shared library lib/libclangRewriteFrontend.so.22.0git
+[152/170] Creating library symlink lib/libclangRewriteFrontend.so
+[153/170] Linking CXX shared library lib/libclangIndex.so.22.0git
+[154/170] Creating library symlink lib/libclangIndex.so
+[155/170] Linking CXX shared library lib/libclangCrossTU.so.22.0git
+[156/170] Creating library symlink lib/libclangCrossTU.so
+[157/170] Linking CXX shared library lib/libclangExtractAPI.so.22.0git
+[158/170] Creating library symlink lib/libclangExtractAPI.so
+[159/170] Linking CXX shared library lib/libclangStaticAnalyzerCore.so.22.0git
+[160/170] Creating library symlink lib/libclangStaticAnalyzerCore.so
+[161/170] Linking CXX shared library lib/libclangCodeGen.so.22.0git
+[162/170] Creating library symlink lib/libclangCodeGen.so
+[163/170] Linking CXX shared library lib/libclangStaticAnalyzerCheckers.so.22.0git
+[164/170] Creating library symlink lib/libclangStaticAnalyzerCheckers.so
+[165/170] Linking CXX shared library lib/libclangStaticAnalyzerFrontend.so.22.0git
+[166/170] Creating library symlink lib/libclangStaticAnalyzerFrontend.so
+[167/170] Linking CXX shared library lib/libclangFrontendTool.so.22.0git
+[168/170] Creating library symlink lib/libclangFrontendTool.so
+[169/170] Linking CXX executable bin/clang-22
+[170/170] Creating executable symlink bin/clang
+########## TOOLCHAIN_RC=0
+== Sublet: lookaside defaulted ON (1200,40) so cell 6 differs from cell 5 by the discipline alone
+== Sublet: pool 1419584 bytes (arena, REV_BORROWED), tables 1750285 bytes
+== Sublet port applied to this build's amalgamation (sublet-3530300.patch)
+   renamed randomFunc -> speedtest1_randomFunc (2 sites)
+== speedtest1 staged from /tmp/capstone/sqlite-src-full/sqlite-version-3.53.3/test/speedtest1.c (3487 lines)
+== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)
+In file included from <built-in>:385:
+<command line>:32:9: warning: 'SQLITE_DEFAULT_LOOKASIDE' macro redefined [-Wmacro-redefined]
+   32 | #define SQLITE_DEFAULT_LOOKASIDE 1200,40
+      |         ^
+<command line>:27:9: note: previous definition is here
+   27 | #define SQLITE_DEFAULT_LOOKASIDE 0,0
+      |         ^
+In file included from /tmp/capstone/cell6-o2/obj/amalgam.c:38:
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:29656:14: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 29656 |   i = (int)(((uptr)p-mem5.poolBase)/mem5.szAtom);
+       |              ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:29750:20: warning: cast to 'void *' from smaller integer type 'unsigned long' [-Wint-to-void-pointer-cast]
+ 29750 |   return i<0 ? 0 : (void*)sublet_take_linear(&mem5.aCap[i], pBlock);
+       |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:29763:19: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 29763 |   iBlock = (int)(((uptr)pOld-mem5.poolBase)/mem5.szAtom);
+       |                   ^~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31888:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31888 |   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pTrueEnd);
+       |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31888:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31888 |   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pTrueEnd);
+       |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31888:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31888 |   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pTrueEnd);
+       |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31888:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31888 |   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pTrueEnd);
+       |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31893:8: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31893 |   if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |        ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31893:18: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31893 |   if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31895:18: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31895 |               + ((uptr)p-(uptr)db->lookaside.pMiddle)/LOOKASIDE_SMALL];
+       |                  ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31895:26: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31895 |               + ((uptr)p-(uptr)db->lookaside.pMiddle)/LOOKASIDE_SMALL];
+       |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31898:32: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31898 |   return &db->lookaside.aSlot[((uptr)p-(uptr)db->lookaside.pStart)
+       |                                ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31898:40: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31898 |   return &db->lookaside.aSlot[((uptr)p-(uptr)db->lookaside.pStart)
+       |                                        ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31932:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31932 |     if( ((uptr)p)<(uptr)(db->lookaside.pTrueEnd) ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31932:19: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31932 |     if( ((uptr)p)<(uptr)(db->lookaside.pTrueEnd) ){
+       |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31934:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31934 |       if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |            ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31934:22: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31934 |       if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31939:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const void *' [-Wvoid-pointer-to-int-cast]
+ 31939 |       if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |            ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31939:22: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31939 |       if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31988:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31988 |     if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31988:19: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31988 |     if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+       |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31990:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31990 |       if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |            ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:31990:22: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 31990 |       if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32002:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32002 |       if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |            ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32002:22: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32002 |       if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32029:8: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32029 |   if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+       |        ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32029:17: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32029 |   if( ((uptr)p)<(uptr)(db->lookaside.pEnd) ){
+       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32031:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32031 |     if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32031:20: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32031 |     if( ((uptr)p)>=(uptr)(db->lookaside.pMiddle) ){
+       |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32043:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32043 |     if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32043:20: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32043 |     if( ((uptr)p)>=(uptr)(db->lookaside.pStart) ){
+       |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32272:8: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32272 |   if( ((uptr)p)<(uptr)db->lookaside.pEnd ){
+       |        ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32272:17: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32272 |   if( ((uptr)p)<(uptr)db->lookaside.pEnd ){
+       |                 ^~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32274:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32274 |     if( ((uptr)p)>=(uptr)db->lookaside.pMiddle ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32274:20: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32274 |     if( ((uptr)p)>=(uptr)db->lookaside.pMiddle ){
+       |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32278:10: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32278 |     if( ((uptr)p)>=(uptr)db->lookaside.pStart ){
+       |          ^~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:32278:20: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 32278 |     if( ((uptr)p)>=(uptr)db->lookaside.pStart ){
+       |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:33551:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const char *' [-Wpointer-to-int-cast]
+ 33551 |   if( SQLITE_WITHIN(z,zText,zEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:33551:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const char *' [-Wpointer-to-int-cast]
+ 33551 |   if( SQLITE_WITHIN(z,zText,zEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:33551:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const char *' [-Wpointer-to-int-cast]
+ 33551 |   if( SQLITE_WITHIN(z,zText,zEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:33551:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'const char *' [-Wpointer-to-int-cast]
+ 33551 |   if( SQLITE_WITHIN(z,zText,zEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:58158:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 58158 |   if( SQLITE_WITHIN(p, pcache1.pStart, pcache1.pEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:58158:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 58158 |   if( SQLITE_WITHIN(p, pcache1.pStart, pcache1.pEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:58158:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 58158 |   if( SQLITE_WITHIN(p, pcache1.pStart, pcache1.pEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:58158:7: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 58158 |   if( SQLITE_WITHIN(p, pcache1.pStart, pcache1.pEnd) ){
+       |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:74906:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 74906 |     if( SQLITE_OVERFLOW(pSrc->aDataEnd, pCell, pCell+info.nLocal) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:34: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:74906:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 74906 |     if( SQLITE_OVERFLOW(pSrc->aDataEnd, pCell, pCell+info.nLocal) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:44: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                            ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:74906:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 74906 |     if( SQLITE_OVERFLOW(pSrc->aDataEnd, pCell, pCell+info.nLocal) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:57: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                                         ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:74906:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 74906 |     if( SQLITE_OVERFLOW(pSrc->aDataEnd, pCell, pCell+info.nLocal) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:67: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                                                   ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80995:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80995 |     if( SQLITE_WITHIN(pCell,aData+j,pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80995:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80995 |     if( SQLITE_WITHIN(pCell,aData+j,pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80995:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80995 |     if( SQLITE_WITHIN(pCell,aData+j,pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80995:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80995 |     if( SQLITE_WITHIN(pCell,aData+j,pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80996:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80996 |       if( ((uptr)(pCell+sz))>(uptr)pEnd ) return SQLITE_CORRUPT_BKPT;
+       |            ^~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80996:30: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80996 |       if( ((uptr)(pCell+sz))>(uptr)pEnd ) return SQLITE_CORRUPT_BKPT;
+       |                              ^~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80998:15: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80998 |     }else if( (uptr)(pCell+sz)>(uptr)pSrcEnd
+       |               ^~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80998:32: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80998 |     }else if( (uptr)(pCell+sz)>(uptr)pSrcEnd
+       |                                ^~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80999:15: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80999 |            && (uptr)(pCell)<(uptr)pSrcEnd
+       |               ^~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:80999:29: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 80999 |            && (uptr)(pCell)<(uptr)pSrcEnd
+       |                             ^~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81090:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81090 |     if( (uptr)(pCArray->apCell[i]+sz)>(uptr)pEnd
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81090:39: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81090 |     if( (uptr)(pCArray->apCell[i]+sz)>(uptr)pEnd
+       |                                       ^~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81091:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81091 |      && (uptr)(pCArray->apCell[i])<(uptr)pEnd
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81091:36: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81091 |      && (uptr)(pCArray->apCell[i])<(uptr)pEnd
+       |                                    ^~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81138:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81138 |     if( SQLITE_WITHIN(pCell, pStart, pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81138:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81138 |     if( SQLITE_WITHIN(pCell, pStart, pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81138:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81138 |     if( SQLITE_WITHIN(pCell, pStart, pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81138:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81138 |     if( SQLITE_WITHIN(pCell, pStart, pEnd) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81694:16: warning: cast to smaller integer type 'long' from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81694 |         iOff = SQLITE_PTR_TO_INT(apDiv[i]) - SQLITE_PTR_TO_INT(pParent->aData);
+       |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:81694:46: warning: cast to smaller integer type 'long' from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 81694 |         iOff = SQLITE_PTR_TO_INT(apDiv[i]) - SQLITE_PTR_TO_INT(pParent->aData);
+       |                                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82133:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82133 |        || !SQLITE_WITHIN(pCell,pOld->aData,pOld->aDataEnd)
+       |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:34: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82133:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82133 |        || !SQLITE_WITHIN(pCell,pOld->aData,pOld->aDataEnd)
+       |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:45: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                             ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82133:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82133 |        || !SQLITE_WITHIN(pCell,pOld->aData,pOld->aDataEnd)
+       |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:58: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                          ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82133:12: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82133 |        || !SQLITE_WITHIN(pCell,pOld->aData,pOld->aDataEnd)
+       |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15979:68: note: expanded from macro 'SQLITE_WITHIN'
+ 15979 | #define SQLITE_WITHIN(P,S,E)   (((uptr)(P)>=(uptr)(S))&&((uptr)(P)<(uptr)(E)))
+       |                                                                    ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82198:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82198 |     if( SQLITE_OVERFLOW(pSrcEnd, pCell, pCell+sz) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:34: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                  ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82198:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82198 |     if( SQLITE_OVERFLOW(pSrcEnd, pCell, pCell+sz) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:44: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                            ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82198:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82198 |     if( SQLITE_OVERFLOW(pSrcEnd, pCell, pCell+sz) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:57: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                                         ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:82198:9: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'u8 *' (aka 'unsigned char *') [-Wpointer-to-int-cast]
+ 82198 |     if( SQLITE_OVERFLOW(pSrcEnd, pCell, pCell+sz) ){
+       |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:16003:67: note: expanded from macro 'SQLITE_OVERFLOW'
+ 16003 | #define SQLITE_OVERFLOW(P,S,E) (((uptr)(S)<(uptr)(P))&&((uptr)(E)>(uptr)(P)))
+       |                                                                   ^~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:87240:50: warning: cast to smaller integer type 'long' from 'char *' [-Wpointer-to-int-cast]
+ 87240 |     if( (enc & SQLITE_UTF16_ALIGNED)!=0 && 1==(1&SQLITE_PTR_TO_INT(pVal->z)) ){
+       |                                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:89556:17: warning: cast to smaller integer type 'long' from 'const char *' [-Wpointer-to-int-cast]
+ 89556 |     pOp->p4.i = SQLITE_PTR_TO_INT(zP4);
+       |                 ^~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:118305:14: warning: cast to smaller integer type 'long' from 'void *' [-Wvoid-pointer-to-int-cast]
+ 118305 |              SQLITE_PTR_TO_INT(pDef->pUserData), target);
+        |              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:119722:9: warning: cast to smaller integer type 'long' from 'void *' [-Wvoid-pointer-to-int-cast]
+ 119722 |     if( SQLITE_PTR_TO_INT(pDef->pUserData)!=INLINEFUNC_iif ) return 0;
+        |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:135296:34: warning: cast to smaller integer type 'long' from 'void *' [-Wvoid-pointer-to-int-cast]
+ 135296 |   sqlite3QuoteValue(&str,argv[0],SQLITE_PTR_TO_INT(sqlite3_user_data(context)));
+        |                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:135651:13: warning: cast to smaller integer type 'long' from 'void *' [-Wvoid-pointer-to-int-cast]
+ 135651 |     flags = SQLITE_PTR_TO_INT(sqlite3_user_data(context));
+        |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15021:38: note: expanded from macro 'SQLITE_PTR_TO_INT'
+ 15021 | # define SQLITE_PTR_TO_INT(X)  ((int)(__PTRDIFF_TYPE__)(X))
+       |                                      ^~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:141640:42: warning: cast to 'void *' from smaller integer type 'long' [-Wint-to-void-pointer-cast]
+ 141640 |               zP4 = x.p4type==P4_INT32 ? SQLITE_INT_TO_PTR(x.p4.i) : x.p4.z;
+        |                                          ^~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15020:33: note: expanded from macro 'SQLITE_INT_TO_PTR'
+ 15020 | # define SQLITE_INT_TO_PTR(X)  ((void*)(__PTRDIFF_TYPE__)(X))
+       |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:176232:36: warning: cast to 'void *' from smaller integer type 'long' [-Wint-to-void-pointer-cast]
+ 176232 |         sqlite3VdbeChangeP4(v, -1, SQLITE_INT_TO_PTR(n), P4_INT32);
+        |                                    ^~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:15020:33: note: expanded from macro 'SQLITE_INT_TO_PTR'
+ 15020 | # define SQLITE_INT_TO_PTR(X)  ((void*)(__PTRDIFF_TYPE__)(X))
+       |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:188304:14: warning: cast to smaller integer type 'uptr' (aka 'unsigned long long') from 'void *' [-Wvoid-pointer-to-int-cast]
+ 188304 |     uptr a = (uptr)pStart;
+        |              ^~~~~~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:188316:29: warning: cast to 'void *' from smaller integer type 'uptr' (aka 'unsigned long long') [-Wint-to-void-pointer-cast]
+ 188316 |     db->lookaside.pMiddle = (void*)a;
+        |                             ^~~~~~~~
+/tmp/capstone/cell6-o2/obj/sqlite3-capstone.c:188326:26: warning: cast to 'void *' from smaller integer type 'uptr' (aka 'unsigned long long') [-Wint-to-void-pointer-cast]
+ 188326 |     db->lookaside.pEnd = (void*)a;
+        |                          ^~~~~~~~
+89 warnings generated.
+== compiling the no-globals support objects separately (they cannot collide)
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:157:17: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'unsigned char *' [-Wpointer-to-int-cast]
+  157 |   bsize_t da = ((bsize_t)d) & (ps - 1u);
+      |                 ^~~~~~~~~~
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:158:17: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'const unsigned char *' [-Wpointer-to-int-cast]
+  158 |   bsize_t sa = ((bsize_t)s) & (ps - 1u);
+      |                 ^~~~~~~~~~
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:278:19: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'unsigned char *' [-Wpointer-to-int-cast]
+  278 |     bsize_t da = ((bsize_t)d) & (ps - 1u);
+      |                   ^~~~~~~~~~
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:279:19: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'const unsigned char *' [-Wpointer-to-int-cast]
+  279 |     bsize_t sa = ((bsize_t)s) & (ps - 1u);
+      |                   ^~~~~~~~~~
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:301:19: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'unsigned char *' [-Wpointer-to-int-cast]
+  301 |     bsize_t da = ((bsize_t)d) & (ps - 1u);
+      |                   ^~~~~~~~~~
+/home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c:302:19: warning: cast to smaller integer type 'bsize_t' (aka 'unsigned long') from 'const unsigned char *' [-Wpointer-to-int-cast]
+  302 |     bsize_t sa = ((bsize_t)s) & (ps - 1u);
+      |                   ^~~~~~~~~~
+6 warnings generated.
+   builtins with no own source file (expected: symbols inside comparedf2.c): eqdf2 gedf2 gtdf2 ltdf2 nedf2
+== pass 1: link at a provisional 8 MiB offset, only to measure .text
+   .text = 1076112 bytes -> globals offset 0x110000
+== pass 2: link with the real globals offset
+== gates
+   cjalr=0  ldc-gp=1106
+   .capstone_gp_table sections: 1 (must be 1 -- more means a multi-TU index collision)
+  declared        nothing -- module sizes it as code_len + max(code_len, DOMAIN_DATA_SIZE)
+  image           code_len=   1223760  code_size=   1223760
+  allocation      pages=598    order=10  tot_size=   4194304
+  dom_data           2969008
+    - blob            109648   (globals_off=0x110000 .. code_size)
+    - cap table         2560   (160 globals)
+    - storage         108368
+    = STACK          2748432
+  VERDICT: fits.
+== pass 3: declare dom_data >= 605600 (carve 220576 + stack 385024)
+  declared        dom_data>=    605600  (stack 385024)  -- one region: code_len + 8192 slack + dom_data
+  image           code_len=   1223760  code_size=   1223760
+  allocation      pages=449    order=9   tot_size=   2097152
+  dom_data            871856
+    - blob            109648   (globals_off=0x110000 .. code_size)
+    - cap table         2560   (160 globals)
+    - storage         108368
+    = STACK           651280
+  VERDICT: fits.
+Built /tmp/capstone/cell6-o2/sqlite_silicon.dom
+Built /tmp/capstone/cell6-o2/sqlite_host.user
+  host source:     /home/<user>/dev/llvm-capstone/.claude/worktrees/compiler-validation-plan/capstone/ports/sqlite/sqlite_host.c
+  libcapstone.c:   /home/<user>/dev/llvm-capstone/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c
+  libcapstone sha: 42747458f8dacf66694dfd9ce0a2311bd98761e62df1d7c41180aa900d213289
+  buildroot HEAD:  d04bd83b13cdaab92fb104f027b8ce4ccbf27e1a
+  buildroot dirty: 0 modified path(s)
+  built:           2026-09-16T09:43:47Z
+== domain 113221f93b0ac994  region=65536  heap=2097152  args='--testset main --size 1 --verify'
+QEMU smoke passed.
+== QEMU pass recorded: /home/<user>/capstone-artifacts/qemu-pass/113221f93b0ac994...
+__CAPSTONE_SPEEDTEST1_QEMU_RAN__
+########## CELL6_RC=0
