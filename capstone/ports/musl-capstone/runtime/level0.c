@@ -27,8 +27,10 @@
  * Every pointer it returns is derived from `arena` by pointer arithmetic, never
  * rebuilt from an integer, which is the whole property that makes it work.
  */
+#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifndef CAPSTONE_LEVEL0_ARENA_BYTES
 #define CAPSTONE_LEVEL0_ARENA_BYTES (256 * 1024)
@@ -86,6 +88,10 @@ void *malloc(size_t n)
 		b->free = 0;
 		return (char *)b + sizeof(struct l0_block);
 	}
+	/* POSIX: a failed allocation sets errno. libc-test's search_hsearch is
+	   what asked: hcreate((size_t)-1) must fail with ENOMEM, and musl's
+	   hcreate reports whatever calloc left in errno, which was nothing. */
+	errno = ENOMEM;
 	return 0;
 }
 
@@ -108,8 +114,10 @@ void free(void *p)
 
 void *calloc(size_t n, size_t m)
 {
-	if (m && n > (size_t)-1 / m)
+	if (m && n > (size_t)-1 / m) {
+		errno = ENOMEM;
 		return 0;
+	}
 	size_t total = n * m;
 	char *p = malloc(total);
 	if (p)
@@ -133,9 +141,25 @@ void *realloc(void *p, size_t n)
 	char *q = malloc(n);
 	if (!q)
 		return 0;
-	const char *s = p;
-	for (size_t i = 0; i < b->size; i++)
-		q[i] = s[i];
+	/* memmove, not a byte loop: a byte loop drops the tag of every pointer
+	   stored in the block, and the whole point of moving a block is that its
+	   contents keep meaning what they meant. See string_bounds_safe.c. */
+	memmove(q, p, b->size);
 	free(p);
 	return q;
 }
+
+/* musl calls its own allocator by five names, not one. The public malloc is a
+   weak alias, so defining it is not enough: everything under src/locale,
+   src/time/__tz.c and src/stdio/ofl_add.c calls __libc_malloc or __libc_calloc
+   directly, which in a build without mallocng resolve to lite_malloc.c's
+   __simple_malloc. That function keeps its heap in uintptr_t and turns integers
+   back into pointers, so the first call traps: libc-test's mbc and swprintf
+   both died on `movc` of a zero cur pointer inside it. Defining the internal
+   names here means one allocator answers to all of them and lite_malloc.c is
+   never pulled out of the archive at all. */
+void *__libc_malloc(size_t n) { return malloc(n); }
+void *__libc_malloc_impl(size_t n) { return malloc(n); }
+void *__libc_calloc(size_t n, size_t m) { return calloc(n, m); }
+void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
+void __libc_free(void *p) { free(p); }

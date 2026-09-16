@@ -33,7 +33,8 @@ printf '#define VERSION "%s"\n' "${MUSL_VERSION:-1.2.5}" \
 
 for required in obj/include/bits/alltypes.h obj/include/bits/syscall.h \
                 arch/capstone64/syscall_arch.h \
-                arch/capstone64/pthread_arch.h; do
+                arch/capstone64/pthread_arch.h \
+                arch/capstone64/bits/setjmp.h; do
   [[ -s "$MUSL_SRC_DIR/$required" ]] || {
     echo "prepare failed, missing or empty: $MUSL_SRC_DIR/$required" >&2
     exit 1

@@ -26,8 +26,10 @@
  * mismatch at the one boundary that cannot be debugged from C. Found 2026-09-16
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
+#include <setjmp.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <time.h>
 #include <syscall_arch.h>
 
 static long hc_write(long fd, const char *buf, unsigned long count);
@@ -95,7 +97,17 @@ struct hc_file {
 };
 static struct hc_file hc_files[HC_MAX_FILES];
 
-#define HC_UNSERVED_MAX 8
+/* Optional: what a domain wants done when the program exits from inside a call
+   rather than by returning from main. Weak, so a domain that does not define it
+   links unchanged and the exit path simply skips it. */
+__attribute__((__weak__)) int __capstone_at_exit(int status);
+
+/* Where exit() lands. Armed once domain_main is ready to receive it. */
+static jmp_buf hc_exit_jb;
+static volatile int hc_exit_armed;
+static volatile int hc_exit_status;
+
+#define HC_UNSERVED_MAX 16
 static long hc_unserved[HC_UNSERVED_MAX];
 static unsigned long hc_unserved_n;
 
@@ -231,6 +243,20 @@ static long hc_handle_op(long fd, unsigned long long opcode,
   if (hc_round(opcode, 0, 0) != 0)
     return -EIO;
   return hc_metadata->error != 0 ? hc_err() : 0;
+}
+
+/* Only the fields the stat helper actually knows. The rest are zeroed rather
+   than invented: a plausible st_dev or st_ino would be a lie that some caller
+   eventually compares against another lie. */
+static void hc_fill_stat(struct stat *st, unsigned long long size,
+                         unsigned long long mode) {
+  for (unsigned long i = 0; i < sizeof *st; i++)
+    ((char *)st)[i] = 0;
+  st->st_size = (off_t)size;
+  st->st_mode = (mode_t)mode;
+  st->st_nlink = 1;
+  st->st_blksize = 4096;
+  st->st_blocks = (blkcnt_t)((size + 511) / 512);
 }
 
 static long hc_open(const char *path, long flags, long mode) {
@@ -459,19 +485,35 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     long rc = hc_stat_basic(f, &size, &mode);
     if (rc < 0)
       return rc;
-    /* Only the fields the helper actually knows. The rest are zeroed rather
-       than invented: a plausible st_dev or st_ino would be a lie that some
-       caller eventually compares against another lie. */
-    struct stat *st = (struct stat *)b;
-    for (unsigned long i = 0; i < sizeof *st; i++)
-      ((char *)st)[i] = 0;
-    st->st_size = (off_t)size;
-    st->st_mode = (mode_t)mode;
-    st->st_nlink = 1;
-    st->st_blksize = 4096;
-    st->st_blocks = (blkcnt_t)((size + 511) / 512);
+    hc_fill_stat((struct stat *)b, size, mode);
     return 0;
   }
+
+  /* stat(path) is fstatat(AT_FDCWD, path, st, 0). There is no path-stat
+     opcode and none is needed: open, stat, close is three round trips for a
+     call made a handful of times, through the same service fstat is already
+     measured against. The open is read-only, which a directory accepts too. */
+  case SYS_newfstatat: {
+    long fd = hc_open((const char *)b, 0, 0);
+    if (fd < 0)
+      return fd;
+    unsigned long long size, mode;
+    long rc = hc_stat_basic(hc_slot(fd), &size, &mode);
+    hc_close(fd);
+    if (rc < 0)
+      return rc;
+    hc_fill_stat((struct stat *)c, size, mode);
+    return 0;
+  }
+
+  /* The identity a domain has is the host service's, and that runs as the
+     guest's root: uid and gid 0. It is the same number the zeroed stat fields
+     carry, so st_uid == geteuid() holds by construction, not by coincidence. */
+  case SYS_getuid:
+  case SYS_geteuid:
+  case SYS_getgid:
+  case SYS_getegid:
+    return 0;
 
   /* open() issues this once, for O_CLOEXEC, and discards the result. There are
      no other processes here for a descriptor to leak into. */
@@ -487,11 +529,44 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_set_tid_address:
     return 1;
 
-  /* Reported as unsupported rather than faked. musl copes: exit_group falling
-     through to the domain return is exactly what a domain does anyway. */
-  case SYS_exit:
+  /* exit_group and exit: see domain_main. The status is the program's and the
+     jump lands where capstone_main() would have returned, so everything after
+     it runs exactly once either way. This case used to return 0 on the
+     reasoning that a refused exit is harmless; it is not. libc-test's mntent
+     calls exit() on a failed assertion, and returning from the syscall put
+     musl's _Exit in its `for (;;) __syscall(SYS_exit, ec)` loop, which took
+     the boot with it. A syscall a caller cannot survive the return of has to
+     be served or the domain has to end. */
   case SYS_exit_group:
+  case SYS_exit:
+    if (hc_exit_armed) {
+      hc_exit_status = (int)(long)a;
+      /* Whatever the program would have done after main returned still has to
+         happen, and only the program knows what that is. A domain that has
+         something to report defines this; one that has not pays nothing. */
+      if (__capstone_at_exit)
+        hc_exit_status = __capstone_at_exit(hc_exit_status);
+      longjmp(hc_exit_jb, 1);
+    }
+    return -ENOSYS;
+
+  /* Time comes from the helper. rdtime would give a counter with a frequency
+     the domain has no way to learn, and a timespec built on a guessed timebase
+     is the kind of number that looks right until something computes with it.
+     One round per call; musl's clock_gettime has no vDSO here to short-cut. */
+  case SYS_clock_gettime: {
+    hc_put_u64(0, (unsigned long long)a);
+    if (hc_round(HC_V0_OP_CLOCK_GETTIME, 0, 0) != 0)
+      return -EIO;
+    if (hc_metadata->error != 0)
+      return hc_err();
+    if (hc_metadata->length < HC_CLOCK_GETTIME_RESP_V0_SIZE)
+      return -EIO;
+    struct timespec *ts = (struct timespec *)b;
+    ts->tv_sec = (time_t)hc_get_u64(0);
+    ts->tv_nsec = (long)hc_get_u64(8);
     return 0;
+  }
 
   default:
     /* RECORDED, NOT JUST REFUSED. A libc is never finished in the sense that
@@ -543,7 +618,21 @@ void domain_main(unsigned *res, unsigned func) {
     return;
   }
 
-  int status = capstone_main();
+  /* exit() has to be able to end the program from anywhere. musl's _Exit is
+     `__syscall(SYS_exit_group, ec); for (;;) __syscall(SYS_exit, ec);`, so a
+     refused exit is not an error the program sees, it is an unbreakable loop,
+     and a spinning domain holds the only hart. The way out is the one the C
+     library itself uses to leave a call frame: the exit syscall longjmps here.
+     Volatile because a local that setjmp returns to may not live in a
+     register. */
+  volatile int status;
+  int jumped = setjmp(hc_exit_jb);
+  hc_exit_armed = 1;
+  if (jumped)
+    status = hc_exit_status;
+  else
+    status = capstone_main();
+  hc_exit_armed = 0;
 
   if (hc_metadata) {
     hc_metadata->opcode = HC_V0_OP_NONE;

@@ -29,7 +29,7 @@
 
 #include "libcapstone.h"
 #include "hostcall_stdout_probe.h"
-#include "hostcall-file-service-probe-common.h"
+#include "host_service.h"
 #include "stdio_probe.h"
 
 /* 64, not 16. The bound exists so a domain that never reaches DONE is a
@@ -40,9 +40,6 @@
    no fault anywhere, which is exactly the shape of a bound set too low. */
 #define STDIO_PROBE_MAX_ROUNDS 64
 #define STDIO_PROBE_REGION_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE
-
-static struct hostcall_file_service_handle_slot
-    handle_slots[HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES];
 
 static const char *status_name(long long s) {
   switch (s) {
@@ -58,19 +55,6 @@ static const char *status_name(long long s) {
   case SP_SEEK_END_WRONG:   return "SEEK_WRONG";
   default:                  return "UNKNOWN";
   }
-}
-
-/* Every failure answer takes the same shape, so it is written once. */
-static void respond_error(struct hostcall_v0 *metadata, int err) {
-  metadata->result = -1;
-  metadata->error = -(hostcall_s64_t)err;
-  metadata->phase = HC_V0_PHASE_RESP;
-}
-
-static void respond_ok(struct hostcall_v0 *metadata, long long value) {
-  metadata->result = (hostcall_s64_t)value;
-  metadata->error = 0;
-  metadata->phase = HC_V0_PHASE_RESP;
 }
 
 int main(int argc, char **argv) {
@@ -114,8 +98,10 @@ int main(int argc, char **argv) {
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
 
+  static struct hc_host host;
+  host.tag = "stdio-probe"; host.verbose = 1;
+
   unsigned serviced = 0;
-  char path_snapshot[STDIO_PROBE_REGION_SIZE];
 
   for (unsigned round = 0; round < STDIO_PROBE_MAX_ROUNDS; ++round) {
     (void)call_dom(domain);
@@ -138,7 +124,7 @@ int main(int argc, char **argv) {
       if (serviced > 0 && request.result == SP_OK) {
         printf("__CAPSTONE_MUSL_STDIO_PROBE_PASSED__\n");
         fflush(stdout);
-        hostcall_cleanup_open_handles(handle_slots,
+        hostcall_cleanup_open_handles(host.slots,
                                       HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES);
         capstone_cleanup();
         return 0;
@@ -157,131 +143,18 @@ int main(int argc, char **argv) {
       break;
     }
 
-    switch (request.opcode) {
-    case HC_V0_OP_WRITE_STDOUT: {
-      ssize_t n = write(STDOUT_FILENO, payload + request.offset,
-                        (size_t)request.length);
-      fflush(stdout);
-      if (n < 0) respond_error(metadata, errno);
-      else       respond_ok(metadata, n);
-      break;
+    /* Every opcode is serviced by the shared switch in host_service.h; this
+       host is only its regions, its round loop and its oracle. */
+    if (hc_host_service(&host, &request, metadata, payload) < 0) {
+      fprintf(stderr, "stdio-probe: unexpected opcode %llu\n", (unsigned long long)request.opcode);
+      hc_host_error(metadata, ENOSYS);
     }
-    case HC_V0_OP_FILE_OPEN: {
-      const struct hc_file_open_req_v0 *req =
-          (const struct hc_file_open_req_v0 *)payload;
-      unsigned long long flags = req->flags, mode = req->mode;
-      memcpy(path_snapshot, payload + request.offset, (size_t)request.length);
-      path_snapshot[request.length] = '\0';
-      int fd = open(path_snapshot, (int)flags, (mode_t)mode);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      hostcall_u64_t opened = hostcall_allocate_handle_token(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, fd);
-      if (!opened) { int e = errno; close(fd); respond_error(metadata, e); break; }
-      printf("stdio-probe: opened %s as token %llu\n", path_snapshot,
-             (unsigned long long)opened);
-      fflush(stdout);
-      respond_ok(metadata, (long long)opened);
-      break;
-    }
-    case HC_V0_OP_FILE_WRITE: {
-      const struct hc_file_write_req_v0 *req =
-          (const struct hc_file_write_req_v0 *)payload;
-      hostcall_u64_t handle = req->handle, off = req->file_offset;
-      int fd = hostcall_lookup_handle_fd(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, handle);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      ssize_t n = pwrite(fd, payload + request.offset, (size_t)request.length,
-                         (off_t)off);
-      if (n < 0) respond_error(metadata, errno);
-      else       respond_ok(metadata, n);
-      break;
-    }
-    case HC_V0_OP_FILE_READ: {
-      const struct hc_file_read_req_v0 *req =
-          (const struct hc_file_read_req_v0 *)payload;
-      hostcall_u64_t handle = req->handle, off = req->file_offset;
-      int fd = hostcall_lookup_handle_fd(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, handle);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      ssize_t n = pread(fd, payload + request.offset, (size_t)request.length,
-                        (off_t)off);
-      if (n < 0) respond_error(metadata, errno);
-      else       respond_ok(metadata, n);
-      break;
-    }
-    case HC_V0_OP_FILE_CLOSE: {
-      const struct hc_file_close_req_v0 *req =
-          (const struct hc_file_close_req_v0 *)payload;
-      if (hostcall_close_handle_token(
-              handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
-              req->handle) < 0)
-        respond_error(metadata, errno);
-      else
-        respond_ok(metadata, 0);
-      break;
-    }
-    case HC_V0_OP_FILE_STAT_BASIC: {
-      const struct hc_file_stat_basic_req_v0 *req =
-          (const struct hc_file_stat_basic_req_v0 *)payload;
-      int fd = hostcall_lookup_handle_fd(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      struct stat st;
-      if (fstat(fd, &st) < 0) { respond_error(metadata, errno); break; }
-      struct hc_file_stat_basic_resp_v0 *resp =
-          (struct hc_file_stat_basic_resp_v0 *)payload;
-      resp->file_size = (hostcall_u64_t)st.st_size;
-      resp->mode = (hostcall_u64_t)st.st_mode;
-      resp->reserved0 = 0;
-      resp->reserved1 = 0;
-      metadata->offset = 0;
-      metadata->length = HC_FILE_STAT_BASIC_RESP_V0_SIZE;
-      respond_ok(metadata, 0);
-      break;
-    }
-    case HC_V0_OP_FILE_SYNC: {
-      const struct hc_file_sync_req_v0 *req =
-          (const struct hc_file_sync_req_v0 *)payload;
-      int fd = hostcall_lookup_handle_fd(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      if (fsync(fd) < 0) respond_error(metadata, errno);
-      else               respond_ok(metadata, 0);
-      break;
-    }
-    case HC_V0_OP_FILE_TRUNCATE: {
-      const struct hc_file_truncate_req_v0 *req =
-          (const struct hc_file_truncate_req_v0 *)payload;
-      hostcall_u64_t want = req->size;
-      int fd = hostcall_lookup_handle_fd(
-          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
-      if (fd < 0) { respond_error(metadata, errno); break; }
-      if (ftruncate(fd, (off_t)want) < 0) respond_error(metadata, errno);
-      else                                respond_ok(metadata, 0);
-      break;
-    }
-    case HC_V0_OP_PATH_ACCESS:
-    case HC_V0_OP_PATH_DELETE: {
-      memcpy(path_snapshot, payload + request.offset, (size_t)request.length);
-      path_snapshot[request.length] = '\0';
-      int rc = request.opcode == HC_V0_OP_PATH_ACCESS
-                   ? access(path_snapshot, F_OK)
-                   : unlink(path_snapshot);
-      if (rc < 0) respond_error(metadata, errno);
-      else        respond_ok(metadata, 0);
-      break;
-    }
-    default:
-      fprintf(stderr, "stdio-probe: unexpected opcode %llu\n",
-              (unsigned long long)request.opcode);
-      respond_error(metadata, ENOSYS);
-      break;
-    }
+    metadata->phase = HC_V0_PHASE_RESP;
     ++serviced;
   }
 
   fprintf(stderr, "stdio-probe: did not reach DONE\n");
-  hostcall_cleanup_open_handles(handle_slots,
+  hostcall_cleanup_open_handles(host.slots,
                                 HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES);
   capstone_cleanup();
   return 1;

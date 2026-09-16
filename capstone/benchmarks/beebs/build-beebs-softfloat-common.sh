@@ -36,6 +36,13 @@ CAPSTONE_SOFTFLOAT_BUILTINS=(
   # carrier.
   addtf3 subtf3 multf3 comparetf2 extenddftf2
   fixtfsi fixunstfsi floatsitf floatunsitf
+  # The second TF wave, from running libc-test rather than one probe: musl's
+  # floatscan (behind strtod, sscanf and every scanf) divides in long double
+  # and converts float and double to and from it, and tgmath converts float to
+  # int64. Thirteen libc-test programs failed to link on exactly these four TF
+  # symbols and one on __fixsfdi (2026-09-16).
+  divtf3 extendsftf2 trunctfdf2 trunctfsf2
+  fixsfdi fixunssfdi
 )
 
 softfloat_objs=()

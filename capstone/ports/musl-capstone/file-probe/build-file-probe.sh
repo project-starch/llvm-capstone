@@ -75,11 +75,16 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/tls.c"                  -o "$OUT_DIR/tls.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$PORT_DIR/runtime/set_thread_area.S" -o "$OUT_DIR/set_thread_area.o"
+# hostcall.c longjmps out of exit(), so setjmp.S is part of the runtime now and
+# not only of the libc-test harness. The control below counts undefined symbols,
+# so a missing one shows up there first.
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 -c "$PORT_DIR/runtime/setjmp.S" -o "$OUT_DIR/setjmp.o"
 "$CLANG" "${CF[@]}" -c "$SCRIPT_DIR/file_probe_domain.c"         -o "$OUT_DIR/file_probe.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/file_probe.o" "$ARCHIVE"
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/file_probe.o" "$ARCHIVE"
 
 # THE CONTROL. domain_main present so --gc-sections keeps the chain alive, no
 # hostcall implementation, so the reference musl's write makes has nothing to
@@ -98,7 +103,7 @@ STUB
 set +e
 control=$("$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DIR/nohostcall.dom" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/stub_main.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/file_probe.o" "$ARCHIVE" 2>&1)
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/file_probe.o" "$ARCHIVE" 2>&1)
 set -e
 undef=$(printf '%s\n' "$control" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | sort -u)
 if [ "$undef" != "__capstone_hostcall" ]; then
@@ -109,7 +114,7 @@ fi
 # The guest-side host: shares the two regions and services WRITE_STDOUT. Built
 # with the buildroot toolchain because it runs as an ordinary Linux process
 # inside the QEMU guest, not in a domain.
-"$GUEST_CC" -O2 -I"$SCRIPT_DIR" -I"$LIBCAPSTONE_DIR" -I"$HOSTCALL_H_DIR" \
+"$GUEST_CC" -O2 -I"$SCRIPT_DIR" -I"$PORT_DIR/runtime" -I"$LIBCAPSTONE_DIR" -I"$HOSTCALL_H_DIR" \
   -I"$REPO_ROOT/capstone/tests/runtime-qemu" \
   -o "$OUT_HOST" "$SCRIPT_DIR/file_probe_host.c" "$LIBCAPSTONE_C"
 

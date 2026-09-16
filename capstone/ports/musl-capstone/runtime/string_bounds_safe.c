@@ -106,3 +106,76 @@ void *memccpy(void *restrict dest, const void *restrict src, int c, size_t n)
    the word-at-a-time code is back in the image through the side door. */
 char *__stpcpy(char *restrict, const char *restrict) __attribute__((alias("stpcpy")));
 char *__stpncpy(char *restrict, const char *restrict, size_t) __attribute__((alias("stpncpy")));
+
+/* ---- memcpy, memmove, memset: tag-preserving ---------------------------
+ *
+ * These three are a different problem from the scanning routines above, and a
+ * worse one. musl's memcpy copies a machine word at a time within the length
+ * it was given, so it never reads out of bounds. What it does instead is copy
+ * 8-byte words through a capability that holds 16-byte tagged values, and an
+ * 8-byte load-store pair of half a capability yields an untagged one: a struct
+ * with a pointer in it, copied by musl's memcpy, comes out with a pointer that
+ * faults on first use. Byte-wise copying does the same thing more slowly. The
+ * only copy that preserves a tag is a 16-byte capability load and store of a
+ * 16-aligned slot, which is what the compiler emits for a pointer-typed access
+ * and what this code asks for by copying through `void **`.
+ *
+ * So: aligned 16-byte slots move as capabilities, the unaligned head and tail
+ * as bytes. A tagged value that is not 16-aligned in both source and target
+ * cannot be preserved by any copy, which is also CHERI's rule, and the bytes
+ * of it are still copied correctly, only untagged.
+ *
+ * This is the same rule level0.c's realloc has to follow, and does now, by
+ * calling memmove. Found via libc-test's inet_pton, whose inet_ntop compresses
+ * the zero run with memmove: the wrong answer there was the visible half of a
+ * defect whose invisible half is every pointer-bearing struct any program ever
+ * copies.
+ */
+typedef void *cap_t;
+#define CAP_ALIGNED(p) ((((__UINTPTR_TYPE__)(p)) & 15) == 0)
+
+void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+{
+	unsigned char *d = dst;
+	const unsigned char *s = src;
+	if (((__UINTPTR_TYPE__)d & 15) == ((__UINTPTR_TYPE__)s & 15)) {
+		while (n && !CAP_ALIGNED(d)) { *d++ = *s++; n--; }
+		while (n >= 16) {
+			*(cap_t *)d = *(const cap_t *)s;
+			d += 16; s += 16; n -= 16;
+		}
+	}
+	while (n--) *d++ = *s++;
+	return dst;
+}
+
+void *memmove(void *dst, const void *src, size_t n)
+{
+	unsigned char *d = dst;
+	const unsigned char *s = src;
+	if (d == s || n == 0) return dst;
+	if ((__UINTPTR_TYPE__)d < (__UINTPTR_TYPE__)s ||
+	    (__UINTPTR_TYPE__)d >= (__UINTPTR_TYPE__)s + n)
+		return memcpy(dst, src, n); /* no overlap, or forward copy is safe */
+	/* Overlapping with d after s: copy backwards, capabilities where aligned. */
+	d += n; s += n;
+	if (((__UINTPTR_TYPE__)d & 15) == ((__UINTPTR_TYPE__)s & 15)) {
+		while (n && !CAP_ALIGNED(d)) { *--d = *--s; n--; }
+		while (n >= 16) {
+			d -= 16; s -= 16; n -= 16;
+			*(cap_t *)d = *(const cap_t *)s;
+		}
+	}
+	while (n--) *--d = *--s;
+	return dst;
+}
+
+void *memset(void *dst, int c, size_t n)
+{
+	/* Bytes. A memset cannot create a tag, and writing bytes over a slot
+	   clears any tag there, which is what overwriting a capability with
+	   integer data must do. */
+	unsigned char *d = dst;
+	while (n--) *d++ = (unsigned char)c;
+	return dst;
+}
