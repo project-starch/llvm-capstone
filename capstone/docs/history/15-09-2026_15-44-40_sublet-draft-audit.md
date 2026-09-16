@@ -182,15 +182,30 @@ This is the shape that survives its own repetition. Two instances the same eveni
 
 **Quantified 2026-09-15 by the RTL lane, with a caveat that must travel with the number.** The
 unspliced walk costs exactly **3.000 cycles per dead node crossed** — `cost = 3N + 249`, fitting
-exactly at six consecutive rungs from N=8 to N=1024; spliced is exactly **0.000**, 328 cycles at six
-different N, identical to the cycle. Crossover at N ≈ 26, and at N=3072 it is 96,822 against 516.
+exactly at **ten** points from N=8 to N=1024 (8, 9, 10, 12, 16, 64, 128, 160, 512, 1024), reproduced
+value for value across separate runs and separate testlist files; spliced is exactly **0.000**, 328
+cycles at six different N, identical to the cycle. Crossover at N ≈ 26, and at N=3072 it is 96,822 against 516.
 
-**The intercept is scoped, the slope is not.** The `249` term is established **only for N >= 8**:
-N=1 sits ~200 cycles below the fit on both trees, so revoke's fixed cost steps by roughly 4x
-somewhere in 1..8, and a fine ladder at N=2..7 is running to locate it. The honest form to quote
-today is *"3 cycles per node, plus a fixed term of ~249 established only for N >= 8"*. This touches
-neither the 3.000 slope, nor the spliced 0.000, nor the crossover (which lies inside the fitted
-range), nor the conclusion that splicing removes the term entirely.
+**The intercept is scoped, the slope is not — and the bound now has a mechanism rather than an
+empirical edge.** State it as *"the intercept of a fit valid for N >= 8"*. An earlier reading that
+revoke's fixed cost "steps by roughly 4x somewhere in 1..8" is **withdrawn**: there is no single
+step. Exactly two rungs sit exactly **+91 cycles** above the fit, and they are **N=6 and N=7**.
+
+The cause was measured rather than inferred, by a matched-pair manipulation. The write-through
+dcache write buffer is **8 deep** (`CVA6ConfigWtDcacheWbufDepth`); halved to 4 and re-run, the +91
+pair moved from {6,7} to {2,3} — a shift of **exactly 4** — while every rung from N=8 upward stayed
+**byte-identical** between the two configurations. So the pair sits at depth−2 and depth−1, tracks
+the buffer depth exactly, and the perturbation provably does not reach the fitted range. Tree
+restored and re-verified afterwards.
+
+**A caution about the lower bound that is worth more than the bound.** At the default depth **N=5
+lands exactly on the fit — and is not support for it.** The sub-depth curve rises at ~60
+cycles/node and merely *crosses* the slope-3 line there. **A point that agrees for the wrong reason
+is how a fit range gets overstated**, and it would have been counted as evidence by anyone
+extending the range downward until agreement stopped. Do not count N=5.
+
+None of this touches the 3.000 slope, the spliced 0.000, the crossover at N ≈ 26 (inside the range),
+or the conclusion that splicing removes the term entirely.
 
 **Do not quote 3 cycles/node as the correction to R1's model.** It is an **L1-hit** cost and therefore
 a **lower bound** on what splicing saves. The dcache holds exactly 2048 nodes, the fit holds to 1024
