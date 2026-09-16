@@ -397,11 +397,23 @@ Items 5 and 6 both require an operation to be *refused*. None of `init_res`, `re
 refusal is to never answer and hang the core — the shape R-27 was, before it was fixed and archived. **This is a prerequisite,
 not a detail**, and it is specified as Part B so it can be approved and built independently.
 
-## 8. Owner and approval
+## 8. Owner and approval — **owner NAMED 2026-09-16; the two approvals remain OPEN**
 
 M1's start gate: *"The lead must name the runtime/RTL owner and approve the algorithm and stale
-reference invariant before anyone schedules the reclaiming arm."* This document supplies the algorithm
-(§1–§3) and the invariant (§3). Naming the owner and approving both is the lead's.
+reference invariant before anyone schedules the reclaiming arm."* Three parts.
+
+**Part 1 is now satisfied: the lead has named the RTL lane as owner** (2026-09-16). That lane is
+accountable for the algorithm, the invariant, the implementation and the wrap bound — which is the
+role this document was written in.
+
+**Parts 2 and 3 are NOT satisfied and the owner cannot satisfy them.** They are approvals *of* the
+owner's work; an owner approving their own algorithm makes the gate decorative. That is not a
+formality here — the audit above found three mechanisms in this very document individually wrong in
+ways that would have shipped, and it found them after the author had already reviewed it twice.
+
+**So: nothing is scheduled, and no reclaiming arm may be planned, until the lead approves the algorithm
+(§1–§3 as corrected) and the stale-reference invariant (§3).** The protocol's own escape applies if
+they do not: *"If no valid algorithm is available, return an implementation-blocked handoff."*
 
 ## 9. The id-transplant primitive
 
