@@ -438,7 +438,16 @@ static void run_linear(unsigned reps) {
  * faulting probe (--stale-take: a capability operation through the oldest retained alias, which must
  * fault INVALID_CAPABILITY and, in a domain, wedges -- M-1) runs LAST and only when asked. Subordinate
  * handles retained across a release are not modelled in this version. */
+/* M1_LIVE is the live-object count AND the fixture's geometry: the carve loop below takes one 64-byte
+ * leaf per live object, so -DM1_LIVE=4 and =64 carve a 256-byte and a 4 KiB pool respectively. A
+ * geometry that changes with this knob is the intent, not a defect; a reader comparing arenas across
+ * arms must compare M1_LIVE first. Overridable because the release walk's per-node conversion assumes
+ * each revoke walks alloc/M1_LIVE dead nodes, and sweeping this knob is the only way to test that
+ * assumption: if the measured slope scales as 1/M1_LIVE the conversion holds, and if it does not the
+ * per-node figure is wrong by exactly that factor (apollo, 2026-09-16). */
+#ifndef M1_LIVE
 #define M1_LIVE 16
+#endif
 /* The retained-reference buffer is an INSTRUMENT limit, not a property of the system, and a measurement
  * must not be bounded by its own instrument. At C = 256 the run's target is 10*C = 2560, so a 2048-entry
  * buffer stopped the pressure and release arms at stop=buffer before either reached its target and left
