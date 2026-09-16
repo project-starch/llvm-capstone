@@ -59,7 +59,14 @@ These are not inconveniences; each one has been read as a result.
 1. **DELETE THE ARTIFACTS BEFORE EVERY RUN.**
    ```bash
    rm -f verif/sim/out_*/veri-testharness_sim/<NAME>*
+   rm -f verif/sim/verilator.vcd verif/sim/verilator.fst
    ```
+   **The second line is not optional and the first cannot replace it.** The run's tail does
+   `[ ! -f verilator.vcd ] || mv verilator.vcd <dir>/<NAME>.vcd`, so a waveform left by an EARLIER
+   traced run is renamed into THIS run's directory under THIS run's test name — a name-scoped delete
+   cannot see it, because until the rename it has a different name. Seen 2026-09-16: a 9.3 GB file
+   dated the previous day appeared as today's test's `.vcd`, on a run that requested no tracing and
+   could not have produced one. Check the mtime against the run before reading any waveform.
    A failed *compile* leaves the previous run's `.log`/`.iss` in place, and the parser happily
    reports them. A stale log has already been read as "exception + timeout" when the run under
    test never built. If you skip the delete, check the file mtime against the wall clock.

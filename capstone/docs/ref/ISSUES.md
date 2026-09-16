@@ -2858,7 +2858,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
-### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324) — the MMU exception register upstream #2528 (23355d29f) deleted is restored exactly as deleted; delivery measured end to end at the ex_stage boundary for causes 4/6/24/27/28, load and store side, each ex_o.valid one cycle wide; lint at baseline. SHIPS WITH R-24 AND CANNOT SHIP WITHOUT IT. NOT synthesised, NOT on the board, and the monitor faults in its own trap handler until sbi_capstone.S:113 is fixed — see WHAT THE FIX EXPOSES. Originally: demonstrated at f6ec6c198, mechanism from source, timing from a waveform, AUDITED (raised 21 times, delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check`
+### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324) — the MMU exception register upstream #2528 (23355d29f) deleted is restored exactly as deleted; delivery measured end to end at the ex_stage boundary for causes 4/6/24/27/28, load and store side, each ex_o.valid one cycle wide; lint at baseline. SHIPS WITH R-24 AND CANNOT SHIP WITHOUT IT. NOT synthesised, NOT on the board, and the monitor faulted in its own trap handler until sbi_capstone.S:113 was fixed — D3 CLOSED 2026-09-16, capstone-sbi d3-monitor-capability-writeback 2dcd3a5, validated on this branch by a matched pair (old shape cause 24 and store refused, replacement cause 0 and store lands, cursor restored, 1 trap in the run); the branch is held off capstone-bootstrap so the drivers keep their pinned monitor — see WHAT THE FIX EXPOSES. Originally: demonstrated at f6ec6c198, mechanism from source, timing from a waveform, AUDITED (raised 21 times, delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check`
 
 > **Folder (the report):** `capstone/tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/` — the directed
 > test `lsu-mmode-gate.S`, the runner, the three runs' result lines and the waveform extract.
@@ -2995,6 +2995,22 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > the current silicon the exception is never delivered, so before and after both run clean. An
 > emulator pass against the flashed bitstream proves only that nothing broke, never that the change
 > is correct. Only simulation of the fix branch can validate it.
+>
+> **D3 IS CLOSED — the monitor fix exists and is validated, 2026-09-16.** `capstone-sbi`
+> `d3-monitor-capability-writeback` at `2dcd3a5`: the writeback moves the stack capability's cursor in
+> place (`CINCOFFSET` with `rd` = `rs1` = `sp`, the store at 16 off `sp`, the negated offset back), so the
+> source-consumption question does not arise. Validated where it CAN be — against this branch, since on
+> the deployed bitstream the old form and the new one both run clean. Matched pair
+> `tests/monitor/d3-monitor-writeback.S` at `c77c65324`, 601 cycles: the replacement takes **cause 0** and
+> its store reads back, the capability is **bit-identical before and after** the in-place move, and the old
+> shape run last takes **cause 24** with its store refused — **exactly one trap in the run, and it was the
+> control's.** Had the control not trapped, the build would not be delivering the exception and the
+> replacement's clean return would have meant nothing. The branch is held OFF `capstone-bootstrap`, which
+> stays at `4274268`, the commit the board drivers pin by hash. Note: `RVTEST_PASS` is the same defect —
+> `sw TESTNUM, tohost, t5` expands to a store through an `auipc` integer base — which is why ten of the
+> twelve sweep tests time out in their epilogue; that pair exits through a capability minted over `tohost`
+> and reports SUCCESS, so the same three lines would convert those ten timeouts into readings. Full note:
+> `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
 >
 > **Fixing the monitor does NOT make the plain-data-access safety rows hold.** The gate is
 > `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` and domains run in S-mode, so the check still never

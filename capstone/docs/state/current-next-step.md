@@ -11,11 +11,12 @@
 >   reclaiming is planned meanwhile. The one experiment that would settle where the 3.2 ns actually
 >   came from is a synthesis of a semantically null duplication of that send site, with its generated
 >   RTL read back before it goes; that is a synth-lane run on the lead's word, not a lane's own call.
-> * **This session (backup)** — D3's single-site monitor change (`sbi_capstone.S:113`, `CINCOFFSET`
->   instead of integer arithmetic) is still mine and still unstarted; it can only be validated by
->   simulating the RTL lane's `r34-r24-exception-delivery` branch, because with delivery broken the
->   before and the after both run clean. It is not started because the bitstream ordering now puts
->   R-12 first and the lead has not asked for it.
+> * **This session (backup)** — D3 is **DONE** (2026-09-16): the monitor change is
+>   `capstone-sbi` `d3-monitor-capability-writeback` at `2dcd3a5`, validated by a matched pair against
+>   the delivery-fix branch — replacement cause 0 with its store landing, old shape cause 24 with its
+>   store refused, one trap in the run and it was the control's. The branch is held off
+>   `capstone-bootstrap` so the drivers keep their pinned monitor, and it lands with the R-34/R-24 pair
+>   whenever the lead schedules that bitstream. Nothing else here is mine and unstarted.
 >
 > **Waiting on the lead — ten, merged rather than replaced (nothing here is dropped for being a day old):**
 > (1) the **author-line ruling**, which still holds C-32, F1/P2 and every optimised Sublet number —

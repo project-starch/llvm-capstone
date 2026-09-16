@@ -59,6 +59,18 @@ Minimal snapshot. Read first in every session.
   superlinearly in cumulative allocations, against flat-at-16 with slope exactly 0.00 under the
   emulator. Queue, gate order and the lead's open decisions:
   `docs/plans/2026-09-15-consolidated-board-queue.md`.
+* **D3 IS CLOSED: the monitor's one plain access through an integer base is fixed and validated.**
+  `capstone-sbi` `d3-monitor-capability-writeback` at `2dcd3a5` moves the stack capability's cursor in
+  place rather than computing an integer address from it. Validated where it CAN be — against the
+  R-34/R-24 delivery-fix branch, because on the deployed bitstream the old form and the new one both run
+  clean. Matched pair at `c77c65324`, 601 cycles: the replacement takes cause 0 and its store reads back,
+  the capability is bit-identical before and after, the old shape run last takes **cause 24** with its
+  store refused, and there is **exactly one trap in the run — the control's**. The branch is held OFF
+  `capstone-bootstrap`, which stays at the commit the drivers pin, so a boot today bakes the monitor it
+  expects. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
+  is the same defect and why ten of the twelve sweep tests time out in their epilogue; exiting through a
+  capability minted over `tohost` works. Instrument, readings and note:
+  `tests/monitor/`, `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
 * **The stale-artifact trap now fires mechanically** (`a0d83f6b8a14`). A worktree generates its anvil
   output at creation time, so a source patch applied afterwards leaves every local gate testing the
   pre-edit design: a 95-test sweep read as "the change is inert" when it meant "the change is absent",
