@@ -9,6 +9,17 @@ Minimal snapshot. Read first in every session.
 > crosses the warm/cold knee and its slope measures the knee rather than either regime. The cold
 > figure to cite is the board lane's Q4 **silicon** fit — 25.45 cycles per node walked, R² = 0.999969
 > over eleven points wholly inside the cold regime. The 3.000 warm slope is unaffected.
+>
+> **AND AN INSTRUMENT RELABEL EVERY LANE NEEDS BEFORE ITS NEXT SIMULATION.** `S12_MEM_DELAY` is **not a
+> cycle count**: `stream_delay.sv` has a 4-bit counter, so the value is truncated to its low nibble and
+> the knob is a **period-16 sawtooth, not a dial**. The `40` used in all 39 places it appears — and
+> described everywhere as "a 40-cycle memory" — realises as **8**. Measured totals on one tree and
+> test: define 0 → 708, 2 → 1,415, 12 → 3,427, **16 → 1,004**. Turning it *up* from 12 to 16 turns
+> latency *down* to near bypass, so anything ≡ 0 mod 16 asks for a large delay and gets essentially
+> none, which reads as a clean negative rather than an obvious failure. **Usable range is 2..15.**
+> This is a magnitude label, **not a retraction** — S-12, R-26 and R-34 all stand, dated to the
+> revisions they ran at, on an 8-cycle memory. Read the define back from
+> `work-ver/Variane_testharness__verFiles.dat`, never from the log.
 > **2026-09-14 and 2026-09-15 are NOT in this file**; that block of board work is in
 > `current-next-step.md`, whose 09-15 header stands.
 
