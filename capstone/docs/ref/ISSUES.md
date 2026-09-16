@@ -3694,7 +3694,17 @@ globals *after* ISel would silently break this positional scheme.
 > would add 2 reads and 2 writes to every DROP — which, unlike the walk, cannot amortise them.
 
 > **THE SECOND DESIGN EXISTS (2026-09-16): `docs/plans/2026-09-16-revnode-reclamation-v2.md`. Start
-> there, not from the rejected v1.** It answers the reconciliation's six items and adds three the M1
+> there, not from the rejected v1 — but it has been AUDITED TOO and DOES NOT SHIP AS WRITTEN EITHER.**
+> v1 was incomplete, having no mechanism; v2 has mechanisms and three of them were individually wrong
+> in ways that would have shipped: the answer to the fatal item relied on a broadcast that does not
+> occur at reclaim, the allocator never composed the new id (so a recycled slot would be handed out at
+> generation 0 and every check would pass vacuously), and the `free` bit was to be set in a helper
+> shared with DROP, which would have marked still-LINKED nodes reclaimable. All are corrected in place
+> and marked **[AUDIT]**; the verdict banner is at the top of the document. **Read the banner before
+> the body.** One audit item is settled by measurement rather than argument: the generation's home bits
+> are structurally always zero today, so the round trip had never been exercised — a node written with
+> every depth bit set reads back 4294967295, all 32 bits surviving, with the high bits after an
+> eviction the stated residual. It answers the reconciliation's six items and adds three the M1
 > start gate does not cover — a failure encoding, the id-transplant primitive, and the closed site
 > inventory. It supplies the mechanism v1 lacked: an **intrusive FIFO free list threaded through the
 > node's own `next`** (zero new storage), with reuse eligibility of **unlinked, not merely invalid**.
