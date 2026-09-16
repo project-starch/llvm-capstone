@@ -12,11 +12,13 @@
 #   the open line     -- the helper resolved the path and handed out token 1.
 #                        Proves the request layout, since a wrong path offset
 #                        would open something else or nothing at all.
-#   the DONE line     -- FIVE serviced requests and status OK. The count is
-#                        load-bearing: open, write, read, close and the refused
-#                        open are five, and the refused read is not, because the
-#                        domain's own table answers it. A sixth round would mean
-#                        the closed descriptor still reached the helper.
+#   the DONE line     -- THIRTEEN serviced requests and status OK. The count is
+#                        load-bearing and derived in file_probe.h: five for the
+#                        small arms, then open, three write chunks, three read
+#                        chunks and close for the 10 000-byte arm. A transfer
+#                        that went out in one round, or one more than it should,
+#                        changes the number; a refused read that reached the
+#                        helper would too.
 #   the pass line     -- printed only when rounds, status and the byte
 #                        comparison all agree.
 set -euo pipefail
@@ -47,7 +49,7 @@ python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
     'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; cp /mnt/host/file_probe.user /tmp/file_probe.user && chmod 0755 /tmp/file_probe.user && /tmp/file_probe.user /mnt/host/file_probe.dom' \
   --success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__' \
   --success-marker 'file-probe: opened /tmp/musl_file_probe.txt as token 1' \
-  --success-marker 'file-probe: DONE, serviced 5 request(s), capstone_main = 0 (OK)' \
+  --success-marker 'file-probe: DONE, serviced 13 request(s), capstone_main = 0 (OK)' \
   --success-marker '__CAPSTONE_MUSL_FILE_PROBE_PASSED__'
 
 echo "run-file-probe.sh completed. Full serial log: $LOG_FILE"

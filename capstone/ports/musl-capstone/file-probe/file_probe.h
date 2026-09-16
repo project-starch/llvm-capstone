@@ -25,8 +25,32 @@
 #define FP_CLOSED_FD_READ     9  /* reading a closed descriptor succeeded */
 #define FP_CLOSED_WRONG_ERR  10  /* it failed, but not with EBADF */
 
-/* OPEN, WRITE, READ, CLOSE, and one refused OPEN. The refused read never
- * reaches the helper, because the domain's own descriptor table rejects it. */
-#define MUSL_FILE_PROBE_EXPECTED_ROUNDS 5
+/* The large transfer. 10 000 bytes against a payload window of 4096 with a
+ * 32-byte header, so 4064 per round: two full chunks and a partial third of
+ * 1872. Chosen NOT to be a multiple of the chunk size, so the tail path runs
+ * too. Every byte carries its own offset, so a chunk delivered out of order, at
+ * the wrong file offset, or truncated changes the comparison; matching counts
+ * alone would not see any of those. */
+#define MUSL_FILE_PROBE_BIG_BYTES 10000UL
+#define MUSL_FILE_PROBE_CHUNK (4096UL - 32UL)
+#define MUSL_FILE_PROBE_BIG_ROUNDS \
+  ((MUSL_FILE_PROBE_BIG_BYTES + MUSL_FILE_PROBE_CHUNK - 1) / MUSL_FILE_PROBE_CHUNK)
+#define MUSL_FILE_PROBE_BYTE_AT(i) ((unsigned char)(((i) * 7 + ((i) >> 8)) & 0xff))
+
+/* The round count is derived, not typed, because it is the assertion that the
+ * chunking happened: OPEN, WRITE, READ, CLOSE and one refused OPEN are five,
+ * the refused read is zero because the domain's own table answers it, and the
+ * large arm adds an OPEN, its write rounds, its read rounds and a CLOSE. A
+ * transfer that went out in one round, or in one more than it should, changes
+ * this number. */
+#define MUSL_FILE_PROBE_EXPECTED_ROUNDS \
+  (5 + 2 + 2 * MUSL_FILE_PROBE_BIG_ROUNDS)
+
+#define FP_BIG_OPEN_FAILED   11
+#define FP_BIG_WRITE_SHORT   12  /* write() returned less than asked, no short-write cause exists here */
+#define FP_BIG_SEEK_FAILED   13
+#define FP_BIG_READ_SHORT    14
+#define FP_BIG_MISMATCH      15  /* a byte differs; the first differing offset is the status' upper bits */
+#define FP_BIG_CLOSE_FAILED  16
 
 #endif

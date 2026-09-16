@@ -51,7 +51,15 @@ static const char *status_name(long long s) {
   case FP_MISSING_WRONG_ERR: return "MISSING_WRONG_ERR (errno lost or sign wrong)";
   case FP_CLOSED_FD_READ:    return "CLOSED_FD_READ (stale slot)";
   case FP_CLOSED_WRONG_ERR:  return "CLOSED_WRONG_ERR";
-  default:                   return "UNKNOWN";
+  case FP_BIG_OPEN_FAILED:   return "BIG_OPEN_FAILED";
+  case FP_BIG_WRITE_SHORT:   return "BIG_WRITE_SHORT (chunk loop stopped early)";
+  case FP_BIG_SEEK_FAILED:   return "BIG_SEEK_FAILED";
+  case FP_BIG_READ_SHORT:    return "BIG_READ_SHORT (chunk loop stopped early)";
+  case FP_BIG_CLOSE_FAILED:  return "BIG_CLOSE_FAILED";
+  default:
+    if ((s & 0xff) == FP_BIG_MISMATCH)
+      return "BIG_MISMATCH (first differing offset in status >> 8)";
+    return "UNKNOWN";
   }
 }
 

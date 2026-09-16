@@ -69,5 +69,34 @@ int capstone_main(void)
     if (errno != EBADF)
         return FP_CLOSED_WRONG_ERR;
 
+    /* Arm 4: more than one payload window. Until this arm existed the chunk
+       loops in hc_file_rw had never run more than once, and the tail path
+       never at all: the longest message any probe sent was 34 bytes against a
+       window of 4064. Static buffers, because 20 000 bytes on a domain stack
+       is a question this probe is not asking. */
+    static unsigned char big_out[MUSL_FILE_PROBE_BIG_BYTES];
+    static unsigned char big_in[MUSL_FILE_PROBE_BIG_BYTES];
+    for (unsigned long i = 0; i < MUSL_FILE_PROBE_BIG_BYTES; i++) {
+        big_out[i] = MUSL_FILE_PROBE_BYTE_AT(i);
+        big_in[i] = 0;
+    }
+
+    int bfd = open(MUSL_FILE_PROBE_PATH, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (bfd < 0)
+        return FP_BIG_OPEN_FAILED;
+    if (write(bfd, big_out, MUSL_FILE_PROBE_BIG_BYTES)
+        != (ssize_t)MUSL_FILE_PROBE_BIG_BYTES)
+        return FP_BIG_WRITE_SHORT;
+    if (lseek(bfd, 0, SEEK_SET) != 0)
+        return FP_BIG_SEEK_FAILED;
+    if (read(bfd, big_in, MUSL_FILE_PROBE_BIG_BYTES)
+        != (ssize_t)MUSL_FILE_PROBE_BIG_BYTES)
+        return FP_BIG_READ_SHORT;
+    for (unsigned long i = 0; i < MUSL_FILE_PROBE_BIG_BYTES; i++)
+        if (big_in[i] != big_out[i])
+            return FP_BIG_MISMATCH | (int)(i << 8);
+    if (close(bfd) != 0)
+        return FP_BIG_CLOSE_FAILED;
+
     return FP_OK;
 }
