@@ -183,8 +183,14 @@ This is the shape that survives its own repetition. Two instances the same eveni
 **Quantified 2026-09-15 by the RTL lane, with a caveat that must travel with the number.** The
 unspliced walk costs exactly **3.000 cycles per dead node crossed** — `cost = 3N + 249`, fitting
 exactly at six consecutive rungs from N=8 to N=1024; spliced is exactly **0.000**, 328 cycles at six
-different N, identical to the cycle. Fixed cost ~79, crossover at N ≈ 26, and at N=3072 it is 96,822
-against 516.
+different N, identical to the cycle. Crossover at N ≈ 26, and at N=3072 it is 96,822 against 516.
+
+**The intercept is scoped, the slope is not.** The `249` term is established **only for N >= 8**:
+N=1 sits ~200 cycles below the fit on both trees, so revoke's fixed cost steps by roughly 4x
+somewhere in 1..8, and a fine ladder at N=2..7 is running to locate it. The honest form to quote
+today is *"3 cycles per node, plus a fixed term of ~249 established only for N >= 8"*. This touches
+neither the 3.000 slope, nor the spliced 0.000, nor the crossover (which lies inside the fitted
+range), nor the conclusion that splicing removes the term entirely.
 
 **Do not quote 3 cycles/node as the correction to R1's model.** It is an **L1-hit** cost and therefore
 a **lower bound** on what splicing saves. The dcache holds exactly 2048 nodes, the fit holds to 1024
