@@ -7,8 +7,12 @@ Minimal snapshot. Read first in every session.
 > **A RETRACTION leads this block.** The cold-regime revoke slope of **87.1 cycles per node is
 > WITHDRAWN**: N = 2,048 sits only 1,239 cycles above the warm fit, so the 2,048 → 3,072 segment
 > crosses the warm/cold knee and its slope measures the knee rather than either regime. The cold
-> figure to cite is the board lane's Q4 **silicon** fit — 25.45 cycles per node walked, R² = 0.999969
-> over eleven points wholly inside the cold regime. The 3.000 warm slope is unaffected.
+> figure to cite is the board lane's **silicon** measurement, and it is a **range: 25–27 cycles per
+> node walked** — Q4's capacity boot fits 25.45 (R² = 0.999969, eleven points wholly inside the cold
+> regime) and the `M1_LIVE` sweep gives 26.96 over a different allocation range. **Both are silicon,
+> both on the same machine, and they are not averaged**: two measurements taken over different ranges
+> do not combine into one figure, and quoting either alone drops the other's existence. The 3.000 warm
+> slope is unaffected.
 >
 > **AND AN INSTRUMENT RELABEL EVERY LANE NEEDS BEFORE ITS NEXT SIMULATION.** `S12_MEM_DELAY` is **not a
 > cycle count**: `stream_delay.sv` has a 4-bit counter, so the value is truncated to its low nibble and
