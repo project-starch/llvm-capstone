@@ -2918,6 +2918,19 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > boundary waveform nor the full sweep could answer it: `S12_MEM_DELAY` defaults to 0, so every
 > measurement had a response available in the tag cycle and the miss path had never been created.
 >
+> **⚠ LABEL CORRECTION 2026-09-16 — `S12_MEM_DELAY` IS NOT A CYCLE COUNT.** `stream_delay.sv` (both
+> copies in the tree) declares `CounterBits = 4` and `assign counter_load = FixedDelay`, so the
+> parameter is **truncated to its low four bits**. `S12_MEM_DELAY=40` — the value in all 39 places it
+> appears, described everywhere as "a 40-cycle memory" — realises as **40 mod 16 = 8**. Confirmed
+> behaviourally as well as from source: define 12 and define 28 (28 mod 16 = 12) gave IDENTICAL rev1,
+> rev2 and total cycle counts on one tree, while the artifact readback proved the builds received
+> different defines. **The live trap: any value ≡ 0 mod 16 loads a ZERO counter and realises as ~2
+> cycles** — "a 32-cycle memory" gets you none. Only 0 reaches the true bypass; 1 is special-cased;
+> **usable range 2..15.** This is a magnitude label, NOT a retraction: every finding resting on
+> "non-zero latency changes the behaviour" stands, S-12, R-26 and R-34 included. Those runs had an
+> 8-cycle memory. Found while calibrating the R-12 S1 ladder; detail in
+> `docs/history/16-09-2026_11-54-05_r12-s1-revoke-walk-cost-ladder.md`.
+>
 > **Rebuilding at delay 40 and rerunning an existing test does NOT answer it either, and this is the
 > trap worth keeping.** `lsu-mmode-gate` at `S12_MEM_DELAY=40` returns all thirteen readings
 > IDENTICAL to the zero-latency run, value for value, only the cycle counts moving (868 → 2485).
@@ -3631,6 +3644,35 @@ globals *after* ISel would silently break this positional scheme.
 > semantically null duplication of that send site — which must have its generated RTL read back to
 > confirm anvil actually emitted the selector, or a collapsed duplicate yields a null result that reads
 > as a refutation.
+>
+> # 2026-09-16 — S1 LADDER: the cost curve, measured on both trees at non-zero memory latency
+>
+> The table above measured a **four-corpse** run at the testbench's default ZERO latency and reported
+> −11 cycles. That was too small a lever to read a curve off. The parameterised ladder
+> (`r12-s1-walk-ladder.S`, `NROUNDS` per build) at `S12_MEM_DELAY=12` gives the curve:
+>
+> | N dead nodes crossed | unspliced | spliced | ratio |
+> |---:|---:|---:|---:|
+> | 8 | 273 | 328 | 0.8× |
+> | 160 | 729 | 328 | 2.2× |
+> | 1,024 | 3,321 | 328 | 10.1× |
+> | 3,072 | 96,822 | 516 | **187.6×** |
+>
+> **Unspliced marginal cost is exactly 3.000 cycles per dead node** — `rev2 = 3N + 249` fits exactly at
+> every rung from N=8 to N=1,024. **Spliced marginal cost is exactly 0.000** — 328 cycles at six
+> different N, identical to the cycle. The splice pays a fixed ~79 cycles to delete a per-node 3;
+> **crossover at N ≈ 26**.
+>
+> **The 3 is an L1-HIT cost and therefore a LOWER BOUND.** The dcache holds exactly 2,048 nodes (32,768 B
+> / 128-bit lines, a node being one line); the 3.000 slope holds to 1,024 and breaks at 2,048. One SQLite
+> speedtest1 run mints 43,355 nodes — **21× the dcache** — so the workload is entirely in the cold regime
+> the simulation only reaches at its last rung.
+>
+> **The pair is clean by construction:** the control tree's HEAD *is* the merge-base of the two branches,
+> and one source file differs. **The flat cost is a working splice, not an early exit** — a `WITNESS`
+> build behind `#ifdef` (timed path byte-identical) shows the middle handle's own node going valid → 
+> invalid across revoke 2 on **both** trees. Full detail, including the cold rung's internal control:
+> `docs/history/16-09-2026_11-54-05_r12-s1-revoke-walk-cost-ladder.md`.
 >
 > **`drop_req` deliberately NOT spliced:** the walk's already-invalid branch simply advances, so dropped
 > nodes sit inside the spliced run and are swept by the next revoke that crosses them. An eager unlink

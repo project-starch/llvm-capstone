@@ -4520,3 +4520,34 @@ indexed read whose price does not grow with the table's occupancy; a growing ali
 access path at this scale (indistinguishable arms, not "flat to 0.03 %").** Node budget per boot ≤ 80 % of 65,532 (the four boots minted 12, 12, 12 and 9
 invocations' worth, well under). Firmware hashes per boot are in the manifest (each boot was re-baked); the
 domain image is build9 in all four.
+
+## Revocation walk cost vs. dead nodes crossed, with and without the chain splice (simulation, 2026-09-16)
+
+Cycle-accurate RTL simulation (Verilator), not silicon. Matched pair: the control tree's HEAD **is** the
+merge-base of the splice branch, and the two differ in one source file. Memory latency non-zero
+(`S12_MEM_DELAY=12`; see the label correction below before quoting any delay figure).
+
+| dead nodes crossed by the walk | unspliced (cycles) | spliced (cycles) |
+|---:|---:|---:|
+| 8 | 273 | 328 |
+| 64 | 441 | 328 |
+| 160 | 729 | 328 |
+| 512 | 1,785 | 328 |
+| 1,024 | 3,321 | 328 |
+| 2,048 | 7,632 | 777 |
+| 3,072 | 96,822 | 516 |
+
+**Unspliced: exactly 3.000 cycles per dead node** (`cost = 3N + 249`, exact at six consecutive rungs
+from N=8 to N=1,024). **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
+cycle. Fixed cost of the splice ≈ 79 cycles; **crossover at N ≈ 26.**
+
+**The 3 cycles/node is an L1-hit cost and a LOWER BOUND on the saving.** The dcache holds exactly 2,048
+nodes (32,768 B, 128-bit lines, one 128-bit node per line); the linear fit holds to 1,024 and breaks at
+2,048. One SQLite speedtest1 run mints 43,355 nodes = 21× the dcache, so the workload sits entirely in
+the cold regime, which this ladder reaches only at its last rung (there, 96,822 vs 516 = 188×). The cold
+per-node slope rests on a single segment and should not be quoted as a constant; the 3.000 rests on six.
+
+**Instrument caveat that affects every delay figure in this document.** `S12_MEM_DELAY` is truncated to
+four bits by `stream_delay.sv` (`CounterBits = 4`), so the widely-quoted `=40` / "40-cycle memory"
+realises as **8**. Values ≡ 0 mod 16 realise as ~2 cycles. Usable range 2..15. This is a magnitude
+label, not a retraction of any result that rests on latency being non-zero.
