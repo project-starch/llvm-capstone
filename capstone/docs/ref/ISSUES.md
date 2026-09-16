@@ -3716,6 +3716,34 @@ globals *after* ISel would silently break this positional scheme.
 > nodes sit inside the spliced run and are swept by the next revoke that crosses them. An eager unlink
 > would add 2 reads and 2 writes to every DROP — which, unlike the walk, cannot amortise them.
 
+> # 2026-09-16 — R-12's HANG is gone: pool exhaustion is an ARCHITECTURAL FAULT (cause 30). Built and measured on `m1-reclaimer`.
+>
+> The 65,533rd allocation used to be deliberately never answered — the unit dropped the request rather
+> than alias an id, the dynamic unit blocked forever on its `recv`, and the only external signal was a
+> debug LED. From software it was indistinguishable from every other wedge. **Now the unit replies with a
+> two-bit status and the dynamic unit raises `INSUFFICIENT_SYSTEM_RESOURCES`** — the spec's own cause 30
+> (`int-except.adoc:27`, *"up to the implementation where to raise it"*), already in QEMU as
+> `RISCV_EXCP_INSUF_RESOURCES`, mapped **by name** in both encoders because no appendable ordinal reaches
+> 30 arithmetically. DELIN, which rewrote a node without reading `valid` and so re-broadcast dead
+> indices, now refuses with `INVALID_CAPABILITY`.
+>
+> **Measured, merged tree (splice + R-34/R-24), fixtures with no `CAPENTER`:** `r12-pool-exhaust` —
+> **65,532 mints, then cause 30**; base still valid; second mint 30; SPLIT 30; 3 traps; three unit
+> dprints. **Positive control on the pre-change tree `c49190d90`:** the same program runs to the
+> 3,000,013-cycle ceiling with `tohost = 0`, no exceptions, no prints; its RVFI trace ends with
+> `x18 = 65,532` and the loop jump — **the 65,533rd MREV never retires.** Same count, same instruction;
+> the pair differs by exactly this change. `r12-delin-dead`: DELIN on a revoked node → cause 25.
+>
+> **This is R-12's capacity half made VISIBLE, not lifted.** The ceiling is still 65,532; the reclaimer
+> (Part A of the v2 spec, in progress on the same branch) is what lifts it. The trap is what makes the
+> ceiling *measurable* on a board, and is a prerequisite for the reclaimer regardless, since two of its
+> audit corrections require an operation to be refused and no response channel could say no.
+>
+> **An instrument fact learned here that binds every trap-then-print fixture:** `CAPPRINT` prints at
+> *execute* on the FLU; a late DYN-unit exception flushes and re-executes younger prints, so a register
+> prints **twice, speculative stale value first. Last print wins.** A first-wins parser reads a clean
+> zero.
+>
 > **THE SECOND DESIGN EXISTS (2026-09-16): `docs/plans/2026-09-16-revnode-reclamation-v2.md`. Start
 > there, not from the rejected v1 — but it has been AUDITED TOO and DOES NOT SHIP AS WRITTEN EITHER.**
 > v1 was incomplete, having no mechanism; v2 has mechanisms and three of them were individually wrong
