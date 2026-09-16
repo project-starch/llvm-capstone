@@ -100,6 +100,15 @@ diff. The superproject's gitlink (`b0d7510c`) and the outgoing host's local `mai
 commits behind it. An earlier claim that `drafts` was the live branch twenty ahead of `main` came
 from a stale local ref and is withdrawn.
 
+> **SUPERSEDED 2026-09-16, verified by `apollo-paper` against the remote directly.** The lead
+> rotated the token, so the paper repository **is readable from apollo now** — the access problem
+> below is solved for reads. Two facts in this section have moved: **`main` is `464a5d5a`**, with
+> `7f83725` as an ancestor (the remote advanced by 8; nothing was rewritten), and **there is no
+> `drafts` branch any more**. Cite `7f83725` as a commit, never as a branch tip. Everything else in
+> §6 verified as written — R1 `pending`, M2 `pending`, P1 already `partial`. **Still open:**
+> `board/e1-s1s2-hardware` is not on the remote, so the E1/R1/M2/H1 bundles remain reachable only
+> from focs-server; read access does not imply the write access that push needs.
+
 Unpushed, on the outgoing host:
 
 * **local `main` `c83379f`** — `studies.json` R1 and P1 `pending` → `partial`. Against the remote,
