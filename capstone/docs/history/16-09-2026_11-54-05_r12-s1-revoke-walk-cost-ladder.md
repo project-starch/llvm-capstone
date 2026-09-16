@@ -191,3 +191,34 @@ eight dead nodes has to measure it, and should expect the answer to depend on th
 3.000 slope, the spliced 0.000, and the crossover at N ≈ 26 are all inside the fitted range and
 untouched. But `249` is the intercept **of a fit valid for N ≥ 8**, not a fixed cost of revocation, and
 it should never be quoted bare.
+
+## The cold asymptote, run properly — and why it does NOT reconcile with the silicon figure
+
+Replacing the retracted 87.1 with rungs placed wholly past the crossover (2×, 4× and 6× dcache
+capacity), both trees:
+
+| N | unspliced rev2 | spliced rev2 | ratio | rev1 unspliced / spliced |
+|---:|---:|---:|---:|---|
+| 4,096 | 167,498 | 399 | 420× | 353,447 / 353,451 (**+4**) |
+| 6,144 | 294,367 | 516 | 570× | 565,495 / 565,499 (**+4**) |
+| 8,192 | 403,353 | 481 | **839×** | 764,629 / 764,633 (**+4**) |
+
+**The internal control is the +4 column.** `rev1` — the revoke that *kills* the nodes — differs between
+the two trees by exactly four cycles at every rung, the splice's two extra writes, while `rev2` differs
+by over 400,000. Construction and killing cost the same on both trees; the entire difference is the
+walk over corpses. That is the attribution, and it needs no model.
+
+**The spliced arm is flat to 0.02 cycles/node across 4,096 → 8,192** (399, 516, 481 — no trend), so the
+spliced cost is ~400–500 cycles at every N from 8 to 8,192, three orders of magnitude.
+
+**The unspliced cold slope is 57.6 cyc/node (R² = 0.998) and is NOT a converged asymptote** — the
+segment slopes are still falling (61.95 then 53.22), so even N=4,096 is not deep enough. More
+importantly, **it must not be reconciled against the board lane's 25.45 cyc/node, because the two
+measure different memory systems.** This testbench imposes a *fixed* per-channel delay through
+`axi_delayer` on every transaction; the board has a real memory controller. A dependent pointer chase
+costs what the memory system makes it cost, so the simulation figure characterises
+`S12_MEM_DELAY`, not the design. **The silicon number is the one with external validity; this one has
+none, and the fact that they differ by ~2× is not evidence about either.**
+
+The warm 3.000 is unaffected by all of this: it is an L1-hit cost, measured where the chain is
+resident, and the cache is the same structure in both worlds.

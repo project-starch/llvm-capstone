@@ -4560,3 +4560,12 @@ realises as **8**. Values ≡ 0 mod 16 realise as LESS delay than define 2 (meas
 to the true-bypass run). Usable range 2..15. **The knob is a period-16 sawtooth, not a monotone dial** — measured totals:
 define 0 → 708, 2 → 1,415, 12 → 3,427, 16 → 1,004, so turning it up from 12 to 16 turns latency down. This is a magnitude
 label, not a retraction of any result that rests on latency being non-zero.
+
+**Splice benefit at scale (simulation, cold, 2026-09-16).** Rungs placed wholly past the crossover:
+unspliced revoke 167,498 / 294,367 / 403,353 cycles at N = 4,096 / 6,144 / 8,192 dead nodes crossed,
+spliced **399 / 516 / 481** — flat to 0.02 cycles/node, **839× at the largest rung**. The attribution
+needs no model: the revoke that *kills* the nodes differs between the two trees by exactly **+4 cycles**
+at every rung, so the entire difference is the walk over corpses. The unspliced cold slope from this
+ladder (57.6 cyc/node) characterises the testbench's fixed-delay memory model rather than the design,
+is not converged, and **must not be reconciled against the 25.45 cyc/node silicon figure** — different
+memory systems. For the cold per-node cost, use the silicon number.
