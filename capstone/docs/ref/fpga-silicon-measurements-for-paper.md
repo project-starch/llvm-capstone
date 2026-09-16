@@ -4541,7 +4541,9 @@ merge-base of the splice branch, and the two differ in one source file. Memory l
 N=1,024). **The fit range is N ≥ 8 and the intercept must not be quoted bare as a fixed cost:** two
 rungs below it (N=6, 7) sit exactly +91 above the fit, caused by the write-through dcache write
 buffer — halving `WtDcacheWbufDepth` from 8 to 4 moves that pair to N=2,3 while leaving every rung
-from N=8 up byte-identical. **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
+from N=8 up byte-identical. **Extrapolating the fit below N=8 fails in both
+directions** — it over-estimates by up to 196 at N=2..4 and under-estimates by 91 at N=6,7 — so it is
+neither a safe lower nor upper bound on small-revoke cost. **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
 cycle. Fixed cost of the splice ≈ 79 cycles; **crossover at N ≈ 26.**
 
 **The 3 cycles/node is an L1-hit cost and a LOWER BOUND on the saving.** The dcache holds exactly 2,048

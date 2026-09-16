@@ -171,6 +171,12 @@ pays per node it kills, i.e. the cold-access cost. At the default depth its line
 line at N=5, which is why N=5 lands on the fit by coincidence rather than by being in the fitted
 regime.
 
+**And extrapolating the fit downward fails in BOTH directions, so it is not a conservative move
+either way.** Against the measured values: it over-estimates by 196, 151 and 60 at N = 2, 3, 4, and
+under-estimates by 91 at N = 6 and 7. It is not a safe lower bound on small-revoke cost and not a safe
+upper bound — it is simply out of range. Anyone wanting the cost of a revoke that crosses fewer than
+eight dead nodes has to measure it, and should expect the answer to depend on the write-buffer depth.
+
 **What this changes: nothing in the result, and one thing in how the intercept may be quoted.** The
 3.000 slope, the spliced 0.000, and the crossover at N ≈ 26 are all inside the fitted range and
 untouched. But `249` is the intercept **of a fit valid for N ≥ 8**, not a fixed cost of revocation, and
