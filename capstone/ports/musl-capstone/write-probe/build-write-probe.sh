@@ -47,15 +47,24 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
      -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
 CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
-    -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion "${INC[@]}")
+    -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
+    # Same feature-test level the survey compiles musl with. Without it musl's
+    # locale.h does not expose locale_t, and pthread_impl.h has a member of that
+    # type, so any file here that reaches musl's internals fails to compile.
+    -D_XOPEN_SOURCE=700
+    ${MUSL_WRITE_PROBE_BADFD:+-DMUSL_WRITE_PROBE_WANT_BADFD} "${INC[@]}")
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$PORT_DIR/runtime/start-musl.S" -o "$OUT_DIR/start-musl.o"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/hostcall.c"             -o "$OUT_DIR/hostcall.o"
+"$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/tls.c"                  -o "$OUT_DIR/tls.o"
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 -c "$PORT_DIR/runtime/set_thread_area.S" -o "$OUT_DIR/set_thread_area.o"
 "$CLANG" "${CF[@]}" -c "$SCRIPT_DIR/write_probe_domain.c"         -o "$OUT_DIR/write_probe.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-  "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/write_probe.o" "$ARCHIVE"
+  "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/tls.o" \
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/write_probe.o" "$ARCHIVE"
 
 # THE CONTROL. domain_main present so --gc-sections keeps the chain alive, no
 # hostcall implementation, so the reference musl's write makes has nothing to
@@ -68,7 +77,8 @@ STUB
 "$CLANG" "${CF[@]}" -c "$OUT_DIR/stub_main.c" -o "$OUT_DIR/stub_main.o"
 set +e
 control=$("$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DIR/nohostcall.dom" \
-  "$OUT_DIR/start-musl.o" "$OUT_DIR/stub_main.o" "$OUT_DIR/write_probe.o" "$ARCHIVE" 2>&1)
+  "$OUT_DIR/start-musl.o" "$OUT_DIR/stub_main.o" "$OUT_DIR/tls.o" \
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/write_probe.o" "$ARCHIVE" 2>&1)
 set -e
 undef=$(printf '%s\n' "$control" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | sort -u)
 if [ "$undef" != "__capstone_hostcall" ]; then

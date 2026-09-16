@@ -4400,6 +4400,41 @@ directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on
 the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 `capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
 
+### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
+
+**What happens.** A `__thread` variable dies in isel with `Cannot select: c128 = GlobalTLSAddress`,
+and `-femulated-tls` does not help. No capability TLS relocation or captable-style TLS slot exists.
+
+**Why it is recorded as off the critical path.** It is tempting to read this as "a libc needs TLS, so
+a libc needs this fixed". musl's core uses the `__thread` KEYWORD zero times. Every hit a text search
+finds is the variable `__thread_list_lock`. musl reaches errno, the locale and the cancellation state
+through the thread POINTER and a plain struct, not through thread-local storage, so a static
+single-threaded domain needs `tp` and needs nothing from this issue.
+
+**What actually blocked it, measured 2026-09-16**, all four the same defect in different places, a
+capability sent through something that carries 64 bits:
+
+| where | was | is |
+|---|---|---|
+| `arch/riscv64/pthread_arch.h` | `__get_tp()` returns `uintptr_t`, reads with `mv` | port overlay returns `char *`, reads with `movc` |
+| `src/thread/riscv64/__set_thread_area.s` | `mv tp, a0` | `movc tp, a0` in the port's runtime |
+| domain startup | never called anything | calls musl's own `__init_tp` |
+| `runtime/start-musl.S` | `__capstone_yield` saves ra, gp, s0-s11 | also saves `tp` |
+
+The last one is the one that would have been guessed last. The yield's own comment says the registers
+ARE the suspended computation and that which of them survive the boundary is unverified; `tp` is the
+answer to that question and it stood open for two ports because nothing in a domain had used it.
+`write(1,...)` completed through the yield and the `write(7,...)` after it halted with `cause = 24` at
+the `cincoffsetimm` of `__pthread_self`, with `tp` reading 0.
+
+**What this issue still blocks.** Anything that genuinely uses `__thread`: real pthreads, and any
+application (rather than libc) source that declares thread-local variables. Those need a capability TLS
+model, which is a design question and not a missing pattern.
+
+**Evidence.** `capstone/ports/musl-capstone/write-probe/`, its negative control built with
+`-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
+thread pointer survives.
+
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
 
 > **CORRECTED 2026-09-10 by the compiler lane, on both counts that matter. The premise holds; the

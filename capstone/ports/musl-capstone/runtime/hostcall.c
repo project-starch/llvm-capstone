@@ -36,6 +36,9 @@
 
 extern void __capstone_yield(void);
 extern int capstone_main(void);
+/* Installs the domain's single thread pointer. Everything in musl that reports
+   an error needs it, so it runs before the program and not on demand. */
+extern int __capstone_init_tls(void);
 
 static volatile struct hostcall_v0 *hc_metadata;
 static volatile char *hc_payload;
@@ -121,6 +124,20 @@ void domain_main(unsigned *res, unsigned func) {
     else if (hc_shared_region_count == 1)
       hc_payload = (volatile char *)res;
     ++hc_shared_region_count;
+    return;
+  }
+
+  /* Before the program, because errno has to exist the first time a syscall
+     fails, and that can be the program's first line. A failure here is worth
+     more than the program's own status: it means every later error report
+     would have faulted instead. */
+  if (__capstone_init_tls() != 0) {
+    if (hc_metadata) {
+      hc_metadata->result = -1;
+      hc_metadata->phase = HC_V0_PHASE_ERROR;
+    }
+    if (res)
+      *res = (unsigned)-1;
     return;
   }
 
