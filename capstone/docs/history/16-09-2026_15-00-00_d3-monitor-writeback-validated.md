@@ -45,7 +45,7 @@ the old integer address; nothing downstream reads it.
 **On the deployed bitstream the old form and the new one both run clean**, because the exception is
 never delivered — so a pass there is not evidence. Only the R-34/R-24 delivery-fix branch can separate
 them. Directed matched pair `d3-monitor-writeback.S` (frozen at `tests/monitor/`, with its list and
-its readings), run against `c77c65324`, terminating in 601 cycles against a 2,000,000 timeout:
+its readings), run against `c77c65324`, terminating in 645 cycles against a 2,000,000 timeout:
 
 | arm | reading |
 |---|---|
@@ -54,6 +54,23 @@ its readings), run against `c77c65324`, terminating in 601 cycles against a 2,00
 | the capability before and after the in-place move | **identical** cursor, bounds, type, perm, revnode |
 | the old shape with capmode SET, run last | cause **24**, store refused, `B0B0` still intact |
 | traps in the whole run | exactly **1**, and it was that one |
+
+**The replacement stores through a capability, so it is bounds-checked where the old integer base was
+not — and that is a requirement the change INTRODUCES.** The monitor's store lands at
+`frame_base + slot*8` for slot 0..31, and the `SAVE_REG` sequence that runs first on every trap writes
+slots 1..31 through the same register, so those addresses are already proved in bounds by code that
+precedes it. **Slot 0 is the only address this change newly subjects to a check that nothing else
+exercises**, reachable when the emulated instruction's `rd` is `x0`. Arm B0 reproduces that geometry
+exactly — the cursor 16 *below* the capability's base, as the monitor's is at the site, the access
+landing on the base itself — and reads **cause 0** with the value stored (`E0E0` over `4D4F4E49`). An
+out-of-bounds cursor in between is legal: the access is checked, not the cursor.
+
+**The residual, stated rather than argued away.** That the *form* can reach its own base is now
+measured. Whether the LIVE monitor's stack capability has a base at or below `frame_base` — rather
+than at or below `frame_base + 8`, which is all the `SAVE_REG`s demonstrate — is a property of runtime
+state that no synthetic test can settle, and the old code could not have revealed it because an
+integer base carries no bounds. It would show as cause 28 on slot 0 only. The first boot on a
+delivering bitstream settles it; nothing before then can.
 
 Witnesses printed in the same run rather than assumed: a capability survives a `CSCRATCH` round trip,
 so capmode is set; `mstatus` reads `0xa00000000`, so MPRV is clear and MPP is zero and the load/store

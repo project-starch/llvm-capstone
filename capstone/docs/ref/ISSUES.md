@@ -3001,10 +3001,17 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > place (`CINCOFFSET` with `rd` = `rs1` = `sp`, the store at 16 off `sp`, the negated offset back), so the
 > source-consumption question does not arise. Validated where it CAN be — against this branch, since on
 > the deployed bitstream the old form and the new one both run clean. Matched pair
-> `tests/monitor/d3-monitor-writeback.S` at `c77c65324`, 601 cycles: the replacement takes **cause 0** and
+> `tests/monitor/d3-monitor-writeback.S` at `c77c65324`, 645 cycles: the replacement takes **cause 0** and
 > its store reads back, the capability is **bit-identical before and after** the in-place move, and the old
 > shape run last takes **cause 24** with its store refused — **exactly one trap in the run, and it was the
-> control's.** Had the control not trapped, the build would not be delivering the exception and the
+> control's.** The replacement is bounds-checked where the integer base was not, which the change
+> INTRODUCES: the store lands at `frame_base + slot*8`, the `SAVE_REG`s that run first write slots
+> 1..31 through the same register, so **slot 0 alone is newly checked** (reachable when the emulated
+> `rd` is `x0`) — arm B0 reproduces that geometry, cursor 16 BELOW the base, and reads cause 0 with
+> the value stored. **Residual:** whether the LIVE stack capability's base is at or below
+> `frame_base` rather than `frame_base + 8` is runtime state no synthetic test settles; it would show
+> as cause 28 on slot 0 only, and the first boot on a delivering bitstream decides it.
+> Had the control not trapped, the build would not be delivering the exception and the
 > replacement's clean return would have meant nothing. The branch is held OFF `capstone-bootstrap`, which
 > stays at `4274268`, the commit the board drivers pin by hash. Note: `RVTEST_PASS` is the same defect —
 > `sw TESTNUM, tohost, t5` expands to a store through an `auipc` integer base — which is why ten of the

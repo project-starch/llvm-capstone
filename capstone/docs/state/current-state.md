@@ -65,7 +65,7 @@ Minimal snapshot. Read first in every session.
   R-34/R-24 delivery-fix branch, because on the deployed bitstream the old form and the new one both run
   clean. Matched pair at `c77c65324`, 601 cycles: the replacement takes cause 0 and its store reads back,
   the capability is bit-identical before and after, the old shape run last takes **cause 24** with its
-  store refused, and there is **exactly one trap in the run — the control's**. The branch is held OFF
+  store refused, and there is **exactly one trap in the run — the control's**. The replacement is bounds-checked where the integer base was not, so a lower-edge arm tests the one address the preceding `SAVE_REG`s do not (slot 0, `rd` = `x0`): cause 0, value stored. The residual is runtime state — whether the live stack capability's base reaches `frame_base` — and only a boot on a delivering bitstream settles it. The branch is held OFF
   `capstone-bootstrap`, which stays at the commit the drivers pin, so a boot today bakes the monitor it
   expects. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
   is the same defect and why ten of the twelve sweep tests time out in their epilogue; exiting through a

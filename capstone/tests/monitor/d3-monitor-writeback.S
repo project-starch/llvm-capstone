@@ -41,6 +41,8 @@
 #          stored value must be READ BACK, because "did not trap" alone is also what a store that
 #          never happened looks like; the capability is printed before and after so the restore is
 #          on record rather than assumed
+#   arm B0 the same replacement at the LOWER EDGE, slot 0 -- the one address this change newly
+#          bounds-checks that the preceding SAVE_REG sequence does not already exercise
 #   arm A  the site as it stands today, through an integer base             -> cause 24 if the
 #          clause is live; a hang if it is live and routed to debug mode
 #
@@ -135,6 +137,33 @@ _start:
   CAPPRINT(sp)                  # after the restore: the cursor must be back where it started
   ld   s5, 40(a1)               # buf[5] after arm B (expect 0xB0B0, or the store never happened)
 
+# ---------------------------------------------------------------- arm B0: the LOWER EDGE, slot 0
+# The monitor's store lands at frame_base + slot*8 with slot 0..31, and the SAVE_REG sequence that
+# precedes it on every trap writes slots 1..31 through the SAME register -- so slots 1..31 are
+# already proved in bounds by code that runs first, and only SLOT 0 is an address this change
+# newly subjects to a bounds check that nothing else exercises. It is reachable when the emulated
+# instruction's rd is x0. Mimic that geometry exactly: put the cursor 16 BELOW the capability's
+# base, as the monitor's is, and store at 16 off it with a zero index, so the access lands on the
+# base itself. The cursor is out of bounds in between, which is legal -- the ACCESS is checked,
+# not the cursor.
+  CAPCREATE(sp)
+  li   a0, CAP_TYPE_NONLIN
+  CAPTYPE(sp, a0)
+  CAPBOUND(sp, a2, a3)
+  li   a4, CAP_PERM_RW
+  CAPPERM(sp, a4)
+  CINCOFFSETIMM(sp, sp, -16)    # the monitor's state at the site: cursor 16 below the frame base
+  li   t4, 0                    # rd = x0 -> slot 0
+  slli t5, t4, 3
+  CINCOFFSET(sp, sp, t5)
+  li   a0, 0xE0E0
+  sd   a0, 16(sp)               # lands exactly on the capability's base
+  mv   s8, s10                  # cause seen (expect 0; 28 would mean the base itself is refused)
+  li   s10, 0
+  ld   s9, 0(a1)                # buf[0] after arm B0 (expect E0E0, was 4D4F4E49)
+
+  CAPPRINT(s8)                  # arm B0 cause
+  CAPPRINT(s9)                  # arm B0 value
   CAPPRINT(s1)                  # arm 0 cause
   CAPPRINT(s2)                  # arm 0 value
   CAPPRINT(s3)                  # buf[5] before arm B
