@@ -3,6 +3,16 @@
 #   C6_TAG=<name> C6_IMG=<dom> C6_HASH=<sha256/16> C6_QEMU_DEFAULT=<icount at the default arena> C6_QEMU_DEFAULT_LOG=<log>
 #   C6_QEMU_2MIB=<icount at --arena 2097152> C6_QEMU_2MIB_LOG=<log> C6_EXPECT="<free text for the pre-registration>"
 #   C6_ARENA=<bytes, default 2097152> C6_TABLES=<bytes, default 1750285> C6_DEFAULT_ARENA=<bytes, default 1419584>
+#   C6_QEMU_DEFAULT_CFG=<host stdout capture of the measure run> C6_QEMU_2MIB_CFG=<same, 2 MiB run>
+# TWO ARTEFACTS PER RECORD, BECAUSE THE TWO LINES ARE IN TWO STREAMS. `SPEEDTEST1-CYCLES` is emitted
+# by the GUEST (speedtest1_measure.c:469) into the serial log the flow names with --log-file
+# (run-speedtest1-measure.sh:238), while `== Sublet: pool ...` is a HOST shell echo (:167) written to
+# the script's own stdout before QEMU starts, and the script never redirects its stdout into that log.
+# So one file cannot carry both, and the first version of this gate (2026-09-16) pointed both greps at
+# C6_QEMU_*_LOG and could not pass on any artefact the flow produces. Each grep now reads the file its
+# own producer wrote. A COMBINED transcript was offered and declined on purpose: a concatenation is
+# something no tool emitted natively, a later reader cannot tell it from a hand-assembled record, and
+# that is the exact property this gate exists to refuse.
 # THE ARENA AND TABLES ARE ONE SOURCE OF TRUTH FOR THE GATE AND THE BOOT, which they were not before
 # 2026-09-16. The emulator gate matched only the SPEEDTEST1-CYCLES line, whose HEAP field is
 # sublet_heap_len() = sublet_tables_len, computed in speedtest1_measure.c:105-113 from the GRANTED
@@ -56,8 +66,8 @@ C6_ARENA=${C6_ARENA:-2097152}; C6_TABLES=${C6_TABLES:-1750285}; C6_DEFAULT_ARENA
 # its configuration fails here, which is the point: refusing is correct, passing unverifiably is not.
 CFG2="== Sublet: pool ${C6_ARENA} bytes (arena, REV_BORROWED), tables ${C6_TABLES} bytes"
 CFGD="== Sublet: pool ${C6_DEFAULT_ARENA} bytes (arena, REV_BORROWED), tables ${C6_TABLES} bytes"
-grep -aqF "$CFGD" ${C6_QEMU_DEFAULT_LOG:?} || fail "the default-arena QEMU record does not show its configuration: expected '$CFGD'"
-grep -aqF "$CFG2" ${C6_QEMU_2MIB_LOG:?} || fail "the 2 MiB QEMU record does not show the configuration this boot runs: expected '$CFG2' (HEAP alone cannot distinguish it -- see the header)"
+grep -aqF "$CFGD" ${C6_QEMU_DEFAULT_CFG:?set C6_QEMU_DEFAULT_CFG=<host stdout of the default-arena measure run>} || fail "the default-arena record's host stdout does not show its configuration: expected '$CFGD'"
+grep -aqF "$CFG2" ${C6_QEMU_2MIB_CFG:?set C6_QEMU_2MIB_CFG=<host stdout of the 2 MiB measure run>} || fail "the 2 MiB record's host stdout does not show the configuration this boot runs: expected '$CFG2' (HEAP alone cannot distinguish it -- see the header)"
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
