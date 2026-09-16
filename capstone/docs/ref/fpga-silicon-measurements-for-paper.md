@@ -4550,5 +4550,6 @@ per-node slope rests on a single segment and should not be quoted as a constant;
 **Instrument caveat that affects every delay figure in this document.** `S12_MEM_DELAY` is truncated to
 four bits by `stream_delay.sv` (`CounterBits = 4`), so the widely-quoted `=40` / "40-cycle memory"
 realises as **8**. Values ≡ 0 mod 16 realise as LESS delay than define 2 (measured at 16: identical
-to the true-bypass run). Usable range 2..15. This is a magnitude
+to the true-bypass run). Usable range 2..15. **The knob is a period-16 sawtooth, not a monotone dial** — measured totals:
+define 0 → 708, 2 → 1,415, 12 → 3,427, 16 → 1,004, so turning it up from 12 to 16 turns latency down. This is a magnitude
 label, not a retraction of any result that rests on latency being non-zero.

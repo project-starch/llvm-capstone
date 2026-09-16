@@ -2928,7 +2928,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > delay than define 2** — measured at define 16: rev2 = 51, IDENTICAL to the true-bypass run, total
 > 1,004 against 708 at bypass and 1,415 at define 2. "A 32-cycle memory" gets you essentially none, and
 > it reads as a clean negative. Only 0 reaches the true bypass; 1 is special-cased;
-> **usable range 2..15.** This is a magnitude label, NOT a retraction: every finding resting on
+> **usable range 2..15.** **AND THE KNOB IS NOT MONOTONE**, which is the part that bites: the delay
+> is a period-16 SAWTOOTH in the define, not a dial. Measured totals on one tree and test: define 0 →
+> 708, 2 → 1,415, 12 → 3,427, **16 → 1,004**. Turning it UP from 12 to 16 turns latency DOWN to near
+> bypass, so "larger define, more latency" yields a plausible-looking result rather than an obvious
+> failure. This is a magnitude label, NOT a retraction: every finding resting on
 > "non-zero latency changes the behaviour" stands, S-12, R-26 and R-34 included. Those runs had an
 > 8-cycle memory. Found while calibrating the R-12 S1 ladder; detail in
 > `docs/history/16-09-2026_11-54-05_r12-s1-revoke-walk-cost-ladder.md`.

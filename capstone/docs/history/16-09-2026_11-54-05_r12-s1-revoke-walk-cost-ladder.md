@@ -125,6 +125,13 @@ The 4-bit counter is not new: the tracked copy dates from 2022 (`8a5898dce`) and
 `CounterBits = 4` at `7e4dc440f` (2026-09-03, the S-12 run) and at `ef5a8eaf2` (2026-09-08, the R-26
 run), so the relabel applies to those runs as fact rather than inference.
 
+**AND THE KNOB IS NOT MONOTONE — this is the part that bites.** Truncation on its own reads as
+"the number is smaller than you thought", which leaves the reader's mental model intact and still
+wrong. The delay is a **period-16 sawtooth in the define, not a dial.** Measured on one tree and test
+(total cycles): define 0 → 708, define 2 → 1,415, define 12 → 3,427, define **16 → 1,004**. Turning
+the knob *up* from 12 to 16 turns the latency *down* to near bypass. Anyone reasoning "larger define,
+more latency" gets a plausible-looking result rather than an obvious failure.
+
 **This is a parameter-label correction, not a retraction.** Every finding that rests on "non-zero memory
 latency changes the behaviour" stands — S-12's store-buffer result, R-26's deciding arm, R-34's
 delay-invariance check. Only the magnitude was mislabelled: those runs had an 8-cycle memory, not a
