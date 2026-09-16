@@ -3693,6 +3693,23 @@ globals *after* ISel would silently break this positional scheme.
 > nodes sit inside the spliced run and are swept by the next revoke that crosses them. An eager unlink
 > would add 2 reads and 2 writes to every DROP — which, unlike the walk, cannot amortise them.
 
+> **THE SECOND DESIGN EXISTS (2026-09-16): `docs/plans/2026-09-16-revnode-reclamation-v2.md`. Start
+> there, not from the rejected v1.** It answers the reconciliation's six items and adds three the M1
+> start gate does not cover — a failure encoding, the id-transplant primitive, and the closed site
+> inventory. It supplies the mechanism v1 lacked: an **intrusive FIFO free list threaded through the
+> node's own `next`** (zero new storage), with reuse eligibility of **unlinked, not merely invalid**.
+> It differs from v1 on where the discriminator lives: v1 spent the slot padding, which the audits
+> showed is **not plumbed**; v2 narrows `depth` from 32 bits to 17 and spends the freed bits as
+> `generation:14 | free:1`, which **are** plumbed end-to-end (verified: `ex_stage.sv:1149` returns them
+> as `data_ruser[29:0]`). The `free` bit exists because "unlinked" is **not** decidable from the node
+> record — W1's splice rewrites only the boundary nodes — and it is set in a write the revoke walk
+> already performs, so it costs no extra memory traffic. It does **not** claim confinement, does not claim it costs nothing, and does not
+> quote a capacity figure. Its fatal item — the S/U boundary that never reads a node — is answered with
+> an index-compare recycle broadcast **plus a stated monitor-side software contract**, with the residual
+> named rather than hidden. **Still gated:** nothing is scheduled until the lead names the RTL owner and
+> approves the algorithm and invariant. A separable Part B turns pool exhaustion from a core hang into a
+> reportable fault and can be approved alone.
+>
 > **TWO AUDITS OF THE RECLAMATION DESIGN, RECONCILED (2026-09-15) — read before proposing a second design.** `docs/history/15-09-2026_20-39-03_revnode-reclamation-two-audits-reconciled.md`. Verdict: the design in `docs/plans/2026-09-14-revnode-reclamation-design.md` is **incomplete, not merely unsafe** — `head` is only ever incremented and there is no free list, reclaim queue or reuse scan anywhere in the unit, so **no index is ever reused and the generation is never consulted**. Separately fatal to the mechanism: the unprivileged boundary (`pmp_data_if.sv:82-97`) decides authority from a cached bit and **never reads a node**, so a split id stops matching the broadcast after the first reuse and revocation silently stops invalidating S/U-mode capabilities — invisible because everything runs at generation 0. The note also records a resolved contradiction between the two audits over the node's field packing (MSB-first; the RTL lane's measurement was wrong and is retracted in the design document), and lists six things a second design must assert. **The direction is not refuted** — the 65,532-lifetime ceiling is real and generation tagging is a sound way to lift it — but this design does not implement it.
 
 > **2026-09-14 (boots sw74 / sw74b): the budget bit a measurement boot, twice, and the read-out is
