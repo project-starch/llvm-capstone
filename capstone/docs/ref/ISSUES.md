@@ -2924,8 +2924,10 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > appears, described everywhere as "a 40-cycle memory" — realises as **40 mod 16 = 8**. Confirmed
 > behaviourally as well as from source: define 12 and define 28 (28 mod 16 = 12) gave IDENTICAL rev1,
 > rev2 and total cycle counts on one tree, while the artifact readback proved the builds received
-> different defines. **The live trap: any value ≡ 0 mod 16 loads a ZERO counter and realises as ~2
-> cycles** — "a 32-cycle memory" gets you none. Only 0 reaches the true bypass; 1 is special-cased;
+> different defines. **The live trap: any value ≡ 0 mod 16 loads a ZERO counter and realises as LESS
+> delay than define 2** — measured at define 16: rev2 = 51, IDENTICAL to the true-bypass run, total
+> 1,004 against 708 at bypass and 1,415 at define 2. "A 32-cycle memory" gets you essentially none, and
+> it reads as a clean negative. Only 0 reaches the true bypass; 1 is special-cased;
 > **usable range 2..15.** This is a magnitude label, NOT a retraction: every finding resting on
 > "non-zero latency changes the behaviour" stands, S-12, R-26 and R-34 included. Those runs had an
 > 8-cycle memory. Found while calibrating the R-12 S1 ladder; detail in

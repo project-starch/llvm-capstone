@@ -83,11 +83,23 @@ must be killed by revoke 2:
 
 Revoke 2 does its job on both trees. **The flat cost is a working splice, not an early exit.**
 
+**The `#ifdef` claim is not taken on trust.** The witness blocks were added *after* the warm ladders
+ran, so the committed fixture is not literally the file that produced 65…729 and 71…328. The proof is
+in the artifact, not the source: the deep rungs were compiled from the **post-edit** source without
+`-DWITNESS` and reproduce the pre-edit fit exactly — 1,785 and 3,321 on `3N + 249`, and 328 on the
+spliced side, to the cycle. A timed path that had moved could not do that.
+
 ## Caveats that belong with the numbers
 
 - The spliced cost is flat **in N**, not immune to cache pressure: at and past capacity its own small
   fixed working set goes cold and the figure moves between 328 and 777 with **no trend in N** (777 at
   2,048, 516 at 3,072 — non-monotone, i.e. noise).
+- **N=1 is ~200 cycles BELOW the fit on BOTH trees** (65 against 252; 71 against 328) and is excluded
+  from every slope quoted here. It is common-mode — the two trees step by 4.2× and 4.6× between N=1
+  and N=8 — so it cannot touch the spliced-vs-unspliced comparison. But a 4× step in revoke 2's
+  *fixed* cost, over a range where the spliced walk does identical work at both ends, is
+  **unexplained**, and "cold start" is a label rather than an explanation. Possibly a lead about
+  REVOKE's entry cost; not chased here.
 - Simulation, not silicon. This measures the mechanism, not a workload.
 - Every rung on both trees: 0 traps, 0 `Exception:` lines, construction cause 0, both revoke causes 0,
   the killed run reading invalid and the outermost reading valid. The fixture reports; it does not judge.
@@ -102,10 +114,16 @@ Revoke 2 does its job on both trees. **The flat cost is a working splice, not an
 - Confirmed behaviourally, not only by reading source: on one tree, define 12 and define 28 (28 mod 16
   = 12) produced **identical** rev1, rev2 and total cycle counts, while the artifact readback proved the
   two builds really did receive different defines.
-- **The live trap:** any value ≡ 0 mod 16 loads a zero counter and realises as ~2 cycles — asking for a
-  32- or 48-cycle memory gets you none. Only `FixedDelay == 0` reaches the true bypass, and `1` is
-  special-cased. **Usable range is 2..15.** No value other than 40 has ever been used, so nothing in the
-  record is affected by that trap today.
+- **The live trap, MEASURED not inferred:** any value ≡ 0 mod 16 loads a zero counter and realises as **less delay than define 2** —
+measured at define 16 on the same tree and test: rev2 = 51, **identical to the true-bypass run**, total
+1,004 against 708 at true bypass and 1,415 at define 2 (define 12 gives 3,427). Asking for a 32- or
+48-cycle memory gets you essentially none, and it reads as a clean negative. Only `FixedDelay == 0` reaches the
+  true bypass, and `1` is special-cased. **Usable range is 2..15.** No value other than 40 has ever
+  been used, so nothing in the record is affected by that trap today.
+
+The 4-bit counter is not new: the tracked copy dates from 2022 (`8a5898dce`) and reads
+`CounterBits = 4` at `7e4dc440f` (2026-09-03, the S-12 run) and at `ef5a8eaf2` (2026-09-08, the R-26
+run), so the relabel applies to those runs as fact rather than inference.
 
 **This is a parameter-label correction, not a retraction.** Every finding that rests on "non-zero memory
 latency changes the behaviour" stands — S-12's store-buffer result, R-26's deciding arm, R-34's
