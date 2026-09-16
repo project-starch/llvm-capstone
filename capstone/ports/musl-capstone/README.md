@@ -8,7 +8,8 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-The compiler accepts **93.3 %** of musl's sources, `libc-capstone.a` links, and
+The compiler accepts **99.6 %** of musl's sources (2026-09-16, below; the
+93.3 % this section carried until then is the 2026-08-14 figure), `libc-capstone.a` links, and
 the domain boundary a syscall needs is **proven working under QEMU**:
 
 - `write(1, ...)` linked against the partial archive leaves `__capstone_hostcall`
@@ -74,16 +75,39 @@ catches the lie itself — `src/stdio/vfprintf.c` fails with
 `'compiler_defines_long_double_incorrectly' declared as an array with a negative
 size`. The 39 long-double files are counted as **unresolved**, not fixed.
 
-## What is left
+## Measured again, 2026-09-16
 
-91 files, grouped by what has to be done. Counts are by directory and sum to 91.
+Re-run with clang from `f7b50f081ca4`, which is `dev` plus three commits, only one of
+which touches the backend and it is an unrelated `ra`-spill fix. So this is very
+probably `dev`'s number too, and confirming that needs a `dev`-built compiler.
 
-| files | where | dominant cause | shape of the fix |
+| | 2026-08-14 | 2026-09-16 |
+|---|---:|---:|
+| compiled | 1270 / 1361 | **1355 / 1361** |
+| | 93.3 % | **99.6 %** |
+| failing | 91 | **6** |
+
+**The long-double item is gone, and it was the only genuinely new one.** The table
+below used to list 39 files in `src/math` and `src/complex` that died in i128 shift
+legalisation because `long double` is 128 bits and so is a capability. `fmodl.c`,
+`powl.c` and `csqrtl.c` were built ONE AT A TIME with the survey's own flags, not read
+off a total, and all three compile. `src/stdlib/qsort.c` compiles too, which retires
+the `Cannot select: i128 = xor` blocker recorded against `__qsort_r` on 2026-08-20.
+The string and the mixed pointer-as-integer groups are gone as well; none of them
+needed the replacement work the old table planned.
+
+**What is left is six files, and they are the ones a domain does not want.**
+
+| files | where | cause | what to do |
 |---:|---|---|---|
-| 39 | `src/math` (31), `src/complex` (8) | **`long double` is 128-bit and so is a capability**, so it dies in i128 shift legalisation and in APInt | Backend: support `-mlong-double-64` for this target, or separate integer-i128 from capability-i128. The only genuinely new item on this list. |
-| 10 | `src/malloc` (3), `mallocng` (6), `oldmalloc` (1) | static asserts over `sizeof(void*)`, violated by 16-byte pointers | Replace with an arena, as memsys5 does for SQLite today. |
-| 9 | `src/string` | word-at-a-time routines: `(uintptr_t)s % ALIGN` | Replace, as SQLite already does with `beebs_freestanding_string.c`. |
-| 33 | `thread` (8), `locale` (7), `network` (5), `aio`, `mman`, `regex`, `signal` (2 each), `exit`, `ldso`, `stdio`, `stdlib`, `multibyte` (1 each) | mixed, mostly the same pointer-as-integer family | Stub to `ENOSYS` for the first milestone; threads and `fork` are out of scope. |
+| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own level 0, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
+
+So the compile side of this port is finished for practical purposes. **What remains is
+the transport**, which a compile count never measured: `runtime/hostcall.c` translates
+Linux syscall numbers to HostCall v0 opcodes and the probe harness beside it
+(`tests/runtime-qemu/run-hostcall-stdout-probe.sh`) exercises that protocol from a
+hand-written guest. musl's own `write()` has still not been run through it end to end.
+That single path, not the 91 files, is now the libc question.
 
 `__syscall_cp` needs **no patch**, contrary to an earlier plan here: musl
 weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
