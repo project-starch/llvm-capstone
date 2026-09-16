@@ -1,7 +1,8 @@
 # R-26 — a younger load is checked against the CPMP entry a pending `CCSRRW` is about to replace
 
 > **Status 2026-09-09: fixed in RTL** (`capstone-ariane` `9d8797560`, on `fpga-testing-dev` at `66c4e7517`), **sim-verified**
-> at the default memory latency and at a verified 40-cycle latency, lint at the baseline counts, sweep unchanged except
+> at the default memory latency and at a verified non-default latency (the `S12_MEM_DELAY=40` define
+> realises as **8** cycles — see "Run it"), lint at the baseline counts, sweep unchanged except
 > the predicted cycle deltas. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517` (sha256 `b03bd967…52da3`, WNS
 > −12.425 ns at 40 ns, 169,207 placed LUTs), FLASHED 2026-09-09 on the project lead's decision and verified
 > after the power cycle (`nv_bitstream_name` = `caplifive_r25r26r27_66c4e7517.bit`); the post-flash variant
@@ -55,7 +56,15 @@ on both trees, spinning on a fetch check its own S-mode code predates) changes o
 
 ## Run it
 
-`bash run.sh <checkout> r26-v2-ldmiss` (add `+define+S12_MEM_DELAY=40` as the third argument for the 40-cycle model).
+`bash run.sh <checkout> r26-v2-ldmiss` (add `+define+S12_MEM_DELAY=40` as the third argument for the
+delayed-memory model).
+
+**`S12_MEM_DELAY=40` realises as an 8-cycle delay, not 40.** The define is truncated to four bits
+(`vendor/pulp-platform/common_cells/src/stream_delay.sv`, `CounterBits = 4`, unchanged at every revision cited
+here), so the value used is its low nibble. The usable range is 2..15, and a value congruent to 0 mod 16
+realises as essentially no delay while reading like a large one. **This is a label correction, not a
+retraction:** every run recorded here stands, at a verified NON-DEFAULT latency of 8 cycles. The command is
+left at 40 so it reproduces the recorded runs byte for byte.
 
 ## Board
 

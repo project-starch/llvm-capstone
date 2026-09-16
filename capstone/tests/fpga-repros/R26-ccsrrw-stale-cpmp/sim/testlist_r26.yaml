@@ -1,6 +1,8 @@
 # R-26 directed tests (CCSRRW -> younger load CPMP check). Kept OUT of testlist_capstone.yaml: r26-v2-ldmiss is
 # expected to FAIL (tohost exit code 11 = hazard) until the RTL flushes or interlocks after a capability CSR write.
-# Run the deciding arm with a 40-cycle memory: DEFINE=+define+S12_MEM_DELAY=40 (see the history note of 2026-09-08).
+# Run the deciding arm with a delayed memory: DEFINE=+define+S12_MEM_DELAY=40 (see the history note of 2026-09-08).
+# The define is truncated to four bits (stream_delay.sv, CounterBits = 4), so 40 realises as an 8-cycle
+# delay; usable range 2..15, and a value congruent to 0 mod 16 gives essentially none. Label, not retraction.
 - test: r26-diag-nodelay
   iterations: 1
   path_var: TESTS_PATH

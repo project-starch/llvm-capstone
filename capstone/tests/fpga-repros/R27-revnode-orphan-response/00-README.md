@@ -2,7 +2,8 @@
 
 > **Status 2026-09-09: pre-existing on `ef5a8eaf2`, fixed in RTL** (`capstone-ariane` `66c4e7517`, the tip of
 > `fpga-testing-dev`), **sim-verified** (three triggers HANG → PASS at the default latency; the load-fault trigger HANG →
-> PASS at a verified 40-cycle latency), lint at the baseline counts, adversarially audited. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
+> PASS at a verified non-default latency — the `S12_MEM_DELAY=40` define realises as **8** cycles, see
+> "Run it"), lint at the baseline counts, adversarially audited. **Bitstream: SYNTHESISED 2026-09-09 from `66c4e7517`
 > (sha256 `b03bd967…52da3`, WNS −12.425 ns at 40 ns), and FLASHED 2026-09-09 on the project lead's
 > decision, verified after the power cycle (`nv_bitstream_name` = `caplifive_r25r26r27_66c4e7517.bit`); silicon
 > UNCONFIRMED and expected to stay so** — no board arm exists for R-27, so the
@@ -61,6 +62,13 @@ itself was tried upstream and reverted (`f5f9291c8`, `d15d45b33`, `7bcbdb39c`).
 ## Run it
 
 `bash run.sh <checkout> r27-ldf-n0` — HANG on `ef5a8eaf2`, PASS with one counted trap at `66c4e7517`.
+
+**`S12_MEM_DELAY=40` realises as an 8-cycle delay, not 40.** The define is truncated to four bits
+(`vendor/pulp-platform/common_cells/src/stream_delay.sv`, `CounterBits = 4`, unchanged at every revision cited
+here), so the value used is its low nibble. The usable range is 2..15, and a value congruent to 0 mod 16
+realises as essentially no delay while reading like a large one. **This is a label correction, not a
+retraction:** the load-fault trigger's HANG → PASS stands, at a verified non-default latency of 8 cycles. The
+command is left at 40 so it reproduces the recorded run byte for byte.
 
 ## Board
 

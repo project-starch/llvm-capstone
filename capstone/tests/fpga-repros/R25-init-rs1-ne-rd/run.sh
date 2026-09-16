@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # run.sh -- run one arm of this package in RTL simulation (capstone-ariane at fpga-testing-dev 66c4e7517 or later).
 # usage: bash run.sh <capstone-ariane checkout> <test-name> [+define+S12_MEM_DELAY=40]
+# S12_MEM_DELAY is truncated to four bits (stream_delay.sv, CounterBits = 4): 40 realises as an
+# 8-cycle delay, the usable range is 2..15, and a value congruent to 0 mod 16 gives essentially none.
 # The arms live in the checkout already (verif/tests/custom/capstone/, list verif/tests/testlist_r26.yaml);
 # the copies under sim/ here are the frozen record. A timeout prints as "SUCCESS ... after <time_out+13>" --
 # that is a HANG, not a pass. A memory-delay define is honoured only when passed on the run that builds the
