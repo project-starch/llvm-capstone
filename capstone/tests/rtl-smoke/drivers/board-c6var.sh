@@ -2,6 +2,18 @@
 # board-c6var.sh -- one boot of a cell-6 VARIANT image at the 2 MiB arena (control, cell, control, probe), parametrised:
 #   C6_TAG=<name> C6_IMG=<dom> C6_HASH=<sha256/16> C6_QEMU_DEFAULT=<icount at the default arena> C6_QEMU_DEFAULT_LOG=<log>
 #   C6_QEMU_2MIB=<icount at --arena 2097152> C6_QEMU_2MIB_LOG=<log> C6_EXPECT="<free text for the pre-registration>"
+#   C6_ARENA=<bytes, default 2097152> C6_TABLES=<bytes, default 1750285> C6_DEFAULT_ARENA=<bytes, default 1419584>
+# THE ARENA AND TABLES ARE ONE SOURCE OF TRUTH FOR THE GATE AND THE BOOT, which they were not before
+# 2026-09-16. The emulator gate matched only the SPEEDTEST1-CYCLES line, whose HEAP field is
+# sublet_heap_len() = sublet_tables_len, computed in speedtest1_measure.c:105-113 from the GRANTED
+# ARENA alone -- atoms = (end-base)/64 -- and never from the --tables argument, which the line does
+# not emit at all. So `HEAP 1344064` says the arena was 2 MiB and says NOTHING about tables: a record
+# produced by the committed flow at that arena carries tables 2523136 (both derive from
+# SPEEDTEST1_POOL, atoms = POOL/65), the boot below runs tables 1750285, and the two are
+# INDISTINGUISHABLE BY CONSTRUCTION -- a clean pass against a denominator from a different
+# configuration. Found by the compiler lane while preparing F1's records and verified against the
+# driver and the emitter by the board lane on apollo. The gate now also demands the flow's own
+# configuration line, which names BOTH numbers, built from the same variables the boot uses.
 # Written 2026-09-15 for the optnone bisection of the -O1/-O2 counter divergence (measurements §7s).
 set -u; R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify
 B=$R/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/capstone-sbi
@@ -28,6 +40,14 @@ RRH=${R1_HOST:?set R1_HOST=<path to sqlite_host_rr.user, the readback host>}
 [ "$(strings $RRH | grep -c 'RR/share')" -ge 1 ] || fail "rr host lacks the revoke-reshare probe"
 grep -aq "SPEEDTEST1-CYCLES ${C6_QEMU_DEFAULT:?} HIGHWATER n/a HEAP 911104" ${C6_QEMU_DEFAULT_LOG:?} || fail "the variant's QEMU run at the default arena is not on record"
 grep -aq "SPEEDTEST1-CYCLES ${C6_QEMU_2MIB:?} HIGHWATER n/a HEAP 1344064" ${C6_QEMU_2MIB_LOG:?} || fail "the variant's QEMU run at the 2 MiB arena (the denominator this boot uses) is not on record"
+C6_ARENA=${C6_ARENA:-2097152}; C6_TABLES=${C6_TABLES:-1750285}; C6_DEFAULT_ARENA=${C6_DEFAULT_ARENA:-1419584}
+# The configuration line run-speedtest1-measure.sh:167 emits. It names arena AND tables, so unlike the
+# HEAP field it can tell the two configurations apart -- and a hand-assembled record that cannot show
+# its configuration fails here, which is the point: refusing is correct, passing unverifiably is not.
+CFG2="== Sublet: pool ${C6_ARENA} bytes (arena, REV_BORROWED), tables ${C6_TABLES} bytes"
+CFGD="== Sublet: pool ${C6_DEFAULT_ARENA} bytes (arena, REV_BORROWED), tables ${C6_TABLES} bytes"
+grep -aqF "$CFGD" ${C6_QEMU_DEFAULT_LOG:?} || fail "the default-arena QEMU record does not show its configuration: expected '$CFGD'"
+grep -aqF "$CFG2" ${C6_QEMU_2MIB_LOG:?} || fail "the 2 MiB QEMU record does not show the configuration this boot runs: expected '$CFG2' (HEAP alone cannot distinguish it -- see the header)"
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
@@ -91,9 +111,9 @@ export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
 export SQLITE_HOST=/test-domains/sqlite_host_rr.user
 BUDGET=900; export SQLITE_STAGE_TIMEOUT=$BUDGET SQLITE_IDLE_S=$BUDGET
 D="/test-domains/lpc|k800:/test-domains/k800.dom"
-D="$D,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--speedtest1 --arena 2097152 --tables 1750285 ${C6_ARGS:---testset main --size 1 --verify}"
+D="$D,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--speedtest1 --arena ${C6_ARENA} --tables ${C6_TABLES} ${C6_ARGS:---testset main --size 1 --verify}"
 D="$D,/test-domains/lpc|k800:/test-domains/k800.dom"
-D="$D,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--tail --arena 2097152 --tables 1750285"
+D="$D,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--tail --arena ${C6_ARENA} --tables ${C6_TABLES}"
 export SQLITE_STAGE_DOMS="$D" PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/boot-raw.txt
 say "=== boot ${C6_TAG} = cell 6 variant ${C6_TAG} (${C6_HASH:?}) at the 2 MiB arena, control, cell, control, probe ==="
 say "=== pre-registered: retval=4 twice; 112006 38bb59fd; ${C6_EXPECT:-counters EITHER the emulator's 5568/37966/32565/37966/5401 OR sw80b's 8654/41293/32638/41287/8649}; cycles = ${C6_QEMU_2MIB} x CPI 3.2..4.9; probe ALEN:00200000, RR/done ==="
