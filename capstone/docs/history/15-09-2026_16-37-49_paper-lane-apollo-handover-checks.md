@@ -537,7 +537,10 @@ run because "cold" is a claim about cache contents the test cannot otherwise see
 | **ARM C cause** | **`0x1b` = 27** | **cold line, DELIVERED** |
 | total traps | 2 | one per arm, none spurious |
 
-Identical at memory delay 40 and delay 0; only the cycle counts move (1287 vs 499).
+Identical at memory delay 40 and delay 0; only the cycle counts move (1287 vs 499). *(Label
+corrected 2026-09-16: `S12_MEM_DELAY` is **not a cycle count** — `stream_delay.sv` counts in 4
+bits, so the parameter truncates to its low four bits and the widely-used **40 realises as 8**.
+The finding is unaffected; only the magnitude label is wrong. Read "non-zero memory latency".)*
 
 **So the R-34 fix has no open sufficiency condition left.** Boundary measured (§6d), miss path
 measured (here), renumber measured (`debug_mode_q` 0 across four cause-24 deliveries), lint at
@@ -549,7 +552,8 @@ must be validated in simulation of the fix branch BEFORE a bitstream is spent, n
 
 ### The instrument lesson, which is a sharpening of an existing project rule rather than a new one
 
-Their first attempt at this measurement rebuilt at `S12_MEM_DELAY=40` and reran the existing gate
+Their first attempt at this measurement rebuilt at `S12_MEM_DELAY=40` (which realises as **8** — see
+above) and reran the existing gate
 test. **All thirteen printed readings came back identical to the zero-latency run, value for value,
 with only the cycle counts moving (868 → 2485).** That reads like a robustness result. It is void:
 the test hammers a single buffer, so the line is resident after the first access and the faulting
