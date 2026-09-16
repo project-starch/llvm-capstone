@@ -20,6 +20,13 @@
  */
 #include <errno.h>
 #include <sys/syscall.h>
+/* syscall_arg_t and the __capstone_hostcall prototype both live in the arch
+ * overlay. Including it here rather than re-declaring the type is what makes a
+ * signature drift between the two a compile error instead of a silent ABI
+ * mismatch at the one boundary that cannot be debugged from C. Found 2026-09-16
+ * the first time this file was compiled: it had never been built, so nothing
+ * had ever asked where syscall_arg_t came from. */
+#include <syscall_arch.h>
 
 #include "../../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
 
