@@ -1,0 +1,5 @@
+1 P latency shared 4194304 --reps 3
+1 P calib shared 4194304 --calib
+2 P calib shared 4194304 --calib
+3 P calib shared 4194304 --calib
+1 S nodes shared 4194304

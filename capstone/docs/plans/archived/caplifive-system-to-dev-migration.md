@@ -18,7 +18,7 @@ Raised by the project lead: **`caplifive-system-dev` is a full replacement for
 > valuable for now exists on a remote independently of them.
 >
 > So `caplifive-system` **does not need to be pushed**, and its 403 is no longer a blocker for
-> anything. Their history is in `/extra/alexey/caplifive-unreplicated-backup/`.
+> anything. Their history is in `/extra/<user>/caplifive-unreplicated-backup/`.
 >
 > **The one real blocker is different:** `caplifive-system-dev` pins buildroot six commits behind,
 > and making it current requires WRITE ACCESS TO `caplifive-system-dev`, which this account also

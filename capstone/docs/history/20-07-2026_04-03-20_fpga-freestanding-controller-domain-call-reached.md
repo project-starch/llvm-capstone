@@ -138,7 +138,7 @@ live hypotheses, distinguished only by the exception code:
 **My first verdict below ("fix is necessarily RTL") was WRONG.** the board owner confirmed the
 `gp = PCC(cursor 0)` line in QEMU's `helper_cscall` is **our own non-canonical patch**,
 not canonical Capstone: commit `7aca05403dc52644072df84ad53b32cf17b9810f`
-("riscv: unblock native domain capability calls", Alexey Paznikov, 2026-05-19). So:
+("riscv: unblock native domain capability calls", 2026-05-19). So:
 
 - The **RTL is correct** to not set `gp` at `cscall` — canonical Capstone never does.
 - the board owner also notes the approach isn't representable anyway: "it's unlikely going to be

@@ -8,6 +8,70 @@ against the security model; and the node/tag storage figures the H1 and M3 studi
 **Nothing here is implemented.** This is the proposal, per the project rule that a substantial new
 direction gets a committed doc for review first.
 
+> # ⚠ AUDITED 2026-09-15 — THIS DESIGN DOES NOT SHIP AS WRITTEN. Four findings, one of them fatal.
+>
+> The audit this document asked for has run. **It would have shipped, passed every test, and silently
+> stopped revoking unprivileged capabilities.** Read this box before anything below it.
+>
+> **1. FATAL — the S/U-mode authority never reads a revocation node at all.**
+> `core/pmp/src/pmp_data_if.sv:82-97` caches `cpmp_revnode_valid_q[i]`, sets it to **valid on any id it
+> has not seen before** (`:90-92`), and clears it only on exact 30-bit equality with the broadcast
+> `revnode_invalidation_id_o = node_wr_req[29:0]` (`core/ex_stage.sv:1208`). It is read at `:133` and
+> gated on `ld_st_priv_lvl_i != PRIV_LVL_M` at `:289` — **this is the unprivileged boundary**, the one
+> deciding a domain's load/store authority in S/U mode. The LSU (`load_store_unit.sv:944, 965-969`) and
+> `commit_stage.sv:237-245` have the same shape and are M-mode only.
+>
+> My invariant says a stale alias "does not need to be found, because it fails the comparison wherever
+> it is". **These three sites perform no comparison.** Under the split the broadcast carries
+> `{14'd0, i}` while a tracker holds `(g, i)`, so after the first reuse of any index the match never
+> fires: revocation stops invalidating the CPMP entry, the in-flight capability and the PC capability,
+> and access is simply still permitted. **Every functional test, lit run and QEMU suite executes at
+> generation 0, where `{14'd0, i} == (0, i)` and the whole thing is correct.** A check that has only
+> ever run at generation 0 is not a passing check.
+>
+> **2. The design never says what `next`/`prev` hold, and both answers break.** Bare indices → the
+> REVOKE broadcast (`capstone_rev_node.anvil:24-25`) can never match a tracker holding a generation,
+> and DROP — which broadcasts a capability-supplied `(g,i)` (`capstone_dyn_unit.anvil:33`) — disagrees
+> with REVOKE about the id format for the same node. Full `(g,i)` → `ex_stage.sv:1160` computes
+> `0xBFF00000 + (g<<20) + (i<<4)`, up to ~16 GiB past a 1 GiB DRAM.
+>
+> **3. Invalidation never unlinks, so reclamation corrupts the tree.**
+> `capstone_unit.anvilh:563-565` preserves `prev` and `next` when clearing `valid`, and nothing removes
+> a node from the list. A reissued index therefore stays in its **old** parent's chain. A later REVOKE
+> of an unrelated ancestor then either revokes a fresh capability that merely inherited the index, or
+> terminates its walk early and silently under-revokes. **Reclamation additionally requires unlinking**
+> — two more node writes, which themselves broadcast. The subtree condition is necessary, not
+> sufficient.
+>
+> **4. DROP and DELIN mutate a node without reading `valid` at all** (`capstone_rev_node.anvil:62-75`,
+> `:44-56`; callers at `capstone_dyn_unit.anvil:24-40`, `:495-514`). Under reuse, a holder of a stale
+> `(i, g_old)` can destroy or de-linearise the **new** owner's node. My invariant covers "confers
+> authority" and says nothing about "mutates the node".
+>
+> **AND "the change is confined to the node unit and the comparison site" IS REFUTED.** The datapath is
+> 94 bits, hard-coded by literal bit index in `ex_stage.sv`, which is neither: `:1148` reads back only
+> `data_ruser[29:0]` so **the padding is never read at all**; `:1162-1163` slices `[93:30]` and
+> `[123:94]`; `:1074` declares `logic[123:0]`; `:1071` feeds a 30-bit id straight to the address adder.
+> **Slot bit 94 is a hard constant 1**, not blank — so 33 bits are free, not 34, and bit 94 is exactly
+> where a naively appended field lands.
+>
+> **THE CAPACITY HEADLINE IS WRONG AND MUST NOT BE QUOTED.** "≈1.07 × 10⁹ lifetimes before the first
+> index retires" holds only for a perfectly uniform round-robin reissue. Under lowest-free-first or
+> LIFO — the natural implementations — a mint/revoke loop gets the same index back every time, and the
+> first index retires after 16,384 reclaims **of that one index**. The size-1 Sublet run this document
+> cites contains 43,355 mints, i.e. **2.65× the reclaims needed to retire an index in a single run**,
+> not 24,700 runs. The figure is optimistic by up to 65,532×. It is **not** a DoS regression — retiring
+> the whole pool still costs ~1.07e9 mints whatever order it is attacked in, against 65,532 for today's
+> stall — but the headline number was headed for a paper table and is not computable at all until the
+> **reissue policy** is written down, which this document never states.
+>
+> **What must be settled before any RTL**, in order: whether `next`/`prev` carry the generation; then
+> the same answer applied to all three trackers *and* the broadcast; then unlinking on reclaim; then a
+> failure encoding for `init_res`/`rev_res`/`drop_res`/`delin_res`, none of which can currently express
+> "no" (`capstone_unit.anvilh:506-519`) — and the only in-file precedent for refusal is to never answer
+> and hang the core, which is R-27's failure mode. Then negative-test at generation ≥ 1.
+
+
 ---
 
 ## Part 2 first, because it is measured rather than proposed
@@ -147,6 +211,116 @@ not change how a fresh one is chosen. And it does not reduce the 1 MiB pool or t
 8× external tag finding above is a separate lever, and a better one for M3.
 
 ---
+
+## Two findings from 2026-09-15 that change what this design claims, before any RTL exists
+
+### It does NOT flatten the revoke cost curve, and the plan must not say it does
+
+`apollo-board` measured per-allocation release cost growing **~12x within a domain**
+(`give_cyc/n` 176 -> 2115) while minting grows only ~1.5x, and located the mechanism, audited
+SUPPORTED: `core/anvil_build/capstone_rev_node.anvil:13-34`, where `REVOKE_NODE` re-enters its own
+FSM once per visited node, terminates only on `node_in.depth <= *depth_bound`, and **revoked nodes are
+never spliced out of the chain** — so round *r* performs *r+2* dependent 16-byte node reads. The
+`.anvil` source is byte-identical between the flashed revision and dev's pin, so this is measurable
+today with no synthesis.
+
+**This design does not splice.** Generation-tagged reuse makes reuse SAFE — a stale alias fails the
+two-field comparison wherever it lies — and it lifts the 65,532 ceiling to ~1.07e9 lifetimes. Neither
+of those shortens the walk. So:
+
+> **Splicing fixes the COST. Generation-tagging fixes the CAPACITY and the SAFETY of reuse. They are
+> different changes, and this document is only the second one.**
+
+Anything that reads "the reclaimer will flatten the release curve" does not follow from what is
+written here. The decision — splice only, generation-tag only, or both in one change — belongs to the
+lead and should be made before the RTL, not discovered after the measurement disagrees with the
+prediction. The paper lane's independent caveat, that a reclaimer may *complicate* P1 rather than
+improve it, is the same worry approached from the other side.
+
+### ~~The generation field lands in the HIGH half~~ — RETRACTED 2026-09-15, I MISREAD THE PACKING
+
+**The section below is wrong about the field order and is kept only so the error is visible.** I read
+the generated `[93:0]` slice — which is a **width** — and inferred the field **order** from the
+declaration sequence in `capstone_unit.anvilh:543-549`, assuming first-declared occupies the low bits.
+Anvil packs MSB-first, like a SystemVerilog `struct packed`: first-declared takes the **top**.
+
+Settled from the consumer rather than from the declaration. `ex_stage.sv:1207` is
+`revnode_invalidation_valid_o = mem_rev_wr_req_valid && !node_wr_req[31]`, and
+`commit_stage.sv:242` says *"Invalidate if rev_node is writing valid=0 for our tracked node ID"* — so
+`node_wr_req[31]` **is** `valid`. With `msg_pack_t = {node_o, node_id[29:0]}`, that bit is `node_o[1]`,
+which is `valid` only under MSB-first. Under my assumed order it would be `depth[1]`, and the broadcast
+would fire on nearly every node write. Corroborated by `node_update_b = {34'd1, node_wr_req[123:94]}`,
+which is `depth[31:2]` going into the high word.
+
+    CORRECT:  depth node_o[93:62] | prev [61:32] | next [31:2] | valid [1] | linear [0]
+    slot low word  = node_o[63:0]              -> next, valid, linear, prev, depth[1:0]
+    slot high word = {34'd1, node_o[93:64]}    -> depth[31:2] plus 34 constant bits
+
+**What survives:** the padding IS slot bits 94..127, and slot bit 94 is a hard constant 1.
+**What is retracted:** `next`, `prev`, `valid` and `linear` are all in the **low** word. My claim that
+"`next` straddles bit 64 and the node already depends on high-half integrity today" is **withdrawn** —
+the only node field in the high word is `depth[31:2]`. I passed that claim to the paper lane and it
+was built on before being withdrawn there too.
+**And the escape is backwards:** narrowing `depth` frees bits in the **high** half, not the low. Landing
+a generation below bit 64 would mean narrowing `prev`/`next` (30 bits each, only 16 reachable), which
+frees 28 bits inside `node_o[63:0]`. I argued the opposite and argued it as the preferred option.
+
+**The error is the one this project documents.** A field's position in a struct declaration is not its
+position in the generated slice — the standing example is a `trans_id` read at `[2:0]` from the
+declaration when the generated code reads it at `[255 +: 3]`. My own auditor derived the packing
+correctly from a bootstrap literal; I overwrote its answer with my earlier inference instead of
+reconciling them.
+
+### THE PROPOSAL IS INCOMPLETE, NOT MERELY UNSAFE: nothing in it ever reuses an index
+
+The most fundamental finding, and neither audit's four named targets would have caught it. `head` is
+written in exactly three places — `capstone_rev_node.anvil:79` and `:141`, both `*head+16'd1`, and
+`:179`, the reset to `16'd3`. **It is never decremented, and there is no free list, reclaim queue or
+reuse scan anywhere in the file.** So with this design exactly as written, **no index is ever reused,
+the generation is never consulted, and the invariant is vacuously true while doing nothing.**
+
+The document specifies the safety *property* of reuse and the *condition* under which an index becomes
+reclaimable. It never specifies the *mechanism* that reuses one. The free list it rules out in its
+opening paragraph is the missing half of the proposal, not a rejected alternative — ruling it out
+without supplying a replacement leaves no allocator at all. That is also why the capacity figure has
+nothing behind it.
+
+### And "the AXI address arithmetic is untouched" is false in a way that matters
+
+`node_query_full_addr = CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr, 4'd0}` shifts the **full 30-bit
+id** left by four, so id bit 16 is worth 2^20 bytes: **generation 1 alone addresses 0xC000_0000**, past
+the top of the DRAM this document's own memory table ends at, and generation 0x3FFF reaches ~16 GiB
+past base. It works today precisely because `#{14'd0,*head}` makes the top fourteen bits hard zeros —
+**the design proposes putting data in exactly the bits whose being zero is load-bearing.** Every call
+site passing a capability-supplied id must mask to `[15:0]`.
+
+### The original high-half section, kept for the record and wrong about field order
+
+Raised by the paper lane and **measured here rather than assumed**. `rev_node_t` is
+`depth:32, prev:30, next:30, valid:1, linear:1` (`capstone_unit.anvilh:543-549`), and the generated
+`capstone_rev_node.anvil.sv` packs it as a **`[93:0]`** slice. So the 94 used bits occupy bits 0..93
+and the 34 "free" bits are **94..127 — every one of them above bit 64**. A generation placed in the
+padding therefore lives wholly in the high 64-bit word of the 16-byte granule.
+
+That is the half R-29, S-06, S-10 and R-10 are all about — R-29 being a plain 8-byte store into a
+granule's high word followed by a 128-bit load returning the high half **zeroed**, still OPEN. **A
+corrupted generation is not a benign wrong number**: it is either a false match, in which case a stale
+alias confers authority, or a false mismatch. That is the entire safety property of this design.
+
+**The exposure is NOT established and must not be assumed either way.** R-29's trigger is `sd` then
+`ldc` through the LSU and the write-buffer/refill path; the node slot is reached through the rev_node
+unit's own memory endpoint (`node_query_full_addr = CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr,
+4'd0}`) and the pool is hardware-managed, not written by software stores. The shape matches; the path
+may not. **What would settle it** is a source read: do rev_node's accesses share the write-buffer
+overlay and refill leg the R-29 mechanism sits in (`wt_dcache_mem.sv:354-358`, overlay gated at word
+granularity at `:283/:335/:397`), or do they bypass the D-cache?
+
+**And if it does reach, there is a cheap alternative that should be on the table before the placement
+is baked in.** The free bits are all high only because the used fields happen to total 94.
+`depth : logic[32]` is far wider than any revocation tree needs; narrowing it to ~18 bits frees 14
+bits **inside the low half**, and the generation could live there instead, entirely below bit 64. That
+changes `rev_node_t` and the packing, so it is a design decision rather than a tweak — but it would
+make the safety property independent of the high-half defect family rather than contingent on it.
 
 ## Sequencing
 

@@ -78,15 +78,22 @@ S-12 no longer needs a board or a 1.6 MB domain. In `capstone-ariane`, branch
     verif/tests/custom/capstone/stc-ldc-sbpressure-norel.S  0 traps, matched control
     verif/tests/custom/capstone/stc-ldc-sbpressure-a4.S     prints a4 at each trap
 
+**`S12_MEM_DELAY=40` realises as an 8-cycle delay, not 40.** The define is truncated to four bits
+(`vendor/pulp-platform/common_cells/src/stream_delay.sv`, `CounterBits = 4`, unchanged at every revision cited
+here), so the value used is its low nibble. The usable range is 2..15, and a value congruent to 0 mod 16
+realises as essentially no delay while reading like a large one. **This is a label correction, not a
+retraction:** every run recorded here stands, at a verified NON-DEFAULT latency of 8 cycles. The command is
+left at 40 so it reproduces the recorded runs byte for byte.
+
 run with `+define+S12_MEM_DELAY=40`. The delay is essential and is why this went unreproduced: the
 testbench default is ZERO memory latency, where the store buffer cannot fill, so the test could
 never create its own triggering condition. At delay 0 the identical ELF produces **0** traps.
 
-| arm | delay | flu-issues | ldc-pending-cycles | hazard | in-loop traps |
+| arm | delay define (realised) | flu-issues | ldc-pending-cycles | hazard | in-loop traps |
 |---|---|---|---|---|---|
-| `stc-ldc-sbpressure` | 0 | 529 | 1800 | 0 | 0 |
-| `stc-ldc-sbpressure` | 40 | 529 | 64279 | **254** | **254** |
-| `stc-ldc-sbpressure-norel` | 40 | 529 | 64256 | 0 | 0 |
+| `stc-ldc-sbpressure` | 0 (0) | 529 | 1800 | 0 | 0 |
+| `stc-ldc-sbpressure` | 40 (8) | 529 | 64279 | **254** | **254** |
+| `stc-ldc-sbpressure-norel` | 40 (8) | 529 | 64256 | 0 | 0 |
 
 Rows 2 and 3 are the comparison: identical FLU issue counts, LDC-unproduced windows agreeing to
 0.04%, opposite outcomes. **Do not use the `escape` counter as the precondition** — `hazard` is

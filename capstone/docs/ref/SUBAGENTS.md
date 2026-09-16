@@ -6,6 +6,12 @@
 > `board-run` for FPGA execution), a subagent for "go do this and report back".
 
 
+> **Lanes, 2026-09-15.** The peer sessions are named as `ListAgents` shows them: `paper`, `compiler`, `RTL`, `synth`,
+> `helper`, `cheri`, `fpga`, and the apollo server's set `apollo-admin`, `apollo-paper`, `apollo-rtl`, `apollo-board`.
+> The lanes are moving to the apollo server gradually; during the transition both sets are live and an item is
+> owned by whichever lane the state doc names. The board lane's handover to `apollo-board` is
+> `../plans/2026-09-15-board-lane-handover.md`; the board is one serialized resource whoever holds it.
+
 Built-in subagents are a different thing from **peer lane B** (a separate Opus session —
 see the archived `../history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`) and from an **external collaborator's own agent** (see the ONBOARDING
 callout). This file covers only the in-session subagents defined in `.claude/agents/`.

@@ -10,7 +10,8 @@ Traced the boot hang to a real SBI-RFENCE mismatch and **built the fix** (a UP �
 `CONFIG_SMP=n` — kernel image with our six `.dom`s, sha256 `6991c0f7…`). But the
 decisive discovery is that **`load-image` + `reset-board` does not boot our
 uploaded image at all** — the board boots a **board-resident firmware** (the
-collaborator's `root@reference-build` build); our `alexey@focs-server` kernel never
+collaborator's `root@<host>` reference build); our own `<user>@<host>` kernel (built on
+focs-server) never
 appears in any boot log. Fixing the boot therefore means **re-flashing the
 shared board's resident firmware**, which is **out of scope** (Step-1 case 2 /
 carve-out). Stop and report. The built UP image is ready to hand to the board
@@ -20,8 +21,8 @@ owner to flash.
 
 | | Kernel build identity |
 |---|---|
-| **Our uploaded images** (`fw_payload.bin` sha `aadd213f`, `fw_payload_up.bin` sha `6991c0f7`) | `alexey@focs-server` |
-| **What the board actually boots** (UART ring buffer) | `root@reference-build`, `#3 SMP Sun May 24` and `#30 SMP Mon May 25` |
+| **Our uploaded images** (`fw_payload.bin` sha `aadd213f`, `fw_payload_up.bin` sha `6991c0f7`) | `<user>@<host>`, built on focs-server |
+| **What the board actually boots** (UART ring buffer) | `root@<host>` (the collaborator's reference build), `#3 SMP Sun May 24` and `#30 SMP Mon May 25` |
 
 Our build id **never** appears on the board; only the collaborator's does. So
 `load-image` (JTAG write to `0x80000000`) followed by `reset-board` does **not**

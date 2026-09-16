@@ -1,0 +1,8 @@
+# D3: does the proposed monitor writeback fix survive live exception delivery?
+# Run against the R-34/R-24 delivery-fix branch -- on the deployed bitstream both the current
+# monitor shape and its replacement run clean, so a pass there carries no information.
+- test: d3-monitor-writeback
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/d3-monitor-writeback.S

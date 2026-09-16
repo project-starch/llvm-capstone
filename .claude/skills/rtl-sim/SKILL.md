@@ -59,14 +59,43 @@ These are not inconveniences; each one has been read as a result.
 1. **DELETE THE ARTIFACTS BEFORE EVERY RUN.**
    ```bash
    rm -f verif/sim/out_*/veri-testharness_sim/<NAME>*
+   rm -f verif/sim/verilator.vcd verif/sim/verilator.fst
    ```
+   **The second line is not optional and the first cannot replace it.** The run's tail does
+   `[ ! -f verilator.vcd ] || mv verilator.vcd <dir>/<NAME>.vcd`, so a waveform left by an EARLIER
+   traced run is renamed into THIS run's directory under THIS run's test name — a name-scoped delete
+   cannot see it, because until the rename it has a different name. Seen 2026-09-16: a 9.3 GB file
+   dated the previous day appeared as today's test's `.vcd`, on a run that requested no tracing and
+   could not have produced one. Check the mtime against the run before reading any waveform.
    A failed *compile* leaves the previous run's `.log`/`.iss` in place, and the parser happily
    reports them. A stale log has already been read as "exception + timeout" when the run under
    test never built. If you skip the delete, check the file mtime against the wall clock.
 
-2. **`.S` FILES GO THROUGH THE C PREPROCESSOR — including comments.** Writing `CAPTYPE(...)`
-   or any other `MACRO(...)` form inside a `#` comment expands as a macro invocation and breaks
-   the assembly. Write "CAPTYPE with CAP_TYPE_UNINIT", never `CAPTYPE(CAP_TYPE_UNINIT)`.
+2. **`.S` FILES GO THROUGH THE C PREPROCESSOR — including comments.** Two distinct ways this
+   bites, and the second is the one that keeps being missed because the first is well known.
+   *Macro expansion:* writing `CAPTYPE(...)` or any other `MACRO(...)` form inside a `#` comment
+   expands as a macro invocation. Write "CAPTYPE with CAP_TYPE_UNINIT", never
+   `CAPTYPE(CAP_TYPE_UNINIT)`.
+   *Directive shape:* a comment line whose `#` is followed by a directive word **is a directive**.
+   Quoting RTL in a header — `#     if (ex_i.valid && ...)` — gives `error: token "." is not valid
+   in preprocessor expressions` and `unterminated #if`, pointing at the comment, which reads like a
+   syntax error in prose. Cost a build on 2026-09-15 in a file whose own header warned about the
+   macro form three paragraphs above. Grep before the first build, because knowing the rule and
+   applying it are different things:
+
+   ```bash
+   # directive-word shape (unterminated #if in prose) AND macro-expansion shape (NAME(...) in a comment)
+   grep -nE '^#[[:space:]]+(if|ifdef|ifndef|else|elif|endif|define|include|undef|error|pragma|line)\b' <test>.S
+   grep -nE '^#.*\b[A-Z][A-Z0-9_]{2,}[[:space:]]*\(' <test>.S
+   ```
+
+   **Both shapes have now cost a build on the same day, which is what makes this a pattern rather than
+   one person's slip.** The macro form did so hours earlier, in `lsu-mmode-gate.S`: a comment reading
+   `CAPENTER (capmode sticky)` expanded as an invocation and the assembler stopped with
+   `error: macro "CAPENTER" requires 2 arguments, but only 1 given` — in a file whose own header
+   carried the warning, exactly as the directive-word instance did. Knowing the rule does not prevent
+   it; the greps do, and the second one is why the macro half is listed here rather than assumed
+   covered by the prose above.
 
 3. **`SUCCESS` AT THE TIMEOUT IS NOT A PASS.** The harness prints
    `*** SUCCESS *** (tohost = 0) after N cycles` even when nothing ever wrote `tohost`. If

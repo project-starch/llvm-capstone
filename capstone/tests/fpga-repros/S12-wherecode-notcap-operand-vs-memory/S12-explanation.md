@@ -263,7 +263,7 @@ that creates the shape existed for a day and reported **zero** — because the t
 
 ```text
         S12_MEM_DELAY = 0    →    0 traps      ← the test could not create its own trigger
-        S12_MEM_DELAY = 40   →  254 traps
+        S12_MEM_DELAY = 40   →  254 traps      ← the define truncates to 4 bits: an 8-cycle delay
 ```
 
 ---

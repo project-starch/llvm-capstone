@@ -1,0 +1,106 @@
+# R-34 readings, RTL simulation at f6ec6c198, 2026-09-15 (run C = the folder's src/ test: witnesses, loads, misaligned lw, stores, untagged ld last)
+# audited artifact set: .log.iss sha256 e9495d5e2ff104ce..., RVFI .log 5670a53503d9c6af... (run of 13:51:55; a live out_* dir is overwritten by every run)
+# NOTE: the RVFI line 'ILLEGAL_INSTR exception @ 0x80000198' is a stale label (rvfi_tracer.sv:129-139 has no default arm); the cause was 24.
+# register map: Reg[17]=a7 capmode witness (CSCRATCH round trip), Reg[30]=t5 mstatus, Reg[11]=a1 RW cap, Reg[15]=a5 WO cap,
+#   Reg[18]=s2 arm0 value, Reg[19]=s3 arm0 traps / later arm4s cause (sd via RO cap), Reg[20]=s4 arm1 cause / later buf[0] after the stores,
+#   Reg[9]=s1 arm1b cause (misaligned lw), Reg[29]=t4 arm1b value, Reg[21]=s5 arm2 value, Reg[22]=s6 arm2 cause / later buf[1] after the stores,
+#   Reg[23]=s7 arm3 value (WO cap), Reg[24]=s8 arm3 cause, Reg[25]=s9 arm4 value (bounds), Reg[31]=t6 arm4 cause / later arm4s cause (misaligned sw),
+#   Reg[27]=s11 total traps before the stores, Reg[7]=t2 arm5 value (untagged base), Reg[26]=s10 arm5 cause
+## .log.iss ($display lines)
+[Cycle        371] Reg[17]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        376] Reg[30]: 0000000a00000000
+[Cycle        450] Reg[11]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        474] Reg[15]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 2 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0 
+[Cycle        493] Reg[18]: 000000004c535550
+[Cycle        494] Reg[19]: 0000000000000000
+[Cycle        501] Reg[20]: 0000000000000002
+[Cycle        503] Reg[ 9]: 0000000000000000
+[Cycle        504] Reg[29]: 00000000004c5355
+[Cycle        505] Reg[21]: 000000004c535550
+[Cycle        510] Reg[22]: 0000000000000000
+[Cycle        512] Reg[23]: 000000004c535550
+[Cycle        513] Reg[24]: 0000000000000000
+[Cycle        514] Reg[25]: 000000000badb0b0
+[Cycle        519] Reg[31]: 0000000000000000
+[Cycle        521] Reg[27]: 0000000000000001
+RAW-DBG2: b-occupancy=0 b-consumers=0 b-NOFORWARD=0 | c-occupancy=125 c-HA/workdir/verif/sim/out_2026-09-15/directed_tests/lsu-mmode-gate.o *** SUCCESS *** (tohost = 0) after 1263 cycles
+[Cycle       1209] Reg[19]: 0000000000000000
+[Cycle       1211] Reg[31]: 0000000000000000
+[Cycle       1212] Reg[20]: 0000000000001150
+[Cycle       1213] Reg[22]: 00000000005ec0de
+[Cycle       1224] Reg[ 7]: 0000000000001150
+[Cycle       1227] Reg[26]: 0000000000000000
+## RVFI trace: every load/store retire with value and address, the exception line and the debug-ROM dret
+3 0x0000000080000024 (0x00033903) x18 0x000000004c535550 mem 0x0000000080003000
+ILLEGAL_INSTR exception @ 0x000000008000007c (0x0000)
+3 0x0000000080000098 (0x00032e83) x29 0x00000000004c5355 mem 0x0000000080003001
+3 0x00000000800000d0 (0x0005ba83) x21 0x000000004c535550 mem 0x0000000080003000
+3 0x00000000800000fc (0x0007bb83) x23 0x000000004c535550 mem 0x0000000080003000
+3 0x000000008000010c (0x0405bc83) x25 0x000000000badb0b0 mem 0x0000000080003040
+3 0x0000000080000168 (0x01c83423) mem 0x0000000080003008 0x00000000005ec0de
+3 0x0000000080000184 (0x01c32023) mem 0x0000000080003001 0x0000000000000011
+ILLEGAL_INSTR exception @ 0x0000000080000198 (0x00033a03)
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000000 mem 0x0000000000000400
+2 0x0000000000000844 (0x40044403) x 8 0x0000000000000001 mem 0x0000000000000400
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000001 mem 0x0000000000000400
+2 0x0000000000000870 (0x10052223) mem 0x0000000000000104 0x0000000000000000
+2 0x0000000000000348 (0x38853023) mem 0x0000000000000380 0x0000000080000000
+BREAKPOINT exception @ 0x000000000000035c (0x00100073)
+2 0x0000000000000828 (0x10852023) mem 0x0000000000000100 0x0000000000000000
+2 0x0000000000000830 (0x40044403) x 8 0x0000000000000002 mem 0x0000000000000400
+2 0x0000000000000844 (0x40044403) x 8 0x0000000000000002 mem 0x0000000000000400
+2 0x0000000000000884 (0x10852423) mem 0x0000000000000108 0x0000000000000000
+core   0: 0x0000000000000890 (0x7b200073) dret
+3 0x0000000080000198 (0x00033a03) x20 0x0000000000001150 mem 0x0000000080003000
+3 0x000000008000019c (0x00833b03) x22 0x00000000005ec0de mem 0x0000000080003008
+3 0x00000000800001b8 (0x00033383) x 7 0x0000000000001150 mem 0x0000000080003000
+3 0x00000000800001d0 (0xe23f2a23) mem 0x0000000080001000 0x0000000000000001
+## earlier runs of the same file (before the misaligned and store arms were added):
+#  run A (witnesses + loads only): SUCCESS after 545 cycles; identical readings for arms 0..5; exactly one trap (cause 2)
+#  run B (+ misaligned lw at buf+1): SUCCESS after 561 cycles; the lw returned 0x004C5355 with no trap
+## stock riscv-tests rv64mi-p-ma_addr on the same RTL, capmode never set (14:08):
+#  *** FAILED *** (tohost = 10) after 719 cycles: tests 2-9 (lh/lw/lwu inside one 8-byte word) pass on the cache's shifted bytes,
+#  TESTNUM 10 (ld at +1, crossing the word) returns wrong data with no trap -- the loss predates the capability check
+
+## RUN D — arm 4b added (STORE at bound_end), RTL lane, 2026-09-15, at the FLASHED 1bfff7776
+# Reproduced run C's every arm first on this revision before adding anything: Reg[18] 4c535550,
+# Reg[19] 0, Reg[20] 2, Reg[21] 4c535550, Reg[23] 4c535550, Reg[24] 0, Reg[25] 0badb0b0, Reg[31] 0,
+# Reg[27] 1, Reg[20] 1150, Reg[22] 5ec0de, Reg[7] 1150, Reg[26] 0.  SUCCESS at 1276 cycles, 0 exceptions.
+# Delivery conditions verified identical between f6ec6c198 and 1bfff7776 by content, not line number:
+#   load_unit.sv  'ex_i.valid && (state_q inside {SEND_TAG, SEND_TAG_LDC}) && !...is_dom_switch'
+#   at :718 (f6ec6c198) and :699 (1bfff7776), byte-identical text; the files differ only by the
+#   S-07 probe ports and LDC-path comments.
+# New registers: Reg[8]=s0 arm 4b cause, Reg[29]=t4 arm 4b guard word (t4 reused after its first print).
+[Cycle       1252] Reg[ 8]: 0000000000000000      <- arm 4b cause: NO TRAP
+[Cycle       1257] Reg[29]: 00000000000005b0      <- the guard word PAST the buffer: the store LANDED
+*** SUCCESS *** after 1303 cycles, 0 exceptions   (timeout was 200000, so a real completion)
+# READING: a store at bound_end through a valid in-bounds capability -- entirely outside the region --
+# is neither refused nor reported, and it overwrites the word past the buffer. The bounds clause is
+# raised-and-dropped for STORES exactly as arm 4 showed for loads. This is the direction that
+# CORRUPTS rather than merely leaks, which is why the store side was worth closing separately.
+
+## RUN E — residual (a), the translation-on path. RTL lane, 2026-09-15, at the FLASHED 1bfff7776
+# Test: src/r34-misaligned-xlate.S. M-mode execution throughout; DATA accesses translated via
+# MPRV=1 + MPP=S + an sv39 identity map (one 1 GiB megapage, root[2]).
+[Cycle        482] Reg[18]: 00000000004c5355   <- X0 misaligned ld, translation OFF: shifted value
+[Cycle        483] Reg[19]: 0000000000000000   <- X0 cause: NO TRAP (the known R-34 case)
+[Cycle        484] Reg[20]: 0000000a00020800   <- witness: MPRV set (0x20000), MPP = S (0x0800)
+[Cycle        485] Reg[21]: 000000004c535550   <- PRECONDITION: aligned ld through the translated
+                                               #    path returns the sentinel, so the map WORKS
+[Cycle        486] Reg[22]: 0000000000000000   <- precondition cause 0
+[Cycle        491] Reg[23]: 00000000004c5355   <- X1 misaligned ld, translation ON: same shifted value
+[Cycle        493] Reg[24]: 0000000000000000   <- X1 cause: NO TRAP
+[Cycle        494] Reg[27]: 0000000000000000   <- zero traps in the whole run
+*** SUCCESS *** after 537 cycles                (timeout 200000, so a real completion)
+# READING: both arms silent with the mapping witnessed working -- the first branch of the pair
+# written down before the run. THE MISALIGNED DROP IS INDEPENDENT OF TRANSLATION, which matches the
+# mechanism: the MMU forwards misaligned_ex_i unregistered either way.
+#
+# THE FIRST RUN OF THIS TEST WAS REFUSED BY ITS OWN PRECONDITION and is recorded because the
+# refusal is the point. The aligned load returned 0 with cause 5 (access fault), so translation was
+# NOT working, and X1's cause 4 in that run was read under a broken mapping. Reported as-is it would
+# have said "misaligned IS delivered under translation", which it does not show. Cause: MPRV+MPP=S
+# makes the effective privilege S for data accesses, so PMP starts applying where it did not, and
+# the `p` environment configures none because it never leaves M-mode. One NAPOT entry fixes it.

@@ -422,6 +422,115 @@ static void run_linear(unsigned reps) {
    footprint growing with the working set; D (data-only) = the same chase by integer arithmetic on one
    base, no lookup ldc at all (the labelled non-protecting ablation). Two warm-up traversals, then the
    timed accesses; the cold first traversal is reported apart; checksum and visit count verified. */
+/* ------------------------------------------------------------------ M1: churn (prepared) ------ */
+/* Safe node reclamation under lifetime churn (experiments/M1-node-reclamation.md): sixteen live
+ * 64-byte objects replaced in round-robin order, each replacement one release (revoke + init) and one
+ * take (one node minted), to 10C cumulative allocations where C is the usable node capacity passed as
+ * --cap. Arms (--arm): drop = clear every obsolete reference; ring = retain the 16 most recent obsolete
+ * aliases in tagged memory, replacing the oldest; pressure = retain every obsolete alias in a
+ * preallocated buffer (M1_MAXRET entries, accounted; a full buffer stops the run as "buffer", not as
+ * exhaustion); release = the pressure arm, then every retained reference cleared, then 2C more
+ * allocations. A snapshot every C/16 allocations prints the cumulative counters and non-faulting type
+ * reads of the oldest retained alias and of a live slot. On the deployed (non-reclaiming) table the run
+ * stops at --budget with stop=budget: that is the exhaustion classification, not a failure of the arm.
+ * What the harness cannot read and a reclaiming build must expose: occupancy and free-node counters,
+ * the reclamation count, and a node id/generation read for the identifier-turnover witness. The
+ * faulting probe (--stale-take: a capability operation through the oldest retained alias, which must
+ * fault INVALID_CAPABILITY and, in a domain, wedges -- M-1) runs LAST and only when asked. Subordinate
+ * handles retained across a release are not modelled in this version. */
+/* M1_LIVE is the live-object count AND the fixture's geometry: the carve loop below takes one 64-byte
+ * leaf per live object, so -DM1_LIVE=4 and =64 carve a 256-byte and a 4 KiB pool respectively. A
+ * geometry that changes with this knob is the intent, not a defect; a reader comparing arenas across
+ * arms must compare M1_LIVE first. Overridable because the release walk's per-node conversion assumes
+ * each revoke walks alloc/M1_LIVE dead nodes, and sweeping this knob is the only way to test that
+ * assumption: if the measured slope scales as 1/M1_LIVE the conversion holds, and if it does not the
+ * per-node figure is wrong by exactly that factor (apollo, 2026-09-16). */
+#ifndef M1_LIVE
+#define M1_LIVE 16
+#endif
+/* The retained-reference buffer is an INSTRUMENT limit, not a property of the system, and a measurement
+ * must not be bounded by its own instrument. At C = 256 the run's target is 10*C = 2560, so a 2048-entry
+ * buffer stopped the pressure and release arms at stop=buffer before either reached its target and left
+ * the release arm's phase 2 (gated on alloc >= target) unreached, so three of the four patterns were
+ * really two (apollo, 2026-09-15). 4096 covers 10*C at C = 256 with margin; a larger C needs a larger
+ * buffer again, and the run says which it hit. */
+#define M1_MAXRET 4096
+static void *m1_ring_alias[M1_LIVE];
+static void *m1_ret_alias[M1_MAXRET];
+static sublet_cap m1_tmp;
+
+static ulong m1_alias_type(void *a) {
+  if (!a) return 99;
+  sublet_store(&m1_tmp, a);
+  return sublet_type(&m1_tmp);
+}
+
+/* per snapshot interval: the raw cycles spent in the takes (mrev: minting) and in the gives (revoke + fill +
+ * init: release), summed over the interval's allocations, so take_cyc/n and give_cyc/n against cumulative
+ * allocations are the two cost curves as the table fills. Each bracket carries the timer's own read-to-read
+ * floor (2 cycles on silicon, E4); the analysis subtracts it, the harness prints raw sums. */
+static void m1_snap(const char *arm, ulong alloc, ulong C, ulong m0, unsigned nret, void *oldest,
+                    ulong n, ulong tk, ulong tg, ulong ini) {
+  out("R1 m1 snap arm="); out(arm); kv("alloc", alloc); kv("C", C); kv("minted", minted() - m0);
+  kv("revoked", sublet_stats.revoke); kv("init", sublet_stats.init); kv("live", M1_LIVE); kv("retained", nret);
+  kv("n", n); kv("take_cyc", tk); kv("give_cyc", tg); kv("init_n", ini);
+  kv("stale_alias_type", m1_alias_type(oldest)); kv("live_slot_type", sublet_type(&leaf[0])); out("\n");
+}
+
+static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) {
+  ulong target, alloc = 0, snap_every, next_snap, m0, phase2_end = 0, t, tk = 0, tg = 0, n = 0, ini0;
+  unsigned i, k, nret = 0, releasing = 0;
+  void *old, *oldest = 0;
+  const char *stop = "target";
+  if (C < 16) C = 16;
+  target = 10UL * C; snap_every = (C + 15UL) / 16UL; next_snap = snap_every;
+  carve_root(M1_LIVE * 64UL, &pool);
+  if (root_short) { out("R1 m1 refused: arena\n"); return; }
+  pool_base = sublet_base(&pool);
+  m0 = minted();
+  for (i = 0; i + 1 < M1_LIVE; i++) sublet_carve(&pool, pool_base + (ulong)(i + 1) * 64UL, &leaf[i]);
+  sublet_move(&pool, &leaf[M1_LIVE - 1]);
+  for (i = 0; i < M1_LIVE; i++) { alias[i] = sublet_take(&leaf[i]); touch((volatile char *)alias[i], 64UL, 0x11); }
+  out("R1 m1 start arm="); out(arm); kv("C", C); kv("target", target); kv("fixture_nodes", minted() - m0);
+  kv("budget", budget); kv("maxret", M1_MAXRET); kv("snap_every", snap_every); out("\n");
+  i = 0; ini0 = sublet_stats.init;
+  for (;;) {
+    if (alloc >= target && !releasing) {
+      if (streq(arm, "release")) {
+        /* phase 2: clear every retained reference, then 2C more allocations */
+        for (k = 0; k < nret; k++) m1_ret_alias[k] = 0;
+        nret = 0; oldest = 0; releasing = 1; phase2_end = alloc + 2UL * C;
+        out("R1 m1 released arm="); out(arm); kv("alloc", alloc); kv("minted", minted() - m0); out("\n");
+      } else break;
+    }
+    if (releasing && alloc >= phase2_end) break;
+    if (minted() + 1UL > budget) { stop = "budget"; break; }
+    old = alias[i];
+    t = cyc(); sublet_give(&leaf[i]); tg += cyc() - t;     /* the object's lifetime ends: revoke, fill, init */
+    if (streq(arm, "drop") || releasing) { alias[i] = 0; }
+    else if (streq(arm, "ring")) { k = (unsigned)(alloc % M1_LIVE); m1_ring_alias[k] = old; if (nret < M1_LIVE) nret++; oldest = m1_ring_alias[(unsigned)((alloc + 1UL) % M1_LIVE)]; if (!oldest) oldest = m1_ring_alias[0]; }
+    else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
+    t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
+    touch((volatile char *)alias[i], 64UL, (unsigned char)alloc);
+    alloc++; n++;
+    if (alloc >= next_snap) {
+      m1_snap(arm, alloc, C, m0, nret, oldest, n, tk, tg, sublet_stats.init - ini0);
+      next_snap += snap_every; n = 0; tk = 0; tg = 0; ini0 = sublet_stats.init;
+    }
+    i = (i + 1) % M1_LIVE;
+  }
+  out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
+  kv("revoked", sublet_stats.revoke); kv("retained", nret); kv("released", releasing); out("\n");
+  nodes_minted_total += minted() - m0;
+  if (stale_take && oldest) {
+    /* LAST, and expected to fault: a capability operation through the oldest retained alias */
+    out("R1 m1 stale-take go\n");
+    sublet_store(&m1_tmp, oldest);
+    old = sublet_take(&m1_tmp);
+    out("R1 m1 stale-take returned"); kv("nonzero", old != 0); out("\n");
+  }
+}
+
 static void run_chase(unsigned reps, ulong seed, const char *arm) {
   static const ulong n_pts[5] = {16, 64, 256, 1024, 4096};
   unsigned k, r;
@@ -469,7 +578,7 @@ void domain_main(unsigned *res, unsigned func) {
   static char args[256];
   ulong len, i;
   const char *arm = "S", *series = "nodes", *pattern = "shared";
-  unsigned reps = 5, touch_unrel = 1, calib = 0, stale = 0;
+  unsigned reps = 5, touch_unrel = 1, calib = 0, stale = 0, stale_take = 0; ulong cap = 65532UL;
   ulong seed = 1;
   ulong budget = 50000UL;
   int arm_sublet;
@@ -516,6 +625,8 @@ void domain_main(unsigned *res, unsigned func) {
       else if (streq(tok[i], "--budget") && i + 1 < nt) budget = atou(tok[++i]);
       else if (streq(tok[i], "--calib")) calib = 1;
       else if (streq(tok[i], "--stale")) stale = 1;
+      else if (streq(tok[i], "--cap") && i + 1 < nt) cap = atou(tok[++i]);
+      else if (streq(tok[i], "--stale-take")) stale_take = 1;
     }
   }
   arm_sublet = streq(arm, "S");
@@ -532,6 +643,7 @@ void domain_main(unsigned *res, unsigned func) {
   if (streq(series, "latency")) run_latency(reps); else
   if (streq(series, "linear")) run_linear(reps); else
   if (streq(series, "chase")) run_chase(reps, seed, arm); else
+  if (streq(series, "m1")) run_m1(arm, cap, budget, stale_take); else
   run_series(series, pattern, arm_sublet, reps, touch_unrel, budget);
   out("R1 end"); kv("minted", nodes_minted_total); kv("split", sublet_stats.split); kv("mrev", sublet_stats.mrev);
   kv("revoke", sublet_stats.revoke); kv("init", sublet_stats.init); kv("out", out_used); kv("lines", out_lines + 1); out("\n");

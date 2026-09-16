@@ -743,6 +743,70 @@ Related: R-21, R-22 (resolved on silicon), Q-04.
 > non-idempotent mutation, which is why MREV and SPLIT are the two ops testable that way; DELIN is a plain
 > gap. Detail: the fix-cycle history note, R-28 section.
 
+> # 2026-09-15 — THE COMMIT-STAGE ROUTE IS CONSTRUCTIBLE IN BARE METAL. Design, so nobody re-derives it.
+>
+> Read out of the RTL rather than reasoned: the trap the route needs is `commit_stage.sv:225-227`,
+> `else if (!pc_revnode_valid_d) → cause 64'd25`, gated at `:208-209` on
+> `priv_lvl_i == PRIV_LVL_M && capmode_i`. Its input is `pc_revnode_tracking` (`:231-247`), which latches
+> `pc_cap.metadata.revnode_id` and **assumes valid on any change**, clearing only when
+> `revnode_invalidation_id_i == pc_revnode_id_d` — the broadcast produced at `ex_stage.sv:1207-1208`
+> **during a write op's own execution**. So a REVOKE whose walk reaches the PC capability's node
+> invalidates it mid-flight, the commit head is the REVOKE itself, and it traps instead of retiring —
+> having already mutated node state in EX. R-28's shape with no interrupt and no debug flush.
+>
+> **It must be a DESCENDANT, and that is a constraint not a detail.** `REVOKE_NODE`
+> (`capstone_rev_node.anvil:15-31`) terminates on `node_in.depth <= *depth_bound` and invalidates only
+> what lies below, so revoking a node does **not** invalidate the node itself. The PC capability's node
+> has to lie in the junior run of the node being revoked.
+>
+> **~~Construction: CAPENTER with a child capability.~~ RETRACTED within the hour — `CAPENTER` does not
+> take a capability, and the route is NOT reachable from a bare-metal test at all.**
+>
+> `CAPENTER` mints its capabilities with **hard-coded node ids**: `capstone_flu_unit.anvil:455` gives
+> the returned revoke capability `revnode_id = 30'd1` and `:471` gives the data capability `30'd2`, and
+> `commit_stage.sv:197` gives the **PC capability `30'd1`**. Nothing the program holds influences any of
+> them. So "enter with the child" is not a thing `CAPENTER` can do.
+>
+> **And no obtainable capability is rooted above the PC's node.** `depth_bound := node_in.depth`
+> (`capstone_rev_node.anvil:154`), the walk starts at `node_in.next` and stops once
+> `node_in.depth <= *depth_bound` (`:18`), so a REVOKE invalidates **strictly deeper** nodes only —
+> never the revoked node itself. Nodes 1 and 2 are both depth 1 (`:173`, `:175`) and are siblings
+> (`node_1.next = 2`). Therefore: revoking through the node-1 capability sets `depth_bound = 1`, walks
+> to node 2, finds `1 <= 1`, and terminates having invalidated nothing. MREV/SPLIT only ever produce
+> **deeper** nodes, so they cannot manufacture an ancestor either. The only node above depth 1 is node 0,
+> the depth-0 sentinel, which is created with `valid = 1'd0`.
+>
+> **This is very likely why the earlier 37 arms never reached the condition.** The entry records that
+> as a timing problem — no arm had a measured chance of landing an interrupt on an in-flight op. The
+> structural reading is simpler: **in the bare-metal configuration the required state cannot be
+> constructed at all**, so no amount of timing would have produced it.
+>
+> **What the route actually needs** is a PC capability carrying a node the program can revoke from
+> above, which happens on a **domain switch** — `commit_stage.sv:235` names CALL/RETURN alongside
+> CAPENTER, and a CALL's PC capability comes from a sealed domain capability whose node the monitor
+> created as a descendant. That is monitor-level setup, not a directed `.S`. Anyone attempting this
+> should budget for it as a domain test, and the oracle design below still applies unchanged.
+>
+> *(Recorded as a retraction rather than an edit because the wrong construction was published first and
+> may have been read. The feasibility check that refuted it cost minutes; writing the arm would have
+> cost a day and produced a clean, meaningless pass.)*
+>
+> **THE ORACLE, and it sidesteps the idempotence problem this entry records.** The entry states that no
+> end-state oracle works for DROP/REVOKE because invalidation is idempotent. That is true and it does
+> not block this route, because **the observable here is a PAIR, not an end state**: (a) did the REVOKE
+> trap with cause 25 — read from a `mtvec` handler that latches `mcause`/`mepc` and steps `mepc` by 4 so
+> the run does not spin on itself; and (b) was the node mutated anyway — read with `LCC(rd, cap, 0)`,
+> selector 0 being validity (`capstone_dyn_unit.anvil:231-240`). Mutation observed **together with**
+> non-retirement is the demonstration. Neither half alone is.
+>
+> Expect the run to reach its report and then time out, for the usual reason: completing needs a store
+> to `tohost` through an `auipc`-derived integer base, which the R-34 delivery fix refuses under capmode.
+>
+> **Two things to get right or the arm is void.** The handler must step `mepc`, or the trap re-executes
+> the REVOKE, traps again and hangs — a hang here is indistinguishable from the wedge this entry is
+> about. And validity must be sampled **before** as well as after, or "invalid" cannot be told from
+> "never valid".
+
 Named by the claim-auditor while attacking the R-27 fix (same history note). The write ops are held until they
 are the oldest instruction (`issue_read_operands.sv:1525-1533`), but an interrupt or a debug flush can still land
 after their request has reached the node, which may by then have mutated state — a minted node, a cleared
@@ -2045,6 +2109,7 @@ the spec's owners, not to a lane.** See **R-31**, whose fix must NOT land before
 > is *"about to leave M-mode INTO the domain"* (`sbi_capstone.c:126`, `:129`). So the only capability-type
 > check on the SCALAR load/store path is inapplicable to domain code **by construction**.
 >
+> *(2026-09-15: half of the explanation — the other half is **R-34**, the LSU's exceptions being raised and dropped at every privilege; the conclusion below stands.)*
 > That explains the 2026-08-04 "inert" measurement completely, and it reclassifies it: not a check that
 > fails to fire, but a check that was never in scope for the code we run. **It also makes R-31's
 > insufficiency structural rather than contingent** — an UNINIT capability held by a domain is readable
@@ -2470,6 +2535,72 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 
 ### R-33 — the region allocator hands out capabilities whose size is NOT REPRESENTABLE in the compressed bounds encoding, so moving the cursor WIDENS a capability's authority past its own allocation by up to one granule less a byte `OPEN — the widening is MEASURED on silicon 2026-09-12 (boot sw62, RCEN = round_up(N, granule) on caplifive_r30r31_1bfff7776) and STC's bound check is READ FROM SOURCE to consume that end; CONFIRMED 2026-09-12 to reach ORDINARY LINEAR capabilities through CINCOFFSET -- i.e. plain pointer arithmetic, not just the reclaim -- by a matched RTL-sim pair on the flashed hash; the resulting over-permissive store is **DEMONSTRATED** 2026-09-12 in RTL simulation at the flashed revision (`r33-store-past-end.S`): a representable control's store at its true end is refused OUT_OF_BOUNDS while a non-representable arm's identical store RETIRES WITHOUT FAULT. Contained by the kernel's PAGE_ALIGN below 4 MiB and NOT contained at or above it. Cause is the allocator, not the encoder; fix is to round region sizes to the granule at creation`
 
+> # 2026-09-15 — R-33 CANNOT REACH THE PAPER'S SAFETY TABLE, and the reason is arithmetic
+>
+> Asked because a demonstrated over-permissive store is the one defect here that could **invalidate**
+> a published claim rather than add one. The paper's `tab:safety` has exactly two cells asserting
+> anything about extent — `appendices/c-validation-and-accounting.tex:41` "Inner free preserves live
+> sibling & Sibling intact, block extent unchanged" and `:42` "Sibling survives uncooperative child",
+> with `:66-69` making the extent claim explicit. A block rounding far enough for a store to land in
+> an adjacent sibling would be "block extent unchanged" being false while the discipline reports
+> success.
+>
+> **The siblings ARE adjacent** — that was checked first and came back the unhelpful way. The fixture
+> is `capstone/ports/nginx/port/ngx_subpool_test.c`, phases 12-13, and it is deliberate:
+> *"The sibling is taken FIRST and from the same arena, so that it is a neighbour of the nest rather
+> than something allocated after the dust settled"* (`:359-361`). Phase 12 carves two 1024-byte
+> children from one 4096-byte block with a 64-byte object in each.
+>
+> **Representability closes it, and the reason is STRUCTURAL rather than a property of the sizes this
+> fixture happens to use.** (First stated as an enumeration of the fixture's sizes; corrected
+> 2026-09-15 to the stronger form, which survives a fixture change — an enumeration would have to be
+> redone every time the fixture moves.)
+>
+> The allocator rounds **every** request: `ports/nginx/port/ngx_subpool.c:86`
+> `bytes = (bytes + 15) & ~(size_t) 15;`, with the comment explaining why — an odd carve leaves the
+> arena 8-aligned and "EVERY later block is misaligned and the first capability stored in one is an
+> unaligned access". The fixture asserts it directly at phase 8: a 4280-byte request yields extent
+> **4288**, *"rounded, not as asked"*.
+>
+> So the quantity that matters is the **granted extent, not the requested size**; every granted extent
+> is a multiple of 16; and for every extent below 16384 the granule is 8 or 16, both of which divide
+> 16 (checked exhaustively: zero counterexamples). **Widening therefore cannot occur at these sizes
+> for ANY request whatsoever**, not merely the ones this fixture chooses.
+>
+> **The margin is 3.8×, not the 1024× first recorded here.** That figure was the threshold at which
+> the granule exceeds *page* alignment, which is a different boundary and the wrong one for this
+> question. What governs is where the granule stops dividing the allocator's own 16-byte rounding:
+>
+> | | |
+> |---|---|
+> | first request whose granted extent is not a multiple of its granule | **16385** → extent 16400, granule 32, remainder 16 |
+> | fixture's largest granted extent | 4288 |
+> | headroom | **3.8×** |
+>
+> The conclusion is unchanged and 3.8× is real headroom, but the distinction matters for what may be
+> said next to it: **an nginx port allocating a 16 KiB buffer sits at that boundary.** "Not a near miss
+> a fixture change could tip" was supported by the wrong number; the reason to stop worrying is the
+> structural argument above, not the size of the gap.
+>
+> **The emulator-versus-silicon question is moot here**, which is worth recording because it was the
+> proposed discriminator: the precondition is a property of the sizes the fixture chooses, not of the
+> platform, so it fails on both and this does not widen the emulator/silicon gap that the safety-table
+> decision turns on.
+>
+> **R-32 drops off the same path by the same argument** — its exposure was those same two extent
+> cells, and an off-by-one at a boundary cannot falsify a cell whose regions are exactly representable.
+> Both remain open as soundness defects; neither threatens a claim. **This closes the SIZE half only.**
+> The bases here are `sublet_base(&x) + <8-aligned offset>` and so are 8-aligned if the root arena base
+> is — true of any capability-bearing arena, but that is reasoning rather than a measurement.
+
+> **R-11 IS THE SAME CONTRACT, AND THIS FIX CLOSES IT TOO (added 2026-09-15).** R-11 is
+> `compress_bounds`' OTHER branch — the cursorless one, losing an unaligned TOP past its window —
+> and it is open only because nothing we ship is large enough to trigger it. Rounding region sizes
+> up to the representability granule at creation makes tops granule-aligned at any size, which is
+> exactly the condition R-11 needs. The two entries' containment edges agree: the granule reaches
+> 8192 B at 4 MiB, so 4 KiB `PAGE_ALIGN` stops covering it there, which is this entry's stated
+> 4 MiB edge derived independently from R-11's granule arithmetic. Do not work R-11 separately.
+
 > # ⚠ RE-SCOPED 2026-09-12 (later, RTL lane `12eb7c5d21dc` + this lane's containment analysis): this is CAPABILITY SOUNDNESS, not instrumentation — and the cause is the ALLOCATOR, not the encoder.
 >
 > **The rounded `end` is not merely *reported* high; it is the authority bound.** `STC`'s check is
@@ -2603,6 +2734,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > reaches ordinary LINEAR capabilities through `CINCOFFSET`, and a store past the region's true end is
 > **accepted** — both by matched pairs with representable controls. DERIVED, and still only derived:
 > the containment table, which is arithmetic over the granule law.
+> *(2026-09-15, from the RTL lane's third arm at `2c59a355b`: the encoding widens at the BOTTOM too — a base that is not
+> granule-aligned reads low once the cursor moves, the mirror of the top's round-up. The containment table above measured
+> the TOP only; the kernel's page rounding rounds the SIZE up, not the start down, so it covers none of the bottom. Whether
+> any allocator hands out a non-granule-aligned base is not established — every region tested so far was base-aligned,
+> which is why it went unnoticed.)*
 >
 > **STILL NOT SHOWN, and worth naming precisely rather than letting the entry read as closed:** (i) an
 > over-permissive store **on silicon** — both demonstrations are RTL simulation, on the flashed
@@ -2722,6 +2858,192 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `SQ:` lines' transcript position is not time order (RCLM brackets the pool-release ecall).
 
 
+### R-34 — every exception the load/store unit generates ITSELF (the five capability causes 24–28 and the misaligned causes 4/6) is LOST when the access is granted in its request cycle, and delivered only if an exception is still being presented one cycle later `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324) — the MMU exception register upstream #2528 (23355d29f) deleted is restored exactly as deleted; delivery measured end to end at the ex_stage boundary for causes 4/6/24/27/28, load and store side, each ex_o.valid one cycle wide; lint at baseline. SHIPS WITH R-24 AND CANNOT SHIP WITHOUT IT. NOT synthesised, NOT on the board, and the monitor faulted in its own trap handler until sbi_capstone.S:113 was fixed — D3 CLOSED 2026-09-16, capstone-sbi d3-monitor-capability-writeback 2dcd3a5, validated on this branch by a matched pair (old shape cause 24 and store refused, replacement cause 0 and store lands, cursor restored, 1 trap in the run); the branch is held off capstone-bootstrap so the drivers keep their pinned monitor — see WHAT THE FIX EXPOSES. Originally: demonstrated at f6ec6c198, mechanism from source, timing from a waveform, AUDITED (raised 21 times, delivered once); the stock rv64mi-p-ma_addr FAILS the same way with capmode never set, so the loss predates the capability check`
+
+> **Folder (the report):** `capstone/tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/` — the directed
+> test `lsu-mmode-gate.S`, the runner, the three runs' result lines and the waveform extract.
+>
+> **What it is.** In M-mode with capmode set (witnessed by a CSCRATCH round trip) and `mstatus.MPRV = 0`
+> (witnessed), so that `cap_violation_detection`'s gate (`load_store_unit.sv:966-967`) is satisfied and the
+> block demonstrably runs (its revnode tracking at `:985-989` updates), a plain `ld` through a WRITE-ONLY
+> tagged capability, a plain `ld` at exactly `bound_end`, a plain `sd` through a READ-ONLY tagged capability, a
+> misaligned `lw` and a misaligned `sw`, and a plain `ld` through an untagged base ALL retire with a value and no
+> trap; the two stores LAND (the misaligned one corrupts the neighbouring bytes). The single access the cache did
+> present one cycle after its request — the first of two back-to-back untagged loads after the stores, whose
+> successor held `cap_exception.valid` across the boundary — had its exception delivered: cause 24, which is this
+> core's `DEBUG_REQUEST` (R-24), so the core entered the debug ROM with no debug request pending and on `dret`
+> the same pair re-ran as two separate pulses and completed silently. **The clauses are live (raised 21 times in
+> the audited run, delivered once); delivery depends on whether the exception is still asserted one cycle later.**
+>
+> **Mechanism.** The exceptions are combinational on `lsu_ctrl` (`:225`; `:820-951` misaligned, `:957-1015`
+> capability, merged at `:951`); on an immediate grant the load unit pops that entry in the request cycle without
+> consulting `ex_i.valid` (`load_unit.sv:423-424`); the MMU forwards `lsu_exception_o = misaligned_ex_i`
+> UNREGISTERED (`cva6_mmu/cva6_mmu.sv:514`) while asserting `lsu_valid_o = lsu_req_q` a cycle later (`:513`,
+> `:741`); the units emit `ex_o.valid` in that later cycle only (`load_unit.sv:718` SEND_TAG — its own contract at
+> `:715-717`; `store_unit.sv:349` `state_q != IDLE`), when `lsu_ctrl` is already empty. At every fire the waveform
+> shows `ex_i.valid = 1`, `state_q = IDLE`, `ex_o.valid = 0` — **re-derived 2026-09-15 into a committed
+> artifact** (`sim/vcd-baseline-loadunit.txt`: 21 fires up to t = 3,000 ps, every one of that shape, the single
+> delivery at 1,167–1,173 being the three-cycle hold; the earlier `sim/vcd-timing.txt` selected 14 signals and
+> contained none of these three, so the sentence had rested on a waveform nobody could reopen). Upstream `23355d29f` (#2528, "extracted PMP") removed
+> the MMU's `misaligned_ex_q` register that used to carry the exception with the request; the non-MMU configuration
+> still registers (`load_store_unit.sv:459`), the MMU one does not. **Not capability-specific:** the stock
+> `rv64mi-p-ma_addr` fails on this RTL with capmode never set (TESTNUM 10, the `ld` crossing an 8-byte word,
+> returns wrong data without a trap; the in-word cases pass on the cache's shifted bytes).
+>
+> **What it changes.** The reading in `docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`
+> that the block is "live for the trusted monitor's own accesses" is superseded: the privilege gate keeps DOMAINS
+> off the block, and R-34 loses the block's exceptions everywhere else, so plain data accesses are unenforced at
+> EVERY privilege on this RTL (the monitor's rdtime emulation stores through an untagged base at every Linux clock
+> read and does not halt: this is why). Capability accesses (`LDC`/`STC`) are the DYN unit's path and are
+> unaffected. Misaligned plain accesses silently complete with shifted data (wrong data across an 8-byte word) unless a second exception is presented one cycle later.
+> For the paper: the four plain-data-access rows of the safety matrix are not supported on this configuration for
+> two independent reasons, and "satisfy the gate" would not have enforced them either.
+>
+> **THE FIX IS SUFFICIENT AT THE `ex_stage` BOUNDARY (measured 2026-09-15, `sim/vcd-fix-boundary.txt`).** A
+> sufficiency condition was raised against any fix: `ex_stage.sv:1015` masks the LSU's exception with the DYN
+> load syncer's valid, whose message carries no exception, so a one-cycle lag would lose every single-cycle
+> exception. On the RTL lane's `c77c65324` each one-cycle `ex_o.valid` is followed by `load_exception_o.valid`
+> with the same cause and then by `csr_regfile_i.ex_i.valid` — causes 4/24/27/28 on the load side, 6/27/28 on
+> the store side — because the LSU registers the exception in the same spill register as the valid
+> (`load_store_unit.sv:685`). `debug_mode_q` stays 0 across four cause-24 deliveries, so **R-24's renumber and
+> R-34's delivery must ship together**: unrenumbered, those four would enter the debug ROM. Scope, stated
+> precisely: the block is gated `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`, so what the fix makes
+> enforceable is **M-mode code only** — the monitor and the test harness — not domain code.
+>
+> **THE MISS PATH IS SUFFICIENT TOO, measured 2026-09-15 (`r34-coldmiss-deliver.S`, `9a7bd598c`).**
+> A second sufficiency condition, one module below the `ex_stage` one: `load_unit.sv`'s delivery site
+> is nested inside the `req_port_i.data_rvalid` block and SEND_TAG asserts `kill_req` when
+> `ex_i.valid`, so a faulting access that MISSED would have its transaction killed, never see an
+> rvalid, and drop its exception — a silent read through a capability that forbids it. Neither the
+> boundary waveform nor the full sweep could answer it: `S12_MEM_DELAY` defaults to 0, so every
+> measurement had a response available in the tag cycle and the miss path had never been created.
+>
+> **⚠ LABEL CORRECTION 2026-09-16 — `S12_MEM_DELAY` IS NOT A CYCLE COUNT.** `stream_delay.sv` (both
+> copies in the tree) declares `CounterBits = 4` and `assign counter_load = FixedDelay`, so the
+> parameter is **truncated to its low four bits**. `S12_MEM_DELAY=40` — the value in all 39 places it
+> appears, described everywhere as "a 40-cycle memory" — realises as **40 mod 16 = 8**. Confirmed
+> behaviourally as well as from source: define 12 and define 28 (28 mod 16 = 12) gave IDENTICAL rev1,
+> rev2 and total cycle counts on one tree, while the artifact readback proved the builds received
+> different defines. **The live trap: any value ≡ 0 mod 16 loads a ZERO counter and realises as LESS
+> delay than define 2** — measured at define 16: rev2 = 51, IDENTICAL to the true-bypass run, total
+> 1,004 against 708 at bypass and 1,415 at define 2. "A 32-cycle memory" gets you essentially none, and
+> it reads as a clean negative. Only 0 reaches the true bypass; 1 is special-cased;
+> **usable range 2..15.** **AND THE KNOB IS NOT MONOTONE**, which is the part that bites: the delay
+> is a period-16 SAWTOOTH in the define, not a dial. Measured totals on one tree and test: define 0 →
+> 708, 2 → 1,415, 12 → 3,427, **16 → 1,004**. Turning it UP from 12 to 16 turns latency DOWN to near
+> bypass, so "larger define, more latency" yields a plausible-looking result rather than an obvious
+> failure. This is a magnitude label, NOT a retraction: every finding resting on
+> "non-zero latency changes the behaviour" stands, S-12, R-26 and R-34 included. Those runs had an
+> 8-cycle memory. Found while calibrating the R-12 S1 ladder; detail in
+> `docs/history/16-09-2026_11-54-05_r12-s1-revoke-walk-cost-ladder.md`.
+>
+> **Rebuilding at delay 40 and rerunning an existing test does NOT answer it either, and this is the
+> trap worth keeping.** `lsu-mmode-gate` at `S12_MEM_DELAY=40` returns all thirteen readings
+> IDENTICAL to the zero-latency run, value for value, only the cycle counts moving (868 → 2485).
+> That reads as robustness and is not: the test hammers one buffer, so the line is resident after the
+> first access and the faulting arms still HIT. Turning the delay on is not the same as making the
+> access miss.
+>
+> A matched pair through the SAME write-only capability, one variable — whether the faulting line was
+> brought in first — with every precondition witnessed in the same run, because "cold" is a claim
+> about cache contents a test cannot otherwise see:
+>
+> | reading | value | |
+> |---|---|---|
+> | warming value | `0x4c535550` | the warm line really is resident |
+> | warming cause | 0 | the warming access did not itself trap |
+> | ARM W value / cause | 0 / `0x1b` = 27 | warm line, delivered |
+> | line separation | `0x1000` | the two lines really are distinct |
+> | ARM C value / cause | 0 / `0x1b` = 27 | **cold line, delivered; no data returned** |
+> | total traps | 2 | one per arm, none spurious |
+>
+> Identical at delay 40 and at 0; only cycles differ, 1287 against 499. So R-34's fix has **no open
+> sufficiency condition**: boundary measured, miss path measured, renumber measured. What stands
+> between it and a bitstream is the monitor, not the RTL.
+>
+> **WHAT THE FIX EXPOSES, and why 12 tests are left failing on purpose.** With delivery working, the
+> suite sweep (RTL lane, 2026-09-15, against baseline `4cc068572`) has 12 tests that passed before
+> now timing out. They are **one pattern, not twelve bugs**: a plain load or store through an
+> INTEGER-derived, untagged base while capmode is set in M-mode. Every one of the twelve calls
+> CAPENTER; not one of R-24's 15 cause-assertion tests does, which is the discriminator.
+>
+> Ten fault on the test harness's own success convention rather than on anything the test does —
+> `verif/tests/riscv-tests/env/p/riscv_test.h:239` is `sw TESTNUM, tohost, t5`, which the assembler
+> expands to `auipc t5, %pcrel_hi(tohost)` then a store through that integer base. Matched pair from
+> the same sweep, one variable:
+>
+> | | epilogue | outcome |
+> |---|---|---|
+> | `cap-overwrite` (no CAPENTER) | `auipc t5` / `sw gp,-334(t5)` | retires, `mem 0x80001000` written |
+> | `cld` (CAPENTER) | `auipc t5` / `sw gp, off(t5)` | exception |
+>
+> Two fault earlier, in the test body, and are the same rule firing sooner: `data-transfer` on a
+> `c.ld` immediately after CAPENTER, `cpmp-if-check` 3102 times.
+>
+> **Cause 24 is MEASURED here, not inferred.** `cpmp-if-check` installs `mtvec` before it faults, so
+> its handler reads the value: `csrrs t0, mcause` returns `0x18`.
+>
+> **The monitor is the same pattern and is the one that matters.** `sbi_capstone.S:112-114` computes
+> `add t5, sp, t5` and stores `sd a0, 16(t5)` through the integer result — that is the emulated-CSR
+> writeback, so it runs at every `rdtime`. It is the ONLY site of this shape in the file, and the C
+> half adds none (`mtime`/`mtimecmp` are capabilities minted by `split_out_cap`). The fix is three
+> instructions using a macro the file already defines seven times: `CINCOFFSET(sp, sp, t5)` IN PLACE
+> (rd == rs1, which sidesteps the R-25 source-consumption question entirely), the store, then the
+> negated offset back.
+>
+> **That fix cannot be validated on the deployed bitstream**, and this is the trap to write down: on
+> the current silicon the exception is never delivered, so before and after both run clean. An
+> emulator pass against the flashed bitstream proves only that nothing broke, never that the change
+> is correct. Only simulation of the fix branch can validate it.
+>
+> **D3 IS CLOSED — the monitor fix exists and is validated, 2026-09-16.** `capstone-sbi`
+> `d3-monitor-capability-writeback` at `2dcd3a5`: the writeback moves the stack capability's cursor in
+> place (`CINCOFFSET` with `rd` = `rs1` = `sp`, the store at 16 off `sp`, the negated offset back), so the
+> source-consumption question does not arise. Validated where it CAN be — against this branch, since on
+> the deployed bitstream the old form and the new one both run clean. Matched pair
+> `tests/monitor/d3-monitor-writeback.S` at `c77c65324`, 645 cycles: the replacement takes **cause 0** and
+> its store reads back, the capability is **bit-identical before and after** the in-place move, and the old
+> shape run last takes **cause 24** with its store refused — **exactly one trap in the run, and it was the
+> control's.** The replacement is bounds-checked where the integer base was not, which the change
+> INTRODUCES: the store lands at `frame_base + slot*8`, the `SAVE_REG`s that run first write slots
+> 1..31 through the same register, so **slot 0 alone is newly checked** (reachable when the emulated
+> `rd` is `x0`) — arm B0 reproduces that geometry, cursor 16 BELOW the base, and reads cause 0 with
+> the value stored. **Residual:** whether the LIVE stack capability's base is at or below
+> `frame_base` rather than `frame_base + 8` is runtime state no synthetic test settles; it would show
+> as cause 28 on slot 0 only, and the first boot on a delivering bitstream decides it.
+> Had the control not trapped, the build would not be delivering the exception and the
+> replacement's clean return would have meant nothing. The branch is held OFF `capstone-bootstrap`, which
+> stays at `4274268`, the commit the board drivers pin by hash. Note: `RVTEST_PASS` is the same defect —
+> `sw TESTNUM, tohost, t5` expands to a store through an `auipc` integer base — which is why ten of the
+> twelve sweep tests time out in their epilogue; that pair exits through a capability minted over `tohost`
+> and reports SUCCESS, so the same three lines would convert those ten timeouts into readings. Full note:
+> `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
+>
+> **Fixing the monitor does NOT make the plain-data-access safety rows hold.** The gate is
+> `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` and domains run in S-mode, so the check still never
+> applies to domain code. It makes the M-mode arm enforceable instead of self-faulting. "R-34 is
+> fixed" must not be read as "the plain-data rows now hold".
+>
+> **What would settle the residuals** *(2026-09-15 later: (b) CLOSED by the RTL lane at the flashed revision — a store at
+> `bound_end` through the same capability the load arm uses takes no trap and the guard word past the buffer holds the
+> stored value, the corrupting direction; (a) MOOT for the capability clauses — translation through MPRV needs MPP below
+> M and the load-store privilege is then that MPP, so translation on takes the gate out of its satisfied state, and
+> S-mode fails it anyway; what (a) still covered was the MISALIGNED causes with translation on — CLOSED by the RTL lane (dev `1e205738c667`):
+> with MPRV set, MPP supervisor and an sv39 identity map witnessed working by an aligned translated load, the misaligned
+> load is dropped both with and without translation (shifted value, cause 0, 0 traps in 537 cycles), so the drop is
+> independent of translation, as the unregistered forward implies. The run before it had REFUSED its own precondition —
+> the translated aligned load access-faulted (no PMP entry once data accesses ran at supervisor privilege) and that run's
+> misaligned arm reported cause 4, which read alone would have been a clean, wrong "delivered under translation". Both
+> residuals are closed; what remains is the fix decision, sequenced with R-24).*
+> (a) The translation-on path (S-mode, Linux) is argued from source only
+> (`cva6_mmu.sv:539` skips the translation branch on a misaligned request and leaves `:514` in force): a directed
+> test with `satp` set, or a board arm. (b) A store bounds arm. (c) After an RTL fix, this test must FAIL its last
+> arm by design — the untagged load then enters debug mode (R-24), and so would `RVTEST_PASS`'s own `sw` to
+> `tohost` (it raised cause 24 in the run) and the debug ROM's accesses — and the write-only/bounds/misaligned
+> arms must trap with 27/28/4/6; `rv64mi-p-ma_addr` must pass. (d) The `trans_id` mis-attribution the delivery
+> path implies (`load_unit.sv:718-721`: the responding load's id, the next request's cause) needs two DIFFERENT
+> causes back to back to show.
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
@@ -2813,7 +3135,7 @@ address. Passing rungs were only ever clean where someone looked.
 > It stays in the open registry rather than the archive because nothing about it was resolved; it is
 > retained as provenance for the sighting.
 
-### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `OPEN — PARTIALLY FIXED; root cause of C-13, board-confirmed 2026-07-29. The secondary defect (`is_cap_req`/`st_wr_cap` decide "holds a capability" by OR-reducing the metadata word, never consulting `cap_type`) is LIVE on 66c4e7517 and is R-29's sibling account; the stage-8 discriminator is unrun`
+### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `OPEN — PARTIALLY FIXED; root cause of C-13, board-confirmed 2026-07-29. The secondary defect is "holds a capability" decided by OR-REDUCING a user/metadata word rather than consulting `cap_type`. The STORE side is REPAIRED (`is_cap_req`/`st_wr_cap` now carry an explicit opcode-derived flag); the REFILL side is LIVE — `wt_dcache_mem.sv:358` and `:501` — on every tree checked including 66c4e7517, 1bfff7776, 4cc068572, dev's pin f6ec6c198 and 9a7bd598c. R-29's sibling account; the stage-8 discriminator is unrun. READ THE SECOND-READING BOX BELOW, NOT THIS LINE ALONE`
 
 **THE MECHANISM, complete.** A capability's two halves are stored differently:
 
@@ -2862,6 +3184,34 @@ capability tags, so the 128 bits round-trip unchanged" -- is FALSE on real silic
 > `:501`. Note how it was found — by reading the tip, not by sampling. The waveform probe originally
 > planned for this would have sampled `is_cap_req` and `st_wr_cap`, seen them behaving correctly, and
 > closed the entry WRONGLY.
+>
+> **2026-09-15 — THAT PREDICTION CAME TRUE, and the header line is why.** The RTL lane read the two
+> repaired sites, traced the explicit `is_cap` chain from issue to the AXI adapter, found it sound,
+> and was about to record the secondary defect as FIXED. The refill pair was missed for a reason
+> worth naming: the search was `grep is_cap`, and **neither `:358` nor `:501` contains the string
+> `is_cap`** — a narrowed view cannot show what it is not keyed to, which is the mirror of sampling
+> `is_cap_req` and seeing it behave. The box above was not read first; it says exactly this.
+>
+> The header line materially helped: it called the defect "LIVE on `66c4e7517`" while naming only the
+> two sites this box records as REPAIRED on that very commit, so a reader who checks those two and
+> finds them clean concludes the entry is stale. The header now carries the split. **Also checked
+> while refuting the claim** — the store-side repair predates `66c4e7517`, and the refill pair is
+> present at identical constructs on `66c4e7517`, `1bfff7776`, `4cc068572`, dev's pin `f6ec6c198`
+> and the R-34 branch `9a7bd598c`, so no tree separates "current" from this entry's subject.
+>
+> Two further things the refutation turned up, recorded so the next reader is not misled the same
+> way. `wt_dcache_wbuffer.sv:754` does not end where it is usually quoted: `is_cap` is STICKY across
+> a merge into an already-capability granule (`| ((|wbuffer_q[wr_ptr].valid) & wbuffer_q[wr_ptr].is_cap)`),
+> deliberate, but not what the one-line quote says. And the store side's "value-driven tag" is not an
+> independent authority for memory-sourced capabilities: the tag on an LDC result comes from
+> `req_port_i.data_rtag` ← `rd_ctag_o` ← `wt_dcache_mem.sv:358`, i.e. **the refill OR-reduce one hop
+> earlier**. The inference moved upstream of the tag; it was not removed. The tag ⇔ `cap_type`
+> equivalence that would close the gap is asserted only under `ifndef SYNTHESIS`
+> (`ex_stage.sv:807-819`), so it is inert on silicon — and that assertion's own comment names the
+> failure mode the refill OR-reduce would produce: "some path minted a tag for non-capability bits."
+>
+> The entry's literal wording also still holds: `grep -rn cap_type core/cache_subsystem/` returns
+> nothing. The cache subsystem has never consulted `cap_type`.
 >
 > **One co-location, recorded as geography and not as causation:** `:358` sits in the SAME
 > `always_comb` as the refill assignment the R-29 probe caught — that block sets `rdata`, `ruser` and
@@ -3255,6 +3605,145 @@ Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6
 globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
+
+> # 2026-09-16 — THE REVOKE-WALK SPLICE: built, measured, synthesised. R-12's COST half, not its capacity half.
+>
+> `r12-splice-revoked-nodes` at `f1331daed` (synthesised at `379248185`). **This addresses the cost of
+> revocation, not the 65,532 ceiling** — the two are separate problems and only a reclaimer touches the
+> ceiling. Do not read this as R-12 being fixed.
+>
+> **The defect.** `REVOKE_NODE` re-enters its FSM per visited node and `change_rev_node_validity`
+> (`capstone_unit.anvilh:563-565`) preserves `prev`/`next`, so invalidated nodes stay linked and every
+> later walk re-reads them — round *r* costs *r+2* dependent 16-byte reads. P1 measured the consequence
+> on silicon as release cost rising ~12× within a domain while minting rose ~1.5×.
+>
+> **The fix is a DEFERRED ONE-SHOT splice at the walk exit, not a per-node unlink.** When the walk
+> terminates, the index in hand is the first node outside the revoked subtree and its record is already
+> read; everything between it and the revoked node is exactly what this revoke killed. So one splice
+> unlinks the whole run in **two writes, independent of run length**, adding no reads — the revoked
+> node's record is cached at entry from a read the unit already performed and discarded. A per-node
+> unlink would instead add reads and writes *inside* the loop and create a read-after-posted-write on
+> two different dcache ports.
+>
+> **Measured, both trees staleness-gated and the other four generated units confirmed byte-identical:**
+>
+> | | unspliced | spliced | |
+> |---|---|---|---|
+> | full sweep | — | **95/95, 0 status changes** | only movement: `excode-base-audit` and `r31-revoke-cursor`, **+4 cycles each** — the two extra writes, on exactly the two tests that revoke |
+> | revoke that kills a run | 52 | 56 | +4, flat |
+> | **revoke that walks the corpses** | 56 | **45** | **−11 on a four-corpse run; the saving scales, the cost does not** |
+> | lint | baseline | **PASS, UNOPTFLAT 40** | no new synthesis hazard |
+>
+> **Synthesis (exit 0, 1h17m):** WNS **−9.225** against the flashed −12.425, TNS halved, 12,981 fewer
+> failing endpoints, +725 LUTs (0.4 %), combinational loops **29 → 13**. Best WNS ever recorded on this
+> design; first whose arithmetic reaches 20 MHz. **NOT FLASHED.**
+>
+> **⚠ THE TIMING GAIN IS NOT ATTRIBUTABLE TO THIS CHANGE'S PURPOSE, and the obvious sentence is false.**
+> Unlinking alters what the chain holds *at runtime*; `synth_design` never sees runtime, so a dynamic
+> property cannot move a loop count. Read out of the generated RTL: the splice put
+> `send ep.rev_res(...)` in **two** branches instead of one, so anvil emitted a **registered endpoint
+> selector** (`_ep_rev_res_valid_selector_q`) plus ~9 one-bit scheduling registers.
+>
+> Confirmed on the **routed netlist**, not just the generated RTL (synth lane, hierarchical
+> utilisation): `capstone_rev_node` FFs **606 → 678 (+72)** and LUTs **1,052 → 1,141 (+89)**, while
+> design-wide FFs fell **93,145 → 92,939 (−206)**. So the unit gained registers and the design lost
+> them — about **278 flops removed outside this unit**, the fingerprint of the loops actually going.
+> **Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.** So: *"a change that
+> duplicated a send site caused anvil to register that endpoint, and timing improved"* — never
+> *"unlinking revoked nodes improved timing"*. It may also not survive a single-send-site
+> reformulation of the same fix.
+>
+> *(Two register figures are in circulation and both are right: **+133 declared flop bits** summed from
+> `_q` widths in the generated RTL — what the source asks for — against **+72 implemented flops** from
+> the routed report. Synthesis did not map ~61 declared bits, including unused upper bits of the 94-bit
+> `serving_node`. Quote the implemented figure against implemented design totals; never mix them.)*
+>
+> **⚠ AND AN UNEXPLAINED COST THAT BELONGS IN THE SAME BREATH.** Design-wide LUTs **rose** by 731 while
+> the unit accounts for only 89 of it — so about **642 LUTs appeared OUTSIDE `capstone_rev_node`**.
+> Removing sixteen loops evidently let synthesis restructure well beyond this unit, trading registers
+> for logic somewhere, and **nobody has explained where or why**. Small against 169k, but not nothing
+> and not local. Any deliberate application of this lever needs that understood first: a remedy whose
+> side effects are unmeasured is an inference with one datum, not a validated technique.
+>
+> **AND THAT IS A LEAD WORTH MORE THAN THE SPLICE.** It converges with an independent measurement along
+> an older build's worst path — 122 hops, 46.010 ns of routing, median 0.373 ns, no tail — a *depth*
+> signature whose stated remedy was pipelining. Registering one endpoint is that remedy, arrived at
+> accidentally from the other direction, and is **the first empirical confirmation of it** on a design
+> with an open clock-rate question. The control that would settle attribution is one synthesis of a
+> semantically null duplication of that send site — which must have its generated RTL read back to
+> confirm anvil actually emitted the selector, or a collapsed duplicate yields a null result that reads
+> as a refutation.
+>
+> # 2026-09-16 — S1 LADDER: the cost curve, measured on both trees at non-zero memory latency
+>
+> The table above measured a **four-corpse** run at the testbench's default ZERO latency and reported
+> −11 cycles. That was too small a lever to read a curve off. The parameterised ladder
+> (`r12-s1-walk-ladder.S`, `NROUNDS` per build) at `S12_MEM_DELAY=12` gives the curve:
+>
+> | N dead nodes crossed | unspliced | spliced | ratio |
+> |---:|---:|---:|---:|
+> | 8 | 273 | 328 | 0.8× |
+> | 160 | 729 | 328 | 2.2× |
+> | 1,024 | 3,321 | 328 | 10.1× |
+> | 3,072 | 96,822 | 516 | **187.6×** |
+>
+> **Unspliced marginal cost is exactly 3.000 cycles per dead node** — `rev2 = 3N + 249` fits exactly at
+> every rung from N=8 to N=1,024. **Spliced marginal cost is exactly 0.000** — 328 cycles at six
+> different N, identical to the cycle. The splice pays a fixed ~79 cycles to delete a per-node 3;
+> **crossover at N ≈ 26**.
+>
+> **The 3 is an L1-HIT cost and therefore a LOWER BOUND.** The dcache holds exactly 2,048 nodes (32,768 B
+> / 128-bit lines, a node being one line); the 3.000 slope holds to 1,024 and breaks at 2,048. One SQLite
+> speedtest1 run mints 43,355 nodes — **21× the dcache** — so the workload is entirely in the cold regime
+> the simulation only reaches at its last rung.
+>
+> **The intercept is a FIT PARAMETER, not a fixed cost, and the sub-8 region has a measured cause.**
+> Exactly two rungs — N=6 and N=7 — sit exactly +91 cycles above the fit; everything from N=8 up is on
+> it at ten exact points. The mechanism is the write-through dcache write buffer
+> (`CVA6ConfigWtDcacheWbufDepth = 8`): halving it to 4 moved the +91 pair from {6,7} to **{2,3}**, a
+> shift of exactly 4, while every rung from N=8 upward stayed **byte-identical** between the two
+> configurations. So the anomalous pair sits at `depth−2`/`depth−1` and the perturbation does not reach
+> the fitted range. Quote `249` only as "the intercept of a fit valid for N ≥ 8", never as a fixed cost
+> of revocation. The 3.000 slope, the spliced 0.000 and the N ≈ 26 crossover are unaffected.
+>
+> **The pair is clean by construction:** the control tree's HEAD *is* the merge-base of the two branches,
+> and one source file differs. **The flat cost is a working splice, not an early exit** — a `WITNESS`
+> build behind `#ifdef` (timed path byte-identical) shows the middle handle's own node going valid → 
+> invalid across revoke 2 on **both** trees. Full detail, including the cold rung's internal control:
+> `docs/history/16-09-2026_11-54-05_r12-s1-revoke-walk-cost-ladder.md`.
+>
+> **`drop_req` deliberately NOT spliced:** the walk's already-invalid branch simply advances, so dropped
+> nodes sit inside the spliced run and are swept by the next revoke that crosses them. An eager unlink
+> would add 2 reads and 2 writes to every DROP — which, unlike the walk, cannot amortise them.
+
+> **THE SECOND DESIGN EXISTS (2026-09-16): `docs/plans/2026-09-16-revnode-reclamation-v2.md`. Start
+> there, not from the rejected v1 — but it has been AUDITED TOO and DOES NOT SHIP AS WRITTEN EITHER.**
+> v1 was incomplete, having no mechanism; v2 has mechanisms and three of them were individually wrong
+> in ways that would have shipped: the answer to the fatal item relied on a broadcast that does not
+> occur at reclaim, the allocator never composed the new id (so a recycled slot would be handed out at
+> generation 0 and every check would pass vacuously), and the `free` bit was to be set in a helper
+> shared with DROP, which would have marked still-LINKED nodes reclaimable. All are corrected in place
+> and marked **[AUDIT]**; the verdict banner is at the top of the document. **Read the banner before
+> the body.** One audit item is settled by measurement rather than argument: the generation's home bits
+> are structurally always zero today, so the round trip had never been exercised — a node written with
+> every depth bit set reads back 4294967295, all 32 bits surviving, with the high bits after an
+> eviction the stated residual. It answers the reconciliation's six items and adds three the M1
+> start gate does not cover — a failure encoding, the id-transplant primitive, and the closed site
+> inventory. It supplies the mechanism v1 lacked: an **intrusive FIFO free list threaded through the
+> node's own `next`** (zero new storage), with reuse eligibility of **unlinked, not merely invalid**.
+> It differs from v1 on where the discriminator lives: v1 spent the slot padding, which the audits
+> showed is **not plumbed**; v2 narrows `depth` from 32 bits to 17 and spends the freed bits as
+> `generation:14 | free:1`, which **are** plumbed end-to-end (verified: `ex_stage.sv:1149` returns them
+> as `data_ruser[29:0]`). The `free` bit exists because "unlinked" is **not** decidable from the node
+> record — W1's splice rewrites only the boundary nodes — and it is set in a write the revoke walk
+> already performs, so it costs no extra memory traffic. It does **not** claim confinement, does not claim it costs nothing, and does not
+> quote a capacity figure. Its fatal item — the S/U boundary that never reads a node — is answered with
+> an index-compare recycle broadcast **plus a stated monitor-side software contract**, with the residual
+> named rather than hidden. **Still gated:** nothing is scheduled until the lead names the RTL owner and
+> approves the algorithm and invariant. A separable Part B turns pool exhaustion from a core hang into a
+> reportable fault and can be approved alone.
+>
+> **TWO AUDITS OF THE RECLAMATION DESIGN, RECONCILED (2026-09-15) — read before proposing a second design.** `docs/history/15-09-2026_20-39-03_revnode-reclamation-two-audits-reconciled.md`. Verdict: the design in `docs/plans/2026-09-14-revnode-reclamation-design.md` is **incomplete, not merely unsafe** — `head` is only ever incremented and there is no free list, reclaim queue or reuse scan anywhere in the unit, so **no index is ever reused and the generation is never consulted**. Separately fatal to the mechanism: the unprivileged boundary (`pmp_data_if.sv:82-97`) decides authority from a cached bit and **never reads a node**, so a split id stops matching the broadcast after the first reuse and revocation silently stops invalidating S/U-mode capabilities — invisible because everything runs at generation 0. The note also records a resolved contradiction between the two audits over the node's field packing (MSB-first; the RTL lane's measurement was wrong and is retracted in the design document), and lists six things a second design must assert. **The direction is not refuted** — the 65,532-lifetime ceiling is real and generation tagging is a sound way to lift it — but this design does not implement it.
 
 > **2026-09-14 (boots sw74 / sw74b): the budget bit a measurement boot, twice, and the read-out is
 > unambiguous.** A second full workload run of the Sublet cell (`ceeded2533a74bce`, `main --size 1`)
@@ -3947,6 +4436,7 @@ undebuggable and takes the core with it.
 > exists: `C_INIT(r, r, 0)` succeeds on QEMU without any rewrite, so the shortcut was never wrong under
 > the emulator anyone develops against. **Consequence: the disclosure R-31 closes on silicon remains
 > open on QEMU by that route until QEMU is aligned** — so "R-31 closes the disclosure" is false for the
+> *(the "inert LSU" here is the privilege gate plus **R-34**'s dropped delivery, 2026-09-15)*
 > emulator even after the RTL fix, which is a second reason beyond the inert-LSU one not to describe it
 > that way.
 
@@ -4591,7 +5081,7 @@ or it regressed. Re-run stage 13 on a current build before trusting either numbe
 bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
 in minutes what no software-visible observable here can.
 
-### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit — and "QEMU never does" is NOT corroboration: QEMU has no `cursorless` encoding at all (zero occurrences in capstone-qemu/target/riscv/), so it cannot exhibit the branch this entry is about. See the 2026-09-15 box`
 
 > **RUN 2026-09-10, with the positive control the earlier attempt lacked. Still NOT HIT, and now that
 > statement means something.** The 2026-09 sweep logged `check-repr.py` as NOT RUN; an audit then ran it
@@ -4623,6 +5113,77 @@ in minutes what no software-visible observable here can.
 >
 > *(Method note: the earlier clean run is the exact shape this registry keeps paying for — a check that
 > returns OK because its detection code never executed. Running it is not the same as exercising it.)*
+
+> # 2026-09-15 — "QEMU NEVER DOES" IS AN ABSENCE OF THE FEATURE, NOT AN INDEPENDENT WITNESS
+>
+> This entry's title contrasts the RTL against QEMU. That contrast does not carry the weight it reads
+> as carrying, because **the two do not implement the same encoding.**
+>
+> `grep -rn cursorless capstone/capstone-qemu/target/riscv/` returns **zero hits**. The RTL has a whole
+> cursorless branch — `ariane_pkg.sv:625` `bounds_cursorless_t`, `:633` the `cursorless` flag, and
+> `:666-670` the branch that reconstructs `base` from it, which is precisely the path this entry is
+> about. So QEMU "never does" the truncation because **QEMU cannot**: the encoding in which it happens
+> does not exist in the model. That is not a reference implementation disagreeing with the RTL; it is a
+> reference implementation that does not model the field.
+>
+> **The two compressed layouts differ from bit 27 upward, by exactly one**, and this was found while
+> auditing something else:
+>
+> | field | QEMU (`cap_compress.c:30-37`) | RTL (`ariane_pkg.sv:630-638`) |
+> |---|---|---|
+> | bounds | bits 0-26, **27 bits** | bits 0-27, **28 bits** (the extra bit is `cursorless`) |
+> | type | 27-29 | 28-30 |
+> | perm | 30-32 | 31-33 |
+> | revnode_id | 33-63, **31 bits** | 34-63, **30 bits** |
+>
+> `verif/tests/custom/capstone/asm_insn.h:64`'s `NODE_ID_INVALID = ((-1) & ((1 << 31) - 1))` follows
+> QEMU's 31 bits, not the RTL's 30. The two QEMU copies are byte-identical, so this is model-versus-RTL
+> and not copy-versus-copy.
+>
+> **No artifact was found in which the two exchange a compressed metadata word, so present harm is
+> UNRESOLVED** — this is recorded before someone builds on it rather than after. The check that would
+> settle it: does any differential test compare a compressed metadata word, or a `CAPNODE` result,
+> across QEMU and silicon? If one does, it has been comparing misaligned fields.
+>
+> **Two consequences worth carrying beyond this entry.** Any claim of the form "the emulator does not
+> show X" is weak evidence about capability *bounds* behaviour until it is known whether the emulator
+> models the encoding X lives in. And R-33's containment reasoning is unaffected — that rests on sizes
+> being exactly representable, which is an allocator property and holds on both — but the general
+> emulator-versus-silicon caveat that the safety-table decision turns on is sharper than it looked.
+
+> # 2026-09-15 — THE STATED TRIGGER IS ONE DOUBLING TOO LOW, AND R-33's FIX CLOSES THIS ENTRY TOO
+>
+> **Re-running at a 2–4 MiB image will produce another uninformative OK**, which is the same shape the
+> method note above warns about — one level further in. 2 MiB is where the truncation BRANCH starts
+> executing (`tot > WINDOW`); it is not where the branch can FIND anything. The granule is
+> `2^(E+3)` with `E = bit_length(len) − 13`, so:
+>
+> | region | granule | 4 KiB `PAGE_ALIGN` covers it |
+> |---|---|---|
+> | 1 MiB | 2048 B | yes |
+> | **2 MiB** | **4096 B** | **yes — exactly at the edge; the branch runs and must report OK** |
+> | 3 MiB | 4096 B | yes |
+> | **4 MiB** | **8192 B** | **NO — the first size where an unaligned top is possible** |
+> | 8 MiB | 16384 B | no |
+>
+> Below 4 MiB every page-aligned carve is granule-aligned by construction, so the top is exact and the
+> checker cannot fire however large the image is within that range. **The informative threshold is
+> 4 MiB, not 2 MiB.** That also explains the `pass1.dom` reading above without appealing to luck: at
+> 8.6 MiB the branch both executes and could fire, and its "exact only because every top happens to be
+> aligned" note is the checker observing page alignment, not a coincidence.
+>
+> **Cross-check, and the reason this is recorded rather than merely reasoned:** the 4 MiB edge derived
+> here from the granule formula is the same edge R-33 states independently from its own containment
+> analysis ("contained by the kernel's `PAGE_ALIGN` below 4 MiB and NOT contained at or above it").
+> Two separate derivations landing on the same number is what makes this worth acting on.
+>
+> **So R-11 and R-33 are one contract seen from two branches of `compress_bounds`** — R-11 the
+> cursorless branch losing an unaligned top, R-33 the other branch widening both ends for a
+> non-representable size — and **R-33's fix closes both**: rounding region sizes up to the
+> representability granule at creation makes tops granule-aligned at any size, which is precisely the
+> condition R-11 needs and cannot otherwise guarantee above 4 MiB. Anyone about to work R-11
+> separately should do R-33's allocator fix instead and then re-run `check-repr.py` on a 4 MiB+ image
+> as its verification.
 
 `compress_bounds` has two branches selected by `bounds.start == cursor`
 (`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
@@ -5735,7 +6296,59 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
-### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `REFUTED 2026-09-11 — the spec base collides with this core's DEBUG_REQUEST; needs a ruling, not a fix`
+### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `FIXED IN RTL SIMULATION 2026-09-15 on r34-r24-exception-delivery (c77c65324, residuals e97b7e7ab) — the REFUTATION below stands and was answered rather than overturned: the collision is real, and the fix is to move the DEBUG_REQUEST sentinel off 24 (to 32) so the capability causes can sit on the spec's 24..29. Measured, not argued: debug_mode_q stays 0 across four cause-24 deliveries. SHIPS WITH R-34 AND CANNOT SHIP WITHOUT IT. Not synthesised, not on the board`
+
+> # 2026-09-15 — THE RULING THE ENTRY ASKED FOR, AND THE FIX THAT FOLLOWS FROM IT
+>
+> The refutation below is correct and is not withdrawn: base 23 does put `UNEXPECTED_OPERAND` on 24,
+> and 24 was `DEBUG_REQUEST`. What was missing was that **`DEBUG_REQUEST` is an internal sentinel on
+> the exception bus, never an architectural `mcause`** — `csr_regfile.sv:2019` gates it out of the
+> normal trap path and `:2208` consumes it into dcsr/dpc. Nothing requires it to be 24. So the
+> collision is resolved from the other side: the sentinel moves to **32** (the block ends at 31, and
+> no encoder ordinal reaches it), and the capability causes take the spec's **24…29**.
+>
+> That makes the two execute-path encoders agree with everything else in the tree for the first
+> time. The four-way agreement on base 23 was already recorded here on 2026-09-10 and is unchanged;
+> the only correction to it is that the LSU block and `commit_stage.sv:216-226` are **one authorial
+> decision** (same author, both 2026-05-10), not two independent witnesses — the genuinely
+> independent pair is the spec text and QEMU's `cpu_bits.h`.
+>
+> **R-24 AND R-34 CANNOT BE SPLIT.** `DebugEn` is 1 in
+> `capstone_cv64a6_imafdc_sv39_config_pkg.sv:146`, so on an unrenumbered tree a delivered LSU
+> `NOT_CAP` — cause 24, the commonest one — enters the debug ROM instead of trapping. It has never
+> bitten only because R-34 means those exceptions are almost never delivered (raised 21 times,
+> delivered once, in the audited run). Fix delivery without moving the sentinel and every one of
+> them becomes a debug-mode entry. The waveform is the counterfactual made visible: `debug_mode_q`
+> stays 0 across all four cause-24 deliveries on the renumbered tree.
+>
+> **The suite, swept against the baseline** (`4cc068572`; `core/load_store_unit.sv` byte-identical
+> to the flashed `1bfff7776`). 27 tests regress, in exactly two groups and nothing left over:
+>
+> * **15 are cause-number assertions** and ALL FIFTEEN now pass, at cycle counts **bit-identical**
+>   to baseline — 686=686, 617=617, 967=967, 673=673, 31043=31043 and so on, the three untouched
+>   controls included. Identical counts, not merely green: the renumber changes nothing about how
+>   they execute, only the number they assert. `c7b616b6e`'s updates applied unchanged, plus one
+>   line that commit missed (`init-rs1-ne-rd.S:164`, code constant left at 25 while its header
+>   comment was moved to 24 — it failed with its own "unexpected cause" exit code 20).
+> * **12 are R-34's new enforcement**, not R-24's: see that entry.
+>
+> A third group of 15 was rechecked at a 10x timeout, because a shared 50,000-cycle budget can MASK
+> a regression. Two were never broken — `s07-ldc-chain-forward` 276,242 and `stc-counter-pair`
+> 215,359, identical on both trees — and the other 13 sit at 500,013 on both. The three groups are
+> pairwise disjoint; the two of size 15 are a coincidence of count.
+>
+> **Residuals closed in `e97b7e7ab`:** `INSUFFICIENT_SYSTEM_RESOURCES` was left at 31 leaving a hole
+> at 30 (spec and QEMU both say 30) — the same "moved four, left two behind" miss this entry
+> criticises below, made again; `capstone_unit.anvilh`'s `ex_code` comments still read base 24; and
+> that file's NOTE calling `commit_stage`'s base 23 "an off-by-one in its own right" is resolved the
+> other way round — `commit_stage` was right.
+>
+> **One claim corrected in this entry's own favour, and one against.** The elaboration assertion
+> added in `c77c65324` is **simulation-only** — it sits inside `//pragma translate_off`, so
+> synthesis strips it and it does not protect the bitstream; the commit message that called it an
+> elaboration check overstated it. And "the LSU is a newly found independent witness" was a
+> re-derivation: this registry had it from 2026-09-10, and it was read again from scratch because
+> the registry was not searched first.
 
 > **THE FIX CANNOT SHIP AS WRITTEN. Base 23 puts `UNEXPECTED_OPERAND` — ordinal 1, the most common
 > capability exception in the whole directed suite — on mcause 24, and `riscv_pkg.sv:348` already

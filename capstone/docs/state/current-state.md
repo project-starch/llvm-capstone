@@ -2,7 +2,84 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-13 (evening) — CURRENT
+## 2026-09-16 — CURRENT
+
+> **A RETRACTION leads this block.** The cold-regime revoke slope of **87.1 cycles per node is
+> WITHDRAWN**: N = 2,048 sits only 1,239 cycles above the warm fit, so the 2,048 → 3,072 segment
+> crosses the warm/cold knee and its slope measures the knee rather than either regime. The cold
+> figure to cite is the board lane's Q4 **silicon** fit — 25.45 cycles per node walked, R² = 0.999969
+> over eleven points wholly inside the cold regime. The 3.000 warm slope is unaffected.
+>
+> **AND AN INSTRUMENT RELABEL EVERY LANE NEEDS BEFORE ITS NEXT SIMULATION.** `S12_MEM_DELAY` is **not a
+> cycle count**: `stream_delay.sv` has a 4-bit counter, so the value is truncated to its low nibble and
+> the knob is a **period-16 sawtooth, not a dial**. The `40` used in all 39 places it appears — and
+> described everywhere as "a 40-cycle memory" — realises as **8**. Measured totals on one tree and
+> test: define 0 → 708, 2 → 1,415, 12 → 3,427, **16 → 1,004**. Turning it *up* from 12 to 16 turns
+> latency *down* to near bypass, so anything ≡ 0 mod 16 asks for a large delay and gets essentially
+> none, which reads as a clean negative rather than an obvious failure. **Usable range is 2..15.**
+> This is a magnitude label, **not a retraction** — S-12, R-26 and R-34 all stand, dated to the
+> revisions they ran at, on an 8-cycle memory. Read the define back from
+> `work-ver/Variane_testharness__verFiles.dat`, never from the log.
+> **2026-09-14 and 2026-09-15 are NOT in this file**; that block of board work is in
+> `current-next-step.md`, whose 09-15 header stands.
+
+* **R-12's COST half is built, measured and synthesised; its CAPACITY half is untouched.** The
+  revoke-walk splice (`r12-splice-revoked-nodes`, submodule `f1331daed`, parent `9a5716d5ab6c`)
+  unlinks a whole revoked run in two writes at the walk exit, independent of run length. Unspliced
+  costs exactly **3.000 cycles per dead node crossed**, spliced exactly **0.000**: 399 / 516 / 481
+  cycles at N = 4,096 / 6,144 / 8,192 against 167,498 / 294,367 / 403,353, a **839× ratio at the
+  largest rung**. The attribution needs no model — the revoke that *kills* the nodes differs between
+  the two trees by exactly +4 cycles at every rung, the revoke that *walks the corpses* by over
+  400,000. Synthesis exit 0, WNS **−9.225** against the flashed −12.425, combinational loops 29 → 13.
+  **NOT FLASHED**, and the 65,532-node ceiling is not addressed by any of it. Box: `ISSUES.md` R-12.
+* **Two warnings travel with that synthesis result and must never be separated from it.** The timing
+  gain is **not attributable to unlinking** — a runtime property cannot move a static loop count; the
+  splice put the response send in two branches, so anvil registered the endpoint (~9 one-bit
+  registers; +72 implemented flops inside the unit, −206 design-wide). And **~642 LUTs appeared
+  OUTSIDE the unit, unexplained**. Quote implemented figures against implemented totals, never the
+  +133 declared bits.
+* **The sub-8 anomaly is the write buffer, measured rather than inferred.** Exactly two rungs sit
+  exactly +91 cycles above the fit, at N = 6 and 7; halving the write-through dcache write buffer from
+  8 to 4 moved the pair to N = 2 and 3 — a shift of exactly four — while every rung from N = 8 up
+  stayed byte-identical. **The fit `3N + 249` is a bound in NEITHER direction below its range**: it
+  over-estimates by 196 / 151 / 60 at N = 2 / 3 / 4 and under-estimates by 91 at N = 6 and 7. A small
+  revoke has to be measured, and the answer tracks the buffer depth.
+* **The reclamation v2 specification is committed, audited, and does not ship as written**:
+  `docs/plans/2026-09-16-revnode-reclamation-v2.md`. The audit found three of its mechanisms
+  individually wrong after the author had reviewed it twice. Item 6 — the three sites that grant
+  authority without ever consulting a node — is still the fatal one, and Part B (graceful exhaustion)
+  is separable and approvable alone.
+* **M1's start gate is 1 of 3.** The lead named the RTL lane as runtime/RTL owner on 2026-09-16.
+  Approval of the algorithm and of the stale-reference invariant are the remaining two, and cannot be
+  given by the owner or the gate is decorative. **Nothing is scheduled and no reclaiming arm may be
+  planned until both are given.**
+* **The board is `apollo-board`'s; this session is backup, hands-off.** Their P1 no-reclamation
+  baseline ran four boots, all `done`, and refuted its pre-registered primary in the informative
+  direction: scored apart, `take` is near-flat at ~70 cycles while `give` grows 221 → 1,558 and
+  superlinearly in cumulative allocations, against flat-at-16 with slope exactly 0.00 under the
+  emulator. Queue, gate order and the lead's open decisions:
+  `docs/plans/2026-09-15-consolidated-board-queue.md`.
+* **D3 IS CLOSED: the monitor's one plain access through an integer base is fixed and validated.**
+  `capstone-sbi` `d3-monitor-capability-writeback` at `2dcd3a5` moves the stack capability's cursor in
+  place rather than computing an integer address from it. Validated where it CAN be — against the
+  R-34/R-24 delivery-fix branch, because on the deployed bitstream the old form and the new one both run
+  clean. Matched pair at `c77c65324`, 601 cycles: the replacement takes cause 0 and its store reads back,
+  the capability is bit-identical before and after, the old shape run last takes **cause 24** with its
+  store refused, and there is **exactly one trap in the run — the control's**. The replacement is bounds-checked where the integer base was not, so a lower-edge arm tests the one address the preceding `SAVE_REG`s do not (slot 0, `rd` = `x0`): cause 0, value stored. The residual is runtime state — whether the live stack capability's base reaches `frame_base` — and only a boot on a delivering bitstream settles it. The branch is held OFF
+  `capstone-bootstrap`, which stays at the commit the drivers pin, so a boot today bakes the monitor it
+  expects. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
+  is the same defect and why ten of the twelve sweep tests time out in their epilogue; exiting through a
+  capability minted over `tohost` works. Instrument, readings and note:
+  `tests/monitor/`, `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
+* **The stale-artifact trap now fires mechanically** (`a0d83f6b8a14`). A worktree generates its anvil
+  output at creation time, so a source patch applied afterwards leaves every local gate testing the
+  pre-edit design: a 95-test sweep read as "the change is inert" when it meant "the change is absent",
+  and the lint numbers and two cost measurements taken beside it were void the same way.
+* **Four result bundles on the paper remote were reviewed rather than accepted** (`7e77374aa2b5`),
+  including one that keeps all seven entries while recording the loss of its own raw evidence. The
+  packaging hole found there generalises to bundles this lane cannot see.
+
+## 2026-09-13 (evening) — EARLIER
 
 > sw64's stall reproduces on an exact redraw and is in the domain's share entry; the mtvec pair
 > is CONFIRMED end to end (sw68 fix + sw69 mcause-27 readback); ten collaborator PRs landed (all but capstone-qemu #3). The morning block below

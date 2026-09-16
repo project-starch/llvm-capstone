@@ -4,7 +4,8 @@
 # ladder's entry glue, link-gpfree.ld with the globals offset measured from .text, and a domreq
 # declaration. Same host as the SQLite cells (sqlite_host.user / sqlite_host_rr.user, --speedtest1).
 #
-#   OUT_DIR=<dir> [R1_OPT=-O1] [DOMAIN_BASE_VA=0x10000] [R1_STACK=262144] bash build-r1-silicon.sh
+#   OUT_DIR=<dir> [R1_OPT=-O1] [DOMAIN_BASE_VA=0x10000] [R1_STACK=262144]
+#   [R1_EXTRA_DEFS="-DM1_LIVE=4"] bash build-r1-silicon.sh
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
@@ -22,7 +23,11 @@ SILICON=(-mllvm -capstone-merge-string-constants=true -mllvm -capstone-gp-captab
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -fno-builtin
         -I"$REPO_ROOT/capstone/sublet" -I"$REPO_ROOT/capstone/ports/sqlite")
 echo "== compile $OPT"
-"$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" "$OPT" -c "$SCRIPT_DIR/r1_slots_pools.c" -o "$OBJ_DIR/r1.o"
+# R1_EXTRA_DEFS: additional -D flags for the harness translation unit, e.g. R1_EXTRA_DEFS="-DM1_LIVE=4".
+# Word-split deliberately so several may be given; a define that changes the fixture geometry (M1_LIVE
+# sizes the carve) makes a DIFFERENT image with a different hash, which needs its own emulator pass.
+read -r -a _r1_extra <<< "${R1_EXTRA_DEFS:-}"
+"$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" "${_r1_extra[@]}" "$OPT" -c "$SCRIPT_DIR/r1_slots_pools.c" -o "$OBJ_DIR/r1.o"
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
   # the same two substitutions build-nginx-domain.sh makes: the globals offset, and the base VA

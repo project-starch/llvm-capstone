@@ -5,13 +5,39 @@ FPGA. The dated notes in `history/` are the investigation trail; **this file is 
 a paper author lifts from**. Each entry states the number, the exact conditions, what
 it supersedes in the current draft, and what it does **not** establish.
 
-Vehicle throughout: Genesys 2 CVA6, bitstream `working-caplifive-captype-fixed.bit`
-(**superseded 2026-08-04** by `caplifive_fixed_forward.bit`; every number below predates
-that reflash and must be re-measured before it is compared with anything taken after),
-`mcycle`/`minstret` read in-domain (the unprivileged counters are gated for the
-domain). Single core.
+Vehicle: Genesys 2 CVA6, single core, `mcycle`/`minstret` read in-domain throughout (the
+unprivileged counters are gated for the domain). **The bitstream is NOT constant across this
+file — take it from the entry you are citing, never from this header.**
 
-Last updated 2026-07-27.
+**⚠ CORRECTED 2026-09-15.** This paragraph previously read *"Vehicle throughout: Genesys 2
+CVA6, bitstream `working-caplifive-captype-fixed.bit` (**superseded 2026-08-04** by
+`caplifive_fixed_forward.bit`; every number below predates that reflash and must be re-measured
+before it is compared with anything taken after)"*. That was accurate for §1–§4c and is false for
+most of the file, which matters because a paper author following it would discard or re-measure
+results that are current:
+
+* **§4e is dated 2026-08-14** — it already postdates the 2026-08-04 reflash the old paragraph
+  treated as the end of the file.
+* At least **five** bitstreams appear below, not two: the two named above, then
+  `caplifive_s12fix_5097eb166`, `caplifive_r25r26r27_66c4e7517`, and
+  `caplifive_r30r31_1bfff7776`.
+* Even within §7 the vehicle changes — and several §7 entries are **not silicon at all** (§7g, §7i and
+  §7l are emulated / QEMU). Where an entry names its bitstream: §7b–§7d name
+  `caplifive_s12fix_5097eb166`; §7e–§7f and §7k name `caplifive_r25r26r27_66c4e7517`; and
+  **everything from §7m (2026-09-13) onward — including every Sublet number in §7r–§7y — names
+  `caplifive_r30r31_1bfff7776`**. Some entries (§7a, §7h, §7j) name none and state their own
+  conditions instead. **Take the vehicle from the entry; do not interpolate across a range** — an
+  earlier version of this correction did exactly that and had to be narrowed.
+* The last two **do not meet timing**, identically: WNS −12.425 ns, 102,508 of 174,960 failing
+  endpoints (§7). §7s bounds what that costs instead of arguing it away — cross-boot reproducibility
+  is 0.02–0.05 % on this workload family, far below the differences its ratios rest on.
+* The pre-flash numbers were **carried forward by measurement, not by assumption**: §7m re-ran
+  §7f–§7k's images unchanged on the flashed bitstream and is the bridge.
+
+Found by the paper lane on 2026-09-15 while checking a draft audit's result table against this
+file. The numbers reproduced; the header did not.
+
+Last updated 2026-09-15.
 
 **Benchmark scope is capped by a 4 KiB code window — but the cap is liftable.**
 `link-gpfree.ld` forces globals to image offset `0x1000`, so every domain's `.text`
@@ -4379,3 +4405,167 @@ the emulator and loses it on silicon; `sublet.h`'s primitives were written for t
 The regression invocation reads unchanged (nd = 2n; REVOKE 96 / 190 / 885 / 3,014 / 11,741 for
 n = 1 … 256, a single cold repetition). H1's forbidden-linear-copy family is therefore MEASURED on
 hardware, as a passing test for the instructions exercised.
+
+### §7x — The M-mode arm of the LSU gate question, answered at the desk: R-34 (RTL simulation, 2026-09-15 13:40–13:55)
+
+**Headline: a stock RISC-V compliance test fails on this core.** `rv64mi-p-ma_addr`, with no Capstone instruction and
+capmode never set, returns wrong data without a trap for the `ld` that crosses an 8-byte word: the LSU raises its
+exceptions and the load unit drops them (R-34). The capability clauses ride on the same path. The measurements are
+not contaminated by it: the computed results match a machine WITHOUT the defect (the `112006 38bb59fd` speedtest1 hash
+under capstone-qemu, **§4g.1**, and the 10,807-record SQLLogicTest corpus identical to native x86, §7c — arm-vs-arm
+agreement on the same core would not have shown it), and the cycle and counter values are CSR reads, not loads through
+the LSU path (the argument is in the R-34 folder). It is a base-core defect, not an extension's.
+
+*(Two corrections, 2026-09-15, paper lane. **The citation was wrong:** this sentence cited §7c for the speedtest1
+hash, and §7c is the SQLLogicTest corpus — it contains no occurrence of `112006 38bb59fd`, `speedtest1` or
+`38bb59fd` anywhere. The hash is in §4g.1 (`:1054`). §7c remains the right cite for the corpus half, and both
+are now named. **And the scope of "not contaminated" needs saying out loud:** that oracle compares computed
+RESULTS against machines that do not model a CVA6 LSU, so it covers every number whose reading is a value. It
+cannot cover a measurement whose reading is *"no trap occurred"* — which is exactly the four plain-data-access
+rows of the safety matrix, conceded two paragraphs below. As written the sentence sits in the headline paragraph
+and reads as covering all of §7; it does not, and the exception is not a small one.)*
+
+The paper lane's request after E1 — run the `obn` probe from M-mode with capmode set, to separate "the
+plain-access checker is unreachable from a domain" from "the checker is broken" — was answered without a
+boot. Two desk facts first: cause 24 is this core's `DEBUG_REQUEST` (R-24), so a live untagged-base clause
+halts rather than traps and the pre-registered "traps, cause 24" was unmeasurable; and the monitor's own
+rdtime emulation stores through an untagged base in M-mode at every Linux clock read without halting. The
+arm then ran as a directed RTL test (`tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/`): with
+both gate inputs witnessed and the block demonstrably running, a load through a write-only capability, a load
+at `bound_end`, a store through a read-only capability, a misaligned load, a misaligned store and a load
+through an untagged base all retired with values and no trap. The claim-auditor read the waveform independently:
+the block FIRES (21 exceptions raised, causes 24/27/28) and the load unit drops them — it pops the request in
+the cycle the exception is presented and looks for one only in the next (`load_unit.sv:423-424`, `:718`; the
+store unit `:349`; the MMU forwards unregistered, `cva6_mmu.sv:514`). One was delivered, because a second
+faulting load held the signal across the boundary. **Every exception the LSU generates itself is lost unless
+something re-asserts it one cycle later**, and the stock `rv64mi-p-ma_addr` fails the same way with capmode
+never set: the loss predates the capability check.
+
+**For the safety matrix (§7r's four plain-data-access rows, the S1S2 bundle's scope note):** unsupported on this
+configuration for two independent reasons — the privilege gate keeps domains off the block, and R-34 loses the
+block's exceptions at every privilege — and enabling the gate would not have enforced them. The reading "live
+for the monitor's own accesses" (the RTL lane's note, endorsed in the first version of the S1S2 scope note) is
+superseded. The capability-access rows stand: `LDC`/`STC` run the DYN unit's node-validity query with no
+privilege gate and no LSU exception (E1's s9 REVOKE fault in every repetition). Later the same day the RTL lane closed both
+residuals at the flashed revision: a store at the bound lands past the buffer (the corrupting direction), and the
+misaligned drop is independent of translation (witnessed identity map; R-34's folder). Not measured: the board itself. History note:
+`docs/history/15-09-2026_lsu-exception-lost-on-immediate-grant.md`.
+
+### §7y — F5 of the follow-on plan: M2's bounded diagnostic, the dependent chase on silicon (boots sw8x-r1f5-b1…b4, 2026-09-15 13:18–14:32)
+
+**Design.** `--series chase` in the R1 harness (build9 `fdd3029ff0f96680`, the emulator pass on record): N 64-byte
+records holding the INDEX of the next in a seeded Sattolo cycle (seeds 1/2/3), a separately counted lookup array
+of capabilities, two warm-up traversals, then 100,000 timed dependent accesses; the cold first traversal reported
+apart; checksum and cycle closure verified on every point. Arms: **custom-spatial** (P: one alias per record, 6
+nodes live), **custom-sublet** (S: a leaf and an alias per record, about 2N+4 nodes live), **data-only** (D: the same
+chase by integer arithmetic on one base, no lookup, the labelled non-protecting ablation). Working sets 16 / 64 /
+256 / 1024 / 4096 records (1 KiB – 256 KiB of records; the lookup array is 16 B per record beside them). 45
+invocations over four boots, a fresh domain each, seeded permutation, at most four sublet invocations per boot
+(node budget); every boot's controls 4/4, every invocation's `ran` code `0x4EB1xxxx`; 225 records, 15 runs per
+point over four boots and three seeds, 0 warnings, all completed. Bundle: `experiments/results/M2/fpga-2026-09-15/`
+on the board branch (`analysis/medians.py` rerunnable).
+
+**The pre-registration was mis-specified, and the correction was written before the numbers were read** (the F5
+correction in the plan, 14:00; the bundle carries the original text verbatim, then the correction). The timed
+access is `cur = *lookup[cur]`: an LDC whose ADDRESS capability is the lookup array's capability, then a plain
+load through the loaded record capability. On this RTL the DYN unit's node-validity query is on the LDC's address
+capability only (Q-11: a loaded capability's node is not queried; the plain load's LSU check is gated and its
+exceptions are dropped, R-34). So the access path queries ONE node per access in both capability arms, and the
+harness's `touched=N` field for the sublet arm is a label. `M2-access-path.md:29-33` anticipated exactly this:
+"if no controlled representation exists, publish the working-set series without claiming an isolated node-cache
+knee" — the contingency clause fired as written. The queried-set series (the record holding the next capability,
+a legal but different shape) is deferred behind M1.
+
+**Reading, under the corrected scope (cycles per access, median of 15 runs; min–max in the bundle):**
+
+| records | custom-spatial (6 live nodes) | custom-sublet (2N+4 live nodes) | S/P | data-only (no lookup) |
+|---|---|---|---|---|
+| 16 | 18.00 | 18.00 (36 nodes) | 1.0000 | 10.00 |
+| 64 | 18.00 | 18.00 (132) | 1.0000 | 10.00 |
+| 256 | 18.00 | 18.00 (516) | 1.0000 | 10.00 |
+| 1024 | 61.37 | 61.39 (2,052) | 1.0003 | 41.84 |
+| 4096 | 88.45 | 88.44 (8,196) | 0.9999 | 49.25 |
+
+1. **The cost of a node-validity query does not depend on how many nodes exist in the table.** Custom-sublet and
+   custom-spatial are INDISTINGUISHABLE at every working set — deviations 0.000 / 0.000 / 0.000 / 0.033 / 0.011 %
+   against cross-boot spreads of 0.00 / 0.00 / 0.03 / 0.25 / 1.25 %, every deviation inside its own spread — while
+   the sublet arm carries 36 to 8,196 live nodes against the spatial arm's 6: occupancy varied 1,366× with no
+   measurable cost difference. That is direct
+   evidence the query is an indexed read (the RTL lane's `get_rev_node`: one 16-byte read, no walk), and it
+   answers "does this get slower as the table fills?" with a measured no, up to 8,196 live nodes (12.5 % of the
+   65,532-node table). It says nothing about a growing QUERIED set (one node was queried per access) and nothing
+   about node-cache sizing, which the protocol forbids inferring from a mixed knee.
+2. **The lookup LDC costs one dependent capability load, and at DRAM sizes exactly one more DRAM access — and this
+   is a mutual validation with E4, not a consistency check.** At 4096 records (records 256 KiB, lookup 64 KiB)
+   M2's derived extra cost is 88.44 − 49.25 = **39.19** cycles; E4's independently measured dependent-load delta
+   is 48.2 − 9.0 = **39.2**. Two harnesses, two access shapes, different boots, agreeing to 0.03 %: E4's
+   calibration and M2's decomposition validate each other. In the data cache the capability arms pay 8.00
+   cycles over data-only (18.00 vs 10.00; 7 vs 6 instructions per access) against E4's 9.00-cycle dependent
+   load — the weaker of the two comparisons. The query adds nothing measurable on top of the load in either
+   regime. At 1024
+   records (records 64 KiB, lookup 16 KiB) the gap is 19.5, half a miss: the lookup array partly survives in the
+   32 KiB cache beside the records.
+3. **The data-only arm reproduces E4's calibration** (10.00 / 41.84 / 49.25 against E4's 9.00 / 40.8 / 48.2 plus
+   the chase's own index arithmetic), which is the positive control that the working-set axis measures memory
+   residency here as it did there. Cold first traversals (28 / 15 / 24 / 56 / 81 cycles per access for the
+   capability arms, 24 / 7 / 14 / 38 / 46 for data-only) are in the bundle and not interpreted.
+4. Cross-boot precision: spread 0.00–0.03 % below 1024 records, 0.25 % at 1024, 1.25 % at 4096 (DRAM); the
+   points are read as their medians, and no ratio is quoted tighter than its point's spread.
+
+**Claim scope for the paper (the bundle's `claim_scope`):** the record's index load carries no temporal query on
+this bitstream; the lookup's LDC runs the DYN unit's query on the lookup array's node at every privilege level;
+the series measures that one query under a growing number of LIVE nodes, not a growing queried set; no
+node-cache knee or node-size inference. The finding to carry: **the temporal check on the access path costs one
+indexed read whose price does not grow with the table's occupancy; a growing alias set costs nothing on the
+access path at this scale (indistinguishable arms, not "flat to 0.03 %").** Node budget per boot ≤ 80 % of 65,532 (the four boots minted 12, 12, 12 and 9
+invocations' worth, well under). Firmware hashes per boot are in the manifest (each boot was re-baked); the
+domain image is build9 in all four.
+
+## Revocation walk cost vs. dead nodes crossed, with and without the chain splice (simulation, 2026-09-16)
+
+Cycle-accurate RTL simulation (Verilator), not silicon. Matched pair: the control tree's HEAD **is** the
+merge-base of the splice branch, and the two differ in one source file. Memory latency non-zero
+(`S12_MEM_DELAY=12`; see the label correction below before quoting any delay figure).
+
+| dead nodes crossed by the walk | unspliced (cycles) | spliced (cycles) |
+|---:|---:|---:|
+| 8 | 273 | 328 |
+| 64 | 441 | 328 |
+| 160 | 729 | 328 |
+| 512 | 1,785 | 328 |
+| 1,024 | 3,321 | 328 |
+| 2,048 | 7,632 | 777 |
+| 3,072 | 96,822 | 516 |
+
+**Unspliced: exactly 3.000 cycles per dead node** (`cost = 3N + 249`, exact at ten rungs from N=8 to
+N=1,024). **The fit range is N ≥ 8 and the intercept must not be quoted bare as a fixed cost:** two
+rungs below it (N=6, 7) sit exactly +91 above the fit, caused by the write-through dcache write
+buffer — halving `WtDcacheWbufDepth` from 8 to 4 moves that pair to N=2,3 while leaving every rung
+from N=8 up byte-identical. **Extrapolating the fit below N=8 fails in both
+directions** — it over-estimates by up to 196 at N=2..4 and under-estimates by 91 at N=6,7 — so it is
+neither a safe lower nor upper bound on small-revoke cost. **Spliced: exactly 0.000** — 328 cycles at six different N, identical to the
+cycle. Fixed cost of the splice ≈ 79 cycles; **crossover at N ≈ 26.**
+
+**The 3 cycles/node is an L1-hit cost and a LOWER BOUND on the saving.** The dcache holds exactly 2,048
+nodes (32,768 B, 128-bit lines, one 128-bit node per line); the linear fit holds to 1,024 and breaks at
+2,048. One SQLite speedtest1 run mints 43,355 nodes = 21× the dcache, so the workload sits entirely in
+the cold regime, which this ladder reaches only at its last rung (there, 96,822 vs 516 = 188×). **The cold per-node slope from THIS ladder (87.1) is RETRACTED** — its segment crosses the warm/cold
+boundary (N=2,048 is still 84 % warm), so it measures the knee. The cold figure to use is the board
+lane's Q4 silicon fit: 25.45 cycles per node walked, R² = 0.999969 over eleven points wholly inside
+the cold regime. The 3.000 warm slope is unaffected and rests on ten exact points.
+
+**Instrument caveat that affects every delay figure in this document.** `S12_MEM_DELAY` is truncated to
+four bits by `stream_delay.sv` (`CounterBits = 4`), so the widely-quoted `=40` / "40-cycle memory"
+realises as **8**. Values ≡ 0 mod 16 realise as LESS delay than define 2 (measured at 16: identical
+to the true-bypass run). Usable range 2..15. **The knob is a period-16 sawtooth, not a monotone dial** — measured totals:
+define 0 → 708, 2 → 1,415, 12 → 3,427, 16 → 1,004, so turning it up from 12 to 16 turns latency down. This is a magnitude
+label, not a retraction of any result that rests on latency being non-zero.
+
+**Splice benefit at scale (simulation, cold, 2026-09-16).** Rungs placed wholly past the crossover:
+unspliced revoke 167,498 / 294,367 / 403,353 cycles at N = 4,096 / 6,144 / 8,192 dead nodes crossed,
+spliced **399 / 516 / 481** — flat to 0.02 cycles/node, **839× at the largest rung**. The attribution
+needs no model: the revoke that *kills* the nodes differs between the two trees by exactly **+4 cycles**
+at every rung, so the entire difference is the walk over corpses. The unspliced cold slope from this
+ladder (57.6 cyc/node) characterises the testbench's fixed-delay memory model rather than the design,
+is not converged, and **must not be reconciled against the 25.45 cyc/node silicon figure** — different
+memory systems. For the cold per-node cost, use the silicon number.

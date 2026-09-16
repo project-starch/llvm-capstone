@@ -1,5 +1,24 @@
 # Why the LSU capability check is inert in a domain: the privilege half, not the capmode half — and the one arm that would make this airtight
 
+> # AMENDED THE SAME DAY — READ THIS FIRST
+>
+> **The central question this note answers is still answered correctly: a domain cannot satisfy the
+> gate, and that is a property of the design rather than a configuration error.** Two things in it
+> are wrong and are struck in place rather than deleted.
+>
+> 1. **"The check is live for the trusted monitor."** Wrong. **R-34**: the block fires and the load
+>    unit **discards** the exception, so plain data accesses are unenforced at *every* privilege, not
+>    only in domains. It is also **not capability-specific** — stock `rv64mi-p-ma_addr` fails with
+>    capmode never set.
+> 2. **"The one arm that would make this airtight" is presented as owed.** It was **run**, and it came
+>    back on the second of the two branches this note pre-registered — the one meaning a second,
+>    independent defect.
+>
+> **My first correction was also wrong** ("lost on an immediate cache grant") and is recorded as such.
+> The accurate wording is **raised and dropped**.
+>
+> **Sequencing that came out of it:** R-24 must be ruled **before or with** R-34's fix, never after.
+
 **RTL lane, 2026-09-15.** Question routed by the lead via the paper lane, open since August and
 blocking a framing decision: `cap_violation_detection` in `load_store_unit.sv` is gated on
 `capmode_i && ld_st_priv_lvl_i == riscv::PRIV_LVL_M`. **What sets those two signals for a domain
@@ -65,10 +84,35 @@ Only two routes exist and neither is a setting:
    privilege — abandoning the isolation the check exists to enforce. That is not a configuration fix;
    it is discarding the threat model to make the checker run.
 
-**Where the check IS live: the monitor.** capmode is set and privilege is M while M-mode code runs,
-so the block is enabled for the trusted monitor's own plain loads and stores, and disabled for
-untrusted domain code. **The enforcement is present exactly where it is least needed and absent
-exactly where it matters.** That is the finding, and it is sharper than "the block is inert".
+> ## ~~Where the check IS live: the monitor.~~ **RETRACTED 2026-09-15 — SEE R-34. AND MY FIRST CORRECTION WAS WRONG TOO.**
+>
+> The struck sentence read: *"capmode is set and privilege is M while M-mode code runs, so the block
+> is enabled for the trusted monitor's own plain loads and stores… present exactly where it is least
+> needed and absent exactly where it matters."* **It is not enabled anywhere in any useful sense.**
+>
+> **My second attempt was also wrong** and is recorded because two wrong wordings are worth more to
+> the next reader than one. I proposed *"the exceptions are lost on an immediate cache grant"*. The
+> board lane's auditor refuted that framing as well.
+>
+> **The correct wording is RAISED AND DROPPED.** The block **fires** — `cap_exception.valid` rises 21
+> times in the audited run, causes 24/27/28 — and the **load unit discards it**. Verified here by
+> content rather than by line number: the emit is guarded on
+> `if (ex_i.valid && (state_q inside {SEND_TAG, SEND_TAG_LDC}) …)` in `load_unit.sv`, and the code's
+> **own comment** states the assumption that breaks — *"An exception arrives one cycle after
+> `dtlb_hit_i` is asserted, i.e. when we are in SEND_TAG."* On an immediate grant the request is
+> popped before that, the state is no longer SEND_TAG, and the exception is silently discarded. The
+> store unit drops it the same way, and the MMU forwards `misaligned_ex_i` unregistered because
+> upstream #2528 removed `misaligned_ex_q`.
+>
+> **It is not capability-specific.** Stock `rv64mi-p-ma_addr` fails on this RTL with capmode never
+> set. This is a general exception-delivery defect inherited from upstream, which changes who should
+> care about it.
+>
+> So the privilege gate keeps **domains** off the block, and R-34 discards the block's exceptions
+> **everywhere else**: plain data accesses are unenforced at **every** privilege. The monitor's
+> `rdtime` emulation stores through an untagged base at every Linux clock read and does not halt —
+> that is why. Full account: `docs/ref/ISSUES.md` R-34 and
+> `tests/fpga-repros/R34-lsu-exception-lost-on-immediate-grant/`.
 
 ## What this settles for the manuscript, and the limit on it
 
@@ -78,23 +122,40 @@ four `tab:safety` rows claiming *"Stops at access"* are not supported for plain 
 configuration. Capability accesses are a separate path and are unaffected — `LDC`/`STC` carry their
 node-validity query in the DYN unit, which has **no privilege gate at all**.
 
+> **AMENDED 2026-09-15 (R-34): the conclusion holds and the reason is now TWO independent ones.**
+> The privilege gate keeps domains off the block; R-34 discards the block's exceptions everywhere
+> else. So those four rows fail **twice over**, and **"satisfy the gate" would not have enforced them
+> either** — which is the part this note originally got wrong by implying the gate was the whole
+> story. Anyone rebutting one reason still has the other to answer.
+
 **Do not restate this as "the silicon does not enforce capability bounds".** That form was filed and
 retracted once because two halves had been measured in different domains. The accurate claim is
 narrower and is about one gated block on the plain load/store path.
 
-## The one arm that would make this airtight, and why it is owed
+## ~~The one arm that would make this airtight~~ — IT WAS RUN, AND IT ANSWERED ON THE SECOND BRANCH
 
-Everything above explains why the block is **not reached**. Nobody has shown the block **works when
-it is reached**. Those are different failures and the current evidence cannot separate them:
+This section asked for one arm and pre-registered both readings. **The board lane ran it** (R-34,
+`lsu-mmode-gate.S`), and the answer was the second branch, verbatim as written here:
 
-> **Run the `obn` probe from M-mode with capmode already set. Predicted: it traps, cause 24.**
+> * Traps → the gate is the whole story.
+> * **Does not trap → there is a second defect**, the block is broken independently of the gate, and
+>   "satisfy the gate and re-measure" would not have closed it either.
 
-* **Traps → the gate is the whole story.** The block is functional and unreachable from a domain,
-  which is what this note argues.
-* **Does not trap → there is a second defect**, the block is broken independently of the gate, and
-  "satisfy the gate and re-measure" would not have closed it either.
+**It did not trap.** In M-mode with capmode set and `MPRV = 0` — both witnessed, so the gate is
+demonstrably satisfied and the block's own revnode tracking updates — a load through a write-only
+tagged capability, a load at exactly `bound_end`, a store through a read-only tagged capability, a
+misaligned load and store, and a load through an untagged base **all retire with no trap**, and the
+two stores land, the misaligned one corrupting its neighbours.
 
-That is the positive control for a claim that currently rests on a negative, and it needs one M-mode
-arm rather than a board boot in a domain. It goes through the board lane. Until it exists, this note
-states a source-derived explanation and not a measured one, and the distinction should survive into
-whatever the paper says.
+**The one exception that was delivered proves the R-24 entanglement rather than weakening it:** it
+came back as cause 24, which is this core's `DEBUG_REQUEST`, so the core entered the debug ROM, and
+on `dret` the same instruction re-ran, was granted at once, and completed silently.
+
+**Consequence for any fix, and it is a sequencing constraint rather than a caveat.** Once delivery is
+repaired, cause 24 enters debug mode on **every** M-mode plain access through an integer base —
+including `RVTEST_PASS`'s own store to `tohost` and the debug ROM's own accesses. **R-24 must be ruled
+before or with R-34's fix, never after.**
+
+**What remains source-derived rather than measured**, and is this lane's next work: the
+translation-on path (S-mode with `satp` set) is argued from `cva6_mmu.sv` alone, and there is no store
+bounds arm. Both are simulation work; only the post-fix confirmation needs a boot.

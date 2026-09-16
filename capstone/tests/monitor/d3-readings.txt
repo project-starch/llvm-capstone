@@ -1,0 +1,56 @@
+D3 -- the monitor writeback fix, validated against the R-34/R-24 delivery-fix branch.
+
+Run: capstone-ariane worktree at c77c65324 (detached), 2026-09-16, veri-testharness,
+     +time_out=2000000, terminated after 645 cycles -- not the timeout, so not a hang.
+Test: d3-monitor-writeback.S (this directory), list testlist_d3_monitor.yaml.
+
+Reading the registers below (each CAPPRINT names one arm; a scalar's value is the cursor field):
+
+  Reg[17] a7   capmode witness -- the capability survived a CSCRATCH round trip, so capmode is SET
+  Reg[28] t3   mstatus 0xa00000000 -- MPRV bit 17 clear, MPP bits 12:11 zero, so the load/store
+               privilege is the current one, M: the LSU's gate is satisfied on both halves
+  Reg[ 2] sp   the capability before the in-place cursor move
+  Reg[ 2] sp   and after the restore -- identical cursor, bounds, type, perm and revnode id
+  Reg[24] s8   arm B0 cause, the replacement at the LOWER EDGE   expect 0
+  Reg[25] s9   arm B0 value, its store read back from the base   expect E0E0 (was 4D4F4E49)
+  Reg[ 9] s1   arm 0 cause, capmode OFF                          expect 0
+  Reg[18] s2   arm 0 value, the old shape's store read back      expect D3D3
+  Reg[19] s3   buffer word before arm B                          expect D3D3
+  Reg[20] s4   arm B cause, the replacement                      expect 0
+  Reg[21] s5   arm B value, its store read back                  expect B0B0
+  Reg[27] s11  traps so far                                      expect 0
+  Reg[22] s6   arm A cause, the old shape with capmode SET       expect 24 = 0x18
+  Reg[23] s7   buffer word after arm A                           expect B0B0, refused store absent
+  Reg[27] s11  total traps                                       expect 1
+
+Arm A is the positive control. Had it not trapped, this build would not be delivering the exception
+and arm B's clean return would say nothing about the fix.
+
+Arm B0 exists because the replacement stores through a CAPABILITY and is therefore bounds-checked,
+where the old integer base was not. The monitor's store lands at frame_base + slot*8 for slot 0..31,
+and the SAVE_REG sequence that runs first on every trap writes slots 1..31 through the same register
+-- so those are already proved in bounds by code that precedes it. Slot 0 is the one address this
+change newly subjects to a check that nothing else exercises, reachable when the emulated
+instruction's rd is x0. Arm B0 reproduces that geometry exactly, cursor 16 BELOW the base as the
+monitor's is, and the access lands on the base itself.
+
+--- result lines, in run order ---
+d3-monitor-writeback.o *** SUCCESS *** (tohost = 0) after 645 cycles
+CCSRRW return cap_rs1 = 0000000080003000
+CCSRRW return cap_rs1 = 0000000000000000
+[Cycle        406] Reg[17]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0
+[Cycle        410] Reg[28]: 0000000a00000000
+[Cycle        442] Reg[ 2]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0
+[Cycle        472] Reg[ 2]: Cursor: 0000000080003000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 6 | Start : 0000000080003000 | End : 0000000080003040 | async = 0 | reg =  0
+[Cycle        511] Reg[24]: 0000000000000000
+[Cycle        523] Reg[25]: 000000000000e0e0
+[Cycle        524] Reg[ 9]: 0000000000000000
+[Cycle        525] Reg[18]: 000000000000d3d3
+[Cycle        526] Reg[19]: 000000000000d3d3
+[Cycle        527] Reg[20]: 0000000000000000
+[Cycle        529] Reg[21]: 000000000000b0b0
+[Cycle        531] Reg[27]: 0000000000000000
+[Cycle        592] Reg[22]: 0000000000000018
+[Cycle        593] Reg[23]: 000000000000b0b0
+[Cycle        594] Reg[27]: 0000000000000001
+*** [rvfi_tracer] INFO: Simulation terminated after        633 cycles!

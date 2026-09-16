@@ -21,4 +21,11 @@ flock -w 7200 "$CAPSTONE_QEMU_LOCK" python3 "$REPO_ROOT/capstone/tests/runtime-q
   --qemu-extra-arg=-append --qemu-extra-arg="root=/dev/vda ro cma=256M" \
   --guest-command "$GC" --success-marker R1_END > "$OUT/smoke.out" 2>&1; rc=$?
 echo "smoke rc=$rc  image $(sha256sum "$R1_DOM" | cut -c1-16)  host $(sha256sum "$R1_HOST" | cut -c1-16)"
+# the pass record the board drivers check before spending a boot (${CAPSTONE_ARTIFACTS}/qemu-pass/<sha256 of the image>):
+# written only when the guest reported R1_RC=0, and it names the image and the host so the record is checkable
+if [ "$rc" -eq 0 ] && grep -aq 'R1_RC=0' "$OUT/boot.log"; then
+  PASSDIR="${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/qemu-pass"; mkdir -p "$PASSDIR"
+  echo "image $(sha256sum "$R1_DOM" | cut -d' ' -f1) host $(sha256sum "$R1_HOST" | cut -d' ' -f1) $(date -u +%FT%TZ) args: $ARGS" \
+    > "$PASSDIR/$(sha256sum "$R1_DOM" | cut -d' ' -f1)"
+fi
 grep -aoE 'R1 [^\r\n]*|SQ: speedtest1-ran=[0-9]+|SQ: [a-z -]*(fault|abort|did not run|trap)[^\r\n]{0,80}|R1_RC=[0-9]+|domain halted[^\r\n]{0,120}|cause = [0-9]+, pc = 0x[0-9a-f]+[^\r\n]{0,60}' "$OUT/boot.log" | sed 's/^/  /'

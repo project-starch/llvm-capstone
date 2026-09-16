@@ -477,3 +477,41 @@ widens; it does not show anything using it.
   seen none of the files. Re-run with the toplevel asserted equal to the worktree and the diff printed
   alongside the verdict — 117 insertions actually examined. Same family as the scan of a branch that
   did not exist, one day later, by the other lane's own warning.
+
+## 11. The BOTTOM truncates too — R-33 widens a region at BOTH ends
+
+The last unexercised half of R-33, closed. Directed arm
+`verif/tests/custom/capstone/r33-base-truncate.S`, run on the flashed `1bfff7776`, committed at
+`2c59a355b` on `r30-r31-init-revoke` and anchored `backup/r33-base-truncate-2026-09-15`.
+
+| arm | cursor | Start | End | |
+|---|---|---|---|---|
+| R, control (base 32-aligned) | at base | `80004000` | `80008020` | |
+| R, control | base+16 | `80004000` | `80008020` | **unchanged** |
+| B, unknown (base **not** aligned) | at base | `80004010` | `80008020` | exact — precondition proven |
+| B, unknown | base+16 | **`80004000`** | `80008020` | **TRUNCATED LOW by 16** |
+
+439 cycles against a 200,000 timeout, no exceptions.
+
+**So the same mechanism runs in both directions.** The encoder keeps only the high bits of the base
+(`B[13:3] = {start >> E}[13:3]`, `B[2:0]` forced to zero) and the decoder shifts back
+(`b = {…,B} << E`) without restoring what was dropped — the mirror of the top's round-up. **A region
+aligned at neither end over-grants at both, by up to one granule less a byte in each direction**,
+rather than one granule in total as the top-only reading implied.
+
+**The pair holds the top fixed so the bottom is the only variable**, and the readings confirm the
+design rather than merely assuming it: both arms share the same granule-aligned end, and `End` is
+identical in all four dumps, so neither arm rounded at the top. The lengths differ only as a
+consequence of moving the base while holding the end — that is what isolates the bottom, not a second
+variable, since the top cannot round either way.
+
+**The control does not move** (so this is representability, not the instruction re-rounding
+everything) **and the unknown's first print shows the exact unaligned base** (so the truncation is
+caused by the cursor move rather than pre-existing). Same two properties that made the first two arms
+readings rather than suggestions.
+
+**What this adds to the containment arithmetic.** The earlier page-alignment analysis measured the
+top only. A region whose *base* is also unaligned loses up to another granule downward, and the
+kernel's `PAGE_ALIGN` does not cover the bottom at all — it rounds the *size* up, not the start down.
+Whether any allocator here hands out a non-granule-aligned base is not established; every region
+tested has been base-aligned, which is exactly why this went unnoticed.

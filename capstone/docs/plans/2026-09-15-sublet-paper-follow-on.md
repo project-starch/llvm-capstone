@@ -61,6 +61,17 @@ deletes `addi rd, rs, 0` when `rd == rs` (the reason `PseudoTRUNC_CAP` stays a p
 `capstone/tests/movc-cfg-scan.py` over the rebuilt -O2 Sublet image reads 0 integer-only sites (the
 mixed and call-return buckets reported beside it), lit green, the QEMU suites green.
 
+*Gate corrected 2026-09-15 14:15, from the compiler lane's result (46c53b7b6ae2, 19bc05cf21b1 on their branch; scan 1/0
+against 1/1 before; pair at `~/capstone-artifacts/c32-fix-2026-09-15/`, before `ec061577fb008e18`, after `a1f8f2093696d511`):*
+design A's accepted residue is itself an integer-only site — `renameResolveTrigger`'s block-entry copy live around its
+back-edge, pinned by `bridged_phi_residue` in the test — so "0 integer-only sites" cannot be met and would invite a
+weakening. The gate is **0 integer-only sites other than that PHI residue, enumerated by function and offset**, with the
+mixed and opaque buckets reported beside. And the emulator pass for the image is SQLLogicTest on the -O2 SQLite image with
+the `movc` density read back (17,378 vs ~6,755 at -O0), not the standard suites: `ptr_int_ptr_roundtrip.c` forms no
+`PseudoBRIDGE_CAP` (its `volatile` pushes the value through memory), so the suites do not exercise the lowering. The fix is
+not on dev: the scan's range mode blocks the merge on author lines of the collaborator's S2 commits already on dev, and
+whether authorship metadata is in the no-names rule's scope is the lead's ruling. The boot waits for dev.
+
 *Board lane, after the fix lands on dev and the toolchain is rebuilt (never during a suite).*
 Rebuild cell ⑥ at pure -O2 (`build-sqlite-silicon.sh`, `SQLITE_OPT_LEVEL=-O2`, no `SQLITE_OPTNONE_FUNCS`),
 scan it, emulator run at the default and the 2 MiB arena (the counters must be
@@ -188,12 +199,60 @@ isolated from the footprint effect; (b) points below two thousand live nodes so 
 check costs one indexed read, and the cost of a growing alias set is a locality cost in the node table,
 not a mechanism cost. Bundle at `experiments/results/M2/fpga-<date>/` in the record shape.
 
+**Correction (2026-09-15 14:00, written after two of the four boots had run and before any number was read as a
+finding):** the pre-registration above mis-specifies the quantity. The timed access is `cur = *lookup[cur]` — an LDC
+whose ADDRESS capability is the lookup array's capability, then a plain load through the loaded record capability —
+and on this RTL the DYN unit's node-validity query is on the LDC's address capability only (Q-11: a loaded
+capability's node is not queried on the load; the plain load's LSU check is gated and its exceptions are lost, R-34).
+So the access path queries ONE node per access in both arms; the harness's `touched` field is a label, not a count of
+queried nodes. What the pair measures is whether the per-access query cost depends on the number of LIVE nodes (the
+sublet arm mints about 2N+4, the spatial arm 6). The footprint of a growing QUERIED set is not measured by this design;
+it would need the record to hold the next capability, which the study's design excludes. The bundle carries the original
+pre-registration verbatim followed by this correction; the §7 entry reads the pair under the corrected scope.
+
 ### F6 — Prepared for M1's day (desk, no board)
 
 The four-arm M1 driver (drop / retain-ring / retain-pressure / release-retained to 10 C cumulative node
 allocations, snapshots every C/16, isolated stale probes at each checkpoint, `M1:30-35, 53, 63-65`) as a
 `board-m1.sh` over the R1 harness's fixture, runnable the day a reclaiming bitstream is flashed; the
 retain-pressure arm is sw74b's exhaustion diagnostic already on record. No boot until then.
+
+**Prepared (2026-09-15 14:25):** `--series m1` in the R1 harness (`--arm drop|ring|pressure|release`, `--cap C`,
+`--stale-take` for the faulting probe, last): sixteen live 64-byte objects replaced round-robin, one release (revoke +
+init) and one take (one node) per allocation, to 10C; the ring keeps the 16 most recent obsolete aliases in tagged
+memory, the pressure arm every one in a preallocated 2,048-entry buffer (a full buffer stops as `buffer`, not as
+exhaustion), release clears them and runs 2C more; a snapshot every C/16 prints minted/revoked/init/retained and
+non-faulting type reads of the oldest retained alias and a live slot; the budget stop is the deployed table's
+exhaustion classification. Emulator flow check at C = 64 (build10 `848887ae81b8c0e3`, host `2c9e82d101b48160`): all
+four arms to target, minted = 31 + one per allocation, revoked = allocations, retained 0/16/640/0 (release 768
+allocations), the retained alias reads type 7 on the emulator (Q-11; 2 expected on silicon). Driver: the parametrised
+R1 driver with `f6/invocations-m1-*.txt` and `chain-m1.sh` (boot 1 = the four arms at the 256-entry diagnostic
+capacity, boot 2 = the pressure arm alone to the 80 % budget on the deployed table) — prepared, not launched: the
+no-reclamation baseline is the study's other configuration and whether to spend two boots on it now is the paper
+lane's and the lead's call; the four arms at C = 65,532 need the reclaiming bitstream (one arm per boot). What the
+harness cannot read and a reclaiming build must expose: occupancy and free-node counters, the reclamation count, and
+a node id/generation read for the identifier-turnover witness. Subordinate handles retained across a release are not
+modelled yet.
+
+*15:05, after the paper lane's review:* every snapshot now also prints the interval's raw cycles in the takes (`take_cyc`,
+minting: `mrev`) and in the gives (`give_cyc`, release: revoke + fill + init) with the interval's allocation count, so
+the two cost curves against cumulative allocations come out of the same boots (build11 `9a01b12a4db639b6`); on the
+deployed table the retention pattern varies nothing (no reclamation: one node per allocation whatever is retained), so
+if the two boots go they are labelled **no-reclamation baseline**, never M1, and their headline is the minting and
+release cost as the table fills — pre-registered flat for both — with the bound as corroboration and the pattern
+comparison void until a reclaimer exists. *Reconciled with R1 (15:20, after the paper lane's check):* the shape is R1's
+`individual` one — a carved LINEAR leaf handed out as a delin'd NONLIN alias under a REV handle in its slot — so the
+release has NO fill (the alias's revoke returns the region LIN; R1 measured `fb = 0`), and the earlier "plus a 64-byte
+fill" was wrong. Brackets by primitive: `take_cyc` = LDC + MREV + STC + DELIN; `give_cyc` = LDC handle + REVOKE + LCC
+type + STC ×2. Predicted from R1's 64-byte object medians (revoke 51, type 12, init 2, reissue 355 − the spatial arm's
+36): PRIMARY, what the boots test — `take_cyc/n + give_cyc/n` FLAT in cumulative allocations (least-squares slope
+times the run's allocation range below 1 % of the mean; last quarter within 1 % of the first); SECONDARY, scored
+apart — the sum in the band **384–391** raw cycles per allocation (384 from R1's phase medians; 391 = R1's total 593
+minus bookkeeping 166 minus the checked first use 36; of the seven between them, two extra timer reads in R1's
+bracket account for about 4 at E4's 2-cycle floor and about 3 are a residual between two independently assembled
+estimates), where outside the band refutes the magnitude model and leaves the primary result untouched.
+The split between the two brackets is reported, not predicted. Boot 1's curve at the 256-entry capacity is labelled diagnostic, not a hardware result — by
+capacity, not by platform (`M1-node-reclamation.md`).
 
 ## Hand-offs (cross-session messages, roles only)
 

@@ -1,0 +1,252 @@
+# BASELINE (unfixed) load-unit reading, re-derived 2026-09-15 17:3x so the registry's sentence has an
+# artifact anyone can reopen. Tree: capstone-ariane f6ec6c198 (the gate/exception lines are identical at the
+# flashed 1bfff7776). Test: this folder's lsu-mmode-gate.S, 1,251 cycles, TRACE_FAST.
+# Artifact hashes at the moment of reading: .log.iss 385ef4fc25b10327, .vcd d47e7c31088ad3ba (22.7 MB).
+# WHAT IT SHOWS: lsu_i.cap_exception.valid rises 21 times up to t=3000 ps (2 ps per cycle); at EVERY one of
+# them i_load_unit.ex_i.valid = 1, state_q = 0 (IDLE) and ex_o.valid = 0 -- the sentence in the R-34 box,
+# now re-derivable. Causes seen: 0x18 (24 NOT_CAP), 0x1b (27), 0x1c (28). The ONE delivery is t=1167-1171:
+# cap_exception stays valid across three cycles, ex_o.valid rises at 1169, the ex_stage boundary and the
+# syncer's valid at 1171, and csr_regfile_i.ex_i.valid with cause 0x18 at 1173 -- the debug-ROM entry.
+selected 9
+   TOP.ariane_testharness.i_ariane.i_cva6.csr_regfile_i.ex_i.cause
+   TOP.ariane_testharness.i_ariane.i_cva6.csr_regfile_i.ex_i.valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.genblk4.forward_normal_load_valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.load_exception_o.valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.cap_exception.cause
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.cap_exception.valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.ex_i.valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.ex_o.valid
+   TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.state_q
+== TOP.ariane_testharness.i_ariane.i_cva6.csr_regfile_i.ex_i.cause (7 changes up to 3000)
+   t=0 0x0
+   t=783 0x2
+   t=785 0x0
+   t=1173 0x18
+   t=1175 0x0
+   t=1631 0x3
+   t=1633 0x0
+== TOP.ariane_testharness.i_ariane.i_cva6.csr_regfile_i.ex_i.valid (7 changes up to 3000)
+   t=0 0
+   t=783 1
+   t=785 0
+   t=1173 1
+   t=1175 0
+   t=1631 1
+   t=1633 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.genblk4.forward_normal_load_valid (29 changes up to 3000)
+   t=0 0
+   t=701 1
+   t=703 0
+   t=875 1
+   t=877 0
+   t=939 1
+   t=941 0
+   t=985 1
+   t=987 0
+   t=1017 1
+   t=1019 0
+   t=1171 1
+   t=1173 0
+   t=1327 1
+   t=1329 0
+   t=1379 1
+   t=1381 0
+   t=1461 1
+   t=1463 0
+   t=1773 1
+   t=1775 0
+   t=1825 1
+   t=1827 0
+   t=2435 1
+   t=2437 0
+   t=2439 1
+   t=2441 0
+   t=2473 1
+   t=2475 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.load_exception_o.valid (3 changes up to 3000)
+   t=0 0
+   t=1171 1
+   t=1173 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.cap_exception.cause (43 changes up to 3000)
+   t=0 0x0
+   t=871 0x18
+   t=873 0x0
+   t=981 0x1b
+   t=983 0x0
+   t=999 0x1c
+   t=1001 0x0
+   t=1107 0x1b
+   t=1109 0x0
+   t=1147 0x18
+   t=1149 0x0
+   t=1167 0x18
+   t=1173 0x0
+   t=1295 0x18
+   t=1297 0x0
+   t=1315 0x18
+   t=1317 0x0
+   t=1367 0x18
+   t=1369 0x0
+   t=1429 0x18
+   t=1431 0x0
+   t=1449 0x18
+   t=1451 0x0
+   t=1491 0x18
+   t=1493 0x0
+   t=1581 0x18
+   t=1583 0x0
+   t=1741 0x18
+   t=1743 0x0
+   t=1761 0x18
+   t=1763 0x0
+   t=1813 0x18
+   t=1815 0x0
+   t=1865 0x18
+   t=1867 0x0
+   t=2431 0x18
+   t=2433 0x0
+   t=2435 0x18
+   t=2437 0x0
+   t=2469 0x18
+   t=2471 0x0
+   t=2515 0x18
+   t=2517 0x0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.cap_exception.valid (43 changes up to 3000)
+   t=0 0
+   t=871 1
+   t=873 0
+   t=981 1
+   t=983 0
+   t=999 1
+   t=1001 0
+   t=1107 1
+   t=1109 0
+   t=1147 1
+   t=1149 0
+   t=1167 1
+   t=1173 0
+   t=1295 1
+   t=1297 0
+   t=1315 1
+   t=1317 0
+   t=1367 1
+   t=1369 0
+   t=1429 1
+   t=1431 0
+   t=1449 1
+   t=1451 0
+   t=1491 1
+   t=1493 0
+   t=1581 1
+   t=1583 0
+   t=1741 1
+   t=1743 0
+   t=1761 1
+   t=1763 0
+   t=1813 1
+   t=1815 0
+   t=1865 1
+   t=1867 0
+   t=2431 1
+   t=2433 0
+   t=2435 1
+   t=2437 0
+   t=2469 1
+   t=2471 0
+   t=2515 1
+   t=2517 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.ex_i.valid (43 changes up to 3000)
+   t=0 0
+   t=871 1
+   t=873 0
+   t=981 1
+   t=983 0
+   t=999 1
+   t=1001 0
+   t=1107 1
+   t=1109 0
+   t=1147 1
+   t=1149 0
+   t=1167 1
+   t=1173 0
+   t=1295 1
+   t=1297 0
+   t=1315 1
+   t=1317 0
+   t=1367 1
+   t=1369 0
+   t=1429 1
+   t=1431 0
+   t=1449 1
+   t=1451 0
+   t=1491 1
+   t=1493 0
+   t=1581 1
+   t=1583 0
+   t=1741 1
+   t=1743 0
+   t=1761 1
+   t=1763 0
+   t=1813 1
+   t=1815 0
+   t=1865 1
+   t=1867 0
+   t=2431 1
+   t=2433 0
+   t=2435 1
+   t=2437 0
+   t=2469 1
+   t=2471 0
+   t=2515 1
+   t=2517 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.ex_o.valid (3 changes up to 3000)
+   t=0 0
+   t=1169 1
+   t=1171 0
+== TOP.ariane_testharness.i_ariane.i_cva6.ex_stage_i.lsu_i.i_load_unit.state_q (46 changes up to 3000)
+   t=0 0x0
+   t=685 0x2
+   t=687 0x0
+   t=785 0x7
+   t=787 0x0
+   t=837 0x7
+   t=839 0x0
+   t=873 0x2
+   t=875 0x0
+   t=937 0x2
+   t=939 0x0
+   t=983 0x2
+   t=985 0x0
+   t=1001 0x2
+   t=1003 0x0
+   t=1169 0x2
+   t=1171 0x1
+   t=1173 0x2
+   t=1175 0x7
+   t=1177 0x0
+   t=1215 0x7
+   t=1217 0x0
+   t=1317 0x2
+   t=1319 0x0
+   t=1369 0x2
+   t=1371 0x0
+   t=1451 0x2
+   t=1453 0x0
+   t=1633 0x7
+   t=1635 0x0
+   t=1665 0x7
+   t=1667 0x0
+   t=1763 0x2
+   t=1765 0x0
+   t=1815 0x2
+   t=1817 0x0
+   t=1899 0x7
+   t=1901 0x0
+   t=2433 0x2
+   t=2435 0x0
+   t=2437 0x2
+   t=2439 0x0
+   t=2471 0x2
+   t=2473 0x0
+   t=2489 0x7
+   t=2491 0x0
