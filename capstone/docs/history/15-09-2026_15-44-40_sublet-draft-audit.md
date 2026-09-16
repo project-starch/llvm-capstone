@@ -204,6 +204,11 @@ cycles/node and merely *crosses* the slope-3 line there. **A point that agrees f
 is how a fit range gets overstated**, and it would have been counted as evidence by anyone
 extending the range downward until agreement stopped. Do not count N=5.
 
+**And the fit is not a bound in either direction below its range**, which is the reflex "out of
+range" invites. Against the measured values, extrapolating `3N + 249` below N=8 **over**-estimates
+by 196, 151 and 60 at N = 2, 3, 4, and **under**-estimates by 91 at N = 6, 7. So it is neither a
+safe ceiling nor a safe floor, and there is no direction in which using it anyway is conservative.
+
 None of this touches the 3.000 slope, the spliced 0.000, the crossover at N ≈ 26 (inside the range),
 or the conclusion that splicing removes the term entirely.
 
