@@ -66,7 +66,17 @@ Both revokes gain a per-node penalty **of the same order** in the cold segment, 
 effect looks like. rev2's 29× is a small-base artifact — its warm cost was only 3. Had rev1 stayed flat
 while rev2 exploded, the reading would have been about rev2's path, not about the cache.
 
-**Do not quote the cold slope as a constant.** It rests on one segment; 3.000 rests on six.
+**⚠ RETRACTED 2026-09-16, same day — 87.1 IS NOT THE COLD SLOPE.** It is worse than thin, and the
+defect is the one this very note warns about two sections down. N=2,048 sits only 1,239 cycles above
+the warm fit — **84 % of that point is still warm** — so the 2,048 → 3,072 segment *crosses the
+boundary*, and the slope of a segment spanning a knee measures the knee. A fit range that straddles a
+regime change was exactly the error the board lane independently diagnosed in P1 the same afternoon;
+mine had it too, and I wrote the caution about fit ranges without applying it to my own table.
+
+Use the board lane's Q4 figure instead: **25.45 cycles per node walked, R² = 0.999969 over eleven
+points, the whole fit inside the cold regime** at 25× dcache capacity. As a sanity check in the same
+direction, *total*/N at my one cold point is 31.5 cyc/node — the same order, where the marginal 87.1
+is not. The rows below are kept only to show the crossover; **no slope may be taken from them.**
 
 ## What the timing alone could NOT distinguish
 

@@ -4549,8 +4549,10 @@ cycle. Fixed cost of the splice ≈ 79 cycles; **crossover at N ≈ 26.**
 **The 3 cycles/node is an L1-hit cost and a LOWER BOUND on the saving.** The dcache holds exactly 2,048
 nodes (32,768 B, 128-bit lines, one 128-bit node per line); the linear fit holds to 1,024 and breaks at
 2,048. One SQLite speedtest1 run mints 43,355 nodes = 21× the dcache, so the workload sits entirely in
-the cold regime, which this ladder reaches only at its last rung (there, 96,822 vs 516 = 188×). The cold
-per-node slope rests on a single segment and should not be quoted as a constant; the 3.000 rests on six.
+the cold regime, which this ladder reaches only at its last rung (there, 96,822 vs 516 = 188×). **The cold per-node slope from THIS ladder (87.1) is RETRACTED** — its segment crosses the warm/cold
+boundary (N=2,048 is still 84 % warm), so it measures the knee. The cold figure to use is the board
+lane's Q4 silicon fit: 25.45 cycles per node walked, R² = 0.999969 over eleven points wholly inside
+the cold regime. The 3.000 warm slope is unaffected and rests on ten exact points.
 
 **Instrument caveat that affects every delay figure in this document.** `S12_MEM_DELAY` is truncated to
 four bits by `stream_delay.sv` (`CounterBits = 4`), so the widely-quoted `=40` / "40-cycle memory"
