@@ -3564,6 +3564,78 @@ globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
 
+> # 2026-09-16 — THE REVOKE-WALK SPLICE: built, measured, synthesised. R-12's COST half, not its capacity half.
+>
+> `r12-splice-revoked-nodes` at `f1331daed` (synthesised at `379248185`). **This addresses the cost of
+> revocation, not the 65,532 ceiling** — the two are separate problems and only a reclaimer touches the
+> ceiling. Do not read this as R-12 being fixed.
+>
+> **The defect.** `REVOKE_NODE` re-enters its FSM per visited node and `change_rev_node_validity`
+> (`capstone_unit.anvilh:563-565`) preserves `prev`/`next`, so invalidated nodes stay linked and every
+> later walk re-reads them — round *r* costs *r+2* dependent 16-byte reads. P1 measured the consequence
+> on silicon as release cost rising ~12× within a domain while minting rose ~1.5×.
+>
+> **The fix is a DEFERRED ONE-SHOT splice at the walk exit, not a per-node unlink.** When the walk
+> terminates, the index in hand is the first node outside the revoked subtree and its record is already
+> read; everything between it and the revoked node is exactly what this revoke killed. So one splice
+> unlinks the whole run in **two writes, independent of run length**, adding no reads — the revoked
+> node's record is cached at entry from a read the unit already performed and discarded. A per-node
+> unlink would instead add reads and writes *inside* the loop and create a read-after-posted-write on
+> two different dcache ports.
+>
+> **Measured, both trees staleness-gated and the other four generated units confirmed byte-identical:**
+>
+> | | unspliced | spliced | |
+> |---|---|---|---|
+> | full sweep | — | **95/95, 0 status changes** | only movement: `excode-base-audit` and `r31-revoke-cursor`, **+4 cycles each** — the two extra writes, on exactly the two tests that revoke |
+> | revoke that kills a run | 52 | 56 | +4, flat |
+> | **revoke that walks the corpses** | 56 | **45** | **−11 on a four-corpse run; the saving scales, the cost does not** |
+> | lint | baseline | **PASS, UNOPTFLAT 40** | no new synthesis hazard |
+>
+> **Synthesis (exit 0, 1h17m):** WNS **−9.225** against the flashed −12.425, TNS halved, 12,981 fewer
+> failing endpoints, +725 LUTs (0.4 %), combinational loops **29 → 13**. Best WNS ever recorded on this
+> design; first whose arithmetic reaches 20 MHz. **NOT FLASHED.**
+>
+> **⚠ THE TIMING GAIN IS NOT ATTRIBUTABLE TO THIS CHANGE'S PURPOSE, and the obvious sentence is false.**
+> Unlinking alters what the chain holds *at runtime*; `synth_design` never sees runtime, so a dynamic
+> property cannot move a loop count. Read out of the generated RTL: the splice put
+> `send ep.rev_res(...)` in **two** branches instead of one, so anvil emitted a **registered endpoint
+> selector** (`_ep_rev_res_valid_selector_q`) plus ~9 one-bit scheduling registers.
+>
+> Confirmed on the **routed netlist**, not just the generated RTL (synth lane, hierarchical
+> utilisation): `capstone_rev_node` FFs **606 → 678 (+72)** and LUTs **1,052 → 1,141 (+89)**, while
+> design-wide FFs fell **93,145 → 92,939 (−206)**. So the unit gained registers and the design lost
+> them — about **278 flops removed outside this unit**, the fingerprint of the loops actually going.
+> **Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.** So: *"a change that
+> duplicated a send site caused anvil to register that endpoint, and timing improved"* — never
+> *"unlinking revoked nodes improved timing"*. It may also not survive a single-send-site
+> reformulation of the same fix.
+>
+> *(Two register figures are in circulation and both are right: **+133 declared flop bits** summed from
+> `_q` widths in the generated RTL — what the source asks for — against **+72 implemented flops** from
+> the routed report. Synthesis did not map ~61 declared bits, including unused upper bits of the 94-bit
+> `serving_node`. Quote the implemented figure against implemented design totals; never mix them.)*
+>
+> **⚠ AND AN UNEXPLAINED COST THAT BELONGS IN THE SAME BREATH.** Design-wide LUTs **rose** by 731 while
+> the unit accounts for only 89 of it — so about **642 LUTs appeared OUTSIDE `capstone_rev_node`**.
+> Removing sixteen loops evidently let synthesis restructure well beyond this unit, trading registers
+> for logic somewhere, and **nobody has explained where or why**. Small against 169k, but not nothing
+> and not local. Any deliberate application of this lever needs that understood first: a remedy whose
+> side effects are unmeasured is an inference with one datum, not a validated technique.
+>
+> **AND THAT IS A LEAD WORTH MORE THAN THE SPLICE.** It converges with an independent measurement along
+> an older build's worst path — 122 hops, 46.010 ns of routing, median 0.373 ns, no tail — a *depth*
+> signature whose stated remedy was pipelining. Registering one endpoint is that remedy, arrived at
+> accidentally from the other direction, and is **the first empirical confirmation of it** on a design
+> with an open clock-rate question. The control that would settle attribution is one synthesis of a
+> semantically null duplication of that send site — which must have its generated RTL read back to
+> confirm anvil actually emitted the selector, or a collapsed duplicate yields a null result that reads
+> as a refutation.
+>
+> **`drop_req` deliberately NOT spliced:** the walk's already-invalid branch simply advances, so dropped
+> nodes sit inside the spliced run and are swept by the next revoke that crosses them. An eager unlink
+> would add 2 reads and 2 writes to every DROP — which, unlike the walk, cannot amortise them.
+
 > **TWO AUDITS OF THE RECLAMATION DESIGN, RECONCILED (2026-09-15) — read before proposing a second design.** `docs/history/15-09-2026_20-39-03_revnode-reclamation-two-audits-reconciled.md`. Verdict: the design in `docs/plans/2026-09-14-revnode-reclamation-design.md` is **incomplete, not merely unsafe** — `head` is only ever incremented and there is no free list, reclaim queue or reuse scan anywhere in the unit, so **no index is ever reused and the generation is never consulted**. Separately fatal to the mechanism: the unprivileged boundary (`pmp_data_if.sv:82-97`) decides authority from a cached bit and **never reads a node**, so a split id stops matching the broadcast after the first reuse and revocation silently stops invalidating S/U-mode capabilities — invisible because everything runs at generation 0. The note also records a resolved contradiction between the two audits over the node's field packing (MSB-first; the RTL lane's measurement was wrong and is retracted in the design document), and lists six things a second design must assert. **The direction is not refuted** — the 65,532-lifetime ceiling is real and generation tagging is a sound way to lift it — but this design does not implement it.
 
 > **2026-09-14 (boots sw74 / sw74b): the budget bit a measurement boot, twice, and the read-out is
