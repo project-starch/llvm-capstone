@@ -19,10 +19,12 @@
  * and no TLS image. musl's core uses the __thread keyword zero times, so there
  * is nothing for it to size.
  *
- * The tid comes back -ENOSYS because set_tid_address has no hostcall opcode.
- * That is recorded rather than worked around: nothing in a single-threaded
- * domain reads it, and inventing a plausible number would be worse than the
- * honest error.
+ * set_tid_address is answered with 1 rather than refused. A domain has one
+ * thread and 1 is its identifier; nothing outside the domain consumes a tid and
+ * musl only stores what comes back. It was refused at first, and the
+ * unserved-syscall instrument in hostcall.c is what made the choice visible: it
+ * reported syscall 96 as the one thing a full stdio run asked for and did not
+ * get. A list with one permanent entry in it is a list people stop reading.
  */
 /* pthread_impl.h declares a locale_t member and does not pull the type in
    itself; musl's own users of it get locale_t from their preamble. Naming the

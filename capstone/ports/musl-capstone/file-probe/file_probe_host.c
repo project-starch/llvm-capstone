@@ -22,6 +22,7 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -210,6 +211,57 @@ int main(int argc, char **argv) {
         respond_error(metadata, errno);
       else
         respond_ok(metadata, 0);
+      break;
+    }
+    case HC_V0_OP_FILE_STAT_BASIC: {
+      const struct hc_file_stat_basic_req_v0 *req =
+          (const struct hc_file_stat_basic_req_v0 *)payload;
+      int fd = hostcall_lookup_handle_fd(
+          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
+      if (fd < 0) { respond_error(metadata, errno); break; }
+      struct stat st;
+      if (fstat(fd, &st) < 0) { respond_error(metadata, errno); break; }
+      struct hc_file_stat_basic_resp_v0 *resp =
+          (struct hc_file_stat_basic_resp_v0 *)payload;
+      resp->file_size = (hostcall_u64_t)st.st_size;
+      resp->mode = (hostcall_u64_t)st.st_mode;
+      resp->reserved0 = 0;
+      resp->reserved1 = 0;
+      metadata->offset = 0;
+      metadata->length = HC_FILE_STAT_BASIC_RESP_V0_SIZE;
+      respond_ok(metadata, 0);
+      break;
+    }
+    case HC_V0_OP_FILE_SYNC: {
+      const struct hc_file_sync_req_v0 *req =
+          (const struct hc_file_sync_req_v0 *)payload;
+      int fd = hostcall_lookup_handle_fd(
+          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
+      if (fd < 0) { respond_error(metadata, errno); break; }
+      if (fsync(fd) < 0) respond_error(metadata, errno);
+      else               respond_ok(metadata, 0);
+      break;
+    }
+    case HC_V0_OP_FILE_TRUNCATE: {
+      const struct hc_file_truncate_req_v0 *req =
+          (const struct hc_file_truncate_req_v0 *)payload;
+      hostcall_u64_t want = req->size;
+      int fd = hostcall_lookup_handle_fd(
+          handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req->handle);
+      if (fd < 0) { respond_error(metadata, errno); break; }
+      if (ftruncate(fd, (off_t)want) < 0) respond_error(metadata, errno);
+      else                                respond_ok(metadata, 0);
+      break;
+    }
+    case HC_V0_OP_PATH_ACCESS:
+    case HC_V0_OP_PATH_DELETE: {
+      memcpy(path_snapshot, payload + request.offset, (size_t)request.length);
+      path_snapshot[request.length] = '\0';
+      int rc = request.opcode == HC_V0_OP_PATH_ACCESS
+                   ? access(path_snapshot, F_OK)
+                   : unlink(path_snapshot);
+      if (rc < 0) respond_error(metadata, errno);
+      else        respond_ok(metadata, 0);
       break;
     }
     default:

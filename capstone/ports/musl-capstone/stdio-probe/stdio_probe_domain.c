@@ -17,8 +17,13 @@
  * that musl's vfprintf references, and those were the last eleven undefined
  * symbols this port had.
  */
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+
+unsigned long __capstone_unserved_count(void);
+long __capstone_unserved_at(unsigned long i);
 
 #include "stdio_probe.h"
 
@@ -55,6 +60,53 @@ int capstone_main(void)
         return SP_PRINTF_FAILED;
     if (fflush(stdout) != 0)
         return SP_PRINTF_FAILED;
+
+    /* The rest of the file service, at the layer a program actually uses it
+       from. Each of these is one opcode that existed in the protocol and had
+       no domain side until now. */
+    int fd = open(MUSL_STDIO_PROBE_PATH, O_RDWR);
+    if (fd < 0)
+        return SP_FOPEN_R_FAILED;
+
+    /* SEEK_END is the one seek that costs a round, because the size lives with
+       the helper. The line written above is what it must report. */
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (end < 0)
+        return SP_SEEK_END_WRONG;
+    if (end != (off_t)sizeof(MUSL_STDIO_PROBE_LINE) - 1)
+        return SP_SEEK_END_SIZE;
+
+    if (fsync(fd) != 0)
+        return SP_FSYNC_FAILED;
+
+    if (ftruncate(fd, 8) != 0)
+        return SP_TRUNCATE_FAILED;
+    /* Asked again, so the answer comes from the helper's fstat and not from
+       our own bookkeeping: a truncate that returned 0 and did nothing would
+       pass on the return value alone. */
+    if (lseek(fd, 0, SEEK_END) != 8)
+        return SP_TRUNCATE_SIZE;
+    close(fd);
+
+    if (access(MUSL_STDIO_PROBE_PATH, F_OK) != 0)
+        return SP_ACCESS_FAILED;
+    if (unlink(MUSL_STDIO_PROBE_PATH) != 0)
+        return SP_UNLINK_FAILED;
+    if (access(MUSL_STDIO_PROBE_PATH, F_OK) == 0)
+        return SP_ACCESS_AFTER;
+
+    /* Last, and the reason it is last: anything the program asked for that had
+       no opcode is recorded rather than merely refused, and this is where the
+       list is read. Printing it needs stdio, which is why it cannot happen
+       inside the hostcall itself. */
+    if (__capstone_unserved_count() != 0) {
+        printf("stdio-probe: UNSERVED syscalls:");
+        for (unsigned long i = 0; i < __capstone_unserved_count(); i++)
+            printf(" %ld", __capstone_unserved_at(i));
+        printf("\n");
+        fflush(stdout);
+        return SP_UNSERVED;
+    }
 
     return SP_OK;
 }

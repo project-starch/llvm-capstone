@@ -26,6 +26,7 @@
  * mismatch at the one boundary that cannot be debugged from C. Found 2026-09-16
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <syscall_arch.h>
 
@@ -94,6 +95,10 @@ struct hc_file {
 };
 static struct hc_file hc_files[HC_MAX_FILES];
 
+#define HC_UNSERVED_MAX 8
+static long hc_unserved[HC_UNSERVED_MAX];
+static unsigned long hc_unserved_n;
+
 static struct hc_file *hc_slot(long fd) {
   if (fd < HC_FD_BASE || fd >= HC_FD_BASE + HC_MAX_FILES)
     return 0;
@@ -120,6 +125,13 @@ static long hc_err(void) {
 static void hc_put_u64(unsigned long off, unsigned long long v) {
   for (unsigned i = 0; i < 8; i++)
     hc_payload[off + i] = (char)((v >> (8 * i)) & 0xff);
+}
+
+static unsigned long long hc_get_u64(unsigned long off) {
+  unsigned long long v = 0;
+  for (unsigned i = 0; i < 8; i++)
+    v |= (unsigned long long)(unsigned char)hc_payload[off + i] << (8 * i);
+  return v;
 }
 
 /* Both directions of FILE_READ/FILE_WRITE, which differ only in who fills the
@@ -172,6 +184,53 @@ static long hc_file_rw(long fd, char *buf, unsigned long count, int writing) {
       break;
   }
   return (long)done;
+}
+
+/* FILE_STAT_BASIC, the one request whose answer arrives in the payload rather
+ * than in metadata.result. Two callers need it: fstat, and lseek's SEEK_END. */
+static long hc_stat_basic(struct hc_file *f, unsigned long long *size,
+                          unsigned long long *mode) {
+  hc_put_u64(0, f->handle);
+  hc_put_u64(8, 0); /* flags 0: the conservative fstat slice */
+  if (hc_round(HC_V0_OP_FILE_STAT_BASIC, 0, 0) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return hc_err();
+  if (hc_metadata->length < HC_FILE_STAT_BASIC_RESP_V0_SIZE)
+    return -EIO;
+  if (size) *size = hc_get_u64(0);
+  if (mode) *mode = hc_get_u64(8);
+  return 0;
+}
+
+/* PATH_ACCESS and PATH_DELETE share FILE_OPEN's layout: flags at 0, the path at
+ * offset 8, length in bytes. Written once because only the opcode differs. */
+static long hc_path_op(unsigned long long opcode, const char *path,
+                       unsigned long long flags) {
+  unsigned long len = 0;
+  while (path[len]) len++;
+  if (len > HC_PAYLOAD_SIZE - HC_PATH_ACCESS_REQ_V0_PATH_OFFSET)
+    return -ENAMETOOLONG;
+  hc_put_u64(0, flags);
+  for (unsigned long i = 0; i < len; i++)
+    hc_payload[HC_PATH_ACCESS_REQ_V0_PATH_OFFSET + i] = path[i];
+  if (hc_round(opcode, HC_PATH_ACCESS_REQ_V0_PATH_OFFSET, len) != 0)
+    return -EIO;
+  return hc_metadata->error != 0 ? hc_err() : 0;
+}
+
+/* FILE_SYNC and FILE_TRUNCATE: handle-only requests with an empty payload area. */
+static long hc_handle_op(long fd, unsigned long long opcode,
+                         unsigned long long arg) {
+  struct hc_file *f = hc_slot(fd);
+  if (!f) return -EBADF;
+  hc_put_u64(0, f->handle);
+  hc_put_u64(8, arg);
+  hc_put_u64(16, 0);
+  hc_put_u64(24, 0);
+  if (hc_round(opcode, 0, 0) != 0)
+    return -EIO;
+  return hc_metadata->error != 0 ? hc_err() : 0;
 }
 
 static long hc_open(const char *path, long flags, long mode) {
@@ -236,16 +295,21 @@ static long hc_lseek(long fd, long long off, long whence) {
   if (!f)
     return -EBADF;
 
-  /* SEEK_END needs the file size, which is FILE_STAT_BASIC, which this does not
-     implement yet. Refusing is the honest answer: guessing a size would make
-     every later read and write silently wrong. */
+  /* SEEK_END is the only one that costs a round: the size lives with the helper
+     and guessing it would make every later access quietly wrong. */
   unsigned long long base;
-  if (whence == 0)      /* SEEK_SET */
+  if (whence == 0) {        /* SEEK_SET */
     base = 0;
-  else if (whence == 1) /* SEEK_CUR */
+  } else if (whence == 1) { /* SEEK_CUR */
     base = f->pos;
-  else
+  } else if (whence == 2) { /* SEEK_END */
+    unsigned long long size;
+    long rc = hc_stat_basic(f, &size, 0);
+    if (rc < 0) return rc;
+    base = size;
+  } else {
     return -EINVAL;
+  }
 
   if (off < 0 && (unsigned long long)(-off) > base)
     return -EINVAL;
@@ -368,10 +432,60 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_ioctl:
     return -ENOTTY;
 
+  case SYS_fsync:
+  case SYS_fdatasync:
+    return hc_handle_op((long)a, HC_V0_OP_FILE_SYNC, 0);
+
+  case SYS_ftruncate:
+    return hc_handle_op((long)a, HC_V0_OP_FILE_TRUNCATE, (unsigned long long)b);
+
+  /* musl's unlink() and access() both go through the *at forms. The dirfd is
+     accepted and unused for the same reason it is in openat: the helper
+     resolves paths in its own working directory and there is no *at family
+     behind this protocol for a relative path to be relative to. */
+  case SYS_unlinkat:
+    return hc_path_op(HC_V0_OP_PATH_DELETE, (const char *)b,
+                      HC_PATH_DELETE_FLAG_NONE);
+
+  case SYS_faccessat:
+    return hc_path_op(HC_V0_OP_PATH_ACCESS, (const char *)b,
+                      HC_PATH_ACCESS_FLAG_EXISTS);
+
+  case SYS_fstat: {
+    struct hc_file *f = hc_slot((long)a);
+    if (!f)
+      return -EBADF;
+    unsigned long long size, mode;
+    long rc = hc_stat_basic(f, &size, &mode);
+    if (rc < 0)
+      return rc;
+    /* Only the fields the helper actually knows. The rest are zeroed rather
+       than invented: a plausible st_dev or st_ino would be a lie that some
+       caller eventually compares against another lie. */
+    struct stat *st = (struct stat *)b;
+    for (unsigned long i = 0; i < sizeof *st; i++)
+      ((char *)st)[i] = 0;
+    st->st_size = (off_t)size;
+    st->st_mode = (mode_t)mode;
+    st->st_nlink = 1;
+    st->st_blksize = 4096;
+    st->st_blocks = (blkcnt_t)((size + 511) / 512);
+    return 0;
+  }
+
   /* open() issues this once, for O_CLOEXEC, and discards the result. There are
      no other processes here for a descriptor to leak into. */
   case SYS_fcntl:
     return 0;
+
+  /* A domain has exactly one thread, and 1 is its identifier. This is not an
+     invented value in the way a fabricated st_dev would be: nothing outside the
+     domain consumes a tid, musl only stores what comes back, and the number is
+     the domain's own to choose. Serving it rather than refusing it is what
+     empties the unserved list, which is the property that makes the list worth
+     reading: a list with one permanent entry teaches everyone to ignore it. */
+  case SYS_set_tid_address:
+    return 1;
 
   /* Reported as unsupported rather than faked. musl copes: exit_group falling
      through to the domain return is exactly what a domain does anyway. */
@@ -380,8 +494,26 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return 0;
 
   default:
+    /* RECORDED, NOT JUST REFUSED. A libc is never finished in the sense that
+       every syscall is served; it is finished in the sense that what is not
+       served is visible. ENOSYS alone is not visible: musl turns most of them
+       into a plausible-looking failure and the caller carries on, so a missing
+       opcode surfaces later as wrong behaviour somewhere unrelated. Recording
+       the number costs nothing when nothing is missing, and a probe can print
+       the list after its work is done, which is safe because printing from here
+       would re-enter through stdio. */
+    if (hc_unserved_n < HC_UNSERVED_MAX)
+      hc_unserved[hc_unserved_n] = n;
+    hc_unserved_n++;
     return -ENOSYS;
   }
+}
+
+/* Read by probes after the program has finished, never during. Returns the
+   total seen, which may exceed what was kept. */
+unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
+long __capstone_unserved_at(unsigned long i) {
+  return i < HC_UNSERVED_MAX && i < hc_unserved_n ? hc_unserved[i] : -1;
 }
 
 /* Domain entry. The first two entries carry the shared regions; the third runs

@@ -8,25 +8,55 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-The compiler accepts **99.6 %** of musl's sources (2026-09-16, below; the
-93.3 % this section carried until then is the 2026-08-14 figure), `libc-capstone.a` links, and
-the domain boundary a syscall needs is **proven working under QEMU**:
+**A domain runs musl.** Not compiles, runs: file I/O and stdio both work under
+QEMU, with probes that fail when they should.
 
-- `write(1, ...)` linked against the partial archive leaves `__capstone_hostcall`
-  as the **only** undefined symbol, so the 91 files that do not compile are not
-  on the path of POSIX I/O.
-- `yield-probe/` shows a pure-capability domain making a blocking hostcall and
-  resuming with its C frame intact (`__CAPSTONE_YIELD_PROBE_PASSED__`). See
-  `docs/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
+| | |
+|---|---|
+| sources the compiler accepts | 1355 / 1361 (99.6 %) |
+| `write` to stdout, `errno` on failure | works |
+| `open` `read` `write` `close` `lseek` incl. SEEK_END | works |
+| `writev` `readv` `fstat` `fsync` `ftruncate` `unlink` `access` | works |
+| `fopen` `fprintf("%f")` `fgets` `fseek` `printf` `fflush` | works |
+| `malloc` `calloc` `realloc` `free` | works, from this port's own level 0 |
+| `clock_gettime` | **no**, and it is a protocol gap: HostCall v0 has no time opcode |
+| real pthreads | **no**, see C-47 |
 
-Not done: musl's own `write()` has not yet been run through that yield.
-`runtime/hostcall.c` is written but unexercised.
+Three probes, each green under QEMU with zero faults:
 
-musl is **not vendored**. `fetch-musl.sh` downloads the official 1.2.5 archive
-and verifies its SHA-256; the upstream tree stays immutable under
-`$CAPSTONE_TMP_ROOT/musl-src`. Everything of ours is in this directory as an
-overlay, so `diff -r arch/riscv64 arch/capstone64` in the staged tree is the
-entire delta.
+| probe | what it establishes |
+|---|---|
+| `write-probe/` | musl's `write` reaches the hostcall, and its error reaches `errno` |
+| `file-probe/` | the file service, with an exact round count that a stale descriptor would break |
+| `stdio-probe/` | the layer above, where musl stops calling `write` and starts calling `writev` |
+
+## What running it cost, and why compiling did not predict it
+
+Nine places sent a capability through something that carries 64 bits. Four were
+in this port, two were in musl, two were missing syscalls and one was an include
+line. **Every file involved is on the compiling side of the 99.6 %.**
+
+| where | what |
+|---|---|
+| `syscall_arch.h` | `__UINTPTR_TYPE__` is `unsigned long` here, so the fix was the type it replaced |
+| `pthread_arch.h` | `__get_tp()` returned `uintptr_t` and read `tp` with `mv` |
+| `__set_thread_area` | upstream's riscv64 `.s` is `mv tp, a0` |
+| `start-musl.S` | `__capstone_yield` saved `ra`, `gp` and `s0-s11`, not `tp` |
+| `hostcall.c` | used `syscall_arg_t` without including the header that defines it |
+| musl's string routines | seven read a machine word at a time, over the end of the object |
+| musl's `lite_malloc` | reads `brk` as a `uintptr_t` and returns `(void *)(brk - req)` |
+| stdio | calls `writev` and `readv`, never `write` or `read` |
+| link | eleven undefined `__*tf*` for any program that links `printf` |
+
+The last one is the only one a link would have caught. The others need a domain
+that actually runs, which is what the probes are for.
+
+**What is not served is recorded, not merely refused.** The default arm of
+`__capstone_hostcall` keeps the syscall numbers it turned away, and a probe
+prints them after its work is done. `-ENOSYS` alone is invisible: musl turns most
+of them into a plausible failure and the caller continues, so a missing opcode
+surfaces later as wrong behaviour somewhere unrelated. A full stdio run currently
+reports an empty list, which is the only state in which the list is worth reading.
 
 ## The one file we wrote
 
@@ -121,7 +151,18 @@ cancellation points route through our hostcall like any other syscall.
 source capstone/tests/capstone-test-env.sh
 bash capstone/ports/musl-capstone/survey-musl-capstone.sh          # fetch, prepare, survey
 bash capstone/ports/musl-capstone/survey-musl-capstone.sh --list-failures
+
+bash capstone/ports/musl-capstone/build-musl-capstone.sh           # libc-capstone.a
+bash capstone/ports/musl-capstone/write-probe/run-write-probe.sh   # each boots QEMU once
+bash capstone/ports/musl-capstone/file-probe/run-file-probe.sh
+bash capstone/ports/musl-capstone/stdio-probe/run-stdio-probe.sh
 ```
+
+`MUSL_WRITE_PROBE_BADFD=1` adds the write probe's negative control, which reads
+`errno` after a refused descriptor and so cannot pass unless the thread pointer
+survives the domain boundary. A worktree has the buildroot submodule present and
+empty, so point `CAPSTONE_BUILDROOT_DIR` at the main clone before building the
+guest side.
 
 Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the
 harness could not measure (unprepared tree, no compiler, empty file list, or a

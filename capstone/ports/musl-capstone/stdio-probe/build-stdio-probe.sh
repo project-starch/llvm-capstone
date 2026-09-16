@@ -88,6 +88,11 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 cat > "$OUT_DIR/stub_main.c" <<'STUB'
 int capstone_main(void);
 void domain_main(unsigned *res, unsigned func) { (void)func; if (res) *res = (unsigned)capstone_main(); }
+/* The unserved-syscall accessors live in hostcall.c too, so the stub provides
+   them. Without this the control reports three missing symbols instead of one
+   and stops isolating the symbol it exists to isolate. */
+unsigned long __capstone_unserved_count(void) { return 0; }
+long __capstone_unserved_at(unsigned long i) { (void)i; return -1; }
 STUB
 "$CLANG" "${CF[@]}" -c "$OUT_DIR/stub_main.c" -o "$OUT_DIR/stub_main.o"
 set +e
