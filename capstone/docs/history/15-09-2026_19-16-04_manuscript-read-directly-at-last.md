@@ -304,3 +304,53 @@ argument rather than by measurement.
 **R-32 drops off the paper's critical path with it**, by the same reasoning: its exposure was the
 same two extent cells, and an off-by-one cannot falsify a cell whose regions are exactly
 representable. Both stay open as soundness defects; neither threatens a claim.
+
+## 8. The revoke-walk slope has a placeholder waiting for it — and the paper's own spec already guards it
+
+The RTL lane quantified the revoke walk: **unspliced costs exactly 3.000 cycles per dead node
+crossed** (`cost = 3N + 249`, exact at six consecutive rungs N=8..1024), **spliced exactly 0.000**
+(328 cycles at six different N). Fixed overhead ~79, crossover N ≈ 26, and at N=3072 it is 96,822
+against 516.
+
+**Where that number would land in the manuscript, and why it must not land bare.** The paper does
+**not** state the numeric release model — `sections/evaluation/04-release-cost.tex` says *"revocation
+work has slope `\targetNodeSlope` cycles per affected node and initialization has slope
+`\targetByteSlope` cycles per byte"*. Both are unfilled `\targetresult` placeholders
+(`macros/`: `a_n` and `a_b`, commented *"R1: fitted local cycles per affected node"*). So there is a
+**labelled hole shaped exactly like this number**, and the obvious move — fill `\targetNodeSlope`
+with 3 — is the one that must not happen unqualified.
+
+**The reason is the caveat, not the figure.** 3.000 is an **L1-hit** cost and therefore a **lower
+bound** on what splicing saves: the dcache holds exactly 2048 nodes, the fit holds to 1024 and
+breaks at 2048, and a speedtest1 run mints **43,355** — **21x the dcache**. The real workload sits
+entirely in the cold regime the ladder reaches only at its last rung, where the slope rests on a
+single segment.
+
+**The paper's own machinery already forbids the misuse, which is worth knowing before anyone argues
+about it.** `appendices/b-target-results.tex:83-86` gives the acceptance criterion for exactly these
+two macros: *"Local fitted cycles per affected node and initialization cycles per byte over at least
+three legal levels. **State fit range and error. Neither is a universal architectural constant.**"*
+So filling `\targetNodeSlope` with a bare 3 would violate the target's own spec. The guard exists;
+it needs honouring rather than inventing.
+
+**And it is splicing that buys this, not generation tagging** — different changes with different
+payoffs, which matters because a gate written against "the reclaimer" is ambiguous between them
+(the handover's decision 4 makes the same point).
+
+This is also the variable the handover said R1's model never varied: `\approx 1.81\cdot B + 22.7\cdot nd + 58.9\cdot n`
+was established with **topology held fixed**, and cumulative revocations within a domain is what
+moves it. It is now a number rather than an argument.
+
+### A label correction that touches no manuscript text
+
+`S12_MEM_DELAY` is **not a cycle count**: `stream_delay.sv` counts in 4 bits, so the parameter
+truncates to its low four bits and the widely-used **40 realises as 8**. Checked here: the
+measurements doc contains no occurrence of `S12_MEM_DELAY`, `MEM_DELAY`, "40-cycle" or "delay 40",
+and neither does the manuscript. The only occurrences in this lane's own notes were two lines in
+§6e of the sibling note, now corrected in place. **It is a magnitude label, not a retraction** —
+S-12, R-26 and R-34 all stand.
+
+One place that cannot be fixed by a lane: `CLAUDE.md:449` carries *"delay 0 → 0 traps, delay 40 →
+254"* inside the rule about a synthetic test needing to create its triggering condition. The rule is
+right and the instance is right; only the magnitude is wrong. That file is the project lead's and
+has been flagged to them rather than edited. Anyone citing that rule should read 40 as 8.
