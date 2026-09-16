@@ -568,6 +568,13 @@ turned on, and the condition still was not created. **Setting the knob is a prec
 triggering condition, not the condition itself** — a miss requires an access to a line that is not
 resident, which is a property of the access pattern, not of the delay setting.
 
+**The label correction STRENGTHENS this lesson and must be read beside it.** `S12_MEM_DELAY=40`
+realises as **8** (4-bit counter; see the note below), so the knob was set to 40, delivered 8, and
+the triggering condition *still* was not created. Setting it was even less of a precondition than
+it appeared. **A reader who "fixes" 40 to 8 and moves on has taken the wrong lesson from the
+correction:** the failure was never about the magnitude. These two sentences belong adjacent
+wherever either of them travels.
+
 It also has the "surprisingly clean → suspect the instrument" shape twice over: thirteen readings
 identical value-for-value across a 3x change in run time is not robustness, it is the arms not
 having moved. Worth pairing with §7's finding, which is the same family at the opposite polarity —
