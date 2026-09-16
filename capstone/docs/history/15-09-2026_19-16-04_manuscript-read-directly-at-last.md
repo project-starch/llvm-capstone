@@ -416,3 +416,53 @@ writing one: `EXECUTION.md` requires literal commands, which pulls the home path
 **Evidence states remain untouched and the reading is agreed:** M1's primary is strong, its
 secondary accounting band is refuted, and this is a *bounded baseline* — so `partial` is right and
 `measured` would overstate it. The two-file constraint (§3) is unchanged by any of this.
+
+
+## 10. Decision 5 is no longer an access question — write to the paper remote demonstrably works
+
+*2026-09-16, after the lead retired the push allowlist and rotated the GitHub token.*
+
+The handover's decision 5 (the push of `board/e1-s1s2-hardware`) has been carried all day as an
+**access** problem, because the branch was refused 403 by the paper remote. **That is no longer the
+obstacle**, and the evidence is not a probe of mine but an accomplished fact:
+
+**`apollo-board` pushed `results/m1-bounded-baseline` to `nested-allocators-paper` today and it is
+on the remote** — I fetched it, reviewed its 63 files (§9) and `git ls-remote` lists it beside
+`main` and `paper/best-case-draft`. A branch that exists on the remote was written there by an agent
+session after the rotation. **Write access works.**
+
+A dry-run create-branch probe from this host agrees (`[new branch]` would succeed, exit 0, and
+`ls-remote` confirms nothing was created), but that is the weaker evidence of the two: `--dry-run`
+does not exercise GitHub's server-side permission check the way a real push does. The successful
+push is what settles it.
+
+**So the remaining obstacle to those ~480 records is neither access nor the allowlist. It is that
+the branch exists only in the focs-server checkout and nobody there has run `git push`.** That
+reduces decision 5 from a permission question for the lead to an action for whoever holds the
+branch. It does not close it — a decision is closed when a push succeeds, not when one is believed
+possible — but it changes who it is waiting on.
+
+### Hook state on apollo, which is stale and worth knowing
+
+Measured with the outgoing lane's corrected check (a `grep` for the new guard cannot distinguish
+"old gate" from "no hook", and on apollo most repos are the second):
+
+| repo | pre-push hook |
+|---|---|
+| superproject | **OLD allowlist** (symlink to `pre-push-allowlist.sh`; allowlist is one entry, `dev`) |
+| `capstone-ariane`, `capstone-qemu`, `caplifive-buildroot`, `caplifive-system` | **NO HOOK** |
+| **`capstone/paper`** | **NO HOOK** |
+| **`capstone/paper-nested-allocators`** | **NO HOOK** |
+
+The lead's new `pre-push-guard.sh` is installed in the six focs-server repos. **On apollo it is not
+present at all** — neither `~/.claude-c/secrets/pre-push-guard.sh` nor
+`~/.claude-kisp/secrets/pre-push-guard.sh` exists — and the superproject's hook is still a symlink
+to the **old** `pre-push-allowlist.sh`. Nothing is broken by this: the old gate has passed every
+push from this lane today and did block a genuine non-fast-forward, so its protections overlap the
+new guard's on the cases that have arisen.
+
+**But the paper submodule has no `pre-push` hook at all** (`.git/modules/capstone/paper-nested-allocators/hooks/pre-push`
+does not exist). The "never push `capstone/paper`" hard constraint is therefore unenforced by any
+hook on this host, and now that write access works, the only thing standing between a lane and an
+Overleaf-owned remote is the rule itself. That is a distribution gap for the lead rather than
+something a lane should fix by writing into the secrets directory.
