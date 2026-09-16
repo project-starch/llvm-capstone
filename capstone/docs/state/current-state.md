@@ -79,6 +79,15 @@ Minimal snapshot. Read first in every session.
   output at creation time, so a source patch applied afterwards leaves every local gate testing the
   pre-edit design: a 95-test sweep read as "the change is inert" when it meant "the change is absent",
   and the lint numbers and two cost measurements taken beside it were void the same way.
+* **A gate in `board-c6var.sh` could not fail on the variable it existed to pin** (fixed 2026-09-16).
+  It demanded an emulator record by its `HEAP` field, which is `sublet_tables_len`, computed from the
+  GRANTED ARENA alone — so it witnessed the arena and never the `--tables` grant the boot also sets.
+  A record from the committed flow at the 2 MiB arena carries tables 2,523,136 against the boot's
+  1,750,285 and prints the identical `HEAP 1344064`: indistinguishable by construction, a clean pass
+  against a denominator from another configuration. Arena and tables are now one variable feeding both
+  the gate and the boot, and the gate also demands the measure flow's configuration line, which names
+  both. Negative-tested: the old gate passed the wrong-tables record, the new one refuses it. Found by
+  the compiler lane, verified on apollo, driver half fixed here.
 * **Four result bundles on the paper remote were reviewed rather than accepted** (`7e77374aa2b5`),
   including one that keeps all seven entries while recording the loss of its own raw evidence. The
   packaging hole found there generalises to bundles this lane cannot see.
