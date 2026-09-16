@@ -354,3 +354,65 @@ One place that cannot be fixed by a lane: `CLAUDE.md:449` carries *"delay 0 → 
 254"* inside the rule about a synthetic test needing to create its triggering condition. The rule is
 right and the instance is right; only the magnitude is wrong. That file is the project lead's and
 has been flagged to them rather than edited. Anyone citing that rule should read 40 as 8.
+
+## 9. Four result bundles reviewed on the paper remote — and a packaging hole that generalises
+
+`results/m1-bounded-baseline` at `ef779f9`, built by `apollo-board`. Reviewed rather than accepted;
+every check below was run here against the fetched branch.
+
+**Shape: all four carry the full seven entries.** `H1/2026-09-15-apollo-handover`,
+`M1/2026-09-15-baseline-maxret2048`, `M1/2026-09-16-baseline-maxret4096`,
+`M1/2026-09-16-live-calibration` — each has `work-order.md`, `manifest.json`, `points.csv`,
+`runs.jsonl`, `raw/`, `analysis/` and `summary.md`. Including the one whose raw evidence was lost,
+which keeps all seven with `raw/README.md` and `analysis/README.md` standing in and every
+`points.csv` row marked unsupported. That is the right call: a bundle that records its own loss is
+worth more than a gap.
+
+**Isolation: verified, not taken on trust.** `git diff origin/main...ef779f9` outside
+`experiments/results/` is **empty**, and `experiments/studies.json`, `appendices/`, `sections/` and
+`macros/` are **untouched**. So nothing here pre-empts the evidence-state decision or approaches the
+manuscript, exactly as the lane said.
+
+**Hash integrity: zero dangling references.** For every `SHA256SUMS` on the branch, each hashed name
+resolves to a file actually tracked in git — 3 sums files, 19 hashed names, **0 missing**.
+
+### The packaging hole, verified and generalisable
+
+The paper repository's **`.gitignore:2` is `*.log`**. Confirmed by mechanism, not by reading:
+`git check-ignore -v experiments/results/M1/x/raw/driver.log` returns
+`.gitignore:2:*.log`. So **any bundle that places `.log` files in `raw/` loses them silently from
+the commit while `SHA256SUMS` and `runs.jsonl` keep referencing them** — a bundle describing files
+a reader cannot find, with nothing in the normal flow to say so. `git add -A` reports success.
+
+`apollo-board` caught it by checking `git ls-files` for each hashed name rather than trusting the
+add, and resolved it by moving those captures to durable references with hashes (which METHODS
+permits) and renaming the retained captures to `.boot.txt` / `.marker` so the extension cannot bite
+again. Each file says the move was forced by the ignore rule rather than chosen, which is the part
+that keeps it auditable.
+
+**This is the same family as §7's flow-gate blind spot**, and it wants the same treatment — a check,
+not a reminder. The check is one line of intent: *for every name in every `SHA256SUMS`, assert the
+file is tracked*. It is what found the zero above, and it would have found the hole before the
+commit rather than after.
+
+**It applies to bundles this lane cannot see.** The E1/R1/M2/H1 bundles on the unpushed
+`board/e1-s1s2-hardware` predate this discovery, and if any of them put `.log` files in `raw/` they
+carry the same silent loss. **Whoever can read that branch should run the check before it is
+pushed**, because once it lands the dangling hashes look like evidence.
+
+### Two more things recorded rather than smoothed, both correct
+
+* **Two work orders say "NOT RAISED"** instead of being backfilled. Right: backfilling would
+  manufacture exactly the "stated rather than backfilled" artefact the handover flagged in the
+  existing bundles, and a work order written after the run is not a work order.
+* **The unscoped console capture is held as a durable reference** because kernel banners carry a
+  `user@host` build string and an upstream driver author's email — the project's "commit result
+  lines, not the capture" rule with a concrete instance, and a second one for §7's collection.
+
+`precommit-scan --tree` blocking on `/home/<name>/…` inside work orders is worth knowing before
+writing one: `EXECUTION.md` requires literal commands, which pulls the home path in, and
+`~`-prefixing satisfies both.
+
+**Evidence states remain untouched and the reading is agreed:** M1's primary is strong, its
+secondary accounting band is refuted, and this is a *bounded baseline* — so `partial` is right and
+`measured` would overstate it. The two-file constraint (§3) is unchanged by any of this.
