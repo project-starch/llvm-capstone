@@ -40,6 +40,16 @@ RRH=${R1_HOST:?set R1_HOST=<path to sqlite_host_rr.user, the readback host>}
 [ "$(strings $RRH | grep -c 'RR/share')" -ge 1 ] || fail "rr host lacks the revoke-reshare probe"
 grep -aq "SPEEDTEST1-CYCLES ${C6_QEMU_DEFAULT:?} HIGHWATER n/a HEAP 911104" ${C6_QEMU_DEFAULT_LOG:?} || fail "the variant's QEMU run at the default arena is not on record"
 grep -aq "SPEEDTEST1-CYCLES ${C6_QEMU_2MIB:?} HIGHWATER n/a HEAP 1344064" ${C6_QEMU_2MIB_LOG:?} || fail "the variant's QEMU run at the 2 MiB arena (the denominator this boot uses) is not on record"
+# WHY THE DEFAULT GATE DEMANDS HEAP 911104 AND NOT THE 910008 THE FORMULA GIVES: the grant is rounded
+# up from the request. 1419584 is 22181 atoms and would give 910008; the granted region is 1421312,
+# 22208 atoms, which gives 911104 -- and 911104 over 1421312 is attested by a separate 2026-09-15 run.
+# The rounding granularity is NOT settled: 2048 and 4096 both reproduce 1421312 and this data cannot
+# separate them, because 347 pages of 4096 is 694 of 2048, and the 2 MiB point is 512 exact pages at
+# every candidate so it constrains nothing. Both agree at the two arenas in use, so nothing here
+# depends on it -- but a prediction at a NEW arena differs between them (a 1700000 request gives
+# 1701888 under 2048 and 1703936 under 4096). Reading the grant path would settle it; nobody has.
+# DO NOT "fix" the 911104 to match the formula on the requested arena: that value is what real runs
+# produce, and a gate moved to 910008 would fail on every genuine record while looking tightened.
 C6_ARENA=${C6_ARENA:-2097152}; C6_TABLES=${C6_TABLES:-1750285}; C6_DEFAULT_ARENA=${C6_DEFAULT_ARENA:-1419584}
 # The configuration line run-speedtest1-measure.sh:167 emits. It names arena AND tables, so unlike the
 # HEAP field it can tell the two configurations apart -- and a hand-assembled record that cannot show
