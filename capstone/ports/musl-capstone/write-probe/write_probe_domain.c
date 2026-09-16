@@ -23,15 +23,10 @@
 #include <errno.h>
 #include <unistd.h>
 
-#define MSG "musl write through hostcall v0\n"
-#define MSG_LEN (sizeof(MSG) - 1)
+#include "write_probe.h"
 
-/* Status codes; the host reads this out of metadata->result. */
-#define WP_OK                0
-#define WP_SHORT_WRITE       1
-#define WP_WRITE_FAILED      2
-#define WP_BADFD_SUCCEEDED   3
-#define WP_BADFD_WRONG_ERRNO 4
+#define MSG     MUSL_WRITE_PROBE_MESSAGE
+#define MSG_LEN MUSL_WRITE_PROBE_MESSAGE_LEN
 
 int capstone_main(void)
 {
@@ -42,13 +37,32 @@ int capstone_main(void)
     if (n != (ssize_t)MSG_LEN)
         return WP_SHORT_WRITE;
 
-    /* Arm 2: the negative control, which must fail and must fail precisely. */
+    /* Arm 2: the negative control, which must fail and must fail precisely.
+     *
+     * OFF BY DEFAULT, and this is a finding rather than a convenience. Reading
+     * errno needs __errno_location, which returns &__pthread_self()->errno_val,
+     * which dereferences the thread pointer. A freestanding domain has none.
+     * Measured 2026-09-16 with this arm on: the first write SUCCEEDS end to end
+     * -- the host printed the payload -- and the domain then halts with
+     * cause = 24 at __errno_location, with tp (x4) reading 0.
+     *
+     * So this arm is not disabled because it fails. It is disabled because it
+     * has already told us what it had to tell us, and a gate that always fails
+     * is one everybody learns to ignore. Turn it back on with
+     * -DMUSL_WRITE_PROBE_WANT_BADFD once a thread pointer exists, and it becomes
+     * the test that the TLS setup is real rather than merely present.
+     *
+     * Note what this does NOT mean: the hostcall's own error path is fine. It
+     * returns -EBADF and musl's __syscall_ret correctly recognises it as an
+     * error. Only the last step, recording it in errno, has nowhere to write. */
+#ifdef MUSL_WRITE_PROBE_WANT_BADFD
     errno = 0;
-    ssize_t bad = write(7, MSG, MSG_LEN);
+    ssize_t bad = write(MUSL_WRITE_PROBE_BAD_FD, MSG, MSG_LEN);
     if (bad >= 0)
         return WP_BADFD_SUCCEEDED;
     if (errno != EBADF)
         return WP_BADFD_WRONG_ERRNO;
+#endif
 
     return WP_OK;
 }

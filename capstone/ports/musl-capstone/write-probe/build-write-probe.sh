@@ -30,6 +30,13 @@ LD_LLD=${CAPSTONE_LD_LLD:?}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-write-probe}
 ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a}
 LINKER_SCRIPT="$REPO_ROOT/capstone/my_first_domain/link.ld"
+OUT_DOM=${OUT_DOM:-$OUT_DIR/write_probe.dom}
+OUT_HOST=${OUT_HOST:-$OUT_DIR/write_probe.user}
+GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
+LIBCAPSTONE_DIR="${CAPSTONE_BUILDROOT_DIR:?set CAPSTONE_BUILDROOT_DIR}/package/modcapstone/userspace/lib"
+LIBCAPSTONE_C="$LIBCAPSTONE_DIR/libcapstone.c"
+HOSTCALL_H_DIR="$REPO_ROOT/capstone/tests/runtime-qemu/hostcall-stdout-probe"
+[ -f "$LIBCAPSTONE_C" ] || { echo "no $LIBCAPSTONE_C; in a worktree the buildroot submodule is empty, so point CAPSTONE_BUILDROOT_DIR at the main clone" >&2; exit 2; }
 
 [ -f "$ARCHIVE" ] || { echo "no $ARCHIVE; run build-musl-capstone.sh first" >&2; exit 2; }
 MUSL=$(bash "$PORT_DIR/prepare-musl-capstone.sh" | tail -1)
@@ -40,14 +47,14 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
      -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
 CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
-    -ffunction-sections -fdata-sections -std=c99 -O1 -w "${INC[@]}")
+    -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion "${INC[@]}")
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$PORT_DIR/runtime/start-musl.S" -o "$OUT_DIR/start-musl.o"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/hostcall.c"             -o "$OUT_DIR/hostcall.o"
 "$CLANG" "${CF[@]}" -c "$SCRIPT_DIR/write_probe_domain.c"         -o "$OUT_DIR/write_probe.o"
 
-"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DIR/write_probe.dom" \
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/write_probe.o" "$ARCHIVE"
 
 # THE CONTROL. domain_main present so --gc-sections keeps the chain alive, no
@@ -69,8 +76,15 @@ if [ "$undef" != "__capstone_hostcall" ]; then
   exit 1
 fi
 
-printf 'built   %s\n' "$OUT_DIR/write_probe.dom"
+# The guest-side host: shares the two regions and services WRITE_STDOUT. Built
+# with the buildroot toolchain because it runs as an ordinary Linux process
+# inside the QEMU guest, not in a domain.
+"$GUEST_CC" -O2 -I"$SCRIPT_DIR" -I"$LIBCAPSTONE_DIR" -I"$HOSTCALL_H_DIR" \
+  -o "$OUT_HOST" "$SCRIPT_DIR/write_probe_host.c" "$LIBCAPSTONE_C"
+
+printf 'built   %s\n' "$OUT_DOM"
+printf 'built   %s\n' "$OUT_HOST"
 printf 'control fired: musl write reaches __capstone_hostcall and nothing else is missing\n'
-"$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$OUT_DIR/write_probe.dom" \
+"$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$OUT_DOM" \
   | awk '$2=="T"||$2=="t"{print $3}' | grep -xE 'write|__syscall_cp|__syscall_ret|__errno_location|__capstone_hostcall|__capstone_yield' \
   | sed 's/^/  linked: /'

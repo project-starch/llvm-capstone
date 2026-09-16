@@ -38,7 +38,31 @@
 #define __SYSCALL_LL_E(x) (x)
 #define __SYSCALL_LL_O(x) (x)
 
-typedef __UINTPTR_TYPE__ syscall_arg_t;
+/* CORRECTED 2026-09-16, and the correction is the whole point of this file.
+ *
+ * This was `typedef __UINTPTR_TYPE__ syscall_arg_t`, on the reasoning written
+ * above: upstream's `(long)(X)` destroys a capability, so use a capability-width
+ * type instead. On THIS target that reasoning does not hold, because
+ *
+ *     __UINTPTR_TYPE__ == long unsigned int,  __UINTPTR_WIDTH__ == 64
+ *
+ * so the replacement was the very type it replaced. The spelling changed and the
+ * semantics did not. clang says so at every call site, `cast to smaller integer
+ * type 'unsigned long' from 'const char *'`, and musl builds with -w.
+ *
+ * It compiled, so nothing objected, and nothing ran, so nothing noticed. Measured
+ * 2026-09-16 the first time a domain actually called write(): the domain halted
+ * with `cause = 24` (requires capability) at the byte-copy loop in hc_write, and
+ * the register dump showed the source pointer as a bare integer, 101560750, where
+ * every live capability in the same dump printed as C(addr [base,top) type 1).
+ *
+ * A POINTER TYPE IS THE FIX HERE. There is no __uintcap_t on this target (the
+ * preprocessor defines none), so the only type that carries a tag is a pointer.
+ * Integer arguments cast to it become untagged capabilities carrying their value,
+ * which is exactly what the callee wants: the syscall number says which arguments
+ * are pointers, and only those need a tag. The int-to-pointer casts warn, and -w
+ * is already how musl is built here. */
+typedef void *syscall_arg_t;
 #define __scc(X) ((syscall_arg_t)(X))
 
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,

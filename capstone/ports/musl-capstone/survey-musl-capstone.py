@@ -80,6 +80,13 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # 35 files fail on "instruction requires the following: 'Zalrsc'",
         # which is a missing flag, not a porting problem.
         "-Xclang", "-target-feature", "-Xclang", "+a",
+        # syscall_arg_t is a POINTER on this target, because no capability-integer
+        # type exists and only a pointer carries a tag (see arch-capstone64/
+        # syscall_arch.h). musl passes plain ints to those parameters at call
+        # sites that do not go through __scc, and clang has made that conversion
+        # an error rather than a warning. Allowing it is the same latitude a
+        # __uintcap_t would give for free; 539 files fail without it.
+        "-Wno-int-conversion",
         "-std=c99", "-nostdinc", "-ffreestanding", "-fno-builtin",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
