@@ -3888,6 +3888,70 @@ entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first
 cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
 ladder rung approaches it (bigmany: 65).~~
 
+> # 2026-09-16 — THE RECLAIMER: R-12's CAPACITY half, built and PROVEN IN SIMULATION on `m1-reclaimer` (`054cea69b`). FIXED-IN-SIM; not synthesised, not flashed.
+>
+> Revocation nodes are reclaimed. A node the walk invalidates is pushed on a LIFO free list — folded
+> into the write that already happens, so a two-node REVOKE costs **252 cycles before and after** — and
+> an allocation pops the list first, handing out **(generation+1, index)** and bumping `head` only when
+> the list is empty; a pop costs **6 cycles more than a bump**, a bump-path SPLIT gained 1. Every use of
+> a revocation reference now requires `valid && generation == g` at the unit (query, drop, delin, mrev,
+> init); the three trackers compare the invalidation broadcast on the index and re-adopt a fresh
+> `(g+1, i)` through the 30-bit adopt guard. Design: `docs/plans/2026-09-16-revnode-reclamation-v2.md`
+> as corrected by its audit; LIFO first (the spec recommended FIFO), flagged there.
+>
+> **The approval test is a PAIR: consecutive commits on the same tree with the same fixtures.** On the
+> gen-blind control `1ac15c4ef` a retained stale reference **succeeds** against the slot's new owner —
+> stale LDC/MREV/SPLIT/DROP all cause 0, the fresh owner's `LCC` reads 0 afterwards (destroyed), a stale
+> REVOKE kills a sibling. On `d9620b907` (and identically on the corrected tip `054cea69b`) every one of those arms is **refused (cause 25)**, the fresh owner
+> reads 1, the sibling reads 1, and the fresh `(1,3)` still works: 8 traps where the control had 4. Read
+> with prints aligned to RVFI retirements (`capstone/tests/capprint-retired.py`); the last-wins parser
+> would have hidden 12 of the 29 readings.
+>
+> **Also measured on `d9620b907` and re-run byte-identical on `054cea69b`:** a DROP'd node is never reissued (bump id, never the dropped index; after
+> the walk sweeps it the next mint pops the revoked neighbour as `65539`); the same index reclaimed 64
+> times at strictly increasing generation with 7 handles dropped mid-run and none reissued
+> (`capstone/tests/freelist-check.py`); the enforcing S/U tracker (`pmp_data_if.sv`) refuses an S-mode
+> load through an entry holding `(0,3)` after the **pop's** reclaim write broadcasts index 3 — the
+> reading that is 0 without that broadcast — and adopts the fresh `(1,3)` installed over it; pool
+> exhaustion 65,532 mints then cause 30, 3 traps -- unchanged from Part B; retirement at production width index 3 reclaimed **16,384 times at generations 0..16383**, last id (16383<<16)|3, then retired permanently; allocation falls back to the bump path and the fresh index enters the same cycle. 0 traps in 16,387 pops; the one-literal variant the retirement bound as ONE literal (14'd16383 -> 14'd3): exactly one generated line differs, `localparam logic[13:0] thread_1_wire$498 = ...` (artifact b2a1a0f15ca0f018 against production b0d5db13cd8a406c), and at NROUNDS=6 it reproduces the production-width shape at 1/4096 the scale in 3,860 cycles: index 3 at generations 0,1,2,3, retired at the bound, then a bump to index 8 and index 8 reclaimed at generations 1 and 2; LCC on the retained gen-0 sliver 0, base 1, 0 traps. It emulates a reduced BOUND, not a reduced field width.
+> Reference suite identical to A2 except the one SPLIT-bearing test by +1 cycle; full sweep 65 PASS / 27 TIMEOUT / 3 NOBUILD, **zero status changes**; three passing tests have moved cycles since Part B (+1, +2, +30) and all of it is A3/A4's -- a worktree at 1ac15c4ef reads the same three numbers -- attributed to alloc_slot()'s one-cycle call boundary on the bump path, measured in the sweep's own regime;
+> lint LATCH 52 / MULTIDRIVEN 3 / UNOPTFLAT **40** / BLKSEQ 2 / UNDRIVEN 25 unmoved, UNUSEDSIGNAL **733**
+> with every delta attributed by (message, bit-range) shape.
+>
+> **Cost, confirmed at N = 65,532.** The allocator's call boundary costs **+1 cycle per allocation** —
+> measured on one instruction (bump SPLIT 27 → 28, bump MREV 26 → 27) and confirmed at scale by the
+> exhaustion fixture, which runs +65,542 cycles against Part B while performing 65,532 allocations
+> (residual 10). A *reclaiming* allocation costs a further **+6**, identical at memory delay 12 and 0
+> while cold operations differ tenfold, so it is unit-side work on cache hits. The bump-path mint is
+> unchanged (the 282-cycle reference mint is byte-identical to A2's). All of it is A3/A4's: A5 adds
+> nothing measurable.
+>
+> **What the pair cannot distinguish, written down:** the PC-capability path (a stale CODE capability
+> needs CALL/RETURN to install); `commit_stage`'s post-adopt compare race; the unit-side belt for
+> `rev_req` (REVOKE's refusal comes from the preceding query; the dyn unit runs one operation at a
+> time); FIFO-only hazards. And the tracker's **per-entry residual** is real and printed: the same stale
+> capability installed into a *different* CPMP entry is re-adopted until the next broadcast of its index.
+>
+> **An audit refuted the first version of this entry, and the correction is the point.** With every
+> gate green at `d9620b907`, an adversarial read of the diff found a composed (generation, index) id
+> reaching a node's LINK: `change_rev_node_next/prev` do not mask, so the walk read a generation back
+> into `revoke_index`, a push carried it into `free_head`, and the allocator's compose adder -- whose
+> comment asserts the popped value carries none -- added it twice. The capability still works (the
+> caller rebuilds the record from the same wrong value), so the symptom is a generation SKIP, and the
+> retirement compare fires only at exactly 16383: a skip can step over it and WRAP, which is the one
+> condition under which a stale reference becomes acceptable again. Fixed at both ends in `054cea69b` and
+> measured as a pair on `r12-recl-composed-link.S` -- a node at generation 1 reissued as generation 3
+> before, generation 2 after, same fixture, same delay, same 3,180 cycles, one differing print. **No
+> fixture reached it**: five directed tests, a full sweep, a lint gate and a 16,386-round retirement run
+> were all green on RTL carrying it, and the fixture header records the two shapes that miss it.
+>
+> **Status: FIXED-IN-SIM.** Synthesis (S1) requested from the synth lane with the prediction written
+> first — WNS no worse than the splice's −9.225, LUTs within +1 % of 169,932, loops ≤ 13; a regression
+> past those numbers is a stop, not a note. No bitstream, no reflash (ask-first). History note:
+> `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
+>
+
+
 ### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
 
 It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` and
