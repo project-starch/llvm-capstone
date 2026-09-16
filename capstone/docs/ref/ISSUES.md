@@ -4009,6 +4009,65 @@ ladder rung approaches it (bigmany: 65).~~
 > none of it.
 >
 
+> # 2026-09-17 — S1: THE RECLAIMER SYNTHESISES, and every pre-registered reading is met. Loops at ONE. Attribution deliberately withheld.
+>
+> `m1-reclaimer` at `054cea69b`, exit 0, **03h43m25s**, synth peak 21.49 GB against a 100 GB ceiling,
+> `write_bitstream completed successfully`. Bitstream sha256 `d76d2a36d919d094…`, distinct from the
+> flashed `406e12bf…` and from S2's `a309323d…`, so the build carries the change. Not flashed.
+>
+> | | flashed `1bfff7776` | splice `379248185` | S2 `54ac25f97` | **S1 `054cea69b`** |
+> |---|---|---|---|---|
+> | WNS clk_out1 (ns) | −12.425 | −9.225 | −8.684 | **−8.307** |
+> | TNS | −718,478 | −349,409 | −425,811 | **−312,530** |
+> | failing endpoints | 102,508 | 89,527 | 91,461 | 90,379 |
+> | combinational loops | 29 | 13 | 29 | **1** |
+> | routed Total LUTs | 169,213 | 169,944 | 169,637 | **168,757** |
+> | routed FFs | 93,145 | 92,939 | 93,140 | 93,085 |
+> | `capstone_rev_node` LUT/FF | 1,052/606 | 1,141/678 | 1,093/607 | 985/740 |
+>
+> `capstone_dyn_unit` 2,579 LUT / 1,095 FF. Post-synth Total LUTs 170,928 (83.87 %). DRC clean of
+> `LUTLP-1`, with TIMING-4/6/7 present in the same file as the control that the matcher sees it.
+>
+> **Predictions, written before the build and all met:** WNS no worse than −9.225 → **−8.307**, the best
+> ever recorded on this design; LUTs at or below 171,497 → met at both stages; loops ≤ 13 → **1**.
+>
+> **It is a net REDUCTION, not a passed budget.** 168,757 routed is **456 LUTs below the flashed base**,
+> 1,187 below the splice and 880 below S2 — while adding an allocator, a free list, a generation check
+> and the merge. The RTL lane's "+1 % band" framed the reclaimer as a cost to be bounded and that
+> framing was wrong in direction as well as in units.
+>
+> **⚠ ATTRIBUTION IS WITHHELD ON PURPOSE, and this is the same trap as the splice's retracted mechanism
+> sentence.** `m1-reclaimer` is 17 commits and **14 files under `core/`** from the splice — the
+> reclaimer AND the `r34-r24-exception-delivery` merge (MMU, PMP, LSU, `csr_regfile.sv`, `riscv_pkg.sv`).
+> So *"the reclaimer took loops from 13 to 1"* and any reclaimer-specific timing or area claim are
+> **exactly the sentences this evidence does not support**. What the four builds jointly license, and
+> no more:
+>
+> * registering the endpoint buys timing and **not** loops — S2, 29 loops at −8.684;
+> * something in the splice commit's **structural** half takes loops 29 → 13;
+> * something in the **14-file reclaimer-plus-merge** range takes them 13 → 1.
+>
+> Which of those 14 files does it is **unmeasured**. `f714d2a72` — the merged baseline, never
+> synthesised — is the only build that would split the reclaimer from the merge, and until it exists the
+> joint statement is the whole of what may be said. Either no reclaimer-specific synthesis claim is ever
+> made, or that build happens; the lead's call, and it gates nothing now.
+>
+> **Two instrument facts from this build.** (1) The loop line is **singular at 1** — *"There is 1
+> combinational loop in the design"* — so a plural-only matcher returns nothing and **reads as zero**,
+> the standing no-data-is-not-a-zero failure; it was caught only by the neighbouring latch-loop line.
+> Match both forms and fail loudly on no match. (2) The post-synth → routed Total LUTs offset is now
+> **N=2 and consistent**: S2 171,620 → 169,637 (−1.16 %), S1 170,928 → 168,757 (−1.27 %). Post-synth
+> over-reads routed by roughly 1.2 %; it still does not rescue a LUT ceiling, since the build that
+> failed to route projects below the highest that routed either way.
+>
+> **Wall-clock, recorded because nobody had this number.** S1: ~2h50m synthesis, of which **~100 minutes
+> single-threaded in Timing Optimization with the log silent** — the stretch most likely to be misread as
+> a hang — then ~45 minutes from `opt_design` to bitstream, the router converging 241,309 overlaps to
+> zero in about 20. S2 for scale: 40 minutes synthesis, 1h50m35s end to end.
+>
+
+
+
 
 
 
