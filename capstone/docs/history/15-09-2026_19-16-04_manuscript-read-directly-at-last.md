@@ -442,7 +442,39 @@ reduces decision 5 from a permission question for the lead to an action for whoe
 branch. It does not close it — a decision is closed when a push succeeds, not when one is believed
 possible — but it changes who it is waiting on.
 
-### Hook state on apollo, which is stale and worth knowing
+### Hook state on apollo — SUPERSEDED 2026-09-16: apollo is now gated, and I proved it here
+
+**The gap described below is closed.** Under the lead's direct instruction the new guard was
+installed over ssh into **all seven** repos on apollo. Re-censused here: superproject,
+`capstone-ariane`, `capstone-qemu`, `caplifive-buildroot`, `caplifive-system`, **`capstone/paper`**
+and **`capstone/paper-nested-allocators`** all report `new guard`. So the combination this note
+named — an unenforced absolute rule beside live write credentials — no longer exists on this host.
+
+**Negative-tested from this session rather than accepted**, because a gate that has never fired
+*here* is unproven *here*:
+
+| probe (all `--dry-run`, nothing written) | result |
+|---|---|
+| task branch from **`capstone/paper`** | **`PUSH BLOCKED: capstone/paper is Overleaf's remote -- never push it.`** exit 1 |
+| task branch from **`paper-nested-allocators`** | `push allowed: zz-guard-positive-test`, exit 0 — the paper rule does **not** over-catch the sibling |
+| `main` in `paper-nested-allocators` | **NOT EXERCISED** — see below |
+
+`git ls-remote` afterwards shows the remote carries exactly the four pre-existing branches; no probe
+created anything.
+
+**The one arm I could not reach, stated rather than claimed.** Both attempts at the `main` block
+were intercepted *before* the hook ran: the first was a no-op (`Everything up-to-date`, git
+short-circuits), the second was rejected by git's own client-side non-fast-forward check with git's
+generic hint rather than the guard's `PUSH BLOCKED:` format. So the guard's **main/master arm is
+unverified on this host** — it may well work, and the outgoing lane tested it on focs-server, but I
+did not see it fire and will not record that I did. This is the same short-circuit that made my
+earlier no-op write-access probe uninformative; a probe that never reaches the thing under test
+proves nothing about it.
+
+*(What follows was the state before the install, kept because the reasoning still applies to any
+host that has not been gated.)*
+
+### Hook state on apollo, which was stale and worth knowing
 
 Measured with the outgoing lane's corrected check (a `grep` for the new guard cannot distinguish
 "old gate" from "no hook", and on apollo most repos are the second):
