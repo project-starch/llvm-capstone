@@ -16,7 +16,9 @@
 >   the delivery-fix branch — replacement cause 0 with its store landing, old shape cause 24 with its
 >   store refused, one trap in the run and it was the control's. The branch is held off
 >   `capstone-bootstrap` so the drivers keep their pinned monitor, and it lands with the R-34/R-24 pair
->   whenever the lead schedules that bitstream. Nothing else here is mine and unstarted.
+>   whenever the lead schedules that bitstream. **Pushed** — the allowlist was retired 2026-09-16 and a
+>   task branch no longer needs an entry; the hook still blocks shared history, deletion,
+>   non-fast-forward and `capstone/paper`. Nothing else here is mine and unstarted.
 >
 > **Waiting on the lead — ten, merged rather than replaced (nothing here is dropped for being a day old):**
 > (1) the **author-line ruling**, which still holds C-32, F1/P2 and every optimised Sublet number —

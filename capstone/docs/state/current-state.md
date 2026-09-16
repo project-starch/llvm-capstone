@@ -71,7 +71,9 @@ Minimal snapshot. Read first in every session.
   the capability is bit-identical before and after, the old shape run last takes **cause 24** with its
   store refused, and there is **exactly one trap in the run — the control's**. The replacement is bounds-checked where the integer base was not, so a lower-edge arm tests the one address the preceding `SAVE_REG`s do not (slot 0, `rd` = `x0`): cause 0, value stored. The residual is runtime state — whether the live stack capability's base reaches `frame_base` — and only a boot on a delivering bitstream settles it. The branch is held OFF
   `capstone-bootstrap`, which stays at the commit the drivers pin, so a boot today bakes the monitor it
-  expects. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
+  expects, and is **now published** — the push allowlist was retired on the lead's instruction on
+  2026-09-16, so a task branch no longer waits on a file edit. The hook still blocks shared history,
+  deletion, non-fast-forward and `capstone/paper`, which are the four that were ever dangerous. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
   is the same defect and why ten of the twelve sweep tests time out in their epilogue; exiting through a
   capability minted over `tohost` works. Instrument, readings and note:
   `tests/monitor/`, `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
