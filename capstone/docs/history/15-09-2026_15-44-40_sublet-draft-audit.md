@@ -180,6 +180,18 @@ This is the shape that survives its own repetition. Two instances the same eveni
   that index** — a figure optimistic by up to 65,532x, and **not computable at all until a reissue
   policy exists**, which the design never states.
 
+**Quantified 2026-09-15 by the RTL lane, with a caveat that must travel with the number.** The
+unspliced walk costs exactly **3.000 cycles per dead node crossed** — `cost = 3N + 249`, fitting
+exactly at six consecutive rungs from N=8 to N=1024; spliced is exactly **0.000**, 328 cycles at six
+different N, identical to the cycle. Fixed cost ~79, crossover at N ≈ 26, and at N=3072 it is 96,822
+against 516.
+
+**Do not quote 3 cycles/node as the correction to R1's model.** It is an **L1-hit** cost and therefore
+a **lower bound** on what splicing saves. The dcache holds exactly 2048 nodes, the fit holds to 1024
+and breaks at 2048, and a speedtest1 run mints 43,355 nodes — **21x the dcache** — so the real
+workload sits entirely in the cold regime the ladder reaches only at its last rung. The cold per-node
+slope rests on **a single segment** and is not a constant.
+
 Neither could have been caught by repeating its own measurement, because repetition varies the
 variables the design already chose. The question that catches both is asked before the run:
 **which variable does this quantity depend on that I am holding fixed?**
