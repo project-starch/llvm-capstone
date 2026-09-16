@@ -7,8 +7,12 @@ Minimal snapshot. Read first in every session.
 > **A RETRACTION leads this block.** The cold-regime revoke slope of **87.1 cycles per node is
 > WITHDRAWN**: N = 2,048 sits only 1,239 cycles above the warm fit, so the 2,048 → 3,072 segment
 > crosses the warm/cold knee and its slope measures the knee rather than either regime. The cold
-> figure to cite is the board lane's Q4 **silicon** fit — 25.45 cycles per node walked, R² = 0.999969
-> over eleven points wholly inside the cold regime. The 3.000 warm slope is unaffected.
+> figure to cite is the board lane's **silicon** measurement, and it is a **range: 25–27 cycles per
+> node walked** — Q4's capacity boot fits 25.45 (R² = 0.999969, eleven points wholly inside the cold
+> regime) and the `M1_LIVE` sweep gives 26.96 over a different allocation range. **Both are silicon,
+> both on the same machine, and they are not averaged**: two measurements taken over different ranges
+> do not combine into one figure, and quoting either alone drops the other's existence. The 3.000 warm
+> slope is unaffected.
 >
 > **AND AN INSTRUMENT RELABEL EVERY LANE NEEDS BEFORE ITS NEXT SIMULATION.** `S12_MEM_DELAY` is **not a
 > cycle count**: `stream_delay.sv` has a 4-bit counter, so the value is truncated to its low nibble and
@@ -67,7 +71,9 @@ Minimal snapshot. Read first in every session.
   the capability is bit-identical before and after, the old shape run last takes **cause 24** with its
   store refused, and there is **exactly one trap in the run — the control's**. The replacement is bounds-checked where the integer base was not, so a lower-edge arm tests the one address the preceding `SAVE_REG`s do not (slot 0, `rd` = `x0`): cause 0, value stored. The residual is runtime state — whether the live stack capability's base reaches `frame_base` — and only a boot on a delivering bitstream settles it. The branch is held OFF
   `capstone-bootstrap`, which stays at the commit the drivers pin, so a boot today bakes the monitor it
-  expects. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
+  expects, and is **now published** — the push allowlist was retired on the lead's instruction on
+  2026-09-16, so a task branch no longer waits on a file edit. The hook still blocks shared history,
+  deletion, non-fast-forward and `capstone/paper`, which are the four that were ever dangerous. Note found on the way: `RVTEST_PASS` stores to `tohost` through an `auipc` integer base, which
   is the same defect and why ten of the twelve sweep tests time out in their epilogue; exiting through a
   capability minted over `tohost` works. Instrument, readings and note:
   `tests/monitor/`, `docs/history/16-09-2026_15-00-00_d3-monitor-writeback-validated.md`.
@@ -75,6 +81,15 @@ Minimal snapshot. Read first in every session.
   output at creation time, so a source patch applied afterwards leaves every local gate testing the
   pre-edit design: a 95-test sweep read as "the change is inert" when it meant "the change is absent",
   and the lint numbers and two cost measurements taken beside it were void the same way.
+* **A gate in `board-c6var.sh` could not fail on the variable it existed to pin** (fixed 2026-09-16).
+  It demanded an emulator record by its `HEAP` field, which is `sublet_tables_len`, computed from the
+  GRANTED ARENA alone — so it witnessed the arena and never the `--tables` grant the boot also sets.
+  A record from the committed flow at the 2 MiB arena carries tables 2,523,136 against the boot's
+  1,750,285 and prints the identical `HEAP 1344064`: indistinguishable by construction, a clean pass
+  against a denominator from another configuration. Arena and tables are now one variable feeding both
+  the gate and the boot, and the gate also demands the measure flow's configuration line, which names
+  both. Negative-tested: the old gate passed the wrong-tables record, the new one refuses it. Found by
+  the compiler lane, verified on apollo, driver half fixed here.
 * **Four result bundles on the paper remote were reviewed rather than accepted** (`7e77374aa2b5`),
   including one that keeps all seven entries while recording the loss of its own raw evidence. The
   packaging hole found there generalises to bundles this lane cannot see.

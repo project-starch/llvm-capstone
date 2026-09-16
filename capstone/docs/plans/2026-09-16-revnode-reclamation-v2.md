@@ -255,9 +255,10 @@ Seventeen bits of depth is 131,072 against a 65,536 pool — sufficient with 2×
 rebuild the record field-by-field, so they must gain the new fields or silently drop them.** Anvil has a
 record-update form, used at `capstone_dyn_unit.anvil:298`: writing them as `rev_node_t::{node with
 valid = 1'd0}` carries new fields automatically and makes the whole class of omission impossible. **Use
-it.** (Whether Anvil errors or zero-fills on a missing field is UNRESOLVED — settle it by compiling one
-literal with a field omitted. If it zero-fills, a single missed site resets a generation to 0 and the
-build ships green, which is the v1 failure mode exactly.); and in `capstone_rev_node.anvil` lines 18, 78, 112,
+it.** **SETTLED 2026-09-16 by compiling one literal with `linear` omitted: Anvil ERRORS** (`Event graph
+error` at the literal's line; no SV is generated). So a missed field fails the build rather than
+zero-filling — the site list is a hard gate, not a hazard, and the `with` form is preferred for
+clarity rather than mandatory for safety.); and in `capstone_rev_node.anvil` lines 18, 78, 112,
 152, 166, 185, 202, 204, 206 and the `reg depth_bound : logic[32]` at `:227`. The only arithmetic on
 depth anywhere is the `+32'd1` at `:166`.
 
@@ -378,8 +379,15 @@ reason not to adopt a bare-index free list even if §6's grant problem were solv
 * **The reserved sentinels are not excluded from reclamation.** `commit_stage.sv:197` plants `30'd1`
   and `capstone_flu_unit.anvil:385` plants `30'd2` into capabilities as hard constants. If index 1 or 2
   ever reached generation ≥ 1 those constants become generation-0 aliases that fail every §3 check.
-  Unreachable today because nodes 1 and 2 are never invalidated — **an unstated invariant the reclaimer
-  must carry explicitly.**
+  **[PLANNING CORRECTION 2026-09-16] The first draft said this was "unreachable today because nodes 1
+  and 2 are never invalidated". That is FALSE.** `CAPENTER(x0,x0)` yields a LINEAR capability on node 2;
+  every MREV off it inserts *above* node 2 and deepens it, so node 2 is always the deepest node and
+  **every REVOKE of a handle minted on that base walks to it and invalidates it** — the S1 ladder does
+  this on every run (`r12-s1-walk-ladder.S`). Node 1 is reachable the same way through the
+  `CAPENTER(a0,a1)` form. **So the `index > 2` guard on the free-list push is load-bearing, not
+  defensive**: without it, index 2 is reissued at generation 1 on the first ladder run, and a reissue
+  of index 1 would clear the PC tracker (`commit_stage.sv:197` plants `(0,1)`) after which every
+  instruction faults. The regression arm is free — no re-minted id may ever print as `65537` or `65538`.
 * **DELIN becomes an availability attack, which makes §5 load-bearing for more than integrity.**
   `capstone_rev_node.anvil:74-83` rewrites a node with no `valid` test, preserving `valid` from the
   read. On a free-listed node that write emits a broadcast, and under an index-only compare it clears

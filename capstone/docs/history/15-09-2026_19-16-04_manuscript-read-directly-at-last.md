@@ -416,3 +416,124 @@ writing one: `EXECUTION.md` requires literal commands, which pulls the home path
 **Evidence states remain untouched and the reading is agreed:** M1's primary is strong, its
 secondary accounting band is refuted, and this is a *bounded baseline* — so `partial` is right and
 `measured` would overstate it. The two-file constraint (§3) is unchanged by any of this.
+
+
+## 10. Decision 5 is no longer an access question — write to the paper remote demonstrably works
+
+*2026-09-16, after the lead retired the push allowlist and rotated the GitHub token.*
+
+The handover's decision 5 (the push of `board/e1-s1s2-hardware`) has been carried all day as an
+**access** problem, because the branch was refused 403 by the paper remote. **That is no longer the
+obstacle**, and the evidence is not a probe of mine but an accomplished fact:
+
+**`apollo-board` pushed `results/m1-bounded-baseline` to `nested-allocators-paper` today and it is
+on the remote** — I fetched it, reviewed its 63 files (§9) and `git ls-remote` lists it beside
+`main` and `paper/best-case-draft`. A branch that exists on the remote was written there by an agent
+session after the rotation. **Write access works.**
+
+A dry-run create-branch probe from this host agrees (`[new branch]` would succeed, exit 0, and
+`ls-remote` confirms nothing was created), but that is the weaker evidence of the two: `--dry-run`
+does not exercise GitHub's server-side permission check the way a real push does. The successful
+push is what settles it.
+
+**So the remaining obstacle to those ~480 records is neither access nor the allowlist. It is that
+the branch exists only in the focs-server checkout and nobody there has run `git push`.** That
+reduces decision 5 from a permission question for the lead to an action for whoever holds the
+branch. It does not close it — a decision is closed when a push succeeds, not when one is believed
+possible — but it changes who it is waiting on.
+
+### Hook state on apollo, which is stale and worth knowing
+
+Measured with the outgoing lane's corrected check (a `grep` for the new guard cannot distinguish
+"old gate" from "no hook", and on apollo most repos are the second):
+
+| repo | pre-push hook |
+|---|---|
+| superproject | **OLD allowlist** (symlink to `pre-push-allowlist.sh`; allowlist is one entry, `dev`) |
+| `capstone-ariane`, `capstone-qemu`, `caplifive-buildroot`, `caplifive-system` | **NO HOOK** |
+| **`capstone/paper`** | **NO HOOK** |
+| **`capstone/paper-nested-allocators`** | **NO HOOK** |
+
+The lead's new `pre-push-guard.sh` is installed in the six focs-server repos. **On apollo it is not
+present at all** — neither `~/.claude-c/secrets/pre-push-guard.sh` nor
+`~/.claude-kisp/secrets/pre-push-guard.sh` exists — and the superproject's hook is still a symlink
+to the **old** `pre-push-allowlist.sh`. Nothing is broken by this: the old gate has passed every
+push from this lane today and did block a genuine non-fast-forward, so its protections overlap the
+new guard's on the cases that have arisen.
+
+**But the paper submodule has no `pre-push` hook at all** (`.git/modules/capstone/paper-nested-allocators/hooks/pre-push`
+does not exist). The "never push `capstone/paper`" hard constraint is therefore unenforced by any
+hook on this host, and now that write access works, the only thing standing between a lane and an
+Overleaf-owned remote is the rule itself. That is a distribution gap for the lead rather than
+something a lane should fix by writing into the secrets directory.
+
+## 11. `board/e1-s1s2-hardware` is on the remote — the owed check run, and a gap nobody has named
+
+Decision 5 closed on 2026-09-16: the outgoing paper lane retried from focs-server after the token
+rotation and the push succeeded (15 commits, tip `7f64283`). The reconciliation this lane proposed
+held — the 403 was real when observed and stale by the time it was being quoted, and the obstacle
+was that nobody holding the branch had run `git push`.
+
+§9 said *"whoever can read that branch should run the check before it is pushed"*. It is pushed, so
+the check is run here.
+
+### Shape against EXECUTION.md's seven entries
+
+| bundle | entries | missing |
+|---|---|---|
+| `H1/fpga-2026-09-15` | **1 of 7** — `manifest.json` only | everything else |
+| `M2/fpga-2026-09-15` | 6 of 7 | **`work-order.md`** |
+| `R1/fpga-2026-09-15` | 6 of 7 | **`work-order.md`** |
+| `S1S2/sw78-rep1-3` | 6 of 7 | **`work-order.md`** |
+
+The missing work order is exactly what the handover recorded as "stated rather than backfilled", and
+the right state to leave it in — a work order written after the run is a reconstruction, not a
+pre-registration.
+
+### The gap nobody has named: none of the four has `SHA256SUMS`
+
+**Zero `SHA256SUMS` files exist on the branch.** So the dangling-hash failure §9 warned about cannot
+occur here — there is nothing to dangle — but the `raw/` acceptance check is **unmet** in a different
+way. `EXECUTION.md` requires *"Original transcripts and reports **with hashes**, no cropped
+success-only logs"*, and these bundles carry the transcripts without the hashes.
+
+That is a weaker defect than a dangling reference and a real one: nothing lets a later reader detect
+that a retained capture has been edited or replaced. `apollo-board`'s newer bundles (§9) do carry
+them, so the fix is known and already practised on the same remote; it simply has not been applied
+backwards. Worth noting this is a **shape** gap, not an evidence gap — the transcripts are present.
+
+### The `*.log` hole did not bite here, and only by naming luck
+
+The S1S2 bundle keeps per-boot captures named `sw78-r1b1-log`, `sw78-r2b3-log` and so on — **a dash,
+not a dot**. Tested both spellings:
+
+* `git check-ignore -v …/sw78-r1b1-log` → **not ignored**, and it is tracked;
+* `git check-ignore -v …/sw78-r1b1.log` → **`.gitignore:2:*.log`**.
+
+So the same content under the conventional name would have vanished from the commit silently. The
+bundle is intact by an accident of naming, and the next person who names a capture `foo.log` loses
+it. That strengthens rather than weakens §9's conclusion: **the protection has to be the check, not
+the convention**, because the convention is one character away from failing.
+
+### The scan range must describe what the push PUBLISHES
+
+`precommit-scan --range origin/main..board/e1-s1s2-hardware` **BLOCKS** — relative to `main` the
+branch reads as reverting the restructure, so the scan sees a personal name on a **removed** line.
+The range that describes what the push actually publishes starts at the merge base. Verified here:
+
+    merge-base(origin/main, board/e1-s1s2-hardware) = b0d7510cbec38a35a57b06c6de07c9b4505ab84c
+    commits from there to the branch tip          = 15
+
+— and `b0d7510c` is exactly the superproject gitlink, which is why the handover's *"landing it is a
+merge, never a fast-forward"* is the same fact. **It bites the scan before it bites the merge.**
+
+This belongs with §4's rule: a range scan's verdict depends on things that are not in the range.
+Add to "sync before you scan, and record who scanned" → **and scan from the merge base whenever the
+branch is not a fast-forward of the target**, or the gate reports on a revert nobody is proposing.
+
+### Still owed, unchanged
+
+M2's `studies.json` edit. Its bundle is now on the remote, which removes the excuse of
+unreachability but none of the constraint: `check_experiments.py:267-268` plus a live
+`appendices/a-evidence-status.tex` still make it a two-file change whose second file is manuscript
+(§3). Merging the branch into `main` is a merge and is not a lane's call either.

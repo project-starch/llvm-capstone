@@ -220,7 +220,15 @@ not tracking it narrows the superlinear claim to something the churn varies inci
 > relay alone and was right to: a peer's message is not the lead's approval, and the no-names rule is
 > a hard constraint whose gate is a deterministic script so that it cannot be talked around.
 > **This entry records the ruling; it does not by itself discharge the compiler lane's need to hear
-> it from the lead**, which they have asked for directly.
+> it from the lead**, which they asked for directly and subsequently received in their own session.
+>
+> **WHAT WAS ACTUALLY WAIVED, because the precise version and the loose version are very different
+> sentences for a later reader.** The compiler lane checked the block's extent before using the
+> waiver: the scan's finding on that range was **22 hit lines, every one of them the identical bare
+> identity line** — 11 commits × author plus committer. **No content hit, no diff hit, no token, no
+> email in any file.** So what was waived is **git authorship metadata and nothing else**, not a
+> relaxation of the no-names rule over repository content. "The scan was overridden" would overstate
+> it; "the scan's only finding was 22 copies of one metadata line" is the accurate record.
 
 The paper lane ranks this **first in value**: it is the only queued run that removes a caveat from a
 headline number (the 1.607× compound currently carries "bounded-prototype diagnostic, one setup
