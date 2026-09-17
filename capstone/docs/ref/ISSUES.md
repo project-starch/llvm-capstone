@@ -4197,7 +4197,8 @@ ladder rung approaches it (bigmany: 65).~~
 >
 > * registering the endpoint buys timing and **not** loops — S2, 29 loops at −8.684;
 > * something in the splice commit's **structural** half takes loops 29 → 13;
-> * something in the **14-file reclaimer-plus-merge** range takes them 13 → 1.
+> * something in the **14-file reclaimer-plus-merge** range takes them 13 → 1. **RESOLVED 2026-09-18 by
+>   `f714d2a72`: it was the MERGE. The reclaimer removes no loops at all.**
 >
 > Which of those 14 files does it is **unmeasured**. `f714d2a72` — the merged baseline, never
 > synthesised — is the only build that would split the reclaimer from the merge, and until it exists the
@@ -4307,6 +4308,59 @@ ladder rung approaches it (bigmany: 65).~~
 > change that removes the denominator's referent turns the normalisation into noise without touching the
 > numerator.** The honest figure on a spliced bitstream is the flat 103.2.
 >
+
+> # 2026-09-18 — THE ATTRIBUTION BUILD: the MERGE removed the loops, the RECLAIMER returned the LUTs. "The reclaimer took loops 13 to 1" is now REFUTED, not merely unsupported.
+>
+> `f714d2a72`, the merged baseline, synthesised to completion (exit 0, 1h54m47s, bitstream sha256
+> `45597add…`). It is the only build that separates the reclaimer from the r34-r24 merge, and it was
+> built for exactly that. The split:
+>
+> | | loops | routed Total LUTs | WNS |
+> |---|---|---|---|
+> | **merge alone** `379248185`→`f714d2a72` | **13 → 1** | **+1,165** | **+1.350** |
+> | **reclaimer alone** `f714d2a72`→`054cea69b` | 1 → 1 | **−2,352** | −0.432 |
+>
+> | | flashed | splice | S2 null | **merge base** | **S1 tip** |
+> |---|---|---|---|---|---|
+> | commit | `1bfff7776` | `379248185` | `54ac25f97` | `f714d2a72` | `054cea69b` |
+> | WNS clk_out1 (ns) | −12.425 | −9.225 | −8.684 | **−7.875** | −8.307 |
+> | TNS | −718,478 | −349,409 | −425,811 | −293,489 | −312,530 |
+> | combinational loops | 29 | 13 | 29 | **1** | **1** |
+> | routed Total LUTs | 169,213 | 169,944 | 169,637 | 171,109 | **168,757** |
+> | routed FFs | 93,145 | 92,939 | 93,140 | 93,006 | 93,085 |
+> | max freq (MHz) | 19.07 | 20.31 | 20.54 | **20.89** | 20.70 |
+> | `capstone_rev_node` LUT/FF | 1,052/606 | 1,141/678 | 1,093/607 | 1,213/678 | 985/740 |
+>
+> **THE CLAIM THAT DID NOT GET MADE, AND WHY THAT MATTERED.** S1 came in at loops 1 against the splice's
+> 13, and "the reclaimer removed twelve combinational loops" was available, striking, and would have gone
+> into a paper. It was withheld on the grounds that 14 `core/` files separated the two builds. **It is now
+> refuted rather than unsupported: the merge did it, and the reclaimer removes none.** The withholding was
+> not caution for its own sake — the attractive claim was false.
+>
+> **AND THE GOOD NEWS INVERTS THE OTHER WAY.** S1's net LUT reduction, which looked like the composite's,
+> is **entirely the reclaimer's**: the merge ADDS 1,165 and the reclaimer GIVES BACK 2,352, with
+> `capstone_rev_node` itself falling 1,213 → 985. The RTL lane's original "+1 % of 169,932, a cost to be
+> bounded" was wrong in direction for the third time — the reclaimer is a net return of 2,352 LUTs.
+>
+> **The reclaimer's true cost is 0.432 ns of WNS**, and the consequence should not be softened: the
+> **merge base is the best-timed build this design has ever produced** (−7.875, 20.89 MHz), and the
+> resident tip is not. It remains far better than the flashed −12.425, and the merge base is not a
+> substitute since it has no reclaimer — but "the tip is the best build" would be false.
+>
+> **A SECOND DATUM THAT LUT COUNT DOES NOT DISCRIMINATE ROUTABILITY HERE.** This build came in at 173,187
+> post-synth (84.98 %) — **150 LUTs BELOW `1cb22e30a`, the only build that has ever failed to route** — and
+> it routed. It did so through a pattern neither previous outcome showed: overlaps 272,124 → 102,596 →
+> 30,993 → 10,988 → 3,055 → 1,246 → **9,233 → 49,316** → 17,875 → 5,953 → 929 → 53 → 0, clearing at 36
+> minutes against ~20 for the others. Successes fell monotonically; the known failure fell monotonically to
+> a floor of 46 over five hours; this one oscillated and cleared. Post-synth → routed is −2,078, so that
+> offset is now **N=3 and holds at about −1.2 %**.
+>
+> **The singular loop-line trap nearly bit a second time** — this artifact also reads "There is 1
+> combinational loop", so a plural-only matcher would have reported 0 loops for a build that has 1. Matched
+> both forms deliberately this time.
+>
+
+
 
 
 
