@@ -3,11 +3,16 @@
 Tests of bounds and lifetime enforcement against the ported AVBufferPool and
 AVRefStructPool APIs.
 
-| File | Purpose |
-|---|---|
-| `security.c` | Valid-reference controls, stale accesses, invalid releases and bounds probes |
-| `security-suite.py` | Select cases/modes and check QEMU outcomes against stage, cause and fault PC |
-| `run-security.sh` | Run the suite under the shared QEMU lock |
+| File | Purpose | Execution location |
+|---|---|---|
+| `security.c` | Valid-reference controls, stale accesses, invalid releases and bounds probes | Capstone domain for security verdicts; also compiled natively as a functional control |
+| `security-suite.py` | Select cases/modes and check QEMU outcomes against stage, cause and fault PC | Development machine |
+| `run-security.sh` | Run the suite under the shared QEMU lock | Development machine |
+
+The suite runs one Capstone binary (`security.dom`) in three protection modes:
+`0` = bounds, `1` = bounds plus backing lifetime, `2` = Capstone plus Sublet
+pool-lease lifetime. It uses `replay/host.c` as its loader inside QEMU guest
+Linux. Native execution cannot demonstrate capability protection.
 
 ## Build and run
 

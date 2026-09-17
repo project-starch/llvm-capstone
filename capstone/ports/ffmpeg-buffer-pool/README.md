@@ -4,16 +4,38 @@ Record AVBufferPool and AVRefStructPool activity in a native FFmpeg decoder,
 then replay those pool operations in a serial Capstone domain. Start with
 `record/` and `replay/`.
 
-## Layout
+## Native, Capstone and Sublet
 
-| Path | Responsibility |
-|---|---|
-| `record/` | Build the stock/traced decoder, instrument upstream FFmpeg and record a workload |
-| `replay/` | Apply the lifetime port, build the replay engine and host loader, run under QEMU |
-| `runtime/` | Shared build preparation, metadata allocator and payload lifetime hooks |
-| `trace/` | Shared event format and observation logic used by recorder and replay |
-| [security-tests/](security-tests/README.md) | Bounds, stale-reference and invalid-release probes with QEMU verdicts |
-| `tools/` | Extract commands, compare traces, summarize and plot results |
+The build target (`native` or `capstone`) and replay protection mode (`0`, `1`,
+or `2`) are separate choices. **Sublet pool-lease protection is Capstone mode 2.**
+
+| Variant | Where it executes | Allocator / protection |
+|---|---|---|
+| Stock native FFmpeg | Development machine | Full upstream decoder and native allocators |
+| Instrumented native FFmpeg | Development machine | Native decoder/allocators with pool recording hooks |
+| Native component replay | Development machine | Our ported pools and allocator layout; functional control with ordinary pointers |
+| Capstone replay, mode `0` | Capstone domain in QEMU | Payload bounds; no temporal revocation |
+| Capstone replay, mode `1` | Capstone domain in QEMU | Bounds and revocation when backing storage is freed |
+| Capstone + Sublet replay, mode `2` | Capstone domain in QEMU | Also revoke each pool lease on return, before reissuing the storage |
+
+The native replay accepts all three mode numbers for functional comparison;
+none gives native pointers Capstone bounds or revocation. The three Capstone
+modes use one domain binary and the same port/layout, selected at runtime.
+The full decoder runs only natively in this experiment.
+
+## Layout and execution locations
+
+| Path | Responsibility | Execution location |
+|---|---|---|
+| `record/` | Build stock/traced FFmpeg and record pool operations | Development machine |
+| [replay/](replay/README.md) | Shared replay engine, Linux loader and build/run scripts | Engine: native or Capstone domain; loader: QEMU guest Linux; scripts: development machine |
+| [runtime/](runtime/README.md) | Metadata allocator and native/Capstone/Sublet payload handling | Compiled into the replay or security executable; `prepare.sh` runs on the development machine |
+| `trace/` | Event format and observation logic | Compiled into the native recorder and both replay targets |
+| [security-tests/](security-tests/README.md) | Bounds, stale-reference and invalid-release probes | C probes: Capstone domain for security verdicts; suite/runner: development machine |
+| `tools/` | Compare, summarize and plot traces | Development machine |
+
+Here, the Linux **host loader** runs inside the QEMU guest and calls the
+Capstone domain. It is distinct from the development machine that starts QEMU.
 
 FFmpeg 9.0.1 sources, generated ports, binaries and logs stay outside this
 repository, under `${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}`. Build
@@ -78,14 +100,8 @@ outside that scope. Component builds use FFmpeg's upstream serial atomics
 fallback. The port separates RefStruct metadata from payload and checks release
 authority before returning a lease.
 
-| Replay mode | Protection boundary |
-|---|---|
-| `0` | Payload bounds, without temporal revocation |
-| `1` | Payload bounds and backing-allocation lifetime |
-| `2` | Payload bounds, backing lifetime and Sublet pool-lease lifetime |
-
-All modes share the same port and allocator layout. Native replay checks
-functional behavior; it cannot enforce capability invalidation.
+See [Native, Capstone and Sublet](#native-capstone-and-sublet) for the
+execution targets and protection modes.
 
 ## Branches and evidence
 
