@@ -4201,6 +4201,57 @@ ladder rung approaches it (bigmany: 65).~~
 > zero in about 20. S2 for scale: 40 minutes synthesis, 1h50m35s end to end.
 >
 
+> # 2026-09-17 — THE RECLAIMER ON SILICON: permitted reuse demonstrated, both cost curves FLAT, the capacity knee gone.
+>
+> `caplifive_m1_054cea69b.bit` flashed and resident (`nv_bitstream_name` read back). Board boots, monitor
+> survives, capability exception delivery live for the first time with the D3 writeback fix holding in
+> practice — firmware scanned two-sided before the bake: 1 integer-derived access in capability-mode text
+> with the D3 site present, 0 after, positive control 7,115 both times. Measured by the board lane.
+>
+> **PERMITTED REUSE, ON SILICON, AND IT NEEDED NO NODE-ID READ.** One invocation reached its target at
+> **alloc = 200,000, minted = 200,031, without exhausting a 65,532-index pool.** More allocations than the
+> pool holds distinct indices cannot have happened without reuse. That is M1's first completion clause,
+> which had been unreachable by construction since the study began — the bitstream exposes no node-id
+> read, and the way around it was to run PAST the pool and let Part B's exhaustion fault serve as the
+> counter. Part B made exhaustion observable rather than fatal; this is what that bought.
+>
+> | | deployed `1bfff7776` | reclaimer `054cea69b` |
+> |---|---|---|
+> | `take_cyc/n` | floor 66.7 → 130–218, knee at alloc ~1,792 | **72.1, FLAT to 200,000** |
+> | `give_cyc/n` | grew ~12× | **103.2, FLAT to 200,000** |
+>
+> `give_cyc/n` reads 103.2 at alloc 1,250 and 103.2 at alloc 195,000. **The 12× release growth is gone and
+> the capacity knee is gone.** 175.3 cycles per allocation in the brackets, so a full 10C arm is about
+> five seconds of board time.
+>
+> **A PRE-REGISTERED FALSIFIER THAT DID NOT FIRE, AND WHY THAT IS HONEST.** The board lane had written
+> "one curve flattens, the other does not; if both flatten or neither, my account is wrong." Both
+> flattened. It does not count as a refutation **only because the reason was written down in advance by
+> two other lanes**: the reclaimer changes minting, so node-table growth per allocation is the free-list
+> MISS rate rather than 1, the invocation's distinct-index set never approaches 2,048 lines, and the
+> capacity knee therefore cannot form. A vanished knee is the capacity account's own prediction under
+> reclamation. Had that not been on record first, this would have been a falsifier firing and an
+> after-the-fact excuse.
+>
+> **THE COEFFICIENT IS BOUNDED, NOT MEASURED: c < 65,532/200,000 = 0.3277.** And a caution for anyone
+> who measures it by running to exhaustion: **RETIREMENT consumes indices exactly as the handle leak
+> does**, so `65,532/A` is a COMBINED index-consumption rate. An index retires after 16,384 allocations
+> of itself and the free list is LIFO, so with reuse rotating over 1/2/4/16 indices the first retirement
+> falls at ~16,384 / 32,768 / 65,536 / 262,144 allocations — the 200,000 pilot is already past it unless
+> reuse spreads over sixteen or more. The correction is computable, since retirement is deterministic:
+> `handle-leak fraction = (65,532 − retired)/A` with `retired ≈ A/16,384`. Nothing observable separates
+> the two on the board — a retirement only makes the next allocation take the bump path, 6 cycles cheaper.
+>
+> **An instrument retired in the same breath**, by its owner: a "give per walked node" column that divides
+> by an assumed walk of `alloc/M1_LIVE`. The splice unlinks the run, so that walk does not exist and the
+> column decays as 1/alloc — 63.7 at alloc 32, 0.008 at alloc 195,000. Arithmetic about a denominator
+> rather than a measurement. **A normalised figure carries an assumption about its denominator, and a
+> change that removes the denominator's referent turns the normalisation into noise without touching the
+> numerator.** The honest figure on a spliced bitstream is the flat 103.2.
+>
+
+
+
 
 
 
