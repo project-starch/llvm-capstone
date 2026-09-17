@@ -269,6 +269,43 @@ today**; then synthesis; then a reflash, which is ask-first. Pre-registration wh
 write-only arm 27, bounds 28, misaligned 4 and 6, the store side 27/6/28, and the untagged arm
 **cause 24** (correction 3 above), with the expected post-report timeout.
 
+**RESOLVED 2026-09-17 — the question stopped existing rather than being answered.** The reflash is
+being spent for **M1's** reasons (the first bitstream able to reach M1's permitted-reuse clause), and
+R-34's confirmation rides the same boot at no additional cost. Both the paper lane's "no" and the
+open question above priced the reflash as the cost of *this* confirmation; it is not the cost any
+more. Lead authorised 2026-09-17.
+
+**Pre-registration RE-CONFIRMED against the build actually being flashed — `054cea69b`, not the
+`c77c65324` it was written for.** That build also carries the splice and the reclaimer, and
+inheriting a pre-registration across a different build is not this project's standard. Checked:
+`c77c65324` is an ancestor of `054cea69b`, and every non-comment delta between them in the
+exception path is either an ADDITION that does not touch a predicted cause or is reclaimer
+plumbing —
+
+    ex_stage.sv        + INSUFFICIENT_SYSTEM_RESOURCES = 4'b1010 and a mapping for exception_code
+                         == 4'd10 -> mcause 30. The mappings for codes 7, 8, 9 and the `23 + code`
+                         fallback are UNCHANGED, and every predicted cause comes from those:
+                         27 = 23+4, 28 = 23+5, 24 = 23+1; 4 and 6 are the standard misaligned codes.
+    ex_stage.sv        rev_init_res_0 / rev_mrev_res_0 widened 29:0 -> 31:0 to carry the allocator
+                         status; node address now {36'd0, addr[15:0], 4'd0} (index-only). Reclaimer.
+    load_store_unit.sv the third revnode index compare. Reclaimer.
+    load_unit.sv       COMMENT ONLY.   store_unit.sv  COMMENT ONLY.
+    csr_regfile.sv     a translate_off assertion bound 29 -> 30, stripped by synthesis.
+    riscv_pkg.sv       INSUFFICIENT_SYSTEM_RESOURCES 31 -> 30, documented unreachable and
+                         referenced by nothing.
+
+So the predicted causes **27, 28, 4, 6 and 24** stand, and the expected post-report timeout stands.
+The §7 entry is to be labelled `054cea69b`.
+
+**Prerequisite, and it is not optional.** `054cea69b` makes capability exception delivery LIVE, and
+the monitor pinned at `4274268` computes its emulated-CSR writeback with `add t5, sp, t5` — an
+integer add on the stack capability — then stores through the untagged result
+(`sbi_capstone.S:113`). Today that store is refused and the exception DROPPED. With delivery live it
+is refused and DELIVERED, inside the monitor's own trap handler, on the path taken at every
+`rdtime`. The fix is `d3-monitor-capability-writeback` at `2dcd3a5`, and it must be merged and the
+`4274268` pin moved in all eight drivers **as one change** before the first boot, or that boot fails
+inside the monitor and looks like a bad bitstream.
+
 **Put to the lead before a reflash is spent on it:** the paper lane's position is that this boot
 changes no sentence in the manuscript — the plain-data rows are already unsupported three independent
 ways (the directed simulation with both gate inputs witnessed, the stock `rv64mi-p-ma_addr` failing
