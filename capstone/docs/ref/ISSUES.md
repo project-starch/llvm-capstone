@@ -4203,6 +4203,22 @@ ladder rung approaches it (bigmany: 65).~~
 
 > # 2026-09-17 — THE RECLAIMER ON SILICON: permitted reuse demonstrated, both cost curves FLAT, the capacity knee gone.
 >
+> **⚠ DISPUTED 2026-09-17, AND THE MEASUREMENTS BELOW DEPEND ON IT. Two lanes report incompatible board
+> state and this lane cannot adjudicate.** One reports `caplifive_m1_054cea69b.bit` flashed and resident,
+> read back from `nv_bitstream_name`, with the silicon numbers recorded here. Another reports that
+> nothing has been flashed, that the resident image is still `caplifive_r30r31_1bfff7776.bit`
+> (sha256 `406e12bf…`, WNS −12.425), and that `054cea69b`'s bitstream — sha256 `d76d2a36…` — has never
+> left the synthesis machine. No m1 bitstream exists on this lane's machine either.
+>
+> **The discriminator is the image HASH, not `nv_bitstream_name`, which is a label.** This project's own
+> rule is to cite a board result by its image hash and never by its label, and it exists because a label
+> has named a different program before. Until the sha256 of the image actually on the board is produced
+> and matched against `d76d2a36…`, **every measurement in this block should be read as provisional** —
+> if the resident image is not the one assumed, the numbers describe a different design.
+>
+> Recorded by this lane, which accepted a peer report and committed it as fact without verifying it
+> against the primary source. That is the error, independently of which report turns out to be right.
+>
 > `caplifive_m1_054cea69b.bit` flashed and resident (`nv_bitstream_name` read back). Board boots, monitor
 > survives, capability exception delivery live for the first time with the D3 writeback fix holding in
 > practice — firmware scanned two-sided before the bake: 1 integer-derived access in capability-mode text
