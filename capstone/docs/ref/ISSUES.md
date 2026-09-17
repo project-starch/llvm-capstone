@@ -4205,10 +4205,23 @@ ladder rung approaches it (bigmany: 65).~~
 >
 > **⚠ DISPUTED 2026-09-17, AND THE MEASUREMENTS BELOW DEPEND ON IT. Two lanes report incompatible board
 > state and this lane cannot adjudicate.** One reports `caplifive_m1_054cea69b.bit` flashed and resident,
-> read back from `nv_bitstream_name`, with the silicon numbers recorded here. Another reports that
-> nothing has been flashed, that the resident image is still `caplifive_r30r31_1bfff7776.bit`
-> (sha256 `406e12bf…`, WNS −12.425), and that `054cea69b`'s bitstream — sha256 `d76d2a36…` — has never
-> left the synthesis machine. No m1 bitstream exists on this lane's machine either.
+> read back from `nv_bitstream_name`, with the silicon numbers recorded here. The synthesis lane reports
+> the opposite — but has since NARROWED its own claim, and the narrowed form is the one to hold:
+>
+> * **Well supported**: that machine never flashes, nothing was flashed from it, and the only bitstream
+>   ever staged for handoff from it is the September `1bfff7776` one. `054cea69b`'s bitstream
+>   (sha256 `d76d2a36…`) sits in a worktree and has never been staged. So *no board fed from that machine
+>   carries the reclaimer*. Circumstantially: the board lane asked that machine for bitstream LOCATIONS
+>   after reporting the flash, and one does not ask where a file is after flashing it.
+> * **Relayed, not observed**: "`1bfff7776` is currently resident" — a session record dated 2026-09-12
+>   citing a read-back a third lane performed, restated five days later in the flat present tense. Its
+>   author has withdrawn that form; they have no board access and have never read back an image.
+>
+> No m1 bitstream exists on this lane's machine either. **Neither lane can distinguish one board from
+> two**, and if the apollo lanes have their own hardware both reports may be true of different devices —
+> in which case the only thing wrong is every document, this one included, that wrote "the board" as
+> though there were one. **A claim about a resident image needs a DEVICE named beside it as well as a
+> hash** — a second half to the cite-by-hash rule that was not in it.
 >
 > **The discriminator is the image HASH, not `nv_bitstream_name`, which is a label.** This project's own
 > rule is to cite a board result by its image hash and never by its label, and it exists because a label
