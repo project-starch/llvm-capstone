@@ -4203,27 +4203,39 @@ ladder rung approaches it (bigmany: 65).~~
 
 > # 2026-09-17 — THE RECLAIMER ON SILICON: permitted reuse demonstrated, both cost curves FLAT, the capacity knee gone.
 >
-> **⚠ DISPUTED 2026-09-17, AND THE MEASUREMENTS BELOW DEPEND ON IT. Two lanes report incompatible board
-> state and this lane cannot adjudicate.** One reports `caplifive_m1_054cea69b.bit` flashed and resident,
-> read back from `nv_bitstream_name`, with the silicon numbers recorded here. The synthesis lane reports
-> the opposite — but has since NARROWED its own claim, and the narrowed form is the one to hold:
+> **RESOLVED 2026-09-17 by a LABEL-INDEPENDENT argument, after this lane committed the report as fact
+> and then had to dispute it.** The run itself is the discriminator:
 >
-> * **Well supported**: that machine never flashes, nothing was flashed from it, and the only bitstream
->   ever staged for handoff from it is the September `1bfff7776` one. `054cea69b`'s bitstream
->   (sha256 `d76d2a36…`) sits in a worktree and has never been staged. So *no board fed from that machine
->   carries the reclaimer*. Circumstantially: the board lane asked that machine for bitstream LOCATIONS
->   after reporting the flash, and one does not ask where a file is after flashing it.
-> * **Relayed, not observed**: "`1bfff7776` is currently resident" — a session record dated 2026-09-12
->   citing a read-back a third lane performed, restated five days later in the flat present tense. Its
->   author has withdrawn that form; they have no board access and have never read back an image.
+>     R1 m1 end arm=drop stop=target alloc=200000 minted=200031 revoked=200000
 >
-> No m1 bitstream exists on this lane's machine either. **Neither lane can distinguish one board from
-> two**, and if the apollo lanes have their own hardware both reports may be true of different devices —
-> in which case the only thing wrong is every document, this one included, that wrote "the board" as
-> though there were one. **A claim about a resident image needs a DEVICE named beside it as well as a
-> hash** — a second half to the cite-by-hash rule that was not in it.
+> Both candidate images carry the same `16'd65535` sentinel, so the pool is 65,532 usable on either — I
+> checked that rather than taking it. A run that mints 200,031 nodes from a 65,532-index pool and reaches
+> `stop=target` cannot have avoided exhaustion, and exhaustion is not a completed run on EITHER candidate:
+> pre-Part-B it is a wedge (measured — the control ran to the 3,000,013-cycle ceiling with `tohost` never
+> written), and post-Part-B it traps with cause 30. **So whatever image executed that run reclaims, and
+> the deployed one does not.** No label is load-bearing in that argument, which is why it settles what a
+> curve comparison could not: a flat curve against a knee is also the shape two different builds produce.
 >
-> **The discriminator is the image HASH, not `nv_bitstream_name`, which is a label.** This project's own
+> **The reconciliation is a vantage limit, not an error by anyone.** The synthesis lane's "that bitstream
+> never left this machine" was their honest belief and is falsified by something they cannot observe — an
+> INBOUND `scp` pull performed from the board side, hash-verified as `d76d2a36…` on arrival, then uploaded
+> and flashed. A pull leaves no trace at the source.
+>
+> **⚠ AND THE LIMITATION THIS EXPOSED IS BIGGER THAN THE INCIDENT, because it applies to every board
+> result this project has ever published.** The console exposes **no digest of the resident image**:
+> `flash_state` carries only `state`, `nv_bitstream_name` and `server_epoch`; the bitstream routes refuse
+> GET (405) and have no download endpoint (404). So **"cite a board result by its image hash" is
+> UNSATISFIABLE for a resident image on this hardware** — the label is the only identity the console
+> offers. The workable form of the rule is therefore three-part, and all three parts existed here:
+> hash the artifact BEFORE it leaves the build host; record the console's label; and **put a behavioural
+> discriminator in the run that only the intended build can pass**. The third is what actually settled
+> this, and it is the one nobody had been asking for.
+>
+> **The residual, stated rather than closed:** the reuse argument proves *a reclaiming build* ran, and
+> three exist on this branch (`1ac15c4ef`, `d9620b907`, `054cea69b`). What pins it to `054cea69b` is the
+> pre-upload file hash, not the run. Any claim resting specifically on A6's link masking rather than on
+> reclamation in general inherits that gap.
+>
 > rule is to cite a board result by its image hash and never by its label, and it exists because a label
 > has named a different program before. Until the sha256 of the image actually on the board is produced
 > and matched against `d76d2a36…`, **every measurement in this block should be read as provisional** —
