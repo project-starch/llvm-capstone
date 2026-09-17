@@ -62,13 +62,20 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/set_thread_area.S" -o "$OBJ_DIR/set_thread_area.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/setjmp.S" -o "$OBJ_DIR/setjmp.o"
-for f in hostcall tls level0 string_bounds_safe; do
+for f in hostcall tls level0 string_bounds_safe fputwc_null_safe; do
   "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/$f.c" -o "$OBJ_DIR/$f.o"
 done
+# Its own line, not the loop: it needs musl's src/multibyte on the include path
+# for the decoder's internal.h, and putting that directory in front of every
+# runtime file would let a bare "internal.h" resolve there by accident.
+"$CLANG" "${CF[@]}" -I"$MUSL/src/multibyte" \
+  -c "$PORT_DIR/runtime/mbsrtowcs_bounds_safe.c" -o "$OBJ_DIR/mbsrtowcs_bounds_safe.o"
 "$CLANG" "${TF[@]}" -c "$SCRIPT_DIR/libc_test_domain.c" -o "$OBJ_DIR/libc_test_domain.o"
 RUNTIME=("$OBJ_DIR/start-musl.o" "$OBJ_DIR/hostcall.o" "$OBJ_DIR/tls.o" "$OBJ_DIR/set_thread_area.o"
          "$OBJ_DIR/setjmp.o"
-         "$OBJ_DIR/string_bounds_safe.o" "$OBJ_DIR/level0.o" "${softfloat_objs[@]}" "$OBJ_DIR/libc_test_domain.o")
+         "$OBJ_DIR/string_bounds_safe.o" "$OBJ_DIR/mbsrtowcs_bounds_safe.o"
+         "$OBJ_DIR/fputwc_null_safe.o"
+         "$OBJ_DIR/level0.o" "${softfloat_objs[@]}" "$OBJ_DIR/libc_test_domain.o")
 
 # libc-test's own harness, minus runtest.c (a fork-based driver, replaced by
 # the guest loop) -- everything else is what the tests link against.
@@ -103,7 +110,6 @@ declare -A EXCLUDE=(
   [ipc_msg]="SysV IPC: no opcode"
   [ipc_sem]="SysV IPC: no opcode"
   [ipc_shm]="SysV IPC: no opcode"
-  [clock_gettime]="time: HostCall v0 has no time opcode, and the test loops until time advances"
 )
 
 built=0; excluded=0; failed=0

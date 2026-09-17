@@ -24,7 +24,7 @@ and the table below accounts for every one of its 77 sources.
 | `setjmp` `longjmp` `sigsetjmp` | works, from this port's own assembly |
 | `clock_gettime` | works, through a new HostCall opcode (`CLOCK_GETTIME`, 25) |
 | `stat` `getuid` `getgid` | works, path stat as open, fstat, close |
-| real pthreads | **no**, see C-47 |
+| real pthreads | **no**, and C-47 is only one of five: `pthread_create` also needs `clone`, two `mmap`s for the stack, `futex` (eight files under `src/thread` use it) and somewhere for the second thread to run, and a domain holds the only hart |
 | `fork` `exec` `pipe` `socket` `dlopen` | **no**, and none of them is on the way: a domain is one process |
 | musl's own test suite | 77 tests accounted for, see below |
 
@@ -186,7 +186,8 @@ stack-passed varargs were packed at 8 bytes while `va_arg` reads at 16, so `inet
 `t_error` call rather than printing what was wrong. Fixed, and the before-and-after is 31 PASS
 and 7 FAULT against 40 and 3.
 
-Four defects in this port, each a case where returning from a call is worse than not having it:
+Six defects in this port. Four are cases where returning from a call is worse than not having
+it, and two are C that is correct on flat memory and wrong here:
 `exit()` put musl's `_Exit` in its retry loop; musl's own `__libc_malloc` bypassed this port's
 allocator into a `lite_malloc.c` that stores pointers as integers; `stat` on a path had no route
 at all; and `sigsetjmp` was a C function that **called** `setjmp`, so the buffer recorded the
@@ -197,23 +198,32 @@ address where a size belonged; that entry is withdrawn in `ISSUES.md` with what 
 because a fault inside compiler-generated bounds code is where a corrupted register file first
 becomes visible, not evidence of who corrupted it.
 
+The two flat-memory ones are the last capability faults the suite had. `mbsrtowcs` reads four
+bytes at a time over a byte string, which is the twelfth and last of musl's `__may_alias__`
+sources and the one `string_bounds_safe.c` had missed, because it was found by grepping
+`ONES/HASZERO/ALIGN` and that pattern finds seven of the twelve. `__fputwc_unlocked` computes
+`f->wpos + MB_LEN_MAX` before `__towrite` has run, which is arithmetic on a null pointer, and
+the RTL raises on that, not only the emulator. Running the whole suite once with
+`CAPSTONE_CINC_UNTAGGED_SURVIVE=1`, which reports every such site instead of trapping at the
+first, found exactly one across 49 tests: this one. The class is a function, not a front.
+
 And the narrowing of M-1: a fault on first entry returns to the guest, a fault after a yield
 does not.
 
 | verdict | n | |
 |---|---:|---|
-| `PASS` | 40 | the test's own `t_status`, with nothing it needed refused behind its back |
+| `PASS` | 43 | the test's own `t_status`, with nothing it needed refused behind its back |
 | `FAIL` | 7 | named below, four of them for a reason that is not the port's |
-| `FAULT` | 2 | a capability fault: `mbc` and `swprintf`, both open |
+| `FAULT` | 0 | not one capability fault is left in the suite |
 | `NOBUILD` | 5 | the five `tls_*` sources, all C-47 |
-| `EXCLUDED` | 23 | a service a domain does not have: processes, threads, sockets, SysV IPC, dynamic loading |
+| `EXCLUDED` | 22 | a service a domain does not have: processes, threads, sockets, SysV IPC, dynamic loading |
 | **total** | **77** | every source in libc-test's `src/functional` |
 
-Measured 2026-09-17 with the C-48 fix in the compiler. Against the same tree without it the
-same run reads 31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN.
+Measured 2026-09-17. Against the same tree without the C-48 compiler fix the same run reads
+31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN, and without the last two replacements below it
+reads 41 PASS and 2 FAULT.
 
-**What the reds are.** Of the nine, four are not about capabilities at all, two are
-services a domain does not have, and three are open.
+**What the reds are.** None of them is a capability fault any more.
 
 | test | what it is |
 |---|---|
@@ -223,13 +233,11 @@ services a domain does not have, and three are open.
 | `utime` | needs `utimensat`; the stat service carries size and mode, not times |
 | `sscanf_long` | wants an 8 MiB buffer; a domain is one contiguous kernel allocation and `MAX_ORDER` caps that at 4 MiB here |
 | `setjmp` | runs to the end since `sigsetjmp` became `setjmp` itself; it fails on `rt_sigprocmask`, which stays unserved: a domain that says nothing is blocked right after being asked to block something is telling a plausible lie, and the test's two assertions about the mask cannot both hold without a real one |
-| `mbc` | faults at `lw a7, 4(a4)` walking a locale table four bytes at a time, cause 5, out of bounds |
-| `swprintf` | faults at `cincoffsetimm a2, a0, 4` on a `FILE` field loaded with `ldc` that carries no tag, cause 24 |
-| `strtold` | the last bit of a 113-bit mantissa, a soft-float question |
+| `strtold` | musl 1.2.5's hex accumulation, replayed on the host with `__float128`, gives the same `…1112`; the binary128 primitives are bit-identical to the host on add, subtract, multiply and the bias round-trip |
 
-`mbc` and `swprintf` both used to die inside musl's `__simple_malloc`; with one allocator under
-all five names that function is not in the image at all any more, and both faults moved further
-in, which is progress and not a fix. They are the three worth chasing next, with `strtold`.
+Four of the seven are libc-test tracking musl's master while this port builds 1.2.5, so they
+fail the same way on any 1.2.5 and are not evidence about capabilities at all. The other three
+are services a domain does not have.
 
 The first two are libc-test tracking musl's master while this port builds 1.2.5, so they
 fail the same way on any 1.2.5 and are not evidence about capabilities at all.
