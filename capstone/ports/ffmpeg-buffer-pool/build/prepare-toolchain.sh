@@ -34,8 +34,8 @@ done
 
 OUT="$WORK/$MODE"
 mkdir -p "$OUT/include/libavutil" "$OUT/obj"
-# Only these configuration choices are used through buffer.c's public headers
-# and its thread abstraction. Both isolated arms select upstream's serial path.
+# Pool replay runs on one thread in both targets, so FFmpeg's thread abstraction
+# uses its no-thread implementation. Reference counts still use C11 atomics.
 cat > "$OUT/include/config.h" <<'EOF'
 #define HAVE_PTHREADS 0
 #define HAVE_W32THREADS 0
@@ -53,17 +53,9 @@ EOF
 FLAGS=(-std=c11 -O0 -g -ffunction-sections -fdata-sections
        -I"$OUT/include" -I"$SRC")
 
-# The compiler currently fails selecting C11 atomic_fetch_add through an
-# AS200 pointer. Use FFmpeg's OWN fallback for serial configurations in BOTH
-# isolated arms. Its atomic_uint is intptr_t, so this is also a layout change.
-# FFPOOL_ATOMICS=c11 reproduces the standard-atomics build attempt.
-ATOMICS=${FFPOOL_ATOMICS:-serial}
-case "$ATOMICS" in
-    serial) FLAGS+=(-I"$SRC/compat/atomics/dummy");;
-    c11) ;;
-    *) echo "FFPOOL_ATOMICS must be serial or c11" >&2; exit 2;;
-esac
-echo "ffpool mode=$MODE atomics=$ATOMICS (isolated execution is serial)"
+# Both targets use C11 atomics for reference counts. The replay runs on one
+# thread; Capstone execution requires the AS200 atomic compiler and QEMU fixes.
+echo "ffpool mode=$MODE atomics=c11 (single-threaded replay)"
 
 # Select the host compiler or prepare the freestanding domain toolchain.
 if [[ "$MODE" == native ]]; then
