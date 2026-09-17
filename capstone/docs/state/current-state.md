@@ -2,6 +2,34 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-17 (evening) — CURRENT
+
+> **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer
+> build `054cea69b` is resident, carrying the revoke-walk splice, the node reclaimer **and R-34 plus
+> R-24** — the last of those found by reading the build's contents rather than its name, two hours
+> before the flash. **Every board result recorded before this reflash is on the old silicon and is
+> stale under the standing rule**; re-check before relying on one.
+>
+> **The monitor fix was a prerequisite and it held.** With delivery live, the old monitor's integer
+> add on the stack capability would have faulted inside its own trap handler at every `rdtime` and the
+> boot would have looked like a bad bitstream. First boot after the merge: control `retval=4` twice,
+> **zero refused-or-trap lines**, all three invocations returned. The pin is `2dcd3a5` in all eight
+> drivers and `capstone-bootstrap` carries the fix.
+> **`tests/monitor/scan-integer-bases.py` was run on BOTH sides of the bake** — one integer-derived
+> base and exit 1 before, zero and exit 0 after — which is what makes "the fix is in the firmware I
+> am about to boot" a different and stronger claim than "the fix is in the source".
+>
+> **The reclaimer does what it was built to do:** 200,000 allocations against a 65,532-index pool
+> **without exhausting it**, and both cost curves flat — the ~12× release growth P1 measured and the
+> capacity knee are both gone. Bundle at `experiments/results/M1/2026-09-17-reclaimer-pilot`,
+> labelled a **platform pilot and not an M1 arm**, because M1's start gate is still one of three.
+>
+> **Stale as of this reflash, pending the console-reported name:** every "the resident bitstream is X"
+> line — `known-good-controls.md`, `bitstream-usability-is-the-census-not-the-slack.md`, the launch
+> doc, and the drivers' `FPGA_BITSTREAM` default. Read the name off the board
+> (`flash_state.nv_bitstream_name`) rather than writing the filename that was flashed; those are not
+> guaranteed to be the same string and the hard-stop gate compares against the former.
+
 ## 2026-09-17 — CURRENT
 
 > **A bitstream queued for flashing carries two fixes its name does not mention.**
