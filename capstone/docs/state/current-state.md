@@ -59,12 +59,12 @@ Minimal snapshot. Read first in every session.
   against 4. An index retires after 16,384 reclaims rather than wrapping (measured at production width).
   An audit of the finished A5 diff found a composed id reaching a node's LINK, which let a generation
   SKIP past the retirement compare and wrap; fixed at both ends in `054cea69b` and measured as a pair.
-  Sweep 65/27/3 with **zero status changes**; lint 733 with **UNOPTFLAT 40 unmoved**. **SYNTHESISED 2026-09-17, exit 0, NOT FLASHED.** S1 on `054cea69b`: **WNS −8.307** (best ever on this
+  Sweep 65/27/3 with **zero status changes**; lint 733 with **UNOPTFLAT 40 unmoved**. **SYNTHESISED 2026-09-17 and FLASHED — `caplifive_m1_054cea69b.bit` is resident, read back from `nv_bitstream_name`.** S1 on `054cea69b`: **WNS −8.307** (best ever on this
   design), **combinational loops 1**, routed Total LUTs **168,757 — 456 BELOW the flashed base** while
   adding the allocator, the free list and the generation check; `capstone_rev_node` 985 LUT / 740 FF.
   All three pre-registered readings met. **Attribution withheld on purpose:** the branch is 14 `core/`
   files from the splice — reclaimer AND the r34-r24 merge — so no reclaimer-specific timing, loop or
-  area claim is supported; `f714d2a72` is the only build that would split them and has never been run. Box: `ISSUES.md` R-12; note
+  area claim is supported; `f714d2a72` is the only build that would split them and has never been run. The reclaimer is now the design on the board, and R-34/R-24 exception delivery went resident with it through the merge — capability exception delivery is live on silicon for the first time. Box: `ISSUES.md` R-12; note
   `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
 * **R-12's COST half is built, measured and synthesised; the capacity half above now rests on it.** The
   revoke-walk splice (`r12-splice-revoked-nodes`, submodule `f1331daed`, parent `9a5716d5ab6c`)
