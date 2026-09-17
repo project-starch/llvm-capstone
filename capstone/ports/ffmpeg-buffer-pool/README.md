@@ -2,7 +2,7 @@
 
 Record AVBufferPool and AVRefStructPool activity in a native FFmpeg decoder,
 then replay those pool operations in a serial Capstone domain. Start with
-`record/` and `replay/`; earlier experiments are under `baselines/`.
+`record/` and `replay/`.
 
 ## Layout
 
@@ -12,9 +12,8 @@ then replay those pool operations in a serial Capstone domain. Start with
 | `replay/` | Apply the lifetime port, build the replay engine and host loader, run under QEMU |
 | `runtime/` | Shared build preparation, metadata allocator and payload lifetime hooks |
 | `trace/` | Shared event format and observation logic used by recorder and replay |
-| `tests/` | Pool lifetime probes and their QEMU verdicts |
+| [security-tests/](security-tests/README.md) | Bounds, stale-reference and invalid-release probes with QEMU verdicts |
 | `tools/` | Extract commands, compare traces, summarize and plot results |
-| [baselines/](baselines/README.md) | Standalone buffer API controls and the older buffer-only replay |
 
 FFmpeg 9.0.1 sources, generated ports, binaries and logs stay outside this
 repository, under `${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}`. Build
@@ -60,11 +59,11 @@ for mode in 0 1 2; do
     python3 "$port/tools/trace-tools.py" compare \
         "$run/recorded.bin" "$run/mode-$mode/capstone.bin"
 done
-bash "$port/tests/run-security.sh" "$FFPOOL_WORK/runs/security-example"
+bash "$port/security-tests/run-security.sh" "$FFPOOL_WORK/runs/security-example"
 ```
 
 `record/build.sh` defaults to `traced`. `replay/build.sh` prepares its own
-freestanding support objects; it does not require a baseline experiment build.
+freestanding support objects.
 The shared environment supplies the QEMU lock. Keep emulator suites inside
 that lock. The default security matrix is cases 0–11 in all three modes;
 cases 12 and 13 are separate long-run probes requiring explicit selection.
@@ -130,10 +129,7 @@ cleaning scratch builds.
 |---|---|
 | `combined/build-workload.sh`, `combined/run-workload.sh` | `record/build.sh traced`, `record/run.sh` |
 | `combined/build-replay.sh`, `combined/run-qemu.sh` | `replay/build.sh`, `replay/run-qemu.sh` |
-| `combined/run-security.sh` | `tests/run-security.sh` |
+| `combined/run-security.sh` | `security-tests/run-security.sh` |
 | `combined/trace-tools.py`, `combined/plot.py` | `tools/trace-tools.py`, `tools/plot.py` |
-| `build.sh`, `run-qemu.sh` | `baselines/standalone/build.sh`, `baselines/standalone/run-qemu.sh` |
-| Root-level buffer-only recorder/replay scripts | `baselines/buffer-only/` |
 
-For the stock decoder, use `record/build.sh stock`. The buffer-only baseline
-has its own `build-workload.sh stock|traced`; its trace format is different.
+For the stock decoder, use `record/build.sh stock`.

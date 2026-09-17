@@ -35,7 +35,7 @@ else
 fi
 sha256sum "$OUT/obj/"*.o > "$OUT/objects.sha256"
 "$CC" "${FLAGS[@]}" -DFF2_SECURITY -c "$HERE/replay.c" -o "$OUT/obj/security-driver.o"
-"$CC" "${FLAGS[@]}" -c "$FFPOOL_ROOT/tests/security.c" -o "$OUT/obj/security.o"
+"$CC" "${FLAGS[@]}" -c "$FFPOOL_ROOT/security-tests/security.c" -o "$OUT/obj/security.o"
 SECURITY=("$OUT/obj/buffer.o" "$OUT/obj/refstruct.o" "$OUT/obj/security-driver.o"
           "$OUT/obj/security.o" "$OUT/obj/observe.o" "$OUT/obj/memory.o")
 if [[ "$MODE" == native ]]; then
