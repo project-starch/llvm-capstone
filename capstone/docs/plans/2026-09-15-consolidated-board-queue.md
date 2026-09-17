@@ -344,7 +344,19 @@ available capacity once P1 is running; do not queue them unasked.
 
 ## Desk work (no board time), in parallel with the queue
 
-* **D1 — finish H1's bundle to `EXECUTION.md`'s seven-item shape**: it is one file (`manifest.json`)
+* **D1 — finish H1's bundle to `EXECUTION.md`'s seven-item shape. BLOCKED FROM APOLLO 2026-09-17,
+  and the "costs no boot" note below is true only on focs-server.** The readings are in §7v, but the
+  bundle needs `raw/` with hashes and **E4's transcript is not on this host**: there is no
+  `board-r1e4-*` output directory under `capstone-artifacts/unify/`, and `board/e1-s1s2-hardware` —
+  which carries the E1/R1/M2/H1 bundles — **is not on the remote** (`git ls-remote` finds no such
+  head; it is unpushed on focs-server). A durable reference is not a way round it either, since that
+  needs the transcript's hash and that is equally unreachable. So D1 is blocked on the same
+  board-branch access item already with the lead, not merely pending. **Do not pick this up on apollo
+  expecting desk work.** Note also that the H1 bundle that DOES exist here,
+  `experiments/results/H1/2026-09-15-apollo-handover/`, is complete at all seven entries and is a
+  different run — the Q0 hand-over boot, not E4's calibration. The two are easy to confuse by name.
+
+  *Original entry:* it is one file (`manifest.json`)
   today, and needs `points.csv` listing every planned cell *including the unsupported ones*,
   `runs.jsonl` linking each attempt to its point, repetition, boot and oracle, `raw/` with hashes,
   `analysis/` with a reproduction command, and a `summary.md` that states what did not run. E4's instruction tests and
