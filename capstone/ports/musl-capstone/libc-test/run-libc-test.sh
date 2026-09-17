@@ -111,9 +111,11 @@ SYSNAME = {25: "fcntl", 29: "ioctl", 34: "mkdirat", 35: "unlinkat", 48: "faccess
     220: "clone", 221: "execve", 222: "mmap", 226: "mprotect", 233: "madvise", 260: "wait4",
     261: "prlimit64", 278: "getrandom", 291: "statx"}
 def sysnames(numbers):
+    # The domain prints distinct numbers with how often each was asked, "88x9".
     seen = []
     for tok in numbers.split():
-        name = SYSNAME.get(int(tok), tok) if re.fullmatch(r"-?\d+", tok) else tok
+        m = re.fullmatch(r"(-?\d+)(x\d+)?", tok)
+        name = SYSNAME.get(int(m.group(1)), m.group(1)) + (m.group(2) or "") if m else tok
         if name not in seen: seen.append(name)
     return " ".join(seen)
 res = {}

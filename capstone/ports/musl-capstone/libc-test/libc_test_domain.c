@@ -19,7 +19,6 @@
 extern volatile int t_status;
 int libc_test_main(int argc, char **argv);
 unsigned long __capstone_unserved_count(void);
-long __capstone_unserved_at(unsigned long i);
 
 /* Status codes above 0xff cannot collide with t_status, which is 0 or 1. */
 #define LT_UNSERVED 0x100
@@ -43,21 +42,11 @@ static int lt_report(int r)
 		return r;
 	lt_reported = 1;
 
-	unsigned long n = __capstone_unserved_count();
-	if (n) {
-		printf("libc-test: UNSERVED syscalls:");
-		for (unsigned long i = 0; i < n; i++) {
-			long nr = __capstone_unserved_at(i);
-			if (nr < 0) {   /* the ring keeps the first few, the count is exact */
-				printf(" (+%lu more)", n - i);
-				break;
-			}
-			printf(" %ld", nr);
-		}
-		printf("\n");
-		fflush(stdout);
+	/* The list itself is the runtime's to print, once, for every domain and not
+	   only for this harness. What is left here is the part only a test needs:
+	   a status that cannot be mistaken for a pass. */
+	if (__capstone_unserved_count())
 		r |= LT_UNSERVED;
-	}
 	fflush(stdout);
 	return r;
 }

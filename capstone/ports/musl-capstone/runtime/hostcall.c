@@ -27,6 +27,7 @@
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
 #include <setjmp.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -586,6 +587,67 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
 
 /* Read by probes after the program has finished, never during. Returns the
    total seen, which may exceed what was kept. */
+/* Said out loud at exit, because recording is not reporting.
+ *
+ * A refused syscall comes back as -ENOSYS, musl turns that into an ordinary
+ * failed call, and a program that does not check carries on with a wrong
+ * answer. The ring below has always held what was refused, but only a caller
+ * that asked ever saw it, so a domain that never asked was silently wrong.
+ * Every domain now says so on its way out.
+ *
+ * write(2) and not printf: this runs after the program is finished, and on the
+ * exit() path musl's stdio has already been torn down. write goes straight
+ * through the hostcall and needs nothing that may have been taken apart.
+ *
+ * Numbers, not names: a table of three hundred names is not worth the bytes in
+ * every domain image when both readers already translate. The suite's runner
+ * prints them by name, and check-domain-support.py says which CALL needs each
+ * one, which is the question a person actually has.
+ */
+static void hc_report_unserved(void) {
+  if (hc_unserved_n == 0)
+    return;
+  static const char head[] = "capstone-domain: UNSERVED syscalls:";
+  char buf[256];
+  unsigned long p = 0;
+  for (unsigned long i = 0; i < sizeof head - 1; i++)
+    buf[p++] = head[i];
+  unsigned long shown = hc_unserved_n < HC_UNSERVED_MAX ? hc_unserved_n : HC_UNSERVED_MAX;
+  for (unsigned long i = 0; i < shown && p + 32 < sizeof buf; i++) {
+    unsigned long seen = 0, times = 0;
+    for (unsigned long j = 0; j < shown; j++) {
+      if (hc_unserved[j] != hc_unserved[i])
+        continue;
+      if (j < i)
+        seen = 1;
+      times++;
+    }
+    if (seen)   /* one line per distinct number, with how often it was asked */
+      continue;
+    buf[p++] = ' ';
+    long v = hc_unserved[i];
+    char d[20];
+    unsigned long k = 0;
+    do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (k)
+      buf[p++] = d[--k];
+    if (times > 1) {
+      buf[p++] = 'x';
+      k = 0;
+      do { d[k++] = (char)('0' + times % 10); times /= 10; } while (times);
+      while (k)
+        buf[p++] = d[--k];
+    }
+  }
+  if (hc_unserved_n > shown && p + 8 < sizeof buf) {
+    static const char more[] = " ...";
+    for (unsigned long i = 0; i < sizeof more - 1; i++)
+      buf[p++] = more[i];
+  }
+  buf[p++] = '\n';
+  write(1, buf, p);
+}
+
 unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
 long __capstone_unserved_at(unsigned long i) {
   return i < HC_UNSERVED_MAX && i < hc_unserved_n ? hc_unserved[i] : -1;
@@ -633,6 +695,7 @@ void domain_main(unsigned *res, unsigned func) {
   else
     status = capstone_main();
   hc_exit_armed = 0;
+  hc_report_unserved();
 
   if (hc_metadata) {
     hc_metadata->opcode = HC_V0_OP_NONE;

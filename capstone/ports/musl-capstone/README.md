@@ -151,6 +151,53 @@ weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
 `pthread_cancel.c`. As long as that object is not linked, the alias wins and
 cancellation points route through our hostcall like any other syscall.
 
+## Using something that is not there
+
+A domain's hostcall answers what it knows and returns `-ENOSYS` for the rest. musl turns that
+into an ordinary failed call, so a program that does not check its return values gets a
+plausible wrong answer rather than a stop. Two things now make that loud.
+
+**Before the run.** `check-domain-support.py` reads a linked `.dom` and says which of its libc
+calls cannot work, without booting anything:
+
+```bash
+python3 capstone/ports/musl-capstone/check-domain-support.py my.dom \
+  --baseline some-other.dom --port-objects "$OBJ"/level0.o "$OBJ"/hostcall.o ...
+```
+
+The served set comes out of `runtime/hostcall.c`'s own `case SYS_x:` labels, so it cannot drift
+from the implementation, and a source is reported only when **every** syscall it names is
+unserved. That second rule is what makes it usable: musl's `fstatat` tries `statx` and falls
+back to `newfstatat`, `clock_gettime` falls back to `gettimeofday`, and a checker that reported
+mentions called both of them broken. `--baseline` subtracts what any musl image links anyway,
+so what is left is what your program brought.
+
+Checked against the suite, it names exactly what running found and nothing else:
+
+| image | says |
+|---|---|
+| `lt-fscanf` | `pipe` needs `pipe2` |
+| `lt-utime` | `utimensat` needs `utimensat` |
+| `lt-setjmp` | `pthread_sigmask` needs `rt_sigprocmask` |
+| `lt-strtold`, `lt-mntent`, `lt-string_strstr` | clean |
+
+The three clean ones are the tests that fail for reasons that are not a missing service, which
+is the discrimination that makes the tool worth running. A line means the call cannot work if
+the program makes it, not that it will: the check reads each symbol's own source rather than a
+call graph, and a linked symbol need not be reachable.
+
+**After the run.** Every domain now prints what it was refused, on its way out:
+
+```
+capstone-domain: UNSERVED syscalls: 59
+```
+
+by `write(2)` rather than stdio, because on the `exit()` path musl's stdio has already been
+taken apart. That report is exact, where the static check is early: it lists what the program
+actually asked for. Numbers rather than names, because a table of three hundred names is not
+worth the bytes in every image when the suite's runner prints them by name and the static check
+says which call needs each one.
+
 ## libc-test: musl's own suite, in a domain
 
 `libc-test/` builds every functional test of musl's libc-test as its own pure-capability
