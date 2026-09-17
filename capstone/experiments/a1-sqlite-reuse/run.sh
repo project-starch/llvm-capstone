@@ -71,11 +71,13 @@ provenance() {  # what produced the files beside it: enough to rebuild the image
     echo "speedtest1      --memdb --size $SIZE --testset main --verify --stats, lookaside ${SQLITE_LOOKASIDE:-1200,40}"
     echo "pool            $POOL bytes in the unprotected arm ($((POOL / 65)) atoms of 64 bytes); the port's pool the same atoms, linear"
     echo "regions         sqlite_host.user --pool / --arena and --tables from the host, from the kernel's CMA area above 4 MiB (cma=${SPEEDTEST1_CMA:-1G}), released after the run"
-    echo "llvm-capstone   $(git -C "$HERE" rev-parse --abbrev-ref HEAD) $(git -C "$HERE" rev-parse --short=12 HEAD)$(git -C "$HERE" diff --quiet -- capstone/ports/sqlite capstone/experiments || echo ' (with uncommitted changes)')"
+    echo "llvm-capstone   $(git -C "$HERE" rev-parse --abbrev-ref HEAD) $(git -C "$HERE" rev-parse --short=12 HEAD)$(git -C "$CAPSTONE_REPO_ROOT" diff --quiet -- capstone/runtime capstone/ports/sqlite capstone/experiments || echo ' (with uncommitted changes)')"
     echo "buildroot       $(git -C "$CAPSTONE_BUILDROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true) $(git -C "$CAPSTONE_BUILDROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || true)"
     echo "qemu            $qemu${qdir:+; $(git -C "$qdir" rev-parse --abbrev-ref HEAD) $(git -C "$qdir" rev-parse --short=12 HEAD)}; CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN CAPSTONE_REV_NODES=$CAPSTONE_REV_NODES"
     echo "port            $(sha256sum "$PORT/sublet/sublet-3530300.patch" | cut -c1-64)  capstone/ports/sqlite/sublet/sublet-3530300.patch"
-    echo "primitives      $(sha256sum "$PORT/sublet/sublet.h" | cut -c1-64)  capstone/ports/sqlite/sublet/sublet.h"
+    for header in capstone/capability-slot.h capstone/capability.h sublet/sublet.h; do
+      echo "runtime         $(sha256sum "$CAPSTONE_REPO_ROOT/capstone/runtime/include/$header" | cut -c1-64)  capstone/runtime/include/$header"
+    done
     echo "instrument      $(sha256sum "$HERE/memhook.c" | cut -c1-64)  memhook.c, called from hook-3530300.patch (memsys5 arm) and hook-3530300-sublet.patch (sublet arm)"
   } > "$f"
 }

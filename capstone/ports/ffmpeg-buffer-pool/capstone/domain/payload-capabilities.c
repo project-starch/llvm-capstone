@@ -1,26 +1,21 @@
 /* Capstone bounds/backing protection; mode 2 adds Sublet pool leases. */
 #include "../../sublet/pool-leases.h"
 #include "payload-backend.h"
+#include <sublet/sublet.h>
 
-static sublet_cap remaining;
+static capstone_cap_slot remaining;
 static size_t init_bytes;
 
 void ff2_payload_init(void *p, size_t n) {
-  sublet_store(&remaining, p);
-  uintptr_t payload_base = sublet_base(&remaining);
-  if (sublet_type(&remaining) != 0 ||
-      sublet_end(&remaining) - payload_base != n)
+  capstone_cap_store(&remaining, p);
+  uintptr_t payload_base = capstone_cap_base(&remaining);
+  if (capstone_cap_type(&remaining) != CAPSTONE_CAP_LINEAR ||
+      capstone_cap_end(&remaining) - payload_base != n)
     ff2_fail(302);
   ff2_pool_init_region(payload_base, n);
 }
 static void *spatial_alias(struct payload_block *b) {
-  void *p;
-  __asm__ volatile(".insn i 0x5b, 0x3, %0, 0(%1)\n"
-                   ".insn s 0x5b, 0x4, x0, 0(%1)\n"
-                   ".insn r 0x5b, 0x1, 0x03, %0, x0, x0\n"
-                   : "=&r"(p)
-                   : "r"(&b->region)
-                   : "memory");
+  void *p = capstone_cap_delinearize(&b->region);
   sublet_stats.delin++;
   return p;
 }
@@ -32,10 +27,11 @@ void *ff2_payload_issue_pointer(struct payload_block *b, unsigned mode) {
 /* Address equality cannot authorize free. Compare the tagged current lease;
  * LCC's validity selector is unimplemented in the pinned QEMU. */
 int ff2_payload_same_authority(const void *a, const void *b) {
-  sublet_cap aa, bb;
-  sublet_store(&aa, (void *)a);
-  sublet_store(&bb, (void *)b);
-  if (sublet_type(&aa) != 1 || sublet_type(&bb) != 1)
+  capstone_cap_slot aa, bb;
+  capstone_cap_store(&aa, (void *)a);
+  capstone_cap_store(&bb, (void *)b);
+  if (capstone_cap_type(&aa) != CAPSTONE_CAP_NONLINEAR ||
+      capstone_cap_type(&bb) != CAPSTONE_CAP_NONLINEAR)
     return 0;
   const volatile uint64_t *x = (const volatile uint64_t *)&aa;
   const volatile uint64_t *y = (const volatile uint64_t *)&bb;

@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'capstone/ports/ffmpeg-buffer-pool/**'
+      - 'capstone/runtime/**'
       - '.github/workflows/ffmpeg-buffer-pool.yml'
   push:
     branches: [ffmpeg/1-buffer-pool]
     paths:
       - 'capstone/ports/ffmpeg-buffer-pool/**'
+      - 'capstone/runtime/**'
       - '.github/workflows/ffmpeg-buffer-pool.yml'
   workflow_dispatch:
 

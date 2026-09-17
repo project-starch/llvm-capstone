@@ -7,11 +7,12 @@ measurement is that build. `SPEEDTEST1_SUBLET=1` in `run-sqlite-speedtest1.sh`, 
 
 | File | What it is |
 |---|---|
-| `sublet.h` | the primitives, as operations on capability slots: split, take, give, handle, carve, move. No linear capability ever sits in a C variable, so a copy the compiler makes cannot move one away |
 | `sublet-3530300.patch` | the port of memsys5 and the lookaside pool: 28 hunks against `sqlite3-capstone.c` as the build produces it from the amalgamation, each hunk classed in the header (I interface, H hierarchy, M metadata layout). Applied with `patch -F0 -p1` to the copy in the build directory, before any instrument's patch |
 
-The primitives are not SQLite's. When the second allocator is ported they move to a shared
-home and only the patch stays here.
+The shared headers live in `capstone/runtime/include/`: `capstone/capability.h`
+provides capability slot operations and `sublet/sublet.h` composes allocator lifetime
+operations and counts them. SQLite and FFmpeg use the same implementation; only the
+SQLite allocator patch stays here.
 
 ## The recipe, as it lands in the two allocators
 
@@ -62,8 +63,9 @@ poison writes into a freed block are gone, the block is revoked memory.
 
 The port writes the block through before `init`. A revoke that killed a linear node hands the
 region back uninitialised with its cursor at the base, and `init` is refused until stores at
-the cursor have carried it to the end; `sublet_give_to` in `sublet.h` is that loop, a null
-capability at a time. The emulator the first passes ran on left the cursor at the end instead
+the cursor have carried it to the end; `sublet_give_to` calls `capstone_cap_initialize_zero` in
+`capstone/capability.h` for that loop, a null capability at a time. The emulator the first
+passes ran on left the cursor at the end instead
 and took the `init` at once, so there the loop runs no iteration; its merge line has since
 moved to the specification's rule (Q-07), and the port runs on both. The fill is what `init`
 costs on such a machine, not a primitive of the discipline: the counters a pass reports are
@@ -81,9 +83,9 @@ Two open RTL defects mask it independently, so fixing either alone is not enough
 
 - **R-31 — REVOKE's permission clause is inverted.** Revoking a linear borrow of a *writable*
   region returns a readable **LINEAR** capability where the specification says UNINIT. That is
-  precisely the revoke `sublet_give_to` tests for, so the type check (`addi -3; bnez`) branches
-  past **both** the fill and the `init`, and the routine reports `inited = 0`. The reclaim never
-  happens and nothing says so.
+  precisely the revoke `sublet_give_to` tests for, so the type check branches
+  past **both** the fill and the `init`, so the initialization counter does not increment.
+  The reclaim never happens and nothing says so.
 - **R-30 — `INIT` is unreachable.** Even with R-31 fixed, filling an UNINIT region leaves the
   cursor *at* `end` while `INIT` requires it *past* `end` — a one-byte shortfall. The fill would
   run and the `init` would still fault.

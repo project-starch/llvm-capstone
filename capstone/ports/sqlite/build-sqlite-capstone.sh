@@ -94,12 +94,12 @@ grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 # there. -F0: a source the patch was not written for is refused, not patched somewhere near.
 # SQLITE_SUBLET_PATCH: the Sublet port of memsys5 and lookaside (sublet/sublet-3530300.patch),
 # a diff against the file the sed above produces, applied to the copy, before the instrument.
-# The port's primitives (sublet.h) sit beside the patch; that directory joins the include path
-# only here, so the unprotected build never sees a Sublet file.
+# Sublet and the Capstone slot primitives are shared runtime headers. Only the
+# protected build adds that include directory; the patch remains SQLite-specific.
 SUBLET_FLAGS=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_FLAGS=(-I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/runtime/include")
 fi
 if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"

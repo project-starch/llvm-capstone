@@ -1,6 +1,7 @@
 /* Capstone mode 2: fresh authority for each lease, revoked on pool return. */
 #include "pool-leases.h"
 #include "payload-backend.h"
+#include <sublet/sublet.h>
 
 static size_t init_bytes;
 

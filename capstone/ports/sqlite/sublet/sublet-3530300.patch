@@ -2,10 +2,10 @@
 #
 # A diff against sqlite3-capstone.c as build-sqlite-capstone.sh produces it from
 # the amalgamation (its sed lines are the platform's, not this port's).  The
-# primitives are sublet.h beside this patch; the amalgamation includes it in the
-# first hunk, and the build puts this directory on the include path only when it
-# applies the patch.  Every hunk belongs to one class of the bookkeeping in
-# nested-allocators-paper experiments/A7-ports.md:
+# shared headers live in capstone/runtime/include; the amalgamation includes
+# <sublet/sublet.h> in the first hunk, and the build adds the runtime include
+# directory when it applies this patch. Every hunk belongs to one class of the
+# bookkeeping in nested-allocators-paper experiments/A7-ports.md:
 #
 #   I  interface: the block for a level that carves it arrives linear, under a
 #      handle the level below keeps (sqlite3MallocLinear; the grant memsys5 is
@@ -33,7 +33,7 @@
  #ifndef SQLITE_AMALGAMATION
  #define SQLITE_CORE 1
  #define SQLITE_AMALGAMATION 1
-+#include "sublet.h"
++#include <sublet/sublet.h>
  #ifndef SQLITE_PRIVATE
  # define SQLITE_PRIVATE static
  #endif
@@ -50,7 +50,7 @@
  };
  struct LookasideSlot {
    LookasideSlot *pNext;    /* Next buffer in the list of free buffers */
-+  sublet_cap cap;          /* The slot: linear while free, its handle while out */
++  capstone_cap_slot cap;   /* The slot: linear while free, its handle while out */
  };
  
  #define DisableLookaside  db->lookaside.bDisable++;db->lookaside.sz=0
@@ -58,7 +58,7 @@
  SQLITE_PRIVATE int sqlite3MallocInit(void);
  SQLITE_PRIVATE void sqlite3MallocEnd(void);
  SQLITE_PRIVATE void *sqlite3Malloc(u64);
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64, sublet_cap*);
++SQLITE_PRIVATE void *sqlite3MallocLinear(u64, capstone_cap_slot*);
  SQLITE_PRIVATE void *sqlite3MallocZero(u64);
  SQLITE_PRIVATE void *sqlite3DbMallocZero(sqlite3*, u64);
  SQLITE_PRIVATE void *sqlite3DbMallocRaw(sqlite3*, u64);
@@ -87,22 +87,22 @@
 +  ** because a freed block is revoked memory.
 +  */
 +  Mem5Link *aLink;
-+  sublet_cap *aCap;
-+  sublet_cap *aPar;
++  capstone_cap_slot *aCap;
++  capstone_cap_slot *aPar;
 +  int aParOff[LOGMAX+2];
 +
  } mem5;
  
 +/* The pool as the level below handed it over: linear, its handle kept there. */
-+static sublet_cap memsys5Grant;
++static capstone_cap_slot memsys5Grant;
 +
 +SQLITE_API void sqlite3_sublet_grant(void *pLinear){
-+  sublet_store(&memsys5Grant, pLinear);
++  capstone_cap_store(&memsys5Grant, pLinear);
 +}
 +SQLITE_API void sqlite3_sublet_pool(unsigned long *pBase, unsigned long *pEnd){
-+  if( sublet_type(&memsys5Grant)==7 ){ *pBase = *pEnd = 0; return; }
-+  *pBase = sublet_base(&memsys5Grant);
-+  *pEnd = sublet_end(&memsys5Grant);
++  if( capstone_cap_type(&memsys5Grant)==7 ){ *pBase = *pEnd = 0; return; }
++  *pBase = capstone_cap_base(&memsys5Grant);
++  *pEnd = capstone_cap_end(&memsys5Grant);
 +}
 +SQLITE_API void sqlite3_sublet_stats(unsigned long *aOut){
 +  aOut[0] = sublet_stats.split;
@@ -113,7 +113,7 @@
 +}
 +
 +/* Where the handle senior to the block of 2^iLog atoms at i is kept. */
-+static sublet_cap *memsys5Parent(int i, int iLog){
++static capstone_cap_slot *memsys5Parent(int i, int iLog){
 +  return &mem5.aPar[mem5.aParOff[iLog] + (i>>iLog)];
 +}
 +
@@ -198,7 +198,7 @@
 +  int i = memsys5CarveUnsafe(nByte);
 +  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
 +}
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, sublet_cap *pBlock){
++SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, capstone_cap_slot *pBlock){
 +  int i;
 +  if( nByte>0x7fffff00 ) return 0;
 +  memsys5Enter();
@@ -237,7 +237,7 @@
 +    /* The handle taken before the split covers both halves: one revoke and
 +    ** the block is whole again; the upper half's capability died with it. */
 +    sublet_give_to(memsys5Parent(iBlock, iLogsize), &mem5.aCap[iBlock]);
-+    sublet_clear(&mem5.aCap[iBlock+size]);
++    capstone_cap_clear(&mem5.aCap[iBlock+size]);
      size *= 2;
    }
  
@@ -260,8 +260,8 @@
 +  /* The pool is the grant, linear, from the level below.  The configured
 +  ** heap holds only the tables beside it: control bytes, links, one
 +  ** capability per atom and the handles of the split blocks. */
-+  mem5.poolBase = sublet_base(&memsys5Grant);
-+  mem5.nBlock = (int)((sublet_end(&memsys5Grant)-mem5.poolBase)/mem5.szAtom);
++  mem5.poolBase = capstone_cap_base(&memsys5Grant);
++  mem5.nBlock = (int)((capstone_cap_end(&memsys5Grant)-mem5.poolBase)/mem5.szAtom);
 +  mem5.aParOff[0] = 0;
 +  mem5.aParOff[1] = 0;
 +  for(ii=1; ii<=LOGMAX; ii++){
@@ -269,7 +269,7 @@
 +  }
 +  mem5.aCtrl = zByte;
 +  mem5.aLink = (Mem5Link*)&zByte[(mem5.nBlock+15)&~15];
-+  mem5.aCap = (sublet_cap*)&zByte[((u8*)&mem5.aLink[mem5.nBlock]-zByte+15)&~15];
++  mem5.aCap = (capstone_cap_slot*)&zByte[((u8*)&mem5.aLink[mem5.nBlock]-zByte+15)&~15];
 +  mem5.aPar = &mem5.aCap[mem5.nBlock];
 +  if( (u8*)&mem5.aPar[mem5.aParOff[LOGMAX+1]] > &zByte[nByte] ){
 +    return SQLITE_NOMEM;
@@ -390,7 +390,7 @@
    sqlite3_int64 szAlloc; /* Total space set aside for lookaside memory */
    int nBig;              /* Number of full-size slots */
    int nSm;               /* Number smaller LOOKASIDE_SMALL-byte slots */
-+  sublet_cap block;      /* The buffer, linear, while it is carved into slots */
++  capstone_cap_slot block; /* The buffer, linear, while it is carved into slots */
  
    if( sqlite3LookasideUsed(db,0)>0 ){
      return SQLITE_BUSY;
@@ -466,7 +466,7 @@
  #endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
 -    assert( ((uptr)p)<=szAlloc + (uptr)pStart );
 -    db->lookaside.pEnd = p;
-+    sublet_clear(&block);  /* what the slots did not cover dies with the block */
++    capstone_cap_clear(&block);  /* what the slots did not cover dies with the block */
 +    assert( a<=szAlloc + (uptr)pStart );
 +    db->lookaside.pEnd = (void*)a;
      db->lookaside.bDisable = 0;

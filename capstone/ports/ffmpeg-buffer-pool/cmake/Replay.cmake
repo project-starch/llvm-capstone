@@ -1,6 +1,10 @@
 ffpool_source(ported)
 
+add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime"
+  "${CMAKE_BINARY_DIR}/capstone-runtime")
+
 add_library(replay-options INTERFACE)
+target_link_libraries(replay-options INTERFACE Capstone::Runtime)
 target_include_directories(replay-options INTERFACE
   "${PROJECT_SOURCE_DIR}/shared"
   "${FFMPEG_ported_SOURCE}"

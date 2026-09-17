@@ -25,7 +25,7 @@
 -  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
 +  return i<0 ? 0 : a1_memsys5_alloc(sublet_take(&mem5.aCap[i]), (size_t)nByte);
  }
- SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, sublet_cap *pBlock){
+ SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, capstone_cap_slot *pBlock){
    int i;
 @@ -29747,13 +29754,14 @@
    memsys5Enter();

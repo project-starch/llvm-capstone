@@ -3,20 +3,14 @@
 
 #include "trace.h"
 
-#ifdef FFPOOL_DOMAIN
-#include "../../sqlite/sublet/sublet.h"
-#else
-typedef struct {
-  void *c;
-} sublet_cap;
-#endif
+#include <capstone/capability-slot.h>
 
 /* The pool owns these records. Backends operate on capability slots in place;
  * a record must never be copied because its region and outer slots may be
  * linear. The pool manages allocation/reuse bookkeeping and metadata; the
  * selected native or Capstone backend manages payload authority. */
 struct payload_block {
-  sublet_cap region, outer;
+  capstone_cap_slot region, outer;
   void *full_alias, *alias, *meta;
   uintptr_t address;
   size_t requested, rounded;
