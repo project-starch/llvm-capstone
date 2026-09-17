@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../build/prepare-toolchain.sh" native
+
+# Keep stock and instrumented decoder sources and builds separate.
 ARM=${1:-traced}
 case "$ARM" in
     stock) SRC="$WORK/workload-src-stock/ffmpeg-9.0.1"; OUT="$WORK/workload-stock" ;;
     traced) SRC="$WORK/combined-src/ffmpeg-9.0.1"; OUT="$WORK/combined-workload" ;;
     *) echo "usage: $0 stock|traced" >&2; exit 2 ;;
 esac
+
+# Extract a verified source tree; instrument only a newly created traced copy.
 ARCHIVE="$WORK/download/ffmpeg-9.0.1.tar.xz"
 printf '%s  %s\n' cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635 "$ARCHIVE" | sha256sum -c -
 if [[ ! -d "$SRC" ]]; then
@@ -15,6 +20,8 @@ if [[ ! -d "$SRC" ]]; then
     tar -xf "$ARCHIVE" -C "$(dirname "$SRC")"
     if [[ "$ARM" == traced ]]; then python3 "$HERE/instrument-pools.py" "$SRC"; fi
 fi
+
+# Configure the codecs and filters needed by the recording workload.
 mkdir -p "$OUT"
 cd "$OUT"
 if [[ ! -f config.h ]]; then
@@ -27,7 +34,10 @@ if [[ ! -f config.h ]]; then
         --enable-parser=mpeg4video --enable-muxer=matroska,framemd5,md5,null \
         --enable-demuxer=matroska --enable-static --disable-shared > configure.log 2>&1
 fi
+
 make -j"${JOBS:-4}" ffmpeg > build.log 2>&1
+
+# Keep binary and source identities beside the build output.
 ./ffmpeg -version > version.txt
 sha256sum ffmpeg "$SRC/libavutil/buffer.c" "$SRC/libavutil/refstruct.c" > identity.sha256
 echo "built $OUT/ffmpeg"
