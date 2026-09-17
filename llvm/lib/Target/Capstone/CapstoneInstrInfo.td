@@ -254,6 +254,12 @@ def GPRMem : MemOperand<GPR>;
 // A capability used as a memory base.
 def GPCRMem : MemOperand<GPCR>;
 
+// Atomic capability addresses have the same assembly syntax as integer bases.
+// Codegen-only forms retain the capability register through allocation.
+def GPCRMemZeroOffset : MemOperand<GPCR> {
+  let PrintMethod = "printZeroOffsetMemOp";
+}
+
 def SPMem : MemOperand<SP>;
 
 def GPRCMem : MemOperand<GPRC>;

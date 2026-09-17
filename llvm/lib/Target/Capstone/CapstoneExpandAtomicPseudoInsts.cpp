@@ -110,9 +110,11 @@ bool CapstoneExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
   case Capstone::PseudoAtomicLoadNand32:
+  case Capstone::PseudoAtomicLoadNand32_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, 32,
                              NextMBBI);
   case Capstone::PseudoAtomicLoadNand64:
+  case Capstone::PseudoAtomicLoadNand64_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, 64,
                              NextMBBI);
   case Capstone::PseudoMaskedAtomicSwap32:
@@ -138,8 +140,10 @@ bool CapstoneExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, true, 32,
                                 NextMBBI);
   case Capstone::PseudoCmpXchg32:
+  case Capstone::PseudoCmpXchg32_CAP:
     return expandAtomicCmpXchg(MBB, MBBI, false, 32, NextMBBI);
   case Capstone::PseudoCmpXchg64:
+  case Capstone::PseudoCmpXchg64_CAP:
     return expandAtomicCmpXchg(MBB, MBBI, false, 64, NextMBBI);
   case Capstone::PseudoMaskedCmpXchg32:
     return expandAtomicCmpXchg(MBB, MBBI, true, 32, NextMBBI);
@@ -236,6 +240,47 @@ static unsigned getSCForRMW64(AtomicOrdering Ordering,
   }
 }
 
+static unsigned withAtomicAddressClass(unsigned Opcode, Register AddrReg) {
+  if (!Capstone::GPCRRegClass.contains(AddrReg))
+    return Opcode;
+  switch (Opcode) {
+  default:
+    llvm_unreachable("Unexpected capability atomic opcode");
+  case Capstone::LR_W:
+    return Capstone::LR_W_CAP;
+  case Capstone::LR_W_AQ:
+    return Capstone::LR_W_AQ_CAP;
+  case Capstone::LR_W_RL:
+    return Capstone::LR_W_RL_CAP;
+  case Capstone::LR_W_AQ_RL:
+    return Capstone::LR_W_AQ_RL_CAP;
+  case Capstone::LR_D:
+    return Capstone::LR_D_CAP;
+  case Capstone::LR_D_AQ:
+    return Capstone::LR_D_AQ_CAP;
+  case Capstone::LR_D_RL:
+    return Capstone::LR_D_RL_CAP;
+  case Capstone::LR_D_AQ_RL:
+    return Capstone::LR_D_AQ_RL_CAP;
+  case Capstone::SC_W:
+    return Capstone::SC_W_CAP;
+  case Capstone::SC_W_AQ:
+    return Capstone::SC_W_AQ_CAP;
+  case Capstone::SC_W_RL:
+    return Capstone::SC_W_RL_CAP;
+  case Capstone::SC_W_AQ_RL:
+    return Capstone::SC_W_AQ_RL_CAP;
+  case Capstone::SC_D:
+    return Capstone::SC_D_CAP;
+  case Capstone::SC_D_AQ:
+    return Capstone::SC_D_AQ_CAP;
+  case Capstone::SC_D_RL:
+    return Capstone::SC_D_RL_CAP;
+  case Capstone::SC_D_AQ_RL:
+    return Capstone::SC_D_AQ_RL_CAP;
+  }
+}
+
 static unsigned getLRForRMW(AtomicOrdering Ordering, int Width,
                             const CapstoneSubtarget *Subtarget) {
   if (Width == 32)
@@ -272,7 +317,10 @@ static void doAtomicBinOpExpansion(const CapstoneInstrInfo *TII, MachineInstr &M
   //   binop scratch, dest, val
   //   sc.[w|d] scratch, scratch, (addr)
   //   bnez scratch, loop
-  BuildMI(LoopMBB, DL, TII->get(getLRForRMW(Ordering, Width, STI)), DestReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(withAtomicAddressClass(getLRForRMW(Ordering, Width, STI),
+                                          AddrReg)),
+          DestReg)
       .addReg(AddrReg);
   switch (BinOp) {
   default:
@@ -286,7 +334,10 @@ static void doAtomicBinOpExpansion(const CapstoneInstrInfo *TII, MachineInstr &M
         .addImm(-1);
     break;
   }
-  BuildMI(LoopMBB, DL, TII->get(getSCForRMW(Ordering, Width, STI)), ScratchReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(withAtomicAddressClass(getSCForRMW(Ordering, Width, STI),
+                                          AddrReg)),
+          ScratchReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
   BuildMI(LoopMBB, DL, TII->get(Capstone::BNE))
@@ -662,7 +713,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicCmpXchg(
     // .loophead:
     //   lr.[w|d] dest, (addr)
     //   bne dest, cmpval, done
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(Ordering, Width, STI)),
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(withAtomicAddressClass(getLRForRMW(Ordering, Width, STI),
+                                            AddrReg)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BNE))
@@ -672,7 +725,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicCmpXchg(
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(Ordering, Width, STI)),
+    BuildMI(LoopTailMBB, DL,
+            TII->get(withAtomicAddressClass(getSCForRMW(Ordering, Width, STI),
+                                            AddrReg)),
             ScratchReg)
         .addReg(AddrReg)
         .addReg(NewValReg);
@@ -686,7 +741,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicCmpXchg(
     //   and scratch, dest, mask
     //   bne scratch, cmpval, done
     Register MaskReg = MI.getOperand(5).getReg();
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(Ordering, Width, STI)),
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(withAtomicAddressClass(getLRForRMW(Ordering, Width, STI),
+                                            AddrReg)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(Capstone::AND), ScratchReg)
@@ -705,7 +762,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicCmpXchg(
     //   bnez scratch, loophead
     insertMaskedMerge(TII, DL, LoopTailMBB, ScratchReg, DestReg, NewValReg,
                       MaskReg, ScratchReg);
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(Ordering, Width, STI)),
+    BuildMI(LoopTailMBB, DL,
+            TII->get(withAtomicAddressClass(getSCForRMW(Ordering, Width, STI),
+                                            AddrReg)),
             ScratchReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);
