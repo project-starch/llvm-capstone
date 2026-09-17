@@ -1543,7 +1543,21 @@ RETURN" rule applied to privilege rather than to control flow.
 > scanner now has the positive control it never had: `capstone/tests/movc-cfg-scan-selftest.py`,
 > negative-tested two-sided (the pre-fix scanner classifies the shape `cap` and the test fails; the
 > fixed one classifies it INT-ONLY and it passes, while a genuine capability def stays unclassified
-> in both). **Classifications in the table above predate the fix and a re-scan may move MIXED cells.**
+> in both). **Re-scanned after the fix: the table does not move.** Both scanner
+> versions were run on the verified image (`113221f93b0ac994`, extracted from
+> `xfer/c32-f1-2026-09-16` and hash-checked) and give byte-identical reports — same four sites, same
+> classifications, same 2/2/1780 split. This is a *loaded* negative rather than a void one: the input
+> contains what the fix acts on (**seven one-operand `jalr` in `setupLookaside` alone**), the two
+> scanner versions differ as files, and the selftest passes in both directions on this host. The
+> instrument changed and the answer did not.
+>
+> The operator's prediction that `0x26a28`'s MIXED was an artefact of the `jalr` defect was **wrong**,
+> and the real reason was already in the record: its two reaching definitions are `0x2679c mv s3, a0`
+> (integer) and `0x267c4 movc s3, zero` — the cnull arm of the branch at `0x26790`. `movc` is not an
+> integer producer, so the `cap` half is genuine. The site the fix *does* touch is `main+0x3aabc`,
+> where it removes a spurious `jalr s5` reaching definition; three real `ldc` capability loads remain
+> among its twelve, so the classification and the conclusion drawn from it — not shown to be a bridged
+> value at all — are unchanged, and are now resting only on genuine capability defs.
 >
 > Design A remains a real improvement for defs all of whose uses conform. Whether it can be *extended*
 > is open: all-or-nothing is a property of upstream's current `PerformSinkAndFold`, not a law, and
