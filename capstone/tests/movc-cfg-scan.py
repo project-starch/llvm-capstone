@@ -42,11 +42,20 @@ def analyse(insns):
     for i,ss in enumerate(succ):
         for s in ss: pred[s].append(i)
     return succ,pred
+JALR={'jalr','cjalr'}
 def defs_reads(op,ops):
     r=regs_in(ops)
     if not r: return None,[]
     if op in STORES or BR.match(op): return None,r
     if op=='<unknown>': return None,r
+    # `jalr rs` is the pseudo for `jalr ra, rs, 0`: it DEFINES ra and READS rs. Returning r[0] as the
+    # def made an indirect call look like a definition of its own TARGET register, which terminated the
+    # backward walk there and injected a spurious 'cap' reaching definition -- so the reaching-def union
+    # was a lower bound and a site could read MIXED on the strength of a call it merely passed through.
+    # It bit only when the movc's source is CALLEE-saved, because the caller-saved case is already
+    # short-circuited at the 'call' branch in scan(). Found by the compiler lane, 2026-09-17.
+    # Only the one-operand form is wrong; `jalr rd, rs, imm` already has r[0] == rd.
+    if op in JALR and len(r)==1: return 'ra',r
     return r[0],r[1:]
 def scan(path,label):
     funcs=parse(path); n_movc=0; strong=[]; mixed=0; sinks_total=0; opaque=0

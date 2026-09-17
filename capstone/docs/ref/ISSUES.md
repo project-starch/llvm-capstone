@@ -380,7 +380,7 @@ a synthesis run settles the first; a determinism control of `e1140aeea` settles 
 > three-way disagreement between spec, RTL and emulator is worse than either rule. Filed as the open
 > question, not as a blocker.
 
-`capstone-academic-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, XFAIL `c32-movc-untagged-live.ll`); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
+`capstone-academic-spec/parts/cap-man-insn.adoc` (MOVC): "If `x[rs1]` is not a non-linear capability (i.e., `type != 1`), write `cnull` to `x[rs1]`" — a NOT_CAP source qualifies, and the RTL does it (`capstone_flu_unit.anvil:13-26`, rtl-oracle 2026-09-04). QEMU's `helper_movc` nulls rs1 only under `rs1_v->tag && !captype_is_copyable(...)` (`op_helper.c:580-585`), so an untagged source survives a `movc` under QEMU and dies on silicon. Consequence: every copy of an integer-bridged pointer that stays live passes under QEMU and loses its value on the board (C-32, `c32-movc-untagged-live.ll` — no longer XFAIL: it was removed in `46c53b7b6ae2` and the test passes); QEMU is a permissive oracle for that whole class until this is aligned with the spec. Fix belongs in `capstone-qemu`; the compiler side is C-32.
 
 
 ## Q-07 — QEMU's `INIT` requires `cursor == end` and aborts the host process otherwise; the spec and the RTL require `cursor > end` `OPEN — QEMU divergence, filed 2026-09-09 from the R-25 probe work`
@@ -1445,7 +1445,7 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN CHOICE STILL PENDING (lead), now blocking P1's O2 arms; reproducer committed as an XFAIL`
+### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
 
 > # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
 >
@@ -1483,6 +1483,79 @@ RETURN" rule applied to privilege rather than to control flow.
 > port's counters and `--stats`). **Related:** Q-04 (the emulator side; still the open spec question
 > and NOT ruled here), C-46 (the machine model's blindness to the consumed source — its "only where a
 > read of the source outlives the movc" bound is exactly this instance).
+
+> **Design A was chosen, merged, and does not fix this site (2026-09-17).** The lead chose design A:
+> `inttoptr` lowers to the rematerializable `PseudoBRIDGE_CAP` instead of a bare `INSERT_SUBREG`
+> (`46c53b7b6ae2`, merged at `e3bb47b43680`). Scanned with `movc-cfg-scan.py` over the Sublet cell ⑥
+> `-O2` image before (`c506694f9f6f6889`) and after (`113221f93b0ac994`): **the same four sites, same
+> functions, same classifications**, offsets shifted a few bytes. It removed nothing on this workload.
+> Not caused by the remat override removed in `46c53b7b6ae2` — rebuilt with it restored, the image is
+> byte-identical.
+>
+> **Why, settled 2026-09-17.** Design A's protection is not rematerialisation at all. RA-side remat
+> never runs for this pseudo: `TargetInstrInfo::isReallyTriviallyReMaterializable` refuses any
+> instruction with a virtual-register use (*"Don't allow any virtual-register uses"*) and the pseudo
+> has one, and Capstone's override (`CapstoneInstrInfo.cpp:244`) is the inherited RVV switch, which
+> falls through to it. What removes the `movc` is `MachineSinking::PerformSinkAndFold`
+> (`MachineSink.cpp:405`), pre-RA, which rewrites ISel's `$c10 = COPY %bridged` into
+> `$c10 = PseudoBRIDGE_CAP %int` and so leaves no GPCR vreg for register allocation to copy. **That
+> fold is all-or-nothing per def:** the first use that is not a copy chaining to a physreg of the same
+> register class, and not a foldable load/store address, makes it decline for the whole def — so one
+> such use leaves the other uses' copies as `movc` too. In `setupLookaside` that use is the **join
+> PHI**. (The address-half read-backs — the `a = (uptr)pStart` this entry already describes, at
+> `0x26888` in the post-fix image — are uses of the *joined* value, so they are not what declined the
+> fold; they are what makes the nulling observable, by reading the source after the `movc` wrote
+> `cnull` over it.)
+>
+> **So the live site is a bridged value reaching a merge — the root design A was accepted as not
+> covering.** The lead's decision table (`plans/DECISIONS-WAITING-2026-09-10.md:559-561`) records
+> design A as leaving "**PHI copies**, which remat cannot reach", and the live site is a PHI copy.
+> What was not anticipated is that the documented gap is the live case. (The register-class
+> alternative was set aside there on a structural objection of its own, not on design A being
+> sufficient, so nothing measured here falsifies that objection.)
+>
+> **It is NOT what the lit test's `bridged_phi_residue` pins, and that is a hole in the regression
+> net.** In `bridged_phi_residue` each bridge's *only* use is the PHI, so no conforming copy is lost
+> to the decline and its `movc` are copies of the PHI *result*. The live site is a bridge with a
+> conforming call-argument copy **and** a PHI use, which is where all-or-nothing bites.
+> `setupLookaside` contains both kinds: `0x267a0` is the fold-declined one (the INT-ONLY site, the one
+> the harm story runs through), while `0x26a28`/`0x26a54` are copies of the merged value and are the
+> `bridged_phi_residue` kind. **A fix that removed the `0x267a0` copy would leave
+> `bridged_phi_residue` still emitting its `movc` and the Capstone lit suite still green.**
+> `capstone/tests/c32-sinkfold-repro/` shape 4 is currently the only thing guarding that shape.
+>
+> **The four sites do NOT share one cause** — an earlier statement that they did is retracted.
+> `setupLookaside+0x26a28` is the same merge as the live site; `renameResolveTrigger+0x10b5b8` is the
+> same *class* with its cause not established; and `main+0x3aabc` has **twelve** reaching definitions
+> including three capability loads, so it is not shown to be a bridged value at all — which agrees
+> with `docs/history/15-09-2026_02-40-00_c32-movc-scan-one-site-or-a-class.md:136`, "**Not
+> PHI-shaped.**" The four-site table itself is correct and re-verified on the post-fix image; only its
+> interpretation is corrected.
+>
+> **A defect in the scanner behind that table, found on the way and now fixed.** `movc-cfg-scan.py`
+> read `jalr rs` as a DEF of `rs` (`defs_reads` returned operand 0), but the one-operand form is the
+> pseudo for `jalr ra, rs, 0` — it defines `ra` and *reads* `rs`. So an indirect call terminated the
+> backward walk on its own target register and injected a `cap` reaching definition that does not
+> exist, making the reaching-def union a **lower bound**. It bit only when the `movc` source is
+> **callee-saved**, because caller-saved registers are already short-circuited at the scan's `call`
+> branch — which is why it survived every image anyone had run. It is a plausible cause of
+> `0x26a28` reading MIXED when its two reaching defs are an integer and `cnull`. Fixed, and the
+> scanner now has the positive control it never had: `capstone/tests/movc-cfg-scan-selftest.py`,
+> negative-tested two-sided (the pre-fix scanner classifies the shape `cap` and the test fails; the
+> fixed one classifies it INT-ONLY and it passes, while a genuine capability def stays unclassified
+> in both). **Classifications in the table above predate the fix and a re-scan may move MIXED cells.**
+>
+> Design A remains a real improvement for defs all of whose uses conform. Whether it can be *extended*
+> is open: all-or-nothing is a property of upstream's current `PerformSinkAndFold`, not a law, and
+> "fold the conforming uses, leave the non-conforming ones" would remove `0x267a0` while leaving
+> `0x26a28`/`0x26a54`. Not proposed and not costed — it changes an upstream CodeGen pass's contract,
+> not Capstone-local code — recorded only so the option is not dismissed by a sentence.
+>
+> Evidence and controls: `docs/history/17-09-2026_14-23-55_c32-design-a-sinkfold-mechanism.md`.
+> **F1's confirming boot is held and should stay held:** the predicted reading is already determined —
+> the four sites are unchanged and the mechanism says they must be — so a boot would report "lookaside
+> silently off", which the scan established. A cycle that confirms what the evidence already implies
+> is not worth board time.
 
 
 **FILED 2026-09-10, LATE.** This ID has been live in a committed, tracked test —
@@ -4155,7 +4228,8 @@ second split/store from the table split.
 > * **The untagged-capability-in-GPCR live copy → C-32.** `movc` with a source read afterwards is
 >   still emitted for GPCR operands; the auditor reproduced it directly
 >   (`movc a0, s0 ; cjalr ; movc a0, s0`) from `test/CodeGen/Capstone/c32-movc-untagged-live.ll`, which
->   is committed `XFAIL` with a positive control. Q-04's own tail already says *"the compiler side is
+>   is committed with a positive control (its `XFAIL` was removed in `46c53b7b6ae2` and it now passes;
+>   note its `bridged_phi_residue` arm does NOT pin the shape live on silicon — see C-32). Q-04's own tail already says *"the compiler side is
 >   C-32"*. **That** is what a Q-04 ruling would gate, not this entry.
 > * **The MOVC instruction MODELLING → C-46 (new).** `CapstoneInstrInfo.td:2479-2483` declares
 >   `hasSideEffects = 0` with `$rs1` as a pure USE and no `Constraints` tying `rd` to `rs1`, unlike
