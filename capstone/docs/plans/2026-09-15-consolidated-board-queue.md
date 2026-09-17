@@ -200,7 +200,29 @@ across 1,366× of occupancy) and not free to WRITE.
   the same probe under the emulator and in simulation at the flashed revision — and only if all three still
   disagree is it a new entry.
 
-### NEW — the occupancy-versus-object pair (ahead of the ride-along, behind P2)
+### RETIRED 2026-09-17 — the occupancy-versus-object pair (its variable was refuted before it ran)
+
+**Do not schedule this.** Its independent variable is table OCCUPANCY, and three results have since
+settled that occupancy is not what release cost tracks:
+
+1. **Occupancy was refuted from the P1 logs themselves.** A boot is twelve separate domain invocations
+   and the rev-node head is not reclaimed between them (R-12), so invocation 9 starts with 18,684 nodes
+   already consumed — yet it traces invocation 1's curve to 0.06 %. If cost tracked the table's fill,
+   invocation 9 would start where invocation 1 ended.
+2. **The cost collapses on cumulative ALLOCATIONS, not on occupancy or walk length**
+   (`experiments/results/M1/2026-09-17-cache-capacity`). Across a 32× geometry range the curves agree to
+   within 2 cycles when plotted against alloc, and not at all against walk length. The boundary is the
+   node table reaching the D-cache's 2,048-node capacity, confirmed by five arms that varied how much of
+   that cache the pool occupied.
+3. **A bitstream that stops the table growing removes the boundary entirely**
+   (`.../2026-09-17-reclaimer-pilot`): flat at 72.09 cycles, sd 0.03, over 200,000 allocations.
+
+So the pair would spend a boot varying something already shown not to be the variable. Kept here with
+its reasoning rather than deleted, because the question it asked was a good one and the record of why
+it stopped being worth a boot is the useful part.
+
+*Original entry follows, unedited:*
+
 
 R1 measured release as O(1) per OBJECT (593/612/608 cycles over a 64× size range) and REVOKE at 23.0 cycles
 per node, flat in heap and depth; P1's baseline has `give` growing with CUMULATIVE ALLOCATIONS. Those are
