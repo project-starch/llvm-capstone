@@ -34,7 +34,7 @@ Optional knobs, every driver: `CAPSTONE_ARTIFACTS` (default `~/capstone-artifact
 
 ## Gates the drivers keep (do not weaken any of them)
 
-* the monitor at `4274268` and the FPGA buildroot copy at `d04bd83`, checked by commit;
+* the monitor at `2dcd3a5` and the FPGA buildroot copy at `d04bd83`, checked by commit;
 * the image hash equals the knob, and `${CAPSTONE_ARTIFACTS}/qemu-pass/<sha256>` exists (the emulator
   pass, written by `sublet/r1/run-r1-qemu.sh` on `R1_RC=0`), and the emulator log holds the gate line;
 * the readback host's hash, and its `RR/share` probe string; `lpc` on the overlay at `3b93a2b6e2adfa36`;
@@ -111,10 +111,15 @@ carries a name) and drops only the committing user's OWN configured identity, gu
   be rebuilt); `k800.dom`: `capstone/tests/runtime-qemu/silicon-ladder/` and the ladder's verify step
   (`verify-and-stage-rung.sh`), which writes the preflight's oracle and `.qemu-pass` under `PREFLIGHT_ORACLES`
   (default `/tmp/capstone/ladder-fpga`) — regenerate, never copy;
-* the monitor: the drivers pin the WRAPPER copy `components/opensbi/lib/sbi/capstone-sbi` at `4274268`, held as
+* the monitor: the drivers pin the WRAPPER copy `components/opensbi/lib/sbi/capstone-sbi` at `2dcd3a5`, held as
   a checkout ahead of its parent's gitlink (`components/opensbi` records `2c49c41`; the bake reads the working
   tree); the PACKAGE copy `package/capstone-sbi-domain/capstone-sbi` stays at `2c49c41` — that is how the
-  reference host holds the two checkouts (memory `opensbi_monitor_rebuild_include_wrapper`);
+  reference host holds the two checkouts (memory `opensbi_monitor_rebuild_include_wrapper`). **The pin moved
+  from `4274268` to `2dcd3a5` on 2026-09-17** — the D3 writeback fix, a PREREQUISITE for the bitstream that
+  makes capability exception delivery live. The old monitor's `add t5, sp, t5` was harmless only because the
+  exception was being dropped; on the new silicon it is delivered inside the trap handler at every `rdtime`.
+  Verify the rebuilt firmware with `tests/monitor/scan-integer-bases.py`: exit 0 and `cap_text 0` is the
+  passing shape, exit 1 names the site that remains;
 * the SQLite cells for F1: `capstone/ports/sqlite/build-sqlite-silicon.sh`.
 
 ## Reading a run

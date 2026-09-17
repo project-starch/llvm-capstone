@@ -23,7 +23,7 @@ bake(){ say "bake $1: waiting for the machine memory lock (another lane may be m
     done' _ "$B" "$CC" "$OUT" "$1"; }
 
 pgrep -f 'python3 -m fpga_driver' >/dev/null && fail "a board runner is live"
-[ "$(git -C $BM rev-parse --short HEAD)" = 4274268 ] || fail "monitor is not 4274268"
+[ "$(git -C $BM rev-parse --short HEAD)" = 2dcd3a5 ] || fail "monitor is not 2dcd3a5 (the D3 writeback fix; 4274268 is the OLD pin)"
 cd $B || fail "no FPGA buildroot copy"
 [ "$(git rev-parse --short HEAD)" = d04bd83 ] || fail "FPGA copy is at $(git rev-parse --short HEAD), not d04bd83 (the #3 module)"
 
@@ -75,7 +75,7 @@ for pg in sub:pgsub hier:pghier; do tag=${pg%%:*}; cell=${pg##*:}
   grep -q 'PG: result=' $T/pg_host_$tag.user || fail "pg_host_$tag.user is not the PostgreSQL host (no PG: result= string)"
   printf '\0' > $T/nothing.bin; cp -f $T/nothing.bin $TT/nothing.bin; STAGED="$STAGED pg_host_$tag.user nothing.bin"
 done
-say "pieces: monitor 4274268, module d04bd83; staged for boot $BOOT rep $REP:$STAGED"
+say "pieces: monitor 2dcd3a5, module d04bd83; staged for boot $BOOT rep $REP:$STAGED"
 say "pre-registered:$PRE"
 # retire the big images that are not this boot's
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
