@@ -27,7 +27,26 @@ Minimal snapshot. Read first in every session.
 > **2026-09-14 and 2026-09-15 are NOT in this file**; that block of board work is in
 > `current-next-step.md`, whose 09-15 header stands.
 
-* **R-12's COST half is built, measured and synthesised; its CAPACITY half is untouched.** The
+* **R-12 is FIXED-IN-SIM on `m1-reclaimer` (`054cea69b`): the reclaimer is built and its approval test
+  passes as a pair.** This is R-12's CAPACITY half — the 65,532-node ceiling — and it sits on top of the
+  cost half below. Revoked nodes go on a LIFO free list folded into the write that already happens (a
+  two-node REVOKE costs 252 cycles before and after); an allocation pops `(generation+1, index)` first,
+  **+6 cycles** over a bump, and the allocator's call boundary costs **+1 per allocation** (confirmed at
+  N = 65,532: the exhaustion fixture runs +65,542 cycles). Every use of a revocation reference now
+  requires `valid && generation == g`. **The approval test is the pair:** on the gen-blind control
+  `1ac15c4ef` a retained stale reference destroys the slot's new owner; on `054cea69b`, same tree and
+  same fixture, every stale arm is refused with cause 25 and every fresh owner is intact — 8 traps
+  against 4. An index retires after 16,384 reclaims rather than wrapping (measured at production width).
+  An audit of the finished A5 diff found a composed id reaching a node's LINK, which let a generation
+  SKIP past the retirement compare and wrap; fixed at both ends in `054cea69b` and measured as a pair.
+  Sweep 65/27/3 with **zero status changes**; lint 733 with **UNOPTFLAT 40 unmoved**. **SYNTHESISED 2026-09-17, exit 0, NOT FLASHED.** S1 on `054cea69b`: **WNS −8.307** (best ever on this
+  design), **combinational loops 1**, routed Total LUTs **168,757 — 456 BELOW the flashed base** while
+  adding the allocator, the free list and the generation check; `capstone_rev_node` 985 LUT / 740 FF.
+  All three pre-registered readings met. **Attribution withheld on purpose:** the branch is 14 `core/`
+  files from the splice — reclaimer AND the r34-r24 merge — so no reclaimer-specific timing, loop or
+  area claim is supported; `f714d2a72` is the only build that would split them and has never been run. Box: `ISSUES.md` R-12; note
+  `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
+* **R-12's COST half is built, measured and synthesised; the capacity half above now rests on it.** The
   revoke-walk splice (`r12-splice-revoked-nodes`, submodule `f1331daed`, parent `9a5716d5ab6c`)
   unlinks a whole revoked run in two writes at the walk exit, independent of run length. Unspliced
   costs exactly **3.000 cycles per dead node crossed**, spliced exactly **0.000**: 399 / 516 / 481
@@ -36,12 +55,23 @@ Minimal snapshot. Read first in every session.
   the two trees by exactly +4 cycles at every rung, the revoke that *walks the corpses* by over
   400,000. Synthesis exit 0, WNS **−9.225** against the flashed −12.425, combinational loops 29 → 13.
   **NOT FLASHED**, and the 65,532-node ceiling is not addressed by any of it. Box: `ISSUES.md` R-12.
-* **Two warnings travel with that synthesis result and must never be separated from it.** The timing
-  gain is **not attributable to unlinking** — a runtime property cannot move a static loop count; the
-  splice put the response send in two branches, so anvil registered the endpoint (~9 one-bit
-  registers; +72 implemented flops inside the unit, −206 design-wide). And **~642 LUTs appeared
-  OUTSIDE the unit, unexplained**. Quote implemented figures against implemented totals, never the
-  +133 declared bits.
+* **Two warnings travel with that synthesis result, and S2 has now split them apart (2026-09-17).** The
+  timing gain is **not attributable to unlinking** — a runtime property cannot move a static loop count;
+  the splice put the response send in two branches, so anvil registered the endpoint. **S2
+  (`54ac25f97`, the semantically null duplication of that send on the unspliced tree) measured which
+  half does what: WNS −8.684, better than the splice's and the best ever on this design, with
+  combinational loops STILL AT 29.** So the endpoint registration buys the timing and none of the
+  loops; the 29 → 13 drop belongs to the splice commit's structural changes. The earlier sentence
+  "nine one-bit registers removed sixteen loops and bought 3.2 ns" is **retracted in its middle
+  clause**. The ~642 LUTs outside the unit are likewise not intrinsic to the registration — S2 routes
+  307 LUTs BELOW the splice — and remain unexplained. Quote implemented figures against implemented
+  totals, never the +133 declared bits.
+* **`reports/ariane.utilization.rpt` is overwritten after routing**, so in any archive of a build that
+  routed it holds a POST-ROUTE number, not the post-synth one. Measured offset (S2): 171,620 post-synth
+  against 169,637 post-route, −1,983 LUTs. This invalidated a post-synth LUT ceiling this lane had
+  proposed for S1 — it would have killed S2, which routed fine — and the premise does not survive the
+  correction either: the build that FAILED to route projects 163 LUTs BELOW the highest that routed, so
+  **LUT count does not discriminate routability on this design**.
 * **The sub-8 anomaly is the write buffer, measured rather than inferred.** Exactly two rungs sit
   exactly +91 cycles above the fit, at N = 6 and 7; halving the write-through dcache write buffer from
   8 to 4 moved the pair to N = 2 and 3 — a shift of exactly four — while every rung from N = 8 up

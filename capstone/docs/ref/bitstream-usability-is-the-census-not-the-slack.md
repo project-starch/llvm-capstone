@@ -22,11 +22,29 @@ produced meets it.** Five routed builds, five negative, each from its own post-r
     76b7f2afc  -12.084       93,200
     84ed6eafb  -13.516      103,197
     52fa06b9d  -14.125      104,238
-    80843404c  -16.400      102,769            <- worst, and it is the RESIDENT image on which
-                                                  every S-12 board result rests
+    80843404c  -16.400      102,769            <- worst; it WAS the resident image when this was
+                                                  written (see the dated note below)
 
 A criterion that forbids every flash already performed is a mis-stated premise, not a rule. And
 "restore retiming" is not the remedy it names: retiming-ON builds are negative too.
+
+> **STALE-FACT CORRECTION 2026-09-17 (RTL lane).** The line above marking `80843404c` (−16.400) as
+> *the* resident image was true when written and is not true now. The resident is
+> `caplifive_r30r31_1bfff7776` (sha256 `406e12bf…`) = `1bfff7776` at **WNS −12.425**; the image it
+> superseded, `66c4e7517`, was also −12.425. `80843404c` is neither current nor immediately previous.
+> The present-tense claim was quoted as current in a cross-lane exchange on 2026-09-17 and had to be
+> withdrawn there — a table of builds written in the present tense goes stale silently every time the
+> board is reflashed. **What survives unchanged:** every routed build this project has produced has
+> negative WNS, so `run.tcl`'s criterion still forbids every flash already performed. The milder true
+> statement is the one to quote: the resident is −12.425, and a build better-timed than it is still not
+> thereby licensed.
+>
+> **And a scope limit this document does not state.** Whatever this analysis concludes, "never treat a
+> bitstream as flashable when post-route WNS is negative" also appears verbatim in the project
+> instructions held by the synthesis lane, with its reason attached. Prior practice against a rule
+> raises a question about the rule; it does not retire it, and that question is the project lead's.
+> Nothing in this document authorises a flash, and no lane should be asked to act against its own
+> standing instructions on the strength of it.
 
 ## What actually licenses these bitstreams
 

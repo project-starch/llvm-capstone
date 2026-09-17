@@ -442,7 +442,58 @@ reduces decision 5 from a permission question for the lead to an action for whoe
 branch. It does not close it — a decision is closed when a push succeeds, not when one is believed
 possible — but it changes who it is waiting on.
 
-### Hook state on apollo, which is stale and worth knowing
+### Hook state on apollo — SUPERSEDED 2026-09-16: apollo is now gated, and I proved it here
+
+*(Census method note: use `git rev-parse --git-path hooks/pre-push`, not `--git-dir`. In a **worktree**
+`--git-dir` resolves to `.git/worktrees/<name>` while git looks for hooks in the common dir, so the
+check reports NO HOOK — the ungated reading — for a worktree that actually inherits the parent's
+hook. That produced five false OPENs on focs-server. The readings below are **submodules**, where
+`--git-dir` is correct, and re-running with `--git-path` here reproduces all seven unchanged.)*
+
+**The gap described below is closed.** Under the lead's direct instruction the new guard was
+installed over ssh into **all seven** repos on apollo. Re-censused here: superproject,
+`capstone-ariane`, `capstone-qemu`, `caplifive-buildroot`, `caplifive-system`, **`capstone/paper`**
+and **`capstone/paper-nested-allocators`** all report `new guard`. So the combination this note
+named — an unenforced absolute rule beside live write credentials — no longer exists on this host.
+
+**Negative-tested from this session rather than accepted**, because a gate that has never fired
+*here* is unproven *here*:
+
+| probe (all `--dry-run`, nothing written) | result |
+|---|---|
+| task branch from **`capstone/paper`** | **`PUSH BLOCKED: capstone/paper is Overleaf's remote -- never push it.`** exit 1 |
+| task branch from **`paper-nested-allocators`** | `push allowed: zz-guard-positive-test`, exit 0 — the paper rule does **not** over-catch the sibling |
+| `main` in `paper-nested-allocators` | **`PUSH BLOCKED: 'main' is shared history and needs the lead's explicit go-ahead.`** exit 1 — closed, see below |
+
+`git ls-remote` afterwards shows the remote carries exactly the four pre-existing branches; no probe
+created anything.
+
+**The arm I could not reach — now CLOSED, on this host, two-sided.** The outgoing lane supplied the
+method that avoids the short-circuits: invoke the hook directly with its stdin protocol rather than
+through `git push`.
+
+    H="$(git rev-parse --git-path hooks/pre-push)"
+    printf 'refs/heads/main <sha> refs/heads/main <zero>\n' | "$H" origin <url>
+      -> PUSH BLOCKED: 'main' is shared history and needs the lead's explicit go-ahead.   exit 1
+    printf 'refs/heads/zz-probe <sha> refs/heads/zz-probe <zero>\n' | "$H" origin <url>
+      -> push allowed: zz-probe                                                            exit 0
+
+The second line is the **control**, and it is the part that makes the first line mean anything: it
+proves the harness can produce the passing outcome, so the block is a decision rather than a gate
+that fails on everything handed to it.
+
+*What follows is why the `git push` route could not reach it, kept because the shape recurs.* Both
+attempts were intercepted *before* the hook ran: the first was a no-op (`Everything up-to-date`, git
+short-circuits), the second was rejected by git's own client-side non-fast-forward check with git's
+generic hint rather than the guard's `PUSH BLOCKED:` format. So the `git push` route reports on git's own
+checks and never consults the guard at all — which is why the direct invocation above was needed. This is the same short-circuit that made my
+earlier no-op write-access probe uninformative; a probe that never reaches the thing under test
+proves nothing about it.
+
+*(What follows was the state before the install, kept because the reasoning still applies to any
+host that has not been gated.)*
+
+### Hook state on apollo, which was stale and worth knowing
 
 Measured with the outgoing lane's corrected check (a `grep` for the new guard cannot distinguish
 "old gate" from "no hook", and on apollo most repos are the second):

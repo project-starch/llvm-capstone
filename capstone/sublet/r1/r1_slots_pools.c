@@ -448,6 +448,33 @@ static void run_linear(unsigned reps) {
 #ifndef M1_LIVE
 #define M1_LIVE 16
 #endif
+/* M1_LEAF is the bytes per live object. It exists because M1_LIVE alone cannot separate slot count from
+ * memory: the pool is M1_LIVE * M1_LEAF, so sweeping M1_LIVE moves both at once. What it is FOR changed
+ * once the existing captures were re-read per snapshot instead of per invocation (apollo, 2026-09-17).
+ * Measured there, across M1_LIVE 2/4/8/16/64: take_cyc/n is a function of ALLOC and not of the preceding
+ * revoke's walk length -- at a walk of 254 dead nodes it reads 67 cycles at M1_LIVE=2 and 130 at 64, while
+ * at alloc 512 every geometry reads 67-68. The floor is 66.7-67.5 everywhere and the rise begins at alloc
+ * 1792-2048, which is 28-32 KiB of 16-byte node table against a 32 KiB D-cache; only the post-knee plateau
+ * (218/163/137/131/130) depends on M1_LIVE. So the knee looks like node-table capacity, and M1_LEAF is the
+ * probe for it: touch() writes one byte per 64, so the pool occupies M1_LIVE*M1_LEAF/64 lines of the same
+ * cache, and if the two share it the knee must move earlier by one allocation per 16 bytes of pool. A knee
+ * that does NOT move refutes the sharing. What this knob does not hold constant, stated because the sweep
+ * cannot avoid it: per-allocation touch volume scales with M1_LEAF, so the probe adds data traffic as well
+ * as data residency, and a knee that moves shows they share a cache without saying which of the two did it. */
+#ifndef M1_LEAF
+#define M1_LEAF 64
+#endif
+/* M1_TOUCH is the bytes of each leaf the workload actually writes, and it exists ONLY to break the tie
+ * M1_LEAF cannot break on its own: sweeping M1_LEAF scales the pool's RESIDENT lines and the per-allocation
+ * touch VOLUME by the same factor, so a knee that moves is consistent with either (the RTL lane, 2026-09-17).
+ * Setting M1_TOUCH below M1_LEAF carves a large pool and leaves all but M1_TOUCH bytes of each leaf never
+ * written, hence never resident: the arm with a 24 KiB carve and a 64-byte touch has the address spread of
+ * the largest arm and the cache residency of the smallest. If the knee tracks residency it must sit with the
+ * smallest arm; if it tracks the carve it must sit with the largest. Defaults to M1_LEAF so every build that
+ * does not set it is byte-identical to one from before this knob existed. */
+#ifndef M1_TOUCH
+#define M1_TOUCH M1_LEAF
+#endif
 /* The retained-reference buffer is an INSTRUMENT limit, not a property of the system, and a measurement
  * must not be bounded by its own instrument. At C = 256 the run's target is 10*C = 2560, so a 2048-entry
  * buffer stopped the pressure and release arms at stop=buffer before either reached its target and left
@@ -472,7 +499,7 @@ static ulong m1_alias_type(void *a) {
 static void m1_snap(const char *arm, ulong alloc, ulong C, ulong m0, unsigned nret, void *oldest,
                     ulong n, ulong tk, ulong tg, ulong ini) {
   out("R1 m1 snap arm="); out(arm); kv("alloc", alloc); kv("C", C); kv("minted", minted() - m0);
-  kv("revoked", sublet_stats.revoke); kv("init", sublet_stats.init); kv("live", M1_LIVE); kv("retained", nret);
+  kv("revoked", sublet_stats.revoke); kv("init", sublet_stats.init); kv("live", M1_LIVE); kv("leaf", M1_LEAF); kv("retained", nret);
   kv("n", n); kv("take_cyc", tk); kv("give_cyc", tg); kv("init_n", ini);
   kv("stale_alias_type", m1_alias_type(oldest)); kv("live_slot_type", sublet_type(&leaf[0])); out("\n");
 }
@@ -484,15 +511,15 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   const char *stop = "target";
   if (C < 16) C = 16;
   target = 10UL * C; snap_every = (C + 15UL) / 16UL; next_snap = snap_every;
-  carve_root(M1_LIVE * 64UL, &pool);
+  carve_root(M1_LIVE * (ulong)M1_LEAF, &pool);
   if (root_short) { out("R1 m1 refused: arena\n"); return; }
   pool_base = sublet_base(&pool);
   m0 = minted();
-  for (i = 0; i + 1 < M1_LIVE; i++) sublet_carve(&pool, pool_base + (ulong)(i + 1) * 64UL, &leaf[i]);
+  for (i = 0; i + 1 < M1_LIVE; i++) sublet_carve(&pool, pool_base + (ulong)(i + 1) * (ulong)M1_LEAF, &leaf[i]);
   sublet_move(&pool, &leaf[M1_LIVE - 1]);
-  for (i = 0; i < M1_LIVE; i++) { alias[i] = sublet_take(&leaf[i]); touch((volatile char *)alias[i], 64UL, 0x11); }
+  for (i = 0; i < M1_LIVE; i++) { alias[i] = sublet_take(&leaf[i]); touch((volatile char *)alias[i], (ulong)M1_TOUCH, 0x11); }
   out("R1 m1 start arm="); out(arm); kv("C", C); kv("target", target); kv("fixture_nodes", minted() - m0);
-  kv("budget", budget); kv("maxret", M1_MAXRET); kv("snap_every", snap_every); out("\n");
+  kv("budget", budget); kv("maxret", M1_MAXRET); kv("leaf", M1_LEAF); kv("touch", M1_TOUCH); kv("pool", M1_LIVE * (ulong)M1_LEAF); kv("resident", M1_LIVE * (ulong)M1_TOUCH); kv("snap_every", snap_every); out("\n");
   i = 0; ini0 = sublet_stats.init;
   for (;;) {
     if (alloc >= target && !releasing) {
@@ -511,7 +538,7 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     else if (streq(arm, "ring")) { k = (unsigned)(alloc % M1_LIVE); m1_ring_alias[k] = old; if (nret < M1_LIVE) nret++; oldest = m1_ring_alias[(unsigned)((alloc + 1UL) % M1_LIVE)]; if (!oldest) oldest = m1_ring_alias[0]; }
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
-    touch((volatile char *)alias[i], 64UL, (unsigned char)alloc);
+    touch((volatile char *)alias[i], (ulong)M1_TOUCH, (unsigned char)alloc);
     alloc++; n++;
     if (alloc >= next_snap) {
       m1_snap(arm, alloc, C, m0, nret, oldest, n, tk, tg, sublet_stats.init - ini0);

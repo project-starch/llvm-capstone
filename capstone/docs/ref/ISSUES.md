@@ -3648,10 +3648,16 @@ globals *after* ISel would silently break this positional scheme.
 > utilisation): `capstone_rev_node` FFs **606 → 678 (+72)** and LUTs **1,052 → 1,141 (+89)**, while
 > design-wide FFs fell **93,145 → 92,939 (−206)**. So the unit gained registers and the design lost
 > them — about **278 flops removed outside this unit**, the fingerprint of the loops actually going.
-> **Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.** So: *"a change that
-> duplicated a send site caused anvil to register that endpoint, and timing improved"* — never
-> *"unlinking revoked nodes improved timing"*. It may also not survive a single-send-site
-> reformulation of the same fix.
+> ~~**Roughly nine one-bit registers removed sixteen loops and bought 3.2 ns.**~~ **THE MIDDLE CLAUSE IS
+> RETRACTED 2026-09-17, measured by S2** (see the S2 block below): the registered endpoint bought the
+> timing and did NOT touch the loops. A semantically null duplication of the same send, with no
+> unlinking, reached **WNS −8.684 with combinational loops still at 29**. The registers are worth more
+> than 3.2 ns and zero loops. What survives: *"a change that duplicated a send site caused anvil to
+> register that endpoint, and timing improved"* — never *"unlinking revoked nodes improved timing"*.
+> The sixteen loops came from the splice commit's STRUCTURAL changes beyond the send duplication (the
+> exit splice, the cached `serving_node`/`serving_idx`/`serving_next`, the reworked walk) — **not** from
+> the endpoint registration, and not from the runtime fact of unlinking either: the opening warning
+> above stands, a dynamic property cannot move a static loop count.
 >
 > *(Two register figures are in circulation and both are right: **+133 declared flop bits** summed from
 > `_q` widths in the generated RTL — what the source asks for — against **+72 implemented flops** from
@@ -3660,7 +3666,12 @@ globals *after* ISel would silently break this positional scheme.
 >
 > **⚠ AND AN UNEXPLAINED COST THAT BELONGS IN THE SAME BREATH.** Design-wide LUTs **rose** by 731 while
 > the unit accounts for only 89 of it — so about **642 LUTs appeared OUTSIDE `capstone_rev_node`**.
-> Removing sixteen loops evidently let synthesis restructure well beyond this unit, trading registers
+> **RETRACTED IN PART 2026-09-17:** these 642 are not intrinsic to registering the endpoint. S2
+> registers it and routes to 169,637 Total LUTs — **307 BELOW the splice** and only 424 above the
+> flashed base — with `capstone_rev_node` itself smaller than the splice's (1,093 LUT / 607 FF against
+> 1,141 / 678). So the 642 belong with the structural half, alongside the loops. Original text, kept
+> because the size of the effect is still unexplained: removing sixteen loops evidently let synthesis
+> restructure well beyond this unit, trading registers
 > for logic somewhere, and **nobody has explained where or why**. Small against 169k, but not nothing
 > and not local. Any deliberate application of this lever needs that understood first: a remedy whose
 > side effects are unmeasured is an inference with one datum, not a validated technique.
@@ -3887,6 +3898,178 @@ globals *after* ISel would silently break this positional scheme.
 entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first domain to
 cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
 ladder rung approaches it (bigmany: 65).~~
+
+> # 2026-09-16 — THE RECLAIMER: R-12's CAPACITY half, built and PROVEN IN SIMULATION on `m1-reclaimer` (`054cea69b`). FIXED-IN-SIM; not synthesised, not flashed.
+>
+> Revocation nodes are reclaimed. A node the walk invalidates is pushed on a LIFO free list — folded
+> into the write that already happens, so a two-node REVOKE costs **252 cycles before and after** — and
+> an allocation pops the list first, handing out **(generation+1, index)** and bumping `head` only when
+> the list is empty; a pop costs **6 cycles more than a bump**, a bump-path SPLIT gained 1. Every use of
+> a revocation reference now requires `valid && generation == g` at the unit (query, drop, delin, mrev,
+> init); the three trackers compare the invalidation broadcast on the index and re-adopt a fresh
+> `(g+1, i)` through the 30-bit adopt guard. Design: `docs/plans/2026-09-16-revnode-reclamation-v2.md`
+> as corrected by its audit; LIFO first (the spec recommended FIFO), flagged there.
+>
+> **The approval test is a PAIR: consecutive commits on the same tree with the same fixtures.** On the
+> gen-blind control `1ac15c4ef` a retained stale reference **succeeds** against the slot's new owner —
+> stale LDC/MREV/SPLIT/DROP all cause 0, the fresh owner's `LCC` reads 0 afterwards (destroyed), a stale
+> REVOKE kills a sibling. On `d9620b907` (and identically on the corrected tip `054cea69b`) every one of those arms is **refused (cause 25)**, the fresh owner
+> reads 1, the sibling reads 1, and the fresh `(1,3)` still works: 8 traps where the control had 4. Read
+> with prints aligned to RVFI retirements (`capstone/tests/capprint-retired.py`); the last-wins parser
+> would have hidden 12 of the 29 readings.
+>
+> **Also measured on `d9620b907` and re-run byte-identical on `054cea69b`:** a DROP'd node is never reissued (bump id, never the dropped index; after
+> the walk sweeps it the next mint pops the revoked neighbour as `65539`); the same index reclaimed 64
+> times at strictly increasing generation with 7 handles dropped mid-run and none reissued
+> (`capstone/tests/freelist-check.py`); the enforcing S/U tracker (`pmp_data_if.sv`) refuses an S-mode
+> load through an entry holding `(0,3)` after the **pop's** reclaim write broadcasts index 3 — the
+> reading that is 0 without that broadcast — and adopts the fresh `(1,3)` installed over it; pool
+> exhaustion 65,532 mints then cause 30, 3 traps -- unchanged from Part B; retirement at production width index 3 reclaimed **16,384 times at generations 0..16383**, last id (16383<<16)|3, then retired permanently; allocation falls back to the bump path and the fresh index enters the same cycle. 0 traps in 16,387 pops; the one-literal variant the retirement bound as ONE literal (14'd16383 -> 14'd3): exactly one generated line differs, `localparam logic[13:0] thread_1_wire$498 = ...` (artifact b2a1a0f15ca0f018 against production b0d5db13cd8a406c), and at NROUNDS=6 it reproduces the production-width shape at 1/4096 the scale in 3,860 cycles: index 3 at generations 0,1,2,3, retired at the bound, then a bump to index 8 and index 8 reclaimed at generations 1 and 2; LCC on the retained gen-0 sliver 0, base 1, 0 traps. It emulates a reduced BOUND, not a reduced field width.
+> Reference suite identical to A2 except the one SPLIT-bearing test by +1 cycle; full sweep 65 PASS / 27 TIMEOUT / 3 NOBUILD, **zero status changes**; three passing tests have moved cycles since Part B (+1, +2, +30) and all of it is A3/A4's -- a worktree at 1ac15c4ef reads the same three numbers -- attributed to alloc_slot()'s one-cycle call boundary on the bump path, measured in the sweep's own regime;
+> lint LATCH 52 / MULTIDRIVEN 3 / UNOPTFLAT **40** / BLKSEQ 2 / UNDRIVEN 25 unmoved, UNUSEDSIGNAL **733**
+> with every delta attributed by (message, bit-range) shape.
+>
+> **Cost, confirmed at N = 65,532.** The allocator's call boundary costs **+1 cycle per allocation** —
+> measured on one instruction (bump SPLIT 27 → 28, bump MREV 26 → 27) and confirmed at scale by the
+> exhaustion fixture, which runs +65,542 cycles against Part B while performing 65,532 allocations
+> (residual 10). A *reclaiming* allocation costs a further **+6**, identical at memory delay 12 and 0
+> while cold operations differ tenfold, so it is unit-side work on cache hits. The bump-path mint is
+> unchanged (the 282-cycle reference mint is byte-identical to A2's). All of it is A3/A4's: A5 adds
+> nothing measurable.
+>
+> **What the pair cannot distinguish, written down:** the PC-capability path (a stale CODE capability
+> needs CALL/RETURN to install); `commit_stage`'s post-adopt compare race; the unit-side belt for
+> `rev_req` (REVOKE's refusal comes from the preceding query; the dyn unit runs one operation at a
+> time); FIFO-only hazards. And the tracker's **per-entry residual** is real and printed: the same stale
+> capability installed into a *different* CPMP entry is re-adopted until the next broadcast of its index.
+>
+> **An audit refuted the first version of this entry, and the correction is the point.** With every
+> gate green at `d9620b907`, an adversarial read of the diff found a composed (generation, index) id
+> reaching a node's LINK: `change_rev_node_next/prev` do not mask, so the walk read a generation back
+> into `revoke_index`, a push carried it into `free_head`, and the allocator's compose adder -- whose
+> comment asserts the popped value carries none -- added it twice. The capability still works (the
+> caller rebuilds the record from the same wrong value), so the symptom is a generation SKIP, and the
+> retirement compare fires only at exactly 16383: a skip can step over it and WRAP, which is the one
+> condition under which a stale reference becomes acceptable again. Fixed at both ends in `054cea69b` and
+> measured as a pair on `r12-recl-composed-link.S` -- a node at generation 1 reissued as generation 3
+> before, generation 2 after, same fixture, same delay, same 3,180 cycles, one differing print. **No
+> fixture reached it**: five directed tests, a full sweep, a lint gate and a 16,386-round retirement run
+> were all green on RTL carrying it, and the fixture header records the two shapes that miss it.
+>
+> **Status: FIXED-IN-SIM.** Synthesis (S1) requested from the synth lane with the prediction written
+> first — WNS no worse than the splice's −9.225, LUTs within +1 % of 169,932, loops ≤ 13; a regression
+> past those numbers is a stop, not a note. No bitstream, no reflash (ask-first). History note:
+> `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
+>
+
+> # 2026-09-17 — S2, THE NULL-DUPLICATION CONTROL: the timing gain reproduced, the loop drop did NOT. Prediction's dichotomy was incomplete.
+>
+> `r12-null-dup-control` at `54ac25f97` — the unspliced tree `4cc068572` with the walk's single
+> `send ep.rev_res` duplicated into two identical branches of a semantically null `if`. No unlinking, no
+> functional change of any kind. Built to decide whether the splice's timing gain came from the
+> registered endpoint anvil emits for a two-site send, or from the splice itself. Exit 0, 1h50m35s,
+> bitstream written.
+>
+> | | flashed `1bfff7776` | **S2 `54ac25f97`** | splice `379248185` |
+> |---|---|---|---|
+> | WNS clk_out1 | −12.425 | **−8.684** | −9.225 |
+> | combinational loops | 29 | **29** | **13** |
+> | routed Total LUTs | 169,213 | 169,637 | 169,944 |
+> | routed FFs | 93,145 | 93,140 | 92,939 |
+> | `capstone_rev_node` | 1,052 LUT / 606 FF | 1,093 / 607 | 1,141 / 678 |
+>
+> **The experiment happened:** the synth lane's own pre-synth check found `_ep_rev_res_valid_selector_q`
+> four times in the regenerated RTL (declaration, next-state, reset, clocked update); controls — a
+> nonsense pattern 0, `rev_res` 30. Anvil did not collapse the duplicate.
+>
+> **Reading.** The registered endpoint buys the timing and nothing else. A change that does *nothing*
+> reaches the best WNS ever recorded on this design, better than the splice's, while leaving the loop
+> count untouched at the flashed base's 29. So the 29 → 13 loop drop is attributable to the splice
+> commit's structural changes, and the timing is attributable to a duplication that could be applied to
+> any tree. **The prediction written before this build offered two arms — "the splice's 3.2 ns and 29 →
+> 13 reappear, so the gain is the endpoint" or "they do not, so the splice's gain is unexplained again"
+> — and the outcome was neither.** Recorded because an incomplete dichotomy is the kind of thing that
+> gets read as whichever arm it most resembles.
+>
+> **A measurement fact that came out of this and invalidates a gate, worth more than either.**
+> `reports/ariane.utilization.rpt` is written after synthesis and **OVERWRITTEN after routing**, so in
+> any archive of a build that routed it holds a POST-ROUTE number. S2 measured the offset directly:
+> 171,620 post-synth against 169,637 post-route, a shrink of 1,983 LUTs (−1.16 %). Consequences: the
+> 171,497 "highest ever routed" is post-route; the 173,337 of the build that failed to route is
+> genuinely post-synth; and an RTL-lane request had proposed killing S1 before implementation if
+> post-synth LUTs exceeded 171,497 — **that gate would have killed S2**, which routed to 83.24 % with
+> the router converging from 117,715 overlaps to zero. It was disarmed to reporting-only before it
+> fired. **And the premise does not survive the correction:** projecting 173,337 through the S2 offset
+> gives 171,334 post-route, i.e. the build that FAILED to route projects 163 LUTs BELOW the build that
+> routed. LUT count does not discriminate routability on this design; whatever sank `1cb22e30a` is not
+> in that quantity, and no corrected threshold should be built on it.
+>
+> Not flashed. Open and deliberately not pursued: which sixteen loops the splice removed — the artifact
+> carries only the count, and enumerating them means opening the retained routed checkpoint. M1 rests on
+> none of it.
+>
+
+> # 2026-09-17 — S1: THE RECLAIMER SYNTHESISES, and every pre-registered reading is met. Loops at ONE. Attribution deliberately withheld.
+>
+> `m1-reclaimer` at `054cea69b`, exit 0, **03h43m25s**, synth peak 21.49 GB against a 100 GB ceiling,
+> `write_bitstream completed successfully`. Bitstream sha256 `d76d2a36d919d094…`, distinct from the
+> flashed `406e12bf…` and from S2's `a309323d…`, so the build carries the change. Not flashed.
+>
+> | | flashed `1bfff7776` | splice `379248185` | S2 `54ac25f97` | **S1 `054cea69b`** |
+> |---|---|---|---|---|
+> | WNS clk_out1 (ns) | −12.425 | −9.225 | −8.684 | **−8.307** |
+> | TNS | −718,478 | −349,409 | −425,811 | **−312,530** |
+> | failing endpoints | 102,508 | 89,527 | 91,461 | 90,379 |
+> | combinational loops | 29 | 13 | 29 | **1** |
+> | routed Total LUTs | 169,213 | 169,944 | 169,637 | **168,757** |
+> | routed FFs | 93,145 | 92,939 | 93,140 | 93,085 |
+> | `capstone_rev_node` LUT/FF | 1,052/606 | 1,141/678 | 1,093/607 | 985/740 |
+>
+> `capstone_dyn_unit` 2,579 LUT / 1,095 FF. Post-synth Total LUTs 170,928 (83.87 %). DRC clean of
+> `LUTLP-1`, with TIMING-4/6/7 present in the same file as the control that the matcher sees it.
+>
+> **Predictions, written before the build and all met:** WNS no worse than −9.225 → **−8.307**, the best
+> ever recorded on this design; LUTs at or below 171,497 → met at both stages; loops ≤ 13 → **1**.
+>
+> **It is a net REDUCTION, not a passed budget.** 168,757 routed is **456 LUTs below the flashed base**,
+> 1,187 below the splice and 880 below S2 — while adding an allocator, a free list, a generation check
+> and the merge. The RTL lane's "+1 % band" framed the reclaimer as a cost to be bounded and that
+> framing was wrong in direction as well as in units.
+>
+> **⚠ ATTRIBUTION IS WITHHELD ON PURPOSE, and this is the same trap as the splice's retracted mechanism
+> sentence.** `m1-reclaimer` is 17 commits and **14 files under `core/`** from the splice — the
+> reclaimer AND the `r34-r24-exception-delivery` merge (MMU, PMP, LSU, `csr_regfile.sv`, `riscv_pkg.sv`).
+> So *"the reclaimer took loops from 13 to 1"* and any reclaimer-specific timing or area claim are
+> **exactly the sentences this evidence does not support**. What the four builds jointly license, and
+> no more:
+>
+> * registering the endpoint buys timing and **not** loops — S2, 29 loops at −8.684;
+> * something in the splice commit's **structural** half takes loops 29 → 13;
+> * something in the **14-file reclaimer-plus-merge** range takes them 13 → 1.
+>
+> Which of those 14 files does it is **unmeasured**. `f714d2a72` — the merged baseline, never
+> synthesised — is the only build that would split the reclaimer from the merge, and until it exists the
+> joint statement is the whole of what may be said. Either no reclaimer-specific synthesis claim is ever
+> made, or that build happens; the lead's call, and it gates nothing now.
+>
+> **Two instrument facts from this build.** (1) The loop line is **singular at 1** — *"There is 1
+> combinational loop in the design"* — so a plural-only matcher returns nothing and **reads as zero**,
+> the standing no-data-is-not-a-zero failure; it was caught only by the neighbouring latch-loop line.
+> Match both forms and fail loudly on no match. (2) The post-synth → routed Total LUTs offset is now
+> **N=2 and consistent**: S2 171,620 → 169,637 (−1.16 %), S1 170,928 → 168,757 (−1.27 %). Post-synth
+> over-reads routed by roughly 1.2 %; it still does not rescue a LUT ceiling, since the build that
+> failed to route projects below the highest that routed either way.
+>
+> **Wall-clock, recorded because nobody had this number.** S1: ~2h50m synthesis, of which **~100 minutes
+> single-threaded in Timing Optimization with the log silent** — the stretch most likely to be misread as
+> a hang — then ~45 minutes from `opt_design` to bitstream, the router converging 241,309 overlaps to
+> zero in about 20. S2 for scale: 40 minutes synthesis, 1h50m35s end to end.
+>
+
+
+
+
+
 
 ### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
 

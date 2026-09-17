@@ -26,6 +26,12 @@ for s in "$SRC"/*.anvil; do
   n=$((n+1))
   if [ ! -f "$g" ]; then
     echo "  MISSING  $(basename "$g") -- never generated"; stale=$((stale+1))
+  elif [ ! -s "$g" ]; then
+    # A FAILED anvil leaves a ZERO-BYTE target with a fresh mtime: the Makefile redirects anvil's
+    # stdout into the .sv before anvil runs, so a compile error produces an empty file that is
+    # "newer than its source" and that make then considers up to date. Found 2026-09-16 when a
+    # borrow-check failure hid behind an OK from this very gate. Empty is not generated.
+    echo "  EMPTY    $(basename "$g") is ZERO BYTES -- anvil FAILED; make will not retry until clean"; stale=$((stale+1))
   elif [ "$s" -nt "$g" ]; then
     echo "  STALE    $(basename "$g") is OLDER than $(basename "$s")"; stale=$((stale+1))
   fi
