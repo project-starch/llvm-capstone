@@ -4091,7 +4091,24 @@ ladder rung approaches it (bigmany: 65).~~
 > fixture reached it**: five directed tests, a full sweep, a lint gate and a 16,386-round retirement run
 > were all green on RTL carrying it, and the fixture header records the two shapes that miss it.
 >
-> **Status: FIXED-IN-SIM.** Synthesis (S1) requested from the synth lane with the prediction written
+> **Status: FIXED-IN-SIM when written; FIXED AND VALIDATED ON SILICON 2026-09-17** — see the silicon
+> block below. Both halves of R-12 are now addressed on hardware: exhaustion is an architectural fault
+> rather than a deadlock (Part B), and the 65,532-node ceiling is lifted by reclamation — **bounded by
+> the workload's leak fraction, not removed**, which is the qualification that must travel with the
+> claim.
+>
+> **CANONICAL WORDING FOR M1, RULED BY THE PROJECT LEAD 2026-09-18.** The result is to be described as
+> **"M1 measured; completion condition four ANSWERED rather than SATISFIED"** — never as "M1 complete".
+> Three of M1's four conditions are met on silicon (permitted reuse demonstrated, stale operations never
+> regain authority, pressure behaviour classified). The fourth, `occupied + free = usable capacity`, is
+> **false by design rather than unmeasured**: this implementation loses nodes deliberately — a revoke
+> never frees its own handle, a DROP'd node is never reclaimable, and an index retires permanently after
+> 16,384 reuses — so the protocol's partition has no category for them. The shortfall is measurable at
+> the exhaustion point and is reported; the equation is not made to balance. Reason for the ruling: a
+> reader of "complete" assumes node accounting balances, and a capacity estimate or a paper claim built
+> on that assumption would be wrong.
+>
+> Original status line, kept: Synthesis (S1) requested from the synth lane with the prediction written
 > first — WNS no worse than the splice's −9.225, LUTs within +1 % of 169,932, loops ≤ 13; a regression
 > past those numbers is a stop, not a note. No bitstream, no reflash (ask-first). History note:
 > `docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md`.
