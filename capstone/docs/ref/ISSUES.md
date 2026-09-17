@@ -4016,6 +4016,19 @@ ladder rung approaches it (bigmany: 65).~~
 > lint LATCH 52 / MULTIDRIVEN 3 / UNOPTFLAT **40** / BLKSEQ 2 / UNDRIVEN 25 unmoved, UNUSEDSIGNAL **733**
 > with every delta attributed by (message, bit-range) shape.
 >
+> **WHAT THE RECLAIMER CANNOT RECLAIM, measured 2026-09-17 and a bound on its practical value.**
+> `REVOKE` frees the nodes BELOW the handle; **the handle's own node is never freed** — inherent, since
+> the handle stays usable after the revoke and its node must stay live. So a workload leaks one node per
+> handle it mints, and the reclaimer can only recycle what a walk sweeps. Measured on the 16,386-round
+> fixture (34,821 minted ids, every one printed): distinct indices ever minted is **linear in
+> allocations at 0.529**, flat to three digits from 64 allocations to 34,821 — the round allocates two
+> nodes and frees one. No saturation at any point. **The consequence for any capacity boundary in the
+> node table is that the reclaimer MOVES it by the reciprocal of the leak fraction rather than removing
+> it** (here 2,048 lines of D-cache at ~2,048 allocations becomes ~3,870, a factor of 1.89). For a
+> workload whose allocations are ALL handles the fraction is 1.0 and the boundary does not move at all,
+> with the reclaimer nonetheless working exactly as designed. The coefficient is a property of the
+> workload's allocate-to-free ratio and must be measured per workload, never carried across.
+>
 > **Cost, confirmed at N = 65,532.** The allocator's call boundary costs **+1 cycle per allocation** —
 > measured on one instruction (bump SPLIT 27 → 28, bump MREV 26 → 27) and confirmed at scale by the
 > exhaustion fixture, which runs +65,542 cycles against Part B while performing 65,532 allocations
