@@ -5,7 +5,7 @@
  */
 #include "trace.h"
 #define ff_memory_init ff2_memory_init
-#include "metadata-memory.c"
+#include "metadata-allocator.c"
 #ifdef FFPOOL_DOMAIN
 #include "../../sqlite/sublet/sublet.h"
 #else
@@ -24,42 +24,23 @@ static unsigned mode, nblocks;
 static uintptr_t payload_base;
 static size_t payload_capacity, payload_used, init_bytes;
 
+#define FF2_INLINE static inline __attribute__((always_inline))
+#ifdef FFPOOL_DOMAIN
+#include "../capstone/domain/payload-capabilities.inc"
+#else
+#include "../native/replay/payload-pointers.inc"
+#endif
+
 void ff2_set_mode(unsigned value)
 { if (value > 2) ff2_fail(301); mode = value; }
 void ff2_payload_init(void *p, size_t n)
 {
-#ifdef FFPOOL_DOMAIN
-    sublet_store(&remaining, p);
-    payload_base = sublet_base(&remaining);
-    if (sublet_type(&remaining) != 0 || sublet_end(&remaining) - payload_base != n) ff2_fail(302);
-#else
-    remaining.c = p; payload_base = (uintptr_t)p;
-#endif
+    payload_init_region(p, n);
     payload_capacity = n;
-}
-static void *spatial_alias(struct payload_block *b)
-{
-#ifdef FFPOOL_DOMAIN
-    void *p;
-    __asm__ volatile(".insn i 0x5b, 0x3, %0, 0(%1)\n"
-                     ".insn s 0x5b, 0x4, x0, 0(%1)\n"
-                     ".insn r 0x5b, 0x1, 0x03, %0, x0, x0\n"
-                     : "=&r"(p) : "r"(&b->region) : "memory");
-    sublet_stats.delin++;
-    return p;
-#else
-    return b->region.c;
-#endif
 }
 static void *issue(struct payload_block *b)
 {
-    void *p;
-#ifdef FFPOOL_DOMAIN
-    p = mode == 2 ? sublet_take(&b->region) : b->full_alias;
-    p = __builtin_capstone_cap_shrink(p, b->address, b->address + b->requested);
-#else
-    p = b->full_alias;
-#endif
+    void *p = payload_issue_pointer(b);
     b->alias = p; b->idle = 0;
     return p;
 }
@@ -68,23 +49,6 @@ static struct payload_block *by_address(uintptr_t address)
     for (unsigned i = 0; i < nblocks; i++)
         if (payload_blocks[i].alive && payload_blocks[i].address == address) return &payload_blocks[i];
     ff2_fail(303);
-}
-/* Address equality alone does not authorize free. Compare the tagged current
- * capability representation, including its revocation node, at the base cursor.
- * LCC's validity selector is deliberately not used (unimplemented in this QEMU).
- */
-static int same_authority(const void *a, const void *b)
-{
-#ifdef FFPOOL_DOMAIN
-    sublet_cap aa, bb;
-    sublet_store(&aa, (void *)a); sublet_store(&bb, (void *)b);
-    if (sublet_type(&aa) != 1 || sublet_type(&bb) != 1) return 0;
-    const volatile uint64_t *x = (const volatile uint64_t *)&aa;
-    const volatile uint64_t *y = (const volatile uint64_t *)&bb;
-    return x[0] == y[0] && x[1] == y[1];
-#else
-    return a == b;
-#endif
 }
 static struct payload_block *by_authority(const void *p)
 {
@@ -103,39 +67,17 @@ void *ff2_payload_alloc(size_t size)
         if (nblocks == 2048 || rounded > payload_capacity - payload_used) return NULL;
         b = &payload_blocks[nblocks++];
         b->address = payload_base + payload_used; b->rounded = rounded;
-#ifdef FFPOOL_DOMAIN
-        sublet_carve(&remaining, b->address + rounded, &b->region);
-#else
-        b->region.c = (unsigned char *)remaining.c + payload_used;
-#endif
+        payload_carve(b, rounded);
         payload_used += rounded;
     }
     b->requested = size; b->alive = 1; b->idle = 1;
-#ifdef FFPOOL_DOMAIN
-    if (mode) sublet_handle(&b->region, &b->outer);
-#endif
-    if (mode != 2 || !b->full_alias) {
-        /* Native mode 2 still has an ordinary pointer; hardware mode 2 never
-         * exposes a persistent copy of the parent capability. */
-#ifdef FFPOOL_DOMAIN
-        if (mode != 2 && !b->full_alias) b->full_alias = spatial_alias(b);
-#else
-        b->full_alias = spatial_alias(b);
-#endif
-    }
+    payload_prepare_backing(b);
     return issue(b);
 }
 void ff2_payload_return(void *p)
 {
     struct payload_block *b = by_authority(p);
-#ifdef FFPOOL_DOMAIN
-    if (mode == 2) {
-        unsigned long before = sublet_stats.init;
-        sublet_give(&b->region);
-        if (sublet_stats.init != before) init_bytes += b->rounded;
-        b->alias = NULL;
-    }
-#endif
+    payload_return_lease(b);
     b->idle = 1;
 }
 void *ff2_payload_issue(uintptr_t address)
@@ -148,14 +90,7 @@ void ff2_payload_free(void *p)
 {
     if (!p) return;
     struct payload_block *b = by_authority(p);
-#ifdef FFPOOL_DOMAIN
-    if (mode) {
-        unsigned long before = sublet_stats.init;
-        sublet_give_to(&b->outer, &b->region);
-        if (sublet_stats.init != before) init_bytes += b->rounded;
-        b->full_alias = b->alias = NULL;
-    }
-#endif
+    payload_free_backing(b);
     b->alive = 0; b->idle = 1;
 }
 void *ff2_ref_alloc(size_t size, size_t metadata_size)
@@ -195,9 +130,5 @@ void ff2_ref_free(void *meta)
 void ff2_memory_report(struct ff2_header *h)
 {
     h->metadata_used = ff_memory_used(); h->payload_used = payload_used;
-#ifdef FFPOOL_DOMAIN
-    h->split = sublet_stats.split; h->mrev = sublet_stats.mrev;
-    h->delin = sublet_stats.delin; h->revoke = sublet_stats.revoke;
-    h->init = sublet_stats.init; h->init_bytes = init_bytes;
-#endif
+    payload_report_stats(h);
 }

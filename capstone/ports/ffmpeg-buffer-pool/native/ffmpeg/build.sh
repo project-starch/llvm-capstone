@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../runtime/prepare.sh" native
+source "$HERE/../../build/prepare-toolchain.sh" native
 ARM=${1:-traced}
 case "$ARM" in
     stock) SRC="$WORK/workload-src-stock/ffmpeg-9.0.1"; OUT="$WORK/workload-stock" ;;
@@ -13,7 +13,7 @@ printf '%s  %s\n' cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f6
 if [[ ! -d "$SRC" ]]; then
     mkdir -p "$(dirname "$SRC")"
     tar -xf "$ARCHIVE" -C "$(dirname "$SRC")"
-    if [[ "$ARM" == traced ]]; then python3 "$HERE/instrument.py" "$SRC"; fi
+    if [[ "$ARM" == traced ]]; then python3 "$HERE/instrument-pools.py" "$SRC"; fi
 fi
 mkdir -p "$OUT"
 cd "$OUT"

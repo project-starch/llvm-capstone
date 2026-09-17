@@ -80,5 +80,5 @@ static void pool_free(AVRefStructPool *pool)''', 1),
 }''', 1),
 ])
 edit('Makefile', [('OBJS = adler32.o', 'OBJS = ff2_record.o ff2_observe.o adler32.o', 1)])
-for original, name in [('../trace/trace.h', 'trace.h'), ('record.c', 'ff2_record.c'), ('../trace/observe.c', 'ff2_observe.c')]:
+for original, name in [('../../shared/trace.h', 'trace.h'), ('record-pool-events.c', 'ff2_record.c'), ('../../shared/observe-pool-events.c', 'ff2_observe.c')]:
     shutil.copy2(here / original, src / name)

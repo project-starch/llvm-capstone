@@ -15,12 +15,7 @@ static struct replay_pool { void *p; unsigned kind, closed; } pools[FF2_POOLS];
 static struct replay_lease { void *p; uint64_t id, pool; } leases[2048];
 static void dispatch(void);
 #ifdef FFPOOL_DOMAIN
-static void node_snapshot(void)
-{
-    unsigned long mark = 0xff20000000000000UL | cursor;
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0\n"
-                     ".insn r 0x5b, 0x1, 0x46, x0, x0, x0\n" : : "r"(mark) : "memory");
-}
+#include "../capstone/domain/node-snapshots.inc"
 #endif
 
 void ff2_lock(void) {}
@@ -144,82 +139,3 @@ static void replay(void *metadata)
 #endif
     report->status = 0;
 }
-
-#ifdef FFPOOL_DOMAIN
-static void *metadata;
-static unsigned shares;
-static unsigned long *domain_result;
-unsigned char ff2_exit_frame[32] __attribute__((aligned(16), used));
-_Noreturn void ff2_fail(unsigned code)
-{
-    if (report) report->status = code;
-    if (domain_result) *domain_result = code;
-    __asm__ volatile(
-        "1: auipc t0, %%pcrel_hi(ff2_exit_frame)\n"
-        "addi t0, t0, %%pcrel_lo(1b)\n"
-        ".insn r 0x5b, 0x1, 0xc, t0, gp, t0\n"
-        ".insn i 0x5b, 0x3, sp, 0(t0)\n"
-        ".insn i 0x5b, 0x3, ra, 16(t0)\n"
-        "ret\n" ::: "memory");
-    __builtin_unreachable();
-}
-void ff2_entry(unsigned long *result, unsigned func)
-{
-    if (func == 1) {
-        switch (shares++) {
-        case 0: report = (struct ff2_header *)result; break;
-        case 1: metadata = result; break;
-        case 2: trace = (const struct ff2_header *)result; break;
-        case 3: ff2_payload_init(result, FF2_PAYLOAD_BYTES); break;
-        default: ff2_fail(218);
-        }
-        return;
-    }
-    domain_result = result;
-    if (shares != 4) ff2_fail(219);
-    replay(metadata);
-    *result = 42044;
-}
-__asm__(".text\n.globl domain_main\ndomain_main:\n"
-        "1: auipc t0, %pcrel_hi(ff2_exit_frame)\n"
-        "addi t0, t0, %pcrel_lo(1b)\n"
-        ".insn r 0x5b, 0x1, 0xc, t0, gp, t0\n"
-        ".insn s 0x5b, 0x4, sp, 0(t0)\n"
-        ".insn s 0x5b, 0x4, ra, 16(t0)\nj ff2_entry\n");
-#else
-#include <stdio.h>
-#include <stdlib.h>
-#include <setjmp.h>
-static jmp_buf failure;
-_Noreturn void ff2_fail(unsigned code)
-{
-    report->status = code;
-    fprintf(stderr, "FF2 fail=%u event=%llu op=%llu\n", code,
-            (unsigned long long)cursor, (unsigned long long)(cursor < trace->count ? peek()->op : 0));
-    longjmp(failure, 1);
-}
-int main(int argc, char **argv)
-{
-    if (argc < 3 || argc > 4) return 2;
-    struct ff2_header *input = calloc(1, FF2_FILE_BYTES);
-    report = calloc(1, FF2_FILE_BYTES);
-    void *meta = aligned_alloc(64, FF2_META_BYTES);
-    void *payload = aligned_alloc(64, FF2_PAYLOAD_BYTES);
-    FILE *f = fopen(argv[1], "rb");
-    if (!input || !report || !meta || !payload || !f) return 2;
-    size_t n = fread(input, 1, FF2_FILE_BYTES, f);
-    if (ferror(f) || fgetc(f) != EOF || n < sizeof *input ||
-        input->count > (FF2_FILE_BYTES - sizeof *input) / sizeof(struct ff2_event) ||
-        n != sizeof *input + input->count * sizeof(struct ff2_event)) return 3;
-    fclose(f); trace = input;
-    report->mode = argc == 4 ? strtoul(argv[3], NULL, 0) : 0;
-    if (!setjmp(failure)) { ff2_payload_init(payload, FF2_PAYLOAD_BYTES); replay(meta); }
-    f = fopen(argv[2], "wb");
-    size_t bytes = sizeof *report + report->count * sizeof(struct ff2_event);
-    if (!f || fwrite(report, 1, bytes, f) != bytes || fclose(f)) return 4;
-    printf("FF2 status=%llu events=%llu metadata=%llu payload=%llu\n",
-           (unsigned long long)report->status, (unsigned long long)report->count,
-           (unsigned long long)report->metadata_used, (unsigned long long)report->payload_used);
-    return report->status ? 1 : 0;
-}
-#endif

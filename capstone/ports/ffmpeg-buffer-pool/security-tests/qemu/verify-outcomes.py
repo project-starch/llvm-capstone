@@ -19,7 +19,7 @@ NAMES = ['shared-references-callbacks-deferred-close', 'buffer-read-after-return
 parser = argparse.ArgumentParser()
 parser.add_argument('output', type=pathlib.Path)
 parser.add_argument('--cases', default='0,1,2,3,4,5,6,7,8,9,10,11')
-parser.add_argument('--modes', default='0,1,2')
+parser.add_argument('--modes', default='0,1,2', help='Capstone modes: 0=bounds, 1=backing lifetime, 2=Sublet pool leases')
 parser.add_argument('--rounds', type=int, default=70000)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)

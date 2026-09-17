@@ -3,9 +3,15 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../../tests/capstone-test-env.sh"
 WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
-INPUT=${1:?usage: run-qemu.sh TRACE RESULT-DIR MODE [EXPECTED-STATUS]}
+INPUT=${1:?usage: run-qemu.sh TRACE RESULT-DIR bounds|backing|sublet [EXPECTED-STATUS]}
 RESULT=${2:?missing result directory}
-MODE=${3:?missing mode}
+PROTECTION=${3:?missing protection: bounds, backing or sublet}
+case "$PROTECTION" in
+    bounds|0) MODE=0 ;;
+    backing|1) MODE=1 ;;
+    sublet|2) MODE=2 ;;
+    *) echo "expected bounds, backing or sublet" >&2; exit 2 ;;
+esac
 EXPECTED_STATUS=${4:-0}
 [[ "$MODE" =~ ^[012]$ && "$EXPECTED_STATUS" =~ ^[0-9]+$ ]] || exit 2
 PYTHON=${PYTHON:-python3}

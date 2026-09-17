@@ -2,8 +2,8 @@
 # Record both pool APIs and keep the decoder output oracle beside the trace.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-WORK=${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}
-OUT=${1:?usage: run-workload.sh RESULT-DIR [duration-seconds] [size]}
+WORK=${FFPOOL_WORK:-${CAPSTONE_TMP_ROOT:-/tmp/capstone}/ffmpeg-buffer-pool}
+OUT=${1:?usage: record-workload.sh RESULT-DIR [duration-seconds] [size]}
 DURATION=${2:-300}
 SIZE=${3:-1280x720}
 mkdir -p "$OUT"
@@ -23,7 +23,7 @@ FFPOOL_TRACE="$OUT/recorded.bin" "$TRACED" "${COMMON[@]}" \
     -i "$OUT/input.mkv" -f framemd5 "$OUT/traced.framemd5" \
     > "$OUT/traced.stdout" 2> "$OUT/traced.stderr"
 cmp "$OUT/stock.framemd5" "$OUT/traced.framemd5"
-python3 "$HERE/../tools/trace-tools.py" commands "$OUT/recorded.bin" "$OUT/commands.bin"
+python3 "$HERE/../../analysis/trace-tools.py" commands "$OUT/recorded.bin" "$OUT/commands.bin"
 python3 - "$OUT" "$DURATION" "$SIZE" "$STOCK" "$TRACED" <<'PY'
 import hashlib, json, pathlib, sys
 out = pathlib.Path(sys.argv[1])
