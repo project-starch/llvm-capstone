@@ -199,11 +199,27 @@ Reproducer and its six negative-tested exit paths: `capstone/tests/c32-sinkfold-
   * **`0x26a28` / `0x26a54`** — copies of the *merged* value, reaching defs `0x2679c [int]` and
     `0x267c4 [cnull]`. **These** are the `bridged_phi_residue` kind.
 
-* **Consequence worth stating on its own: the lit test cannot detect a change to the live site's
-  shape.** A fix that removed the `0x267a0` copy would leave `bridged_phi_residue` still emitting
-  its `movc` and the lit suite still green. `bridged_phi_residue` does not exercise the
-  fold-declined shape and cannot. Shape 4 of `c32-sinkfold-repro` is currently the only guard on
-  it — a real gap in the regression net, found by audit rather than by the net.
+* **Consequence worth stating on its own: until this change the lit test could not detect a change
+  to the live site's shape.** A fix that removed the `0x267a0` copy would have left
+  `bridged_phi_residue` still emitting its `movc` and the lit suite still green;
+  `bridged_phi_residue` does not exercise the fold-declined shape and cannot. A real gap in the
+  regression net, found by audit rather than by the net.
+
+  **It is CLOSED here, not merely recorded.** `c32-movc-untagged-live.ll` gains
+  `bridged_callarg_plus_phi` — the live shape reduced — which pins the call-argument copy the way
+  `bridged_phi_residue` pins its own residue, and it is the arm that should fail first when a C-32
+  fix lands. Negative-tested two-sided: it passes on current codegen and FAILS when the PHI use is
+  removed so the fold fires, so it is a proven guard rather than an unproven one.
+  `c32-sinkfold-repro` is a development instrument and runs in **no** suite; the lit arm is what
+  actually runs.
+
+  Two defects in the existing test surfaced while adding it, both fixed here. Its `O0-NOT: movc`
+  was **unbounded** — a trailing `CHECK-NOT` runs to end of file, so it had been silently policing
+  every function added after it, and the new arm's legitimate `movc <rd>, zero` cnull
+  materialisation tripped it; it is now bounded by a label, preserving exactly the old coverage.
+  And a bare `O2: movc` on the new arm would have been satisfied forever by that same cnull
+  `movc` — including after a fix removed the copy the arm exists to catch — so the check is pinned
+  to the call-argument copy by position (`O2: movc` / `O2-NEXT: cjalr`) instead.
 * **The handover's statement that the register-class alternative "was rejected partly on design A
   being sufficient here" is not supported by the record, and this note does not repeat it.** The
   decision table the lead ruled from (`docs/plans/DECISIONS-WAITING-2026-09-10.md:559-561`) says

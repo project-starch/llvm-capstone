@@ -21,9 +21,12 @@
 >   non-fast-forward and `capstone/paper`. Nothing else here is mine and unstarted.
 >
 > **Waiting on the lead — ten, merged rather than replaced (nothing here is dropped for being a day old):**
-> (1) the **author-line ruling**, which still holds C-32, F1/P2 and every optimised Sublet number —
-> the compiler lane's two options are rewrite-and-force-push or a narrow identity allowlist beside the
-> denylist, and no lane touches the gate; (2) the **fault-rung ruling** — how a fault rung earns its
+> (1) ~~the **author-line ruling**~~ — **waived, and C-32 is no longer held by it** (corrected
+> 2026-09-17): design A merged at `e3bb47b43680`, so the mechanical half is settled by git. C-32 is
+> now held by the **design question being reopened** — design A is on dev and measured not to fix
+> `setupLookaside`; mechanism and evidence in
+> `docs/history/17-09-2026_14-23-55_c32-design-a-sinkfold-mechanism.md`. Whether the ruling still
+> bears on P2 or other optimised Sublet numbers is not this lane's to say and is left standing; (2) the **fault-rung ruling** — how a fault rung earns its
 > recorded emulator pass — which blocks S1's and S2's invalid-operation cells and H1's fault family and
 > has the widest reach in the catalogue; (3) the narrowed **METHODS** question: are S1/S2's
 > `unsafe-success` cells an *enforcement failure* that stops dependent performance publication?

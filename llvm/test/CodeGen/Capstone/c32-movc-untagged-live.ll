@@ -80,6 +80,47 @@ join:
   ret ptr addrspace(200) %p
 }
 
+; THE SHAPE THAT IS LIVE ON SILICON, and the one `bridged_phi_residue` above does NOT
+; cover.  Added 2026-09-17 after an audit found the gap.
+;
+; The difference from `bridged_phi_residue` is that there, each bridge's ONLY use is the
+; PHI -- so nothing is lost to a declined fold, and its `movc` are copies of the PHI
+; RESULT.  Here the bridge has TWO uses: a conforming copy into a GPCR physreg (the call
+; argument) AND the PHI.  MachineSinking::PerformSinkAndFold scans every use of a def and
+; declines for the WHOLE def on the first non-conforming one, so the PHI costs the call
+; argument its fold and that copy is emitted as `movc` too.
+;
+; This is `setupLookaside` at 0x267a0 in the Sublet cell 6 -O2 image, reduced: the
+; INT-ONLY site the scanner flags, and the one the harm story runs through.  Without this
+; arm a fix that removed THAT copy would leave the suite green, because
+; `bridged_phi_residue` would still emit its own `movc` and nothing else here looks at
+; this shape.
+;
+; SO: when a C-32 fix lands, THIS IS THE ARM THAT SHOULD FAIL FIRST.  It is a pin on
+; current behaviour, not a statement that the behaviour is wanted -- update it
+; deliberately, with the reason, exactly as `bridged_phi_residue` would be.
+; The check is `movc` IMMEDIATELY BEFORE the `cjalr`, not a bare `movc`, and that is
+; load-bearing: this function also emits `movc <reg>, zero` on the null arm to materialise
+; cnull, which a bare CHECK would match happily FOREVER -- including after a fix had
+; removed the copy this arm exists to catch.  Pinning the call-argument copy by its
+; position is what makes the arm able to fail.
+; CHECK-LABEL: bridged_callarg_plus_phi:
+; O2: movc
+; O2-NEXT: cjalr
+define ptr addrspace(200) @bridged_callarg_plus_phi(i64 %x, i1 %c) {
+entry:
+  br i1 %c, label %then, label %nul
+then:
+  %p = inttoptr i64 %x to ptr addrspace(200)
+  call void @use(ptr addrspace(200) %p)
+  br label %join
+nul:
+  br label %join
+join:
+  %q = phi ptr addrspace(200) [ %p, %then ], [ null, %nul ]
+  ret ptr addrspace(200) %q
+}
+
 ; -O0 has its OWN prefix because its output is not the -O2 output: at -O0 the
 ; copy is copyPhysReg's GPR->GPCR arm emitting the ADDI directly, and
 ; real_cap_copy emits no movc at all, so the shared CHECK lines cannot be
@@ -87,3 +128,18 @@ join:
 ; place: the bridge as an integer write, never a movc of the bridged value.
 ; O0-LABEL: bridged_copied_live:
 ; O0-NOT: movc
+;
+; THE O0-NOT IS BOUNDED DELIBERATELY, and the bound is the label below.  A trailing
+; CHECK-NOT runs to END OF FILE, so before this bound existed the -O0 arm silently policed
+; every later function too -- and adding bridged_callarg_plus_phi broke it, because that
+; function legitimately materialises cnull for its null PHI input and `movc <rd>, zero` is
+; not a copy of a bridged value at all.  Bounding it here keeps exactly the old coverage
+; (bridged_copied_live, real_cap_copy and bridged_phi_residue all still emit no movc at
+; -O0) while letting the new arm say what IT must show.
+; O0-LABEL: bridged_callarg_plus_phi:
+; O0: movc {{[a-z0-9]+}}, zero
+;
+; That is the ONLY movc this function may have at -O0.  At -O0 the bridge goes through
+; memory (`stc` then `ldc`), so the bridged value is never copied with movc here -- which
+; is why C-32 has never been seen on an -O0 image, and why the -O0 arm is not where a fix
+; would be noticed.

@@ -51,8 +51,11 @@ def, which declines the fold by itself.
 PHI, so no conforming copy is lost to the decline and its `movc` are copies of the
 PHI result. The live site is a bridge with a conforming call-argument copy *and* a
 PHI use — which is where all-or-nothing actually bites. A fix that removed the live
-site's copy would leave the lit suite green. Shape 4 is currently the only guard on
-that shape.
+site's copy would once have left the lit suite green. That is no longer true:
+`c32-movc-untagged-live.ll` now carries `bridged_callarg_plus_phi`, the same shape,
+negative-tested two-sided. **The lit arm is the guard; this directory is not.**
+Nothing runs `check.py` automatically — it is a development instrument for
+iterating on a candidate fix in under a second, not part of any suite.
 
 Shape 1 vs shape 2 is that difference as one variable: identical but for a
 `ptrtoint`, and `mv` becomes `movc`.
