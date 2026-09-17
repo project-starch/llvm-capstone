@@ -4038,6 +4038,17 @@ ladder rung approaches it (bigmany: 65).~~
 > to every future walk and leaks for the life of the boot. Together with the handle rule above, those two
 > are the whole of what bounds the feature.
 >
+> **THE THREE INVALIDATION SITES, and why a no-DROP workload has a valid fraction of exactly 1.** Only
+> three places set `valid = 0`: the walk's push branch (invalidates AND frees); the walk's non-push
+> branch (invalidates without freeing — only for `idx <= 2` or a generation at the retirement maximum);
+> and DROP, via `change_rev_node_validity`, which preserves prev/next so the node stays linked and is
+> never freed. Nothing else. Since the exit splice unlinks the whole revoked run, a previous walk's
+> corpses are not in any later walk's path either. **So on a spliced tree a workload that never DROPs
+> has every walked node valid, and the fraction of a walk's visits that it frees is 1** — the only
+> exceptions being the two sentinels and a retired index. The practical form: measuring that fraction
+> tells you nothing, but ASSERTING it is free, and a deviation means a DROP nobody knew about or an
+> index that has retired. It also means the leak fraction is decided entirely by the handle rule.
+>
 > **Cost, confirmed at N = 65,532.** The allocator's call boundary costs **+1 cycle per allocation** —
 > measured on one instruction (bump SPLIT 27 → 28, bump MREV 26 → 27) and confirmed at scale by the
 > exhaustion fixture, which runs +65,542 cycles against Part B while performing 65,532 allocations
