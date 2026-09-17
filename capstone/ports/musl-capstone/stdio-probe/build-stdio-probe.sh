@@ -27,11 +27,11 @@ source "$PORT_DIR/../../tests/capstone-test-env.sh"
 REPO_ROOT=$CAPSTONE_REPO_ROOT
 CLANG=${CAPSTONE_CLANG:?}
 LD_LLD=${CAPSTONE_LD_LLD:?}
-OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-write-probe}
+OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-stdio-probe}
 ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a}
 LINKER_SCRIPT="$REPO_ROOT/capstone/my_first_domain/link.ld"
-OUT_DOM=${OUT_DOM:-$OUT_DIR/write_probe.dom}
-OUT_HOST=${OUT_HOST:-$OUT_DIR/write_probe.user}
+OUT_DOM=${OUT_DOM:-$OUT_DIR/stdio_probe.dom}
+OUT_HOST=${OUT_HOST:-$OUT_DIR/stdio_probe.user}
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
 LIBCAPSTONE_DIR="${CAPSTONE_BUILDROOT_DIR:?set CAPSTONE_BUILDROOT_DIR}/package/modcapstone/userspace/lib"
 LIBCAPSTONE_C="$LIBCAPSTONE_DIR/libcapstone.c"
@@ -52,7 +52,7 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     # locale.h does not expose locale_t, and pthread_impl.h has a member of that
     # type, so any file here that reaches musl's internals fails to compile.
     -D_XOPEN_SOURCE=700
-    ${MUSL_WRITE_PROBE_BADFD:+-DMUSL_WRITE_PROBE_WANT_BADFD} "${INC[@]}")
+    "${INC[@]}")
 
 # Soft-float builtins from the shared list. A domain has no FP hardware ABI, so
 # every float and double operation lowers to a compiler-rt libcall, and musl's
@@ -75,11 +75,11 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/tls.c"                  -o "$OUT_DIR/tls.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$PORT_DIR/runtime/set_thread_area.S" -o "$OUT_DIR/set_thread_area.o"
-"$CLANG" "${CF[@]}" -c "$SCRIPT_DIR/write_probe_domain.c"         -o "$OUT_DIR/write_probe.o"
+"$CLANG" "${CF[@]}" -c "$SCRIPT_DIR/stdio_probe_domain.c"         -o "$OUT_DIR/stdio_probe.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/write_probe.o" "$ARCHIVE"
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE"
 
 # THE CONTROL. domain_main present so --gc-sections keeps the chain alive, no
 # hostcall implementation, so the reference musl's write makes has nothing to
@@ -93,7 +93,7 @@ STUB
 set +e
 control=$("$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DIR/nohostcall.dom" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/stub_main.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/write_probe.o" "$ARCHIVE" 2>&1)
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/string_bounds_safe.o" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE" 2>&1)
 set -e
 undef=$(printf '%s\n' "$control" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | sort -u)
 if [ "$undef" != "__capstone_hostcall" ]; then
@@ -105,7 +105,8 @@ fi
 # with the buildroot toolchain because it runs as an ordinary Linux process
 # inside the QEMU guest, not in a domain.
 "$GUEST_CC" -O2 -I"$SCRIPT_DIR" -I"$LIBCAPSTONE_DIR" -I"$HOSTCALL_H_DIR" \
-  -o "$OUT_HOST" "$SCRIPT_DIR/write_probe_host.c" "$LIBCAPSTONE_C"
+  -I"$REPO_ROOT/capstone/tests/runtime-qemu" \
+  -o "$OUT_HOST" "$SCRIPT_DIR/stdio_probe_host.c" "$LIBCAPSTONE_C"
 
 printf 'built   %s\n' "$OUT_DOM"
 printf 'built   %s\n' "$OUT_HOST"

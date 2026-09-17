@@ -26,6 +26,16 @@ CAPSTONE_SOFTFLOAT_BUILTINS=(
   floatunsisf
   floatunsidf floatdidf floatundidf fixdfdi fixunsdfdi fixunsdfsi
   fp_mode
+  # TF mode, i.e. 128-bit long double. musl's vfprintf references the whole
+  # family whether or not a caller uses %Lf, so ANY program that links printf
+  # needs these: they were the last eleven undefined symbols the musl port had
+  # (measured 2026-09-16). comparetf2 carries __eqtf2, __netf2 and __unordtf2
+  # together, so nine files close eleven symbols. All nine compile for
+  # capstone64 as they stand, which was the open question: compiler-rt computes
+  # the significand in __uint128_t and MVT::i128 is this target's capability
+  # carrier.
+  addtf3 subtf3 multf3 comparetf2 extenddftf2
+  fixtfsi fixunstfsi floatsitf floatunsitf
 )
 
 softfloat_objs=()
