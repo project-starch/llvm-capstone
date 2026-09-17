@@ -4029,6 +4029,15 @@ ladder rung approaches it (bigmany: 65).~~
 > with the reclaimer nonetheless working exactly as designed. The coefficient is a property of the
 > workload's allocate-to-free ratio and must be measured per workload, never carried across.
 >
+> **A NODE IS RECLAIMABLE ONLY IN THE WALK THAT INVALIDATES IT** — the second half of the bound, and the
+> one that is easy to state backwards. The push lives only in the walk's `node_in.valid == 1'd1` branch;
+> the `else` branch, an already-invalid node, advances and does nothing. So "a reclaiming revoke frees
+> what it walks" is FALSE as usually said — it frees what it walks **and finds valid**. Measured in
+> `r12-recl-drop-not-free.S`: a DROP'd node is crossed by a later revoke and **never reissued**. Anything
+> invalidated by DROP, or by an earlier walk that has already spliced it out of the chain, is unreachable
+> to every future walk and leaks for the life of the boot. Together with the handle rule above, those two
+> are the whole of what bounds the feature.
+>
 > **Cost, confirmed at N = 65,532.** The allocator's call boundary costs **+1 cycle per allocation** —
 > measured on one instruction (bump SPLIT 27 → 28, bump MREV 26 → 27) and confirmed at scale by the
 > exhaustion fixture, which runs +65,542 cycles against Part B while performing 65,532 allocations
