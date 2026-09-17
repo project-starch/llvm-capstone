@@ -6,11 +6,25 @@ that become NOT_CAP faults once the LSU's capability check is delivered (R-34's 
 capmode set. Splits the count by address range: the monitor's capability-mode text (`--lo`..`--hi`)
 against everything else, because the two have different owners and different exposure.
 
-POSITIVE CONTROL, and it is not optional: the monitor's hand-written trap site in `_handle_non_ecall`
-(`add t5, t5, sp` then `sd a0, 0x10(t5)`) MUST appear in the output. A first version of this scan
-restricted itself to functions that adjust their frame with a capability instruction and so excluded
-that 13-instruction fragment, reporting a confident ZERO with the one known site missing. If the
-control line below does not print, the scan is not measuring what it claims and its zero means nothing.
+POSITIVE CONTROL, and it is not optional. A first version of this scan restricted itself to functions
+that adjust their frame with a capability instruction, so it excluded the 13-instruction hand-written
+fragment holding the one known site and reported a confident ZERO. Without a control, a zero here means
+nothing.
+
+THE CONTROL IS THE `other` REGION, NOT `_handle_non_ecall`, AND THAT CHANGED 2026-09-17. It used to be
+the trap site itself, which was the one known instance -- and that made the scan SELF-DEFEATING: the
+D3 fix removes exactly that site, so on a CORRECT firmware the control could never fire and the scan
+exited 2, i.e. it could not be used to verify the fix it was built to find, and its failure would read
+as a broken instrument rather than as a repaired monitor. Demonstrated with a matched pair on the same
+firmware, one site changed: before, `cap_text` 1 and exit 0; after, `cap_text` 0 and exit 2.
+
+The generic OpenSBI text carries ~7,115 such accesses and nobody is fixing them, so it fires whatever
+the monitor's capability-mode text does. It is independent of the subject, which is what a control has
+to be.
+
+EXIT CODES: 2 the control did not fire, so the scan proves nothing; 1 the control fired and `cap_text`
+is NON-ZERO, which is the finding this scan exists to report; 0 the control fired and `cap_text` is
+zero, which is the only combination that means the monitor is clean AND the check was working.
 """
 import re, sys, subprocess, collections
 
@@ -65,9 +79,14 @@ def main():
             elif mnem in CAP and d: last[d] = "cap"
     for r in ("cap_text", "other"):
         print(f"{r:9} {tot[r]:6} plain accesses, {bad[r]:6} through an integer-derived base")
-    print(f"POSITIVE CONTROL _handle_non_ecall: {control} (MUST be >= 1, or this scan proves nothing)")
+    print(f"POSITIVE CONTROL (other region): {bad['other']} (MUST be >= 1, or this scan proves nothing)")
+    print(f"the D3 trap site _handle_non_ecall: {control}  "
+          f"({'STILL PRESENT -- the monitor fix is not in this firmware' if control else 'gone -- consistent with the D3 fix'})")
     for (r, f), n in per.most_common(15):
         print(f"   {r:9} {n:5}  {f}")
-    sys.exit(0 if control >= 1 else 2)
+    if bad["other"] < 1:
+        print("BLOCKED: the control did not fire. This scan measured nothing; its zero is not a result.")
+        sys.exit(2)
+    sys.exit(1 if bad["cap_text"] else 0)
 
 main()
