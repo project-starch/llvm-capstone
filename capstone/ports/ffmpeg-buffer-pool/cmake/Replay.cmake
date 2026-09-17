@@ -12,7 +12,8 @@ add_library(pool-core OBJECT
   "${FFMPEG_ported_SOURCE}/libavutil/buffer.c"
   "${FFMPEG_ported_SOURCE}/libavutil/refstruct.c"
   shared/observe-pool-events.c
-  shared/pool-allocator.c)
+  shared/pool-allocator.c
+  shared/metadata-allocator.c)
 target_link_libraries(pool-core PUBLIC replay-options)
 add_dependencies(pool-core ffmpeg-ported-source)
 
@@ -20,6 +21,10 @@ if(FFPOOL_PLATFORM STREQUAL "capstone-domain")
   enable_language(ASM)
   target_compile_definitions(replay-options INTERFACE FFPOOL_DOMAIN)
   set(entry capstone/domain/entry.c)
+  target_sources(pool-core PRIVATE
+    capstone/domain/payload-capabilities.c
+    capstone/domain/node-snapshots.c
+    sublet/pool-leases.c)
   set(suffix .dom)
   set(domain_runtime
     "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
@@ -30,10 +35,12 @@ if(FFPOOL_PLATFORM STREQUAL "capstone-domain")
 endif()
 if(FFPOOL_PLATFORM STREQUAL "native")
   set(entry native/replay/main.c)
+  target_sources(pool-core PRIVATE native/replay/payload-pointers.c)
 endif()
 
-add_executable(replay ${entry})
-add_executable(pool-security ${entry} security-tests/shared/pool-lifetime-probes.c)
+add_executable(replay ${entry} shared/replay-engine.c)
+add_executable(pool-security ${entry} shared/replay-engine.c
+  security-tests/shared/pool-lifetime-probes.c)
 target_compile_definitions(pool-security PRIVATE FF2_SECURITY)
 foreach(program replay pool-security)
   target_link_libraries(${program} PRIVATE pool-core)
