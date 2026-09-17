@@ -564,6 +564,75 @@ drivers enforce this and hard-stop on a mismatch). `C_PRINT` (`csrw 0x800`) goes
 don't use it as a UART probe. Signal of a live domain = the controller prints its
 first line (that's AFTER `IOCTL_DOM_CREATE` returns).
 
+## RE-FLASHING — the procedure, and the one step that is not ours
+
+**Ask-first, always** (CLAUDE.md). What follows is how it is done once authorised. It is written here
+because it existed only inside the S-12 repro folder, which nobody opens to learn a procedure.
+
+**TWO CORRECTIONS TO THE TOOLING LIST ABOVE, which could not be applied in place — see the note at
+the end of this section.**
+
+* **There is NO re-flash tool.** The list names `board_reflash_only.py`; that file **has never been
+  committed to any ref** (checked across all refs 2026-09-17, not just the working tree), and the S-12
+  folder recorded the same in August. Do not go looking for it.
+* **The resident-bitstream name in that list is one flash stale, for the second time.** It has named a
+  file two reflashes old before, was corrected on 2026-09-10, and a flash on 2026-09-12 made it stale
+  again within two days. **Do not trust any written name: read it off the board**
+  (`flash_state.nv_bitstream_name`). As of 2026-09-12 the resident bitstream is
+  **`caplifive_r30r31_1bfff7776`**, attested three ways — `known-good-controls.md`, §4g.2 of the
+  measurements doc, and all seven shell drivers.
+
+**The step we cannot do: getting a `.bit` ONTO the console.** The client exposes no bitstream upload,
+and `flash_bitstream` names a file **already registered server-side**. The REST surface has
+file-management routes (`GET/DELETE/PATCH /api/images`, `/api/bitstreams`, `.../upload`) but
+`PROTOCOL.md` records them as "present too but not on the rtl-smoke path" — documented, never
+exercised from here. Every flash on our record named a file somebody else had registered. **Ask the
+lead to upload it, or for the exact name it is already registered under.**
+
+**The sequence that worked** (2026-08-27, the only flash recorded end to end from this side):
+
+1. Power **ON**, then **let the board settle ~30 s**. Flashing within a second of power-on returns
+   `error`.
+2. `POST /api/flash-bitstream {filename}` — the stored filename **with `.bit`**, not a content hash
+   (that is boot images, stored under `sha256[:12]`). One build has appeared under two names, so use
+   the string you were given rather than inferring it.
+3. **Wait for a FRESH `flash_state` event.** The HTTP `200 {"state":"loading"}` is NOT success.
+   `FpgaConsole.flash_bitstream` blocks until `flash_state=done`.
+4. Read back `flash_state.nv_bitstream_name` and export that exact string as `FPGA_BITSTREAM`. The
+   shell drivers under `tests/rtl-smoke/drivers/` take it from the environment with the resident name
+   as their default, so a flash costs one exported variable, not seven file edits.
+
+**No duration is on record.** Budget generously rather than treating a slow flash as hung.
+
+**`nv_bitstream_name` semantics.** Set only when the **non-volatile** (SPI) write succeeds; a volatile
+JTAG-only flash leaves it unchanged. Never cleared on power-off, but **lost when the backend
+restarts** — the console appears to learn it by performing a flash itself. That is the only thing
+`FPGA_BITSTREAM_UNVERIFIED=1` tolerates; a console reporting a DIFFERENT name still hard-stops.
+
+**Failures that were ours, not the board's:** reading a **cached** `flash_state` from a prior attempt
+instead of waiting for a fresh event; and a presence check that iterated `{"files": [...]}` as a dict,
+enumerating the single key `'files'` instead of the filenames. One genuine failure is also on record —
+`200` then `error` for both registrations of a build, resident bitstream untouched, board undamaged,
+**no failure reason exposed by the API**.
+
+**Before flashing away from a bitstream, confirm the OLD one is still registered** (`GET
+/api/bitstreams`). Flashing back is the same procedure and cost, but only if it is still there, and
+that is cheaper to learn before than after: every "before" measurement stops being a live comparison
+the moment the new one lands.
+
+**Then re-derive the memory map — see the next section.** Not optional for any bitstream that changes
+the revocation-node pool.
+
+> **Why the two corrections above are here and not in the list they correct.** That list carries, in
+> prose about the `FPGA_URL` rule, the word *token* immediately followed by a colon and a value —
+> which is exactly the shape `precommit-scan.sh:285` matches as a leaked credential. Any diff touching
+> those lines carries that shape: as a context line if the line is left alone, as a removed line if it
+> is reworded. Both were demonstrated on 2026-09-17 rather than assumed. So the file is frozen around
+> that line — the phrase cannot be removed, because removing it is itself blocked. The pattern guards
+> the real console credential and must NOT be weakened, and the gate must not be bypassed, so this is
+> the project lead's to rule on. Note that this paragraph had to describe the shape rather than quote
+> it, for the same reason. Editing this far-away section is unaffected.
+
 ## A NEW BITSTREAM CAN MOVE THE MEMORY MAP — check the device tree first
 
 **Symptom:** the board reflashes fine, then Linux dies in early init at the same point on every
