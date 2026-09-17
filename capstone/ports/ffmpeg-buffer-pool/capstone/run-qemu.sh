@@ -5,6 +5,8 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../../tests/capstone-test-env.sh"
 
 WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
+DOMAIN_BUILD=${FFPOOL_DOMAIN_BUILD_DIR:-$WORK/build/capstone-domain}
+LINUX_BUILD=${FFPOOL_LINUX_BUILD_DIR:-$WORK/build/linux-host}
 
 # Map readable protection names to the mode numbers stored in replay reports.
 INPUT=${1:?usage: run-qemu.sh TRACE RESULT-DIR bounds|backing|sublet [EXPECTED-STATUS]}
@@ -30,8 +32,8 @@ RUN=$(mktemp -d "$RESULT/qemu.XXXXXX")
 SHARE="$RUN/share"
 mkdir -p "$SHARE"
 cp "$INPUT" "$SHARE/trace.bin"
-cp "$WORK/combined-port-capstone/replay.dom" "$SHARE/replay.dom"
-cp "$WORK/combined-port-capstone/host.user" "$SHARE/host.user"
+cp "$DOMAIN_BUILD/bin/replay.dom" "$SHARE/replay.dom"
+cp "$LINUX_BUILD/bin/domain-loader" "$SHARE/host.user"
 printf 'EXPECTED_STATUS=%s\nMODE=%s\n' "$EXPECTED_STATUS" "$MODE" > "$SHARE/expected.sh"
 
 # This script executes inside guest Linux and enters the Capstone domain.

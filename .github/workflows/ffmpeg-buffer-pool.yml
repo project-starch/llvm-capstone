@@ -1,0 +1,54 @@
+name: FFmpeg buffer pool
+
+on:
+  pull_request:
+    paths:
+      - 'capstone/ports/ffmpeg-buffer-pool/**'
+      - '.github/workflows/ffmpeg-buffer-pool.yml'
+  push:
+    branches: [ffmpeg/1-buffer-pool]
+    paths:
+      - 'capstone/ports/ffmpeg-buffer-pool/**'
+      - '.github/workflows/ffmpeg-buffer-pool.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-buffer-pool-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: capstone/ports/ffmpeg-buffer-pool
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install build and formatting tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential python3-venv
+          python3 -m venv /tmp/ffpool-tools
+          /tmp/ffpool-tools/bin/pip install -r requirements-dev.txt
+      - name: Check formatting and shell syntax
+        run: |
+          /tmp/ffpool-tools/bin/black --check .
+          while IFS= read -r script; do
+            bash -n "$script"
+          done < <(git ls-files '*.sh')
+      - name: Configure, build and test the native port
+        run: |
+          source ../../tests/capstone-test-env.sh
+          cmake --preset native
+          cmake --build --preset native
+          ctest --preset native
+      - name: Check the incremental build is idle
+        run: |
+          source ../../tests/capstone-test-env.sh
+          output=$(cmake --build --preset native -- -n)
+          printf '%s\n' "$output"
+          test "$output" = 'ninja: no work to do.'

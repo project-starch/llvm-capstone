@@ -12,12 +12,13 @@ SIZE=${3:-1280x720}
 # Keep an existing recording intact, including its decoder-output oracle.
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
-for name in input.mkv stock.framemd5 traced.framemd5 recorded.bin commands.bin workload.json; do
+for name in input.mkv stock.framemd5 traced.framemd5 recorded.bin commands.bin workload.json ffmpeg-version.txt; do
     [[ ! -e "$OUT/$name" ]] || { echo "refusing to overwrite $OUT/$name" >&2; exit 2; }
 done
 
-STOCK="$WORK/workload-stock/ffmpeg"
-TRACED="$WORK/combined-workload/ffmpeg"
+BUILD_DIR=${FFPOOL_NATIVE_BUILD_DIR:-$WORK/build/native}
+STOCK="$BUILD_DIR/ffmpeg/stock/ffmpeg"
+TRACED="$BUILD_DIR/ffmpeg/traced/ffmpeg"
 COMMON=(-nostdin -hide_banner -loglevel warning -threads 1 -filter_threads 1 -filter_complex_threads 1)
 
 # Generate one input, then decode it with both stock and instrumented FFmpeg.
@@ -36,6 +37,8 @@ FFPOOL_TRACE="$OUT/recorded.bin" "$TRACED" "${COMMON[@]}" \
 cmp "$OUT/stock.framemd5" "$OUT/traced.framemd5"
 python3 "$HERE/../../analysis/trace-tools.py" commands "$OUT/recorded.bin" "$OUT/commands.bin"
 
+"$STOCK" -version > "$OUT/ffmpeg-version.txt"
+
 # Validate the frame count and record hashes for the workload and binaries.
 python3 - "$OUT" "$DURATION" "$SIZE" "$STOCK" "$TRACED" <<'PY'
 import hashlib, json, pathlib, sys
@@ -46,7 +49,8 @@ if frames != int(sys.argv[2]) * 30:
 paths = [out / name for name in ('input.mkv', 'stock.framemd5', 'traced.framemd5', 'recorded.bin', 'commands.bin')]
 paths += [pathlib.Path(sys.argv[4]), pathlib.Path(sys.argv[5])]
 hashes = {str(p): hashlib.file_digest(p.open('rb'), 'sha256').hexdigest() for p in paths}
-info = dict(ffmpeg='9.0.1', duration_seconds=int(sys.argv[2]), dimensions=sys.argv[3],
+version = (out / 'ffmpeg-version.txt').read_text().splitlines()[0]
+info = dict(ffmpeg=version, duration_seconds=int(sys.argv[2]), dimensions=sys.argv[3],
             frames=frames, fps=30, output_identical=True, sha256=hashes,
             trace_scope='AVBufferPool and AVRefStructPool with nested allocator callback effects',
             scheduling='native pthreads and atomics; pool operations serialized by recorder')
