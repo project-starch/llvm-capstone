@@ -2,6 +2,26 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-17 — CURRENT
+
+> **A bitstream queued for flashing carries two fixes its name does not mention.**
+> `caplifive_m1_054cea69b.bit` is the splice-plus-reclaimer build and **also contains R-34 and R-24**.
+> Established by CONTENT: `misaligned_ex_q` in `cva6_mmu.sv` goes 0 → 5 against the flashed
+> `1bfff7776`, and `DEBUG_REQUEST` goes 24 → 32. That makes capability exception delivery LIVE, and
+> the monitor the drivers bake still computes its trap-handler writeback with an integer add on the
+> stack capability — a dropped exception today, a delivered one inside the handler afterwards, on the
+> `rdtime` path. **The D3 fix (`capstone-sbi` `d3-monitor-capability-writeback` at `2dcd3a5`) must be
+> merged and the `4274268` pin moved in eight drivers before the first boot on the new silicon.** The
+> memory map does NOT move — both capability-region constants are byte-identical at the two revisions,
+> checked independently by two lanes — so the device tree stays valid.
+>
+> **The re-flash procedure is written down** for the first time
+> (`docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`, §RE-FLASHING); it had existed only inside the S-12 repro
+> folder. Two corrections could not be applied in the list they correct, because
+> `precommit-scan.sh`'s credential pattern matches a phrase committed in that list and blocks any
+> diff that touches those lines, as context or as a removal. Both directions demonstrated. The file
+> is frozen around that line and the fix is the lead's, since the pattern guards the real credential.
+
 ## 2026-09-16 — CURRENT
 
 > **A RETRACTION leads this block.** The cold-regime revoke slope of **87.1 cycles per node is

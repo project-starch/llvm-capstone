@@ -3083,6 +3083,21 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > emulator pass against the flashed bitstream proves only that nothing broke, never that the change
 > is correct. Only simulation of the fix branch can validate it.
 >
+> **2026-09-17 — R-34 AND R-24 ARE IN THE BITSTREAM QUEUED FOR FLASHING, WHICH IS LABELLED FOR
+> SOMETHING ELSE.** `caplifive_m1_054cea69b.bit` is described as the splice-plus-reclaimer build and
+> **also carries this pair.** Established BY CONTENT, not by its name and not by ancestry:
+> `misaligned_ex_q` in `cva6_mmu.sv` goes 0 → 5 between the flashed `1bfff7776` and `054cea69b`, and
+> `DEBUG_REQUEST` in `riscv_pkg.sv` goes 24 → 32. (All three R-34/R-24 commits are also ancestors, but
+> ancestry cannot see a cherry-pick and content can.) **Consequence: the moment it is resident the
+> monitor's unfixed writeback stops being a dropped exception and becomes a delivered one, inside the
+> monitor's own trap handler, on the path taken at every `rdtime`.** The drivers bake the monitor at
+> `4274268` and eight of them GATE on that commit, where the integer add is still at line 113, so the
+> D3 fix below must be merged and those pins moved before the first boot on the new silicon. The
+> memory map does NOT move: `CAP_REVNODE_MEM_BASE` and `CAP_TAG_MEM_BASE` are byte-identical at both
+> revisions (0xBFF00000, 0xBC2D2D2D), verified independently by two lanes, so the device tree stays
+> valid. Note also that the two entries' own "NOT synthesised, NOT on the board" status lines are
+> about to be overtaken by a build queued for a different reason.
+>
 > **D3 IS CLOSED — the monitor fix exists and is validated, 2026-09-16.** `capstone-sbi`
 > `d3-monitor-capability-writeback` at `2dcd3a5`: the writeback moves the stack capability's cursor in
 > place (`CINCOFFSET` with `rd` = `rs1` = `sp`, the store at 16 off `sp`, the negated offset back), so the
