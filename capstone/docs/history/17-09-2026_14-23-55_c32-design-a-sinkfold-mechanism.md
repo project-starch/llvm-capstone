@@ -137,6 +137,19 @@ Toolchain: `llvm/cmake-build-debug` on apollo, freshness gate exit 0
    source is only a call return or argument and so are not statically classifiable. Same four
    functions and classifications the handover records, and the first one's source/read pair is
    exactly the pair analysed above.
+
+   **Re-scanned after the scanner was repaired, and the table does not move.** That first scan
+   predated the board lane's fix to `movc-cfg-scan.py` (the one-operand `jalr rs` had been read as a
+   definition of `rs`, injecting a reaching definition that does not exist — reported from this
+   investigation, fixed at `fe2866d71437`). Re-running the repaired scanner on the same
+   hash-verified image gives a **byte-identical** report: same four sites, same classifications,
+   same 2/2/1780 split. The negative is a loaded one rather than a void one — the construct the fix
+   acts on is present (seven one-operand `jalr` in `setupLookaside` alone) and the two scanner
+   versions differ as files, so the instrument changed and the answer did not. `0x26a28` in
+   particular stays MIXED, and for the reason already given: its `cnull` arm, not the `jalr`
+   defect. For `main+0x3aabc` the fix removes the spurious `jalr s5` reaching definition, but three
+   genuine `ldc` capability loads remain among its twelve, so its classification and the conclusion
+   drawn from it are unaffected.
 8. **The other three sites do NOT share one cause — an earlier draft of this note said "four
    sites, one cause" and that is RETRACTED.** It was written from a few lines of disassembly
    context around each; replicating the scanner's flow-sensitive backward walk and printing the
