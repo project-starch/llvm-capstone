@@ -41,9 +41,10 @@ New to the project? See `capstone/docs/ONBOARDING.md`.
     This is a **script, not a subagent**, deliberately: a release gate on an absolute
     rule must be deterministic. Never delegate this check, and never weaken a pattern
     to make it pass. The exact-name list lives **outside the repo** at
-    `~/.claude-c/secrets/name-denylist.txt` (mode 600) — putting the names in a
-    committed file would itself break the rule. Keep that file populated; without it
-    the script warns and runs only its name-independent heuristics.
+    `~/.claude-kisp/secrets/name-denylist.txt` (mode 600) — the path the script itself
+    reads (`precommit-scan.sh:48`, overridable with `CAPSTONE_NAME_DENYLIST`) — putting
+    the names in a committed file would itself break the rule. Keep that file populated;
+    without it the script warns and runs only its name-independent heuristics.
 - **Commit result lines, not the capture they came from.** A raw log is contaminated by
   construction — kernel and driver banners carry account names and emails — so scrubbing is
   endless and per-log. Twelve result lines beat 1110, and are better evidence.
