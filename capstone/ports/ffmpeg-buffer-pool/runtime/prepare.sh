@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Usage: bash build.sh native|capstone
-# Compiles upstream buffer.c without editing it. Native mode compares the
-# upstream library to the isolated component. Capstone mode links the same
-# isolated component into a domain, without Sublet yet.
-set -euo pipefail
-HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../../tests/capstone-test-env.sh"
+# Source from a build script with native|capstone as its argument.
+# Exports WORK, SRC, OUT, MODE, CC and FLAGS in the calling shell; preserves HERE.
+# Generated paths stay stable so archived commands and reports remain usable.
+FFPOOL_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$FFPOOL_ROOT/../../tests/capstone-test-env.sh"
 MODE=${1:-native}
 case "$MODE" in native|capstone) ;; *) echo "usage: $0 native|capstone" >&2; exit 2;; esac
 WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
@@ -60,15 +58,6 @@ esac
 echo "ffpool mode=$MODE atomics=$ATOMICS (isolated execution is serial)"
 if [[ "$MODE" == native ]]; then
     CC=${CC:-cc}
-    if [[ ! -f "$OUT/config.h" ]]; then
-        (cd "$OUT"; "$SRC/configure" --disable-everything --disable-autodetect \
-            --disable-programs --disable-doc --disable-network --disable-x86asm \
-            --disable-pthreads --disable-w32threads --disable-os2threads \
-            --enable-static --disable-shared > configure.out 2>&1)
-    fi
-    make -C "$OUT" -j"${JOBS:-4}" libavutil/libavutil.a > "$OUT/build.out" 2>&1
-    "$CC" -std=c11 -O0 -g -I"$SRC" "$HERE/probe.c" \
-        "$OUT/libavutil/libavutil.a" -lm -o "$OUT/probe-upstream"
 else
     CC=$CAPSTONE_CLANG
     MUSL=${FFPOOL_MUSL:-$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5}
@@ -82,28 +71,6 @@ else
             -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
             -isystem "$MUSL/obj/include" -isystem "$MUSL/include"
             -isystem "$RESOURCE/include")
-fi
-OBJS=()
-for file in "$SRC/libavutil/buffer.c" "$HERE/probe.c" "$HERE/pilot_memory.c"; do
-    obj="$OUT/obj/$(basename "${file%.c}").o"
-    "$CC" "${FLAGS[@]}" -c "$file" -o "$obj"
-    OBJS+=("$obj")
-done
-if [[ "$MODE" == native ]]; then
-    "$CC" -Wl,--gc-sections "${OBJS[@]}" -o "$OUT/probe-isolated"
-    "$OUT/probe-upstream"
-    "$OUT/probe-isolated"
-    # Validate the exit-status oracle with a deliberately failing build.
-    "$CC" "${FLAGS[@]}" -DFFPOOL_FORCE_FAILURE -c "$HERE/probe.c" -o "$OUT/obj/negative.o"
-    "$CC" -Wl,--gc-sections "$OUT/obj/buffer.o" "$OUT/obj/negative.o" \
-        "$OUT/obj/pilot_memory.o" -o "$OUT/probe-negative"
-    negative_rc=0
-    "$OUT/probe-negative" > "$OUT/negative.out" || negative_rc=$?
-    if [[ "$negative_rc" != 1 ]] || ! grep -qx 'ffpool status=106 result=FAIL' "$OUT/negative.out"; then
-        echo "failure control did not report the expected failure" >&2; exit 1
-    fi
-    echo "corrupted-payload control: expected status 106 and exit 1"
-else
     # This repository's copy preserves capability tags in pointer-bearing data.
     "$CC" "${FLAGS[@]}" -c \
         "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c" \
@@ -112,16 +79,5 @@ else
                 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/gct-section-end.S"; do
         obj="$OUT/obj/$(basename "${file%.S}").o"
         "$CC" -target capstone64-unknown-elf -ffreestanding -c "$file" -o "$obj"
-        OBJS+=("$obj")
     done
-    "$CAPSTONE_LD_LLD" --gc-sections \
-        -T "$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld" \
-        -o "$OUT/ffpool.dom" "${OBJS[@]}" "$OUT/obj/string.o"
-    echo "built $OUT/ffpool.dom (expected return 42042, not yet an execution result)"
 fi
-{
-    printf 'mode=%s atomics=%s\n' "$MODE" "$ATOMICS"
-    "$CC" --version
-    sha256sum "$(command -v "$CC")"
-    sha256sum "$SRC/libavutil/buffer.c" "$HERE/probe.c" "$HERE/pilot_memory.c"
-} > "$OUT/build-identity.txt"

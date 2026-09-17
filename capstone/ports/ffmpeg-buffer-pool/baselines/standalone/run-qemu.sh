@@ -4,7 +4,7 @@
 # to the installed toolchain and initialized platform checkout before calling.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../../tests/capstone-test-env.sh"
+source "$HERE/../../../../tests/capstone-test-env.sh"
 WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
 PYTHON=${PYTHON:-python3}
 "$PYTHON" -c 'import pexpect'

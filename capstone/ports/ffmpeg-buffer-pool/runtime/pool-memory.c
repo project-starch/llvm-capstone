@@ -5,7 +5,7 @@
  */
 #include "trace.h"
 #define ff_memory_init ff2_memory_init
-#include "../replay-memory.c"
+#include "metadata-memory.c"
 #ifdef FFPOOL_DOMAIN
 #include "../../sqlite/sublet/sublet.h"
 #else

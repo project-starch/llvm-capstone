@@ -23,7 +23,7 @@ FFPOOL_TRACE="$OUT/recorded.bin" "$TRACED" "${COMMON[@]}" \
     -i "$OUT/input.mkv" -f framemd5 "$OUT/traced.framemd5" \
     > "$OUT/traced.stdout" 2> "$OUT/traced.stderr"
 cmp "$OUT/stock.framemd5" "$OUT/traced.framemd5"
-python3 "$HERE/trace-tools.py" commands "$OUT/recorded.bin" "$OUT/commands.bin"
+python3 "$HERE/../tools/trace-tools.py" commands "$OUT/recorded.bin" "$OUT/commands.bin"
 python3 - "$OUT" "$DURATION" "$SIZE" "$STOCK" "$TRACED" <<'PY'
 import hashlib, json, pathlib, sys
 out = pathlib.Path(sys.argv[1])

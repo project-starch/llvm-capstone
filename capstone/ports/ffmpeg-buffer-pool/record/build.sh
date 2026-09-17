@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../../../tests/capstone-test-env.sh"
-WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
-SRC="$WORK/combined-src/ffmpeg-9.0.1"
-OUT="$WORK/combined-workload"
+source "$HERE/../runtime/prepare.sh" native
+ARM=${1:-traced}
+case "$ARM" in
+    stock) SRC="$WORK/workload-src-stock/ffmpeg-9.0.1"; OUT="$WORK/workload-stock" ;;
+    traced) SRC="$WORK/combined-src/ffmpeg-9.0.1"; OUT="$WORK/combined-workload" ;;
+    *) echo "usage: $0 stock|traced" >&2; exit 2 ;;
+esac
 ARCHIVE="$WORK/download/ffmpeg-9.0.1.tar.xz"
 printf '%s  %s\n' cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635 "$ARCHIVE" | sha256sum -c -
 if [[ ! -d "$SRC" ]]; then
     mkdir -p "$(dirname "$SRC")"
     tar -xf "$ARCHIVE" -C "$(dirname "$SRC")"
-    python3 "$HERE/instrument.py" "$SRC"
+    if [[ "$ARM" == traced ]]; then python3 "$HERE/instrument.py" "$SRC"; fi
 fi
 mkdir -p "$OUT"
 cd "$OUT"

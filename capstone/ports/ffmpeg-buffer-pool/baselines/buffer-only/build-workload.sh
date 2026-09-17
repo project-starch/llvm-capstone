@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-WORK=${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}
+source "$HERE/../../runtime/prepare.sh" native
 ARM=${1:?usage: build-workload.sh stock|traced}
 case "$ARM" in stock|traced) ;; *) exit 2;; esac
 SRC="$WORK/workload-src-$ARM/ffmpeg-9.0.1"

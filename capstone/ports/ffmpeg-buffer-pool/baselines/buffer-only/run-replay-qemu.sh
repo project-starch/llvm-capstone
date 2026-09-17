@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-source "$HERE/../../tests/capstone-test-env.sh"
+source "$HERE/../../../../tests/capstone-test-env.sh"
 WORK=${FFPOOL_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-buffer-pool}
 INPUT=${1:?usage: run-replay-qemu.sh TRACE RESULT-DIR}
 RESULT=${2:?missing result directory}

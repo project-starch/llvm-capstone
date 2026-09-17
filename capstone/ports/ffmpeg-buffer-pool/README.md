@@ -1,112 +1,139 @@
 # FFmpeg pool replay on Capstone
 
-Start here for the FFmpeg allocator experiment. This directory owns the port,
-recorders, replay engines and semantic probes. The paper repository owns study
-protocols and archived evidence. FFmpeg 9.0.1 sources and generated builds stay
-under `${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}`.
+Record AVBufferPool and AVRefStructPool activity in a native FFmpeg decoder,
+then replay those pool operations in a serial Capstone domain. Start with
+`record/` and `replay/`; earlier experiments are under `baselines/`.
 
-## Scope and entry points
+## Layout
 
-| Directory | Purpose |
+| Path | Responsibility |
 |---|---|
-| This directory | Upstream `buffer.c` bring-up and an unprotected AVBufferPool replay |
-| `combined/` | AVBufferPool and AVRefStructPool recording, replay and lifetime port |
-| [Paper experiment index](https://github.com/project-starch/nested-allocators-paper/blob/eval/ffmpeg/experiments/README.md) | Study ownership and evidence bundles |
-| [Archived FFmpeg audit](https://github.com/project-starch/nested-allocators-paper/tree/eval/ffmpeg/experiments/results/P2/20260917-ffmpeg-pool-replay) | Configuration limits, hashes, recorded outcomes and offline validation |
+| `record/` | Build the stock/traced decoder, instrument upstream FFmpeg and record a workload |
+| `replay/` | Apply the lifetime port, build the replay engine and host loader, run under QEMU |
+| `runtime/` | Shared build preparation, metadata allocator and payload lifetime hooks |
+| `trace/` | Shared event format and observation logic used by recorder and replay |
+| `tests/` | Pool lifetime probes and their QEMU verdicts |
+| `tools/` | Extract commands, compare traces, summarize and plot results |
+| [baselines/](baselines/README.md) | Standalone buffer API controls and the older buffer-only replay |
 
-The complete FFmpeg decoder runs on the native host. A serial component replay
-executes the recorded pool APIs and nested allocator effects of callbacks.
-It does not replay codec computation, all reference-count operations, callback
-payload computations or application concurrency. Both component targets use
-FFmpeg's upstream serial atomics fallback. The port separates RefStruct metadata
-from payload and checks release authority before returning a lease.
-
-| Combined replay mode | Protection boundary |
-|---|---|
-| `0` | Payload bounds, without temporal revocation |
-| `1` | Payload bounds and backing-allocation lifetime |
-| `2` | Payload bounds, backing lifetime and Sublet pool-lease lifetime |
-
-All three modes share the same port and allocator layout. Native replay checks
-functional behavior only. It cannot enforce Capstone capability invalidation.
+FFmpeg 9.0.1 sources, generated ports, binaries and logs stay outside this
+repository, under `${FFPOOL_WORK:-/tmp/capstone/ffmpeg-buffer-pool}`. Build
+preparation verifies the pinned archive and pristine buffer sources. Existing
+build/output directory names are retained so saved traces remain usable.
 
 ## Build and run
 
-Use Bash and source `capstone/tests/capstone-test-env.sh` from the repository
-root before building. Select installed dependencies explicitly when this is a
-source-only worktree. Set `CAPSTONE_LLVM_BUILD_DIR`, `CAPSTONE_BUILDROOT_DIR`,
-`CAPSTONE_QEMU_BINARY` and `FFPOOL_MUSL` to the actual installations. The musl
-directory must contain the prepared Capstone headers. Python is required for
-the instruments, `pexpect` for QEMU and NumPy/Matplotlib for optional plots.
-The environment's toolchain freshness warning is not a successful freshness
-check. Record source revisions and binary hashes independently.
+Use Bash. For a source-only worktree, select the installed dependencies with
+`CAPSTONE_LLVM_BUILD_DIR`, `CAPSTONE_BUILDROOT_DIR`, `CAPSTONE_QEMU_BINARY` and
+`FFPOOL_MUSL` before sourcing the environment. The MUSL directory must contain
+prepared Capstone headers. Python is required for instrumentation, `pexpect`
+for QEMU and NumPy/Matplotlib for optional plots. An environment freshness
+warning is not a successful check; record compiler revisions and binary hashes.
 
 ```bash
 source capstone/tests/capstone-test-env.sh
 export FFPOOL_WORK="${CAPSTONE_TMP_ROOT}/ffmpeg-buffer-pool"
 port=capstone/ports/ffmpeg-buffer-pool
 
-# Download and verify FFmpeg, then check the isolated buffer API.
-bash "$port/build.sh" native
-bash "$port/build.sh" capstone
+# Download/verify FFmpeg and build both native decoders.
+bash "$port/record/build.sh" stock
+bash "$port/record/build.sh" traced
 
-# Build native recorders and the combined component port.
-bash "$port/build-workload.sh" stock
-bash "$port/combined/build-workload.sh"
-bash "$port/combined/build-replay.sh" native
-bash "$port/combined/build-replay.sh" capstone
+# Build the replay and security probes for both targets.
+bash "$port/replay/build.sh" native
+bash "$port/replay/build.sh" capstone
 
-# Use a new output directory for each recording.
+# Always use a new recording directory. Use 1 160x120 for a short smoke run.
 run="$FFPOOL_WORK/runs/example"
-bash "$port/combined/run-workload.sh" "$run" 300 1280x720
-"$FFPOOL_WORK/combined-port-native/replay" "$run/commands.bin" "$run/native.bin" 2
-python3 "$port/combined/trace-tools.py" compare "$run/recorded.bin" "$run/native.bin"
+bash "$port/record/run.sh" "$run" 300 1280x720
+for mode in 0 1 2; do
+    "$FFPOOL_WORK/combined-port-native/replay" \
+        "$run/commands.bin" "$run/native-$mode.bin" "$mode"
+    python3 "$port/tools/trace-tools.py" compare \
+        "$run/recorded.bin" "$run/native-$mode.bin"
+done
 
-# This is an explicit enlarged emulator capacity, not the hardware capacity.
+# Explicit enlarged emulator capacity; this is not the hardware capacity.
 export CAPSTONE_REV_NODES=1048576
 for mode in 0 1 2; do
-    bash "$port/combined/run-qemu.sh" "$run/commands.bin" "$run/mode-$mode" "$mode"
-    python3 "$port/combined/trace-tools.py" compare \
+    bash "$port/replay/run-qemu.sh" "$run/commands.bin" "$run/mode-$mode" "$mode"
+    python3 "$port/tools/trace-tools.py" compare \
         "$run/recorded.bin" "$run/mode-$mode/capstone.bin"
 done
-bash "$port/combined/run-security.sh" "$FFPOOL_WORK/runs/security-example"
+bash "$port/tests/run-security.sh" "$FFPOOL_WORK/runs/security-example"
 ```
 
-The shared environment supplies the QEMU lock. Do not run emulator suites
-outside that lock. The security suite's default matrix is cases 0 through 11
-in all three modes. Cases 12 and 13 are separate long-run probes and require
-explicit selection. An expected fault has to match its stage, cause and PC.
+`record/build.sh` defaults to `traced`. `replay/build.sh` prepares its own
+freestanding support objects; it does not require a baseline experiment build.
+The shared environment supplies the QEMU lock. Keep emulator suites inside
+that lock. The default security matrix is cases 0–11 in all three modes;
+cases 12 and 13 are separate long-run probes requiring explicit selection.
+Expected faults must match their stage, cause and PC.
 
-## Recorded baseline and limits
+## What is replayed
 
-The archived 2026-09-17 combined recording has 9,000 decoded frames, 630,309
-events, 27,000 buffer leases and 108,001 RefStruct leases. Native and all three
-Capstone replay reports match every recorded event. The saved semantic matrix
-contains 36 of 36 expected outcomes. These are single-run exploratory results,
-not completion of the paper's P2, S1, S2 or M1 protocols.
+The full decoder runs natively. Component replay executes pool APIs and the
+nested allocator effects of callbacks. Codec computation, callback payload
+computation, all reference-count operations and application concurrency are
+outside that scope. Component builds use FFmpeg's upstream serial atomics
+fallback. The port separates RefStruct metadata from payload and checks release
+authority before returning a lease.
 
-An earlier large Sublet replay exhausted the default 65,536-node QEMU budget.
-The completed replay used 1,048,576 nodes and reached 135,285 allocated nodes.
-It does not establish sustainable node reclamation. No hardware execution,
-FFmpeg throughput or full application port is claimed. The evidence manifest
-separates recorded build identities from dependency checkouts observed later.
+| Replay mode | Protection boundary |
+|---|---|
+| `0` | Payload bounds, without temporal revocation |
+| `1` | Payload bounds and backing-allocation lifetime |
+| `2` | Payload bounds, backing lifetime and Sublet pool-lease lifetime |
 
-## Ownership and publication
+All modes share the same port and allocator layout. Native replay checks
+functional behavior; it cannot enforce capability invalidation.
 
-Development uses the `ffmpeg/1-buffer-pool` branch of `project-starch/llvm-capstone`,
-reviewed against `dev`. Keep the original bring-up entry points stable.
-Commit code and its documentation together after the repository checks.
-Publish the feature branch to `origin` before relying on it from an evidence
-manifest. Record immutable code commits in result bundles.
+## Branches and evidence
 
-The paper branch is `eval/ffmpeg` in `project-starch/nested-allocators-paper`.
-It links the existing W2 survey to the P2 exploratory replay evidence without
-changing manuscript claims. Working branches go to GitHub `origin`. Overleaf
-receives integrated manuscript changes through the paper's `main` workflow.
-QEMU, monitor and Buildroot changes belong in their own repositories and must
-be published there before a parent revision depends on them.
+The code branch is `ffmpeg/1-buffer-pool` in `project-starch/llvm-capstone`.
+[PR #44](https://github.com/project-starch/llvm-capstone/pull/44) is stacked on
+`musl/1-gap-survey` ([PR #43](https://github.com/project-starch/llvm-capstone/pull/43)),
+which includes the C48 compiler fix. Review the FFmpeg diff against MUSL until
+that dependency lands in `dev`. Push the feature branch to GitHub `origin`;
+record immutable commits in evidence manifests.
 
-Temporary source trees and build products are disposable. Completed evidence
-is archived with hashes before scratch cleanup. Full local captures may carry
-machine identities and are kept outside published source trees. The portable
-bundle identifies excluded captures and labels any extracted observations.
+This source rebase does not switch the replay to MUSL's libc: it still uses
+MUSL headers and the freestanding runtime under `runtime/`. Linking
+`libc-capstone.a`, replacing the metadata allocator or changing startup/hostcalls
+requires a separate integration and validation step. Rebase also does not
+rebuild the installed compiler, QEMU or monitor.
+
+The paper repository's `eval/ffmpeg` branch owns the
+[study index](https://github.com/project-starch/nested-allocators-paper/blob/eval/ffmpeg/experiments/README.md)
+and [archived evidence](https://github.com/project-starch/nested-allocators-paper/tree/eval/ffmpeg/experiments/results/P2/20260917-ffmpeg-pool-replay).
+The [release](https://github.com/project-starch/llvm-capstone/releases/tag/ffmpeg-pool-replay-20260917)
+pins the original code and numeric archive. Its paths refer to that original
+commit, not this reorganized tree. Paper working branches go to GitHub;
+Overleaf receives integrated manuscript changes through the paper's `main`.
+Platform changes belong in their own repositories and must be published before
+a parent revision depends on them.
+
+The archived recording has 9,000 frames and 630,309 events: 27,000 buffer leases
+and 108,001 RefStruct leases. Saved native and Capstone reports match every
+event; the saved security matrix has 36 expected outcomes. These are exploratory
+results, not completion of the paper's P2, S1, S2 or M1 protocols. The completed
+Sublet replay used 1,048,576 QEMU nodes and reached 135,285 allocated nodes after
+the default 65,536-node budget was exhausted. It does not establish sustainable
+reclamation, hardware execution, FFmpeg throughput or a full application port.
+The evidence manifest records platform provenance gaps. Keep full local captures
+outside published source trees; archive completed evidence with hashes before
+cleaning scratch builds.
+
+## Previous paths
+
+| Earlier entry point | Current entry point |
+|---|---|
+| `combined/build-workload.sh`, `combined/run-workload.sh` | `record/build.sh traced`, `record/run.sh` |
+| `combined/build-replay.sh`, `combined/run-qemu.sh` | `replay/build.sh`, `replay/run-qemu.sh` |
+| `combined/run-security.sh` | `tests/run-security.sh` |
+| `combined/trace-tools.py`, `combined/plot.py` | `tools/trace-tools.py`, `tools/plot.py` |
+| `build.sh`, `run-qemu.sh` | `baselines/standalone/build.sh`, `baselines/standalone/run-qemu.sh` |
+| Root-level buffer-only recorder/replay scripts | `baselines/buffer-only/` |
+
+For the stock decoder, use `record/build.sh stock`. The buffer-only baseline
+has its own `build-workload.sh stock|traced`; its trace format is different.
