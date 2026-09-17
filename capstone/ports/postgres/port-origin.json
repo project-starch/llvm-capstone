@@ -1,0 +1,50 @@
+{
+  "repository": "https://github.com/project-starch/llvm-capstone",
+  "revision": "2474837587df30b2051a60de4ab3724ede578eb0",
+  "original_directory": "capstone/ports/postgres",
+  "scope": "Existing PostgreSQL 17.5 memory-manager replay, AllocSet Sublet port, subpool and context-hierarchy fixtures. Reorganized for CMake and the shared runtime.",
+  "files": {
+    "a11trace.h": "shared/a11trace.h",
+    "port/pg_stubs.c": "shared/postgres-compat.c",
+    "port/pg_printf_host.c": "native/replay/printf.c",
+    "port/freestanding/pg_printf_domain.c": "capstone/domain/printf.c",
+    "port/freestanding/pg_string.c": "capstone/domain/string.c",
+    "port/freestanding/pg_level0.c": "capstone/domain/backing-allocator.c",
+    "port/freestanding/pg_subpool.c": "sublet/context-pools.c",
+    "port/freestanding/pg_subpool_libc.c": "sublet/unsupported-allocators.c",
+    "port/pg_subpool.h": "sublet/pg_subpool.h",
+    "pg_host.c": "capstone/linux-host/domain-loader.c",
+    "tools/replay.c": "native/replay/main.c",
+    "tools/replay_domain.c": "capstone/domain/replay-spatial.c",
+    "tools/replay_sublet.c": "sublet/replay.c",
+    "tools/hierarchy_sublet.c": "security-tests/capstone/context-hierarchy.c",
+    "tools/subpool_domain.c": "security-tests/capstone/subpool-lifetimes.c",
+    "tools/make-fixture-trace.py": "tests/make-fixture-trace.py",
+    "port/aset-capstone.patch": "patches/aset-capstone.patch",
+    "port/memorychunk-capstone.patch": "patches/memorychunk-capstone.patch",
+    "port/memorychunk-sublet.patch": "patches/memorychunk-sublet.patch",
+    "port/aset-sublet.patch.classes": "patches/aset-sublet.patch.classes",
+    "port/aset-sublet.patch": "patches/aset-sublet.patch",
+    "port/stubinc/locale.h": "capstone/include/locale.h",
+    "port/stubinc/stdio.h": "capstone/include/stdio.h",
+    "port/stubinc/strings.h": "capstone/include/strings.h",
+    "port/stubinc/errno.h": "capstone/include/errno.h",
+    "port/stubinc/math.h": "capstone/include/math.h",
+    "port/stubinc/setjmp.h": "capstone/include/setjmp.h",
+    "port/stubinc/signal.h": "capstone/include/signal.h",
+    "port/stubinc/ctype.h": "capstone/include/ctype.h",
+    "port/stubinc/string.h": "capstone/include/string.h",
+    "port/stubinc/stdlib.h": "capstone/include/stdlib.h",
+    "port/stubinc/sys/types.h": "capstone/include/sys/types.h"
+  },
+  "modules": {
+    "tools/replay_core.inc": [
+      "shared/replay-engine.c",
+      "shared/replay-engine.h"
+    ],
+    "tools/domain_frame.inc": [
+      "capstone/domain/domain-runtime.c",
+      "capstone/domain/domain-runtime.h"
+    ]
+  }
+}

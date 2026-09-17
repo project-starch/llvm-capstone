@@ -1,0 +1,105 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "/tmp/capstone/postgres-memory-contexts/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": true
+      }
+    },
+    {
+      "name": "native",
+      "inherits": "base",
+      "displayName": "Native PostgreSQL manager replay",
+      "description": "Host compiler; override the external build directory with -B or CMakeUserPresets.json.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "capstone-domain",
+      "inherits": "base",
+      "displayName": "Capstone spatial/Sublet manager and lifetime tests",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/capstone-domain.cmake"
+    },
+    {
+      "name": "linux-host",
+      "inherits": "base",
+      "displayName": "Guest Linux domain loader",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/linux-host.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "jobs": 4
+    },
+    {
+      "name": "capstone-domain",
+      "configurePreset": "capstone-domain",
+      "jobs": 4
+    },
+    {
+      "name": "linux-host",
+      "configurePreset": "linux-host",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "qemu-replay",
+      "configurePreset": "capstone-domain",
+      "filter": {
+        "include": {
+          "label": "qemu-replay"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 1
+      }
+    },
+    {
+      "name": "qemu-security",
+      "configurePreset": "capstone-domain",
+      "filter": {
+        "include": {
+          "label": "qemu-security"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 1
+      }
+    }
+  ]
+}

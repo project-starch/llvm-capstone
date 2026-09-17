@@ -1,0 +1,1217 @@
+# PostgreSQL's aset.c under Sublet.
+#
+# Applied on top of aset-capstone.patch, which is the change any machine with
+# sixteen-byte pointers needs.  This one is the discipline: every chunk gets
+# bounds of its own, every free revokes what the program still holds, and a
+# context's whole heap dies in one revocation.
+#
+# WHAT IT COSTS, WHICH IS THE NUMBER A7 REPORTS
+#
+#   added     149 lines of code, 268 of comment
+#   removed   245 lines of code, 123 of comment
+#
+# So the allocator gets SMALLER by 96 lines of code.  That is not a trick of
+# counting and it is worth saying out loud: what disappears is the teardown.
+# AllocSetReset and AllocSetDelete each walked the block list and freed the
+# blocks one at a time, and AllocSetCheck walked every chunk of every block.
+# One revocation replaces the first two walks entirely, and the third cannot
+# be done at all, for a reason given at the function.
+#
+# WHAT CHANGES, AND WHY EACH ONE IS FORCED
+#
+# Every change below is one of three facts about capabilities, and none of
+# them is a choice.
+#
+#   A capability cannot reach out of the object it was given for.  So a chunk
+#   cannot name its block by the distance back to it, the keeper block cannot
+#   be the context header's address plus a constant, and the manager cannot
+#   form a pointer to a chunk it was not handed.  Each becomes a field or an
+#   index: KeeperBlock, ChunkGetBlock, the chunk walker in AllocSetCheck.
+#
+#   A revocation cannot spare part of what it covers.  So the context header
+#   leaves the sub-pool, into a table of its own, and the keeper block is
+#   revoked with everything else and carved again at the same size.
+#
+#   A revoked chunk cannot be read or written.  So the free list of a size
+#   class leaves the freed chunk and becomes an index into a side table, the
+#   chunk's header is written when it is handed out rather than when it is
+#   freed, and AllocSetStats walks a free list without touching a chunk.
+#
+# WHAT DOES NOT CHANGE, WHICH IS A7's CONDITION
+#
+# The policy.  The same size classes, the same block sizes, the same doubling,
+# the same keeper, the same order of chunks within a block, the same free
+# lists per class, the same context freelist.  ALLOC_BLOCKHDRSZ stays at
+# eighty bytes even though no header occupies them any more, because that
+# number decides allocChunkLimit and therefore the whole ladder, and the arm
+# this is measured against is the same manager without the discipline.
+# Eighty bytes a block are spent to keep the two comparable.
+#
+# THE ONE POLICY CHANGE, REPORTED AS ONE
+#
+# In-place realloc of a chunk above allocChunkLimit becomes a copy, because a
+# region can be split and not joined and no primitive grows one.  The
+# recording prices it: of 1 228 019 allocations on the pgbench tpcb rung there
+# are two reallocs and one takes that path, the timezone parser at startup
+# with 5 120 bytes.  See experiments/a11/postgres/reallocs.py in the paper.
+#
+--- aset.c
++++ aset.c
+@@ -49,6 +49,11 @@
+ #include "port/pg_bitutils.h"
+ #include "utils/memdebug.h"
+ #include "utils/memutils.h"
++
++/* The level below, under Sublet: one sub-pool per context under one handle,
++ * and the block and chunk tables that have to live where no revocation
++ * reaches them.  See ports/postgres/sublet/README.md. */
++#include "pg_subpool.h"
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
+ 
+@@ -103,10 +108,32 @@
+  *--------------------
+  */
+ 
+-#define ALLOC_BLOCKHDRSZ	MAXALIGN(sizeof(AllocBlockData))
++/*
++ * Kept as a number rather than computed, and that is deliberate.  A block's
++ * header is not at the front of the block under this port: it is an entry in
++ * a table beside the sub-pool, because the manager reads and writes it across
++ * a reset of the block's own contents and one revocation cannot spare part of
++ * what it covers.  So no header occupies these bytes any more.
++ *
++ * They are still counted, because this number decides allocChunkLimit and
++ * therefore the size-class ladder and the whole sequence of block sizes.  The
++ * arm this is measured against is the same manager without the discipline,
++ * and a ladder that differed would make the two incomparable.  Eighty bytes a
++ * block are spent to keep them comparable, and the comment says so rather
++ * than the diff hiding it.
++ */
++#define ALLOC_BLOCKHDRSZ	80
+ #define ALLOC_CHUNKHDRSZ	sizeof(MemoryChunk)
+ 
+-typedef struct AllocBlockData *AllocBlock;	/* forward reference */
++/*
++ * A block, as the manager sees it, is an entry in the level below's table.
++ * The fields it reads are there under the names it uses, with freeptr and
++ * endptr as addresses rather than pointers, because the manager has no
++ * capability into the inside of a block and a pointer here would be one.  It
++ * adds, subtracts and compares them and never dereferences one, so its own
++ * arithmetic needs no change.
++ */
++typedef pg_block *AllocBlock;
+ 
+ /*
+  * AllocPointer
+@@ -121,18 +148,17 @@
+  *		the AllocSetContext's freelist and then set the given freelist element
+  *		to point to the chunk being freed.
+  */
+-typedef struct AllocFreeListLink
+-{
+-	MemoryChunk *next;
+-} AllocFreeListLink;
+-
+ /*
+- * Obtain a AllocFreeListLink for the given chunk.  Allocation sizes are
+- * always at least sizeof(AllocFreeListLink), so we reuse the pointer's memory
+- * itself to store the freelist link.
++ * The free list of a size class used to live inside the freed chunk itself,
++ * at GetFreeListLink(chunk).  A freed chunk is revoked here, so its bytes are
++ * not readable and the link cannot be there.  It moves to the chunk's entry in
++ * the level below's table, as an index rather than a pointer, and so a list is
++ * walked through pg_subpool_entry.
++ *
++ * Index zero is never an entry, so it means the end of a list, which is what
++ * a null pointer meant.
+  */
+-#define GetFreeListLink(chkptr) \
+-	(AllocFreeListLink *) ((char *) (chkptr) + ALLOC_CHUNKHDRSZ)
++#define FreeListNext(i)		(pg_subpool_entry(i)->next_free)
+ 
+ /* Validate a freelist index retrieved from a chunk header */
+ #define FreeListIdxIsValid(fidx) \
+@@ -156,7 +182,25 @@
+ 	MemoryContextData header;	/* Standard memory-context fields */
+ 	/* Info about storage allocated in this context: */
+ 	AllocBlock	blocks;			/* head of list of blocks in this set */
+-	MemoryChunk *freelist[ALLOCSET_NUM_FREELISTS];	/* free chunk lists */
++	uint32		freelist[ALLOCSET_NUM_FREELISTS];	/* free chunk lists, by
++													 * index into the level
++													 * below's chunk table */
++	/*
++	 * The sub-pool every block of this context is carved from, and the
++	 * handle senior to it that one revocation takes back.  The level below
++	 * owns both; this is only the name by which the manager asks.
++	 */
++	pg_subpool *pool;
++
++	/*
++	 * The keeper block, which a reset keeps.  It used to be found by
++	 * arithmetic, at the context header's address plus a constant, because
++	 * the two came from one malloc.  Neither half of that survives: the
++	 * header is outside the sub-pool so that the reset cannot destroy the
++	 * context it is executing on, and a capability cannot be made to reach
++	 * out of the object it was given for.  So the keeper is a field.
++	 */
++	AllocBlock	keeper;
+ 	/* Allocation parameters for this context: */
+ 	uint32		initBlockSize;	/* initial block size */
+ 	uint32		maxBlockSize;	/* maximum block size */
+@@ -180,14 +224,10 @@
+  *		AllocBlockData is the header data for a block --- the usable space
+  *		within the block begins at the next alignment boundary.
+  */
+-typedef struct AllocBlockData
+-{
+-	AllocSet	aset;			/* aset that owns this block */
+-	AllocBlock	prev;			/* prev block in aset's blocks list, if any */
+-	AllocBlock	next;			/* next block in aset's blocks list, if any */
+-	char	   *freeptr;		/* start of free space in this block */
+-	char	   *endptr;			/* end of space in this block */
+-}			AllocBlockData;
++/*
++ * AllocBlockData was here.  It is pg_block now, in port/pg_subpool.h, for the
++ * reason given at the typedef above.
++ */
+ 
+ /*
+  * AllocPointerIsValid
+@@ -207,15 +247,28 @@
+  *		True iff block is valid block of allocation set.
+  */
+ #define AllocBlockIsValid(block) \
+-	(PointerIsValid(block) && AllocSetIsValid((block)->aset))
++	(PointerIsValid(block) && AllocSetIsValid((AllocSet) (block)->aset))
+ 
+ /*
+  * We always store external chunks on a dedicated block.  This makes fetching
+  * the block from an external chunk easy since it's always the first and only
+  * chunk on the block.
+  */
+-#define ExternalChunkGetBlock(chunk) \
+-	(AllocBlock) ((char *) chunk - ALLOC_BLOCKHDRSZ)
++/*
++ * A chunk cannot say which block it is on by the distance back to it.  A
++ * block's header is not at the front of the block here, and a capability
++ * cannot be made to reach out of the chunk it was given for: subtracting even
++ * a correct offset would produce a capability outside its bounds and the
++ * first dereference would fault.  So the chunk carries the index of its
++ * block's entry, in the eight bytes a sixteen-byte capability had already
++ * forced as padding, and the header does not grow by one byte for it.  See
++ * port/memorychunk-sublet.patch.
++ *
++ * This replaces two macros with one, because the arithmetic the two of them
++ * did differed only in which offset it subtracted, and neither can be done.
++ */
++#define ChunkGetBlock(chunk)	pg_subpool_block_at((chunk)->capstone_block)
++#define ExternalChunkGetBlock(chunk)	ChunkGetBlock(chunk)
+ 
+ /*
+  * Rather than repeatedly creating and deleting memory contexts, we keep some
+@@ -242,13 +295,18 @@
+  */
+ #define MAX_FREE_CONTEXTS 100	/* arbitrary limit on freelist length */
+ 
+-/* Obtain the keeper block for an allocation set */
+-#define KeeperBlock(set) \
+-	((AllocBlock) (((char *) set) + MAXALIGN(sizeof(AllocSetContext))))
++/* Obtain the keeper block for an allocation set: a field, not arithmetic */
++#define KeeperBlock(set)	((set)->keeper)
+ 
+ /* Check if the block is the keeper block of the given allocation set */
+ #define IsKeeperBlock(set, block) ((block) == (KeeperBlock(set)))
+ 
++/* What the keeper block holds.  This used to be the distance from the context
++ * header to the end of the keeper, because the two were one allocation; they
++ * are two now, and a distance between two regions means nothing. */
++#define KeeperSize(set) \
++	(KeeperBlock(set) ? KeeperBlock(set)->endptr - KeeperBlock(set)->base : 0)
++
+ typedef struct AllocSetFreeList
+ {
+ 	int			num_free;		/* current list length */
+@@ -360,9 +418,16 @@
+ 	/* ensure MemoryChunk's size is properly maxaligned */
+ 	StaticAssertDecl(ALLOC_CHUNKHDRSZ == MAXALIGN(ALLOC_CHUNKHDRSZ),
+ 					 "sizeof(MemoryChunk) is not maxaligned");
+-	/* check we have enough space to store the freelist link */
+-	StaticAssertDecl(sizeof(AllocFreeListLink) <= (1 << ALLOC_MINBITS),
+-					 "sizeof(AllocFreeListLink) larger than minimum allocation size");
++
++	/*
++	 * The free-list link no longer lives in the chunk, so the assertion that
++	 * the smallest chunk could hold one is gone with it.  This one takes its
++	 * place: the context header comes from a table of equal slots outside
++	 * every sub-pool, and a version of the manager that grew its context
++	 * struct past a slot must fail to build rather than overrun.
++	 */
++	StaticAssertDecl(sizeof(AllocSetContext) <= PG_HEADER_BYTES,
++					 "AllocSetContext does not fit a header slot; raise PG_HEADER_BYTES");
+ 
+ 	/*
+ 	 * First, validate allocation parameters.  Once these were regular runtime
+@@ -424,8 +489,7 @@
+ 								parent,
+ 								name);
+ 
+-			((MemoryContext) set)->mem_allocated =
+-				KeeperBlock(set)->endptr - ((char *) set);
++			((MemoryContext) set)->mem_allocated = KeeperSize(set);
+ 
+ 			return (MemoryContext) set;
+ 		}
+@@ -440,10 +504,24 @@
+ 		firstBlockSize = Max(firstBlockSize, initBlockSize);
+ 
+ 	/*
+-	 * Allocate the initial block.  Unlike other aset.c blocks, it starts with
+-	 * the context header and its block header follows that.
++	 * The context header and the keeper block are two allocations here, where
++	 * upstream makes them one.  They have to be: a reset takes the whole
++	 * sub-pool back in one revocation, and a revocation cannot spare part of
++	 * what it covers, so a header inside the sub-pool would be destroyed by
++	 * the reset that is executing on it.  The header therefore comes from the
++	 * level below's own table, which nothing revokes, and the keeper is the
++	 * first block carved from the sub-pool like any other.
+ 	 */
+-	set = (AllocSet) malloc(firstBlockSize);
++	set = (AllocSet) pg_subpool_header(sizeof(AllocSetContext));
++	if (set != NULL)
++	{
++		set->pool = pg_subpool_create();
++		if (set->pool == NULL)
++		{
++			pg_subpool_header_free(set);
++			set = NULL;
++		}
++	}
+ 	if (set == NULL)
+ 	{
+ 		if (TopMemoryContext)
+@@ -460,17 +538,31 @@
+ 	 * we'd leak the header/initial block if we ereport in this stretch.
+ 	 */
+ 
+-	/* Fill in the initial block's block header */
+-	block = KeeperBlock(set);
++	/*
++	 * The keeper block, carved from the sub-pool.  firstBlockSize still
++	 * includes the space the context header used to take, so that the
++	 * keeper's size is the same as it would have been and the block sequence
++	 * this context goes on to allocate is identical to the arm without the
++	 * discipline.
++	 */
++	block = pg_subpool_block(set->pool, firstBlockSize);
++	if (block == NULL)
++	{
++		pg_subpool_destroy(set->pool);
++		pg_subpool_header_free(set);
++		if (TopMemoryContext)
++			MemoryContextStats(TopMemoryContext);
++		ereport(ERROR,
++				(errcode(ERRCODE_OUT_OF_MEMORY),
++				 errmsg("out of memory"),
++				 errdetail("Failed while creating memory context \"%s\".",
++						   name)));
++	}
++	set->keeper = block;
+ 	block->aset = set;
+-	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
+-	block->endptr = ((char *) set) + firstBlockSize;
+ 	block->prev = NULL;
+ 	block->next = NULL;
+ 
+-	/* Mark unallocated space NOACCESS; leave the block header alone. */
+-	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr, block->endptr - block->freeptr);
+-
+ 	/* Remember block as part of block list */
+ 	set->blocks = block;
+ 
+@@ -518,7 +610,7 @@
+ 						parent,
+ 						name);
+ 
+-	((MemoryContext) set)->mem_allocated = firstBlockSize;
++	((MemoryContext) set)->mem_allocated = KeeperSize(set);
+ 
+ 	return (MemoryContext) set;
+ }
+@@ -539,8 +631,7 @@
+ AllocSetReset(MemoryContext context)
+ {
+ 	AllocSet	set = (AllocSet) context;
+-	AllocBlock	block;
+-	Size		keepersize PG_USED_FOR_ASSERTS_ONLY;
++	Size		keepersize;
+ 
+ 	Assert(AllocSetIsValid(set));
+ 
+@@ -549,50 +640,53 @@
+ 	AllocSetCheck(context);
+ #endif
+ 
+-	/* Remember keeper block size for Assert below */
+-	keepersize = KeeperBlock(set)->endptr - ((char *) set);
++	/* What the keeper holds, so that the same can be carved again */
++	keepersize = KeeperSize(set);
+ 
+ 	/* Clear chunk freelists */
+ 	MemSetAligned(set->freelist, 0, sizeof(set->freelist));
+ 
+-	block = set->blocks;
+-
+-	/* New blocks list will be just the keeper block */
+-	set->blocks = KeeperBlock(set);
++	/*
++	 * One revocation, and this is the claim the port exists to make.  Every
++	 * block of this context, every chunk carved from those blocks, and every
++	 * capability the program still holds into any of them dies here.  The
++	 * blocks are not walked and freed one at a time: the level below took a
++	 * handle senior to the whole sub-pool when the context was created, and
++	 * revoking that handle is one instruction whatever the context holds.
++	 *
++	 * The keeper is revoked with the rest, which upstream does not do, for
++	 * the plainest of reasons: a revocation cannot spare part of what it
++	 * covers.  It is carved again immediately and at the same size, so what
++	 * the manager sees afterwards is what it saw before, a context holding
++	 * exactly its keeper and nothing else.
++	 */
++	pg_subpool_reset(set->pool);
++	set->blocks = NULL;
++	set->keeper = NULL;
+ 
+-	while (block != NULL)
++	if (keepersize > 0)
+ 	{
+-		AllocBlock	next = block->next;
++		AllocBlock	block = pg_subpool_block(set->pool, keepersize);
+ 
+-		if (IsKeeperBlock(set, block))
+-		{
+-			/* Reset the block, but don't return it to malloc */
+-			char	   *datastart = ((char *) block) + ALLOC_BLOCKHDRSZ;
++		if (block == NULL)
++			elog(ERROR, "could not carve the keeper block again after a reset");
+ 
+-#ifdef CLOBBER_FREED_MEMORY
+-			wipe_mem(datastart, block->freeptr - datastart);
+-#else
+-			/* wipe_mem() would have done this */
+-			VALGRIND_MAKE_MEM_NOACCESS(datastart, block->freeptr - datastart);
+-#endif
+-			block->freeptr = datastart;
+-			block->prev = NULL;
+-			block->next = NULL;
+-		}
+-		else
+-		{
+-			/* Normal case, release the block */
+-			context->mem_allocated -= block->endptr - ((char *) block);
++		set->keeper = block;
++		block->aset = set;
++		block->prev = NULL;
++		block->next = NULL;
++		set->blocks = block;
+ 
+-#ifdef CLOBBER_FREED_MEMORY
+-			wipe_mem(block, block->freeptr - ((char *) block));
+-#endif
+-			free(block);
+-		}
+-		block = next;
++		/*
++		 * Said out loud, because it is the one block the unprotected arm
++		 * never takes: upstream keeps the keeper across a reset and this port
++		 * revokes it with the rest and carves it again.  Counting it apart is
++		 * what lets "blocks taken" be compared between the two arms.
++		 */
++		pg_subpool_count_keeper();
+ 	}
+ 
+-	Assert(context->mem_allocated == keepersize);
++	context->mem_allocated = KeeperSize(set);
+ 
+ 	/* Reset block size allocation sequence, too */
+ 	set->nextBlockSize = set->initBlockSize;
+@@ -609,8 +703,6 @@
+ AllocSetDelete(MemoryContext context)
+ {
+ 	AllocSet	set = (AllocSet) context;
+-	AllocBlock	block = set->blocks;
+-	Size		keepersize PG_USED_FOR_ASSERTS_ONLY;
+ 
+ 	Assert(AllocSetIsValid(set));
+ 
+@@ -619,9 +711,6 @@
+ 	AllocSetCheck(context);
+ #endif
+ 
+-	/* Remember keeper block size for Assert below */
+-	keepersize = KeeperBlock(set)->endptr - ((char *) set);
+-
+ 	/*
+ 	 * If the context is a candidate for a freelist, put it into that freelist
+ 	 * instead of destroying it.
+@@ -650,8 +739,15 @@
+ 				freelist->first_free = (AllocSetContext *) oldset->header.nextchild;
+ 				freelist->num_free--;
+ 
+-				/* All that remains is to free the header/initial block */
+-				free(oldset);
++				/*
++				 * The header and the keeper were one allocation upstream and
++				 * are two here, so this is two returns.  The sub-pool goes
++				 * back whole, with its region still in its slot, because a
++				 * region splits and does not join and every sub-pool is the
++				 * same size.
++				 */
++				pg_subpool_destroy(oldset->pool);
++				pg_subpool_header_free(oldset);
+ 			}
+ 			Assert(freelist->num_free == 0);
+ 		}
+@@ -664,28 +760,24 @@
+ 		return;
+ 	}
+ 
+-	/* Free all blocks, except the keeper which is part of context header */
+-	while (block != NULL)
+-	{
+-		AllocBlock	next = block->next;
+-
+-		if (!IsKeeperBlock(set, block))
+-			context->mem_allocated -= block->endptr - ((char *) block);
+-
+-#ifdef CLOBBER_FREED_MEMORY
+-		wipe_mem(block, block->freeptr - ((char *) block));
+-#endif
+-
+-		if (!IsKeeperBlock(set, block))
+-			free(block);
+-
+-		block = next;
+-	}
+-
+-	Assert(context->mem_allocated == keepersize);
++	/*
++	 * One revocation, keeper included, and then the sub-pool goes back to the
++	 * level below.  There is no walk of the blocks here either: what the
++	 * handle covers is everything this context ever held.
++	 *
++	 * A tree of contexts therefore costs one revocation per context, in the
++	 * order MemoryContextDelete already walks it, bottom up.  That is the
++	 * claim, and it is one per context rather than one for the tree because a
++	 * child context has a sub-pool and a handle of its own, and a parent's
++	 * revoke does not reach into them.
++	 */
++	pg_subpool_destroy(set->pool);
++	context->mem_allocated = 0;
++	set->blocks = NULL;
++	set->keeper = NULL;
+ 
+-	/* Finally, free the context header, including the keeper block */
+-	free(set);
++	/* Finally, the context header, which is not in any sub-pool */
++	pg_subpool_header_free(set);
+ }
+ 
+ /*
+@@ -702,6 +794,7 @@
+ 	MemoryChunk *chunk;
+ 	Size		chunk_size;
+ 	Size		blksize;
++	unsigned int slot;
+ 
+ 	/* validate 'size' is within the limits for the given 'flags' */
+ 	MemoryContextCheckSize(context, size, flags);
+@@ -714,19 +807,30 @@
+ #endif
+ 
+ 	blksize = chunk_size + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+-	block = (AllocBlock) malloc(blksize);
++	block = pg_subpool_block(set->pool, blksize);
++	if (block == NULL && pg_subpool_grow(set->pool, blksize))
++		block = pg_subpool_block(set->pool, blksize);
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+ 
+-	context->mem_allocated += blksize;
++	context->mem_allocated += block->endptr - block->base;
+ 
+ 	block->aset = set;
+-	block->freeptr = block->endptr = ((char *) block) + blksize;
+ 
+-	chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
++	/*
++	 * The chunk is carved from the block, and carving is what gives it bounds
++	 * of its own: a capability to this chunk cannot reach the next one.  It
++	 * is the whole block's worth, because an external chunk owns its block.
++	 */
++	slot = pg_subpool_carve(block, chunk_size + ALLOC_CHUNKHDRSZ);
++	if (slot == 0)
++		elog(ERROR, "the chunk table is full");
++	chunk = (MemoryChunk *) pg_subpool_hand(slot);
+ 
+ 	/* mark the MemoryChunk as externally managed */
+ 	MemoryChunkSetHdrMaskExternal(chunk, MCTX_ASET_ID);
++	chunk->capstone_slot = slot;
++	chunk->capstone_block = pg_subpool_block_index(block);
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	chunk->requested_size = size;
+@@ -777,17 +881,30 @@
+ 							Size size, Size chunk_size, int fidx)
+ {
+ 	MemoryChunk *chunk;
++	unsigned int slot;
+ 
+-	chunk = (MemoryChunk *) (block->freeptr);
+-
+-	/* Prepare to initialize the chunk header. */
+-	VALGRIND_MAKE_MEM_UNDEFINED(chunk, ALLOC_CHUNKHDRSZ);
+-
+-	block->freeptr += (chunk_size + ALLOC_CHUNKHDRSZ);
++	/*
++	 * The chunk is carved out of the block rather than bumped out of it, and
++	 * that is the one difference that matters: what comes back has bounds of
++	 * its own, so a capability to this chunk cannot reach the chunk beside
++	 * it.  pg_subpool_carve advances the block's cursor by the same amount
++	 * the bump did, so the layout, the order and the sizes are unchanged.
++	 */
++	slot = pg_subpool_carve(block, chunk_size + ALLOC_CHUNKHDRSZ);
++	if (slot == 0)
++		elog(ERROR, "the chunk table is full");
+ 	Assert(block->freeptr <= block->endptr);
+ 
+-	/* store the free list index in the value field */
+-	MemoryChunkSetHdrMask(chunk, block, fidx, MCTX_ASET_ID);
++	chunk = (MemoryChunk *) pg_subpool_hand(slot);
++
++	/*
++	 * The block offset the header used to carry is zero now, because a chunk
++	 * cannot say where its block is by a distance.  The two indices say it
++	 * instead, in the padding a sixteen-byte capability had already forced.
++	 */
++	MemoryChunkSetHdrMask(chunk, chunk, fidx, MCTX_ASET_ID);
++	chunk->capstone_slot = slot;
++	chunk->capstone_block = pg_subpool_block_index(block);
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	chunk->requested_size = size;
+@@ -846,8 +963,7 @@
+ 	 */
+ 	while (availspace >= ((1 << ALLOC_MINBITS) + ALLOC_CHUNKHDRSZ))
+ 	{
+-		AllocFreeListLink *link;
+-		MemoryChunk *chunk;
++		unsigned int slot;
+ 		Size		availchunk = availspace - ALLOC_CHUNKHDRSZ;
+ 		int			a_fidx = AllocSetFreeIndex(availchunk);
+ 
+@@ -863,26 +979,23 @@
+ 			availchunk = GetChunkSizeFromFreeListIdx(a_fidx);
+ 		}
+ 
+-		chunk = (MemoryChunk *) (block->freeptr);
+-
+-		/* Prepare to initialize the chunk header. */
+-		VALGRIND_MAKE_MEM_UNDEFINED(chunk, ALLOC_CHUNKHDRSZ);
+-		block->freeptr += (availchunk + ALLOC_CHUNKHDRSZ);
++		/*
++		 * Carved but not handed out.  A chunk that goes straight onto a free
++		 * list is never written to, so the manager needs no capability to it
++		 * and its header is written only when it is popped.  That is also why
++		 * the header no longer has to be readable while the chunk is free,
++		 * which is what made the old free-list link inside the chunk
++		 * impossible under a discipline that revokes a freed chunk.
++		 */
++		slot = pg_subpool_carve(block, availchunk + ALLOC_CHUNKHDRSZ);
++		if (slot == 0)
++			break;					/* the table is full; the tail is wasted */
+ 		availspace -= (availchunk + ALLOC_CHUNKHDRSZ);
+ 
+-		/* store the freelist index in the value field */
+-		MemoryChunkSetHdrMask(chunk, block, a_fidx, MCTX_ASET_ID);
+-#ifdef MEMORY_CONTEXT_CHECKING
+-		chunk->requested_size = InvalidAllocSize;	/* mark it free */
+-#endif
+-		/* push this chunk onto the free list */
+-		link = GetFreeListLink(chunk);
+-
+-		VALGRIND_MAKE_MEM_DEFINED(link, sizeof(AllocFreeListLink));
+-		link->next = set->freelist[a_fidx];
+-		VALGRIND_MAKE_MEM_NOACCESS(link, sizeof(AllocFreeListLink));
+-
+-		set->freelist[a_fidx] = chunk;
++		/* push this chunk onto the free list, by index */
++		FreeListNext(slot) = set->freelist[a_fidx];
++		pg_subpool_entry(slot)->block = pg_subpool_block_index(block);
++		set->freelist[a_fidx] = slot;
+ 	}
+ 
+ 	/*
+@@ -906,33 +1019,38 @@
+ 	while (blksize < required_size)
+ 		blksize <<= 1;
+ 
+-	/* Try to allocate it */
+-	block = (AllocBlock) malloc(blksize);
++	/* Try to allocate it out of this context's sub-pool */
++	block = pg_subpool_block(set->pool, blksize);
+ 
+ 	/*
+-	 * We could be asking for pretty big blocks here, so cope if malloc fails.
+-	 * But give up if there's less than 1 MB or so available...
++	 * The sub-pool is 64 KiB, chosen from the recording because it keeps
++	 * 99.96% of the resets at one revocation, so a context that asks for more
++	 * than it holds gets a second sub-pool and pays one more revocation at
++	 * its next reset.  The recording says that happens eight times in thirty
++	 * thousand.  Halving the request first is the manager's own fallback and
++	 * is kept, because a smaller block that fits costs nothing at all.
+ 	 */
+-	while (block == NULL && blksize > 1024 * 1024)
++	while (block == NULL && blksize > 1024)
+ 	{
+ 		blksize >>= 1;
+ 		if (blksize < required_size)
+ 			break;
+-		block = (AllocBlock) malloc(blksize);
++		block = pg_subpool_block(set->pool, blksize);
++	}
++	if (block == NULL)
++	{
++		blksize = Max(required_size, (Size) PG_SUBPOOL_BYTES);
++		if (pg_subpool_grow(set->pool, blksize))
++			block = pg_subpool_block(set->pool, blksize);
+ 	}
+ 
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+ 
++	blksize = block->endptr - block->base;
+ 	context->mem_allocated += blksize;
+ 
+ 	block->aset = set;
+-	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
+-	block->endptr = ((char *) block) + blksize;
+-
+-	/* Mark unallocated space NOACCESS. */
+-	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr,
+-							   blksize - ALLOC_BLOCKHDRSZ);
+ 
+ 	block->prev = NULL;
+ 	block->next = set->blocks;
+@@ -1000,20 +1118,28 @@
+ 	 * doubling the memory requirements for such allocations.
+ 	 */
+ 	fidx = AllocSetFreeIndex(size);
+-	chunk = set->freelist[fidx];
+-	if (chunk != NULL)
++	if (set->freelist[fidx] != 0)
+ 	{
+-		AllocFreeListLink *link = GetFreeListLink(chunk);
+-
+-		/* Allow access to the chunk header. */
+-		VALGRIND_MAKE_MEM_DEFINED(chunk, ALLOC_CHUNKHDRSZ);
++		unsigned int slot = set->freelist[fidx];
+ 
+-		Assert(fidx == MemoryChunkGetValue(chunk));
++		/* pop this chunk off the freelist, which is a list of indices */
++		set->freelist[fidx] = FreeListNext(slot);
++		FreeListNext(slot) = 0;
+ 
+-		/* pop this chunk off the freelist */
+-		VALGRIND_MAKE_MEM_DEFINED(link, sizeof(AllocFreeListLink));
+-		set->freelist[fidx] = link->next;
+-		VALGRIND_MAKE_MEM_NOACCESS(link, sizeof(AllocFreeListLink));
++		/*
++		 * The chunk goes out again, and this is where its capability is
++		 * made: the entry keeps the handle, so the next pfree kills whatever
++		 * the program still holds.  No carve is needed, because the entry has
++		 * held the chunk's region since it was carved once.
++		 *
++		 * The header is written now rather than when the chunk was freed,
++		 * since a freed chunk is revoked and cannot be written to.  Nothing
++		 * is lost by that: everything the header says is known here.
++		 */
++		chunk = (MemoryChunk *) pg_subpool_hand(slot);
++		MemoryChunkSetHdrMask(chunk, chunk, fidx, MCTX_ASET_ID);
++		chunk->capstone_slot = slot;
++		chunk->capstone_block = pg_subpool_entry(slot)->block;
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 		chunk->requested_size = size;
+@@ -1075,10 +1201,19 @@
+ 		AllocBlock	block = ExternalChunkGetBlock(chunk);
+ 
+ 		/*
+-		 * Try to verify that we have a sane block pointer: the block header
+-		 * should reference an aset and the freeptr should match the endptr.
++		 * Try to verify that we have a sane block: its entry should reference
++		 * an aset.  The other half of the upstream check, that the block is
++		 * full to its end, does not hold here: a block carved from a sub-pool
++		 * still counts ALLOC_BLOCKHDRSZ bytes it no longer puts a header in,
++		 * so that the size-class ladder stays identical to the arm this is
++		 * measured against, and those bytes sit unused past the chunk.
++		 *
++		 * What the upstream check was really for is gone anyway.  It guarded
++		 * a block pointer obtained by subtracting an offset from the chunk,
++		 * which could land anywhere; the block here is named by an index the
++		 * chunk carries, and an index out of range cannot be formed.
+ 		 */
+-		if (!AllocBlockIsValid(block) || block->freeptr != block->endptr)
++		if (!AllocBlockIsValid(block))
+ 			elog(ERROR, "could not find block containing chunk %p", chunk);
+ 
+ 		set = block->aset;
+@@ -1101,18 +1236,24 @@
+ 		if (block->next)
+ 			block->next->prev = block->prev;
+ 
+-		set->header.mem_allocated -= block->endptr - ((char *) block);
++		set->header.mem_allocated -= block->endptr - block->base;
+ 
+-#ifdef CLOBBER_FREED_MEMORY
+-		wipe_mem(block, block->freeptr - ((char *) block));
+-#endif
+-		free(block);
++		/*
++		 * The chunk's capability dies here, which is what a free means under
++		 * the discipline: whatever the program still holds into it stops
++		 * working.  The block's bytes do not go back to the sub-pool, because
++		 * a region splits and does not join; they stay the context's until
++		 * its next reset takes the whole sub-pool back.  What is returned is
++		 * the bookkeeping, the block's entry and its chunk entries.
++		 */
++		pg_subpool_drop(chunk->capstone_slot);
++		pg_subpool_block_free(block);
+ 	}
+ 	else
+ 	{
+-		AllocBlock	block = MemoryChunkGetBlock(chunk);
++		AllocBlock	block = ChunkGetBlock(chunk);
+ 		int			fidx;
+-		AllocFreeListLink *link;
++		unsigned int slot;
+ 
+ 		/*
+ 		 * In this path, for speed reasons we just Assert that the referenced
+@@ -1125,7 +1266,13 @@
+ 
+ 		fidx = MemoryChunkGetValue(chunk);
+ 		Assert(FreeListIdxIsValid(fidx));
+-		link = GetFreeListLink(chunk);
++
++		/*
++		 * Read out of the header everything that is needed after the chunk is
++		 * revoked, because after that the header is not readable.  That is
++		 * the whole reason the free list moved out of the chunk.
++		 */
++		slot = chunk->capstone_slot;
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 		/* Test for someone scribbling on unused space in chunk */
+@@ -1138,20 +1285,17 @@
+ #ifdef CLOBBER_FREED_MEMORY
+ 		wipe_mem(pointer, GetChunkSizeFromFreeListIdx(fidx));
+ #endif
+-		/* push this chunk onto the top of the free list */
+-		VALGRIND_MAKE_MEM_DEFINED(link, sizeof(AllocFreeListLink));
+-		link->next = set->freelist[fidx];
+-		VALGRIND_MAKE_MEM_NOACCESS(link, sizeof(AllocFreeListLink));
+-		set->freelist[fidx] = chunk;
+-
+-#ifdef MEMORY_CONTEXT_CHECKING
+-
+ 		/*
+-		 * Reset requested_size to InvalidAllocSize in chunks that are on free
+-		 * list.
++		 * The chunk's capability dies here and the entry holds its region
++		 * again, ready to be handed out without another carve.  This is the
++		 * free the paper claims: an alias the program kept stops working at
++		 * the pfree and not only at the context's reset.
+ 		 */
+-		chunk->requested_size = InvalidAllocSize;
+-#endif
++		pg_subpool_drop(slot);
++
++		/* push this chunk onto the top of the free list, by index */
++		FreeListNext(slot) = set->freelist[fidx];
++		set->freelist[fidx] = slot;
+ 	}
+ }
+ 
+@@ -1182,21 +1326,31 @@
+ 	if (MemoryChunkIsExternal(chunk))
+ 	{
+ 		/*
+-		 * The chunk must have been allocated as a single-chunk block.  Use
+-		 * realloc() to make the containing block bigger, or smaller, with
+-		 * minimum space wastage.
+-		 */
+-		Size		chksize;
+-		Size		blksize;
+-		Size		oldblksize;
++		 * Upstream grows the containing block in place, with realloc() on the
++		 * block.  A region can be split and not joined, so no primitive grows
++		 * one, and the port copies instead: a new chunk, the bytes moved with
++		 * the tag-preserving memcpy, and the old chunk revoked.
++		 *
++		 * This is the one policy change the port makes, and the paper reports
++		 * it as one.  The recording says what it costs: of 1 228 019
++		 * allocations on the pgbench tpcb rung there are two reallocs and one
++		 * takes this path, the timezone parser at startup with 5 120 bytes.
++		 * See experiments/a11/postgres/reallocs.py in the paper's repository.
++		 */
++		void	   *newPointer;
++		Size		oldsize;
+ 
+ 		block = ExternalChunkGetBlock(chunk);
+ 
+ 		/*
+-		 * Try to verify that we have a sane block pointer: the block header
+-		 * should reference an aset and the freeptr should match the endptr.
++		 * Try to verify that we have a sane block: its entry should reference
++		 * an aset.  The other half of the upstream check, that the block is
++		 * full to its end, does not hold here: a block carved from a sub-pool
++		 * still counts ALLOC_BLOCKHDRSZ bytes it no longer puts a header in,
++		 * so that the size-class ladder stays identical to the arm this is
++		 * measured against, and those bytes sit unused past the chunk.
+ 		 */
+-		if (!AllocBlockIsValid(block) || block->freeptr != block->endptr)
++		if (!AllocBlockIsValid(block))
+ 			elog(ERROR, "could not find block containing chunk %p", chunk);
+ 
+ 		set = block->aset;
+@@ -1204,105 +1358,43 @@
+ 		/* only check size in paths where the limits could be hit */
+ 		MemoryContextCheckSize((MemoryContext) set, size, flags);
+ 
+-		oldchksize = block->endptr - (char *) pointer;
++		/*
++		 * What the chunk holds, from its entry rather than from the block's
++		 * end: the block has those unused bytes past the chunk now.
++		 */
++		oldsize = pg_subpool_entry(chunk->capstone_slot)->bytes
++			- ALLOC_CHUNKHDRSZ;
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 		/* Test for someone scribbling on unused space in chunk */
+-		Assert(chunk->requested_size < oldchksize);
++		Assert(chunk->requested_size < oldsize);
+ 		if (!sentinel_ok(pointer, chunk->requested_size))
+ 			elog(WARNING, "detected write past chunk end in %s %p",
+ 				 set->header.name, chunk);
+ #endif
+ 
+-#ifdef MEMORY_CONTEXT_CHECKING
+-		/* ensure there's always space for the sentinel byte */
+-		chksize = MAXALIGN(size + 1);
+-#else
+-		chksize = MAXALIGN(size);
+-#endif
+-
+-		/* Do the realloc */
+-		blksize = chksize + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+-		oldblksize = block->endptr - ((char *) block);
+-
+-		block = (AllocBlock) realloc(block, blksize);
+-		if (block == NULL)
++		newPointer = AllocSetAlloc((MemoryContext) set, size, flags);
++		if (newPointer == NULL)
+ 		{
+ 			/* Disallow access to the chunk header. */
+ 			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 			return MemoryContextAllocationFailure(&set->header, size, flags);
+ 		}
+ 
+-		/* updated separately, not to underflow when (oldblksize > blksize) */
+-		set->header.mem_allocated -= oldblksize;
+-		set->header.mem_allocated += blksize;
+-
+-		block->freeptr = block->endptr = ((char *) block) + blksize;
+-
+-		/* Update pointers since block has likely been moved */
+-		chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
+-		pointer = MemoryChunkGetPointer(chunk);
+-		if (block->prev)
+-			block->prev->next = block;
+-		else
+-			set->blocks = block;
+-		if (block->next)
+-			block->next->prev = block;
+-
+-#ifdef MEMORY_CONTEXT_CHECKING
+-#ifdef RANDOMIZE_ALLOCATED_MEMORY
+-
+ 		/*
+-		 * We can only randomize the extra space if we know the prior request.
+-		 * When using Valgrind, randomize_mem() also marks memory UNDEFINED.
++		 * memcpy and not a byte loop, and this cost a run to learn on the
++		 * unprotected arm: a byte loop copies a pointer's address bits and
++		 * drops its tag, so every pointer in what was copied comes back
++		 * untagged and the first store through it faults.
+ 		 */
+-		if (size > chunk->requested_size)
+-			randomize_mem((char *) pointer + chunk->requested_size,
+-						  size - chunk->requested_size);
+-#else
+-
+-		/*
+-		 * If this is an increase, realloc() will have marked any
+-		 * newly-allocated part (from oldchksize to chksize) UNDEFINED, but we
+-		 * also need to adjust trailing bytes from the old allocation (from
+-		 * chunk->requested_size to oldchksize) as they are marked NOACCESS.
+-		 * Make sure not to mark too many bytes in case chunk->requested_size
+-		 * < size < oldchksize.
+-		 */
+-#ifdef USE_VALGRIND
+-		if (Min(size, oldchksize) > chunk->requested_size)
+-			VALGRIND_MAKE_MEM_UNDEFINED((char *) pointer + chunk->requested_size,
+-										Min(size, oldchksize) - chunk->requested_size);
+-#endif
+-#endif
+-
+-		chunk->requested_size = size;
+-		/* set mark to catch clobber of "unused" space */
+-		Assert(size < chksize);
+-		set_sentinel(pointer, size);
+-#else							/* !MEMORY_CONTEXT_CHECKING */
+-
+-		/*
+-		 * We may need to adjust marking of bytes from the old allocation as
+-		 * some of them may be marked NOACCESS.  We don't know how much of the
+-		 * old chunk size was the requested size; it could have been as small
+-		 * as one byte.  We have to be conservative and just mark the entire
+-		 * old portion DEFINED.  Make sure not to mark memory beyond the new
+-		 * allocation in case it's smaller than the old one.
+-		 */
+-		VALGRIND_MAKE_MEM_DEFINED(pointer, Min(size, oldchksize));
+-#endif
+-
+-		/* Ensure any padding bytes are marked NOACCESS. */
+-		VALGRIND_MAKE_MEM_NOACCESS((char *) pointer + size, chksize - size);
+-
+-		/* Disallow access to the chunk header . */
+-		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
++		VALGRIND_MAKE_MEM_DEFINED(pointer, oldsize);
++		memcpy(newPointer, pointer, Min(size, oldsize));
++		AllocSetFree(pointer);
+ 
+-		return pointer;
++		return newPointer;
+ 	}
+ 
+-	block = MemoryChunkGetBlock(chunk);
++	block = ChunkGetBlock(chunk);
+ 
+ 	/*
+ 	 * In this path, for speed reasons we just Assert that the referenced
+@@ -1444,7 +1536,7 @@
+ 	if (MemoryChunkIsExternal(chunk))
+ 		block = ExternalChunkGetBlock(chunk);
+ 	else
+-		block = (AllocBlock) MemoryChunkGetBlock(chunk);
++		block = ChunkGetBlock(chunk);
+ 
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+@@ -1478,7 +1570,12 @@
+ 
+ 		Assert(AllocBlockIsValid(block));
+ 
+-		return block->endptr - (char *) chunk;
++		/*
++		 * What the chunk holds, from its entry.  The block's end is past it
++		 * now, by the ALLOC_BLOCKHDRSZ bytes the port still counts so that
++		 * the size-class ladder matches the arm it is measured against.
++		 */
++		return pg_subpool_entry(chunk->capstone_slot)->bytes;
+ 	}
+ 
+ 	fidx = MemoryChunkGetValue(chunk);
+@@ -1540,29 +1637,26 @@
+ 	for (block = set->blocks; block != NULL; block = block->next)
+ 	{
+ 		nblocks++;
+-		totalspace += block->endptr - ((char *) block);
++		totalspace += block->endptr - block->base;
+ 		freespace += block->endptr - block->freeptr;
+ 	}
+ 	for (fidx = 0; fidx < ALLOCSET_NUM_FREELISTS; fidx++)
+ 	{
+ 		Size		chksz = GetChunkSizeFromFreeListIdx(fidx);
+-		MemoryChunk *chunk = set->freelist[fidx];
++		unsigned int slot = set->freelist[fidx];
+ 
+-		while (chunk != NULL)
++		/*
++		 * A free list is a list of indices, and it is walked without touching
++		 * a chunk.  It has to be: a freed chunk is revoked, so its header is
++		 * not readable and the assertion that used to check its size class
++		 * against the list it sits on cannot be made here.  The class is the
++		 * list's own, which is what the assertion was for.
++		 */
++		while (slot != 0)
+ 		{
+-			AllocFreeListLink *link = GetFreeListLink(chunk);
+-
+-			/* Allow access to the chunk header. */
+-			VALGRIND_MAKE_MEM_DEFINED(chunk, ALLOC_CHUNKHDRSZ);
+-			Assert(MemoryChunkGetValue(chunk) == fidx);
+-			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+-
+ 			freechunks++;
+ 			freespace += chksz + ALLOC_CHUNKHDRSZ;
+-
+-			VALGRIND_MAKE_MEM_DEFINED(link, sizeof(AllocFreeListLink));
+-			chunk = link->next;
+-			VALGRIND_MAKE_MEM_NOACCESS(link, sizeof(AllocFreeListLink));
++			slot = FreeListNext(slot);
+ 		}
+ 	}
+ 
+@@ -1606,20 +1700,35 @@
+ 	AllocBlock	block;
+ 	Size		total_allocated = 0;
+ 
++	/*
++	 * What this can check, and what it cannot, and the difference is a
++	 * consequence of the discipline rather than an omission.
++	 *
++	 * Upstream walks a block's chunks by casting the block's cursor to a
++	 * MemoryChunk and stepping by each chunk's own size, reading every
++	 * chunk's header including the headers of the free ones.  Neither half of
++	 * that is possible here.  The manager holds no capability to the inside
++	 * of a block, so it cannot form a pointer to a chunk it was not handed;
++	 * and a freed chunk is revoked, so even a capability to it would not
++	 * read.  An allocator that revokes what it frees cannot audit what it
++	 * freed.  That is a cost of the discipline, and it is stated rather than
++	 * worked around.
++	 *
++	 * What is left is every check that does not read a chunk: the block
++	 * chain, the block fields, the count of chunks a block holds, and that
++	 * each of those chunks names this block.  The chunks are walked through
++	 * the level below's own chain, which is bookkeeping outside every
++	 * sub-pool.
++	 */
+ 	for (prevblock = NULL, block = set->blocks;
+ 		 block != NULL;
+ 		 prevblock = block, block = block->next)
+ 	{
+-		char	   *bpoz = ((char *) block) + ALLOC_BLOCKHDRSZ;
+-		long		blk_used = block->freeptr - bpoz;
+-		long		blk_data = 0;
++		long		blk_used = block->freeptr - block->base;
+ 		long		nchunks = 0;
+-		bool		has_external_chunk = false;
++		unsigned int slot;
+ 
+-		if (IsKeeperBlock(set, block))
+-			total_allocated += block->endptr - ((char *) set);
+-		else
+-			total_allocated += block->endptr - ((char *) block);
++		total_allocated += block->endptr - block->base;
+ 
+ 		/*
+ 		 * Empty block - empty can be keeper-block only
+@@ -1636,87 +1745,27 @@
+ 		 */
+ 		if (block->aset != set ||
+ 			block->prev != prevblock ||
+-			block->freeptr < bpoz ||
++			block->freeptr < block->base ||
+ 			block->freeptr > block->endptr)
+ 			elog(WARNING, "problem in alloc set %s: corrupt header in block %p",
+ 				 name, block);
+ 
+ 		/*
+-		 * Chunk walker
++		 * Chunk walker, over the entries and not over the bytes
+ 		 */
+-		while (bpoz < block->freeptr)
++		for (slot = pg_subpool_first_chunk(block); slot != 0;
++			 slot = pg_subpool_next_chunk(slot))
+ 		{
+-			MemoryChunk *chunk = (MemoryChunk *) bpoz;
+-			Size		chsize,
+-						dsize;
+-
+-			/* Allow access to the chunk header. */
+-			VALGRIND_MAKE_MEM_DEFINED(chunk, ALLOC_CHUNKHDRSZ);
+-
+-			if (MemoryChunkIsExternal(chunk))
+-			{
+-				chsize = block->endptr - (char *) MemoryChunkGetPointer(chunk); /* aligned chunk size */
+-				has_external_chunk = true;
+-
+-				/* make sure this chunk consumes the entire block */
+-				if (chsize + ALLOC_CHUNKHDRSZ != blk_used)
+-					elog(WARNING, "problem in alloc set %s: bad single-chunk %p in block %p",
+-						 name, chunk, block);
+-			}
+-			else
+-			{
+-				int			fidx = MemoryChunkGetValue(chunk);
+-
+-				if (!FreeListIdxIsValid(fidx))
+-					elog(WARNING, "problem in alloc set %s: bad chunk size for chunk %p in block %p",
+-						 name, chunk, block);
+-
+-				chsize = GetChunkSizeFromFreeListIdx(fidx); /* aligned chunk size */
+-
+-				/*
+-				 * Check the stored block offset correctly references this
+-				 * block.
+-				 */
+-				if (block != MemoryChunkGetBlock(chunk))
+-					elog(WARNING, "problem in alloc set %s: bad block offset for chunk %p in block %p",
+-						 name, chunk, block);
+-			}
+-			dsize = chunk->requested_size;	/* real data */
+-
+-			/* an allocated chunk's requested size must be <= the chsize */
+-			if (dsize != InvalidAllocSize && dsize > chsize)
+-				elog(WARNING, "problem in alloc set %s: req size > alloc size for chunk %p in block %p",
+-					 name, chunk, block);
+-
+-			/* chsize must not be smaller than the first freelist's size */
+-			if (chsize < (1 << ALLOC_MINBITS))
+-				elog(WARNING, "problem in alloc set %s: bad size %zu for chunk %p in block %p",
+-					 name, chsize, chunk, block);
+-
+-			/*
+-			 * Check for overwrite of padding space in an allocated chunk.
+-			 */
+-			if (dsize != InvalidAllocSize && dsize < chsize &&
+-				!sentinel_ok(chunk, ALLOC_CHUNKHDRSZ + dsize))
+-				elog(WARNING, "problem in alloc set %s: detected write past chunk end in block %p, chunk %p",
+-					 name, block, chunk);
+-
+-			/* if chunk is allocated, disallow access to the chunk header */
+-			if (dsize != InvalidAllocSize)
+-				VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+-
+-			blk_data += chsize;
+ 			nchunks++;
+ 
+-			bpoz += ALLOC_CHUNKHDRSZ + chsize;
++			if (pg_subpool_entry(slot)->block !=
++				pg_subpool_block_index(block))
++				elog(WARNING, "problem in alloc set %s: chunk entry %u names a block other than %p",
++					 name, slot, block);
+ 		}
+ 
+-		if ((blk_data + (nchunks * ALLOC_CHUNKHDRSZ)) != blk_used)
+-			elog(WARNING, "problem in alloc set %s: found inconsistent memory block %p",
+-				 name, block);
+-
+-		if (has_external_chunk && nchunks > 1)
+-			elog(WARNING, "problem in alloc set %s: external chunk on non-dedicated block %p",
++		if (nchunks == 0 && blk_used)
++			elog(WARNING, "problem in alloc set %s: block %p holds bytes and no chunk",
+ 				 name, block);
+ 	}
+ 

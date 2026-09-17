@@ -1,0 +1,68 @@
+add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime" "${CMAKE_BINARY_DIR}/capstone-runtime")
+add_library(replay-options INTERFACE)
+target_link_libraries(replay-options INTERFACE Capstone::Runtime region-options)
+target_include_directories(replay-options INTERFACE
+  "${PROJECT_SOURCE_DIR}/shared" "${PROJECT_SOURCE_DIR}/sublet"
+  "${PROJECT_SOURCE_DIR}/capstone/domain")
+target_compile_options(replay-options INTERFACE
+  "$<$<COMPILE_LANGUAGE:C>:-ffunction-sections;-fdata-sections>")
+option(PG_CHECK_DATA "Write/check payloads at free and realloc" ON)
+if(PG_CHECK_DATA)
+  target_compile_definitions(replay-options INTERFACE REPLAY_CHECK_DATA)
+endif()
+
+function(pg_manager name mode)
+  if(mode STREQUAL "native")
+    set(aset "${PG_SOURCE}/src/backend/utils/mmgr/aset.c")
+  else()
+    set(aset "${CMAKE_BINARY_DIR}/variants/${mode}/aset.c")
+  endif()
+  add_library(${name} OBJECT "${aset}" shared/postgres-compat.c)
+  foreach(file mcxt generation slab bump alignedalloc memdebug)
+    target_sources(${name} PRIVATE "${PG_SOURCE}/src/backend/utils/mmgr/${file}.c")
+  endforeach()
+  target_link_libraries(${name} PUBLIC replay-options)
+  if(NOT mode STREQUAL "native")
+    target_include_directories(${name} PUBLIC "${CMAKE_BINARY_DIR}/variants/${mode}/include")
+  endif()
+  target_include_directories(${name} PUBLIC "${PG_SOURCE}/src/include" "${PG_SOURCE}/src/backend")
+endfunction()
+
+if(PG_PLATFORM STREQUAL "native")
+  pg_manager(manager-native native)
+  add_executable(replay native/replay/main.c native/replay/printf.c shared/replay-engine.c)
+  target_link_libraries(replay PRIVATE manager-native)
+  target_link_options(replay PRIVATE LINKER:--gc-sections)
+else()
+  enable_language(ASM)
+  target_include_directories(replay-options SYSTEM INTERFACE "${PROJECT_SOURCE_DIR}/capstone/include")
+  pg_manager(manager-spatial spatial)
+  pg_manager(manager-sublet sublet)
+  set(domain_sources capstone/domain/domain-runtime.c capstone/domain/printf.c
+    "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
+    "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/start.S"
+    "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/gct-section-end.S"
+    "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/domreq.S")
+  set(link_script "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/link.ld")
+  function(pg_domain name)
+    add_executable(${name} ${ARGN} ${domain_sources})
+    target_link_libraries(${name} PRIVATE replay-options)
+    target_compile_definitions(${name} PRIVATE CAPSTONE_DOMREQ_DATA=${PG_DOMAIN_STACK_BYTES} CAPSTONE_DOMREQ_STACK=${PG_DOMAIN_STACK_BYTES})
+    target_link_options(${name} PRIVATE --gc-sections -T "${link_script}")
+    set_target_properties(${name} PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
+    add_custom_command(TARGET ${name} POST_BUILD
+      COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/cmake/check-domain.py" "$<TARGET_FILE:${name}>")
+  endfunction()
+  pg_domain(replay-spatial capstone/domain/replay-spatial.c capstone/domain/backing-allocator.c
+    capstone/domain/string.c shared/replay-engine.c)
+  target_link_libraries(replay-spatial PRIVATE manager-spatial)
+  pg_domain(replay-sublet sublet/replay.c sublet/context-pools.c sublet/unsupported-allocators.c
+    capstone/domain/string.c shared/replay-engine.c)
+  target_link_libraries(replay-sublet PRIVATE manager-sublet)
+  pg_domain(context-hierarchy security-tests/capstone/context-hierarchy.c sublet/context-pools.c
+    sublet/unsupported-allocators.c capstone/domain/string.c)
+  target_link_libraries(context-hierarchy PRIVATE manager-sublet)
+  target_compile_definitions(context-hierarchy PRIVATE "PG_DOM_FAIL_MARKER=\"__CAPSTONE_PG_HIER_FAILED__\\n\"")
+  pg_domain(subpool-lifetimes security-tests/capstone/subpool-lifetimes.c sublet/context-pools.c)
+  target_compile_definitions(subpool-lifetimes PRIVATE "PG_DOM_FAIL_MARKER=\"__CAPSTONE_PG_SUBPOOL_FAILED__\\n\"")
+endif()

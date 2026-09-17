@@ -1,0 +1,40 @@
+# Two changes a capability machine forces on the chunk layout, and the second
+# is why the first is not enough.
+#
+# A capability is sixteen bytes and loses its tag if it is stored to a slot
+# that is not sixteen-aligned. The payload of a chunk begins at
+# sizeof(MemoryChunk), so an eight-byte header puts it at eight modulo
+# sixteen, and the first pointer the program stores into what palloc gave it
+# faults with an unaligned capability access. aset.c writes such a pointer
+# itself: the free-list link of a size class lives inside the freed chunk, and
+# that is where the first run faulted, at aset.c:882.
+#
+# The header is therefore padded to sixteen bytes here, and the build rewrites
+# MAXIMUM_ALIGNOF from eight to sixteen in the copy of pg_config.h it compiles
+# against, because MAXALIGN is what every palloc promises its caller. Neither
+# is Sublet's change: any machine with sixteen-byte pointers needs both, and
+# both are the metadata-layout class the port bookkeeping counts.
+#
+# The cost is real and belongs in the measurement: eight bytes on every chunk.
+--- memutils_memorychunk.h
++++ memutils_memorychunk.h
+@@ -127,6 +127,19 @@
+ 	Size		requested_size;
+ #endif
+ 
++	/*
++	 * A capability is sixteen bytes and loses its tag if it is stored to a
++	 * slot that is not sixteen-aligned.  The payload of a chunk begins at
++	 * sizeof(MemoryChunk), so with an eight-byte header it lands at eight
++	 * modulo sixteen and the first pointer the program stores into what
++	 * palloc gave it faults.  aset.c writes such a pointer itself: the
++	 * free-list link of a size class lives inside the freed chunk.
++	 *
++	 * Padding rather than widening hdrmask, which must stay last and stay
++	 * one word: MemoryChunkSetHdrMask and its readers are written against
++	 * a single sixty-four-bit field.
++	 */
++	uint64		capstone_pad;
+ 	/* bitfield for storing details about the chunk */
+ 	uint64		hdrmask;		/* must be last */
+ } MemoryChunk;
