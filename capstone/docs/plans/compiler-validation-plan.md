@@ -1,6 +1,8 @@
 # Compiler validation and hardening plan
 
-**Status: PROPOSED 2026-09-04 — for the project lead's review; nothing here is executed yet.**
+**Status: IN EXECUTION since 2026-09-04** (header corrected 2026-09-17; it read "PROPOSED …
+nothing here is executed yet" above what is now an ~800-line execution log). The two lead
+decisions below are still open.
 Built from three read-only inventories (backend, frontend/ABI, tests + defects) and three design
 passes (static coverage; execution oracles and fuzzing; semantics and ABI audit). Every
 high-consequence claim was re-verified on the built compiler before it entered — marked ✔ below —

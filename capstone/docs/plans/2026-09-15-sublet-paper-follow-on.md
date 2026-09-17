@@ -68,9 +68,12 @@ back-edge, pinned by `bridged_phi_residue` in the test — so "0 integer-only si
 weakening. The gate is **0 integer-only sites other than that PHI residue, enumerated by function and offset**, with the
 mixed and opaque buckets reported beside. And the emulator pass for the image is SQLLogicTest on the -O2 SQLite image with
 the `movc` density read back (17,378 vs ~6,755 at -O0), not the standard suites: `ptr_int_ptr_roundtrip.c` forms no
-`PseudoBRIDGE_CAP` (its `volatile` pushes the value through memory), so the suites do not exercise the lowering. The fix is
-not on dev: the scan's range mode blocks the merge on author lines of the collaborator's S2 commits already on dev, and
-whether authorship metadata is in the no-names rule's scope is the lead's ruling. The boot waits for dev.
+`PseudoBRIDGE_CAP` (its `volatile` pushes the value through memory), so the suites do not exercise the lowering. **The fix IS on dev** as of
+`e3bb47b43680` (corrected 2026-09-17; this read "the fix is not on dev"). The author-line question that held it was
+waived by the lead — git authorship metadata only, no content, diff, token or email hit. **But design A does not fix
+setupLookaside:** the same four movc sites survive it on the cell 6 -O2 image, and the mechanism is settled in
+`docs/history/17-09-2026_14-23-55_c32-design-a-sinkfold-mechanism.md` — the live site is an instance of the residue
+design A was known not to reach. The C-32 design choice is back with the lead, so the boot below waits on that, not on dev.
 
 *Board lane, after the fix lands on dev and the toolchain is rebuilt (never during a suite).*
 Rebuild cell ⑥ at pure -O2 (`build-sqlite-silicon.sh`, `SQLITE_OPT_LEVEL=-O2`, no `SQLITE_OPTNONE_FUNCS`),
