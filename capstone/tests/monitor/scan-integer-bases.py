@@ -37,15 +37,42 @@ LS  = {"ld","lw","lwu","lh","lhu","lb","lbu","sd","sw","sh","sb"}
 INSN = re.compile(r"^\s*([0-9a-f]+):\s+[0-9a-f ]+\t([a-z][a-z0-9._]*)\s*\t?(.*)$")
 MEM  = re.compile(r"^(-?0x[0-9a-f]+|-?\d+)\((\w+)\)$")
 
+def die(msg):
+    """Every CANNOT-CHECK path exits 2, never 1.
+
+    `sys.exit(<string>)` exits 1, and so does an uncaught exception -- which is the SAME code this
+    scan uses for "the control fired and the capability-mode text is non-zero", i.e. the finding.
+    So a broken invocation was indistinguishable from a positive result to any caller reading the
+    status rather than the output. Reported from a real run 2026-09-17: with CAPSTONE_LLVM_BIN
+    unset, subprocess raises before the return-code guard below is ever reached, the process exits
+    1, and that reads as the finding. Three paths had it -- the missing binary, the guard itself,
+    and an unreadable input file.
+    """
+    print(f"BLOCKED: {msg}", file=sys.stderr)
+    print("BLOCKED: this scan could not measure anything. Exit 2 is NOT a result.", file=sys.stderr)
+    sys.exit(2)
+
 def disassemble(path):
-    if path.endswith(".dis"):
-        return open(path, errors="replace").read().splitlines()
     import os
-    objdump = os.environ.get("CAPSTONE_LLVM_BIN", "") + "/llvm-objdump"
-    out = subprocess.run([objdump, "-d", "--triple=capstone64-unknown-elf", path],
-                         capture_output=True, text=True, errors="replace")
+    if path.endswith(".dis"):
+        try:
+            return open(path, errors="replace").read().splitlines()
+        except OSError as e:
+            die(f"cannot read the disassembly {path!r}: {e}")
+    base = os.environ.get("CAPSTONE_LLVM_BIN", "")
+    if not base:
+        die("CAPSTONE_LLVM_BIN is not set -- source capstone/tests/capstone-test-env.sh first. "
+            "Without it the objdump path is '/llvm-objdump', which does not exist.")
+    objdump = base + "/llvm-objdump"
+    try:
+        out = subprocess.run([objdump, "-d", "--triple=capstone64-unknown-elf", path],
+                             capture_output=True, text=True, errors="replace")
+    except OSError as e:
+        die(f"cannot run {objdump!r}: {e}")
     if out.returncode != 0:
-        sys.exit(f"disassembly failed: set CAPSTONE_LLVM_BIN (capstone-test-env.sh). {out.stderr[:200]}")
+        die(f"disassembly of {path!r} failed (rc={out.returncode}): {out.stderr[:200]}")
+    if not out.stdout.strip():
+        die(f"disassembly of {path!r} produced NO OUTPUT -- nothing was scanned.")
     return out.stdout.splitlines()
 
 def main():
@@ -89,4 +116,9 @@ def main():
         sys.exit(2)
     sys.exit(1 if bad["cap_text"] else 0)
 
-main()
+try:
+    main()
+except SystemExit:
+    raise
+except BaseException as _e:                       # any crash is a CANNOT-CHECK, never a finding
+    die(f"{type(_e).__name__}: {_e}")
