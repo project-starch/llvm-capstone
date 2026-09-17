@@ -105,7 +105,7 @@ export FPGA_URL="$(cat "${CAPSTONE_FPGA_URL_FILE:-$HOME/.claude-kisp/secrets/fpg
 # exported variable rather than an edit to each of the seven drivers. Set it to the string the
 # console REPORTS as flash_state.nv_bitstream_name after the flash, never to the filename you
 # happened to upload. A wrong value hard-stops the boot, which is the safe direction.
-export FPGA_BITSTREAM=${FPGA_BITSTREAM:-caplifive_r30r31_1bfff7776.bit} FPGA_BITSTREAM_UNVERIFIED=1
+export FPGA_BITSTREAM=${FPGA_BITSTREAM:-caplifive_m1_054cea69b.bit} FPGA_BITSTREAM_UNVERIFIED=1
 export PREFLIGHT_ALLOW_SHORT=1 PREFLIGHT_ALLOW_SLOTS=1
 export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
 export SQLITE_HOST=/test-domains/sqlite_host_rr.user

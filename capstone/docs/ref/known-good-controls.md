@@ -7,6 +7,10 @@
 > thing separating "the experiment failed" from "the firmware I just changed failed", which is
 > why it runs first. Below, the refresh against the bitstream itself:
 >
+> ## SUPERSEDED BY THE 2026-09-17 REFLASH — the resident bitstream is now
+> ## `caplifive_m1_054cea69b.bit` (reclaimer + splice + R-34/R-24), and every value below was
+> ## taken on the PREVIOUS silicon. `k800` returned 4 on the first boot of the new bitstream;
+> ## nothing else here has been re-checked.
 > ## refreshed 2026-09-12 on caplifive_r30r31_1bfff7776 (the R-30/R-31 bitstream, flashed and
 > content-verified `nv_bitstream_sha256 = 406e12bf…3b30`): **k800 = 4 in all three boots on it**
 > — sw59 `cycles=4521`, sw60 `cycles=4517`, sw61 `cycles=4517`, `instret=1089` in every one.

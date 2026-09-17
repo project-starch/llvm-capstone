@@ -24,11 +24,21 @@ Minimal snapshot. Read first in every session.
 > capacity knee are both gone. Bundle at `experiments/results/M1/2026-09-17-reclaimer-pilot`,
 > labelled a **platform pilot and not an M1 arm**, because M1's start gate is still one of three.
 >
-> **Stale as of this reflash, pending the console-reported name:** every "the resident bitstream is X"
-> line — `known-good-controls.md`, `bitstream-usability-is-the-census-not-the-slack.md`, the launch
-> doc, and the drivers' `FPGA_BITSTREAM` default. Read the name off the board
-> (`flash_state.nv_bitstream_name`) rather than writing the filename that was flashed; those are not
-> guaranteed to be the same string and the hard-stop gate compares against the former.
+> **The console reports `caplifive_m1_054cea69b.bit`**, taken from a fresh read of
+> `flash_state.nv_bitstream_name` rather than from the filename flashed, and confirmed to be a genuine
+> gate match rather than the `None`-tolerating branch (zero `BITSTREAM IDENTITY UNVERIFIED` lines in
+> the boot log — worth checking, because the drivers set that tolerance and a gate passing on it would
+> have proved nothing about the string). All four places that named the old resident are updated:
+> `known-good-controls.md`, `bitstream-usability-is-the-census-not-the-slack.md`, the launch doc, and
+> the drivers' `FPGA_BITSTREAM` default.
+>
+> **A REFLASH INVALIDATES TWO CLASSES, AND ONLY ONE OF THEM IS GREPPABLE.** The first is every "the
+> resident bitstream is X" line, which a search for the old name finds. The second is every statement
+> about **what a board result MEANS**, and those live in documents that need not contain the word
+> bitstream anywhere — the capacity bundle published that morning measures a knee that does not exist
+> on the silicon now resident. It was caught only because the pilot happened to contradict it, and it
+> was annotated rather than left standing. When a reflash lands, re-read the RESULTS of the last
+> bitstream, not just the lines that name it.
 
 ## 2026-09-17 — CURRENT
 

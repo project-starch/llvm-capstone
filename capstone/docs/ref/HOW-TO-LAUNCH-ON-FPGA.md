@@ -577,10 +577,12 @@ the end of this section.**
   folder recorded the same in August. Do not go looking for it.
 * **The resident-bitstream name in that list is one flash stale, for the second time.** It has named a
   file two reflashes old before, was corrected on 2026-09-10, and a flash on 2026-09-12 made it stale
-  again within two days. **Do not trust any written name: read it off the board**
-  (`flash_state.nv_bitstream_name`). As of 2026-09-12 the resident bitstream is
-  **`caplifive_r30r31_1bfff7776`**, attested three ways — `known-good-controls.md`, §4g.2 of the
-  measurements doc, and all seven shell drivers.
+  again within two days, and a THIRD time on 2026-09-17. **Do not trust any written name, this one
+  included: read it off the board** (`flash_state.nv_bitstream_name`). As of the 2026-09-17 reflash the
+  resident bitstream is **`caplifive_m1_054cea69b.bit`** — the reclaimer build, which also carries the
+  revoke-walk splice and R-34/R-24. Taken from a fresh read of that field rather than from the
+  filename that was flashed, and confirmed to be a genuine match rather than the `None`-tolerating
+  branch of the driver gate (zero `BITSTREAM IDENTITY UNVERIFIED` lines in the boot's log).
 
 **The step we cannot do: getting a `.bit` ONTO the console.** The client exposes no bitstream upload,
 and `flash_bitstream` names a file **already registered server-side**. The REST surface has

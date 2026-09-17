@@ -30,6 +30,7 @@ A criterion that forbids every flash already performed is a mis-stated premise, 
 
 > **STALE-FACT CORRECTION 2026-09-17 (RTL lane).** The line above marking `80843404c` (−16.400) as
 > *the* resident image was true when written and is not true now. The resident is
+> **NO LONGER RESIDENT as of the 2026-09-17 reflash — the board now holds `caplifive_m1_054cea69b.bit`.**
 > `caplifive_r30r31_1bfff7776` (sha256 `406e12bf…`) = `1bfff7776` at **WNS −12.425**; the image it
 > superseded, `66c4e7517`, was also −12.425. `80843404c` is neither current nor immediately previous.
 > The present-tense claim was quoted as current in a cross-lane exchange on 2026-09-17 and had to be
