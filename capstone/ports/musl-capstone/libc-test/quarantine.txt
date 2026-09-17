@@ -7,6 +7,5 @@
 # log ends at the register dump and the batch-done marker never prints. Measured
 # twice on 2026-09-16, both times costing every test scheduled after it. A
 # faulting test at the tail costs only itself.
-setjmp     C-49: a shrink with a top where a length belongs, in libc_test_main itself
 mbc        out of bounds walking a locale table, cause 5
 swprintf   movc-class fault on an untagged FILE field, cause 24

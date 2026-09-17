@@ -180,25 +180,31 @@ the tail of their chunk. Quarantine is ordering, not exclusion. Every run writes
 `logs/<RUN_ID>/` with the toolchain that built the domains beside the chunk logs, so two
 compilers are two tables and not one overwritten.
 
-**What the suite found that no probe would have.** Two compiler defects. C-48: outgoing
+**What the suite found that no probe would have.** One compiler defect, C-48: outgoing
 stack-passed varargs were packed at 8 bytes while `va_arg` reads at 16, so `inet_ntop` printed
 `::1` as `::1:0`, `getmntent_r` spun forever, and five tests took a capability fault in a
 `t_error` call rather than printing what was wrong. Fixed, and the before-and-after is 31 PASS
-and 7 FAULT against 40 and 3. C-49: the `shrink` that bounds a pointer before a
-call reads a size operand holding a code address, and the three writes to that register in the
-whole function are one `li` of the size and two `add`s that replace it with a top; `setjmp`
-faults on exactly that instruction and is the only source of the 77 that still does. Three runtime defects too, each a case
-where returning from a syscall is worse than serving it: `exit()` put musl's `_Exit` in its
-retry loop, musl's own `__libc_malloc` bypassed this port's allocator into a `lite_malloc.c`
-that stores pointers as integers, and `stat` on a path had no route at all. The first two
-were each worth a whole boot: a refused `exit` and a faulting allocator both end the guest. And the narrowing
-of M-1: a fault on first entry returns to the guest, a fault after a yield does not.
+and 7 FAULT against 40 and 3.
+
+Four defects in this port, each a case where returning from a call is worse than not having it:
+`exit()` put musl's `_Exit` in its retry loop; musl's own `__libc_malloc` bypassed this port's
+allocator into a `lite_malloc.c` that stores pointers as integers; `stat` on a path had no route
+at all; and `sigsetjmp` was a C function that **called** `setjmp`, so the buffer recorded the
+wrapper's frame and every `siglongjmp` resumed the caller with a frame pointer belonging to a
+function that had already returned. The first two were each worth a whole boot. The last one
+was filed as a compiler defect first, on a fault dump that showed a `shrink` reading a code
+address where a size belonged; that entry is withdrawn in `ISSUES.md` with what it really was,
+because a fault inside compiler-generated bounds code is where a corrupted register file first
+becomes visible, not evidence of who corrupted it.
+
+And the narrowing of M-1: a fault on first entry returns to the guest, a fault after a yield
+does not.
 
 | verdict | n | |
 |---|---:|---|
 | `PASS` | 40 | the test's own `t_status`, with nothing it needed refused behind its back |
-| `FAIL` | 6 | named below, five of them for a reason that is not the port's |
-| `FAULT` | 3 | a capability fault: `setjmp` is C-49, `mbc` and `swprintf` are open |
+| `FAIL` | 7 | named below, four of them for a reason that is not the port's |
+| `FAULT` | 2 | a capability fault: `mbc` and `swprintf`, both open |
 | `NOBUILD` | 5 | the five `tls_*` sources, all C-47 |
 | `EXCLUDED` | 23 | a service a domain does not have: processes, threads, sockets, SysV IPC, dynamic loading |
 | **total** | **77** | every source in libc-test's `src/functional` |
@@ -206,8 +212,8 @@ of M-1: a fault on first entry returns to the guest, a fault after a yield does 
 Measured 2026-09-17 with the C-48 fix in the compiler. Against the same tree without it the
 same run reads 31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN.
 
-**What the reds are.** Of the nine, five are not about capabilities at all, one is a
-registered compiler defect, and three are open.
+**What the reds are.** Of the nine, four are not about capabilities at all, two are
+services a domain does not have, and three are open.
 
 | test | what it is |
 |---|---|
@@ -216,7 +222,7 @@ registered compiler defect, and three are open.
 | `fscanf` | reads its input through a pipe, and a domain has no second end for one |
 | `utime` | needs `utimensat`; the stat service carries size and mode, not times |
 | `sscanf_long` | wants an 8 MiB buffer; a domain is one contiguous kernel allocation and `MAX_ORDER` caps that at 4 MiB here |
-| `setjmp` | C-49, the one compiler defect still open |
+| `setjmp` | runs to the end since `sigsetjmp` became `setjmp` itself; it fails on `rt_sigprocmask`, which stays unserved: a domain that says nothing is blocked right after being asked to block something is telling a plausible lie, and the test's two assertions about the mask cannot both hold without a real one |
 | `mbc` | faults at `lw a7, 4(a4)` walking a locale table four bytes at a time, cause 5, out of bounds |
 | `swprintf` | faults at `cincoffsetimm a2, a0, 4` on a `FILE` field loaded with `ldc` that carries no tag, cause 24 |
 | `strtold` | the last bit of a 113-bit mantissa, a soft-float question |

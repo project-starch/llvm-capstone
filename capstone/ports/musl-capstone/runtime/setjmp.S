@@ -17,10 +17,24 @@
 .global setjmp
 .global _setjmp
 .global __setjmp
+.global sigsetjmp
+.global __sigsetjmp
 .type setjmp, %function
+.type sigsetjmp, %function
+/* sigsetjmp is setjmp here, the same instructions and not a call to them. A
+   domain has no signal mask, so there is nothing for the savemask argument to
+   save and a1 is simply ignored; but a C wrapper that CALLS setjmp records the
+   wrapper's own frame, and the later jump then lands with the wrapper's sp and
+   frame pointer instead of the caller's. That is what this file replaced:
+   libc-test's setjmp test faulted after its first siglongjmp with a frame
+   pointer that belonged to a function that had already returned. musl's own
+   riscv64 sigsetjmp tail-calls setjmp for the savemask == 0 case for the same
+   reason. */
 setjmp:
 _setjmp:
 __setjmp:
+sigsetjmp:
+__sigsetjmp:
 	stc ra,   0(a0)
 	stc s0,  16(a0)
 	stc s1,  32(a0)
@@ -41,9 +55,12 @@ __setjmp:
 
 .global longjmp
 .global _longjmp
+.global siglongjmp
 .type longjmp, %function
+.type siglongjmp, %function
 longjmp:
 _longjmp:
+siglongjmp:
 	ldc ra,   0(a0)
 	ldc s0,  16(a0)
 	ldc s1,  32(a0)

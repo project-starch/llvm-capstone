@@ -3544,6 +3544,17 @@ returning with a cause proves the handler works.
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.
 
+> **OBSERVED 2026-09-16 from the musl probes, and it narrows the entry.** A domain that faults on
+> its FIRST entry hands control back: the write probe faulted in `hc_write` at first entry, the
+> host process saw the register dump, printed its markers and the guest shell continued. A domain
+> that faults on RE-ENTRY, after a `domreturn` yield and a later `call_dom`, does not: libc-test's
+> `mbc` faulted inside musl's `__simple_malloc` after a yield and the serial log ends at the
+> register dump, twice. No `LT-END`, no shell prompt, `alarm()` in the host cannot fire because the
+> process is inside the ioctl, and `kill -9` from the guest changes nothing. So the "unbreakable
+> loop" is not every fault, it is the resumed-domain fault, which is worth knowing when choosing
+> where a probe may fault. Batch runs order known faulters last for this reason
+> (`libc-test/quarantine.txt`).
+
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
 
 > # ⚠ 2026-09-10: FIVE monitor sites, not two — and the widest one is not a re-share at all.
@@ -4347,6 +4358,42 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-49 — WITHDRAWN. The `shrink` that trapped in libc-test's `setjmp` was fed by a `sigsetjmp` that called `setjmp` instead of being it `WITHDRAWN 2026-09-17, same day it was filed — NOT a compiler defect`
+
+**What it looked like.** libc-test's `setjmp`, run as a domain, trapped with cause 29,
+`ILLEGAL_OP_VAL`, at `shrink s6, a0, s9`. The register dump had a code address in the size
+operand:
+
+```
+x10 (a0) = 10157f9c0
+x22 (s6) = C(10157f9c0 [10156e500,101580000) type 1)
+x25 (s9) = 202ae3ba4        ; a0 + 0x1015641e4, and 0x1015641e4 is in .text
+```
+
+and `s9` is written in exactly three places in the function: `li s9, 0x80` and two
+`add s9, a0, s9`. Reading only that, the bounded-pointer materialisation looked like it was
+destroying its own length operand and then reading it again.
+
+**What it actually was.** `runtime/sigsetjmp.c` in the musl port implemented `sigsetjmp` as a C
+function that **calls** `setjmp`. The buffer then records that wrapper's frame: its `sp`, its
+frame pointer, and whatever it left in the callee-saved registers. `siglongjmp` restores those,
+so the caller resumed with a frame pointer belonging to a function that had already returned,
+and every value the caller held in a callee-saved register was someone else's. The code address
+in `s9` was one of them. musl's own `riscv64/sigsetjmp.s` **tail-calls** `setjmp` for exactly
+this reason; the port's version is now the same instructions as `setjmp`, reached by a second
+label rather than a call, and `siglongjmp` likewise.
+
+**Measured.** With that one change and nothing else, `setjmp` goes from FAULT to a clean run.
+No compiler change was involved, and the branch opened to hold one was deleted.
+
+**What to take from it.** A capability fault inside compiler-generated bounds code is not
+evidence that the compiler generated it wrongly. The bounds sequence is where a corrupted
+register file first becomes visible, because it is the only place that checks. Before filing a
+codegen defect from a fault dump, account for how the function was entered: anything that
+restores a register file, `setjmp`, `longjmp`, a domain re-entry, moves the suspicion to
+whoever saved it. The minimal reproduction that never fell out was the signal that this was
+not codegen.
+
 ### C-48 — outgoing stack-passed varargs are packed at 8 bytes, `va_arg` reads them at 16: every seventh-and-later integer vararg is lost `FIXED 2026-09-16 — COMPILER, caller side; found the same day by libc-test's inet_pton, proven from disassembly`
 
 **What happens.** A variadic callee's `va_arg` advances by the 16-byte slot stride, which is what
@@ -4410,6 +4457,11 @@ a libc needs this fixed". musl's core uses the `__thread` KEYWORD zero times. Ev
 finds is the variable `__thread_list_lock`. musl reaches errno, the locale and the cancellation state
 through the thread POINTER and a plain struct, not through thread-local storage, so a static
 single-threaded domain needs `tp` and needs nothing from this issue.
+
+> **2026-09-17, from libc-test in a domain.** Five sources of the suite fail to build on this,
+> not four: `tls_align_dso`, `tls_init`, `tls_init_dso` and `tls_local_exec` die in isel, and
+> `tls_align` links against a `__thread` variable its partner DSO would have defined, so it
+> comes back as `undefined symbol: t`. They are the only five of the 77 that do not build.
 
 **What actually blocked it, measured 2026-09-16**, all four the same defect in different places, a
 capability sent through something that carries 64 bits:
