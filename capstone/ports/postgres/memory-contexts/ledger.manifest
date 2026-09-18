@@ -1,6 +1,13 @@
 # PostgreSQL adaptation inventory: path, bucket, purpose.
 # The classified AllocSet patch is counted against postgresql-17.0-0004-allocset-sublet-context-revocation.patch.classes.
 # ABI patches are separate from the Sublet allocator delta.
+examples/client.h                                                     test       common allocator-client interface
+examples/allocset.c                                                   test       variable-size buffer and current-context client
+examples/generation.c                                                 test       FIFO batch client
+examples/slab.c                                                       test       fixed-size job table client
+examples/bump.c                                                       test       per-request bulk scratch client
+examples/support/native.c                                             test       native client entry point
+examples/support/domain.c                                             test       spatial and Sublet client domain setup
 src/shared/a11trace.h                                                   glue       the record format, shared with the recorder in the paper repository
 src/allocators/sublet/pg_subpool.h                                      glue       what the manager needs from the level below
 src/allocators/spatial/backing-allocator.c                              glue       first-fit backing allocator for the spatial arm

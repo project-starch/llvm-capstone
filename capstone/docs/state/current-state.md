@@ -14,6 +14,11 @@ documented in the component README. Debug manager layouts are explicitly
 refused. The original shell builds remain AllocSet-only, and protected
 consumer-defect reproduction is still a separate milestone.
 
+Runnable clients are in `ports/postgres/memory-contexts/examples/`: an AllocSet
+buffer, Generation message queue, Slab job table and Bump request scratch.
+Each source is shared by native/spatial/Sublet executables. All four pass in
+all three builds; the examples README gives commands and the client interface.
+
 ## 2026-09-18 — PostgreSQL 17.0 pin consistency (before the additional ports)
 
 The PostgreSQL component, original shell builds and native defect corpus now

@@ -45,6 +45,10 @@ or a validated protected consumer-defect reproducer.
 
 ## Build and run
 
+For small programs that directly use the allocation APIs, start with the
+[client examples](examples/README.md). Each allocator has a separate client,
+built unchanged for native, Capstone spatial and Capstone/Sublet execution.
+
 Run from the repository root. Sources and binaries stay outside the checkout.
 Native builds need CMake 3.25+, Ninja, Python 3.11.4+, a C compiler, make, patch
 and PostgreSQL's configure/header-generation prerequisites (including bison and
