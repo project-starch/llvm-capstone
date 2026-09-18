@@ -90,6 +90,23 @@ else()
   target_compile_definitions(context-hierarchy PRIVATE "PG_DOM_FAIL_MARKER=\"__CAPSTONE_PG_HIER_FAILED__\\n\"")
   pg_domain(subpool-lifetimes security-tests/capstone/subpool-lifetimes.c src/allocators/sublet/context-pools.c)
   target_compile_definitions(subpool-lifetimes PRIVATE "PG_DOM_FAIL_MARKER=\"__CAPSTONE_PG_SUBPOOL_FAILED__\\n\"")
+  # A seam, not a case: bug-corpora supplies the defect program, the port only
+  # builds it the same way it builds its own fixtures. Case material must not
+  # live inside a port (docs/design/repo-layout.md).
+  set(PG_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied domain defect program")
+  if(PG_CORPUS_SRC)
+    foreach(mode spatial sublet)
+      pg_domain(defects-${mode} "${PG_CORPUS_SRC}" src/capstone-domain/string.c)
+      target_link_libraries(defects-${mode} PRIVATE manager-${mode})
+      if(mode STREQUAL "sublet")
+        target_compile_definitions(defects-${mode} PRIVATE PG_DEFECTS_SUBLET)
+        target_sources(defects-${mode} PRIVATE src/allocators/sublet/context-pools.c
+          src/allocators/sublet/unsupported-allocators.c)
+      else()
+        target_sources(defects-${mode} PRIVATE src/allocators/spatial/backing-allocator.c)
+      endif()
+    endforeach()
+  endif()
   foreach(mode spatial sublet)
     pg_domain(contexts-${mode} security-tests/capstone/contexts.c src/capstone-domain/string.c)
     target_include_directories(contexts-${mode} PRIVATE "${PROJECT_SOURCE_DIR}/tests")

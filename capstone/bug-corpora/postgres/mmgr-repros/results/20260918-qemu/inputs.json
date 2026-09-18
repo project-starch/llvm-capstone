@@ -1,0 +1,21 @@
+{
+  "postgresql": "17.0",
+  "binary_sha256": {
+    "defects.dom": "a3c72c28050302ef134fb6230410dd936dae20aafd1c0ed1fa025f97732c0a45",
+    "loader.user": "e0e27dbf6839896e661acde6e6ad3e9b3083063b9943bada3de4a05c6b1f69d1",
+    "selection.bin": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+  },
+  "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+  "regions": {
+    "payload": 65536,
+    "arena": 67108864,
+    "trace": 67108864,
+    "scratch": 50331648
+  },
+  "arms": 16,
+  "cases": 8,
+  "expected_faults": 8,
+  "domain_program": "bug-corpora/postgres/mmgr-repros/shared/defects.c",
+  "port_seam": "PG_CORPUS_SRC"
+}
