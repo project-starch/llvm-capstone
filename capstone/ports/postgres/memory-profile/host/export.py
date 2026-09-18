@@ -9,10 +9,7 @@ import io
 import json
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+from plot import plot
 
 
 def main():
@@ -29,7 +26,7 @@ def main():
     if not manifest.get("complete"):
         raise SystemExit("campaign has not completed")
     args.output.mkdir(parents=True, exist_ok=False)
-    summaries, series = [], {}
+    summaries = []
     provenance = dict(
         scope=manifest["scope"],
         comparison=manifest["comparison"],
@@ -69,12 +66,6 @@ def main():
             continue
         memory = json.loads((directory / "memory-summary.json").read_text())
         rows = list(csv.DictReader((directory / "memory.csv").open()))
-        events = [
-            {k: int(v) if k != "kind" else v for k, v in row.items()}
-            for row in rows
-            if row["kind"] == "event"
-        ]
-        series[run["workload"], run["program"]] = events
         for row in rows:
             archive_rows.append(
                 dict(workload=run["workload"], program=run["program"], **row)
@@ -146,76 +137,14 @@ def main():
     (args.output / "provenance.json").write_text(
         json.dumps(provenance, indent=2) + "\n"
     )
-    arena_sizes = {s["arena_reserved_bytes"] for s in summaries}
-    if len(arena_sizes) != 1:
-        raise SystemExit("expected a fixed arena budget across the campaign")
-    arena_mib = arena_sizes.pop() / 2**20
-    plt.rcParams.update({"font.size": 10, "svg.hashsalt": "postgres-memory-profile"})
-    workloads = list(dict.fromkeys(s["workload"] for s in summaries))
-    fig, axes = plt.subplots(
-        len(workloads), 3, figsize=(13, 3.5 * len(workloads)), squeeze=False
+    plot(args.output, args.output)
+    (args.output / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+            for path in sorted(args.output.iterdir())
+            if path.is_file() and path.name != "SHA256SUMS"
+        )
     )
-    for row, label in enumerate(workloads):
-        off = series[label, "replay-spatial"]
-        on = series[label, "replay-sublet"]
-        for values, color, name in (
-            (off, "#3274a1", "Temporal off: spatial port"),
-            (on, "#e1812c", "Temporal on: Sublet port"),
-        ):
-            x = [r["event"] / 1e6 for r in values]
-            axes[row, 0].plot(
-                x,
-                [r["backing_bytes"] / 2**20 for r in values],
-                color=color,
-                label=name,
-                lw=1.2,
-            )
-        x = [r["event"] / 1e6 for r in on]
-        axes[row, 0].plot(
-            x,
-            [r["live_payload_bytes"] / 2**20 for r in on],
-            color="#333333",
-            label="Requested live payload",
-            lw=1,
-        )
-        axes[row, 0].set(ylabel=f"{label}: backing / payload (MiB)")
-        axes[row, 1].plot(
-            x,
-            [r["metadata_records_live_bytes"] / 1024 for r in on],
-            color="#e1812c",
-            label="Records in use",
-        )
-        axes[row, 1].axhline(
-            on[-1]["metadata_records_reserved_bytes"] / 1024,
-            color="#777777",
-            ls="--",
-            label="Static record capacity",
-        )
-        axes[row, 1].set(ylabel="Sublet record storage (KiB)")
-        axes[row, 2].plot(
-            x, [r["nodes_created_cumulative"] / 1e6 for r in on], color="#e1812c"
-        )
-        axes[row, 2].set(ylabel="Sublet nodes created (millions)")
-        for col in range(3):
-            axes[row, col].set_xlabel("Replay event (millions)")
-            axes[row, col].grid(alpha=0.2)
-            axes[row, col].set_ylim(bottom=0)
-        axes[row, 0].legend(fontsize=8)
-        axes[row, 1].legend(fontsize=8)
-    fig.suptitle("PostgreSQL allocator memory behaviour in QEMU", fontsize=14)
-    fig.text(
-        0.5,
-        0.01,
-        f"{manifest['repetitions']} repetitions per arm; identical profiles. Backing definitions differ by port; arena reservation is {arena_mib:g} MiB in both.\nNode creation is cumulative demand. Replay buffers and global node/tag storage are outside these curves.",
-        ha="center",
-        fontsize=9,
-    )
-    fig.tight_layout(rect=(0, 0.07, 1, 0.95))
-    fig.savefig(args.output / "memory.svg", metadata={"Date": None})
-    fig.savefig(
-        args.output / "memory.pdf", metadata={"CreationDate": None, "ModDate": None}
-    )
-    fig.savefig(args.output / "memory.png", dpi=160)
     print(json.dumps(summaries, indent=2))
 
 

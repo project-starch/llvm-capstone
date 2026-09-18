@@ -7,7 +7,7 @@ on:
       - 'capstone/runtime/**'
       - '.github/workflows/postgres-memory-contexts.yml'
   push:
-    branches: [postgres/1-memory-contexts]
+    branches: [postgres/1-memory-contexts, postgres/2-memory-profiles]
     paths:
       - 'capstone/ports/postgres/**'
       - 'capstone/runtime/**'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect paired spatial/Sublet QEMU profiles and matched uninstrumented controls."""
+"""Run on the host to collect paired QEMU profiles and uninstrumented controls."""
 
 import argparse
 import hashlib
@@ -101,7 +101,7 @@ def main():
             parser.error("trace names must be unique lowercase labels")
         traces[label] = Path(path).resolve(strict=True)
     args.output.mkdir(parents=True, exist_ok=args.resume)
-    port = Path(__file__).resolve().parents[1]
+    port = Path(__file__).resolve().parents[2]
     runner = port / "capstone/run-qemu.py"
     manifest = dict(
         scope="QEMU allocator memory behaviour; no FPGA or security experiments",
@@ -117,7 +117,7 @@ def main():
         },
         tool_sha256={
             p.name: digest(p)
-            for p in (Path(__file__), port / "memory-profile/analyze.py", runner)
+            for p in (Path(__file__), Path(__file__).with_name("analyze.py"), runner)
         },
         node_capacity=int(os.environ.get("CAPSTONE_REV_NODES", "1048576")),
         results=[],

@@ -5,6 +5,10 @@ add_custom_command(OUTPUT "${fixture}"
   DEPENDS tests/make-fixture-trace.py shared/a11trace.h VERBATIM)
 add_custom_target(replay-fixture ALL DEPENDS "${fixture}")
 if(PG_PLATFORM STREQUAL "native")
+  add_test(NAME memory-profile-accounting COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+    -s "${PROJECT_SOURCE_DIR}/memory-profile/tests" -p "test_*.py")
+  set_tests_properties(memory-profile-accounting PROPERTIES LABELS native TIMEOUT 60
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
   add_test(NAME native-replay-controls COMMAND "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/tests/check-native.py" "$<TARGET_FILE:replay>" "${fixture}")
   add_test(NAME build-guards COMMAND "${Python3_EXECUTABLE}"

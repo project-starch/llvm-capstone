@@ -5,11 +5,14 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "host"))
+
 from analyze import HEADER, RECORD, analyze, trace_memory
-from run import loader_stopped_before_sharing, retryable_boot_failure
+from collect import loader_stopped_before_sharing, retryable_boot_failure
 
 
 class MemoryAccounting(unittest.TestCase):
