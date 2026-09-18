@@ -100,5 +100,18 @@ reallocates and frees the set on every modification specifically
 
 It is off by default and debug-only. It would make this defect deterministic; it
 would **not** make it visible to a malloc-level tool, because the reallocation is
-still `palloc`/`pfree`. That is why this case's control is a plain `malloc`
-use-after-free instead: it proves the harness can see the class it *can* see.
+still `palloc`/`pfree`.
+
+`REALLOCATE_BITMAPSETS` is the second of three hand-written, opt-in, debug-only
+mechanisms this one defect runs past. The others are `MEMORY_CONTEXT_CHECKING`,
+whose double-`pfree` detector arrived only in March 2026 (`0c8b4e9cfc`) and was
+kept out of production builds because *"that adds measurable overhead"*, and the
+Valgrind mempool annotations in `mcxt.c` and `aset.c`, compiled out unless
+`USE_VALGRIND` is defined.
+
+That last one is why this case makes **no claim from AddressSanitizer's
+silence**. ASan cannot fire here by construction — no `malloc` or `free` occurs
+between the free and the read — so its silence measures nothing. Valgrind *can*
+fire, precisely because somebody wrote those annotations by hand. The
+discriminating question is not whether a tool can see into a nested allocator but
+who taught it to, for which tool, and in which build. See the README.
