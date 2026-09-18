@@ -499,6 +499,28 @@ static void run_linear(unsigned reps) {
  * accounting (the implementation owner's specification, approved 2026-09-18). So the arm tests that
  * the generation check holds under a large retained set. A CLEAN NULL IS THE EXPECTED AND CORRECT
  * RESULT and is only interesting if it fails. */
+/* M1_RELEASE_AT_BUFFER moves the release arm's phase-2 trigger from "10C allocations" to "the retained
+ * buffer is full", and exists because the arm is otherwise UNMEASURABLE at the protocol's production
+ * capacity. Release retains one alias per allocation for the whole of phase 1 -- it takes the same
+ * branch as the pressure arm until phase 2 fires -- and a `void *` here is a 16-byte capability, so
+ * 10C at C = 65,532 needs 10,485,120 bytes of buffer against a ~2 MB domain region. Measured, not
+ * assumed: on 2026-09-18 the arm stopped at `stop=buffer alloc=4097` with M1_MAXRET = 4096 while drop
+ * and ring beside it ran to 655,320 in the same boot.
+ *
+ * The two settings answer different questions and the lead asked for both: 0 keeps the approved
+ * algorithm and the arm is run at a smaller C with the reduction stated, while 1 keeps C at the
+ * production capacity and changes when phase 2 begins. NEITHER SUBSTITUTES FOR THE OTHER, and a
+ * transcript produced with 1 must never be reported as the protocol's release arm without saying so --
+ * which is why it lowers `target`, so the START LINE states the trigger that was actually used.
+ *
+ * It is applied at SETUP and not inside the loop, so the default build is byte-identical rather than
+ * merely intended to be. That is not a style preference: the first version of this change wrote the
+ * extra term into the loop's phase-2 condition, where it folds away at compile time, and the rebuilt
+ * default image was NOT byte-identical -- reordering the short-circuit moved the codegen (598dce77
+ * against the board's 1b7a04fe). */
+#ifndef M1_RELEASE_AT_BUFFER
+#define M1_RELEASE_AT_BUFFER 0
+#endif
 static void *m1_ring_alias[M1_LIVE];
 static void *m1_ret_alias[M1_MAXRET];
 static sublet_cap m1_tmp;
@@ -528,6 +550,11 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   const char *stop = "target";
   if (C < 16) C = 16;
   target = 10UL * C; snap_every = (C + 15UL) / 16UL; next_snap = snap_every;
+#if M1_RELEASE_AT_BUFFER
+  /* phase 2 at buffer-full instead of at 10C: lower the target so the LOOP is untouched and the
+     start line reports the trigger that was actually used */
+  if (streq(arm, "release") && target > (ulong)M1_MAXRET - 1UL) target = (ulong)M1_MAXRET - 1UL;
+#endif
   carve_root(M1_LIVE * (ulong)M1_LEAF, &pool);
   if (root_short) { out("R1 m1 refused: arena\n"); return; }
   pool_base = sublet_base(&pool);
@@ -536,7 +563,11 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   sublet_move(&pool, &leaf[M1_LIVE - 1]);
   for (i = 0; i < M1_LIVE; i++) { alias[i] = sublet_take(&leaf[i]); touch((volatile char *)alias[i], (ulong)M1_TOUCH, 0x11); }
   out("R1 m1 start arm="); out(arm); kv("C", C); kv("target", target); kv("fixture_nodes", minted() - m0);
-  kv("budget", budget); kv("maxret", M1_MAXRET); kv("leaf", M1_LEAF); kv("touch", M1_TOUCH); kv("pool", M1_LIVE * (ulong)M1_LEAF); kv("resident", M1_LIVE * (ulong)M1_TOUCH); kv("snap_every", snap_every); out("\n");
+  kv("budget", budget); kv("maxret", M1_MAXRET); kv("leaf", M1_LEAF); kv("touch", M1_TOUCH); kv("pool", M1_LIVE * (ulong)M1_LEAF); kv("resident", M1_LIVE * (ulong)M1_TOUCH); kv("snap_every", snap_every);
+#if M1_RELEASE_AT_BUFFER
+  kv("rel_at_buffer", 1);   /* the release arm's phase 2 fires at buffer-full, NOT at 10C */
+#endif
+  out("\n");
   i = 0; ini0 = sublet_stats.init;
   for (;;) {
     if (alloc >= target && !releasing) {
