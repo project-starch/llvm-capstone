@@ -1,0 +1,283 @@
+Subject: [PATCH 1/2] Record AVBufferPool and AVRefStructPool lifecycle events
+Upstream: ffmpeg 9.0.1
+Upstream-Archive: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+Upstream-SHA256: cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635
+Build-Variants: traced native decoder; ported native and Capstone replays
+Depends-On: none (pristine release)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Add recording guards, pool and callback events, and recorder objects in
+libavutil/Makefile. Reject callback configurations unsupported by the replay.
+The build copies trace.h, ff2_record.c and ff2_observe.c from this component
+into the prepared tree; their implementations remain ordinary src/ files.
+
+diff --git a/libavutil/buffer.c b/libavutil/buffer.c
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -25,6 +25,7 @@
+ #include "common.h"
+ #include "mem.h"
+ #include "thread.h"
++#include "trace.h"
+ 
+ static AVBufferRef *buffer_create(AVBuffer *buf, uint8_t *data, size_t size,
+                                   void (*free)(void *opaque, uint8_t *data),
+@@ -260,6 +261,7 @@
+                                    AVBufferRef* (*alloc)(void *opaque, size_t size),
+                                    void (*pool_free)(void *opaque))
+ {
++    FF2_GUARD;
+     AVBufferPool *pool = av_mallocz(sizeof(*pool));
+     if (!pool)
+         return NULL;
+@@ -271,17 +273,21 @@
+ 
+     pool->size      = size;
+     pool->opaque    = opaque;
++    if (alloc || pool_free) ff2_fail(125);
+     pool->alloc2    = alloc;
+     pool->alloc     = av_buffer_alloc; // fallback
+     pool->pool_free = pool_free;
+ 
+     atomic_init(&pool->refcount, 1);
+ 
++    uint64_t call = ff2_begin(FF2_CREATE, FF2_BUFFER, NULL, size, pool->alloc == av_buffer_allocz, NULL);
++    ff2_end(call, pool);
+     return pool;
+ }
+ 
+ AVBufferPool *av_buffer_pool_init(size_t size, AVBufferRef* (*alloc)(size_t size))
+ {
++    FF2_GUARD;
+     AVBufferPool *pool = av_mallocz(sizeof(*pool));
+     if (!pool)
+         return NULL;
+@@ -292,10 +298,13 @@
+     }
+ 
+     pool->size     = size;
++    if (alloc && alloc != av_buffer_alloc && alloc != av_buffer_allocz) ff2_fail(126);
+     pool->alloc    = alloc ? alloc : av_buffer_alloc;
+ 
+     atomic_init(&pool->refcount, 1);
+ 
++    uint64_t call = ff2_begin(FF2_CREATE, FF2_BUFFER, NULL, size, pool->alloc == av_buffer_allocz, NULL);
++    ff2_end(call, pool);
+     return pool;
+ }
+ 
+@@ -305,6 +314,7 @@
+         BufferPoolEntry *buf = pool->pool;
+         pool->pool = buf->next;
+ 
++        ff2_drop(FF2_BUFFER, pool, buf->data);
+         buf->free(buf->opaque, buf->data);
+         av_freep(&buf);
+     }
+@@ -327,11 +337,13 @@
+ 
+ void av_buffer_pool_uninit(AVBufferPool **ppool)
+ {
++    FF2_GUARD;
+     AVBufferPool *pool;
+ 
+     if (!ppool || !*ppool)
+         return;
+     pool   = *ppool;
++    uint64_t call = ff2_begin(FF2_CLOSE, FF2_BUFFER, pool, 0, 0, NULL);
+     *ppool = NULL;
+ 
+     ff_mutex_lock(&pool->mutex);
+@@ -340,12 +352,15 @@
+ 
+     if (atomic_fetch_sub_explicit(&pool->refcount, 1, memory_order_acq_rel) == 1)
+         buffer_pool_free(pool);
++    ff2_end(call, NULL);
+ }
+ 
+ static void pool_release_buffer(void *opaque, uint8_t *data)
+ {
++    FF2_GUARD;
+     BufferPoolEntry *buf = opaque;
+     AVBufferPool *pool = buf->pool;
++    uint64_t call = ff2_begin(FF2_RETURN, FF2_BUFFER, pool, 0, 0, data);
+ 
+     ff_mutex_lock(&pool->mutex);
+     buf->next = pool->pool;
+@@ -354,6 +369,7 @@
+ 
+     if (atomic_fetch_sub_explicit(&pool->refcount, 1, memory_order_acq_rel) == 1)
+         buffer_pool_free(pool);
++    ff2_end(call, NULL);
+ }
+ 
+ /* allocate a new buffer and override its free() callback so that
+@@ -376,6 +392,7 @@
+         return NULL;
+     }
+ 
++    ff2_new(FF2_BUFFER, pool, ret->data);
+     buf->data   = ret->buffer->data;
+     buf->opaque = ret->buffer->opaque;
+     buf->free   = ret->buffer->free;
+@@ -389,6 +406,8 @@
+ 
+ AVBufferRef *av_buffer_pool_get(AVBufferPool *pool)
+ {
++    FF2_GUARD;
++    uint64_t call = ff2_begin(FF2_GET, FF2_BUFFER, pool, 0, 0, NULL);
+     AVBufferRef *ret;
+     BufferPoolEntry *buf;
+ 
+@@ -411,6 +430,7 @@
+     if (ret)
+         atomic_fetch_add_explicit(&pool->refcount, 1, memory_order_relaxed);
+ 
++    ff2_end(call, ret ? ret->data : NULL);
+     return ret;
+ }
+ 
+diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
+--- a/libavutil/refstruct.c
++++ b/libavutil/refstruct.c
+@@ -28,6 +28,7 @@
+ #include "mem.h"
+ #include "mem_internal.h"
+ #include "thread.h"
++#include "trace.h"
+ 
+ #ifndef REFSTRUCT_CHECKED
+ #ifndef ASSERT_LEVEL
+@@ -117,8 +118,11 @@
+     return obj;
+ }
+ 
++static uint64_t ff2_unref_begin(RefCount *ref, void *obj);
++
+ void av_refstruct_unref(void *objp)
+ {
++    FF2_GUARD;
+     void *obj;
+     RefCount *ref;
+ 
+@@ -129,9 +133,11 @@
+ 
+     ref = get_refcount(obj);
+     if (atomic_fetch_sub_explicit(&ref->refcount, 1, memory_order_acq_rel) == 1) {
++        uint64_t call = ff2_unref_begin(ref, obj);
+         if (ref->free_cb)
+             ref->free_cb(ref->opaque, obj);
+         ref->free(ref);
++        if (call) ff2_end(call, NULL);
+     }
+ 
+     return;
+@@ -205,18 +211,36 @@
+     AVMutex mutex;
+ };
+ 
++static void pool_return_entry(void *ref);
++static void pool_unref(void *ref);
++static uint64_t ff2_unref_begin(RefCount *ref, void *obj)
++{
++    if (ref->free == pool_return_entry)
++        return ff2_begin(FF2_RETURN, FF2_REFSTRUCT, ref->opaque.nc, 0, 0, obj);
++    if (ref->free == pool_unref)
++        return ff2_begin(FF2_CLOSE, FF2_REFSTRUCT, obj, 0, 0, NULL);
++    return 0;
++}
++
+ static void pool_free(AVRefStructPool *pool)
+ {
+     ff_mutex_destroy(&pool->mutex);
+-    if (pool->free_cb)
++    if (pool->free_cb) {
++        uint64_t call = ff2_callback(FF2_REFSTRUCT, pool, NULL, FF2_FREE_POOL_CB);
+         pool->free_cb(pool->opaque);
++        ff2_end(call, NULL);
++    }
+     av_free(get_refcount(pool));
+ }
+ 
+ static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
+ {
+-    if (pool->free_entry_cb)
++    if (pool->free_entry_cb) {
++        uint64_t call = ff2_callback(FF2_REFSTRUCT, pool, get_userdata(ref), FF2_FREE_ENTRY_CB);
+         pool->free_entry_cb(pool->opaque, get_userdata(ref));
++        ff2_end(call, NULL);
++    }
++    ff2_drop(FF2_REFSTRUCT, pool, get_userdata(ref));
+     av_free(ref);
+ }
+ 
+@@ -244,11 +268,15 @@
+ {
+     AVRefStructPool *pool = opaque.nc;
+ 
++    uint64_t call = ff2_callback(FF2_REFSTRUCT, pool, entry, FF2_RESET_CB);
+     pool->reset_cb(pool->opaque, entry);
++    ff2_end(call, NULL);
+ }
+ 
+ static int refstruct_pool_get_ext(void *datap, AVRefStructPool *pool)
+ {
++    FF2_GUARD;
++    uint64_t call = ff2_begin(FF2_GET, FF2_REFSTRUCT, pool, 0, 0, NULL);
+     void *ret = NULL;
+ 
+     memcpy(datap, &(void *){ NULL }, sizeof(void*));
+@@ -272,8 +300,12 @@
+             return AVERROR(ENOMEM);
+         ref = get_refcount(ret);
+         ref->free = pool_return_entry;
++        ff2_new(FF2_REFSTRUCT, pool, ret);
+         if (pool->init_cb) {
++            uint64_t cb = ff2_callback(FF2_REFSTRUCT, pool, ret, FF2_INIT_CB);
+             int err = pool->init_cb(pool->opaque, ret);
++            ff2_end(cb, NULL);
++            if (err < 0) ff2_fail(127);
+             if (err < 0) {
+                 if (pool->pool_flags & AV_REFSTRUCT_POOL_FLAG_RESET_ON_INIT_ERROR)
+                     pool->reset_cb(pool->opaque, ret);
+@@ -290,6 +322,7 @@
+         memset(ret, 0, pool->size);
+ 
+     memcpy(datap, &ret, sizeof(ret));
++    ff2_end(call, ret);
+ 
+     return 0;
+ }
+@@ -344,6 +377,7 @@
+                                                void (*free_entry_cb)(AVRefStructOpaque opaque, void *obj),
+                                                void (*free_cb)(AVRefStructOpaque opaque))
+ {
++    FF2_GUARD;
+     AVRefStructPool *pool = av_refstruct_alloc_ext(sizeof(*pool), 0, NULL,
+                                                    refstruct_pool_uninit);
+     int err;
+@@ -382,5 +416,12 @@
+         av_free(get_refcount(pool));
+         return NULL;
+     }
++    uint64_t trace_flags = flags;
++    if (init_cb) trace_flags |= FF2_HAS_INIT;
++    if (reset_cb) trace_flags |= FF2_HAS_RESET;
++    if (free_entry_cb) trace_flags |= FF2_HAS_FREE_ENTRY;
++    if (free_cb) trace_flags |= FF2_HAS_FREE_POOL;
++    uint64_t call = ff2_begin(FF2_CREATE, FF2_REFSTRUCT, NULL, size, trace_flags, NULL);
++    ff2_end(call, pool);
+     return pool;
+ }
+diff --git a/libavutil/Makefile b/libavutil/Makefile
+--- a/libavutil/Makefile
++++ b/libavutil/Makefile
+@@ -110,7 +110,7 @@
+ BUILT_HEADERS = avconfig.h                                              \
+                 ffversion.h
+ 
+-OBJS = adler32.o                                                        \
++OBJS = ff2_record.o ff2_observe.o adler32.o                                                        \
+        aes.o                                                            \
+        aes_ctr.o                                                        \
+        ambient_viewing_environment.o                                    \

@@ -1,3 +1,14 @@
+Subject: [PATCH 3/4] Store Sublet chunk and block metadata indices
+Upstream: postgresql 17.5
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2
+Upstream-SHA256: fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8
+Build-Variants: Sublet Capstone replay
+Depends-On: postgresql-17.5-0002-memorychunk-capstone-alignment.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Use the capability-layout padding for side-table indices without
+increasing MemoryChunk beyond the spatial capability layout.
+
 # What the Sublet port needs from the chunk header, on top of the padding the
 # capability build already forced.
 #
@@ -26,8 +37,9 @@
 # header does not grow by one byte over the unprotected capability build.
 # That is worth stating plainly, because the discipline's per-object cost is
 # the sixteen-byte capability in the side table and not a wider chunk.
---- memutils_memorychunk.h
-+++ memutils_memorychunk.h
+diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
+--- a/src/include/utils/memutils_memorychunk.h
++++ b/src/include/utils/memutils_memorychunk.h
 @@ -128,18 +128,19 @@
  #endif
  
@@ -43,7 +55,7 @@
 +	 * entry it belongs to by index, because it cannot say it by offset: a
 +	 * block's header is not at the front of the block under the Sublet port,
 +	 * and a capability cannot be made to reach out of the object it was given
-+	 * for.  See port/memorychunk-sublet.patch.
++	 * for.  See patches/postgresql-17.5-0003-memorychunk-sublet-metadata-indices.patch.
  	 *
 -	 * Padding rather than widening hdrmask, which must stay last and stay
 -	 * one word: MemoryChunkSetHdrMask and its readers are written against

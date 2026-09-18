@@ -1,3 +1,14 @@
+Subject: [PATCH 1/4] Use 16-byte AllocSet size classes for capability pointers
+Upstream: postgresql 17.5
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2
+Upstream-SHA256: fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8
+Build-Variants: spatial and Sublet Capstone replays
+Depends-On: none (pristine release)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Raise the smallest chunk to hold a capability free-list link while
+retaining the 8 KiB size-class ceiling.
+
 # Two lines that a 16-byte pointer forces on aset.c, and the allocator says so
 # itself: StaticAssertDecl(sizeof(AllocFreeListLink) <= (1 << ALLOC_MINBITS)).
 # The free list of a size class lives inside the freed chunk, so the smallest
@@ -11,8 +22,9 @@
 # size classes on a capability machine are 16 to 8192, not 8 to 8192, so the
 # sequence of blocks differs from the x86 run and the host gate's exact block
 # count does not carry over.
---- aset.c
-+++ aset.c
+diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
+--- a/src/backend/utils/mmgr/aset.c
++++ b/src/backend/utils/mmgr/aset.c
 @@ -80,8 +80,10 @@
   *--------------------
   */

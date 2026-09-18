@@ -1,0 +1,193 @@
+Subject: [PATCH 2/2] Route pool payloads and reference metadata through lifetime hooks
+Upstream: ffmpeg 9.0.1
+Upstream-Archive: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
+Upstream-SHA256: cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635
+Build-Variants: ported native and Capstone replays
+Depends-On: ffmpeg-9.0.1-0001-libavutil-pool-event-instrumentation.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Separate AVBufferPool payload allocation from metadata allocation. Retain
+an address for each cached entry and issue/return its payload through the
+backend. Route AVRefStruct metadata and payload access through the same
+lifetime interface. The native or Capstone backend supplies those hooks.
+
+diff --git a/libavutil/buffer.c b/libavutil/buffer.c
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -72,7 +72,7 @@
+ 
+ void av_buffer_default_free(void *opaque, uint8_t *data)
+ {
+-    av_free(data);
++    ff2_payload_free(data);
+ }
+ 
+ AVBufferRef *av_buffer_alloc(size_t size)
+@@ -80,13 +80,13 @@
+     AVBufferRef *ret = NULL;
+     uint8_t    *data = NULL;
+ 
+-    data = av_malloc(size);
++    data = ff2_payload_alloc(size);
+     if (!data)
+         return NULL;
+ 
+     ret = av_buffer_create(data, size, av_buffer_default_free, NULL, 0);
+     if (!ret)
+-        av_freep(&data);
++        ff2_payload_free(data);
+ 
+     return ret;
+ }
+@@ -314,6 +314,7 @@
+         BufferPoolEntry *buf = pool->pool;
+         pool->pool = buf->next;
+ 
++        buf->data = ff2_payload_issue(buf->ff2_address);
+         ff2_drop(FF2_BUFFER, pool, buf->data);
+         buf->free(buf->opaque, buf->data);
+         av_freep(&buf);
+@@ -361,6 +362,8 @@
+     BufferPoolEntry *buf = opaque;
+     AVBufferPool *pool = buf->pool;
+     uint64_t call = ff2_begin(FF2_RETURN, FF2_BUFFER, pool, 0, 0, data);
++    ff2_payload_return(data);
++    buf->data = NULL;
+ 
+     ff_mutex_lock(&pool->mutex);
+     buf->next = pool->pool;
+@@ -393,6 +396,7 @@
+     }
+ 
+     ff2_new(FF2_BUFFER, pool, ret->data);
++    buf->ff2_address = (uintptr_t)ret->buffer->data;
+     buf->data   = ret->buffer->data;
+     buf->opaque = ret->buffer->opaque;
+     buf->free   = ret->buffer->free;
+@@ -414,6 +418,7 @@
+     ff_mutex_lock(&pool->mutex);
+     buf = pool->pool;
+     if (buf) {
++        buf->data = ff2_payload_issue(buf->ff2_address);
+         memset(&buf->buffer, 0, sizeof(buf->buffer));
+         ret = buffer_create(&buf->buffer, buf->data, pool->size,
+                             pool_release_buffer, buf, 0);
+@@ -421,6 +426,9 @@
+             pool->pool = buf->next;
+             buf->next = NULL;
+             buf->buffer.flags_internal |= BUFFER_FLAG_NO_FREE;
++        } else {
++            ff2_payload_return(buf->data);
++            buf->data = NULL;
+         }
+     } else {
+         ret = pool_alloc_buffer(pool);
+diff --git a/libavutil/buffer_internal.h b/libavutil/buffer_internal.h
+--- a/libavutil/buffer_internal.h
++++ b/libavutil/buffer_internal.h
+@@ -66,6 +66,7 @@
+ };
+ 
+ typedef struct BufferPoolEntry {
++    uintptr_t ff2_address;
+     uint8_t *data;
+ 
+     /*
+diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
+--- a/libavutil/refstruct.c
++++ b/libavutil/refstruct.c
+@@ -70,21 +70,21 @@
+ 
+ static RefCount *get_refcount(void *obj)
+ {
+-    RefCount *ref = (RefCount*)((char*)obj - REFCOUNT_OFFSET);
++    RefCount *ref = (RefCount*)ff2_ref_meta(obj);
+     ff_assert(ref->cookie == REFSTRUCT_COOKIE);
+     return ref;
+ }
+ 
+ static const RefCount *cget_refcount(const void *obj)
+ {
+-    const RefCount *ref = (const RefCount*)((const char*)obj - REFCOUNT_OFFSET);
++    const RefCount *ref = (const RefCount*)ff2_ref_meta(obj);
+     ff_assert(ref->cookie == REFSTRUCT_COOKIE);
+     return ref;
+ }
+ 
+ static void *get_userdata(void *buf)
+ {
+-    return (char*)buf + REFCOUNT_OFFSET;
++    return ff2_ref_data(buf);
+ }
+ 
+ static void refcount_init(RefCount *ref, AVRefStructOpaque opaque,
+@@ -93,7 +93,7 @@
+     atomic_init(&ref->refcount, 1);
+     ref->opaque  = opaque;
+     ref->free_cb = free_cb;
+-    ref->free    = av_free;
++    ref->free    = ff2_ref_free;
+ 
+ #if REFSTRUCT_CHECKED
+     ref->cookie  = REFSTRUCT_COOKIE;
+@@ -107,7 +107,7 @@
+ 
+     if (size > SIZE_MAX - REFCOUNT_OFFSET)
+         return NULL;
+-    buf = av_malloc(size + REFCOUNT_OFFSET);
++    buf = ff2_ref_alloc(size, sizeof(RefCount));
+     if (!buf)
+         return NULL;
+     refcount_init(buf, opaque, free_cb);
+@@ -230,7 +230,7 @@
+         pool->free_cb(pool->opaque);
+         ff2_end(call, NULL);
+     }
+-    av_free(get_refcount(pool));
++    ff2_ref_free(get_refcount(pool));
+ }
+ 
+ static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
+@@ -241,13 +241,14 @@
+         ff2_end(call, NULL);
+     }
+     ff2_drop(FF2_REFSTRUCT, pool, get_userdata(ref));
+-    av_free(ref);
++    ff2_ref_free(ref);
+ }
+ 
+ static void pool_return_entry(void *ref_)
+ {
+     RefCount *ref = ref_;
+     AVRefStructPool *pool = ref->opaque.nc;
++    ff2_ref_return(ref);
+ 
+     ff_mutex_lock(&pool->mutex);
+     if (!pool->uninited) {
+@@ -285,7 +286,7 @@
+     ff_assert(!pool->uninited);
+     if (pool->available_entries) {
+         RefCount *ref = pool->available_entries;
+-        ret = get_userdata(ref);
++        ret = ff2_ref_issue(ref);
+         pool->available_entries = ref->opaque.nc;
+         ref->opaque.nc = pool;
+         atomic_init(&ref->refcount, 1);
+@@ -311,7 +312,7 @@
+                     pool->reset_cb(pool->opaque, ret);
+                 if (pool->pool_flags & AV_REFSTRUCT_POOL_FLAG_FREE_ON_INIT_ERROR)
+                     pool->free_entry_cb(pool->opaque, ret);
+-                av_free(ref);
++                ff2_ref_free(ref);
+                 return err;
+             }
+         }
+@@ -413,7 +414,7 @@
+     if (err) {
+         // Don't call av_refstruct_uninit() on pool, as it hasn't been properly
+         // set up and is just a POD right now.
+-        av_free(get_refcount(pool));
++        ff2_ref_free(get_refcount(pool));
+         return NULL;
+     }
+     uint64_t trace_flags = flags;

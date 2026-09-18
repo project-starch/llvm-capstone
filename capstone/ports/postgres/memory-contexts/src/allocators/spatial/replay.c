@@ -156,7 +156,7 @@ void pg_domain_entry(unsigned *res, unsigned func) {
   row("blocks held at once, most", c.was_peak, got_peak);
 
   /* The size classes differ from the host's, because a capability does not
-     fit in an eight-byte chunk (port/aset-capstone.patch), so the block
+     fit in an eight-byte chunk (patches/postgresql-17.5-0001-allocset-capstone-size-classes.patch), so the block
      counts are not expected to match the backend's. What must match is the
      calls, and that the manager gave back what it took. */
   pg_domain_text(got_given + pg_level0_live == got_taken

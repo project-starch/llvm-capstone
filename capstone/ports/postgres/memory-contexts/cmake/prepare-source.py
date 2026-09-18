@@ -10,6 +10,7 @@ import tarfile
 import tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--patch-tool", default="patch")
 for name in ("archive", "source", "variants", "patches"):
     parser.add_argument("--" + name, type=Path, required=True)
 for name in ("version", "sha256", "cc", "make"):
@@ -87,9 +88,18 @@ def patched(original, patches):
         with tempfile.TemporaryDirectory(dir=args.variants) as temporary:
             target = Path(temporary) / original.name
             target.write_bytes(data)
-            with (args.patches / name).open("rb") as patch:
+            patch_path = args.patches / f"postgresql-{args.version}-{name}.patch"
+            with patch_path.open("rb") as patch:
                 subprocess.run(
-                    ["patch", "--batch", "-s", "-F0", "-p0", str(target)],
+                    [
+                        args.patch_tool,
+                        "--batch",
+                        "--forward",
+                        "--fuzz=0",
+                        "-s",
+                        "-p1",
+                        str(target),
+                    ],
                     stdin=patch,
                     check=True,
                 )
@@ -100,19 +110,23 @@ def patched(original, patches):
 args.variants.mkdir(parents=True, exist_ok=True)
 for mode in ("spatial", "sublet"):
     root = args.variants / mode
-    suffixes = ["capstone"] + (["sublet"] if mode == "sublet" else [])
+    aset_patches = ["0001-allocset-capstone-size-classes"]
+    chunk_patches = ["0002-memorychunk-capstone-alignment"]
+    if mode == "sublet":
+        chunk_patches.append("0003-memorychunk-sublet-metadata-indices")
+        aset_patches.append("0004-allocset-sublet-context-revocation")
     put(
         root / "aset.c",
         patched(
             args.source / "src/backend/utils/mmgr/aset.c",
-            [f"aset-{s}.patch" for s in suffixes],
+            aset_patches,
         ),
     )
     put(
         root / "include/utils/memutils_memorychunk.h",
         patched(
             args.source / "src/include/utils/memutils_memorychunk.h",
-            [f"memorychunk-{s}.patch" for s in suffixes],
+            chunk_patches,
         ),
     )
     text = config.read_text()

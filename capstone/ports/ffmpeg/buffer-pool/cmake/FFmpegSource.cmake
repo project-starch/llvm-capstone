@@ -4,6 +4,7 @@ set(FFMPEG_SHA256 "${UPSTREAM_sha256}")
 set(FFPOOL_ARCHIVE "${FFPOOL_WORK}/download/ffmpeg-${FFMPEG_VERSION}.tar.xz"
   CACHE FILEPATH "Pinned FFmpeg archive; prepopulate for offline builds")
 port_download("${FFPOOL_ARCHIVE}")
+find_program(PORT_PATCH_TOOL NAMES patch REQUIRED)
 
 function(ffpool_source variant)
   set(source_dir "${CMAKE_BINARY_DIR}/sources/ffmpeg-${variant}")
@@ -11,18 +12,20 @@ function(ffpool_source variant)
   set(dependencies "${FFPOOL_ARCHIVE}" "${PROJECT_SOURCE_DIR}/cmake/prepare-source.py")
   if(NOT variant STREQUAL "stock")
     list(APPEND dependencies
-      "${PROJECT_SOURCE_DIR}/host/instrument-pools.py"
+      "${PROJECT_SOURCE_DIR}/patches/ffmpeg-${FFMPEG_VERSION}-0001-libavutil-pool-event-instrumentation.patch"
       "${PROJECT_SOURCE_DIR}/src/native/ffmpeg/record-pool-events.c"
       "${PROJECT_SOURCE_DIR}/src/shared/observe-pool-events.c"
       "${PROJECT_SOURCE_DIR}/src/shared/trace.h")
   endif()
   if(variant STREQUAL "ported")
-    list(APPEND dependencies "${PROJECT_SOURCE_DIR}/patches/apply-pool-port.py")
+    list(APPEND dependencies
+      "${PROJECT_SOURCE_DIR}/patches/ffmpeg-${FFMPEG_VERSION}-0002-libavutil-pool-payload-lifetime-hooks.patch")
   endif()
   add_custom_command(OUTPUT "${stamp}"
     BYPRODUCTS "${source_dir}/libavutil/buffer.c" "${source_dir}/libavutil/refstruct.c"
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/cmake/prepare-source.py"
       "${FFPOOL_ARCHIVE}" "${FFMPEG_SHA256}" "${FFMPEG_VERSION}" "${source_dir}" "${variant}"
+      --patch-tool "${PORT_PATCH_TOOL}"
     DEPENDS ${dependencies}
     COMMENT "Preparing SHA-verified FFmpeg ${variant} sources"
     VERBATIM)

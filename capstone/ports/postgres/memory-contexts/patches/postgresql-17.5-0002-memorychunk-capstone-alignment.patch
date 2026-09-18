@@ -1,3 +1,14 @@
+Subject: [PATCH 2/4] Align MemoryChunk payloads for 16-byte capabilities
+Upstream: postgresql 17.5
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2
+Upstream-SHA256: fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8
+Build-Variants: spatial and Sublet Capstone replays
+Depends-On: none (pristine release)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Pad MemoryChunk to preserve capability alignment. The build also sets
+MAXIMUM_ALIGNOF to 16 in each variant of generated pg_config.h.
+
 # Two changes a capability machine forces on the chunk layout, and the second
 # is why the first is not enough.
 #
@@ -16,8 +27,9 @@
 # both are the metadata-layout class the port bookkeeping counts.
 #
 # The cost is real and belongs in the measurement: eight bytes on every chunk.
---- memutils_memorychunk.h
-+++ memutils_memorychunk.h
+diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
+--- a/src/include/utils/memutils_memorychunk.h
++++ b/src/include/utils/memutils_memorychunk.h
 @@ -127,6 +127,19 @@
  	Size		requested_size;
  #endif

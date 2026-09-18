@@ -6,10 +6,12 @@ port_download("${PG_ARCHIVE}")
 set(PG_SOURCE "${CMAKE_BINARY_DIR}/source/postgresql-${PG_VERSION}")
 find_program(PG_HOST_CC NAMES cc gcc REQUIRED)
 find_program(PG_MAKE NAMES gmake make REQUIRED)
+find_program(PORT_PATCH_TOOL NAMES patch REQUIRED)
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare-source.py"
   --archive "${PG_ARCHIVE}" --version "${PG_VERSION}" --sha256 "${PG_SHA256}"
   --source "${PG_SOURCE}" --variants "${CMAKE_BINARY_DIR}/variants"
   --patches "${PROJECT_SOURCE_DIR}/patches" --cc "${PG_HOST_CC}" --make "${PG_MAKE}"
+  --patch-tool "${PORT_PATCH_TOOL}"
   RESULT_VARIABLE prepare_status)
 if(NOT prepare_status EQUAL 0)
   message(FATAL_ERROR "PostgreSQL source preparation failed; see source/prepare.log in this build.")

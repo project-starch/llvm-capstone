@@ -1,6 +1,19 @@
+Subject: [PATCH 4/4] Adapt AllocSet to revocable Sublet context pools
+Upstream: postgresql 17.5
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2
+Upstream-SHA256: fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8
+Build-Variants: Sublet Capstone replay
+Depends-On: postgresql-17.5-0001-allocset-capstone-size-classes.patch
+  postgresql-17.5-0003-memorychunk-sublet-metadata-indices.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Move allocator bookkeeping outside revocable payloads and route chunk
+allocation, return, context reset and deletion through pg_subpool.h.
+The companion .patch.classes file preserves the hunk effort inventory.
+
 # PostgreSQL's aset.c under Sublet.
 #
-# Applied on top of aset-capstone.patch, which is the change any machine with
+# Applied on top of postgresql-17.5-0001-allocset-capstone-size-classes.patch, which is the change any machine with
 # sixteen-byte pointers needs.  This one is the discipline: every chunk gets
 # bounds of its own, every free revokes what the program still holds, and a
 # context's whole heap dies in one revocation.
@@ -55,8 +68,9 @@
 # are two reallocs and one takes that path, the timezone parser at startup
 # with 5 120 bytes.  See experiments/a11/postgres/reallocs.py in the paper.
 #
---- aset.c
-+++ aset.c
+diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
+--- a/src/backend/utils/mmgr/aset.c
++++ b/src/backend/utils/mmgr/aset.c
 @@ -49,6 +49,11 @@
  #include "port/pg_bitutils.h"
  #include "utils/memdebug.h"
@@ -64,7 +78,7 @@
 +
 +/* The level below, under Sublet: one sub-pool per context under one handle,
 + * and the block and chunk tables that have to live where no revocation
-+ * reaches them.  See ports/postgres/sublet/README.md. */
++ * reaches them.  See src/allocators/sublet/pg_subpool.h. */
 +#include "pg_subpool.h"
  #include "utils/memutils_internal.h"
  #include "utils/memutils_memorychunk.h"
@@ -200,7 +214,7 @@
 + * first dereference would fault.  So the chunk carries the index of its
 + * block's entry, in the eight bytes a sixteen-byte capability had already
 + * forced as padding, and the header does not grow by one byte for it.  See
-+ * port/memorychunk-sublet.patch.
++ * patches/postgresql-17.5-0003-memorychunk-sublet-metadata-indices.patch.
 + *
 + * This replaces two macros with one, because the arithmetic the two of them
 + * did differed only in which offset it subtracted, and neither can be done.
