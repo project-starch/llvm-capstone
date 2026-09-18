@@ -1,0 +1,19 @@
+{
+  "backing_bytes": {
+    "replay-spatial": "Unfreed manager backing allocations, including first-fit headers; reusable arena holes excluded",
+    "replay-sublet": "All subpool extents carved from the arena, including returned/cached pools; these extents do not coalesce into the arena"
+  },
+  "assigned_backing_bytes": "Backing assigned to managers and their caches; Sublet excludes pools returned to its backing free list",
+  "block_bytes": "Backing held in PostgreSQL blocks; contains payload, headers, rounding and free capacity",
+  "stranded_block_bytes": "Sublet carved block bytes whose bookkeeping was freed, unavailable until pool reset",
+  "metadata_records_live_bytes": "Active Sublet pool/block/chunk records and context-header slots, including embedded capability slots",
+  "metadata_records_reserved_bytes": "All static Sublet record arrays and header free-index array; live records are included, not additive",
+  "nodes_created_cumulative": "Sublet split + mrev operations; cumulative identifier demand, excluding monitor/loader operations, not live-node occupancy",
+  "init_bytes_cumulative": "Bytes initialized by Sublet pool revocation, excluding loader setup/cleanup",
+  "arena_capacity_bytes": "Available manager arena; the loader reserves this full amount for both arms regardless of the backing occupancy curve",
+  "observer_bytes": "Dynamic profiling context table, inside separate replay scratch",
+  "peaks": "Exact maxima at replay operation boundaries; internal transient allocations during one operation are not separately sampled",
+  "snapshots": "First 64 events, each 1024th event, every reset/delete, final event and exact peak witnesses",
+  "scope": "Memory behaviour of allocator replays. No QEMU timing, FPGA result or security claim. Full application RSS and global node/tag storage are not measured.",
+  "comparison": "Same trace and target ABI, with matching arena budgets. Spatial and Sublet use different backing policies and layouts; differences are complete-port effects, not isolated revocation-instruction overhead."
+}

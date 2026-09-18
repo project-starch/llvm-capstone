@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from analyze import HEADER, RECORD, analyze, trace_memory
-from run import retryable_boot_failure
+from run import loader_stopped_before_sharing, retryable_boot_failure
 
 
 class MemoryAccounting(unittest.TestCase):
@@ -142,6 +142,21 @@ class BootRetryControl(unittest.TestCase):
             (run / "serial.log").write_text("kernel boot output\n")
             (run / "verdict.json").write_text('{"passed": false, "runner_exit": 1}')
             self.assertFalse(retryable_boot_failure(directory))
+
+    def test_explicit_setup_retry_rejects_shared_regions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            run = directory / "run"
+            run.mkdir()
+            (directory / "runner.log").write_text("pexpect.exceptions.TIMEOUT\n")
+            (run / "verdict.json").write_text('{"passed": false, "runner_exit": 1}')
+            (run / "serial.log").write_text("PG: dom=0\nPG: r3=14\n")
+            self.assertTrue(loader_stopped_before_sharing(directory))
+            self.assertFalse(retryable_boot_failure(directory))
+            (run / "serial.log").write_text("PG: r3=14\nPG: shared\n")
+            self.assertFalse(loader_stopped_before_sharing(directory))
+            (run / "serial.log").write_text("PG: shared\nPG: r3=14\n")
+            self.assertFalse(loader_stopped_before_sharing(directory))
 
 
 if __name__ == "__main__":

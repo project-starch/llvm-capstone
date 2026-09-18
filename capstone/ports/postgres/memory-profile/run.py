@@ -51,6 +51,26 @@ def retryable_boot_failure(directory):
     )
 
 
+def loader_stopped_before_sharing(directory):
+    # This permits an explicit retry, never an automatic one. The loader has
+    # created regions, but its trace-loaded and shared markers are absent.
+    verdicts = list(directory.glob("*/verdict.json"))
+    if len(verdicts) != 1:
+        return False
+    verdict = json.loads(verdicts[0].read_text())
+    serial = (verdicts[0].parent / "serial.log").read_text(errors="replace")
+    log = (directory / "runner.log").read_text(errors="replace")
+    lines = serial.splitlines()
+    return (
+        verdict["runner_exit"] == 1
+        and "pexpect.exceptions.TIMEOUT" in log
+        and bool(lines)
+        and lines[-1].startswith("PG: r3=")
+        and "PG: trace bytes=" not in serial
+        and "PG: shared" not in serial
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("domain_build", type=Path)
@@ -64,7 +84,14 @@ def main():
         action="store_true",
         help="Verify and reuse completed runs; retain every failed attempt",
     )
+    parser.add_argument(
+        "--retry-loader-setup",
+        action="store_true",
+        help="On resume, explicitly retry a timeout before trace/arena sharing; retain the failed attempt",
+    )
     args = parser.parse_args()
+    if args.retry_loader_setup and not args.resume:
+        parser.error("--retry-loader-setup requires --resume")
     if args.repetitions < 1:
         parser.error("repetitions must be positive")
     traces = {}
@@ -139,11 +166,18 @@ def main():
         }
         for entry in previous:
             if entry["runner_exit"] != 0:
-                if not retryable_boot_failure(args.output / entry["directory"]):
+                directory = args.output / entry["directory"]
+                if retryable_boot_failure(directory):
+                    entry["failure_phase"] = "boot-login"
+                elif args.retry_loader_setup and loader_stopped_before_sharing(
+                    directory
+                ):
+                    entry["failure_phase"] = "loader-setup-before-share"
+                    entry["explicit_setup_retry"] = True
+                else:
                     raise SystemExit(
-                        "Cannot resume past a workload failure; use a new campaign"
+                        "Cannot resume past this failure; inspect it and use a new campaign"
                     )
-                entry["failure_phase"] = "boot-login"
                 continue
             artifacts = args.output / entry["artifacts"]
             identity = json.loads((artifacts / "manifest.json").read_text())

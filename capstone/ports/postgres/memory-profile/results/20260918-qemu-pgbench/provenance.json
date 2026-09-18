@@ -1,0 +1,892 @@
+{
+  "scope": "QEMU allocator memory behaviour; no FPGA or security experiments",
+  "comparison": "Complete port comparison; backing policy and layout differ",
+  "repetitions": 3,
+  "tool_sha256": {
+    "run.py": "d76d0c1e63267c03d2446a14097404d37734802831d3b3fd47e0f957f679d7bf",
+    "analyze.py": "8b669e1ee447800d58819d5894ff4d3a87c12c0a7cc898c668e7ea2018fffc6e",
+    "run-qemu.py": "67b21a63f0cfb1e817d8c723762d9d49b9890b7fa40993298c0903c691db0d40"
+  },
+  "instrumentation_counts_match": true,
+  "repeated_profiles_identical": true,
+  "runs": [
+    {
+      "workload": "readonly",
+      "program": "replay-spatial",
+      "repetition": 0,
+      "profile": false,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": false,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "1cd1f0a74768ab39d54114d6eaccc16975d5b4d5c1fd1001ea4e10a4f0f44ea7",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "668688a9b134a67de42b4d7ef9e6a42ddf4093682f9cda2f4da145e8a141d4a0"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-sublet",
+      "repetition": 0,
+      "profile": false,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": false,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "3816a8ec621ce618896acd1019a8c3aaedb5c1c70c542218bd09e6da1c496279",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "1bdf14862000ea618d16dbbdbad8d7881dde650e07fc1951db3266eddb155631"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-spatial",
+      "repetition": 1,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "7fc607ea2143bf18eef4e615f4df89e81b0330bf6029d8146ac81d3bd099e2f4",
+        "share/payload.log": "48e1eb473acb125d59049dffdaeca36ae31a8835f545f101aa7fbf5463b7abe2"
+      },
+      "memory_csv_sha256": "980965fd527f1b9858a95e8f1e28dd3b10b192a19b21b12f4b92c18eed466030"
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-sublet",
+      "repetition": 1,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "4aa338c5c9edbf9b4f33b210f9105648c4dba0bb893f59eaf580afff1a25a2b6",
+        "share/payload.log": "918b0f11cec1a8b02d358a4b9c5a661fc7d620910b796160ff1e190824310e57"
+      },
+      "memory_csv_sha256": "a5382311a79b51769d3140d43697aeeaca20ba4212675d1c856ce32769a203a5"
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-sublet",
+      "repetition": 2,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "1821f5520935df81bf28f364da0f7c8b49a88c8779187841986779fa2318bd7f",
+        "share/payload.log": "918b0f11cec1a8b02d358a4b9c5a661fc7d620910b796160ff1e190824310e57"
+      },
+      "memory_csv_sha256": "a5382311a79b51769d3140d43697aeeaca20ba4212675d1c856ce32769a203a5"
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-spatial",
+      "repetition": 2,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "6a70cb89286a71ebb79f52f9975e349a35e1a284d30045800514ed31de6f1a9e",
+        "share/payload.log": "48e1eb473acb125d59049dffdaeca36ae31a8835f545f101aa7fbf5463b7abe2"
+      },
+      "memory_csv_sha256": "980965fd527f1b9858a95e8f1e28dd3b10b192a19b21b12f4b92c18eed466030"
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-spatial",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "901085bebd9414ba75d08706fb34eb113995700cea54691c61df8fa2e2b88181",
+        "share/payload.log": "48e1eb473acb125d59049dffdaeca36ae31a8835f545f101aa7fbf5463b7abe2"
+      },
+      "memory_csv_sha256": "980965fd527f1b9858a95e8f1e28dd3b10b192a19b21b12f4b92c18eed466030"
+    },
+    {
+      "workload": "readonly",
+      "program": "replay-sublet",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "a57b0e56a2336910d280d88141f09ba0c45a2e2215f29470d5328cbfec42721a"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "76e5806717378be4a8faa0c8fe9924f45f7b2e9fd8ec3d16336b85e0edf8f118",
+        "share/payload.log": "918b0f11cec1a8b02d358a4b9c5a661fc7d620910b796160ff1e190824310e57"
+      },
+      "memory_csv_sha256": "a5382311a79b51769d3140d43697aeeaca20ba4212675d1c856ce32769a203a5"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-spatial",
+      "repetition": 0,
+      "profile": false,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": false,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "1cd1f0a74768ab39d54114d6eaccc16975d5b4d5c1fd1001ea4e10a4f0f44ea7",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "4212ab8d60b77cddd8a3107a3292e624622c548ef3d6853883d6e87e49b11202"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 0,
+      "profile": false,
+      "runner_exit": 1,
+      "failure_phase": "boot-login",
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": false,
+        "runner_exit": 75,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": false,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "3816a8ec621ce618896acd1019a8c3aaedb5c1c70c542218bd09e6da1c496279",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "de02e955039347313bafa361e632bf6947179a43957abe7d12fb2b394404f414"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 0,
+      "profile": false,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": false,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "3816a8ec621ce618896acd1019a8c3aaedb5c1c70c542218bd09e6da1c496279",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "487b5b15bbd1263d05fb609683637ec0f463579091384a698e177736a9db038b"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-spatial",
+      "repetition": 1,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "5cb0f11e0698c600f315abd28cd36d73dfdc7eb2ccc6da4b73807daadb4aa145",
+        "share/payload.log": "168c1ce893dd4cf167621b36a4c682ccef83b03c595716b8dd8c8ff79bfb8612"
+      },
+      "memory_csv_sha256": "219aaf83da94d6a27ed9a33a7af43e2412337cef2dee65630ccb776d8b7df396"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 1,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "492602fe7d804da90e9691f31cc8b52ae4ce94f211a0115b54419f3efd1643a6",
+        "share/payload.log": "b409a05573a43632dfc60932280b819eccbce65c62c06e7834561f8b62918441"
+      },
+      "memory_csv_sha256": "3f66834e6b9e535055f0ae24cf87de8393c946a9e4ef8f5ed084559e393db03a"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 2,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "989bbdd7b8c1ac9f0b2ad84b3470786e7872a4a12a30decaee60b3a774278339",
+        "share/payload.log": "b409a05573a43632dfc60932280b819eccbce65c62c06e7834561f8b62918441"
+      },
+      "memory_csv_sha256": "3f66834e6b9e535055f0ae24cf87de8393c946a9e4ef8f5ed084559e393db03a"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-spatial",
+      "repetition": 2,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "a35c6dde6e14f1754b4a8a84d7c276f40e9d68f874a17c20f720af568541abc9",
+        "share/payload.log": "168c1ce893dd4cf167621b36a4c682ccef83b03c595716b8dd8c8ff79bfb8612"
+      },
+      "memory_csv_sha256": "219aaf83da94d6a27ed9a33a7af43e2412337cef2dee65630ccb776d8b7df396"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-spatial",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-spatial",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "ee734751639b778339d636a0f49421c7c53c89f48a3d016e2bf96e217811cd19",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "999e1eda166adee52a17e012ba8cca418645810d5668ac057c652fbc6c45502d",
+        "share/payload.log": "168c1ce893dd4cf167621b36a4c682ccef83b03c595716b8dd8c8ff79bfb8612"
+      },
+      "memory_csv_sha256": "219aaf83da94d6a27ed9a33a7af43e2412337cef2dee65630ccb776d8b7df396"
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 1,
+      "failure_phase": "loader-setup-before-share",
+      "explicit_setup_retry": true,
+      "verdict": {
+        "passed": false,
+        "runner_exit": 1,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "d6950ca3e6db5246ffd14d734fcec43acae8f172ee2bed46b737fc808717fe43"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 1,
+      "failure_phase": "boot-login",
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": false,
+        "runner_exit": 75,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "4ba45bdaf7000515ea6397488eaad06cd2b5ce30fa51f6eb3f4378bbf130e1ac"
+      },
+      "memory_csv_sha256": null
+    },
+    {
+      "workload": "tpcb",
+      "program": "replay-sublet",
+      "repetition": 3,
+      "profile": true,
+      "runner_exit": 0,
+      "failure_phase": null,
+      "explicit_setup_retry": false,
+      "verdict": {
+        "passed": true,
+        "runner_exit": 0,
+        "required": [
+          "__CAPSTONE_PG_REPLAY_BALANCED__",
+          "__CAPSTONE_PG_SUBLET_ONE_EACH__",
+          "__CAPSTONE_PG_REPLAY_DONE__",
+          "__CAPSTONE_PG_MEMORY_DONE__"
+        ]
+      },
+      "identity": {
+        "program": "replay-sublet",
+        "memory_profile": true,
+        "separate_scratch": true,
+        "regions": {
+          "payload": 16777216,
+          "arena": 67108864,
+          "trace": 67108864,
+          "scratch": 67108864
+        },
+        "node_capacity": 8388608,
+        "sha256": {
+          "domain.dom": "a65cf2802e5d2b1cf0727f11923817836e781f9003cd1b109322ff0c6a24f30f",
+          "loader.user": "e8413a61a90ac60d849c3936c5aeb39e9dc315b0ca5b62003925545d52505199",
+          "trace.a11": "bbd274886d456fd6cca4e8a43743e66ba3f3d398872b96003142782a1c6a9897"
+        },
+        "qemu_sha256": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+      },
+      "output_sha256": {
+        "serial.log": "1011b9026d5ca77b8c5d7416fa94a586b49ededddb1726f23683d82290d4678f",
+        "share/payload.log": "b409a05573a43632dfc60932280b819eccbce65c62c06e7834561f8b62918441"
+      },
+      "memory_csv_sha256": "3f66834e6b9e535055f0ae24cf87de8393c946a9e4ef8f5ed084559e393db03a"
+    }
+  ],
+  "environment": {
+    "target": "capstone64-unknown-elf",
+    "compiler_revision": "d5b5f11cae8f60c2fd9863b191daa6d6485b967a",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "linker_sha256": "e3f252c6a1500591a4d35a79cec6f4d6ba32ec891f8bd9e66b5dd87f24e4d71e",
+    "postgres_version": "17.5",
+    "postgres_archive_sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8",
+    "patch_sha256": {
+      "aset-capstone.patch": "f728df5b6b2f81ffa0cb63d1c304ce209f388a40effee2eded56d1af2a6415bc",
+      "aset-sublet.patch": "e5448afe4bf31239d0ac862d139d599adfc625782017aa0ec545f7f660cfd0c4",
+      "memorychunk-capstone.patch": "5ff3d5fac6cdf9fb3a7a9f5db9f2ad2d62feda24e2d9dc3d41369ba29451b39e",
+      "memorychunk-sublet.patch": "ed408c191e430849aea8682b8f73fe5787c180856a4a77c4e9f6cbcfad02efb4"
+    },
+    "qemu_machine": "virt-capstone",
+    "guest_memory": "8G",
+    "guest_cpus": 1,
+    "guest_cma": "512M",
+    "snapshot_rootfs": true,
+    "runtime_image_sha256": {
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+      "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a"
+    },
+    "build_configuration": {
+      "profile": {
+        "BUILD_TESTING": "FALSE",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-Xclang -target-feature -Xclang +m -ffreestanding -fno-builtin -nostdlibinc",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-O3 -DNDEBUG",
+        "PG_ARENA_BYTES": "67108864",
+        "PG_CHECK_DATA": "ON",
+        "PG_DOMAIN_STACK_BYTES": "262144",
+        "PG_MEMORY_PROFILE": "TRUE",
+        "PG_PAYLOAD_BYTES": "16777216",
+        "PG_PLATFORM": "capstone-domain",
+        "PG_SCRATCH_BYTES": "67108864",
+        "PG_SEPARATE_SCRATCH": "TRUE",
+        "PG_TRACE_BYTES": "67108864"
+      },
+      "reference": {
+        "BUILD_TESTING": "FALSE",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-Xclang -target-feature -Xclang +m -ffreestanding -fno-builtin -nostdlibinc",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-O3 -DNDEBUG",
+        "PG_ARENA_BYTES": "67108864",
+        "PG_CHECK_DATA": "ON",
+        "PG_DOMAIN_STACK_BYTES": "262144",
+        "PG_MEMORY_PROFILE": "FALSE",
+        "PG_PAYLOAD_BYTES": "16777216",
+        "PG_PLATFORM": "capstone-domain",
+        "PG_SCRATCH_BYTES": "67108864",
+        "PG_SEPARATE_SCRATCH": "TRUE",
+        "PG_TRACE_BYTES": "67108864"
+      },
+      "linux-host": {
+        "BUILD_TESTING": "TRUE",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_FLAGS": "",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-O3 -DNDEBUG",
+        "PG_ARENA_BYTES": "67108864",
+        "PG_DOMAIN_STACK_BYTES": "262144",
+        "PG_PAYLOAD_BYTES": "16777216",
+        "PG_PLATFORM": "linux-host",
+        "PG_SCRATCH_BYTES": "67108864",
+        "PG_TRACE_BYTES": "67108864"
+      }
+    },
+    "plot_packages": {
+      "matplotlib": "3.11.2"
+    },
+    "recorded_workloads": {
+      "suite": "pgbench",
+      "scale_factor": 10,
+      "clients": 1,
+      "transactions_per_client": 1000,
+      "trace_scope": "Flattened allocator trace for one backend, including its inherited startup prefix; not full PostgreSQL process memory"
+    },
+    "validation": {
+      "accounting_and_retry_controls": 7,
+      "black": "26.5.1",
+      "shared_scratch_configuration_rejected": true,
+      "qemu_only": true
+    },
+    "domain_source_revision": "3b618628404c304db076ad6eb9615c0989fb26c0"
+  },
+  "resume_tool_sha256": [
+    {
+      "run.py": "1ad20e7a93a0c23e271a0319a8989edcb375e822c359dbd9019389b0bac46217",
+      "analyze.py": "8b669e1ee447800d58819d5894ff4d3a87c12c0a7cc898c668e7ea2018fffc6e",
+      "run-qemu.py": "67b21a63f0cfb1e817d8c723762d9d49b9890b7fa40993298c0903c691db0d40"
+    },
+    {
+      "run.py": "45990de6a67400c6024e1d6de7650446cbc0341a85df4187f78c520d34afe9d6",
+      "analyze.py": "8b669e1ee447800d58819d5894ff4d3a87c12c0a7cc898c668e7ea2018fffc6e",
+      "run-qemu.py": "67b21a63f0cfb1e817d8c723762d9d49b9890b7fa40993298c0903c691db0d40"
+    }
+  ],
+  "files": {
+    "summary.csv": "0eb3d6bc6a32e2def973a6fd625d8281c6d28c7b5905fe3c2b17b24243e6890e",
+    "profiles.csv.gz": "7ee37f6e3eceee6c52fa2681462679a03474f9d3767e5efcdf337428a1a8389f",
+    "metrics.json": "a7d1257b766578db229958079b2683a756c3786c4b730fa0555f233a0f0f27c7"
+  }
+}

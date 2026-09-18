@@ -53,8 +53,15 @@ def main():
                 repetition=run["repetition"],
                 profile=run["profile"],
                 runner_exit=run["runner_exit"],
+                failure_phase=run.get("failure_phase"),
+                explicit_setup_retry=run.get("explicit_setup_retry", False),
                 verdict=json.loads((directory / "verdict.json").read_text()),
                 identity=identity,
+                output_sha256={
+                    name: hashlib.sha256((directory / name).read_bytes()).hexdigest()
+                    for name in ("serial.log", "share/payload.log")
+                    if (directory / name).exists()
+                },
                 memory_csv_sha256=run.get("memory_csv_sha256"),
             )
         )
@@ -98,7 +105,9 @@ def main():
             )
         )
     with (args.output / "summary.csv").open("w", newline="") as out:
-        writer = csv.DictWriter(out, fieldnames=summaries[0].keys())
+        writer = csv.DictWriter(
+            out, fieldnames=summaries[0].keys(), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(summaries)
     # Each repeated profile is identical; keep one copy per arm/workload and
@@ -127,7 +136,7 @@ def main():
         "peaks": "Exact maxima at replay operation boundaries; internal transient allocations during one operation are not separately sampled",
         "snapshots": "First 64 events, each 1024th event, every reset/delete, final event and exact peak witnesses",
         "scope": "Memory behaviour of allocator replays. No QEMU timing, FPGA result or security claim. Full application RSS and global node/tag storage are not measured.",
-        "comparison": "Same trace, target ABI and 64-MiB arena budget. Spatial and Sublet use different backing policies and layouts; differences are complete-port effects, not isolated revocation-instruction overhead.",
+        "comparison": "Same trace and target ABI, with matching arena budgets. Spatial and Sublet use different backing policies and layouts; differences are complete-port effects, not isolated revocation-instruction overhead.",
     }
     (args.output / "metrics.json").write_text(json.dumps(definitions, indent=2) + "\n")
     provenance["files"] = {
@@ -137,6 +146,10 @@ def main():
     (args.output / "provenance.json").write_text(
         json.dumps(provenance, indent=2) + "\n"
     )
+    arena_sizes = {s["arena_reserved_bytes"] for s in summaries}
+    if len(arena_sizes) != 1:
+        raise SystemExit("expected a fixed arena budget across the campaign")
+    arena_mib = arena_sizes.pop() / 2**20
     plt.rcParams.update({"font.size": 10, "svg.hashsalt": "postgres-memory-profile"})
     workloads = list(dict.fromkeys(s["workload"] for s in summaries))
     fig, axes = plt.subplots(
@@ -193,7 +206,7 @@ def main():
     fig.text(
         0.5,
         0.01,
-        f"{manifest['repetitions']} repetitions per arm; identical profiles. Backing definitions differ by port; arena reservation is 64 MiB in both.\nNode creation is cumulative demand. Replay buffers and global node/tag storage are outside these curves.",
+        f"{manifest['repetitions']} repetitions per arm; identical profiles. Backing definitions differ by port; arena reservation is {arena_mib:g} MiB in both.\nNode creation is cumulative demand. Replay buffers and global node/tag storage are outside these curves.",
         ha="center",
         fontsize=9,
     )
