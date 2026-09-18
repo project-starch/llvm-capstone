@@ -7,8 +7,10 @@ template: a native arm on x86 and a paired spatial/Sublet arm in a domain, one
 defect per boot, the fault PC checked against a labelled probe.
 
 The inventory, the triage and the numbers are in
-`docs/ref/cpython-pymalloc-defects.md`. **21 of the defects live in the pinned
-3.13.7 are reachable with the existing pymalloc port.**
+`docs/ref/cpython-pymalloc-defects.md`. **23 of the defects live in the pinned
+3.13.7 are reachable with the existing pymalloc port** — 21 proven by their
+backports, 2 from the never-backported group after an apply-test against a
+pristine `v3.13.7` tree, with 2 more unresolved.
 
 The template's own eight arms — `shared/defects.c`, `shared/run-defects.py` and
 two QEMU result sets — are on PRs #54 and #55 and are not on this branch yet;
