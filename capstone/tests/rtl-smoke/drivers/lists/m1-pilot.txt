@@ -1,0 +1,3 @@
+1 drop m1 shared 2097152 --cap 512 --budget 4096
+2 drop m1 shared 2097152 --cap 2048 --budget 20000
+3 drop m1 shared 2097152 --cap 20000 --budget 250000
