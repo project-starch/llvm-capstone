@@ -39,10 +39,18 @@ MARKER_BASE = 0xCF18000000000000
 
 
 def classify(serial, which, mode, runner_exit):
+    # Two emulator behaviours, and the difference is the whole point of the
+    # delivery work. Without the local-trap-delivery change the fault HALTS the
+    # domain and QEMU exits, so the guest never returns; with it the fault is
+    # DELIVERED, the launcher dies by SIGSEGV, and the VM keeps running. Accept
+    # both, and when the fault was delivered demand the process-death evidence
+    # rather than treating a surviving VM as a weaker result.
     faults = re.findall(
-        r"domain halted by capability fault: cause = (\d+), pc = (0x[0-9a-f]+)",
+        r"domain (?:halted by capability fault|capability fault delivered): "
+        r"cause = (\d+), pc = (0x[0-9a-f]+)",
         serial,
     )
+    delivered = "capability fault delivered" in serial
     marker = f"Print = Scalar(0x{MARKER_BASE | which:x})"
     row = {
         "case": which,
@@ -59,7 +67,7 @@ def classify(serial, which, mode, runner_exit):
         cause, pc = faults[-1] if faults else ("0", "0")
         # Case 0 faults inside the manager, so it declares no expected PC.
         expected = None if which == 0 else (sites[0] if sites else None)
-        row.update(cause=int(cause), pc=pc, expected_pc=expected)
+        row.update(cause=int(cause), pc=pc, expected_pc=expected, delivered=delivered)
         ok = (
             marker in serial
             and len(faults) == 1
@@ -68,6 +76,17 @@ def classify(serial, which, mode, runner_exit):
         )
         if which != 0:
             ok = ok and expected is not None and int(pc, 16) == int(expected, 16)
+        if delivered:
+            # The VM survived, so the claim is containment and it has to be
+            # evidenced: the launcher process died by SIGSEGV, and the guest got
+            # its shell back to say so. That marker can only appear if a command
+            # ran AFTER the fault, which is the whole property.
+            #
+            # runner_exit stays 1 here and that is correct, not a failure: the
+            # generic guest runner waits for the normal completion marker, which
+            # a killed launcher never prints. Requiring 0 would reject exactly
+            # the arms that demonstrate containment.
+            ok = ok and "__EXIT_CODE__139" in serial
         row["passed"] = ok
     else:
         row["passed"] = (

@@ -1,0 +1,21 @@
+{
+  "postgresql": "17.0",
+  "binary_sha256": {
+    "defects.dom": "605e5a2312885b2ad93105d4bbe054feb0e1a260798b27c81b5c09fc941659d7",
+    "loader.user": "b2dd3a0c11640fef3235795975adac43a48d8fcc5675eaed6b4dc16e1c4087bd",
+    "selection.bin": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+  },
+  "qemu_sha256": "e8d562a8ee62725ee8a89d385468b0b06cd7e901907af28b0e70ff9f4456ef5d",
+  "qemu_revision": "77d69353b7",
+  "qemu_branch": "runtime/1-domain-trap-delivery",
+  "compiler_sha256": "5003f54c8f02e24163c2e2a1e4be70b0a602d56eefcc1e9be5c9e9b8f1f1125d",
+  "regions": {
+    "payload": 65536,
+    "arena": 67108864,
+    "trace": 67108864,
+    "scratch": 50331648
+  },
+  "fault_recovery": "CAPSTONE_DOMAIN_FAULT_RECOVERY=ON",
+  "arms": 16,
+  "expected_faults": 8
+}
