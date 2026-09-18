@@ -2,9 +2,10 @@
 
 Consumer-side temporal-safety defects in CPython whose memory comes from
 pymalloc, so that no `free()` reaches `malloc` and a malloc-level tool has no
-event to see. Same design as `../../postgres/mmgr-repros/`: one defect per boot,
-a paired spatial/Sublet arm in a domain, the fault PC checked against a labelled
-probe.
+event to see. One defect per boot, a paired spatial/Sublet arm in a domain, the
+fault PC checked against a labelled probe. The PostgreSQL memory-context corpus
+on its own branch is built the same way and was the template; it is not in this
+tree yet, so nothing here depends on it.
 
 **Every one of the 20 reachable defects has a driver.** That is the whole
 reachable set at the pin, not a sample — the inventory, the triage and the three
