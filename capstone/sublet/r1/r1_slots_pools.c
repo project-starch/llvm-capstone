@@ -481,7 +481,24 @@ static void run_linear(unsigned reps) {
  * the release arm's phase 2 (gated on alloc >= target) unreached, so three of the four patterns were
  * really two (apollo, 2026-09-15). 4096 covers 10*C at C = 256 with margin; a larger C needs a larger
  * buffer again, and the run says which it hit. */
+#ifndef M1_MAXRET
 #define M1_MAXRET 4096
+#endif
+/* Overridable as of M1's approved run (apollo, 2026-09-18). At the protocol's production capacity the
+ * interpretable size is not "as large as fits" but ONE RETAINED REFERENCE PER DISTINCT INDEX EVER
+ * CONSUMED -- 65,532, the measured pool -- because that is what makes the retain-pressure arm answer
+ * the strongest form of its question: does holding a stale reference to every index ever used prevent
+ * or corrupt reuse? At 4096 the arm stops at 0.63 % of a 10C run and measures this buffer rather than
+ * the reclaimer. If the data budget will not take the full size, report the largest that does TOGETHER
+ * WITH THE FRACTION OF DISTINCT INDICES IT COVERS, since that fraction is what makes the number
+ * interpretable at all.
+ *
+ * What a null in that arm means, recorded before the run rather than after: retention CANNOT prevent
+ * reuse in this design, because no old reference is consulted at reclaim time -- the reclaim event is
+ * the walk finding a node valid, and safety is carried by the generation rather than by reference
+ * accounting (the implementation owner's specification, approved 2026-09-18). So the arm tests that
+ * the generation check holds under a large retained set. A CLEAN NULL IS THE EXPECTED AND CORRECT
+ * RESULT and is only interesting if it fails. */
 static void *m1_ring_alias[M1_LIVE];
 static void *m1_ret_alias[M1_MAXRET];
 static sublet_cap m1_tmp;
