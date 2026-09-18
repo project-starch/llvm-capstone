@@ -1,0 +1,37 @@
+# PostgreSQL adaptation inventory: path, bucket, purpose.
+# The classified AllocSet patch is counted against aset-sublet.patch.classes.
+# ABI patches are separate from the Sublet allocator delta.
+src/shared/a11trace.h                           glue       the record format, shared with the recorder in the paper repository
+src/allocators/sublet/pg_subpool.h              glue       what the manager needs from the level below
+src/allocators/spatial/backing-allocator.c      glue       first-fit backing allocator for the spatial arm
+src/allocators/sublet/context-pools.c           glue       revocable subpools and out-of-band metadata for the Sublet arm
+src/allocators/sublet/unsupported-allocators.c  glue       reject unsupported backing requests from non-AllocSet managers
+src/capstone-domain/string.c                    compat     the string functions a freestanding build leaves undefined
+src/capstone-domain/printf.c                    compat     the formatting the manager calls and a domain has no libc for
+src/native/replay/printf.c                      compat     the same formatting on the host side
+src/shared/postgres-compat.c                    compat     backend error reporting and process-state compatibility
+src/capstone-domain/include/ctype.h             compat     a header the freestanding build needs to exist and not to do anything
+src/capstone-domain/include/errno.h             compat     the same
+src/capstone-domain/include/locale.h            compat     the same
+src/capstone-domain/include/math.h              compat     the same
+src/capstone-domain/include/setjmp.h            compat     the same
+src/capstone-domain/include/signal.h            compat     the same
+src/capstone-domain/include/stdio.h             compat     the same
+src/capstone-domain/include/stdlib.h            compat     the same
+src/capstone-domain/include/string.h            compat     the same
+src/capstone-domain/include/strings.h           compat     the same
+src/capstone-domain/include/sys/types.h         compat     the same
+src/linux-guest/domain-loader.c                 test       the guest that creates the domain and sizes its regions
+src/native/replay/main.c                        test       the replay driver
+src/allocators/spatial/replay.c                 test       the same in a domain
+src/allocators/sublet/replay.c                  test       the same under the discipline
+security-tests/capstone/subpool-lifetimes.c     test       the level below's own test
+security-tests/capstone/context-hierarchy.c     test       the context tree's own test, an ancestor withdrawing from levels never asked
+patches/aset-sublet.patch                       allocator  the classified patch, counted by port-effort.py
+src/shared/replay-engine.c                      test       shared trace dispatch and payload checks
+src/shared/replay-engine.h                      test       native/domain replay interface
+src/capstone-domain/domain-runtime.c            test       domain entry, exit and replay scratch support
+src/capstone-domain/domain-runtime.h            test       domain runtime interface
+patches/aset-capstone.patch                     compat     capability ABI alignment and minimum size class
+patches/memorychunk-capstone.patch              compat     capability ABI chunk header
+patches/memorychunk-sublet.patch                allocator  indices for out-of-band chunk and block metadata

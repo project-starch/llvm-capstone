@@ -3,14 +3,16 @@ name: PostgreSQL memory contexts
 on:
   pull_request:
     paths:
-      - 'capstone/ports/postgres/**'
+      - 'capstone/ports/postgres/memory-contexts/**'
       - 'capstone/runtime/**'
+      - 'capstone/ports/common/**'
       - '.github/workflows/postgres-memory-contexts.yml'
   push:
-    branches: [postgres/1-memory-contexts, postgres/2-memory-profiles]
+    branches: [postgres/1-memory-contexts, postgres/2-memory-profiles, ports/1-shared-template]
     paths:
-      - 'capstone/ports/postgres/**'
+      - 'capstone/ports/postgres/memory-contexts/**'
       - 'capstone/runtime/**'
+      - 'capstone/ports/common/**'
       - '.github/workflows/postgres-memory-contexts.yml'
   workflow_dispatch:
 
@@ -27,7 +29,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: capstone/ports/postgres
+        working-directory: capstone/ports/postgres/memory-contexts
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Install build and formatting tools
@@ -38,16 +40,16 @@ jobs:
           /tmp/pg-replay-tools/bin/pip install -r requirements-dev.txt
       - name: Check Python formatting
         run: |
-          /tmp/pg-replay-tools/bin/black --check .
+          /tmp/pg-replay-tools/bin/black --check --workers 1 --config pyproject.toml . ../../common
       - name: Configure, build and test the native port
         run: |
-          source ../../tests/capstone-test-env.sh
+          source ../../../tests/capstone-test-env.sh
           cmake --preset native
           cmake --build --preset native
           ctest --preset native
       - name: Check the incremental build is idle
         run: |
-          source ../../tests/capstone-test-env.sh
+          source ../../../tests/capstone-test-env.sh
           output=$(cmake --build --preset native -- -n)
           printf '%s\n' "$output"
           test "$output" = 'ninja: no work to do.'
