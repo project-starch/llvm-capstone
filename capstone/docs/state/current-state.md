@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-18 — PostgreSQL 17.0 pin consistency
+
+The PostgreSQL component, original shell builds and native defect corpus now
+read one `memory-contexts/upstream.json` pin: 17.0. Five native and four QEMU
+CTests pass; both original domain scripts compile and the native defect
+reproduces. Historical 17.5 profiles retain their original provenance. The
+shared Sublet runtime header required by the CMake ports is restored, with a
+configure-time completeness guard. See the component README for commands and
+scope: AllocSet is protected; the consumer reproducer's Capstone arm remains
+future work.
+
 ## 2026-09-17 (evening) — CURRENT
 
 > **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer
