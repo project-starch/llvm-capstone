@@ -1,0 +1,97 @@
+Subject: [PATCH 1/3] Compile pymalloc independently of interpreter lifecycle services
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: native reference, native port, Capstone domain
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Use one allocator state and a small compatibility interface. Exclude interpreter
+statistics, debug allocator and interpreter lifecycle code. Preserve the actual
+arena, pool, free-list and realloc algorithms for the reference build.
+
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -1,5 +1,8 @@
+ /* Python's malloc wrappers (see pymem.h) */
+ 
++#ifdef PYMALLOC_PORT
++#include "pymalloc-compat.h"
++#else
+ #include "Python.h"
+ #include "pycore_code.h"          // stats
+ #include "pycore_object.h"        // _PyDebugAllocatorStats() definition
+@@ -1430,6 +1433,8 @@
+ }
+ 
+ 
++#endif /* !PYMALLOC_PORT */
++
+ /* If we're using GCC, use __builtin_expect() to reduce overhead of
+    the valgrind checks */
+ #if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
+@@ -1456,6 +1461,9 @@
+  * will be allocated in the BSS which is a small performance win.  The radix
+  * tree arrays are fairly large but are sparsely used.  */
+ static struct _obmalloc_state obmalloc_state_main;
++#ifdef PYMALLOC_PORT
++static inline OMState *get_state(void) { return &obmalloc_state_main; }
++#else
+ static bool obmalloc_state_initialized;
+ 
+ static inline int
+@@ -1473,6 +1481,7 @@
+     assert(interp->obmalloc != NULL); // otherwise not initialized or freed
+     return interp->obmalloc;
+ }
++#endif
+ 
+ // These macros all rely on a local "state" variable.
+ #define usedpools (state->pools.used)
+@@ -1486,6 +1495,7 @@
+ #define narenas_highwater (state->mgmt.narenas_highwater)
+ #define raw_allocated_blocks (state->mgmt.raw_allocated_blocks)
+ 
++#ifndef PYMALLOC_PORT
+ #ifdef WITH_MIMALLOC
+ static bool count_blocks(
+     const mi_heap_t* heap, const mi_heap_area_t* area,
+@@ -1663,6 +1673,7 @@
+ {
+     return get_num_global_allocated_blocks(&_PyRuntime);
+ }
++#endif /* !PYMALLOC_PORT */
+ 
+ #if WITH_PYMALLOC_RADIX_TREE
+ /*==========================================================================*/
+@@ -1815,6 +1826,7 @@
+     uint excess;        /* number of bytes above pool alignment */
+     void *address;
+ 
++#ifndef PYMALLOC_PORT
+     int debug_stats = _PyRuntime.obmalloc.dump_debug_stats;
+     if (debug_stats == -1) {
+         const char *opt = Py_GETENV("PYTHONMALLOCSTATS");
+@@ -1824,6 +1836,7 @@
+     if (debug_stats) {
+         _PyObject_DebugMallocStats(stderr);
+     }
++#endif
+ 
+     if (unused_arena_objects == NULL) {
+         uint i;
+@@ -2647,6 +2660,7 @@
+ 
+ 
+ /*==========================================================================*/
++#ifndef PYMALLOC_PORT
+ /* A x-platform debugging allocator.  This doesn't manage memory directly,
+  * it wraps a real allocator, adding extra debugging info to the memory blocks.
+  */
+@@ -3553,3 +3567,6 @@
+ }
+ 
+ #endif /* #ifdef WITH_PYMALLOC */
++#else
++#include "pymalloc-api.inc"
++#endif /* !PYMALLOC_PORT */

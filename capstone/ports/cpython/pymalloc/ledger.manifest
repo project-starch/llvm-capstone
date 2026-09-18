@@ -1,0 +1,15 @@
+# Path, bucket, purpose. No measured port-effort claim is derived from this inventory.
+patches/cpython-3.13.7-0001-standalone-pymalloc.patch compat interpreter extraction boundary
+patches/cpython-3.13.7-0002-capability-provenance.patch compat pool sentinels and retained pointer authority
+patches/cpython-3.13.7-0003-block-lifetime-hooks.patch allocator lifetime transitions and bounded realloc copying
+src/shared/pymalloc-compat.h compat freestanding interface to upstream pymalloc
+src/shared/pymalloc-api.inc glue allocator initialization and public replay entry points
+src/shared/backing.c glue bounded native backing and domain metadata allocator
+src/allocators/sublet/block-lifetimes.c allocator retained arena, pool, block and raw-fallback authority
+src/shared/port.h glue fixed-width replay protocol and adapter interface
+src/shared/replay.c test ordered replay with synthetic payload validation
+src/native/main.c test native reference and ported replay
+src/native/record.c test public allocator API recording in the pinned interpreter
+src/capstone-domain/entry.c test domain entry and shared region setup
+src/linux-guest/domain-loader.c test guest domain loader
+security-tests/shared/lifetimes.c test live and stale capability probes

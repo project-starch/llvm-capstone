@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-18 — CPython allocator component
+
+`capstone/ports/cpython/pymalloc/` adds CPython 3.13.7's actual pymalloc to the
+shared port template. Native reference comparison covers normalized allocation
+decisions and payloads. A 123,622-event native JSON/regex/bytearray recording
+completed in both spatial and Sublet QEMU replays; the 18 paired lifetime cases
+passed, with fault verdicts checked at the intended access instruction.
+This is allocator replay, not interpreter execution or FPGA measurement.
+The component README describes the extraction boundary, fixed backing budgets,
+raw fallback, recorder limits and validation commands.
+
 ## 2026-09-12 — CURRENT
 
 > Three boots on the R-30/R-31 bitstream. The 2026-09-10 block below is still accurate for the

@@ -1,5 +1,14 @@
 # Next step
 
+## 2026-09-18 — allocator-port follow-up
+
+CPython 3.13.7 pymalloc now has native reference comparison, workload recording,
+spatial/Sublet QEMU replay and paired lifetime probes in
+`capstone/ports/cpython/pymalloc/`. Follow-up work can extend the recorded workload
+coverage and measure metadata/node costs under matched budgets. Full interpreter
+execution and FPGA validation remain separate milestones; the component results
+do not establish either. See the component README and its `results/` bundle.
+
 ## 0. CURRENT — 2026-09-12. **R-31 FIXED ON SILICON; R-30's 1,728 BYTES SOLVED — IT IS BOUNDS RE-ENCODING, NOW FILED AS R-33.**
 
 Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
