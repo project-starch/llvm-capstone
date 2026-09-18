@@ -1,0 +1,116 @@
+Subject: [PATCH 2/3] Preserve arena and pool authority across capability addressing
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: native port, Capstone domain
+Depends-On: cpython-3.13.7-0001-standalone-pymalloc.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Keep real pool sentinels and retrieve retained arena/pool authority rather than
+converting integer addresses to dereferenceable pointers. The radix tree indexes
+64 address bits even when capabilities occupy 16 bytes. Numeric address checks
+must remain integer arithmetic, including assertions.
+
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -1912,7 +1912,7 @@
+     arenaobj->freepools = NULL;
+     /* pool_address <- first pool-aligned address in the arena
+        nfreepools <- number of whole pools that fit after alignment */
+-    arenaobj->pool_address = (pymem_block*)arenaobj->address;
++    arenaobj->pool_address = address;
+     arenaobj->nfreepools = MAX_POOLS_IN_ARENA;
+     excess = (uint)(arenaobj->address & POOL_SIZE_MASK);
+     if (excess != 0) {
+@@ -2119,8 +2119,8 @@
+              * time.
+              */
+             assert(usable_arenas->freepools != NULL ||
+-                   usable_arenas->pool_address <=
+-                   (pymem_block*)usable_arenas->address +
++                   (uintptr_t)usable_arenas->pool_address <=
++                   usable_arenas->address +
+                        ARENA_SIZE - POOL_SIZE);
+         }
+     }
+@@ -2129,7 +2129,7 @@
+         assert(usable_arenas->nfreepools > 0);
+         assert(usable_arenas->freepools == NULL);
+         pool = (poolp)usable_arenas->pool_address;
+-        assert((pymem_block*)pool <= (pymem_block*)usable_arenas->address +
++        assert((uintptr_t)pool <= usable_arenas->address +
+                                  ARENA_SIZE - POOL_SIZE);
+         pool->arenaindex = (uint)(usable_arenas - allarenas);
+         assert(&allarenas[pool->arenaindex] == usable_arenas);
+@@ -2152,7 +2152,7 @@
+ 
+     /* Frontlink to used pools. */
+     pymem_block *bp;
+-    poolp next = usedpools[size + size]; /* == prev */
++    poolp next = state->pools.heads[size].nextpool; /* == prev */
+     pool->nextpool = next;
+     pool->prevpool = next;
+     next->nextpool = pool;
+@@ -2211,7 +2211,7 @@
+     }
+ 
+     uint size = (uint)(nbytes - 1) >> ALIGNMENT_SHIFT;
+-    poolp pool = usedpools[size + size];
++    poolp pool = state->pools.heads[size].nextpool;
+     pymem_block *bp;
+ 
+     if (LIKELY(pool != pool->nextpool)) {
+@@ -2283,7 +2283,7 @@
+     assert(pool->ref.count > 0);            /* else the pool is empty */
+ 
+     uint size = pool->szidx;
+-    poolp next = usedpools[size + size];
++    poolp next = state->pools.heads[size].nextpool;
+     poolp prev = next->prevpool;
+ 
+     /* insert pool before next:   prev <-> pool <-> next */
+@@ -2382,7 +2382,7 @@
+ 
+         /* Free the entire arena. */
+         _PyObject_Arena.free(_PyObject_Arena.ctx,
+-                             (void *)ao->address, ARENA_SIZE);
++                             pym_arena_pointer(ao->address), ARENA_SIZE);
+         ao->address = 0;                        /* mark unassociated */
+         --narenas_currently_allocated;
+ 
+--- a/Include/internal/pycore_obmalloc.h
++++ b/Include/internal/pycore_obmalloc.h
+@@ -311,7 +311,11 @@
+ #define DUMMY_SIZE_IDX          0xffff  /* size class of newly cached pools */
+ 
+ /* Round pointer P down to the closest pool-aligned address <= P, as a poolp */
++#ifdef PYMALLOC_PORT
++#define POOL_ADDR(P) ((poolp)pym_pool_pointer(P))
++#else
+ #define POOL_ADDR(P) ((poolp)_Py_ALIGN_DOWN((P), POOL_SIZE))
++#endif
+ 
+ /* Return total number of blocks in pool of size index I, as a uint. */
+ #define NUMBLOCKS(I) ((pymem_uint)(POOL_SIZE - POOL_OVERHEAD) / INDEX2SIZE(I))
+@@ -417,7 +421,12 @@
+ #define OBMALLOC_USED_POOLS_SIZE (2 * ((NB_SMALL_SIZE_CLASSES + 7) / 8) * 8)
+ 
+ struct _obmalloc_pools {
++#ifdef PYMALLOC_PORT
++    /* Real sentinel objects: do not manufacture a pointer before an array. */
++    struct pool_header heads[NB_SMALL_SIZE_CLASSES];
++#else
+     poolp used[OBMALLOC_USED_POOLS_SIZE];
++#endif
+ };
+ 
+ 
+@@ -537,7 +546,7 @@
+ 
+ */
+ 
+-#if SIZEOF_VOID_P == 8
++#if SIZEOF_VOID_P == 8 || defined(PYMALLOC_PORT)
+ 
+ /* number of bits in a pointer */
+ #define POINTER_BITS 64

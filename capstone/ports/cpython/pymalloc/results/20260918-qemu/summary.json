@@ -1,0 +1,244 @@
+{
+  "scope": "CPython 3.13.7 GIL allocator component; native capture and QEMU replay; no FPGA or full interpreter port",
+  "workload": "20 rounds of JSON, regex and bytearray operations",
+  "trace_sha256": "fdc8e089a44a6a88925e4f527ff787535fe2cc768a820643fba97f7e248af734",
+  "live_at_end": 1,
+  "reports": {
+    "native": {
+      "magic": 3555957288647612752,
+      "count": 123622,
+      "mode": 0,
+      "status": 0,
+      "completed": 123622,
+      "allocations": 57891,
+      "frees": 57890,
+      "reallocations": 7840,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata_high_water": 4602752,
+      "request_checksum": 12864466034881799783
+    },
+    "spatial": {
+      "magic": 3555957288647612752,
+      "count": 123622,
+      "mode": 0,
+      "status": 0,
+      "completed": 123622,
+      "allocations": 57891,
+      "frees": 57890,
+      "reallocations": 7840,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata_high_water": 5767040,
+      "request_checksum": 12864466034881799783
+    },
+    "sublet": {
+      "magic": 3555957288647612752,
+      "count": 123622,
+      "mode": 1,
+      "status": 0,
+      "completed": 123622,
+      "allocations": 57891,
+      "frees": 57890,
+      "reallocations": 7840,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata_high_water": 5767040,
+      "request_checksum": 12864466034881799783
+    }
+  },
+  "security": [
+    {
+      "mode": 0,
+      "case": 0,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 1,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 2,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 3,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 4,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 5,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 5,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 6,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 7,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 0,
+      "case": 8,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 0,
+      "runner_exit": 0,
+      "expected": "completed",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 1,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 2,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b590",
+      "expected_pc": "0x101a0b590",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 3,
+      "runner_exit": 0,
+      "expected": "rejected",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 4,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 5,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 5,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 6,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 7,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    },
+    {
+      "mode": 1,
+      "case": 8,
+      "runner_exit": 1,
+      "expected": "fault",
+      "cause": 24,
+      "pc": "0x101a0b464",
+      "expected_pc": "0x101a0b464",
+      "passed": true
+    }
+  ],
+  "source_sha256": {
+    "CMakeLists.txt": "33fb134bf12f9330a6317da25b822cc69db8a0d9dfae85e840b0ce53bed7e4fe",
+    "CMakePresets.json": "f8b4a61a59136959818ee69c12335f9b779890cf96f6ea73059b114b71b0e195",
+    "cmake/CPythonSource.cmake": "702fc0c07fe802b282f11b43aa6ea5ff19c757165fe24910d9f0027b06d908e4",
+    "cmake/Recorder.cmake": "ae0c2397530859a20b32cfc059e14d1dfa178acb40fbf573861d5cb99d3dee3a",
+    "cmake/Replay.cmake": "1dbca7f981f4a60694cb5bf4b10723858a26c2f428c5c98de64a8db8ebfe5fac",
+    "cmake/prepare-source.py": "6902097038da5d4b1f6374bafae27b0cf572f45ec30afcfb1da2baf4895e5870",
+    "host/record.py": "fa8c35fcd044271373b7c62eb47d4ade823b38320374562711f21f3c23adfbc4",
+    "host/run-qemu.py": "8066393713b7cff27fb7808ce988c18274d99e8798fc38c973f4ae27ef4c2cbb",
+    "host/summarize.py": "36dae12d525eeae6e8f3bdc83a34b72b76bc421890ab7dd5bf83d94456b03ade",
+    "patches/cpython-3.13.7-0001-standalone-pymalloc.patch": "c65885a5883f756ccd4a406f3faab2fff000bcbf77082d085c261f7b173f9c76",
+    "patches/cpython-3.13.7-0002-capability-provenance.patch": "54df540ab50f2cf18001e5d6bbd56ae62566e4b16c1cabac039ff5395f2f0874",
+    "patches/cpython-3.13.7-0003-block-lifetime-hooks.patch": "8c4eae399d3f29afef626c7d4d5713fdcb19cdd0f9c8d133419942d889b17d6e",
+    "security-tests/qemu/run.py": "a0b31321c3709cff6d58a25e785be10e84d9c1910e04afd85f2a82839d334c91",
+    "security-tests/shared/lifetimes.c": "2cd0fd67521f53578e66221cc06512d9f701ed4d7317a4026201041328143335",
+    "src/allocators/sublet/block-lifetimes.c": "fb68c93386f09f0b496d68a08c4b039ae0c8ce4c2a976c6de66ccda8c8cb1420",
+    "src/capstone-domain/entry.c": "e3ebc49f17ebeb664ad839a9c75275ccc32e563d726069ece6ebcb21d1cc471c",
+    "src/linux-guest/CMakeLists.txt": "e3dff14095ad3caef777d3b68450b0760f3852f80ee96e8332dc914281b3abfe",
+    "src/linux-guest/domain-loader.c": "6c3e94914e8e6161683021310ae748780b8a76747c63fe68520ee61b4d121387",
+    "src/native/main.c": "b684b8630608fb1daf618166a727293c981d69aa6f6ab5c230d886a273674af2",
+    "src/native/record.c": "dce04c74f2309b557a523eaafca94e78fadc55c7fd3bfbe29f5e4a373f148151",
+    "src/shared/backing.c": "375bb924476d6ad93b45b97c30bb0609ea50d066020ee68d6873064299402d89",
+    "src/shared/port.h": "b7ae93d2988a5b3fa63626b8280f4edfb1979c4f9ac9cfb85c8a317d54d8cbed",
+    "src/shared/pymalloc-api.inc": "9971b55d19811740722b538d3a9d4362f6a5c1267e81fd81ce9bfd5bf1ddd746",
+    "src/shared/pymalloc-compat.h": "9fc61be090542e990d06f05c12632f71eeba151e9ac5b0a788783a1ada063d3c",
+    "src/shared/replay.c": "6e18528212bf940ee2d6dd6cf2e666536b8fbac7a7f7e01f2dc545086bdfa3ae",
+    "tests/native/test-recording.py": "3fba8663623fa2e9b3375742e74036dc2783533fc9518a68c32a83eca7e99077",
+    "tests/native/test-replay.py": "8742c80a77314f46f5458e9aa1c332fb10163512f29d355d080a8ea62d58bda9",
+    "tests/native/test-source.py": "a338e96a1740fdedba077d470ae71cd3172fcbcec6cd9dd0c438514de3c0f326",
+    "upstream.json": "ad182517df2663720eaa11a548fc8d0101d6504bedf6e4cbdc0d345961ab24f8"
+  },
+  "tools_sha256": {
+    "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "qemu": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a"
+  },
+  "limits": "Fresh replay state; successful MEM/OBJ requests only; synthetic payloads; fixed region budgets; metadata high-water is not RSS; no timing measurements"
+}
