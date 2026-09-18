@@ -1,0 +1,82 @@
+{
+  "base_revision": "dc40bc1df43f",
+  "qemu_revision": "77d69353b7",
+  "native": {
+    "ctests_passed": 3,
+    "policy_cases": 18,
+    "stdio_negative_control": "prior diagnostic-writing policy rejected"
+  },
+  "cases": [
+    {
+      "case": 0,
+      "passed": true,
+      "runner_exit": 0,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "6ef0b8db3738ff315b7109406b27258a09164abdb41df204eee8a3641cb0d6c3"
+      }
+    },
+    {
+      "case": 1,
+      "passed": true,
+      "runner_exit": 0,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "1be5def49b04c25db3ab0578bc85d67688e1bfd4c45631dff77d05b77e036a06"
+      }
+    },
+    {
+      "case": 2,
+      "passed": true,
+      "runner_exit": 0,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "f991e1a6b75af7a84a12ad8ddc8b7ded67a8eb456a77bb3d830ed80771261060"
+      }
+    },
+    {
+      "case": 3,
+      "passed": true,
+      "runner_exit": 0,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "519d35be6b3aedd2525d81a56ff53e48ac8d370776d1f7e0940342af39cbe1e6"
+      }
+    },
+    {
+      "case": 4,
+      "passed": true,
+      "runner_exit": 1,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "af429ac85d40f48623df53919d78c8c03a467f637840763fedc2676b9a37e2c4"
+      }
+    },
+    {
+      "case": 5,
+      "passed": true,
+      "runner_exit": 1,
+      "sha256": {
+        "reentry.user": "923bc30da2b356bae18bc7f79bc60110bd1d02254ba814ae907035d3b419a013",
+        "fault.dom": "5f1adee8c368fc3274a8cc3115b01fff17c037e141d311f5d2c8a4c26f01ca90"
+      }
+    },
+    {
+      "case": "processes",
+      "passed": true,
+      "runner_exit": 0,
+      "sha256": {
+        "launcher.user": "38988d20168bc3bf2da11d83698f825ce63e3ad0de27aa44a7ad4a47d737c1d8",
+        "supervisor.user": "9496c535e7e2dd7fc02c4856b14184fbde70717ac1f61aa8e415a01aec9f6dfa",
+        "healthy.dom": "4ac1fb77b89382d3209afbc2337f85cc962bf6112076e2a55a49e4b5d4b4176f",
+        "fault-0.dom": "6ef0b8db3738ff315b7109406b27258a09164abdb41df204eee8a3641cb0d6c3",
+        "fault-1.dom": "1be5def49b04c25db3ab0578bc85d67688e1bfd4c45631dff77d05b77e036a06",
+        "fault-2.dom": "f991e1a6b75af7a84a12ad8ddc8b7ded67a8eb456a77bb3d830ed80771261060",
+        "fault-3.dom": "519d35be6b3aedd2525d81a56ff53e48ac8d370776d1f7e0940342af39cbe1e6"
+      }
+    }
+  ],
+  "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+  "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+  "revocation_nodes": 8388608
+}

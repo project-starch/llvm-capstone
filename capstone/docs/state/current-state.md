@@ -2,6 +2,16 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
+
+The [shared runtime](../../runtime/domain-faults.md) provides a domain build
+helper, cooperative fault return/quarantine, and a Linux process-termination
+policy. Its standalone tests require no PostgreSQL or Sublet allocator sources.
+Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEMU.
+This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
+complete resource reclamation, or a new FPGA result. Allocator integration is
+reviewed separately; existing ports are not enabled automatically.
+
 ## 2026-09-17 (evening) — CURRENT
 
 > **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer
