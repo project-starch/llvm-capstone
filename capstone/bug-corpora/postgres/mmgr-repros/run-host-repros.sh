@@ -39,7 +39,7 @@ set -uo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PORT=$(cd -- "$HERE/../../../ports/postgres" && pwd)
-PG_VERSION=${PG_VERSION:-17.0}
+source "$PORT/upstream.sh" || exit 75
 OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
 SRC=$OUT/postgresql-$PG_VERSION
 WORK=${WORK:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-repros}
@@ -64,7 +64,8 @@ fi
 
 mkdir -p "$WORK"
 
-# Build one case, with or without ASan. Objects are per-mode so the two never mix.
+# Rebuild every object: a previous run may have used another pin, compiler or
+# generated header configuration. Separate mode directories are not a cache key.
 build_case() {
     local case_dir=$1
     local mode=$2
@@ -76,19 +77,19 @@ build_case() {
     local objs=()
     local f
     for f in $MMGR; do
-        [ -f "$obj/$f.o" ] || $CC -c -O1 -g "${san[@]}" $INC \
+        $CC -c -O1 -g "${san[@]}" $INC \
             "$SRC/src/backend/utils/mmgr/$f.c" -o "$obj/$f.o" || return 1
         objs+=("$obj/$f.o")
     done
     for f in $CONSUMERS "$PORT/port/pg_stubs.c" "$PORT/port/pg_printf_host.c"; do
         local base; base=$(basename "$f" .c)
         local p=$f; [ -f "$p" ] || p="$SRC/$f"
-        [ -f "$obj/$base.o" ] || $CC -c -O1 -g "${san[@]}" $INC "$p" -o "$obj/$base.o" || return 1
+        $CC -c -O1 -g "${san[@]}" $INC "$p" -o "$obj/$base.o" || return 1
         objs+=("$obj/$base.o")
     done
-    [ -f "$obj/avx512.o" ] || $CC -c -O1 -g "${san[@]}" -mavx512vpopcntdq -mavx512bw $INC \
+    $CC -c -O1 -g "${san[@]}" -mavx512vpopcntdq -mavx512bw $INC \
         "$SRC/$AVX512" -o "$obj/avx512.o" || return 1
-    [ -f "$obj/avx512choose.o" ] || $CC -c -O1 -g "${san[@]}" -mxsave $INC \
+    $CC -c -O1 -g "${san[@]}" -mxsave $INC \
         "$SRC/$AVX512_CHOOSE" -o "$obj/avx512choose.o" || return 1
     objs+=("$obj/avx512.o" "$obj/avx512choose.o")
     $CC -O1 -g "${san[@]}" $INC "$case_dir/before.c" "${objs[@]}" \

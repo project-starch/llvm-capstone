@@ -6,6 +6,9 @@ add_custom_command(OUTPUT "${fixture}"
 add_custom_target(replay-fixture ALL DEPENDS "${fixture}")
 if(PORT_PLATFORM STREQUAL "native")
   port_add_support_tests()
+  add_test(NAME upstream-pin COMMAND "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/check-pin.py")
+  set_tests_properties(upstream-pin PROPERTIES LABELS native TIMEOUT 30)
   add_test(NAME memory-profile-accounting COMMAND "${Python3_EXECUTABLE}" -m unittest discover
     -s "${PROJECT_SOURCE_DIR}/tests/memory" -p "test_*.py")
   set_tests_properties(memory-profile-accounting PROPERTIES LABELS native TIMEOUT 60

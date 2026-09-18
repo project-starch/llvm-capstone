@@ -14,8 +14,7 @@
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$HERE/../../.." && pwd)
-PG_VERSION=${PG_VERSION:-17.0}
-BASE_URL=https://ftp.postgresql.org/pub/source/v$PG_VERSION
+source "$HERE/upstream.sh"
 OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
 SRC=$OUT/postgresql-$PG_VERSION
 
@@ -24,10 +23,16 @@ SRC=$OUT/postgresql-$PG_VERSION
 FILES="aset.c mcxt.c generation.c slab.c bump.c alignedalloc.c memdebug.c"
 
 mkdir -p "$OUT"
-if [ ! -f "$SRC/configure" ]; then
+ARCHIVE=$OUT/postgresql-$PG_VERSION.tar.bz2
+if [ ! -f "$ARCHIVE" ]; then
   echo "== fetching PostgreSQL $PG_VERSION"
-  curl -sS -L -o "$OUT/pg.tar.bz2" "$BASE_URL/postgresql-$PG_VERSION.tar.bz2"
-  tar xf "$OUT/pg.tar.bz2" -C "$OUT"
+  curl --fail --silent --show-error --location -o "$ARCHIVE.part" "$PG_URL"
+  pg_verify_archive "$ARCHIVE.part"
+  mv "$ARCHIVE.part" "$ARCHIVE"
+fi
+pg_verify_archive "$ARCHIVE"
+if [ ! -f "$SRC/configure" ]; then
+  tar xf "$ARCHIVE" -C "$OUT"
 fi
 # configure only generates the headers the manager includes; nothing of the
 # backend is built, and the manager is compiled from the tree by hand below.

@@ -4,7 +4,7 @@
  * This is replay_domain.c with the level below changed, and that is the whole
  * of the difference: the loop is src/shared/replay-engine.c, the same one the host
  * driver and the unprotected domain run, and the manager is the same source
- * with patches/postgresql-17.5-0004-allocset-sublet-context-revocation.patch applied. Everything the two arms report side by
+ * with patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch applied. Everything the two arms report side by
  * side therefore comes from one loop over one recording.
  *
  * The regions, in the order the host shares them:
