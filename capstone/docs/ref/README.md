@@ -58,7 +58,7 @@ one's memory came from, and how many the port can actually reach. The specimens 
 | doc | pin | reachable | drivers |
 |---|---|---|---|
 | `postgres-nested-allocator-defects.md` | PostgreSQL 17.0 | 8 | 8 paired domain arms, run under QEMU (PR #54, #55) |
-| `cpython-pymalloc-defects.md` | CPython 3.13.7 | 21 of 44 live | none yet — scaffolding and one case's provenance |
+| `cpython-pymalloc-defects.md` | CPython 3.13.7 | 23 of 44 live | none yet — scaffolding and one case's provenance |
 | `whisper-ggml-defects.md` | whisper.cpp 1.9.4 | **0** | none, and none possible: see the doc |
 
 `paper-bug-inventory.md` is the separate question of what the paper currently cites.
