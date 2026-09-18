@@ -14,7 +14,7 @@
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$HERE/../../.." && pwd)
-PG_VERSION=${PG_VERSION:-17.5}
+PG_VERSION=${PG_VERSION:-17.0}
 BASE_URL=https://ftp.postgresql.org/pub/source/v$PG_VERSION
 OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
 SRC=$OUT/postgresql-$PG_VERSION
