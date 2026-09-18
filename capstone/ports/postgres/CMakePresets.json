@@ -39,6 +39,36 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "memory-domain",
+      "inherits": "capstone-domain",
+      "displayName": "QEMU allocator memory profiles",
+      "cacheVariables": {
+        "PG_PAYLOAD_BYTES": "16777216",
+        "PG_SCRATCH_BYTES": "67108864",
+        "BUILD_TESTING": false,
+        "PG_MEMORY_PROFILE": true,
+        "PG_SEPARATE_SCRATCH": true
+      }
+    },
+    {
+      "name": "memory-linux-host",
+      "inherits": "linux-host",
+      "displayName": "QEMU memory-profile loader",
+      "cacheVariables": {
+        "PG_PAYLOAD_BYTES": "16777216",
+        "PG_SCRATCH_BYTES": "67108864",
+        "BUILD_TESTING": false
+      }
+    },
+    {
+      "name": "memory-reference",
+      "inherits": "memory-domain",
+      "displayName": "Matching replay without memory instrumentation",
+      "cacheVariables": {
+        "PG_MEMORY_PROFILE": false
+      }
     }
   ],
   "buildPresets": [
@@ -55,6 +85,29 @@
     {
       "name": "linux-host",
       "configurePreset": "linux-host",
+      "jobs": 4
+    },
+    {
+      "name": "memory-domain",
+      "configurePreset": "memory-domain",
+      "targets": [
+        "replay-spatial",
+        "replay-sublet"
+      ],
+      "jobs": 4
+    },
+    {
+      "name": "memory-reference",
+      "configurePreset": "memory-reference",
+      "targets": [
+        "replay-spatial",
+        "replay-sublet"
+      ],
+      "jobs": 4
+    },
+    {
+      "name": "memory-linux-host",
+      "configurePreset": "memory-linux-host",
       "jobs": 4
     }
   ],

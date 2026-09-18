@@ -19,6 +19,11 @@
 #include "pg_subpool.h"
 #include <stddef.h>
 #include <stdint.h>
+#ifdef PG_MEMORY_PROFILE
+#include "profile.h"
+static struct pg_memory_backing memory;
+static unsigned long profile_pool_bytes[PG_SUBPOOL_MAX];
+#endif
 
 struct pg_subpool_counts pg_subpool_counts;
 
@@ -104,6 +109,9 @@ unsigned long pg_subpool_arena(void *region, unsigned long bytes) {
     pool_tab[i].free_next = &pool_tab[i + 1];
   pool_free = &pool_tab[0];
 
+#ifdef PG_MEMORY_PROFILE
+  memory.arena_capacity = arena_limit - arena_cursor;
+#endif
   arena_ready = 1;
   return 0;
 }
@@ -115,6 +123,9 @@ static int cut(capstone_cap_slot *slot, capstone_cap_slot *handle,
                unsigned long bytes) {
   if (!arena_ready || arena_cursor + bytes > arena_limit)
     return 0;
+#ifdef PG_MEMORY_PROFILE
+  memory.backing_bytes += bytes;
+#endif
   arena_cursor += bytes;
   sublet_carve(&arena, arena_cursor, slot);
   sublet_handle(slot, handle);
@@ -145,6 +156,11 @@ static struct pg_subpool *pool_alloc(unsigned long bytes) {
              bytes) {
     return NULL; /* a reused sub-pool is too small for this */
   }
+#ifdef PG_MEMORY_PROFILE
+  unsigned long capacity = capstone_cap_end(&sp->pool) - capstone_cap_base(&sp->pool);
+  profile_pool_bytes[sp - pool_tab] = capacity;
+  memory.assigned_bytes += capacity;
+#endif
   pool_free = sp->free_next;
   sp->free_next = NULL;
   sp->extra = NULL;
@@ -183,6 +199,9 @@ int pg_subpool_grow(pg_subpool *sp, unsigned long bytes) {
  * hold capabilities that the revoke has already killed, and the next carve
  * stores over them. That is what keeps a reset off the chunks. */
 static void block_release(pg_block *b) {
+#ifdef PG_MEMORY_PROFILE
+  memory.block_bytes -= b->endptr - b->base;
+#endif
   if (b->chunk_head) {
     chunk_tab[b->chunk_tail].block_next = chunk_free;
     chunk_free = b->chunk_head;
@@ -229,7 +248,16 @@ static void pool_drop_blocks(struct pg_subpool *sp) {
 
 static void pool_revoke(struct pg_subpool *sp) {
   pool_drop_blocks(sp);
+#ifdef PG_MEMORY_PROFILE
+  unsigned long carved = sp->cursor - capstone_cap_base(&sp->handle);
+  unsigned long before_init = sublet_stats.init;
+#endif
   sublet_give_to(&sp->handle, &sp->pool);
+#ifdef PG_MEMORY_PROFILE
+  memory.stranded_bytes -= carved;
+  if (sublet_stats.init != before_init)
+    memory.init_bytes += profile_pool_bytes[sp - pool_tab];
+#endif
   pg_subpool_counts.revocations++;
   sublet_handle(&sp->pool, &sp->handle);
   pg_subpool_counts.handles++;
@@ -281,6 +309,9 @@ static void pool_return(struct pg_subpool *sp) {
   sp->extra = NULL;
   sp->free_next = pool_free;
   pool_free = sp;
+#ifdef PG_MEMORY_PROFILE
+  memory.assigned_bytes -= profile_pool_bytes[sp - pool_tab];
+#endif
   pg_subpool_counts.pools_live--;
 }
 
@@ -315,6 +346,10 @@ static pg_block *block_from(struct pg_subpool *sp, unsigned long bytes) {
   block_free = b->free_next;
   b->free_next = NULL;
 
+#ifdef PG_MEMORY_PROFILE
+  memory.block_bytes += bytes;
+  memory.stranded_bytes += bytes;
+#endif
   sp->cursor += bytes;
   sublet_carve(&sp->pool, sp->cursor, &b->region);
   sp->carved++;
@@ -470,3 +505,22 @@ void pg_subpool_header_free(void *p) {
 }
 
 const struct sublet_stats *pg_subpool_primitives(void) { return &sublet_stats; }
+
+#ifdef PG_MEMORY_PROFILE
+void pg_memory_backing(struct pg_memory_backing *out) {
+  *out = memory;
+  /* The internal counter includes all carved bytes, even blocks whose
+   * bookkeeping was returned. The difference is unavailable until reset. */
+  out->stranded_bytes -= memory.block_bytes;
+  out->pools = pg_subpool_counts.pools_live;
+  out->blocks = pg_subpool_counts.blocks_live;
+  out->entries = pg_subpool_counts.entries_live;
+  out->metadata_live = out->pools * sizeof(pool_tab[0]) +
+      out->blocks * sizeof(block_tab[0]) + out->entries * sizeof(chunk_tab[0]) +
+      (header_next - header_free_n) * PG_HEADER_BYTES;
+  out->metadata_reserved = sizeof(pool_tab) + sizeof(block_tab) +
+      sizeof(chunk_tab) + sizeof(header_tab) + sizeof(header_free);
+  out->nodes_created = sublet_stats.split + sublet_stats.mrev;
+  out->revokes = sublet_stats.revoke;
+}
+#endif

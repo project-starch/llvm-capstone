@@ -130,6 +130,9 @@ void pg_domain_entry(unsigned *res, unsigned func) {
   tables += (r[n - 1].s3 + 2) * 4UL;
 #endif
 
+#ifdef PG_MEMORY_PROFILE
+  tables += (r[n - 1].s2 + 2) * 64UL;
+#endif
   tables = (tables + 4095UL) & ~4095UL;
   if (tables > PG_REPLAY_SCRATCH_SIZE) {
     fail("the scratch region cannot hold the identity tables");

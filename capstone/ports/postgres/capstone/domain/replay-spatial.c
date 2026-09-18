@@ -41,6 +41,9 @@ extern unsigned long pg_level0_live, pg_level0_peak;
  * the rest, so they never pass its counters. */
 static char *arena;
 static char *trace;
+#ifdef PG_SEPARATE_SCRATCH
+static char *scratch;
+#endif
 
 void pg_domain_entry(unsigned *res, unsigned func) {
   if (func == CAPSTONE_DPI_REGION_SHARE) {
@@ -57,6 +60,11 @@ void pg_domain_entry(unsigned *res, unsigned func) {
     case 3:
       trace = (char *)res;
       break;
+#ifdef PG_SEPARATE_SCRATCH
+    case 4:
+      scratch = (char *)res;
+      break;
+#endif
     default:
       break;
     }
@@ -101,6 +109,16 @@ void pg_domain_entry(unsigned *res, unsigned func) {
   tables += (r[n - 1].s3 + 2) * 4UL;
 #endif
   tables = (tables + 4095UL) & ~4095UL;
+#ifdef PG_MEMORY_PROFILE
+  tables += ((r[n - 1].s2 + 2) * 64UL + 4095UL) & ~4095UL;
+#endif
+#ifdef PG_SEPARATE_SCRATCH
+  if (!scratch || tables > PG_REPLAY_SCRATCH_SIZE)
+    replay_die("profile scratch region is absent or too small");
+  scratch_next = scratch;
+  scratch_end = scratch + tables;
+  pg_level0_init(arena, PG_REPLAY_ARENA_SIZE);
+#else
   if (tables + (1UL << 20) > PG_REPLAY_ARENA_SIZE) {
     fail("the arena cannot hold the identity tables and a heap");
     pg_domain_text("  wanted ");
@@ -111,6 +129,7 @@ void pg_domain_entry(unsigned *res, unsigned func) {
   scratch_next = arena;
   scratch_end = arena + tables;
   pg_level0_init(arena + tables, PG_REPLAY_ARENA_SIZE - tables);
+#endif
 
   struct replay_counts c;
   for (size_t i = 0; i < sizeof c; i++)

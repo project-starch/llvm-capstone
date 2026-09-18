@@ -25,6 +25,8 @@ parser.add_argument(
 )
 parser.add_argument("trace", type=Path)
 parser.add_argument("--results", type=Path)
+parser.add_argument("--memory-profile", action="store_true")
+parser.add_argument("--separate-scratch", action="store_true")
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[4]
 regions = json.loads((args.domain_build / "regions.json").read_text())
@@ -68,15 +70,27 @@ markers = {
     "context-hierarchy": ("__CAPSTONE_PG_HIER_DONE__", ["__CAPSTONE_PG_HIER_GOOD__"]),
 }
 done, required = markers[args.program]
-command = "cp /mnt/host/loader.user /tmp/pg-loader && chmod 0755 /tmp/pg-loader && /tmp/pg-loader /mnt/host/domain.dom /mnt/host/trace.a11 --tail"
+command = "cp /mnt/host/loader.user /tmp/pg-loader && chmod 0755 /tmp/pg-loader && /tmp/pg-loader /mnt/host/domain.dom /mnt/host/trace.a11"
 if args.program != "replay-spatial":
-    command += f" --linear-arena --scratch {regions['scratch']}"
+    command += " --linear-arena"
+if args.program != "replay-spatial" or args.memory_profile or args.separate_scratch:
+    command += f" --scratch {regions['scratch']}"
+if args.memory_profile:
+    if args.program not in ("replay-spatial", "replay-sublet"):
+        raise SystemExit("Memory profiling accepts replay programs only")
+    required.extend([done, "__CAPSTONE_PG_MEMORY_DONE__"])
+    done = "__CAPSTONE_PG_HOST_DONE__"
+    command += " --report-file /mnt/host/payload.log"
+else:
+    command += " --tail"
 env = dict(os.environ, CAPSTONE_REPO_ROOT=str(repo))
 env.setdefault("CAPSTONE_GP_NONLIN", "1")
 env.setdefault("CAPSTONE_REV_NODES", "1048576")
 qemu = Path(env["CAPSTONE_QEMU_BINARY"])
 manifest = {
     "program": args.program,
+    "memory_profile": args.memory_profile,
+    "separate_scratch": args.separate_scratch or args.memory_profile,
     "regions": regions,
     "node_capacity": int(env["CAPSTONE_REV_NODES"]),
     "sha256": {
@@ -113,6 +127,9 @@ text = (
     if (run / "serial.log").exists()
     else ""
 )
+if args.memory_profile:
+    report = share / "payload.log"
+    text += report.read_text(errors="replace") if report.exists() else ""
 passed = (
     result.returncode == 0
     and all(m in text for m in required)

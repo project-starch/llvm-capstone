@@ -3,6 +3,9 @@
 #include "replay-engine.h"
 #include "a11trace.h"
 #include "utils/memutils.h"
+#ifdef PG_MEMORY_PROFILE
+#include "profile.h"
+#endif
 
 /* The oracle, and it stays in: a replay that follows a name it was never given
    is not replaying the recording, and the way that shows without a check is a
@@ -67,6 +70,9 @@ void replay_run(struct a11_rec *r, unsigned long n, struct replay_counts *c) {
     replay_die("no room for the table the data check needs");
 #endif
 
+#ifdef PG_MEMORY_PROFILE
+  pg_memory_begin(&r[n - 1]);
+#endif
   unsigned long live = 0;
 
   for (unsigned long i = 0; i < n; i++) {
@@ -174,5 +180,11 @@ void replay_run(struct a11_rec *r, unsigned long n, struct replay_counts *c) {
     default:
       replay_die("a record this reader does not know");
     }
+#ifdef PG_MEMORY_PROFILE
+    pg_memory_event(i, e, len);
+#endif
   }
+#ifdef PG_MEMORY_PROFILE
+  pg_memory_end(n);
+#endif
 }

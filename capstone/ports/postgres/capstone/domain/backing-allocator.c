@@ -20,6 +20,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef PG_MEMORY_PROFILE
+#include "profile.h"
+static unsigned long profile_block_bytes;
+#endif
 
 /* A header before every block. `size` is the payload, `prev` walks backwards
    so a free can coalesce with what is behind it without a scan. */
@@ -112,6 +116,9 @@ void *malloc(size_t want) {
     struct hdr *after = NEXT(h);
     if ((char *)after < arena_hi)
       after->prevsize = 0; /* in use, so it may not coalesce back */
+#ifdef PG_MEMORY_PROFILE
+    profile_block_bytes += h->size;
+#endif
     in_use++;
     pg_level0_taken++;
     if (++pg_level0_live > pg_level0_peak)
@@ -126,6 +133,9 @@ void free(void *p) {
     return;
   struct hdr *h = HEADER(p);
 
+#ifdef PG_MEMORY_PROFILE
+  profile_block_bytes -= h->size;
+#endif
   pg_level0_given++;
   pg_level0_live--;
   in_use--;
@@ -191,3 +201,14 @@ void *calloc(size_t k, size_t n) {
 }
 
 int pg_level0_in_use(void) { return in_use; }
+
+#ifdef PG_MEMORY_PROFILE
+void pg_memory_backing(struct pg_memory_backing *out) {
+  *out = (struct pg_memory_backing){0};
+  out->backing_bytes = profile_block_bytes + pg_level0_live * HDRSZ;
+  out->assigned_bytes = out->backing_bytes;
+  out->block_bytes = profile_block_bytes;
+  out->blocks = pg_level0_live;
+  out->arena_capacity = arena_hi - arena_lo;
+}
+#endif

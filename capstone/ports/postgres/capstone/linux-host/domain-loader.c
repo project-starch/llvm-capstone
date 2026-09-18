@@ -1,6 +1,6 @@
 /* The host side of the PostgreSQL memory-manager domain.
  *
- *   domain-loader <domain image> <trace> [--tail]
+ *   domain-loader <domain image> <trace> [--tail | --report-file <path>]
  *
  * Four regions, in the order the domain expects them, because the domain
  * counts the shares and assigns by order:
@@ -57,12 +57,13 @@
  *   REV_DEFAULT    non-linear to the domain, a handle kept by the monitor
  *   REV_BORROWED   linear to the domain, a handle kept by the monitor
  *
- * The unprotected arm wants the first: capstone/domain/backing-allocator.c walks its arena with
- * ordinary pointer arithmetic, and a linear capability copied by ordinary C
- * code is what the hardware refuses. The Sublet arm needs the second, because
- * a region that is not linear cannot be split and a handle senior to it has
- * nothing to revoke. The first run of the sub-pool test said so, type 1 where
- * it wanted 0, and that is why this is an argument and not a constant. */
+ * The unprotected arm wants the first: capstone/domain/backing-allocator.c
+ * walks its arena with ordinary pointer arithmetic, and a linear capability
+ * copied by ordinary C code is what the hardware refuses. The Sublet arm needs
+ * the second, because a region that is not linear cannot be split and a handle
+ * senior to it has nothing to revoke. The first run of the sub-pool test said
+ * so, type 1 where it wanted 0, and that is why this is an argument and not a
+ * constant. */
 #define REV_DEFAULT 0x0UL
 #define REV_BORROWED 0x1UL
 
@@ -155,18 +156,50 @@ static long load_trace(const char *path, char *dst, unsigned long room) {
   return (long)got;
 }
 
+/* Keep large profiles off the serial console. Like input, shared mappings
+ * pass through ordinary userspace memory before a kernel file operation. */
+static int save_report(const char *path, const char *payload,
+                       unsigned long size) {
+  char staging[65536];
+  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fd < 0)
+    return -1;
+  while (size) {
+    size_t chunk = size < sizeof staging ? size : sizeof staging;
+    memcpy(staging, payload, chunk);
+    size_t written = 0;
+    while (written < chunk) {
+      ssize_t n = write(fd, staging + written, chunk - written);
+      if (n < 0 && errno == EINTR)
+        continue;
+      if (n <= 0) {
+        close(fd);
+        return -1;
+      }
+      written += (size_t)n;
+    }
+    payload += chunk;
+    size -= chunk;
+  }
+  return close(fd);
+}
+
 int main(int argc, char **argv) {
   int want_tail = 0;
+  const char *report_file = NULL;
   int linear_arena = 0;
   unsigned long scratch_bytes = 0;
 
   if (argc < 3) {
-    mark("usage: domain-loader <domain image> <trace> [--tail]\n");
+    mark("usage: domain-loader <domain image> <trace> [--tail | --report-file "
+         "<path>]\n");
     return 2;
   }
   for (int i = 3; i < argc; i++)
     if (!strcmp(argv[i], "--tail"))
       want_tail = 1;
+    else if (!strcmp(argv[i], "--report-file") && i + 1 < argc)
+      report_file = argv[++i];
     else if (!strcmp(argv[i], "--linear-arena"))
       linear_arena = 1;
     /*
@@ -179,6 +212,14 @@ int main(int argc, char **argv) {
      */
     else if (!strcmp(argv[i], "--scratch") && i + 1 < argc)
       scratch_bytes = strtoul(argv[++i], NULL, 0);
+    else {
+      mark("PG: unknown or incomplete option\n");
+      return 2;
+    }
+  if (want_tail && report_file) {
+    mark("PG: choose --tail or --report-file\n");
+    return 2;
+  }
 
   if (capstone_init())
     return fail("PG: capstone_init failed=", 0);
@@ -245,15 +286,21 @@ int main(int argc, char **argv) {
       want_tail && pthread_create(&tail_thread, NULL, tail_main, &tail) == 0;
 
   unsigned long result = call_dom(domain);
+  mark_u("PG: result=", result);
 
   if (tail_started) {
     __atomic_store_n(&tail.stop, 1, __ATOMIC_RELEASE);
     pthread_join(tail_thread, NULL);
   }
-  if (meta->length > tail.printed && meta->length <= PG_REPLAY_PAYLOAD_SIZE)
+  if (report_file) {
+    if (meta->length > PG_REPLAY_PAYLOAD_SIZE ||
+        save_report(report_file, payload, meta->length))
+      return fail("PG: save_report failed=", meta->length);
+  } else if (meta->length > tail.printed &&
+             meta->length <= PG_REPLAY_PAYLOAD_SIZE)
     (void)write(STDOUT_FILENO, payload + tail.printed,
                 (size_t)(meta->length - tail.printed));
-  mark_u("PG: result=", result);
   capstone_cleanup();
+  mark("__CAPSTONE_PG_HOST_DONE__\n");
   return 0;
 }
