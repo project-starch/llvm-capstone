@@ -1,4 +1,5 @@
 {
+  "case": 0,
   "upstream_fix": "gh-143543",
   "title": "re-entrant use-after-free in itertools.groupby",
   "consumer": "Modules/itertoolsmodule.c",
@@ -8,16 +9,17 @@
   "object": "the user's key object, held borrowed in gbo->tgtkey and gbo->currkey",
   "size_class": "small object struct, well under the 512-byte pymalloc threshold",
   "lifetime_ender": "last reference dropped by a re-entrant __eq__, freeing the object to its pool",
-  "shape": "re-entrancy",
+  "shape": "free / reuse / stale read",
+  "sibling_issue": "gh-146613_grouper_parent_key",
   "fidelity": "model-consumer, real allocator",
   "arms": {
     "native-detect": {
       "oracle": "invalid-read",
-      "requires": "valgrind, or a --without-pymalloc build for ASan"
+      "requires": "valgrind, or a --without-pymalloc build for ASan",
+      "status": "not written"
     },
-    "native-damage": { "oracle": "stale-read-returns-other-object" },
     "spatial": { "oracle": "complete" },
-    "sublet": { "oracle": "fault", "cause": 24 }
+    "sublet": { "oracle": "fault at the labelled read probe", "cause": 24 }
   },
-  "status": "provenance only; no driver written, nothing run"
+  "status": "run 2026-09-18 under QEMU; both arms passed"
 }

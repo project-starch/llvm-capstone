@@ -57,7 +57,7 @@ one's memory came from, and how many the port can actually reach. The specimens 
 
 | doc | pin | reachable | drivers |
 |---|---|---|---|
-| `cpython-pymalloc-defects.md` | CPython 3.13.7 | 23 of 44 live | none yet — scaffolding and one case's provenance |
+| `cpython-pymalloc-defects.md` | CPython 3.13.7 | 23 of 44 live | 8 paired domain arms, 16/16 under QEMU, negative control fires |
 
 The PostgreSQL and whisper.cpp inventories arrive with their own ports' branches; add their rows
 here when those land, so this table never lists a file that is not in the tree.
