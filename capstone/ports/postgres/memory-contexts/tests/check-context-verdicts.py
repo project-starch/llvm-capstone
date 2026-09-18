@@ -36,6 +36,7 @@ class Verdicts(unittest.TestCase):
         write = self.serial.replace("000001)", "000005)").replace(
             "pc = 0x123", "pc = 0x456"
         )
+
         self.assertTrue(classify(write, 0, 5, "sublet", 1)["passed"])
         self.assertFalse(
             classify(write.replace("pc = 0x456", "pc = 0x123"), 0, 5, "sublet", 1)[
@@ -50,6 +51,17 @@ class Verdicts(unittest.TestCase):
             classify(bounds.replace("cause = 5", "cause = 24"), 0, 9, "sublet", 1)[
                 "passed"
             ]
+        )
+
+    def test_delivered_fault_requires_process_exit(self):
+        serial = self.serial.replace(
+            "halted by capability fault", "capability fault delivered"
+        )
+        self.assertFalse(classify(serial, 0, 1, "sublet", 1)["passed"])
+        serial += "__CAPSTONE_PG_DOMAIN_FAULT__\n__EXIT_CODE__139\n"
+        self.assertTrue(classify(serial, 0, 1, "sublet", 1)["passed"])
+        self.assertFalse(
+            classify(serial.replace("139", "0"), 0, 1, "sublet", 1)["passed"]
         )
 
     def test_control(self):

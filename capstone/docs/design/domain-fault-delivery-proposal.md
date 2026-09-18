@@ -1,5 +1,14 @@
 # Proposal: clean delivery of in-domain capability faults (retire the `do_interrupt` abort hack)
 
+**2026-09-18 update:** an opt-in [cooperative client runtime](../../runtime/domain-faults.md)
+now provides local `ctvec` delivery and a fault return for the PostgreSQL example
+launcher under a matching QEMU build. It is not the monitor-level unwind proposed
+below. In particular, the historical “parent handler” description of CIH below is
+incorrect for the current firmware: `cap_env_init` installs the global interrupt
+scheduler, whose ordinary handler resumes an interrupted domain. Routing a
+synchronous fault there unchanged does not terminate the client. Monitor-enforced
+termination, general resource destruction, and FPGA recovery remain separate work.
+
 *Status: PARTIALLY IMPLEMENTED (2026-07-03). The abort hack is retired: an
 in-domain capability fault now **halts cleanly with a reported cause and
 preserved output** instead of aborting the emulator (QEMU-only change, see

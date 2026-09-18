@@ -1,0 +1,321 @@
+{
+  "qemu_revision": "77d69353b7",
+  "runtime_base": "fccde741ad01",
+  "runtime_changes": "Companion commit containing this evidence",
+  "configuration": {
+    "PG_DOMAIN_FAULT_RECOVERY": true,
+    "PG_ARENA_BYTES": 8388608,
+    "PG_TRACE_BYTES": 1048576,
+    "PG_DOMAIN_STACK_BYTES": 262144
+  },
+  "native_ctests_passed": 14,
+  "rows": [
+    {
+      "artifact": "fault-0-lzdwwjr0",
+      "case": 0,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "19cf4c69639efbbf89e31de41682c674966d0bbda90a0bd8021f1b0a4b3934f7"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "fault-1-ps1prhug",
+      "case": 1,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "3196108e2fef15610c6d58e04536c051662c9ee40eca672a757ef2f1e564ee31"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "fault-2-8d1cciu5",
+      "case": 2,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "b9325bfdae34787cb639bb4d4325f5a893f7e8952f15ee74ecdd946f66ece6ad"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "fault-3-m7quc9pp",
+      "case": 3,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "7f87900d7e21a6a38ea5c6fabec4ec6c5b15bde0f9197079b49b5627c0408c57"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "fault-4-jkz7vp35",
+      "case": 4,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "75219071d42be4c8e1378026862d3d6a50b0983335365c047c71265d91eb142e"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 1
+    },
+    {
+      "artifact": "fault-5-ahdbrr_i",
+      "case": 5,
+      "sha256": {
+        "reentry.user": "aa45497af5e28e3d05bca0822eac083be2fe53925d9035d420fa0507504b8b9e",
+        "fault.dom": "0fda3833268f8c37d043cdbd657e5f6173c2c1748eeaaebb9a2b5977b95a0db1"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 1
+    },
+    {
+      "artifact": "fault-allocators-7_r489sz",
+      "case": "allocators",
+      "sha256": {
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "supervisor.user": "d729d3bc166c1f2dd3f619f1dba9eec72cd235f333f99624f79d66193f1b70ba",
+        "healthy.dom": "2dce52b68cd9aa95929d24dd57068e5ef5d2eb711f5a0c0e65d3e7092cebad39",
+        "fault.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+        "case-2.bin": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd",
+        "case-1.bin": "34fb5c825de7ca4aea6e712f19d439c1da0c92c37b423936c5f618545ca4fa1f",
+        "case-0.bin": "2fcd151b8295e8b3bf8ec64ede173523417960a8db6cbc569de9a25a458f9135",
+        "empty.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "revocation_nodes": 8388608,
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "allocset-spatial-ky15994c",
+      "client": "allocset",
+      "mode": "spatial",
+      "sha256": {
+        "client.dom": "b38e99eaebceea514430203f9e36441cd58ceb2a411f5515f24c6243d78acc16",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "allocset-sublet-htwv_xp7",
+      "client": "allocset",
+      "mode": "sublet",
+      "sha256": {
+        "client.dom": "2f83d95642e6485479277780c378dc3a4166a8a082e58802de7bdcaeff969192",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "generation-spatial-9xclshwi",
+      "client": "generation",
+      "mode": "spatial",
+      "sha256": {
+        "client.dom": "e2dc1db3b1dc4054f551906b607c48a317da0d4f8c446ffcf33dc45dac74f153",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "generation-sublet-zrhut4g0",
+      "client": "generation",
+      "mode": "sublet",
+      "sha256": {
+        "client.dom": "2dce52b68cd9aa95929d24dd57068e5ef5d2eb711f5a0c0e65d3e7092cebad39",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "slab-spatial-koo1h_dj",
+      "client": "slab",
+      "mode": "spatial",
+      "sha256": {
+        "client.dom": "81204f24d2d5bd9fbcbb63652dfdd33bd4502c5038d9e2b497e992a18742efde",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "slab-sublet-4wt3gekl",
+      "client": "slab",
+      "mode": "sublet",
+      "sha256": {
+        "client.dom": "cef326282fd46f1d08cbd3904110721c6b90e2d6a9946e5697a53c518e6b3feb",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "bump-spatial-f8vhmqza",
+      "client": "bump",
+      "mode": "spatial",
+      "sha256": {
+        "client.dom": "94061e44f71272cdeb139ad925d8e3db4ad698438efca373070b4a6a5fd099a0",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    },
+    {
+      "artifact": "bump-sublet-jlrw1xkr",
+      "client": "bump",
+      "mode": "sublet",
+      "sha256": {
+        "client.dom": "f3e0c032831bf2d318fc9ff9ac4d74f335f853a6d0d888dfc92a2f8634c9f94c",
+        "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+        "input.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regions": {
+        "payload": 65536,
+        "arena": 8388608,
+        "trace": 1048576,
+        "scratch": 50331648
+      },
+      "revocation_nodes": 8388608,
+      "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+      "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+      "passed": true,
+      "runner_exit": 0
+    }
+  ]
+}

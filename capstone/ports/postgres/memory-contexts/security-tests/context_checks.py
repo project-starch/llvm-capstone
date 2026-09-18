@@ -5,7 +5,7 @@ import re
 
 def classify(serial, kind, test, mode, runner_exit):
     faults = re.findall(
-        r"domain halted by capability fault: cause = (\d+), pc = (0x[0-9a-f]+)",
+        r"domain (?:halted by capability fault|capability fault delivered): cause = (\d+), pc = (0x[0-9a-f]+)",
         serial,
     )
     fault = mode == "sublet" and test not in (0, 7, 10, 14)
@@ -31,6 +31,13 @@ def classify(serial, kind, test, mode, runner_exit):
             and expected is not None
             and int(pc, 16) == int(expected, 16)
             and int(cause) in ((5,) if test == 9 else (24, 25))
+            and (
+                "domain capability fault delivered" not in serial
+                or (
+                    "__CAPSTONE_PG_DOMAIN_FAULT__" in serial
+                    and "__EXIT_CODE__139" in serial
+                )
+            )
         )
     else:
         row["passed"] = (

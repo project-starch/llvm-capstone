@@ -25,6 +25,8 @@ class ClientVerdicts(unittest.TestCase):
             good + good,
             good + "__CAPSTONE_PG_CLIENT_FAILED__",
             good + "domain halted by capability fault: cause = 24",
+            good + "domain capability fault delivered: cause = 24",
+            good + "__CAPSTONE_PG_DOMAIN_FAULT__",
         ):
             with self.subTest(serial=bad):
                 self.assertFalse(runner.passed(bad, "slab", 0))
