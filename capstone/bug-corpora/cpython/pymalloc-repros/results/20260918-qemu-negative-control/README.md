@@ -1,5 +1,9 @@
 # Negative control for the defect suite, 2026-09-18
 
+> **SUPERSEDED by `../20260919-qemu-20-negative-control/`**, which covers all twenty reachable
+> defects instead of the first eight, against a later binary. Kept for the
+> trail; its rows are a strict subset and were not wrong.
+
 **2/2 oracles fired.** Neither arm reported a pass on an input that never ran the
 case.
 

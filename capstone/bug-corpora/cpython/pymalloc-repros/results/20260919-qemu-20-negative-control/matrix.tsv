@@ -1,0 +1,5 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	delivered	completed	runner_exit
+0	gh-143543	groupby-reentrant-eq	free/reuse/stale read	spatial	complete	False						0
+0	gh-143543	groupby-reentrant-eq	free/reuse/stale read	sublet	fault	False	0	0		False		0
+10	gh-142560	bytearray-search-realloc-moved	realloc moved the block	spatial	complete	False						0
+10	gh-142560	bytearray-search-realloc-moved	realloc moved the block	sublet	fault	False	0	0		False		0

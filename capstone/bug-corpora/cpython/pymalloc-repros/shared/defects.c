@@ -1,4 +1,8 @@
-/* Eight CPython pymalloc defects, as domain programs.
+/* Twenty CPython pymalloc defects, as domain programs.
+ *
+ * Every consumer-side temporal defect live in the pinned 3.13.7 whose freed
+ * memory is pymalloc's. The inventory that produced the list, and what was
+ * excluded and why, is docs/ref/cpython-pymalloc-defects.md.
  *
  * One program, one defect per boot, selected through the first event's id --
  * the port's own security tests are built this way, and for the same reason: a
@@ -16,7 +20,7 @@
  *
  * That pairing is the claim. Note what the spatial arm is and is not: it is
  * this port's unprotected baseline, not a CHERI model. CHERI would narrow
- * bounds per allocation and would still miss all eight, because a reused block
+ * bounds per allocation and would still miss all twenty, because a reused block
  * stays tagged and in bounds -- but that argument is made in prose, not by this
  * arm.
  *
@@ -30,20 +34,30 @@
  * names its upstream fix; the per-case PROVENANCE.md says line by line what was
  * reduced.
  *
- * FOUR OF THE EIGHT SHARE ONE ALLOCATOR SHAPE, AND THAT IS A FINDING
+ * TWENTY REPORTS, NINE SHAPES, AND THAT RATIO IS THE FINDING
  *
- * Cases 0, 1, 3 and 4 come from four separately reported defects in three
- * modules, and all four reduce to: free a small object, allocate the same size
- * again, read through the pointer that was kept. They are kept apart rather
- * than merged because they are independent upstream reports, and because the
- * sameness is the point -- one revocation mechanism covers a defect class that
- * upstream has had to fix one module at a time.
+ * Eight of the twenty -- cases 0, 1, 3, 8, 12, 16, 17, 19 -- reduce to the same
+ * sequence: free a small object, allocate the same size again, read through the
+ * pointer that was kept. They are eight separately reported defects across
+ * seven modules, fixed one at a time over more than a year. They are kept apart
+ * rather than merged because the sameness is the point: one revocation
+ * mechanism covers a class upstream has to keep rediscovering.
+ *
+ * The other shapes, each held by one or two cases: an interior pointer into a
+ * freed block (2, 13); a stale entry reached through a live array (4); a
+ * pointer LOADED out of a freed block and followed (5); a payload buffer (6, 9);
+ * a cursor surviving in a struct field across two API calls (7); a block ended
+ * by a REALLOC that moved it (10); a free and a use on adjacent lines with no
+ * callback in between (11); a dangling pointer parked in a surviving object or
+ * a global, with no bound on when it is next read (14, 18); and a bare
+ * PyMem_Malloc block cached by a third party (15).
  *
  * SIZE. Every block here is well under pymalloc's 512-byte threshold, so all of
- * it is pool memory that never reaches malloc. Case 6 is the one whose upstream
- * defect can exceed that: it carries a payload buffer, and on a large input the
- * same defect becomes an ordinary malloc use-after-free that ASan does see.
- * That is stated in its PROVENANCE.md and is why the size is pinned here.
+ * it is pool memory that never reaches malloc. Three cases have upstream
+ * defects that can exceed it -- 6 (a join buffer), 10 (bytearray storage) and
+ * 19 (a buffered-input snapshot). For those the same defect becomes an ordinary
+ * malloc use-after-free that ASan does see, which is why the size is pinned
+ * here and stated in each of their PROVENANCE.md files.
  */
 #include "port.h"
 #include <string.h>
@@ -258,6 +272,238 @@ static void defect(unsigned which) {
     memset(fresh, 89, OBJ);
     mark(7);
     (void)read_probe(held);    /* the NEXT decompress() resumes from next_in */
+  } else if (which == 8) {
+    /* gh-112127 -- atexit.unregister(). The loop compares the caller's func
+     * against each registered callback, borrowing the tuple out of the live
+     * callbacks list. PyObject_RichCompareBool runs a user __eq__, which can
+     * call atexit.unregister again and mutate the list, dropping the tuple the
+     * comparison is standing on -- and the loop then carries on to the next
+     * index through the same list. */
+    void **callbacks = pym_malloc(OBJ);   /* the list's ob_item */
+    unsigned char *tuple = pym_malloc(OBJ);
+    unsigned char *other = pym_malloc(OBJ);
+    CHECK(callbacks && tuple && other, 719);
+    tuple[0] = 97;
+    other[0] = 101;
+    callbacks[0] = tuple;
+    callbacks[1] = other;
+    pym_free(tuple);           /* the re-entrant unregister removed it */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == tuple && other[0] == 101, 720);
+    fresh[0] = 103;
+    mark(8);
+    (void)read_probe(callbacks[0]);
+  } else if (which == 9) {
+    /* gh-139210 -- xml.etree.ElementTree.iterparse(). event_name is a C string
+     * pointing INTO an item of events_seq. The pre-fix order drops the
+     * sequence first and formats the message second, so PyErr_Format reads the
+     * string out of memory the sequence took with it.
+     *
+     * The distinguishing feature is that nothing here is a PyObject* the
+     * checker could have followed -- it is a char* into a payload, consumed by
+     * a formatter on the error path. */
+    unsigned char *item = pym_malloc(OBJ);   /* the event name string object */
+    CHECK(item, 721);
+    memset(item, 107, OBJ);
+    held = item + 24;          /* event_name, into the string's payload */
+    pym_free(item);            /* Py_DECREF(events_seq), before the format */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == item, 722);
+    memset(fresh, 109, OBJ);
+    mark(9);
+    (void)read_probe(held);    /* PyErr_Format("unknown event '%s'", ...) */
+  } else if (which == 10) {
+    /* gh-142560 -- bytearray's search-like methods. They cache
+     * PyByteArray_AS_STRING(self) and then call into code that can run user
+     * Python, which may resize the bytearray. The resize REALLOCATES the
+     * storage, and when it moves, the cached base pointer is left addressing
+     * the old block.
+     *
+     * This is the only case in the corpus where the block is ended by a
+     * REALLOC rather than a free, so the assertion that it really moved is
+     * part of the case: a realloc that returned the same address would leave
+     * the driver testing nothing at all. */
+    unsigned char *storage = pym_malloc(OBJ);
+    CHECK(storage, 723);
+    memset(storage, 113, OBJ);
+    held = storage;            /* the cached PyByteArray_AS_STRING(self) */
+    unsigned char *grown = pym_realloc(storage, 300); /* user code resized it */
+    CHECK(grown, 724);
+    CHECK(grown != storage, 725); /* it MUST have moved, or this tests nothing */
+    grown[0] = 127;
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == storage, 726); /* the old block came back */
+    memset(fresh, 131, OBJ);
+    mark(10);
+    (void)read_probe(held);    /* _Py_bytes_find over the old base */
+  } else if (which == 11) {
+    /* gh-142783 -- the zoneinfo weak cache. get_weak_cache asked for the
+     * attribute, immediately Py_XDECREF'd it, and returned what the comment
+     * called "a borrowed reference" on the assumption that the type held one.
+     * When it does not, the object is gone before the caller's first use.
+     *
+     * No re-entrancy and no user callback: the free and the use are adjacent
+     * lines. Every other case here needs something to run in between. */
+    unsigned char *cache = pym_malloc(OBJ);
+    CHECK(cache, 727);
+    cache[0] = 137;
+    held = cache;
+    pym_free(cache);           /* Py_XDECREF, one line after the lookup */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == cache, 728);
+    fresh[0] = 139;
+    mark(11);
+    (void)read_probe(held);    /* PyObject_CallMethod(weak_cache, "get", ...) */
+  } else if (which == 12) {
+    /* gh-143004 -- collections.Counter.update via _count_elements. oldval is
+     * borrowed from the mapping; PyNumber_Add runs a user __add__ that can
+     * mutate or clear the dict, freeing the value while the sum is being
+     * computed. The mapping itself survives, which is what separates this from
+     * case 4: there the container was emptied and abandoned, here it is
+     * emptied and kept. */
+    void **values = pym_malloc(OBJ);
+    unsigned char *oldval = pym_malloc(OBJ);
+    CHECK(values && oldval, 729);
+    oldval[0] = 149;
+    values[0] = oldval;        /* the dict's slot, borrowed as oldval */
+    pym_free(oldval);          /* the user __add__ cleared the dict */
+    values[0] = NULL;          /* ... and the container is still live */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == oldval, 730);
+    fresh[0] = 151;
+    held = oldval;             /* PyNumber_Add is still holding it */
+    mark(12);
+    (void)read_probe(held);
+  } else if (which == 13) {
+    /* gh-144833 -- the SSL module when SSL_new() fails. The error path did
+     * Py_DECREF(self) and then get_state_ctx(self), reading a field out of the
+     * object it had just released.
+     *
+     * The stale access is to the freed object ITSELF, not to anything it
+     * pointed at, and there is no second party involved at all. */
+    unsigned char *self = pym_malloc(OBJ);
+    CHECK(self, 731);
+    memset(self, 157, OBJ);
+    held = self + 8;           /* the ctx field inside self */
+    pym_free(self);            /* Py_DECREF(self), first on the error path */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == self, 732);
+    memset(fresh, 163, OBJ);
+    mark(13);
+    (void)read_probe(held);    /* get_state_ctx(self), second */
+  } else if (which == 14) {
+    /* gh-146011 -- _decimal's signal dict. traps->flags is a borrowed pointer
+     * INTO the context object's own storage. context_clear released the
+     * context while the signal dict, which can outlive it, kept the interior
+     * pointer -- and signaldict_repr reads it whenever it is next called.
+     *
+     * The gap is unbounded here. Every other case's stale access happens
+     * within the operation that created it, or at worst on the next API call;
+     * this one waits for an unrelated repr() that may never come. */
+    unsigned char *context = pym_malloc(OBJ);
+    unsigned char *signaldict = pym_malloc(OBJ);
+    CHECK(context && signaldict, 733);
+    memset(context, 167, OBJ);
+    signaldict[0] = 173;
+    held = context + 16;       /* traps->flags, into the context's storage */
+    pym_free(context);         /* context_clear, without clearing traps->flags */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == context && signaldict[0] == 173, 734);
+    memset(fresh, 179, OBJ);
+    mark(14);
+    (void)read_probe(held);    /* signaldict_repr, arbitrarily later */
+  } else if (which == 15) {
+    /* gh-149449 -- unicodedata's capsule. _PyUnicode_Name_CAPI was a raw
+     * PyMem_Malloc block owned by a capsule; other code cached the pointer,
+     * and when unicodedata left sys.modules the capsule's destructor freed it
+     * under them. Upstream's fix was to make the struct static.
+     *
+     * The freed thing is not a PyObject at all -- it is a bare allocation, and
+     * it is pymalloc's because obmalloc sets PYMEM_DOMAIN_MEM to
+     * PYMALLOC_ALLOC, so PyMem_Malloc reaches the same pools that
+     * PyObject_Malloc does. That is the fact this case exists to exercise. */
+    unsigned char *capi = pym_malloc(32); /* the _PyUnicode_Name_CAPI block */
+    CHECK(capi, 735);
+    memset(capi, 191, 32);
+    held = capi;
+    pym_free(capi);            /* the capsule's destructor, at module teardown */
+    unsigned char *fresh = pym_malloc(32);
+    CHECK(fresh == capi, 736);
+    fresh[0] = 193;
+    mark(15);
+    (void)read_probe(held);    /* the cached capi->getname, called later */
+  } else if (which == 16) {
+    /* gh-151403 -- subprocess fork_exec. borrowed_arg comes from fast_args and
+     * is handed to PyUnicode_FSConverter, whose __fspath__ can mutate args and
+     * drop the sequence's last reference to it. */
+    void **fast_args = pym_malloc(OBJ);
+    unsigned char *arg = pym_malloc(OBJ);
+    CHECK(fast_args && arg, 737);
+    arg[0] = 197;
+    fast_args[0] = arg;        /* PySequence_Fast_GET_ITEM, borrowed */
+    pym_free(arg);             /* __fspath__ mutated args */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == arg, 738);
+    fresh[0] = 199;
+    mark(16);
+    (void)read_probe(fast_args[0]);
+  } else if (which == 17) {
+    /* gh-151416 -- os.spawnv/spawnve. The same __fspath__ trigger as case 16,
+     * one module over, reached through a getitem function pointer rather than
+     * a fast-sequence macro. Kept separate because it was reported and fixed
+     * separately, months apart, which is the corpus's point about how narrowly
+     * each of these gets patched. */
+    void **argv = pym_malloc(OBJ);
+    unsigned char *item = pym_malloc(OBJ);
+    CHECK(argv && item, 739);
+    item[0] = 211;
+    argv[0] = item;            /* (*getitem)(argv, i), borrowed */
+    pym_free(item);            /* __fspath__ mutated the list */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == item, 740);
+    fresh[0] = 223;
+    mark(17);
+    (void)read_probe(argv[0]);
+  } else if (which == 18) {
+    /* gh-151695 -- the curses screen encoding. A MODULE-LEVEL static pointed
+     * into the encoding string owned by the window object initscr() returned.
+     * The window is an ordinary object and can be deallocated while
+     * module-level functions -- unctrl(), ungetch() -- keep reading through
+     * the static.
+     *
+     * The dangling pointer outlives every frame here. Case 14's lived in
+     * another object; this one lives in a global, so nothing in the program's
+     * structure bounds when it is next used. */
+    unsigned char *window = pym_malloc(OBJ);
+    CHECK(window, 741);
+    memset(window, 227, OBJ);
+    held = window + 32;        /* curses_screen_encoding, into ->encoding */
+    pym_free(window);          /* the window object was deallocated */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == window, 742);
+    memset(fresh, 229, OBJ);
+    mark(18);
+    (void)read_probe(held);    /* unctrl(), through the module-level static */
+  } else if (which == 19) {
+    /* gh-153539 -- TextIOWrapper.tell() with a re-entrant decoder. next_input
+     * is the snapshot bytes object, borrowed; the decoder's getstate can run
+     * Python that seeks the file and replaces the snapshot, dropping the last
+     * reference while tell() is still measuring against it.
+     *
+     * SIZE. The snapshot is a bytes object holding buffered input, so a large
+     * buffer puts it above pymalloc's 512-byte threshold and back within a
+     * malloc-level tool's reach -- the same caveat as case 6 and case 10. The
+     * driver pins the small size. */
+    unsigned char *next_input = pym_malloc(OBJ);
+    CHECK(next_input, 743);
+    memset(next_input, 233, OBJ);
+    held = next_input;         /* the borrowed snapshot */
+    pym_free(next_input);      /* the re-entrant decoder seeked */
+    unsigned char *fresh = pym_malloc(OBJ);
+    CHECK(fresh == next_input, 744);
+    memset(fresh, 239, OBJ);
+    mark(19);
+    (void)read_probe(held);    /* cookie.start_pos -= PyBytes_GET_SIZE(...) */
   } else {
     pym_fail(718);
   }
@@ -274,7 +520,7 @@ void pym_replay(const struct pym_header *input, struct pym_header *out,
   out->count = 1;
   const struct pym_event *e = (const void *)(input + 1);
   unsigned which = e->id;
-  CHECK(input->magic == PYM_MAGIC && input->count == 1 && which < 8, 700);
+  CHECK(input->magic == PYM_MAGIC && input->count == 1 && which < 20, 700);
   defect(which);
   /* Only the spatial arm is expected to arrive here. */
   out->completed = 1;

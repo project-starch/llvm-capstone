@@ -85,13 +85,50 @@ allocator layer the freed object came from:
 
 Of those 32, **21 come from group A** and are proven live by their backports.
 The other 11 are group B and were tested separately, below; 2 of them survive.
-The number to quote is **23 reachable today**, against PostgreSQL's 8.
+~~The number to quote is **23 reachable today**.~~ **RETRACTED 2026-09-18 — it
+is 20.** See the next section: 32 → 31 → 22 → 20, three corrections, each from
+reading a case rather than counting it.
 
 The recurring shape is **re-entrancy**: a Python callback runs inside a C
 operation and drops the last reference to something the C code still holds.
 `bytes.join` via `__buffer__`, `os.spawnv` via `__fspath__`, `Context.__eq__` via
 `ContextVar.set`, `OrderedDict.copy`, `itertools.groupby` and `_grouper`, the
 JSON encoder and decoder, `TextIOWrapper.tell` with a re-entrant decoder.
+
+## 23 was wrong. It is 20, and here is each correction
+
+Writing the drivers forced every case to be read rather than bucketed, and three
+of them turned out not to belong. All three were invisible to counting, and two
+of them are the *file-based layer proxy* failing in the direction this doc had
+only warned about the other way round.
+
+**1. One defect was counted twice: 32 → 31, 23 → 22.** The triage keys an entry
+by its `gh-NNNNN` and falls back to the commit hash when the subject has none.
+The `local_timezone_from_timestamp` fix says `(#156598)` on main — a PR number,
+no `gh-` prefix, so it keyed by hash — and `(GH-156598)` in its 3.13 backport,
+which the regex *does* match. Two keys, one defect, counted in both group A and
+group B. Verified: both touch `Modules/_datetimemodule.c`, and the second is the
+backport of the first.
+
+**2. That same defect is not a heap defect at all: 22 → 21.** Its dangling
+pointer is `zone = buf` where `buf` is a `char buf[100]` **on the stack**, inside
+a block whose scope ends while `zone` is still live. The fix hoists the array to
+the function's frame. No allocator is involved, so no allocator port can reach
+it.
+
+**3. `gh-143544`'s freed object is above the threshold: 21 → 20.** The JSON
+decoder's `raise_errmsg` does `Py_DECREF(JSONDecodeError)` and then
+`PyErr_SetObject(JSONDecodeError, exc)`. The freed object is therefore the
+exception **class** — a heap type, and `sys.getsizeof` of one measures **1704
+bytes**, more than three times the 512-byte threshold. It is a `malloc`
+allocation, ASan does see it, and it is not a blindspot case.
+
+**The generalisable part:** assigning a layer from the *file* a fix touches is a
+proxy, and this doc already said it under-counts the free-list layer. It also
+**over-counts pymalloc**, in two distinct ways a file name cannot show — the
+freed thing may not be heap memory at all, and it may be a heap object too large
+for the small-object allocator. A size check and a "what object is this?" check
+belong in the triage, not in the driver-writing that happened to catch them.
 
 ## Group B, measured
 
@@ -133,14 +170,18 @@ them:
 | `gh-126703` pycfunction freelist | wrong layer | belongs to the free-list bucket, not pymalloc; see below |
 | `GH-127705` better double-free message | noise | changes message text only |
 
-So group B contributes **2** live cases — one by the apply test
-(`local_timezone_from_timestamp`), one by inspection (`gh-145244`) — with **2
-unresolved** that could raise the total to 25.
+~~So group B contributes **2** live cases.~~ **It contributes 1.** The apply
+test's single hit, `local_timezone_from_timestamp`, turned out to be a group-A
+entry counted twice *and* a stack-lifetime bug with no allocator in it — see the
+two corrections above. `gh-145244`, found by inspection rather than by the test,
+is group B's only genuine contribution.
 
-The 3.10 exercise predicted roughly this: of 75 fixes that never reached 3.10,
-only 9 still applied, about 12%. Group B here scores 1 of 11 on the same test and
-2 of 11 after reading. "Never backported" usually means the code did not exist
-yet, and it has now been measured on this pin rather than borrowed from that one.
+Which sharpens the lesson rather than blunting it: the apply test scored 1 of 11,
+and that 1 was **spurious**. Everything group B actually contributed came from
+reading. The 3.10 exercise predicted about 12% survival from the same test; on
+this pin the test's true yield was **zero**.
+
+With **2 unresolved** (`gh-154189`, `gh-116946`) that could raise the total to 22.
 
 ## Two remaining weaknesses, stated so the numbers are not over-read
 
@@ -178,13 +219,12 @@ nothing.
 
 ## Reaching further
 
-Eight of the 23 now have drivers and have been run:
-`bug-corpora/cpython/pymalloc-repros/results/20260918-qemu/` — 16/16 arms, with
-a negative control that fires on both oracles. Fifteen do not.
+**All 20 now have drivers** in `bug-corpora/cpython/pymalloc-repros/`, run as
+paired spatial/Sublet arms with a negative control that fires on both oracles.
 
 | | reachable | needs |
 |---|---|---|
-| pymalloc port (exists) | 23 (+2 unresolved), 8 with drivers | — |
+| pymalloc port (exists) | **20, all with drivers** (+2 unresolved) | — |
 | + type free lists | 2 and more, `gh-126703` among them | porting the ten free lists |
 | + PyArena | 1 | porting the parser arena |
 

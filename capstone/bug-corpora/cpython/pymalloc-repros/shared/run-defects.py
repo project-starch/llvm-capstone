@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the eight CPython pymalloc defects as paired spatial/sublet domain arms.
+"""Run the twenty CPython pymalloc defects as paired spatial/sublet domain arms.
 
 Each case is booted twice against the same binary; the port chooses the arm at
 runtime from the mode argument, so the two arms differ in exactly one thing.
@@ -36,6 +36,18 @@ CASES = [
     ("gh-148660", "odict-copy-stale-link", "pointer load from freed block"),
     ("gh-151295", "bytes-join-reentrant-buffer", "payload buffer, sub-512"),
     ("gh-148395", "decompressor-next-in", "cursor across two API calls"),
+    ("gh-112127", "atexit-unregister-borrowed-tuple", "free/reuse/stale read"),
+    ("gh-139210", "iterparse-event-name-after-decref", "payload buffer, error path"),
+    ("gh-142560", "bytearray-search-realloc-moved", "realloc moved the block"),
+    ("gh-142783", "zoneinfo-eager-decref", "free and use on adjacent lines"),
+    ("gh-143004", "counter-update-borrowed-value", "free/reuse/stale read"),
+    ("gh-144833", "ssl-decref-self-then-read-self", "interior pointer"),
+    ("gh-146011", "decimal-signaldict-outlives-context", "parked in a surviving object"),
+    ("gh-149449", "unicodedata-capi-freed-under-cache", "bare PyMem block, cached"),
+    ("gh-151403", "fork-exec-fspath-mutates-args", "free/reuse/stale read"),
+    ("gh-151416", "spawnv-fspath-mutates-argv", "free/reuse/stale read"),
+    ("gh-151695", "curses-screen-encoding-global", "parked in a global"),
+    ("gh-153539", "textio-tell-reentrant-decoder", "free/reuse/stale read"),
 ]
 
 MARKER_BASE = 0xCF19000000000000
@@ -170,7 +182,18 @@ echo PYC_DEFECT_DONE
                 ),
             },
         )
-        result = run_guest(run, "sh /mnt/host/run.sh", "PYC_DEFECT_DONE")
+        # BOUND EVERY BOOT. run_guest defaults to timeout_multiplier=12, which on
+        # a boot that wedges before login leaves the whole suite sitting there:
+        # on 2026-09-18 one such boot stalled at kernel time 0.70s and held the
+        # run for eleven minutes before it was killed by hand. A suite of forty
+        # arms cannot have an unbounded arm in it -- every run must return.
+        env = dict(os.environ)
+        env.setdefault("CAPSTONE_QEMU_LOGIN_TIMEOUT", "90")
+        env.setdefault("CAPSTONE_GUEST_COMMAND_TIMEOUT", "90")
+        result = run_guest(
+            run, "sh /mnt/host/run.sh", "PYC_DEFECT_DONE", env=env,
+            timeout_multiplier=1,
+        )
         serial = (
             (run / "serial.log").read_text(errors="replace")
             if (run / "serial.log").exists()
@@ -181,6 +204,16 @@ echo PYC_DEFECT_DONE
             # so and stop, rather than letting an empty string classify as a
             # clean "no fault found".
             print(f"NO SERIAL CAPTURE for case={which} mode={mode}: {run}", flush=True)
+            sys.exit(75)
+        if "PYC_DEFECT_DONE" not in serial and not re.search(
+            r"domain (?:halted by capability fault|capability fault delivered)", serial
+        ):
+            # The guest never ran the command and no fault was raised either, so
+            # this boot produced no information about the case. Exit 75 -- the
+            # infrastructure code -- rather than record a FAIL that would read
+            # like the defect failing to reproduce.
+            print(f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}",
+                  flush=True)
             sys.exit(75)
         blob = share / "report.bin"
         report = None

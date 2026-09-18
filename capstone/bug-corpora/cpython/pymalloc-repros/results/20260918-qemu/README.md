@@ -1,5 +1,9 @@
 # Eight CPython pymalloc defects, paired arms, QEMU, 2026-09-18
 
+> **SUPERSEDED by `../20260919-qemu-20/`**, which covers all twenty reachable
+> defects instead of the first eight, against a later binary. Kept for the
+> trail; its rows are a strict subset and were not wrong.
+
 **16/16 arms passed.** Every one of the eight defects completes silently in the
 spatial arm and faults at the labelled stale access in the Sublet arm.
 
