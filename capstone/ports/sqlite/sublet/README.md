@@ -12,7 +12,9 @@ measurement is that build. `SPEEDTEST1_SUBLET=1` in `run-sqlite-speedtest1.sh`, 
 The primitives are not SQLite's and do not live here. They are
 [`capstone/sublet/sublet.h`](../../../sublet/sublet.h), shared by every port, and the build
 puts that directory on the include path only when a Sublet patch is applied. What stays here
-is the patch and this bookkeeping.
+is the patch and this bookkeeping. The capability-slot headers added alongside the shared-runtime
+layout live in `capstone/runtime/include/capstone/`; the build adds that root too, so an
+`#include <sublet/sublet.h>` and an `#include "sublet.h"` both resolve to the one header.
 
 ## The recipe, as it lands in the two allocators
 
@@ -82,9 +84,9 @@ Two open RTL defects mask it independently, so fixing either alone is not enough
 
 - **R-31 — REVOKE's permission clause is inverted.** Revoking a linear borrow of a *writable*
   region returns a readable **LINEAR** capability where the specification says UNINIT. That is
-  precisely the revoke `sublet_give_to` tests for, so the type check (`addi -3; bnez`) branches
-  past **both** the fill and the `init`, and the routine reports `inited = 0`. The reclaim never
-  happens and nothing says so.
+  precisely the revoke `sublet_give_to` tests for, so the type check branches
+  past **both** the fill and the `init`, so the initialization counter does not increment.
+  The reclaim never happens and nothing says so.
 - **R-30 — `INIT` is unreachable.** Even with R-31 fixed, filling an UNINIT region leaves the
   cursor *at* `end` while `INIT` requires it *past* `end` — a one-byte shortfall. The fill would
   run and the `init` would still fault.

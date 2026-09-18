@@ -1,0 +1,8 @@
+{
+  "availability": "Historical local archive; predates the shared application-port layout",
+  "default_artifact_store": "~/artifacts",
+  "directory_in_artifact_store": "ffmpeg/20260917",
+  "archive": "raw.tar.xz",
+  "sha256": "6e2c2e6a4aa01d930d53493b0f085ff3746b573dcb8943564ca26e3070fa47a8",
+  "bytes": 16536776
+}

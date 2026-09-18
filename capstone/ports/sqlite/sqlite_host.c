@@ -6,7 +6,7 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
+#include <libcapstone.h>
 #include "sqlite_hostcall.h"
 
 /* MARKERS WITHOUT STDIO, AND SHORT ENOUGH TO ESCAPE.

@@ -1,0 +1,107 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "/tmp/capstone/ffmpeg-buffer-pool/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": true
+      }
+    },
+    {
+      "name": "native",
+      "inherits": "base",
+      "displayName": "Native decoder, recording and replay",
+      "description": "Host compiler; override the external build directory with -B or CMakeUserPresets.json."
+    },
+    {
+      "name": "capstone-domain",
+      "inherits": "base",
+      "displayName": "Freestanding Capstone domains (including Sublet mode)",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-domain.cmake",
+      "cacheVariables": {
+        "PORT_C11_ATOMICS": true,
+        "PORT_HEADER_PROVIDER": "musl",
+        "PORT_MUSL_ROOT": "$env{FFPOOL_MUSL}"
+      }
+    },
+    {
+      "name": "linux-guest",
+      "inherits": "base",
+      "displayName": "Guest Linux domain loader",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/linux-guest.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "jobs": 4
+    },
+    {
+      "name": "capstone-domain",
+      "configurePreset": "capstone-domain",
+      "jobs": 4
+    },
+    {
+      "name": "linux-guest",
+      "configurePreset": "linux-guest",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "qemu-replay",
+      "configurePreset": "capstone-domain",
+      "filter": {
+        "include": {
+          "label": "qemu-replay"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 1
+      }
+    },
+    {
+      "name": "qemu-security",
+      "configurePreset": "capstone-domain",
+      "filter": {
+        "include": {
+          "label": "qemu-security"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "jobs": 1
+      }
+    }
+  ]
+}

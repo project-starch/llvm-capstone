@@ -1,0 +1,10 @@
+{
+  "availability": "Local archive; numeric results and plots are tracked in Git",
+  "default_artifact_store": "~/artifacts",
+  "directory_in_artifact_store": "postgres/20260918-qemu-pgbench",
+  "archive": "raw-campaign.tar.gz",
+  "sha256": "457fc6e4cb203e73b13ef74c009e1c81a0920bed7664166ca2a3c81d4462d6ca",
+  "bytes": 77476491,
+  "campaign_directory_in_archive": "campaign-v2",
+  "environment_file_in_archive": "build-environment.json"
+}

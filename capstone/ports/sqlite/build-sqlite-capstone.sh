@@ -97,10 +97,18 @@ grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 # The primitives (capstone/sublet/sublet.h) are program-independent and shared by every port;
 # the patch's own directory joins the include path too, for anything a program's port keeps
 # beside it. Both join only here, so the unprotected build never sees a Sublet file.
+#
+# TWO include ROOTS, because two conventions now coexist. This lane's code says
+# `#include "sublet.h"`; the collaborator's amalgamation patch says `#include <sublet/sublet.h>`.
+# Adding capstone/ as a root makes the angle form resolve to capstone/sublet/sublet.h without
+# moving the header or rewriting either caller. capstone/runtime/include carries the capability
+# headers the same change introduced.
 SUBLET_FLAGS=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
   SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/sublet"
+                -I"$REPO_ROOT/capstone"
+                -I"$REPO_ROOT/capstone/runtime/include"
                 -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
 fi
 if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then

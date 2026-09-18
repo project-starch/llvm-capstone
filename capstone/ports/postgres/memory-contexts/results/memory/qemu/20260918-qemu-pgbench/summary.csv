@@ -1,0 +1,5 @@
+workload,program,events,requested_payload_peak_bytes,backing_peak_bytes,backing_final_bytes,assigned_backing_final_bytes,metadata_records_peak_bytes,metadata_records_reserved_bytes,nodes_created_cumulative,init_bytes_cumulative,arena_reserved_bytes,scratch_reserved_bytes,report_reserved_bytes,trace_reserved_bytes,node_capacity
+readonly,replay-spatial,273690,741430,1324448,1224848,1224848,0,0,0,0,67108864,67108864,16777216,67108864,8388608
+readonly,replay-sublet,273690,741430,9664224,9664224,9664224,157824,665600,430767,329711616,67108864,67108864,16777216,67108864,8388608
+tpcb,replay-spatial,1478512,762799,1345216,1237376,1237376,0,0,0,0,67108864,67108864,16777216,67108864,8388608
+tpcb,replay-sublet,1478512,762799,10122976,10122976,10122976,165968,665600,2396450,1379663872,67108864,67108864,16777216,67108864,8388608
