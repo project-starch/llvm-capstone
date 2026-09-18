@@ -132,10 +132,13 @@ historical 17.5 memory-profile campaign.
 
 The default emulator stops the VM on a C-mode capability fault. With the matching
 QEMU local-trap-delivery change, configure a separate domain build with
-`-DPG_DOMAIN_FAULT_RECOVERY=ON`. The guest launcher then terminates with SIGSEGV
+`-DCAPSTONE_DOMAIN_FAULT_RECOVERY=ON`. The guest launcher then terminates with SIGSEGV
 when the client returns the reserved fault result, while Linux and QEMU continue.
 This is cooperative client recovery, not recovery from monitor/kernel crashes.
 See [the runtime contract and limitations](../../../runtime/domain-faults.md).
+The build helper and Linux fault policy are shared, not PostgreSQL-specific.
+The old `PG_DOMAIN_FAULT_RECOVERY` option is a deprecated compatibility alias;
+remove it from an existing cache before selecting a different shared setting.
 
 For the single-boot regression, configure smaller matching regions in separate
 build directories (the current driver retains allocations across processes).
@@ -147,7 +150,7 @@ PG_PORT=capstone/ports/postgres/memory-contexts
 cmake --preset linux-guest -S "$PG_PORT" -B "$PG_FAULT_WORK/linux" \
   -DPG_ARENA_BYTES=8388608 -DPG_TRACE_BYTES=1048576
 cmake --preset capstone-domain -S "$PG_PORT" -B "$PG_FAULT_WORK/domain" \
-  -DPG_DOMAIN_FAULT_RECOVERY=ON -DPG_LINUX_BUILD_DIR="$PG_FAULT_WORK/linux" \
+  -DCAPSTONE_DOMAIN_FAULT_RECOVERY=ON -DPG_LINUX_BUILD_DIR="$PG_FAULT_WORK/linux" \
   -DPG_ARENA_BYTES=8388608 -DPG_TRACE_BYTES=1048576
 cmake --build "$PG_FAULT_WORK/linux"
 cmake --build "$PG_FAULT_WORK/domain"
@@ -155,6 +158,8 @@ ctest --test-dir "$PG_FAULT_WORK/domain" -R '^qemu-(client-|fault-isolation)' --
 ```
 
 The fault suite verifies real SIGSEGV deaths for Generation, Slab and Bump
-use-after-reset clients, followed by a healthy client in the same VM; it also
-checks that faulted domains cannot run client code again. Recovery is OFF by
+use-after-reset clients, followed by a healthy client in the same VM. The
+[standalone runtime suite](../../../runtime/tests/fault-recovery/README.md)
+owns allocator-independent fault delivery, quarantine and fallback tests.
+Recovery is OFF by
 default so existing firmware/emulator installations keep their current behavior.

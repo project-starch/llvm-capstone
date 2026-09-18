@@ -58,10 +58,13 @@ class Verdicts(unittest.TestCase):
             "halted by capability fault", "capability fault delivered"
         )
         self.assertFalse(classify(serial, 0, 1, "sublet", 1)["passed"])
-        serial += "__CAPSTONE_PG_DOMAIN_FAULT__\n__EXIT_CODE__139\n"
+        serial += "__EXIT_CODE__139\n"
         self.assertTrue(classify(serial, 0, 1, "sublet", 1)["passed"])
         self.assertFalse(
             classify(serial.replace("139", "0"), 0, 1, "sublet", 1)["passed"]
+        )
+        self.assertFalse(
+            classify(serial + "__CAPSTONE_PG_HOST_DONE__", 0, 1, "sublet", 1)["passed"]
         )
 
     def test_control(self):

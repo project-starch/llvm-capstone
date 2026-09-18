@@ -38,7 +38,7 @@ if(PORT_PLATFORM STREQUAL "native")
     "${PG_HOST_CC}" "${PG_MAKE}")
   set_tests_properties(native-replay-controls build-guards PROPERTIES LABELS native TIMEOUT 60)
 else()
-  if(PG_DOMAIN_FAULT_RECOVERY)
+  if(CAPSTONE_DOMAIN_FAULT_RECOVERY)
     add_test(NAME qemu-fault-isolation COMMAND "${Python3_EXECUTABLE}"
       "${PROJECT_SOURCE_DIR}/security-tests/run-fault-isolation.py"
       --domain-build "${CMAKE_BINARY_DIR}" --linux-build "${PG_LINUX_BUILD_DIR}"

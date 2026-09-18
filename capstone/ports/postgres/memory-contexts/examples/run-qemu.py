@@ -21,7 +21,6 @@ def passed(serial, client, runner_exit):
         and "_BAD__" not in serial
         and "domain halted by capability fault" not in serial
         and "domain capability fault delivered" not in serial
-        and "__CAPSTONE_PG_DOMAIN_FAULT__" not in serial
     )
 
 

@@ -34,8 +34,8 @@ def classify(serial, kind, test, mode, runner_exit):
             and (
                 "domain capability fault delivered" not in serial
                 or (
-                    "__CAPSTONE_PG_DOMAIN_FAULT__" in serial
-                    and "__EXIT_CODE__139" in serial
+                    "__EXIT_CODE__139" in serial
+                    and "__CAPSTONE_PG_HOST_DONE__" not in serial
                 )
             )
         )

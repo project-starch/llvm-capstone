@@ -9,6 +9,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 include(cmake/Workspace.cmake)
 include(CTest)
+if(DEFINED PG_DOMAIN_FAULT_RECOVERY)
+  message(DEPRECATION "Use CAPSTONE_DOMAIN_FAULT_RECOVERY instead of PG_DOMAIN_FAULT_RECOVERY")
+  if(NOT DEFINED CAPSTONE_DOMAIN_FAULT_RECOVERY)
+    set(CAPSTONE_DOMAIN_FAULT_RECOVERY "${PG_DOMAIN_FAULT_RECOVERY}" CACHE BOOL
+      "Enable cooperative domain fault returns")
+  elseif((CAPSTONE_DOMAIN_FAULT_RECOVERY AND NOT PG_DOMAIN_FAULT_RECOVERY) OR
+         (PG_DOMAIN_FAULT_RECOVERY AND NOT CAPSTONE_DOMAIN_FAULT_RECOVERY))
+    message(FATAL_ERROR "Conflicting fault-recovery options; remove PG_DOMAIN_FAULT_RECOVERY from the cache")
+  endif()
+endif()
+add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime" "${CMAKE_BINARY_DIR}/capstone-runtime")
 find_package(Python3 3.11.4 REQUIRED COMPONENTS Interpreter)
 # A shared definition controls region sizes in both ABIs; the runner checks
 # their generated manifests before it stages either executable.

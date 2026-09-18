@@ -23,7 +23,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +34,7 @@
    not, and the workaround there is a symlink that makes the commit scanner
    block every commit in the tree. */
 #include "libcapstone.h"
-#include "capstone/domain-fault.h"
+#include "capstone/linux-domain-fault.h"
 
 /* Both halves must agree on these, and they are separate compilations, so the
    host publishes what it used in the metadata and the domain checks it. */
@@ -75,6 +74,11 @@ struct pg_hostcall_v0 {
 };
 
 static void mark(const char *s) { (void)write(STDOUT_FILENO, s, strlen(s)); }
+
+static void close_domain(void *unused) {
+  (void)unused;
+  capstone_cleanup();
+}
 
 static void mark_u(const char *s, unsigned long v) {
   char line[96];
@@ -294,22 +298,7 @@ int main(int argc, char **argv) {
     __atomic_store_n(&tail.stop, 1, __ATOMIC_RELEASE);
     pthread_join(tail_thread, NULL);
   }
-  if (result == CAPSTONE_DOMAIN_FAULT_RETVAL) {
-    capstone_cleanup();
-    mark("__CAPSTONE_PG_DOMAIN_FAULT__\n");
-    /* This is a guest userspace policy, not an emulator shutdown. Restore the
-     * default disposition and unblock SIGSEGV before raising it. */
-    struct sigaction action = {0};
-    sigset_t signals;
-    action.sa_handler = SIG_DFL;
-    sigemptyset(&action.sa_mask);
-    sigaction(SIGSEGV, &action, NULL);
-    sigemptyset(&signals);
-    sigaddset(&signals, SIGSEGV);
-    pthread_sigmask(SIG_UNBLOCK, &signals, NULL);
-    raise(SIGSEGV);
-    _Exit(128 + SIGSEGV);
-  }
+  capstone_domain_exit_on_fault(result, close_domain, NULL);
   if (report_file) {
     if (meta->length > PG_REPLAY_PAYLOAD_SIZE ||
         save_report(report_file, payload, meta->length))
