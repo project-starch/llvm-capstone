@@ -1,5 +1,5 @@
 # PostgreSQL adaptation inventory: path, bucket, purpose.
-# The classified AllocSet patch is counted against postgresql-17.5-0004-allocset-sublet-context-revocation.patch.classes.
+# The classified AllocSet patch is counted against postgresql-17.0-0004-allocset-sublet-context-revocation.patch.classes.
 # ABI patches are separate from the Sublet allocator delta.
 src/shared/a11trace.h                                                   glue       the record format, shared with the recorder in the paper repository
 src/allocators/sublet/pg_subpool.h                                      glue       what the manager needs from the level below
@@ -27,11 +27,11 @@ src/allocators/spatial/replay.c                                         test    
 src/allocators/sublet/replay.c                                          test       the same under the discipline
 security-tests/capstone/subpool-lifetimes.c                             test       the level below's own test
 security-tests/capstone/context-hierarchy.c                             test       the context tree's own test, an ancestor withdrawing from levels never asked
-patches/postgresql-17.5-0004-allocset-sublet-context-revocation.patch   allocator  the classified patch, counted by port-effort.py
+patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch   allocator  the classified patch, counted by port-effort.py
 src/shared/replay-engine.c                                              test       shared trace dispatch and payload checks
 src/shared/replay-engine.h                                              test       native/domain replay interface
 src/capstone-domain/domain-runtime.c                                    test       domain entry, exit and replay scratch support
 src/capstone-domain/domain-runtime.h                                    test       domain runtime interface
-patches/postgresql-17.5-0001-allocset-capstone-size-classes.patch       compat     capability ABI alignment and minimum size class
-patches/postgresql-17.5-0002-memorychunk-capstone-alignment.patch       compat     capability ABI chunk header
-patches/postgresql-17.5-0003-memorychunk-sublet-metadata-indices.patch  allocator  indices for out-of-band chunk and block metadata
+patches/postgresql-17.0-0001-allocset-capstone-size-classes.patch       compat     capability ABI alignment and minimum size class
+patches/postgresql-17.0-0002-memorychunk-capstone-alignment.patch       compat     capability ABI chunk header
+patches/postgresql-17.0-0003-memorychunk-sublet-metadata-indices.patch  allocator  indices for out-of-band chunk and block metadata
