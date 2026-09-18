@@ -217,6 +217,50 @@ fail.
 **Stay at 3.13.7.** It yields more verified cases than any older pin and costs
 nothing.
 
+### 3.13.0 is a different question, and the answer is "maybe, for real work"
+
+The table above is about older *minor* versions, where the allocator has moved
+too far to port. `v3.13.0` is on the **same branch**, so it deserves its own
+measurement rather than the same verdict. Measured 2026-09-19:
+
+**What it would gain: 7.** Nine temporal fixes landed on the 3.13 branch between
+`v3.13.0` and `v3.13.7`; after the same three axes, 7 are consumer-side pymalloc
+cases. Four are `_asynciomodule.c` re-entrancy — "an evil callback", "an evil
+`__getattribute__`" — plus `ElementTree.Element.find*`, the unicode-escape
+decoder, and `PyImport_ImportModuleLevelObject`. **Upper bound:** they have not
+had the per-case reading that removed three of 23 from the live set, so expect
+attrition.
+
+**What the port would cost: one hunk.** `obmalloc.c` moved +112/−14 between the
+two tags. Patches `0001` and `0002` apply clean; `0003` has **11 of its 12 hunks
+applying at a uniform −111 offset**, and the one failure is at a line where
+3.13.0 *already* derives `pool_address` from `arenaobj->address` — the direction
+the patch pushes. `pycore_obmalloc.h` applies clean. This is a rebase, not a
+re-port, and it is the opposite of the 3.10/3.12 finding.
+
+**What it would risk: 8 of the current 20.** Apply-testing the corpus's own
+twenty fixes against `v3.13.0` leaves 8 not applying — cases 3, 4, 5, 8, 10, 13,
+14 and 18. **That is not 8 losses**, by the same one-directionality that already
+bit this doc once: a failure means the code differs, not that the defect is gone.
+Spot-checked case 8, `atexit.unregister`: the defect **is** in 3.13.0, but the
+callbacks are a C array of `atexit_py_callback *` rather than a `PyList` of
+tuples, so the fix cannot apply. Still live, different shape.
+
+**So the real cost is documentation, not code.** Each of those 8 would need its
+`PROVENANCE.md` re-read and rewritten against the older source, because each
+quotes a hunk that no longer describes the pinned tree. Plus a 54-boot re-run.
+
+**Recommendation: not now.** ~+7 for eight case re-readings, a patch rebase and a
+full re-run is a fair trade only when someone wants the bigger number for a
+specific reason. It is worth doing before a submission and not before then. And
+note the framing this kills: it is *not* "older is richer". It is "this branch's
+first release had seven defects that were fixed before our tag, and puts eight of
+ours in different code".
+
+*Method note:* the apply-test helper greps the whole commit **message**, so
+`gh-145244` matched the `gh-142831` commit, whose body cites it. That one row is
+unreliable and is why the 8 need reading rather than counting.
+
 ## Reaching further
 
 **All 20 now have drivers** in `bug-corpora/cpython/pymalloc-repros/`, run as
