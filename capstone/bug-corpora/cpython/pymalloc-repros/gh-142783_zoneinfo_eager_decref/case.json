@@ -1,0 +1,24 @@
+{
+  "case": 11,
+  "upstream_fix": "gh-142783",
+  "title": "possible use after free in the zoneinfo module",
+  "consumer": "Modules/_zoneinfo.c",
+  "object": "the weak cache returned by PyObject_GetAttrString",
+  "lifetime_ender": "Py_XDECREF on the line after the lookup, on the assumption that the type held a reference",
+  "shape": "free and use on adjacent lines",
+  "distinguishing": "no re-entrancy and no user callback. Every other case here needs something to run between the free and the use; this one has the two on consecutive lines, with a comment explaining why it is safe",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

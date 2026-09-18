@@ -1,0 +1,25 @@
+{
+  "case": 17,
+  "upstream_fix": "gh-151416",
+  "title": "borrowed ref use after free via fspath in os.spawnv/spawnve",
+  "consumer": "Modules/posixmodule.c",
+  "object": "the item returned by the getitem function pointer over argv",
+  "lifetime_ender": "the item's __fspath__ mutates the list, releasing its reference",
+  "shape": "free / reuse / stale read",
+  "distinguishing": "sibling of gh-151403, fixed months apart. Keeping both is the corpus's point about how narrowly each instance gets patched",
+  "sibling_issue": "gh-151403_fork_exec_fspath",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}
