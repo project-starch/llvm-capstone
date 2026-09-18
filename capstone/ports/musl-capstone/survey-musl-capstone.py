@@ -30,7 +30,14 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1270
+BASELINE_OK = 1355
+
+# RAISED 2026-09-16, 1270 -> 1355, measured against clang built from f7b50f081ca4 (dev plus
+# three commits, only one of which touches the backend and it is an unrelated ra-spill fix).
+# The long-double/i128 work this port was waiting for has landed: fmodl.c, powl.c and
+# csqrtl.c were built ONE AT A TIME with these flags, not inferred from a total. If a
+# dev-built compiler reports 1270 again, that is the first thing to check and the number
+# above is where it will say so.
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
@@ -46,7 +53,21 @@ CONTROL_MUST_PASS = "src/stdlib/abs.c"
 # 128-bit shift, which this target cannot do while MVT::i128 is the capability carrier. It
 # will keep failing until the capability-MVT work (Tier 3) lands, and retiring it then is
 # again a deliberate act rather than a surprise.
-CONTROL_MUST_FAIL = "src/math/fmodl.c"
+# RETIRED 2026-09-16: src/math/fmodl.c. It was the MUST_FAIL control on the grounds that long
+# double lowers to a 128-bit shift this target cannot do while MVT::i128 carries capabilities.
+# That is no longer true -- the file compiles, verified by building it directly with these
+# flags rather than read off a survey total, together with powl.c and csqrtl.c. All 39
+# long-double files this control stood for are gone from the failure list. Retiring it is the
+# deliberate act the previous retirement note asked for, not a workaround: leaving it in makes
+# the survey report ERROR on every run, which is how a gate teaches people to ignore it.
+#
+# The replacement fails for a reason that is structural rather than a missing backend feature:
+# mallocng derives a static assert from sizeof(void*), and a 16-byte pointer makes the assert
+# expression zero, so the negative-size array reports "array is too large (2^64-1 elements)".
+# It will keep failing for as long as a pointer is a capability. It is also the one component
+# a domain never wants, since every port here brings its own level 0, so fixing it is not on
+# any milestone and the control is not standing in front of planned work.
+CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
@@ -59,6 +80,13 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # 35 files fail on "instruction requires the following: 'Zalrsc'",
         # which is a missing flag, not a porting problem.
         "-Xclang", "-target-feature", "-Xclang", "+a",
+        # syscall_arg_t is a POINTER on this target, because no capability-integer
+        # type exists and only a pointer carries a tag (see arch-capstone64/
+        # syscall_arch.h). musl passes plain ints to those parameters at call
+        # sites that do not go through __scc, and clang has made that conversion
+        # an error rather than a warning. Allowing it is the same latitude a
+        # __uintcap_t would give for free; 539 files fail without it.
+        "-Wno-int-conversion",
         "-std=c99", "-nostdinc", "-ffreestanding", "-fno-builtin",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
@@ -176,6 +204,15 @@ def main() -> int:
 
     print(f"musl tree      {musl}")
     print(f"compiler       {clang}")
+    # The count is a property of the COMPILER as much as of the port, and the two move
+    # independently: this survey jumped 1270 -> 1355 on a backend change nobody re-ran it for.
+    # Printing the revision makes a future disagreement attributable instead of a mystery.
+    try:
+        ver = subprocess.run([clang, "--version"], capture_output=True, text=True, timeout=30).stdout
+        rev = re.search(r"\(([^()]*\s+)?([0-9a-f]{40})\)", ver)
+        print(f"compiler rev   {rev.group(2) if rev else 'unknown'}")
+    except Exception as e:
+        print(f"compiler rev   unavailable ({e})")
     print(f"surveyed       {len(files)} files ({dropped} foreign-arch sources excluded)")
     print(f"compiled       {len(ok)}")
     print(f"failed         {len(bad)}   ({100 * len(ok) / len(files):.1f}% ok)")

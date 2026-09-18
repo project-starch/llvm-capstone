@@ -1,0 +1,22 @@
+The table is char[100][W] with W = 80 and lsearch copies W bytes from the key,
+so set("a") reads 80 bytes out of a two-byte string literal: harmless on flat
+memory, an out-of-bounds fault in memcpy under exact bounds. The keys become
+W-byte compound literals with the same contents; every check stays as it was.
+
+diff --git i/src/functional/search_lsearch.c w/src/functional/search_lsearch.c
+index 711a7a0..40baa88 100644
+--- i/src/functional/search_lsearch.c
++++ w/src/functional/search_lsearch.c
+@@ -9,8 +9,11 @@
+ static char tab[100][W];
+ static size_t nel;
+ 
++/* Keys as wide as a table row: lsearch copies W bytes out of the key, and a
++   two-byte literal read for 80 bytes is out of bounds under exact bounds. */
++#define K(s) ((const char[W]){ s })
+ #define set(k) do{ \
+-	char *r = lsearch(k, tab, &nel, W, (int(*)(const void*,const void*))strcmp); \
++	char *r = lsearch(K(k), tab, &nel, W, (int(*)(const void*,const void*))strcmp); \
+ 	if (strcmp(r, k) != 0) \
+ 		t_error("lsearch %s failed\n", #k); \
+ }while(0)

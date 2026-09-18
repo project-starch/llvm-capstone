@@ -158,6 +158,12 @@ struct hostcall_v0 {
 /* First SQLite-facing path-service opcode. */
 #define HC_V0_OP_PATH_ACCESS 23ULL
 #define HC_V0_OP_PATH_DELETE 24ULL
+/* Time. A domain has no clock of its own: rdtime is a counter whose frequency
+ * lives in a device tree the domain cannot read, so wall-clock and monotonic
+ * time both come from the helper. Request: clock_id at payload offset 0.
+ * Response: seconds and nanoseconds at payload offset 0, length 16. First
+ * consumer is musl's clock_gettime, and behind it mkstemp's __randname. */
+#define HC_V0_OP_CLOCK_GETTIME 25ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -246,6 +252,16 @@ struct hc_path_delete_req_v0 {
 #define HC_FILE_READ_REQ_V0_DATA_OFFSET 32ULL
 #define HC_FILE_WRITE_REQ_V0_DATA_OFFSET 32ULL
 #define HC_FILE_STAT_BASIC_RESP_V0_SIZE 32ULL
+struct hc_clock_gettime_req_v0 {
+  hostcall_u64_t clock_id;
+};
+
+struct hc_clock_gettime_resp_v0 {
+  hostcall_s64_t sec;
+  hostcall_s64_t nsec;
+};
+
+#define HC_CLOCK_GETTIME_RESP_V0_SIZE 16ULL
 #define HC_PATH_ACCESS_REQ_V0_PATH_OFFSET 8ULL
 #define HC_PATH_DELETE_REQ_V0_PATH_OFFSET 8ULL
 

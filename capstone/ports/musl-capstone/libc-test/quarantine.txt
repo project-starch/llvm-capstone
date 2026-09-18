@@ -1,0 +1,11 @@
+# Tests that run LAST, one per line, name then reason. Quarantine is ordering,
+# not exclusion: the test still runs and still reports.
+#
+# Why ordering matters here: a domain that faults on RE-ENTRY, after a yield,
+# does not return control to the guest at all. Not to the host process, which
+# alarm() cannot reach inside the ioctl, and not to the shell either: the serial
+# log ends at the register dump and the batch-done marker never prints. Measured
+# twice on 2026-09-16, both times costing every test scheduled after it. A
+# faulting test at the tail costs only itself.
+mbc        out of bounds walking a locale table, cause 5
+swprintf   movc-class fault on an untagged FILE field, cause 24

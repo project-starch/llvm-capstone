@@ -228,6 +228,16 @@ __capstone_yield:
   stc(s9, sp, 176)
   stc(s10, sp, 192)
   stc(s11, sp, 208)
+  /* THE THREAD POINTER IS PART OF THE SUSPENDED COMPUTATION, and it is the one
+     register here that is neither callee-saved by the C ABI nor handed back by
+     the monitor. musl keeps errno, the locale and the cancellation state behind
+     it, so a domain that loses it across a yield works until the first syscall
+     that FAILS and then faults in __errno_location instead of returning -1.
+     Measured 2026-09-16: write(1,...) completed through this yield, and the
+     write(7,...) after it halted with cause = 24 at `cincoffsetimm a0, a0, -0x124`,
+     the pointer arithmetic in __pthread_self, with tp reading 0. Slot 224 was
+     free; the frame is 256 bytes and 0..208 were in use. */
+  stc(tp, sp, 224)
 
   .Lpcrel_domret_load:
   auipc t3, %pcrel_hi(__capstone_dom_ret)
@@ -263,6 +273,7 @@ __capstone_yield:
   ldc(s9, sp, 176)
   ldc(s10, sp, 192)
   ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
   cincoffsetimm(sp, sp, 256)
   ret
 

@@ -4918,6 +4918,17 @@ returning with a cause proves the handler works.
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.
 
+> **OBSERVED 2026-09-16 from the musl probes, and it narrows the entry.** A domain that faults on
+> its FIRST entry hands control back: the write probe faulted in `hc_write` at first entry, the
+> host process saw the register dump, printed its markers and the guest shell continued. A domain
+> that faults on RE-ENTRY, after a `domreturn` yield and a later `call_dom`, does not: libc-test's
+> `mbc` faulted inside musl's `__simple_malloc` after a yield and the serial log ends at the
+> register dump, twice. No `LT-END`, no shell prompt, `alarm()` in the host cannot fire because the
+> process is inside the ioctl, and `kill -9` from the guest changes nothing. So the "unbreakable
+> loop" is not every fault, it is the resumed-domain fault, which is worth knowing when choosing
+> where a probe may fault. Batch runs order known faulters last for this reason
+> (`libc-test/quarantine.txt`).
+
 ### M-5 — the `REV_BORROWED` re-share path `C_INIT`s a revoke-derived `UNINIT` that cannot satisfy `INIT` on silicon `OPEN — LATENT on silicon, monitor; QEMU-validated only`
 
 > # ⚠ 2026-09-10: FIVE monitor sites, not two — and the widest one is not a re-share at all.
@@ -5946,6 +5957,135 @@ disagreeing with the history.
 
 
 ## Compiler / toolchain (ours)
+
+### C-49 — WITHDRAWN. The `shrink` that trapped in libc-test's `setjmp` was fed by a `sigsetjmp` that called `setjmp` instead of being it `WITHDRAWN 2026-09-17, same day it was filed — NOT a compiler defect`
+
+**What it looked like.** libc-test's `setjmp`, run as a domain, trapped with cause 29,
+`ILLEGAL_OP_VAL`, at `shrink s6, a0, s9`. The register dump had a code address in the size
+operand:
+
+```
+x10 (a0) = 10157f9c0
+x22 (s6) = C(10157f9c0 [10156e500,101580000) type 1)
+x25 (s9) = 202ae3ba4        ; a0 + 0x1015641e4, and 0x1015641e4 is in .text
+```
+
+and `s9` is written in exactly three places in the function: `li s9, 0x80` and two
+`add s9, a0, s9`. Reading only that, the bounded-pointer materialisation looked like it was
+destroying its own length operand and then reading it again.
+
+**What it actually was.** `runtime/sigsetjmp.c` in the musl port implemented `sigsetjmp` as a C
+function that **calls** `setjmp`. The buffer then records that wrapper's frame: its `sp`, its
+frame pointer, and whatever it left in the callee-saved registers. `siglongjmp` restores those,
+so the caller resumed with a frame pointer belonging to a function that had already returned,
+and every value the caller held in a callee-saved register was someone else's. The code address
+in `s9` was one of them. musl's own `riscv64/sigsetjmp.s` **tail-calls** `setjmp` for exactly
+this reason; the port's version is now the same instructions as `setjmp`, reached by a second
+label rather than a call, and `siglongjmp` likewise.
+
+**Measured.** With that one change and nothing else, `setjmp` goes from FAULT to a clean run.
+No compiler change was involved, and the branch opened to hold one was deleted.
+
+**What to take from it.** A capability fault inside compiler-generated bounds code is not
+evidence that the compiler generated it wrongly. The bounds sequence is where a corrupted
+register file first becomes visible, because it is the only place that checks. Before filing a
+codegen defect from a fault dump, account for how the function was entered: anything that
+restores a register file, `setjmp`, `longjmp`, a domain re-entry, moves the suspicion to
+whoever saved it. The minimal reproduction that never fell out was the signal that this was
+not codegen.
+
+### C-48 — outgoing stack-passed varargs are packed at 8 bytes, `va_arg` reads them at 16: every seventh-and-later integer vararg is lost `FIXED 2026-09-16 — COMPILER, caller side; found the same day by libc-test's inet_pton, proven from disassembly`
+
+**What happens.** A variadic callee's `va_arg` advances by the 16-byte slot stride, which is what
+`lowerVAARG` documents as intended (`CapstoneISelLowering.cpp:10550`, "advance by ... the 16-byte
+slot stride") and what the register save area uses (`:24117`, `CXLenInBytes` per register, written
+with `stc` to keep tags). The **caller** places the varargs that overflow the argument registers on
+the stack at an 8-byte stride. Both sides of one ABI, disagreeing.
+
+Proof, no emulator needed. Caller with three fixed arguments and eight `int` varargs:
+
+```
+  li  t0, 0x88 ; li t1, 0x77 ; li t2, 0x66
+  sd  t2, 0x0(sp)      # vararg 6
+  sd  t1, 0x8(sp)      # vararg 7
+  sd  t0, 0x10(sp)     # vararg 8
+```
+
+Callee, `va_arg(ap, int)` in a loop:
+
+```
+  ld  a0, 0x0(a0)
+  cincoffsetimm a1, a0, 0x10     # next vararg: +16
+```
+
+So vararg 6 is read correctly, vararg 7's slot is skipped, vararg 8 is read as the seventh, and
+the eighth read lands past the caller's frame.
+
+**What it looks like.** musl's `inet_ntop` formats an IPv6 address with one `snprintf` of eight
+`%x`: `::1` came out as `::1:0` and `1:2:3:4:5:6:7:0` as `1:2:3:4:5:6::`, i.e. the seventh
+hextet gone and the eighth in its place. Any `printf` family call whose integer varargs overflow
+the registers is affected; with three fixed arguments that is the sixth vararg onward.
+
+**The fix** is in `CC_Capstone`'s generic path, `CapstoneCallingConv.cpp`: a variadic argument that
+gets no register takes `AllocateStack(16, Align(16))` instead of XLen/8, so the caller's slots sit
+where `va_arg` was already looking. Fixed arguments keep their XLen slots, they are never read
+through a `va_list`, and capability varargs already took 16-byte slots. Nothing changes for a
+callee: `LowerFormalArguments` derives the stack-vararg base as before. Changing `lowerVAARG` to 8
+instead would have broken capability varargs, which need the 16-byte, 16-aligned slot to keep
+their tag.
+
+**Second symptom, a hang rather than a wrong answer.** musl's `getmntent_r` parses a line with one
+`sscanf` carrying ten pointer varargs, eight `%n` and two `%d`, behind two fixed arguments, so four
+of them are stack-passed and mis-stepped. Its retry loop, `while (linebuf[n[0]] == '#' ||
+n[1]==len)`, keys on those `%n` results and never terminates. libc-test's `mntent` therefore spins,
+and a spinning domain holds the only hart, so the guest never runs again: the batch it was in lost
+every test after it. That is the shape to expect from this bug wherever a loop condition depends on
+a vararg beyond the registers, and it is why `mntent` sits in `libc-test/quarantine.txt`.
+
+**Gate.** `llvm/test/CodeGen/Capstone/c48-vararg-stack-stride.ll` checks the caller's stack slots
+directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on the tree before
+the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
+`capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
+
+### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
+
+**What happens.** A `__thread` variable dies in isel with `Cannot select: c128 = GlobalTLSAddress`,
+and `-femulated-tls` does not help. No capability TLS relocation or captable-style TLS slot exists.
+
+**Why it is recorded as off the critical path.** It is tempting to read this as "a libc needs TLS, so
+a libc needs this fixed". musl's core uses the `__thread` KEYWORD zero times. Every hit a text search
+finds is the variable `__thread_list_lock`. musl reaches errno, the locale and the cancellation state
+through the thread POINTER and a plain struct, not through thread-local storage, so a static
+single-threaded domain needs `tp` and needs nothing from this issue.
+
+> **2026-09-17, from libc-test in a domain.** Five sources of the suite fail to build on this,
+> not four: `tls_align_dso`, `tls_init`, `tls_init_dso` and `tls_local_exec` die in isel, and
+> `tls_align` links against a `__thread` variable its partner DSO would have defined, so it
+> comes back as `undefined symbol: t`. They are the only five of the 77 that do not build.
+
+**What actually blocked it, measured 2026-09-16**, all four the same defect in different places, a
+capability sent through something that carries 64 bits:
+
+| where | was | is |
+|---|---|---|
+| `arch/riscv64/pthread_arch.h` | `__get_tp()` returns `uintptr_t`, reads with `mv` | port overlay returns `char *`, reads with `movc` |
+| `src/thread/riscv64/__set_thread_area.s` | `mv tp, a0` | `movc tp, a0` in the port's runtime |
+| domain startup | never called anything | calls musl's own `__init_tp` |
+| `runtime/start-musl.S` | `__capstone_yield` saves ra, gp, s0-s11 | also saves `tp` |
+
+The last one is the one that would have been guessed last. The yield's own comment says the registers
+ARE the suspended computation and that which of them survive the boundary is unverified; `tp` is the
+answer to that question and it stood open for two ports because nothing in a domain had used it.
+`write(1,...)` completed through the yield and the `write(7,...)` after it halted with `cause = 24` at
+the `cincoffsetimm` of `__pthread_self`, with `tp` reading 0.
+
+**What this issue still blocks.** Anything that genuinely uses `__thread`: real pthreads, and any
+application (rather than libc) source that declares thread-local variables. Those need a capability TLS
+model, which is a design question and not a missing pattern.
+
+**Evidence.** `capstone/ports/musl-capstone/write-probe/`, its negative control built with
+`-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
+thread pointer survives.
 
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
 

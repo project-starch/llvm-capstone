@@ -177,6 +177,14 @@ To avoid churn with those diagnostics, reserve a separate block for the file-ser
 
 These values are a recommendation for the next implementation patch series.
 
+`HC_V0_OP_CLOCK_GETTIME = 25` (added 2026-09-16). Request: `hc_clock_gettime_req_v0`
+(`clock_id`) at payload offset 0, `metadata.offset = 0`, `metadata.length = 0`. Response:
+`hc_clock_gettime_resp_v0` (`sec`, `nsec`) at payload offset 0, `metadata.length = 16`,
+`result = 0`; failure as in section 11. A domain cannot derive time on its own: `rdtime` is a
+counter whose frequency is in a device tree the domain does not see, so both wall-clock and
+monotonic time are helper-supplied. First consumer is musl's `clock_gettime`, reached from
+`mkstemp` through `__randname`.
+
 ## 5. Region contract
 
 ## 5a. Metadata region

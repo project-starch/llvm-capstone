@@ -1,0 +1,44 @@
+aligned() rounds a pointer up by casting it to uintptr_t and back, which on a
+capability target yields an address without a tag, and the test faults on its
+own first access. Adding the rounding distance to the original pointer keeps
+its provenance and reaches the same address. Same helper in three tests.
+
+diff --git i/src/functional/string_memcpy.c w/src/functional/string_memcpy.c
+index 96256a7..264606d 100644
+--- i/src/functional/string_memcpy.c
++++ w/src/functional/string_memcpy.c
+@@ -8,7 +8,7 @@ static char buf[512];
+ static void *(*volatile pmemcpy)(void *restrict, const void *restrict, size_t);
+ 
+ static void *aligned(void *p) {
+-	return (void*)(((uintptr_t)p + 63) & -64);
++	return (char*)p + ((-(uintptr_t)p) & 63);
+ }
+ 
+ #define N 80
+diff --git i/src/functional/string_memset.c w/src/functional/string_memset.c
+index e688742..fb1e962 100644
+--- i/src/functional/string_memset.c
++++ w/src/functional/string_memset.c
+@@ -11,7 +11,7 @@ static void *(*volatile pmemset)(void *, int, size_t);
+ 
+ static char *aligned(void *p)
+ {
+-	return (char*)(((uintptr_t)p + 63) & -64);
++	return (char*)p + ((-(uintptr_t)p) & 63);
+ }
+ 
+ static void test_align(int align, int len)
+diff --git i/src/functional/string_strchr.c w/src/functional/string_strchr.c
+index 4b1e063..08d0979 100644
+--- i/src/functional/string_strchr.c
++++ w/src/functional/string_strchr.c
+@@ -5,7 +5,7 @@ static char buf[512];
+ 
+ static void *aligned(void *p)
+ {
+-	return (void*)(((uintptr_t)p + 63) & -64);
++	return (char*)p + ((-(uintptr_t)p) & 63);
+ }
+ 
+ static void *aligncpy(void *p, size_t len, size_t a)

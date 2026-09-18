@@ -8,24 +8,61 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-The compiler accepts **93.3 %** of musl's sources, `libc-capstone.a` links, and
-the domain boundary a syscall needs is **proven working under QEMU**:
+**A domain runs musl.** Not compiles, runs: musl's own functional test suite
+builds and runs inside a pure-capability domain under QEMU, one boot per test,
+and the table below accounts for every one of its 77 sources.
 
-- `write(1, ...)` linked against the partial archive leaves `__capstone_hostcall`
-  as the **only** undefined symbol, so the 91 files that do not compile are not
-  on the path of POSIX I/O.
-- `yield-probe/` shows a pure-capability domain making a blocking hostcall and
-  resuming with its C frame intact (`__CAPSTONE_YIELD_PROBE_PASSED__`). See
-  `docs/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
+| | |
+|---|---|
+| sources the compiler accepts | 1355 / 1361 (99.6 %) |
+| `write` to stdout, `errno` on failure | works |
+| `open` `read` `write` `close` `lseek` incl. SEEK_END | works |
+| `writev` `readv` `fstat` `fsync` `ftruncate` `unlink` `access` | works |
+| `fopen` `fprintf("%f")` `fgets` `fseek` `printf` `fflush` | works |
+| `malloc` `calloc` `realloc` `free` | works, from this port's own level 0, under all five names musl calls it by |
+| `exit` from anywhere | works, and it has to: a refused exit is an unbreakable loop |
+| `setjmp` `longjmp` `sigsetjmp` | works, from this port's own assembly |
+| `clock_gettime` | works, through a new HostCall opcode (`CLOCK_GETTIME`, 25) |
+| `stat` `getuid` `getgid` | works, path stat as open, fstat, close |
+| real pthreads | **no**, and C-47 is only one of five: `pthread_create` also needs `clone`, two `mmap`s for the stack, `futex` (eight files under `src/thread` use it) and somewhere for the second thread to run, and a domain holds the only hart |
+| `fork` `exec` `pipe` `socket` `dlopen` | **no**, and none of them is on the way: a domain is one process |
+| musl's own test suite | 77 tests accounted for, see below |
 
-Not done: musl's own `write()` has not yet been run through that yield.
-`runtime/hostcall.c` is written but unexercised.
+Three probes, each green under QEMU with zero faults:
 
-musl is **not vendored**. `fetch-musl.sh` downloads the official 1.2.5 archive
-and verifies its SHA-256; the upstream tree stays immutable under
-`$CAPSTONE_TMP_ROOT/musl-src`. Everything of ours is in this directory as an
-overlay, so `diff -r arch/riscv64 arch/capstone64` in the staged tree is the
-entire delta.
+| probe | what it establishes |
+|---|---|
+| `write-probe/` | musl's `write` reaches the hostcall, and its error reaches `errno` |
+| `file-probe/` | the file service, with an exact round count that a stale descriptor would break |
+| `stdio-probe/` | the layer above, where musl stops calling `write` and starts calling `writev` |
+
+## What running it cost, and why compiling did not predict it
+
+Nine places sent a capability through something that carries 64 bits. Four were
+in this port, two were in musl, two were missing syscalls and one was an include
+line. **Every file involved is on the compiling side of the 99.6 %.**
+
+| where | what |
+|---|---|
+| `syscall_arch.h` | `__UINTPTR_TYPE__` is `unsigned long` here, so the fix was the type it replaced |
+| `pthread_arch.h` | `__get_tp()` returned `uintptr_t` and read `tp` with `mv` |
+| `__set_thread_area` | upstream's riscv64 `.s` is `mv tp, a0` |
+| `start-musl.S` | `__capstone_yield` saved `ra`, `gp` and `s0-s11`, not `tp` |
+| `hostcall.c` | used `syscall_arg_t` without including the header that defines it |
+| musl's string routines | seven read a machine word at a time, over the end of the object |
+| musl's `lite_malloc` | reads `brk` as a `uintptr_t` and returns `(void *)(brk - req)` |
+| stdio | calls `writev` and `readv`, never `write` or `read` |
+| link | eleven undefined `__*tf*` for any program that links `printf` |
+
+The last one is the only one a link would have caught. The others need a domain
+that actually runs, which is what the probes are for.
+
+**What is not served is recorded, not merely refused.** The default arm of
+`__capstone_hostcall` keeps the syscall numbers it turned away, and a probe
+prints them after its work is done. `-ENOSYS` alone is invisible: musl turns most
+of them into a plausible failure and the caller continues, so a missing opcode
+surfaces later as wrong behaviour somewhere unrelated. A full stdio run currently
+reports an empty list, which is the only state in which the list is worth reading.
 
 ## The one file we wrote
 
@@ -74,16 +111,39 @@ catches the lie itself — `src/stdio/vfprintf.c` fails with
 `'compiler_defines_long_double_incorrectly' declared as an array with a negative
 size`. The 39 long-double files are counted as **unresolved**, not fixed.
 
-## What is left
+## Measured again, 2026-09-16
 
-91 files, grouped by what has to be done. Counts are by directory and sum to 91.
+Re-run with clang from `f7b50f081ca4`, which is `dev` plus three commits, only one of
+which touches the backend and it is an unrelated `ra`-spill fix. So this is very
+probably `dev`'s number too, and confirming that needs a `dev`-built compiler.
 
-| files | where | dominant cause | shape of the fix |
+| | 2026-08-14 | 2026-09-16 |
+|---|---:|---:|
+| compiled | 1270 / 1361 | **1355 / 1361** |
+| | 93.3 % | **99.6 %** |
+| failing | 91 | **6** |
+
+**The long-double item is gone, and it was the only genuinely new one.** The table
+below used to list 39 files in `src/math` and `src/complex` that died in i128 shift
+legalisation because `long double` is 128 bits and so is a capability. `fmodl.c`,
+`powl.c` and `csqrtl.c` were built ONE AT A TIME with the survey's own flags, not read
+off a total, and all three compile. `src/stdlib/qsort.c` compiles too, which retires
+the `Cannot select: i128 = xor` blocker recorded against `__qsort_r` on 2026-08-20.
+The string and the mixed pointer-as-integer groups are gone as well; none of them
+needed the replacement work the old table planned.
+
+**What is left is six files, and they are the ones a domain does not want.**
+
+| files | where | cause | what to do |
 |---:|---|---|---|
-| 39 | `src/math` (31), `src/complex` (8) | **`long double` is 128-bit and so is a capability**, so it dies in i128 shift legalisation and in APInt | Backend: support `-mlong-double-64` for this target, or separate integer-i128 from capability-i128. The only genuinely new item on this list. |
-| 10 | `src/malloc` (3), `mallocng` (6), `oldmalloc` (1) | static asserts over `sizeof(void*)`, violated by 16-byte pointers | Replace with an arena, as memsys5 does for SQLite today. |
-| 9 | `src/string` | word-at-a-time routines: `(uintptr_t)s % ALIGN` | Replace, as SQLite already does with `beebs_freestanding_string.c`. |
-| 33 | `thread` (8), `locale` (7), `network` (5), `aio`, `mman`, `regex`, `signal` (2 each), `exit`, `ldso`, `stdio`, `stdlib`, `multibyte` (1 each) | mixed, mostly the same pointer-as-integer family | Stub to `ENOSYS` for the first milestone; threads and `fork` are out of scope. |
+| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own level 0, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
+
+So the compile side of this port is finished for practical purposes. **What remains is
+the transport**, which a compile count never measured: `runtime/hostcall.c` translates
+Linux syscall numbers to HostCall v0 opcodes and the probe harness beside it
+(`tests/runtime-qemu/run-hostcall-stdout-probe.sh`) exercises that protocol from a
+hand-written guest. musl's own `write()` has still not been run through it end to end.
+That single path, not the 91 files, is now the libc question.
 
 `__syscall_cp` needs **no patch**, contrary to an earlier plan here: musl
 weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
@@ -91,13 +151,174 @@ weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
 `pthread_cancel.c`. As long as that object is not linked, the alias wins and
 cancellation points route through our hostcall like any other syscall.
 
+## Using something that is not there
+
+A domain's hostcall answers what it knows and returns `-ENOSYS` for the rest. musl turns that
+into an ordinary failed call, so a program that does not check its return values gets a
+plausible wrong answer rather than a stop. Two things now make that loud.
+
+**Before the run.** `check-domain-support.py` reads a linked `.dom` and says which of its libc
+calls cannot work, without booting anything:
+
+```bash
+python3 capstone/ports/musl-capstone/check-domain-support.py my.dom \
+  --baseline some-other.dom --port-objects "$OBJ"/level0.o "$OBJ"/hostcall.o ...
+```
+
+The served set comes out of `runtime/hostcall.c`'s own `case SYS_x:` labels, so it cannot drift
+from the implementation, and a source is reported only when **every** syscall it names is
+unserved. That second rule is what makes it usable: musl's `fstatat` tries `statx` and falls
+back to `newfstatat`, `clock_gettime` falls back to `gettimeofday`, and a checker that reported
+mentions called both of them broken. `--baseline` subtracts what any musl image links anyway,
+so what is left is what your program brought.
+
+Checked against the suite, it names exactly what running found and nothing else:
+
+| image | says |
+|---|---|
+| `lt-fscanf` | `pipe` needs `pipe2` |
+| `lt-utime` | `utimensat` needs `utimensat` |
+| `lt-setjmp` | `pthread_sigmask` needs `rt_sigprocmask` |
+| `lt-strtold`, `lt-mntent`, `lt-string_strstr` | clean |
+
+The three clean ones are the tests that fail for reasons that are not a missing service, which
+is the discrimination that makes the tool worth running. A line means the call cannot work if
+the program makes it, not that it will: the check reads each symbol's own source rather than a
+call graph, and a linked symbol need not be reachable.
+
+**After the run.** Every domain now prints what it was refused, on its way out:
+
+```
+capstone-domain: UNSERVED syscalls: 59
+```
+
+by `write(2)` rather than stdio, because on the `exit()` path musl's stdio has already been
+taken apart. That report is exact, where the static check is early: it lists what the program
+actually asked for. Numbers rather than names, because a table of three hundred names is not
+worth the bytes in every image when the suite's runner prints them by name and the static check
+says which call needs each one.
+
+## libc-test: musl's own suite, in a domain
+
+`libc-test/` builds every functional test of musl's libc-test as its own pure-capability
+domain and runs it under QEMU in its own boot. The result is one table that accounts for
+all 77 sources, not only the ones that produced a domain.
+
+```bash
+bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh   # builds, one boot per test, summarises
+cat  "$CAPSTONE_TMP_ROOT/musl-libc-test/logs/latest/results.txt"   # one directory per run, with toolchain.txt
+```
+
+Verdicts: `PASS` and `FAIL` are the test's own, `t_status` folded with the unserved-syscall
+count so a test that "passed" while a syscall it needed was refused does not pass.
+`NOBUILD` carries the first compile or link error, `EXCLUDED` the reason from
+`build-libc-test.sh`, `FAULT` a capability fault, `HUNG` a test that never came back and took its
+chunk's guest with it, `NOBOOT` a boot that never reached a shell, `NOTRUN` a chunk-mate of one
+that hung. A `FAIL` that says `UNSERVED` names the syscalls the domain asked for and the host
+refused, so the row says what the test needed and not only that it failed.
+
+**Why one boot per test.** A domain that never comes back takes the guest with it: a fault
+after a yield does (M-1), and so does a domain that spins, because it holds the only hart.
+Nothing inside the guest can recover it, not `alarm()` in the host process, which is inside the
+ioctl, not `kill -9` from the shell. The unit of loss is the boot, so the only lever is how much
+rides on one, and boot-to-login here is about twenty seconds. `CHUNK=10` gets batching back
+where a boot is expensive; there `quarantine.txt` orders known faulters last so they cost only
+the tail of their chunk. Quarantine is ordering, not exclusion. Every run writes its own
+`logs/<RUN_ID>/` with the toolchain that built the domains beside the chunk logs, so two
+compilers are two tables and not one overwritten.
+
+**What the suite found that no probe would have.** One compiler defect, C-48: outgoing
+stack-passed varargs were packed at 8 bytes while `va_arg` reads at 16, so `inet_ntop` printed
+`::1` as `::1:0`, `getmntent_r` spun forever, and five tests took a capability fault in a
+`t_error` call rather than printing what was wrong. Fixed, and the before-and-after is 31 PASS
+and 7 FAULT against 40 and 3.
+
+Six defects in this port. Four are cases where returning from a call is worse than not having
+it, and two are C that is correct on flat memory and wrong here:
+`exit()` put musl's `_Exit` in its retry loop; musl's own `__libc_malloc` bypassed this port's
+allocator into a `lite_malloc.c` that stores pointers as integers; `stat` on a path had no route
+at all; and `sigsetjmp` was a C function that **called** `setjmp`, so the buffer recorded the
+wrapper's frame and every `siglongjmp` resumed the caller with a frame pointer belonging to a
+function that had already returned. The first two were each worth a whole boot. The last one
+was filed as a compiler defect first, on a fault dump that showed a `shrink` reading a code
+address where a size belonged; that entry is withdrawn in `ISSUES.md` with what it really was,
+because a fault inside compiler-generated bounds code is where a corrupted register file first
+becomes visible, not evidence of who corrupted it.
+
+The two flat-memory ones are the last capability faults the suite had. `mbsrtowcs` reads four
+bytes at a time over a byte string, which is the twelfth and last of musl's `__may_alias__`
+sources and the one `string_bounds_safe.c` had missed, because it was found by grepping
+`ONES/HASZERO/ALIGN` and that pattern finds seven of the twelve. `__fputwc_unlocked` computes
+`f->wpos + MB_LEN_MAX` before `__towrite` has run, which is arithmetic on a null pointer, and
+the RTL raises on that, not only the emulator. Running the whole suite once with
+`CAPSTONE_CINC_UNTAGGED_SURVIVE=1`, which reports every such site instead of trapping at the
+first, found exactly one across 49 tests: this one. The class is a function, not a front.
+
+And the narrowing of M-1: a fault on first entry returns to the guest, a fault after a yield
+does not.
+
+| verdict | n | |
+|---|---:|---|
+| `PASS` | 43 | the test's own `t_status`, with nothing it needed refused behind its back |
+| `FAIL` | 7 | named below, four of them for a reason that is not the port's |
+| `FAULT` | 0 | not one capability fault is left in the suite |
+| `NOBUILD` | 5 | the five `tls_*` sources, all C-47 |
+| `EXCLUDED` | 22 | a service a domain does not have: processes, threads, sockets, SysV IPC, dynamic loading |
+| **total** | **77** | every source in libc-test's `src/functional` |
+
+Measured 2026-09-17. Against the same tree without the C-48 compiler fix the same run reads
+31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN, and without the last two replacements below it
+reads 41 PASS and 2 FAULT.
+
+**What the reds are.** None of them is a capability fault any more.
+
+| test | what it is |
+|---|---|
+| `strptime` | musl 1.2.5 has a case for none of `%F`, `%s`, `%z` and returns 0 for all three |
+| `mntent` | musl 1.2.5 leaves the trailing newline in `mnt_opts`; the same `sscanf` line against the host's libc returns the same `n[6]=16 n[7]=25` and the same `"defaults\n"` |
+| `fscanf` | reads its input through a pipe, and a domain has no second end for one |
+| `utime` | needs `utimensat`; the stat service carries size and mode, not times |
+| `sscanf_long` | wants an 8 MiB buffer; a domain is one contiguous kernel allocation and `MAX_ORDER` caps that at 4 MiB here |
+| `setjmp` | runs to the end since `sigsetjmp` became `setjmp` itself; it fails on `rt_sigprocmask`, which stays unserved: a domain that says nothing is blocked right after being asked to block something is telling a plausible lie, and the test's two assertions about the mask cannot both hold without a real one |
+| `strtold` | musl 1.2.5's hex accumulation, replayed on the host with `__float128`, gives the same `…1112`; the binary128 primitives are bit-identical to the host on add, subtract, multiply and the bias round-trip |
+
+Four of the seven are libc-test tracking musl's master while this port builds 1.2.5, so they
+fail the same way on any 1.2.5 and are not evidence about capabilities at all. The other three
+are services a domain does not have.
+
+The first two are libc-test tracking musl's master while this port builds 1.2.5, so they
+fail the same way on any 1.2.5 and are not evidence about capabilities at all.
+
+**Patches to the tests, not to musl.** `patches/` holds the minimal changes that remove a
+flat-memory assumption from a test: `search_lsearch` reads 80 bytes out of a two-byte literal,
+and the string tests' `aligned()` sends a pointer through `uintptr_t` and back, which on this
+target returns an address without a tag. Both are harmless on flat memory and fault here before
+the test measures anything; both would fault under CHERI too. The rule in `patches/README.md`:
+a patch may change how a test reaches memory, never what it checks. `fetch-libc-test.sh` resets
+the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
+and on nothing that happened in the tree before.
+
 ## Run
 
 ```bash
 source capstone/tests/capstone-test-env.sh
 bash capstone/ports/musl-capstone/survey-musl-capstone.sh          # fetch, prepare, survey
 bash capstone/ports/musl-capstone/survey-musl-capstone.sh --list-failures
+
+bash capstone/ports/musl-capstone/build-musl-capstone.sh           # libc-capstone.a
+bash capstone/ports/musl-capstone/write-probe/run-write-probe.sh   # each boots QEMU once
+bash capstone/ports/musl-capstone/file-probe/run-file-probe.sh
+bash capstone/ports/musl-capstone/stdio-probe/run-stdio-probe.sh
+
+bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh      # one boot per test
+TESTS="inet_pton mntent" bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh
 ```
+
+`MUSL_WRITE_PROBE_BADFD=1` adds the write probe's negative control, which reads
+`errno` after a refused descriptor and so cannot pass unless the thread pointer
+survives the domain boundary. A worktree has the buildroot submodule present and
+empty, so point `CAPSTONE_BUILDROOT_DIR` at the main clone before building the
+guest side.
 
 Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the
 harness could not measure (unprepared tree, no compiler, empty file list, or a
