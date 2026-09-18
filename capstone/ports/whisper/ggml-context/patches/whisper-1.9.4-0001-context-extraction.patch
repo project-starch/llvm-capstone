@@ -1,0 +1,72 @@
+Subject: Isolate the original ggml context allocator
+Upstream: whisper.cpp 1.9.4
+Upstream-Archive: https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.4.tar.gz
+Upstream-SHA256: 57e280cee375ab02425b806ad5146b99f6eb9357e3c2b31357c8a6af2e2e44ae
+Build-Variants: native reference, native port, Capstone domain; inert in full Whisper
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -1,3 +1,6 @@
++#ifdef GGML_CONTEXT_ONLY
++#include "context-compat.h"
++#else
+ #define _CRT_SECURE_NO_DEPRECATE // Disables "unsafe" warnings on Windows
+ #define _USE_MATH_DEFINES // For M_PI on MSVC
+ 
+@@ -955,6 +958,7 @@
+ // ggml object
+ //
+ 
++#endif /* GGML_CONTEXT_ONLY */
+ struct ggml_object {
+     size_t offs;
+     size_t size;
+@@ -988,6 +992,7 @@
+ // data types
+ //
+ 
++#ifndef GGML_CONTEXT_ONLY
+ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
+     "NONE",
+ 
+@@ -1602,6 +1607,7 @@
+     return (t0->ne[0] == t1->ne[0]) && ggml_can_repeat(t0, t1);
+ }
+ 
++#endif /* GGML_CONTEXT_ONLY */
+ // assert that pointer is aligned to GGML_MEM_ALIGN
+ #define GGML_ASSERT_ALIGNED(ptr) \
+     GGML_ASSERT(((uintptr_t) (ptr))%GGML_MEM_ALIGN == 0)
+@@ -1692,6 +1698,7 @@
+     return ctx->mem_size;
+ }
+ 
++#ifndef GGML_CONTEXT_ONLY
+ size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
+     size_t max_size = 0;
+ 
+@@ -1705,6 +1712,7 @@
+ 
+ ////////////////////////////////////////////////////////////////////////////////
+ 
++#endif /* GGML_CONTEXT_ONLY */
+ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml_object_type type, size_t size) {
+     // always insert objects at the end of the context's memory pool
+     struct ggml_object * obj_cur = ctx->objects_end;
+@@ -1763,6 +1771,9 @@
+     return obj_new;
+ }
+ 
++#ifdef GGML_CONTEXT_ONLY
++#include "context-api.inc"
++#else
+ static struct ggml_tensor * ggml_new_tensor_impl(
+         struct ggml_context * ctx,
+         enum   ggml_type      type,
+@@ -8086,3 +8097,4 @@
+     if (p0->strict_cpu != p1->strict_cpu ) return false;
+     return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
+ }
++#endif /* GGML_CONTEXT_ONLY */

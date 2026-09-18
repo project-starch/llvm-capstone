@@ -1,0 +1,15 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {"name": "base", "hidden": true, "generator": "Ninja", "binaryDir": "/tmp/capstone/whisper-ggml-context/build/${presetName}", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release", "BUILD_TESTING": true}},
+    {"name": "native", "inherits": "base"},
+    {"name": "capstone-domain", "inherits": "base", "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-domain.cmake", "cacheVariables": {"PORT_HEADER_PROVIDER": "musl"}},
+    {"name": "linux-guest", "inherits": "base", "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/linux-guest.cmake"}
+  ],
+  "buildPresets": [
+    {"name": "native", "configurePreset": "native", "jobs": 4},
+    {"name": "capstone-domain", "configurePreset": "capstone-domain", "jobs": 4},
+    {"name": "linux-guest", "configurePreset": "linux-guest", "jobs": 4}
+  ],
+  "testPresets": [{"name": "native", "configurePreset": "native", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error"}}]
+}

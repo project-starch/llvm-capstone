@@ -1,0 +1,40 @@
+Subject: Bind context resets and ownership to buffer epochs
+Upstream: whisper.cpp 1.9.4
+Upstream-Archive: https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.4.tar.gz
+Upstream-SHA256: 57e280cee375ab02425b806ad5146b99f6eb9357e3c2b31357c8a6af2e2e44ae
+Build-Variants: native port, Capstone domain; inert in full Whisper
+Depends-On: whisper-1.9.4-0001-context-extraction.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -1648,6 +1648,9 @@
+     };
+ 
+     GGML_ASSERT(ctx->mem_buffer != NULL);
++#ifdef GGML_CONTEXT_ONLY
++    ctx->mem_buffer = wg_bind(ctx, ctx->mem_buffer, ctx->mem_size, ctx->mem_buffer_owned);
++#endif
+ 
+     GGML_ASSERT_ALIGNED(ctx->mem_buffer);
+ 
+@@ -1661,6 +1664,9 @@
+         return;
+     }
+ 
++#ifdef GGML_CONTEXT_ONLY
++    ctx->mem_buffer = wg_reset_buffer(ctx, ctx->mem_buffer);
++#endif
+     ctx->n_objects     = 0;
+     ctx->objects_begin = NULL;
+     ctx->objects_end   = NULL;
+@@ -1671,6 +1677,9 @@
+         return;
+     }
+ 
++#ifdef GGML_CONTEXT_ONLY
++    wg_unbind(ctx, ctx->mem_buffer, ctx->mem_buffer_owned);
++#endif
+     if (ctx->mem_buffer_owned) {
+         ggml_aligned_free(ctx->mem_buffer, ctx->mem_size);
+     }

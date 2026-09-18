@@ -300,6 +300,15 @@
 > **Next:** the `--size 20` rehearsal (boot sw64) buys the CPI that decides whether `--size 100` is
 > ~8.8 h or ~17.6 h. Then `--size 100` is a decision, not a default.
 
+## 2026-09-18 — ggml ownership follow-up
+
+The Whisper context allocator now has native transcription recording, full-library
+reference comparison and spatial/Sublet replay in `capstone/ports/whisper/ggml-context/`.
+A full application port must coordinate graph completion with the backing-buffer
+owner before exclusive rebind, preserve borrowed graph access after descriptor
+free, and separately address backend tensor-data allocation. The component
+results do not establish protected inference. See its README and numeric bundle.
+
 ## 2026-09-18 — allocator-port follow-up
 
 CPython 3.13.7 pymalloc now has native reference comparison, workload recording,

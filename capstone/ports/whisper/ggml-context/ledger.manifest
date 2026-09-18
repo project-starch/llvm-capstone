@@ -1,0 +1,12 @@
+# Path, bucket, purpose. Inventory only, not a measured effort claim.
+patches/whisper-1.9.4-0001-context-extraction.patch compat serial allocator extraction boundary
+patches/whisper-1.9.4-0002-buffer-epochs.patch allocator owned and borrowed epoch transitions
+patches/whisper-1.9.4-0003-native-recording.patch test native workload event hooks
+src/shared/context-compat.h compat freestanding services
+src/shared/context-api.inc glue static allocator exposure and payload bounds
+src/shared/backing.c allocator bounded backing policy and descriptor lifetimes
+src/allocators/sublet/regions.c allocator retained authority and revocation
+src/shared/replay.c test event validation and synthetic payload checks
+src/native/full-reference.c test ordinary upstream library reference
+src/native/record.c test native event recorder
+security-tests/shared/lifetimes.c test live and stale access controls

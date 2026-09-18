@@ -1,0 +1,7 @@
+{
+  "storage": "local archive; raw transcripts and guest logs are not committed",
+  "path": "~/artifacts/whisper/20260918-ggml-context/raw-campaign.tar.gz",
+  "bytes": 4922481,
+  "sha256": "828bcac769c6a1a3b62b568e46b31e00da5e917ebf2fd522009c37c1bb5ede9a",
+  "contents": "release native capture and all retained QEMU attempts, including failed boots and earlier development controls"
+}

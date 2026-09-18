@@ -1,0 +1,57 @@
+Subject: Record allocator events in native Whisper
+Upstream: whisper.cpp 1.9.4
+Upstream-Archive: https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.4.tar.gz
+Upstream-SHA256: 57e280cee375ab02425b806ad5146b99f6eb9357e3c2b31357c8a6af2e2e44ae
+Build-Variants: instrumented full native Whisper only
+Depends-On: whisper-1.9.4-0002-buffer-epochs.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -1,3 +1,6 @@
++#ifdef WG_RECORD
++#include "record.h"
++#endif
+ #ifdef GGML_CONTEXT_ONLY
+ #include "context-compat.h"
+ #else
+@@ -1654,6 +1657,9 @@
+ 
+     GGML_ASSERT_ALIGNED(ctx->mem_buffer);
+ 
++#ifdef WG_RECORD
++    wg_record_init(ctx, ctx->mem_buffer, ctx->mem_size, ctx->mem_buffer_owned, GGML_OBJECT_SIZE);
++#endif
+     GGML_PRINT_DEBUG("%s: context initialized\n", __func__);
+ 
+     return ctx;
+@@ -1667,6 +1673,9 @@
+ #ifdef GGML_CONTEXT_ONLY
+     ctx->mem_buffer = wg_reset_buffer(ctx, ctx->mem_buffer);
+ #endif
++#ifdef WG_RECORD
++    wg_record_reset(ctx);
++#endif
+     ctx->n_objects     = 0;
+     ctx->objects_begin = NULL;
+     ctx->objects_end   = NULL;
+@@ -1680,6 +1689,9 @@
+ #ifdef GGML_CONTEXT_ONLY
+     wg_unbind(ctx, ctx->mem_buffer, ctx->mem_buffer_owned);
+ #endif
++#ifdef WG_RECORD
++    wg_record_free(ctx);
++#endif
+     if (ctx->mem_buffer_owned) {
+         ggml_aligned_free(ctx->mem_buffer, ctx->mem_size);
+     }
+@@ -1774,6 +1786,9 @@
+     }
+ 
+     ctx->objects_end = obj_new;
++#ifdef WG_RECORD
++    wg_record_object(ctx, type, size);
++#endif
+ 
+     //printf("%s: inserted new object at %zu, size = %zu\n", __func__, cur_end, obj_new->size);
+ 
