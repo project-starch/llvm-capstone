@@ -5,7 +5,7 @@ src/shared/a11trace.h                                                   glue    
 src/allocators/sublet/pg_subpool.h                                      glue       what the manager needs from the level below
 src/allocators/spatial/backing-allocator.c                              glue       first-fit backing allocator for the spatial arm
 src/allocators/sublet/context-pools.c                                   glue       revocable subpools and out-of-band metadata for the Sublet arm
-src/allocators/sublet/unsupported-allocators.c                          glue       reject unsupported backing requests from non-AllocSet managers
+src/allocators/sublet/unsupported-allocators.c                          glue       reject any remaining unadapted libc backing path
 src/capstone-domain/string.c                                            compat     the string functions a freestanding build leaves undefined
 src/capstone-domain/printf.c                                            compat     the formatting the manager calls and a domain has no libc for
 src/native/replay/printf.c                                              compat     the same formatting on the host side
@@ -35,3 +35,11 @@ src/capstone-domain/domain-runtime.h                                    test    
 patches/postgresql-17.0-0001-allocset-capstone-size-classes.patch       compat     capability ABI alignment and minimum size class
 patches/postgresql-17.0-0002-memorychunk-capstone-alignment.patch       compat     capability ABI chunk header
 patches/postgresql-17.0-0003-memorychunk-sublet-metadata-indices.patch  allocator  indices for out-of-band chunk and block metadata
+patches/postgresql-17.0-0005-slab-sublet-lifetimes.patch                 allocator  Slab sidecar metadata and revocable slots
+patches/postgresql-17.0-0006-generation-sublet-lifetimes.patch           allocator  Generation chunk and recycled-block lifetimes
+patches/postgresql-17.0-0007-bump-sublet-lifetimes.patch                 allocator  Bump allocation bounds and reset/delete lifetimes
+tests/contexts-workload.h                                              test       common upstream and protected policy and payload workload
+tests/contexts-native.c                                                test       native upstream context workload entry
+security-tests/capstone/contexts.c                                     test       paired exact-PC stale access and live-neighbor fixtures
+src/capstone-domain/memory/profile.c                                    test       optional domain memory-profile instrumentation
+src/capstone-domain/memory/profile.h                                    test       memory-profile accounting interface

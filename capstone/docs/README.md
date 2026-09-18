@@ -83,6 +83,11 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ## Current verified baseline
 
+PostgreSQL's CMake component supports AllocSet, Generation, Slab and Bump under
+Sublet at the shared 17.0 pin. Its native and QEMU test entry points and scope
+are in [the component README](../ports/postgres/memory-contexts/README.md).
+This is allocator-level coverage, not a protected server or consumer-defect suite.
+
 > **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
 > accurate, but it accumulated before any of the silicon work and says nothing about it. For
 > what is verified **on the board** — the resident bitstream, S-06/S-07/S-08/S-12, and SQLite's

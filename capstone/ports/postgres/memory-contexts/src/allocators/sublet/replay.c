@@ -4,7 +4,7 @@
  * This is replay_domain.c with the level below changed, and that is the whole
  * of the difference: the loop is src/shared/replay-engine.c, the same one the host
  * driver and the unprotected domain run, and the manager is the same source
- * with patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch applied. Everything the two arms report side by
+ * with the versioned Sublet lifetime patches applied. Everything the two arms report side by
  * side therefore comes from one loop over one recording.
  *
  * The regions, in the order the host shares them:
@@ -57,8 +57,8 @@ static char *trace;
 static char *scratch;
 static unsigned long arena_type = 7;
 
-/* What the refusing malloc in src/allocators/sublet/unsupported-allocators.c calls when a
- * context type the port does not cover asks for memory. It ends the domain at
+/* What the refusing malloc in src/allocators/sublet/unsupported-allocators.c calls when an
+ * unadapted backing path asks for memory. It ends the domain at
  * a named place instead of handing out a heap nothing revokes. */
 __attribute__((noreturn)) void pg_subpool_refuse(const char *what) {
   (void)what; /* the caller already said it */
@@ -219,7 +219,8 @@ void pg_domain_entry(unsigned *res, unsigned func) {
    */
   row("teardowns the trace asked for", c.reset + c.delete, k->resets);
   row("of those, one revocation each", 0,
-      k->revocations - k->extra_revocations);
+      k->revocations - k->extra_revocations - k->destroy_revocations);
+  row("primary revocations on direct destroy", 0, k->destroy_revocations);
   row("revocations of a second sub-pool", 0, k->extra_revocations);
   row("teardowns with nothing to revoke", 0, k->resets_empty);
   row("revocations in total", 0, k->revocations);
@@ -240,14 +241,15 @@ void pg_domain_entry(unsigned *res, unsigned func) {
    * as an identity rather than a bound:
    *
    *   revocations == teardowns - the ones with nothing to revoke
-   *                  + the revocations of second sub-pools
+   *                  + direct destroys + the revocations of second sub-pools
    *
    * One per teardown of a context that holds something, and one more for
    * each further sub-pool that context was given, which it keeps for the
    * rest of its life. Nothing else can contribute, and if anything did the
    * two sides would differ.
    */
-  unsigned long expect = k->resets - k->resets_empty + k->extra_revocations;
+  unsigned long expect = k->resets - k->resets_empty + k->destroy_revocations +
+                         k->extra_revocations;
 
   pg_domain_text(k->revocations == expect
                      ? "__CAPSTONE_PG_SUBLET_ONE_EACH__\n"

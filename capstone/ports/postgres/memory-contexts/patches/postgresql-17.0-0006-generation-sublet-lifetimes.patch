@@ -1,0 +1,425 @@
+Subject: [PATCH] Port generation lifetimes to Sublet context pools
+Upstream: postgresql 17.0
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.0/postgresql-17.0.tar.bz2
+Upstream-SHA256: 7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de
+Build-Variants: Sublet Capstone replay
+Depends-On: postgresql-17.0-0003-memorychunk-sublet-metadata-indices.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Preserve allocation policy, keep context/block metadata outside revoked bytes,
+and mint allocation authority from the actual block carve. Production-layout
+builds only; debug configurations that walk dead chunks are explicitly refused.
+
+diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/generation.c
+index 0238c11..9bcc819 100644
+--- a/src/backend/utils/mmgr/generation.c
++++ b/src/backend/utils/mmgr/generation.c
+@@ -36,6 +36,11 @@
+ #include "postgres.h"
+ 
+ #include "lib/ilist.h"
++#include "pg_subpool.h"
++
++#if defined(MEMORY_CONTEXT_CHECKING) || defined(CLOBBER_FREED_MEMORY)
++#error "Sublet Generation requires the release-layout manager configuration"
++#endif
+ #include "port/pg_bitutils.h"
+ #include "utils/memdebug.h"
+ #include "utils/memutils.h"
+@@ -43,7 +48,8 @@
+ #include "utils/memutils_memorychunk.h"
+ 
+ 
+-#define Generation_BLOCKHDRSZ	MAXALIGN(sizeof(GenerationBlock))
++#define Generation_BLOCKHDRSZ 96 /* upstream capstone64 block geometry */
++#define Generation_CONTEXTSZ 224 /* upstream capstone64 context geometry */
+ #define Generation_CHUNKHDRSZ	sizeof(MemoryChunk)
+ 
+ #define Generation_CHUNK_FRACTION	8
+@@ -70,6 +76,8 @@ typedef struct GenerationContext
+ 	GenerationBlock *freeblock; /* pointer to an empty block that's being
+ 								 * recycled, or NULL if there's no such block. */
+ 	dlist_head	blocks;			/* list of blocks */
++	pg_subpool *pool;
++	GenerationBlock *keeper;
+ } GenerationContext;
+ 
+ /*
+@@ -86,13 +94,14 @@ typedef struct GenerationContext
+  */
+ struct GenerationBlock
+ {
++	pg_block *backing;
+ 	dlist_node	node;			/* doubly-linked list of blocks */
+ 	GenerationContext *context; /* pointer back to the owning context */
+ 	Size		blksize;		/* allocated size of this block */
+ 	int			nchunks;		/* number of chunks in the block */
+ 	int			nfree;			/* number of free chunks */
+-	char	   *freeptr;		/* start of free space in this block */
+-	char	   *endptr;			/* end of space in this block */
++	uintptr_t	freeptr;		/* start of free space in this block */
++	uintptr_t	endptr;			/* end of space in this block */
+ };
+ 
+ /*
+@@ -121,12 +130,10 @@ struct GenerationBlock
+  * chunk on the block.
+  */
+ #define ExternalChunkGetBlock(chunk) \
+-	(GenerationBlock *) ((char *) chunk - Generation_BLOCKHDRSZ)
++	((GenerationBlock *) pg_subpool_block_at((chunk)->capstone_block)->manager)
+ 
+ /* Obtain the keeper block for a generation context */
+-#define KeeperBlock(set) \
+-	((GenerationBlock *) (((char *) set) + \
+-	MAXALIGN(sizeof(GenerationContext))))
++#define KeeperBlock(set) ((set)->keeper)
+ 
+ /* Check if the block is the keeper block of the given generation context */
+ #define IsKeeperBlock(set, block) ((block) == (KeeperBlock(set)))
+@@ -141,6 +148,23 @@ static inline void GenerationBlockFree(GenerationContext *set,
+ 									   GenerationBlock *block);
+ 
+ 
++/* Sidecars retain the upstream intrusive lists, outside revocable blocks. */
++StaticAssertDecl(sizeof(GenerationContext) <= PG_HEADER_BYTES, "context header slot");
++StaticAssertDecl(sizeof(GenerationBlock) <= sizeof(((pg_block *) 0)->manager), "block sidecar");
++StaticAssertDecl(sizeof(void *) == 16, "Capstone block geometry");
++
++static GenerationBlock *
++GenerationNewBlock(GenerationContext *set, Size bytes)
++{
++	pg_block *b = pg_subpool_managed_block(set->pool, bytes, Generation_BLOCKHDRSZ);
++	GenerationBlock *block;
++	if (!b)
++		return NULL;
++	block = (GenerationBlock *) b->manager;
++	block->backing = b;
++	return block;
++}
++
+ /*
+  * Public routines
+  */
+@@ -195,7 +219,7 @@ GenerationContextCreate(MemoryContext parent,
+ 	Assert(maxBlockSize <= MEMORYCHUNK_MAX_BLOCKOFFSET);
+ 
+ 	/* Determine size of initial block */
+-	allocSize = MAXALIGN(sizeof(GenerationContext)) +
++	allocSize = Generation_CONTEXTSZ +
+ 		Generation_BLOCKHDRSZ + Generation_CHUNKHDRSZ;
+ 	if (minContextSize != 0)
+ 		allocSize = Max(allocSize, minContextSize);
+@@ -206,7 +230,7 @@ GenerationContextCreate(MemoryContext parent,
+ 	 * Allocate the initial block.  Unlike other generation.c blocks, it
+ 	 * starts with the context header and its block header follows that.
+ 	 */
+-	set = (GenerationContext *) malloc(allocSize);
++	set = (GenerationContext *) pg_subpool_header(sizeof(GenerationContext));
+ 	if (set == NULL)
+ 	{
+ 		MemoryContextStats(TopMemoryContext);
+@@ -221,12 +245,23 @@ GenerationContextCreate(MemoryContext parent,
+ 	 * Avoid writing code that can fail between here and MemoryContextCreate;
+ 	 * we'd leak the header if we ereport in this stretch.
+ 	 */
++	set->pool = pg_subpool_create();
++	if (!set->pool)
++	{
++		pg_subpool_header_free(set);
++		elog(ERROR, "Sublet context pool exhausted");
++	}
+ 	dlist_init(&set->blocks);
+ 
+ 	/* Fill in the initial block's block header */
+-	block = KeeperBlock(set);
+-	/* determine the block size and initialize it */
+-	firstBlockSize = allocSize - MAXALIGN(sizeof(GenerationContext));
++	firstBlockSize = allocSize - Generation_CONTEXTSZ;
++	block = set->keeper = GenerationNewBlock(set, firstBlockSize);
++	if (!block)
++	{
++		pg_subpool_destroy(set->pool);
++		pg_subpool_header_free(set);
++		elog(ERROR, "Sublet keeper allocation failed");
++	}
+ 	GenerationBlockInit(set, block, firstBlockSize);
+ 
+ 	/* add it to the doubly-linked list of blocks */
+@@ -283,41 +318,18 @@ void
+ GenerationReset(MemoryContext context)
+ {
+ 	GenerationContext *set = (GenerationContext *) context;
+-	dlist_mutable_iter miter;
+-
+-	Assert(GenerationIsValid(set));
+-
+-#ifdef MEMORY_CONTEXT_CHECKING
+-	/* Check for corruption and leaks before freeing */
+-	GenerationCheck(context);
+-#endif
+-
+-	/*
+-	 * NULLify the free block pointer.  We must do this before calling
+-	 * GenerationBlockFree as that function never expects to free the
+-	 * freeblock.
+-	 */
++	Size bytes = set->keeper->blksize;
++	pg_subpool_reset(set->pool);
++	dlist_init(&set->blocks);
+ 	set->freeblock = NULL;
+-
+-	dlist_foreach_modify(miter, &set->blocks)
+-	{
+-		GenerationBlock *block = dlist_container(GenerationBlock, node, miter.cur);
+-
+-		if (IsKeeperBlock(set, block))
+-			GenerationBlockMarkEmpty(block);
+-		else
+-			GenerationBlockFree(set, block);
+-	}
+-
+-	/* set it so new allocations to make use of the keeper block */
+-	set->block = KeeperBlock(set);
+-
+-	/* Reset block size allocation sequence, too */
++	set->keeper = GenerationNewBlock(set, bytes);
++	if (!set->keeper)
++		elog(ERROR, "Sublet keeper allocation failed");
++	GenerationBlockInit(set, set->keeper, bytes);
++	dlist_push_head(&set->blocks, &set->keeper->node);
++	set->block = set->keeper;
+ 	set->nextBlockSize = set->initBlockSize;
+-
+-	/* Ensure there is only 1 item in the dlist */
+-	Assert(!dlist_is_empty(&set->blocks));
+-	Assert(!dlist_has_next(&set->blocks, dlist_head_node(&set->blocks)));
++	context->mem_allocated = bytes;
+ }
+ 
+ /*
+@@ -327,10 +339,9 @@ GenerationReset(MemoryContext context)
+ void
+ GenerationDelete(MemoryContext context)
+ {
+-	/* Reset to release all releasable GenerationBlocks */
+-	GenerationReset(context);
+-	/* And free the context header and keeper block */
+-	free(context);
++	GenerationContext *set = (GenerationContext *) context;
++	pg_subpool_destroy(set->pool);
++	pg_subpool_header_free(set);
+ }
+ 
+ /*
+@@ -361,7 +372,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+ 	required_size = chunk_size + Generation_CHUNKHDRSZ;
+ 	blksize = required_size + Generation_BLOCKHDRSZ;
+ 
+-	block = (GenerationBlock *) malloc(blksize);
++	block = GenerationNewBlock(set, blksize);
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+ 
+@@ -374,9 +385,17 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+ 	block->nfree = 0;
+ 
+ 	/* the block is completely full */
+-	block->freeptr = block->endptr = ((char *) block) + blksize;
+-
+-	chunk = (MemoryChunk *) (((char *) block) + Generation_BLOCKHDRSZ);
++	unsigned int slot = pg_subpool_carve(block->backing, required_size);
++	if (!slot)
++	{
++		context->mem_allocated -= blksize;
++		pg_subpool_managed_free(block->backing);
++		return MemoryContextAllocationFailure(context, size, flags);
++	}
++	block->freeptr = block->endptr = block->backing->endptr;
++	chunk = (MemoryChunk *) pg_subpool_hand(slot);
++	chunk->capstone_slot = slot;
++	chunk->capstone_block = pg_subpool_block_index(block->backing);
+ 
+ 	/* mark the MemoryChunk as externally managed */
+ 	MemoryChunkSetHdrMaskExternal(chunk, MCTX_GENERATION_ID);
+@@ -411,9 +430,15 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+  */
+ static inline void *
+ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+-							  Size size, Size chunk_size)
++							  Size size, Size chunk_size, int flags)
+ {
+-	MemoryChunk *chunk = (MemoryChunk *) (block->freeptr);
++	unsigned int slot = pg_subpool_carve(block->backing, Generation_CHUNKHDRSZ + chunk_size);
++	MemoryChunk *chunk;
++	if (!slot)
++		return MemoryContextAllocationFailure(context, size, flags);
++	chunk = (MemoryChunk *) pg_subpool_hand(slot);
++	chunk->capstone_slot = slot;
++	chunk->capstone_block = pg_subpool_block_index(block->backing);
+ 
+ 	/* validate we've been given a block with enough free space */
+ 	Assert(block != NULL);
+@@ -428,7 +453,7 @@ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+ 
+ 	Assert(block->freeptr <= block->endptr);
+ 
+-	MemoryChunkSetHdrMask(chunk, block, chunk_size, MCTX_GENERATION_ID);
++	MemoryChunkSetHdrMask(chunk, chunk, chunk_size, MCTX_GENERATION_ID);
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	chunk->requested_size = size;
+ 	/* set mark to catch clobber of "unused" space */
+@@ -482,7 +507,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
+ 	if (blksize < required_size)
+ 		blksize = pg_nextpower2_size_t(required_size);
+ 
+-	block = (GenerationBlock *) malloc(blksize);
++	block = GenerationNewBlock(set, blksize);
+ 
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+@@ -498,7 +523,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
+ 	/* make this the current block */
+ 	set->block = block;
+ 
+-	return GenerationAllocChunkFromBlock(context, block, size, chunk_size);
++	return GenerationAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
+@@ -584,7 +609,7 @@ GenerationAlloc(MemoryContext context, Size size, int flags)
+ 			return GenerationAllocChunkFromBlock(context,
+ 												 freeblock,
+ 												 size,
+-												 chunk_size);
++												 chunk_size, flags);
+ 		}
+ 		else
+ 		{
+@@ -597,7 +622,7 @@ GenerationAlloc(MemoryContext context, Size size, int flags)
+ 	}
+ 
+ 	/* The current block has space, so just allocate chunk there. */
+-	return GenerationAllocChunkFromBlock(context, block, size, chunk_size);
++	return GenerationAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
+@@ -614,8 +639,8 @@ GenerationBlockInit(GenerationContext *context, GenerationBlock *block,
+ 	block->nchunks = 0;
+ 	block->nfree = 0;
+ 
+-	block->freeptr = ((char *) block) + Generation_BLOCKHDRSZ;
+-	block->endptr = ((char *) block) + blksize;
++	block->freeptr = block->backing->freeptr;
++	block->endptr = block->backing->endptr;
+ 
+ 	/* Mark unallocated space NOACCESS. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr,
+@@ -629,21 +654,9 @@ GenerationBlockInit(GenerationContext *context, GenerationBlock *block,
+ static inline void
+ GenerationBlockMarkEmpty(GenerationBlock *block)
+ {
+-#if defined(USE_VALGRIND) || defined(CLOBBER_FREED_MEMORY)
+-	char	   *datastart = ((char *) block) + Generation_BLOCKHDRSZ;
+-#endif
+-
+-#ifdef CLOBBER_FREED_MEMORY
+-	wipe_mem(datastart, block->freeptr - datastart);
+-#else
+-	/* wipe_mem() would have done this */
+-	VALGRIND_MAKE_MEM_NOACCESS(datastart, block->freeptr - datastart);
+-#endif
+-
+-	/* Reset the block, but don't return it to malloc */
+-	block->nchunks = 0;
+-	block->nfree = 0;
+-	block->freeptr = ((char *) block) + Generation_BLOCKHDRSZ;
++	pg_subpool_managed_reset(block->backing, Generation_BLOCKHDRSZ);
++	block->nchunks = block->nfree = 0;
++	block->freeptr = block->backing->freeptr;
+ }
+ 
+ /*
+@@ -677,7 +690,7 @@ GenerationBlockFree(GenerationContext *set, GenerationBlock *block)
+ 	wipe_mem(block, block->blksize);
+ #endif
+ 
+-	free(block);
++	pg_subpool_managed_free(block->backing);
+ }
+ 
+ /*
+@@ -712,12 +725,12 @@ GenerationFree(void *pointer)
+ 
+ #if (defined(MEMORY_CONTEXT_CHECKING) && defined(USE_ASSERT_CHECKING)) \
+ 	|| defined(CLOBBER_FREED_MEMORY)
+-		chunksize = block->endptr - (char *) pointer;
++		chunksize = block->endptr - (uintptr_t) pointer;
+ #endif
+ 	}
+ 	else
+ 	{
+-		block = MemoryChunkGetBlock(chunk);
++		block = ExternalChunkGetBlock(chunk);
+ 
+ 		/*
+ 		 * In this path, for speed reasons we just Assert that the referenced
+@@ -749,6 +762,8 @@ GenerationFree(void *pointer)
+ 	chunk->requested_size = InvalidAllocSize;
+ #endif
+ 
++	/* Read the header before revoking it; no payload access follows. */
++	pg_subpool_drop(chunk->capstone_slot);
+ 	block->nfree += 1;
+ 
+ 	Assert(block->nchunks > 0);
+@@ -819,11 +834,11 @@ GenerationRealloc(void *pointer, Size size, int flags)
+ 		if (!GenerationBlockIsValid(block))
+ 			elog(ERROR, "could not find block containing chunk %p", chunk);
+ 
+-		oldsize = block->endptr - (char *) pointer;
++		oldsize = block->endptr - (uintptr_t) pointer;
+ 	}
+ 	else
+ 	{
+-		block = MemoryChunkGetBlock(chunk);
++		block = ExternalChunkGetBlock(chunk);
+ 
+ 		/*
+ 		 * In this path, for speed reasons we just Assert that the referenced
+@@ -955,7 +970,7 @@ GenerationGetChunkContext(void *pointer)
+ 	if (MemoryChunkIsExternal(chunk))
+ 		block = ExternalChunkGetBlock(chunk);
+ 	else
+-		block = (GenerationBlock *) MemoryChunkGetBlock(chunk);
++		block = (GenerationBlock *) ExternalChunkGetBlock(chunk);
+ 
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
+@@ -983,7 +998,7 @@ GenerationGetChunkSpace(void *pointer)
+ 		GenerationBlock *block = ExternalChunkGetBlock(chunk);
+ 
+ 		Assert(GenerationBlockIsValid(block));
+-		chunksize = block->endptr - (char *) pointer;
++		chunksize = block->endptr - (uintptr_t) pointer;
+ 	}
+ 	else
+ 		chunksize = MemoryChunkGetValue(chunk);
+@@ -1045,7 +1060,7 @@ GenerationStats(MemoryContext context,
+ 	Assert(GenerationIsValid(set));
+ 
+ 	/* Include context header in totalspace */
+-	totalspace = MAXALIGN(sizeof(GenerationContext));
++	totalspace = Generation_CONTEXTSZ;
+ 
+ 	dlist_foreach(iter, &set->blocks)
+ 	{
+@@ -1143,7 +1158,7 @@ GenerationCheck(MemoryContext context)
+ 			}
+ 			else
+ 			{
+-				chunkblock = MemoryChunkGetBlock(chunk);
++				chunkblock = ExternalChunkGetBlock(chunk);
+ 				chunksize = MemoryChunkGetValue(chunk);
+ 			}

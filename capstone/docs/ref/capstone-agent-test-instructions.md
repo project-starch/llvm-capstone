@@ -39,6 +39,10 @@ Also preserve the user's local IDE data:
 
 ## 2. Fast compiler/linker checks
 
+For PostgreSQL allocator ports, use the CMake presets and CTest commands in
+`ports/postgres/memory-contexts/README.md`. The canonical component tests all
+four managers; the older `ports/postgres/build-*.sh` path remains AllocSet-only.
+
 ### Backend / SelectionDAG
 
 ```bash

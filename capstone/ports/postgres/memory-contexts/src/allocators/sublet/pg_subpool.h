@@ -51,6 +51,10 @@ typedef struct pg_block {
    * it asks for the revocation, and a level that trusts the level above to
    * free correctly is not a level that can claim anything. */
   struct pg_block *pool_prev, *pool_next;
+  /* Optional block-level authority and sidecar for Generation/Slab/Bump.
+   * Their intrusive lists live here, not inside revocable allocation bytes. */
+  capstone_cap_slot handle;
+  unsigned char manager[128] __attribute__((aligned(16)));
 } pg_block;
 
 /* A chunk, as the discipline needs it: what aset.c kept inside the freed chunk
@@ -149,9 +153,17 @@ unsigned int pg_subpool_next_chunk(unsigned int i);
  * The headers are a table of equal slots in the domain's own data, because
  * they are few and a table cannot be revoked. A static assertion in the patch
  * fails the build if a version of the manager grows a context past a slot. */
-#define PG_HEADER_BYTES 320u
+#define PG_HEADER_BYTES 384u
 void *pg_subpool_header(unsigned long bytes);
 void pg_subpool_header_free(void *p);
+
+/* Managed blocks preserve upstream block-header geometry as reserved bytes.
+ * Only these blocks take an extra handle, so AllocSet's primitive path stays
+ * unchanged. Reset reclaims all carved chunks, including Bump allocations. */
+pg_block *pg_subpool_managed_block(pg_subpool *sp, unsigned long bytes,
+                                 unsigned long prefix);
+void pg_subpool_managed_reset(pg_block *b, unsigned long prefix);
+void pg_subpool_managed_free(pg_block *b);
 
 /* The counts a pass reports. Revocations are the claim; the rest says what it
  * cost to get there. */
@@ -159,8 +171,10 @@ struct pg_subpool_counts {
   unsigned long created, destroyed, resets, resets_empty;
   unsigned long revocations, handles;
   /* Counted apart so the claim is an identity and not a bound:
-   *   revocations == (resets - resets_empty) + extra_revocations   */
-  unsigned long extra_revocations;
+   *   revocations == (resets - resets_empty) + destroy_revocations
+   *                  + extra_revocations
+   * Direct destroy need not reset/recarve a keeper first. */
+  unsigned long extra_revocations, destroy_revocations;
   unsigned long blocks, blocks_freed, grown;
   unsigned long blocks_live, blocks_peak;
   /* Keepers carved again after a reset, work the unprotected arm does not

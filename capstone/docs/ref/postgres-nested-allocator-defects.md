@@ -1,8 +1,9 @@
 # PostgreSQL nested-allocator defects — inventory at the 17.0 pin
 
 *What upstream PostgreSQL defects are usable as specimens for the nested-allocator
-corpus, which allocator each one's memory came from, and which have a protected
-arm today. Assembled 2026-09-18 against the port's pin,
+corpus, which allocator each one's memory came from, and whether that allocator
+has a Sublet port. Port availability is not a validated consumer reproducer.
+Assembled 2026-09-18 against the port's pin,
 `ports/postgres/memory-contexts/upstream.json` = 17.0.*
 
 ## Why this class, and what makes a row count
@@ -35,21 +36,20 @@ A row is **out of scope** if it is allocator-internal (a change to `mmgr`
 itself), a pure leak, frontend code over plain `malloc` (ecpg, libpq), requires
 true concurrency (single hart), or requires the LLVM JIT (no capstone64 backend).
 
-## Only AllocSet is ported
+## Allocator ports and consumer reproducers are different gates
 
-`ports/postgres/memory-contexts` compiles five context types — `aset`,
-`generation`, `slab`, `bump`, `alignedalloc` — but **only `aset.c` is ported to
-the Sublet discipline**. The four patches touch `aset.c` and
-`memutils_memorychunk.h` and nothing else. Under Sublet the other context types
-hit a deliberate refusal stub
-(`src/allocators/sublet/unsupported-allocators.c`), which says so:
+`ports/postgres/memory-contexts` now ports **AllocSet, Generation, Slab and
+Bump** to Sublet in its CMake targets. Seven versioned patches cover capability
+ABI layout, chunk metadata and all four managers' lifetime paths. The remaining
+libc refusal stub guards against unadapted backing calls. `alignedalloc` is a
+helper, not a fifth independently ported pool manager. See the component README
+for release-layout limits and runnable native/QEMU tests; the original shell
+builds remain AllocSet-only.
 
-> "Only aset contexts are ported to Sublet; a generation, slab or bump context
-> would need its own sub-pool discipline."
-
-The spatial arm has no such restriction — `backing-allocator.c` provides a
-general `malloc`/`free`/`realloc`/`calloc` over the region — so a non-aset
-specimen can still run native and spatial. It just has no protected arm.
+The directed allocator fixtures validate lifetime enforcement, not these eight
+consumer defects. The existing `live_parts` consumer reproducer is native;
+its Capstone arm remains separate work. The table records **allocator support**,
+not eight already-validated protected consumer arms.
 
 **So each row below names the allocator of the stale object, read from its
 creation site.** Inferring it from the subsystem is wrong twice over: TidStore's
@@ -60,7 +60,7 @@ stale pointer is to the `TidStore` struct itself, `palloc0`'d in
 
 ## Specimens live in the 17.0 pin — no revert needed
 
-| # | Fix commit | Consumer | Lifetime ended by | Allocator | Protected arm |
+| # | Fix commit | Consumer | Lifetime ended by | Allocator | Sublet allocator available |
 |---|---|---|---|---|---|
 | 1 | `1f5b6a5e5d` | `utils/sort/tuplestore.c` | `pfree` → freelist, then a **second** `pfree` of the same chunk | AllocSet | yes |
 | 2 | `3549ffb6af` | `commands/vacuumparallel.c` | `pfree` → freelist | AllocSet | yes |
@@ -69,9 +69,10 @@ stale pointer is to the `TidStore` struct itself, `palloc0`'d in
 | 5 | `727bc6ac33f6` | `optimizer/path/joinrels.c` | `pfree` via `bms_free` on **parent-owned** sets | AllocSet | yes |
 | 6 | `9d5ce4f1a00a` | `executor/nodeWindowAgg.c` | **`MemoryContextReset`** (bulk) | AllocSet | yes |
 | 7 | `a61592253e` | `replication/pgoutput/pgoutput.c` | **`MemoryContextDelete`** of an ancestor | AllocSet | yes |
-| 8 | `9e0b4b1ab5` | `replication/logical/reorderbuffer.c` | `pfree` → slab `block->freehead` | **Slab** | **no** |
+| 8 | `9e0b4b1ab5` | `replication/logical/reorderbuffer.c` | `pfree` → slab `block->freehead` | **Slab** | yes |
 
-Seven of eight have both arms today. The mix matters as much as the count: five
+All eight now have the required allocator port available, but paired consumer
+reproduction is not established by this inventory. The mix matters: five
 are `pfree`-into-freelist, two are context reset/delete, one is slab — so both
 lifetime-enders are represented, which is the sharper axis.
 
@@ -123,13 +124,14 @@ context-reset-ended representative.
 context down, taking every `entry_cxt` with it, while the cache survives holding
 pointers into freed arenas.
 
-**8 — reorderbuffer, and why it has no protected arm.** `ReorderBufferChange`
+**8 — reorderbuffer, requiring a Slab consumer fixture.** `ReorderBufferChange`
 comes from `reorderbuffer.c:329`
-`SlabContextCreate(..., sizeof(ReorderBufferChange))`. Slab is the one allocator
-where same-address reuse is *guaranteed* rather than probabilistic — one chunk
-size, LIFO `block->freehead` (`slab.c:731-732` ↔ `:277-286`), no size-class
-rounding — which makes it the best vulnerable arm we have and useless as a
-protected one until slab is ported.
+`SlabContextCreate(..., sizeof(ReorderBufferChange))`. A directed single-block
+Slab free/allocate pair gives deterministic same-address reuse: one chunk size,
+LIFO `block->freehead` (`slab.c:731-732` ↔ `:277-286`), no size-class rounding.
+With multiple blocks, upstream fullness-based selection still applies. The
+Slab port now tests same-address reuse with revoked stale aliases;
+the reorderbuffer-specific protected fixture is still to be built.
 
 ## Also live, not a row
 

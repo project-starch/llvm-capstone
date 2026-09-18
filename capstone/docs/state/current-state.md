@@ -2,7 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-18 — PostgreSQL 17.0 pin consistency
+## 2026-09-18 — PostgreSQL's four Sublet allocator ports
+
+The canonical `ports/postgres/memory-contexts` CMake component ports AllocSet,
+Generation, Slab and Bump at PostgreSQL 17.0. Generation/Slab revoke individual
+allocations; all four support context reset/delete. Bump retains bulk-only
+lifetime semantics. Upstream block policies remain in the versioned patches,
+with out-of-band context/block metadata and allocation authority from Sublet.
+Native tests, mixed-manager replay and paired exact-access QEMU fixtures are
+documented in the component README. Debug manager layouts are explicitly
+refused. The original shell builds remain AllocSet-only, and protected
+consumer-defect reproduction is still a separate milestone.
+
+## 2026-09-18 — PostgreSQL 17.0 pin consistency (before the additional ports)
 
 The PostgreSQL component, original shell builds and native defect corpus now
 read one `memory-contexts/upstream.json` pin: 17.0. Five native and four QEMU

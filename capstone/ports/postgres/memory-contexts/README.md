@@ -16,10 +16,32 @@ must not be relabeled as 17.0 evidence.
 
 The seven upstream memory-manager files are built outside the server. Native
 replay checks the recorded allocation counts and payloads. Spatial replay adds
-the capability ABI patches; Sublet adds per-context pools and chunk lifetimes
-for **AllocSet only**. Generation, Slab and Bump are compiled but their Sublet
-backing requests are deliberately refused. The hierarchy and subpool fixtures
-test revocation; none of this constitutes a protected PostgreSQL server.
+the capability ABI patches; Sublet adds per-context pools and allocation
+lifetimes for **AllocSet, Generation, Slab and Bump**. These are versioned
+patches to the pinned upstream managers, selected by the CMake Sublet target.
+
+| Manager | Sublet lifetime boundary |
+|---|---|
+| AllocSet | Individual free/reuse and context reset/delete |
+| Generation | Individual free, moving realloc, recycled blocks and context reset/delete |
+| Slab | Individual free/same-address reuse and context reset/delete |
+| Bump | Allocation bounds and bulk context reset/delete; no individual free/realloc |
+
+Context headers and typed block sidecars live outside revoked payload bytes.
+Slab's free chain uses side-table indices; its block selection and empty-block
+retention remain upstream code. Generation keeps its block recycling policy.
+Bump's zero-byte result is a non-dereferenceable address and consumes no bytes.
+Logical block geometry is preserved for the capability ABI; actual side-table
+overhead is separate from PostgreSQL's logical context statistics. Tables have
+fixed budgets; released backing bytes become reusable at context reset, not
+through general-purpose block coalescing.
+
+The new patches require PostgreSQL's release-layout configuration: they reject
+`MEMORY_CONTEXT_CHECKING` and `CLOBBER_FREED_MEMORY`, whose upstream walks can
+touch revoked chunks. This is distinct from the CMake build's optimization/debug
+setting. A remaining libc backing call is still refused, never silently routed
+to an unprotected heap. None of this constitutes a protected PostgreSQL server
+or a validated protected consumer-defect reproducer.
 
 ## Build and run
 
@@ -49,12 +71,26 @@ cmake --build /tmp/capstone/postgres-memory-contexts/build/linux-guest
 ctest --test-dir /tmp/capstone/postgres-memory-contexts/build/capstone-domain --output-on-failure
 ```
 
-The four QEMU tests cover spatial replay, Sublet replay, subpool lifetimes and
-context hierarchy. They use the shared QEMU lock and retain per-run artifacts.
+The QEMU tests cover the original spatial/Sublet replay and hierarchy fixtures,
+mixed-manager trace replay in both arms, and a paired context-allocator matrix.
+The matrix checks allocation-policy counters, payloads, live siblings, bounds,
+free/reset/delete/realloc aliases, block recycling, mixed context trees and
+metadata-exhaustion recovery. Unsupported upstream operations (Bump free/realloc,
+variable-size Slab allocations) are excluded. Expected faults must occur at the
+declared read/write instruction after successful setup; an unrelated fault or
+timeout is a failure. Native tests exercise the same policy workload and prove
+that the replay oracle and verdict classifier reject bad controls.
+
+Tests use the shared QEMU lock and retain per-run artifacts.
 For custom build roots use `-B`, `-DPG_WORK=...` and
 `-DPG_LINUX_BUILD_DIR=...`; pass matching build paths to `host/run-qemu.py`.
+`security-tests/run-contexts.py OUTPUT --domain-build DOMAIN --linux-build LINUX`
+also runs the matrix directly. After inspecting a failed attempt, its exact
+`suite-*` directory may be passed with `--resume`; passing inputs must retain
+identical binary/runtime hashes. Failed attempt directories are retained.
 
-The original scripts remain for existing experiment drivers. Prepare their
+The original scripts remain **AllocSet-only** for existing experiment drivers;
+use this CMake component for the four-manager Sublet port. Prepare their
 separate source tree before invoking the corpus:
 
 ```sh
@@ -70,6 +106,15 @@ available and configured. A Capstone arm for that consumer reproducer is still
 separate work; the component's lifetime fixtures are not that reproducer.
 
 ## Validation of the 17.0 pin (2026-09-18)
+
+The additional allocator ports pass eight native CTests, both mixed-manager
+QEMU replay arms and all 72 paired context-matrix arms (25 expected exact-access
+faults). All three capability-ABI policy hashes match the spatial arm. Compact
+results and binary identities are in `results/contexts/20260918-qemu/`.
+The four existing QEMU regressions also pass; the original Sublet replay needed
+one explicit rerun after a post-result guest stall, recorded in that result set.
+
+The earlier pin-consistency validation, before those ports were added:
 
 Five native CTests and all four QEMU CTests passed with fresh 17.0 builds.
 The original host fixture matched its oracle (72/68/1/12 blocks taken,

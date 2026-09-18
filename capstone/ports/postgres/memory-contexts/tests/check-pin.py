@@ -57,7 +57,7 @@ class PinTests(unittest.TestCase):
 
     def test_patch_metadata(self):
         patches = sorted((PORT / "patches").glob("*.patch"))
-        self.assertEqual(len(patches), 4)
+        self.assertEqual(len(patches), 7)
         for patch in patches:
             self.assertTrue(patch.name.startswith(f"postgresql-{PIN['version']}-"))
             text = patch.read_text()

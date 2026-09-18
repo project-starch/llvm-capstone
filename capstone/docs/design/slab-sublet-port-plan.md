@@ -1,5 +1,27 @@
 # Porting slab.c to the Sublet discipline
 
+## Implemented design
+
+The CMake memory-context component now carries versioned PostgreSQL 17.0
+Sublet patches for Slab, Generation and Bump as well as AllocSet. The proposal
+below is historical; its allocator-availability and local-toolchain statements
+are superseded by the component README and tests.
+
+The implementation retains upstream intrusive block lists in typed sidecars
+outside the revoked bytes, rather than converting those lists to indices.
+Slab's freed-chunk links do become side-table indices. A block handle supports
+Generation's whole-block recycle and Bump's bulk lifetime. Context slots grow
+from 320 to 384 bytes; a 128-byte aligned sidecar holds each manager's block
+metadata. Static assertions check both capacities. Logical upstream block and
+context geometry is reserved/reported separately from this metadata overhead.
+
+The port supports release-layout managers, explicitly refusing debug layouts
+that walk revoked payload. Synthetic native/spatial/Sublet workloads exercise
+the managers; port availability does not itself reproduce a consumer defect.
+The reorderbuffer specimen still needs its own matched consumer-level test.
+
+## Original proposal
+
 *Design record, 2026-09-18. What the second allocator port changes, function by
 function, against PostgreSQL 17.0's `src/backend/utils/mmgr/slab.c` (1154 lines).
 The template is `patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch`;
