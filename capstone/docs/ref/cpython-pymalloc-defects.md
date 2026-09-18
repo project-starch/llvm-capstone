@@ -178,9 +178,13 @@ nothing.
 
 ## Reaching further
 
+Eight of the 23 now have drivers and have been run:
+`bug-corpora/cpython/pymalloc-repros/results/20260918-qemu/` — 16/16 arms, with
+a negative control that fires on both oracles. Fifteen do not.
+
 | | reachable | needs |
 |---|---|---|
-| pymalloc port (exists) | 23 (+2 unresolved) | — |
+| pymalloc port (exists) | 23 (+2 unresolved), 8 with drivers | — |
 | + type free lists | 2 and more, `gh-126703` among them | porting the ten free lists |
 | + PyArena | 1 | porting the parser arena |
 
