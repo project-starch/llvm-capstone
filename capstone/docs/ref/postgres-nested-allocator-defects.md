@@ -47,9 +47,27 @@ for release-layout limits and runnable native/QEMU tests; the original shell
 builds remain AllocSet-only.
 
 The directed allocator fixtures validate lifetime enforcement, not these eight
-consumer defects. The existing `live_parts` consumer reproducer is native;
-its Capstone arm remains separate work. The table records **allocator support**,
-not eight already-validated protected consumer arms.
+consumer defects. The table records **allocator support**, not eight
+already-validated protected consumer arms.
+
+**Two of the eight have running reproducers**, both native only, in
+`bug-corpora/postgres/mmgr-repros/`:
+
+| Row | Case | What it establishes |
+|---|---|---|
+| 4 | `ed394c4bdf_live_parts_stale_alias` | real `bitmapset.c` compiled; freed chunk handed straight back; stale read returns the new owner's member |
+| 8 | `9e0b4b1ab5_reorderbuffer_spec_insert_lsn` | real Slab context at the real chunk size; **64 of 64** free/allocate rounds return the identical address; stale read returns the successor's LSN |
+
+Row 8 is the deterministic one — Slab has a single chunk size and a LIFO free
+list, so same-address reuse is a property of the allocator rather than of a run.
+It is also the first row whose Capstone arm is even possible, since slab was
+ported. Neither Capstone arm has been run: that needs a domain build.
+
+Neither case claims anything from AddressSanitizer. `pfree` never reaches
+`free`, so ASan cannot fire and its silence measures nothing; the arm that can
+discriminate is Valgrind, which PostgreSQL hand-annotated for
+(`VALGRIND_MEMPOOL_FREE` inside `pfree` itself, `mcxt.c:1531`) and which has not
+been run here.
 
 **So each row below names the allocator of the stale object, read from its
 creation site.** Inferring it from the subsystem is wrong twice over: TidStore's
