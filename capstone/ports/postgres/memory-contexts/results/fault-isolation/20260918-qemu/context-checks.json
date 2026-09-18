@@ -1,0 +1,296 @@
+[
+  {
+    "kind": 0,
+    "case": 2,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "0-2-spatial-ar1b_jgg",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "2fcd151b8295e8b3bf8ec64ede173523417960a8db6cbc569de9a25a458f9135"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 0,
+    "case": 2,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 24,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "0-2-sublet-91gxiv17",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "2fcd151b8295e8b3bf8ec64ede173523417960a8db6cbc569de9a25a458f9135"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 0,
+    "case": 9,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "0-9-spatial-hdzd64tr",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "d8e0873e07dc7ad50a18300157d1aa293f9c3f70d2271ba00489647275af9c2f"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 0,
+    "case": 9,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 5,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "0-9-sublet-1txx7es0",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "d8e0873e07dc7ad50a18300157d1aa293f9c3f70d2271ba00489647275af9c2f"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 1,
+    "case": 2,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "1-2-spatial-q3f0too0",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "34fb5c825de7ca4aea6e712f19d439c1da0c92c37b423936c5f618545ca4fa1f"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 1,
+    "case": 2,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 24,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "1-2-sublet-p5obgpbl",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "34fb5c825de7ca4aea6e712f19d439c1da0c92c37b423936c5f618545ca4fa1f"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 1,
+    "case": 9,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "1-9-spatial-fd_gt90h",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "849fe3a3ba24eefa45046ed6472b16b12ef1d707703c63c0d68e13b79dcc578a"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 1,
+    "case": 9,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 5,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "1-9-sublet-efhp5qgh",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "849fe3a3ba24eefa45046ed6472b16b12ef1d707703c63c0d68e13b79dcc578a"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 2,
+    "case": 2,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "2-2-spatial-yaazauax",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 2,
+    "case": 2,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 24,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "2-2-sublet-nytlo17c",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 2,
+    "case": 9,
+    "mode": "spatial",
+    "expected": "complete",
+    "runner_exit": 0,
+    "passed": true,
+    "artifact": "2-9-spatial-9ypdywv6",
+    "sha256": {
+      "context.dom": "335dd7e3f533a13d7907cd9bf4b360e366101e65138154458541b45eb3ffce9a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "a8db57eb231a849fee7592bd51c53ba4a0a9d20470bb2cd58cbd523a7890de63"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  },
+  {
+    "kind": 2,
+    "case": 9,
+    "mode": "sublet",
+    "expected": "fault",
+    "runner_exit": 1,
+    "cause": 5,
+    "pc": "0x101a17af4",
+    "expected_pc": "0x101a17af4",
+    "passed": true,
+    "artifact": "2-9-sublet-gy7btlhf",
+    "sha256": {
+      "context.dom": "b46a151236830146297cd241201e0ef8cfb9116f24b200fc9acf085f353ab96a",
+      "loader.user": "79c747cf042e3e359bc1929c95e36d88593d8e674f6511ccbcb05752854cba06",
+      "selection.bin": "a8db57eb231a849fee7592bd51c53ba4a0a9d20470bb2cd58cbd523a7890de63"
+    },
+    "regions": {
+      "payload": 65536,
+      "arena": 8388608,
+      "trace": 1048576,
+      "scratch": 50331648
+    },
+    "qemu_sha256": "925071be2923af604d3a53a63f3a19b8bb940c9ae8f9f960d03689976bce3bf6",
+    "compiler_sha256": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "nodes": 8388608
+  }
+]

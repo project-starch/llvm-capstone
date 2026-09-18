@@ -129,6 +129,16 @@ for mode in ("spatial", "sublet"):
             chunk_patches,
         ),
     )
+    if mode == "sublet":
+        for manager, patch in (
+            ("slab", "0005-slab-sublet-lifetimes"),
+            ("generation", "0006-generation-sublet-lifetimes"),
+            ("bump", "0007-bump-sublet-lifetimes"),
+        ):
+            put(
+                root / f"{manager}.c",
+                patched(args.source / f"src/backend/utils/mmgr/{manager}.c", [patch]),
+            )
     text = config.read_text()
     if text.count("#define MAXIMUM_ALIGNOF 8\n") != 1:
         raise SystemExit(

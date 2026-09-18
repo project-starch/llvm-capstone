@@ -1,0 +1,30 @@
+# Hunk class and level; mixed hunks follow the driving change described below.
+src/backend/utils/mmgr/generation.c:36 metadata allocator Include sidecar interface and reject unsupported dead-chunk debug walks
+src/backend/utils/mmgr/generation.c:48 metadata allocator Retain upstream capability-ABI block and context geometry
+src/backend/utils/mmgr/generation.c:76 hierarchy allocator Retain context authority and an explicit keeper
+src/backend/utils/mmgr/generation.c:94 metadata allocator Move block metadata out of payload and represent carve cursors as addresses
+src/backend/utils/mmgr/generation.c:130 metadata allocator Resolve owner and keeper without reaching outside chunk bounds
+src/backend/utils/mmgr/generation.c:148 hierarchy allocator Allocate revocable blocks with bounded sidecars
+src/backend/utils/mmgr/generation.c:219 metadata allocator Preserve original keeper geometry
+src/backend/utils/mmgr/generation.c:230 metadata allocator Keep context headers outside reset authority
+src/backend/utils/mmgr/generation.c:245 hierarchy allocator Create context authority and its keeper with failure cleanup
+src/backend/utils/mmgr/generation.c:318 hierarchy allocator Bulk revoke and reconstitute the keeper on reset
+src/backend/utils/mmgr/generation.c:339 hierarchy allocator Revoke and destroy context authority on delete
+src/backend/utils/mmgr/generation.c:372 hierarchy allocator Allocate a protected external block
+src/backend/utils/mmgr/generation.c:385 hierarchy allocator Carve and issue bounded authority for external chunks
+src/backend/utils/mmgr/generation.c:430 hierarchy allocator Carve regular chunks and propagate metadata exhaustion
+src/backend/utils/mmgr/generation.c:453 metadata allocator Encode chunk class while resolving its block through side indices
+src/backend/utils/mmgr/generation.c:507 hierarchy allocator Allocate the next protected block
+src/backend/utils/mmgr/generation.c:523 hierarchy allocator Preserve allocation-failure flags when carving
+src/backend/utils/mmgr/generation.c:609 hierarchy allocator Preserve failure flags on recycled blocks
+src/backend/utils/mmgr/generation.c:622 hierarchy allocator Preserve failure flags on the current block
+src/backend/utils/mmgr/generation.c:639 metadata allocator Initialize cursors from the backing region
+src/backend/utils/mmgr/generation.c:654 hierarchy allocator Revoke a recycled block and recover its chunk metadata
+src/backend/utils/mmgr/generation.c:690 hierarchy allocator Revoke released blocks
+src/backend/utils/mmgr/generation.c:725 metadata allocator Read scalar geometry and resolve sidecar ownership
+src/backend/utils/mmgr/generation.c:762 hierarchy allocator Revoke individual chunk aliases before recycling accounting
+src/backend/utils/mmgr/generation.c:834 metadata allocator Read realloc capacity and ownership without pointer reconstruction
+src/backend/utils/mmgr/generation.c:970 metadata allocator Resolve context ownership by side index
+src/backend/utils/mmgr/generation.c:998 metadata allocator Use scalar geometry for external chunk space
+src/backend/utils/mmgr/generation.c:1060 metadata allocator Report original logical context geometry
+src/backend/utils/mmgr/generation.c:1158 metadata allocator Keep owner resolution consistent in the gated debug path

@@ -1,0 +1,348 @@
+Subject: [PATCH] Port slab lifetimes to Sublet context pools
+Upstream: postgresql 17.0
+Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.0/postgresql-17.0.tar.bz2
+Upstream-SHA256: 7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de
+Build-Variants: Sublet Capstone replay
+Depends-On: postgresql-17.0-0003-memorychunk-sublet-metadata-indices.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Preserve allocation policy, keep context/block metadata outside revoked bytes,
+and mint allocation authority from the actual block carve. Production-layout
+builds only; debug configurations that walk dead chunks are explicitly refused.
+
+diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
+index 3e15d59..89e2bd7 100644
+--- a/src/backend/utils/mmgr/slab.c
++++ b/src/backend/utils/mmgr/slab.c
+@@ -69,12 +69,17 @@
+ #include "postgres.h"
+ 
+ #include "lib/ilist.h"
++#include "pg_subpool.h"
++
++#if defined(MEMORY_CONTEXT_CHECKING) || defined(CLOBBER_FREED_MEMORY)
++#error "Sublet Slab requires the release-layout manager configuration"
++#endif
+ #include "utils/memdebug.h"
+ #include "utils/memutils.h"
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
+ 
+-#define Slab_BLOCKHDRSZ	MAXALIGN(sizeof(SlabBlock))
++#define Slab_BLOCKHDRSZ 96 /* upstream capstone64 block geometry */
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ /*
+@@ -85,7 +90,7 @@
+ #define Slab_CONTEXT_HDRSZ(chunksPerBlock)	\
+ 	(sizeof(SlabContext) + ((chunksPerBlock) * sizeof(bool)))
+ #else
+-#define Slab_CONTEXT_HDRSZ(chunksPerBlock)	sizeof(SlabContext)
++#define Slab_CONTEXT_HDRSZ(chunksPerBlock) 320 /* upstream capstone64 geometry */
+ #endif
+ 
+ /*
+@@ -127,6 +132,7 @@ typedef struct SlabContext
+ 	 * enough empty blocks already.
+ 	 */
+ 	dlist_head	blocklist[SLAB_BLOCKLIST_COUNT];
++	pg_subpool *pool;
+ } SlabContext;
+ 
+ /*
+@@ -148,8 +154,8 @@ typedef struct SlabBlock
+ 	SlabContext *slab;			/* owning context */
+ 	int32		nfree;			/* number of chunks on free + unused chunks */
+ 	int32		nunused;		/* number of unused chunks */
+-	MemoryChunk *freehead;		/* pointer to the first free chunk */
+-	MemoryChunk *unused;		/* pointer to the next unused chunk */
++	unsigned int freehead;		/* side-table index, never a revoked pointer */
++	pg_block *backing;		/* uncarved tail and out-of-band metadata */
+ 	dlist_node	node;			/* doubly-linked list for blocklist[] */
+ } SlabBlock;
+ 
+@@ -270,41 +276,45 @@ SlabFindNextBlockListIndex(SlabContext *slab)
+ static inline MemoryChunk *
+ SlabGetNextFreeChunk(SlabContext *slab, SlabBlock *block)
+ {
++	unsigned int slot;
+ 	MemoryChunk *chunk;
+-
+ 	Assert(block->nfree > 0);
+-
+-	if (block->freehead != NULL)
++	if (block->freehead)
+ 	{
+-		chunk = block->freehead;
+-
+-		/*
+-		 * Pop the chunk from the linked list of free chunks.  The pointer to
+-		 * the next free chunk is stored in the chunk itself.
+-		 */
+-		VALGRIND_MAKE_MEM_DEFINED(SlabChunkGetPointer(chunk), sizeof(MemoryChunk *));
+-		block->freehead = *(MemoryChunk **) SlabChunkGetPointer(chunk);
+-
+-		/* check nothing stomped on the free chunk's memory */
+-		Assert(block->freehead == NULL ||
+-			   (block->freehead >= SlabBlockGetChunk(slab, block, 0) &&
+-				block->freehead <= SlabBlockGetChunk(slab, block, slab->chunksPerBlock - 1) &&
+-				SlabChunkMod(slab, block, block->freehead) == 0));
++		slot = block->freehead;
++		block->freehead = pg_subpool_entry(slot)->next_free;
+ 	}
+ 	else
+ 	{
+ 		Assert(block->nunused > 0);
+-
+-		chunk = block->unused;
+-		block->unused = (MemoryChunk *) (((char *) block->unused) + slab->fullChunkSize);
++		slot = pg_subpool_carve(block->backing, slab->fullChunkSize);
++		if (!slot)
++			return NULL;
+ 		block->nunused--;
+ 	}
+-
++	chunk = (MemoryChunk *) pg_subpool_hand(slot);
++	chunk->capstone_slot = slot;
++	chunk->capstone_block = pg_subpool_block_index(block->backing);
+ 	block->nfree--;
+-
+ 	return chunk;
+ }
+ 
++StaticAssertDecl(sizeof(SlabContext) <= PG_HEADER_BYTES, "context header slot");
++StaticAssertDecl(sizeof(SlabBlock) <= sizeof(((pg_block *) 0)->manager), "block sidecar");
++StaticAssertDecl(sizeof(void *) == 16, "Capstone block geometry");
++
++static SlabBlock *
++SlabNewBlock(SlabContext *slab)
++{
++	pg_block *b = pg_subpool_managed_block(slab->pool, slab->blockSize, Slab_BLOCKHDRSZ);
++	SlabBlock *block;
++	if (!b)
++		return NULL;
++	block = (SlabBlock *) b->manager;
++	block->backing = b;
++	return block;
++}
++
+ /*
+  * SlabContextCreate
+  *		Create a new Slab context.
+@@ -361,7 +371,7 @@ SlabContextCreate(MemoryContext parent,
+ 
+ 
+ 
+-	slab = (SlabContext *) malloc(Slab_CONTEXT_HDRSZ(chunksPerBlock));
++	slab = (SlabContext *) pg_subpool_header(sizeof(SlabContext));
+ 	if (slab == NULL)
+ 	{
+ 		MemoryContextStats(TopMemoryContext);
+@@ -377,6 +387,13 @@ SlabContextCreate(MemoryContext parent,
+ 	 * we'd leak the header if we ereport in this stretch.
+ 	 */
+ 
++	slab->pool = pg_subpool_create();
++	if (!slab->pool)
++	{
++		pg_subpool_header_free(slab);
++		elog(ERROR, "Sublet context pool exhausted");
++	}
++
+ 	/* Fill in SlabContext-specific header fields */
+ 	slab->chunkSize = (uint32) chunkSize;
+ 	slab->fullChunkSize = (uint32) fullChunkSize;
+@@ -431,50 +448,12 @@ void
+ SlabReset(MemoryContext context)
+ {
+ 	SlabContext *slab = (SlabContext *) context;
+-	dlist_mutable_iter miter;
+-	int			i;
+-
+-	Assert(SlabIsValid(slab));
+-
+-#ifdef MEMORY_CONTEXT_CHECKING
+-	/* Check for corruption and leaks before freeing */
+-	SlabCheck(context);
+-#endif
+-
+-	/* release any retained empty blocks */
+-	dclist_foreach_modify(miter, &slab->emptyblocks)
+-	{
+-		SlabBlock  *block = dlist_container(SlabBlock, node, miter.cur);
+-
+-		dclist_delete_from(&slab->emptyblocks, miter.cur);
+-
+-#ifdef CLOBBER_FREED_MEMORY
+-		wipe_mem(block, slab->blockSize);
+-#endif
+-		free(block);
+-		context->mem_allocated -= slab->blockSize;
+-	}
+-
+-	/* walk over blocklist and free the blocks */
+-	for (i = 0; i < SLAB_BLOCKLIST_COUNT; i++)
+-	{
+-		dlist_foreach_modify(miter, &slab->blocklist[i])
+-		{
+-			SlabBlock  *block = dlist_container(SlabBlock, node, miter.cur);
+-
+-			dlist_delete(miter.cur);
+-
+-#ifdef CLOBBER_FREED_MEMORY
+-			wipe_mem(block, slab->blockSize);
+-#endif
+-			free(block);
+-			context->mem_allocated -= slab->blockSize;
+-		}
+-	}
+-
++	pg_subpool_reset(slab->pool);
++	dclist_init(&slab->emptyblocks);
++	for (int i = 0; i < SLAB_BLOCKLIST_COUNT; i++)
++		dlist_init(&slab->blocklist[i]);
+ 	slab->curBlocklistIndex = 0;
+-
+-	Assert(context->mem_allocated == 0);
++	context->mem_allocated = 0;
+ }
+ 
+ /*
+@@ -484,10 +463,9 @@ SlabReset(MemoryContext context)
+ void
+ SlabDelete(MemoryContext context)
+ {
+-	/* Reset to release all the SlabBlocks */
+-	SlabReset(context);
+-	/* And free the context header */
+-	free(context);
++	SlabContext *slab = (SlabContext *) context;
++	pg_subpool_destroy(slab->pool);
++	pg_subpool_header_free(slab);
+ }
+ 
+ /*
+@@ -504,14 +482,12 @@ SlabAllocSetupNewChunk(MemoryContext context, SlabBlock *block,
+ 	 * Check that the chunk pointer is actually somewhere on the block and is
+ 	 * aligned as expected.
+ 	 */
+-	Assert(chunk >= SlabBlockGetChunk(slab, block, 0));
+-	Assert(chunk <= SlabBlockGetChunk(slab, block, slab->chunksPerBlock - 1));
+-	Assert(SlabChunkMod(slab, block, chunk) == 0);
++	Assert(pg_subpool_block_at(chunk->capstone_block) == block->backing);
+ 
+ 	/* Prepare to initialize the chunk header. */
+ 	VALGRIND_MAKE_MEM_UNDEFINED(chunk, Slab_CHUNKHDRSZ);
+ 
+-	MemoryChunkSetHdrMask(chunk, block, MAXALIGN(slab->chunkSize), MCTX_SLAB_ID);
++	MemoryChunkSetHdrMask(chunk, chunk, MAXALIGN(slab->chunkSize), MCTX_SLAB_ID);
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	/* slab mark to catch clobber of "unused" space */
+@@ -559,10 +535,15 @@ SlabAllocFromNewBlock(MemoryContext context, Size size, int flags)
+ 
+ 		/* fetch the next chunk from this block */
+ 		chunk = SlabGetNextFreeChunk(slab, block);
++		if (!chunk)
++		{
++			dclist_push_head(&slab->emptyblocks, &block->node);
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
+ 	}
+ 	else
+ 	{
+-		block = (SlabBlock *) malloc(slab->blockSize);
++		block = SlabNewBlock(slab);
+ 
+ 		if (unlikely(block == NULL))
+ 			return MemoryContextAllocationFailure(context, size, flags);
+@@ -570,13 +551,15 @@ SlabAllocFromNewBlock(MemoryContext context, Size size, int flags)
+ 		block->slab = slab;
+ 		context->mem_allocated += slab->blockSize;
+ 
+-		/* use the first chunk in the new block */
+-		chunk = SlabBlockGetChunk(slab, block, 0);
+-
+-		block->nfree = slab->chunksPerBlock - 1;
+-		block->unused = SlabBlockGetChunk(slab, block, 1);
+-		block->freehead = NULL;
+-		block->nunused = slab->chunksPerBlock - 1;
++		block->nfree = block->nunused = slab->chunksPerBlock;
++		block->freehead = 0;
++		chunk = SlabGetNextFreeChunk(slab, block);
++		if (!chunk)
++		{
++			context->mem_allocated -= slab->blockSize;
++			pg_subpool_managed_free(block->backing);
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
+ 	}
+ 
+ 	/* find the blocklist element for storing blocks with 1 used chunk */
+@@ -672,6 +655,8 @@ SlabAlloc(MemoryContext context, Size size, int flags)
+ 
+ 		/* fetch the next chunk from this block */
+ 		chunk = SlabGetNextFreeChunk(slab, block);
++		if (!chunk)
++			return MemoryContextAllocationFailure(context, size, flags);
+ 
+ 		/* get the new blocklist index based on the new free chunk count */
+ 		new_blocklist_idx = SlabBlocklistIndex(slab, block->nfree);
+@@ -709,7 +694,7 @@ SlabFree(void *pointer)
+ 	/* Allow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_DEFINED(chunk, Slab_CHUNKHDRSZ);
+ 
+-	block = MemoryChunkGetBlock(chunk);
++	block = (SlabBlock *) pg_subpool_block_at(chunk->capstone_block)->manager;
+ 
+ 	/*
+ 	 * For speed reasons we just Assert that the referenced block is good.
+@@ -728,8 +713,10 @@ SlabFree(void *pointer)
+ #endif
+ 
+ 	/* push this chunk onto the head of the block's free list */
+-	*(MemoryChunk **) pointer = block->freehead;
+-	block->freehead = chunk;
++	unsigned int slot = chunk->capstone_slot;
++	pg_subpool_entry(slot)->next_free = block->freehead;
++	block->freehead = slot;
++	pg_subpool_drop(slot);
+ 
+ 	block->nfree++;
+ 
+@@ -795,7 +782,7 @@ SlabFree(void *pointer)
+ #ifdef CLOBBER_FREED_MEMORY
+ 			wipe_mem(block, slab->blockSize);
+ #endif
+-			free(block);
++			pg_subpool_managed_free(block->backing);
+ 			slab->header.mem_allocated -= slab->blockSize;
+ 		}
+ 
+@@ -832,7 +819,7 @@ SlabRealloc(void *pointer, Size size, int flags)
+ 	/* Allow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_DEFINED(chunk, Slab_CHUNKHDRSZ);
+ 
+-	block = MemoryChunkGetBlock(chunk);
++	block = (SlabBlock *) pg_subpool_block_at(chunk->capstone_block)->manager;
+ 
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Slab_CHUNKHDRSZ);
+@@ -868,7 +855,7 @@ SlabGetChunkContext(void *pointer)
+ 	/* Allow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_DEFINED(chunk, Slab_CHUNKHDRSZ);
+ 
+-	block = MemoryChunkGetBlock(chunk);
++	block = (SlabBlock *) pg_subpool_block_at(chunk->capstone_block)->manager;
+ 
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Slab_CHUNKHDRSZ);
+@@ -893,7 +880,7 @@ SlabGetChunkSpace(void *pointer)
+ 	/* Allow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_DEFINED(chunk, Slab_CHUNKHDRSZ);
+ 
+-	block = MemoryChunkGetBlock(chunk);
++	block = (SlabBlock *) pg_subpool_block_at(chunk->capstone_block)->manager;
+ 
+ 	/* Disallow access to the chunk header. */
+ 	VALGRIND_MAKE_MEM_NOACCESS(chunk, Slab_CHUNKHDRSZ);
