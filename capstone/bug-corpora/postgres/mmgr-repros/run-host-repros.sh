@@ -8,21 +8,33 @@
 # plus whatever consumer source the defect lives in. Nothing is modelled: the
 # allocator under the driver is the subject.
 #
-# Every case is run three ways and all three must agree before a verdict prints:
+# Every case is run three ways:
 #
 #   control   a plain malloc/free/use in the same binary, under ASan. ASan MUST
-#             report it. If it does not, the harness cannot see this class of
-#             fault at all and the run exits 75 with NO verdict, because a
-#             silent subject would then say nothing.
+#             report it, which proves the binary really is instrumented. If it
+#             does not, the run exits 75 with NO verdict.
 #   plain     the subject, no sanitizer. Must print its verdict.
-#   asan      the subject, under ASan. Must print the SAME verdict and ASan must
-#             stay SILENT -- that silence is the finding, and it is only
-#             believable because the control fired.
+#   asan      the subject, under ASan. Must print the SAME verdict.
 #
-# The silence is not a bug in ASan. pfree() does not call free(): the chunk goes
-# on the context's size-class free list (aset.c:1139-1143) and comes back from
-# the next palloc of that class (aset.c:1000-1013). No malloc-level event ever
-# happens, so there is nothing for a malloc-level tool to see.
+# ASAN'S SILENCE ON THE SUBJECT IS NOT A FINDING, AND THIS RUNNER DOES NOT
+# REPORT IT AS ONE.
+#
+# ASan instruments malloc and free. The chunk this defect frees and re-reads
+# never passes through either: pfree puts it on the context's size-class free
+# list (aset.c:1139-1143) and the next palloc of that class pops it
+# (aset.c:1000-1013). So ASan has no event, cannot fire, and its silence is a
+# restatement of how AllocSet works rather than a measurement of anything. The
+# control does not rescue this: it proves ASan sees malloc faults, which was
+# never in doubt, on memory the subject never touches.
+#
+# The arm that would actually discriminate is Valgrind. PostgreSQL hand-teaches
+# it about the nested allocator with the mempool client requests --
+# VALGRIND_CREATE_MEMPOOL per context (mcxt.c:422), VALGRIND_MEMPOOL_ALLOC on
+# every palloc (mcxt.c:1201), VALGRIND_MAKE_MEM_NOACCESS on a freed chunk
+# (aset.c:879-881) -- all compiled out unless USE_VALGRIND is defined. So the
+# real question is not "can a tool see into a nested allocator" but "who wrote
+# the annotations, for which tool, in which build". That arm is below, and when
+# it cannot run it is reported as SKIPPED, never as a pass.
 set -uo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -130,13 +142,37 @@ for case_dir in "${cases[@]}"; do
     asan_quiet=yes
     grep -qE "ERROR: AddressSanitizer|SUMMARY: AddressSanitizer" "$WORK/$name.asan.log" && asan_quiet=no
 
+    # --- the discriminating arm, when it can run ----------------------------
+    #
+    # Valgrind CAN see this, because PostgreSQL annotated its allocator for it.
+    # Needs both a valgrind binary and a tree built with USE_VALGRIND, and
+    # neither is assumed. Not runnable is reported as such: a skipped arm is not
+    # a passing arm.
+    vg=SKIPPED
+    if command -v valgrind >/dev/null 2>&1 && [ "${PG_USE_VALGRIND:-0}" = "1" ]; then
+        valgrind --error-exitcode=99 --quiet "$WORK/$name.plain" \
+            > "$WORK/$name.valgrind.log" 2>&1
+        if grep -qE "Invalid read|Invalid write" "$WORK/$name.valgrind.log"; then
+            vg="reported the stale read"
+        else
+            vg="SILENT -- unexpected, investigate before quoting this case"
+        fi
+    elif ! command -v valgrind >/dev/null 2>&1; then
+        vg="SKIPPED (no valgrind on this host)"
+    else
+        vg="SKIPPED (tree not built with USE_VALGRIND; set PG_USE_VALGRIND=1 on one that is)"
+    fi
+
     echo
     echo "  plain          rc=$plain_rc verdict=${got:-<none>}"
-    echo "  under ASan     rc=$asan_rc verdict=${got_asan:-<none>}  asan-silent=$asan_quiet"
+    echo "  under ASan     rc=$asan_rc verdict=${got_asan:-<none>}"
+    echo "                 ASan quiet=$asan_quiet -- EXPECTED AND UNINFORMATIVE:"
+    echo "                 no malloc/free happens between the free and the read,"
+    echo "                 so ASan has no event and cannot fire either way."
+    echo "  under Valgrind $vg"
 
-    if [ "$plain_rc" = 0 ] && [ "$got" = "$want" ] && [ "$got_asan" = "$want" ] \
-       && [ "$asan_quiet" = yes ]; then
-        echo "  RESULT: REPRODUCED, and invisible to ASan"
+    if [ "$plain_rc" = 0 ] && [ "$got" = "$want" ] && [ "$got_asan" = "$want" ]; then
+        echo "  RESULT: REPRODUCED (tool coverage: see the Valgrind arm, not the ASan one)"
     else
         echo "  RESULT: NOT AS RECORDED"
         status=1

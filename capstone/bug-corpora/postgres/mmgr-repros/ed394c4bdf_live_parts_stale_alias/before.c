@@ -44,9 +44,18 @@
  * returns a wrong answer instead of crashing: the loop is told the partition
  * it already deleted is still there, under a different index.
  *
- * The control is a plain malloc/free/use in the same binary. It exists so a
- * silent run can be believed: if the harness cannot see the control, its
- * silence on the subject says nothing about the subject.
+ * ON ASAN, AND WHY THIS CASE CLAIMS NOTHING FROM IT
+ *
+ * ASan instruments malloc and free, and neither happens here between the free
+ * and the read. It therefore cannot fire, and its silence says nothing about
+ * PostgreSQL -- only that AllocSet is an allocator above malloc, which the code
+ * already told us. The malloc use-after-free below is a control on the BINARY,
+ * proving it really is instrumented; it is not a control on the subject, whose
+ * memory it never touches, and it does not make the subject's silence evidence.
+ *
+ * The tool that can fire on the subject is Valgrind, because PostgreSQL wrote
+ * the mempool annotations for it by hand (mcxt.c:422, mcxt.c:1201,
+ * aset.c:879-881), all behind USE_VALGRIND. The runner has that arm.
  */
 #include "postgres.h"
 
