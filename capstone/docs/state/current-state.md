@@ -2,6 +2,18 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-18 — Whisper ggml context component
+
+`capstone/ports/whisper/ggml-context/` ports whisper.cpp 1.9.4's real context
+allocator through the shared template. A native tiny.en recording contains
+60,179 events and 58,192 object allocations; stock and instrumented transcripts
+match. Native allocation layout matches both the extracted reference and the
+ordinary full ggml library. The recording completes in spatial and Sublet QEMU.
+Borrowed-buffer graph objects survive descriptor destruction; reset, owned free
+and exclusive owner rebind are distinct epoch boundaries. The README documents
+that rebind contract, capability-header capacity adjustment and fixed backing
+budget. This is allocator replay, not protected inference or FPGA measurement.
+
 ## 2026-09-17 (evening) — CURRENT
 
 > **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer
