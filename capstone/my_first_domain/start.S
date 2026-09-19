@@ -9,12 +9,22 @@
 #define lcc(rd, rs, imm) .insn r 0x5b, 0x1, 0x4, rd, rs, x##imm
 #define scc(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x5, rd, rs1, rs2
 #define delin(rd) .insn r 0x5b, 0x1, 0x3, rd, x0, x0
+#define split(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x6, rd, rs1, rs2
+#define ctvec 0x000
 #define cscratch 0x004
 #endif
+
+#include "../runtime/include/capstone/domain-fault.h"
 
 .text
 
 __test_reentry:
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  ldc(sp, t0, 48)
+  ldc(gp, t0, 32)
+  ccsrrw(x0, cscratch, t0)
+#else
   ccsrrw(sp, cscratch, x0)
   ldc(gp, sp, -16)
   ldc(t0, sp, -32)
@@ -23,6 +33,7 @@ __test_reentry:
   csrrw x0, mcause, t0
   ld t0, -48(sp)
   csrrw x0, mtval, t0
+#endif
   j test
 
 .section .text.entry
@@ -30,9 +41,23 @@ __test_reentry:
 _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  # The upper 256 bytes are recovery state, OUTSIDE the application's stack
+  # bounds. cscratch owns the route to it even if application SP/GP is damaged.
+  # Slots: 0 sealed return; 16 CALL result pointer; 32 gp; 48 stack top; 64 DPI.
+  lcc(t1, sp, 4)
+  addi t1, t1, -256
+  split(t2, sp, t1)
+  delin(t2)
+  ccsrrw(x0, cscratch, t2)
+#endif
   lcc(t1, sp, 4)
   scc(sp, sp, t1)
   delin(sp)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  stc(sp, t2, 48)
+  li t2, 0
+#endif
   j test
 
 .text
@@ -40,7 +65,29 @@ __test_entry:
 test:
   delin(gp)
   cincoffsetimm(sp, sp, -96)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t2, cscratch, x0)
+  stc(ra, t2, 0)
+  li ra, 0
+  stc(gp, t2, 32)
+  sd a0, 64(t2)
+  # REGION_SHARE passes a region, not a result pointer. Never write through it
+  # on a fault. A share fault quarantines the domain; its next CALL reports it.
+  bnez a0, .Lfault_no_result
+  stc(a1, t2, 16)
+.Lfault_no_result:
+  ccsrrw(x0, cscratch, t2)
+  li t2, 0
+  lla t0, .Ldomain_fault
+  cincoffset(t0, gp, t0)
+  # Execute-only is the QEMU local-recovery opt-in. Legacy monitor RWX trap
+  # vectors assume S/U-mode state and must not receive internal C-mode faults.
+  .insn r 0x5b, 0x1, 0x2, t0, t0, x1
+  ccsrrw(x0, ctvec, t0)
+  li t0, 0
+#else
   stc(ra, sp, 48)
+#endif
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
@@ -87,10 +134,19 @@ test:
   .insn i 0x5b, 0x5, ra, 0(t0)
 
   lla t2, __test_reentry
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ccsrrw(x0, cscratch, t0)
+  j .Ldomain_scrub_return
+#else
   ldc(t1, sp, 48)
   lcc(t0, sp, 4)
   scc(sp, sp, t0)
   stc(gp, sp, -16)
+#endif
+.Ldomain_scrub_return:
   li ra, 0
   li gp, 0
   li tp, 0
@@ -119,6 +175,7 @@ test:
   li t4, 0
   li t5, 0
   li t6, 0
+#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
   stc(t0, sp, -32)
   csrrw t0, mcause, x0
@@ -127,8 +184,40 @@ test:
   sd t0, -48(sp)
   li t0, 0
   ccsrrw(x0, cscratch, sp)
+#endif
   li sp, 0
   domreturn(t1, t2, x0)
+
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+.Ldomain_fault:
+  # No C calls and no use of the faulting stack or global pointer. A second
+  # fault in recovery retains QEMU's fail-stop behavior instead of recursing.
+  ccsrrw(x0, ctvec, x0)
+  ccsrrw(sp, cscratch, x0)
+  ld t0, 64(sp)
+  bnez t0, .Ldomain_fault_return
+  ldc(t0, sp, 16)
+  li t3, CAPSTONE_DOMAIN_FAULT_RETVAL
+  sd t3, 0(t0)
+.Ldomain_fault_return:
+  ldc(t1, sp, 0)
+  stc(x0, sp, 0)
+  ccsrrw(x0, cscratch, sp)
+  lla t2, .Ldomain_faulted_reentry
+  j .Ldomain_scrub_return
+
+.Ldomain_faulted_reentry:
+  # Fresh caller, but a permanently quarantined client. Neither global
+  # initializers nor domain_main may execute after a fault.
+  bnez a0, .Ldomain_faulted_return
+  li t0, CAPSTONE_DOMAIN_FAULT_RETVAL
+  sd t0, 0(a1)
+.Ldomain_faulted_return:
+  .insn r 0x5b, 0x1, 0xa, t1, ra, x0
+  li ra, 0
+  lla t2, .Ldomain_faulted_reentry
+  j .Ldomain_scrub_return
+#endif
 
 .Ltest_ret:
   j .Ltest_ret

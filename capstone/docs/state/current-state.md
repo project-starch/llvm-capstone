@@ -13,6 +13,15 @@ Borrowed-buffer graph objects survive descriptor destruction; reset, owned free
 and exclusive owner rebind are distinct epoch boundaries. The README documents
 that rebind contract, capability-header capacity adjustment and fixed backing
 budget. This is allocator replay, not protected inference or FPGA measurement.
+## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
+
+The [shared runtime](../../runtime/domain-faults.md) provides a domain build
+helper, cooperative fault return/quarantine, and a Linux process-termination
+policy. Its standalone tests require no PostgreSQL or Sublet allocator sources.
+Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEMU.
+This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
+complete resource reclamation, or a new FPGA result. Allocator integration is
+reviewed separately; existing ports are not enabled automatically.
 
 ## 2026-09-17 (evening) — CURRENT
 

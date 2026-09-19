@@ -83,6 +83,11 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ## Current verified baseline
 
+Opt-in [generic client-fault recovery](../runtime/domain-faults.md) and its
+[standalone tests](../runtime/tests/fault-recovery/README.md) are independent of
+the allocator ports. The runtime requires the matching QEMU trap-delivery change;
+it does not change the default fault behavior or claim FPGA recovery.
+
 > **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
 > accurate, but it accumulated before any of the silicon work and says nothing about it. For
 > what is verified **on the board** — the resident bitstream, S-06/S-07/S-08/S-12, and SQLite's
