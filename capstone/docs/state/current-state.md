@@ -2,6 +2,12 @@
 
 Minimal snapshot. Read first in every session.
 
+Port navigation and pending integration: [component catalog](../../ports/README.md)
+and [integration plan](../plans/port-stack-integration.md). The shared runtime's
+missing `include/sublet/sublet.h` is restored from the identical port-branch
+header. This repairs a missing build input; the dated silicon results below
+and the pending fault-recovery validation remain separate.
+
 ## 2026-09-17 (evening) — CURRENT
 
 > **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer

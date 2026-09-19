@@ -1,5 +1,24 @@
 # PostgreSQL's memory manager, outside PostgreSQL
 
+## Choose the build path
+
+The canonical component for new allocator work is
+[`memory-contexts/`](memory-contexts/), using the
+[shared port layout](../README.md) and CMake presets `native`,
+`capstone-domain` and `linux-guest`. Its `host/memory/` tools and `results/`
+hold the profiling workflow and compact evidence. Read
+[`upstream.json`](memory-contexts/upstream.json) for this revision's pin.
+
+The shell drivers described below remain the older experiment/gate path.
+Their Sublet adapter is AllocSet-only. The four-manager CMake extension
+(AllocSet, Generation, Slab and Bump), client examples and unified 17.0 pin
+are in [PR #51](https://github.com/project-starch/llvm-capstone/pull/51).
+The existing memory-profile campaign measured 17.5; those results must retain
+that identity after the pin changes. The paragraphs below describe the shell
+path, not the versioned patches inside `memory-contexts/patches/`.
+
+## Existing shell drivers
+
 PostgreSQL the program does not run under capabilities and is not meant to: it
 wants an operating system, a file system, sockets and processes. Its memory
 manager is another matter. The seven files of `src/backend/utils/mmgr` are a

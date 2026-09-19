@@ -19,6 +19,10 @@ like Codex/Cursor, which do not auto-read `CLAUDE.md`).
 
 ## Minimal startup reading set
 
+For application and allocator work, start with the
+[port catalog](../ports/README.md) and the
+[cross-repository integration plan](plans/port-stack-integration.md).
+
 For a normal fresh session, read only these files first:
 
 1. `README.md`
