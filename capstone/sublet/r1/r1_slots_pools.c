@@ -568,6 +568,13 @@ static void run_linear(unsigned reps) {
  * stale dereference had SUCCEEDED -- on an emulator where the identical instruction, same offset and
  * same register, faults. A claim that large should not rest on an absent transcript. Default is 1, so
  * every existing image is byte-identical. */
+/* M1_STALE_WRITE turns the probe from a confidentiality test into an integrity one. Reading through a
+ * revoked reference is one claim; STORING through it and then seeing the value through a LIVE alias to
+ * the same storage is a different and worse one. Off by default, and only meaningful with
+ * M1_STALE_DEREF. */
+#ifndef M1_STALE_WRITE
+#define M1_STALE_WRITE 0
+#endif
 #ifndef M1_STALE_MINT
 #define M1_STALE_MINT 1
 #endif
@@ -579,6 +586,13 @@ static void run_linear(unsigned reps) {
 #endif
 #ifndef M1_RELEASE_AT_BUFFER
 #define M1_RELEASE_AT_BUFFER 0
+#endif
+#if M1_STALE_DEREF
+/* What each slot's storage was last written with, recorded as it happens so the probe can print the
+ * value a LIVE read would give beside the value the STALE read gave. On 2026-09-19 that comparison had
+ * to be done by hand afterwards -- the board returned byte=16 and the arithmetic said allocation 43,280
+ * wrote 16 -- and a probe that carries its own expected value cannot be got wrong that way. */
+static unsigned char m1_last_touch[M1_LIVE];
 #endif
 static void *m1_ring_alias[M1_LIVE];
 static void *m1_ret_alias[M1_MAXRET];
@@ -646,6 +660,9 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], (ulong)M1_TOUCH, (unsigned char)alloc);
+#if M1_STALE_DEREF
+    m1_last_touch[i] = (unsigned char)alloc;
+#endif
     alloc++; n++;
     if (alloc >= next_snap) {
       m1_snap(arm, alloc, C, m0, nret, oldest, n, tk, tg, sublet_stats.init - ini0);
@@ -680,8 +697,34 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
      * lesson the 2026-09-19 board boot paid for. */
     out("R1 m1 stale-take go\n");
 #if M1_STALE_DEREF
-    { volatile char *p = (volatile char *)oldest; char v = *p; (void)v;
-      out("R1 m1 stale-deref ok"); kv("byte", (ulong)(unsigned char)v); out("\n"); }
+    /* Probe several AGES, oldest first, because "a stale reference works" and "the oldest stale
+     * reference works" are different claims and only a gradient tells them apart. Each line carries
+     * the value a LIVE read of that storage would give, so the transcript checks itself. */
+    { unsigned q, nq = 0, idx[3];
+      idx[nq++] = 0;                                   /* the first alias ever retained */
+      if (nret > 2u) idx[nq++] = nret / 2u;            /* the middle */
+      if (nret > 1u) idx[nq++] = nret - 1u;            /* the newest */
+      for (q = 0; q < nq; q++) {
+        void *a = m1_ret_alias[idx[q]];
+        volatile char *p = (volatile char *)a;
+        char v = *p;
+        out("R1 m1 stale-deref ok"); kv("k", idx[q]); kv("reuses_since", (alloc - idx[q]) / M1_LIVE);
+        kv("byte", (ulong)(unsigned char)v);
+        kv("live_byte", (ulong)m1_last_touch[idx[q] % M1_LIVE]);
+        kv("is_live_data", (unsigned char)v == m1_last_touch[idx[q] % M1_LIVE]); out("\n");
+      }
+    }
+#endif
+#if M1_STALE_WRITE
+    /* INTEGRITY. Store through the revoked reference, then read the same storage back through a LIVE
+     * alias. If the live alias sees it, the stale reference has modified the current occupant's data,
+     * which is a strictly worse claim than being able to read it. Runs after every read, because a
+     * write that faults would otherwise cost the reads their transcript. */
+    { volatile char *p = (volatile char *)m1_ret_alias[0];
+      *p = (char)0xA5;
+      out("R1 m1 stale-write ok\n");
+      out("R1 m1 stale-write readback"); kv("via_live_alias", (ulong)(unsigned char)*(volatile char *)alias[0]);
+      kv("wrote", 0xA5u); out("\n"); }
 #endif
 #if M1_STALE_MINT
     sublet_store(&m1_tmp, oldest);
