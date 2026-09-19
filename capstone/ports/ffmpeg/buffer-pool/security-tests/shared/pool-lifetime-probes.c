@@ -282,5 +282,47 @@ void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
         return;
     }
 #endif
+    if (test == 36) {
+        /* af_join's dedup bound (upstream 461fb22053). The tracking test
+         * compares the search index against the CHANNEL index instead of
+         * nb_buffers, so once channel 1 shares channel 0's buffer, channel 2's
+         * genuinely new buffer ends the search at j == nb_buffers != i and is
+         * never tracked -- so no reference is taken for it, and it returns to
+         * the pool while the output still names it. */
+        AVBufferPool *bp = av_buffer_pool_init(64, NULL);
+        AVBufferRef *in0 = av_buffer_pool_get(bp), *in1 = av_buffer_pool_get(bp);
+        CHECK(in0 && in1, 450);
+        in0->data[0] = 17; in0->data[32] = 19; in1->data[0] = 23;
+        AVBufferRef *tracked[3];
+        volatile unsigned char *chan[3];
+        unsigned nb = 0;
+        for (unsigned i = 0; i < 3; i++) {
+            AVBufferRef *cur = i < 2 ? in0 : in1;
+            unsigned j;
+            chan[i] = cur->data + (i == 1 ? 32 : 0);
+            for (j = 0; j < nb; j++)
+                if (tracked[j]->buffer == cur->buffer)
+                    break;
+            if (j == i)
+                tracked[nb++] = cur;
+        }
+        CHECK(nb == 1, 451); /* channel 2's buffer was dropped */
+        AVBufferRef *out = av_buffer_ref(tracked[0]);
+        CHECK(out, 452);
+        held = chan[2];
+        CHECK(read_probe(held) == 23, 453);
+        uintptr_t address = (uintptr_t)held;
+        av_buffer_unref(&in0); /* the output reference keeps this one alive */
+        av_buffer_unref(&in1); /* nothing references this one */
+        AVBufferRef *next = av_buffer_pool_get(bp);
+        CHECK(next && (uintptr_t)next->data == address, 454);
+        next->data[0] = 61;
+        CHECK(out->data[0] == 17 && out->data[32] == 19, 455);
+        mark(test);
+        CHECK(read_probe(held) == 61, 456);
+        av_buffer_unref(&next); av_buffer_unref(&out);
+        av_buffer_pool_uninit(&bp); held = NULL;
+        return;
+    }
     ff2_fail(430);
 }

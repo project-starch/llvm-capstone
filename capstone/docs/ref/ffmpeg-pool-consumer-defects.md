@@ -174,6 +174,15 @@ the thread-context hand-off, which is a copy between two contexts rather than a
 race, so it is expressible without threads — but that is an argument, not yet a
 fixture.
 
+Liveness decides whether the *pinned tree* still contains the defect, not
+whether the corpus can reproduce it: what the port pins is the allocator, and a
+case transcribes its consumer's call sequence, so `461fb22053` builds and faults
+against the 9.0.1 pool as it stands ([corpus case](../../bug-corpora/ffmpeg/pool-repros/461fb22053_af_join_dedup_bound/README.md),
+probe case 36, spatial completes and Sublet faults at the published PC). Moving
+the pin to n8.1 raises the fidelity tier of three specimens from "reduction of
+code that shipped until n8.1.1" to "reduction of shipping code". It buys that,
+and nothing else.
+
 | Specimen | class | live at n9.0.1 | live at n8.1 | needs |
 |---|---|---|---|---|
 | `af_join` | buffer pool | no | yes | — |

@@ -23,8 +23,10 @@ port. Reduced: the consumer, to the allocator call sequence it makes, in the
 same order, plus the part of `AVFrame` the defect touches. Each case's
 `PROVENANCE.md` states that split line by line.
 
-These are native paired arms. **No Capstone or Sublet arm exists yet**, so
-nothing here shows a protected outcome; the arms differ only in whether the
-upstream fix is applied. Nor does anything here claim an AddressSanitizer
+`run.sh` builds native paired arms that differ only in whether the upstream fix
+is applied, which shows the defect and its absence but no protected outcome. The
+protected arms are the port's QEMU probes, where the same sequence runs spatial
+against Sublet under a fault-PC oracle; each case README names its case number.
+Nothing here claims an AddressSanitizer
 result: the port's payload arena is itself one allocation, so ASan is blind to
 it by construction and its silence would measure the fixture, not FFmpeg.

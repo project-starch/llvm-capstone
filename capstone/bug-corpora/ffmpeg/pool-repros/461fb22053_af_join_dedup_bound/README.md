@@ -37,3 +37,19 @@ The buggy arm's stale read returns `0xCC`, the payload written by the next
 consumer of that storage, at the identical address the pool reissued. The fixed
 arm is the matched control: the output holds the reference, the pool has nothing
 to reissue, and the same read returns its own `0xB0`.
+
+## Paired arms in a Capstone domain
+
+The same sequence is case 36 of the port's pool lifetime probes, so it runs
+under the QEMU oracle that requires a completed-setup marker, exactly one fault,
+and a fault PC equal to the address the domain published for its probe:
+
+| mode | what the allocator does on a last return | outcome |
+|---|---|---|
+| 0 spatial | bounds and tags only | **completes** — the stale read returns `61`, the next consumer's byte |
+| 2 Sublet | each last return to the pool is revoked before the storage is reissued | **faults**, cause 24, pc `0x101a101d8` = the published probe address |
+
+    bash security-tests/qemu/run.sh <out> --cases 36 --modes 0,2 --rounds 1
+
+The spatial arm is the control: it shows the defect is reachable and that the
+pool really does reissue the same storage. Neither arm is a CHERI model.
