@@ -556,6 +556,21 @@ static void run_linear(unsigned reps) {
  * emulator pass record and every board result on file cites a hash, and silently re-baselining them
  * to gain a probe that only a condition-3 boot ever executes is a bad trade. A condition-3 boot builds
  * its own image with -DM1_STALE_DEREF=1, and its control adds -DM1_STALE_TAKE_LIVE=1. */
+/* M1_STALE_MINT=0 drops the mint from the probe, and exists to turn a wedge into a RETURNED ANSWER.
+ * The mint is known to fault on any alias, so with it present the domain always wedges and a wedge
+ * destroys the entire output buffer -- no arm end line, no stop reason, no printed byte, nothing but a
+ * latched mepc. With it gone, a dereference that SUCCEEDS lets the arm finish and print: the pressure
+ * arm's stop reason, the retained count, and the byte actually read through the stale reference. A
+ * dereference that FAILS still wedges, at the dereference, which is the reading that says the reference
+ * was denied.
+ *
+ * Built 2026-09-19 because the silicon probe landed on the mint rather than the dereference, meaning the
+ * stale dereference had SUCCEEDED -- on an emulator where the identical instruction, same offset and
+ * same register, faults. A claim that large should not rest on an absent transcript. Default is 1, so
+ * every existing image is byte-identical. */
+#ifndef M1_STALE_MINT
+#define M1_STALE_MINT 1
+#endif
 #ifndef M1_STALE_DEREF
 #define M1_STALE_DEREF 0
 #endif
@@ -668,9 +683,13 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     { volatile char *p = (volatile char *)oldest; char v = *p; (void)v;
       out("R1 m1 stale-deref ok"); kv("byte", (ulong)(unsigned char)v); out("\n"); }
 #endif
+#if M1_STALE_MINT
     sublet_store(&m1_tmp, oldest);
     old = sublet_take(&m1_tmp);
     out("R1 m1 stale-take returned"); kv("nonzero", old != 0); out("\n");
+#else
+    out("R1 m1 stale-mint SKIPPED -- the arm returns so the transcript survives\n");
+#endif
   }
 }
 
