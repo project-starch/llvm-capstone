@@ -324,5 +324,57 @@ void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
         av_buffer_pool_uninit(&bp); held = NULL;
         return;
     }
+    if (test == 37) {
+        /* h264_refs' reset is bounded by ref_count, not by the array
+         * (upstream 1886c3269d), so records past ref_count keep naming
+         * pictures that have been returned to the pool. */
+        AVBufferPool *bp = av_buffer_pool_init(64, NULL);
+        AVBufferRef *pic[8];
+        volatile unsigned char *rec[8];
+        unsigned len = 2, ref_count = 6;
+        for (unsigned i = 0; i < 8; i++) {
+            pic[i] = av_buffer_pool_get(bp);
+            CHECK(pic[i], 460);
+            pic[i]->data[0] = (unsigned char)(0x40 + i);
+            rec[i] = pic[i]->data;
+        }
+        for (unsigned i = len; i < ref_count; i++)
+            rec[i] = 0; /* the reset, with upstream's bound */
+        for (unsigned i = len; i < 8; i++)
+            av_buffer_unref(&pic[i]); /* every picture past the live length */
+        CHECK(rec[7] != 0, 461);      /* slot 7 is past ref_count */
+        held = rec[7];
+        AVBufferRef *reused = av_buffer_pool_get(bp);
+        CHECK(reused && reused->data == (uint8_t *)held, 462);
+        reused->data[0] = 61;
+        CHECK(rec[0] && rec[0][0] == 0x40, 463); /* a live record is intact */
+        mark(test);
+        CHECK(read_probe(held) == 61, 464);
+        av_buffer_unref(&reused);
+        for (unsigned i = 0; i < len; i++) av_buffer_unref(&pic[i]);
+        av_buffer_pool_uninit(&bp); held = NULL;
+        return;
+    }
+    if (test == 38) {
+        /* vidstabtransform parks a shallow copy of the source frame in the
+         * library's state and writes through it on the next frame
+         * (upstream 316531e61c). This arm's stale access is a WRITE. */
+        AVBufferPool *bp = av_buffer_pool_init(64, NULL);
+        AVBufferRef *in = av_buffer_pool_get(bp), *sibling = av_buffer_pool_get(bp);
+        CHECK(in && sibling, 470);
+        in->data[0] = 17; sibling->data[0] = 41;
+        held = in->data;          /* td->src, no reference taken */
+        av_buffer_unref(&in);     /* the filter returns the source frame */
+        AVBufferRef *next = av_buffer_pool_get(bp);
+        CHECK(next && next->data == (uint8_t *)held, 471);
+        next->data[0] = 61;
+        CHECK(sibling->data[0] == 41, 472);
+        mark(test);
+        write_probe(held);        /* vsFrameCopy through the parked pointer */
+        CHECK(read_probe(held) == 93, 473);
+        av_buffer_unref(&next); av_buffer_unref(&sibling);
+        av_buffer_pool_uninit(&bp); held = NULL;
+        return;
+    }
     ff2_fail(430);
 }
