@@ -1,5 +1,8 @@
 #include "replay-engine.h"
 
+#ifdef FFPOOL_CHERI
+#include <malloc_np.h>
+#endif
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +25,11 @@ int main(int argc, char **argv) {
   FILE *f = fopen(argv[1], "rb");
   if (!input || !report || !meta || !payload || !f)
     return 2;
+#ifdef FFPOOL_CHERI
+  printf("FF2 CHERI runtime_revoke=%u pointer_bytes=%zu\n",
+         (unsigned)malloc_revoke_enabled(), sizeof(void *));
+  fflush(stdout);
+#endif
   size_t n = fread(input, 1, FF2_FILE_BYTES, f);
   if (ferror(f) || fgetc(f) != EOF || n < sizeof *input ||
       input->count >

@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — CHERI and PICASSO arena comparison
+
+The FFmpeg port now has a bounded CHERI Purecap backend and a CheriBSD/QEMU
+collector. Nine CHERI spatial and nine PICASSO outer-heap-enabled replays match
+the same native recordings, with three identical repeats per recording/arm.
+Payload arena carving increases by 192, 192 and 576 bytes; requested payload
+and metadata carving agree with the previous Capstone comparison. Twelve new
+companion controls pass. PICASSO catches libc post-free access, while these
+spatial arena leases retain the two stale pool-return cases. This is not a
+comparison with equivalent temporal guarantees or a complete memory ledger.
+[Results and plots](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
+include a separate static ELF inventory and retained failed-attempt history.
+
 ## 2026-09-19 — Paired FFmpeg replay measurements
 
 The measurement worktree adds a reproducible native-to-QEMU comparison on

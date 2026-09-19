@@ -1,3 +1,10 @@
+CHERI replay baseline: the [FFmpeg CHERI/PICASSO arena comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
+is complete. Before comparing equal temporal protection, integrate explicit
+pool-return revocation into the CHERI/PICASSO adapter and require the same
+stale-lease outcomes as Sublet. Measure that adapter's metadata, padding,
+reclamation and reuse policy; outer-heap revocation alone does not cover arena
+leases. Preserve this spatial baseline as a separate arm.
+
 Replay measurements: the first FFmpeg paired matrix is complete. Next extend
 the [measurement plan](../plans/replay-memory-measurements.md) with full
 allocator/driver/node accounting and separate payload/metadata budget sweeps.

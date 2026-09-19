@@ -5,6 +5,9 @@
 #include "libavutil/buffer.h"
 #include "libavutil/refstruct.h"
 #include "trace.h"
+#ifdef FFPOOL_CHERI
+#include <stdio.h>
+#endif
 
 #define CHECK(c, n) do { if (!(c)) ff2_fail(n); } while (0)
 static volatile unsigned char *held;
@@ -17,6 +20,9 @@ static void mark(unsigned id)
                      ".insn r 0x5b, 0x1, 0x43, x0, %1, x0\n"
                      ".insn r 0x5b, 0x1, 0x43, x0, %2, x0\n"
                      : : "r"(value), "r"(ff2_probe_read), "r"(ff2_probe_write) : "memory");
+#elif defined(FFPOOL_CHERI)
+    printf("FF2_PROBE case=%u ready\n", id);
+    fflush(stdout);
 #else
     (void)id;
 #endif

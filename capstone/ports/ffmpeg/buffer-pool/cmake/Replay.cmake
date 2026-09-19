@@ -1,3 +1,8 @@
+if(FFPOOL_CHERI AND (NOT PORT_PLATFORM STREQUAL "native" OR
+                      NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD"))
+  message(FATAL_ERROR "FFPOOL_CHERI requires the CheriBSD toolchain and the hosted replay entry")
+endif()
+
 ffpool_source(ported)
 
 add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime"
@@ -39,7 +44,13 @@ if(PORT_PLATFORM STREQUAL "capstone-domain")
 endif()
 if(PORT_PLATFORM STREQUAL "native")
   set(entry src/native/replay/main.c)
-  target_sources(pool-core PRIVATE src/native/replay/payload-pointers.c)
+  if(FFPOOL_CHERI)
+    target_compile_definitions(replay-options INTERFACE FFPOOL_CHERI)
+    target_sources(pool-core PRIVATE src/cheribsd/payload-capabilities.c)
+    add_executable(heap-policy-probe src/cheribsd/heap-policy-probe.c)
+  else()
+    target_sources(pool-core PRIVATE src/native/replay/payload-pointers.c)
+  endif()
 endif()
 
 add_executable(replay ${entry} src/shared/replay-engine.c)

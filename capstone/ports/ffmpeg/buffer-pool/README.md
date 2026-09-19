@@ -6,7 +6,9 @@ decoder runs natively; this is not a capability-domain FFmpeg decoder.
 
 [`upstream.json`](upstream.json) pins FFmpeg 9.0.1 by archive checksum.
 [`patches/`](patches/) separates the upstream changes from the replay and
-authority adapters. The [shared layout](../../README.md) describes `src/`,
+authority adapters. A [CHERI Purecap target](host/cheribsd/README.md) runs the
+same allocator and recordings in CheriBSD/QEMU, with explicit compressed-bounds
+accounting and separate pool/outer-heap lifetime controls. The [shared layout](../../README.md) describes `src/`,
 `host/`, tests and result ownership.
 
 ## Build and run
@@ -50,6 +52,11 @@ in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).
 
 ## Evidence and limits
 
+The [CHERI/PICASSO comparison](results/measurements/20260919-cheri/README.md)
+adds 18 verified replays, compressed-bounds padding and static storage accounting.
+Its pool leases are spatial; the PICASSO outer-heap control is kept distinct
+from Sublet's per-return revocation.
+
 The [paired measurement campaign](results/measurements/20260919-replay/README.md)
 checks three fresh native recordings in spatial and Sublet QEMU, three
 repetitions per arm. All accepted event sequences match native observations;
@@ -57,7 +64,7 @@ carving watermarks, requested-payload series and primitive counts are reported
 separately from fixed reservations and unmeasured node/tag costs. Failed attempts
 remain documented. Use `host/memory/measure.py` for a new campaign,
 `export-measurements.py` for checked JSON/CSV and `plot-measurements.py` for
-event-indexed figures. The [measurement plan](../../../docs/plans/replay-memory-measurements.md)
+comparison and event-excerpt figures. The [measurement plan](../../../docs/plans/replay-memory-measurements.md)
 defines the scope and remaining ledger, capacity and turnover work.
 
 [`results/archive/20260917/`](results/archive/20260917/) indexes the exploratory
