@@ -1,0 +1,20 @@
+# Hunk class and level; mixed hunks follow the driving change described below.
+src/backend/utils/mmgr/slab.c:69 metadata allocator Introduce sidecar interface and preserve block geometry; reject debug walks of dead chunks
+src/backend/utils/mmgr/slab.c:90 metadata allocator Keep upstream logical context geometry separate from sidecar storage
+src/backend/utils/mmgr/slab.c:132 hierarchy allocator Associate each context with a revocable pool
+src/backend/utils/mmgr/slab.c:154 metadata allocator Replace in-payload free links with side indices and block backing metadata
+src/backend/utils/mmgr/slab.c:276 metadata allocator Pop freed slots by side index; carve unused slots and renew authority
+src/backend/utils/mmgr/slab.c:371 metadata allocator Allocate the context header outside its revocable payload
+src/backend/utils/mmgr/slab.c:387 hierarchy allocator Create context authority with allocation-failure cleanup
+src/backend/utils/mmgr/slab.c:448 hierarchy allocator Bulk revoke the context and reinitialize its sidecar lists
+src/backend/utils/mmgr/slab.c:463 hierarchy allocator Destroy context authority and return its header slot
+src/backend/utils/mmgr/slab.c:482 metadata allocator Resolve block identity through side indices rather than pointer subtraction
+src/backend/utils/mmgr/slab.c:535 hierarchy allocator Allocate protected blocks and handle exhausted slot metadata
+src/backend/utils/mmgr/slab.c:551 metadata allocator Initialize out-of-band free-chain state before handing out the first slot
+src/backend/utils/mmgr/slab.c:655 hierarchy allocator Propagate slot exhaustion without modifying live allocations
+src/backend/utils/mmgr/slab.c:694 metadata allocator Resolve the owning block from the live chunk's side index
+src/backend/utils/mmgr/slab.c:713 metadata allocator Link the freed slot out of band and revoke its old aliases
+src/backend/utils/mmgr/slab.c:782 hierarchy allocator Revoke a released block before returning its sidecar
+src/backend/utils/mmgr/slab.c:819 metadata allocator Resolve realloc ownership without deriving authority outside the chunk
+src/backend/utils/mmgr/slab.c:855 metadata allocator Resolve context ownership by side index
+src/backend/utils/mmgr/slab.c:880 metadata allocator Resolve chunk-space metadata by side index

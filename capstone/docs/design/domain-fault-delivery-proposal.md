@@ -5,6 +5,9 @@ now provides local `ctvec` delivery and a fault return for a standalone client
 launcher under a matching QEMU build, without an allocator dependency. It is not
 the monitor-level unwind proposed below. In particular, the historical “parent
 handler” description of CIH below is
+now provides local `ctvec` delivery and a fault return for the PostgreSQL example
+launcher under a matching QEMU build. It is not the monitor-level unwind proposed
+below. In particular, the historical “parent handler” description of CIH below is
 incorrect for the current firmware: `cap_env_init` installs the global interrupt
 scheduler, whose ordinary handler resumes an interrupted domain. Routing a
 synchronous fault there unchanged does not terminate the client. Monitor-enforced

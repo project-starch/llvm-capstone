@@ -1,0 +1,9 @@
+case	fix	name	allocator	spatial	sublet	cause	probe_pc	fault_pc	delivered	guest_exit
+0	1f5b6a5e5d	tuplestore-double-pfree	aset	PASS:complete	PASS:fault	24	in-manager	0x101a063a8	yes	139
+1	3549ffb6af	dead-items-stale-after-reset	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+2	83ce20d671	dead-items-2024-instance	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+3	ed394c4bdf	live-parts-stale-alias	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+4	727bc6ac33f6	child-join-frees-parent-relids	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+5	9d5ce4f1a00a	windowagg-reset-keeps-byref	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+6	a61592253e	pgoutput-ancestor-delete	aset	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139
+7	9e0b4b1ab5	reorderbuffer-slab-reuse	slab	PASS:complete	PASS:fault	24	0x101a147f0	0x101a147f0	yes	139

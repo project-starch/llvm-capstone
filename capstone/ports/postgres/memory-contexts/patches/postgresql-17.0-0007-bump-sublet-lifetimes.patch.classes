@@ -1,0 +1,23 @@
+# Hunk class and level; mixed hunks follow the driving change described below.
+src/backend/utils/mmgr/bump.c:39 metadata allocator Include sidecar interface and preserve release-layout block geometry
+src/backend/utils/mmgr/bump.c:63 metadata allocator Keep an explicit keeper reference outside payload
+src/backend/utils/mmgr/bump.c:80 hierarchy allocator Associate context authority and keeper
+src/backend/utils/mmgr/bump.c:92 metadata allocator Move block metadata outside payload and retain scalar cursors
+src/backend/utils/mmgr/bump.c:125 hierarchy allocator Allocate revocable blocks with bounded sidecars
+src/backend/utils/mmgr/bump.c:187 metadata allocator Preserve original keeper geometry
+src/backend/utils/mmgr/bump.c:198 metadata allocator Allocate the context header outside its reset authority
+src/backend/utils/mmgr/bump.c:213 hierarchy allocator Create context authority and initial keeper with failure cleanup
+src/backend/utils/mmgr/bump.c:278 hierarchy allocator Bulk revoke on reset and restore the keeper
+src/backend/utils/mmgr/bump.c:297 hierarchy allocator Revoke all live bump allocations on deletion
+src/backend/utils/mmgr/bump.c:333 hierarchy allocator Carve bounded external allocations with failure cleanup
+src/backend/utils/mmgr/bump.c:386 hierarchy allocator Return issued authority instead of a reconstructed pointer
+src/backend/utils/mmgr/bump.c:396 hierarchy allocator Carry allocation-failure flags into the carve
+src/backend/utils/mmgr/bump.c:411 hierarchy allocator Carve regular allocations; zero-byte results carry no access authority
+src/backend/utils/mmgr/bump.c:483 hierarchy allocator Allocate the next protected block
+src/backend/utils/mmgr/bump.c:496 hierarchy allocator Preserve allocation-failure flags on new blocks
+src/backend/utils/mmgr/bump.c:556 hierarchy allocator Preserve allocation-failure flags on the current block
+src/backend/utils/mmgr/bump.c:570 metadata allocator Initialize scalar cursors from the backing region
+src/backend/utils/mmgr/bump.c:585 metadata allocator Determine emptiness from backing geometry
+src/backend/utils/mmgr/bump.c:595 hierarchy allocator Revoke and reclaim a recycled block
+src/backend/utils/mmgr/bump.c:622 hierarchy allocator Release blocks with revocation and scalar size accounting
+src/backend/utils/mmgr/bump.c:723 metadata allocator Report block capacity without deriving an out-of-bounds pointer

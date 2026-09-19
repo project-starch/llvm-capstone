@@ -318,8 +318,10 @@ static void pool_return(struct pg_subpool *sp) {
 void pg_subpool_destroy(pg_subpool *sp) {
   struct pg_subpool *e = sp->extra;
 
-  if (sp->carved)
+  if (sp->carved) {
     pool_revoke(sp);
+    pg_subpool_counts.destroy_revocations++;
+  }
   while (e) {
     struct pg_subpool *next = e->extra;
 
@@ -410,6 +412,47 @@ void pg_subpool_block_free(pg_block *b) {
   block_release(b);
   pg_subpool_counts.blocks_freed++;
   pg_subpool_counts.blocks_live--;
+}
+
+static void managed_prefix(pg_block *b, unsigned long prefix) {
+  capstone_cap_slot padding;
+  b->freeptr = b->base + prefix;
+  if (prefix) {
+    sublet_carve(&b->region, b->freeptr, &padding);
+    capstone_cap_clear(&padding);
+  }
+}
+
+pg_block *pg_subpool_managed_block(pg_subpool *sp, unsigned long bytes,
+                                 unsigned long prefix) {
+  if (prefix > bytes)
+    return NULL;
+  pg_block *b = pg_subpool_block(sp, bytes);
+  if (!b && pg_subpool_grow(sp, bytes))
+    b = pg_subpool_block(sp, bytes);
+  if (!b)
+    return NULL;
+  sublet_handle(&b->region, &b->handle);
+  managed_prefix(b, prefix);
+  return b;
+}
+
+void pg_subpool_managed_reset(pg_block *b, unsigned long prefix) {
+  sublet_give_to(&b->handle, &b->region);
+  if (b->chunk_head) {
+    chunk_tab[b->chunk_tail].block_next = chunk_free;
+    chunk_free = b->chunk_head;
+    pg_subpool_counts.entries_live -= b->chunks;
+  }
+  b->chunk_head = b->chunk_tail = b->chunks = 0;
+  sublet_handle(&b->region, &b->handle);
+  managed_prefix(b, prefix);
+}
+
+void pg_subpool_managed_free(pg_block *b) {
+  /* Unlike the AllocSet-only release path, Bump may still have live chunks. */
+  sublet_give_to(&b->handle, &b->region);
+  pg_subpool_block_free(b);
 }
 
 void pg_subpool_count_keeper(void) { pg_subpool_counts.keepers++; }
