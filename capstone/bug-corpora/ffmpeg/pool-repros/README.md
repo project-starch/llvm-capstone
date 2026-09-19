@@ -45,3 +45,31 @@ against Sublet under a fault-PC oracle; each case README names its case number.
 Nothing here claims an AddressSanitizer
 result: the port's payload arena is itself one allocation, so ASan is blind to
 it by construction and its silence would measure the fixture, not FFmpeg.
+
+## The seven reuse-not-free cases have no protected arm, measured
+
+Case 39 of the port's pool lifetime probes runs the class-3 shape in a domain:
+one pooled buffer, two holders, and the one that kept it writes into it again.
+
+| mode | outcome |
+|---|---|
+| 0 spatial | completes |
+| 2 Sublet | **completes** |
+
+The fixture checks its own premise before the write — `av_buffer_get_ref_count`
+is 2 and `av_buffer_is_writable` is false, both from the real `buffer.c` — so the
+storage genuinely is shared and genuinely is not writable, and the write lands
+anyway.
+
+The reason is in the adapter, not in the fixture.
+[`src/allocators/sublet/pool-leases.c`](../../../ports/ffmpeg/buffer-pool/src/allocators/sublet/pool-leases.c)
+hooks two operations, `ff2_sublet_issue` → `sublet_take` and `ff2_sublet_return`
+→ `sublet_give`. Both are keyed on the **pool's** allocation lifecycle. Nothing
+hooks `av_buffer_ref`, so a second reference is not a borrow: both holders use
+the one capability derived at issue time. With nothing returned to the pool
+there is nothing to revoke, and revocation is the whole of what mode 2 does.
+
+What would cover this class is Sublet's **borrow** side — lending non-writable
+or exclusive authority at `av_buffer_ref` — which is a different primitive from
+the one this port applies. That is a design decision about the adapter, and it
+is recorded here as an open gap rather than decided in a fixture.
