@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import struct
+import sys
 import subprocess
 import wave
 
@@ -70,14 +70,11 @@ for arm in ("stock", "recorded"):
 stock = (a.output / "stock.txt").read_bytes()
 if not stock.strip() or stock != (a.output / "recorded.txt").read_bytes():
     raise SystemExit("stock/recorded transcript mismatch")
-raw = trace.read_bytes()
-magic, count, *_ = struct.unpack_from("<16Q", raw)
-if (
-    magic != 0x315854434C4D4747
-    or len(raw) != 128 + 48 * count
-    or struct.unpack_from("<6Q", raw, len(raw) - 48)[0] != 5
-):
-    raise SystemExit("incomplete recorder trace")
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common/host"))
+from port_trace import inspect_trace
+
+inspection = inspect_trace(trace, expected_format="whisper.ggml-context", replay=True)
+count = inspection["trace"]["records"]
 trace.rename(a.output / "trace.bin")
 (a.output / "manifest.json").write_text(
     json.dumps(
@@ -91,6 +88,7 @@ trace.rename(a.output / "trace.bin")
             "transcript_sha256": hashlib.sha256(stock).hexdigest(),
             "executables_sha256": hashes,
             "events": count,
+            "trace": inspection["trace"],
         },
         indent=2,
     )

@@ -8,7 +8,8 @@ import shutil
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common/host"))
-from port_support import digest, run_guest, stage_run, write_json
+from port_trace import record_trace
+from port_support import write_replay_verdict, digest, run_guest, stage_run, write_json
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("trace", type=Path)
@@ -48,6 +49,8 @@ run, hashes = stage_run(
     },
 )
 share = run / "share"
+if args.expected_status == 0:
+    record_trace(run, share / "trace.bin", "ffmpeg.buffer-pool")
 expected = args.expected_status
 (share / "run.sh").write_text(
     f"""#!/bin/sh
@@ -82,10 +85,7 @@ write_json(
 )
 print(f"FFmpeg artifacts: {run}", flush=True)
 result = run_guest(run, "sh /mnt/host/run.sh", "FF2_DONE", env=env, lock_timeout=45)
-write_json(
-    run / "verdict.json",
-    {"passed": result.returncode == 0, "runner_exit": result.returncode},
-)
+write_replay_verdict(run, passed=result.returncode == 0, runner_exit=result.returncode)
 if result.returncode:
     raise SystemExit(result.returncode)
 shutil.copyfile(share / "capstone.bin", args.output / "capstone.bin")

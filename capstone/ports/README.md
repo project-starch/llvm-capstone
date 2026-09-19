@@ -17,17 +17,17 @@ of a complete protected application.
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
 | PostgreSQL | Memory-context replay and memory profiles; not a database server | [PostgreSQL](postgres/README.md), [CMake component](postgres/memory-contexts/CMakeLists.txt); shared CMake layout plus older shell drivers |
 | CPython | Real pymalloc replay from native interpreter recordings; not a domain interpreter | [pymalloc](cpython/pymalloc/README.md); shared CMake layout |
-| Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [Port PR #50](https://github.com/project-starch/llvm-capstone/pull/50); shared CMake layout on that branch |
+| Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
 
-The table distinguishes the checked-in components from the pending Whisper
-port. Consult the selected revision's `upstream.json` or fetch script for the
+This integration branch includes the pending Whisper port and PostgreSQL/runtime
+PRs. Consult the selected revision's `upstream.json` or fetch script for the
 source pin, and the component's result bundle for the revision actually tested.
 Historical results keep their original source and binary identities.
 
 ## Shared layout for component ports
 
 FFmpeg, PostgreSQL memory contexts and CPython use the same build support.
-Whisper follows it in its port branch. New component ports should use this
+Whisper uses it here as well. New component ports should use this
 layout; the older application ports retain their established drivers until a
 separately validated migration preserves their workloads and gates.
 
@@ -60,6 +60,14 @@ run staging and the QEMU lock. [runtime/](../runtime/CMakeLists.txt) owns
 capability operations and Sublet primitives. Put allocator policy in its port,
 and real consumer-defect reproducers in [bug-corpora/](../bug-corpora/), rather
 than copying either into another port or into generic runtime support.
+
+## Shared traces
+
+The four CMake components use [shared trace tooling](common/host/port_trace/README.md)
+for format detection, structural validation, inspection and trace/result metadata.
+Existing binary formats and allocator-specific replay operations remain intact.
+For a new allocator, add a format adapter and its corruption controls rather
+than copying a reader or flattening its lifetime semantics.
 
 ## Build and evidence
 

@@ -9,7 +9,8 @@ import struct
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common/host"))
-from port_support import digest, run_guest, stage_run, write_json
+from port_trace import record_trace
+from port_support import write_replay_verdict, digest, run_guest, stage_run, write_json
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("trace", type=Path)
@@ -29,6 +30,7 @@ run, hashes = stage_run(
     },
 )
 share = run / "share"
+record_trace(run, share / "trace.bin", "cpython.pymalloc")
 (share / "run.sh").write_text(f"""#!/bin/sh
 set -e
 cp /mnt/host/replay.dom /tmp/pym.dom
@@ -55,7 +57,7 @@ ok = result.returncode == 0
 if ok:
     report = struct.unpack("<12Q", (share / "report.bin").read_bytes())
     ok = report[0] == 0x31594C50524D5950 and report[3] == 0 and report[1] == report[4]
-write_json(run / "verdict.json", {"passed": ok, "runner_exit": result.returncode})
+write_replay_verdict(run, passed=ok, runner_exit=result.returncode)
 if not ok:
     raise SystemExit(result.returncode or 1)
 shutil.copyfile(share / "report.bin", a.output / "report.bin")

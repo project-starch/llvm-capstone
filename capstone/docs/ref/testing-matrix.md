@@ -1,5 +1,7 @@
 # Capstone testing matrix and current recommendations
 
+Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
+
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
 

@@ -1,3 +1,8 @@
+Trace tooling: use the [shared readers and format-adapter contract](../../ports/common/host/port_trace/README.md)
+for new allocator traces. The development branch includes the pending port PRs;
+the [upstream integration plan](../plans/port-stack-integration.md) remains relevant
+when those independent PRs land. Historical milestone entries follow.
+
 ## PostgreSQL allocator work — 2026-09-18
 
 The CMake component now has all four Sublet manager ports. Next, build paired

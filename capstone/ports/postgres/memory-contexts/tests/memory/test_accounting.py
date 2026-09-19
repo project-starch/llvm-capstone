@@ -30,9 +30,11 @@ class MemoryAccounting(unittest.TestCase):
             (4, 1, 0, 0, 0, 0, 0),  # Reset deletes children and both objects.
             (1, 1, 4, 0, 50, 0, 0),
             (5, 1, 0, 0, 0, 0, 0),
-            (0, 0, 0, 0, 0, 2, 4),
+            (0, 0, 0, 0, 8, 2, 4),
         ]
-        raw = HEADER.pack(b"A11TRACE", 1, RECORD.size, 9, 0, 0, 0, 0, 0, b"")
+        raw = HEADER.pack(
+            b"A11TRACE", 1, RECORD.size, 0x0102030405060708, 0, 0, 0, 0, 0, b""
+        )
         raw += b"".join(RECORD.pack(*r) for r in records)
         self.trace = self.run / "share/trace.a11"
         self.trace.write_bytes(raw)

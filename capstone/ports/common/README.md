@@ -9,6 +9,7 @@ the [port catalog](../README.md). It is not an application or allocator.
 | `cmake/Workspace.cmake` | Repository discovery and environment/cache path defaults |
 | `cmake/Upstream.cmake` | Shared source preparation helpers |
 | `cmake/toolchains/` | Capstone domain and guest Linux compilation |
+| `host/port_trace/` | [Shared trace readers, validation, inspection and metadata](host/port_trace/README.md) |
 | `host/port_support.py` | Verified source preparation, run staging, provenance and serialized guest execution |
 | `tests/` | Source, staging, runner and oracle regression tests |
 

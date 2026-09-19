@@ -1,5 +1,7 @@
 # Capstone project documentation
 
+Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
+
 Everything durable the project knows about itself: architecture, the issue registry, the test
 matrix, root-cause trails, and the plans in flight. Written for human developers and for any AI
 coding assistant.

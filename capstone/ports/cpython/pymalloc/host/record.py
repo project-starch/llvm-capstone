@@ -44,5 +44,12 @@ for iteration in range(a.rounds):
     del data, words, buffers, buffer
     gc.collect()
 events, live = _pymrecord.stop()
+# Import after capture so inspection cannot alter the recorded workload.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common/host"))
+from port_trace import inspect_trace
+
+inspection = inspect_trace(partial, expected_format="cpython.pymalloc", replay=True)
+if inspection["trace"]["records"] != events:
+    raise SystemExit("recorder event count differs from completed trace")
 partial.rename(a.output)
 print(f"recorded {events} events; {live} allocations live at capture end")

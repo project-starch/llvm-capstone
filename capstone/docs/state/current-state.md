@@ -2,6 +2,12 @@
 
 Minimal snapshot. Read first in every session.
 
+Trace-development branch: the current port/runtime/corpus PR heads are combined
+in `integration/2-trace-ports`. The [shared trace tooling](../../ports/common/host/port_trace/README.md)
+reads all four existing formats and supplies staged-input validation and
+versioned result metadata. This is host tooling; allocator replay semantics
+and previous QEMU/silicon result identities are unchanged.
+
 Port navigation and pending integration: [component catalog](../../ports/README.md)
 and [integration plan](../plans/port-stack-integration.md). The shared runtime's
 missing `include/sublet/sublet.h` is restored from the identical port-branch

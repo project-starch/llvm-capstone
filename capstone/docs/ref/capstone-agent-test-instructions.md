@@ -1,5 +1,7 @@
 # Capstone test/run instructions for future agent sessions
 
+Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
+
 This file is the practical command cookbook for the current tree.
 It intentionally keeps only the most reused commands and points the reader at the test wrappers instead of re-explaining every old path in detail.
 
