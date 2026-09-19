@@ -81,7 +81,14 @@ run mx43296 \
 
 # Boot 2 is the same allocation order as boot 1, so if boot 1 did not produce an arm there is nothing
 # here to learn and the boot is skipped rather than spent. A skip is printed, never silent.
-if grep -aq 'R1 m1 end' "$U/board-mx43296.console" 2>/dev/null; then
+#
+# CHECK THE RESULTS FILE, NOT THE CONSOLE. The first version of this guard grepped the .console for
+# "R1 m1 end", which that file NEVER contains -- the driver writes arm lines to board-<tag>-b1/ and the
+# console carries only its own classification, "R1 end lines: 2". So the condition was unsatisfiable and
+# the boot was skipped on 2026-09-19 with the message "boot 1 produced no arm end line" while boot 1 had
+# in fact produced two. A guard that cannot pass is not a conservative guard, it is a broken one, and it
+# fails in the direction that looks like caution.
+if grep -aq 'R1 m1 end' "$U/board-mx43296-b1/r1-lines.txt" 2>/dev/null; then
 run mxrelbuf \
   "the release arm at the FULL production capacity under a re-specified phase-2 trigger: buffer-full instead of 10C" \
   "$A/relbuf43296/r1_slots_pools.dom" 29d9099326304ee5 "$L/m1-relbuf43296.txt" \
