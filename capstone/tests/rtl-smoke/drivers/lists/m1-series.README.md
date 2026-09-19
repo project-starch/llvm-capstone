@@ -154,3 +154,33 @@ is the finding to look for. The control boot must show the live alias reaching t
 body, which `run_m1` links unconditionally, so their hashes differ. `M1_STALE_DEREF` is off by default
 precisely so the measured arms keep the binaries their records cite: with it off, `M1_MAXRET=4096`
 rebuilds to `1b7a04fe237e1580` and `M1_MAXRET=43296` to `249cfda958f22f16`, both byte for byte.
+
+## RETRACTION (2026-09-19): "the fraction of distinct indices it covers" was never what this buffer buys
+
+The table near the top of this file says the retain-pressure arm's result is the fraction of distinct
+indices covered, `M1_MAXRET / 65,532`. **That is wrong**, and it is wrong in the harness comment and in
+`chain-maxret.sh`'s pre-registration too, both corrected in the same commit.
+
+**Retained references are not distinct indices.** `sublet_give(&leaf[i])` frees leaf *i*'s alias node to
+a LIFO free list and the very next statement, `alias[i] = sublet_take(&leaf[i])`, pops the head —
+nothing allocates in between — so the same index comes straight back under the next generation. The
+number of indices in play is **`M1_LIVE`**, not `M1_MAXRET`. At `M1_LIVE` = 16 the arm cycles about
+**sixteen** indices no matter how large the buffer is.
+
+**It was refutable from data already on file.** One boot performed **1,314,737 allocations against a
+65,532-index pool without exhausting it** — 20.1× the pool. That is only possible if indices recycle.
+The bundle that recorded that number said so about the capacity bound and then asserted the opposite
+about this arm; both statements sat in the repository at once.
+
+**What this changes.** Enlarging `M1_MAXRET` buys **no** additional pool coverage, so the work of
+finding the largest buffer the board would accept — the whole `m1-maxret*` ladder — bought coverage of
+nothing. It was not wasted: it attributed the 09-18 wedge and it stops the arm measuring its own buffer
+instead of the reclaimer. But the protocol's instruction to report *"the largest retained set that fits
+together with the fraction of distinct indices it covers"* rests on a false premise as written.
+
+**To actually cover a meaningful fraction of the pool, sweep `M1_LIVE`.** It is already an overridable
+knob and it is the one that sets how many indices the fixture holds at once. That sweep has not been
+run, and it is the experiment the protocol's condition actually wants.
+
+**For condition 3 the correction strengthens the result:** `m1_ret_alias[0]` names an index that has
+been reused roughly 2,706 times since it was retained, not one of 43,296 once-used indices.

@@ -493,6 +493,20 @@ static void run_linear(unsigned reps) {
  * WITH THE FRACTION OF DISTINCT INDICES IT COVERS, since that fraction is what makes the number
  * interpretable at all.
  *
+ * RETRACTED 2026-09-19, AND THE WHOLE PARAGRAPH ABOVE IS WRONG. Retained references are NOT distinct
+ * indices, so this knob does not buy coverage of the pool and no value of it ever will. give(i) frees
+ * leaf[i]'s node to a LIFO free list and the very next statement, take(i), pops the head -- nothing
+ * allocates in between -- so it comes straight back under the next generation. The number of indices in
+ * play is M1_LIVE, not M1_MAXRET: at M1_LIVE=16 the arm cycles about SIXTEEN indices however large the
+ * buffer is. Measured proof, already on file before this was written: one boot performed 1,314,737
+ * allocations against a 65,532-index pool WITHOUT EXHAUSTING IT -- 20.1x the pool -- which is only
+ * possible if indices recycle.
+ *
+ * So: M1_MAXRET bounds how many stale references are HELD, which is worth having, and M1_LIVE bounds
+ * how many distinct indices they NAME, which is what the protocol's "fraction of distinct indices"
+ * actually asks for. Sweep M1_LIVE for coverage. This knob is still what stops the arm measuring its
+ * own buffer instead of the reclaimer, which is why it stays.
+ *
  * What a null in that arm means, recorded before the run rather than after: retention CANNOT prevent
  * reuse in this design, because no old reference is consulted at reclaim time -- the reclaim event is
  * the walk finding a node valid, and safety is carried by the generation rather than by reference
