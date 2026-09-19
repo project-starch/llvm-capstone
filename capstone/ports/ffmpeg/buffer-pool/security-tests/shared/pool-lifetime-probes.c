@@ -376,5 +376,28 @@ void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
         av_buffer_pool_uninit(&bp); held = NULL;
         return;
     }
+    if (test == 39) {
+        /* The reuse-not-free shape (taxonomy class 3): one pooled buffer, two
+         * holders, and the one that kept it draws into it again. Nothing is
+         * returned to the pool, so there is nothing for mode 2 to revoke. This
+         * case is registered as COMPLETING in every mode on purpose: it records
+         * what this port's lease discipline does not cover. */
+        AVBufferPool *bp = av_buffer_pool_init(64, NULL);
+        AVBufferRef *outpicref = av_buffer_pool_get(bp);
+        CHECK(outpicref, 480);
+        outpicref->data[0] = 17;
+        AVBufferRef *downstream = av_buffer_ref(outpicref); /* av_frame_clone */
+        CHECK(downstream, 481);
+        held = downstream->data;
+        CHECK(read_probe(held) == 17, 482);
+        CHECK(av_buffer_get_ref_count(outpicref) == 2, 483);
+        CHECK(!av_buffer_is_writable(outpicref), 484);
+        mark(test);
+        write_probe(outpicref->data); /* the filter draws again */
+        CHECK(read_probe(held) == 93, 485); /* the reader's data changed identity */
+        av_buffer_unref(&downstream); av_buffer_unref(&outpicref);
+        av_buffer_pool_uninit(&bp); held = NULL;
+        return;
+    }
     ff2_fail(430);
 }

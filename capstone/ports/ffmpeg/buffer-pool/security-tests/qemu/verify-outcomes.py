@@ -38,7 +38,8 @@ NAMES += [
 NAMES += ["alias-scatter-valid-after-parent-revoke"]
 NAMES += ["af-join-dedup-bound-stale-read"]
 NAMES += ["h264-refs-partial-clear-stale-read",
-          "vidstab-parked-plane-pointer-stale-write"]
+          "vidstab-parked-plane-pointer-stale-write",
+          "reuse-not-free-shared-frame-rewrite"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")
