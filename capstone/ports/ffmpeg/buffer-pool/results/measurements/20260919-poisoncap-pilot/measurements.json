@@ -1,0 +1,71 @@
+{
+  "schema": "poisoncap-ffmpeg-pilot-v1",
+  "adapter_base": "46d380be9c6a7fb9ed05149be72bb9bbefd99f89",
+  "workload": {
+    "name": "short",
+    "width": 320,
+    "height": 180,
+    "frames": 30,
+    "duration_seconds": 1
+  },
+  "commands_sha256": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0",
+  "native_oracle_sha256": "30cc3297c90d18f293e2ffca64166c1cef8c01c9238db0178d29c69e41af3bcf",
+  "compiler_sha256": "51b76edd1776d375c32cea00a86a3aec118c5fcf2207a0ae13f8bf9df417b2e4",
+  "replays": [
+    {
+      "attempt": "recording-isolated-1",
+      "events": 2379,
+      "exact_event_match": true,
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372544,
+      "counters": {
+        "sweeps": 63,
+        "poison_bytes": 4071488,
+        "clear_bytes": 3699136,
+        "snapshot_bytes": 372352,
+        "copied_bytes": 7770624
+      },
+      "output_sha256": "3b7ce3191f0a5c0cd9527e6273c708b656b89af373314230d2fe03aeaf952edc",
+      "guest_default_revocation": "preserved (kernel default on)"
+    },
+    {
+      "attempt": "recording-isolated-2",
+      "events": 2379,
+      "exact_event_match": true,
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372544,
+      "counters": {
+        "sweeps": 63,
+        "poison_bytes": 4071488,
+        "clear_bytes": 3699136,
+        "snapshot_bytes": 372352,
+        "copied_bytes": 7770624
+      },
+      "output_sha256": "3b7ce3191f0a5c0cd9527e6273c708b656b89af373314230d2fe03aeaf952edc",
+      "guest_default_revocation": "preserved (kernel default on)"
+    },
+    {
+      "attempt": "replay-default-off-1",
+      "events": 2379,
+      "exact_event_match": true,
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372544,
+      "counters": {
+        "sweeps": 63,
+        "poison_bytes": 4071488,
+        "clear_bytes": 3699136,
+        "snapshot_bytes": 372352,
+        "copied_bytes": 7770624
+      },
+      "output_sha256": "3b7ce3191f0a5c0cd9527e6273c708b656b89af373314230d2fe03aeaf952edc",
+      "guest_default_revocation": "off"
+    }
+  ],
+  "complete_suite": {
+    "attempt": "replay-default-off-1",
+    "passed": 29,
+    "total": 29,
+    "test_runtime_revocation": "off",
+    "guest_default_revocation": "off"
+  }
+}

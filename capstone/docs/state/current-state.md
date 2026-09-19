@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Experimental PoisonCap FFmpeg port
+
+The published PoisonCap compiler, QEMU and matching CheriBSD kernel/userspace
+are reconstructed with pinned sources. The FFmpeg allocator library, direct
+example and per-lease adapter build. Seven platform controls pass; ten protected
+pool cases pass in a separate fresh guest, including persistent RefStruct state
+and stale access after reuse. A 2,379-event native recording matches its complete
+event oracle. The first adapter snapshots payloads before poisoning and sweeps
+before reuse, with its storage and copy costs counted separately.
+
+The full suite passes all 29 processes when the automatic guest libc-revocation
+default is disabled before SSH starts; explicit adapter revocation remains
+active. Three successful replays have identical output and counters. Preserving
+the guest default instead produces a captured kernel `share->excl` panic in
+longer suites, including a spatial-only arm. The explicit guest configuration
+is a workaround, not a kernel fix or a Capstone/PoisonCap performance ranking.
+[Pilot, failed attempts and scope](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md).
+
 ## 2026-09-19 — Four CheriBSD allocator libraries and examples
 
 FFmpeg buffer pools, PostgreSQL memory contexts, CPython pymalloc and Whisper

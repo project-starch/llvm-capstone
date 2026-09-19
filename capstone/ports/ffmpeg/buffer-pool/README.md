@@ -4,6 +4,8 @@
 use the shared purecap toolchain. Each hosted build exposes a CMake allocator
 library and `bin/allocator-example`; a custom main can be linked through
 `PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+The experimental [PoisonCap workflow](host/cheribsd/poisoncap/README.md)
+reconstructs its published platform and selects a separate per-lease adapter.
 
 This component records native FFmpeg's AVBufferPool and AVRefStructPool
 operations and replays their allocator behavior in a Capstone domain. The

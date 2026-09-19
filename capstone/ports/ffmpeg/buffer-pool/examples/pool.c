@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef FFPOOL_POISONCAP
+#include <sys/mman.h>
+#endif
 
 _Noreturn void ff2_fail(unsigned code) {
   fprintf(stderr, "FFPOOL example failed: %u\n", code);
@@ -17,12 +20,23 @@ void ff2_lock(void) {}
 void ff2_unlock(int *guard) { (void)guard; }
 int main(void) {
   void *metadata = aligned_alloc(64, FF2_META_BYTES);
+#ifdef FFPOOL_POISONCAP
+  void *payload = mmap(NULL, FF2_PAYLOAD_BYTES, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANON, -1, 0);
+  if (payload == MAP_FAILED)
+    return 1;
+#else
   void *payload = aligned_alloc(64, FF2_PAYLOAD_BYTES);
+#endif
   if (!metadata || !payload)
     return 1;
   ff2_memory_init(metadata, FF2_META_BYTES);
   ff2_payload_init(payload, FF2_PAYLOAD_BYTES);
+#ifdef FFPOOL_POISONCAP
+  ff2_set_mode(2);
+#else
   ff2_set_mode(0);
+#endif
   ff2_reset();
   AVBufferPool *pool = av_buffer_pool_init(64, NULL);
   AVBufferRef *a = av_buffer_pool_get(pool);
@@ -45,7 +59,11 @@ int main(void) {
   av_buffer_unref(&b);
   ff2_finish();
   free(metadata);
+#ifdef FFPOOL_POISONCAP
+  munmap(payload, FF2_PAYLOAD_BYTES);
+#else
   free(payload);
+#endif
   printf("ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=%zu\n", sizeof(void *));
   return 0;
 }

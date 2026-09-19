@@ -1,0 +1,29 @@
+{
+  "source_manifest": "../../../host/cheribsd/poisoncap/platform.json",
+  "source_manifest_sha256": "1f1d00c29710d15dcc47a51dc274d0a63d735a56d2bda437b5a466db4c9efd79",
+  "published_regular_files_verified": 85453,
+  "llvm_targets": [
+    "RISCV",
+    "X86"
+  ],
+  "host_compiler": "clang-18",
+  "port_build_type": "Debug",
+  "native_ctest_entries_passed": 4,
+  "shared_python_tests_passed": 23,
+  "source_sha256": {
+    "capstone/ports/common/host/cheribsd/guest.py": "6e1a9655f7184e1849b6424c3ab2e953875279a5c878675efb6da9a5c7aaab7a",
+    "capstone/ports/common/host/cheribsd/run.py": "bcaa9cb0b95b65b11312e4a21e68f9a0acdae0a5e430ae1804f860f14580080e",
+    "capstone/ports/common/tests/test_guest_console.py": "5b92ba337552335323159db7d6dd8dd061be1e98083dac175f7b6c1baef39053",
+    "capstone/ports/ffmpeg/buffer-pool/cmake/Replay.cmake": "f2ba461daf78d1a6654a3f4556a9ab938d91cf988a52b764c45cb9f701b7431b",
+    "capstone/ports/ffmpeg/buffer-pool/examples/pool.c": "c39302ed80a546634febb836269508dc14b39f3ad1e12aee361823b08544098e",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/build.sh": "05509de2ec4badcbcd5323e7e0671fa0438dd4cee18fc2ff280bf10c4ba9c9cd",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/platform.json": "1f1d00c29710d15dcc47a51dc274d0a63d735a56d2bda437b5a466db4c9efd79",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/platform.sh": "f0da39e1a7b8d9a45778bc42762a1d8a1cd876ed775578fd75c3ed079dc671e9",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/prepare.py": "5f995d7735fb9b5f8bc3e01d200c15ed0825fc818859fb7279333759e8f6ee44",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/run.py": "af0a823e368a15a4e9b983db383c2c3cf7041f19f85c95bee679a355e0ca841c",
+    "capstone/ports/ffmpeg/buffer-pool/security-tests/cheribsd/poisoncap-probe.c": "27b2be9001a81ea2615ade323ea0529f36886c1474db862c3444174a454c13db",
+    "capstone/ports/ffmpeg/buffer-pool/src/cheribsd/poisoncap-payload.c": "6d1fe14e8524f68367c9bbf455e8cfe27bde138f28502a32e140b54a6e51e83f",
+    "capstone/ports/ffmpeg/buffer-pool/src/native/replay/main.c": "aef4447a19f6dcf89c2091a2ebd43f7a4ba8d3d62e11ef7b29a5df3309075e0d",
+    "capstone/ports/ffmpeg/buffer-pool/src/shared/payload-backend.h": "5860d8e5463c778f96c0d6b8eb6e88981b7b573e324dd7c933b668f8f73510a8"
+  }
+}

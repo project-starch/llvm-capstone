@@ -1,0 +1,435 @@
+{
+  "schema": "cheribsd-allocator-cases-v1",
+  "status": "complete",
+  "runtime_revocation": "off",
+  "guest_default_revocation": "off",
+  "results": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+      "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "CHERI_BOUNDARY_READY",
+      "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-live",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP live PASS",
+      "stdout_sha256": "b08eef40afc75a1e10c524e6c637a3cc90da3d0e002828fbd4957b55eff1c0ef",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP read READY",
+      "stdout_sha256": "1118b8cfeb952f15c74e573099ad10893c738d186b3a2d628fb2a539cfd97cec",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-write",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP write READY",
+      "stdout_sha256": "769e3ae89df435a6834082b117887f6aae2c0efbb26718492aa78a2db0b04d8d",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reuse",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP reuse PASS",
+      "stdout_sha256": "4a26759cb78ba2b2f29cc1fdd1338dd77173f0b902f0632de0222fe2b32d5122",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reused-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP reused-read READY",
+      "stdout_sha256": "a5b1622e32f0d62fc9e14d104fbf3dc2863e37ddf1b24f75fcb35cc5fc5c8767",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "allocator-example",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=16",
+      "stdout_sha256": "0330c76e1569021cab71fa8f3954f0c8689d4a116e8a779fead1728de8bb370c",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "pool-0-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "f6611d1094463898655d76d5f45244fd655c47757dbe9bb05606a3d2833bd756",
+      "inputs": {
+        "input.bin": "00598d39c0bd22d0a35d48ef50bb8c31367cb386245ab26200afdb0d2797b202"
+      },
+      "outputs": {
+        "output.bin": "6f0311b3705300ffa1e4d9423f5283e81c52d2a7773b54122f1c1b1160d91069"
+      }
+    },
+    {
+      "name": "pool-0-1",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "e2b61348b9680d02461d26e557f2ae66bac8fdc7375e69aea19ea5d4870bd87c",
+      "inputs": {
+        "input.bin": "b5c9183615f1c94d25ed063fc77a3ab6ede7dd05d2302b7800236dfbb0718aa1"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-2",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "43cf9030730b55e6729e38e5759a234c3c96cf6b6afe9f08447a43469c3f896e",
+      "inputs": {
+        "input.bin": "2a6f7f852f0852bc4d5248d15b9d445576ee94ad4c6b927b10a6e6816e73d6ec"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-3",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "36a8f1af2874cceac54758d53017bf78d90421427e3f06814c6f994cfe3d91b3",
+      "inputs": {
+        "input.bin": "1be2628a98343ddc11e99d5ed0d5e448d831d3b509a1b07520cdacbd973933d9"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-4",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "42f8910b3a26969add1e9be9a3508cf17579ff715e42341b36eb9bc8b5b9bb51",
+      "inputs": {
+        "input.bin": "4f4308423e08796f91183919860fc736eec3e45b2f88d47bee8971bf553fdf1d"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-5",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "039e1fb283043a43a66df8c435c1369d08f96c26d93ba7a01c9364b5d6544fd4",
+      "inputs": {
+        "input.bin": "315576995d04afb2d0d067435b8156044a7d209b14b335313cb6829c950a3751"
+      },
+      "outputs": {
+        "output.bin": "687eca1705817e0541c13aea699723301b5dbb57a83e6f16d9f2c3337a104cf3"
+      }
+    },
+    {
+      "name": "pool-0-6",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "25611a82f7696a0ec47c8fb55d062090cb35b0fb0bb62357000dded5f74a56f7",
+      "inputs": {
+        "input.bin": "3a100bbf2af90be3bc62c68559f1c9b27e084d44faae29e4d990bfbe932781d4"
+      },
+      "outputs": {
+        "output.bin": "687eca1705817e0541c13aea699723301b5dbb57a83e6f16d9f2c3337a104cf3"
+      }
+    },
+    {
+      "name": "pool-0-8",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "f2703c613f9dcb0addbf90b1bb97641f17170a1b989e8ff88625a21e5d5d1f53",
+      "inputs": {
+        "input.bin": "a258e9ab8e8184acd494fbe0dcb4b9014330729b58ddb0f6680a9e7154719ee2"
+      },
+      "outputs": {
+        "output.bin": "155ff9ee94617a7081e5e2e68263786c24b0131eb21eed77f4d2592c78a8fd18"
+      }
+    },
+    {
+      "name": "pool-0-9",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "282e895785179476bab4478f90fb243d571ce85fb313a2393569b17dd100690d",
+      "inputs": {
+        "input.bin": "d6eae8f0783d4589ec031319387a6249e59c7bbdab1e526a80cfbc821ecebc23"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-13",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "d65799bf7947e6e36587a83839878db0a1303a9ea3ef9a9a9e2c429a2edbe511",
+      "inputs": {
+        "input.bin": "43c8f46b2b1f0728f53e1bb18b54396d1e9a1e5c671c4747719a8b94c24d7a95"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-2-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "79079f18f7a31c3c366529b45be777d8574a3e02fdd129f4423bd5feefed3565",
+      "inputs": {
+        "input.bin": "00598d39c0bd22d0a35d48ef50bb8c31367cb386245ab26200afdb0d2797b202"
+      },
+      "outputs": {
+        "output.bin": "2fdedf63cd5803d59cc5a614b9d88cfdda5c4019cf509257d1275fde2d7b4b7d"
+      }
+    },
+    {
+      "name": "pool-2-1",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=1 ready",
+      "stdout_sha256": "914ea2b13091e89f4559a888353c32c2475d5e476304a6ed657311385b04f913",
+      "inputs": {
+        "input.bin": "b5c9183615f1c94d25ed063fc77a3ab6ede7dd05d2302b7800236dfbb0718aa1"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-2",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=2 ready",
+      "stdout_sha256": "8f1d151118bd42a7ca1a50eefce9a52f7f4bee5b318e9640fb63c0fb570627a2",
+      "inputs": {
+        "input.bin": "2a6f7f852f0852bc4d5248d15b9d445576ee94ad4c6b927b10a6e6816e73d6ec"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-3",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=3 ready",
+      "stdout_sha256": "0677f4228491421fb601003661774f8d3861de441828c5ef149bf40451b120e2",
+      "inputs": {
+        "input.bin": "1be2628a98343ddc11e99d5ed0d5e448d831d3b509a1b07520cdacbd973933d9"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-4",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=4 ready",
+      "stdout_sha256": "788210e3ad956cb86ce4c082e621d056af0506b3e3e0608403009e004df163ba",
+      "inputs": {
+        "input.bin": "4f4308423e08796f91183919860fc736eec3e45b2f88d47bee8971bf553fdf1d"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-5",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=5 ready",
+      "stdout_sha256": "d9ff0556fedab93749147ed067606cd8088b27941cc9a9ddcf39dc1a1ad3073b",
+      "inputs": {
+        "input.bin": "315576995d04afb2d0d067435b8156044a7d209b14b335313cb6829c950a3751"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-6",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=6 ready",
+      "stdout_sha256": "5dbb220c9e8be0f386fa54837c2c49fd30481fa30653059453125e856f109e7d",
+      "inputs": {
+        "input.bin": "3a100bbf2af90be3bc62c68559f1c9b27e084d44faae29e4d990bfbe932781d4"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-8",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=8 ready",
+      "stdout_sha256": "09562485b83ba8d8df831fff157e32927455a0340758b060c37794f13e3a3444",
+      "inputs": {
+        "input.bin": "a258e9ab8e8184acd494fbe0dcb4b9014330729b58ddb0f6680a9e7154719ee2"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-9",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "FF2_PROBE case=9 ready",
+      "stdout_sha256": "cb5edb64ea2918c4bc4058b80e14ba3a5a75965f3d4542f7edc786de708728b7",
+      "inputs": {
+        "input.bin": "d6eae8f0783d4589ec031319387a6249e59c7bbdab1e526a80cfbc821ecebc23"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-2-13",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "c708e37e00b2dc00974929c9945ccb0fff017e716ac994a07b9cbea70a23898a",
+      "inputs": {
+        "input.bin": "43c8f46b2b1f0728f53e1bb18b54396d1e9a1e5c671c4747719a8b94c24d7a95"
+      },
+      "outputs": {
+        "output.bin": "53bc15a739f25cf7d54cac33ba71cbb04ddd5fdded84d316a07bf74c5cd6032b"
+      }
+    },
+    {
+      "name": "recording",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=[0-9]+ metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "195c8a02b4d07d23d2f1d8d2edc9b83270d2dc246f8ca9333fe95f3d80232e0b",
+      "inputs": {
+        "input.bin": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0"
+      },
+      "outputs": {
+        "output.bin": "3b7ce3191f0a5c0cd9527e6273c708b656b89af373314230d2fe03aeaf952edc"
+      }
+    }
+  ],
+  "cases": [
+    "cheribsd-abi",
+    "cheribsd-bounds",
+    "poison-live",
+    "poison-read",
+    "poison-write",
+    "poison-reuse",
+    "poison-reused-read",
+    "allocator-example",
+    "pool-0-0",
+    "pool-0-1",
+    "pool-0-2",
+    "pool-0-3",
+    "pool-0-4",
+    "pool-0-5",
+    "pool-0-6",
+    "pool-0-8",
+    "pool-0-9",
+    "pool-0-13",
+    "pool-2-0",
+    "pool-2-1",
+    "pool-2-2",
+    "pool-2-3",
+    "pool-2-4",
+    "pool-2-5",
+    "pool-2-6",
+    "pool-2-8",
+    "pool-2-9",
+    "pool-2-13",
+    "recording"
+  ],
+  "binaries": {
+    "cheribsd-abi": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "cheribsd-bounds": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "poison-live": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-read": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-write": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-reuse": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-reused-read": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "allocator-example": "3583d3b3dbebc42ee71d8ea6a80e107b8e6d58249407838e34cf33a7a51b8ee0",
+    "pool-0-0": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-1": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-2": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-3": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-4": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-5": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-6": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-8": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-9": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-13": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-0": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-1": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-2": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-3": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-4": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-5": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-6": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-8": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-9": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-13": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "recording": "f001ad977b461e90970c5151e2f779ae76c9c31e48aad8040fa26874cd578f23"
+  },
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+    "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+  }
+}

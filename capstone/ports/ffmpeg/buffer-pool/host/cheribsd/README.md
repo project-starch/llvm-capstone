@@ -150,3 +150,8 @@ separate libc allocation/free control. Its stale load is volatile and built
 at the selected Debug optimization level. The live control must complete;
 with the PICASSO runtime active, the post-`free()` load must reach its setup
 marker and then SIGPROT. This is separate from the stale pool-return controls.
+
+## Experimental PoisonCap integration
+
+The separate [PoisonCap workflow](poisoncap/README.md) reconstructs the paper
+platform and adds an explicitly selected pool-lifetime adapter and control suite.

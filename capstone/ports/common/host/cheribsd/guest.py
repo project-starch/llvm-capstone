@@ -4,17 +4,23 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import threading
 import time
 
 import pexpect
 
 
 class Guest:
-    def __init__(self, sdk, rootfs, image, output, port):
+    def __init__(
+        self, sdk, rootfs, image, output, port, disable_default_revocation=False
+    ):
         self.output = output
         self.process = None
         self.log = None
+        self.reader = None
+        self.reader_stop = threading.Event()
         self.port = port
+        self.disable_default_revocation = disable_default_revocation
         key = output / "guest-key"
         subprocess.run(
             [
@@ -83,7 +89,7 @@ class Guest:
         )
 
     def copy(self, source, destination):
-        subprocess.run(
+        result = subprocess.run(
             [
                 "scp",
                 "-O",
@@ -94,9 +100,24 @@ class Guest:
                 str(destination),
             ],
             capture_output=True,
-            check=True,
+            check=False,
             timeout=120,
         )
+        if result.returncode:
+            detail = result.stderr.decode(errors="replace").strip()
+            raise RuntimeError(f"guest copy failed ({result.returncode}): {detail}")
+
+    def drain_console(self):
+        # SSH runs independently of pexpect. Keep consuming serial/debug output
+        # so a full PTY cannot block QEMU and obscure a guest failure.
+        while not self.reader_stop.is_set():
+            try:
+                self.process.read_nonblocking(65536, timeout=0.1)
+                self.log.flush()
+            except pexpect.TIMEOUT:
+                continue
+            except pexpect.EOF:
+                break
 
     def start(self):
         self.log = (self.output / "serial.log").open("w")
@@ -126,18 +147,31 @@ class Guest:
             "chmod 600 /root/.ssh/authorized_keys",
             "service sshd onestart",
         ]
+        if self.disable_default_revocation:
+            commands.insert(2, "sysctl security.cheri.runtime_revocation_default=0")
         for command in commands:
             self.process.sendline(command)
             self.process.expect(r"# ", timeout=45)
+        self.reader = threading.Thread(target=self.drain_console, daemon=True)
+        self.reader.start()
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             result = self.ssh("mkdir -p /tmp/allocator-tests")
             if result.returncode == 0:
+                if self.disable_default_revocation:
+                    policy = self.ssh(
+                        "sysctl -n security.cheri.runtime_revocation_default"
+                    )
+                    if policy.returncode or policy.stdout.strip() != "0":
+                        raise RuntimeError("guest default revocation was not disabled")
                 return
             time.sleep(1)
         raise RuntimeError("guest SSH did not become ready")
 
     def close(self):
+        self.reader_stop.set()
+        if self.reader is not None:
+            self.reader.join(timeout=1)
         if self.process is not None:
             self.process.terminate(force=True)
         if self.log is not None:

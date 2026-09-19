@@ -1,3 +1,13 @@
+PoisonCap FFmpeg: the [first pilot](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md)
+passes a full 29-process suite with the guest's automatic libc-revocation
+default disabled; explicit adapter revocation remains active. Three replays
+match exactly. Extend this documented configuration with matched memory
+accounting, and separately isolate the kernel VM-locking panic seen with the
+guest default preserved. Retain failed attempts. Measure selective state
+preservation and quarantine as explicit
+adapter policies; the initial all-payload snapshots are not an architectural
+minimum. See the [integration plan](../plans/poisoncap-ffmpeg.md).
+
 CheriBSD allocator ports: the four components now have a
 [shared build/link/run workflow](../../ports/common/host/cheribsd/README.md).
 Use these libraries and explicit protection scopes for matching replay

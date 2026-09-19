@@ -62,6 +62,11 @@ def main():
     p.add_argument("--abi-probe", type=Path, help="Required for a cases-only suite")
     p.add_argument("--port", type=int, default=10427)
     p.add_argument("--runtime-revocation", choices=("off", "on"), default="off")
+    p.add_argument(
+        "--disable-default-revocation",
+        action="store_true",
+        help="Disable the guest default before starting SSH; programs keep their explicit policy",
+    )
     a = p.parse_args()
     cases = []
     for item in a.build:
@@ -107,6 +112,7 @@ def main():
         schema="cheribsd-allocator-cases-v1",
         status="running",
         runtime_revocation=a.runtime_revocation,
+        guest_default_revocation="off" if a.disable_default_revocation else "preserved",
         results=[],
         cases=[c["name"] for c in cases],
         binaries={c["name"]: digest(c["program"]) for c in cases},
@@ -135,7 +141,12 @@ def main():
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
             guest = Guest(
-                a.sdk.resolve(), a.rootfs.resolve(), a.image.resolve(), a.output, a.port
+                a.sdk.resolve(),
+                a.rootfs.resolve(),
+                a.image.resolve(),
+                a.output,
+                a.port,
+                disable_default_revocation=a.disable_default_revocation,
             )
             (a.output / "qemu-command.json").write_text(
                 json.dumps(guest.argv, indent=2) + "\n"

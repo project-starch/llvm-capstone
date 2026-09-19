@@ -1,0 +1,227 @@
+{
+  "schema": "cheribsd-allocator-cases-v1",
+  "status": "failed",
+  "runtime_revocation": "off",
+  "results": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+      "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "CHERI_BOUNDARY_READY",
+      "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-live",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP live PASS",
+      "stdout_sha256": "b08eef40afc75a1e10c524e6c637a3cc90da3d0e002828fbd4957b55eff1c0ef",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP read READY",
+      "stdout_sha256": "1118b8cfeb952f15c74e573099ad10893c738d186b3a2d628fb2a539cfd97cec",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-write",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP write READY",
+      "stdout_sha256": "769e3ae89df435a6834082b117887f6aae2c0efbb26718492aa78a2db0b04d8d",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reuse",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP reuse PASS",
+      "stdout_sha256": "4a26759cb78ba2b2f29cc1fdd1338dd77173f0b902f0632de0222fe2b32d5122",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reused-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP reused-read READY",
+      "stdout_sha256": "a5b1622e32f0d62fc9e14d104fbf3dc2863e37ddf1b24f75fcb35cc5fc5c8767",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "allocator-example",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=16",
+      "stdout_sha256": "0330c76e1569021cab71fa8f3954f0c8689d4a116e8a779fead1728de8bb370c",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "pool-0-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "f6611d1094463898655d76d5f45244fd655c47757dbe9bb05606a3d2833bd756",
+      "inputs": {
+        "input.bin": "00598d39c0bd22d0a35d48ef50bb8c31367cb386245ab26200afdb0d2797b202"
+      },
+      "outputs": {
+        "output.bin": "6f0311b3705300ffa1e4d9423f5283e81c52d2a7773b54122f1c1b1160d91069"
+      }
+    },
+    {
+      "name": "pool-0-1",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "e2b61348b9680d02461d26e557f2ae66bac8fdc7375e69aea19ea5d4870bd87c",
+      "inputs": {
+        "input.bin": "b5c9183615f1c94d25ed063fc77a3ab6ede7dd05d2302b7800236dfbb0718aa1"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-2",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "43cf9030730b55e6729e38e5759a234c3c96cf6b6afe9f08447a43469c3f896e",
+      "inputs": {
+        "input.bin": "2a6f7f852f0852bc4d5248d15b9d445576ee94ad4c6b927b10a6e6816e73d6ec"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-3",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "36a8f1af2874cceac54758d53017bf78d90421427e3f06814c6f994cfe3d91b3",
+      "inputs": {
+        "input.bin": "1be2628a98343ddc11e99d5ed0d5e448d831d3b509a1b07520cdacbd973933d9"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    },
+    {
+      "name": "pool-0-4",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=1 metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "42f8910b3a26969add1e9be9a3508cf17579ff715e42341b36eb9bc8b5b9bb51",
+      "inputs": {
+        "input.bin": "4f4308423e08796f91183919860fc736eec3e45b2f88d47bee8971bf553fdf1d"
+      },
+      "outputs": {
+        "output.bin": "7a1361dd90356c86fa5d68b642ea872ca248925c0a34591730ffb17904eddb2f"
+      }
+    }
+  ],
+  "cases": [
+    "cheribsd-abi",
+    "cheribsd-bounds",
+    "poison-live",
+    "poison-read",
+    "poison-write",
+    "poison-reuse",
+    "poison-reused-read",
+    "allocator-example",
+    "pool-0-0",
+    "pool-0-1",
+    "pool-0-2",
+    "pool-0-3",
+    "pool-0-4",
+    "pool-0-5",
+    "pool-0-6",
+    "pool-0-8",
+    "pool-0-9",
+    "pool-0-13",
+    "pool-2-0",
+    "pool-2-1",
+    "pool-2-2",
+    "pool-2-3",
+    "pool-2-4",
+    "pool-2-5",
+    "pool-2-6",
+    "pool-2-8",
+    "pool-2-9",
+    "pool-2-13",
+    "recording"
+  ],
+  "binaries": {
+    "cheribsd-abi": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "cheribsd-bounds": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "poison-live": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-read": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-write": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-reuse": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "poison-reused-read": "48faf0336ff5493a41d47181fc849f45c926a98731fe69dc465412c96daae0c7",
+    "allocator-example": "3583d3b3dbebc42ee71d8ea6a80e107b8e6d58249407838e34cf33a7a51b8ee0",
+    "pool-0-0": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-1": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-2": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-3": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-4": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-5": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-6": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-8": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-9": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-0-13": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-0": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-1": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-2": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-3": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-4": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-5": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-6": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-8": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-9": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "pool-2-13": "9824aa62829aead7bb2924ae9a32251c48904b836f2b001f4deff3a1b4b4c583",
+    "recording": "f001ad977b461e90970c5151e2f779ae76c9c31e48aad8040fa26874cd578f23"
+  },
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+    "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+  },
+  "error": "RuntimeError"
+}
