@@ -240,7 +240,7 @@ static int case_vp9(int fixed) {
  * holds and reads. Nothing is freed, the pointer stays tagged and in bounds,
  * and only the identity of the data changes. That is the taxonomy's class 3,
  * "reuse-not-free", which no CHERI configuration catches at any cost. */
-static int case_abitscope(int fixed) {
+static int case_shared_rewrite(int fixed, const char *who) {
   AVBufferRef *outpicref = av_buffer_pool_get(g_pool);
   if (!outpicref)
     ff2_fail(650);
@@ -264,9 +264,10 @@ static int case_abitscope(int fixed) {
   memset(outpicref->data, 0xB2, POOL_BYTES); /* frame 2 drawn */
 
   unsigned char consumer_sees_now = downstream->data[0];
-  printf("arm=%s shared_when_written=%d consumer_saw=0x%02X consumer_now=0x%02X "
-         "freed_to_malloc=0\n",
-         fixed ? "fixed" : "buggy", shared, consumer_saw_first, consumer_sees_now);
+  printf("arm=%s holder=%s shared_when_written=%d consumer_saw=0x%02X "
+         "consumer_now=0x%02X freed_to_malloc=0\n",
+         fixed ? "fixed" : "buggy", who, shared, consumer_saw_first,
+         consumer_sees_now);
   printf("VERDICT %s\n",
          !fixed && shared && consumer_sees_now == 0xB2
              ? "DEFECT-REPRODUCED the held frame's data changed identity under its reader"
@@ -277,6 +278,44 @@ static int case_abitscope(int fixed) {
                    : consumer_sees_now != 0xA1;
   av_buffer_unref(&downstream);
   av_buffer_unref(&outpicref);
+  return bad;
+}
+
+
+/* ---- b9f91a7cbc: af_dynaudnorm writes into the INPUT frame ----------------
+ * The same class in the opposite direction. The filter modifies the frame it
+ * received, which its sender may still hold, instead of taking writable
+ * storage first. Nothing is freed here either. */
+static int case_input_rewrite(int fixed) {
+  AVBufferRef *producer = av_buffer_pool_get(g_pool);
+  if (!producer)
+    ff2_fail(660);
+  memset(producer->data, 0xA1, POOL_BYTES);
+  AVBufferRef *in = av_buffer_ref(producer); /* what the filter receives */
+  if (!in)
+    ff2_fail(661);
+  if (fixed && !av_buffer_is_writable(in)) {
+    AVBufferRef *fresh = av_buffer_pool_get(g_pool);
+    if (!fresh)
+      ff2_fail(662);
+    memcpy(fresh->data, in->data, POOL_BYTES);
+    av_buffer_unref(&in);
+    in = fresh;
+  }
+  int shared = av_buffer_get_ref_count(in) > 1;
+  memset(in->data, 0xB2, POOL_BYTES); /* perform_dc_correction */
+  unsigned char sender_sees = producer->data[0];
+  printf("arm=%s holder=sender shared_when_written=%d sender_saw=0xA1 "
+         "sender_now=0x%02X freed_to_malloc=0\n",
+         fixed ? "fixed" : "buggy", shared, sender_sees);
+  printf("VERDICT %s\n",
+         !fixed && shared && sender_sees == 0xB2
+             ? "DEFECT-REPRODUCED the filter rewrote storage its sender still holds"
+         : fixed && sender_sees == 0xA1 ? "FIXED the input was left alone"
+                                        : "INCONCLUSIVE");
+  int bad = !fixed ? !(shared && sender_sees == 0xB2) : sender_sees != 0xA1;
+  av_buffer_unref(&in);
+  av_buffer_unref(&producer);
   return bad;
 }
 
@@ -297,11 +336,27 @@ int main(int argc, char **argv) {
   if (!pool)
     ff2_fail(605);
   g_pool = pool;
+  /* The five retained-frame cases share one call sequence, as the eight CPython
+   * free/reuse cases do: they are kept apart because they are separate upstream
+   * reports in separate consumers, and that recurrence is the argument. */
+  static const struct { const char *id, *who; } shared_rewrite[] = {
+      {"8061098418", "abitscope"},    {"2a5a14f3ca", "aphasemeter"},
+      {"de07c57d5a", "ahistogram"},   {"faac31cc86", "avectorscope"},
+      {"dc8e83b4e0", "ebur128"},      {"1ee3c984b9", "snow"},
+  };
+  for (unsigned i = 0; i < sizeof shared_rewrite / sizeof *shared_rewrite; i++)
+    if (!strcmp(want, shared_rewrite[i].id)) {
+      int rc = case_shared_rewrite(fixed, shared_rewrite[i].who);
+      av_buffer_pool_uninit(&pool);
+      free(metadata);
+      free(payload);
+      return rc;
+    }
   if (!strcmp(want, "1886c3269d") || !strcmp(want, "316531e61c") ||
-      !strcmp(want, "a024f8c541") || !strcmp(want, "8061098418")) {
+      !strcmp(want, "a024f8c541") || !strcmp(want, "b9f91a7cbc")) {
     int rc = !strcmp(want, "1886c3269d")   ? case_h264_refs(fixed)
              : !strcmp(want, "316531e61c") ? case_vidstab(fixed)
-             : !strcmp(want, "8061098418") ? case_abitscope(fixed)
+             : !strcmp(want, "b9f91a7cbc") ? case_input_rewrite(fixed)
                                            : case_vp9(fixed);
     av_buffer_pool_uninit(&pool);
     free(metadata);

@@ -15,8 +15,14 @@ exits 75 with no verdict if that control does not hold.
     316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
     a024f8c541_vp9_flush_leaves_next_refs/     contract violated with no free anywhere
     8061098418_abitscope_writes_shared_frame/  in-place rewrite of storage a reader holds
+    2a5a14f3ca_aphasemeter_writes_shared_frame/   same, another filter
+    de07c57d5a_ahistogram_writes_shared_frame/    same, another filter
+    faac31cc86_avectorscope_writes_shared_frame/  same, another filter
+    dc8e83b4e0_ebur128_writes_shared_frame/       same, another filter
+    1ee3c984b9_snow_writes_shared_picture/        same, encoder side
+    b9f91a7cbc_dynaudnorm_writes_input_frame/     same class, opposite direction
 
-Five cases, five shapes. The last one frees nothing: its storage stays alive on
+Eleven cases. Four are use-after-lifetime shapes; seven are class 3 of the sharing taxonomy, reuse-not-free, where nothing is freed at all. The last one frees nothing: its storage stays alive on
 a retained reference, and what it violates is the lifetime contract rather than
 memory safety. Its README says why this port's own protected arm is expected to
 lose that row.
