@@ -1,0 +1,280 @@
+{
+  "suite": {
+    "schema": "cheribsd-allocator-cases-v1",
+    "status": "complete",
+    "runtime_revocation": "off",
+    "results": [
+      {
+        "name": "cheribsd-abi",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+        "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "cheribsd-bounds",
+        "passed": true,
+        "exit": 162,
+        "expected_exit": 162,
+        "marker": "CHERI_BOUNDARY_READY",
+        "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "ffmpeg-allocator-example",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=16",
+        "stdout_sha256": "0330c76e1569021cab71fa8f3954f0c8689d4a116e8a779fead1728de8bb370c",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "postgres-allocator-example",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE postgres PASS pointer_bytes=16",
+        "stdout_sha256": "e07829940f1282bb7e4c8acfdcccad44db987cd56080bc277c1847ab09af558b",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "postgres-client-generation-cheribsd",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "PG_CLIENT generation RESULT 0",
+        "stdout_sha256": "29a586ec70a7dd231c20d0995ae5ad269e0c0b4a898d8d9438503e62a1013581",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "postgres-client-slab-cheribsd",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "PG_CLIENT slab RESULT 0",
+        "stdout_sha256": "397b2b11a27ee954e131cfd7d9decca6dd5dd60f83e1a02e846f96cec7225f79",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "postgres-client-bump-cheribsd",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "PG_CLIENT bump RESULT 0",
+        "stdout_sha256": "dd6fe50652cd89f7567572adc3c7e0e0315547f8d63a7cdbc0a8d81b842b72a9",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "cpython-allocator-example",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE cpython PASS pointer_bytes=16",
+        "stdout_sha256": "2432dbdf44e6ea8875c723e3fb05d932e48c67163915fc97050e09b952b4042d",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "whisper-allocator-example",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE whisper PASS pointer_bytes=16",
+        "stdout_sha256": "3c9f88fb73c8d282c99b804fce048626c1d9ce05aa0827c58e4fccce449ef5ab",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "ffmpeg-replay",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "FF2 status=0 events=[0-9]+ metadata=[0-9]+ payload=[0-9]+",
+        "stdout_sha256": "85c2501c1ec54c7e535c8670af45f7de37b2e3d8bf791a97fc17158c8dae2ca4",
+        "inputs": {
+          "input.bin": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0"
+        },
+        "outputs": {
+          "output.bin": "633b4a400217c94a02484e37707a389efa808fd09b0918ac1f9f715d420f6e27"
+        }
+      },
+      {
+        "name": "cpython-replay",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "PYM completed=[0-9]+ alloc=[0-9]+ free=[0-9]+ realloc=[0-9]+ arenas=[0-9]+ released=[0-9]+",
+        "stdout_sha256": "822a7ae7f4dc704bd616aec4861b18a3e9066ec00e0e3b2cc9c509f765809af6",
+        "inputs": {
+          "input.bin": "0f6f33095d3e22394905e0c69b139d6cb4f73e8f591a97498e9bcb4a22007ffa"
+        },
+        "outputs": {
+          "output.bin": "d48201202a46dab403bd839dfe252b0279535adfcaa09af57a143ad5b1d88bfd"
+        }
+      },
+      {
+        "name": "whisper-replay",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "WG completed=[0-9]+ objects=[0-9]+ checksum=[0-9]+ peak=[0-9]+ layout=[0-9]+",
+        "stdout_sha256": "74b310bbe97c2a45eb4150cca6607a5dc58f0079f8f71fed879d7df76cdde150",
+        "inputs": {
+          "input.bin": "18a08912a5f36f3a3bb530deb3d5afa8fb2dcb708609688f63fd9384c820ed20"
+        },
+        "outputs": {
+          "output.bin": "6370dd5f65082f1e26678625d2d2e171db353c861911f5efdc940f7d57c3b228"
+        }
+      },
+      {
+        "name": "postgres-replay",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "PG_REPLAY PASS creates=[0-9]+ allocs=[0-9]+ frees=[0-9]+ reallocs=[0-9]+ resets=[0-9]+ deletes=[0-9]+ checked=[0-9]+ pointer_bytes=16",
+        "stdout_sha256": "2e92f68d80c51d796771f3046fdf82514b3ea8b2c946e176168b4ee827ec067d",
+        "inputs": {
+          "input.bin": "60382e0a1a2fabfa2696883fc43d72ff5b771530cf474516646b8effcda8562b"
+        },
+        "outputs": {}
+      }
+    ],
+    "cases": [
+      "cheribsd-abi",
+      "cheribsd-bounds",
+      "ffmpeg-allocator-example",
+      "postgres-allocator-example",
+      "postgres-client-generation-cheribsd",
+      "postgres-client-slab-cheribsd",
+      "postgres-client-bump-cheribsd",
+      "cpython-allocator-example",
+      "whisper-allocator-example",
+      "ffmpeg-replay",
+      "cpython-replay",
+      "whisper-replay",
+      "postgres-replay"
+    ],
+    "binaries": {
+      "cheribsd-abi": "ae1d31769fd9c73e3decc012688dbd1e3c0dfefbb1d2e95f5c7cb37d6c721724",
+      "cheribsd-bounds": "ae1d31769fd9c73e3decc012688dbd1e3c0dfefbb1d2e95f5c7cb37d6c721724",
+      "ffmpeg-allocator-example": "4ee2ae534da09e4ec6bccbe5e88e43f7440f49d58f713fa4e007c65d5c853f5f",
+      "postgres-allocator-example": "34966db021f28e010a3502eadaa7c4c48572420d801b04ddc3f497e6e7f69e30",
+      "postgres-client-generation-cheribsd": "9fcf200b3dad0cb945eb755cf685326fde930007e118223af2071db64893b964",
+      "postgres-client-slab-cheribsd": "530ce953d0ef8b16729ad931631299d7612ce97390f3b67b40cfb2b17c34e5eb",
+      "postgres-client-bump-cheribsd": "341e1ad7d5fbff7eda99acc300c56fce1112fd7d49051df61b6046e301dfd7f7",
+      "cpython-allocator-example": "d5184eb31175da57c925579fd745d69200dc03cccc00c317ea88e50314f8f5d9",
+      "whisper-allocator-example": "6739be5e0ee9a747e2e5b624816f8f4f8cdec9d993e0dc1144edd3647b5b393c",
+      "ffmpeg-replay": "409a6a9666d5cf72aee02fc992b06a4bf7bdbe30d0d252d7e93b55d791151b8b",
+      "cpython-replay": "aac18b4c8a36967cce2ae836f0e3a5f0d1abf451f7f5638694603ffd5a250e9b",
+      "whisper-replay": "fa5a5c36e1c2b356fe400df48d916a1ffd025f4454ff971fe6be243f7005a46c",
+      "postgres-replay": "57d49673fd04c62b86f2b74868604ca601e27014ce8d89bc647fe54fe1464035"
+    },
+    "platform": {
+      "qemu": "dc34b3f2e265083dba29d37b4eabe7472923fa2dc819404660b226d5e5dc5460",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "62be5d3f24dc2585875e8efe165e3b8acc9a1fd3936c623cd993c155255baa18",
+      "libc": "193f132913c504153de92b5570dc30a1cafd62401ea8551deb62217408bdb287",
+      "image": "e7470361adeb651113bb1a5bdb476d6b1fec331067e0f64cf2bf9ee252116542"
+    }
+  },
+  "clients": {
+    "schema": "cheribsd-allocator-cases-v1",
+    "status": "complete",
+    "runtime_revocation": "off",
+    "results": [
+      {
+        "name": "cheribsd-abi",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+        "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "cheribsd-bounds",
+        "passed": true,
+        "exit": 162,
+        "expected_exit": 162,
+        "marker": "CHERI_BOUNDARY_READY",
+        "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "ffmpeg-external-client",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=16",
+        "stdout_sha256": "0330c76e1569021cab71fa8f3954f0c8689d4a116e8a779fead1728de8bb370c",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "postgres-external-client",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE postgres PASS pointer_bytes=16",
+        "stdout_sha256": "e07829940f1282bb7e4c8acfdcccad44db987cd56080bc277c1847ab09af558b",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "cpython-external-client",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE cpython PASS pointer_bytes=16",
+        "stdout_sha256": "2432dbdf44e6ea8875c723e3fb05d932e48c67163915fc97050e09b952b4042d",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "name": "whisper-external-client",
+        "passed": true,
+        "exit": 0,
+        "expected_exit": 0,
+        "marker": "ALLOCATOR_EXAMPLE whisper PASS pointer_bytes=16",
+        "stdout_sha256": "3c9f88fb73c8d282c99b804fce048626c1d9ce05aa0827c58e4fccce449ef5ab",
+        "inputs": {},
+        "outputs": {}
+      }
+    ],
+    "cases": [
+      "cheribsd-abi",
+      "cheribsd-bounds",
+      "ffmpeg-external-client",
+      "postgres-external-client",
+      "cpython-external-client",
+      "whisper-external-client"
+    ],
+    "binaries": {
+      "cheribsd-abi": "ae1d31769fd9c73e3decc012688dbd1e3c0dfefbb1d2e95f5c7cb37d6c721724",
+      "cheribsd-bounds": "ae1d31769fd9c73e3decc012688dbd1e3c0dfefbb1d2e95f5c7cb37d6c721724",
+      "ffmpeg-external-client": "bd311209b3e2f647f11af5c468b2174ac273c8a7efa9df2c7bac4e2d25e2c6b4",
+      "postgres-external-client": "0cf850662d10eceddd8708d7974f2c11738eee20c88090667ea653844d3cc2df",
+      "cpython-external-client": "787904fd2bbd4a33480c901d9a03f6dd27b498023e3948bd6357e5d809aff41c",
+      "whisper-external-client": "4e229ba64a70e10849ff0bd7c0e6b6198a57152da390d6166b9071fba81c421f"
+    },
+    "platform": {
+      "qemu": "dc34b3f2e265083dba29d37b4eabe7472923fa2dc819404660b226d5e5dc5460",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "62be5d3f24dc2585875e8efe165e3b8acc9a1fd3936c623cd993c155255baa18",
+      "libc": "193f132913c504153de92b5570dc30a1cafd62401ea8551deb62217408bdb287",
+      "image": "e7470361adeb651113bb1a5bdb476d6b1fec331067e0f64cf2bf9ee252116542"
+    }
+  }
+}

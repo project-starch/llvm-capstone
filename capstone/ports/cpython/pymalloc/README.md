@@ -1,5 +1,10 @@
 # CPython 3.13.7 pymalloc
 
+[CheriBSD build, link example and QEMU runner](host/cheribsd/README.md)
+use the shared purecap toolchain. Each hosted build exposes a CMake allocator
+library and `bin/allocator-example`; a custom main can be linked through
+`PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+
 The real allocator in `Objects/obmalloc.c`, extracted into native and Capstone
 replays. This is an allocator component port with a native Python workload
 recorder. It does not execute the interpreter, its collector, or extensions in

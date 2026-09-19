@@ -1,5 +1,10 @@
 # FFmpeg buffer-pool replay
 
+[CheriBSD build, link example and QEMU runner](host/cheribsd/README.md)
+use the shared purecap toolchain. Each hosted build exposes a CMake allocator
+library and `bin/allocator-example`; a custom main can be linked through
+`PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+
 This component records native FFmpeg's AVBufferPool and AVRefStructPool
 operations and replays their allocator behavior in a Capstone domain. The
 decoder runs natively; this is not a capability-domain FFmpeg decoder.

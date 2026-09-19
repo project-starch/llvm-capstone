@@ -1,4 +1,16 @@
-# CHERI arena replay in QEMU
+# FFmpeg on CheriBSD
+
+The [shared CheriBSD workflow](../../../../common/host/cheribsd/README.md) provides
+the common toolchain, build/run scripts and explicit ABI/bounds controls.
+`bash host/cheribsd/build.sh BUILD` builds the `FFmpeg::BufferPool` static
+library, [direct-link example](../../examples/pool.c), and existing replay.
+`bash host/cheribsd/run.sh BUILD OUTPUT --sdk SDK --rootfs ROOTFS --image IMAGE`
+runs the example. Add `--client /absolute/path/main.c` to the build script
+to link your own client with the same CMake target.
+
+The specialized spatial/PICASSO measurement workflow follows.
+
+## CHERI arena replay in QEMU
 
 This target runs the same patched FFmpeg AVBufferPool/AVRefStructPool sources,
 replay engine and native recordings as the Capstone measurement. It adds a
@@ -98,10 +110,10 @@ A custom arena allocator bypasses the libc `free()` path on pool return. The
 [official PICASSO artifact](https://github.com/coloredcapabilities/colored-artifact)
 integrates colored allocation/release in the libc allocator. Enabling it for
 our few outer arenas is therefore a useful integration control, but does not
-match Sublet's per-return protection. A future temporal comparison needs an
-explicit nested-pool adapter and must account for color/node storage, revocation
-and any changes to allocation/reuse policy. It must pass the same stale-lease
-controls before being labeled equivalent protection.
+match Sublet's per-return protection. The optional PICASSO lease adapter above
+provides an explicit trusted-pool comparison and accounts for its token storage.
+Ancestor/child authority and finite-metadata reclamation remain separate
+comparison obligations; successful lease controls do not establish them.
 
 ## Export and plots
 

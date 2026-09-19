@@ -1,3 +1,10 @@
+CheriBSD allocator ports: the four components now have a
+[shared build/link/run workflow](../../ports/common/host/cheribsd/README.md).
+Use these libraries and explicit protection scopes for matching replay
+campaigns. Next collect equivalent per-component memory accounting and add
+inner-lifetime adapters only with paired stale/live controls. Compilation and
+successful examples do not establish Sublet-equivalent temporal protection.
+
 Protected pool replay: the [PICASSO token adapter and Sublet reuse comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md)
 now passes matching per-return stale-lease controls. The
 [A1 matrix](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md)

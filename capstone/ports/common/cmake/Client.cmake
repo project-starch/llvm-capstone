@@ -1,0 +1,11 @@
+# One direct-link client per component; callers may supply their own main.
+function(port_add_client library)
+  if(PORT_PLATFORM STREQUAL "cheribsd")
+    add_executable(cheribsd-abi-probe "${PORT_SUPPORT_ROOT}/host/cheribsd/abi-probe.c")
+  endif()
+  set(PORT_CLIENT_SOURCE "" CACHE FILEPATH "Optional client main linked to this allocator")
+  if(PORT_CLIENT_SOURCE)
+    add_executable(allocator-client "${PORT_CLIENT_SOURCE}")
+    target_link_libraries(allocator-client PRIVATE ${library})
+  endif()
+endfunction()

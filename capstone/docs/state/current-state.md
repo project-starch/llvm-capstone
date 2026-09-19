@@ -2,6 +2,20 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Four CheriBSD allocator libraries and examples
+
+FFmpeg buffer pools, PostgreSQL memory contexts, CPython pymalloc and Whisper
+ggml contexts now share a CheriBSD purecap toolchain, build/run scripts and
+CMake library targets. Standalone examples and separately supplied client
+sources link and run in QEMU. The suite checks the ABI/runtime policy and an
+exact bounds fault before running allocator programs. FFmpeg, CPython and
+ggml native-recording replays match their logical native oracles; PostgreSQL
+passes its four-manager fixture. Native regression tests pass, and all four
+Capstone domain configurations still build. These are capability-compatible
+component ports with explicitly documented boundaries, not automatic inner
+temporal protection in CheriBSD.
+[Build/link/run guide](../../ports/common/host/cheribsd/README.md).
+
 ## 2026-09-19 — Scattered aliases and ancestor revocation
 
 The synthetic A1 fixture passes 44 QEMU executions: 20 stale read/write

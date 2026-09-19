@@ -1,5 +1,10 @@
 # whisper.cpp 1.9.4: ggml context allocator
 
+[CheriBSD build, link example and QEMU runner](host/cheribsd/README.md)
+use the shared purecap toolchain. Each hosted build exposes a CMake allocator
+library and `bin/allocator-example`; a custom main can be linked through
+`PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+
 This ports the original context allocator in `ggml/src/ggml.c` into native and
 Capstone replays. Native Whisper can record its actual object-allocation stream;
 the domain executes allocator calls with checked synthetic payloads, not speech

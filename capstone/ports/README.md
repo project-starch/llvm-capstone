@@ -5,6 +5,12 @@ execute an application, replay one allocator, or only establish that a library
 compiles. Those scopes are different; a directory's existence is not evidence
 of a complete protected application.
 
+For the four newer allocator components, start with the
+[shared CheriBSD guide](common/host/cheribsd/README.md): one purecap toolchain,
+matching `host/cheribsd/build.sh` and `run.sh` scripts, CMake library targets,
+and standalone link examples. The guide states the protection boundary of
+each adapter and keeps the specialized FFmpeg PICASSO collector separate.
+
 ## Components
 
 | Component | Scope | Entry point and organization |

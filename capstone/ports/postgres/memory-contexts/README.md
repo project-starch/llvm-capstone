@@ -1,5 +1,10 @@
 # PostgreSQL memory-context component
 
+[CheriBSD build, link example and QEMU runner](host/cheribsd/README.md)
+use the shared purecap toolchain. Each hosted build exposes a CMake allocator
+library and `bin/allocator-example`; a custom main can be linked through
+`PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+
 The port and native defect corpus use **PostgreSQL 17.0**, pinned by URL and
 SHA-256 in `upstream.json`. The original scripts in `../` read that same file
 through `../upstream.sh`; a conflicting `PG_VERSION` is rejected. Change the

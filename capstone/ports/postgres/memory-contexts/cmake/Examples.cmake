@@ -1,8 +1,8 @@
 # The same client source is linked to each manager implementation. No Sublet
 # conditionals belong in client code; only the domain wrapper changes backing.
 foreach(client allocset generation slab bump)
-  if(PORT_PLATFORM STREQUAL "native")
-    set(target client-${client}-native)
+  if(PORT_HOSTED)
+    set(target client-${client}-${PORT_PLATFORM})
     add_executable(${target} examples/${client}.c examples/support/native.c
       src/native/replay/printf.c)
     target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/examples")
