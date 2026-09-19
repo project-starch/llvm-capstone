@@ -1,3 +1,9 @@
+Replay measurements: the first FFmpeg paired matrix is complete. Next extend
+the [measurement plan](../plans/replay-memory-measurements.md) with full
+allocator/driver/node accounting and separate payload/metadata budget sweeps.
+The initial carving watermarks must not be used as total protection overhead.
+Validated repeatable epochs and other allocator adapters remain follow-ups.
+
 Trace tooling: use the [shared readers and format-adapter contract](../../ports/common/host/port_trace/README.md)
 for new allocator traces. The development branch includes the pending port PRs;
 the [upstream integration plan](../plans/port-stack-integration.md) remains relevant

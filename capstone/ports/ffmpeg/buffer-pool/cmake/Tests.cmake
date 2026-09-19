@@ -1,5 +1,11 @@
 if(PORT_PLATFORM STREQUAL "native")
   port_add_support_tests()
+  add_test(NAME native-measurement-controls
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/native/test-measurement.py")
+  set_tests_properties(native-measurement-controls PROPERTIES LABELS native TIMEOUT 30)
+  add_test(NAME native-measurement-resume-controls
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/native/test-measurement-resume.py")
+  set_tests_properties(native-measurement-resume-controls PROPERTIES LABELS native TIMEOUT 30)
   if(FFPOOL_BUILD_DECODERS)
     add_test(NAME native-workload-and-controls
       COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/native/test-workload.py"

@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Paired FFmpeg replay measurements
+
+The measurement worktree adds a reproducible native-to-QEMU comparison on
+three FFmpeg recordings. Eighteen accepted spatial/Sublet points match the
+native event sequences, with three bit-identical repeats per workload/arm.
+Six companion lifetime controls and four native CTests pass. Failed runner
+attempts are retained. These are allocator observations and resource counters,
+not application timing or a complete protection-memory ledger. See the
+[result bundle](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-replay/README.md)
+and [measurement plan](../plans/replay-memory-measurements.md).
+
 Trace-development branch: the current port/runtime/corpus PR heads are combined
 in `integration/2-trace-ports`. The [shared trace tooling](../../ports/common/host/port_trace/README.md)
 reads all four existing formats and supplies staged-input validation and

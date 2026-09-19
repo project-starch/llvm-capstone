@@ -50,6 +50,16 @@ in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).
 
 ## Evidence and limits
 
+The [paired measurement campaign](results/measurements/20260919-replay/README.md)
+checks three fresh native recordings in spatial and Sublet QEMU, three
+repetitions per arm. All accepted event sequences match native observations;
+carving watermarks, requested-payload series and primitive counts are reported
+separately from fixed reservations and unmeasured node/tag costs. Failed attempts
+remain documented. Use `host/memory/measure.py` for a new campaign,
+`export-measurements.py` for checked JSON/CSV and `plot-measurements.py` for
+event-indexed figures. The [measurement plan](../../../docs/plans/replay-memory-measurements.md)
+defines the scope and remaining ledger, capacity and turnover work.
+
 [`results/archive/20260917/`](results/archive/20260917/) indexes the exploratory
 numeric evidence and external raw artifacts. It includes failed and incomplete
 attempts; it is not a claim that every long-run configuration passed. Memory

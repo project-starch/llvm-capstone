@@ -1,0 +1,1560 @@
+{
+  "schema": "capstone.ffmpeg-measurement/v1",
+  "status": "complete",
+  "scope": "serialized allocator replay; no application timing or full memory ledger",
+  "source_revision": "aef778b5c6a47c10ac3508f3974b00c733b895cd",
+  "repetitions_requested": 3,
+  "node_capacity": 1048576,
+  "raw_manifest_sha256": "9e758728b4e53d25818cdb07a94726c37009f38ca94925ac5ded3562bfcc11ab",
+  "identities": {
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a",
+    "analyze.py": "028ae722a4103802fc47709b012230a8b23a9de418c9ce384dca0c7e6e82447b",
+    "measure.py": "48c53353d8531c9f255dd813ef8e01a11d50be6c2e68cedc3a6f807ee8843072",
+    "metadata-allocator.c": "a650eec94afde284963c352c9c9c187c154261661e35389e5a84642124ce3fe8",
+    "observe-pool-events.c": "1ff7e380fdffb1ff2d14374fc1bb4868db4cd82d46be0c0902c85fc6260cb03c",
+    "pool-allocator.c": "df15e3c7db8b134b795b804113e27fece3f35ce416d94d9bd1134761b899c05b",
+    "trace.h": "f39f0bc8d33c8321712b731c82b6b3388dbe6018b44e4af0c4252add37b5b05a",
+    "replay.dom": "0782f322e9f66334098a5822d9f0a5ff4d202e6819b3cadcf14156501b166353",
+    "domain-loader": "5d76674afe3c9e65c85c4decd5ca5a2a89bdc2592ede8ec6bb8c6590e6451b60",
+    "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "ld.lld": "e3f252c6a1500591a4d35a79cec6f4d6ba32ec891f8bd9e66b5dd87f24e4d71e",
+    "qemu-system-riscv64": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+  },
+  "recordings": {
+    "short": {
+      "seconds": 1,
+      "dimensions": "320x180",
+      "frames": 30,
+      "output_identical": true,
+      "sha256": {
+        "recorded.bin": "c958e0608e333c0982f40043a619f8cf6f7af048a1ab44431efae0a6c48e7fe7",
+        "commands.bin": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0",
+        "native.bin": "30cc3297c90d18f293e2ffca64166c1cef8c01c9238db0178d29c69e41af3bcf",
+        "stock.framemd5": "663177980a01dfe04f38ecf4393b54bc8be37b217e85ad170059dc1f04aeda89"
+      }
+    },
+    "turnover": {
+      "seconds": 2,
+      "dimensions": "320x180",
+      "frames": 60,
+      "output_identical": true,
+      "sha256": {
+        "recorded.bin": "f1f737735c9cc7a32e9b80fba00cf2adf90711a6ff831dec54fb4f2c3a685f60",
+        "commands.bin": "19b5dce58791d326b026ff9fe9f32f97eae172be0b6823fb2189c5cb03906b44",
+        "native.bin": "f2bd6db4af705f877af1573f219796512855fb10c3baf40ed49f01db48a31ffa",
+        "stock.framemd5": "8200ea71cad0813844af6200d80eea11cc42be539efa3b5fb25886e93b99d345"
+      }
+    },
+    "larger": {
+      "seconds": 2,
+      "dimensions": "640x360",
+      "frames": 60,
+      "output_identical": true,
+      "sha256": {
+        "recorded.bin": "84fe7a90d79fcb1cdc1585118ab9de3229d536178d387020d79da97b2039b9b1",
+        "commands.bin": "1684fa685a8f69a2ef19b5e89eb5195d7ef13534f37f06fe6d84536861c42c45",
+        "native.bin": "e27041dd45fe5ae13268ba74c79517421569a89897226ce054c6cc3d56e79967",
+        "stock.framemd5": "690dc72663f118e6b1d2162292b6d45880d1629fa91901eba0499612998255f2"
+      }
+    }
+  },
+  "results": [
+    {
+      "workload": "short",
+      "arm": "spatial",
+      "repetition": 1,
+      "status": "passed",
+      "events": 2379,
+      "mode": 0,
+      "primitives": {
+        "split": 63,
+        "mrev": 0,
+        "delin": 63,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "0fcfab136304c12572af434a03018e33246a5978a0db301467c9460c5a4c03e5"
+    },
+    {
+      "workload": "short",
+      "arm": "sublet",
+      "repetition": 1,
+      "status": "passed",
+      "events": 2379,
+      "mode": 2,
+      "primitives": {
+        "split": 63,
+        "mrev": 589,
+        "delin": 520,
+        "revoke": 520,
+        "init": 69,
+        "init_bytes": 373504
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "2ac176f5b493a78e7a155cc85532104c01b8fb9e368231e3ccef333af4fcf7f8"
+    },
+    {
+      "workload": "short",
+      "arm": "spatial",
+      "repetition": 2,
+      "status": "passed",
+      "events": 2379,
+      "mode": 0,
+      "primitives": {
+        "split": 63,
+        "mrev": 0,
+        "delin": 63,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "0fcfab136304c12572af434a03018e33246a5978a0db301467c9460c5a4c03e5"
+    },
+    {
+      "workload": "short",
+      "arm": "sublet",
+      "repetition": 2,
+      "status": "passed",
+      "events": 2379,
+      "mode": 2,
+      "primitives": {
+        "split": 63,
+        "mrev": 589,
+        "delin": 520,
+        "revoke": 520,
+        "init": 69,
+        "init_bytes": 373504
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "2ac176f5b493a78e7a155cc85532104c01b8fb9e368231e3ccef333af4fcf7f8"
+    },
+    {
+      "workload": "short",
+      "arm": "spatial",
+      "repetition": 3,
+      "status": "passed",
+      "events": 2379,
+      "mode": 0,
+      "primitives": {
+        "split": 63,
+        "mrev": 0,
+        "delin": 63,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "0fcfab136304c12572af434a03018e33246a5978a0db301467c9460c5a4c03e5"
+    },
+    {
+      "workload": "short",
+      "arm": "sublet",
+      "repetition": 3,
+      "status": "passed",
+      "events": 2379,
+      "mode": 2,
+      "primitives": {
+        "split": 63,
+        "mrev": 589,
+        "delin": 520,
+        "revoke": 520,
+        "init": 69,
+        "init_bytes": 373504
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 90,
+        "backings": 9,
+        "reuses": 81,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 9
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 361,
+        "backings": 43,
+        "reuses": 318,
+        "peak_live": 35771,
+        "peak_retained": 35803,
+        "callbacks": {
+          "1": 22,
+          "2": 151,
+          "3": 22
+        },
+        "nested_operations": 210
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 372352,
+      "combined": {
+        "peak_live_requested_bytes": 368258,
+        "peak_pool_backing_requested_bytes": 368290,
+        "peak_idle_pool_requested_bytes": 184788,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 27,
+          "2": 27,
+          "3": 27
+        },
+        "refstruct": {
+          "0": 43,
+          "1": 4,
+          "10": 36,
+          "11": 44,
+          "12": 37,
+          "13": 6,
+          "14": 1,
+          "15": 1,
+          "2": 9,
+          "22": 1,
+          "3": 13,
+          "4": 26,
+          "5": 28,
+          "6": 22,
+          "7": 27,
+          "8": 28,
+          "9": 35
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "2ac176f5b493a78e7a155cc85532104c01b8fb9e368231e3ccef333af4fcf7f8"
+    },
+    {
+      "workload": "turnover",
+      "arm": "spatial",
+      "repetition": 1,
+      "status": "passed",
+      "events": 4437,
+      "mode": 0,
+      "primitives": {
+        "split": 56,
+        "mrev": 0,
+        "delin": 56,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "822abaa21b063054c2cecba8603b4e0e4bd88a0958846ae5cee4a0a34fdcc2d8"
+    },
+    {
+      "workload": "turnover",
+      "arm": "sublet",
+      "repetition": 1,
+      "status": "passed",
+      "events": 4437,
+      "mode": 2,
+      "primitives": {
+        "split": 56,
+        "mrev": 1025,
+        "delin": 963,
+        "revoke": 963,
+        "init": 62,
+        "init_bytes": 373056
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "3f88565feb135cb683163195dd802c3e229b6c23b82b0735d4ae1129c01cb55a"
+    },
+    {
+      "workload": "turnover",
+      "arm": "spatial",
+      "repetition": 2,
+      "status": "passed",
+      "events": 4437,
+      "mode": 0,
+      "primitives": {
+        "split": 56,
+        "mrev": 0,
+        "delin": 56,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "822abaa21b063054c2cecba8603b4e0e4bd88a0958846ae5cee4a0a34fdcc2d8"
+    },
+    {
+      "workload": "turnover",
+      "arm": "sublet",
+      "repetition": 2,
+      "status": "passed",
+      "events": 4437,
+      "mode": 2,
+      "primitives": {
+        "split": 56,
+        "mrev": 1025,
+        "delin": 963,
+        "revoke": 963,
+        "init": 62,
+        "init_bytes": 373056
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "3f88565feb135cb683163195dd802c3e229b6c23b82b0735d4ae1129c01cb55a"
+    },
+    {
+      "workload": "turnover",
+      "arm": "spatial",
+      "repetition": 3,
+      "status": "passed",
+      "events": 4437,
+      "mode": 0,
+      "primitives": {
+        "split": 56,
+        "mrev": 0,
+        "delin": 56,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "822abaa21b063054c2cecba8603b4e0e4bd88a0958846ae5cee4a0a34fdcc2d8"
+    },
+    {
+      "workload": "turnover",
+      "arm": "sublet",
+      "repetition": 3,
+      "status": "failed"
+    },
+    {
+      "workload": "turnover",
+      "arm": "sublet",
+      "repetition": 3,
+      "status": "passed",
+      "events": 4437,
+      "mode": 2,
+      "primitives": {
+        "split": 56,
+        "mrev": 1025,
+        "delin": 963,
+        "revoke": 963,
+        "init": 62,
+        "init_bytes": 373056
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 332487,
+        "peak_retained": 332487,
+        "callbacks": {},
+        "nested_operations": 117
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 36,
+        "reuses": 685,
+        "peak_live": 35739,
+        "peak_retained": 35763,
+        "callbacks": {
+          "1": 15,
+          "2": 301,
+          "3": 15
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 11648,
+      "payload_carved_bytes": 371904,
+      "combined": {
+        "peak_live_requested_bytes": 368226,
+        "peak_pool_backing_requested_bytes": 368250,
+        "peak_idle_pool_requested_bytes": 184732,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 36,
+          "1": 21,
+          "10": 64,
+          "11": 64,
+          "12": 122,
+          "13": 18,
+          "14": 6,
+          "15": 5,
+          "17": 2,
+          "18": 1,
+          "19": 6,
+          "2": 28,
+          "20": 1,
+          "3": 30,
+          "4": 47,
+          "5": 50,
+          "6": 49,
+          "7": 54,
+          "8": 58,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "3f88565feb135cb683163195dd802c3e229b6c23b82b0735d4ae1129c01cb55a"
+    },
+    {
+      "workload": "larger",
+      "arm": "spatial",
+      "repetition": 1,
+      "status": "passed",
+      "events": 4473,
+      "mode": 0,
+      "primitives": {
+        "split": 62,
+        "mrev": 0,
+        "delin": 62,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "51d975ddec1c27ce83235967429085e6c3a975f52451814d1752ad5ac4c8f299"
+    },
+    {
+      "workload": "larger",
+      "arm": "sublet",
+      "repetition": 1,
+      "status": "passed",
+      "events": 4473,
+      "mode": 2,
+      "primitives": {
+        "split": 62,
+        "mrev": 1037,
+        "delin": 969,
+        "revoke": 969,
+        "init": 68,
+        "init_bytes": 1243392
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "35803888c9a60e616e977653ac65568e211da908ffae4b6bb954ba4427eb1ecd"
+    },
+    {
+      "workload": "larger",
+      "arm": "spatial",
+      "repetition": 2,
+      "status": "passed",
+      "events": 4473,
+      "mode": 0,
+      "primitives": {
+        "split": 62,
+        "mrev": 0,
+        "delin": 62,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "51d975ddec1c27ce83235967429085e6c3a975f52451814d1752ad5ac4c8f299"
+    },
+    {
+      "workload": "larger",
+      "arm": "sublet",
+      "repetition": 2,
+      "status": "passed",
+      "events": 4473,
+      "mode": 2,
+      "primitives": {
+        "split": 62,
+        "mrev": 1037,
+        "delin": 969,
+        "revoke": 969,
+        "init": 68,
+        "init_bytes": 1243392
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "35803888c9a60e616e977653ac65568e211da908ffae4b6bb954ba4427eb1ecd"
+    },
+    {
+      "workload": "larger",
+      "arm": "spatial",
+      "repetition": 3,
+      "status": "passed",
+      "events": 4473,
+      "mode": 0,
+      "primitives": {
+        "split": 62,
+        "mrev": 0,
+        "delin": 62,
+        "revoke": 0,
+        "init": 0,
+        "init_bytes": 0
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "51d975ddec1c27ce83235967429085e6c3a975f52451814d1752ad5ac4c8f299"
+    },
+    {
+      "workload": "larger",
+      "arm": "sublet",
+      "repetition": 3,
+      "status": "passed",
+      "events": 4473,
+      "mode": 2,
+      "primitives": {
+        "split": 62,
+        "mrev": 1037,
+        "delin": 969,
+        "revoke": 969,
+        "init": 68,
+        "init_bytes": 1243392
+      },
+      "buffer": {
+        "pools": 3,
+        "allocations": 180,
+        "backings": 9,
+        "reuses": 171,
+        "peak_live": 1106631,
+        "peak_retained": 1106631,
+        "callbacks": {},
+        "nested_operations": 123
+      },
+      "refstruct": {
+        "pools": 17,
+        "allocations": 721,
+        "backings": 42,
+        "reuses": 679,
+        "peak_live": 131201,
+        "peak_retained": 131233,
+        "callbacks": {
+          "1": 21,
+          "2": 301,
+          "3": 21
+        },
+        "nested_operations": 420
+      },
+      "metadata_carved_bytes": 12288,
+      "payload_carved_bytes": 1242240,
+      "combined": {
+        "peak_live_requested_bytes": 1237832,
+        "peak_pool_backing_requested_bytes": 1237864,
+        "peak_idle_pool_requested_bytes": 753010,
+        "final_live_requested_bytes": 0,
+        "final_pool_backing_requested_bytes": 0
+      },
+      "reuse_gap_histogram": {
+        "buffer": {
+          "0": 9,
+          "1": 57,
+          "2": 57,
+          "3": 57
+        },
+        "refstruct": {
+          "0": 42,
+          "1": 28,
+          "10": 64,
+          "11": 73,
+          "12": 107,
+          "13": 20,
+          "132": 1,
+          "14": 9,
+          "15": 2,
+          "16": 1,
+          "17": 1,
+          "18": 1,
+          "2": 17,
+          "20": 1,
+          "24": 2,
+          "3": 39,
+          "4": 41,
+          "41": 1,
+          "5": 44,
+          "6": 56,
+          "69": 1,
+          "7": 51,
+          "8": 58,
+          "80": 1,
+          "84": 1,
+          "9": 59
+        }
+      },
+      "replay_status": 0,
+      "output_sha256": "35803888c9a60e616e977653ac65568e211da908ffae4b6bb954ba4427eb1ecd"
+    }
+  ],
+  "unknown": [
+    "physical hardware node/tag bytes",
+    "live node occupancy",
+    "minimum payload/metadata capacity",
+    "application cache and DRAM traffic"
+  ],
+  "reservations_bytes": {
+    "payload": 67108864,
+    "metadata": 16777216,
+    "trace_input": 134217728,
+    "trace_output": 134217728
+  },
+  "reservation_scope": "Four regions from trace.h; excludes static domain, driver and node/tag storage"
+}
