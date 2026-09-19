@@ -269,6 +269,33 @@ v1.5.5. It selected header files by **basename**, which also matched
 declaration two releases after the real header dropped it. Same mistake as the
 truncated `grep` earlier in this work: the view was chosen by the query.
 
+### The graph allocator was the last open path, and it is closed too
+
+`ggml_context` has no per-object free. But `ggml-alloc.c`'s `ggml_gallocr` **does**
+free and reuse per tensor -- `ggml_dyn_tallocr_free_tensor`,
+`ggml_gallocr_free_node` -- and a reserve can move a tensor's storage. Upstream
+treats that as a live hazard: `GGML_SCHED_NO_REALLOC` exists as a debug switch,
+and there are fixes titled "fix graph reallocation with multiple chunks" and
+"add graph_reused".
+
+So a consumer case could still exist in the shape *take `tensor->data`, call
+something that reallocates the graph, use the old pointer*. Checked against
+`src/whisper.cpp` at `v1.9.4`:
+
+| | |
+|---|---|
+| `ggml_gallocr_reserve`, `ggml_gallocr_alloc_graph`, `ggml_gallocr_new` | **0 calls** |
+| `ggml_backend_sched_reserve` | **0 calls** |
+| `ggml_backend_sched_alloc_graph` | 6 calls, each followed immediately by compute |
+| lines assigning a cached `->data` pointer | **3, none of them a `ggml_tensor`** |
+
+The three are `vad_segments->data[i]`, whisper's own segment array. **whisper.cpp
+never caches a tensor data pointer at all**, and never touches the graph
+allocator directly -- it uses the scheduler's allocate-then-compute pattern, where
+the tensors are consumed inside the call that allocated them.
+
+No exposure, so no case, on the one layer that has the operation.
+
 ### The port does not reach back past v1.7.0 anyway
 
 | releases | where the patched file lives |
@@ -294,9 +321,12 @@ CVE table of section 4 is spatial, concurrent, or outside whisper.cpp entirely.
 An older base version buys **nothing** here, and for a better reason than "we
 looked and found none":
 
-1. the operation the defect class needs has never worked in ggml, in any release;
-2. the port cannot reach the releases before v1.7.0 without being rewritten;
-3. the single temporal CVE inside the usable range is on ordinary C++ heap.
+1. the operation the defect class needs has never worked in the ported allocator,
+   in any release;
+2. on the one layer that does have it, the graph allocator, whisper.cpp has no
+   exposure -- it never caches a tensor data pointer;
+3. the port cannot reach the releases before v1.7.0 without being rewritten;
+4. the single temporal CVE inside the usable range is on ordinary C++ heap.
 
 Unlike the equivalent CPython question — where moving from 3.13.7 to 3.13.0 would
 genuinely add 7 defects and cost a patch rebase — there is no version of
