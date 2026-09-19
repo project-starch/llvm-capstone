@@ -36,6 +36,7 @@ NAMES += [
     for operation in ("read", "write")
 ]
 NAMES += ["alias-scatter-valid-after-parent-revoke"]
+NAMES += ["af-join-dedup-bound-stale-read"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")
@@ -60,7 +61,7 @@ for mode in map(int, args.modes.split(",")):
     for case in map(int, args.cases.split(",")):
         if mode not in (0, 1, 2) or not 0 <= case < len(NAMES):
             raise SystemExit("invalid mode or case")
-        if case >= 14 and mode == 1:
+        if 14 <= case <= 35 and mode == 1:
             raise SystemExit("alias scatter requires mode 0 or 2")
         scatter = 15 <= case <= 34
         register = scatter and (case - 15) % 10 >= 8
@@ -79,6 +80,7 @@ for mode in map(int, args.modes.split(",")):
             or (case == 9 and mode >= 1)
             or (mode == 2 and case in (1, 2, 3, 4, 5, 6, 8, 12))
             or (mode == 2 and scatter)
+            or (mode == 2 and case == 36)
         )
         guest = f"""#!/bin/sh
 set -e

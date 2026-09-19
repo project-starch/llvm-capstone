@@ -25,9 +25,14 @@ own copy of the file:
 |---|---|---|---|---|
 | present | present | present | gone | gone |
 
-**Not live at the port's current 9.0.1 pin.** Reproducing it there needs the pin
-moved to n8.1, which is the newest tag that still has it and still ships the
-public `libavutil/refstruct.c` the port extracts.
+**Not live at the port's current 9.0.1 pin** — and that does not block the
+fixture. What is pinned is the *allocator*; the defective consumer loop is
+transcribed here, so the case builds and runs against the 9.0.1 pool exactly as
+it stands, which is what `results/` records. Liveness is a fidelity property, not
+a build requirement: it decides whether the pinned tree still contains the
+defect, and therefore whether this is a reduction of shipping code or of code
+that shipped until n8.1.1. Moving the pin to n8.1 would raise that tier; nothing
+else here depends on it.
 
 ## Why the stale storage is pool memory
 
