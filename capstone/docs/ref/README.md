@@ -49,6 +49,21 @@ capability `mcause` in either file against that table before acting on it** — 
 | `table6-cheri-vs-capstone-explained.md` | how that comparison table is derived |
 | `report-style.md` | how results reports should read |
 
+## Bug-corpus inventories
+
+One per ported allocator: which upstream defects are live at our pin, which allocator layer each
+one's memory came from, and how many the port can actually reach. The specimens themselves live in
+`bug-corpora/`, not here.
+
+| doc | pin | reachable | drivers |
+|---|---|---|---|
+| `cpython-pymalloc-defects.md` | CPython 3.13.7 | 21 of 44 live | none yet — scaffolding and one case's provenance |
+
+The PostgreSQL and whisper.cpp inventories arrive with their own ports' branches; add their rows
+here when those land, so this table never lists a file that is not in the tree.
+
+`paper-bug-inventory.md` is the separate question of what the paper currently cites.
+
 ## Background, stable
 
 `capstone-purecap-pointer-model.md`, `capstone-coding-conventions.md`, `runtime-terms-glossary.md`,
