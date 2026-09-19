@@ -13,3 +13,14 @@ The arms differ in the memset bound and nothing else.
 Two records past the cleared range survive in the buggy arm, the pool reissues
 that storage at the same address, and the record still names it. The fixed arm
 clears the whole array, so nothing survives to name anything.
+
+## Paired arms in a Capstone domain
+
+Case 37 of the port's pool lifetime probes:
+
+| mode | outcome |
+|---|---|
+| 0 spatial | **completes** — the read through the uncleared record returns `61`, the reissued storage's new byte |
+| 2 Sublet | **faults**, cause 24, at the published `ff2_probe_read` address |
+
+    bash security-tests/qemu/run.sh <out> --cases 37 --modes 0,2 --rounds 1

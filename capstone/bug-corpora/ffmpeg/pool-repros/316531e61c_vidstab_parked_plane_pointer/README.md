@@ -15,3 +15,16 @@ not read the new owner's data, it **overwrites** it.
 The CPython corpus files this shape as *parked with no bound on reuse*. What is
 distinctive here is where it is parked: inside an opaque third-party library's
 state, where no amount of care in FFmpeg's own code would find it.
+
+## Paired arms in a Capstone domain
+
+Case 38 of the port's pool lifetime probes. It is the corpus's only **write**
+probe, and the oracle shows it: this case faults at a different published
+address from the read cases, `ff2_probe_write` rather than `ff2_probe_read`.
+
+| mode | outcome |
+|---|---|
+| 0 spatial | **completes** — the write lands in the new owner's storage |
+| 2 Sublet | **faults**, cause 24, at the published `ff2_probe_write` address |
+
+    bash security-tests/qemu/run.sh <out> --cases 38 --modes 0,2 --rounds 1
