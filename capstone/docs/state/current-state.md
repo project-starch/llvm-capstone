@@ -2,6 +2,57 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-18 — Whisper ggml context component
+
+`capstone/ports/whisper/ggml-context/` ports whisper.cpp 1.9.4's real context
+allocator through the shared template. A native tiny.en recording contains
+60,179 events and 58,192 object allocations; stock and instrumented transcripts
+match. Native allocation layout matches both the extracted reference and the
+ordinary full ggml library. The recording completes in spatial and Sublet QEMU.
+Borrowed-buffer graph objects survive descriptor destruction; reset, owned free
+and exclusive owner rebind are distinct epoch boundaries. The README documents
+that rebind contract, capability-header capacity adjustment and fixed backing
+budget. This is allocator replay, not protected inference or FPGA measurement.
+## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
+
+The [shared runtime](../../runtime/domain-faults.md) provides a domain build
+helper, cooperative fault return/quarantine, and a Linux process-termination
+policy. Its standalone tests require no PostgreSQL or Sublet allocator sources.
+Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEMU.
+This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
+complete resource reclamation, or a new FPGA result. Allocator integration is
+reviewed separately; existing ports are not enabled automatically.
+Port navigation and pending integration: [component catalog](../../ports/README.md)
+and [integration plan](../plans/port-stack-integration.md). The shared runtime's
+missing `include/sublet/sublet.h` is restored from the identical port-branch
+header. This repairs a missing build input; the dated silicon results below
+and the pending fault-recovery validation remain separate.
+## 2026-09-19 — Experimental PoisonCap pymalloc port
+
+The extracted CPython 3.13.7 allocator now has a trusted PoisonCap backend,
+reusing the three existing upstream patches and the FFmpeg platform. The full
+33-process QEMU suite passes: ABI/platform controls, linked example, five API
+checks, nine paired lifetime cases and two native-recording replays. Both
+modes process all 115 events and match the native logical oracle; payload
+preservation is checked inside the guest. The small complete recording is not
+the existing larger workload or the defect corpus.
+
+An initial failed replay exposed stored poison capabilities remaining after
+`cclearpoison`, causing a later sweep to revoke a fresh unwritten allocation.
+The adapter now overwrites those remnants and counts the additional writes;
+a targeted regression and the complete suite pass. The protected recording
+uses 63 sweeps and 80,336 bytes each of poison/clear/zero work. Snapshot copy
+traffic is zero on this recording; separate in-place realloc controls exercise
+it. Both modes report 5,275,200 bytes of private metadata high-water, including
+the same authority-record layout and replay scratch. These are not total
+memory overhead or hardware timing measurements.
+
+Automatic libc revocation remains explicitly off while adapter sweeps remain
+on, using the documented platform workaround. Native tests and all four
+backend builds pass. This is not whole-interpreter protection or isolation of
+hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
+[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+
 ## 2026-09-19 — Experimental PoisonCap FFmpeg port
 
 The published PoisonCap compiler, QEMU and matching CheriBSD kernel/userspace
@@ -84,7 +135,6 @@ and [integration plan](../plans/port-stack-integration.md). The shared runtime's
 missing `include/sublet/sublet.h` is restored from the identical port-branch
 header. This repairs a missing build input; the dated silicon results below
 and the pending fault-recovery validation remain separate.
-
 ## 2026-09-18 — PostgreSQL's four Sublet allocator ports
 
 The canonical `ports/postgres/memory-contexts` CMake component ports AllocSet,
@@ -112,6 +162,7 @@ shared Sublet runtime header required by the CMake ports is restored, with a
 configure-time completeness guard. See the component README for commands and
 scope: AllocSet is protected; the consumer reproducer's Capstone arm remains
 future work.
+
 
 ## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
 

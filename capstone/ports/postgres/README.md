@@ -19,6 +19,15 @@ that identity after the pin changes. The paragraphs below describe the shell
 path, not the versioned patches inside `memory-contexts/patches/`.
 
 ## Existing shell drivers
+The shared-template component and its runnable CMake instructions are in
+[`memory-contexts/`](memory-contexts/README.md). Its `upstream.json` is the
+single **PostgreSQL 17.0** pin for that component, these original scripts and
+the native defect corpus. The original scripts remain for existing experiment
+drivers; the allocator implementations have not yet been consolidated. The
+older 17.5 memory-profile campaign remains labeled with its actual version.
+
+The following describes the original shell-based layout.
+
 
 PostgreSQL the program does not run under capabilities and is not meant to: it
 wants an operating system, a file system, sockets and processes. Its memory

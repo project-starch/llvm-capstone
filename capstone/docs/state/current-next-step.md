@@ -1,3 +1,17 @@
+Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
+for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
+and state-file merge conflicts remain integration work; the board milestones
+below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
+PoisonCap pymalloc: the [first pilot](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md)
+passes the complete 33-process suite and both modes of a 115-event native
+recording. Next validate a larger complete recording and account for matched
+payload, authority records, snapshot retention and kernel scan work. Evaluate
+quarantine/batching as a separate policy; the initial synchronous sweeps are
+not an architectural lower bound. Preserve the unwritten-reuse regression and
+explicit automatic-libc-off configuration. The full interpreter, existing
+defect corpus and hostile nested-manager protection remain outside the
+validated scope. See the [integration plan](../plans/poisoncap-pymalloc.md).
+
 PoisonCap FFmpeg: the [first pilot](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md)
 passes a full 29-process suite with the guest's automatic libc-revocation
 default disabled; explicit adapter revocation remains active. Three replays
@@ -38,7 +52,6 @@ Trace tooling: use the [shared readers and format-adapter contract](../../ports/
 for new allocator traces. The development branch includes the pending port PRs;
 the [upstream integration plan](../plans/port-stack-integration.md) remains relevant
 when those independent PRs land. Historical milestone entries follow.
-
 ## PostgreSQL allocator work — 2026-09-18
 
 The CMake component now has all four Sublet manager ports. Next, build paired
@@ -46,6 +59,7 @@ consumer-level defect fixtures (the existing native `live_parts` case and the
 Slab-backed reorderbuffer candidate) rather than counting allocator lifetime
 tests as those reproducers. See `ports/postgres/memory-contexts/README.md` and
 `ref/postgres-nested-allocator-defects.md`. The board work below is independent.
+
 
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime

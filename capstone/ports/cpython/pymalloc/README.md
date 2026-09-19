@@ -10,6 +10,9 @@ replays. This is an allocator component port with a native Python workload
 recorder. It does not execute the interpreter, its collector, or extensions in
 a capability domain. The free-threaded/mimalloc configuration is outside scope.
 
+The experimental [PoisonCap adapter](host/cheribsd/poisoncap/README.md) adds
+explicit per-block invalidation with synchronous sweeps and paired controls.
+
 ## Layout and source boundary
 
 This component uses `../../common` for verified downloads, cross toolchains,

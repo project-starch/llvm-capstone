@@ -93,6 +93,11 @@ Opt-in [generic client-fault recovery](../runtime/domain-faults.md) and its
 [standalone tests](../runtime/tests/fault-recovery/README.md) are independent of
 the allocator ports. The runtime requires the matching QEMU trap-delivery change;
 it does not change the default fault behavior or claim FPGA recovery.
+PostgreSQL's CMake component supports AllocSet, Generation, Slab and Bump under
+Sublet at the shared 17.0 pin. Its native and QEMU test entry points and scope
+are in [the component README](../ports/postgres/memory-contexts/README.md).
+This is allocator-level coverage, not a protected server or consumer-defect suite.
+
 
 > **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
 > accurate, but it accumulated before any of the silicon work and says nothing about it. For

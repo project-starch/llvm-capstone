@@ -117,7 +117,11 @@ For custom programs and recordings, add `--cases /path/to/cases.json`:
 ```
 
 Without `--build`, supply `--abi-probe BUILD/bin/cheribsd-abi-probe`.
-Patterns match a complete stdout line. A successful process is only a smoke
+Patterns match a complete stdout line. `exit` selects success (0), an explicit
+application rejection (1), or CheriBSD SIGPROT (162). For a rejection, use an
+exact error marker and `also_expect` for the setup marker; every additional
+marker must appear as a complete stdout line. An unrelated failure is not a
+successful rejection control. A successful process is only a smoke
 check: validate replay outputs against expected event counts, payload checks
 and the component's native recording before publishing a workload result.
 The input formats remain allocator-specific and use the shared trace readers.
@@ -148,8 +152,10 @@ The guest's system default is otherwise preserved. Optional
 and helper processes also use that default. The report records this separate
 setting; test programs still receive their explicit `--runtime-revocation`
 policy. The console is continuously drained during SSH operations.
-The experimental [PoisonCap workflow](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md)
-uses its own reconstructed platform and explicit per-lease hooks.
-It has its own mode and measurements; the generic examples use the default
+The experimental PoisonCap workflows for
+[FFmpeg](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md) and
+[CPython pymalloc](../../../cpython/pymalloc/host/cheribsd/poisoncap/README.md)
+reuse a reconstructed platform and add explicit per-lease hooks.
+They have their own modes and measurements; the generic examples use the default
 CheriBSD adapter. No cross-system security or performance equivalence is
 implied by a successful build or example.

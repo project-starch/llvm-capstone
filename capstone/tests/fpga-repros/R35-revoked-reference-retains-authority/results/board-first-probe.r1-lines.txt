@@ -1,0 +1,18 @@
+R1 entry shares=4 region=65536 opcode=1397769216 offset=97 phase=0
+R1 start arm=pressure series=m1 pattern=shared reps=5 touch=1 budget=900000 arena=2097152 root_type=0
+R1 m1 start arm=pressure C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 snap arm=pressure alloc=4096 C=65532 minted=4127 revoked=4096 init=0 live=16 leaf=64 retained=4096 n=4096 take_cyc=294912 give_cyc=414706 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=8192 C=65532 minted=8223 revoked=8192 init=0 live=16 leaf=64 retained=8192 n=4096 take_cyc=294912 give_cyc=413646 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=12288 C=65532 minted=12319 revoked=12288 init=0 live=16 leaf=64 retained=12288 n=4096 take_cyc=294912 give_cyc=413823 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=16384 C=65532 minted=16415 revoked=16384 init=0 live=16 leaf=64 retained=16384 n=4096 take_cyc=294932 give_cyc=413822 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=20480 C=65532 minted=20511 revoked=20480 init=0 live=16 leaf=64 retained=20480 n=4096 take_cyc=294912 give_cyc=413827 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=24576 C=65532 minted=24607 revoked=24576 init=0 live=16 leaf=64 retained=24576 n=4096 take_cyc=294912 give_cyc=413842 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=28672 C=65532 minted=28703 revoked=28672 init=0 live=16 leaf=64 retained=28672 n=4096 take_cyc=294916 give_cyc=413827 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=32768 C=65532 minted=32799 revoked=32768 init=0 live=16 leaf=64 retained=32768 n=4096 take_cyc=294912 give_cyc=413842 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=36864 C=65532 minted=36895 revoked=36864 init=0 live=16 leaf=64 retained=36864 n=4096 take_cyc=294912 give_cyc=413870 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 snap arm=pressure alloc=40960 C=65532 minted=40991 revoked=40960 init=0 live=16 leaf=64 retained=40960 n=4096 take_cyc=294912 give_cyc=413779 init_n=0 stale_alias_type=1 live_slot_type=2
+R1 m1 end arm=pressure stop=buffer alloc=43297 minted=43328 revoked=43297 retained=43296 released=0
+R1 m1 stale-take go
+R1 m1 stale-deref ok byte=16
+R1 m1 stale-mint SKIPPED -- the arm returns so the transcript survives
+R1 end minted=43328 split=16 mrev=43313 revoke=43297 init=0 out=2518 lines=18

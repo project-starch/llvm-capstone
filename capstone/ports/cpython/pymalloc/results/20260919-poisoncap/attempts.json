@@ -1,0 +1,291 @@
+[
+  {
+    "name": "pilot-1",
+    "status": "complete",
+    "passed": 8,
+    "executed": 8,
+    "selected": {
+      "stage": "pools",
+      "complete_suite": false,
+      "reuse_rounds": 8,
+      "cases": [
+        "allocator-example",
+        "pool-1-0",
+        "pool-1-1",
+        "pool-1-2",
+        "pool-1-3",
+        "pool-1-4"
+      ]
+    },
+    "explanation": "Selected bring-up controls before complete acceptance.",
+    "failures": [],
+    "binaries": {
+      "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "allocator-example": "784de3ab04bf2b9e00e1494bf5d6c37b8efe6951ceb5f24f2f796e5487b1decc",
+      "pool-1-0": "367a8b4f518c0316a5c4744159fbb8d4f93e592e822f65029dce05916a7cc08c",
+      "pool-1-1": "367a8b4f518c0316a5c4744159fbb8d4f93e592e822f65029dce05916a7cc08c",
+      "pool-1-2": "367a8b4f518c0316a5c4744159fbb8d4f93e592e822f65029dce05916a7cc08c",
+      "pool-1-3": "367a8b4f518c0316a5c4744159fbb8d4f93e592e822f65029dce05916a7cc08c",
+      "pool-1-4": "367a8b4f518c0316a5c4744159fbb8d4f93e592e822f65029dce05916a7cc08c"
+    },
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+      "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+    }
+  },
+  {
+    "name": "suite-1",
+    "status": "failed",
+    "passed": 31,
+    "executed": 32,
+    "selected": {
+      "stage": "replay",
+      "complete_suite": true,
+      "reuse_rounds": 8,
+      "cases": [
+        "poison-live",
+        "poison-read",
+        "poison-write",
+        "poison-reuse",
+        "poison-reused-read",
+        "allocator-example",
+        "check-sizes",
+        "check-realloc",
+        "check-snapshot-failure",
+        "check-arena-turnover",
+        "pool-0-0",
+        "pool-0-1",
+        "pool-0-2",
+        "pool-0-3",
+        "pool-0-4",
+        "pool-0-5",
+        "pool-0-6",
+        "pool-0-7",
+        "pool-0-8",
+        "pool-1-0",
+        "pool-1-1",
+        "pool-1-2",
+        "pool-1-3",
+        "pool-1-4",
+        "pool-1-5",
+        "pool-1-6",
+        "pool-1-7",
+        "pool-1-8",
+        "recording-0",
+        "recording-1"
+      ]
+    },
+    "explanation": "31 of 32 passed; protected recording rejected a live zero-size allocation at event index 25 with code 719. Clearing poison state left a stored poison capability. Not an accepted replay.",
+    "failures": [
+      {
+        "name": "recording-1",
+        "exit": 1,
+        "expected_exit": 0,
+        "stdout_sha256": "469d7bb8740358c9c8e26548c31cc68c9403a133c2a4d10d2c60d3663a4d660f"
+      }
+    ],
+    "binaries": {
+      "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "poison-live": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-write": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-reuse": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-reused-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "allocator-example": "784de3ab04bf2b9e00e1494bf5d6c37b8efe6951ceb5f24f2f796e5487b1decc",
+      "check-sizes": "43be365e736ce1998592cff4048bc483c546a5751535671fbf45111f9de77e41",
+      "check-realloc": "43be365e736ce1998592cff4048bc483c546a5751535671fbf45111f9de77e41",
+      "check-snapshot-failure": "43be365e736ce1998592cff4048bc483c546a5751535671fbf45111f9de77e41",
+      "check-arena-turnover": "43be365e736ce1998592cff4048bc483c546a5751535671fbf45111f9de77e41",
+      "pool-0-0": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-1": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-2": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-3": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-4": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-5": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-6": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-7": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-0-8": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-0": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-1": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-2": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-3": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-4": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-5": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-6": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-7": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "pool-1-8": "2f8ce4f0afe44bb67f9b687140c50e501661f1c9ef3e1caa196427d811df125a",
+      "recording-0": "c352c379b80a8bb455a6137c6f99f506b7d45ca22b556909ded07236d83260ba",
+      "recording-1": "c352c379b80a8bb455a6137c6f99f506b7d45ca22b556909ded07236d83260ba"
+    },
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+      "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+    }
+  },
+  {
+    "name": "diagnostic-1",
+    "status": "failed",
+    "passed": 2,
+    "executed": 3,
+    "selected": {
+      "stage": "replay",
+      "complete_suite": false,
+      "reuse_rounds": 8,
+      "cases": [
+        "recording-1"
+      ]
+    },
+    "explanation": "Instrumented reproduction of the same event-25 failure; diagnostic code removed from final source.",
+    "failures": [
+      {
+        "name": "recording-1",
+        "exit": 1,
+        "expected_exit": 0,
+        "stdout_sha256": "469d7bb8740358c9c8e26548c31cc68c9403a133c2a4d10d2c60d3663a4d660f"
+      }
+    ],
+    "binaries": {
+      "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "recording-1": "409428c18d591484e8b22e1e9b1ce39fe54b66f0c40def70fd4cac559e90ea84"
+    },
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+      "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+    }
+  },
+  {
+    "name": "fix-1",
+    "status": "complete",
+    "passed": 4,
+    "executed": 4,
+    "selected": {
+      "stage": "replay",
+      "complete_suite": false,
+      "reuse_rounds": 8,
+      "cases": [
+        "check-unwritten-reuse",
+        "recording-1"
+      ]
+    },
+    "explanation": "Targeted unwritten-reuse control and full small protected replay passed after clearing stored poison capabilities.",
+    "failures": [],
+    "binaries": {
+      "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "check-unwritten-reuse": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "recording-1": "73ad6dc85bb667b130d33748ceb6633e1292e2d92d6f5767902d831b5b3f9596"
+    },
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+      "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+    }
+  },
+  {
+    "name": "suite-2",
+    "status": "complete",
+    "passed": 33,
+    "executed": 33,
+    "selected": {
+      "stage": "replay",
+      "complete_suite": true,
+      "reuse_rounds": 8,
+      "cases": [
+        "poison-live",
+        "poison-read",
+        "poison-write",
+        "poison-reuse",
+        "poison-reused-read",
+        "allocator-example",
+        "check-sizes",
+        "check-realloc",
+        "check-snapshot-failure",
+        "check-unwritten-reuse",
+        "check-arena-turnover",
+        "pool-0-0",
+        "pool-0-1",
+        "pool-0-2",
+        "pool-0-3",
+        "pool-0-4",
+        "pool-0-5",
+        "pool-0-6",
+        "pool-0-7",
+        "pool-0-8",
+        "pool-1-0",
+        "pool-1-1",
+        "pool-1-2",
+        "pool-1-3",
+        "pool-1-4",
+        "pool-1-5",
+        "pool-1-6",
+        "pool-1-7",
+        "pool-1-8",
+        "recording-0",
+        "recording-1"
+      ]
+    },
+    "explanation": "Complete final suite with the stored-poison fix and both replay modes.",
+    "failures": [],
+    "binaries": {
+      "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+      "poison-live": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-write": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-reuse": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "poison-reused-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+      "allocator-example": "36070e3c6d101d11cea49ba695fe5156f9b4faa34e02b664322a4618fb50c6ae",
+      "check-sizes": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "check-realloc": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "check-snapshot-failure": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "check-unwritten-reuse": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "check-arena-turnover": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+      "pool-0-0": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-1": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-2": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-3": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-4": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-5": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-6": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-7": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-0-8": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-0": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-1": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-2": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-3": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-4": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-5": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-6": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-7": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "pool-1-8": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+      "recording-0": "73ad6dc85bb667b130d33748ceb6633e1292e2d92d6f5767902d831b5b3f9596",
+      "recording-1": "73ad6dc85bb667b130d33748ceb6633e1292e2d92d6f5767902d831b5b3f9596"
+    },
+    "platform": {
+      "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+      "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+      "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+      "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+      "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+    }
+  },
+  {
+    "name": "capstone-regression",
+    "status": "infrastructure-failed",
+    "explanation": "Shared QEMU lock acquisition timed out while the PoisonCap suite held it; no guest serial log was created. Retried after that suite in capstone-regression-2."
+  }
+]

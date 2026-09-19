@@ -31,8 +31,15 @@ def validate_case(case):
     for name in [case["name"], *case.get("inputs", {}), *case.get("outputs", [])]:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
             raise ValueError("case and guest file names must be single path components")
-    if case.get("exit", 0) not in (0, 162):
-        raise ValueError("supported outcomes are completion or CheriBSD SIGPROT")
+    if not isinstance(case.get("also_expect", []), list) or any(
+        not isinstance(line, str) or not line or "\n" in line
+        for line in case.get("also_expect", [])
+    ):
+        raise ValueError("additional markers must be nonempty single-line strings")
+    if case.get("exit", 0) not in (0, 1, 162):
+        raise ValueError(
+            "supported outcomes are completion, explicit rejection (1), or CheriBSD SIGPROT"
+        )
 
 
 def outcome_matches(case, result):
@@ -42,7 +49,11 @@ def outcome_matches(case, result):
         if "expect" in case
         else any(re.fullmatch(case["expect_regex"], line) for line in lines)
     )
-    return result.returncode == case.get("exit", 0) and marker
+    return (
+        result.returncode == case.get("exit", 0)
+        and marker
+        and all(line in lines for line in case.get("also_expect", []))
+    )
 
 
 def main():
