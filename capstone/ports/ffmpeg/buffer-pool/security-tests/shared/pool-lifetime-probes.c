@@ -5,12 +5,26 @@
 #include "libavutil/buffer.h"
 #include "libavutil/refstruct.h"
 #include "trace.h"
+#ifdef FFPOOL_DOMAIN
+#include "../../src/capstone-domain/node-snapshots.h"
+#endif
 #ifdef FFPOOL_CHERI
 #include <stdio.h>
 #endif
 
 #define CHECK(c, n) do { if (!(c)) ff2_fail(n); } while (0)
 static volatile unsigned char *held;
+static void checkpoint(unsigned long round)
+{
+#ifdef FFPOOL_PICASSO
+    extern void ff2_picasso_checkpoint(unsigned long);
+    ff2_picasso_checkpoint(round);
+#elif defined(FFPOOL_DOMAIN)
+    ff2_node_snapshot(round);
+#else
+    (void)round;
+#endif
+}
 static void mark(unsigned id)
 {
 #ifdef FFPOOL_DOMAIN
@@ -125,11 +139,14 @@ void ff2_security_run(unsigned test, unsigned long rounds)
             av_buffer_unref(&a);
             if (test >= 3 && test != 9) {
                 unsigned long n = (test == 12 || test == 13) ? rounds : 1;
-                CHECK(n > 0 && n <= 1000000, 423);
+                CHECK(n > 0 && n <= 3000000, 423);
                 for (unsigned long i = 0; i < n; i++) {
                     a = av_buffer_pool_get(bp);
                     CHECK((uintptr_t)a->data == address, 424);
                     a->data[0] = 59; CHECK(a->data[0] == 59 && sibling->data[0] == 41, 425);
+                    if ((test == 12 || test == 13) &&
+                        (i == 0 || (i + 1) % 10000 == 0 || i + 1 == n))
+                        checkpoint(i + 1);
                     if (i + 1 < n) av_buffer_unref(&a);
                 }
             }

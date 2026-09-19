@@ -2,6 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Protected pool reuse comparison
+
+An optional PICASSO adapter now colors each FFmpeg pool lease and invalidates
+it on return. Nine native-recording replays match exactly, and the three-repeat
+300,000-round comparison passes 36 companion controls. Both retain 128 bytes
+of payload and carve 1,344 bytes of pool metadata in the churn fixture. PICASSO
+adds at most 128 requested bytes of live token storage in this adapter. Busy
+color IDs and Capstone node entries both increase; neither count is a byte
+cost. The pinned Capstone QEMU does not return nodes to its free list.
+The separate PICASSO 2,200,000-round extension crosses its real 21-bit color
+threshold, recycles IDs once, and still rejects the retained old pointer.
+Capstone's matching extension also completes and rejects that pointer, while
+retaining 2,200,050 node entries outside the free list before final cleanup.
+This is trusted per-lease adaptation, not hierarchical parent/child revocation.
+[Results and protocol corrections](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md).
+
 ## 2026-09-19 — CHERI and PICASSO arena comparison
 
 The FFmpeg port now has a bounded CHERI Purecap backend and a CheriBSD/QEMU

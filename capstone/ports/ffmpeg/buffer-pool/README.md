@@ -52,6 +52,12 @@ in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).
 
 ## Evidence and limits
 
+The [protected reuse experiment](results/measurements/20260919-temporal-reuse/README.md)
+adds a PICASSO per-lease adapter, matching stale-return controls, and fixed-payload
+churn through color recycling. It distinguishes trusted pool adaptation from
+hierarchical parent/child protection and records the pinned Capstone QEMU's
+node-reclamation limitation.
+
 The [CHERI/PICASSO comparison](results/measurements/20260919-cheri/README.md)
 adds 18 verified replays, compressed-bounds padding and static storage accounting.
 Its pool leases are spatial; the PICASSO outer-heap control is kept distinct

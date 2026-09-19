@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure the spatial arena port in fresh CheriBSD/QEMU snapshots."""
+"""Measure spatial or explicitly colored pool leases in fresh QEMU snapshots."""
 
 import argparse
 import hashlib
@@ -39,11 +39,20 @@ def main():
     p.add_argument("--runtime-revocation", choices=("off", "on"), default="off")
     p.add_argument("--label", default="cheri-spatial-arena")
     p.add_argument(
+        "--lease-protection", choices=("spatial", "picasso"), default="spatial"
+    )
+    p.add_argument("--churn-rounds", type=int, default=0)
+    p.add_argument(
         "--heap-probe", type=Path, help="Optional separate outer-heap lifetime control"
     )
     a = p.parse_args()
     if a.repetitions < 1:
         p.error("repetitions must be positive")
+    if a.churn_rounds < 0 or a.churn_rounds > 3000000:
+        p.error("churn rounds must be between zero and three million")
+    if a.lease_protection == "picasso" and a.runtime_revocation != "on":
+        p.error("PICASSO leases require active runtime revocation")
+    mode = 2 if a.lease_protection == "picasso" else 0
     manifest = json.loads((a.campaign / "manifest.json").read_text())
     if manifest["status"] != "complete":
         raise ValueError("incomplete source campaign")
@@ -99,7 +108,9 @@ def main():
     report = dict(
         schema="ffpool-cheribsd-v1",
         label=a.label,
-        scope="bounded spatial leases within reusable arenas",
+        scope=a.lease_protection + " leases within reusable arenas",
+        lease_protection=a.lease_protection,
+        churn_rounds=a.churn_rounds,
         runtime_revocation=a.runtime_revocation,
         repetitions=a.repetitions,
         heap_probe_requested=bool(a.heap_probe),
@@ -132,7 +143,7 @@ def main():
     def ssh(command, **kwargs):
         return subprocess.run(
             ["ssh", *ssh_options, "-p", str(a.port), "root@127.0.0.1", command],
-            timeout=120,
+            timeout=600 if a.churn_rounds else 120,
             **kwargs,
         )
 
@@ -259,7 +270,7 @@ def main():
                             text=True,
                         )
                         (run / "guest-info.txt").write_text(info.stdout + info.stderr)
-                        command = f"cd /tmp/replay && ulimit -c 0 && env {policy} ./replay input.bin output.bin 0"
+                        command = f"cd /tmp/replay && ulimit -c 0 && env {policy} CC_DEBUG=1 ./replay input.bin output.bin {mode}"
                         result = ssh(command, capture_output=True, text=True)
                         (run / "stdout.txt").write_text(result.stdout)
                         (run / "stderr.txt").write_text(result.stderr)
@@ -280,7 +291,7 @@ def main():
                         stats, _ = observations(
                             run / "output.bin",
                             a.campaign / "recordings" / workload / "recorded.bin",
-                            0,
+                            mode,
                         )
                         header = struct.unpack(
                             "<16Q", (run / "output.bin").read_bytes()[:128]
@@ -299,15 +310,23 @@ def main():
                             raise ValueError("not a confirmed 128-bit purecap run")
                         # Companion controls use separate processes after the measurement.
                         entry["controls"] = []
-                        if repeat == 1 and workload == workloads[0]:
-                            for case in (0, 3, 5, 10, 11):
-                                h = [0x4650465452433032, 1] + [0] * 10 + [case, 1, 0, 0]
+                        if (repeat == 1 or a.churn_rounds) and workload == workloads[0]:
+                            cases = (0, 3, 5, 10, 11) + (
+                                (13, 12) if a.churn_rounds else ()
+                            )
+                            for case in cases:
+                                rounds = a.churn_rounds if case in (12, 13) else 1
+                                h = (
+                                    [0x4650465452433032, 1]
+                                    + [0] * 10
+                                    + [case, rounds, 0, 0]
+                                )
                                 fixture = run / f"control-{case}.bin"
                                 fixture.write_bytes(
                                     struct.pack("<16Q", *h) + bytes(128)
                                 )
                                 scp(fixture, "root@127.0.0.1:/tmp/replay/control.bin")
-                                control_command = f"cd /tmp/replay && ulimit -c 0 && env {policy} ./pool-security control.bin control-out.bin 0"
+                                control_command = f"cd /tmp/replay && ulimit -c 0 && env {policy} CC_DEBUG=1 ./pool-security control.bin control-out.bin {mode}"
                                 # Keep a shell parent: SSH otherwise reports an exit-signal
                                 # as 255 rather than the child's conventional 128 + signal.
                                 control_command += (
@@ -321,7 +340,10 @@ def main():
                                 (run / f"control-{case}.txt").write_text(
                                     control.stdout + control.stderr
                                 )
-                                expected_code = 162 if case in (10, 11) else 0
+                                fault_cases = (
+                                    (3, 5, 10, 11, 12) if mode == 2 else (10, 11)
+                                )
+                                expected_code = 162 if case in fault_cases else 0
                                 passed = (
                                     control.returncode == expected_code
                                     and f"FF2_PROBE case={case} ready" in control.stdout

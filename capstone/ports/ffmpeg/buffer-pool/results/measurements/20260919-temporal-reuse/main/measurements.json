@@ -1,0 +1,4106 @@
+{
+  "schema": "ffpool-temporal-reuse-v1",
+  "rounds": 300000,
+  "repetitions": 3,
+  "picasso_fingerprints": {
+    "0:qemu-system-riscv64cheri": "96204960f4d4f44493c65e3f9c1c623f596879249a806849ec9f78bae0d2e799",
+    "1:bbl-riscv64cheri-virt-fw_jump.bin": "830fd2b12ec49405aee24f33194cfa2f1662ffed82130fac9f4e1aeec94f0a8f",
+    "2:kernel": "113e51f09c7f9d15ea5173def4fd82fc74715c268ccd5db10e43f2be6c8261ec",
+    "3:picasso-fresh.img": "7dbc48348724fb02128cf2ffd5c2a91d33a9c0c46aa2575de0bd1284f96cf09a",
+    "4:replay": "03db66fde464a09d6629ddc778b691d1973f245312b9b0b2649cf8cf5e7493aa",
+    "5:pool-security": "1ebfa223799f2dcca933a8b79bbf119a708724ec8e032c42074daa569680a5da",
+    "6:clang": "f3ca1779dfe8bcc771ca615b4ef1e9b96f10ba3c79646ad3bcc05e66ebdbf9b9",
+    "7:collector.py": "ac7ae552f9d3709e4a980329fb274680c46a1d2cdc1e36781b66f9054fd2082b",
+    "8:libc.so.7": "8575e954dce1b0336e14ab67e494c11a3e2ca156d2c2f361c3065e6ad817cb13",
+    "9:CMakeCache.txt": "cc1d9d74f7f829ba42da9c5b422321aa6b5b1365cdd5af643c9a0611447f2e7c",
+    "10:compile_commands.json": "ec51e01d2c379cdb50ae016ec05f99cf4995f949f3bb310e598bd9e010c25365",
+    "11:commands.bin": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0",
+    "12:recorded.bin": "c958e0608e333c0982f40043a619f8cf6f7af048a1ab44431efae0a6c48e7fe7",
+    "13:commands.bin": "19b5dce58791d326b026ff9fe9f32f97eae172be0b6823fb2189c5cb03906b44",
+    "14:recorded.bin": "f1f737735c9cc7a32e9b80fba00cf2adf90711a6ff831dec54fb4f2c3a685f60",
+    "15:commands.bin": "1684fa685a8f69a2ef19b5e89eb5195d7ef13534f37f06fe6d84536861c42c45",
+    "16:recorded.bin": "84fe7a90d79fcb1cdc1585118ab9de3229d536178d387020d79da97b2039b9b1"
+  },
+  "replay": [
+    {
+      "workload": "short",
+      "repetition": 1,
+      "measurements": {
+        "events": 2379,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 90,
+          "backings": 9,
+          "reuses": 81,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 9
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 361,
+          "backings": 43,
+          "reuses": 318,
+          "peak_live": 35771,
+          "peak_retained": 35803,
+          "callbacks": {
+            "1": 22,
+            "2": 151,
+            "3": 22
+          },
+          "nested_operations": 210
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 372544,
+        "combined": {
+          "peak_live_requested_bytes": 368258,
+          "peak_pool_backing_requested_bytes": 368290,
+          "peak_idle_pool_requested_bytes": 184788,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 27,
+            "2": 27,
+            "3": 27
+          },
+          "refstruct": {
+            "0": 43,
+            "1": 4,
+            "10": 36,
+            "11": 44,
+            "12": 37,
+            "13": 6,
+            "14": 1,
+            "15": 1,
+            "2": 9,
+            "22": 1,
+            "3": 13,
+            "4": 26,
+            "5": 28,
+            "6": 22,
+            "7": 27,
+            "8": 28,
+            "9": 35
+          }
+        }
+      },
+      "sha256": "5996931edb06bc30d31817913f94f9d4a9591eff829c8300ca6fac4b8d750973"
+    },
+    {
+      "workload": "short",
+      "repetition": 2,
+      "measurements": {
+        "events": 2379,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 90,
+          "backings": 9,
+          "reuses": 81,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 9
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 361,
+          "backings": 43,
+          "reuses": 318,
+          "peak_live": 35771,
+          "peak_retained": 35803,
+          "callbacks": {
+            "1": 22,
+            "2": 151,
+            "3": 22
+          },
+          "nested_operations": 210
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 372544,
+        "combined": {
+          "peak_live_requested_bytes": 368258,
+          "peak_pool_backing_requested_bytes": 368290,
+          "peak_idle_pool_requested_bytes": 184788,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 27,
+            "2": 27,
+            "3": 27
+          },
+          "refstruct": {
+            "0": 43,
+            "1": 4,
+            "10": 36,
+            "11": 44,
+            "12": 37,
+            "13": 6,
+            "14": 1,
+            "15": 1,
+            "2": 9,
+            "22": 1,
+            "3": 13,
+            "4": 26,
+            "5": 28,
+            "6": 22,
+            "7": 27,
+            "8": 28,
+            "9": 35
+          }
+        }
+      },
+      "sha256": "5996931edb06bc30d31817913f94f9d4a9591eff829c8300ca6fac4b8d750973"
+    },
+    {
+      "workload": "short",
+      "repetition": 3,
+      "measurements": {
+        "events": 2379,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 90,
+          "backings": 9,
+          "reuses": 81,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 9
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 361,
+          "backings": 43,
+          "reuses": 318,
+          "peak_live": 35771,
+          "peak_retained": 35803,
+          "callbacks": {
+            "1": 22,
+            "2": 151,
+            "3": 22
+          },
+          "nested_operations": 210
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 372544,
+        "combined": {
+          "peak_live_requested_bytes": 368258,
+          "peak_pool_backing_requested_bytes": 368290,
+          "peak_idle_pool_requested_bytes": 184788,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 27,
+            "2": 27,
+            "3": 27
+          },
+          "refstruct": {
+            "0": 43,
+            "1": 4,
+            "10": 36,
+            "11": 44,
+            "12": 37,
+            "13": 6,
+            "14": 1,
+            "15": 1,
+            "2": 9,
+            "22": 1,
+            "3": 13,
+            "4": 26,
+            "5": 28,
+            "6": 22,
+            "7": 27,
+            "8": 28,
+            "9": 35
+          }
+        }
+      },
+      "sha256": "5996931edb06bc30d31817913f94f9d4a9591eff829c8300ca6fac4b8d750973"
+    },
+    {
+      "workload": "turnover",
+      "repetition": 1,
+      "measurements": {
+        "events": 4437,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 117
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 36,
+          "reuses": 685,
+          "peak_live": 35739,
+          "peak_retained": 35763,
+          "callbacks": {
+            "1": 15,
+            "2": 301,
+            "3": 15
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 11648,
+        "payload_carved_bytes": 372096,
+        "combined": {
+          "peak_live_requested_bytes": 368226,
+          "peak_pool_backing_requested_bytes": 368250,
+          "peak_idle_pool_requested_bytes": 184732,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 36,
+            "1": 21,
+            "10": 64,
+            "11": 64,
+            "12": 122,
+            "13": 18,
+            "14": 6,
+            "15": 5,
+            "17": 2,
+            "18": 1,
+            "19": 6,
+            "2": 28,
+            "20": 1,
+            "3": 30,
+            "4": 47,
+            "5": 50,
+            "6": 49,
+            "7": 54,
+            "8": 58,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "12076dceae80d4fac5fafec499e3be1d487615e9eaf89334e76d911bed4fdc46"
+    },
+    {
+      "workload": "turnover",
+      "repetition": 2,
+      "measurements": {
+        "events": 4437,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 117
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 36,
+          "reuses": 685,
+          "peak_live": 35739,
+          "peak_retained": 35763,
+          "callbacks": {
+            "1": 15,
+            "2": 301,
+            "3": 15
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 11648,
+        "payload_carved_bytes": 372096,
+        "combined": {
+          "peak_live_requested_bytes": 368226,
+          "peak_pool_backing_requested_bytes": 368250,
+          "peak_idle_pool_requested_bytes": 184732,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 36,
+            "1": 21,
+            "10": 64,
+            "11": 64,
+            "12": 122,
+            "13": 18,
+            "14": 6,
+            "15": 5,
+            "17": 2,
+            "18": 1,
+            "19": 6,
+            "2": 28,
+            "20": 1,
+            "3": 30,
+            "4": 47,
+            "5": 50,
+            "6": 49,
+            "7": 54,
+            "8": 58,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "12076dceae80d4fac5fafec499e3be1d487615e9eaf89334e76d911bed4fdc46"
+    },
+    {
+      "workload": "turnover",
+      "repetition": 3,
+      "measurements": {
+        "events": 4437,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 332487,
+          "peak_retained": 332487,
+          "callbacks": {},
+          "nested_operations": 117
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 36,
+          "reuses": 685,
+          "peak_live": 35739,
+          "peak_retained": 35763,
+          "callbacks": {
+            "1": 15,
+            "2": 301,
+            "3": 15
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 11648,
+        "payload_carved_bytes": 372096,
+        "combined": {
+          "peak_live_requested_bytes": 368226,
+          "peak_pool_backing_requested_bytes": 368250,
+          "peak_idle_pool_requested_bytes": 184732,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 36,
+            "1": 21,
+            "10": 64,
+            "11": 64,
+            "12": 122,
+            "13": 18,
+            "14": 6,
+            "15": 5,
+            "17": 2,
+            "18": 1,
+            "19": 6,
+            "2": 28,
+            "20": 1,
+            "3": 30,
+            "4": 47,
+            "5": 50,
+            "6": 49,
+            "7": 54,
+            "8": 58,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "12076dceae80d4fac5fafec499e3be1d487615e9eaf89334e76d911bed4fdc46"
+    },
+    {
+      "workload": "larger",
+      "repetition": 1,
+      "measurements": {
+        "events": 4473,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 1106631,
+          "peak_retained": 1106631,
+          "callbacks": {},
+          "nested_operations": 123
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 42,
+          "reuses": 679,
+          "peak_live": 131201,
+          "peak_retained": 131233,
+          "callbacks": {
+            "1": 21,
+            "2": 301,
+            "3": 21
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 1242816,
+        "combined": {
+          "peak_live_requested_bytes": 1237832,
+          "peak_pool_backing_requested_bytes": 1237864,
+          "peak_idle_pool_requested_bytes": 753010,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 42,
+            "1": 28,
+            "10": 64,
+            "11": 73,
+            "12": 107,
+            "13": 20,
+            "132": 1,
+            "14": 9,
+            "15": 2,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "2": 17,
+            "20": 1,
+            "24": 2,
+            "3": 39,
+            "4": 41,
+            "41": 1,
+            "5": 44,
+            "6": 56,
+            "69": 1,
+            "7": 51,
+            "8": 58,
+            "80": 1,
+            "84": 1,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "4c987f12075ca78d4b4f5867cf04dbb3cfa6eac88d9374d2da1bea60740519df"
+    },
+    {
+      "workload": "larger",
+      "repetition": 2,
+      "measurements": {
+        "events": 4473,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 1106631,
+          "peak_retained": 1106631,
+          "callbacks": {},
+          "nested_operations": 123
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 42,
+          "reuses": 679,
+          "peak_live": 131201,
+          "peak_retained": 131233,
+          "callbacks": {
+            "1": 21,
+            "2": 301,
+            "3": 21
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 1242816,
+        "combined": {
+          "peak_live_requested_bytes": 1237832,
+          "peak_pool_backing_requested_bytes": 1237864,
+          "peak_idle_pool_requested_bytes": 753010,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 42,
+            "1": 28,
+            "10": 64,
+            "11": 73,
+            "12": 107,
+            "13": 20,
+            "132": 1,
+            "14": 9,
+            "15": 2,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "2": 17,
+            "20": 1,
+            "24": 2,
+            "3": 39,
+            "4": 41,
+            "41": 1,
+            "5": 44,
+            "6": 56,
+            "69": 1,
+            "7": 51,
+            "8": 58,
+            "80": 1,
+            "84": 1,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "4c987f12075ca78d4b4f5867cf04dbb3cfa6eac88d9374d2da1bea60740519df"
+    },
+    {
+      "workload": "larger",
+      "repetition": 3,
+      "measurements": {
+        "events": 4473,
+        "status": 0,
+        "mode": 2,
+        "primitives": {
+          "split": 0,
+          "mrev": 0,
+          "delin": 0,
+          "revoke": 0,
+          "init": 0,
+          "init_bytes": 0
+        },
+        "buffer": {
+          "pools": 3,
+          "allocations": 180,
+          "backings": 9,
+          "reuses": 171,
+          "peak_live": 1106631,
+          "peak_retained": 1106631,
+          "callbacks": {},
+          "nested_operations": 123
+        },
+        "refstruct": {
+          "pools": 17,
+          "allocations": 721,
+          "backings": 42,
+          "reuses": 679,
+          "peak_live": 131201,
+          "peak_retained": 131233,
+          "callbacks": {
+            "1": 21,
+            "2": 301,
+            "3": 21
+          },
+          "nested_operations": 420
+        },
+        "metadata_carved_bytes": 12288,
+        "payload_carved_bytes": 1242816,
+        "combined": {
+          "peak_live_requested_bytes": 1237832,
+          "peak_pool_backing_requested_bytes": 1237864,
+          "peak_idle_pool_requested_bytes": 753010,
+          "final_live_requested_bytes": 0,
+          "final_pool_backing_requested_bytes": 0
+        },
+        "reuse_gap_histogram": {
+          "buffer": {
+            "0": 9,
+            "1": 57,
+            "2": 57,
+            "3": 57
+          },
+          "refstruct": {
+            "0": 42,
+            "1": 28,
+            "10": 64,
+            "11": 73,
+            "12": 107,
+            "13": 20,
+            "132": 1,
+            "14": 9,
+            "15": 2,
+            "16": 1,
+            "17": 1,
+            "18": 1,
+            "2": 17,
+            "20": 1,
+            "24": 2,
+            "3": 39,
+            "4": 41,
+            "41": 1,
+            "5": 44,
+            "6": 56,
+            "69": 1,
+            "7": 51,
+            "8": 58,
+            "80": 1,
+            "84": 1,
+            "9": 59
+          }
+        }
+      },
+      "sha256": "4c987f12075ca78d4b4f5867cf04dbb3cfa6eac88d9374d2da1bea60740519df"
+    }
+  ],
+  "churn": [
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        },
+        {
+          "round": 0,
+          "busy": 300009,
+          "live": 0,
+          "peak": 2,
+          "issued": 300004,
+          "freed": 300004
+        }
+      ],
+      "completed_sweeps": 0,
+      "metadata_carved": 1344,
+      "payload_carved": 128,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        }
+      ],
+      "completed_sweeps": null,
+      "metadata_carved": null,
+      "payload_carved": null,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        },
+        {
+          "round": 0,
+          "busy": 300009,
+          "live": 0,
+          "peak": 2,
+          "issued": 300004,
+          "freed": 300004
+        }
+      ],
+      "completed_sweeps": 0,
+      "metadata_carved": 1344,
+      "payload_carved": 128,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        }
+      ],
+      "completed_sweeps": null,
+      "metadata_carved": null,
+      "payload_carved": null,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        },
+        {
+          "round": 0,
+          "busy": 300009,
+          "live": 0,
+          "peak": 2,
+          "issued": 300004,
+          "freed": 300004
+        }
+      ],
+      "completed_sweeps": 0,
+      "metadata_carved": 1344,
+      "payload_carved": 128,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "busy": 8,
+          "live": 2,
+          "peak": 2,
+          "issued": 3,
+          "freed": 1
+        },
+        {
+          "round": 10000,
+          "busy": 10007,
+          "live": 2,
+          "peak": 2,
+          "issued": 10002,
+          "freed": 10000
+        },
+        {
+          "round": 20000,
+          "busy": 20007,
+          "live": 2,
+          "peak": 2,
+          "issued": 20002,
+          "freed": 20000
+        },
+        {
+          "round": 30000,
+          "busy": 30007,
+          "live": 2,
+          "peak": 2,
+          "issued": 30002,
+          "freed": 30000
+        },
+        {
+          "round": 40000,
+          "busy": 40007,
+          "live": 2,
+          "peak": 2,
+          "issued": 40002,
+          "freed": 40000
+        },
+        {
+          "round": 50000,
+          "busy": 50007,
+          "live": 2,
+          "peak": 2,
+          "issued": 50002,
+          "freed": 50000
+        },
+        {
+          "round": 60000,
+          "busy": 60007,
+          "live": 2,
+          "peak": 2,
+          "issued": 60002,
+          "freed": 60000
+        },
+        {
+          "round": 70000,
+          "busy": 70007,
+          "live": 2,
+          "peak": 2,
+          "issued": 70002,
+          "freed": 70000
+        },
+        {
+          "round": 80000,
+          "busy": 80007,
+          "live": 2,
+          "peak": 2,
+          "issued": 80002,
+          "freed": 80000
+        },
+        {
+          "round": 90000,
+          "busy": 90007,
+          "live": 2,
+          "peak": 2,
+          "issued": 90002,
+          "freed": 90000
+        },
+        {
+          "round": 100000,
+          "busy": 100007,
+          "live": 2,
+          "peak": 2,
+          "issued": 100002,
+          "freed": 100000
+        },
+        {
+          "round": 110000,
+          "busy": 110007,
+          "live": 2,
+          "peak": 2,
+          "issued": 110002,
+          "freed": 110000
+        },
+        {
+          "round": 120000,
+          "busy": 120007,
+          "live": 2,
+          "peak": 2,
+          "issued": 120002,
+          "freed": 120000
+        },
+        {
+          "round": 130000,
+          "busy": 130007,
+          "live": 2,
+          "peak": 2,
+          "issued": 130002,
+          "freed": 130000
+        },
+        {
+          "round": 140000,
+          "busy": 140007,
+          "live": 2,
+          "peak": 2,
+          "issued": 140002,
+          "freed": 140000
+        },
+        {
+          "round": 150000,
+          "busy": 150007,
+          "live": 2,
+          "peak": 2,
+          "issued": 150002,
+          "freed": 150000
+        },
+        {
+          "round": 160000,
+          "busy": 160007,
+          "live": 2,
+          "peak": 2,
+          "issued": 160002,
+          "freed": 160000
+        },
+        {
+          "round": 170000,
+          "busy": 170007,
+          "live": 2,
+          "peak": 2,
+          "issued": 170002,
+          "freed": 170000
+        },
+        {
+          "round": 180000,
+          "busy": 180007,
+          "live": 2,
+          "peak": 2,
+          "issued": 180002,
+          "freed": 180000
+        },
+        {
+          "round": 190000,
+          "busy": 190007,
+          "live": 2,
+          "peak": 2,
+          "issued": 190002,
+          "freed": 190000
+        },
+        {
+          "round": 200000,
+          "busy": 200007,
+          "live": 2,
+          "peak": 2,
+          "issued": 200002,
+          "freed": 200000
+        },
+        {
+          "round": 210000,
+          "busy": 210007,
+          "live": 2,
+          "peak": 2,
+          "issued": 210002,
+          "freed": 210000
+        },
+        {
+          "round": 220000,
+          "busy": 220007,
+          "live": 2,
+          "peak": 2,
+          "issued": 220002,
+          "freed": 220000
+        },
+        {
+          "round": 230000,
+          "busy": 230007,
+          "live": 2,
+          "peak": 2,
+          "issued": 230002,
+          "freed": 230000
+        },
+        {
+          "round": 240000,
+          "busy": 240007,
+          "live": 2,
+          "peak": 2,
+          "issued": 240002,
+          "freed": 240000
+        },
+        {
+          "round": 250000,
+          "busy": 250007,
+          "live": 2,
+          "peak": 2,
+          "issued": 250002,
+          "freed": 250000
+        },
+        {
+          "round": 260000,
+          "busy": 260007,
+          "live": 2,
+          "peak": 2,
+          "issued": 260002,
+          "freed": 260000
+        },
+        {
+          "round": 270000,
+          "busy": 270007,
+          "live": 2,
+          "peak": 2,
+          "issued": 270002,
+          "freed": 270000
+        },
+        {
+          "round": 280000,
+          "busy": 280007,
+          "live": 2,
+          "peak": 2,
+          "issued": 280002,
+          "freed": 280000
+        },
+        {
+          "round": 290000,
+          "busy": 290007,
+          "live": 2,
+          "peak": 2,
+          "issued": 290002,
+          "freed": 290000
+        },
+        {
+          "round": 300000,
+          "busy": 300007,
+          "live": 2,
+          "peak": 2,
+          "issued": 300002,
+          "freed": 300000
+        }
+      ],
+      "completed_sweeps": null,
+      "metadata_carved": null,
+      "payload_carved": null,
+      "token_requested_peak_bytes": 128
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        },
+        {
+          "round": 0,
+          "high_water": 300052,
+          "free": 0,
+          "not_on_free_list": 300052,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": 1344,
+      "payload_carved": 128
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": null,
+      "payload_carved": null
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        },
+        {
+          "round": 0,
+          "high_water": 300052,
+          "free": 0,
+          "not_on_free_list": 300052,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": 1344,
+      "payload_carved": 128
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": null,
+      "payload_carved": null
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 13,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        },
+        {
+          "round": 0,
+          "high_water": 300052,
+          "free": 0,
+          "not_on_free_list": 300052,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": 1344,
+      "payload_carved": 128
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 12,
+      "checkpoints": [
+        {
+          "round": 1,
+          "high_water": 51,
+          "free": 0,
+          "not_on_free_list": 51,
+          "capacity": 1048576
+        },
+        {
+          "round": 10000,
+          "high_water": 10050,
+          "free": 0,
+          "not_on_free_list": 10050,
+          "capacity": 1048576
+        },
+        {
+          "round": 20000,
+          "high_water": 20050,
+          "free": 0,
+          "not_on_free_list": 20050,
+          "capacity": 1048576
+        },
+        {
+          "round": 30000,
+          "high_water": 30050,
+          "free": 0,
+          "not_on_free_list": 30050,
+          "capacity": 1048576
+        },
+        {
+          "round": 40000,
+          "high_water": 40050,
+          "free": 0,
+          "not_on_free_list": 40050,
+          "capacity": 1048576
+        },
+        {
+          "round": 50000,
+          "high_water": 50050,
+          "free": 0,
+          "not_on_free_list": 50050,
+          "capacity": 1048576
+        },
+        {
+          "round": 60000,
+          "high_water": 60050,
+          "free": 0,
+          "not_on_free_list": 60050,
+          "capacity": 1048576
+        },
+        {
+          "round": 70000,
+          "high_water": 70050,
+          "free": 0,
+          "not_on_free_list": 70050,
+          "capacity": 1048576
+        },
+        {
+          "round": 80000,
+          "high_water": 80050,
+          "free": 0,
+          "not_on_free_list": 80050,
+          "capacity": 1048576
+        },
+        {
+          "round": 90000,
+          "high_water": 90050,
+          "free": 0,
+          "not_on_free_list": 90050,
+          "capacity": 1048576
+        },
+        {
+          "round": 100000,
+          "high_water": 100050,
+          "free": 0,
+          "not_on_free_list": 100050,
+          "capacity": 1048576
+        },
+        {
+          "round": 110000,
+          "high_water": 110050,
+          "free": 0,
+          "not_on_free_list": 110050,
+          "capacity": 1048576
+        },
+        {
+          "round": 120000,
+          "high_water": 120050,
+          "free": 0,
+          "not_on_free_list": 120050,
+          "capacity": 1048576
+        },
+        {
+          "round": 130000,
+          "high_water": 130050,
+          "free": 0,
+          "not_on_free_list": 130050,
+          "capacity": 1048576
+        },
+        {
+          "round": 140000,
+          "high_water": 140050,
+          "free": 0,
+          "not_on_free_list": 140050,
+          "capacity": 1048576
+        },
+        {
+          "round": 150000,
+          "high_water": 150050,
+          "free": 0,
+          "not_on_free_list": 150050,
+          "capacity": 1048576
+        },
+        {
+          "round": 160000,
+          "high_water": 160050,
+          "free": 0,
+          "not_on_free_list": 160050,
+          "capacity": 1048576
+        },
+        {
+          "round": 170000,
+          "high_water": 170050,
+          "free": 0,
+          "not_on_free_list": 170050,
+          "capacity": 1048576
+        },
+        {
+          "round": 180000,
+          "high_water": 180050,
+          "free": 0,
+          "not_on_free_list": 180050,
+          "capacity": 1048576
+        },
+        {
+          "round": 190000,
+          "high_water": 190050,
+          "free": 0,
+          "not_on_free_list": 190050,
+          "capacity": 1048576
+        },
+        {
+          "round": 200000,
+          "high_water": 200050,
+          "free": 0,
+          "not_on_free_list": 200050,
+          "capacity": 1048576
+        },
+        {
+          "round": 210000,
+          "high_water": 210050,
+          "free": 0,
+          "not_on_free_list": 210050,
+          "capacity": 1048576
+        },
+        {
+          "round": 220000,
+          "high_water": 220050,
+          "free": 0,
+          "not_on_free_list": 220050,
+          "capacity": 1048576
+        },
+        {
+          "round": 230000,
+          "high_water": 230050,
+          "free": 0,
+          "not_on_free_list": 230050,
+          "capacity": 1048576
+        },
+        {
+          "round": 240000,
+          "high_water": 240050,
+          "free": 0,
+          "not_on_free_list": 240050,
+          "capacity": 1048576
+        },
+        {
+          "round": 250000,
+          "high_water": 250050,
+          "free": 0,
+          "not_on_free_list": 250050,
+          "capacity": 1048576
+        },
+        {
+          "round": 260000,
+          "high_water": 260050,
+          "free": 0,
+          "not_on_free_list": 260050,
+          "capacity": 1048576
+        },
+        {
+          "round": 270000,
+          "high_water": 270050,
+          "free": 0,
+          "not_on_free_list": 270050,
+          "capacity": 1048576
+        },
+        {
+          "round": 280000,
+          "high_water": 280050,
+          "free": 0,
+          "not_on_free_list": 280050,
+          "capacity": 1048576
+        },
+        {
+          "round": 290000,
+          "high_water": 290050,
+          "free": 0,
+          "not_on_free_list": 290050,
+          "capacity": 1048576
+        },
+        {
+          "round": 300000,
+          "high_water": 300050,
+          "free": 0,
+          "not_on_free_list": 300050,
+          "capacity": 1048576
+        }
+      ],
+      "metadata_carved": null,
+      "payload_carved": null
+    }
+  ],
+  "controls": [
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 0,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 3,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 5,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 10,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 11,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 13,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 1,
+      "case": 12,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 0,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 3,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 5,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 10,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 11,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 13,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 2,
+      "case": 12,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 0,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 3,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 5,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 10,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 11,
+      "exit_code": 162
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 13,
+      "exit_code": 0
+    },
+    {
+      "arm": "picasso",
+      "repetition": 3,
+      "case": 12,
+      "exit_code": 162
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 0,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 3,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 5,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 13,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 1,
+      "case": 12,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 0,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 3,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 5,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 13,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 2,
+      "case": 12,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 0,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 3,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 5,
+      "expected": "fault"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 13,
+      "expected": "completed"
+    },
+    {
+      "arm": "capstone",
+      "repetition": 3,
+      "case": 12,
+      "expected": "fault"
+    }
+  ],
+  "evidence": [
+    {
+      "artifact": "picasso/1/control-0",
+      "sha256": "9a28969ec42030e59395ecb57e80504d3b40ca765abfe248dbaec08cd0698588"
+    },
+    {
+      "artifact": "picasso/1/control-3",
+      "sha256": "787f89a2236e216842486f9810257011f2df1b657552b4e167cc6dce0da94477"
+    },
+    {
+      "artifact": "picasso/1/control-5",
+      "sha256": "23dcb499720daf50a012f64bd2d839e9e1bd7dd5c7bae42ec6d44fd695efe21f"
+    },
+    {
+      "artifact": "picasso/1/control-10",
+      "sha256": "2978760648890943147d040fee6b703f71ccb6e4dd64c08d4fb4adf15d5356aa"
+    },
+    {
+      "artifact": "picasso/1/control-11",
+      "sha256": "4cc66d9ea176baceb7b73f57bfb1503b0a8d92b731ef8f5e52a59be1edfd31ea"
+    },
+    {
+      "artifact": "picasso/1/control-13",
+      "sha256": "1cbbb7b3bef2d47d369b17ad7e362cb4a8626c4f9ebbb0cafc516a303199eca6"
+    },
+    {
+      "artifact": "picasso/1/control-12",
+      "sha256": "7178894a600bd20d9e9b032926b6a61a2715be8977d50dc8859f485e7cf87b25"
+    },
+    {
+      "artifact": "picasso/2/control-0",
+      "sha256": "9a28969ec42030e59395ecb57e80504d3b40ca765abfe248dbaec08cd0698588"
+    },
+    {
+      "artifact": "picasso/2/control-3",
+      "sha256": "787f89a2236e216842486f9810257011f2df1b657552b4e167cc6dce0da94477"
+    },
+    {
+      "artifact": "picasso/2/control-5",
+      "sha256": "23dcb499720daf50a012f64bd2d839e9e1bd7dd5c7bae42ec6d44fd695efe21f"
+    },
+    {
+      "artifact": "picasso/2/control-10",
+      "sha256": "2978760648890943147d040fee6b703f71ccb6e4dd64c08d4fb4adf15d5356aa"
+    },
+    {
+      "artifact": "picasso/2/control-11",
+      "sha256": "4cc66d9ea176baceb7b73f57bfb1503b0a8d92b731ef8f5e52a59be1edfd31ea"
+    },
+    {
+      "artifact": "picasso/2/control-13",
+      "sha256": "1cbbb7b3bef2d47d369b17ad7e362cb4a8626c4f9ebbb0cafc516a303199eca6"
+    },
+    {
+      "artifact": "picasso/2/control-12",
+      "sha256": "7178894a600bd20d9e9b032926b6a61a2715be8977d50dc8859f485e7cf87b25"
+    },
+    {
+      "artifact": "picasso/3/control-0",
+      "sha256": "9a28969ec42030e59395ecb57e80504d3b40ca765abfe248dbaec08cd0698588"
+    },
+    {
+      "artifact": "picasso/3/control-3",
+      "sha256": "787f89a2236e216842486f9810257011f2df1b657552b4e167cc6dce0da94477"
+    },
+    {
+      "artifact": "picasso/3/control-5",
+      "sha256": "23dcb499720daf50a012f64bd2d839e9e1bd7dd5c7bae42ec6d44fd695efe21f"
+    },
+    {
+      "artifact": "picasso/3/control-10",
+      "sha256": "2978760648890943147d040fee6b703f71ccb6e4dd64c08d4fb4adf15d5356aa"
+    },
+    {
+      "artifact": "picasso/3/control-11",
+      "sha256": "4cc66d9ea176baceb7b73f57bfb1503b0a8d92b731ef8f5e52a59be1edfd31ea"
+    },
+    {
+      "artifact": "picasso/3/control-13",
+      "sha256": "1cbbb7b3bef2d47d369b17ad7e362cb4a8626c4f9ebbb0cafc516a303199eca6"
+    },
+    {
+      "artifact": "picasso/3/control-12",
+      "sha256": "7178894a600bd20d9e9b032926b6a61a2715be8977d50dc8859f485e7cf87b25"
+    },
+    {
+      "artifact": "capstone/1/case-0",
+      "sha256": "cc0ee9d8433c9316140ff65f5ae32af3c6c488e2e59d4d931ea94949ad965b2f"
+    },
+    {
+      "artifact": "capstone/1/case-3",
+      "sha256": "b4fbf92288b59f321e08126863dc190afc234d5945d7a15014c1210caaa5f833"
+    },
+    {
+      "artifact": "capstone/1/case-5",
+      "sha256": "baffb4258cab3cf93dd435609104aa250b5d5ca15f0397ed63da715dd1161544"
+    },
+    {
+      "artifact": "capstone/1/case-13",
+      "sha256": "724ce87a60559788f1f38ec86778fca0ae9782f06e70d565f737bad1c3199d3b"
+    },
+    {
+      "artifact": "capstone/1/case-13-output",
+      "sha256": "2977c502be3d0b8677bb3f20f8374aec284c92cb115e8a71853210ed9db60523"
+    },
+    {
+      "artifact": "capstone/1/case-12",
+      "sha256": "052fbf7f6c0a9fbf6c6ed322103909362fef78db507539117b0c88147a5817bb"
+    },
+    {
+      "artifact": "capstone/2/case-0",
+      "sha256": "682b60f144a88493100c045c92a325ce4fcefc05752255ae96632918431a6abf"
+    },
+    {
+      "artifact": "capstone/2/case-3",
+      "sha256": "af8b2df958e9264e216f99111b9af8422d7b5fbe81f2cba7d86ca2a29658730a"
+    },
+    {
+      "artifact": "capstone/2/case-5",
+      "sha256": "e03dee271b17b75e54214c9212b6f200e025b557fe57d7b89e1d49502421310d"
+    },
+    {
+      "artifact": "capstone/2/case-13",
+      "sha256": "700f137c768fb56eb14f2694ee00cc5a3a23e7dd8d0ab29db036eaeb88c5ecc4"
+    },
+    {
+      "artifact": "capstone/2/case-13-output",
+      "sha256": "2977c502be3d0b8677bb3f20f8374aec284c92cb115e8a71853210ed9db60523"
+    },
+    {
+      "artifact": "capstone/2/case-12",
+      "sha256": "0085b0dd3c498b6ab40d6b3d91ff9c35b985ac0ab8456e2361883939bc9f6083"
+    },
+    {
+      "artifact": "capstone/3/case-0",
+      "sha256": "982a6f4a5d9dca74c2253bbf5c04978b64d13d6321cdb63d05f598d5648cf701"
+    },
+    {
+      "artifact": "capstone/3/case-3",
+      "sha256": "d828c0811e7e26a0ab05aacf76aeffe9dd383e2653483d0980d447c80007c6cc"
+    },
+    {
+      "artifact": "capstone/3/case-5",
+      "sha256": "e6820ced04394103f526ea7e38b43fa6cf10790a299ee1cbb2513a1ad74b522b"
+    },
+    {
+      "artifact": "capstone/3/case-13",
+      "sha256": "dfd783cf4ba2bda232e58ca78b05b01365016971ee959bc5c42551815b9b6410"
+    },
+    {
+      "artifact": "capstone/3/case-13-output",
+      "sha256": "2977c502be3d0b8677bb3f20f8374aec284c92cb115e8a71853210ed9db60523"
+    },
+    {
+      "artifact": "capstone/3/case-12",
+      "sha256": "10823b10aeaaf5f1ae5454a7486d361af628f0fc238dceb437120c1c633d8646"
+    }
+  ],
+  "capstone_platform_fingerprints": {
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a",
+    "domain-loader": "5d76674afe3c9e65c85c4decd5ca5a2a89bdc2592ede8ec6bb8c6590e6451b60",
+    "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "qemu-system-riscv64": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52"
+  },
+  "capstone_binary_sha256": "626245a11165fc70e484443ce2c13545f5ec4e61ace13dd7a649af62f82a2abe"
+}

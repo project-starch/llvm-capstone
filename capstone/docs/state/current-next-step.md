@@ -1,9 +1,12 @@
-CHERI replay baseline: the [FFmpeg CHERI/PICASSO arena comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
-is complete. Before comparing equal temporal protection, integrate explicit
-pool-return revocation into the CHERI/PICASSO adapter and require the same
-stale-lease outcomes as Sublet. Measure that adapter's metadata, padding,
-reclamation and reuse policy; outer-heap revocation alone does not cover arena
-leases. Preserve this spatial baseline as a separate arm.
+Protected pool replay: the [PICASSO token adapter and Sublet reuse comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md)
+now passes matching per-return stale-lease controls. The next semantic test is
+parent-region invalidation with independently live children: individual flat
+colors do not automatically encode this hierarchy. Keep trusted adaptation
+separate from protection of untrusted nested managers. Before making a
+reclamation-space claim, use a Capstone model implementing the intended node
+reclaimer; the pinned QEMU accumulates nodes in these traces. Account for
+physical metadata and the adapter's token storage separately from payload and
+ID counts. Preserve the earlier spatial arena comparison as a separate arm.
 
 Replay measurements: the first FFmpeg paired matrix is complete. Next extend
 the [measurement plan](../plans/replay-memory-measurements.md) with full

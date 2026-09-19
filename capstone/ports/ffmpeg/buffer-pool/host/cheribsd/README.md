@@ -7,6 +7,33 @@ to cover the requested payload without extending beyond its backing block.
 It refuses Capstone modes 1 and 2; running on a temporal-capable OS does not
 turn these arena leases into temporally protected allocations.
 
+An optional `-DFFPOOL_PICASSO=ON` build adds explicitly colored leases on the
+installed PICASSO SDK. This build requires mode 2 and active libc revocation;
+the default spatial build still refuses mode 2. The [temporal reuse experiment](../../../../../docs/plans/pool-temporal-reuse.md)
+defines the comparison and its separate hierarchical-protection boundary.
+
+The adapter maps the payload arena with `mmap` to retain trusted recoloring
+authority. Each issued lease obtains one 64-byte libc token and copies its
+color onto the bounded payload pointer. It removes `CHERI_PERM_SW_VMEM` before
+returning that pointer. Returning/freeing a lease frees the token, invalidating
+that color while retaining pool storage. This is an added trusted-pool adapter,
+not a feature evaluated for nested allocators in the PICASSO paper. It does
+not automatically couple child colors to a parent lifetime. Tokens are adapter
+overhead, not an intrinsic lower bound on PICASSO memory cost.
+
+Use `--lease-protection picasso --runtime-revocation on` with the collector.
+`--churn-rounds 300000` adds valid/stale constant-address churn controls in
+every first-workload repetition. The separate `2200000` extension crosses the
+installed 21-bit color threshold and uses one repetition. The collector retains
+its own source snapshot so later formatting does not change the recorded tool.
+
+```sh
+python3 "$PORT/host/cheribsd/temporal-summary.py" "$PICASSO_CAMPAIGN" \
+  "$NATIVE_CAMPAIGN" "$EXPORT" "$CAPSTONE_RUN_1" "$CAPSTONE_RUN_2" "$CAPSTONE_RUN_3"
+python3 "$PORT/host/cheribsd/plot-temporal.py" "$EXPORT/measurements.json" "$PLOTS"
+# For the separate extension: --extension, with its one Capstone run directory.
+```
+
 ## Build
 
 Keep SDKs, upstream archives, builds and raw results outside the checkout.

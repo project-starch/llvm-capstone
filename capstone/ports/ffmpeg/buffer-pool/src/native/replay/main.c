@@ -6,6 +6,9 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef FFPOOL_PICASSO
+#include <sys/mman.h>
+#endif
 static jmp_buf failure;
 static struct ff2_header *report;
 _Noreturn void ff2_fail(unsigned code) {
@@ -21,7 +24,16 @@ int main(int argc, char **argv) {
   struct ff2_header *input = calloc(1, FF2_FILE_BYTES);
   report = calloc(1, FF2_FILE_BYTES);
   void *meta = aligned_alloc(64, FF2_META_BYTES);
+#ifdef FFPOOL_PICASSO
+  /* The trusted manager needs uncolored authority to issue new lease colors.
+   * libc deliberately removes that permission from malloc results. */
+  void *payload = mmap(NULL, FF2_PAYLOAD_BYTES, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANON, -1, 0);
+  if (payload == MAP_FAILED)
+    return 2;
+#else
   void *payload = aligned_alloc(64, FF2_PAYLOAD_BYTES);
+#endif
   FILE *f = fopen(argv[1], "rb");
   if (!input || !report || !meta || !payload || !f)
     return 2;
