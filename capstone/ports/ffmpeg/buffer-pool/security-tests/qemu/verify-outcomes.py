@@ -37,6 +37,8 @@ NAMES += [
 ]
 NAMES += ["alias-scatter-valid-after-parent-revoke"]
 NAMES += ["af-join-dedup-bound-stale-read"]
+NAMES += ["h264-refs-partial-clear-stale-read",
+          "vidstab-parked-plane-pointer-stale-write"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")
@@ -65,7 +67,7 @@ for mode in map(int, args.modes.split(",")):
             raise SystemExit("alias scatter requires mode 0 or 2")
         scatter = 15 <= case <= 34
         register = scatter and (case - 15) % 10 >= 8
-        writing = (case - 15) % 2 if scatter else case in (2, 4, 6)
+        writing = (case - 15) % 2 if scatter else case in (2, 4, 6, 38)
         run = args.output / f"mode-{mode}-case-{case}"
         run.mkdir(exist_ok=False)
         share = run / "share"
@@ -80,7 +82,7 @@ for mode in map(int, args.modes.split(",")):
             or (case == 9 and mode >= 1)
             or (mode == 2 and case in (1, 2, 3, 4, 5, 6, 8, 12))
             or (mode == 2 and scatter)
-            or (mode == 2 and case == 36)
+            or (mode == 2 and case in (36, 37, 38))
         )
         guest = f"""#!/bin/sh
 set -e
