@@ -10,7 +10,15 @@ One binary, case and arm chosen at run time. `run.sh` builds it against the
 port's native pool library, runs the **fixed** arm first as the control, and
 exits 75 with no verdict if that control does not hold.
 
-    461fb22053_af_join_dedup_bound/   wrong dedup bound drops a buffer reference
+    461fb22053_af_join_dedup_bound/            a reference is never taken; stale read
+    1886c3269d_h264_refs_partial_clear/        reset bounded by the count, not the array
+    316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
+    a024f8c541_vp9_flush_leaves_next_refs/     contract violated with no free anywhere
+
+Four cases, four shapes. The last one frees nothing: its storage stays alive on
+a retained reference, and what it violates is the lifetime contract rather than
+memory safety. Its README says why this port's own protected arm is expected to
+lose that row.
 
 The inventory and triage that selected these cases, and the three other
 pool-backed specimens not yet built, are in
