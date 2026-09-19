@@ -20,6 +20,11 @@ longer suites, including a spatial-only arm. The explicit guest configuration
 is a workaround, not a kernel fix or a Capstone/PoisonCap performance ranking.
 [Pilot, failed attempts and scope](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md).
 
+The [backend regression](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md#backend-regression-verification)
+rebuilds all four FFmpeg configurations, passes 4 native and 23 shared Python
+tests, and repeats the full 29-process PoisonCap suite with an identical replay
+report. The spatial CheriBSD replay and its five controls also pass.
+
 ## 2026-09-19 — Four CheriBSD allocator libraries and examples
 
 FFmpeg buffer pools, PostgreSQL memory contexts, CPython pymalloc and Whisper
@@ -47,34 +52,15 @@ functional Capstone evidence, not protected decoding, hostile-manager domain
 isolation, a performance measurement or a measured competitor disadvantage.
 [Matrix, protocol and provenance](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md).
 
-## 2026-09-19 — Protected pool reuse comparison
+## 2026-09-19 — CHERI spatial arena comparison
 
-An optional PICASSO adapter now colors each FFmpeg pool lease and invalidates
-it on return. Nine native-recording replays match exactly, and the three-repeat
-300,000-round comparison passes 36 companion controls. Both retain 128 bytes
-of payload and carve 1,344 bytes of pool metadata in the churn fixture. PICASSO
-adds at most 128 requested bytes of live token storage in this adapter. Busy
-color IDs and Capstone node entries both increase; neither count is a byte
-cost. The pinned Capstone QEMU does not return nodes to its free list.
-The separate PICASSO 2,200,000-round extension crosses its real 21-bit color
-threshold, recycles IDs once, and still rejects the retained old pointer.
-Capstone's matching extension also completes and rejects that pointer, while
-retaining 2,200,050 node entries outside the free list before final cleanup.
-This is trusted per-lease adaptation, not hierarchical parent/child revocation.
-[Results and protocol corrections](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md).
-
-## 2026-09-19 — CHERI and PICASSO arena comparison
-
-The FFmpeg port now has a bounded CHERI Purecap backend and a CheriBSD/QEMU
-collector. Nine CHERI spatial and nine PICASSO outer-heap-enabled replays match
-the same native recordings, with three identical repeats per recording/arm.
-Payload arena carving increases by 192, 192 and 576 bytes; requested payload
-and metadata carving agree with the previous Capstone comparison. Twelve new
-companion controls pass. PICASSO catches libc post-free access, while these
-spatial arena leases retain the two stale pool-return cases. This is not a
-comparison with equivalent temporal guarantees or a complete memory ledger.
-[Results and plots](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
-include a separate static ELF inventory and retained failed-attempt history.
+Nine CHERI spatial replays match the native recordings, with three identical
+repetitions per workload. Five companion controls distinguish bounds faults
+from ordinary stale pool accesses. The
+[three-arm export and plots](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
+contain Capstone spatial, Capstone Sublet and CHERI spatial only. Payload
+padding and static storage are separate observations; the arms do not provide
+equivalent lifetime guarantees or a complete protection-memory ledger.
 
 ## 2026-09-19 — Paired FFmpeg replay measurements
 

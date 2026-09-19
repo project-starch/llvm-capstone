@@ -74,11 +74,10 @@ unaffected and new authority remains usable. It is functional evidence about
 authority and reuse, not a cycle measurement, memory-overhead estimate, proof
 over all storage locations, or isolation of a hostile manager in another domain.
 
-PoisonCap and PICASSO are not measured by this matrix. In particular, alias
+PoisonCap is not measured by this matrix. In particular, alias
 scattering alone must not be described as a missing PoisonCap property.
 A cross-system hierarchy claim needs matched adapters and equivalent parent,
-child and reuse semantics. Keep this result separate from the previous trusted
-PICASSO per-lease experiment.
+child and reuse semantics.
 
 The fixture carves synthetic grants directly and does not update FFmpeg's pool
 accounting. Its normal-return `payload=0` line therefore does not measure

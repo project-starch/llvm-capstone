@@ -12,6 +12,46 @@ default disabled. Explicit per-lease revocation remains active. Three
 2,379-event replays produce identical output. Preserving the guest default
 instead encounters a captured kernel VM-locking panic in longer suites.
 
+## Incremental porting effort
+
+The first working integration adds **167 lines and removes 5 lines** across
+six implementation/build files, relative to the prepared CheriBSD port.
+Git counts include blank lines and comments; these are diff counts, not a
+count of executable statements or developer hours.
+
+| Area | Added | Removed | Files |
+|---|---:|---:|---:|
+| Protection backend (`poisoncap-payload.c`) and private epoch field | 118 | 0 | 2 |
+| Replay entry and standalone example initialization | 21 | 4 | 2 |
+| CMake integration and allocator build script | 28 | 1 | 2 |
+| **Allocator integration subtotal** | **167** | **5** | **6** |
+| Validation, guest runner changes and console regression test | 338 | 4 | 5 |
+| Published-platform reconstruction scripts and configuration | 204 | 0 | 3 |
+| **All implementation, tests, scripts and configuration** | **709** | **9** | **14** |
+
+Documentation and captured evidence are separate: 1,994 added / 1 removed
+lines across 22 files. Counting the entire initial change (2,703 added /
+10 removed) as allocator adaptation would therefore overstate that effort.
+
+The backend itself is 115 added lines; the epoch field adds three.
+**No additional upstream FFmpeg edits were needed for this integration.**
+It reuses the extracted AVBufferPool/AVRefStructPool implementation, existing
+lifetime hooks, replay infrastructure and CHERI support. In particular, the
+pre-existing lifetime-hook patch adds 23 / removes 13 lines in FFmpeg; the
+separate event-instrumentation patch adds 64 / removes 3. Neither is new
+PoisonCap work, and those patches alone are not the complete cost of bringing
+unmodified FFmpeg to this setup. The count also excludes the published
+compiler, emulator and OS implementation reused by the platform scripts.
+
+Reproduce the initial-integration census with these pinned revisions. Later
+cleanup of other backends is outside this census:
+
+```sh
+git diff --numstat \
+  46d380be9c6a7fb9ed05149be72bb9bbefd99f89 \
+  e7c1d0287507f11a7b848ac00ca12ab26bed8da2
+```
+
 ## Reconstruct the platform
 
 `platform.json` pins the paper artifact, complete upstream source bases and
@@ -45,7 +85,7 @@ GSSAPI header even in an otherwise minimal build. The port enables GNU C for
 the published revocation header and explicitly selects LLD when linking.
 
 Existing artifact archives can be supplied as `--artifact` and `--cap-library`.
-The build stages do not alter existing standard CheriBSD/PICASSO installations.
+The build stages do not alter existing standard CheriBSD installations.
 The older emulator executable is named `qemu-system-riscv64xcheri`; the SDK
 provides the name expected by the shared runner. Firmware is an explicit
 external input and must be included in the run's platform fingerprints.

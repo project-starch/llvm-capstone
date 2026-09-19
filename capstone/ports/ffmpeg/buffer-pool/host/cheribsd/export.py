@@ -147,20 +147,6 @@ def main():
             expected = 162 if control["case"] in (10, 11) else 0
             if control["exit_code"] != expected or not control["passed"]:
                 raise ValueError("incorrect companion verdict")
-        if manifest.get("heap_probe_requested"):
-            controls = [
-                c for r in record["results"] for c in r.get("heap_controls", [])
-            ]
-            if sorted(c["stale"] for c in controls) != [False, True]:
-                raise ValueError("missing or duplicate outer-heap controls")
-            for control in controls:
-                expected = (
-                    162
-                    if control["stale"] and manifest["runtime_revocation"] == "on"
-                    else 0
-                )
-                if control["exit_code"] != expected or not control["passed"]:
-                    raise ValueError("incorrect outer-heap verdict")
         records.append(record)
     for workload in workloads:
         peaks = {

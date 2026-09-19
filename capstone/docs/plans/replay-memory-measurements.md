@@ -72,18 +72,16 @@ other ports requires each port's own accounting and baseline validation.
 Raw logs stay outside the checkout; only compact verified results belong in
 the port's results directory.
 
-## CHERI comparison baseline — 2026-09-19
+## CHERI comparison baseline
 
-[CHERI/PICASSO arena results](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
-reuse all three native recordings. Each new arm has nine accepted fresh-VM
-replays and explicit process-policy checks. CHERI compressed-bounds padding
-is reported separately from requested payload. The twelve companion controls
-distinguish pool return from libc free; static ELF storage is a separate ledger
-entry. Timing and total protection overhead remain outside the measured scope.
+Use the [shared CheriBSD workflow](../../ports/common/host/cheribsd/README.md)
+for bounded spatial leases and the
+[PoisonCap pilot](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md)
+for the explicit per-return adapter. Account for compressed-bounds padding,
+static storage and adapter snapshots separately.
 
 The next comparative arm needs a real nested-pool temporal adapter. Preserve
 pool lifecycle semantics and do not substitute libc allocation/free for pool
 reuse without recording the policy change. Require matching stale-lease
 controls before interpreting memory differences as the cost of equivalent
-protection. PICASSO's enabled outer-heap runtime is a control for that work,
-not its completion.
+protection. Enabling outer-heap revocation alone does not meet this gate.

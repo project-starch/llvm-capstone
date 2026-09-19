@@ -63,18 +63,11 @@ The [A1 ancestor-revocation matrix](results/measurements/20260919-alias-scatter/
 checks aliases in globals, heap objects, linked lists, independent sibling-pool
 storage and a register. All 44 executions pass, including same-address reuse
 and no-revoke counterparts. This is a synthetic Capstone fixture in the replay
-harness; it does not measure a CHERI/PoisonCap/PICASSO hierarchy comparison.
+harness; it does not measure a CHERI/PoisonCap hierarchy comparison.
 
-The [protected reuse experiment](results/measurements/20260919-temporal-reuse/README.md)
-adds a PICASSO per-lease adapter, matching stale-return controls, and fixed-payload
-churn through color recycling. It distinguishes trusted pool adaptation from
-hierarchical parent/child protection and records the pinned Capstone QEMU's
-node-reclamation limitation.
-
-The [CHERI/PICASSO comparison](results/measurements/20260919-cheri/README.md)
-adds 18 verified replays, compressed-bounds padding and static storage accounting.
-Its pool leases are spatial; the PICASSO outer-heap control is kept distinct
-from Sublet's per-return revocation.
+The [CHERI spatial comparison](results/measurements/20260919-cheri/README.md)
+reports nine verified replays, compressed-bounds padding and static storage.
+Its spatial leases have different lifetime guarantees from Sublet.
 
 The [paired measurement campaign](results/measurements/20260919-replay/README.md)
 checks three fresh native recordings in spatial and Sublet QEMU, three

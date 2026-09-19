@@ -8,7 +8,7 @@ shift
 cmake -S "$HERE/../../.." -B "$BUILD" -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$HERE/../../../../../common/cmake/toolchains/cheribsd.cmake" \
   -DCHERI_SDK="$CHERI_SDK" -DCHERI_SYSROOT="$CHERI_SYSROOT" \
-  -DCMAKE_BUILD_TYPE=Debug -DFFPOOL_POISONCAP=ON -DFFPOOL_PICASSO=OFF \
+  -DCMAKE_BUILD_TYPE=Debug -DFFPOOL_POISONCAP=ON \
   -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
   -DBUILD_TESTING=OFF "$@"
 cmake --build "$BUILD" -j "${BUILD_JOBS:-2}"

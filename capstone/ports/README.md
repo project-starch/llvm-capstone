@@ -9,7 +9,8 @@ For the four newer allocator components, start with the
 [shared CheriBSD guide](common/host/cheribsd/README.md): one purecap toolchain,
 matching `host/cheribsd/build.sh` and `run.sh` scripts, CMake library targets,
 and standalone link examples. The guide states the protection boundary of
-each adapter and keeps the specialized FFmpeg PICASSO collector separate.
+each adapter. The experimental FFmpeg PoisonCap adapter has its own platform
+and validation workflow linked from that guide.
 
 ## Components
 

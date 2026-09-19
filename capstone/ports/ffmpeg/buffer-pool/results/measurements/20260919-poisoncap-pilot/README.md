@@ -150,3 +150,19 @@ before drawing scaling conclusions. This pilot establishes trusted
 per-lease adaptation for the tested cases. It does not establish hostile
 nested-manager isolation, full application protection, hardware performance
 or a measured Capstone/PoisonCap ranking.
+
+## Backend regression verification
+
+The follow-up [regression record](backend-regression.json) pins the source,
+binary and platform hashes after simplifying the available backends. Native,
+Capstone domain, spatial CheriBSD and PoisonCap configurations build. Four
+native CTests and all 23 shared Python tests pass.
+
+A fresh PoisonCap guest passes all 29 processes with the same documented
+revocation policy. The 2,379-event replay output is byte-identical to the
+initial full-suite result, including 63 sweeps and 372,352 snapshot bytes.
+A fresh spatial CheriBSD replay also matches its native oracle and passes all
+five companion controls. The spatial export and plots regenerate successfully.
+This is regression verification, not an additional workload or timing claim.
+The earlier source hashes in `provenance.json` continue to identify the initial
+pilot; the follow-up source hashes are in `backend-regression.json`.

@@ -7,7 +7,7 @@ Work branch: `ports/9-poisoncap-ffmpeg`.
 
 Run the extracted FFmpeg buffer/refstruct pools with PoisonCap protection of
 individual lease lifetimes. Reuse existing native recordings and the shared
-CheriBSD runner. Preserve the existing spatial and PICASSO configurations.
+CheriBSD runner. Preserve the existing spatial configuration.
 
 ## Platform gate
 

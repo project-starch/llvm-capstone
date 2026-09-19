@@ -31,10 +31,7 @@ struct scattered_link {
 #endif
 static void checkpoint(unsigned long round)
 {
-#ifdef FFPOOL_PICASSO
-    extern void ff2_picasso_checkpoint(unsigned long);
-    ff2_picasso_checkpoint(round);
-#elif defined(FFPOOL_DOMAIN)
+#ifdef FFPOOL_DOMAIN
     ff2_node_snapshot(round);
 #else
     (void)round;

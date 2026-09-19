@@ -24,10 +24,9 @@ labels = {
     "capstone-spatial": "Capstone Spatial",
     "capstone-sublet": "Capstone Sublet",
     "cheri-spatial-arena": "CHERI Purecap",
-    "picasso-arena": "PICASSO · arena",
 }
 arms = list(dict.fromkeys(r["arm"] for r in rows))
-colors = ["#42677E", "#D57A27", "#38816A", "#7C6296"]
+colors = ["#42677E", "#D57A27", "#38816A"]
 plt.rcParams.update({"font.size": 12})
 
 

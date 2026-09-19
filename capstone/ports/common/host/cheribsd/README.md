@@ -148,8 +148,6 @@ The guest's system default is otherwise preserved. Optional
 and helper processes also use that default. The report records this separate
 setting; test programs still receive their explicit `--runtime-revocation`
 policy. The console is continuously drained during SSH operations.
-FFmpeg's existing optional PICASSO lease adapter remains available through its
-[specialized collector](../../../ffmpeg/buffer-pool/host/cheribsd/README.md).
 The experimental [PoisonCap workflow](../../../ffmpeg/buffer-pool/host/cheribsd/poisoncap/README.md)
 uses its own reconstructed platform and explicit per-lease hooks.
 It has its own mode and measurements; the generic examples use the default

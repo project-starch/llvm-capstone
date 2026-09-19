@@ -21,7 +21,7 @@ at the child's old address. Dedicated controls complete without a stale access.
 This demonstrates the tested **ancestor invalidation and reuse semantics**.
 It does not demonstrate a performance or total-memory advantage, a full
 allocator port, protection of a hostile manager in another domain, or failure
-of CHERI, PoisonCap or PICASSO. The no-revoke arm is a control in the same
+of CHERI or PoisonCap. The no-revoke arm is a control in the same
 Capstone binary; it is not a simulation of those systems.
 
 ## Fixture and evidence

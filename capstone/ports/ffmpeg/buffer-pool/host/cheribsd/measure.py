@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure spatial or explicitly colored pool leases in fresh QEMU snapshots."""
+"""Measure spatial pool leases in fresh QEMU snapshots."""
 
 import argparse
 import hashlib
@@ -38,21 +38,13 @@ def main():
     p.add_argument("--port", type=int, default=10426)
     p.add_argument("--runtime-revocation", choices=("off", "on"), default="off")
     p.add_argument("--label", default="cheri-spatial-arena")
-    p.add_argument(
-        "--lease-protection", choices=("spatial", "picasso"), default="spatial"
-    )
     p.add_argument("--churn-rounds", type=int, default=0)
-    p.add_argument(
-        "--heap-probe", type=Path, help="Optional separate outer-heap lifetime control"
-    )
     a = p.parse_args()
     if a.repetitions < 1:
         p.error("repetitions must be positive")
     if a.churn_rounds < 0 or a.churn_rounds > 3000000:
         p.error("churn rounds must be between zero and three million")
-    if a.lease_protection == "picasso" and a.runtime_revocation != "on":
-        p.error("PICASSO leases require active runtime revocation")
-    mode = 2 if a.lease_protection == "picasso" else 0
+    mode = 0
     manifest = json.loads((a.campaign / "manifest.json").read_text())
     if manifest["status"] != "complete":
         raise ValueError("incomplete source campaign")
@@ -99,8 +91,6 @@ def main():
             a.build / "compile_commands.json",
         )
     }
-    if a.heap_probe:
-        fingerprints[str(a.heap_probe)] = digest(a.heap_probe)
     for workload in workloads:
         for name in ("commands.bin", "recorded.bin"):
             f = a.campaign / "recordings" / workload / name
@@ -108,12 +98,11 @@ def main():
     report = dict(
         schema="ffpool-cheribsd-v1",
         label=a.label,
-        scope=a.lease_protection + " leases within reusable arenas",
-        lease_protection=a.lease_protection,
+        scope="spatial leases within reusable arenas",
+        lease_protection="spatial",
         churn_rounds=a.churn_rounds,
         runtime_revocation=a.runtime_revocation,
         repetitions=a.repetitions,
-        heap_probe_requested=bool(a.heap_probe),
         fingerprints=fingerprints,
         results=[],
         status="running",
@@ -270,7 +259,7 @@ def main():
                             text=True,
                         )
                         (run / "guest-info.txt").write_text(info.stdout + info.stderr)
-                        command = f"cd /tmp/replay && ulimit -c 0 && env {policy} CC_DEBUG=1 ./replay input.bin output.bin {mode}"
+                        command = f"cd /tmp/replay && ulimit -c 0 && env {policy} ./replay input.bin output.bin {mode}"
                         result = ssh(command, capture_output=True, text=True)
                         (run / "stdout.txt").write_text(result.stdout)
                         (run / "stderr.txt").write_text(result.stderr)
@@ -326,7 +315,7 @@ def main():
                                     struct.pack("<16Q", *h) + bytes(128)
                                 )
                                 scp(fixture, "root@127.0.0.1:/tmp/replay/control.bin")
-                                control_command = f"cd /tmp/replay && ulimit -c 0 && env {policy} CC_DEBUG=1 ./pool-security control.bin control-out.bin {mode}"
+                                control_command = f"cd /tmp/replay && ulimit -c 0 && env {policy} ./pool-security control.bin control-out.bin {mode}"
                                 # Keep a shell parent: SSH otherwise reports an exit-signal
                                 # as 255 rather than the child's conventional 128 + signal.
                                 control_command += (
@@ -340,9 +329,7 @@ def main():
                                 (run / f"control-{case}.txt").write_text(
                                     control.stdout + control.stderr
                                 )
-                                fault_cases = (
-                                    (3, 5, 10, 11, 12) if mode == 2 else (10, 11)
-                                )
+                                fault_cases = (10, 11)
                                 expected_code = 162 if case in fault_cases else 0
                                 passed = (
                                     control.returncode == expected_code
@@ -360,49 +347,6 @@ def main():
                                 if not passed:
                                     raise ValueError(
                                         f"companion control {case} failed: {control.returncode}"
-                                    )
-                        if a.heap_probe and repeat == 1 and workload == workloads[0]:
-                            scp(a.heap_probe, "root@127.0.0.1:/tmp/replay/heap-probe")
-                            entry["heap_controls"] = []
-                            for stale in (False, True):
-                                command = (
-                                    f"cd /tmp/replay && ulimit -c 0 && env {policy} ./heap-probe"
-                                    + (" stale" if stale else "")
-                                )
-                                command += '; rc=$?; echo HEAP_EXIT=$rc; exit "$rc"'
-                                check = ssh(
-                                    "sh -c " + shlex.quote(command),
-                                    capture_output=True,
-                                    text=True,
-                                )
-                                (run / f"heap-{int(stale)}.txt").write_text(
-                                    check.stdout + check.stderr
-                                )
-                                expected = (
-                                    162 if stale and a.runtime_revocation == "on" else 0
-                                )
-                                passed = (
-                                    check.returncode == expected
-                                    and f"HEAP_EXIT={expected}" in check.stdout
-                                )
-                                passed &= (
-                                    f'HEAP_PROBE runtime={int(a.runtime_revocation == "on")}'
-                                    in check.stdout
-                                )
-                                if stale:
-                                    passed &= (
-                                        "HEAP_PROBE stale-access-ready" in check.stdout
-                                    )
-                                entry["heap_controls"].append(
-                                    dict(
-                                        stale=stale,
-                                        exit_code=check.returncode,
-                                        passed=passed,
-                                    )
-                                )
-                                if not passed:
-                                    raise ValueError(
-                                        "outer-heap lifetime control failed"
                                     )
                         entry["status"] = "passed"
                         print(

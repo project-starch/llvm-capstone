@@ -15,20 +15,18 @@ campaigns. Next collect equivalent per-component memory accounting and add
 inner-lifetime adapters only with paired stale/live controls. Compilation and
 successful examples do not establish Sublet-equivalent temporal protection.
 
-Protected pool replay: the [PICASSO token adapter and Sublet reuse comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md)
-now passes matching per-return stale-lease controls. The
-[A1 matrix](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md)
-also verifies Capstone ancestor revocation across five alias locations, with
+Protected pool replay: the [A1 matrix](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md)
+verifies Capstone ancestor revocation across five alias locations, with
 same-address reuse and unaffected-sibling controls. Next define matched
 parent/child semantics for a cross-system hierarchy experiment; A1's no-revoke
-arm is not a CHERI, PoisonCap or PICASSO implementation. Vary child fan-out and
+arm is not a CHERI or PoisonCap implementation. Vary child fan-out and
 account for required manager bookkeeping before making a scaling claim.
 Keep trusted adaptation
 separate from protection of untrusted nested managers. Before making a
 reclamation-space claim, use a Capstone model implementing the intended node
 reclaimer; the pinned QEMU accumulates nodes in these traces. Account for
-physical metadata and the adapter's token storage separately from payload and
-ID counts. Preserve the earlier spatial arena comparison as a separate arm.
+physical metadata and adapter snapshot storage separately from payload and
+ID counts. Keep spatial and protected arms separate.
 
 Replay measurements: the first FFmpeg paired matrix is complete. Next extend
 the [measurement plan](../plans/replay-memory-measurements.md) with full

@@ -28,10 +28,5 @@
     "attempt": "campaign-spatial-4",
     "disposition": "excluded: companion gate failed",
     "reason": "replay matched native; SSH encoded an expected child SIGPROT as 255; collector now preserves a shell parent and checks 128+signal"
-  },
-  {
-    "attempt": "campaign-picasso-1",
-    "disposition": "failed before replay",
-    "reason": "existing PICASSO image held by another running guest; created an independent image from the installed rootfs"
   }
 ]
