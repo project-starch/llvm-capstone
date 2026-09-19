@@ -493,6 +493,20 @@ static void run_linear(unsigned reps) {
  * WITH THE FRACTION OF DISTINCT INDICES IT COVERS, since that fraction is what makes the number
  * interpretable at all.
  *
+ * RETRACTED 2026-09-19, AND THE WHOLE PARAGRAPH ABOVE IS WRONG. Retained references are NOT distinct
+ * indices, so this knob does not buy coverage of the pool and no value of it ever will. give(i) frees
+ * leaf[i]'s node to a LIFO free list and the very next statement, take(i), pops the head -- nothing
+ * allocates in between -- so it comes straight back under the next generation. The number of indices in
+ * play is M1_LIVE, not M1_MAXRET: at M1_LIVE=16 the arm cycles about SIXTEEN indices however large the
+ * buffer is. Measured proof, already on file before this was written: one boot performed 1,314,737
+ * allocations against a 65,532-index pool WITHOUT EXHAUSTING IT -- 20.1x the pool -- which is only
+ * possible if indices recycle.
+ *
+ * So: M1_MAXRET bounds how many stale references are HELD, which is worth having, and M1_LIVE bounds
+ * how many distinct indices they NAME, which is what the protocol's "fraction of distinct indices"
+ * actually asks for. Sweep M1_LIVE for coverage. This knob is still what stops the arm measuring its
+ * own buffer instead of the reclaimer, which is why it stays.
+ *
  * What a null in that arm means, recorded before the run rather than after: retention CANNOT prevent
  * reuse in this design, because no old reference is consulted at reclaim time -- the reclaim event is
  * the walk finding a node valid, and safety is carried by the generation rather than by reference
@@ -518,6 +532,51 @@ static void run_linear(unsigned reps) {
  * extra term into the loop's phase-2 condition, where it folds away at compile time, and the rebuilt
  * default image was NOT byte-identical -- reordering the short-circuit moved the codegen (598dce77
  * against the board's 1b7a04fe). */
+/* M1_STALE_TAKE_LIVE is the POSITIVE CONTROL for --stale-take, and the probe should never have been
+ * run on silicon without it. The probe performs sublet_take through the oldest RETAINED alias and is
+ * expected to fault; on 2026-09-19 it faulted on the board with mcause 26 (UNEXP_CAP_TYPE) and
+ * reproduced on the emulator as `helper_csmrev: Assertion rs1_v->tag failed` -- mrev's operand carried
+ * NO TAG, so it was not a capability at all.
+ *
+ * That result is UNINTERPRETABLE on its own, which is the whole point of this knob. An untagged
+ * operand is equally consistent with (a) the revocation having correctly disarmed the stale alias,
+ * which is condition 3 HOLDING in a strong form, and (b) the harness losing the tag on the way through
+ * a void* C variable and the m1_tmp slot, in which case the probe measures the harness and says
+ * nothing about the design. The snapshots do not settle it either: m1_alias_type(oldest) reports type 1
+ * (NONLIN) at every snapshot, which is a store plus an lcc, while the probe is a store plus an ldc plus
+ * an mrev -- so the two disagree about whether a tag is there, and the difference is the instrument.
+ *
+ * Set to 1 and the probe runs on alias[0], a LIVE alias, through the identical code path. A live alias
+ * that MINTS FINE proves the path preserves tags and makes the stale fault evidence about staleness. A
+ * live alias that raises THE SAME fault proves the path does not, and the stale result is void. Either
+ * reading decides it, and both run on the emulator for nothing. */
+/* M1_STALE_DEREF turns on the dereference probe described below, and is OFF by default for one
+ * reason only: the probe body sits inside run_m1, which every build links, so turning it on changes
+ * EVERY image's hash. The measurement arms must keep the binary they were measured with -- every
+ * emulator pass record and every board result on file cites a hash, and silently re-baselining them
+ * to gain a probe that only a condition-3 boot ever executes is a bad trade. A condition-3 boot builds
+ * its own image with -DM1_STALE_DEREF=1, and its control adds -DM1_STALE_TAKE_LIVE=1. */
+/* M1_STALE_MINT=0 drops the mint from the probe, and exists to turn a wedge into a RETURNED ANSWER.
+ * The mint is known to fault on any alias, so with it present the domain always wedges and a wedge
+ * destroys the entire output buffer -- no arm end line, no stop reason, no printed byte, nothing but a
+ * latched mepc. With it gone, a dereference that SUCCEEDS lets the arm finish and print: the pressure
+ * arm's stop reason, the retained count, and the byte actually read through the stale reference. A
+ * dereference that FAILS still wedges, at the dereference, which is the reading that says the reference
+ * was denied.
+ *
+ * Built 2026-09-19 because the silicon probe landed on the mint rather than the dereference, meaning the
+ * stale dereference had SUCCEEDED -- on an emulator where the identical instruction, same offset and
+ * same register, faults. A claim that large should not rest on an absent transcript. Default is 1, so
+ * every existing image is byte-identical. */
+#ifndef M1_STALE_MINT
+#define M1_STALE_MINT 1
+#endif
+#ifndef M1_STALE_DEREF
+#define M1_STALE_DEREF 0
+#endif
+#ifndef M1_STALE_TAKE_LIVE
+#define M1_STALE_TAKE_LIVE 0
+#endif
 #ifndef M1_RELEASE_AT_BUFFER
 #define M1_RELEASE_AT_BUFFER 0
 #endif
@@ -597,12 +656,40 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
   kv("revoked", sublet_stats.revoke); kv("retained", nret); kv("released", releasing); out("\n");
   nodes_minted_total += minted() - m0;
+#if M1_STALE_TAKE_LIVE
+  oldest = alias[0];   /* the positive control: a LIVE alias through the identical path */
+  out("R1 m1 stale-take CONTROL: probing a LIVE alias, not a stale one\n");
+#endif
   if (stale_take && oldest) {
-    /* LAST, and expected to fault: a capability operation through the oldest retained alias */
+    /* LAST, and expected to fault. TWO probes in order, and the ORDER IS THE INSTRUMENT.
+     *
+     * 1. A DEREFERENCE, which is the probe that actually tests condition 3. A live alias performs it
+     *    successfully -- it is an ordinary load through an ordinary NONLIN alias -- so a fault here
+     *    can only be the stale reference being denied, and that is the reading the condition wants.
+     * 2. The MINT, kept only because the earlier runs used it, and now known NOT to test condition 3:
+     *    mrev requires CAP_TYPE_LIN and an alias is NONLIN, so it refuses a LIVE alias too. Measured
+     *    2026-09-19 on the emulator through the M1_STALE_TAKE_LIVE control: the stale alias fails
+     *    `Assertion rs1_v->tag` and the live alias fails `Assertion type == CAP_TYPE_LIN`, one line
+     *    apart in op_helper.c. Both fault, so the mint alone separates nothing. It runs second so that
+     *    it can never pre-empt the dereference.
+     *
+     * Read: "deref ok" then a fault at the mint = the stale reference STILL CARRIES AUTHORITY, which
+     * is condition 3 VIOLATED. No "deref ok" line at all = the dereference faulted, which is condition
+     * 3 HOLDING -- provided the live control shows a live alias surviving the same dereference, and
+     * that control is M1_STALE_TAKE_LIVE=1. Without the control this probe means nothing, which is the
+     * lesson the 2026-09-19 board boot paid for. */
     out("R1 m1 stale-take go\n");
+#if M1_STALE_DEREF
+    { volatile char *p = (volatile char *)oldest; char v = *p; (void)v;
+      out("R1 m1 stale-deref ok"); kv("byte", (ulong)(unsigned char)v); out("\n"); }
+#endif
+#if M1_STALE_MINT
     sublet_store(&m1_tmp, oldest);
     old = sublet_take(&m1_tmp);
     out("R1 m1 stale-take returned"); kv("nonzero", old != 0); out("\n");
+#else
+    out("R1 m1 stale-mint SKIPPED -- the arm returns so the transcript survives\n");
+#endif
   }
 }
 
