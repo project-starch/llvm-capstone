@@ -19,13 +19,25 @@ software counters; spatial reports zero revokes and zero initialized bytes.
 | turnover, 320x180 | 60 | 4,437 | 371,904 | 11,648 | 368,226 | 963 | 373,056 |
 | larger, 640x360 | 60 | 4,473 | 1,242,240 | 12,288 | 1,237,832 | 969 | 1,243,392 |
 
-![Synchronized requested-payload profiles](payload.png)
+![Direct comparison of peak requested pool payload](payload.png)
 
-The x-axis is replay events, not time. Solid spatial and dashed Sublet curves
-overlap exactly. Each curve represents three identical repetitions. Light
-curves include live objects and idle backing still owned by the pools; idle
-bytes alone are their difference. Both live and pool-owned requested payload
-return to zero at completion.
+Each pair compares spatial and Sublet for the same recording. Bar lengths
+measure peak requested payload held by pools: live objects plus idle backing.
+The labels are rounded to 0.1 KiB. The exact maximum absolute difference across
+**all corresponding events**, for both live and held payload, is **zero bytes**;
+this is checked separately from the rounded peak labels. Each bar represents
+three identical repetitions. This is not a total memory overhead measurement.
+
+![Used and idle pool payload, enlarged excerpt](payload-detail.png)
+
+The detail shows events 580–800 of the `turnover` recording, including every
+event without smoothing. Blue is currently used payload; the pale area is idle
+payload held for reuse. A falling blue boundary means objects were returned;
+a rising boundary means objects were handed out. Both modes have exactly the
+same full trajectory, so this view uses one shared curve. Its x-axis is event
+order, not elapsed time. The excerpt illustrates pool reuse; it does not show
+startup or teardown. Both live and pool-owned requested payload return to zero
+at the end of the complete replay.
 
 The recordings contain native scheduling variation: the 30-frame and 60-frame
 inputs do not have identical startup allocator histories. Their small
@@ -116,8 +128,13 @@ python3 capstone/ports/ffmpeg/buffer-pool/host/memory/measure.py "$RESULTS" \
 python3 capstone/ports/ffmpeg/buffer-pool/host/memory/export-measurements.py \
   "$RESULTS" "$EXPORT"
 python3 capstone/ports/ffmpeg/buffer-pool/host/memory/plot-measurements.py \
-  "$RESULTS" "$PLOTS"
+  "$RESULTS" "$PLOTS" --detail-workload turnover \
+  --detail-start 580 --detail-stop 800
 ```
+
+The plotting command produces the overview and detail as PNG and PDF. Use
+`--language de` for German labels. Before rendering, it rechecks hashes, native
+observations and every repetition, and verifies paired event alignment.
 
 Choose new output directories. Native recordings may differ while preserving
 decoded frames; compare each replay to its own recording. A diagnosed failure
