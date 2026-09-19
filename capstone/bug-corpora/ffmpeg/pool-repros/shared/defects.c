@@ -232,6 +232,54 @@ static int case_vp9(int fixed) {
   return bad;
 }
 
+
+/* ---- 8061098418: avf_abitscope writes into a frame it has already shared ----
+ * The filter keeps s->outpicref across calls. In mode 1 it CLONES it, so the
+ * clone that goes downstream shares the same pooled storage. On the next frame
+ * the filter writes into s->outpicref again -- into storage a consumer still
+ * holds and reads. Nothing is freed, the pointer stays tagged and in bounds,
+ * and only the identity of the data changes. That is the taxonomy's class 3,
+ * "reuse-not-free", which no CHERI configuration catches at any cost. */
+static int case_abitscope(int fixed) {
+  AVBufferRef *outpicref = av_buffer_pool_get(g_pool);
+  if (!outpicref)
+    ff2_fail(650);
+  memset(outpicref->data, 0xA1, POOL_BYTES); /* frame 1 drawn */
+  AVBufferRef *downstream = av_buffer_ref(outpicref); /* av_frame_clone */
+  if (!downstream)
+    ff2_fail(651);
+  unsigned char consumer_saw_first = downstream->data[0];
+
+  /* frame 2: the filter draws again into its retained frame */
+  if (fixed && !av_buffer_is_writable(outpicref)) {
+    /* av_frame_make_writable: the storage is shared, so take fresh storage */
+    AVBufferRef *fresh = av_buffer_pool_get(g_pool);
+    if (!fresh)
+      ff2_fail(652);
+    memcpy(fresh->data, outpicref->data, POOL_BYTES);
+    av_buffer_unref(&outpicref);
+    outpicref = fresh;
+  }
+  int shared = av_buffer_get_ref_count(outpicref) > 1;
+  memset(outpicref->data, 0xB2, POOL_BYTES); /* frame 2 drawn */
+
+  unsigned char consumer_sees_now = downstream->data[0];
+  printf("arm=%s shared_when_written=%d consumer_saw=0x%02X consumer_now=0x%02X "
+         "freed_to_malloc=0\n",
+         fixed ? "fixed" : "buggy", shared, consumer_saw_first, consumer_sees_now);
+  printf("VERDICT %s\n",
+         !fixed && shared && consumer_sees_now == 0xB2
+             ? "DEFECT-REPRODUCED the held frame's data changed identity under its reader"
+         : fixed && consumer_sees_now == 0xA1
+             ? "FIXED the shared storage was left alone"
+             : "INCONCLUSIVE");
+  int bad = !fixed ? !(shared && consumer_sees_now == 0xB2)
+                   : consumer_sees_now != 0xA1;
+  av_buffer_unref(&downstream);
+  av_buffer_unref(&outpicref);
+  return bad;
+}
+
 /* One binary, case and arm chosen at run time, as the other corpora do. */
 int main(int argc, char **argv) {
   const char *want = argc > 1 ? argv[1] : "461fb22053";
@@ -250,9 +298,10 @@ int main(int argc, char **argv) {
     ff2_fail(605);
   g_pool = pool;
   if (!strcmp(want, "1886c3269d") || !strcmp(want, "316531e61c") ||
-      !strcmp(want, "a024f8c541")) {
+      !strcmp(want, "a024f8c541") || !strcmp(want, "8061098418")) {
     int rc = !strcmp(want, "1886c3269d")   ? case_h264_refs(fixed)
              : !strcmp(want, "316531e61c") ? case_vidstab(fixed)
+             : !strcmp(want, "8061098418") ? case_abitscope(fixed)
                                            : case_vp9(fixed);
     av_buffer_pool_uninit(&pool);
     free(metadata);
