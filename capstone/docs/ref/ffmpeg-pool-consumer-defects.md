@@ -6,9 +6,12 @@ AVBufferPool or AVRefStructPool handed out. Assembled 2026-09-19 against
 `ports/ffmpeg/buffer-pool/upstream.json` = 9.0.1, using a full clone of
 `git.ffmpeg.org/ffmpeg.git` at master `bfac54a03b`.*
 
-**Result: of twenty candidates, three are pool-backed. None is live at the
-current 9.0.1 pin; all three are live at n8.1, which is the newest tag that has
-them and still has the public `libavutil/refstruct.c` the port extracts.**
+**Result: four pool-backed specimens are known. One is live at the current 9.0.1
+pin; all four are live at n8.1, which is the newest tag that has them and still
+ships the public `libavutil/refstruct.c` the port extracts. The limit on the
+corpus is not the search window but FFmpeg's defect composition: the fourth case
+was only found by searching fixes that were never backported, and widening that
+search further returns hardware paths a domain cannot run.**
 
 ## The blindness argument is the strongest of the three ports
 
@@ -77,12 +80,13 @@ the allocation site, never inferred from the subsystem.
 | `4b9c4b9cfb` | `swscale/ops_dispatch` | — | file does not exist at n8.0 | not live |
 | `c05fc27dd3` | `aacdec_usac` | — | already in n8.0 | not live |
 
-Three of twenty. The ratio is the finding: FFmpeg's consumer defects are
+Three of twenty in this window; a fourth comes from the never-backported
+window below. The ratio is the finding: FFmpeg's consumer defects are
 overwhelmingly on ordinary `av_malloc` state — format lists, glyph caches,
 context structs, side data — which a malloc-level tool already sees. The
 nested allocator's blindness is broad in *bytes* and narrow in *known defects*.
 
-## Liveness of the three, by tag
+## Liveness of the first three, by tag
 
 Removed-line match count per tag:
 
@@ -92,9 +96,9 @@ Removed-line match count per tag:
 | `1886c3269d` h264_refs | 4/4 | 4/4 | 0/4 | 0/4 | 0/4 |
 | `461fb22053` af_join | 1/1 | 1/1 | 1/1 | 0/1 | 0/1 |
 
-**n8.1 (2026-03-16) is the newest tag with all three**, and it still ships
-`libavutil/refstruct.c`, so the port's extraction and both patches carry over
-unchanged. Below n8.0 the pool is `libavcodec/refstruct.c` with the private
+**n8.1 (2026-03-16) is the newest tag with all three** — and, as the next section
+shows, with the fourth as well. It still ships `libavutil/refstruct.c`, so the
+port's extraction and both patches carry over unchanged. Below n8.0 the pool is `libavcodec/refstruct.c` with the private
 `ff_refstruct_*` names and the extraction must be rewritten; before 2023-10-07
 the second pool does not exist at all.
 
@@ -119,12 +123,78 @@ shape the CPython corpus files as "parked with no bound on reuse".
   `vsFrameAllocate` because `td->src` looks non-null, and writes through the
   previous frame's pointer.
 
+## Never-backported fixes are a second, larger pool — with worse precision
+
+A defect fixed on master after a release branch was cut, and never cherry-picked
+into it, is still present in that branch's tags. This is CPython's Group B, and
+for FFmpeg it is the larger of the two windows:
+
+| Pin | branch point | Group A (branch after tag) | Group B raw | Group B never backported |
+|---|---|---|---|---|
+| n9.0.1 | 2026-06-26 | 7 | 34 | 19 |
+| n8.1 | 2026-03-08 | 13 | 58 | 45 |
+| n8.0.3 | 2025-08-09 | 4 | 78 | 59 |
+| n7.1.5 | 2024-09-24 | 4 | 95 | 81 |
+
+Backports are cherry-picks, so membership is decided by patch id (`git cherry`),
+not by reachability. Group B grows steadily as the pin ages, and this is where
+the fourth specimen came from.
+
+Its precision, however, collapses in the other direction. At the 9.0.1 pin all
+19 Group B candidates are Vulkan, AMF, CUDA or VideoToolbox paths, or fixes on
+memory that is not pooled — **none is usable**, because a Capstone domain has no
+GPU. At n8.1, 19 of 45 are still hardware; of the 26 software ones, the swscale
+op-chain work, the bitstream-filter `profile` resets and the `itut35` side-data
+unrefs are ordinary `av_malloc` state, and `ff_hwaccel_frame_priv_alloc`
+(`decode.c:2352-2356`) uses `av_refstruct_allocz` **without** a pool, so the four
+"private HW data freed early for pictures" commits are refstruct but not pooled.
+
+The pooled object classes at this pin are exactly four, read from their
+allocation sites:
+
+- `frame->buf[i]` planes — `av_buffer_pool_get`, `get_buffer.c:196`/`:233`
+- `progress_frame_pool` — `av_refstruct_pool_alloc_ext`, `decode.c:2136`
+- per-decoder refstruct pools — e.g. h264 `decode_error_flags_pool`, hevc
+  `tab_mvf_pool`/`rpl_tab_pool`, `MPVPicture`
+- the filter frame pool — `libavfilter/framepool.c`
+
+Anything else is not in this corpus's class, however temporal its fix reads.
+
+## The fourth specimen, and the tally by pin
+
+`a024f8c541` (master, backported to release/9.0 as `c878aa71a6`) —
+`vp9_decode_flush()` releases `s->s.frames[]`, `s->s.refs[]` and
+`s->s.ref_frames[]` but leaves `s->next_refs[]` referenced. Under frame
+threading, `vp9_decode_update_thread_context()` seeds a worker's `refs[]` from
+the source worker's `next_refs[]`, so pre-flush references survive the flush and
+are resurrected, and a later inter frame passes the availability check and
+decodes against references that no longer exist. `ProgressFrame` internals come
+from `progress_frame_pool`, so this is pool memory. The reduction has to model
+the thread-context hand-off, which is a copy between two contexts rather than a
+race, so it is expressible without threads — but that is an argument, not yet a
+fixture.
+
+| Specimen | class | live at n9.0.1 | live at n8.1 | needs |
+|---|---|---|---|---|
+| `af_join` | buffer pool | no | yes | — |
+| `h264_refs` | buffer pool | no | yes | — |
+| `vidstabtransform` | buffer pool | no | yes | `--enable-libvidstab` |
+| `vp9` next_refs | refstruct pool | **yes** | yes | frame-threading hand-off modelled |
+
+Two candidates remain unresolved and are recorded rather than counted:
+`08597a382e` (`avcodec/mwsc`, does not dereference a missing reference frame) and
+`fd3ee52fab` (`avcodec/tdsc`, unrefs the reference frame before reallocating on a
+size change). The second is upstream-classified as an out-of-array access; its
+cause is a retained buffer used with updated dimensions, which is a size
+confusion on live memory rather than a stale pointer after release, so it may not
+belong in this class at all.
+
 ## Limits
 
 This is a source triage, not a reproduction. Each verdict names the allocation
-site it was read from; none of the three has been built, run, or shown to
+site it was read from; none of the four has been built, run, or shown to
 produce a stale access under the port's oracle, and that is the next gate. The
-count of three is a count of *upstream-fixed, pool-backed consumer* defects found
+count of four is a count of *upstream-fixed, pool-backed consumer* defects found
 by this instrument on this surface — it is not a claim that FFmpeg has only three,
 and the instrument's two discarded predecessors are the reason to treat any
 single number here as a floor. Re-pinning has costs this document does not
