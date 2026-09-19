@@ -1,0 +1,298 @@
+{
+  "headers": {
+    "native": {
+      "magic": 3555957288647612752,
+      "count": 115,
+      "mode": 0,
+      "status": 0,
+      "completed": 115,
+      "allocations": 55,
+      "frees": 55,
+      "reallocations": 4,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata": 4589888,
+      "checksum": 16784404770030295340
+    },
+    "spatial": {
+      "magic": 3555957288647612752,
+      "count": 115,
+      "mode": 0,
+      "status": 0,
+      "completed": 115,
+      "allocations": 55,
+      "frees": 55,
+      "reallocations": 4,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata": 5275200,
+      "checksum": 16784404770030295340
+    },
+    "protected": {
+      "magic": 3555957288647612752,
+      "count": 115,
+      "mode": 1,
+      "status": 0,
+      "completed": 115,
+      "allocations": 55,
+      "frees": 55,
+      "reallocations": 4,
+      "arenas": 1,
+      "arena_frees": 0,
+      "metadata": 5275200,
+      "checksum": 16784404770030295340
+    }
+  },
+  "protection_counters": {
+    "cheribsd-abi": [],
+    "cheribsd-bounds": [],
+    "poison-live": [],
+    "poison-read": [],
+    "poison-write": [],
+    "poison-reuse": [],
+    "poison-reused-read": [],
+    "allocator-example": [
+      {
+        "mode": 1,
+        "sweeps": 6,
+        "poison_bytes": 17648,
+        "clear_bytes": 17648,
+        "zeroed_bytes": 17648,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 1,
+        "pointer_bytes": 16
+      }
+    ],
+    "check-sizes": [
+      {
+        "mode": 1,
+        "sweeps": 68,
+        "poison_bytes": 1632752,
+        "clear_bytes": 1632752,
+        "zeroed_bytes": 1632752,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 31,
+        "pointer_bytes": 16
+      }
+    ],
+    "check-realloc": [
+      {
+        "mode": 1,
+        "sweeps": 7,
+        "poison_bytes": 10400,
+        "clear_bytes": 10400,
+        "zeroed_bytes": 10400,
+        "copied_bytes": 2176,
+        "snapshot_peak": 1024,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "check-snapshot-failure": [
+      {
+        "mode": 1,
+        "sweeps": 1,
+        "poison_bytes": 64,
+        "clear_bytes": 64,
+        "zeroed_bytes": 64,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "check-unwritten-reuse": [
+      {
+        "mode": 1,
+        "sweeps": 6,
+        "poison_bytes": 6336,
+        "clear_bytes": 6336,
+        "zeroed_bytes": 6336,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "check-arena-turnover": [
+      {
+        "mode": 1,
+        "sweeps": 2301,
+        "poison_bytes": 2226176,
+        "clear_bytes": 2226176,
+        "zeroed_bytes": 2226176,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      },
+      {
+        "mode": 1,
+        "sweeps": 2303,
+        "poison_bytes": 2242496,
+        "clear_bytes": 2242496,
+        "zeroed_bytes": 2242496,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 1,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-0": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-1": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-2": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-3": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-4": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-5": [],
+    "pool-0-6": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-7": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 1,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-0-8": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-1-0": [
+      {
+        "mode": 1,
+        "sweeps": 5,
+        "poison_bytes": 1248,
+        "clear_bytes": 1248,
+        "zeroed_bytes": 1248,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 0,
+        "pointer_bytes": 16
+      }
+    ],
+    "pool-1-1": [],
+    "pool-1-2": [],
+    "pool-1-3": [],
+    "pool-1-4": [],
+    "pool-1-5": [],
+    "pool-1-6": [],
+    "pool-1-7": [],
+    "pool-1-8": [],
+    "recording-0": [
+      {
+        "mode": 0,
+        "sweeps": 0,
+        "poison_bytes": 0,
+        "clear_bytes": 0,
+        "zeroed_bytes": 0,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 4,
+        "pointer_bytes": 16
+      }
+    ],
+    "recording-1": [
+      {
+        "mode": 1,
+        "sweeps": 63,
+        "poison_bytes": 80336,
+        "clear_bytes": 80336,
+        "zeroed_bytes": 80336,
+        "copied_bytes": 0,
+        "snapshot_peak": 0,
+        "reclasses": 4,
+        "pointer_bytes": 16
+      }
+    ]
+  },
+  "copy_scope": "copied_bytes counts snapshot save/restore only; excludes ordinary realloc, calloc, replay writes and kernel scan traffic",
+  "memory_scope": "metadata is allocator high-water; fixed payload budget is 64 MiB; not process RSS or physical protection metadata"
+}

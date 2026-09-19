@@ -26,6 +26,26 @@ class CheriBSDOutcomeTests(unittest.TestCase):
                 expected,
             )
 
+    def test_explicit_rejection_requires_marker_and_failure_exit(self):
+        case = dict(
+            name="rejection", expect="REJECT code=719", exit=1, also_expect=["READY"]
+        )
+        runner.validate_case(case)
+        for code, output, expected in (
+            (1, "READY\nREJECT code=719\n", True),
+            (1, "REJECT code=719\n", False),
+            (0, "REJECT code=719\n", False),
+            (162, "REJECT code=719\n", False),
+            (1, "REJECT code=718\n", False),
+            (1, "", False),
+        ):
+            self.assertEqual(
+                runner.outcome_matches(
+                    case, SimpleNamespace(returncode=code, stdout=output)
+                ),
+                expected,
+            )
+
     def test_regex_must_match_whole_line_and_success_exit(self):
         case = dict(name="replay", expect_regex=r"done=\d+ status=0")
         for output, code, expected in (
@@ -49,6 +69,8 @@ class CheriBSDOutcomeTests(unittest.TestCase):
             {"inputs": {"../input": "source"}},
             {"outputs": ["/tmp/output"]},
             {"exit": 139},
+            {"also_expect": "READY"},
+            {"also_expect": [""]},
             {"expect_regex": "READY"},
             {"expect": ""},
         ):

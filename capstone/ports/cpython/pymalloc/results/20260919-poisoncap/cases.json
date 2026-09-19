@@ -1,0 +1,477 @@
+{
+  "schema": "cheribsd-allocator-cases-v1",
+  "status": "complete",
+  "runtime_revocation": "off",
+  "guest_default_revocation": "off",
+  "results": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+      "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "CHERI_BOUNDARY_READY",
+      "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-live",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP live PASS",
+      "stdout_sha256": "b08eef40afc75a1e10c524e6c637a3cc90da3d0e002828fbd4957b55eff1c0ef",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP read READY",
+      "stdout_sha256": "1118b8cfeb952f15c74e573099ad10893c738d186b3a2d628fb2a539cfd97cec",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-write",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP write READY",
+      "stdout_sha256": "769e3ae89df435a6834082b117887f6aae2c0efbb26718492aa78a2db0b04d8d",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reuse",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "POISONCAP reuse PASS",
+      "stdout_sha256": "4a26759cb78ba2b2f29cc1fdd1338dd77173f0b902f0632de0222fe2b32d5122",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "poison-reused-read",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "POISONCAP reused-read READY",
+      "stdout_sha256": "a5b1622e32f0d62fc9e14d104fbf3dc2863e37ddf1b24f75fcb35cc5fc5c8767",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "allocator-example",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "ALLOCATOR_EXAMPLE cpython PASS pointer_bytes=16",
+      "stdout_sha256": "74a1c15396b30f5d218ef9e90a5a62d96e52456068a0aacc9a831059a6e3b855",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "check-sizes",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM_CHECK sizes PASS pointer_bytes=16",
+      "stdout_sha256": "3b08e56dfe8f03209c58fc329eb945abae9aeeb0200c47b5248d9c4f699640e3",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "check-realloc",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM_CHECK realloc PASS pointer_bytes=16",
+      "stdout_sha256": "580af2a6f39fc8838c5b731a878f43a389e95439545d6b0754d65e3f028be31e",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "check-snapshot-failure",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM_CHECK snapshot-failure PASS pointer_bytes=16",
+      "stdout_sha256": "c36b955e643ebf9c10397505c167fb9c9d038ed34bfad4ed4bba71c8c94f6047",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "check-unwritten-reuse",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM_CHECK unwritten-reuse PASS pointer_bytes=16",
+      "stdout_sha256": "70c843a9bcbd9f2b4043f3c318eb16006d8478ffdc00096843cee52330369af8",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "check-arena-turnover",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM_CHECK arena-turnover PASS pointer_bytes=16",
+      "stdout_sha256": "0d8834b8216ef01e9ba07982b362123a0575607b24923a96ae2745107ed6e2a2",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "pool-0-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "4059b77a255ebe04835c8564c75e0930b1e69aa31a64bd39cc9701af43b76988",
+      "inputs": {
+        "input.bin": "7bdcde4c719b8c4fa17666a4dba569a9c443766426ec592fb294be450382e1cb"
+      },
+      "outputs": {
+        "output.bin": "0565200ba0013e7d35bb1a2c181acb83c5b826a60b670f095d3581d12791df02"
+      }
+    },
+    {
+      "name": "pool-0-1",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "74cf66a5b6e3c2d549f1964170fdf1c3f829db4f3f3b4338b3e43ae1010a252d",
+      "inputs": {
+        "input.bin": "27677e20d60f8616a2905e42c8681a1e0ee942b93d240b06b9b6a3bed2be8a4c"
+      },
+      "outputs": {
+        "output.bin": "9aaa874ab237b6c773a84ce54960e75503b1229989aef11d8721c8a5875e503e"
+      }
+    },
+    {
+      "name": "pool-0-2",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "3698df1a83a893a6ba5f92d08c8ce75245848e9a35d00a365acbb14da0e6b147",
+      "inputs": {
+        "input.bin": "d336bff8ec5b74329f6fc06a92a79893664e3c2473c869d97412ab981dc7533c"
+      },
+      "outputs": {
+        "output.bin": "9aaa874ab237b6c773a84ce54960e75503b1229989aef11d8721c8a5875e503e"
+      }
+    },
+    {
+      "name": "pool-0-3",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "70eecdad10dadea6b4bf3539f75c016727bec34e4befe5dffc74738a8796cf31",
+      "inputs": {
+        "input.bin": "297e239644dd7d433812924c9af668f941b4954048d4c064d0392b3e58cbad47"
+      },
+      "outputs": {
+        "output.bin": "9aaa874ab237b6c773a84ce54960e75503b1229989aef11d8721c8a5875e503e"
+      }
+    },
+    {
+      "name": "pool-0-4",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "582944aae985ee5a797112a5c0077bae6553cfee9b0de13b32b7143af5f3984d",
+      "inputs": {
+        "input.bin": "1da89b4c1eddcf084bc83ed53da79bc49eb298a3c4c8f574a349073f622076ba"
+      },
+      "outputs": {
+        "output.bin": "9aaa874ab237b6c773a84ce54960e75503b1229989aef11d8721c8a5875e503e"
+      }
+    },
+    {
+      "name": "pool-0-5",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=5 ready",
+      "stdout_sha256": "ce4742715123b8fbe93318cbda50b5a8797a17062987a0ec85a6b33cab9e7a81",
+      "inputs": {
+        "input.bin": "b3868740fc1fe0d37531a1044df47b362d3cd34776b8513f451ddc60dc0f8d77"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-0-6",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "58bb0506cab171beaca7afa731de39f5a4ac30898c1d1d96bb0de6f0205a4d15",
+      "inputs": {
+        "input.bin": "24cb9bc9b6f9227ef02880107caa569a9fb2d019b18377286142bf811d8f0051"
+      },
+      "outputs": {
+        "output.bin": "80b72363862f0738ca5f1f0fc983669e1b64c6e4bfdab9d1d00c771a26e522b0"
+      }
+    },
+    {
+      "name": "pool-0-7",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "84c918a872055375d8c404f6e6eb8102f3c1d594cbd3becadb758e2882eff73f",
+      "inputs": {
+        "input.bin": "fb916588e56c8ff0598858090c3ed85aee2f644783610a51de363d678b4c0405"
+      },
+      "outputs": {
+        "output.bin": "351053844225621151042d5260fd872413f42f1e1d9a7432a066e5ca3529e048"
+      }
+    },
+    {
+      "name": "pool-0-8",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "ddff410175f8817a14606feeb7595599047fb2ab07caaa3b6b40aedf30436a47",
+      "inputs": {
+        "input.bin": "eac6f301ce8a4c26a899fb7b4108c473adb7f0ba1913a9de28a18a6a7ac0626d"
+      },
+      "outputs": {
+        "output.bin": "9aaa874ab237b6c773a84ce54960e75503b1229989aef11d8721c8a5875e503e"
+      }
+    },
+    {
+      "name": "pool-1-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=1 alloc=0 free=0 realloc=0 arenas=\\d+ released=\\d+",
+      "stdout_sha256": "a64d01a412b5146c38108dac6c2325e38dae619df8265670581240963a5a75fd",
+      "inputs": {
+        "input.bin": "7bdcde4c719b8c4fa17666a4dba569a9c443766426ec592fb294be450382e1cb"
+      },
+      "outputs": {
+        "output.bin": "9d191bd5321153183f630344aaba0d1b90e0303759036a970ab5e42fa6fcb350"
+      }
+    },
+    {
+      "name": "pool-1-1",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=1 ready",
+      "stdout_sha256": "22cf2e7684e2d68c1b2434102c3cde2ebe4912e6fa51430e03ba6a1247129315",
+      "inputs": {
+        "input.bin": "27677e20d60f8616a2905e42c8681a1e0ee942b93d240b06b9b6a3bed2be8a4c"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-2",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=2 ready",
+      "stdout_sha256": "8ed83d00d560013476461ade0d80ea9f2de3b30def1c2e2a986162788965e1bb",
+      "inputs": {
+        "input.bin": "d336bff8ec5b74329f6fc06a92a79893664e3c2473c869d97412ab981dc7533c"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-3",
+      "passed": true,
+      "exit": 1,
+      "expected_exit": 1,
+      "marker": "PYM_REJECT code=719",
+      "stdout_sha256": "f7fe36ee91e0b3b98bb0594a322daaa79d3acf3f41b111afa0e1ca7d27891698",
+      "inputs": {
+        "input.bin": "297e239644dd7d433812924c9af668f941b4954048d4c064d0392b3e58cbad47"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-4",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=4 ready",
+      "stdout_sha256": "d103dd7f0858d8cfbd4b649868e40fbea5d4f9c531943b7581623a2ea50ff4e4",
+      "inputs": {
+        "input.bin": "1da89b4c1eddcf084bc83ed53da79bc49eb298a3c4c8f574a349073f622076ba"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-5",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=5 ready",
+      "stdout_sha256": "ce4742715123b8fbe93318cbda50b5a8797a17062987a0ec85a6b33cab9e7a81",
+      "inputs": {
+        "input.bin": "b3868740fc1fe0d37531a1044df47b362d3cd34776b8513f451ddc60dc0f8d77"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-6",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=6 ready",
+      "stdout_sha256": "2d59c36e674bc0c4b2919f80c47bb63af0fac836461f08476f100cbb1ac49919",
+      "inputs": {
+        "input.bin": "24cb9bc9b6f9227ef02880107caa569a9fb2d019b18377286142bf811d8f0051"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-7",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=7 ready",
+      "stdout_sha256": "8bf08a4222102aa26093cf1a718444447fb46826732c49eabb5800cb40673cc7",
+      "inputs": {
+        "input.bin": "fb916588e56c8ff0598858090c3ed85aee2f644783610a51de363d678b4c0405"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "pool-1-8",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "PYM_PROBE case=8 ready",
+      "stdout_sha256": "83c7db22250e3f26d88c08176af77cda9f82fd0a611de8cb4edddfbc7a1199b7",
+      "inputs": {
+        "input.bin": "eac6f301ce8a4c26a899fb7b4108c473adb7f0ba1913a9de28a18a6a7ac0626d"
+      },
+      "outputs": {}
+    },
+    {
+      "name": "recording-0",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=\\d+ alloc=\\d+ free=\\d+ realloc=\\d+ arenas=\\d+ released=\\d+",
+      "stdout_sha256": "b676a3d7b4e8a8a74686139649290b79e6717a7206803d9275070726bd39d6fe",
+      "inputs": {
+        "input.bin": "4d1a034a7ef1d27d2bf4b58aaabacbba28f24988609218e68b9d7082a61b520c"
+      },
+      "outputs": {
+        "output.bin": "5b5b5780f9d365989fef405063871cf5ccd8bbe6c5a40536f4e93d9c53460fbe"
+      }
+    },
+    {
+      "name": "recording-1",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "PYM completed=\\d+ alloc=\\d+ free=\\d+ realloc=\\d+ arenas=\\d+ released=\\d+",
+      "stdout_sha256": "8d6348785094c70e31e6de42127bbc0ab9db1ff64731f8c885ff1de56cb0973b",
+      "inputs": {
+        "input.bin": "4d1a034a7ef1d27d2bf4b58aaabacbba28f24988609218e68b9d7082a61b520c"
+      },
+      "outputs": {
+        "output.bin": "33c6722edcdc389b59517e37d8b9394102ef71e8e573411f5637fa47b0b4e2fe"
+      }
+    }
+  ],
+  "cases": [
+    "cheribsd-abi",
+    "cheribsd-bounds",
+    "poison-live",
+    "poison-read",
+    "poison-write",
+    "poison-reuse",
+    "poison-reused-read",
+    "allocator-example",
+    "check-sizes",
+    "check-realloc",
+    "check-snapshot-failure",
+    "check-unwritten-reuse",
+    "check-arena-turnover",
+    "pool-0-0",
+    "pool-0-1",
+    "pool-0-2",
+    "pool-0-3",
+    "pool-0-4",
+    "pool-0-5",
+    "pool-0-6",
+    "pool-0-7",
+    "pool-0-8",
+    "pool-1-0",
+    "pool-1-1",
+    "pool-1-2",
+    "pool-1-3",
+    "pool-1-4",
+    "pool-1-5",
+    "pool-1-6",
+    "pool-1-7",
+    "pool-1-8",
+    "recording-0",
+    "recording-1"
+  ],
+  "binaries": {
+    "cheribsd-abi": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+    "cheribsd-bounds": "db98f75590e7027ee2e061d171779cc3f2b42523496f330272fb8acff10e0326",
+    "poison-live": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+    "poison-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+    "poison-write": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+    "poison-reuse": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+    "poison-reused-read": "1b8649f66190e9467bf8cc6ccc6a43f8e2ffc526cf9f3b1ad513bcde468ddc88",
+    "allocator-example": "36070e3c6d101d11cea49ba695fe5156f9b4faa34e02b664322a4618fb50c6ae",
+    "check-sizes": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+    "check-realloc": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+    "check-snapshot-failure": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+    "check-unwritten-reuse": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+    "check-arena-turnover": "68540f48d24675d19538f530d3745184edca30b6eb4edf8a213cdb9d13f0a088",
+    "pool-0-0": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-1": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-2": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-3": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-4": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-5": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-6": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-7": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-0-8": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-0": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-1": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-2": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-3": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-4": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-5": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-6": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-7": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "pool-1-8": "c51cc306421879a006d8fe9f3454e9908947560161da07bbedef9597c5238def",
+    "recording-0": "73ad6dc85bb667b130d33748ceb6633e1292e2d92d6f5767902d831b5b3f9596",
+    "recording-1": "73ad6dc85bb667b130d33748ceb6633e1292e2d92d6f5767902d831b5b3f9596"
+  },
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+    "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+  }
+}

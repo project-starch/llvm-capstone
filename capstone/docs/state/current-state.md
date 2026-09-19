@@ -2,6 +2,32 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Experimental PoisonCap pymalloc port
+
+The extracted CPython 3.13.7 allocator now has a trusted PoisonCap backend,
+reusing the three existing upstream patches and the FFmpeg platform. The full
+33-process QEMU suite passes: ABI/platform controls, linked example, five API
+checks, nine paired lifetime cases and two native-recording replays. Both
+modes process all 115 events and match the native logical oracle; payload
+preservation is checked inside the guest. The small complete recording is not
+the existing larger workload or the defect corpus.
+
+An initial failed replay exposed stored poison capabilities remaining after
+`cclearpoison`, causing a later sweep to revoke a fresh unwritten allocation.
+The adapter now overwrites those remnants and counts the additional writes;
+a targeted regression and the complete suite pass. The protected recording
+uses 63 sweeps and 80,336 bytes each of poison/clear/zero work. Snapshot copy
+traffic is zero on this recording; separate in-place realloc controls exercise
+it. Both modes report 5,275,200 bytes of private metadata high-water, including
+the same authority-record layout and replay scratch. These are not total
+memory overhead or hardware timing measurements.
+
+Automatic libc revocation remains explicitly off while adapter sweeps remain
+on, using the documented platform workaround. Native tests and all four
+backend builds pass. This is not whole-interpreter protection or isolation of
+hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
+[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+
 ## 2026-09-19 — Experimental PoisonCap FFmpeg port
 
 The published PoisonCap compiler, QEMU and matching CheriBSD kernel/userspace

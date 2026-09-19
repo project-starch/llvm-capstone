@@ -1,0 +1,16 @@
+[
+  {
+    "mode": 0,
+    "logical_fields_match": true,
+    "events": 115,
+    "output_sha256": "5b5b5780f9d365989fef405063871cf5ccd8bbe6c5a40536f4e93d9c53460fbe",
+    "native_sha256": "cb0e441370caa59dd50e6a1254cf91a3dc8f06456268040c158978c51d045a6a"
+  },
+  {
+    "mode": 1,
+    "logical_fields_match": true,
+    "events": 115,
+    "output_sha256": "33c6722edcdc389b59517e37d8b9394102ef71e8e573411f5637fa47b0b4e2fe",
+    "native_sha256": "cb0e441370caa59dd50e6a1254cf91a3dc8f06456268040c158978c51d045a6a"
+  }
+]

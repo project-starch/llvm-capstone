@@ -1,3 +1,13 @@
+PoisonCap pymalloc: the [first pilot](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md)
+passes the complete 33-process suite and both modes of a 115-event native
+recording. Next validate a larger complete recording and account for matched
+payload, authority records, snapshot retention and kernel scan work. Evaluate
+quarantine/batching as a separate policy; the initial synchronous sweeps are
+not an architectural lower bound. Preserve the unwritten-reuse regression and
+explicit automatic-libc-off configuration. The full interpreter, existing
+defect corpus and hostile nested-manager protection remain outside the
+validated scope. See the [integration plan](../plans/poisoncap-pymalloc.md).
+
 PoisonCap FFmpeg: the [first pilot](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md)
 passes a full 29-process suite with the guest's automatic libc-revocation
 default disabled; explicit adapter revocation remains active. Three replays

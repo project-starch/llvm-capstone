@@ -23,3 +23,8 @@ This is a single-threaded component port. The surrounding libc's revocation
 policy is checked separately by the runner; enabling it does not add Sublet's
 inner-lifetime semantics. Keep native recording validation and target replay
 validation explicit when using these builds for a comparison.
+
+The experimental [PoisonCap workflow](poisoncap/README.md) uses the published
+platform and an explicitly selected inner-lifetime adapter. Its mode 1,
+synchronous sweep policy and separate controls do not change this standard
+CheriBSD build's protection scope.
