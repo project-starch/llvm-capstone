@@ -22,6 +22,11 @@ Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEM
 This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
 complete resource reclamation, or a new FPGA result. Allocator integration is
 reviewed separately; existing ports are not enabled automatically.
+Port navigation and pending integration: [component catalog](../../ports/README.md)
+and [integration plan](../plans/port-stack-integration.md). The shared runtime's
+missing `include/sublet/sublet.h` is restored from the identical port-branch
+header. This repairs a missing build input; the dated silicon results below
+and the pending fault-recovery validation remain separate.
 
 ## 2026-09-17 (evening) — CURRENT
 
