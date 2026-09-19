@@ -1,0 +1,2 @@
+domain halted by capability fault: cause = 24, pc = 0x101a04354, tval = 0x0, badaddr = 0x1013efdb8
+Cap mem access requires capability: pc = 1019041fc, rs1 = x21, imm = 0, value = f0300000, value_hi = a788100000
