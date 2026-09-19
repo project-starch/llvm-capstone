@@ -1,9 +1,10 @@
 # Whisper / ggml defects — a negative result at the 1.9.4 pin
 
 *Whether ggml's allocators have consumer-side temporal defects usable as corpus
-specimens, surveyed the way the CPython one was. Assembled 2026-09-18, deepened
-2026-09-19 after the first pass was found to rest on a weak instrument.
-**The answer is no, and three separate lines of evidence agree.***
+specimens. Assembled 2026-09-18, deepened 2026-09-19 twice: once after the first
+pass was found to rest on a weak instrument, and again after the second was found
+**not** to have searched CVEs at all. **The answer is no, and four separate lines
+of evidence agree** -- but see section 4 for what the first three could not see.*
 
 ## Why this was redone
 
@@ -70,9 +71,11 @@ across a `ggml_free`, a graph reset, or a buffer reallocation.
 | `src/whisper.cpp` | 346 | **1** — "fixed crash in GPU device selection on multi-GPU systems" |
 | `examples/` | 628 | 3 — a missing-argument segfault, a vocab-length crash, and a stdin dangling pointer on ordinary `malloc` memory |
 
-Not one of those four is a temporal defect on ggml memory. In the entire history
-of whisper.cpp's own sources, **there is no use-after-free of allocator memory to
-reproduce.**
+Not one of those four is a temporal defect on ggml memory. But this table is a
+**keyword** search of commit subjects, and section 4 shows it misses a real
+whisper.cpp use-after-free CVE whose fix is titled "fix memory leak". Read it as
+what it is -- a lower bound from one instrument -- and take the conclusion from
+the structural argument in section 3 and the advisory sweep in section 4.
 
 ## 3. Why — read from the source, after a false positive
 
@@ -124,6 +127,72 @@ whisper.cpp actually uses, *the consumer owns the arena*, so ggml never ends a
 lifetime the consumer is still relying on. There is no per-tensor free
 (`ggml_free` is the only `ggml_free*` symbol the public header declares), and the
 arena's lifetime is a C++ object's lifetime.
+
+## 4. Published CVEs — the half the first two passes never did
+
+**RETRACTED 2026-09-19.** Both earlier passes claimed this survey was run "the way
+the CPython one was". That was false in a specific way: the CPython survey is
+anchored on upstream's issue tracker, every case carrying a `gh-NNNNN`. The ggml
+passes searched **commit history only** and never looked at a CVE database, a
+GitHub Security Advisory, or either project's issue tracker. The conclusion
+survives; the claim that it rested on equivalent evidence did not.
+
+### Why the earlier net could not have found them
+
+A commit that fixes a reported vulnerability is rarely described as one. Of every
+commit touching `examples/common-whisper.cpp` — the file holding a real
+use-after-free CVE — **not one carries a temporal word in its subject or body.**
+The fix is titled:
+
+    47b9eb37  examples : fix memory leak in read_audio_data (#3810)
+
+*Leak*: the opposite word. A net built from `use-after-free|dangling|double free`
+misses it by construction, and so would a net built from this doc's earlier,
+wider list. The lesson generalises past ggml: **search the advisory stream, not
+only the commit stream.**
+
+### Every published CVE, and why none is a corpus case
+
+| CVE | what | where | why not a case |
+|---|---|---|---|
+| CVE-2025-14569 | **use-after-free** in `read_audio_data` | whisper.cpp `examples/common-whisper.cpp`, ≤1.8.2 | **fixed in 1.8.3, before our 1.9.4 pin.** And the memory is a `std::vector<float>` — ordinary C++ heap that ASan sees, not ggml allocator memory |
+| CVE-2026-17512 | out-of-bounds read in `log_mel_spectrogram` | whisper.cpp `src/whisper.cpp` 1.8.4-58, fix pending | **spatial**, not temporal |
+| CVE-2026-43622 | **double free** — `new_1batch()` mallocs, `free_1batch()` deletes | llama.cpp Android JNI, b1886–b7445 | allocator *mismatch* on malloc/new memory; not ggml, not whisper |
+| CVE-2026-43631 | **use-after-free** of the `vocab` pointer, RCE | llama.cpp `llama-server` `--sleep-idle-seconds` | **concurrency** — worker threads racing the sleep transition; `llama_vocab`, not ggml memory |
+| CVE-2026-43632 | same dangling `vocab`, other endpoints | llama.cpp `llama-server` | same |
+| CVE-2026-70640 | **race-condition use-after-free** on `llama_context` | llama.cpp Android JNI, b1886–b7445 | **concurrency**, and llama.cpp's own object |
+
+Four of the six are genuine temporal defects. **None is a temporal defect on
+memory handed out by a ggml allocator**, which is what this corpus is made of.
+They divide cleanly into three exclusions the CPython triage uses as well:
+spatial rather than temporal; concurrency rather than single-threaded; and
+ordinary `malloc`/`new`/`std::vector` memory rather than nested-allocator memory.
+
+The whisper.cpp one, CVE-2025-14569, is the closest miss and worth stating
+precisely: a real use-after-free, in whisper.cpp itself, in a consumer path — and
+still not a case, because the buffer is a `std::vector` and a malloc-level tool
+reports it. That is the distinction the whole corpus rests on.
+
+### Context this adds
+
+Ten vulnerabilities were reported to llama.cpp by one research group between July
+2025 and June 2026 through GitHub Security Advisories and MITRE. All ten
+advisories were closed by the maintainer without fixes or CVE assignment;
+VulnCheck allocated the CVE IDs afterwards, and five of the ten remained
+unpatched as of June 2026.
+
+That materially changes this document's earlier caveat. The first version said a
+project nobody fuzzes produces few use-after-free *fixes* whether or not it has
+use-after-frees. The stronger and now-evidenced form: **llama.cpp has had
+reported, CVE-assigned memory-safety vulnerabilities that were never fixed at
+all**, so counting fixes in its history under-reports its defects by an amount
+this survey cannot bound. A history-based survey measures a project's *response*,
+not its *code*.
+
+For this corpus the practical consequence is unchanged — none of the reported
+defects is in a ggml allocator's consumer — and the structural argument in
+section 3 does not depend on the history at all, which is why it carries the
+conclusion and the counting does not.
 
 ## The limitation this result has, stated plainly
 

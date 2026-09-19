@@ -9,6 +9,12 @@ word.
     consumers.py      whisper.cpp's OWN sources, which is where a corpus case
                       would have to come from
     read-kv-cache.py  the source read that explains why there is no window
+    security-net.py   a WIDE memory-safety net over both repos, classified
+                      spatial vs temporal -- 369 hits in llama.cpp where the
+                      temporal net found 33
+    trace-cve-2025-14569.py
+                      why a keyword net could not have found a real CVE: the
+                      fix is titled "fix memory leak" 
 
 ## Inputs
 
@@ -38,3 +44,19 @@ prints the whole function, which shows the arena is caller-owned.
 
 That last one is the pattern worth copying: **a positive finding from a narrowed
 view needs the same suspicion as a clean zero.**
+
+## The one that got away, and what it cost
+
+`security-net.py` and `trace-cve-2025-14569.py` were added on 2026-09-19, after
+the survey had twice been described as equivalent to the CPython one. It was not:
+the CPython survey is anchored on upstream's issue tracker, and neither ggml pass
+had looked at a CVE database, a security advisory, or an issue tracker at all.
+
+What that missed: **CVE-2025-14569**, a use-after-free in whisper.cpp's own
+`read_audio_data`. Every commit touching that file has a subject with no temporal
+word in it; the fix says *"fix memory leak"*. No keyword net over commit subjects
+finds that, however wide.
+
+It turned out not to be a corpus case — the buffer is a `std::vector<float>`, so
+a malloc-level tool reports it — but that was luck, not method. **Search the
+advisory stream, not only the commit stream.**
