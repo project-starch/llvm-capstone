@@ -43,6 +43,18 @@ void *ff2_payload_alloc(size_t size) {
   if (!size || size > payload_capacity || size > SIZE_MAX - 63)
     return NULL;
   size_t rounded = (size + 63) & ~(size_t)63;
+  size_t alignment = 64;
+#ifdef FFPOOL_CHERI
+  /* Compressed bounds may need additional alignment and tail padding.
+   * Keep the allocator policy, but account for the actual CHERI geometry. */
+  size_t cheri_alignment =
+      ~__builtin_cheri_representable_alignment_mask(size) + 1;
+  if (cheri_alignment > alignment)
+    alignment = cheri_alignment;
+  size_t representable = __builtin_cheri_round_representable_length(size);
+  if (representable > rounded)
+    rounded = representable;
+#endif
   struct payload_block *b = NULL;
   for (unsigned i = 0; i < nblocks; i++)
     if (!payload_blocks[i].alive && payload_blocks[i].rounded == rounded) {
@@ -50,8 +62,11 @@ void *ff2_payload_alloc(size_t size) {
       break;
     }
   if (!b) {
-    if (nblocks == 2048 || rounded > payload_capacity - payload_used)
+    size_t padding = (-(size_t)(payload_base + payload_used)) & (alignment - 1);
+    if (nblocks == 2048 || padding > payload_capacity - payload_used ||
+        rounded > payload_capacity - payload_used - padding)
       return NULL;
+    payload_used += padding;
     b = &payload_blocks[nblocks++];
     b->address = payload_base + payload_used;
     b->rounded = rounded;

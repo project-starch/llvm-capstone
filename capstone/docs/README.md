@@ -1,5 +1,7 @@
 # Capstone project documentation
 
+Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
+
 Everything durable the project knows about itself: architecture, the issue registry, the test
 matrix, root-cause trails, and the plans in flight. Written for human developers and for any AI
 coding assistant.
@@ -95,6 +97,7 @@ PostgreSQL's CMake component supports AllocSet, Generation, Slab and Bump under
 Sublet at the shared 17.0 pin. Its native and QEMU test entry points and scope
 are in [the component README](../ports/postgres/memory-contexts/README.md).
 This is allocator-level coverage, not a protected server or consumer-defect suite.
+
 
 > **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
 > accurate, but it accumulated before any of the silicon work and says nothing about it. For

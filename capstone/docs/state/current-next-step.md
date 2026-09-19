@@ -2,6 +2,56 @@ Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones
 below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
+PoisonCap pymalloc: the [first pilot](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md)
+passes the complete 33-process suite and both modes of a 115-event native
+recording. Next validate a larger complete recording and account for matched
+payload, authority records, snapshot retention and kernel scan work. Evaluate
+quarantine/batching as a separate policy; the initial synchronous sweeps are
+not an architectural lower bound. Preserve the unwritten-reuse regression and
+explicit automatic-libc-off configuration. The full interpreter, existing
+defect corpus and hostile nested-manager protection remain outside the
+validated scope. See the [integration plan](../plans/poisoncap-pymalloc.md).
+
+PoisonCap FFmpeg: the [first pilot](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md)
+passes a full 29-process suite with the guest's automatic libc-revocation
+default disabled; explicit adapter revocation remains active. Three replays
+match exactly. Extend this documented configuration with matched memory
+accounting, and separately isolate the kernel VM-locking panic seen with the
+guest default preserved. Retain failed attempts. Measure selective state
+preservation and quarantine as explicit
+adapter policies; the initial all-payload snapshots are not an architectural
+minimum. See the [integration plan](../plans/poisoncap-ffmpeg.md).
+
+CheriBSD allocator ports: the four components now have a
+[shared build/link/run workflow](../../ports/common/host/cheribsd/README.md).
+Use these libraries and explicit protection scopes for matching replay
+campaigns. Next collect equivalent per-component memory accounting and add
+inner-lifetime adapters only with paired stale/live controls. Compilation and
+successful examples do not establish Sublet-equivalent temporal protection.
+
+Protected pool replay: the [A1 matrix](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md)
+verifies Capstone ancestor revocation across five alias locations, with
+same-address reuse and unaffected-sibling controls. Next define matched
+parent/child semantics for a cross-system hierarchy experiment; A1's no-revoke
+arm is not a CHERI or PoisonCap implementation. Vary child fan-out and
+account for required manager bookkeeping before making a scaling claim.
+Keep trusted adaptation
+separate from protection of untrusted nested managers. Before making a
+reclamation-space claim, use a Capstone model implementing the intended node
+reclaimer; the pinned QEMU accumulates nodes in these traces. Account for
+physical metadata and adapter snapshot storage separately from payload and
+ID counts. Keep spatial and protected arms separate.
+
+Replay measurements: the first FFmpeg paired matrix is complete. Next extend
+the [measurement plan](../plans/replay-memory-measurements.md) with full
+allocator/driver/node accounting and separate payload/metadata budget sweeps.
+The initial carving watermarks must not be used as total protection overhead.
+Validated repeatable epochs and other allocator adapters remain follow-ups.
+
+Trace tooling: use the [shared readers and format-adapter contract](../../ports/common/host/port_trace/README.md)
+for new allocator traces. The development branch includes the pending port PRs;
+the [upstream integration plan](../plans/port-stack-integration.md) remains relevant
+when those independent PRs land. Historical milestone entries follow.
 ## PostgreSQL allocator work — 2026-09-18
 
 The CMake component now has all four Sublet manager ports. Next, build paired
@@ -9,6 +59,12 @@ consumer-level defect fixtures (the existing native `live_parts` case and the
 Slab-backed reorderbuffer candidate) rather than counting allocator lifetime
 tests as those reproducers. See `ports/postgres/memory-contexts/README.md` and
 `ref/postgres-nested-allocator-defects.md`. The board work below is independent.
+
+
+Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
+for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
+and state-file merge conflicts remain integration work; the board milestones
+below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
 
 ## 0. CURRENT — 2026-09-17 (18:10). **THE BOARD WAS REFLASHED AND THE FIRST BOOT DEMONSTRATED PERMITTED REUSE.** The resident bitstream is `caplifive_m1_054cea69b.bit` (RTL `054cea69b` — splice **+ reclaimer** + the R-34/R-24 merge), confirmed by reading `nv_bitstream_name` back off a fresh `flash_state` event; the previous `caplifive_r30r31_1bfff7776.bit` is still registered server-side, so reverting is one flash. **Every board result predating this flash is stale as a live comparison and keeps its value only as a record.** **The pilot boot: `k800 retval=4` twice, zero refused-or-trap lines, and an invocation reaching `stop=target` at 200,000 allocations against a pool of 65,532 distinct indices WITHOUT exhausting it — more allocations than the pool holds distinct indices cannot happen without reuse, and it needed no node-id read, which matters because this bitstream exposes none.** **Both cost curves went FLAT: minting 72.09 cycles (sd 0.03) and release 103.16 (sd 0.05) over 200,000 allocations, against 66.7→130-218 with a knee at alloc≈1792 and a ~12× release growth on the deployed bitstream. The same analysis reads sd 44-58 and 13,600 on the old capture, so the flatness rests on a ~1000× dispersion difference rather than judgement.** **A PRE-REGISTERED FALSIFIER FIRED AND IS NOT A REFUTATION — "one curve flattens, the other does not"; both flattened, and the reason was written down by two other lanes BEFORE the run (reclamation makes node-table growth the free-list miss rate, so the distinct-index set never approaches the cache's 2,048-node capacity and the knee cannot form). Recorded in those terms because a falsifier that fires plus an after-the-fact explanation is worth nothing and the only difference is the timestamp.** **THE MONITOR MOVE WAS A PREREQUISITE, NOT A TIDY-UP: the bitstream makes capability exception delivery LIVE, and the old monitor's `add t5, sp, t5` then a store through the untagged result is refused-and-DROPPED today but refused-and-DELIVERED inside its own trap handler with delivery live, on the `rdtime` path. Monitor is `2dcd3a5`, pinned in all eight drivers (`FPGA_BITSTREAM`/monitor gates), and the baked firmware was scanned two-sided before the boot (1 integer-derived access in capability-mode text before, 0 after, control 7,115 both times).** **M1's start gate is STILL 1 of 3 and no reclaiming arm is scheduled — the RTL lane has now delivered the algorithm and stale-reference invariant, and parts 2 and 3 are with the lead. Their stronger statement is carried: the protocol's accounting identity is FALSE for this design, not merely unmeasurable — `occupied + free + structural + RETIRED + LEAKED = 65,532`, where LEAKED includes the handle of every revoke — so the fourth completion condition can be ANSWERED but not SATISFIED as written.** **The reclaim coefficient is BOUNDED, not measured (`c < 0.3277`), and the bound mixes handle leak with RETIREMENT — an index retires permanently after 16,384 allocations of itself and a LIFO free list concentrates reuse, so ~12 indices retired over the pilot. The two are not separable on the board; both terms are reported.** **The ~5.4-cycle move in the minting floor is UNATTRIBUTED between the splice and the reclaimer; the splice-only build `379248185` exists and would separate them by a reflash.** **P3's bitstream now EXISTS and is resident — the old "gated on a bitstream that does not exist" is void — but its repro folder is SIM-ONLY (`fpga-repros/R34-.../00-README.md:11`, "the board has not run this test"), so a board image must still be built from its `.S` sources.** **The occupancy-versus-object pair is RETIRED, not ranked: its independent variable was refuted three ways.** Bundles: `experiments/results/M1/2026-09-17-reclaimer-pilot` and `.../2026-09-17-cache-capacity`, both pushed.
 

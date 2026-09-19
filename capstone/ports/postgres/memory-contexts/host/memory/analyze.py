@@ -7,17 +7,17 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import struct
+import sys
 
-HEADER = struct.Struct("<8sIIQIIQII32s")
-RECORD = struct.Struct("<IIIIQQQ")
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "common/host"))
+from port_trace import TraceReader
+from port_trace.formats.postgres import Postgres
+
+# Retain the fixture writer interface while sharing the wire schema.
+HEADER, RECORD = Postgres.header, Postgres.record
 
 
 def trace_memory(path, wanted):
-    raw = path.read_bytes()
-    header = HEADER.unpack_from(raw)
-    if header[0] != b"A11TRACE" or header[1:3] != (1, RECORD.size) or header[5]:
-        raise ValueError("expected a flattened A11 trace")
     contexts, objects = {}, {}
     live = count = peak = 0
     snapshots = {}
@@ -56,33 +56,36 @@ def trace_memory(path, wanted):
         count += 1
 
     events = 0
-    for events, rec in enumerate(RECORD.iter_unpack(raw[HEADER.size :]), 1):
-        op, cid, oid, aux, size, s2, s3 = rec
-        if 6 <= op <= 9:
-            assert cid not in contexts
-            contexts[cid] = dict(parent=aux, children=set(), objects=set())
-            if aux:
-                contexts[aux]["children"].add(cid)
-        elif op == 1:
-            add(cid, oid, size)
-        elif op == 2:
-            assert objects[oid][0] == cid
-            drop(oid)
-        elif op == 3:
-            drop(oid)
-            if aux:
-                add(cid, aux, size)
-        elif op == 4:
-            for child in list(contexts[cid]["children"]):
-                delete(child)
-            remove_payload(cid)
-        elif op == 5:
-            delete(cid)
-        elif op not in (0, 10):
-            raise ValueError(f"unknown trace operation {op}")
-        peak = max(peak, live)
-        if events in wanted:
-            snapshots[events] = (live, count, len(contexts), op)
+    with TraceReader(path, expected_format="postgres.a11", replay=True) as trace:
+        for event in trace.events():
+            events = event.index + 1
+            rec = tuple(event.fields[name] for name in trace.format.record_fields)
+            op, cid, oid, aux, size, s2, s3 = rec
+            if 6 <= op <= 9:
+                assert cid not in contexts
+                contexts[cid] = dict(parent=aux, children=set(), objects=set())
+                if aux:
+                    contexts[aux]["children"].add(cid)
+            elif op == 1:
+                add(cid, oid, size)
+            elif op == 2:
+                assert objects[oid][0] == cid
+                drop(oid)
+            elif op == 3:
+                drop(oid)
+                if aux:
+                    add(cid, aux, size)
+            elif op == 4:
+                for child in list(contexts[cid]["children"]):
+                    delete(child)
+                remove_payload(cid)
+            elif op == 5:
+                delete(cid)
+            elif op not in (0, 10):
+                raise ValueError(f"unknown trace operation {op}")
+            peak = max(peak, live)
+            if events in wanted:
+                snapshots[events] = (live, count, len(contexts), op)
     if op != 0:
         raise ValueError("trace lacks footer")
     return snapshots, dict(

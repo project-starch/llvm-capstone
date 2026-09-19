@@ -6,6 +6,7 @@
     "patch": 0
   },
   "configurePresets": [
+    {"name": "cheribsd", "inherits": "base", "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/cheribsd.cmake", "cacheVariables": {"BUILD_TESTING": false}},
     {
       "name": "base",
       "hidden": true,
@@ -44,6 +45,7 @@
     }
   ],
   "buildPresets": [
+    {"name": "cheribsd", "configurePreset": "cheribsd", "jobs": 2},
     {
       "name": "native",
       "configurePreset": "native",

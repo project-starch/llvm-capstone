@@ -9,7 +9,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common/host"))
-from port_support import REPO_ROOT, run_guest, stage_run
+from port_trace import record_trace
+from port_support import write_replay_verdict, REPO_ROOT, run_guest, stage_run
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("trace", type=Path)
@@ -64,6 +65,8 @@ run, input_hashes = stage_run(
     },
 )
 share = run / "share"
+if args.program.startswith("replay-"):
+    record_trace(run, share / "trace.a11", "postgres.a11")
 markers = {
     "replay-spatial": (
         "__CAPSTONE_PG_REPLAY_DONE__",
@@ -123,13 +126,10 @@ passed = (
     and "_FAILED__" not in text
     and "_BAD__" not in text
 )
-(run / "verdict.json").write_text(
-    json.dumps(
-        {"passed": passed, "runner_exit": result.returncode, "required": required},
-        indent=2,
-    )
-    + "\n"
+write_replay_verdict(
+    run, passed=passed, runner_exit=result.returncode, required=required
 )
+
 if not passed:
     print(f"PostgreSQL {args.program} failed; inspect {run}", file=sys.stderr)
     raise SystemExit(result.returncode or 1)

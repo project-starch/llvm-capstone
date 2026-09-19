@@ -1,0 +1,116 @@
+{
+  "base_commit": "6c25a14d3443f3e795f9706639c0b7db571358f3",
+  "abi": "riscv64 l64pc128d",
+  "build_type": "Debug",
+  "final_sources": {
+    "capstone/docs/state/current-next-step.md": "76f0f05dc9728642966869ee977001a48c4466c5a26d490c15341f4fa964ca14",
+    "capstone/docs/state/current-state.md": "20a2ddab82dffabeeba36e9eb007da5f0c3fe0fc490afc47231761f8e3f342ce",
+    "capstone/ports/README.md": "a55e3a6495c39b38a10551b0cc0f572b591acc8eee70f1e4976394d97861647d",
+    "capstone/ports/common/README.md": "006e2dada589f0723395facf3ae779586c2af30efeaeae83e73db114abe28914",
+    "capstone/ports/common/cmake/Port.cmake": "10aea2bc547e5bd3a973e0ceccae62fce619b011d8f5b455e6f5f3f935bcabad",
+    "capstone/ports/cpython/pymalloc/CMakePresets.json": "a716de258d179f7e2f5e1f0fb117b7d6f10cb0c9ff0a9b3f3911c33b092a52e7",
+    "capstone/ports/cpython/pymalloc/README.md": "5e2a4331c702286b7844687fe58910d1d35a2e38d71d71554a91d98f25c056a1",
+    "capstone/ports/cpython/pymalloc/cmake/Replay.cmake": "80990436a559c1e4ba190a722b0c2c4ea34cbc0e6ac86bbfb1fc58145ed4b7d1",
+    "capstone/ports/ffmpeg/buffer-pool/CMakeLists.txt": "0509daf56fef2578508c544832d26a2f6b2b44bb215da5c7e400da2308ec306f",
+    "capstone/ports/ffmpeg/buffer-pool/CMakePresets.json": "c17c33da004a33d0c773f6e791d5d24116d9c646bb641746771734da041bd0b6",
+    "capstone/ports/ffmpeg/buffer-pool/README.md": "d308ec3916fef5abc8455c8a701632f4dd57c0946796ff37baa7e331a83f108c",
+    "capstone/ports/ffmpeg/buffer-pool/cmake/Replay.cmake": "3bfe9e897656c102953bcde7e7a81684e39a498479433b02ca67484519ac7f30",
+    "capstone/ports/ffmpeg/buffer-pool/cmake/toolchains/cheribsd.cmake": "b14928196c9ed1974397cf4b31beefb8ac0071a82597c5ed2def25456ee36633",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/README.md": "9f9437a37e30aa74f58ee8999daac4e797e4030408161b988b7b7f36305a04e1",
+    "capstone/ports/postgres/memory-contexts/CMakePresets.json": "37d9690817cc46057f70298a97686c6cdfbcbd2c215f3b07bf52fadc0a83a1d0",
+    "capstone/ports/postgres/memory-contexts/README.md": "8105a07619055d22174d8c107d0cf7b7e7c9b4bc5a89a1475ac3a887cd9ea233",
+    "capstone/ports/postgres/memory-contexts/cmake/Examples.cmake": "10f56413d423cc41776bfa0a6d2e873fb113ec0697ecaa030db125e96f1b4189",
+    "capstone/ports/postgres/memory-contexts/cmake/Replay.cmake": "e8bd9abdf5dd08022b873a2d27c50a4f8be8415e2b152e0168ef984d5c1857ba",
+    "capstone/ports/whisper/ggml-context/CMakeLists.txt": "059519ac55d213760968cab2f7ea64418068bfad567369918ed63bec09823ada",
+    "capstone/ports/whisper/ggml-context/CMakePresets.json": "3b1d7a68b1194f00bd21db1af71282b88f4222855147c12da6ead0fa365f6fdf",
+    "capstone/ports/whisper/ggml-context/README.md": "47e546256bb2c2d68265a560cfdacb5fbbc2efafc09184fe4a30ffbf21d3e916",
+    "capstone/ports/whisper/ggml-context/cmake/Replay.cmake": "82507c9bd3b9247d052b504acd767515e88d414548e7d57c935b4a56c083c00e",
+    "capstone/ports/common/cmake/Client.cmake": "1c1a6dfb671d9d0488d8ec7136ad6001c2c1afbab7a84eec1d27919656589ce3",
+    "capstone/ports/common/cmake/toolchains/cheribsd.cmake": "6a2f066dc3e874dbe63f578639ec4713a8fcf34da1cadada380bf83d5c262914",
+    "capstone/ports/common/host/cheribsd/README.md": "cd58692a176abb50b04e8556dfca88c6d75b98a95aec33f9eb6a6b0bf2d3aa74",
+    "capstone/ports/common/host/cheribsd/abi-probe.c": "10d000a32069f6b3bd3f72d37a48ae1e7664f52c4a708f70f440ce5052933b39",
+    "capstone/ports/common/host/cheribsd/build.py": "410a5814632205065edbf7e0eb3a0914d2ab115eb308d305f3dfc6190bc797dc",
+    "capstone/ports/common/host/cheribsd/components.json": "a5ae54804f3af9164ad6d5ba78a8dcd605ec7b70ce4123190019ae5251102270",
+    "capstone/ports/common/host/cheribsd/guest.py": "7fd75ae36a63f40f9976fccb86b84e201c8c6c509a6d2c18644769ec8249180b",
+    "capstone/ports/common/host/cheribsd/run.py": "be4a16e82072c9f69e49e63af3d101830e5b7e73c5acb0c8b8ffe7c7603c8b15",
+    "capstone/ports/common/tests/test_cheribsd.py": "6677e1361e450c4db835c032222956741c033f47043fba3029a182ea9d039534",
+    "capstone/ports/cpython/pymalloc/examples/pymalloc.c": "2607fbf4bfb8e42f975b7f50bba9b9dfd4f0a33b216234df352b0b980a663d72",
+    "capstone/ports/cpython/pymalloc/host/cheribsd/README.md": "577d44b4462a7e2f16917d2d6ef0502b3310acb932eb79fb0418780b612d275b",
+    "capstone/ports/cpython/pymalloc/host/cheribsd/build.sh": "12128d25da804b3913b905f3db7a0410f28f12a8488390c37e3e157435ea72a9",
+    "capstone/ports/cpython/pymalloc/host/cheribsd/run.sh": "5ce3280911c5bdfa6d2f29f81f4497f4789e1c71c6e6ce00741cf283f94cb27b",
+    "capstone/ports/ffmpeg/buffer-pool/examples/pool.c": "fba0610c3e3250f335631f50eb5d5fa49e5ccb7312377741d54f28d73e7d4866",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/build.sh": "c914f857cb1b2cb38c2cfcf39fc09841aad53535c65417d3fe3172c154852961",
+    "capstone/ports/ffmpeg/buffer-pool/host/cheribsd/run.sh": "6797c13551e04a3b030aeecaee1472d94f303866f7bdad87a34ab3f02df90d53",
+    "capstone/ports/postgres/memory-contexts/examples/contexts.c": "c3c97e5536100bad065dabbe8647a7d288a7309dfb6a2e83f7dbe85b4a304f02",
+    "capstone/ports/postgres/memory-contexts/host/cheribsd/README.md": "d92cbc37aef5cdb4a5b1877f58c1f1636f4ac127b82d00f66f6bd027201cbefd",
+    "capstone/ports/postgres/memory-contexts/host/cheribsd/build.sh": "30d49dcb311720800c4e7813d005f91854c69204d1d22954f0e787b123892045",
+    "capstone/ports/postgres/memory-contexts/host/cheribsd/run.sh": "59a011bb0bfe3815fcad12fd2380e78e50b4de973f3fa04940131522ffc9cbae",
+    "capstone/ports/postgres/memory-contexts/src/cheribsd/main.c": "cde8d3a91124ef87b4561581e84f8fc2dde7745f392eff829960672d972efe8d",
+    "capstone/ports/whisper/ggml-context/examples/context.c": "bebb79c18c3d955015600e9ed8079e7c23acd8e9de474d0bd1b3462d4cf68fd1",
+    "capstone/ports/whisper/ggml-context/host/cheribsd/README.md": "c9f297cfedc99aae855fa6b6af5cf4317e26fc34298b19893d4293be2426025e",
+    "capstone/ports/whisper/ggml-context/host/cheribsd/build.sh": "8be081a9d1ece79f9d6b7148b67e8c672858a5b5d96f7fd4ad739fbe9b5733cb",
+    "capstone/ports/whisper/ggml-context/host/cheribsd/run.sh": "d1213ca15ee45cd912531fb676ffde8955b338431acc78743186bff5e5c45ca8"
+  },
+  "components": {
+    "ffmpeg": {
+      "upstream": {
+        "name": "ffmpeg",
+        "version": "9.0.1",
+        "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz",
+        "sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635"
+      },
+      "build_files": {
+        "CMakeCache.txt": "f6a74843680d19d3e62e7daffe5fc6b822761217992e0558a9f3e7fc3c78b727",
+        "compile_commands.json": "f68d765ad48086de1e898cc170901324834042cccc40e66c40344e573fb34cd5",
+        "bin/allocator-example": "4ee2ae534da09e4ec6bccbe5e88e43f7440f49d58f713fa4e007c65d5c853f5f",
+        "bin/allocator-client": "bd311209b3e2f647f11af5c468b2174ac273c8a7efa9df2c7bac4e2d25e2c6b4",
+        "bin/replay": "409a6a9666d5cf72aee02fc992b06a4bf7bdbe30d0d252d7e93b55d791151b8b"
+      }
+    },
+    "postgres": {
+      "upstream": {
+        "name": "postgresql",
+        "version": "17.0",
+        "url": "https://ftp.postgresql.org/pub/source/v17.0/postgresql-17.0.tar.bz2",
+        "sha256": "7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de"
+      },
+      "build_files": {
+        "CMakeCache.txt": "d11564c88193783ed8ee6c8804489ff9198126a56b597b098854424f7737b6fb",
+        "compile_commands.json": "4e51811e70dabd4a1030cc1234d037a152530e497ea1c3bc22dc635e61e76642",
+        "bin/allocator-example": "34966db021f28e010a3502eadaa7c4c48572420d801b04ddc3f497e6e7f69e30",
+        "bin/allocator-client": "0cf850662d10eceddd8708d7974f2c11738eee20c88090667ea653844d3cc2df",
+        "bin/replay": "57d49673fd04c62b86f2b74868604ca601e27014ce8d89bc647fe54fe1464035"
+      }
+    },
+    "cpython": {
+      "upstream": {
+        "name": "CPython",
+        "version": "3.13.7",
+        "url": "https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz",
+        "sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2"
+      },
+      "build_files": {
+        "CMakeCache.txt": "4b9f62e44c2881c5a0a16f00f7e6200e3c779ee2c4fcbfe7325b29063bffc3ef",
+        "compile_commands.json": "19feefd567d0d292b6dd8f1181b0bb1ad0864088520105a31c1f7739e43da2d2",
+        "bin/allocator-example": "d5184eb31175da57c925579fd745d69200dc03cccc00c317ea88e50314f8f5d9",
+        "bin/allocator-client": "787904fd2bbd4a33480c901d9a03f6dd27b498023e3948bd6357e5d809aff41c",
+        "bin/replay": "aac18b4c8a36967cce2ae836f0e3a5f0d1abf451f7f5638694603ffd5a250e9b"
+      }
+    },
+    "whisper": {
+      "upstream": {
+        "name": "whisper.cpp",
+        "version": "1.9.4",
+        "url": "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.4.tar.gz",
+        "sha256": "57e280cee375ab02425b806ad5146b99f6eb9357e3c2b31357c8a6af2e2e44ae"
+      },
+      "build_files": {
+        "CMakeCache.txt": "63edee6bb3ca6ea34cd55d80bda525e74fb06e17cda9e74248e0ce0a53a14c0e",
+        "compile_commands.json": "4de397a486ddd31292f36820691714764a183bca293bd476cbddd51e5395df8e",
+        "bin/allocator-example": "6739be5e0ee9a747e2e5b624816f8f4f8cdec9d993e0dc1144edd3647b5b393c",
+        "bin/allocator-client": "4e229ba64a70e10849ff0bd7c0e6b6198a57152da390d6166b9071fba81c421f",
+        "bin/replay": "fa5a5c36e1c2b356fe400df48d916a1ffd025f4454ff971fe6be243f7005a46c"
+      }
+    }
+  }
+}

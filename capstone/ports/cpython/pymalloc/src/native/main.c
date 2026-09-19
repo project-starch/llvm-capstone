@@ -1,12 +1,23 @@
 #include "port.h"
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef PYMALLOC_POISONCAP
+#include <sys/mman.h>
+#endif
 _Noreturn void pym_fail(unsigned code) {
   fprintf(stderr, "PYM failed=%u\n", code);
+#ifdef PYMALLOC_POISONCAP
+  printf("PYM_REJECT code=%u\n", code);
+  fflush(stdout);
+#endif
   exit(1);
 }
 int main(int argc, char **argv) {
+#ifdef PYMALLOC_POISONCAP
+  if (argc != 3 && argc != 4)
+#else
   if (argc != 3)
+#endif
     return 2;
   FILE *f = fopen(argv[1], "rb");
   struct pym_header *input = malloc(PYM_FILE_BYTES), out = {0};
@@ -20,10 +31,31 @@ int main(int argc, char **argv) {
     return 3;
   fclose(f);
   void *metadata = aligned_alloc(16384, PYM_META_BYTES);
+#ifdef PYMALLOC_POISONCAP
+  void *arena = mmap(NULL, PYM_ARENA_BYTES, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANON | MAP_ALIGNED(14), -1, 0);
+  if (arena == MAP_FAILED)
+    return 4;
+#else
   void *arena = aligned_alloc(16384, PYM_ARENA_BYTES);
+#endif
   if (!metadata || !arena)
     return 4;
+#ifdef PYMALLOC_POISONCAP
+  out.mode = 1;
+  if (argc == 4) {
+    char *end;
+    unsigned long mode = strtoul(argv[3], &end, 10);
+    if (!argv[3][0] || *end || mode > 1)
+      return 2;
+    out.mode = mode;
+  }
+#endif
   pym_backing_init(metadata, arena);
+#ifdef PYMALLOC_POISONCAP
+  pym_lifetime_init(arena);
+  pym_set_mode(out.mode);
+#endif
   pym_allocator_init();
   void *scratch = pym_raw_calloc(PYM_MAX_OBJECTS, 64);
   if (!scratch)
@@ -37,10 +69,16 @@ int main(int argc, char **argv) {
          (unsigned long long)out.completed, (unsigned long long)out.allocations,
          (unsigned long long)out.frees, (unsigned long long)out.reallocations,
          (unsigned long long)out.arenas, (unsigned long long)out.arena_frees);
+#ifndef PYMALLOC_POISONCAP
   printf("PYM decisions=%016llx\n",
          (unsigned long long)pym_decision_checksum());
+#endif
   free(metadata);
+#ifdef PYMALLOC_POISONCAP
+  munmap(arena, PYM_ARENA_BYTES);
+#else
   free(arena);
+#endif
   free(input);
   return 0;
 }

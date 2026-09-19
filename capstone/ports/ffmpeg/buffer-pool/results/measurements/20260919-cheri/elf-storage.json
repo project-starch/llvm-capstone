@@ -1,0 +1,200 @@
+{
+  "capstone": {
+    "sha256": "0782f322e9f66334098a5822d9f0a5ff4d202e6819b3cadcf14156501b166353",
+    "allocated_sections": [
+      {
+        "section": ".text",
+        "bytes": 54116,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".rodata",
+        "bytes": 168,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".init_array",
+        "bytes": 0,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".fini_array",
+        "bytes": 0,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".capstone_cap_init",
+        "bytes": 0,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".bss",
+        "bytes": 844256,
+        "writable": true,
+        "nobits": true
+      }
+    ],
+    "zero_initialized_bytes": 844256
+  },
+  "cheri-spatial": {
+    "sha256": "81f1e627af06608533f7359c4647ea837437755ed2cc7b19a4b80d7e0adc2563",
+    "allocated_sections": [
+      {
+        "section": ".interp",
+        "bytes": 21,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".note.tag",
+        "bytes": 100,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".dynsym",
+        "bytes": 648,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".gnu.version",
+        "bytes": 54,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".gnu.version_r",
+        "bytes": 64,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".gnu.hash",
+        "bytes": 36,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".hash",
+        "bytes": 224,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".dynstr",
+        "bytes": 273,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".rela.dyn",
+        "bytes": 96,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".rela.plt",
+        "bytes": 504,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": "__cap_relocs",
+        "bytes": 3160,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".rodata",
+        "bytes": 287,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".srodata.cst8",
+        "bytes": 8,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".eh_frame_hdr",
+        "bytes": 788,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".eh_frame",
+        "bytes": 3168,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".text",
+        "bytes": 18404,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".plt",
+        "bytes": 368,
+        "writable": false,
+        "nobits": false
+      },
+      {
+        "section": ".got.plt",
+        "bytes": 368,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".got",
+        "bytes": 960,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".pad.cheri.pcc",
+        "bytes": 16,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".fini_array",
+        "bytes": 16,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".dynamic",
+        "bytes": 384,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".data",
+        "bytes": 32,
+        "writable": true,
+        "nobits": false
+      },
+      {
+        "section": ".sbss",
+        "bytes": 120,
+        "writable": true,
+        "nobits": true
+      },
+      {
+        "section": ".bss",
+        "bytes": 952448,
+        "writable": true,
+        "nobits": true
+      }
+    ],
+    "zero_initialized_bytes": 952568
+  }
+}

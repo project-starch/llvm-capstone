@@ -185,8 +185,8 @@ void ff2_replay_run(const struct ff2_header *input, struct ff2_header *output,
   ff2_set_mode(mode);
   ff2_reset();
 #ifdef FF2_SECURITY
-  void ff2_security_run(unsigned, unsigned long);
-  ff2_security_run(trace->reserved[0], trace->reserved[1]);
+  void ff2_security_run(unsigned, unsigned long, unsigned);
+  ff2_security_run(trace->reserved[0], trace->reserved[1], mode);
   ff2_finish();
   report->count = trace->count;
 #else

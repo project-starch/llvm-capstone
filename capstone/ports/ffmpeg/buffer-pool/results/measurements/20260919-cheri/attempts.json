@@ -1,0 +1,32 @@
+[
+  {
+    "attempt": "pilot-spatial",
+    "disposition": "excluded pilot",
+    "reason": "initial one-recording bring-up before runtime-policy and companion-control acceptance gates"
+  },
+  {
+    "attempt": "campaign-spatial-1",
+    "disposition": "failed before replay",
+    "reason": "sandbox prevented temporary QEMU snapshot creation"
+  },
+  {
+    "attempt": "campaign-spatial-2",
+    "disposition": "failed before replay",
+    "reason": "guest console truncated an overlong setup command"
+  },
+  {
+    "attempt": "campaign-spatial-3",
+    "disposition": "failed before replay",
+    "reason": "SSH connection attempted before daemon readiness"
+  },
+  {
+    "attempt": "pilot-console",
+    "disposition": "failed before replay",
+    "reason": "SSH connection attempted before daemon readiness"
+  },
+  {
+    "attempt": "campaign-spatial-4",
+    "disposition": "excluded: companion gate failed",
+    "reason": "replay matched native; SSH encoded an expected child SIGPROT as 255; collector now preserves a shell parent and checks 128+signal"
+  }
+]

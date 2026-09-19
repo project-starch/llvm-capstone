@@ -27,6 +27,114 @@ and [integration plan](../plans/port-stack-integration.md). The shared runtime's
 missing `include/sublet/sublet.h` is restored from the identical port-branch
 header. This repairs a missing build input; the dated silicon results below
 and the pending fault-recovery validation remain separate.
+## 2026-09-19 — Experimental PoisonCap pymalloc port
+
+The extracted CPython 3.13.7 allocator now has a trusted PoisonCap backend,
+reusing the three existing upstream patches and the FFmpeg platform. The full
+33-process QEMU suite passes: ABI/platform controls, linked example, five API
+checks, nine paired lifetime cases and two native-recording replays. Both
+modes process all 115 events and match the native logical oracle; payload
+preservation is checked inside the guest. The small complete recording is not
+the existing larger workload or the defect corpus.
+
+An initial failed replay exposed stored poison capabilities remaining after
+`cclearpoison`, causing a later sweep to revoke a fresh unwritten allocation.
+The adapter now overwrites those remnants and counts the additional writes;
+a targeted regression and the complete suite pass. The protected recording
+uses 63 sweeps and 80,336 bytes each of poison/clear/zero work. Snapshot copy
+traffic is zero on this recording; separate in-place realloc controls exercise
+it. Both modes report 5,275,200 bytes of private metadata high-water, including
+the same authority-record layout and replay scratch. These are not total
+memory overhead or hardware timing measurements.
+
+Automatic libc revocation remains explicitly off while adapter sweeps remain
+on, using the documented platform workaround. Native tests and all four
+backend builds pass. This is not whole-interpreter protection or isolation of
+hostile nested managers. [Pilot and provenance](../../ports/cpython/pymalloc/results/20260919-poisoncap/README.md),
+[build/link/run guide](../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+
+## 2026-09-19 — Experimental PoisonCap FFmpeg port
+
+The published PoisonCap compiler, QEMU and matching CheriBSD kernel/userspace
+are reconstructed with pinned sources. The FFmpeg allocator library, direct
+example and per-lease adapter build. Seven platform controls pass; ten protected
+pool cases pass in a separate fresh guest, including persistent RefStruct state
+and stale access after reuse. A 2,379-event native recording matches its complete
+event oracle. The first adapter snapshots payloads before poisoning and sweeps
+before reuse, with its storage and copy costs counted separately.
+
+The full suite passes all 29 processes when the automatic guest libc-revocation
+default is disabled before SSH starts; explicit adapter revocation remains
+active. Three successful replays have identical output and counters. Preserving
+the guest default instead produces a captured kernel `share->excl` panic in
+longer suites, including a spatial-only arm. The explicit guest configuration
+is a workaround, not a kernel fix or a Capstone/PoisonCap performance ranking.
+[Pilot, failed attempts and scope](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md).
+
+The [backend regression](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot/README.md#backend-regression-verification)
+rebuilds all four FFmpeg configurations, passes 4 native and 23 shared Python
+tests, and repeats the full 29-process PoisonCap suite with an identical replay
+report. The spatial CheriBSD replay and its five controls also pass.
+
+## 2026-09-19 — Four CheriBSD allocator libraries and examples
+
+FFmpeg buffer pools, PostgreSQL memory contexts, CPython pymalloc and Whisper
+ggml contexts now share a CheriBSD purecap toolchain, build/run scripts and
+CMake library targets. Standalone examples and separately supplied client
+sources link and run in QEMU. The suite checks the ABI/runtime policy and an
+exact bounds fault before running allocator programs. FFmpeg, CPython and
+ggml native-recording replays match their logical native oracles; PostgreSQL
+passes its four-manager fixture. Native regression tests pass, and all four
+Capstone domain configurations still build. These are capability-compatible
+component ports with explicitly documented boundaries, not automatic inner
+temporal protection in CheriBSD.
+[Build/link/run guide](../../ports/common/host/cheribsd/README.md).
+
+## 2026-09-19 — Scattered aliases and ancestor revocation
+
+The synthetic A1 fixture passes 44 QEMU executions: 20 stale read/write
+attempts fault after parent revocation, 20 matched no-revoke attempts complete,
+and four valid-authority controls complete. Five alias locations are covered
+(global, heap object, linked list, independent sibling pool, register), both
+immediately after revocation and after same-address reuse. Disassembly confirms
+the register alias stays in a register across revocation without calls or
+spills. New authority and the unaffected sibling remain usable. This is
+functional Capstone evidence, not protected decoding, hostile-manager domain
+isolation, a performance measurement or a measured competitor disadvantage.
+[Matrix, protocol and provenance](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md).
+
+## 2026-09-19 — CHERI spatial arena comparison
+
+Nine CHERI spatial replays match the native recordings, with three identical
+repetitions per workload. Five companion controls distinguish bounds faults
+from ordinary stale pool accesses. The
+[three-arm export and plots](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-cheri/README.md)
+contain Capstone spatial, Capstone Sublet and CHERI spatial only. Payload
+padding and static storage are separate observations; the arms do not provide
+equivalent lifetime guarantees or a complete protection-memory ledger.
+
+## 2026-09-19 — Paired FFmpeg replay measurements
+
+The measurement worktree adds a reproducible native-to-QEMU comparison on
+three FFmpeg recordings. Eighteen accepted spatial/Sublet points match the
+native event sequences, with three bit-identical repeats per workload/arm.
+Six companion lifetime controls and four native CTests pass. Failed runner
+attempts are retained. These are allocator observations and resource counters,
+not application timing or a complete protection-memory ledger. See the
+[result bundle](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-replay/README.md)
+and [measurement plan](../plans/replay-memory-measurements.md).
+
+Trace-development branch: the current port/runtime/corpus PR heads are combined
+in `integration/2-trace-ports`. The [shared trace tooling](../../ports/common/host/port_trace/README.md)
+reads all four existing formats and supplies staged-input validation and
+versioned result metadata. This is host tooling; allocator replay semantics
+and previous QEMU/silicon result identities are unchanged.
+
+Port navigation and pending integration: [component catalog](../../ports/README.md)
+and [integration plan](../plans/port-stack-integration.md). The shared runtime's
+missing `include/sublet/sublet.h` is restored from the identical port-branch
+header. This repairs a missing build input; the dated silicon results below
+and the pending fault-recovery validation remain separate.
 ## 2026-09-18 — PostgreSQL's four Sublet allocator ports
 
 The canonical `ports/postgres/memory-contexts` CMake component ports AllocSet,
@@ -54,6 +162,29 @@ shared Sublet runtime header required by the CMake ports is restored, with a
 configure-time completeness guard. See the component README for commands and
 scope: AllocSet is protected; the consumer reproducer's Capstone arm remains
 future work.
+
+
+## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
+
+The [shared runtime](../../runtime/domain-faults.md) provides a domain build
+helper, cooperative fault return/quarantine, and a Linux process-termination
+policy. Its standalone tests require no PostgreSQL or Sublet allocator sources.
+Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEMU.
+This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
+complete resource reclamation, or a new FPGA result. Allocator integration is
+reviewed separately; existing ports are not enabled automatically.
+
+## 2026-09-18 — Whisper ggml context component
+
+`capstone/ports/whisper/ggml-context/` ports whisper.cpp 1.9.4's real context
+allocator through the shared template. A native tiny.en recording contains
+60,179 events and 58,192 object allocations; stock and instrumented transcripts
+match. Native allocation layout matches both the extracted reference and the
+ordinary full ggml library. The recording completes in spatial and Sublet QEMU.
+Borrowed-buffer graph objects survive descriptor destruction; reset, owned free
+and exclusive owner rebind are distinct epoch boundaries. The README documents
+that rebind contract, capability-header capacity adjustment and fixed backing
+budget. This is allocator replay, not protected inference or FPGA measurement.
 
 ## 2026-09-17 (evening) — CURRENT
 

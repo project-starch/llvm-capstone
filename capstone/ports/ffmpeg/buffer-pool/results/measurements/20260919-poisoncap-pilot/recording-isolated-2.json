@@ -1,0 +1,58 @@
+{
+  "schema": "cheribsd-allocator-cases-v1",
+  "status": "complete",
+  "runtime_revocation": "off",
+  "results": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "CHERI_ABI pointer_bytes=16 runtime_revocation=0",
+      "stdout_sha256": "ce49f4115bdac214f8f5b32ea5938d9ef1d94b8f89626f35be34218bba7a58aa",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true,
+      "exit": 162,
+      "expected_exit": 162,
+      "marker": "CHERI_BOUNDARY_READY",
+      "stdout_sha256": "e13ae4c02c4b2927748adfce96b611d60ad947067017ee19d09a2c93753b275f",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "recording",
+      "passed": true,
+      "exit": 0,
+      "expected_exit": 0,
+      "marker": "FF2 status=0 events=[0-9]+ metadata=[0-9]+ payload=[0-9]+",
+      "stdout_sha256": "195c8a02b4d07d23d2f1d8d2edc9b83270d2dc246f8ca9333fe95f3d80232e0b",
+      "inputs": {
+        "input.bin": "55e22b32b5afd4d2920f7f35fe656d6ea48bc20c8d112792430622209ddd3df0"
+      },
+      "outputs": {
+        "output.bin": "3b7ce3191f0a5c0cd9527e6273c708b656b89af373314230d2fe03aeaf952edc"
+      }
+    }
+  ],
+  "cases": [
+    "cheribsd-abi",
+    "cheribsd-bounds",
+    "recording"
+  ],
+  "binaries": {
+    "cheribsd-abi": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "cheribsd-bounds": "acf9bed172d036417c14ff802f2b1097a8540fd61491b24f70a287e018f955fd",
+    "recording": "f001ad977b461e90970c5151e2f779ae76c9c31e48aad8040fa26874cd578f23"
+  },
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c",
+    "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6"
+  }
+}

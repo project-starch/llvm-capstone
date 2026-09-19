@@ -1,5 +1,7 @@
 # Prompt for continuing this Capstone work in a new chat
 
+Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
+
 Use the following prompt as the opening message in a fresh chat.
 
 For PostgreSQL allocator work, use `ports/postgres/memory-contexts/README.md`:

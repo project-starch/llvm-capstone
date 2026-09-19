@@ -7,19 +7,22 @@ import pathlib
 import struct
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[4] / "common/host"))
+from port_trace import TraceReader
+
 ROW = struct.Struct("<16Q")
 MAGIC = 0x4650465452433032
 FIELDS = "op kind pool call parent object size flags backing allocations gap live retained reserved0 reserved1 reserved2".split()
 
 
 def read(path):
-    raw = pathlib.Path(path).read_bytes()
-    if len(raw) < ROW.size or len(raw) % ROW.size:
-        raise ValueError("invalid file length")
-    head = ROW.unpack_from(raw)
-    if head[0] != MAGIC or head[1] != len(raw) // ROW.size - 1:
-        raise ValueError("invalid header")
-    return head, list(ROW.iter_unpack(raw[ROW.size :]))
+    with TraceReader(path, expected_format="ffmpeg.buffer-pool") as trace:
+        head = tuple(trace.header[name] for name in trace.format.header_fields)
+        rows = [
+            tuple(e.fields[name] for name in trace.format.record_fields)
+            for e in trace.events()
+        ]
+        return head, rows
 
 
 def summary(head, events):

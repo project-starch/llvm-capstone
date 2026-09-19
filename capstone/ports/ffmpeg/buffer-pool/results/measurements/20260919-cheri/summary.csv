@@ -1,0 +1,10 @@
+arm,workload,repetitions,payload_carved_bytes,metadata_carved_bytes,peak_pool_payload_bytes,max_bounds_slack_bytes
+capstone-spatial,short,3,372352,12288,368290,
+capstone-spatial,turnover,3,371904,11648,368250,
+capstone-spatial,larger,3,1242240,12288,1237864,
+capstone-sublet,short,3,372352,12288,368290,
+capstone-sublet,turnover,3,371904,11648,368250,
+capstone-sublet,larger,3,1242240,12288,1237864,
+cheri-spatial-arena,short,3,372544,12288,368290,49
+cheri-spatial-arena,turnover,3,372096,11648,368250,49
+cheri-spatial-arena,larger,3,1242816,12288,1237864,177

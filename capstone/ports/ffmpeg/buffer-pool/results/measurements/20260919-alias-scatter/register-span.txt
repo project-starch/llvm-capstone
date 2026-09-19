@@ -1,0 +1,60 @@
+Disassembly of section .text:
+
+000000000001fa4c <ff2_alias_scatter_register_span>:
+   1fa4c: 03 43 05 00  	lbu	t1, 0x0(a0)
+   1fa50: 93 03 10 01  	li	t2, 0x11
+   1fa54: 63 12 73 0c  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1fa58: 63 0e 07 04  	beqz	a4, 0x1fab4 <ff2_alias_scatter_register_span+0x68>
+   1fa5c: db b2 05 00  	ldc	t0, 0x0(a1)
+   1fa60: 5b 90 02 00  	revoke	t0
+   1fa64: 63 04 06 04  	beqz	a2, 0x1faac <ff2_alias_scatter_register_span+0x60>
+   1fa68: 5b 93 12 08  	lcc	t1, t0, 0x1
+   1fa6c: 93 03 30 00  	li	t2, 0x3
+   1fa70: 63 12 73 02  	bne	t1, t2, 0x1fa94 <ff2_alias_scatter_register_span+0x48>
+   1fa74: 5b 93 22 08  	lcc	t1, t0, 0x2
+   1fa78: db 93 42 08  	lcc	t2, t0, 0x4
+   1fa7c: 13 0e 03 01  	addi	t3, t1, 0x10
+   1fa80: 63 e8 c3 01  	bltu	t2, t3, 0x1fa90 <ff2_alias_scatter_register_span+0x44>
+   1fa84: 5b c0 02 00  	stc	zero, 0x0(t0)
+   1fa88: 13 03 0e 00  	mv	t1, t3
+   1fa8c: 6f f0 1f ff  	j	0x1fa7c <ff2_alias_scatter_register_span+0x30>
+   1fa90: db 92 02 12  	init	t0, t0, zero
+   1fa94: 5b 93 22 08  	lcc	t1, t0, 0x2
+   1fa98: 63 10 13 09  	bne	t1, a7, 0x1fb18 <ff2_probe_register_write+0x14>
+   1fa9c: 93 03 d0 03  	li	t2, 0x3d
+   1faa0: 23 80 72 00  	sb	t2, 0x0(t0)
+   1faa4: 03 c3 02 00  	lbu	t1, 0x0(t0)
+   1faa8: 63 18 73 06  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1faac: 5b c0 55 00  	stc	t0, 0x0(a1)
+   1fab0: 6f 00 00 01  	j	0x1fac0 <ff2_alias_scatter_register_span+0x74>
+   1fab4: 63 06 06 00  	beqz	a2, 0x1fac0 <ff2_alias_scatter_register_span+0x74>
+   1fab8: 93 03 d0 03  	li	t2, 0x3d
+   1fabc: 23 00 75 00  	sb	t2, 0x0(a0)
+   1fac0: 03 c3 07 04  	lbu	t1, 0x40(a5)
+   1fac4: 93 03 90 02  	li	t2, 0x29
+   1fac8: 63 18 73 04  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1facc: 93 03 a0 02  	li	t2, 0x2a
+   1fad0: a3 80 77 04  	sb	t2, 0x41(a5)
+   1fad4: 03 c3 17 04  	lbu	t1, 0x41(a5)
+   1fad8: 63 10 73 04  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1fadc: 5b 10 08 86  	<unknown>
+   1fae0: 63 90 06 02  	bnez	a3, 0x1fb00 <ff2_probe_register_read+0x1c>
+
+000000000001fae4 <ff2_probe_register_read>:
+   1fae4: 03 43 05 00  	lbu	t1, 0x0(a0)
+   1fae8: 93 03 10 01  	li	t2, 0x11
+   1faec: 63 04 06 00  	beqz	a2, 0x1faf4 <ff2_probe_register_read+0x10>
+   1faf0: 93 03 d0 03  	li	t2, 0x3d
+   1faf4: 63 12 73 02  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1faf8: 13 05 00 00  	li	a0, 0x0
+   1fafc: 67 80 00 00  	ret
+   1fb00: 93 03 d0 05  	li	t2, 0x5d
+
+000000000001fb04 <ff2_probe_register_write>:
+   1fb04: 23 00 75 00  	sb	t2, 0x0(a0)
+   1fb08: 03 43 05 00  	lbu	t1, 0x0(a0)
+   1fb0c: 63 16 73 00  	bne	t1, t2, 0x1fb18 <ff2_probe_register_write+0x14>
+   1fb10: 13 05 00 00  	li	a0, 0x0
+   1fb14: 67 80 00 00  	ret
+   1fb18: 13 05 10 00  	li	a0, 0x1
+   1fb1c: 67 80 00 00  	ret

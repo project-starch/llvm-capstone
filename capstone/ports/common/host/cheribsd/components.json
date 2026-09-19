@@ -1,0 +1,31 @@
+{
+  "ffmpeg": {
+    "path": "ffmpeg/buffer-pool",
+    "archive_option": "FFPOOL_ARCHIVE",
+    "library": "FFmpeg::BufferPool",
+    "examples": {"allocator-example": "ALLOCATOR_EXAMPLE ffmpeg PASS pointer_bytes=16"}
+  },
+  "postgres": {
+    "path": "postgres/memory-contexts",
+    "archive_option": "PG_ARCHIVE",
+    "library": "PostgreSQL::MemoryContexts",
+    "examples": {
+      "allocator-example": "ALLOCATOR_EXAMPLE postgres PASS pointer_bytes=16",
+      "client-generation-cheribsd": "PG_CLIENT generation RESULT 0",
+      "client-slab-cheribsd": "PG_CLIENT slab RESULT 0",
+      "client-bump-cheribsd": "PG_CLIENT bump RESULT 0"
+    }
+  },
+  "cpython": {
+    "path": "cpython/pymalloc",
+    "archive_option": "PYMALLOC_ARCHIVE",
+    "library": "CPython::Pymalloc",
+    "examples": {"allocator-example": "ALLOCATOR_EXAMPLE cpython PASS pointer_bytes=16"}
+  },
+  "whisper": {
+    "path": "whisper/ggml-context",
+    "archive_option": "WG_ARCHIVE",
+    "library": "Whisper::GgmlContext",
+    "examples": {"allocator-example": "ALLOCATOR_EXAMPLE whisper PASS pointer_bytes=16"}
+  }
+}

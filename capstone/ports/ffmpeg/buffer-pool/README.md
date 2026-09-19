@@ -1,12 +1,21 @@
 # FFmpeg buffer-pool replay
 
+[CheriBSD build, link example and QEMU runner](host/cheribsd/README.md)
+use the shared purecap toolchain. Each hosted build exposes a CMake allocator
+library and `bin/allocator-example`; a custom main can be linked through
+`PORT_CLIENT_SOURCE`. Protection scope is stated separately from build support.
+The experimental [PoisonCap workflow](host/cheribsd/poisoncap/README.md)
+reconstructs its published platform and selects a separate per-lease adapter.
+
 This component records native FFmpeg's AVBufferPool and AVRefStructPool
 operations and replays their allocator behavior in a Capstone domain. The
 decoder runs natively; this is not a capability-domain FFmpeg decoder.
 
 [`upstream.json`](upstream.json) pins FFmpeg 9.0.1 by archive checksum.
 [`patches/`](patches/) separates the upstream changes from the replay and
-authority adapters. The [shared layout](../../README.md) describes `src/`,
+authority adapters. A [CHERI Purecap target](host/cheribsd/README.md) runs the
+same allocator and recordings in CheriBSD/QEMU, with explicit compressed-bounds
+accounting and separate pool/outer-heap lifetime controls. The [shared layout](../../README.md) describes `src/`,
 `host/`, tests and result ownership.
 
 ## Build and run
@@ -49,6 +58,26 @@ atomic compiler change already in LLVM `dev` and the matching emulator checks
 in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).
 
 ## Evidence and limits
+
+The [A1 ancestor-revocation matrix](results/measurements/20260919-alias-scatter/README.md)
+checks aliases in globals, heap objects, linked lists, independent sibling-pool
+storage and a register. All 44 executions pass, including same-address reuse
+and no-revoke counterparts. This is a synthetic Capstone fixture in the replay
+harness; it does not measure a CHERI/PoisonCap hierarchy comparison.
+
+The [CHERI spatial comparison](results/measurements/20260919-cheri/README.md)
+reports nine verified replays, compressed-bounds padding and static storage.
+Its spatial leases have different lifetime guarantees from Sublet.
+
+The [paired measurement campaign](results/measurements/20260919-replay/README.md)
+checks three fresh native recordings in spatial and Sublet QEMU, three
+repetitions per arm. All accepted event sequences match native observations;
+carving watermarks, requested-payload series and primitive counts are reported
+separately from fixed reservations and unmeasured node/tag costs. Failed attempts
+remain documented. Use `host/memory/measure.py` for a new campaign,
+`export-measurements.py` for checked JSON/CSV and `plot-measurements.py` for
+comparison and event-excerpt figures. The [measurement plan](../../../docs/plans/replay-memory-measurements.md)
+defines the scope and remaining ledger, capacity and turnover work.
 
 [`results/archive/20260917/`](results/archive/20260917/) indexes the exploratory
 numeric evidence and external raw artifacts. It includes failed and incomplete

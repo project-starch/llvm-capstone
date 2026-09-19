@@ -1,0 +1,36 @@
+{
+  "ffmpeg": {
+    "events": 2379,
+    "exact_observed_event_sequence": true,
+    "status": 0
+  },
+  "cpython": {
+    "events": 123622,
+    "logical_counts_and_payload_checksum_match": true,
+    "native_arenas": 1,
+    "cheribsd_arenas": 1,
+    "native_metadata": 4602752,
+    "cheribsd_metadata": 4865664
+  },
+  "whisper": {
+    "events": 60179,
+    "logical_counts_and_payload_checksum_match": true,
+    "native_object_header": 32,
+    "cheribsd_object_header": 48,
+    "native_peak_used": 236976,
+    "cheribsd_peak_used": 240112
+  },
+  "postgres": {
+    "scope": "synthetic four-manager fixture",
+    "records": 5176,
+    "counts_match_fixture": true,
+    "creates": 7,
+    "allocs": 4110,
+    "frees": 1026,
+    "reallocs": 12,
+    "resets": 12,
+    "deletes": 7,
+    "checked": 1050,
+    "pointer_bytes": 16
+  }
+}

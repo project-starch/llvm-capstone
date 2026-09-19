@@ -2,6 +2,7 @@
 """Paired pool lifetime tests; fault verdicts require stage, cause, and exact PC."""
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -26,7 +27,15 @@ NAMES = [
     "buffer-one-past-end",
     "retained-stale-reference-long-run",
     "valid-reference-long-run",
+    "alias-scatter-valid-after-parent-reuse",
 ]
+NAMES += [
+    f"alias-scatter-{site}-{operation}-{phase}"
+    for phase in ("after-revoke", "after-reuse")
+    for site in ("global", "heap-object", "linked-list", "sibling-pool", "register")
+    for operation in ("read", "write")
+]
+NAMES += ["alias-scatter-valid-after-parent-revoke"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")
@@ -51,6 +60,11 @@ for mode in map(int, args.modes.split(",")):
     for case in map(int, args.cases.split(",")):
         if mode not in (0, 1, 2) or not 0 <= case < len(NAMES):
             raise SystemExit("invalid mode or case")
+        if case >= 14 and mode == 1:
+            raise SystemExit("alias scatter requires mode 0 or 2")
+        scatter = 15 <= case <= 34
+        register = scatter and (case - 15) % 10 >= 8
+        writing = (case - 15) % 2 if scatter else case in (2, 4, 6)
         run = args.output / f"mode-{mode}-case-{case}"
         run.mkdir(exist_ok=False)
         share = run / "share"
@@ -64,6 +78,7 @@ for mode in map(int, args.modes.split(",")):
             case in (10, 11)
             or (case == 9 and mode >= 1)
             or (mode == 2 and case in (1, 2, 3, 4, 5, 6, 8, 12))
+            or (mode == 2 and scatter)
         )
         guest = f"""#!/bin/sh
 set -e
@@ -112,13 +127,18 @@ echo FF2_SECURITY_DONE
             node_budget=int(os.environ["CAPSTONE_REV_NODES"]),
             rounds=args.rounds,
             log=str(run / "serial.log"),
+            log_sha256=hashlib.sha256((run / "serial.log").read_bytes()).hexdigest(),
+            domain_sha256=hashlib.sha256(
+                (share / "security.dom").read_bytes()
+            ).hexdigest(),
+            trace_sha256=hashlib.sha256((share / "trace.bin").read_bytes()).hexdigest(),
         )
         if fault:
             following = serial.split(stage, 1)[-1] if stage in serial else ""
             sites = re.findall(
                 r"Print = Cap\(\d+, 0x[0-9a-f]+, (0x[0-9a-f]+),", following
             )
-            site = 1 if case in (2, 4, 6) else 0
+            site = (2 if register else 0) + int(writing)
             cause, pc = faults[-1] if faults else ("0", "0")
             # This pinned QEMU reports bounds failures as load-access fault 5,
             # with the explicit OOB diagnostic and offending range.
@@ -130,6 +150,7 @@ echo FF2_SECURITY_DONE
             )
             row["passed"] = (
                 stage in serial
+                and len(faults) == 1
                 and len(sites) > site
                 and int(cause) in allowed
                 and int(pc, 16) == int(sites[site], 16)
@@ -142,6 +163,10 @@ echo FF2_SECURITY_DONE
             if status:
                 raw = (share / "result.bin").read_bytes()
                 row["passed"] &= struct.unpack_from("<16Q", raw)[2] == status
+        if register:
+            ready = f"Print = Scalar(0x{0xff26000000000000 | case:x})"
+            row["register_transition_checked"] = ready in serial
+            row["passed"] &= ready in serial
         verdicts.append(row)
         (args.output / "verdicts.json").write_text(
             json.dumps(verdicts, indent=2) + "\n"

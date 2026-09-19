@@ -1,0 +1,80 @@
+[
+  {
+    "mode": 0,
+    "case": 0,
+    "name": "shared-references-callbacks-deferred-close",
+    "expected": "completed",
+    "runner_exit": 0,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "passed": true,
+    "serial_sha256": "a19152fff216f0c246db6a916295c743a3e1015f9d7c20db6990349633e085a9",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  },
+  {
+    "mode": 0,
+    "case": 3,
+    "name": "buffer-read-after-reuse",
+    "expected": "completed",
+    "runner_exit": 0,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "passed": true,
+    "serial_sha256": "f59f1203a3c8acebe9023808a4b3554f5474a93c4eacb8336dd6006a73ba99d4",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  },
+  {
+    "mode": 0,
+    "case": 5,
+    "name": "refstruct-read-after-return",
+    "expected": "completed",
+    "runner_exit": 0,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "passed": true,
+    "serial_sha256": "3266f3249ec8657e3b9c3ac7156a2910495313b70a4f02c122a536a14c13e30d",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  },
+  {
+    "mode": 2,
+    "case": 0,
+    "name": "shared-references-callbacks-deferred-close",
+    "expected": "completed",
+    "runner_exit": 0,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "passed": true,
+    "serial_sha256": "69ffc9bfb54bd30e6abc29764019275a0bf286eb3a609166f076ec0a20199f2a",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  },
+  {
+    "mode": 2,
+    "case": 3,
+    "name": "buffer-read-after-reuse",
+    "expected": "fault",
+    "runner_exit": 1,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "cause": 24,
+    "pc": "0x101a0df6c",
+    "expected_pc": "0x101a0df6c",
+    "passed": true,
+    "serial_sha256": "942c2dde980d19b931e66de9b0e6624ae0f8d5ec1e9e451f255c4c830f94d1c9",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  },
+  {
+    "mode": 2,
+    "case": 5,
+    "name": "refstruct-read-after-return",
+    "expected": "fault",
+    "runner_exit": 1,
+    "node_budget": 1048576,
+    "rounds": 70000,
+    "cause": 24,
+    "pc": "0x101a0df6c",
+    "expected_pc": "0x101a0df6c",
+    "passed": true,
+    "serial_sha256": "9106884c63456f1f2d8df480e9ace235438c75c30791a2d57685106a63e8be87",
+    "domain_sha256": "0c58a33eb0cff47a22f255ef079799d26688b8035058c64383fb592dbcd9bdf4"
+  }
+]

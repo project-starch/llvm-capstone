@@ -1,9 +1,17 @@
 # Port and runtime integration
 
-Status: pending integration. Checked 2026-09-19 against LLVM `dev`
+Status: combined in the isolated trace-development baseline `6e66c1928288`;
+upstream PR integration remains pending. Checked 2026-09-19 against LLVM `dev`
 `dc40bc1df43f`. This is the remaining integration plan, not a new runtime or
 silicon validation. The [port catalog](../../ports/README.md) describes scope
 and build entry points independently of the PR queue.
+
+The trace baseline includes the current heads of #50–#58, preserving their
+ancestry. Shared-file conflicts are resolved there, with the combined runtime
+CMake interface and the newer delivered-corpus runner. The allocator source
+trees match their respective current port branches. This does not establish a
+new combined QEMU or silicon verdict. The remaining upstream integration
+actions below still apply to the independent PRs.
 
 ## Prerequisites and order
 

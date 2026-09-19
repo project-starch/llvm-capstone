@@ -1,0 +1,18 @@
+{
+  "artifact": {
+    "repository": "https://github.com/Yuecheng-CAM/Ajs38RO4Vz-p",
+    "commit": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+    "sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c"
+  },
+  "bases": {
+    "qemu": {"repository": "https://github.com/CTSRD-CHERI/qemu", "commit": "5571e801bf5b20cfb10da7fd2a60da1ff0f50df0"},
+    "cheribsd": {"repository": "https://github.com/CTSRD-CHERI/cheribsd", "commit": "214a1a2d939ec065a7ac5452413058e84c3faf61"},
+    "llvm-project": {"repository": "https://github.com/CTSRD-CHERI/llvm-project", "commit": "b34041a38135b9594e3a8ec203af4a0713b4ceda"}
+  },
+  "compressed_cap": {
+    "repository": "https://github.com/CTSRD-CHERI/cheri-compressed-cap",
+    "commit": "4168e74071d1e5e4e1931f4289501a7c54130278",
+    "sha256": "ed32922ab436e2ced4ed1f458c03b03f231eda614f63d95e6a27ec70d410d423"
+  },
+  "cheribuild_commit": "07d5e034d7c7fee740d2f49f99146e8207bc79b7"
+}

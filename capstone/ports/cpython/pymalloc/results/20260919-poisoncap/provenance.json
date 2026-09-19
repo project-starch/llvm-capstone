@@ -1,0 +1,83 @@
+{
+  "branch": "ports/10-poisoncap-pymalloc",
+  "ffmpeg_base": "69925e284db7c041288514f490d3ea05f708637a",
+  "dev_merged_at_start": "8abc0545f0dd",
+  "parent_commit": "c87480d2c33c2d95610092c0ab84bec7b6943626",
+  "cpython": {
+    "name": "CPython",
+    "version": "3.13.7",
+    "url": "https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz",
+    "sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2"
+  },
+  "platform": {
+    "artifact": {
+      "repository": "https://github.com/Yuecheng-CAM/Ajs38RO4Vz-p",
+      "commit": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+      "sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c"
+    },
+    "bases": {
+      "qemu": {
+        "repository": "https://github.com/CTSRD-CHERI/qemu",
+        "commit": "5571e801bf5b20cfb10da7fd2a60da1ff0f50df0"
+      },
+      "cheribsd": {
+        "repository": "https://github.com/CTSRD-CHERI/cheribsd",
+        "commit": "214a1a2d939ec065a7ac5452413058e84c3faf61"
+      },
+      "llvm-project": {
+        "repository": "https://github.com/CTSRD-CHERI/llvm-project",
+        "commit": "b34041a38135b9594e3a8ec203af4a0713b4ceda"
+      }
+    },
+    "compressed_cap": {
+      "repository": "https://github.com/CTSRD-CHERI/cheri-compressed-cap",
+      "commit": "4168e74071d1e5e4e1931f4289501a7c54130278",
+      "sha256": "ed32922ab436e2ced4ed1f458c03b03f231eda614f63d95e6a27ec70d410d423"
+    },
+    "cheribuild_commit": "07d5e034d7c7fee740d2f49f99146e8207bc79b7"
+  },
+  "source_sha256": {
+    "capstone/ports/common/host/cheribsd/run.py": "65ce93a4a95c6c935ebb90c68d107c219cbeb2ed4852fa3226ffec66ee88d794",
+    "capstone/ports/common/tests/test_cheribsd.py": "36fade270117013b5d35ab55959cbe2912e48fd336df1b23ae9e23fdd38d22e1",
+    "capstone/ports/cpython/pymalloc/CMakeLists.txt": "efceab532f54b3e9fdb3c315d6a3ce349f412d805217e70eeb108615f8fcae0a",
+    "capstone/ports/cpython/pymalloc/cmake/Replay.cmake": "c737754191d06f9aabcb89dc6f8d70d12ceb39d6a195dbaab3899d755010562f",
+    "capstone/ports/cpython/pymalloc/examples/pymalloc.c": "6bd322de0f8570072ffddac0f14525b8cb212bbacf78e654b65bd1eecbfaa95e",
+    "capstone/ports/cpython/pymalloc/host/cheribsd/poisoncap/build.sh": "746441c120ace673c74a4caf374081fe264f93f10410c2b930b82298e4f9720a",
+    "capstone/ports/cpython/pymalloc/host/cheribsd/poisoncap/run.py": "06029423dbd2f5f55c21cef9fb3e18478b356b08d10d0d0ce989e6429be7713a",
+    "capstone/ports/cpython/pymalloc/host/record.py": "9658827797d5cc8804942bed52e65361e7c684ab898c9844878074e4ebe6aa7e",
+    "capstone/ports/cpython/pymalloc/security-tests/cheribsd/allocator-checks.c": "4130ddf7fccf74b48e19f97535e39239f131f9192082fc2950cfd5b620cca3b6",
+    "capstone/ports/cpython/pymalloc/security-tests/shared/lifetimes.c": "8a52db14ec92781337dbd735ae0d470c71ab43d99c30c969d50408ce0dc3d3bc",
+    "capstone/ports/cpython/pymalloc/src/cheribsd/poisoncap-lifetimes.c": "3653ff5d3b3b55deb76879f547a84e1b137049caf5f3fa96408c509994645c29",
+    "capstone/ports/cpython/pymalloc/src/native/main.c": "9fbe09fd411be7bf645b89be69fd45926fca15aea3439e833a89d6b05ceea344",
+    "capstone/ports/cpython/pymalloc/src/shared/backing.c": "03494f27ed4db74eab12dca4263aa446e4fb37aa6c5661f9439ece9c8d7677d3",
+    "capstone/ports/cpython/pymalloc/tests/native/test-poisoncap-oracle.py": "120c5af805fffedd35219484144af372c4d5ae723f25038afdcc07f58e6964e2"
+  },
+  "upstream_patches": {
+    "cpython-3.13.7-0001-standalone-pymalloc.patch": "c65885a5883f756ccd4a406f3faab2fff000bcbf77082d085c261f7b173f9c76",
+    "cpython-3.13.7-0002-capability-provenance.patch": "54df540ab50f2cf18001e5d6bbd56ae62566e4b16c1cabac039ff5395f2f0874",
+    "cpython-3.13.7-0003-block-lifetime-hooks.patch": "8c4eae399d3f29afef626c7d4d5713fdcb19cdd0f9c8d133419942d889b17d6e"
+  },
+  "generated_obmalloc_sha256": "4e8ecfb387ae110993b7dec2a6247bd22c441414e1f3c60e73ac6507ee4d5988",
+  "poisoncap_compiler_sha256": "51b76edd1776d375c32cea00a86a3aec118c5fcf2207a0ae13f8bf9df417b2e4",
+  "build": {
+    "type": "Debug",
+    "platform": "cheribsd",
+    "poisoncap": true,
+    "linker": "lld"
+  },
+  "recording": {
+    "rounds": 1,
+    "items": 1,
+    "events": 115,
+    "allocations": 55,
+    "frees": 55,
+    "reallocations": 4,
+    "live_at_end": 0,
+    "sha256": "4d1a034a7ef1d27d2bf4b58aaabacbba28f24988609218e68b9d7082a61b520c",
+    "repeat_sha256": "4d1a034a7ef1d27d2bf4b58aaabacbba28f24988609218e68b9d7082a61b520c",
+    "native_oracle_sha256": "b5f86cecf35ccabf6248a6b036567208c1af1db4ea0ec4ac17c59d57f5a492d1"
+  },
+  "reuse_rounds": 8,
+  "arena_turnover_objects": 2300,
+  "scope": "Extracted single-threaded trusted pymalloc, synthetic replay payloads; no full interpreter, defect corpus, hostile nested-manager or hardware performance claim."
+}

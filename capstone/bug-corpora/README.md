@@ -7,6 +7,9 @@ Deliberately outside `ports/`, which holds the ports themselves and their build.
     cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
     sqlite/cve-repros/     the CVE rows, one directory per row
     postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
+    postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
+    sqlite/cve-repros/       the CVE rows, one directory per row
+    cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
 
 Each case is its own directory with a `run.sh` that builds, runs its control first, and
 prints a verdict against what the case records. A run whose control fails exits 75 with NO

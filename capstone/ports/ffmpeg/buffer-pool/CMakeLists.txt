@@ -3,6 +3,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../common/cmake/Port.cmake")
 project(ffmpeg_buffer_pool LANGUAGES C)
 
 port_check_platform()
+if(PORT_PLATFORM STREQUAL "cheribsd")
+  set(FFPOOL_CHERI ON)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)

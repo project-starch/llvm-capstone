@@ -77,3 +77,34 @@ def write_checksums(directory):
             if p.is_file() and p.name != "SHA256SUMS"
         )
     )
+
+
+def write_replay_verdict(run, *, passed, runner_exit, **details):
+    """Common result envelope; each port still owns its execution oracle.
+
+    A trace hash binds the result to the staged bytes when a validated trace
+    sidecar exists. Dedicated lifetime fixtures and deliberate malformed-input
+    controls need not be trace replays and keep that association absent.
+    """
+    run = Path(run)
+    trace = None
+    sidecar = run / "trace.json"
+    if sidecar.exists():
+        inspection = json.loads(sidecar.read_text())
+        if (
+            inspection.get("schema") == "capstone.trace-inspection/v1"
+            and inspection.get("validation", {}).get("complete") is True
+        ):
+            trace = inspection["trace"]
+        elif passed:
+            raise ValueError("cannot pass a replay whose trace validation failed")
+    write_json(
+        run / "verdict.json",
+        {
+            **details,
+            "schema": "capstone.replay-verdict/v1",
+            "passed": bool(passed),
+            "runner_exit": runner_exit,
+            "trace": trace,
+        },
+    )

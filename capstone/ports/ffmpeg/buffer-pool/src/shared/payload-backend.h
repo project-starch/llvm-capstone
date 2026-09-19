@@ -15,6 +15,9 @@ struct payload_block {
   uintptr_t address;
   size_t requested, rounded;
   unsigned alive, idle;
+#ifdef FFPOOL_POISONCAP
+  unsigned long poison_epoch;
+#endif
 };
 
 /* Called by ff2_payload_init after the backend has stored the incoming grant.
