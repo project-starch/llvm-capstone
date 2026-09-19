@@ -1,7 +1,12 @@
 Protected pool replay: the [PICASSO token adapter and Sublet reuse comparison](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-temporal-reuse/README.md)
-now passes matching per-return stale-lease controls. The next semantic test is
-parent-region invalidation with independently live children: individual flat
-colors do not automatically encode this hierarchy. Keep trusted adaptation
+now passes matching per-return stale-lease controls. The
+[A1 matrix](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md)
+also verifies Capstone ancestor revocation across five alias locations, with
+same-address reuse and unaffected-sibling controls. Next define matched
+parent/child semantics for a cross-system hierarchy experiment; A1's no-revoke
+arm is not a CHERI, PoisonCap or PICASSO implementation. Vary child fan-out and
+account for required manager bookkeeping before making a scaling claim.
+Keep trusted adaptation
 separate from protection of untrusted nested managers. Before making a
 reclamation-space claim, use a Capstone model implementing the intended node
 reclaimer; the pinned QEMU accumulates nodes in these traces. Account for

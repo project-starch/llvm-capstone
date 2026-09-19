@@ -52,6 +52,12 @@ in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).
 
 ## Evidence and limits
 
+The [A1 ancestor-revocation matrix](results/measurements/20260919-alias-scatter/README.md)
+checks aliases in globals, heap objects, linked lists, independent sibling-pool
+storage and a register. All 44 executions pass, including same-address reuse
+and no-revoke counterparts. This is a synthetic Capstone fixture in the replay
+harness; it does not measure a CHERI/PoisonCap/PICASSO hierarchy comparison.
+
 The [protected reuse experiment](results/measurements/20260919-temporal-reuse/README.md)
 adds a PICASSO per-lease adapter, matching stale-return controls, and fixed-payload
 churn through color recycling. It distinguishes trusted pool adaptation from

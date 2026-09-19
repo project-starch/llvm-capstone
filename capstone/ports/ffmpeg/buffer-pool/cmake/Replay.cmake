@@ -61,6 +61,10 @@ add_executable(replay ${entry} src/shared/replay-engine.c)
 add_executable(pool-security ${entry} src/shared/replay-engine.c
   security-tests/shared/pool-lifetime-probes.c)
 target_compile_definitions(pool-security PRIVATE FF2_SECURITY)
+if(PORT_PLATFORM STREQUAL "capstone-domain")
+  target_sources(pool-security PRIVATE
+    security-tests/capstone/alias-scatter-register.S)
+endif()
 foreach(program replay pool-security)
   target_link_libraries(${program} PRIVATE pool-core)
   # Headers in the prepared source tree must exist before compiling entry points.

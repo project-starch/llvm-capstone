@@ -3,10 +3,12 @@
  * A paired live access and successful setup marker precede every stale access.
  */
 #include "libavutil/buffer.h"
+#include "libavutil/mem.h"
 #include "libavutil/refstruct.h"
 #include "trace.h"
 #ifdef FFPOOL_DOMAIN
 #include "../../src/capstone-domain/node-snapshots.h"
+#include "../../src/capstone-domain/alias-scatter.h"
 #endif
 #ifdef FFPOOL_CHERI
 #include <stdio.h>
@@ -14,6 +16,19 @@
 
 #define CHECK(c, n) do { if (!(c)) ff2_fail(n); } while (0)
 static volatile unsigned char *held;
+#ifdef FFPOOL_DOMAIN
+static volatile unsigned char *volatile scattered_global;
+static volatile unsigned long scattered_canary;
+struct scattered_holder {
+    volatile unsigned char *volatile alias;
+    volatile unsigned long canary;
+};
+struct scattered_link {
+    struct scattered_link *volatile next;
+    volatile unsigned char *volatile alias;
+    volatile unsigned long canary;
+};
+#endif
 static void checkpoint(unsigned long round)
 {
 #ifdef FFPOOL_PICASSO
@@ -29,11 +44,16 @@ static void mark(unsigned id)
 {
 #ifdef FFPOOL_DOMAIN
     extern void ff2_probe_read(void), ff2_probe_write(void);
+    extern void ff2_probe_register_read(void), ff2_probe_register_write(void);
     unsigned long value = 0xff25000000000000UL | id;
     __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0\n"
                      ".insn r 0x5b, 0x1, 0x43, x0, %1, x0\n"
                      ".insn r 0x5b, 0x1, 0x43, x0, %2, x0\n"
-                     : : "r"(value), "r"(ff2_probe_read), "r"(ff2_probe_write) : "memory");
+                     ".insn r 0x5b, 0x1, 0x43, x0, %3, x0\n"
+                     ".insn r 0x5b, 0x1, 0x43, x0, %4, x0\n"
+                     : : "r"(value), "r"(ff2_probe_read), "r"(ff2_probe_write),
+                         "r"(ff2_probe_register_read),
+                         "r"(ff2_probe_register_write) : "memory");
 #elif defined(FFPOOL_CHERI)
     printf("FF2_PROBE case=%u ready\n", id);
     fflush(stdout);
@@ -113,8 +133,9 @@ static void controls(void)
     mark(0);
 }
 
-void ff2_security_run(unsigned test, unsigned long rounds)
+void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
 {
+    (void)mode;
     if (!test) { controls(); return; }
     if (test == 8) {
         AVBufferPool *bp = av_buffer_pool_init(64, NULL);
@@ -185,5 +206,84 @@ void ff2_security_run(unsigned test, unsigned long rounds)
         av_refstruct_unref(&a); av_refstruct_unref(&sibling); av_refstruct_unref(&rp); held = NULL;
         return;
     }
+#ifdef FFPOOL_DOMAIN
+    if (test >= 14 && test <= 35) {
+        CHECK(mode == 0 || mode == 2, 443);
+        unsigned control = test == 14 || test == 35;
+        unsigned reuse = test == 14 || (test >= 25 && test <= 34);
+        unsigned site = control ? 0 : ((test - 15) % 10) / 2;
+        unsigned writing = control ? 0 : (test - 15) % 2;
+        struct ff2_alias_scatter state = {0};
+        struct scattered_holder *heap = av_mallocz(sizeof(*heap));
+        struct scattered_link *head = av_mallocz(sizeof(*head));
+        struct scattered_link *tail = av_mallocz(sizeof(*tail));
+        CHECK(heap && head && tail, 431);
+        head->next = tail;
+        heap->canary = head->canary = tail->canary = scattered_canary = 71;
+
+        ff2_alias_scatter_setup(&state);
+        CHECK(state.child_alias && state.sibling_alias, 432);
+        state.child_alias[0] = 17;
+        state.sibling_alias[64] = 41;
+
+        /* All holders are outside the parent subtree. The final holder uses
+         * storage owned by an independent sibling pool. */
+        scattered_global = state.child_alias;
+        heap->alias = state.child_alias;
+        tail->alias = state.child_alias;
+        volatile unsigned char *volatile *other_pool =
+            (volatile unsigned char *volatile *)state.sibling_alias;
+        *other_pool = state.child_alias;
+        volatile unsigned char *register_alias = state.child_alias;
+
+        CHECK(read_probe(scattered_global) == 17, 433);
+        CHECK(read_probe(heap->alias) == 17, 434);
+        CHECK(read_probe(head->next->alias) == 17, 435);
+        CHECK(read_probe(*other_pool) == 17, 436);
+        CHECK(read_probe(register_alias) == 17 && state.sibling_alias[64] == 41, 437);
+
+        if (!control && site == 4) {
+            mark(test);
+            CHECK(ff2_alias_scatter_register_span(register_alias,
+                &state.parent_handle, reuse, writing, mode, state.sibling_alias,
+                0xff26000000000000UL | test, state.child_address) == 0, 444);
+            av_free(heap); av_free(head); av_free(tail);
+            return;
+        }
+
+        ff2_alias_scatter_transition(&state, mode, reuse);
+        if (reuse) {
+            state.new_alias[0] = 61;
+            CHECK(state.new_alias[0] == 61, 438);
+        }
+        CHECK(state.sibling_alias[64] == 41, 439);
+        state.sibling_alias[65] = 42;
+        CHECK(state.sibling_alias[65] == 42, 440);
+        CHECK(heap->canary == 71 && head->canary == 71 &&
+              tail->canary == 71 && scattered_canary == 71 &&
+              head->next == tail, 441);
+        heap->canary = 72;
+        CHECK(heap->canary == 72, 442);
+        if (control) {
+            mark(test);
+            av_free(heap); av_free(head); av_free(tail);
+            return;
+        }
+
+        volatile unsigned char *selected =
+            site == 0 ? scattered_global :
+            site == 1 ? heap->alias :
+            site == 2 ? head->next->alias : *other_pool;
+        mark(test);
+        if (writing) {
+            write_probe(selected);
+            CHECK(read_probe(selected) == 93, 445);
+        } else {
+            CHECK(read_probe(selected) == (reuse ? 61 : 17), 446);
+        }
+        av_free(heap); av_free(head); av_free(tail);
+        return;
+    }
+#endif
     ff2_fail(430);
 }

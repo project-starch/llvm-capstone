@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-19 — Scattered aliases and ancestor revocation
+
+The synthetic A1 fixture passes 44 QEMU executions: 20 stale read/write
+attempts fault after parent revocation, 20 matched no-revoke attempts complete,
+and four valid-authority controls complete. Five alias locations are covered
+(global, heap object, linked list, independent sibling pool, register), both
+immediately after revocation and after same-address reuse. Disassembly confirms
+the register alias stays in a register across revocation without calls or
+spills. New authority and the unaffected sibling remain usable. This is
+functional Capstone evidence, not protected decoding, hostile-manager domain
+isolation, a performance measurement or a measured competitor disadvantage.
+[Matrix, protocol and provenance](../../ports/ffmpeg/buffer-pool/results/measurements/20260919-alias-scatter/README.md).
+
 ## 2026-09-19 — Protected pool reuse comparison
 
 An optional PICASSO adapter now colors each FFmpeg pool lease and invalidates

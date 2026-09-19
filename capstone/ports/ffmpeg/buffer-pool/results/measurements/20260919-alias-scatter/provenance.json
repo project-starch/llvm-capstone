@@ -1,0 +1,47 @@
+{
+  "base_commit": "4d9095a9fcba8e9f6737f573c81afab185d4d001",
+  "machine": "virt-capstone",
+  "memory": "8G",
+  "cpus": 1,
+  "revocation_node_capacity": 1048576,
+  "snapshot": true,
+  "build": "Debug; musl headers; PORT_C11_ATOMICS=ON; FFmpeg 9.0.1",
+  "binaries_and_build_files": {
+    "qemu-system-riscv64": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52",
+    "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "rootfs.ext2": "313ba2991985f78671634966508c38de7a02b283cd65c13cdbba582dcf75fe6a",
+    "domain-loader": "5d76674afe3c9e65c85c4decd5ca5a2a89bdc2592ede8ec6bb8c6590e6451b60",
+    "pool-security.dom": "a0595bb20dc888b560dd15dc74425c95487166373456d848d26a17baf1edbc70",
+    "CMakeCache.txt": "a33e97c33e19131b8c51209621f24404b5751dbefc1546180d224ffd4860d70c",
+    "compile_commands.json": "da6ed404f243d4590c52b0cc1aef148ef5c2c6efe8fc78bc7c4a72fbcdd74ca6"
+  },
+  "final_component_sources": {
+    "cmake/Replay.cmake": "89f99ed675bfb10f5a58c5e86272fe54107ce39bcab491a970df26a6c4f4cafd",
+    "src/shared/replay-engine.c": "11d421d6d4e97ba5e9084bc4d1ed21a36c7ae1097aea714dd2f4ad6c9a48c7f2",
+    "src/capstone-domain/payload-capabilities.c": "2b817a63ff0739e8b42ae5e5ce02aa2a45c150592819e60bb7b957407f48db33",
+    "src/capstone-domain/alias-scatter.h": "32884b0beb8765a01595dfc4341bcf32bcdfdf4a797fba1df93d0777b513fe87",
+    "security-tests/shared/pool-lifetime-probes.c": "18a4a4b876519f01e7f6918a3415d00951287009fa80e4492a2c945be69e6dec",
+    "security-tests/capstone/alias-scatter-register.S": "8214cbc26e715600c6343fc9fa61a257f73611147c5d6b1e3933503f88f1d64a",
+    "security-tests/qemu/verify-outcomes.py": "7b06a5e9ac681901723f5b85537272a625b47882fbdcab3f7aaec55a8d7c3000",
+    "security-tests/capstone/export.py": "029c023e68151b16602d51fef9da2779e2a4546f720173306891b2569058cfe3"
+  },
+  "runtime_headers": {
+    "capstone/runtime/include/capstone/domain-fault.h": "a87351dde445b68ccc38d34ad519876e446b83b1ed81227626f4c22aeea7f90a",
+    "capstone/runtime/include/capstone/linux-domain-fault.h": "92b84e9702d9909ed07b4a8e948af6d196c0add4a3400412e9a5a3a18b7bba64",
+    "capstone/runtime/include/capstone/capability-slot.h": "a00a47fc11b4b897b8efcbf134c83bcd53711a16957fe91514fa804ca1833c73",
+    "capstone/runtime/include/capstone/capability.h": "3d8e700dc29a520de91c447a91f36191a41e8176a242cbc7f62d08dbc93bd99e",
+    "capstone/runtime/include/sublet/sublet.h": "aef9f1bc9f9818276ae505eb32cbf21730dd6b089711cef4fba6dc562143fcd5"
+  },
+  "register_review": {
+    "entry_pc": "0x1fa4c",
+    "size_bytes": 212,
+    "retained_register": "a0",
+    "revoke_instructions": 1,
+    "calls": 0,
+    "stack_accesses": 0,
+    "alias_spills": 0,
+    "note": "Manual control-flow review of both labelled paths; a0 overwritten only on return paths."
+  }
+}

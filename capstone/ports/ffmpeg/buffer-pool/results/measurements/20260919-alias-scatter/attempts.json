@@ -1,0 +1,42 @@
+{
+  "pilot": {
+    "directory": "pilot-1",
+    "accepted": 14,
+    "included_in_matrix": false
+  },
+  "matrix": {
+    "accepted": 44,
+    "excluded": [
+      {
+        "log": "matrix-1/mode-0-case-25/serial.log",
+        "reason": "boot-login infrastructure failure before the guest test",
+        "replacement": "matrix-2/mode-0-case-25/serial.log"
+      },
+      {
+        "log": "matrix-3/mode-2-case-14/serial.log",
+        "reason": "boot-login infrastructure failure before the guest test",
+        "replacement": "matrix-5/mode-2-case-14/serial.log"
+      },
+      {
+        "log": "matrix-4/mode-2-case-14/serial.log",
+        "reason": "boot-login infrastructure failure before the guest test",
+        "replacement": "matrix-5/mode-2-case-14/serial.log"
+      }
+    ]
+  },
+  "build_preflight": [
+    "Initial log redirect failed before configuration because output directory did not exist.",
+    "First compile failed on an incorrect capability enum name; fixed before any guest execution."
+  ],
+  "export_checks": [
+    "Incomplete matrix rejected",
+    "Wrong fault PC rejected even with refreshed log hash",
+    "Missing setup marker rejected even with refreshed log hash",
+    "Changed log hash rejected"
+  ],
+  "regressions": {
+    "qemu": 6,
+    "native_ctest": 3,
+    "native_pool_control": 1
+  }
+}
