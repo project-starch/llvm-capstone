@@ -1,0 +1,25 @@
+{
+  "case": 2,
+  "upstream_fix": "gh-142829",
+  "title": "use-after-free in Context.__eq__ via re-entrant ContextVar.set",
+  "consumer": "Python/hamt.c",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "object": "a HAMT node the iterator state points INTO",
+  "size_class": "small, under the threshold",
+  "lifetime_ender": "a re-entrant ContextVar.set rebuilds the map",
+  "shape": "interior pointer into a freed block",
+  "layer_note": "the containers are Context objects and have a free list; the keys and values are pymalloc, and that is the path modelled",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    }
+  },
+  "status": "run 2026-09-18 under QEMU; both arms passed"
+}
