@@ -12,7 +12,8 @@ hold the profiling workflow and compact evidence. Read
 The shell drivers described below remain the older experiment/gate path.
 Their Sublet adapter is AllocSet-only. The four-manager CMake extension
 (AllocSet, Generation, Slab and Bump), client examples and unified 17.0 pin
-are in [PR #51](https://github.com/project-starch/llvm-capstone/pull/51).
+are included here from [PR #51](https://github.com/project-starch/llvm-capstone/pull/51).
+The component, shell drivers and native corpus read the same 17.0 manifest.
 The existing memory-profile campaign measured 17.5; those results must retain
 that identity after the pin changes. The paragraphs below describe the shell
 path, not the versioned patches inside `memory-contexts/patches/`.

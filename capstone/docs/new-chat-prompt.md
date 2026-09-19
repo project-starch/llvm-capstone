@@ -2,6 +2,10 @@
 
 Use the following prompt as the opening message in a fresh chat.
 
+For PostgreSQL allocator work, use `ports/postgres/memory-contexts/README.md`:
+the CMake targets port all four pool managers; the legacy scripts remain
+AllocSet-only. Do not infer protected consumer-reproducer coverage from that.
+
 ---
 
 I am continuing work on the Capstone architecture support in the repository:

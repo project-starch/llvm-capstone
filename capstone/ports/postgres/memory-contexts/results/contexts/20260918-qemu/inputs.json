@@ -1,0 +1,29 @@
+{
+  "postgresql": "17.0",
+  "archive_sha256": "7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de",
+  "patch_sha256": {
+    "0005-slab": "2b63dce4ea2086dec422f101c39d619bf979be2c967d89ea76c9531233ae95fe",
+    "0006-generation": "7f050720f52e0fa565e5b9312884f77cfefa8881d4f069af05552b5a68dd3811",
+    "0007-bump": "ca9509e0a936d105807eef98dbcc5169006533f2d023b61b4ae4289b09656514"
+  },
+  "binary_sha256": {
+    "contexts-spatial.dom": "868fbff466496c1e6940d9e7b3b0b76bc5e6644019679e4ca8d733c221c34f7c",
+    "contexts-sublet.dom": "6b9157e6f17e2ab3b79f070aab24ddb1d07711b388bb3c0bf5dd6ebc0b392536",
+    "replay-spatial.dom": "e7ffb5398133eb424166d8b3774855e13f6233605c7acef764beb9e810dc6fa1",
+    "replay-sublet.dom": "0de99d5772929e338ea209d875d5e8ad8fdaf4d5e17a339ad575c79d2094dc67",
+    "domain-loader": "e0e27dbf6839896e661acde6e6ad3e9b3083063b9943bada3de4a05c6b1f69d1",
+    "qemu": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52",
+    "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664"
+  },
+  "regions": {
+    "payload": 65536,
+    "arena": 67108864,
+    "trace": 67108864,
+    "scratch": 50331648
+  },
+  "revocation_nodes": 8388608,
+  "matrix_arms": 72,
+  "expected_faults": 25,
+  "cmake_build_type": "Debug",
+  "postgresql_manager_layout": "release"
+}

@@ -1,0 +1,24 @@
+{
+  "case": 14,
+  "upstream_fix": "gh-146011",
+  "title": "use-after-free in signaldict_repr after deletion",
+  "consumer": "Modules/_decimal/_decimal.c",
+  "object": "traps->flags, a borrowed pointer INTO the context object's storage",
+  "lifetime_ender": "context_clear releases the context without clearing the signal dict's interior pointer, and the signal dict survives it",
+  "shape": "dangling pointer parked in a surviving object",
+  "distinguishing": "the gap is unbounded. Every other case's stale access happens inside the operation that created it or on the next API call; this one waits for a repr() that may never come",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

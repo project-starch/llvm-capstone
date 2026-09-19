@@ -45,6 +45,11 @@ RUN_ALL_BEEBS_JOBS=8 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all
 
 ## Test layers
 
+PostgreSQL allocator changes use the native and capstone-domain CTest suites in
+`ports/postgres/memory-contexts`. They cover AllocSet plus Generation, Slab and
+Bump, paired lifetime faults and mixed-manager replay. See the component README
+for build paths, release-layout restrictions and artifact retention.
+
 | Layer | What it proves | Run when | Entry point |
 | --- | --- | --- | --- |
 | Backend / SelectionDAG | codegen lowering and backend behavior | backend changes | `llvm/test/CodeGen/Capstone/` |

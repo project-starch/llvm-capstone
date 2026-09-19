@@ -14,7 +14,7 @@
 # build-mmgr-host.sh leaves behind.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PG_VERSION=${PG_VERSION:-17.5}
+source "$HERE/upstream.sh"
 OUT=${OUT:-${CAPSTONE_TMP_ROOT:-/tmp}/pg-mmgr-host}
 SRC=$OUT/postgresql-$PG_VERSION
 LLVM=${CAPSTONE_LLVM_BUILD_DIR:-$HERE/../../../llvm/build-rel}

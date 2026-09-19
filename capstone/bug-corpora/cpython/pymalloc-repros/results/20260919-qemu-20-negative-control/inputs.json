@@ -1,0 +1,8 @@
+{
+  "defects.dom": "44f77ef9209633f02701f552a31ffa0843260e03fb3b8725def7324223f02b71",
+  "domain_loader": "e8ad6404358dc3daa7ce9ce9fc4b13bafe05ab48f5b37a86616379bf00d96c38",
+  "qemu": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52",
+  "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+  "distinct_trace_inputs": 2,
+  "arms": 4
+}

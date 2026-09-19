@@ -1,0 +1,24 @@
+{
+  "case": 18,
+  "upstream_fix": "gh-151695",
+  "title": "use-after-free of the curses screen encoding",
+  "consumer": "Modules/_cursesmodule.c",
+  "object": "curses_screen_encoding, a module-level pointer into the window object's encoding string",
+  "lifetime_ender": "the window object initscr() returned is deallocated while module-level functions keep reading through the static",
+  "shape": "dangling pointer parked in a global",
+  "distinguishing": "the dangling pointer outlives every frame. Case 14's lived in another object; this one lives in a global, so nothing in the program's structure bounds when it is next read",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

@@ -8,6 +8,56 @@ missing `include/sublet/sublet.h` is restored from the identical port-branch
 header. This repairs a missing build input; the dated silicon results below
 and the pending fault-recovery validation remain separate.
 
+## 2026-09-18 — PostgreSQL's four Sublet allocator ports
+
+The canonical `ports/postgres/memory-contexts` CMake component ports AllocSet,
+Generation, Slab and Bump at PostgreSQL 17.0. Generation/Slab revoke individual
+allocations; all four support context reset/delete. Bump retains bulk-only
+lifetime semantics. Upstream block policies remain in the versioned patches,
+with out-of-band context/block metadata and allocation authority from Sublet.
+Native tests, mixed-manager replay and paired exact-access QEMU fixtures are
+documented in the component README. Debug manager layouts are explicitly
+refused. The original shell builds remain AllocSet-only, and protected
+consumer-defect reproduction is still a separate milestone.
+
+Runnable clients are in `ports/postgres/memory-contexts/examples/`: an AllocSet
+buffer, Generation message queue, Slab job table and Bump request scratch.
+Each source is shared by native/spatial/Sublet executables. All four pass in
+all three builds; the examples README gives commands and the client interface.
+
+## 2026-09-18 — PostgreSQL 17.0 pin consistency (before the additional ports)
+
+The PostgreSQL component, original shell builds and native defect corpus now
+read one `memory-contexts/upstream.json` pin: 17.0. Five native and four QEMU
+CTests pass; both original domain scripts compile and the native defect
+reproduces. Historical 17.5 profiles retain their original provenance. The
+shared Sublet runtime header required by the CMake ports is restored, with a
+configure-time completeness guard. See the component README for commands and
+scope: AllocSet is protected; the consumer reproducer's Capstone arm remains
+future work.
+
+## 2026-09-18 — Opt-in generic client-fault recovery (QEMU)
+
+The [shared runtime](../../runtime/domain-faults.md) provides a domain build
+helper, cooperative fault return/quarantine, and a Linux process-termination
+policy. Its standalone tests require no PostgreSQL or Sublet allocator sources.
+Enable `CAPSTONE_DOMAIN_FAULT_RECOVERY` only with the matching trap-delivery QEMU.
+This is launcher-chosen SIGSEGV termination, not monitor-enforced containment,
+complete resource reclamation, or a new FPGA result. Allocator integration is
+reviewed separately; existing ports are not enabled automatically.
+
+## 2026-09-18 — Whisper ggml context component
+
+`capstone/ports/whisper/ggml-context/` ports whisper.cpp 1.9.4's real context
+allocator through the shared template. A native tiny.en recording contains
+60,179 events and 58,192 object allocations; stock and instrumented transcripts
+match. Native allocation layout matches both the extracted reference and the
+ordinary full ggml library. The recording completes in spatial and Sublet QEMU.
+Borrowed-buffer graph objects survive descriptor destruction; reset, owned free
+and exclusive owner rebind are distinct epoch boundaries. The README documents
+that rebind contract, capability-header capacity adjustment and fixed backing
+budget. This is allocator replay, not protected inference or FPGA measurement.
+
 ## 2026-09-17 (evening) — CURRENT
 
 > **THE BOARD WAS REFLASHED AND CAPABILITY EXCEPTION DELIVERY IS NOW LIVE ON SILICON.** The reclaimer

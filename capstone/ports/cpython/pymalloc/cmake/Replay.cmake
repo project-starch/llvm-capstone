@@ -55,4 +55,18 @@ else()
   add_dependencies(pool-security cpython-source)
   target_link_options(pool-security PRIVATE --gc-sections -T "${link_script}")
   set_target_properties(pool-security PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
+  # The seam the bug corpus builds through. It supplies its own pym_replay, the
+  # way security-tests/shared/lifetimes.c does, so the corpus stays outside the
+  # port and the port keeps one way in.
+  set(PY_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied domain defect program")
+  if(PY_CORPUS_SRC)
+    add_executable(defects src/capstone-domain/entry.c "${PY_CORPUS_SRC}"
+      "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
+      "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/start.S"
+      "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/gct-section-end.S")
+    target_link_libraries(defects PRIVATE pymalloc)
+    add_dependencies(defects cpython-source)
+    target_link_options(defects PRIVATE --gc-sections -T "${link_script}")
+    set_target_properties(defects PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
+  endif()
 endif()

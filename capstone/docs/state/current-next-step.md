@@ -1,3 +1,11 @@
+## PostgreSQL allocator work — 2026-09-18
+
+The CMake component now has all four Sublet manager ports. Next, build paired
+consumer-level defect fixtures (the existing native `live_parts` case and the
+Slab-backed reorderbuffer candidate) rather than counting allocator lifetime
+tests as those reproducers. See `ports/postgres/memory-contexts/README.md` and
+`ref/postgres-nested-allocator-defects.md`. The board work below is independent.
+
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones
@@ -304,6 +312,15 @@ below are a separate track. Build entry points are in the [port catalog](../../p
 >
 > **Next:** the `--size 20` rehearsal (boot sw64) buys the CPI that decides whether `--size 100` is
 > ~8.8 h or ~17.6 h. Then `--size 100` is a decision, not a default.
+
+## 2026-09-18 — ggml ownership follow-up
+
+The Whisper context allocator now has native transcription recording, full-library
+reference comparison and spatial/Sublet replay in `capstone/ports/whisper/ggml-context/`.
+A full application port must coordinate graph completion with the backing-buffer
+owner before exclusive rebind, preserve borrowed graph access after descriptor
+free, and separately address backend tensor-data allocation. The component
+results do not establish protected inference. See its README and numeric bundle.
 
 ## 2026-09-18 — allocator-port follow-up
 
