@@ -3,8 +3,9 @@
 *Whether ggml's allocators have consumer-side temporal defects usable as corpus
 specimens. Assembled 2026-09-18, deepened 2026-09-19 twice: once after the first
 pass was found to rest on a weak instrument, and again after the second was found
-**not** to have searched CVEs at all. **The answer is no, and four separate lines
-of evidence agree** -- but see section 4 for what the first three could not see.*
+**not** to have searched CVEs at all. **The answer is no at every version ggml has
+ever had**, and five separate lines of evidence agree -- see section 4 for what
+the first three could not see, and section 5 for why the version does not matter.*
 
 ## Why this was redone
 
@@ -126,7 +127,9 @@ It is not merely that the arena is freed wholesale — it is that in the idiom
 whisper.cpp actually uses, *the consumer owns the arena*, so ggml never ends a
 lifetime the consumer is still relying on. There is no per-tensor free
 (`ggml_free` is the only `ggml_free*` symbol the public header declares), and the
-arena's lifetime is a C++ object's lifetime.
+arena's lifetime is a C++ object's lifetime. Section 5 shows this is not a
+property of our pin: ggml has never had a **working** per-object free in any of
+its 39 releases.
 
 ## 4. Published CVEs — the half the first two passes never did
 
@@ -211,6 +214,94 @@ So the honest claim is **not** "ggml has no temporal defects". It is:
 
 The first is strong. The second is an absence of evidence, and is reported as
 one.
+
+## 5. Older base versions: what an earlier pin would buy
+
+Asked properly, this is not "which CVEs were live at an older tag" but **"did the
+window this corpus needs ever exist in ggml?"** — because a defect class that
+cannot occur is not a matter of picking the right release. Checked across all
+**39** whisper.cpp releases, `v1.0.4` to `v1.9.4`.
+
+### ggml once had a public per-tensor free. It was never implemented.
+
+Scanning the public headers release by release turns one up:
+
+```c
+GGML_API void ggml_backend_buffer_free_tensor(ggml_backend_buffer_t buffer,
+                                              struct ggml_tensor * tensor);
+```
+
+Present in the real `ggml-backend.h` at **v1.4.3 and earlier**, gone afterwards.
+That is exactly the operation the corpus's defect class requires — hand one
+object's storage back so a later allocation can reuse it — so it had to be read
+rather than counted. Its implementation:
+
+```c
+void ggml_backend_buffer_free_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
+    // free_tensor is optional
+    if (buffer->iface.free_tensor) {
+        buffer->iface.free_tensor(buffer, tensor);
+    }
+}
+```
+
+An optional hook. And every backend in the tree leaves it unset:
+
+```
+ggml-backend.c:249   /* .free_tensor = */ NULL, // no cleanup required
+ggml-backend.c:258   /* .free_tensor = */ NULL,
+ggml-cuda.cu:8088    /* .free_tensor = */ NULL,
+ggml-metal.m:1579    /* .free_tensor = */ NULL, // no cleanup required
+```
+
+CPU, CUDA and Metal: all NULL. Its only caller anywhere in the tree is
+`ggml-alloc.c` — the allocator itself. **No consumer ever called it, on any
+version, and no backend ever did anything when it was called.**
+
+So the strongest form of this document's conclusion is not "there is no
+per-tensor free at our pin". It is: **ggml has never had a working per-object
+free in any release.** The one API that looked like one was a vestigial interface
+slot, unimplemented everywhere, and deleted.
+
+*A correction worth keeping:* the first scan reported this symbol present through
+v1.5.5. It selected header files by **basename**, which also matched
+`bindings/ruby/ext/ggml-backend.h` — a stale vendored copy that kept the
+declaration two releases after the real header dropped it. Same mistake as the
+truncated `grep` earlier in this work: the view was chosen by the query.
+
+### The port does not reach back past v1.7.0 anyway
+
+| releases | where the patched file lives |
+|---|---|
+| v1.0.4 – v1.6.x | `ggml.c`, at the repository root |
+| **v1.7.0 – v1.9.4** | `ggml/src/ggml.c` |
+
+All three of the port's patches target `ggml/src/ggml.c`. Below v1.7.0 the tree
+is laid out differently and they do not apply at all — so the usable range for an
+older pin is **v1.7.0 … v1.9.4**, eleven releases, and the per-tensor free was
+already gone from all of them.
+
+### What the usable range would actually add
+
+One thing, and it is not a case: **CVE-2025-14569**, the use-after-free in
+`read_audio_data`, is live at **≤ 1.8.2** and fixed in 1.8.3. Pinning at 1.8.2
+would make it reproducible — on a `std::vector<float>`, which a malloc-level tool
+reports, so it demonstrates nothing this corpus is about. Everything else in the
+CVE table of section 4 is spatial, concurrent, or outside whisper.cpp entirely.
+
+### Conclusion
+
+An older base version buys **nothing** here, and for a better reason than "we
+looked and found none":
+
+1. the operation the defect class needs has never worked in ggml, in any release;
+2. the port cannot reach the releases before v1.7.0 without being rewritten;
+3. the single temporal CVE inside the usable range is on ordinary C++ heap.
+
+Unlike the equivalent CPython question — where moving from 3.13.7 to 3.13.0 would
+genuinely add 7 defects and cost a patch rebase — there is no version of
+whisper.cpp at which this corpus gains a case. That is a structural property of
+ggml, not a gap in the search.
 
 ## Consequence for the corpus
 

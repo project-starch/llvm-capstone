@@ -60,3 +60,20 @@ finds that, however wide.
 It turned out not to be a corpus case — the buffer is a `std::vector<float>`, so
 a malloc-level tool reports it — but that was luck, not method. **Search the
 advisory stream, not only the commit stream.**
+
+## The version sweep (section 5)
+
+    api-over-time.py          every public ggml free-like symbol, release by
+                              release, across all 39 whisper.cpp tags
+    free-tensor-v143.py       the one release with a real public per-tensor free:
+                              what it did, and who called it
+    free-tensor-backends.py   what every backend set that hook to (all NULL)
+    patched-file-location.py  where the file our port patches lives per release,
+                              which bounds how far back the port can reach
+
+`api-over-time.py` carries a caveat worth repeating: it selects headers by
+**basename**, which also matches the stale vendored copy under
+`bindings/ruby/ext/`. That copy kept a declaration two releases after the real
+header dropped it, and reading the result without checking which file each hit
+came from over-stated the API's lifetime by two releases. Check the path, not the
+filename.
