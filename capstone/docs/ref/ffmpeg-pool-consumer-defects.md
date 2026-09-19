@@ -189,6 +189,53 @@ cause is a retained buffer used with updated dimensions, which is a size
 confusion on live memory rather than a stale pointer after release, so it may not
 belong in this class at all.
 
+## Unfixed instances: the flush-gap search
+
+Upstream history is exhausted at four. The shapes it produced are mechanical
+enough to search for directly, and an instance nobody has fixed is live at every
+pin by construction. [`ffmpeg-pool-survey/flush-gap.py`](ffmpeg-pool-survey/flush-gap.py)
+implements the `vp9` shape: a reference-holding context member whose lifetime is
+ended on close but not on flush.
+
+It is calibrated on that defect — a run must name `libavcodec/vp9.c` with
+`s->next_refs[]`, which is present at the 9.0.1 pin, or it is measuring
+something else. Against 9.0.1 it reports **50 member gaps across 24 files**.
+
+Two earlier versions of the tool were wrong, and the script records both because
+they are the failure modes of this kind of search:
+
+| version | reading | why it was wrong |
+|---|---|---|
+| helpers resolved per file | `h264dec.c` `pic->f`, `hevc/hevcdec.c` | both flushes *do* release the DPB, through `ff_h264_unref_picture` and `ff_hevc_flush_dpb`, which live in other files |
+| flat tree-wide name table | `ralf.c` `s->prev_frame` | `decode_close`/`decode_flush`/`flush` are `static` names defined dozens of times; the first won, and `ralf.c` contains no `prev_frame` at all |
+
+The current version resolves locally first and falls back tree-wide only for
+names that are unique across the tree.
+
+### First candidate from the search
+
+`libavcodec/vvc/dec.c` — `vvc_decode_flush` flushes the DPB of exactly one frame
+context, `get_frame_context(s, s->fcs, s->nb_frames - 1)`, while
+`vvc_decode_free` loops over all `s->nb_fcs` of them. With frame threading
+`nb_fcs > 1`, so the other contexts keep `fc->DPB[].frame`, `fc->output_frame`
+and their parameter-set references across a flush — and `dec.c:713` reaches back
+to the previous frame context during decoding, which is the path that makes the
+retained state reachable again. This is structurally the `vp9` defect: a flush
+that clears part of the reference state, plus a route back to the part it left.
+
+It is a **candidate**, not a finding. What is checked: the asymmetry between
+flush and free, and the existence of the backward reach. What is not: that a
+real stream reaches it, and that the retained references are stale rather than
+merely redundant, which is the question every gap has to answer separately —
+holding a reference keeps memory alive, so a gap is memory-unsafe only where
+something else ends the object's lifetime while the pointer survives.
+
+Two gaps were checked and dismissed. `libavcodec/rasc.c` clears `frame1`/`frame2`
+on flush without unreffing them, but those are internal scratch frames that are
+never handed out, and its real hazard is `clear_plane` writing `avctx->height`
+rows through a possibly older `linesize` — a size confusion, not this class.
+`libavcodec/vp3.c` `s->coeff_vlc` is a refstruct VLC table with no pool behind it.
+
 ## Limits
 
 This is a source triage, not a reproduction. Each verdict names the allocation
