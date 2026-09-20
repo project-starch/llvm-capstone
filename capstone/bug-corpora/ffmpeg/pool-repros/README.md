@@ -31,9 +31,9 @@ Where this corpus differs, and why:
   differs by whether the **upstream fix** is applied, which is a different axis
   and is named rather than folded into `spatial`/`sublet`. The protected arms
   are the port's probe cases 36–38 and do differ by protection only.
-* **`poisoncap-*` and `native-detect` are declared and not written.** The
-  ASan arm is not merely unwritten but tautological here: the port's payload
-  arena is one allocation, so ASan's silence would measure the fixture.
+* **`native-detect` is declared and not written**, and not merely unwritten but
+  tautological here: the port's payload arena is one allocation, so ASan's
+  silence would measure the fixture rather than FFmpeg.
 
 ## Running
 
@@ -41,11 +41,41 @@ Where this corpus differs, and why:
 
 One program per case, built from its `case.c` plus `shared/driver.c`, each run
 twice. The control arm runs first and an infrastructure failure exits 75 with no
-verdict. The protected arms live with the port, because they need a toolchain
-and a guest a per-case script would have to reinvent:
+verdict. The protected arms live with the port, because they need a toolchain and a
+guest a per-case script would have to reinvent. A Capstone domain:
 
     bash ../../../ports/ffmpeg/buffer-pool/security-tests/qemu/run.sh <out> \
       --cases 36,37,38 --modes 0,2 --rounds 1
+
+and CheriBSD with PoisonCap, where the same three cases are registered as
+`pool-<mode>-<case>`:
+
+    python3 ../../../ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/run.py \
+      <build> <out> --stage pool --disable-default-revocation \
+      --case poison-live --case poison-read --case poison-write \
+      --case poison-reuse --case poison-reused-read \
+      --case pool-0-36 --case pool-2-36 --case pool-0-37 --case pool-2-37 \
+      --case pool-0-38 --case pool-2-38 --sdk ... --rootfs ... --image ...
+
+Keep the five `poison-*` controls in that selection. Without them the run shows
+only that mode 2 ends differently from mode 0, which is a differential and not
+evidence that poisoning was active; with them the platform is demonstrated
+independently of these cases. `selection.json` records `complete_suite: false`
+for any subset, so a partial run cannot later read as a full one.
+
+## The three arms side by side
+
+| case | spatial | Sublet | PoisonCap mode 0 | PoisonCap mode 2 |
+|---|---|---|---|---|
+| `af_join` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
+| `h264_refs` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
+| `vidstab` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
+
+The two protected systems are not interchangeable and the oracles say so: a
+domain halts and publishes a fault PC, which the runner compares against the
+address that boot printed for its probe; a CheriBSD process reports a status,
+so there the setup marker is what separates the result from an arbitrary crash.
+No timing comparison is made or implied — the two run on different emulators.
 
 ## Scope
 

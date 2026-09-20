@@ -59,7 +59,8 @@ def main():
             )
         )
         for mode in (0, 2):
-            for test in (0, 1, 2, 3, 4, 5, 6, 8, 9, 13):
+            # 36-38 are the corpus cases in bug-corpora/ffmpeg/pool-repros.
+            for test in (0, 1, 2, 3, 4, 5, 6, 8, 9, 13, 36, 37, 38):
                 header = [0] * 16
                 header[0], header[1], header[12], header[13] = MAGIC, 1, test, 8
                 fixture = a.output / f"case-{test}.bin"

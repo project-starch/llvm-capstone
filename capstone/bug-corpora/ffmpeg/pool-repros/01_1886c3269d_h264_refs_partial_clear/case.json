@@ -26,15 +26,21 @@
       "cause": 24
     },
     "poisoncap-spatial": {
-      "status": "not written"
+      "mode": 0,
+      "case": "pool-0-37",
+      "oracle": "the sequence completes, exit 0"
     },
     "poisoncap-protected": {
-      "status": "not written"
+      "mode": 2,
+      "case": "pool-2-37",
+      "oracle": "SIGPROT after the setup marker FF2_PROBE case=37 ready",
+      "exit": 162,
+      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked"
     },
     "native-detect": {
       "status": "not written",
       "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg"
     }
   },
-  "status": "native pair and both domain arms run 2026-09-20 under QEMU; all passed"
+  "status": "native pair, both domain arms and both PoisonCap arms run 2026-09-20; all passed. The PoisonCap run carried the five platform controls (live, poisoned read, poisoned write, sweep/reuse, retained old alias) alongside, so the protection is shown active independently of these cases"
 }
