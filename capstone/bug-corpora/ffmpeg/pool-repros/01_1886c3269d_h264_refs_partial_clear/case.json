@@ -25,6 +25,13 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap, libc revocation enabled",
+      "case": "pool-0-37",
+      "oracle": "the sequence completes: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
+      "control": "the run's cheribsd-abi probe reports runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
+      "guest_default": "preserved -- unlike the PoisonCap runs, this one does not disable the kernel default"
+    },
     "poisoncap-spatial": {
       "mode": 0,
       "case": "pool-0-37",
@@ -42,5 +49,5 @@
       "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg"
     }
   },
-  "status": "native pair, both domain arms and both PoisonCap arms run 2026-09-20; all passed. The PoisonCap run carried the five platform controls (live, poisoned read, poisoned write, sweep/reuse, retained old alias) alongside, so the protection is shown active independently of these cases"
+  "status": "native pair, both domain arms, both PoisonCap arms and the stock-CheriBSD arm run 2026-09-20; all passed. The PoisonCap run carried its five platform controls; the CheriBSD run carried the revocation control that proves the revoker was enabled while the case completed"
 }

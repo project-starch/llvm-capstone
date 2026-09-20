@@ -63,19 +63,41 @@ evidence that poisoning was active; with them the platform is demonstrated
 independently of these cases. `selection.json` records `complete_suite: false`
 for any subset, so a partial run cannot later read as a full one.
 
-## The three arms side by side
+## Four systems side by side
 
-| case | spatial | Sublet | PoisonCap mode 0 | PoisonCap mode 2 |
+| case | Capstone spatial | Capstone Sublet | stock CheriBSD, revoker **on** | PoisonCap mode 2 |
 |---|---|---|---|---|
-| `af_join` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
-| `h264_refs` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
-| `vidstab` | completes | faults, cause 24 | completes | **SIGPROT**, exit 162 |
+| `af_join` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
+| `h264_refs` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
+| `vidstab` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
 
-The two protected systems are not interchangeable and the oracles say so: a
-domain halts and publishes a fault PC, which the runner compares against the
-address that boot printed for its probe; a CheriBSD process reports a status,
-so there the setup marker is what separates the result from an arbitrary crash.
-No timing comparison is made or implied — the two run on different emulators.
+The stock-CheriBSD column is the one worth reading twice, and it is measured
+rather than derived. `libc`'s revoker sweeps allocations that `free()` put in
+its quarantine; a buffer returned to an `AVBufferPool` never reaches `malloc`,
+so it never enters that quarantine and the sweep has nothing to find. **The
+argument was always available; what was missing was the run.**
+
+That column carries its own control, in the same guest and immediately before
+the cases: the `cheribsd-abi` probe calls CheriBSD's `malloc_revoke_enabled()`
+and the runner requires it to report `runtime_revocation=1`. Its summary records
+`guest_default_revocation: preserved` — unlike the PoisonCap runs, this one does
+not disable the kernel default. So the revoker demonstrably was on while the
+sequence completed.
+
+PoisonCap is not blind here, and the table says so plainly. Poisoning acts at
+the lease return, which is exactly where these three defects are, so it catches
+all three. What separates these systems on this corpus is therefore not
+detection but cost and what each one needs to be told — and the counters for
+that exist on both sides (`sweeps`, `poison_bytes`, `clear_bytes`,
+`copied_bytes`, `snapshot_bytes` against `split`, `mrev`, `delin`, `revoke`,
+`init`). No timing comparison is made or implied: the arms run on different
+emulators.
+
+The protected oracles are not interchangeable either. A domain halts and
+publishes a fault PC, which the runner compares against the address that boot
+printed for its probe. A CheriBSD process reports only a status, so there the
+setup marker carries the weight — it is printed only once reuse at the same
+address has been checked.
 
 ## Scope
 
