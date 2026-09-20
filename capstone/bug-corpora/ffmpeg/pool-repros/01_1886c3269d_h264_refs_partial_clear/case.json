@@ -42,7 +42,10 @@
       "case": "pool-2-37",
       "oracle": "SIGPROT after the setup marker FF2_PROBE case=37 ready",
       "exit": 162,
-      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked"
+      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked",
+      "signal": 34,
+      "si_code": null,
+      "si_code_note": "not captured: the runner records a process exit status and 162 is 128+34, so the signal is derived, but si_code is not recoverable from an exit status and is not guessed here"
     },
     "native-detect": {
       "status": "not written",

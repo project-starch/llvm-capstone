@@ -10,6 +10,12 @@ property of the allocator rather than of a run.
     01_1886c3269d_h264_refs_partial_clear/        reset bounded by the count, not the array
     02_316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
 
+| shape | cases |
+|---|---|
+| reference never taken / reuse / stale read | 0 |
+| partial clear / reuse / stale read | 1 |
+| parked pointer / reuse / stale write | 2 |
+
 Three cases, three shapes. The inventory and triage that selected them, and the
 further pool-backed specimens it found that are not built here, are in
 [`docs/ref/ffmpeg-pool-consumer-defects.md`](../../../docs/ref/ffmpeg-pool-consumer-defects.md).
@@ -105,3 +111,24 @@ Real: `libavutil/buffer.c`, compiled unmodified through the port. Reduced: the
 consumer, to the allocator call sequence it makes, and the part of `AVFrame`
 that sequence touches — the port extracts the allocator, not `frame.c`. Each
 case's `PROVENANCE.md` states that split for itself.
+
+## Where this corpus deviates from the contract, and why
+
+`tests/check-corpus.py` in the pymalloc corpus enforces
+[SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
+reports exactly three kinds of problem, all of them deliberate. They are listed
+here rather than silenced, and no copy of that checker is shipped beside them: a
+fork would be a second contract, and a checker that fails by design is noise.
+
+| what it reports | why |
+|---|---|
+| `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
+| `arm 'cheribsd-revocation' is not in SCHEMA.md` | stock CheriBSD with `libc` revocation enabled is a fourth system the contract does not yet name. It is the arm that makes the blindness claim a measurement |
+| `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `FF2_CASE`/`APR_CASE`. The rule the checker means — a case declares the number its directory carries, and the driver refuses a fixture that names another — is implemented |
+
+`poisoncap-protected` carries `si_code: null` with a note. The runner records a
+process exit status; 162 is 128+34 so the signal is derived, but `si_code` is not
+recoverable from an exit status and is not guessed.
+
+Extending the checker to know these is a change to the pymalloc corpus and
+belongs in a conversation with it, not a unilateral edit from here.

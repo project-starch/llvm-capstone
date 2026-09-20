@@ -23,6 +23,14 @@
     "sublet": {
       "status": "not written"
     },
+    "poisoncap-spatial": {
+      "status": "not written",
+      "requires": "no CheriBSD or PoisonCap build of APR exists; the port is a compilation census"
+    },
+    "poisoncap-protected": {
+      "status": "not written",
+      "requires": "no CheriBSD or PoisonCap build of APR exists; the port is a compilation census"
+    },
     "native-detect": {
       "status": "not written",
       "requires": "the nodes never reach malloc, so ASan has no event; Valgrind with APR's own annotations is the arm that could discriminate"
