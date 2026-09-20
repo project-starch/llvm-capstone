@@ -135,6 +135,40 @@ class SpatialArmTests(unittest.TestCase):
         self.assertFalse(self.evaluate(blob=report(magic=1))["passed"])
 
 
+class ModeSelectionTests(unittest.TestCase):
+    """--modes takes the arm names each case.json declares, or the numbers the
+    binary takes. A name from the OTHER target is not silently accepted."""
+
+    def select(self, text):
+        return oracle.numbers(text, {0, 1}, "mode", oracle.MODE_NAMES)
+
+    def test_numbers_and_names_mean_the_same_thing(self):
+        self.assertEqual(self.select("0,1"), self.select("spatial,protected"))
+
+    def test_a_single_name_selects_one_arm(self):
+        self.assertEqual(self.select("protected"), [1])
+        self.assertEqual(self.select("spatial"), [0])
+
+    def test_case_does_not_matter_and_duplicates_collapse(self):
+        self.assertEqual(self.select("PROTECTED"), [1])
+        self.assertEqual(self.select("1,protected"), [1])
+
+    def test_order_is_preserved(self):
+        self.assertEqual(self.select("protected,spatial"), [1, 0])
+
+    def test_the_other_targets_arm_name_is_refused(self):
+        # sublet is a Capstone arm; the CheriBSD protected arm is not Sublet.
+        with self.assertRaises(SystemExit):
+            self.select("sublet")
+        with self.assertRaises(SystemExit):
+            self.select("spatial,sublet")
+
+    def test_an_out_of_range_number_and_an_empty_selection_are_refused(self):
+        for text in ("2", "", "-1", "0,", "eins"):
+            with self.subTest(text=text), self.assertRaises(SystemExit):
+                self.select(text)
+
+
 class CaseConstructionTests(unittest.TestCase):
     def test_both_arms_name_the_same_binary_and_differ_only_in_mode(self):
         spatial = oracle.build_case(3, 0, "/b/bin/defects", "/f/case-3.bin", 60)

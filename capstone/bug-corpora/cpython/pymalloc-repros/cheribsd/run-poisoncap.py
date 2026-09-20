@@ -198,14 +198,25 @@ def evaluate(number, mode, row, stdout, report):
     return verdict
 
 
-def numbers(text, limit, what):
+# The arm names each case.json declares, so the command line and the corpus
+# speak one vocabulary. The Capstone runner names its arms too (spatial,
+# sublet); numbers stay accepted because the binary takes a mode argument.
+MODE_NAMES = {"spatial": 0, "protected": 1}
+
+
+def numbers(text, limit, what, names=None):
     values = []
     for item in text.split(","):
         item = item.strip()
-        if not item.isdigit() or int(item) not in limit:
+        value = (names or {}).get(item.lower())
+        if value is None:
+            if not item.isdigit():
+                raise SystemExit(f"no such {what}: {item!r}")
+            value = int(item)
+        if value not in limit:
             raise SystemExit(f"no such {what}: {item!r}")
-        if int(item) not in values:
-            values.append(int(item))
+        if value not in values:
+            values.append(value)
     if not values:
         raise SystemExit(f"select at least one {what}")
     return values
@@ -237,7 +248,12 @@ def main():
         default=",".join(str(i) for i in sorted(claims)),
         help="Comma-separated diagnostic subset; the default is the whole corpus",
     )
-    p.add_argument("--modes", default="0,1", help="Comma-separated modes, default 0,1")
+    p.add_argument(
+        "--modes",
+        default="0,1",
+        help="Comma-separated modes: 0/1, or the arm names spatial/protected "
+        "that each case.json declares. Default 0,1",
+    )
     p.add_argument("--timeout", type=int, default=1800, help="Seconds per arm")
     p.add_argument(
         "--negative-control",
@@ -250,7 +266,7 @@ def main():
     )
     a = p.parse_args()
     selected = numbers(a.cases, set(claims), "case")
-    modes = numbers(a.modes, {0, 1}, "mode")
+    modes = numbers(a.modes, {0, 1}, "mode", MODE_NAMES)
     if a.timeout < 1:
         p.error("the per-arm timeout must be positive")
     program = a.build.resolve() / "bin/defects"
