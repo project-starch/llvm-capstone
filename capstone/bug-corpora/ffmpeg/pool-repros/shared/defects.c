@@ -238,8 +238,10 @@ static int case_vp9(int fixed) {
  * clone that goes downstream shares the same pooled storage. On the next frame
  * the filter writes into s->outpicref again -- into storage a consumer still
  * holds and reads. Nothing is freed, the pointer stays tagged and in bounds,
- * and only the identity of the data changes. That is the taxonomy's class 3,
- * "reuse-not-free", which no CHERI configuration catches at any cost. */
+ * and only the identity of the data changes. The downstream reference is still
+ * valid and its borrow has not ended, so what is violated is EXCLUSIVITY by the
+ * writer -- the dimension of taxonomy class 6, not class 3, which is duration.
+ * This is not a temporal case. */
 static int case_shared_rewrite(int fixed, const char *who) {
   AVBufferRef *outpicref = av_buffer_pool_get(g_pool);
   if (!outpicref)

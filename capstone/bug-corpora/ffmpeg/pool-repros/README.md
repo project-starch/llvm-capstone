@@ -22,10 +22,9 @@ exits 75 with no verdict if that control does not hold.
     1ee3c984b9_snow_writes_shared_picture/        same, encoder side
     b9f91a7cbc_dynaudnorm_writes_input_frame/     same class, opposite direction
 
-Eleven cases. Four are use-after-lifetime shapes; seven are class 3 of the sharing taxonomy, reuse-not-free, where nothing is freed at all. The last one frees nothing: its storage stays alive on
-a retained reference, and what it violates is the lifetime contract rather than
-memory safety. Its README says why this port's own protected arm is expected to
-lose that row.
+Eleven cases, and they are **not one class**. Four are temporal: an object's
+lifetime ends and a retained pointer is used afterwards. Seven are not, and
+calling them class 3 of the sharing taxonomy was wrong — see below.
 
 The inventory and triage that selected these cases, and the three other
 pool-backed specimens not yet built, are in
@@ -46,30 +45,45 @@ Nothing here claims an AddressSanitizer
 result: the port's payload arena is itself one allocation, so ASan is blind to
 it by construction and its silence would measure the fixture, not FFmpeg.
 
-## The seven reuse-not-free cases have no protected arm, measured
+## The seven writability cases are exclusivity, not duration
 
-Case 39 of the port's pool lifetime probes runs the class-3 shape in a domain:
-one pooled buffer, two holders, and the one that kept it writes into it again.
+These seven were first filed here as taxonomy class 3, *reuse-not-free*. That was
+a misclassification and it is corrected rather than quietly dropped, because the
+distinction is the one the paper turns on.
 
-| mode | outcome |
+The taxonomy separates by **dimension**:
+
+| class | dimension |
 |---|---|
-| 0 spatial | completes |
-| 2 Sublet | **completes** |
+| 3 reuse-not-free | **Duration**, with no allocator event |
+| 6 TOCTOU / double-fetch | **Exclusivity** — both sides hold access, one mutates while the other reads |
 
-The fixture checks its own premise before the write — `av_buffer_get_ref_count`
-is 2 and `av_buffer_is_writable` is false, both from the real `buffer.c` — so the
-storage genuinely is shared and genuinely is not writable, and the write lands
-anyway.
+Class 3's example is SQLite's `column_text`: the API *documents* that the
+pointer is valid only until the next `step()`. The borrow has a stated end, and
+the consumer used it past that end. That is duration.
 
-The reason is in the adapter, not in the fixture.
-[`src/allocators/sublet/pool-leases.c`](../../../ports/ffmpeg/buffer-pool/src/allocators/sublet/pool-leases.c)
-hooks two operations, `ff2_sublet_issue` → `sublet_take` and `ff2_sublet_return`
-→ `sublet_give`. Both are keyed on the **pool's** allocation lifecycle. Nothing
-hooks `av_buffer_ref`, so a second reference is not a borrow: both holders use
-the one capability derived at issue time. With nothing returned to the pool
-there is nothing to revoke, and revocation is the whole of what mode 2 does.
+In these seven a filter holds a frame, shares a clone downstream, and draws into
+it again. **The downstream reference is still valid and its borrow has not
+ended** — nobody told the reader anything. What is violated is exclusivity, by
+the writer, while the reader's view is legitimately live. That is class 6's
+dimension, not class 3's.
 
-What would cover this class is Sublet's **borrow** side — lending non-writable
-or exclusive authority at `av_buffer_ref` — which is a different primitive from
-the one this port applies. That is a design decision about the adapter, and it
-is recorded here as an open gap rather than decided in a fixture.
+Only `a024f8c541_vp9_flush_leaves_next_refs` is temporal among the eight non-PR
+cases: references that the flush was supposed to discard survive it and are
+resurrected, so a later frame decodes against references whose lifetime had
+ended. No allocator event, but a genuine duration violation.
+
+**A paper about temporal safety should not carry the seven.** They are real
+defects on pool storage and worth keeping, but under exclusivity, and the
+argument for them is a borrow discipline rather than a revocation one.
+
+## What the measurement showed, and what it now means
+
+Probe case 39 runs the shape in a domain and **mode 2 completes**: this port's
+adapter revokes at the pool's allocation cycle, nothing hooks `av_buffer_ref`,
+and with nothing returned there is nothing to revoke.
+
+Read as an exclusivity result that is not a surprise but a statement of scope:
+revocation ends a lifetime, and no lifetime ends here. Covering these needs the
+*borrow* side — a lend that costs the lender its write authority until the loan
+returns — which is a different primitive from the one this port applies.

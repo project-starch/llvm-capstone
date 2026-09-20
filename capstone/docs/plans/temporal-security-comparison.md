@@ -72,23 +72,22 @@ and not an appendix.
 
 ## First measured cell, and it is a loss
 
-The FFmpeg corpus supplies seven cases of the sharing taxonomy's class 3,
-*reuse-not-free*: one pooled buffer, two holders, the one that kept it writes
-into it again. Nothing is freed, the pointer stays tagged and in bounds, only
-the identity of the data changes.
+The FFmpeg corpus supplies seven cases that were first filed as the sharing
+taxonomy's class 3, *reuse-not-free*. **That was a misclassification.** Class 3's
+dimension is Duration — its example is SQLite's `column_text`, where the API
+states the borrow ends at the next `step()`. In these seven the downstream
+reference is still valid and its borrow has not ended; what a filter violates by
+drawing into a frame it has shared is **exclusivity**, which is class 6's
+dimension. They are real defects on pool storage and they are **not temporal**,
+so this lane does not count them.
 
-Probe case 39 runs that shape in a domain. **Mode 2 completes.** The port's
-Sublet adapter hooks `sublet_take` at pool issue and `sublet_give` at pool
-return; nothing hooks `av_buffer_ref`, so a second reference is not a borrow and
-there is no return to revoke. The fixture verifies its own premise first —
-reference count 2, `av_buffer_is_writable` false — so the shape is real and the
-write lands regardless.
-
-This is T7 territory reached from the other side: not an attack on the
-enforcement path, but a class the enforcement path does not reach. It is the
-first cell in this matrix that our own arm loses, it was found by building
-cases rather than by reasoning about the model, and covering it needs Sublet's
-borrow primitive rather than its revocation primitive.
+Probe case 39 runs that shape in a domain and **mode 2 completes**. The adapter
+hooks `sublet_take` at pool issue and `sublet_give` at pool return; nothing hooks
+`av_buffer_ref`, so a second reference is not a borrow and there is no return to
+revoke. Read correctly this is not a loss in the temporal matrix at all — it is a
+statement of scope: revocation ends a lifetime, and no lifetime ends here.
+Covering the class needs the borrow primitive, which is a different question from
+the one this lane asks.
 
 ## Evidence rules
 

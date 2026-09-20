@@ -7,14 +7,20 @@ draws into `s->outpicref` again — into storage a consumer still holds and read
     arm=fixed shared_when_written=0 consumer_saw=0xA1 consumer_now=0xA1 freed_to_malloc=0
     arm=buggy shared_when_written=1 consumer_saw=0xA1 consumer_now=0xB2 freed_to_malloc=0
 
-## Why this case is the corpus's thinnest class
+## Why this case is exclusivity and not duration
 
-Nothing is freed. The pointer stays tagged and in bounds. Only the identity of
-the data changes, under a reader who was never told. That is class 3,
-*reuse-not-free*, of [the sharing taxonomy](../../../docs/design/sharing-bug-taxonomy-and-novelty.md),
-which places it in the **Security** column with the note that no CHERI
-configuration catches it at any cost — there is no knob — and records **one row**
-of evidence for it.
+Nothing is freed and the pointer stays tagged and in bounds. But the downstream
+reference is **still valid and its borrow has not ended** — nobody told the
+reader anything. What is violated is **exclusivity**, by the writer, while the
+reader's view is legitimately live.
+
+An earlier version of this file called that class 3, *reuse-not-free*, of
+[the sharing taxonomy](../../../docs/design/sharing-bug-taxonomy-and-novelty.md).
+That was wrong. Class 3's dimension is **Duration**, and its example is SQLite's
+`column_text`, where the API documents that the pointer is valid only until the
+next `step()` — a borrow with a stated end, used past it. Here there is no
+stated end. The dimension is **Exclusivity**, class 6's. **This is not a
+temporal case**, and a paper about temporal safety should not carry it.
 
 `av_buffer_is_writable` and `av_buffer_get_ref_count` are the real ones from the
 extracted `buffer.c`, so the fixed arm's decision to take fresh storage is made
