@@ -85,7 +85,3 @@ which is what the re-entrant `__eq__` produces.
 
 That makes this a **model-consumer / real-allocator** case, the weaker of the two
 tiers used in the PostgreSQL corpus, and it is labelled so in `case.json`.
-
-## Status
-
-Provenance only. No driver is written and nothing has been run.
