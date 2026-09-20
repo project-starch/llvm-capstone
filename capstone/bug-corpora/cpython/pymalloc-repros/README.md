@@ -103,12 +103,9 @@ That is the corpus's thesis in the project's own build documentation.
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
     shared/corpus.h      probes, markers, fault handler; what every case includes
     shared/build-cases.sh  builds one program per case, for either target
-    capstone-domain/     the Capstone domain target
+    runners/<target>/    one directory per target
         README.md            how to run the corpus there
         run-defects.py       the runner and its oracles
-    cheribsd/            the CheriBSD purecap target
-        README.md            how to run the corpus there
-        run-poisoncap.py     the runner and its oracles
     tests/               everything that can say FAIL
         check-corpus.py      enforces SCHEMA.md; exits non-zero on drift
         cheribsd/            the CheriBSD oracles' own negative controls
@@ -117,8 +114,8 @@ That is the corpus's thesis in the project's own build documentation.
 
 One rule decides where a file goes. A case directory is **self-contained**: the
 claim, its provenance and its sequence. `shared/` is what every case includes
-and the script that builds them. Each target owns a directory with its runner
-and its manual. `tests/` is what can say FAIL; `tools/` is what produces the
+and the script that builds them. Each target owns a directory under `runners/`
+with its runner and its manual. `tests/` is what can say FAIL; `tools/` is what produces the
 inventory's numbers.
 
 **One program per defect.** A `case.c` includes `shared/corpus.h` and writes
@@ -145,8 +142,8 @@ commands, its oracle and its negative control are in its own manual:
 
 | target | arms | manual |
 |---|---|---|
-| Capstone domain | `spatial` / `sublet` | [`capstone-domain/README.md`](capstone-domain/README.md) |
-| CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`cheribsd/README.md`](cheribsd/README.md) |
+| Capstone domain | `spatial` / `sublet` | [`runners/capstone-domain/README.md`](runners/capstone-domain/README.md) |
+| CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`runners/cheribsd/README.md`](runners/cheribsd/README.md) |
 
 Both build from the same `case.c` files; a case behaves identically on both.
 After touching anything here, run the checks:

@@ -10,12 +10,12 @@ capability fault ends the domain, so a case that provokes one cannot also
 report results beside it.
 
     shared/build-cases.sh capstone-domain <build>
-    python3 capstone-domain/run-defects.py <out> \
+    python3 runners/capstone-domain/run-defects.py <out> \
       --domain-build <build> --linux-build <guest>
 
 and the control that makes the result mean something, which must exit 0:
 
-    python3 capstone-domain/run-defects.py <out> --cases 0 --negative-control
+    python3 runners/capstone-domain/run-defects.py <out> --cases 0 --negative-control
 
 `--cases` takes a diagnostic subset and `--modes spatial,sublet` a single arm.
 

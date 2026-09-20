@@ -106,12 +106,12 @@ its own `pym_replay`.
 ```sh
 BUILD=/tmp/capstone/poisoncap-pymalloc-corpus-work/build/poisoncap
 CORPUS=$PWD/capstone/bug-corpora/cpython/pymalloc-repros
-bash "$PC/build.sh" "$BUILD" -DPY_CORPUS_SRC="$CORPUS/shared/defects.c"
-python3 "$CORPUS/cheribsd/run-poisoncap.py" "$BUILD" /tmp/capstone/pymalloc-defects-1 \
+bash "$CORPUS/shared/build-cases.sh" cheribsd "$BUILD"
+python3 "$CORPUS/runners/cheribsd/run-defects.py" "$BUILD" /tmp/capstone/pymalloc-defects-1 \
   --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" \
   --image /tmp/capstone/poisoncap-work/output/cheribsd-riscv64-purecap.img \
   --disable-default-revocation
-python3 "$CORPUS/cheribsd/run-poisoncap.py" "$BUILD" /tmp/capstone/pymalloc-defects-control-1 \
+python3 "$CORPUS/runners/cheribsd/run-defects.py" "$BUILD" /tmp/capstone/pymalloc-defects-control-1 \
   --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" --image "$IMAGE" \
   --disable-default-revocation --negative-control
 ```

@@ -36,7 +36,7 @@ import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
-CORPUS = HERE.parent
+CORPUS = HERE.parents[1]
 RUNNER = CORPUS.parents[2] / "ports/common/host/cheribsd/run.py"
 
 MAGIC = 0x31594C50524D5950
