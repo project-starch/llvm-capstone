@@ -84,8 +84,13 @@ pymalloc. The adapter is trusted and single-threaded; nothing here isolates a
 hostile nested manager.
 
 **Revocation configuration.** `--disable-default-revocation` turns the guest
-libc's automatic revocation default off before SSH starts, which is the
-documented workaround for the VM-locking failure of this published platform.
+libc's automatic revocation default off before SSH starts. That is not a
+preference: on the published platform the corpus cannot run with it on, because
+the platform's libc never takes poison off a reused block and the program dies
+before its first case. [`platform/`](../../platform/README.md) has the
+diagnosis, the fix and a script that applies it; with the fix applied, both
+configurations run and `--runtime-revocation on` measures the platform's own
+mechanism against these defects.
 The adapter's own explicit PoisonCap sweeps stay on — they are what mode 1
 measures — so this is not whole-process temporal protection.
 
