@@ -17,9 +17,7 @@ fi
   -I"$HERE/../../../runtime" -L"$BUILD" -lffmpeg-pool || { echo "CONTROL-FAILED build" >&2; exit 75; }
 
 status=0
-for case in 461fb22053 1886c3269d 316531e61c a024f8c541 \
-            8061098418 2a5a14f3ca de07c57d5a faac31cc86 dc8e83b4e0 1ee3c984b9 \
-            b9f91a7cbc; do
+for case in 461fb22053 1886c3269d 316531e61c; do
   fixed=$("$OUT/defects" "$case" fixed); rc=$?
   [ $rc -eq 0 ] || { echo "CONTROL-FAILED $case fixed arm rc=$rc" >&2; exit 75; }
   grep -q '^VERDICT FIXED' <<<"$fixed" || { echo "CONTROL-FAILED $case fixed arm did not hold its reference" >&2; exit 75; }

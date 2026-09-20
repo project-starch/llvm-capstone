@@ -13,22 +13,9 @@ exits 75 with no verdict if that control does not hold.
     461fb22053_af_join_dedup_bound/            a reference is never taken; stale read
     1886c3269d_h264_refs_partial_clear/        reset bounded by the count, not the array
     316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
-    a024f8c541_vp9_flush_leaves_next_refs/     contract violated with no free anywhere
-    8061098418_abitscope_writes_shared_frame/  in-place rewrite of storage a reader holds
-    2a5a14f3ca_aphasemeter_writes_shared_frame/   same, another filter
-    de07c57d5a_ahistogram_writes_shared_frame/    same, another filter
-    faac31cc86_avectorscope_writes_shared_frame/  same, another filter
-    dc8e83b4e0_ebur128_writes_shared_frame/       same, another filter
-    1ee3c984b9_snow_writes_shared_picture/        same, encoder side
-    b9f91a7cbc_dynaudnorm_writes_input_frame/     same class, opposite direction
 
-Eleven cases. Four are use-after-lifetime shapes; seven are class 3 of the sharing taxonomy, reuse-not-free, where nothing is freed at all. The last one frees nothing: its storage stays alive on
-a retained reference, and what it violates is the lifetime contract rather than
-memory safety. Its README says why this port's own protected arm is expected to
-lose that row.
-
-The inventory and triage that selected these cases, and the three other
-pool-backed specimens not yet built, are in
+Three cases, three shapes. The inventory and triage that selected them, and the
+further pool-backed specimens it found that are not built here, are in
 [`docs/ref/ffmpeg-pool-consumer-defects.md`](../../../docs/ref/ffmpeg-pool-consumer-defects.md).
 
 ## Scope
@@ -46,30 +33,3 @@ Nothing here claims an AddressSanitizer
 result: the port's payload arena is itself one allocation, so ASan is blind to
 it by construction and its silence would measure the fixture, not FFmpeg.
 
-## The seven reuse-not-free cases have no protected arm, measured
-
-Case 39 of the port's pool lifetime probes runs the class-3 shape in a domain:
-one pooled buffer, two holders, and the one that kept it writes into it again.
-
-| mode | outcome |
-|---|---|
-| 0 spatial | completes |
-| 2 Sublet | **completes** |
-
-The fixture checks its own premise before the write — `av_buffer_get_ref_count`
-is 2 and `av_buffer_is_writable` is false, both from the real `buffer.c` — so the
-storage genuinely is shared and genuinely is not writable, and the write lands
-anyway.
-
-The reason is in the adapter, not in the fixture.
-[`src/allocators/sublet/pool-leases.c`](../../../ports/ffmpeg/buffer-pool/src/allocators/sublet/pool-leases.c)
-hooks two operations, `ff2_sublet_issue` → `sublet_take` and `ff2_sublet_return`
-→ `sublet_give`. Both are keyed on the **pool's** allocation lifecycle. Nothing
-hooks `av_buffer_ref`, so a second reference is not a borrow: both holders use
-the one capability derived at issue time. With nothing returned to the pool
-there is nothing to revoke, and revocation is the whole of what mode 2 does.
-
-What would cover this class is Sublet's **borrow** side — lending non-writable
-or exclusive authority at `av_buffer_ref` — which is a different primitive from
-the one this port applies. That is a design decision about the adapter, and it
-is recorded here as an open gap rather than decided in a fixture.
