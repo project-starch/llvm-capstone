@@ -1,0 +1,41 @@
+{
+  "case": 2,
+  "upstream_fix": "316531e61c",
+  "title": "vidstabtransform leaves a shallow copy of the source frame in the library's state",
+  "consumer": "libavfilter/vf_vidstabtransform.c",
+  "live_in_pin": false,
+  "live_proof": "the fix's removed lines are present from n8.0 through n8.1.2 and absent from 9.0.x",
+  "object": "the source frame's plane storage, named by libvidstab's td->src with no reference taken",
+  "lifetime_ender": "the filter returns the source frame, and the pool reissues its storage to the next frame",
+  "shape": "parked pointer / reuse / stale write",
+  "allocator_layer": "AVBufferPool, through ff_get_video_buffer and libavfilter/framepool.c",
+  "fidelity": "allocator literal, consumer and library both reduced: libvidstab is not linked, and its state is modelled as the one retained pointer the upstream message describes",
+  "distinguishing": "the corpus's only write probe, and the only case where the retained pointer lives inside third-party state rather than FFmpeg's own",
+  "note": "the real filter needs --enable-libvidstab; the fixture does not, because the retained pointer is the defect",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm writes through the parked pointer into the new owner's storage; the fixed arm carries nothing across frames",
+      "note": "this pair differs by the upstream fix, not by protection"
+    },
+    "spatial": {
+      "probe_case": 38,
+      "oracle": "the sequence completes"
+    },
+    "sublet": {
+      "probe_case": 38,
+      "oracle": "fault at the labelled WRITE probe, a different published address from the read cases",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg"
+    }
+  },
+  "status": "native pair and both domain arms run 2026-09-20 under QEMU; all passed"
+}
