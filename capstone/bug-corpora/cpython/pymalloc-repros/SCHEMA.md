@@ -1,7 +1,7 @@
 # The corpus contract
 
 What a case in this corpus *is*, field by field, so the shape can be copied
-rather than re-derived. `tools/check-corpus.py` enforces every rule below; if
+rather than re-derived. `tests/check-corpus.py` enforces every rule below; if
 the two ever disagree, the checker is the authority and this file is stale.
 
 ## One directory per case

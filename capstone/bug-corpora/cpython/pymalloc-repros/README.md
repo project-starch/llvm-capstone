@@ -103,19 +103,20 @@ That is the corpus's thesis in the project's own build documentation.
     shared/defects.c     the program, one case per run; builds for both targets
     shared/run-defects.py the paired Capstone domain runner and its oracles
     cheribsd/run-poisoncap.py       the paired PoisonCap/CheriBSD runner
-    cheribsd/test-run-poisoncap.py  its oracles' own negative controls
-    tools/check-corpus.py           enforces SCHEMA.md; exits non-zero on drift
+    tests/check-corpus.py           enforces SCHEMA.md; exits non-zero on drift
+    tests/cheribsd/test_run_poisoncap.py  the oracles' own negative controls
     tools/                the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
 `SCHEMA.md` states what a case is and what every field means, and
-`tools/check-corpus.py` enforces it -- required fields, dense case numbers, a
+`tests/check-corpus.py` enforces it -- required fields, dense case numbers, a
 `PROVENANCE.md` beside every claim, every arm's oracle, and the shape table
 actually partitioning the cases. It found the headline ratio wrong on the day
 it was written: the table has ten rows and the prose said nine. Run it after
 touching anything here:
 
-    python3 tools/check-corpus.py
+    python3 tests/check-corpus.py
+    python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## Running it
 
