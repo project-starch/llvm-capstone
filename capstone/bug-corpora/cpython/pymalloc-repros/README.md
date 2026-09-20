@@ -109,6 +109,8 @@ That is the corpus's thesis in the project's own build documentation.
     tests/               everything that can say FAIL
         check-corpus.py      enforces SCHEMA.md; exits non-zero on drift
         cheribsd/            the CheriBSD oracles' own negative controls
+    platform/            the libc fix the CheriBSD target needs, and a script
+                         that applies it, rebuilds and reverts
     tools/               the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
