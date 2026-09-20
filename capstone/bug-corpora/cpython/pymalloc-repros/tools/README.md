@@ -1,4 +1,4 @@
-# The two scripts behind the inventory's numbers
+# The four scripts behind the inventory's numbers
 
 Every count in `docs/ref/cpython-pymalloc-defects.md` comes from one of these.
 They are committed so the numbers can be re-derived rather than trusted.
@@ -11,7 +11,7 @@ They are committed so the numbers can be re-derived rather than trusted.
 
 ## Inputs
 
-Both take a CPython clone; `apply-test.py` also takes a **pristine worktree of
+They all take a CPython clone; `apply-test.py` also takes a **pristine worktree of
 the pin**, which it never writes to (`git apply --check` only):
 
     git clone --bare https://github.com/python/cpython $REPO

@@ -13,7 +13,7 @@ from pathlib import Path
 import struct
 import unittest
 
-path = Path(__file__).resolve().parent / "run-poisoncap.py"
+path = Path(__file__).resolve().parents[2] / "cheribsd/run-poisoncap.py"
 spec = importlib.util.spec_from_file_location("run_poisoncap", path)
 oracle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(oracle)
