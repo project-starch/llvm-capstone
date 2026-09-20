@@ -47,7 +47,7 @@
  * names its upstream fix; the per-case PROVENANCE.md says line by line what was
  * reduced.
  *
- * TWENTY REPORTS, NINE SHAPES, AND THAT RATIO IS THE FINDING
+ * TWENTY REPORTS, TEN SHAPES, AND THAT RATIO IS THE FINDING
  *
  * Eight of the twenty -- cases 0, 1, 3, 8, 12, 16, 17, 19 -- reduce to the same
  * sequence: free a small object, allocate the same size again, read through the
