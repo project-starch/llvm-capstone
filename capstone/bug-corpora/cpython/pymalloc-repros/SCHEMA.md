@@ -17,9 +17,9 @@ number is what a run selects.
 **There is no `run.sh` per case here**, and that is deliberate. A capability
 fault ends the domain, so a case that provokes one cannot also report results
 beside it: one case per run, selected by number, from one shared program. The
-executable material is therefore `shared/`, not the case directory. A corpus
-whose cases *can* run side by side may prefer a per-case script; this one
-cannot.
+executable material is therefore `shared/` and the per-target directories, not
+the case directory. A corpus whose cases *can* run side by side may prefer a
+per-case script; this one cannot.
 
 ## Required fields
 
