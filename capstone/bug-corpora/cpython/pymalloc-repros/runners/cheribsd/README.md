@@ -6,7 +6,7 @@ describes the corpus; this describes how to run it here. -->
 The same `shared/defects.c`, and the same pinned CPython 3.13.7
 `Objects/obmalloc.c`, also build as an ordinary CheriBSD purecap program against
 the port's
-[PoisonCap adapter](../../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+[PoisonCap adapter](../../../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
 No case changes: the allocation sequences, the sizes and every `CHECK` are
 shared between the two targets, and only the probe instructions, the markers and
 the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected.
@@ -18,7 +18,7 @@ the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected.
     bash capstone/bug-corpora/cpython/pymalloc-repros/shared/build-cases.sh \
       cheribsd "$BUILD"
 
-    python3 capstone/bug-corpora/cpython/pymalloc-repros/cheribsd/run-poisoncap.py \
+    python3 capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py \
       "$BUILD" /tmp/capstone/pymalloc-defects-poisoncap-1 \
       --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" \
       --image /tmp/capstone/poisoncap-work/output/cheribsd-riscv64-purecap.img \
@@ -26,7 +26,7 @@ the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected.
 
 and the control that makes the result mean something, which must exit 0:
 
-    python3 capstone/bug-corpora/cpython/pymalloc-repros/cheribsd/run-poisoncap.py \
+    python3 capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py \
       "$BUILD" /tmp/capstone/pymalloc-defects-poisoncap-control-1 \
       --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" --image <image> \
       --disable-default-revocation --negative-control
@@ -67,7 +67,7 @@ with `signal=34`, `code=2`, the two PC fields identical as text, `exact=1`, the
 case's ready marker before it, and exit 162 — every one of them, not any of
 them. The handler then restores the default disposition and re-raises, so the
 process still ends the ordinary CheriBSD way; a fault is never turned into a
-clean exit. `cheribsd/test-run-poisoncap.py` is that oracle's own negative
+clean exit. `tests/cheribsd/test_run_poisoncap.py` is that oracle's own negative
 control: it shows each of those rejections firing.
 
 **Case 5 faults at the byte read, not at the pointer load.** The labelled byte
