@@ -38,10 +38,6 @@
 /* The hosted CheriBSD/PoisonCap build only. The Capstone domain build is
  * freestanding and has none of these. */
 #include <cheri/cheric.h>
-#include <signal.h>
-#include <stdio.h>
-#include <ucontext.h>
-#include <unistd.h>
 #endif
 
 #define CHECK(x, n)                                                            \
@@ -99,94 +95,6 @@ __attribute__((used, noinline)) static void write_probe(volatile unsigned char *
 #endif
 }
 
-#ifdef PYMALLOC_POISONCAP
-/* CheriBSD reports an access through a revoked alias as SIGPROT with
- * si_code PROT_CHERI_TAG. The handler exists so that the runner can require
- * the fault to be THAT fault at THAT instruction: a bounds fault, a permission
- * fault, an ordinary SIGSEGV or a tag fault at some other address is not this
- * corpus reproducing, and would otherwise be indistinguishable from it through
- * the process exit status alone, which is 162 for every SIGPROT.
- *
- * It prints one line and then re-raises with the default disposition, so the
- * process still ends the ordinary CheriBSD way instead of a fault being turned
- * into a normal exit. */
-extern void pyc_defect_read(void);
-
-static volatile sig_atomic_t fault_case;
-
-/* Signal-handler formatting: a fixed local buffer and one write(). Every
- * append is bounded by the buffer size, so an over-long line is TRUNCATED
- * rather than overflowing -- and a truncated line fails the runner's
- * complete-line match, which is the safe direction. */
-static size_t put_text(char *buffer, size_t size, size_t at, const char *text) {
-  while (*text && at < size)
-    buffer[at++] = *text++;
-  return at;
-}
-
-static size_t put_number(char *buffer, size_t size, size_t at,
-                         unsigned long value, unsigned base) {
-  char digits[24];
-  size_t count = 0;
-  do {
-    digits[count++] = "0123456789abcdef"[value % base];
-    value /= base;
-  } while (value && count < sizeof digits);
-  while (count && at < size)
-    buffer[at++] = digits[--count];
-  return at;
-}
-
-static void report_fault(int sig, siginfo_t *info, void *context) {
-  const ucontext_t *state = context;
-  unsigned long pc = (unsigned long)cheri_getaddress(
-      (void *)state->uc_mcontext.mc_capregs.cp_sepcc);
-  unsigned long expected =
-      (unsigned long)cheri_getaddress((void *)pyc_defect_read);
-  int exact =
-      sig == SIGPROT && info->si_code == PROT_CHERI_TAG && pc == expected;
-  char line[192];
-  size_t at = 0;
-  at = put_text(line, sizeof line, at, "PYC_DEFECT_FAULT case=");
-  at = put_number(line, sizeof line, at, (unsigned long)fault_case, 10);
-  at = put_text(line, sizeof line, at, " signal=");
-  at = put_number(line, sizeof line, at, (unsigned long)sig, 10);
-  at = put_text(line, sizeof line, at, " code=");
-  at = put_number(line, sizeof line, at, (unsigned long)info->si_code, 10);
-  at = put_text(line, sizeof line, at, " pc=0x");
-  at = put_number(line, sizeof line, at, pc, 16);
-  at = put_text(line, sizeof line, at, " expected=0x");
-  at = put_number(line, sizeof line, at, expected, 16);
-  at = put_text(line, sizeof line, at, " exact=");
-  at = put_text(line, sizeof line, at, exact ? "1" : "0");
-  at = put_text(line, sizeof line, at, "\n");
-  (void)write(STDOUT_FILENO, line, at);
-  /* Restore the platform outcome: default disposition, unblocked, re-raised. */
-  struct sigaction restore;
-  sigset_t unblock;
-  memset(&restore, 0, sizeof restore);
-  restore.sa_handler = SIG_DFL;
-  sigemptyset(&restore.sa_mask);
-  sigaction(SIGPROT, &restore, NULL);
-  sigemptyset(&unblock);
-  sigaddset(&unblock, SIGPROT);
-  sigprocmask(SIG_UNBLOCK, &unblock, NULL);
-  raise(SIGPROT);
-  _exit(70); /* raise() must not return; never let a fault exit cleanly. */
-}
-
-static void install_fault_handler(unsigned which) {
-  struct sigaction action;
-  memset(&action, 0, sizeof action);
-  action.sa_sigaction = report_fault;
-  action.sa_flags = SA_SIGINFO;
-  sigemptyset(&action.sa_mask);
-  fault_case = (sig_atomic_t)which;
-  if (sigaction(SIGPROT, &action, NULL))
-    pym_fail(750);
-}
-#endif
-
 /* Publish the case and both probe addresses, so the host knows which
  * instruction a fault is allowed to be at. On CheriBSD the addresses travel
  * with the fault instead: the handler compares the trap PC against the
@@ -194,8 +102,12 @@ static void install_fault_handler(unsigned which) {
  * reached its critical access. */
 static void mark(unsigned which) {
 #ifdef PYMALLOC_POISONCAP
-  printf("PYC_DEFECT case=%u ready\n", which);
-  fflush(stdout);
+  /* Nothing to publish on this target. The supervisor observes the fault from
+   * outside -- signal, si_code and PC from the kernel, the expected address
+   * from the child's memory map and the ELF -- so the program neither reports
+   * nor judges anything about itself. The Capstone target still needs the
+   * marker instructions below, because its oracle reads them off the monitor. */
+  (void)which;
 #else
   extern void pyc_defect_read(void), pyc_defect_write(void);
   unsigned long code = 0xcf19000000000000UL | which;
@@ -215,17 +127,11 @@ struct node {
 };
 
 
-#ifdef PYMALLOC_POISONCAP
-#define PYC_INSTALL_HANDLER(n) install_fault_handler(n)
-#define PYC_COMPLETED(n)                                                       \
-  do {                                                                        \
-    printf("PYC_DEFECT case=%u completed\n", (unsigned)(n));                  \
-    fflush(stdout);                                                           \
-  } while (0)
-#else
+/* The program reports nothing about its own outcome on either target: a
+ * protected arm is judged by the fault the kernel delivers, a spatial arm by
+ * the 96-byte report it writes out. */
 #define PYC_INSTALL_HANDLER(n) ((void)0)
 #define PYC_COMPLETED(n) ((void)0)
-#endif
 
 /* One case per program. The body follows the macro:
  *

@@ -27,6 +27,13 @@ for dir in "$CORPUS"/[0-9][0-9]_*/; do
     cp "$work/bin/defects" "$OUT/bin/defect-$number"
     # The runner's platform control comes from the same build.
     cp -f "$work/bin/cheribsd-abi-probe" "$OUT/bin/" 2>/dev/null || true
+    # The supervisor that observes each case's fault from outside it.
+    if [ ! -x "$OUT/bin/supervise" ]; then
+      "$CHERI_SDK/bin/clang" --target=riscv64-unknown-freebsd13 \
+        -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -B"$CHERI_SDK/bin" \
+        --sysroot="$CHERI_SYSROOT" -std=gnu11 -O1 -Wall -Wextra -fuse-ld=lld \
+        "$CORPUS/observe/supervise.c" -lutil -o "$OUT/bin/supervise"
+    fi
     ;;
   capstone-domain)
     cmake --preset capstone-domain -S "$PORT" -B "$work" \

@@ -48,9 +48,14 @@ SIGPROT_EXIT = 128 + SIGPROT
 PLATFORM_CONTROLS = ("cheribsd-abi", "cheribsd-bounds")
 EXIT_INFRASTRUCTURE = 75
 
+# What the supervisor reports, all of it observed from outside the program: the
+# signal, si_code and faulting PC come from the kernel (PT_LWPINFO and
+# PT_GETCAPREGS), and the expected address from the child's own memory map plus
+# the symbol in its ELF. The program under test prints nothing and judges
+# nothing about itself.
+EXPECT_LINE = re.compile(r"SUPERVISE expect (\S+) (0x[0-9a-f]+)")
 FAULT_LINE = re.compile(
-    r"PYC_DEFECT_FAULT case=(\d+) signal=(\d+) code=(\d+) "
-    r"pc=(0x[0-9a-f]+) expected=(0x[0-9a-f]+) exact=([01])"
+    r"SUPERVISE fault signal=(\d+) code=(\d+) addr=(0x[0-9a-f]+) pc=(0x[0-9a-f]+)"
 )
 
 
@@ -91,38 +96,37 @@ def fixture(number, negative_control):
     return struct.pack("<16Q", MAGIC, count, *([0] * 10), 0, number, 0, 0)
 
 
-def fault_oracle(number):
-    """The complete line a protected arm must print, and nothing weaker.
+def fault_oracle():
+    """The complete line a protected arm must produce, and nothing weaker.
 
-    The backreference is the point: the trap PC and the probe label address are
-    required to be the same text, so a fault at another instruction cannot
-    satisfy it however plausible the rest of the line looks.
+    The backreference is the point: the faulting address and the PC must be the
+    same text. Whether that address is the RIGHT one is settled against the
+    supervisor's own `expect` line, which is resolved from the ELF and the
+    memory map -- see evaluate().
     """
     return (
-        rf"PYC_DEFECT_FAULT case={number} signal={SIGPROT} code={PROT_CHERI_TAG} "
-        r"pc=(0x[0-9a-f]+) expected=\1 exact=1"
+        rf"SUPERVISE fault signal={SIGPROT} code={PROT_CHERI_TAG} "
+        r"addr=(0x[0-9a-f]+) pc=\1"
     )
 
 
-def build_case(number, mode, program, input_path, timeout, slug=""):
-    # The arm name carries what it is, so an archived result tree stays
-    # readable away from the corpus: 05-odict-copy-stale-link-mode1 rather
-    # than defect-5-mode1.
+def build_case(number, mode, supervisor, program, input_path, timeout, slug=""):
+    # The supervisor runs the case binary and observes it; the case binary is
+    # copied in as ./target so the supervisor can resolve its path and ELF.
     label = f"{number:02d}-{slug.replace('_', '-')}" if slug else f"defect-{number}"
     case = dict(
         name=f"{label}-mode{mode}",
-        program=str(program),
-        args=["input.bin", "output.bin", str(mode)],
-        inputs={"input.bin": str(input_path)},
-        also_expect=[f"PYC_DEFECT case={number} ready"],
+        program=str(supervisor),
+        args=["./target", "input.bin", "output.bin", str(mode)],
+        inputs={"target": str(program), "input.bin": str(input_path)},
         timeout=timeout,
     )
     if mode == 0:
-        case["expect"] = f"PYC_DEFECT case={number} completed"
+        case["expect"] = "SUPERVISE exit status=0"
         case["exit"] = 0
         case["outputs"] = ["output.bin"]
     else:
-        case["expect_regex"] = fault_oracle(number)
+        case["expect_regex"] = fault_oracle()
         case["exit"] = SIGPROT_EXIT
     return case
 
@@ -143,30 +147,23 @@ def report_fields(blob):
 
 
 def evaluate(number, mode, row, stdout, report):
-    """The verdict for one arm, from what the guest actually printed."""
+    """The verdict for one arm, from what the KERNEL reported about it."""
     lines = stdout.splitlines()
-    ready = f"PYC_DEFECT case={number} ready" in lines
     verdict = dict(
         case=number,
         mode=mode,
-        expected=(
-            "completed" if mode == 0 else "SIGPROT/PROT_CHERI_TAG at pyc_defect_read"
-        ),
+        expected="completed" if mode == 0 else "tag fault at pyc_defect_read",
         ran=row is not None,
         exit=row["exit"] if row else None,
         expected_exit=0 if mode == 0 else SIGPROT_EXIT,
-        ready_marker=ready,
         runner_oracle=bool(row and row["passed"]),
         stdout_sha256=row["stdout_sha256"] if row else None,
     )
     if mode == 0:
         fields = report_fields(report)
-        verdict["completed_marker"] = f"PYC_DEFECT case={number} completed" in lines
         verdict["report"] = fields
         verdict["passed"] = bool(
             verdict["runner_oracle"]
-            and ready
-            and verdict["completed_marker"]
             and verdict["exit"] == 0
             and fields is not None
             and fields["magic_ok"]
@@ -176,29 +173,35 @@ def evaluate(number, mode, row, stdout, report):
             and fields["mode"] == mode
         )
         return verdict
-    fault = None
+
+    # The supervisor resolves the probe address from the ELF and the child's
+    # memory map. It says "unavailable" rather than guessing when it cannot,
+    # and an unavailable expectation is a failed arm, never a match.
+    expect = None
     for line in lines:
-        match = FAULT_LINE.fullmatch(line)
-        if match:
-            fault = dict(
-                case=int(match[1]),
-                signal=int(match[2]),
-                code=int(match[3]),
-                pc=match[4],
-                expected_pc=match[5],
-                exact=int(match[6]),
-            )
-    verdict["fault"] = fault
+        found = EXPECT_LINE.fullmatch(line)
+        if found:
+            expect = found[2]
+    faults = [FAULT_LINE.fullmatch(line) for line in lines]
+    faults = [f for f in faults if f]
+    # The FIRST fault is the one the case produced; anything after it is the
+    # aftermath of dying and must not be able to rescue the arm.
+    first = faults[0] if faults else None
+    verdict["expect"] = expect
+    verdict["fault"] = (
+        dict(signal=int(first[1]), code=int(first[2]), addr=first[3], pc=first[4])
+        if first
+        else None
+    )
+    verdict["faults_seen"] = len(faults)
     verdict["passed"] = bool(
         verdict["runner_oracle"]
-        and ready
         and verdict["exit"] == SIGPROT_EXIT
-        and fault is not None
-        and fault["case"] == number
-        and fault["signal"] == SIGPROT
-        and fault["code"] == PROT_CHERI_TAG
-        and fault["pc"] == fault["expected_pc"]
-        and fault["exact"] == 1
+        and expect is not None
+        and first is not None
+        and int(first[1]) == SIGPROT
+        and int(first[2]) == PROT_CHERI_TAG
+        and first[3] == first[4] == expect
     )
     return verdict
 
@@ -207,6 +210,23 @@ def evaluate(number, mode, row, stdout, report):
 # speak one vocabulary. The Capstone runner names its arms too (spatial,
 # sublet); numbers stay accepted because the binary takes a mode argument.
 MODE_NAMES = {"spatial": 0, "protected": 1}
+
+
+def control_fired(verdict):
+    """Did this arm's oracle reject a fixture that never ran its case?
+
+    The fixture is refused before any case runs, so a fired oracle shows no
+    fault at the probe and no completed report: the arm did not merely fail, it
+    produced no measurement at all. Kept as a function because it is the check
+    that decides whether a whole control run means anything, and because two
+    refactors broke it where only a ten-minute guest run could notice.
+    """
+    report = verdict.get("report") or {}
+    return bool(
+        not verdict["passed"]
+        and not verdict.get("fault")
+        and not report.get("completed")
+    )
 
 
 def numbers(text, limit, what, names=None):
@@ -283,8 +303,9 @@ def main():
     # One program per defect, built by shared/build-cases.sh through the port's
     # one-source seam.
     programs = {n: bins / f"defect-{n:02d}" for n in selected}
+    supervisor = bins / "supervise"
     probe = a.abi_probe.resolve() if a.abi_probe else bins / "cheribsd-abi-probe"
-    for path in [*programs.values(), probe]:
+    for path in [*programs.values(), probe, supervisor]:
         if not path.is_file():
             p.error(f"missing program: {path} (build with shared/build-cases.sh)")
     a.output = a.output.resolve()
@@ -305,6 +326,7 @@ def main():
                     build_case(
                         number,
                         mode,
+                        supervisor,
                         programs[number],
                         path,
                         a.timeout,
@@ -412,12 +434,7 @@ def main():
             program_sha256=summary["binaries"][name],
         )
         if a.negative_control:
-            verdict["control_fired"] = bool(
-                not verdict["passed"]
-                and not verdict["ready_marker"]
-                and not verdict.get("completed_marker")
-                and not verdict.get("fault")
-            )
+            verdict["control_fired"] = control_fired(verdict)
             if not verdict["control_fired"]:
                 status = 1
             flag = "FIRED  " if verdict["control_fired"] else "VACUOUS"
@@ -431,8 +448,8 @@ def main():
             fault = verdict["fault"]
             detail = (
                 f" signal={fault['signal']} code={fault['code']} "
-                f"pc={fault['pc']} expected={fault['expected_pc']} "
-                f"exact={fault['exact']}"
+                f"addr={fault['addr']} pc={fault['pc']} "
+                f"expect={verdict.get('expect')}"
             )
         print(
             f"{flag} case={number:<2} mode={mode} "
