@@ -237,6 +237,11 @@ def main():
     for name in ("sdk", "rootfs", "image"):
         p.add_argument("--" + name, type=Path, required=True)
     p.add_argument("--port", type=int, default=10431)
+    p.add_argument(
+        "--abi-probe",
+        type=Path,
+        help="cheribsd-abi-probe; defaults to BUILD/bin/cheribsd-abi-probe",
+    )
     p.add_argument("--disable-default-revocation", action="store_true")
     p.add_argument(
         "--runtime-revocation",
@@ -274,11 +279,14 @@ def main():
     modes = numbers(a.modes, {0, 1}, "mode", MODE_NAMES)
     if a.timeout < 1:
         p.error("the per-arm timeout must be positive")
-    program = a.build.resolve() / "bin/defects"
-    probe = a.build.resolve() / "bin/cheribsd-abi-probe"
-    for path in (program, probe):
+    bins = a.build.resolve() / "bin"
+    # One program per defect, built by shared/build-cases.sh through the port's
+    # one-source seam.
+    programs = {n: bins / f"defect-{n:02d}" for n in selected}
+    probe = a.abi_probe.resolve() if a.abi_probe else bins / "cheribsd-abi-probe"
+    for path in [*programs.values(), probe]:
         if not path.is_file():
-            p.error(f"missing program: {path} (build with -DPY_CORPUS_SRC=...)")
+            p.error(f"missing program: {path} (build with shared/build-cases.sh)")
     a.output = a.output.resolve()
     a.output.mkdir(parents=True, exist_ok=False)
     fixtures = a.output / "fixtures"
@@ -295,7 +303,12 @@ def main():
                     number,
                     mode,
                     build_case(
-                        number, mode, program, path, a.timeout, claims[number]["slug"]
+                        number,
+                        mode,
+                        programs[number],
+                        path,
+                        a.timeout,
+                        claims[number]["slug"],
                     ),
                 )
             )

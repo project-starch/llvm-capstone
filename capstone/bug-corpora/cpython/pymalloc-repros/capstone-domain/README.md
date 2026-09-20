@@ -3,12 +3,13 @@ describes the corpus; this describes how to run it here. -->
 
 # Running the corpus in a Capstone domain
 
-One defect per boot, selected by the first event's id, from the shared
-`../shared/defects.c`. A capability fault ends the domain, so a case that
-provokes one cannot also report results beside it.
+One defect per boot, one program per defect. `build-cases.sh` invokes the
+port's one-source seam once per case and leaves the programs as
+`<build>/bin/defect-NN.dom`; the runner stages the one its case needs. A
+capability fault ends the domain, so a case that provokes one cannot also
+report results beside it.
 
-    cmake -S <port> -B <build> ... -DPY_CORPUS_SRC=<abs path>/shared/defects.c
-    cmake --build <build> --target defects
+    shared/build-cases.sh capstone-domain <build>
     python3 capstone-domain/run-defects.py <out> \
       --domain-build <build> --linux-build <guest>
 

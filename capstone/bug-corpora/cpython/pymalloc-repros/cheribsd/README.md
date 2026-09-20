@@ -15,8 +15,8 @@ the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected.
     export CHERI_SDK=/tmp/capstone/poisoncap-work/sdk
     export CHERI_SYSROOT=/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap
     BUILD=/tmp/capstone/poisoncap-pymalloc-corpus-work/build/poisoncap
-    bash capstone/ports/cpython/pymalloc/host/cheribsd/poisoncap/build.sh "$BUILD" \
-      -DPY_CORPUS_SRC="$PWD/capstone/bug-corpora/cpython/pymalloc-repros/shared/defects.c"
+    bash capstone/bug-corpora/cpython/pymalloc-repros/shared/build-cases.sh \
+      cheribsd "$BUILD"
 
     python3 capstone/bug-corpora/cpython/pymalloc-repros/cheribsd/run-poisoncap.py \
       "$BUILD" /tmp/capstone/pymalloc-defects-poisoncap-1 \

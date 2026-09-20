@@ -100,48 +100,6 @@ def check_shape_table(count, problems):
             )
 
 
-def check_case_index(files, problems):
-    """shared/defects.c carries an index; it must match the case.json files.
-
-    The index is how a reader gets from a `which == N` branch back to the
-    directory that holds the claim. An index nobody checks drifts, which is how
-    the shape count came to say nine over a ten-row table.
-    """
-    source = (CORPUS / "shared/defects.c").read_text()
-    block = re.search(r"CASE INDEX\..*?\n \*\n(.*?)\n \*\n", source, re.S)
-    if not block:
-        problems.append("shared/defects.c: no CASE INDEX block")
-        return
-    listed = {}
-    for line in block.group(1).splitlines():
-        row = re.match(r"\s*\*\s+(\d+)\s+(\S+)\s\s+(.*\S)", line)
-        if not row:
-            problems.append(f"shared/defects.c: unreadable index row {line.strip()!r}")
-            continue
-        listed[int(row.group(1))] = (row.group(2), row.group(3))
-    for path in files:
-        case = json.loads(path.read_text())
-        number = case.get("case")
-        if number not in listed:
-            problems.append(f"shared/defects.c: case {number} missing from the index")
-            continue
-        directory, shape = listed.pop(number)
-        if directory != path.parent.name:
-            problems.append(
-                f"shared/defects.c: index row {number} says {directory!r}, "
-                f"the directory is {path.parent.name!r}"
-            )
-        if shape != case.get("shape"):
-            problems.append(
-                f"shared/defects.c: index row {number} shape disagrees with "
-                f"its case.json"
-            )
-    for number in sorted(listed):
-        problems.append(
-            f"shared/defects.c: index lists case {number}, which has no directory"
-        )
-
-
 def main():
     problems = []
     files = sorted(CORPUS.glob("[0-9][0-9]_*/case.json"))
@@ -218,12 +176,27 @@ def main():
     if extra:
         problems.append(f"case numbers outside 0..{len(files) - 1}: {sorted(extra)}")
 
-    check_case_index(files, problems)
-
-    # A case directory without a PROVENANCE.md is a claim without its source.
+    # A case directory without a PROVENANCE.md is a claim without its source,
+    # and without a case.c it is a claim with no sequence. The case.c must
+    # declare the number its directory carries, so a copied file that kept the
+    # wrong PYC_CASE cannot pass.
     for path in files:
-        if not (path.parent / "PROVENANCE.md").is_file():
-            problems.append(f"{path.parent.name}: no PROVENANCE.md")
+        where = path.parent
+        if not (where / "PROVENANCE.md").is_file():
+            problems.append(f"{where.name}: no PROVENANCE.md")
+        source = where / "case.c"
+        if not source.is_file():
+            problems.append(f"{where.name}: no case.c")
+            continue
+        number = json.loads(path.read_text()).get("case")
+        declared = re.search(r"PYC_CASE\((\d+)\)", source.read_text())
+        if not declared:
+            problems.append(f"{where.name}: case.c declares no PYC_CASE")
+        elif int(declared.group(1)) != number:
+            problems.append(
+                f"{where.name}: case.c says PYC_CASE({declared.group(1)}), "
+                f"case.json says {number}"
+            )
 
     for problem in problems:
         print("FAIL " + problem)
