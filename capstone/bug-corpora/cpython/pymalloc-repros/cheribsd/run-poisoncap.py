@@ -61,7 +61,7 @@ def load_cases():
     verdict cannot describe a case differently from the case's own claims.
     """
     cases = {}
-    for path in sorted(CORPUS.glob("gh-*/case.json")):
+    for path in sorted(CORPUS.glob("[0-9][0-9]_*/case.json")):
         claim = json.loads(path.read_text())
         number = claim["case"]
         if number in cases:
@@ -69,6 +69,7 @@ def load_cases():
         cases[number] = dict(
             case=number,
             directory=path.parent.name,
+            slug=path.parent.name.split("_", 2)[2],
             upstream_fix=claim["upstream_fix"],
             title=claim["title"],
             shape=claim["shape"],
@@ -103,9 +104,13 @@ def fault_oracle(number):
     )
 
 
-def build_case(number, mode, program, input_path, timeout):
+def build_case(number, mode, program, input_path, timeout, slug=""):
+    # The arm name carries what it is, so an archived result tree stays
+    # readable away from the corpus: 05-odict-copy-stale-link-mode1 rather
+    # than defect-5-mode1.
+    label = f"{number:02d}-{slug.replace('_', '-')}" if slug else f"defect-{number}"
     case = dict(
-        name=f"defect-{number}-mode{mode}",
+        name=f"{label}-mode{mode}",
         program=str(program),
         args=["input.bin", "output.bin", str(mode)],
         inputs={"input.bin": str(input_path)},
@@ -286,7 +291,13 @@ def main():
         hashes[number] = hashlib.sha256(path.read_bytes()).hexdigest()
         for mode in modes:
             arms_wanted.append(
-                (number, mode, build_case(number, mode, program, path, a.timeout))
+                (
+                    number,
+                    mode,
+                    build_case(
+                        number, mode, program, path, a.timeout, claims[number]["slug"]
+                    ),
+                )
             )
     cases = [case for _, _, case in arms_wanted]
     (a.output / "cases.json").write_text(json.dumps(cases, indent=2) + "\n")

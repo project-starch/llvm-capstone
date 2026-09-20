@@ -65,6 +65,30 @@
  * a global, with no bound on when it is next read (14, 18); and a bare
  * PyMem_Malloc block cached by a third party (15).
  *
+ * CASE INDEX. The directory holds the claim and its provenance; this holds
+ * the sequence. check-corpus.py keeps the two in step.
+ *
+ *    0  00_gh-143543_groupby_reentrant_eq                 free / reuse / stale read
+ *    1  01_gh-146613_grouper_parent_key                   free / reuse / stale read, with a surviving sibling alias
+ *    2  02_gh-142829_hamt_eq_interior_cursor              interior pointer into a freed block
+ *    3  03_gh-142831_json_encoder_list_item               stale entry reached through a live array
+ *    4  04_gh-145244_json_encoder_dict_key                bulk free, stale read on the error path
+ *    5  05_gh-148660_odict_copy_stale_link                pointer load out of a freed block, then followed
+ *    6  06_gh-151295_bytes_join_reentrant_buffer          payload buffer, sub-512
+ *    7  07_gh-148395_decompressor_next_in                 cursor surviving in a struct field across two API calls
+ *    8  08_gh-112127_atexit_unregister_borrowed_tuple     free / reuse / stale read
+ *    9  09_gh-139210_iterparse_event_name                 payload buffer, error path
+ *   10  10_gh-142560_bytearray_search_realloc             realloc moved the block
+ *   11  11_gh-142783_zoneinfo_eager_decref                free and use on adjacent lines
+ *   12  12_gh-143004_counter_update_borrowed_value        free / reuse / stale read
+ *   13  13_gh-144833_ssl_decref_self_then_read            interior pointer into the object that was just released
+ *   14  14_gh-146011_decimal_signaldict_outlives_context  dangling pointer parked in a surviving object
+ *   15  15_gh-149449_unicodedata_capi_cached              bare PyMem block, cached by a third party
+ *   16  16_gh-151403_fork_exec_fspath                     free / reuse / stale read
+ *   17  17_gh-151416_spawnv_fspath                        free / reuse / stale read
+ *   18  18_gh-151695_curses_screen_encoding_global        dangling pointer parked in a global
+ *   19  19_gh-153539_textio_tell_reentrant_decoder        free / reuse / stale read
+ *
  * SIZE. Every block here is well under pymalloc's 512-byte threshold, so all of
  * it is pool memory that never reaches malloc. Three cases have upstream
  * defects that can exceed it -- 6 (a join buffer), 10 (bytearray storage) and

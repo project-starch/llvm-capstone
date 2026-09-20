@@ -42,7 +42,11 @@ CASES = [
     ("gh-142783", "zoneinfo-eager-decref", "free and use on adjacent lines"),
     ("gh-143004", "counter-update-borrowed-value", "free/reuse/stale read"),
     ("gh-144833", "ssl-decref-self-then-read-self", "interior pointer"),
-    ("gh-146011", "decimal-signaldict-outlives-context", "parked in a surviving object"),
+    (
+        "gh-146011",
+        "decimal-signaldict-outlives-context",
+        "parked in a surviving object",
+    ),
     ("gh-149449", "unicodedata-capi-freed-under-cache", "bare PyMem block, cached"),
     ("gh-151403", "fork-exec-fspath-mutates-args", "free/reuse/stale read"),
     ("gh-151416", "spawnv-fspath-mutates-argv", "free/reuse/stale read"),
@@ -52,7 +56,7 @@ CASES = [
 
 MARKER_BASE = 0xCF19000000000000
 REPORT_FIELDS = 12  # struct pym_header: 12 x uint64
-COMPLETED = 4       # its index
+COMPLETED = 4  # its index
 
 
 def classify(serial, report, which, mode, runner_exit):
@@ -145,7 +149,7 @@ for which in map(int, a.cases.split(",")):
         number = 0 if mode == "spatial" else 1
         run, hashes = stage_run(
             a.output,
-            f"{which}-{mode}-",
+            f"{which:02d}-{CASES[which][1]}-{mode}-",
             {
                 "defects.dom": a.domain_build / "bin/defects.dom",
                 "host.user": a.linux_build / "bin/domain-loader",
@@ -191,7 +195,10 @@ echo PYC_DEFECT_DONE
         env.setdefault("CAPSTONE_QEMU_LOGIN_TIMEOUT", "90")
         env.setdefault("CAPSTONE_GUEST_COMMAND_TIMEOUT", "90")
         result = run_guest(
-            run, "sh /mnt/host/run.sh", "PYC_DEFECT_DONE", env=env,
+            run,
+            "sh /mnt/host/run.sh",
+            "PYC_DEFECT_DONE",
+            env=env,
             timeout_multiplier=1,
         )
         serial = (
@@ -212,13 +219,17 @@ echo PYC_DEFECT_DONE
             # this boot produced no information about the case. Exit 75 -- the
             # infrastructure code -- rather than record a FAIL that would read
             # like the defect failing to reproduce.
-            print(f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}",
-                  flush=True)
+            print(
+                f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}",
+                flush=True,
+            )
             sys.exit(75)
         blob = share / "report.bin"
         report = None
         if blob.exists() and blob.stat().st_size >= 8 * REPORT_FIELDS:
-            report = struct.unpack(f"<{REPORT_FIELDS}Q", blob.read_bytes()[: 8 * REPORT_FIELDS])
+            report = struct.unpack(
+                f"<{REPORT_FIELDS}Q", blob.read_bytes()[: 8 * REPORT_FIELDS]
+            )
         row = classify(serial, report, which, mode, result.returncode)
         row["run"] = str(run)
         verdicts.append(row)
@@ -240,8 +251,10 @@ echo PYC_DEFECT_DONE
 
 passed = sum(r["passed"] for r in verdicts)
 if a.negative_control:
-    print(f"\nnegative control: {len(verdicts) - passed}/{len(verdicts)} oracles "
-          f"fired; {passed} reported a pass on an input that never ran the case")
+    print(
+        f"\nnegative control: {len(verdicts) - passed}/{len(verdicts)} oracles "
+        f"fired; {passed} reported a pass on an input that never ran the case"
+    )
 else:
     print(f"\n{passed}/{len(verdicts)} arms passed")
 sys.exit(status)
