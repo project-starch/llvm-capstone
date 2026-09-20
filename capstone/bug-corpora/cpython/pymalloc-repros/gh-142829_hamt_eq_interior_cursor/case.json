@@ -19,6 +19,16 @@
     "sublet": {
       "oracle": "fault at the labelled read probe",
       "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
     }
   },
   "status": "run 2026-09-18 under QEMU; both arms passed"

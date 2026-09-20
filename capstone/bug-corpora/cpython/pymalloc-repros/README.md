@@ -48,7 +48,7 @@ because upstream renamed the function. It is live by inspection —
 `Modules/_json.c:1621` of `v3.13.7` hands the borrowed key straight on with no
 `Py_INCREF` at all. Its `PROVENANCE.md` quotes the pinned source.
 
-## Twenty reports, nine shapes
+## Twenty reports, ten shapes
 
 Eight of the twenty — 0, 1, 3, 8, 12, 16, 17, 19 — reduce to one sequence: free
 a small object, allocate the same size again, read through the pointer that was
@@ -56,7 +56,7 @@ kept. Eight separately reported defects, seven modules, fixed one at a time over
 more than a year. They are kept apart rather than merged because the sameness is
 the point: one revocation mechanism covers a class upstream keeps rediscovering.
 
-The nine shapes, and what each is there to show:
+The ten shapes, and what each is there to show:
 
 | shape | cases | why it is not the same test |
 |---|---|---|
@@ -96,6 +96,7 @@ That is the corpus's thesis in the project's own build documentation.
 
 ## Layout
 
+    SCHEMA.md            the corpus contract, field by field
     <gh-NNNNN>_<slug>/
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
@@ -103,8 +104,18 @@ That is the corpus's thesis in the project's own build documentation.
     shared/run-defects.py the paired Capstone domain runner and its oracles
     cheribsd/run-poisoncap.py       the paired PoisonCap/CheriBSD runner
     cheribsd/test-run-poisoncap.py  its oracles' own negative controls
-    tools/               the survey scripts behind the inventory's numbers
+    tools/check-corpus.py           enforces SCHEMA.md; exits non-zero on drift
+    tools/                the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
+
+`SCHEMA.md` states what a case is and what every field means, and
+`tools/check-corpus.py` enforces it -- required fields, dense case numbers, a
+`PROVENANCE.md` beside every claim, every arm's oracle, and the shape table
+actually partitioning the cases. It found the headline ratio wrong on the day
+it was written: the table has ten rows and the prose said nine. Run it after
+touching anything here:
+
+    python3 tools/check-corpus.py
 
 ## Running it
 
