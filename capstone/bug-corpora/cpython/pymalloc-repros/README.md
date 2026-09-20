@@ -98,9 +98,11 @@ That is the corpus's thesis in the project's own build documentation.
 
     SCHEMA.md            the corpus contract, field by field
     NN_<gh-NNNNN>_<slug>/   NN is the case number a run selects
+        case.c           the sequence; one program per defect
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
-    shared/defects.c     the program, one case per run; builds for both targets
+    shared/corpus.h      probes, markers, fault handler; what every case includes
+    shared/build-cases.sh  builds one program per case, for either target
     capstone-domain/     the Capstone domain target
         README.md            how to run the corpus there
         run-defects.py       the runner and its oracles
@@ -113,10 +115,18 @@ That is the corpus's thesis in the project's own build documentation.
     tools/               the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
-One rule decides where a file goes. A case directory holds **claims** and their
-**provenance**, never anything executable. `shared/` is what both targets
-compile. Each target owns a directory with its runner and its manual. `tests/`
-is what can say FAIL; `tools/` is what produces the inventory's numbers.
+One rule decides where a file goes. A case directory is **self-contained**: the
+claim, its provenance and its sequence. `shared/` is what every case includes
+and the script that builds them. Each target owns a directory with its runner
+and its manual. `tests/` is what can say FAIL; `tools/` is what produces the
+inventory's numbers.
+
+**One program per defect.** A `case.c` includes `shared/corpus.h` and writes
+its sequence inside `PYC_CASE(N)`; the macro supplies `pym_replay`, so the file
+is a complete translation unit and the port's one-source seam builds it on its
+own. `shared/build-cases.sh` invokes that seam once per case and puts the
+programs side by side as `bin/defect-NN`. All twenty build in under half a
+minute for either target.
 
 `SCHEMA.md` states what a case is and what every field means, and
 `tests/check-corpus.py` enforces it -- required fields, dense case numbers, a
@@ -138,7 +148,7 @@ commands, its oracle and its negative control are in its own manual:
 | Capstone domain | `spatial` / `sublet` | [`capstone-domain/README.md`](capstone-domain/README.md) |
 | CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`cheribsd/README.md`](cheribsd/README.md) |
 
-Both drive the same `shared/defects.c`; a case behaves identically on both.
+Both build from the same `case.c` files; a case behaves identically on both.
 After touching anything here, run the checks:
 
     python3 tests/check-corpus.py

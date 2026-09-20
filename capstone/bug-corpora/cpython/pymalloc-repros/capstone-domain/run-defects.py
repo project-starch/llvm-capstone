@@ -151,7 +151,7 @@ for which in map(int, a.cases.split(",")):
             a.output,
             f"{which:02d}-{CASES[which][1]}-{mode}-",
             {
-                "defects.dom": a.domain_build / "bin/defects.dom",
+                "defects.dom": a.domain_build / f"bin/defect-{which:02d}.dom",
                 "host.user": a.linux_build / "bin/domain-loader",
             },
         )

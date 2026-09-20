@@ -7,6 +7,7 @@ the two ever disagree, the checker is the authority and this file is stale.
 ## One directory per case
 
     NN_<upstream-fix-id>_<slug>/
+        case.c           the sequence, inside PYC_CASE(NN)
         case.json        machine-readable claims
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
 
@@ -19,12 +20,17 @@ checker keeps the two in step. Run artifacts are named the same way, so an
 archived result tree stays readable away from the corpus:
 `05-odict-copy-stale-link-mode1`, not `defect-5-mode1`.
 
-**There is no `run.sh` per case here**, and that is deliberate. A capability
-fault ends the domain, so a case that provokes one cannot also report results
-beside it: one case per run, selected by number, from one shared program. The
-executable material is therefore `shared/` and the per-target directories, not
-the case directory. A corpus whose cases *can* run side by side may prefer a
-per-case script; this one cannot.
+**One program per case, and no `run.sh` beside it.** A capability fault ends
+the domain, so a case that provokes one cannot also report results next to it:
+one case per run. The sequence lives in the case directory as `case.c`, which
+includes `shared/corpus.h` and writes its body inside `PYC_CASE(NN)`; the macro
+supplies `pym_replay`, so the file is a complete translation unit that the
+port's one-source build seam compiles on its own. Building and running stay
+with the target directories, because both need a toolchain and a guest that a
+per-case script would have to reinvent twenty times.
+
+`case.c` must declare the number its directory carries. A fixture naming
+another case is refused rather than silently run.
 
 ## Required fields
 
