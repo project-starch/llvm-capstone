@@ -1,8 +1,9 @@
 # R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 
-**Status (2026-09-19): REPRODUCED ON THE BOARD, twice, with controls. The mechanism is NOT identified,
-and the two obvious candidates are both already fixed in the RTL this bitstream is labelled from — which
-is the reason this folder exists rather than a line in an existing one.**
+**Status (2026-09-20): REPRODUCED ON THE BOARD, three times, with controls, and the provenance
+question is SETTLED — the flashed bitstream carries the R-34/R-24 fix, verified by a cause comparison
+on the board itself rather than by the build record. So neither of the two candidate issues explains
+this, and the defect is that the LSU path does not check the tag while the execute path does.**
 
 Sibling issues, so a reader who arrived with the wrong symptom is redirected now:
 `../R34-lsu-exception-lost-on-immediate-grant/` is the LSU dropping exceptions it generates, and its fix
@@ -55,7 +56,36 @@ Read in order:
   `CAP_TYPE_LIN` and an alias is `NONLIN`, so it is a type error on *any* alias, live or stale. Both
   faulted; the detector separated neither.
 
-## The two live hypotheses, and the one question that discriminates them
+## SETTLED 2026-09-20: the flashed bitstream IS post-fix, so this is a new defect
+
+The provenance question below was answered on the board, by comparison rather than inference.
+
+**The method.** Raise the *same* deliberate capability fault in the *same* image on both the emulator
+and the board. The emulator is base 23 by construction, so board == emulator means post-fix and
+board == emulator + 1 means pre-fix. **Neither reading needs to know which enum fired**, which is what
+makes it immune to the aliasing that blocks every value already on file.
+
+**The fault.** `cincoffset` with a scalar operand — an **execute-path** check (`helper_cscincoffset`,
+`op_helper.c:747`), chosen because the execute path demonstrably still checks on this bitstream (`mrev`
+through a NONLIN alias faulted with `mcause` 26). Image `c01e454f8652493c`.
+
+| | instruction | cause |
+|---|---|---|
+| emulator | offset **0x42b4** | **24** (`UNEXP_OP_TYPE`, *"`x[rs1]` is not a capability"*) |
+| board | `mepc` 0x81a042b4 − `DBAS` 0x81A00000 = offset **0x42b4** | `sw=255` 0x98 → seen=1, **24** |
+
+**Same instruction, same cause. The flashed image carries `c77c65324`.**
+
+**A first attempt was discarded before it cost a boot**, and is recorded so nobody repeats it: an
+out-of-bounds store, which the emulator answers with cause **7** (`STORE_AMO_ACCESS_FAULT`) because
+capstone-qemu maps memory-path bounds violations onto the standard code deliberately
+(`op_helper.c:1539`). A standard code carries no capability enum and discriminates nothing.
+
+**So hypothesis (a) below is dead and (b) stands: the untagged-base check does not fire on the LSU
+path, while the execute path checks correctly on the same silicon, in the same boot, in the same
+image.** That is the defect this folder reports.
+
+## The two hypotheses as they stood before 2026-09-20 — (a) is now excluded
 
 Both R-34's and R-24's fixes are ancestors of `054cea69b`. Therefore either:
 
@@ -70,9 +100,9 @@ back as the explanation and nothing here is new.
 load/store unit, and whether that path checks the tag at all is a separate question from the two fixed
 issues. If so this is a new, and severe, gap: revocation does not deny access.
 
-**The discriminating question is for the board/RTL lane, and this folder cannot answer it:
-was the currently flashed `caplifive_m1_054cea69b.bit` built from `054cea69b`, i.e. with `c77c65324`
-in?** A yes makes (b) the answer and this a new defect. A no makes it an old one.
+**That question — was the flashed `caplifive_m1_054cea69b.bit` built from `054cea69b`, i.e. with
+`c77c65324` in? — is answered YES by the probe above.** An independent answer from the build record
+would be a useful cross-check on the provenance trail, but it is no longer what this folder waits on.
 
 ## Reproduce
 

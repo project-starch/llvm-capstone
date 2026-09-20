@@ -575,6 +575,54 @@ static void run_linear(unsigned reps) {
 #ifndef M1_STALE_WRITE
 #define M1_STALE_WRITE 0
 #endif
+/* M1_OOB_STORE raises a DELIBERATE, KNOWN capability fault so the board's mcause can be compared
+ * against the emulator's for the SAME image. It exists to settle one question and nothing else: does
+ * the flashed bitstream contain c77c65324, the R-34/R-24 exception-delivery fix?
+ *
+ * WHY A COMPARISON AND NOT AN INFERENCE. R-24 records that the data path computed causes on base 24
+ * while the spec base is 23, so EVERY observed value aliases: an observed 26 is post-fix
+ * UNEXPECTED_CAP_TYPE (3+23) or pre-fix INVALID_CAPABILITY (2+24), and an observed 28 is post-fix
+ * OUT_OF_BOUNDS (5+23) or pre-fix INSUFFICIENT_PERMISSION (4+24). No single number already on file can
+ * decide it, and arguing from which enum is more plausible is how two claims got retracted on
+ * 2026-09-19. Running the same program on both sides removes the need to know the enum at all:
+ *
+ *     board mcause == emulator cause      -> post-fix -> R-35 is a NEW defect
+ *     board mcause == emulator cause + 1  -> pre-fix  -> R-35 collapses into R-24/R-34
+ *
+ * THE FAULT. Each leaf is M1_LEAF bytes, carved by sublet_carve in the fixture, so byte [M1_LEAF] of
+ * alias[0] is the first byte outside leaf[0]. That is an LSU/DYN bounds check (core/cva6.sv:1523, the
+ * path that carries the wrong base pre-fix) and NOT the commit_stage.sv PC-capability path, which used
+ * base 23 all along and would not discriminate.
+ *
+ * A THIRD OUTCOME, named in advance so it is not read as a failed probe: if this store does NOT fault
+ * on the board either, the enforcement gap is wider than R-35 claims -- bounds as well as tags -- and
+ * that is a bigger finding than the one being checked. */
+/* M1_CAUSE_PROBE raises a capability fault on the FLU path so the board's mcause can be compared with
+ * the emulator's for the SAME image, which is what settles whether the flashed bitstream carries
+ * c77c65324 (the R-34/R-24 exception-delivery fix). See M1_OOB_STORE below for why a COMPARISON is
+ * needed rather than an inference -- every observed value aliases between the two cause bases.
+ *
+ * WHY CINCOFFSET AND NOT A BOUNDS VIOLATION. The first attempt used an out-of-bounds store, and the
+ * emulator answered cause 7 (STORE_AMO_ACCESS_FAULT), not a capability cause at all: capstone-qemu maps
+ * a memory-path bounds violation onto the standard access fault deliberately (op_helper.c:1539). A
+ * standard cause carries no capability enum, so it cannot discriminate base 23 from base 24. The FLU
+ * path does: helper_cscincoffset raises UNEXP_OP_TYPE for a non-capability operand (op_helper.c:747).
+ *
+ * WHY IT WILL FIRE ON SILICON even though the LSU path does not. R-35 is an LSU-path gap; the FLU path
+ * demonstrably still checks on this bitstream, because mrev on a NONLIN alias faulted there with
+ * mcause 26 on 2026-09-19. So a cincoffset on a scalar is expected to fault on both sides.
+ *
+ *     emulator raises UNEXP_OP_TYPE = 24 (enum 1, spec base 23)
+ *     board 24 -> post-fix -> R-35 is a NEW defect, an LSU-path enforcement gap
+ *     board 25 -> pre-fix  -> R-35 collapses into R-24/R-34 and the RTL is fine
+ *
+ * The comparison needs no knowledge of which enum fired, so the aliasing cannot touch it. */
+#ifndef M1_CAUSE_PROBE
+#define M1_CAUSE_PROBE 0
+#endif
+#ifndef M1_OOB_STORE
+#define M1_OOB_STORE 0
+#endif
 #ifndef M1_STALE_MINT
 #define M1_STALE_MINT 1
 #endif
@@ -725,6 +773,22 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
       out("R1 m1 stale-write ok\n");
       out("R1 m1 stale-write readback"); kv("via_live_alias", (ulong)(unsigned char)*(volatile char *)alias[0]);
       kv("wrote", 0xA5u); out("\n"); }
+#endif
+#if M1_CAUSE_PROBE
+    /* cincoffset with a SCALAR rs1: opcode 0x5b, funct3 1, funct7 0x0c, decoded from the image's own
+     * `cincoffset a0, a1, a0`. Expected to fault on both sides; the domain wedges and the monitor
+     * latches the cause. */
+    { ulong scalar = 0x1234UL, res = 0;
+      out("R1 m1 cause-probe go -- cincoffset on a scalar, expect a capability fault\n");
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x0c, %0, %1, x0\n" : "=r"(res) : "r"(scalar) :);
+      out("R1 m1 cause-probe RETURNED -- the FLU check did NOT fire"); kv("res", res); out("\n"); }
+#endif
+#if M1_OOB_STORE
+    /* LAST of the probes, because it is expected to fault and a fault destroys the whole transcript. */
+    { volatile char *q = (volatile char *)alias[0];
+      out("R1 m1 oob-store go"); kv("leaf", M1_LEAF); kv("offset", M1_LEAF); out("\n");
+      q[M1_LEAF] = (char)0x5A;
+      out("R1 m1 oob-store RETURNED -- the bounds check did NOT fire"); kv("readback", (ulong)(unsigned char)q[M1_LEAF]); out("\n"); }
 #endif
 #if M1_STALE_MINT
     sublet_store(&m1_tmp, oldest);
