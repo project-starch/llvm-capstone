@@ -18,7 +18,8 @@
     },
     "spatial": {
       "probe_case": 37,
-      "oracle": "the sequence completes"
+      "oracle": "the sequence completes",
+      "role": "control for sublet: same binary and guest, one difference"
     },
     "sublet": {
       "probe_case": 37,
@@ -35,7 +36,8 @@
     "poisoncap-spatial": {
       "mode": 0,
       "case": "pool-0-37",
-      "oracle": "the sequence completes, exit 0"
+      "oracle": "the sequence completes, exit 0",
+      "role": "control for poisoncap-protected: same binary and guest, one difference"
     },
     "poisoncap-protected": {
       "mode": 2,
@@ -50,7 +52,19 @@
     "native-detect": {
       "status": "not written",
       "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg"
+    },
+    "backing": {
+      "mode": 1,
+      "case": "probe case 37, mode 1",
+      "oracle": "the sequence completes",
+      "role": "the informative negative: revocation exists here, at the backing allocation, and the pool never frees its backing but recycles out of it. This separates 'no mechanism' from 'a mechanism at the wrong point'"
     }
   },
-  "status": "native pair, both domain arms, both PoisonCap arms and the stock-CheriBSD arm run 2026-09-20; all passed. The PoisonCap run carried its five platform controls; the CheriBSD run carried the revocation control that proves the revoker was enabled while the case completed"
+  "status": "native pair and every arm above run 2026-09-20; all passed. Four systems compared, two matched controls and one intermediate beside them",
+  "comparison": [
+    "Capstone (spatial)",
+    "Sublet",
+    "CHERI default (stock CheriBSD, revoker on)",
+    "PoisonCap (mode 2)"
+  ]
 }

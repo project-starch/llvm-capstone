@@ -69,48 +69,61 @@ evidence that poisoning was active; with them the platform is demonstrated
 independently of these cases. `selection.json` records `complete_suite: false`
 for any subset, so a partial run cannot later read as a full one.
 
-## Four systems side by side
+## Four systems
 
-| case | Capstone spatial | Capstone Sublet | stock CheriBSD, revoker **on** | PoisonCap mode 2 |
-|---|---|---|---|---|
-| `af_join` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
-| `h264_refs` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
-| `vidstab` | completes | faults, cause 24 | **completes** | SIGPROT, exit 162 |
+| system | what it acts on | af_join | h264_refs | vidstab |
+|---|---|:--:|:--:|:--:|
+| **Capstone** | bounds and tags; no lifetime event | — | — | — |
+| **Sublet** | the last return to the pool | **fault**, cause 24 | **fault**, cause 24 | **fault**, cause 24 |
+| **CHERI default** | `free()` → quarantine → sweep | — | — | — |
+| **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
 
-The stock-CheriBSD column is the one worth reading twice, and it is measured
-rather than derived. `libc`'s revoker sweeps allocations that `free()` put in
-its quarantine; a buffer returned to an `AVBufferPool` never reaches `malloc`,
-so it never enters that quarantine and the sweep has nothing to find. **The
-argument was always available; what was missing was the run.**
+It catches whoever listens for the moment the inner allocator takes the storage
+back. The other two listen for an event that never happens here: Capstone
+spatial has none at all, and CHERI's deployed revoker sweeps what `free()` put
+in its quarantine — a buffer returned to an `AVBufferPool` never reaches
+`malloc`, so it never enters that quarantine and the sweep has nothing to find.
 
-That column carries its own control, in the same guest and immediately before
-the cases: the `cheribsd-abi` probe calls CheriBSD's `malloc_revoke_enabled()`
-and the runner requires it to report `runtime_revocation=1`. Its summary records
-`guest_default_revocation: preserved` — unlike the PoisonCap runs, this one does
-not disable the kernel default. So the revoker demonstrably was on while the
-sequence completed.
+The CHERI-default row is measured, not derived, and carries its own control in
+the same guest immediately before the cases: the `cheribsd-abi` probe calls
+CheriBSD's `malloc_revoke_enabled()` and the runner requires
+`runtime_revocation=1`. Its summary records `guest_default_revocation:
+preserved`. **The argument was always available; what was missing was the run.**
 
-PoisonCap is not blind here, and the table says so plainly. Poisoning acts at
-the lease return, which is exactly where these three defects are, so it catches
-all three. What separates these systems on this corpus is therefore not
-detection but cost and what each one needs to be told — and the counters for
-that exist on both sides (`sweeps`, `poison_bytes`, `clear_bytes`,
-`copied_bytes`, `snapshot_bytes` against `split`, `mrev`, `delin`, `revoke`,
-`init`). No timing comparison is made or implied: the arms run on different
+PoisonCap is not blind here, and that is the expected result rather than a
+setback: [the taxonomy](../../../docs/design/sharing-bug-taxonomy-and-novelty.md)
+files free-ended UAF as **1-timing** and puts it in the *Performance* column,
+noting that CHERI can match it with `eager` and that the claim is what that
+costs. These three cases are that class. Two systems catching them is the
+model and the measurement agreeing.
+
+### The controls, and one intermediate
+
+Three further arms ran and are not systems in the table above:
+
+| arm | role |
+|---|---|
+| Capstone mode 0 | the matched control for Sublet: same binary, same guest, one difference |
+| PoisonCap mode 0 | the matched control for PoisonCap: same binary, same guest, one difference |
+| Capstone mode 1, backing lifetime | an intermediate, and the informative negative |
+
+The two mode-0 arms are controls and not comparisons. They isolate one variable
+each; the CHERI-default row cannot do that job for PoisonCap, because it differs
+from it in kernel, emulator, libc, build and revocation setting at once.
+
+Mode 1 is the one negative that says something on its own. It **has** revocation,
+at the backing allocation — and the pool never frees its backing, it recycles
+out of it. In the port's twelve-case suite that arm catches exactly one defect,
+`buffer-read-after-backing-free`, and none of these three. That separates "no
+mechanism" from "a mechanism at the wrong point", which is the distinction the
+whole argument turns on.
+
+The protected oracles are not interchangeable. A domain halts and publishes a
+fault PC, which the runner compares against the address that boot printed for
+its probe. A CheriBSD process reports only a status, so there the setup marker
+carries the weight: it is printed only once reuse at the same address has been
+checked. No timing comparison is made or implied — the arms run on different
 emulators.
-
-The protected oracles are not interchangeable either. A domain halts and
-publishes a fault PC, which the runner compares against the address that boot
-printed for its probe. A CheriBSD process reports only a status, so there the
-setup marker carries the weight — it is printed only once reuse at the same
-address has been checked.
-
-## Scope
-
-Real: `libavutil/buffer.c`, compiled unmodified through the port. Reduced: the
-consumer, to the allocator call sequence it makes, and the part of `AVFrame`
-that sequence touches — the port extracts the allocator, not `frame.c`. Each
-case's `PROVENANCE.md` states that split for itself.
 
 ## Where this corpus deviates from the contract, and why
 
