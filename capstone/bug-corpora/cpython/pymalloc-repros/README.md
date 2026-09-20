@@ -101,20 +101,22 @@ That is the corpus's thesis in the project's own build documentation.
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
     shared/defects.c     the program, one case per run; builds for both targets
-    shared/run-defects.py  the Capstone domain runner and its oracles
-    cheribsd/README.md     how to run the corpus on CheriBSD
-    cheribsd/run-poisoncap.py  the PoisonCap/CheriBSD runner
-    tests/check-corpus.py  enforces SCHEMA.md; exits non-zero on drift
-    tests/cheribsd/test_run_poisoncap.py  the CheriBSD oracles' negative controls
+    capstone-domain/     the Capstone domain target
+        README.md            how to run the corpus there
+        run-defects.py       the runner and its oracles
+    cheribsd/            the CheriBSD purecap target
+        README.md            how to run the corpus there
+        run-poisoncap.py     the runner and its oracles
+    tests/               everything that can say FAIL
+        check-corpus.py      enforces SCHEMA.md; exits non-zero on drift
+        cheribsd/            the CheriBSD oracles' own negative controls
     tools/               the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
-`shared/` is what the two targets share. `run-defects.py` sits there for a
-historical reason rather than a structural one: it is the Capstone runner, and
-three committed result records cite that exact path and command line, including
-the PostgreSQL corpus's. Those are dated evidence and are not retro-edited, so
-the file keeps its place. A corpus starting fresh should put each runner beside
-its own target, as `cheribsd/` does.
+One rule decides where a file goes. A case directory holds **claims** and their
+**provenance**, never anything executable. `shared/` is what both targets
+compile. Each target owns a directory with its runner and its manual. `tests/`
+is what can say FAIL; `tools/` is what produces the inventory's numbers.
 
 `SCHEMA.md` states what a case is and what every field means, and
 `tests/check-corpus.py` enforces it -- required fields, dense case numbers, a
@@ -128,31 +130,30 @@ touching anything here:
 
 ## Running it
 
-    cmake -S <port> -B <build> ... -DPY_CORPUS_SRC=<abs path>/shared/defects.c
-    cmake --build <build> --target defects
-    python3 shared/run-defects.py <out> --domain-build <build> --linux-build <guest>
+One source, one set of twenty cases, two targets. Each target's build and run
+commands, its oracle and its negative control are in its own manual:
 
-and the control that makes the result mean something:
+| target | arms | manual |
+|---|---|---|
+| Capstone domain | `spatial` / `sublet` | [`capstone-domain/README.md`](capstone-domain/README.md) |
+| CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`cheribsd/README.md`](cheribsd/README.md) |
 
-    python3 shared/run-defects.py <out> --cases 0 --negative-control
+Both drive the same `shared/defects.c`; a case behaves identically on both.
+After touching anything here, run the checks:
+
+    python3 tests/check-corpus.py
+    python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## The same twenty on PoisonCap/CheriBSD
 
 The same `shared/defects.c`, and the same pinned `Objects/obmalloc.c`, also
 build as an ordinary CheriBSD purecap program against the port's
-[PoisonCap adapter](../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md),
-keeping the paired shape. No case changes: the allocation sequences, the sizes
-and every `CHECK` are shared between the two targets, and only the probe
-instructions, the markers and the fault reporting are
-`#ifdef PYMALLOC_POISONCAP`-selected.
-
-| target | arms | a protected arm passes on |
-|---|---|---|
-| Capstone domain | `spatial` / `sublet` | a fault at the labelled probe, with its cause |
-| CheriBSD purecap | mode `0` / mode `1` | `SIGPROT`, `si_code` 2, at the labelled probe |
-
-Build and run commands, the strict fault oracle, the negative control and the
-revocation configuration: **[`cheribsd/README.md`](cheribsd/README.md)**.
+[PoisonCap adapter](../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+No case changes: the allocation sequences, the sizes and every `CHECK` are
+shared between the two targets, and only the probe instructions, the markers
+and the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected. A protected
+arm passes there on `SIGPROT` with `si_code` 2 at the labelled probe, where the
+Capstone `sublet` arm passes on a fault with its cause.
 
 ## What is NOT here
 
