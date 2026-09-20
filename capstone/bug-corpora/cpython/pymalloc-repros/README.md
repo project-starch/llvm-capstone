@@ -97,7 +97,7 @@ That is the corpus's thesis in the project's own build documentation.
 ## Layout
 
     SCHEMA.md            the corpus contract, field by field
-    <gh-NNNNN>_<slug>/
+    NN_<gh-NNNNN>_<slug>/   NN is the case number a run selects
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
     shared/defects.c     the program, one case per run; builds for both targets

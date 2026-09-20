@@ -100,9 +100,51 @@ def check_shape_table(count, problems):
             )
 
 
+def check_case_index(files, problems):
+    """shared/defects.c carries an index; it must match the case.json files.
+
+    The index is how a reader gets from a `which == N` branch back to the
+    directory that holds the claim. An index nobody checks drifts, which is how
+    the shape count came to say nine over a ten-row table.
+    """
+    source = (CORPUS / "shared/defects.c").read_text()
+    block = re.search(r"CASE INDEX\..*?\n \*\n(.*?)\n \*\n", source, re.S)
+    if not block:
+        problems.append("shared/defects.c: no CASE INDEX block")
+        return
+    listed = {}
+    for line in block.group(1).splitlines():
+        row = re.match(r"\s*\*\s+(\d+)\s+(\S+)\s\s+(.*\S)", line)
+        if not row:
+            problems.append(f"shared/defects.c: unreadable index row {line.strip()!r}")
+            continue
+        listed[int(row.group(1))] = (row.group(2), row.group(3))
+    for path in files:
+        case = json.loads(path.read_text())
+        number = case.get("case")
+        if number not in listed:
+            problems.append(f"shared/defects.c: case {number} missing from the index")
+            continue
+        directory, shape = listed.pop(number)
+        if directory != path.parent.name:
+            problems.append(
+                f"shared/defects.c: index row {number} says {directory!r}, "
+                f"the directory is {path.parent.name!r}"
+            )
+        if shape != case.get("shape"):
+            problems.append(
+                f"shared/defects.c: index row {number} shape disagrees with "
+                f"its case.json"
+            )
+    for number in sorted(listed):
+        problems.append(
+            f"shared/defects.c: index lists case {number}, which has no directory"
+        )
+
+
 def main():
     problems = []
-    files = sorted(CORPUS.glob("gh-*/case.json"))
+    files = sorted(CORPUS.glob("[0-9][0-9]_*/case.json"))
     if not files:
         print("ERROR: no case.json found under", CORPUS, file=sys.stderr)
         return 2
@@ -127,11 +169,14 @@ def main():
                     f"SCHEMA.md and to this checker, or drop it"
                 )
 
-        fix = case.get("upstream_fix")
-        if fix and not where.startswith(fix + "_"):
-            problems.append(
-                f"{where}: directory does not start with " f"upstream_fix {fix!r}"
-            )
+        # The directory name is metadata and is checked as such: NN_<fix>_<slug>,
+        # where NN is the case number a run selects. Sorting the tree then puts
+        # the corpus in run order, and --cases N is findable by eye.
+        fix, number = case.get("upstream_fix"), case.get("case")
+        if isinstance(number, int) and fix:
+            prefix = f"{number:02d}_{fix}_"
+            if not where.startswith(prefix):
+                problems.append(f"{where}: directory should start with {prefix!r}")
 
         if case.get("live_in_pin") and not str(case.get("live_proof", "")).strip():
             problems.append(f"{where}: live_in_pin is set with no live_proof")
@@ -172,6 +217,8 @@ def main():
         )
     if extra:
         problems.append(f"case numbers outside 0..{len(files) - 1}: {sorted(extra)}")
+
+    check_case_index(files, problems)
 
     # A case directory without a PROVENANCE.md is a claim without its source.
     for path in files:

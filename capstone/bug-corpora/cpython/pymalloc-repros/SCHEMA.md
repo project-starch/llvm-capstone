@@ -6,13 +6,18 @@ the two ever disagree, the checker is the authority and this file is stale.
 
 ## One directory per case
 
-    <upstream-fix-id>_<slug>/
+    NN_<upstream-fix-id>_<slug>/
         case.json        machine-readable claims
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
 
-The directory name begins with the same id as `upstream_fix`. Case numbers are
-dense: N cases are numbered 0..N-1, with no gaps and no duplicates, because the
-number is what a run selects.
+**The directory name is metadata.** `NN` is the case number a run selects, so
+sorting the tree puts the corpus in run order and `--cases 5` is findable by
+eye; the rest names the upstream fix and the case. Case numbers are dense: N
+cases are numbered 0..N-1, with no gaps and no duplicates. `shared/defects.c`
+carries a CASE INDEX mapping each number to its directory and shape, and the
+checker keeps the two in step. Run artifacts are named the same way, so an
+archived result tree stays readable away from the corpus:
+`05-odict-copy-stale-link-mode1`, not `defect-5-mode1`.
 
 **There is no `run.sh` per case here**, and that is deliberate. A capability
 fault ends the domain, so a case that provokes one cannot also report results
