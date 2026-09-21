@@ -12,7 +12,14 @@
 #ifndef PG_SUBPOOL_H
 #define PG_SUBPOOL_H
 
+#ifdef PG_POISONCAP
+/* The hosted backend shares the manager hook ABI, not Sublet primitives. */
+typedef void *pg_lifetime_slot;
+struct sublet_stats;
+#else
 #include <sublet/sublet.h>
+typedef capstone_cap_slot pg_lifetime_slot;
+#endif
 
 /* A block, as the manager sees it, plus what the discipline needs.
  *
@@ -26,7 +33,7 @@
  * integers makes it impossible to dereference one by accident.
  */
 typedef struct pg_block {
-  capstone_cap_slot region; /* the uncarved tail of the block */
+  pg_lifetime_slot region; /* the uncarved tail of the block */
   /* These two carry the names aset.c gives them, so the manager's own
    * arithmetic over them needs no patch: it adds, subtracts and compares
    * them and never dereferences one. They are integers and not pointers
@@ -53,7 +60,7 @@ typedef struct pg_block {
   struct pg_block *pool_prev, *pool_next;
   /* Optional block-level authority and sidecar for Generation/Slab/Bump.
    * Their intrusive lists live here, not inside revocable allocation bytes. */
-  capstone_cap_slot handle;
+  pg_lifetime_slot handle;
   unsigned char manager[128] __attribute__((aligned(16)));
 } pg_block;
 
@@ -64,7 +71,7 @@ typedef struct pg_block {
  * reset that reclaims its block and a free does not release it.
  */
 typedef struct pg_chunk {
-  capstone_cap_slot slot;
+  pg_lifetime_slot slot;
   unsigned int next_free; /* the manager's size-class list, by index */
   /* Its block's chain while it belongs to one, the spare list while it does
    * not. The two never overlap, so one field does both and a block's entries

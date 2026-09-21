@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef PG_POISONCAP
+#include "poisoncap.h"
+#endif
 
 _Noreturn void replay_die(const char *what) {
   fprintf(stderr, "PG_REPLAY failed: %s\n", what);
@@ -16,8 +19,20 @@ _Noreturn void replay_die_at(unsigned long i, const char *what, unsigned long id
 }
 void *replay_alloc(size_t n) { return calloc(1, n); }
 int main(int argc, char **argv) {
-  if (argc != 2)
+  if (argc != 2
+#ifdef PG_POISONCAP
+      && argc != 3
+#endif
+  )
     return 2;
+#ifdef PG_POISONCAP
+  unsigned mode = 1;
+  if (argc == 3) {
+    if (strcmp(argv[2], "0") && strcmp(argv[2], "1")) return 2;
+    mode = argv[2][0] - '0';
+  }
+  pg_poisoncap_init(mode);
+#endif
   FILE *file = fopen(argv[1], "rb");
   if (!file || fseek(file, 0, SEEK_END))
     return 2;
@@ -42,5 +57,8 @@ int main(int argc, char **argv) {
          counts.create, counts.alloc, counts.free, counts.realloc,
          counts.reset, counts.delete, counts.checked, sizeof(void *));
   free(bytes);
+#ifdef PG_POISONCAP
+  pg_poisoncap_report();
+#endif
   return 0;
 }

@@ -46,7 +46,9 @@
 #include <unistd.h>
 
 /* The labelled access every case's protected arm must fault at. */
+#ifndef PROBE_SYMBOL
 #define PROBE_SYMBOL "pyc_defect_read"
+#endif
 
 #ifdef __CHERI_PURE_CAPABILITY__
 #include <cheri/cheric.h>
