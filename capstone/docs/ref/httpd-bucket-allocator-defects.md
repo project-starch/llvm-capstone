@@ -91,13 +91,49 @@ symbol it calls — five `apr_allocator_*` and four `apr_pool_*` — is defined 
 [`apr_shim.h`](../../ports/apr/adapted/apr_shim.h). So the two levels port
 together or not at all, and that is the point rather than an obstacle.
 
-**The one real obstacle is the node geometry.** `SMALL_NODE_SIZE` is
-`APR_BUCKET_ALLOC_SIZE` plus the node header, and `APR_BUCKET_ALLOC_SIZE` is
-`2*sizeof(union apr_bucket_structs)` — a union over the bucket *type* zoo, not
-over anything in this file. A shim that guesses that size silently changes the
-allocator it is meant to port. Carrying the union verbatim, or deriving the size
-and recording the derivation, is the decision that has to be made before a line
-is written.
+**The one real obstacle was the node geometry, and it is resolved.**
+`SMALL_NODE_SIZE` is `APR_BUCKET_ALLOC_SIZE` plus the node header, and
+`APR_BUCKET_ALLOC_SIZE` is `2*sizeof(union apr_bucket_structs)` — a union over
+the bucket *type* zoo, which lives in `apr_buckets.h` and not in the file being
+ported. A shim that invented that size would silently change the allocator's
+block layout, its small/large split, and therefore which frees reach the
+freelist at all.
+
+So [`adapted/apr_bucket_shim.h`](../../ports/apr/adapted/apr_bucket_shim.h)
+**transcribes the five structs and the union verbatim**, and
+[`build-buckets-census.sh`](../../ports/apr/build-buckets-census.sh) checks that
+transcription field by field against upstream's header on every run rather than
+trusting it. It also answers the two questions that decide whether the port is
+sound:
+
+    1. is the transcribed geometry faithful to upstream?
+       apr_bucket             identical, 7 fields
+       apr_bucket_refcount    identical, 1 fields
+       apr_bucket_heap        identical, 4 fields
+       apr_bucket_pool        identical, 4 fields
+       apr_bucket_mmap        identical, 2 fields
+       apr_bucket_file        identical, 7 fields
+       apr_bucket_structs     identical, 7 fields
+    2. does APR_HAS_MMAP move the allocation size?
+       sizeof(union) 64, APR_BUCKET_ALLOC_SIZE 128   (APR_HAS_MMAP=1)
+       sizeof(union) 64, APR_BUCKET_ALLOC_SIZE 128   (APR_HAS_MMAP=0)
+    3. do both levels recycle, and does anything reach malloc?
+       level1_freelist_same_address=1  stale_before=0xA1 stale_after=0xB2
+       level2_allocator_same_address=1
+       freed_to_malloc=0
+       freed_to_malloc_including_teardown=5
+
+`APR_HAS_MMAP` does not move the size because `apr_bucket` is the union's
+largest member either way — asserted by the shim's comment and **checked** by
+step 2, rather than left as reasoning.
+
+Step 3 is the structural claim, measured rather than quoted: the probe
+**interposes `free()`** and counts it. Nothing reaches `malloc` while storage is
+recycled, at either level, and both levels hand back the same address — the
+stale read returns `0xB2`, the next owner's byte, where it wrote `0xA1`. The
+last line is the honest companion: the *teardown* does free, five times.
+Destroying an allocator returns memory for real. It is the **recycling** that is
+invisible, and that is the distinction the corpus rests on.
 
 ## Limits
 
