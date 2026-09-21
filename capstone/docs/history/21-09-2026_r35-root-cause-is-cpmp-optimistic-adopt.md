@@ -72,8 +72,17 @@ live — which is what cause 28 independently shows. That note's derivation rest
 `mret`s, which are labelled `call_into_smode` / `resume_smode`: the **S-mode host**, not a domain. A
 domain is entered by `__domcallsaves` from monitor code.
 
-**This is owed to the RTL lane**, since it changes that note's conclusion and the note is committed.
-I have not edited their note; this is the correction, and it needs their sign-off.
+**This is owed to whoever owns that note, and that is the PROJECT LEAD, not a lane.** Its only two
+commits — `6aabb7a6781c` (original) and `70463e759cd3` (the "raised and dropped" correction) — are both
+under the lead's own identity. I first recorded this as owed to the RTL lane, which was wrong: I
+inferred ownership from the note's RTL content, i.e. from adjacency rather than from an assignment.
+
+That inference is unsafe here in both directions. `Capstone Lane` is a **shared** git identity on this
+host — `git log --author="Capstone Lane"` returns commits from more than one session — so a commit
+header establishes neither authorship nor ownership. **Ownership comes from an assignment, never from
+adjacency or from a commit header.**
+
+I have not edited the note. The correction is above and the amendment is the lead's to make.
 
 **Still unresolved, flagged rather than assumed:** whether *every* domain access is at M, or only the
 class measured. It is established for the accesses that produced cause 28 — same instruction class,
@@ -98,8 +107,16 @@ answers `ep.query_res(node_in.valid)`, but the LSU has no port to it and adding 
 access path in the common case — or a wider tracker with a miss path.
 
 **CLAUDE.md's rule about adding a signal into a cone that already carries a combinational loop applies
-directly, and only synthesis proves synthesizability.** No RTL is changed by this note; the fix and any
-respin are the RTL lane's and the lead's calls.
+directly, and only synthesis proves synthesizability.** No RTL is changed by this note.
+
+**Ownership of the fix, stated because it is currently held by nobody.** `load_store_unit.sv` is the
+same file and the same block as R-34/R-24, so the fix belongs to **whichever lane holds R-34/R-24** —
+two lanes editing that file is the thing the split exists to prevent. It is **not** held by the lane
+that verified this root cause; verifying a claim is not claiming the work, and the incentive there runs
+backwards, since the lane that checks your `file:line` numbers is the one that looks like it owns your
+file. A simulation lane has separately **offered** to validate a fix once it exists — two-sided, cause
+25 firing on repaired RTL and not on `054cea69b`, no board and no bitstream — and that offer is not an
+assignment either. **Assigning the fix, and accepting that offer, are the lead's calls.**
 
 `commit_stage.sv:239` carries the same optimistic-adopt shape for the PC capability and should be
 fixed with it. `pmp_data_if.sv:82-102` carries it too and is a genuine latent defect — it is simply not
