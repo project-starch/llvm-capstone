@@ -76,6 +76,10 @@ Existing binary formats and allocator-specific replay operations remain intact.
 For a new allocator, add a format adapter and its corruption controls rather
 than copying a reader or flattening its lifetime semantics.
 
+Which components replay a trace, which only carry the trace-shaped protocol, and
+where the "common interface" is a shared implementation versus a copied convention:
+[cross-port audit](../docs/ref/port-trace-replay-interface.md).
+
 ## Build and evidence
 
 Source `capstone/tests/capstone-test-env.sh` from the repository root before
