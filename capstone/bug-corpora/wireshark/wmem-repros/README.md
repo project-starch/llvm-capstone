@@ -128,12 +128,14 @@ is the block's, so the free ends nothing and the read completes. PoisonCap
 acts on the chunk: the port's hook poisons its granules at the free, one
 sweep later the registry's stale name is dead, and the read faults —
 `epochs=0 released_chunks=1` in that arm's counters, where the other twelve
-read `epochs=1 released_chunks=0`. The reason Sublet cannot be made
-to do the same on this allocator is not the bug but the allocator: `block`
-coalesces neighbouring free chunks, and Capstone has `SPLIT` but no merge, so
-per-chunk authority cannot be faithfully re-joined.
-`docs/design/capability-merge-primitive-proposal.md` states the missing
-primitive and what a non-coalescing variant would give up.
+read `epochs=1 released_chunks=0`. Sublet could revoke the chunk at that
+free, as the PostgreSQL port does at every `pfree` — but only as a linear
+piece, because `mrev` takes a linear source, and `block` coalesces
+neighbouring free chunks, which linear pieces cannot re-form without a merge
+Capstone lacks. The shipped port keeps region granularity for that reason:
+the allocator's policy stays byte-identical to upstream, and this one case
+is the price. `docs/design/capability-merge-primitive-proposal.md` states the
+trade, the missing primitive, and what a per-chunk port would cost.
 
 ## Building and running
 
