@@ -1,0 +1,36 @@
+{
+  "case": 4,
+  "upstream_fix": "727bc6ac33f6",
+  "title": "a child SpecialJoinInfo frees relid sets the parent still owns",
+  "consumer": "src/backend/optimizer/path/joinrels.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin: build_child_join_sjinfo (src/backend/optimizer/path/joinrels.c:1693) shallow-copies the parent at :1710, so every Relids pointer is shared, and adjust_child_relids (src/backend/optimizer/util/appendinfo.c:554) copies ONLY when a member changes -- :566-568 -- and otherwise returns the parent's set unchanged at :580. free_child_join_sjinfo:1755-1758 then bms_free's those four fields unconditionally. The pre-fix shape is present.",
+  "object": "a relids Bitmapset shared between parent and child",
+  "lifetime_ender": "free_child_join_sjinfo frees it unconditionally, once per partition pair",
+  "shape": "alias freed through a sibling",
+  "sibling_issue": "03_ed394c4bdf_live_parts_stale_alias",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}
