@@ -6,8 +6,10 @@ This is an allocator component port for the
 [httpd/APR bug corpus](../../../bug-corpora/httpd/apr-pool-repros/README.md).
 It does not execute httpd, APR's other subsystems, or any threaded use of a
 pool: `APR_HAS_THREADS` and `APR_ALLOCATOR_USES_MMAP` are zero, as in the
-census, and the `APR_POOL_DEBUG` implementation is not built. There is no
-CheriBSD or PoisonCap build of APR.
+census, and the `APR_POOL_DEBUG` implementation is not built. A
+[stock CheriBSD build](host/cheribsd/README.md) exists -- the platform's own
+`malloc` under every node, no adapter authority -- and there is no PoisonCap
+build of APR.
 
 ## Layout and source boundary
 
@@ -68,6 +70,32 @@ The fixed regions are 64 MiB payload, 16 MiB metadata, 8 MiB trace and 4 KiB
 report; at most 8,192 nodes. `metadata` in the report is heap high-water usage.
 No timing or memory-overhead claim is made.
 
+## CheriBSD
+
+The `cheribsd` preset builds the same allocator for CheriBSD purecap with
+`src/cheribsd/node-malloc.c`: every node comes from the platform's `malloc` and
+goes back through its `free`, exactly as upstream APR does. There is no payload
+region and no protected mode; mode 1 is refused. This is the build that asks
+the platform's own libc revocation the question at the level where it lives,
+and the answer is in the corpus's
+[CheriBSD results](../../../bug-corpora/httpd/apr-pool-repros/results/20260921-cheribsd/README.md):
+APR never calls `free()` on the path where a destroyed pool's node is reused,
+so revocation is never asked.
+
+`bin/revocation-control` is the positive control that makes a completing stock
+arm mean something. It frees a block, forces the quarantine sweep
+(`malloc_revoke_quarantine_force_flush()`, the name `<stdlib.h>` deprecates
+`malloc_revoke()` in favour of), and reads through the old pointer at the
+corpus's own labelled `clbu`, `apr_defect_read`. With revocation on it faults
+there; with it off it completes.
+
+Two things a reader of the preset should know. `CMAKE_EXE_LINKER_FLAGS` is
+`-fuse-ld=lld`, because the SDK ships `ld.lld` and no `ld`, so clang otherwise
+falls back to the host's linker (`unrecognised emulation mode: elf64lriscv`);
+the pymalloc PoisonCap build passes the same flag from its script. And
+`allocator-example` prints `ALLOCATOR_EXAMPLE apr PASS pointer_bytes=16` as its
+last line, which is what the shared runner's component registration expects.
+
 ## Build
 
 From the repository root, source `capstone/tests/capstone-test-env.sh` and set
@@ -79,6 +107,7 @@ cmake --preset native && cmake --build /tmp/capstone/apr-pools/build/native
 ctest --test-dir /tmp/capstone/apr-pools/build/native
 cmake --preset capstone-domain && cmake --build /tmp/capstone/apr-pools/build/capstone-domain
 cmake --preset linux-guest && cmake --build /tmp/capstone/apr-pools/build/linux-guest
+CHERI_SDK=... CHERI_SYSROOT=... cmake --preset cheribsd && cmake --build /tmp/capstone/apr-pools/build/cheribsd
 ```
 
 Presets build under `/tmp/capstone/apr-pools/build/`. A hosted build exposes
@@ -95,8 +124,8 @@ observes the reissue the corpus exists for: a destroyed pool's node comes back
 as the next pool, `node_reuses >= 1`. Without that the example would be
 measuring the wrong allocator.
 
-The domain arms are the corpus's, run and judged by
-[its runner](../../../bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/README.md):
+The domain and CheriBSD arms are the corpus's, run and judged by
+[its runners](../../../bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/README.md):
 `spatial` must complete, `sublet` must fault at the labelled probe, the
 expected address is published by the run, and the negative control must make
 every oracle fail before a pass is believed. Recorded results live with the

@@ -7,6 +7,10 @@ src/shared/metadata.c glue metadata heap for adapter records and the allocator s
 src/shared/services.c glue the nine off-path services apr_pools.c references, each ending the run
 src/allocators/sublet/node-leases.c allocator retained node authority, revoked on release and issue
 src/native/node-pointers.c glue hosted node backing with plain pointers, mode 0 only
+src/cheribsd/node-malloc.c glue stock CheriBSD: nodes from the platform's malloc, mode 0 only
+security-tests/cheribsd/revocation-control.c test libc revocation made to fire at the corpus's labelled load
+host/cheribsd/build.sh test shared CheriBSD build entry
+host/cheribsd/run.sh test shared CheriBSD run entry
 src/native/main.c test hosted entry through the seam
 src/capstone-domain/entry.c test domain entry and shared region setup
 src/linux-guest/domain-loader.c test guest domain loader

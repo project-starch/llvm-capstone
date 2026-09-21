@@ -19,7 +19,19 @@ add_dependencies(apr-pools apr-source)
 # in. Both the Capstone domain build and the hosted build read it.
 set(APRP_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied program that defines aprp_replay")
 if(PORT_HOSTED)
-  target_sources(apr-pools PRIVATE src/native/node-pointers.c)
+  if(PORT_PLATFORM STREQUAL "cheribsd")
+    # Stock CheriBSD: nodes from the platform's own malloc, so its revocation
+    # is asked the question at the level where it lives. No payload region.
+    target_compile_definitions(pools-options INTERFACE APRP_NODES_FROM_MALLOC)
+    target_sources(apr-pools PRIVATE src/cheribsd/node-malloc.c)
+    # The positive control: this guest's libc revocation, made to fire at the
+    # corpus's own labelled load shape. Pure libc, no port library.
+    add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
+    # The probes use GNU inline asm with a "C" operand, as cheric.h does.
+    set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
+  else()
+    target_sources(apr-pools PRIVATE src/native/node-pointers.c)
+  endif()
   add_library(apr-pools-library STATIC $<TARGET_OBJECTS:apr-pools>)
   set_target_properties(apr-pools-library PROPERTIES OUTPUT_NAME apr-pools)
   target_link_libraries(apr-pools-library PUBLIC pools-options)
@@ -34,6 +46,9 @@ if(PORT_HOSTED)
     target_link_libraries(defects PRIVATE apr-pools)
     add_dependencies(defects apr-source)
     target_link_options(defects PRIVATE LINKER:--gc-sections)
+    if(PORT_PLATFORM STREQUAL "cheribsd")
+      set_target_properties(defects PROPERTIES C_EXTENSIONS ON)
+    endif()
   endif()
 else()
   enable_language(ASM)

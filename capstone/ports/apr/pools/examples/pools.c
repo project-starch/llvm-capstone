@@ -12,8 +12,14 @@ _Noreturn void aprp_fail(unsigned code) {
 }
 int main(void) {
   void *metadata = aligned_alloc(4096, APRP_META_BYTES);
+#ifdef APRP_NODES_FROM_MALLOC
+  void *payload = NULL;
+#else
   void *payload = aligned_alloc(4096, APRP_PAYLOAD_BYTES);
-  if (!metadata || !payload)
+  if (!payload)
+    return 1;
+#endif
+  if (!metadata)
     return 1;
   aprp_meta_init(metadata);
   aprp_payload_init(payload);
@@ -44,5 +50,8 @@ int main(void) {
   /* The reissue is the allocator's own behaviour and the reason the corpus
    * exists; an example that did not see it would be measuring the wrong
    * allocator. */
-  return same_node && h.node_reuses >= 1 ? 0 : 1;
+  if (!(same_node && h.node_reuses >= 1))
+    return 1;
+  printf("ALLOCATOR_EXAMPLE apr PASS pointer_bytes=%zu\n", sizeof(void *));
+  return 0;
 }

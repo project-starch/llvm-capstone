@@ -13,13 +13,16 @@
  * calls the upstream defect makes, in the same order; the per-case
  * PROVENANCE.md says what was left out.
  *
- * TWO TARGETS, SAME SEQUENCE. Natively the arms differ by the upstream FIX and
+ * THREE TARGETS, SAME SEQUENCE. Natively the arms differ by the upstream FIX and
  * the driver prints what the case observed. In a Capstone domain the arms
  * differ by PROTECTION -- mode 0 spatial must complete, mode 1 sublet must
  * fault at the labelled probe -- and the program reports nothing about itself:
  * the runner reads the fault off the monitor and the completion off the
- * report. Only the probe and the marker are target-specific, and neither is a
- * case. */
+ * report. On CheriBSD the same hosted program runs in mode 0 against the
+ * platform's own malloc, with libc revocation on or off, and a supervisor
+ * observes it from outside; the probe there is a capability-base load so the
+ * label sits on the instruction the kernel's trap PC can be compared against.
+ * Only the probe and the marker are target-specific, and neither is a case. */
 #ifndef APR_CORPUS_H
 #define APR_CORPUS_H
 #include "port.h"
@@ -49,11 +52,20 @@ static volatile unsigned char *held __attribute__((used));
  * rather than merely somewhere in the program. Natively it is a plain load. */
 __attribute__((noinline, unused)) static unsigned
 read_probe(const volatile unsigned char *p) {
-#ifdef APRP_DOMAIN
+#if defined(APRP_DOMAIN)
   unsigned long value;
   __asm__ volatile(".globl apr_defect_read\napr_defect_read:\nlbu %0, 0(%1)\n"
                    : "=r"(value)
                    : "r"(p)
+                   : "memory");
+  return value;
+#elif defined(__CHERI_PURE_CAPABILITY__)
+  /* Capability-base byte load; a "C" operand keeps the stale capability itself
+   * as the base, so a revoked tag faults HERE and nowhere earlier. */
+  unsigned long value;
+  __asm__ volatile(".globl apr_defect_read\napr_defect_read:\nclbu %0, 0(%1)\n"
+                   : "=r"(value)
+                   : "C"(p)
                    : "memory");
   return value;
 #else
@@ -63,11 +75,17 @@ read_probe(const volatile unsigned char *p) {
 /* No case writes. The label must still exist, because mark() publishes both
  * addresses; `used` keeps --gc-sections from dropping it. */
 __attribute__((used, noinline)) static void write_probe(volatile unsigned char *p) {
-#ifdef APRP_DOMAIN
+#if defined(APRP_DOMAIN)
   unsigned long value = 93;
   __asm__ volatile(
       ".globl apr_defect_write\napr_defect_write:\nsb %0, 0(%1)\n" ::"r"(value),
       "r"(p)
+      : "memory");
+#elif defined(__CHERI_PURE_CAPABILITY__)
+  unsigned long value = 93;
+  __asm__ volatile(
+      ".globl apr_defect_write\napr_defect_write:\ncsb %0, 0(%1)\n" ::"r"(value),
+      "C"(p)
       : "memory");
 #else
   *p = 93;

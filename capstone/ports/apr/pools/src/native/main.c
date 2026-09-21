@@ -32,8 +32,14 @@ int main(int argc, char **argv) {
     out.mode = mode;
   }
   void *metadata = aligned_alloc(4096, APRP_META_BYTES);
+#ifdef APRP_NODES_FROM_MALLOC
+  void *payload = NULL; /* the platform's malloc is the region */
+#else
   void *payload = aligned_alloc(4096, APRP_PAYLOAD_BYTES);
-  if (!metadata || !payload)
+  if (!payload)
+    return 4;
+#endif
+  if (!metadata)
     return 4;
   aprp_meta_init(metadata);
   aprp_payload_init(payload);

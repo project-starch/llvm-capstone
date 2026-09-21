@@ -28,10 +28,14 @@ referenced rather than copied. Where this corpus differs:
 * **`native-detect`** is not merely unwritten: the nodes never reach `malloc`,
   so ASan has no event. Valgrind, against APR's own annotations, is the arm that
   could discriminate.
-* **`poisoncap-*`** are declared and not written: no CheriBSD or PoisonCap
-  build of APR exists.
+* **`cheribsd-revocation`** is an arm the contract does not name: stock
+  CheriBSD with its own libc revocation, nodes from the platform's `malloc`,
+  mode 0 only, with a positive control in the same boot. It is the FFmpeg
+  corpus's arm of that name.
+* **`poisoncap-*`** are declared and not written: no PoisonCap build of APR
+  exists.
 
-## Two targets, one sequence
+## Three targets, one sequence
 
 Real: `apr_pools.c` from the 1.7.4 pin, unmodified but for the two patches the
 port [`ports/apr/pools`](../../../ports/apr/pools/README.md) applies — one
@@ -42,12 +46,15 @@ targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
 
     shared/build-cases.sh native <out>            then runners/run-native.sh
     shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
+    shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
 
 The [domain runner's manual](runners/capstone-domain/README.md) has the
 commands, the two modes and the oracle. In short: `spatial` must complete,
 `sublet` must fault at the labelled probe, the expected address is published by
 the run and never hardcoded, and `--negative-control` must make every oracle
-say FAIL before a PASS is believed.
+say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/README.md)
+runs the same case against the platform's own `malloc` with libc revocation on
+or off, beside a control that shows the revocation can fire at the same shape.
 
 ## Where this corpus deviates from the contract, and why
 
@@ -60,6 +67,7 @@ second contract, and a checker that fails by design is noise.
 | what it reports | why |
 |---|---|
 | `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
+| `arm 'cheribsd-revocation' is not in SCHEMA.md` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
 | `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `APR_CASE`. The rule the checker means — a case declares the number its directory carries, and the driver refuses a fixture that names another — is implemented |
 
 Extending the checker to know these is a change to the pymalloc corpus and

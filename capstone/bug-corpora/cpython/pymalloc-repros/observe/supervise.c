@@ -45,8 +45,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* The labelled access every case's protected arm must fault at. */
+/* The labelled access every case's protected arm must fault at. Another corpus
+ * with its own label builds this file with -DPROBE_SYMBOL='"its_label"'. */
+#ifndef PROBE_SYMBOL
 #define PROBE_SYMBOL "pyc_defect_read"
+#endif
 
 #ifdef __CHERI_PURE_CAPABILITY__
 #include <cheri/cheric.h>

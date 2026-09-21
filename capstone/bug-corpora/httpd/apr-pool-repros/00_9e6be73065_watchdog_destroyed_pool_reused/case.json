@@ -39,8 +39,16 @@
     "native-detect": {
       "status": "not written",
       "requires": "the nodes never reach malloc, so ASan has no event; Valgrind with APR's own annotations is the arm that could discriminate"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: nodes from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == apr_defect_read; with --runtime-revocation off it must complete instead. The ABI control reports runtime_revocation from malloc_revoke_enabled()",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "APR files a destroyed pool's node on its own free list and pops it back; under APR_ALLOCATOR_MAX_FREE_UNLIMITED it never calls free() on that path, so libc's quarantine never holds the node"
     }
   },
-  "status": "native pair run 2026-09-20 and again 2026-09-21 through the port, both arms as expected. spatial and sublet run in QEMU 2026-09-21: spatial completes (nodes=3, node_reuses=1), sublet faults at apr_defect_read with cause=24 at the published address; negative control fires both oracles; 31 of 32 repetitions returned a result, the one stall a pre-login boot flake. See results/20260921-qemu/. No poisoncap arm: no CheriBSD build of APR exists",
+  "status": "native pair 2026-09-20 and 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (nodes=3, node_reuses=1), sublet faults at apr_defect_read cause=24 at the published address; negative control fires; 31 of 32 repetitions returned a result, the one stall a pre-login boot flake (results/20260921-qemu/). Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes while revocation-control faults at apr_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 1/1 with the control still faulting (results/20260921-cheribsd/). No poisoncap arm: no PoisonCap build of APR exists",
   "note": "other_pool_corrupted is 0 and stays 0: the fixture shows allocation proceeding through the stale handle into another arena, not that existing bytes were overwritten, which depends on sizes and ordering. Upstream reports crashes; this records the step before them"
 }
