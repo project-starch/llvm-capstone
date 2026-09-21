@@ -91,6 +91,20 @@ before its first case. [`platform/`](../../platform/README.md) has the
 diagnosis, the fix and a script that applies it; with the fix applied, both
 configurations run and `--runtime-revocation on` measures the platform's own
 mechanism against these defects.
+
+**`on` is CheriBSD's shipping default, not a setting we invented**, which is
+what makes that row a finding rather than a curiosity. The default is decided by
+the KERNEL at exec, not by libc: `imgact_elf.c` computes `ELF_BSDF_CHERI_REVOKE`
+with the precedence "procctl, ELF note, system default -- in case of conflicting
+flags, disable wins", and the system default is
+`security_cheri_runtime_revocation_default = 1`
+(`sys/cheri/cheri_sysctl.c`, exposed as `security.cheri.runtime_revocation_default`).
+libc then reads it through `AT_BSDFLAGS` and only afterwards lets
+`_RUNTIME_REVOCATION_ENABLE` / `_DISABLE` override it, and only when
+`!issetugid()`. Neither value of `--runtime-revocation` leaves the default in
+place: the common runner always exports one of the two, so the `on` arms
+re-assert the shipping default explicitly rather than relying on it, and the ABI
+control then verifies it in the guest through `malloc_revoke_enabled()`.
 The adapter's own explicit PoisonCap sweeps stay on — they are what mode 1
 measures — so this is not whole-process temporal protection.
 
