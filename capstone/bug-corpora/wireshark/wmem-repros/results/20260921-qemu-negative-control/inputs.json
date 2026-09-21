@@ -1,7 +1,7 @@
 {
   "images": {
-    "00-rpcrdma-write-offsets-global": "6361ffd600693c2eebea3f723efa4e4d5af6f6d4ea39284682c790011e2ce611",
-    "12-xml-root-name-recycled": "bee5420fec684cc2df4f401b680cd0e6e9ba3a8e430db7ce551546b8044076c7"
+    "00-rpcrdma-write-offsets-global": "2b1df8d6b8c154f41812a3042f2f4969ae15bf5b9ca1a08de904838f7bcf78d2",
+    "12-xml-root-name-recycled": "cbf1653c67f644c41df1d3871274f0936745874f022f9ac51afd2a73d15d045a"
   },
   "domain_loader": "aba8d38d02fb9dabe99a9ef73070ccebc113f3b6a3cd83464312a093b6d841c3",
   "qemu": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",

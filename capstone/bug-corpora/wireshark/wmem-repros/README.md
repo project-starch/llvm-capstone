@@ -81,36 +81,58 @@ reduction class are visibly siblings rather than accidentally similar.
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes without protection |
 | `sublet` | Capstone domain | fault at the labelled probe the oracle names |
+| `cheribsd` | CheriBSD purecap, libc revocation ON, plain build | whether the layer below sees these defects |
+| `poisoncap-spatial` | CheriBSD purecap, PoisonCap mode 0 | exact bounds, no invalidation: the matched control |
+| `poisoncap-protected` | CheriBSD purecap, PoisonCap mode 1 | SIGPROT at the labelled read probe |
 | `native-detect` | host | declared, not written |
 
-Both arms run the same program; the loader picks the arm at run time. The
-sublet oracle names an **instruction**: the run publishes the probe addresses
+The two Capstone arms run the same program; the loader picks the arm at run
+time. The two PoisonCap arms run the same purecap program with a mode argument,
+under `supervise`. Every protected oracle names an **instruction**: the run publishes the probe addresses
 and the fault must land on the one the case's oracle names — the read probe,
 the write probe, or the allocator's own probe when the stale pointer is handed
 back to `wmem`.
 
-## What Sublet does, measured 2026-09-21
+## What the four systems do, measured 2026-09-21
 
-| shape | cases | caught |
+| system | what it acts on | caught |
 |---|---|:--:|
-| stale pointer held by a global across packets | 0, 1, 6 | **3 / 3**, cause 24 at the read |
-| packet-scope object held by a column or address past the scope's end | 2, 3, 4, 5 | **4 / 4**, cause 24 at the read |
-| packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | **5 / 5**, cause 24 at the read |
-| stale pointer after an individual recycler free | 12 | **0 / 1** — recorded, not hidden |
+| Capstone | bounds and tags; no lifetime event | **0 / 13** |
+| **Sublet** | the block's epoch at a pool reset | **12 / 13**, cause 24 at the read |
+| CheriBSD default | `free()` → quarantine → revoker sweep, libc revocation on | **0 / 13** |
+| **PoisonCap** | poison at reset, at release and at the recycler's individual free, then a sweep | **13 / 13**, SIGPROT at the read |
 
-Twelve of thirteen. Every `spatial` arm completed: the unprotected allocator
-returns either the old bytes (the column cases, where nothing intervenes) or
-another object's bytes (the cases that assert reoccupation). Every fault
-landed on the labelled instruction, compared against the address the run
-resolved from the image. The record is `results/20260921-qemu/`, its negative
-control beside it; both attempts, including the one whose three cases derived
-an interior pointer after the reset and faulted at the arithmetic instead, are
-described there.
+By shape, for the two mechanisms that catch anything:
 
-The one miss is the one predicted before the first run: case 12's lifetime
-ends by an individual `wmem_free` into the block allocator's recycler, inside
-a live block, and Sublet's epoch is the block's. A mechanism that acts per
-chunk would see it; this one does not, and the row says so.
+| shape | cases | Sublet | PoisonCap |
+|---|---|:--:|:--:|
+| stale pointer held by a global across packets | 0, 1, 6 | 3 / 3 | 3 / 3 |
+| packet-scope object held by a column or address past the scope's end | 2, 3, 4, 5 | 4 / 4 | 4 / 4 |
+| packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | 5 / 5 | 5 / 5 |
+| stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
+
+Every `spatial` and every plain-CheriBSD arm completed: the unprotected
+allocator returns either the old bytes (the column cases, where nothing
+intervenes) or another object's bytes (the cases that assert reoccupation),
+and libc's quarantine never sees an event because wmem hands storage back to
+libc neither at a reset nor at a free. Every protected fault landed on the
+labelled instruction, compared against the address the run resolved from the
+image or, on CheriBSD, from the child's own map. The records are
+`results/20260921-qemu/` and `results/20260921-cheribsd/`, the negative
+control beside the first.
+
+Case 12 is the row the two mechanisms disagree on, and both readings were
+predicted before the runs. Its lifetime ends by an individual `wmem_free`
+into the block allocator's recycler, inside a live 8 MiB block. Sublet's epoch
+is the block's, so the free ends nothing and the read completes. PoisonCap
+acts on the chunk: the port's hook poisons its granules at the free, one
+sweep later the registry's stale name is dead, and the read faults —
+`epochs=0 released_chunks=1` in that arm's counters, where the other twelve
+read `epochs=1 released_chunks=0`. The reason Sublet cannot be made
+to do the same on this allocator is not the bug but the allocator: `block`
+coalesces neighbouring free chunks, and Capstone has `SPLIT` but no merge, so
+per-chunk authority cannot be faithfully re-joined. The port's README says
+what a variant would have to give up.
 
 ## Building and running
 

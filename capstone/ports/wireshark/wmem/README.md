@@ -164,6 +164,44 @@ free ends no epoch. Fixtures 3 and 4 completing in `spatial` mode return the
 recycler's own free-list node, which it writes into the freed chunk — the
 unprotected reader sees allocator metadata, silently.
 
+## CheriBSD and PoisonCap arms
+
+The same sources build for CheriBSD purecap through the shared toolchain
+(`cmake --preset cheribsd`, or `host/cheribsd/poisoncap/build.sh BUILD
+[--poisoncap] [--corpus DIR]`), with `CHERI_SDK` and `CHERI_SYSROOT` naming
+the PoisonCap platform the FFmpeg port reconstructs. Two builds exist:
+
+* **plain** — the port's native backing policy under a purecap libc. Objects
+  are not narrowed and nothing is invalidated; what this arm measures is the
+  guest's own temporal safety, libc's quarantine and revoker sweep, against
+  an allocator that never hands the storage back to libc.
+* **PoisonCap** (`WM_POISONCAP`) — `src/cheribsd/poisoncap.c` replaces the
+  backing policy. Every system request becomes one mapped region that keeps
+  `SW_VMEM` and `POISON` authority for the manager; every published object is
+  bounded exactly and stripped of both, so a sweep revokes it and nothing
+  else. Mode 0 stops there. Mode 1 invalidates — poison every granule, one
+  synchronous sweep, clear, zero — a retained block at every reset, a region
+  at every release, and, through a hook Sublet has no use for, a recycler
+  chunk at every individual `wmem_free`, before the free list reuses it.
+
+The corpus arms run through `host/cheribsd/poisoncap/run.py`, under
+`supervise`, which reports the child's signal and trap PC from the kernel and
+resolves `wm_defect_probe` from the child's own map plus the target ELF. A
+protected arm that faults anywhere else carries the same exit status; only
+the PC comparison in `matrix.json` tells the two apart. The plain build has
+one mode, and a completion there means the layer below saw nothing.
+
+Measured 2026-09-21 on the thirteen corpus cases, guest libc revocation on
+for all three arms: the plain build completed every case (0 / 13 caught);
+PoisonCap mode 0 completed every case; PoisonCap mode 1 faulted on all 13 at
+the labelled read. The counters printed at each arm's ready marker name the
+hook: cases 0–11 `epochs=1 released_chunks=0` (the reset's block sweep), case
+12 `epochs=0 released_chunks=1` (the individual free's chunk sweep).
+Records: `bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd/`.
+The plain arm's zero and Sublet's twelve rest on different reasons — libc
+sees no event at all; Sublet sees the reset but not the chunk — and the
+corpus README says which is which.
+
 ## Geometry and limits
 
 The domain backs allocations from a 384 MiB payload with 4,096 region slots

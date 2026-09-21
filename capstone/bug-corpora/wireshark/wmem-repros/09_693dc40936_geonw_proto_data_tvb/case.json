@@ -19,9 +19,19 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
     "native-detect": {
       "status": "not written"
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd"
 }

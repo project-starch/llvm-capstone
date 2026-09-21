@@ -11,6 +11,9 @@
 #ifdef WM_CORPUS_HOSTED
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef WM_POISONCAP
+#include "poisoncap.h"
+#endif
 #endif
 
 wmem_allocator_t *wm_packet;
@@ -27,8 +30,8 @@ _Noreturn void wm_give_up(unsigned long code) {
 
 void wm_next_packet(void) { wm_packet_pool_reset(wm_packet); }
 
-#ifdef WM_CORPUS_HOSTED
-/* A host build has no fault oracle; the accesses stay, the labels do not. */
+#if defined(WM_CORPUS_HOSTED) && !defined(__riscv)
+/* An x86 host build has no fault oracle; the accesses stay, the labels do not. */
 __attribute__((noinline)) unsigned wm_probe(const volatile unsigned char *p) {
   return *p;
 }
@@ -36,11 +39,16 @@ __attribute__((noinline)) void wm_write_probe(volatile unsigned char *p) {
   *p = 93;
 }
 #else
+/* Capstone and CheriBSD purecap: the labelled instruction the oracle names. */
 __attribute__((noinline)) unsigned wm_probe(const volatile unsigned char *p) {
   unsigned long value;
   __asm__ volatile(".globl wm_defect_probe\nwm_defect_probe:\nlbu %0, 0(%1)"
                    : "=r"(value)
+#ifdef __CHERI_PURE_CAPABILITY__
+                   : "C"(p)
+#else
                    : "r"(p)
+#endif
                    : "memory");
   return value;
 }
@@ -48,7 +56,11 @@ __attribute__((noinline)) unsigned wm_probe(const volatile unsigned char *p) {
 __attribute__((noinline)) void wm_write_probe(volatile unsigned char *p) {
   __asm__ volatile(".globl wm_defect_write\nwm_defect_write:\nsb %0, 0(%1)" ::"r"(
                        93UL),
+#ifdef __CHERI_PURE_CAPABILITY__
+                   "C"(p)
+#else
                    "r"(p)
+#endif
                    : "memory");
 }
 #endif
@@ -57,6 +69,11 @@ void wm_mark(void) {
 #ifdef WM_CORPUS_HOSTED
   printf("WM_DEFECT case=%u ready\n", wm_case_number);
   fflush(stdout);
+#ifdef WM_POISONCAP
+  /* The protected arm dies at the access that follows; the adapter's counters
+   * up to this point are the evidence of which hook fired, so print them now. */
+  wm_poisoncap_report();
+#endif
 #else
   extern void wm_defect_probe(void), wm_defect_write(void), wm_widen_probe(void);
   unsigned long code = 0xcf16000000000000UL | wm_case_number;
@@ -79,22 +96,33 @@ static void start(void) {
 #ifdef WM_CORPUS_HOSTED
 _Noreturn void wm_fail(unsigned code) { wm_give_up(code); }
 int main(int argc, char **argv) {
-  /* Only the unprotected shape exists natively, so mode 0 is the only mode
-   * this build accepts; strict input rejection is the runner's control. */
-  if (argc < 2 || argc > 3 || strcmp(argv[1], "0"))
+  /* Strict input rejection is the runner's control. Without PoisonCap only
+   * the unprotected shape exists, so mode 0 is the only mode accepted. */
+  setvbuf(stdout, NULL, _IONBF, 0);
+  if (argc < 2 || argc > 3 || (strcmp(argv[1], "0") && strcmp(argv[1], "1")))
     return 75;
   if (argc == 3 && (unsigned)atoi(argv[2]) != wm_case_number) {
     fprintf(stderr, "CONTROL-FAILED fixture is case %u, run asked for %s\n",
             wm_case_number, argv[2]);
     return 75;
   }
+  unsigned mode = (unsigned)(argv[1][0] - '0');
+#ifdef WM_POISONCAP
+  wm_init_backing(NULL, NULL, mode);
+#else
+  if (mode)
+    return 75; /* no protected mode exists in this build */
   void *payload = aligned_alloc(16, WM_PAYLOAD_BYTES);
   if (!payload)
     return 75;
   wm_init_backing(NULL, payload, 0);
+#endif
   start();
   wm_case_run();
-  printf("WM_DEFECT case=%u mode=0 completed\n", wm_case_number);
+  printf("WM_DEFECT case=%u mode=%u completed\n", wm_case_number, mode);
+#ifdef WM_POISONCAP
+  wm_poisoncap_report();
+#endif
   return 0;
 }
 #else

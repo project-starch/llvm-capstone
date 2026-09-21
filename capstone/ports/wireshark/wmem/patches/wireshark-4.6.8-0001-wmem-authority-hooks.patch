@@ -1,11 +1,10 @@
-Subject: Bind wmem object bounds and block epochs to the port's authority hooks
+Subject: Bind wmem object bounds, block epochs and chunk releases to the port's authority hooks
 Upstream: wireshark 4.6.8
 Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
 Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
 Build-Variants: native port, Capstone domain; inert in full Wireshark (every hunk is guarded by WMEM_PORT_HOOKS)
 Depends-On: none
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
-
 --- a/wsutil/wmem/wmem_allocator_block.c
 +++ b/wsutil/wmem/wmem_allocator_block.c
 @@ -17,6 +17,9 @@
@@ -68,7 +67,18 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
      chunk = WMEM_DATA_TO_CHUNK(ptr);
  
      if (chunk->jumbo) {
-@@ -919,6 +939,9 @@
+@@ -902,6 +922,10 @@
+         return;
+     }
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* The chunk's storage is retired before the free list reuses it. */
++    wm_release(WMEM_CHUNK_TO_DATA(chunk), WMEM_CHUNK_DATA_LEN(chunk));
++#endif
+     /* mark it as unused */
+     chunk->used = false;
+ 
+@@ -919,6 +943,9 @@
      wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
      wmem_block_chunk_t     *chunk;
  
@@ -78,7 +88,7 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
      chunk = WMEM_DATA_TO_CHUNK(ptr);
  
      if (chunk->jumbo) {
-@@ -969,8 +992,13 @@
+@@ -969,8 +996,13 @@
              /* Now cycle the recycler */
              wmem_block_cycle_recycler(allocator);
  
@@ -92,7 +102,7 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
          }
          else {
              /* no room to grow, need to alloc, copy, free */
-@@ -991,6 +1019,15 @@
+@@ -991,6 +1023,15 @@
          wmem_block_split_used_chunk(allocator, chunk, size);
  
          /* Now cycle the recycler */
@@ -108,7 +118,7 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
          wmem_block_cycle_recycler(allocator);
  
          return ptr;
-@@ -998,6 +1035,7 @@
+@@ -998,6 +1039,7 @@
  
      /* no-op */
      return ptr;
@@ -116,7 +126,7 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
  }
  
  static void
-@@ -1014,6 +1052,37 @@
+@@ -1014,6 +1056,37 @@
      /* iterate through the blocks, reinitializing each one */
      cur = allocator->block_list;
  
@@ -154,7 +164,7 @@ Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
      while (cur) {
          chunk = WMEM_BLOCK_TO_CHUNK(cur);
          if (chunk->jumbo) {
-@@ -1027,6 +1096,7 @@
+@@ -1027,6 +1100,7 @@
          }
      }
  }

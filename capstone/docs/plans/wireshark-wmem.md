@@ -67,6 +67,29 @@ storage-reuse property this port exists to study is not present as assumed.
 If any protected case completes instead of faulting, the epoch hook missed a
 retained block.
 
+## Predicted readings, CheriBSD arms (written before the first run)
+
+Three more arms, on the PoisonCap platform with the local libc fix, guest
+libc revocation ON for all three, exactly as the PostgreSQL corpus was run:
+
+| arm | what it acts on | predicted |
+|---|---|---|
+| CheriBSD default (plain build, revocation on) | `free()` → quarantine → revoker sweep | **0 / 13** caught: every case completes. wmem never returns the storage to libc between the reset and the read, so the layer below sees no event |
+| PoisonCap, mode 0 | exact bounds, no invalidation | every case completes; it is the matched control |
+| PoisonCap, mode 1 | poison at reset, at region release, and at the recycler's individual free | **13 / 13** SIGPROT at the labelled read — including case 12, where the chunk is poisoned before the free list reuses it |
+
+The one reading that decides something is case 12 in PoisonCap mode 1. If it
+completes, the per-chunk hook did not fire or the sweep did not reach the
+published alias, and the "Sublet cannot, a per-chunk mechanism can" claim is
+not established. If any of the twelve faults somewhere other than the probe,
+the adapter is handing out a dead capability at the next allocation, as the
+PostgreSQL adapter once did, and the pair does not count.
+
+*Measured 2026-09-21: all three predicted readings held — plain 0 / 13,
+PoisonCap mode 0 13 / 13 completed, mode 1 13 / 13 SIGPROT at the probe, case
+12 with `released_chunks=1`. Record in
+`bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd/`.*
+
 ## What the replay proves, and what it does not
 
 `tests/native/test-replay.py` drives all four allocators through allocation,
