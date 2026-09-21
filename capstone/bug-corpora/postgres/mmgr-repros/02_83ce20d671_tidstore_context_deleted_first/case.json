@@ -1,0 +1,37 @@
+{
+  "case": 2,
+  "upstream_fix": "83ce20d671",
+  "title": "the 2024 instance of the same defect, with the store context deleted first",
+  "consumer": "src/backend/commands/vacuumparallel.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin plus the upstream commit: parallel_vacuum_reset_dead_items (src/backend/commands/vacuumparallel.c:473) keeps a local `dead_items`, destroys the store through it at :483, recreates into pvs->dead_items at :484, and then reads the DESTROYED local at :488-489. Upstream 83ce20d671 (2024-12-04, 'Fix use-after-free in parallel_vacuum_reset_dead_items') removes that local and destroys through pvs->dead_items instead; it postdates the 17.0 release of 2024-09-26, so the pre-fix shape is present at the pin.",
+  "object": "the palloc'd TidStore struct",
+  "lifetime_ender": "TidStoreDestroy through the callee's local, which deletes the store's child context and then pfrees the struct the local still points at",
+  "shape": "stale pointer to a recreated object",
+  "distinguishing": "the callee's own local is stale here; case 1 is the caller's field, a separate defect at the same site fixed ten months later",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "sibling_issue": "01_3549ffb6af_vacuum_dead_items_stale_struct"
+}

@@ -24,6 +24,17 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "ports/common/host"))
 from port_support import digest, run_guest, stage_run, write_json
 
+def discover(domain_build, mode):
+    """The corpus contract builds ONE program per case, named NN-slug, and the
+    directory names are the authority. Discover them instead of keeping a
+    second list of slugs here that can drift out of step with the corpus."""
+    found = {}
+    for path in sorted((domain_build / "bin").glob(f"[0-9][0-9]-*-{mode}.dom")):
+        stem = path.name[: -len(f"-{mode}.dom")]
+        found[int(stem[:2])] = (stem, path)
+    return found
+
+
 CASES = [
     ("1f5b6a5e5d", "tuplestore-double-pfree", "aset"),
     ("3549ffb6af", "dead-items-stale-after-reset", "aset"),
@@ -121,11 +132,15 @@ for which in map(int, a.cases.split(",")):
     for mode in a.modes.split(","):
         if mode not in ("spatial", "sublet"):
             p.error("invalid mode")
+        programs = discover(a.domain_build, mode)
+        if which not in programs:
+            p.error(f"no {mode} program for case {which} in {a.domain_build}/bin")
+        stem, image = programs[which]
         run, hashes = stage_run(
             a.output,
-            f"{which}-{mode}-",
+            f"{stem}-{mode}-",
             {
-                "defects.dom": a.domain_build / f"bin/defects-{mode}.dom",
+                "defects.dom": image,
                 "loader.user": a.linux_build / "bin/domain-loader",
             },
         )

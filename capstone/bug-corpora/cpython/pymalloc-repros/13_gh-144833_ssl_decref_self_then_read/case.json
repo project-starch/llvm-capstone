@@ -1,0 +1,34 @@
+{
+  "case": 13,
+  "upstream_fix": "gh-144833",
+  "title": "use-after-free in the SSL module when SSL_new() fails",
+  "consumer": "Modules/_ssl.c",
+  "object": "the PySSLSocket itself",
+  "lifetime_ender": "Py_DECREF(self) on the error path, before self is read",
+  "shape": "interior pointer into the object that was just released",
+  "distinguishing": "the stale access is to the freed object ITSELF rather than to anything it pointed at, and no second party is involved at all. The fix is a two-line swap",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

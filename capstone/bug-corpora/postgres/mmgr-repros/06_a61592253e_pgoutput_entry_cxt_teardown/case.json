@@ -1,0 +1,35 @@
+{
+  "case": 6,
+  "upstream_fix": "a61592253e",
+  "title": "a cache entry outlives the decoding context its memory came from",
+  "consumer": "src/backend/replication/pgoutput/pgoutput.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin: src/backend/replication/pgoutput/pgoutput.c:429 makes data->cachectx a child of the decoding context ctx->context, and :857 makes each entry->entry_cxt a grandchild, while RelationSyncCache is a static (:210) initialised into CacheMemoryContext at :524. The comment at :1698-1701 states that cachectx is deliberately not cleaned because the decoding machinery will free it, and pgoutput_shutdown:1703 destroys only the hash. An error path that tears down ctx->context without running that shutdown therefore leaves the long-lived cache pointing into a dead arena. The pre-fix shape is present.",
+  "object": "a row filter allocated in entry_cxt, a grandchild of the decoding context",
+  "lifetime_ender": "an error tears down the decoding context while RelationSyncCache keeps pointing into it",
+  "shape": "stale pointer into a deleted ancestor",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}

@@ -119,6 +119,31 @@ Unchanged and absolute: `precommit-scan.sh` runs before every push, and **never 
 lack write access — push the submodule first, then the parent, so the parent never references
 commits that do not exist remotely.
 
+## Squash before the first push — what lands is one complete change
+
+**The unit that lands on a shared branch is the smallest self-contained change that stands on its
+own**: it builds, it bisects, and its message explains all of it. Fixups, WIP and "address review"
+commits are working notes, not history — fold them into the change they belong to before the branch
+is pushed or merged.
+
+This is "No micro-commits" one level up, and it fails the same way: a squashed commit whose message
+describes only part of what it carries is the 2026-08-18 defect again, where the content was right
+and the message described something else.
+
+- **Squash BEFORE the first push, never after.** Rewriting pushed history is a force-push, needs the
+  lead, and costs every other lane a re-sync. Once it is on the remote it stays.
+- **Squash noise, SPLIT substance.** A branch carrying two logical changes lands as two commits, not
+  one that does both: a message can only honestly describe one of them, and bisect then stops
+  working at exactly the commit you need it to.
+- **Never squash across a RETRACTION.** If the branch claims something and then withdraws it, both
+  commits survive. The withdrawal trail is evidence — it records that the claim was tested, which is
+  what separates a conclusion from an assumption.
+- **Squash only your OWN commits.** The `-o` rule applies to history rewriting too: a rebase that
+  absorbs another lane's commit republishes their work under your message.
+
+This does not change how an external collaborator's PR lands: those keep their merge commits, which
+is how authorship survives.
+
 ## Silicon-defect handovers: one link per issue, and the folder IS the report
 
 A suspected RTL/silicon defect is handed to the hardware side as a **single link to one

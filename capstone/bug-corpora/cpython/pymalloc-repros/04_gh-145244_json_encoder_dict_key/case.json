@@ -1,0 +1,35 @@
+{
+  "case": 4,
+  "upstream_fix": "gh-145244",
+  "title": "use-after-free on borrowed dict key in json encoder",
+  "consumer": "Modules/_json.c",
+  "live_in_pin": true,
+  "live_proof": "NOT a backport. Fixed on main, never back-ported; the apply test fails because the function was renamed. Live by inspection: Modules/_json.c:1621 of v3.13.7 hands the borrowed key and value to encoder_encode_key_value with no Py_INCREF at all",
+  "object": "a key borrowed from PyDict_Next",
+  "size_class": "small, under the threshold",
+  "lifetime_ender": "the default callback clears the dict, freeing every entry",
+  "shape": "bulk free, stale read on the error path",
+  "sibling_issue": "gh-142831_json_encoder_list_item",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    }
+  },
+  "status": "run 2026-09-18 under QEMU; both arms passed"
+}

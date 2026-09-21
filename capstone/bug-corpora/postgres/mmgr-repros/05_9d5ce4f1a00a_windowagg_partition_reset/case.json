@@ -1,0 +1,35 @@
+{
+  "case": 5,
+  "upstream_fix": "9d5ce4f1a00a",
+  "title": "by-ref window results survive the bulk reset of the context holding them",
+  "consumer": "src/backend/executor/nodeWindowAgg.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin: release_partition (src/backend/executor/nodeWindowAgg.c:1335) resets partcontext and aggcontext at :1354-1355 and never touches ecxt_aggvalues, which :762 fills with by-ref results. The non-top-window branch at :2310-2331 DOES nullify them, with a comment naming the hazard -- 'Some of these might be byref types so we can't have them pointing to free'd memory' -- while the top_window branch at :2305-2309 sets the status and continues without nullifying. The unprotected branch sits beside the protected one; the pre-fix shape is present.",
+  "object": "a by-ref aggregate result in the partition context",
+  "lifetime_ender": "release_partition resets the partition context without NULLing ecxt_aggvalues[]",
+  "shape": "stale pointer into a reset context",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}

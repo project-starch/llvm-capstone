@@ -1,0 +1,37 @@
+{
+  "case": 1,
+  "upstream_fix": "3549ffb6af",
+  "title": "vacuum reads the TidStore struct its own reset destroyed",
+  "consumer": "src/backend/access/heap/vacuumlazy.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin plus the upstream commit: dead_items_reset (src/backend/access/heap/vacuumlazy.c:2905) takes the parallel branch at :2909-2913 and RETURNS without refreshing vacrel->dead_items, so the caller keeps the destroyed store. Upstream 3549ffb6af (2025-10-03, 'Fix reuse-after-free hazard in dead_items_reset') adds exactly that refresh before the return; it postdates the 17.0 release of 2024-09-26, so the pre-fix shape is present at the pin.",
+  "object": "the palloc'd TidStore struct",
+  "lifetime_ender": "parallel_vacuum_reset_dead_items destroys and recreates the store, and dead_items_reset returns without updating vacrel->dead_items",
+  "shape": "stale pointer to a recreated object",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "sibling_issue": "02_83ce20d671_tidstore_context_deleted_first",
+  "distinguishing": "the caller's field is stale here; case 2 is the callee's own local, a separate defect at the same site fixed ten months earlier"
+}

@@ -448,6 +448,21 @@ static void run_linear(unsigned reps) {
 #ifndef M1_LIVE
 #define M1_LIVE 16
 #endif
+/* M1_LIVE indexes leaf[] and alias[], which are sized by MAXN and NOT by M1_LIVE, so a value above
+ * MAXN+1 overruns both -- silently, with capability-sized writes, in the fixture setup before any
+ * measurement starts. Found 2026-09-21 while costing an M1_LIVE sweep. This is a compile-time check and
+ * emits no code: every existing image rebuilds byte-identical with it present.
+ *
+ * It also fixes the CEILING on what that sweep can answer. M1_LIVE is what sets how many distinct
+ * revocation indices the fixture holds at once -- M1_MAXRET buys none, per the 2026-09-19 retraction --
+ * so the protocol's "fraction of distinct indices covered" is bounded by MAXN: 256 of 65,532, which is
+ * 0.39 %. Reaching a meaningful fraction needs MAXN raised, and that moves every image's hash and every
+ * global's placement, which the same day's layout finding showed changes the release cost by 83 %. So
+ * the sweep is cheap and uninformative as the harness stands, and informative only at the price of the
+ * comparison basis. Recorded here rather than discovered again from an overrun. */
+#if M1_LIVE > MAXN
+#error "M1_LIVE exceeds MAXN: leaf[] and alias[] are sized by MAXN and would be overrun"
+#endif
 /* M1_LEAF is the bytes per live object. It exists because M1_LIVE alone cannot separate slot count from
  * memory: the pool is M1_LIVE * M1_LEAF, so sweeping M1_LIVE moves both at once. What it is FOR changed
  * once the existing captures were re-read per snapshot instead of per invocation (apollo, 2026-09-17).

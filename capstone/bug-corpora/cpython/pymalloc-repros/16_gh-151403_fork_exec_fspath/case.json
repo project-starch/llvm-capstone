@@ -1,0 +1,35 @@
+{
+  "case": 16,
+  "upstream_fix": "gh-151403",
+  "title": "use-after-free when an argv item's __fspath__ mutates args",
+  "consumer": "Modules/_posixsubprocess.c",
+  "object": "borrowed_arg, from PySequence_Fast_GET_ITEM(fast_args, arg_num)",
+  "lifetime_ender": "the item's __fspath__ runs Python that drops fast_args' last reference to it",
+  "shape": "free / reuse / stale read",
+  "distinguishing": "sibling of gh-151416, the same trigger one module over, reported and fixed separately",
+  "sibling_issue": "gh-151416_spawnv_fspath",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

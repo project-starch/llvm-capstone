@@ -1,0 +1,70 @@
+{
+  "case": 1,
+  "upstream_fix": "1886c3269d",
+  "title": "h264_refs clears ref_list up to ref_count instead of the array length",
+  "consumer": "libavcodec/h264_refs.c",
+  "live_in_pin": false,
+  "live_proof": "the fix's removed lines are present in n8.0 and n8.1 and absent from n8.1.1 onwards; absent from the 9.0.1 pin",
+  "object": "H264Ref records carrying data[3] into an H264Picture's planes",
+  "lifetime_ender": "pictures past the live reference length are returned to the pool",
+  "shape": "partial clear / reuse / stale read",
+  "allocator_layer": "AVBufferPool, through avcodec_default_get_buffer2",
+  "fidelity": "model-consumer, real allocator: the reset and its bound are transcribed; the slice decoder and its reference-list construction are reduced to the array and the buffers it names",
+  "distinguishing": "the stale record is not the one the shrink left valid; it lies past the count the reset used as its bound",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm leaves records past ref_count naming reissued storage; the fixed arm leaves none",
+      "note": "this pair differs by the upstream fix, not by protection"
+    },
+    "spatial": {
+      "probe_case": 37,
+      "oracle": "the sequence completes",
+      "role": "control for sublet: same binary and guest, one difference"
+    },
+    "sublet": {
+      "probe_case": 37,
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap, libc revocation enabled",
+      "case": "pool-0-37",
+      "oracle": "the sequence completes: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
+      "control": "the run's cheribsd-abi probe reports runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
+      "guest_default": "preserved -- unlike the PoisonCap runs, this one does not disable the kernel default"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "case": "pool-0-37",
+      "oracle": "the sequence completes, exit 0",
+      "role": "control for poisoncap-protected: same binary and guest, one difference"
+    },
+    "poisoncap-protected": {
+      "mode": 2,
+      "case": "pool-2-37",
+      "oracle": "SIGPROT after the setup marker FF2_PROBE case=37 ready",
+      "exit": 162,
+      "note": "CheriBSD reports a process status, not a fault PC, so the marker is what separates this from an arbitrary crash: it is printed only once reuse at the same address has been checked",
+      "signal": 34,
+      "si_code": null,
+      "si_code_note": "not captured: the runner records a process exit status and 162 is 128+34, so the signal is derived, but si_code is not recoverable from an exit status and is not guessed here"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the port's payload arena is one allocation, so ASan's silence here would measure the fixture rather than FFmpeg"
+    },
+    "backing": {
+      "mode": 1,
+      "case": "probe case 37, mode 1",
+      "oracle": "the sequence completes",
+      "role": "the informative negative: revocation exists here, at the backing allocation, and the pool never frees its backing but recycles out of it. This separates 'no mechanism' from 'a mechanism at the wrong point'"
+    }
+  },
+  "status": "native pair and every arm above run 2026-09-20; all passed. Four systems compared, two matched controls and one intermediate beside them",
+  "comparison": [
+    "Capstone (spatial)",
+    "Sublet",
+    "CHERI default (stock CheriBSD, revoker on)",
+    "PoisonCap (mode 2)"
+  ]
+}

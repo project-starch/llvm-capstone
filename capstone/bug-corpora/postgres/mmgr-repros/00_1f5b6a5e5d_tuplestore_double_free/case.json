@@ -1,0 +1,35 @@
+{
+  "case": 0,
+  "upstream_fix": "1f5b6a5e5d",
+  "title": "double free of a tuple the write path had already freed",
+  "consumer": "src/backend/utils/sort/tuplestore.c",
+  "live_in_pin": true,
+  "live_proof": "inspection at the 17.0 pin: writetup_heap (src/backend/utils/sort/tuplestore.c:1500) frees the tuple at :1516-1517, after the BufFileWrite calls at :1511-1514 that can throw; dumptuples:1222 calls it in a loop and clears memtupdeleted/memtupcount only afterwards at :1225-1226; tuplestore_clear:428-432 then walks the same range with GetMemoryChunkSpace and pfree. The pre-fix shape is present.",
+  "object": "a tuple chunk still listed in memtuples[]",
+  "lifetime_ender": "writetup_heap frees each tuple as it writes it; a throw leaves the already-freed entries inside memtupdeleted..memtupcount for the cleanup walk to free again",
+  "shape": "double free through a stale array entry",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault anywhere; the stale access is the second pfree, so there is no read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete, with one tolerated double release; the adapter's active[] table counts it as tolerated_double_drops rather than refusing, so the unprotected arm is genuinely unprotected"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT inside GetMemoryChunkMethodID -- the manager faults reading the revoked chunk's header, before any bookkeeping runs, so there is no read probe to land on",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU: mode 0 completes with tolerated_double_drops=1 and mode 1 faults in GetMemoryChunkMethodID, so the pair holds. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}

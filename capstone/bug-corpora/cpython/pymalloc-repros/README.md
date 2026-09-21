@@ -7,6 +7,11 @@ fault PC checked against a labelled probe. The PostgreSQL memory-context corpus
 on its own branch is built the same way and was the template; it is not in this
 tree yet, so nothing here depends on it.
 
+The same twenty sequences also build for CheriBSD against the port's PoisonCap
+adapter, with the same pairing and the same labelled probe — see
+[the PoisonCap section](#the-same-twenty-on-poisoncapcheribsd) below. The
+results recorded here are the Capstone ones.
+
 **Every one of the 20 reachable defects has a driver.** That is the whole
 reachable set at the pin, not a sample — the inventory, the triage and the three
 corrections that took it from 23 to 20 are in
@@ -43,7 +48,7 @@ because upstream renamed the function. It is live by inspection —
 `Modules/_json.c:1621` of `v3.13.7` hands the borrowed key straight on with no
 `Py_INCREF` at all. Its `PROVENANCE.md` quotes the pinned source.
 
-## Twenty reports, nine shapes
+## Twenty reports, ten shapes
 
 Eight of the twenty — 0, 1, 3, 8, 12, 16, 17, 19 — reduce to one sequence: free
 a small object, allocate the same size again, read through the pointer that was
@@ -51,7 +56,7 @@ kept. Eight separately reported defects, seven modules, fixed one at a time over
 more than a year. They are kept apart rather than merged because the sameness is
 the point: one revocation mechanism covers a class upstream keeps rediscovering.
 
-The nine shapes, and what each is there to show:
+The ten shapes, and what each is there to show:
 
 | shape | cases | why it is not the same test |
 |---|---|---|
@@ -91,23 +96,73 @@ That is the corpus's thesis in the project's own build documentation.
 
 ## Layout
 
-    <gh-NNNNN>_<slug>/
+    SCHEMA.md            the corpus contract, field by field
+    NN_<gh-NNNNN>_<slug>/   NN is the case number a run selects
+        case.c           the sequence; one program per defect
         case.json        machine-readable claims: layer, size, shape, arms, oracles
         PROVENANCE.md    the upstream hunk, quoted; what is real and what is reduced
-    shared/defects.c     the domain program, one case per boot
-    shared/run-defects.py the paired runner and its oracles
+    shared/corpus.h      probes, markers, fault handler; what every case includes
+    shared/build-cases.sh  builds one program per case, for either target
+    runners/<target>/    one directory per target
+        README.md            how to run the corpus there
+        run-defects.py       the runner and its oracles
+    tests/               everything that can say FAIL
+        check-corpus.py      enforces SCHEMA.md; exits non-zero on drift
+        cheribsd/            the CheriBSD oracles' own negative controls
+    platform/            the libc fix the CheriBSD target needs, and a script
+                         that applies it, rebuilds and reverts
     tools/               the survey scripts behind the inventory's numbers
     results/<stamp>/     matrix.tsv and input hashes; never raw serial captures
 
+One rule decides where a file goes. A case directory is **self-contained**: the
+claim, its provenance and its sequence. `shared/` is what every case includes
+and the script that builds them. Each target owns a directory under `runners/`
+with its runner and its manual. `tests/` is what can say FAIL; `tools/` is what produces the
+inventory's numbers.
+
+**One program per defect.** A `case.c` includes `shared/corpus.h` and writes
+its sequence inside `PYC_CASE(N)`; the macro supplies `pym_replay`, so the file
+is a complete translation unit and the port's one-source seam builds it on its
+own. `shared/build-cases.sh` invokes that seam once per case and puts the
+programs side by side as `bin/defect-NN`. All twenty build in under half a
+minute for either target.
+
+`SCHEMA.md` states what a case is and what every field means, and
+`tests/check-corpus.py` enforces it -- required fields, dense case numbers, a
+`PROVENANCE.md` beside every claim, every arm's oracle, and the shape table
+actually partitioning the cases. It found the headline ratio wrong on the day
+it was written: the table has ten rows and the prose said nine. Run it after
+touching anything here:
+
+    python3 tests/check-corpus.py
+    python3 -m unittest discover -s tests -p 'test_*.py'
+
 ## Running it
 
-    cmake -S <port> -B <build> ... -DPY_CORPUS_SRC=<abs path>/shared/defects.c
-    cmake --build <build> --target defects
-    python3 shared/run-defects.py <out> --domain-build <build> --linux-build <guest>
+One source, one set of twenty cases, two targets. Each target's build and run
+commands, its oracle and its negative control are in its own manual:
 
-and the control that makes the result mean something:
+| target | arms | manual |
+|---|---|---|
+| Capstone domain | `spatial` / `sublet` | [`runners/capstone-domain/README.md`](runners/capstone-domain/README.md) |
+| CheriBSD purecap | mode `0` / `1`, or `spatial` / `protected` | [`runners/cheribsd/README.md`](runners/cheribsd/README.md) |
 
-    python3 shared/run-defects.py <out> --cases 0 --negative-control
+Both build from the same `case.c` files; a case behaves identically on both.
+After touching anything here, run the checks:
+
+    python3 tests/check-corpus.py
+    python3 -m unittest discover -s tests -p 'test_*.py'
+
+## The same twenty on PoisonCap/CheriBSD
+
+The same `shared/defects.c`, and the same pinned `Objects/obmalloc.c`, also
+build as an ordinary CheriBSD purecap program against the port's
+[PoisonCap adapter](../../../ports/cpython/pymalloc/host/cheribsd/poisoncap/README.md).
+No case changes: the allocation sequences, the sizes and every `CHECK` are
+shared between the two targets, and only the probe instructions, the markers
+and the fault reporting are `#ifdef PYMALLOC_POISONCAP`-selected. A protected
+arm passes there on `SIGPROT` with `si_code` 2 at the labelled probe, where the
+Capstone `sublet` arm passes on a fault with its cause.
 
 ## What is NOT here
 

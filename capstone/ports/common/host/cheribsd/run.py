@@ -42,6 +42,17 @@ def validate_case(case):
         )
 
 
+def failed_case_names(results):
+    """Names of the cases that did not meet their oracle, in the order they ran.
+
+    A suite that stops at the first failure cannot show that the REST of its
+    oracles would have rejected the same input, which is exactly what a
+    negative control has to demonstrate. Collecting the names keeps that
+    reporting out of the boot/SSH path.
+    """
+    return [row["name"] for row in results if not row["passed"]]
+
+
 def outcome_matches(case, result):
     lines = result.stdout.splitlines()
     marker = (
@@ -77,6 +88,11 @@ def main():
         "--disable-default-revocation",
         action="store_true",
         help="Disable the guest default before starting SSH; programs keep their explicit policy",
+    )
+    p.add_argument(
+        "--continue-on-failure",
+        action="store_true",
+        help="Run every remaining case after one fails; the suite still exits non-zero",
     )
     a = p.parse_args()
     cases = []
@@ -215,8 +231,15 @@ def main():
                 report["results"].append(row)
                 save()
                 print(("PASS " if passed else "FAIL ") + name, flush=True)
-                if not passed:
+                if not passed and not a.continue_on_failure:
                     raise RuntimeError("case failed: " + name)
+            # Every selected case ran. A caller inverting these oracles needs to
+            # tell "all of them rejected the input" from "the boot died early",
+            # and only this flag separates them.
+            report["ran_all_cases"] = True
+            report["failed_cases"] = failed_case_names(report["results"])
+            if report["failed_cases"]:
+                raise RuntimeError("cases failed: " + ", ".join(report["failed_cases"]))
             report["status"] = "complete"
         except BaseException as exc:
             report["status"] = "failed"
