@@ -1,49 +1,82 @@
 # memcached allocator defect corpus
 
-Consumer-side defects in code that allocates from memcached 1.6.45's
-per-thread object cache, `cache.c`. A freed object does not go back to
-`malloc`: `do_cache_free` (`cache.c:135`) pushes it on the cache's `STAILQ`,
-writing the list link into its first bytes, and `do_cache_alloc`
-(`cache.c:80`) pops the same object, uncleared, for the next request. `free()`
-is called only over a limit the three per-thread instances -- connection-queue
-items, read buffers, pending IOs -- do not have.
+Defects in which a pointer to storage that one of memcached 1.6.45's two
+nested allocators handed out is used after the owner released it. Neither
+allocator returns that storage to `malloc` on the path that matters.
 
-    00_7af02b0c87_rbuf_copied_after_cache_free/   a multiget's read buffer copied after it went back
-    01_0ad4de66ae_io_walk_reads_freed_link/       a list walk reads the next-link out of a returned IO
+`cache.c` is the per-thread object cache: `do_cache_free` (`cache.c:135`)
+pushes a freed object on the cache's `STAILQ`, writing the list link into its
+first bytes, and `do_cache_alloc` (`cache.c:80`) pops the same object,
+uncleared, for the next request. `free()` is called only over a limit the
+three per-thread instances -- connection-queue items, read buffers, pending
+IOs -- do not have.
+
+`slabs.c` is the size-class allocator under every item: `item_free`
+(`items.c:360`) ends in `slabs_free`, and `do_slabs_free` (`slabs.c:501`)
+pushes the chunk onto its class's `slots` list. A chunk never reaches `free()`
+at all; a page leaves its class only through the mover, which this port does
+not build.
+
+    00_7af02b0c87_rbuf_copied_after_cache_free/       a multiget's read buffer copied after it went back
+    01_0ad4de66ae_io_walk_reads_freed_link/           a list walk reads the next-link out of a returned IO
+    02_59bd02ce29_tail_repair_frees_referenced_item/  the allocator frees an item somebody is holding
 
 | shape | cases |
 |---|---|
 | stale object pointer / cache.c reuse / read through the dead pointer | 0 |
 | stale object pointer / cache.c reuse / list link read through the dead pointer | 1 |
+| allocator-forced free of a referenced item / slabs reuse / read through the dead pointer | 2 |
 
-Two cases, one shape in two readings: of the freed object's payload, and of
-the freed object's own list link -- the field the walk needs next is the one
-the allocator's push and the next owner overwrite.
+Three cases in three shapes, across both of the allocators the port carries.
+Cases 0 and 1 are consumer mistakes in `cache.c`'s object caches, read one
+level apart: the freed object's payload, and the freed object's own list link
+-- the field the walk needs next is the one the allocator's push and the next
+owner overwrite. Case 2 is not a consumer mistake at all: it is `slabs`'
+own escape hatch, in which the item layer overwrites the reference count of an
+item it knows is held and frees it anyway.
 
-## Why there is no slabs case
+**Case 2 is the only one live in the pin.** Cases 0 and 1 reconstruct shapes
+upstream has since fixed; case 2 runs the branch that is in the pinned tree,
+reachable in the shipped binary with `-o tail_repair_time=N`.
 
-The port carries both of memcached's allocators, and its slab arm -- chunks
-on a class's `slots` list, never `free()`d -- is exercised by the port's
-example and smoke run in both modes. It has no corpus case, and this is why.
+## What was searched, and what was left out
 
-On 2026-09-21 upstream's history was searched (GitHub commit search over the
-repository for *use-after-free*, *use after free*, *dangling*, *freed item*,
-*double free*, *after free*, *refcount leak item*, *item_remove crash*,
-*segfault item*; issue search for the same) for a consumer-side defect in
-which an **item pointer outlives `slabs_free` and meets the chunk's next
-tenant**. Every candidate turned out to be something else:
+On 2026-09-21 upstream's whole history to the pin -- 2360 commits -- was
+searched for consumer-side defects in which a pointer to storage that
+`slabs.c` or `cache.c` handed out is used after the owner released it. The
+commit messages were filtered on temporal-safety vocabulary (55 hits) and
+classified by which allocator owned the storage. The published CVE record was
+searched too, through the CVE Program and NVD APIs, and the open issues were
+read.
 
-| commit | what it is | why not |
-|---|---|---|
-| `8caa4146a5` (2019) *close delete + incr item survival bug* | DELETE fetched, unlocked, and an `incr` replaced the item in between | DELETE's reference keeps the refcount up, so the item is never freed while held; a linkage race, not a stale-storage access |
-| `f4983b2068` (2012) *Fix a race condition from 1.4.10 on item_remove* | unprotected refcount tests against the LRU tail | that era's eviction reused the tail **in place** (`do_item_alloc`: `it = search; it->refcount = 1;`), never through `slabs_free`; the reuse a stale reference met was not the slab free list's |
-| `c0e5a99745` (2020), `2b97c389f0` (2024), `c65a2fbb13` (2017) | the page mover frees a chunked header the wrong way, changes a CAS during a rescue, unlinks a chunk mid-write | all in `slabs_mover.c`'s territory, the one place a chunk's storage changes class, which the port does not build |
-| `b031143f8a` (2020) *Fix over-freeing in internal object cache* | `cache.c`'s own limit test inverted | the allocator's bug, fixed at the pin; not a consumer's |
+Seven candidates are in scope and unbuilt; the three cases here are the three
+shapes built so far. The rest, and why each is not here yet:
 
-The item layer's reference counts under per-key locks -- atomics since
-`f4983b2068` -- are why: in 1.6.x an item reaches `slabs_free` only when its
-last reference is dropped. That is what was searched, not a proof of absence.
-The corpus records the boundary rather than manufacturing a case to fill it.
+| candidate | why not (yet) |
+|---|---|
+| `a8c4a82` = **CVE-2018-1000127** (+ DSA-4218, USN-3601-1, RHSA-2018:2290) | `refcount` is `unsigned short` and wraps during ASCII multigets, so an item is freed while still in the hash table; issue #271 carries the gdb evidence (`h_next == it`, infinite loop in `assoc_find`). The strongest provenance available and the next case to build |
+| `e3b7d33` (2026-07-02), `bc080ab` (2020) | the same overflow through the binary and meta protocols; upstream calls the binary one a remote-code-execution path. One shape, three protocols |
+| `152ddb6` (2026-07-09) | `refcount--` without the item lock on the `mg` error path: *"could cause the refcount to drift on a busy item and lead to memory corruption"* |
+| `f4983b2` (2012) and the 2011-12 `do_item_alloc`/`do_item_get` races | that era reused the LRU tail **in place** rather than through `slabs_free`, so the reuse is at the item layer, not the allocator's free list |
+| `41aa0a5` (2008) | hash corruption in `do_item_alloc`; pre-dates most of the structure the port builds |
+
+Out of scope until another allocator is ported: the page mover (7 defects on
+record, including `d67d187`, which frees busy items deliberately), the proxy's
+own pools (4), extstore (3), the logger's bipbuffer (2), the response bundles
+(1) and the crawler (1).
+
+Rejected outright, with the maintainer's own adjudication:
+
+| report | why |
+|---|---|
+| #1306, chunked-item `assert` DoS | asserts are in the debug binary only, the path falls through correctly without them, and the PoC does not reproduce: *"There is no issue, no CVE"* |
+| #1308, proxy `raw_line()` underflow | reachable only by a privileged user writing a configuration that would never work |
+| #1213, `do_cache_alloc` NPD | reachable only on `malloc` failure, because the `io_cache` has no limit -- and a NULL dereference faults in the protected and the spatial arm alike, so it could not tell them apart |
+| CVE-2026-90698 | fixed in 1.6.44; the pin is 1.6.45 |
+
+No published CVE is live at the pin. `master` is the pin
+(`compare/1.6.45...master` is `identical`), so there are no post-pin fixes to
+mine either; what is live is what upstream has chosen not to fix.
 
 ## The contract
 

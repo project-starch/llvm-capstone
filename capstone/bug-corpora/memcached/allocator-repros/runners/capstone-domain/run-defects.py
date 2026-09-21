@@ -39,6 +39,11 @@ CASES = [
         "io-walk-reads-freed-link",
         "stale object pointer / cache.c reuse / list link read through the dead pointer",
     ),
+    (
+        "59bd02ce29",
+        "tail-repair-frees-referenced-item",
+        "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer",
+    ),
 ]
 
 MAGIC = 0x315342414C53434D  # "MCSLABS1"

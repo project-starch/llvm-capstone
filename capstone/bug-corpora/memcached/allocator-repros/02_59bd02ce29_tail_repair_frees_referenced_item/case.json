@@ -1,0 +1,58 @@
+{
+  "case": 2,
+  "upstream_fix": "59bd02ce29",
+  "title": "tail repair discards a live reference and frees the item to the slab free list",
+  "consumer": "items.c, do_item_alloc()'s LRU-tail branch under settings.tail_repair_time",
+  "live_in_pin": true,
+  "live_proof": "the branch is in the pinned tree at items.c:1117-1125, under upstream's own comment 'WARNING: This can cause terrible corruption', and is reachable in the shipped binary with -o tail_repair_time=N (N>=10, memcached.c:5291-5298). It was never fixed: 59bd02ce29 (2014-04-27) set TAIL_REPAIR_TIME_DEFAULT to 0 -- 'this feature does have a race for something grabbing active data from the tail' -- and the code stayed",
+  "object": "an item, i.e. one chunk of a slab class, still referenced by a client",
+  "lifetime_ender": "search->refcount = 1 followed by do_item_unlink_nolock (items.c:1121-1123), which takes the count to zero and calls item_free -> slabs_free; the chunk goes on its class's slots list (slabs.c:501), never to free()",
+  "shape": "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer",
+  "allocator_layer": "slabs.c size classes over 1 MiB pages, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator: slabs.c is upstream's file at the 1.6.45 pin through the port's two patches, and every allocation decision here is its own. The item layer is reduced to the three functions that decide whether a chunk goes back to slabs -- item_free, do_item_remove, do_item_unlink_nolock -- with their refcount arithmetic kept verbatim; the hash table, the LRU queues, the stats, the storage hooks and the locks are left out because none of them takes part in that decision",
+  "distinguishing": "the other cases in this corpus are consumer mistakes -- a copy in the wrong order, a walk that reads a link it just returned. This one is the allocator's own escape hatch: the code deliberately overwrites the reference count of an item it knows is held, and upstream says so in the comment above it. It is also the only case here that is live in the pin",
+  "layer_note": "tail_repair exists because refcount leaks used to strand items at the LRU tail forever. The cure frees them regardless of who is holding them; since 2014 it is off by default, and the stat that counts it (tailrepairs, items.c:807) is still reported",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm (tail_repair_time set) frees the held item, the next slabs_alloc returns the same chunk, and the holder reads the other item's bytes; the fixed arm (the shipped default) leaves the item alone and the holder reads what it stored",
+      "note": "unit_reissued differs between the arms here, unlike cases 0 and 1: the premature free IS the defect, so the reuse it enables cannot be present in the control. That is why the case checks it before the marker"
+    },
+    "spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
+      "role": "control for sublet: same binary and guest, one difference. A chunk keeps the alias it was carved with, so the holder's pointer still names live storage -- the next item's -- and the read succeeds"
+    },
+    "sublet": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
+      "cause": 24,
+      "note": "release and issue each revoke the chunk, so the holder's pointer is dead twice over by the time it is read"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
+      "role": "control for poisoncap-protected: bounded leases and no invalidation, so the freed chunk stays addressable and the stale read succeeds"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
+      "signal": 34,
+      "si_code": 2,
+      "note": "si_code 2 and not 3: the sweep has run and the holder's alias is revoked, which is a different refusal from an access to a poisoned but unswept granule"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: slab pages from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == mc_defect_read; with --runtime-revocation off it must complete instead",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "slabs never calls free() on a chunk at all: item_free ends in slabs_free, which pushes the chunk on its class's slots list. libc's quarantine therefore never holds it and its revoker never sweeps it"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the chunk never reaches free(), so ASan has no event; it would see the reuse only as an ordinary live object"
+    }
+  },
+  "status": "native pair 2026-09-21 through the port, both arms as expected (buggy: unit_reissued=1, accessed_through_stale=1, damage=1, chunk_reuses=1; fixed: all zero). Capstone domain 2026-09-21: spatial completes, sublet faults at mc_defect_read cause=24 at the published address; negative control fires 2/2. PoisonCap 2026-09-21: spatial completes with sweeps=0, protected faults with SIGPROT si_code=PROT_CHERI_TAG at the resolved address, behind the platform's five instruction controls; negative control fires 2/2. Stock CheriBSD 2026-09-21: completes with revocation on and verified (chunk_reuses=1, so the chunk really was reissued) while revocation-control faults in the same boot; with revocation off it completes too; negative control fires 1/1",
+  "note": "damage is the holder reading another item's bytes where it stored its own. Upstream's warning says 'terrible corruption' without naming a consequence; this records the step that produces it"
+}
