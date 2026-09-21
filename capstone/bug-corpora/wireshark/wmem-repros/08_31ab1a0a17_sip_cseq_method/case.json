@@ -1,0 +1,27 @@
+{
+  "case": 8,
+  "upstream_fix": "31ab1a0a17",
+  "title": "CSeq method string in pinfo->pool stored into the file-scope resend record by a truncation fix",
+  "consumer": "epan/dissectors/packet-sip.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-sip.c stores wmem_strdup(wmem_file_scope(), cseq_method). The pre-fix shape is quoted from 31ab1a0a17^ at packet-sip.c:1331 (the field), :4096 (the pinfo->pool string), :5338 (the file-scope record), :5323/:5352 (the stores) and :5375 (the read).",
+  "object": "the CSeq method string, 48 bytes in pinfo->pool",
+  "lifetime_ender": "epan_dissect_reset between packets (epan.c:591 at the fix's parent); the resend record in the static hash keeps the pointer",
+  "shape": "packet-scope object kept by file-scope state across packets",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the hash table and its lookup are reduced to the record",
+  "distinguishing": "introduced and fixed one day apart by a change that replaced an inline copy with a pointer; no release shipped it",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+}

@@ -82,5 +82,7 @@ a workload recording from tshark; a recorder is a follow-up.
   Sublet lends whole regions; a chunk inside a live block has none of its own.
 * Regions are reissued only at their exact size and never returned to the
   payload. A long replay with many distinct sizes can exhaust it.
-* Nothing here runs a dissector. The 17 in-class reported defects are
-  corpus work on top of this port, not part of it.
+* Nothing here runs a dissector. The reported defects are in
+  `bug-corpora/wireshark/wmem-repros/`: seventeen reports, thirteen distinct
+  defects, twelve revoked reads and one recorded non-detection, measured
+  2026-09-21.

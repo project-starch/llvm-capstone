@@ -1,0 +1,28 @@
+{
+  "case": 11,
+  "upstream_fix": "3a5f82dfb5",
+  "title": "header map created in pinfo->pool before the start line and saved into the conversation's file-scope data",
+  "consumer": "epan/dissectors/packet-http.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-http.c creates header_value_map only from wmem_file_scope() (:1598) before storing it at :1777/:1782; the stray-header path that creates the map in pinfo->pool (3a5f82dfb5^ at :1808-1814) does not exist at the pin, so the store cannot carry a packet-scope map there. The pre-fix shape is quoted from 3a5f82dfb5^ at packet-http.c:1808-1814 (the pinfo->pool map), :1781/:1786 (the store), :1797-1804 (the retrieval) and :3611 with wmem_map.c:299 (the insert's first read).",
+  "object": "the wmem_map_t header map, 88 bytes in pinfo->pool",
+  "lifetime_ender": "epan_dissect_reset between packets (epan.c:625 at the fix's parent); the conversation's private data keeps the map pointer",
+  "shape": "packet-scope object kept by file-scope state across packets",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the map is reduced to its struct storage and the insert to its first read of the struct",
+  "distinguishing": "the stale access is the allocator's own metadata read inside wmem_map_insert; had it not faulted, the next step would call the allocator through the stale map's data_allocator. Reoccupation is asserted before the marker because the report's allocator log shows another dissector's allocation sitting in the freed block",
+  "sibling_issue": "#20703 was closed as a duplicate of #20702: same map, same insert, a capture filed two days after the fix",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+}

@@ -1,0 +1,27 @@
+{
+  "case": 6,
+  "upstream_fix": "a8b16d74e1",
+  "title": "distinguished-name buffer in pinfo->pool kept by a file-level static whose frame-end reset was registered on a copy of pinfo",
+  "consumer": "epan/dissectors/packet-eap.c and epan/dissectors/packet-x509if.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-eap.c no longer carries the pinfo_eapol copy. The pre-fix shape is quoted from a8b16d74e1^ at packet-eap.c:1818-1819 and :2283 (the copy handed to TLS), packet-x509if.c:279 and :911-912 (the static, the allocation and the registration) and packet-x509af.c:323-324 (the read).",
+  "object": "the x509if distinguished-name string buffer, about 2600 bytes in pinfo->pool",
+  "lifetime_ender": "epan_dissect_reset between packets (epan.c:591 at the fix's parent); the frame-end routine that would clear the static ran on a discarded copy of pinfo",
+  "shape": "stale pointer held by a global across packets",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the defeated frame-end registration is represented by its effect, a static that is never cleared",
+  "distinguishing": "the largest object in the corpus, and the only holder whose upstream cleanup existed but was attached to the wrong packet_info; the read is a printf %s over the whole buffer",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+}

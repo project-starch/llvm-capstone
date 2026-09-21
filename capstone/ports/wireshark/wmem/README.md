@@ -184,6 +184,6 @@ for when it wants to see this class at all.
 
 These are allocator-component QEMU results. They do not establish protection
 of a running Wireshark, dissector correctness on Capstone, FPGA behaviour,
-memory overhead of the complete application, or timing overhead. The 17
-reported in-class defects (`docs/ref/port-candidate-survey.md`) are corpus work
-on top of this port, not part of it.
+memory overhead of the complete application, or timing overhead. The reported
+defects live in `bug-corpora/wireshark/wmem-repros/`: thirteen cases built by
+this port with `-DWM_CORPUS_DIR`, twelve caught and one recorded non-detection.

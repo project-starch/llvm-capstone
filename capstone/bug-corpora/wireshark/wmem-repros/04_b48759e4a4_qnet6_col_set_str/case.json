@@ -1,0 +1,27 @@
+{
+  "case": 4,
+  "upstream_fix": "b48759e4a4",
+  "title": "col_add_str converted to col_set_str on a non-literal val_to_str default string",
+  "consumer": "epan/dissectors/packet-qnet6.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-qnet6.c uses col_add_str at the site. The pre-fix shape is quoted from b48759e4a4^ at packet-qnet6.c:4066; the introducing conversion 9e3e17136c and the fix are both in v4.3.1.",
+  "object": "the formatted default string of val_to_str, 70 bytes in wmem_packet_scope()",
+  "lifetime_ender": "wmem_leave_packet_scope at the end of epan_dissect_run_with_taps (epan.c:665 at the fix's parent), before the packet is printed",
+  "shape": "packet-scope object held by a column or address past the scope's end",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the seam's packet pool stands in for the separate wmem_packet_scope() pool, the same allocator type with the same reset",
+  "distinguishing": "the only case whose fix is on the store side (copy into the column) rather than on the allocation's scope; introduced and fixed within one release by a mass conversion that mistook a heap string for a literal",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+}

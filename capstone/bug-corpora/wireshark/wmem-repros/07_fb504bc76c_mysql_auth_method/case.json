@@ -1,0 +1,27 @@
+{
+  "case": 7,
+  "upstream_fix": "fb504bc76c",
+  "title": "authentication plugin name in pinfo->pool kept by the file-scope connection record and compared by the next packet",
+  "consumer": "epan/dissectors/packet-mysql.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-mysql.c reads the name with tvb_get_string_enc(wmem_file_scope(), ...). The pre-fix shape is quoted from fb504bc76c^ at packet-mysql.c:1371 (the field), :4043 (the file-scope record), :3714 (the store) and :3745 (the read).",
+  "object": "the auth-plugin name string, 43 bytes in pinfo->pool",
+  "lifetime_ender": "epan_dissect_reset between packets (epan.c:589 at the fix's parent); the connection record keeps the pointer",
+  "shape": "packet-scope object kept by file-scope state across packets",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the connection record is reduced to the one field",
+  "distinguishing": "request and response are two packets by protocol, so the cross-packet read is guaranteed by the exchange rather than by data-dependent state",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; results/20260921-qemu"
+}

@@ -1,0 +1,26 @@
+{
+  "case": 12,
+  "upstream_fix": "90bb3a5c9e",
+  "title": "epan-scope root name freed individually while the protocol registry still holds it",
+  "consumer": "epan/dissectors/packet-xml.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: the line wmem_free(wmem_epan_scope(), root_name) is gone from packet-xml.c. The pre-fix shape is quoted from 90bb3a5c9e^ at packet-xml.c:1453-1456 and :1499-1501 (the alias), :1600-1616 (the registration that stores the pointer), :1631 (the free) and :709 with ftype-protocol.c:54 (the read).",
+  "object": "the DTD's root name, a short epan-scope string the registry stores by pointer",
+  "lifetime_ender": "an explicit wmem_free into the epan scope's block allocator at the end of register_dtd; the chunk goes to the recycler's free list inside a live block, and the next request of that size receives it",
+  "shape": "stale pointer after an individual recycler free",
+  "allocator_layer": "block",
+  "fidelity": "model-consumer, real allocator; the ASan report's own alloc and free stacks describe the address being recycled by a packet-pool object, not the root name's lifecycle, which is taken from the fix",
+  "distinguishing": "the only case whose lifetime ends by an individual free rather than a pool reset, and the corpus's recorded non-detection: Sublet lends whole regions and a chunk inside a live block has no epoch of its own, so the protected arm is expected to complete. Introduced and fixed within one release, by a change that turned an owned copy into an alias without removing the free",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "complete: the individual recycler free ends no epoch, a recorded non-detection, not a pass"
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: both arms complete, the recorded non-detection; results/20260921-qemu"
+}
