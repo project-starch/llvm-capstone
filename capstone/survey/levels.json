@@ -1,0 +1,375 @@
+{
+  "schema": 1,
+  "purpose": "One survey level per ported allocator, recorded on the revision the port pins.",
+  "instrument": {
+    "repo": "nested-allocators-paper",
+    "path": "experiments/a1/hook",
+    "header": "a1hook.h",
+    "core": "a1core.inc",
+    "contract": "A target's wiring defines A1_L1_NAME, optionally A1_L0_NAME, includes a1core.inc, and implements a1_block_* and a1_ctx_*. The wiring is included into the allocator's own translation unit so the build system does not change.",
+    "one_custom_level_per_process": true,
+    "consequence": "A program with several nested allocators needs one run per allocator, not one run with several levels."
+  },
+  "workloads": {
+    "speedtest1-size100": {
+      "program": "SQLite",
+      "command": "speedtest1 --size 100",
+      "note": "The recorded configuration of the existing survey, kept so the new rows stay comparable with the old ones."
+    },
+    "pyperformance-regex": {
+      "program": "CPython",
+      "command": "pyperformance run --benchmarks regex_v8",
+      "note": "Summed over the process tree, as the existing CPython row is."
+    },
+    "pgbench-tpcb": {
+      "program": "PostgreSQL",
+      "command": "pgbench -b tpcb-like",
+      "note": "One backend process is the workload process. The four managers are separate runs of the same workload."
+    },
+    "tshark-corpus-captures": {
+      "program": "Wireshark",
+      "command": "tshark -r <capture> -V",
+      "note": "The captures attached to the upstream reports the wmem defect corpus names, so the survey exercises the same dissectors the corpus does. New workload: the port has no native recorder, its src/native is a synthetic driver."
+    },
+    "ffmpeg-decode-300s": {
+      "program": "FFmpeg",
+      "command": "ffmpeg -i <clip> -f null -",
+      "note": "The recorded configuration of the existing survey row."
+    },
+    "memcached-churn": {
+      "program": "memcached",
+      "command": "set, get, delete, five rounds",
+      "note": "The recorded configuration of the existing survey row."
+    },
+    "ab-keepalive": {
+      "program": "Apache httpd",
+      "command": "ab -k",
+      "note": "The recorded configuration of the existing survey row. Both APR levels come from the same workload."
+    }
+  },
+  "levels": [
+    {
+      "id": "sqlite-lookaside",
+      "program": "SQLite",
+      "allocator": "lookaside",
+      "level": "lookaside",
+      "below": "memsys5",
+      "upstream": {"version": "3.53.3", "sources": ["sqlite3.c"]},
+      "port": {"path": "capstone/ports/sqlite", "status": "merged"},
+      "workload": "speedtest1-size100",
+      "container": "the connection's lookaside buffer",
+      "seam": {
+        "alloc": "a lookaside slot handed out on the sqlite3DbMallocRawNN path",
+        "free": "sqlite3DbFree returning a slot to the connection free list",
+        "bulk": "connection close releasing the lookaside buffer",
+        "evidence": "capstone/ports/sqlite/sublet/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "The only level the existing survey records for SQLite. It is kept so the new table can be compared with the old one, and because its level 0 is not libc."
+    },
+    {
+      "id": "sqlite-memsys5",
+      "program": "SQLite",
+      "allocator": "memsys5",
+      "level": "memsys5",
+      "below": "libc",
+      "upstream": {"version": "3.53.3", "sources": ["sqlite3.c"]},
+      "port": {"path": "capstone/ports/sqlite", "status": "merged"},
+      "workload": "speedtest1-size100",
+      "container": "the memsys5 arena",
+      "seam": {
+        "alloc": "memsys5Malloc",
+        "free": "memsys5Free",
+        "bulk": "none: the arena is not released during a run",
+        "evidence": "capstone/ports/sqlite/sublet/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "The buddy allocator beneath lookaside. Recording it turns SQLite's two-level nesting into two measured rows instead of one."
+    },
+    {
+      "id": "cpython-pymalloc",
+      "program": "CPython",
+      "allocator": "pymalloc",
+      "level": "pymalloc",
+      "below": "libc",
+      "upstream": {"version": "3.13.7", "sources": ["Objects/obmalloc.c"]},
+      "port": {"path": "capstone/ports/cpython/pymalloc", "status": "merged"},
+      "workload": "pyperformance-regex",
+      "container": "the pymalloc arena",
+      "seam": {
+        "alloc": "pymalloc_alloc",
+        "free": "pymalloc_free",
+        "bulk": "arena release",
+        "evidence": "capstone/ports/cpython/pymalloc/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "Already recorded by the existing survey at 3.13. The new run only moves it onto the pinned 3.13.7 the port builds."
+    },
+    {
+      "id": "postgres-aset",
+      "program": "PostgreSQL",
+      "allocator": "AllocSet",
+      "level": "aset",
+      "below": "libc",
+      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/aset.c"]},
+      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "workload": "pgbench-tpcb",
+      "container": "the memory context",
+      "seam": {
+        "alloc": "AllocSetAlloc",
+        "free": "AllocSetFree",
+        "bulk": "AllocSetReset and AllocSetDelete",
+        "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "The existing survey records one aggregated `context` level. Splitting it is what lets the table say which manager the reuse belongs to."
+    },
+    {
+      "id": "postgres-generation",
+      "program": "PostgreSQL",
+      "allocator": "Generation",
+      "level": "generation",
+      "below": "libc",
+      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/generation.c"]},
+      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "workload": "pgbench-tpcb",
+      "container": "the memory context",
+      "seam": {
+        "alloc": "GenerationAlloc",
+        "free": "GenerationFree",
+        "bulk": "GenerationReset and GenerationDelete",
+        "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0006-generation-sublet-lifetimes.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "Keeps its block recycling policy, so its reuse profile is not the AllocSet one."
+    },
+    {
+      "id": "postgres-slab",
+      "program": "PostgreSQL",
+      "allocator": "Slab",
+      "level": "slab",
+      "below": "libc",
+      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/slab.c"]},
+      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "workload": "pgbench-tpcb",
+      "container": "the memory context",
+      "seam": {
+        "alloc": "SlabAlloc",
+        "free": "SlabFree",
+        "bulk": "SlabReset and SlabDelete",
+        "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0005-slab-sublet-lifetimes.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "Fixed-size free list with deterministic same-address reuse, which is the shape the mmgr corpus case 7 turns on."
+    },
+    {
+      "id": "postgres-bump",
+      "program": "PostgreSQL",
+      "allocator": "Bump",
+      "level": "bump",
+      "below": "libc",
+      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/bump.c"]},
+      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "workload": "pgbench-tpcb",
+      "container": "the memory context",
+      "seam": {
+        "alloc": "BumpAlloc",
+        "free": "none: Bump has no individual free",
+        "bulk": "BumpReset and BumpDelete",
+        "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0007-bump-sublet-lifetimes.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "The one ported manager with no individual free at all. Its row is the clean case of a level whose every death is a bulk release."
+    },
+    {
+      "id": "wireshark-block",
+      "program": "Wireshark",
+      "allocator": "wmem block",
+      "level": "wmem_block",
+      "below": "libc",
+      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_block.c"]},
+      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "workload": "tshark-corpus-captures",
+      "container": "the wmem pool",
+      "seam": {
+        "alloc": "wmem_block_alloc",
+        "free": "wmem_block_free",
+        "bulk": "wmem_block_free_all at the pool reset",
+        "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "The file and epan scopes. It keeps every block across a reset and rebuilds its free lists, which is exactly the retained-backing shape the survey looks for."
+    },
+    {
+      "id": "wireshark-block-fast",
+      "program": "Wireshark",
+      "allocator": "wmem block_fast",
+      "level": "wmem_block_fast",
+      "below": "libc",
+      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_block_fast.c"]},
+      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "workload": "tshark-corpus-captures",
+      "container": "the wmem pool",
+      "seam": {
+        "alloc": "wmem_block_fast_alloc",
+        "free": "none: block_fast has no individual free",
+        "bulk": "wmem_block_fast_free_all at the packet-scope reset",
+        "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "The per-dissection packet pool. It keeps its first 2 MiB block and rewinds, so every packet reuses the same storage without any system free."
+    },
+    {
+      "id": "wireshark-simple",
+      "program": "Wireshark",
+      "allocator": "wmem simple",
+      "level": "wmem_simple",
+      "below": "libc",
+      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_simple.c"]},
+      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "workload": "tshark-corpus-captures",
+      "container": "the wmem pool",
+      "seam": {
+        "alloc": "wmem_simple_alloc",
+        "free": "wmem_simple_free",
+        "bulk": "wmem_simple_free_all",
+        "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "Passes every object straight to the system allocator. It is the control row: a nested allocator whose releases level 0 does see."
+    },
+    {
+      "id": "wireshark-strict",
+      "program": "Wireshark",
+      "allocator": "wmem strict",
+      "level": "wmem_strict",
+      "below": "libc",
+      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_strict.c"]},
+      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "workload": "tshark-corpus-captures",
+      "container": "the wmem pool",
+      "seam": {
+        "alloc": "wmem_strict_alloc",
+        "free": "wmem_strict_free",
+        "bulk": "wmem_strict_free_all",
+        "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "The debugging allocator upstream substitutes to make these defects visible to Valgrind. Recording it states what the production allocators cost in visibility."
+    },
+    {
+      "id": "ffmpeg-avbufferpool",
+      "program": "FFmpeg",
+      "allocator": "AVBufferPool",
+      "level": "avbufferpool",
+      "below": "libc",
+      "upstream": {"version": "9.0.1", "sources": ["libavutil/buffer.c"]},
+      "port": {"path": "capstone/ports/ffmpeg/buffer-pool", "status": "merged"},
+      "workload": "ffmpeg-decode-300s",
+      "container": "the AVBufferPool",
+      "seam": {
+        "alloc": "av_buffer_pool_get",
+        "free": "pool_release_buffer pushing the payload onto the pool freelist",
+        "bulk": "av_buffer_pool_uninit",
+        "evidence": "capstone/bug-corpora/ffmpeg/pool-repros/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "The level the existing FFmpeg survey row already records, moved onto the pinned 9.0.1."
+    },
+    {
+      "id": "ffmpeg-avrefstructpool",
+      "program": "FFmpeg",
+      "allocator": "AVRefStructPool",
+      "level": "avrefstructpool",
+      "below": "libc",
+      "upstream": {"version": "9.0.1", "sources": ["libavutil/refstruct.c"]},
+      "port": {"path": "capstone/ports/ffmpeg/buffer-pool", "status": "merged"},
+      "workload": "ffmpeg-decode-300s",
+      "container": "the AVRefStructPool",
+      "seam": {
+        "alloc": "av_refstruct_pool_get",
+        "free": "the pool's release path returning an entry",
+        "bulk": "av_refstruct_pool_uninit",
+        "evidence": "capstone/ports/ffmpeg/buffer-pool/patches/ffmpeg-9.0.1-0002-libavutil-pool-payload-lifetime-hooks.patch"
+      },
+      "confirmed": "port-patch",
+      "why": "FFmpeg's second pooled allocator, ported but never surveyed. Counting one of a program's two allocators can only understate the share of invisible releases."
+    },
+    {
+      "id": "memcached-slabs",
+      "program": "memcached",
+      "allocator": "slab classes",
+      "level": "slabs",
+      "below": "libc",
+      "upstream": {"version": "1.6.45", "sources": ["slabs.c"]},
+      "port": {"path": "capstone/ports/memcached/allocators", "status": "pending", "lands_with": "PR #71"},
+      "workload": "memcached-churn",
+      "container": "the size class",
+      "seam": {
+        "alloc": "do_slabs_alloc",
+        "free": "do_slabs_free pushing the chunk onto its class slots list",
+        "bulk": "none in this build: a page leaves its class only through the mover, which the port does not build",
+        "evidence": "capstone/bug-corpora/memcached/allocator-repros/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "The level the existing memcached survey row records, moved onto the pinned 1.6.45."
+    },
+    {
+      "id": "memcached-objcache",
+      "program": "memcached",
+      "allocator": "object cache",
+      "level": "objcache",
+      "below": "libc",
+      "upstream": {"version": "1.6.45", "sources": ["cache.c"]},
+      "port": {"path": "capstone/ports/memcached/allocators", "status": "pending", "lands_with": "PR #71"},
+      "workload": "memcached-churn",
+      "container": "the per-thread cache",
+      "seam": {
+        "alloc": "do_cache_alloc popping the STAILQ head",
+        "free": "do_cache_free pushing the object and writing the list link into its first bytes",
+        "bulk": "cache_destroy",
+        "evidence": "capstone/bug-corpora/memcached/allocator-repros/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "memcached's second allocator, ported and never surveyed. It calls free only over a limit its three per-thread instances do not have, so its releases are invisible by construction."
+    },
+    {
+      "id": "apr-pool",
+      "program": "Apache",
+      "allocator": "APR pools",
+      "level": "apr_pool",
+      "below": "libc",
+      "upstream": {"version": "1.7.4", "sources": ["memory/unix/apr_pools.c"]},
+      "port": {"path": "capstone/ports/apr/pools", "status": "merged"},
+      "workload": "ab-keepalive",
+      "container": "the pool",
+      "seam": {
+        "alloc": "apr_palloc",
+        "free": "none: a pool object has no individual free",
+        "bulk": "apr_pool_clear and apr_pool_destroy",
+        "evidence": "capstone/ports/apr/pools/README.md"
+      },
+      "confirmed": "port-document",
+      "why": "The level the existing Apache survey row records. Its own wiring already says the second allocator is not measured, which is what this branch fixes."
+    },
+    {
+      "id": "apr-bucket",
+      "program": "Apache",
+      "allocator": "APR buckets",
+      "level": "apr_bucket",
+      "below": "apr_pool",
+      "upstream": {"version": "apr-util 1.6.3", "sources": ["buckets/apr_buckets_alloc.c"]},
+      "port": {"path": "capstone/ports/apr/census-buckets.sh", "status": "pending", "lands_with": "PR #74"},
+      "workload": "ab-keepalive",
+      "container": "the bucket allocator",
+      "seam": {
+        "alloc": "apr_bucket_alloc",
+        "free": "apr_bucket_free returning the node to the allocator freelist",
+        "bulk": "apr_bucket_alloc_destroy",
+        "evidence": "capstone/ports/apr/census-buckets.sh"
+      },
+      "confirmed": "port-document",
+      "why": "The second genuinely nested pair in the set. Its level 0 is the APR pool, not libc, so its row shows releases that are invisible even to the custom allocator beneath it."
+    }
+  ]
+}
