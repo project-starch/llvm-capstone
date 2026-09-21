@@ -7,8 +7,9 @@ an allocator component port for the
 It does not execute memcached, its item layer, its threads or its page mover:
 the port is single-threaded, the mutexes are no-ops in a domain and the host's
 uncontended ones natively, and `slabs_mover.c` -- the one place a page changes
-class -- is not built. There is no CheriBSD or PoisonCap build of these
-allocators.
+class -- is not built. A [stock CheriBSD build](host/cheribsd/README.md)
+exists -- the platform's own `malloc` under every page and object, no adapter
+authority -- and there is no PoisonCap build of these allocators.
 
 ## Layout and source boundary
 
@@ -16,8 +17,9 @@ This component uses `../../common` for verified downloads, cross toolchains,
 external builds and the shared QEMU lock, in the layout the port catalog
 describes. `src/shared/` holds the protocol, the metadata heap, the service
 stubs and the lifetime ledger; `src/allocators/sublet/` and `src/native/` the
-two authority layers under it; `src/capstone-domain/` the domain entry;
-`src/linux-guest/` the staging loader. Generated sources stay outside the
+two authority layers under it; `src/cheribsd/` the stock-platform ledger over
+`malloc`; `src/capstone-domain/` the domain entry; `src/linux-guest/` the
+staging loader. Generated sources stay outside the
 repository.
 
 `upstream.json` pins the official memcached 1.6.45 archive by SHA256 -- the
@@ -110,6 +112,33 @@ memory-overhead claim is made.
   freestanding target has no FP ABI, so nine compiler-rt double builtins are
   compiled in from the tree, as the BEEBS FP benchmarks do.
 
+## CheriBSD
+
+The `cheribsd` preset builds the same allocators for CheriBSD purecap with
+`src/cheribsd/malloc-leases.c`: every slab page and every cache object comes
+from the platform's `malloc` and goes back through its `free`, exactly as
+upstream memcached does; chunks are offsets into a malloc'd page, addressed
+through the page's capability. There is no payload region and no protected
+mode; mode 1 is refused. This is the build that asks the platform's own libc
+revocation the question at the level where it lives, and the corpus's
+[CheriBSD arm](../../../bug-corpora/memcached/allocator-repros/runners/cheribsd/README.md)
+answers it: cache.c never calls `free()` on the path where a freed object is
+reused, so revocation is never asked, and both cases complete while the
+control beside them faults.
+
+`bin/revocation-control` is the positive control that makes a completing stock
+arm mean something. It frees a block, forces the quarantine sweep
+(`malloc_revoke_quarantine_force_flush()`), and reads through the old pointer
+at the corpus's own labelled `clbu`, `mc_defect_read`. With revocation on it
+faults there; with it off it completes.
+
+The SDK ships `ld.lld` and no `ld`, so the port adds `-fuse-ld=lld` for this
+platform itself; the preset says the same through `CMAKE_EXE_LINKER_FLAGS`, but
+the shared `host/cheribsd/build.py` configures from the toolchain file alone.
+On CheriBSD `allocator-example` prints `ALLOCATOR_EXAMPLE memcached PASS
+pointer_bytes=16`, which is what the shared runner's component registration
+expects.
+
 ## Build
 
 From the repository root, source `capstone/tests/capstone-test-env.sh` and set
@@ -121,6 +150,7 @@ cmake --preset native && cmake --build /tmp/capstone/memcached-allocators/build/
 ctest --test-dir /tmp/capstone/memcached-allocators/build/native
 cmake --preset capstone-domain && cmake --build /tmp/capstone/memcached-allocators/build/capstone-domain
 cmake --preset linux-guest && cmake --build /tmp/capstone/memcached-allocators/build/linux-guest
+CHERI_SDK=... CHERI_SYSROOT=... cmake --preset cheribsd && cmake --build /tmp/capstone/memcached-allocators/build/cheribsd
 ```
 
 Presets build under `/tmp/capstone/memcached-allocators/build/`. A hosted
@@ -129,8 +159,8 @@ build exposes `Memcached::Allocators`, `bin/allocator-example` and
 corpus supplies `mcp_replay`, and the build produces `bin/defects` (hosted) or
 `bin/defects.dom` (domain). The corpus's `shared/build-cases.sh` invokes it
 once per case. `allocator-example` prints
-`ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=8` as its last line, the form
-the shared runner's component registration expects.
+`ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=8` as its last line natively,
+`pointer_bytes=16` on CheriBSD.
 
 ## Verification
 
@@ -142,8 +172,8 @@ next `slabs_alloc` and a freed object as the next `cache_alloc`,
 be measuring the wrong allocators. The same sequence, built through the seam
 as a domain, completes in both modes under QEMU with the same counts.
 
-The domain arms are the corpus's, run and judged by
-[its runner](../../../bug-corpora/memcached/allocator-repros/runners/capstone-domain/README.md):
+The domain and CheriBSD arms are the corpus's, run and judged by
+[its runners](../../../bug-corpora/memcached/allocator-repros/runners/capstone-domain/README.md):
 `spatial` must complete, `sublet` must fault at the labelled probe, the
 expected address is published by the run, and the negative control must make
 every oracle fail before a pass is believed. Results are recorded in the case

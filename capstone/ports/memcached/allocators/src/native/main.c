@@ -32,8 +32,16 @@ int main(int argc, char **argv) {
     out.mode = mode;
   }
   void *metadata = aligned_alloc(4096, MCP_META_BYTES);
+#ifdef MCP_UNITS_FROM_MALLOC
+  void *payload = NULL; /* the platform's malloc is the region */
+#else
   void *payload = aligned_alloc(4096, MCP_PAYLOAD_BYTES);
-  if (!metadata || !payload)
+#endif
+#ifndef MCP_UNITS_FROM_MALLOC
+  if (!payload)
+    return 4;
+#endif
+  if (!metadata)
     return 4;
   mcp_meta_init(metadata);
   mcp_payload_init(payload);

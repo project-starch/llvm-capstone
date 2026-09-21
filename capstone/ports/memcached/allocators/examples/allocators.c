@@ -15,8 +15,16 @@ _Noreturn void mcp_fail(unsigned code) {
 }
 int main(void) {
   void *metadata = aligned_alloc(4096, MCP_META_BYTES);
+#ifdef MCP_UNITS_FROM_MALLOC
+  void *payload = NULL; /* the platform's malloc is the region */
+#else
   void *payload = aligned_alloc(4096, MCP_PAYLOAD_BYTES);
-  if (!metadata || !payload)
+#endif
+#ifndef MCP_UNITS_FROM_MALLOC
+  if (!payload)
+    return 1;
+#endif
+  if (!metadata)
     return 1;
   mcp_meta_init(metadata);
   mcp_payload_init(payload);

@@ -29,17 +29,25 @@
     },
     "poisoncap-spatial": {
       "status": "not written",
-      "requires": "no CheriBSD or PoisonCap build of memcached's allocators exists"
+      "requires": "no PoisonCap build of memcached's allocators exists; the stock CheriBSD build is the cheribsd-revocation arm"
     },
     "poisoncap-protected": {
       "status": "not written",
-      "requires": "no CheriBSD or PoisonCap build of memcached's allocators exists"
+      "requires": "no PoisonCap build of memcached's allocators exists; the stock CheriBSD build is the cheribsd-revocation arm"
     },
     "native-detect": {
       "status": "not written",
       "requires": "the buffer never reaches free(), so ASan has no event at the push; it would see the reuse only as an ordinary live object"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: slab pages and cache objects from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == mc_defect_read; with --runtime-revocation off it must complete instead. The ABI control reports runtime_revocation from malloc_revoke_enabled()",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "cache.c pushes the freed object on its STAILQ and pops it back uncleared; it calls free() only over a limit these caches do not have, so libc's quarantine never holds the object"
     }
   },
-  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds; negative control fires. No poisoncap arm: no CheriBSD or PoisonCap build of memcached's allocators exists",
+  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds; negative control fires. Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes (completed=1, object_reuses=1) while revocation-control faults at mc_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 2/2 with the control still faulting. No poisoncap arm: no PoisonCap build of memcached's allocators exists",
   "note": "damage is the copied command differing from what was read: natively the first 8 bytes become the free list's link, in a domain the first 16. Upstream reported an unhelpful ERROR to the client; this records the byte-level cause of it"
 }

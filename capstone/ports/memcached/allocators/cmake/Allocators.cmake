@@ -10,8 +10,15 @@ target_include_directories(allocators-options INTERFACE
 # whole capabilities. The shim defaults to 8 so a census keeps upstream's table.
 target_compile_definitions(allocators-options INTERFACE NDEBUG CHUNK_ALIGN_BYTES=16)
 target_compile_options(allocators-options INTERFACE -ffunction-sections -fdata-sections -Wall -Wextra)
+# The lifetime ledger: one over a payload region for native and domain builds,
+# one over the platform's malloc for stock CheriBSD.
+if(PORT_PLATFORM STREQUAL "cheribsd")
+  set(ledger src/cheribsd/malloc-leases.c)
+else()
+  set(ledger src/shared/leases.c)
+endif()
 add_library(mc-allocators OBJECT "${MC_SOURCE}/slabs.c" "${MC_SOURCE}/cache.c"
-  src/shared/metadata.c src/shared/services.c src/shared/leases.c)
+  src/shared/metadata.c src/shared/services.c ${ledger})
 # Upstream's warnings are upstream's; ours stay on.
 set_source_files_properties("${MC_SOURCE}/slabs.c" "${MC_SOURCE}/cache.c"
   PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter;-Wno-sign-compare")
@@ -22,10 +29,27 @@ add_dependencies(mc-allocators memcached-source)
 # in. Both the Capstone domain build and the hosted build read it.
 set(MCP_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied program that defines mcp_replay")
 if(PORT_HOSTED)
-  target_sources(mc-allocators PRIVATE src/native/authority.c)
   # The shim takes the host's <pthread.h> in a hosted build (see mc_pthread_shim.h).
   find_package(Threads REQUIRED)
   target_link_libraries(allocators-options INTERFACE Threads::Threads)
+  if(PORT_PLATFORM STREQUAL "cheribsd")
+    # Stock CheriBSD: pages and objects from the platform's own malloc, so its
+    # revocation is asked the question at the level where it lives. No payload
+    # region, no ledger over one: src/cheribsd/malloc-leases.c is the seam.
+    target_compile_definitions(allocators-options INTERFACE MCP_UNITS_FROM_MALLOC)
+    # The SDK ships ld.lld and no ld; without this clang falls back to the host
+    # linker. The cheribsd preset says the same through CMAKE_EXE_LINKER_FLAGS,
+    # but the shared host/cheribsd/build.py configures from the toolchain file
+    # alone, so the port says it here too.
+    add_link_options(-fuse-ld=lld)
+    # The positive control: this guest's libc revocation, made to fire at the
+    # corpus's own labelled load shape. Pure libc, no port library.
+    add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
+    # The probes use GNU inline asm with a "C" operand, as cheric.h does.
+    set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
+  else()
+    target_sources(mc-allocators PRIVATE src/native/authority.c)
+  endif()
   add_library(mc-allocators-library STATIC $<TARGET_OBJECTS:mc-allocators>)
   set_target_properties(mc-allocators-library PROPERTIES OUTPUT_NAME memcached-allocators)
   target_link_libraries(mc-allocators-library PUBLIC allocators-options)
@@ -40,6 +64,9 @@ if(PORT_HOSTED)
     target_link_libraries(defects PRIVATE mc-allocators)
     add_dependencies(defects memcached-source)
     target_link_options(defects PRIVATE LINKER:--gc-sections)
+    if(PORT_PLATFORM STREQUAL "cheribsd")
+      set_target_properties(defects PROPERTIES C_EXTENSIONS ON)
+    endif()
   endif()
 else()
   enable_language(ASM)

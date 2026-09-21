@@ -57,8 +57,12 @@ referenced rather than copied. Where this corpus differs:
   and the program prints nothing.
 * **`native-detect`** is not merely unwritten: the objects never reach
   `malloc`'s `free`, so ASan has no event at the push.
-* **`poisoncap-*`** are declared and not written: no CheriBSD or PoisonCap
-  build of memcached's allocators exists.
+* **`cheribsd-revocation`** is an arm the contract does not name: stock
+  CheriBSD with its own libc revocation, pages and objects from the platform's
+  `malloc`, mode 0 only, with a positive control in the same boot. It is the
+  APR and FFmpeg corpora's arm of that name.
+* **`poisoncap-*`** are declared and not written: no PoisonCap build of
+  memcached's allocators exists.
 * **`live_in_pin` is `false`** for both cases with the proof beside it: each
   fix is an ancestor of the 1.6.45 tag (GitHub compare `status=behind`), so
   the shipped allocator is exercised by a pre-fix consumer shape the commit's
@@ -67,7 +71,7 @@ referenced rather than copied. Where this corpus differs:
   race; the fixture performs the interleaving the commit message describes in
   program order, and says so.
 
-## Two targets, one sequence
+## Three targets, one sequence
 
 Real: `cache.c` (and `slabs.c`, initialised and idle) from the 1.6.45 pin,
 unmodified but for the two patches the port
@@ -79,12 +83,15 @@ both targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
 
     shared/build-cases.sh native <out>            then runners/run-native.sh
     shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
+    shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
 
 The [domain runner's manual](runners/capstone-domain/README.md) has the
 commands, the two modes and the oracle. In short: `spatial` must complete,
 `sublet` must fault at the labelled probe, the expected address is published by
 the run and never hardcoded, and `--negative-control` must make every oracle
-say FAIL before a PASS is believed.
+say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/README.md)
+runs the same cases against the platform's own `malloc` with libc revocation on
+or off, beside a control that shows the revocation can fire at the same shape.
 
 One thing the first run taught, now in `corpus.h`: in this emulator,
 arithmetic on a revoked alias faults at the arithmetic (`cincoffsetimm with an
@@ -97,12 +104,13 @@ live, and comparisons are of addresses, never of pointers.
 
 `tests/check-corpus.py` in the pymalloc corpus enforces
 [SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
-reports two kinds of problem, both deliberate. They are listed here rather than
+reports three kinds of problem, all deliberate. They are listed here rather than
 silenced, and no copy of that checker is shipped beside them: a fork would be a
 second contract, and a checker that fails by design is noise.
 
 | what it reports | why |
 |---|---|
+| `arm 'cheribsd-revocation' is not in SCHEMA.md` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
 | `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
 | `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `MC_CASE`. The rule the checker means -- a case declares the number its directory carries, and the driver refuses a fixture that names another -- is implemented |
 
