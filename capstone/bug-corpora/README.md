@@ -14,6 +14,8 @@ Deliberately outside `ports/`, which holds the ports themselves and their build.
     sqlite/cve-repros/       the CVE rows, one directory per row
     cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
     ffmpeg/pool-repros/      defects in consumers of FFmpeg's AVBufferPool/AVRefStructPool
+    httpd/apr-pool-repros/   1 defect in a consumer of APR's pools
+    memcached/allocator-repros/ 2 defects in consumers of memcached's per-thread object cache
 
 Each case is its own directory recording what the defect is and where it came from. The
 file names differ by corpus: sqlite and postgres cases carry `before.c`, `oracle`,
@@ -32,6 +34,8 @@ and executes the whole set:
     postgres/mmgr-repros/run-host-repros.sh
     cpython/pymalloc-repros/runners/cheribsd/run-defects.py
     cpython/pymalloc-repros/runners/capstone-domain/run-defects.py
+    httpd/apr-pool-repros/runners/capstone-domain/run-defects.py
+    memcached/allocator-repros/runners/capstone-domain/run-defects.py
 
 The postgres and pymalloc runners execute a control before any case — ASan must see a plain
 malloc use-after-free; CheriBSD must pass its ABI and bounds probes — and exit 75 with NO

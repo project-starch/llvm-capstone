@@ -1,0 +1,226 @@
+Subject: [PATCH 2/2] Connect chunk and object transitions to retained lifetime authority
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: native port, Capstone domain
+Depends-On: memcached-1.6.45-0001-freestanding-shims.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Slabs never frees a chunk. do_slabs_free pushes an item on its class's slots
+list and do_slabs_alloc pops it straight back; a page leaves a class only
+through the mover, never through free(). cache.c is the same shape one level
+down: an object is malloc'd once, pushed on a STAILQ at cache_free and popped
+uncleared at cache_alloc, freed only over a limit or at destroy. A hook on
+free() would therefore never fire on the paths that matter. The hooks sit on
+the transitions instead: mcp_chunk_release where do_slabs_free and
+do_slabs_free_chunked file a chunk, after its header has been read and before
+its links are written; mcp_chunk_issue where do_slabs_alloc pops one; and
+mcp_object_release / mcp_object_issue at the two corresponding lines of
+cache.c.
+
+Each returns the alias upstream must use from then on. In the protected mode
+the adapter revokes the chunk's authority and mints a fresh alias at each
+transition, so a pointer held across slabs_free is dead rather than rebound to
+whatever item the chunk becomes next. Pages come from the payload region in
+place of memory_allocate's malloc, and once do_slabs_newslab has zeroed a page
+the whole-page alias is exchanged for one region per chunk; the split then
+asks for each chunk by number, because a pointer stepped past its own chunk is
+not the next chunk's alias. The slab list grows element-wise, since it holds
+page aliases. cache.c's control block and name come from the metadata heap,
+so an allocator never lives inside storage it hands out.
+
+Upstream keeps every decision: the class table, perslab, the LIFO order, which
+chunk the next slabs_alloc pops, which object the next cache_alloc pops.
+10 hunks in slabs.c and 5 in cache.c, 19 lines removed and 46 added; the
+mover, which is not built, is not touched.
+
+--- a/slabs.c
++++ b/slabs.c
+@@ -7,6 +7,7 @@
+  */
+ #include "mc_slabs_shim.h"
+ #include "mc_slabs_libc.h"
++#include "port.h"
+ #include "slabs.h"
+ 
+ //#define DEBUG_SLAB_MOVER
+@@ -337,7 +338,9 @@
+     slabclass_t *p = &slabclass[id];
+     if (p->slabs == p->list_size) {
+         size_t new_size =  (p->list_size != 0) ? p->list_size * 2 : 16;
+-        void *new_list = realloc(p->slab_list, new_size * sizeof(void *));
++        /* Element-wise, not a byte copy: the list holds page aliases, which
++         * are capabilities in a domain and do not survive being copied as bytes. */
++        void *new_list = mcp_meta_grow_pointers(p->slab_list, p->list_size, new_size);
+         if (new_list == 0) return 0;
+         p->list_size = new_size;
+         p->slab_list = new_list;
+@@ -357,8 +360,10 @@
+     slabclass_t *p = &slabclass[id];
+     int x;
+     for (x = 0; x < p->perslab; x++) {
+-        do_slabs_free(ptr, id);
+-        ptr += p->size;
++        /* By number, through the adapter: a pointer stepped past its own
++         * chunk is not the next chunk's alias. Order, and the LIFO the
++         * pushes build, stay upstream's. */
++        do_slabs_free(mcp_chunk_at(ptr, x), id);
+     }
+ }
+ 
+@@ -401,6 +406,10 @@
+     // wiping memory as it's being pulled out of the global pool instead of
+     // blocking startup all at once.
+     memset(ptr, 0, (size_t)len);
++    /* From here on the page is its chunks: the whole-page alias just zeroed
++     * through is exchanged for one region per chunk, and what the slab list
++     * keeps is the first chunk's alias, whose address is the page's. */
++    ptr = mcp_page_carve(ptr, id, p->size, p->perslab);
+     split_slab_page_into_freelist(ptr, id);
+ 
+     p->slab_list[p->slabs++] = ptr;
+@@ -434,6 +443,9 @@
+         it = (item *)p->slots;
+         p->slots = it->next;
+         if (it->next) it->next->prev = 0;
++        /* The free list's alias ends here and the item's begins; in the
++         * protected mode the chunk is revoked in between. */
++        it = mcp_chunk_issue(it);
+         /* Kill flag and initialize refcount here for lock safety in slab
+          * mover's freeness detection. */
+         it->it_flags &= ~ITEM_SLABBED;
+@@ -457,16 +469,21 @@
+     item_chunk *chunk = (item_chunk *) ITEM_schunk(it);
+     slabclass_t *p;
+ 
++    /* The header's chunk record lives inside the header; read what the
++     * release would clear, then release the header into its original class. */
++    uint8_t orig_clsid = chunk->orig_clsid;
++    item_chunk *first = chunk->next;
++    it = mcp_chunk_release(it, orig_clsid);
+     it->it_flags = ITEM_SLABBED;
+     // FIXME: refresh on how this works?
+     //it->slabs_clsid = 0;
+     it->prev = 0;
+     // header object's original classid is stored in chunk.
+-    p = &slabclass[chunk->orig_clsid];
++    p = &slabclass[orig_clsid];
+     // original class id needs to be set on free memory.
+-    it->slabs_clsid = chunk->orig_clsid;
+-    if (chunk->next) {
+-        chunk = chunk->next;
++    it->slabs_clsid = orig_clsid;
++    if (first) {
++        chunk = first;
+         chunk->prev = 0;
+     } else {
+         // header with no attached chunk
+@@ -484,9 +501,10 @@
+     item_chunk *next_chunk;
+     while (chunk) {
+         assert(chunk->it_flags == ITEM_CHUNK);
+-        chunk->it_flags = ITEM_SLABBED;
+         p = &slabclass[chunk->slabs_clsid];
+         next_chunk = chunk->next;
++        chunk = mcp_chunk_release(chunk, chunk->slabs_clsid);
++        chunk->it_flags = ITEM_SLABBED;
+ 
+         chunk->prev = 0;
+         chunk->next = p->slots;
+@@ -513,6 +531,9 @@
+ 
+     it = (item *)ptr;
+     if ((it->it_flags & ITEM_CHUNKED) == 0) {
++        /* The item's alias has been read for the last time; the free list
++         * writes its links through the one the adapter hands back. */
++        it = mcp_chunk_release(it, id);
+         it->it_flags = ITEM_SLABBED;
+         it->slabs_clsid = id;
+         it->prev = 0;
+@@ -621,7 +642,7 @@
+ 
+     if (mem_base == NULL) {
+         /* We are not using a preallocated large memory chunk */
+-        ret = malloc(size);
++        ret = mcp_page_backing(size);
+     } else {
+         ret = mem_current;
+ 
+@@ -657,7 +678,7 @@
+ 
+     while (mem_malloced > mem_limit &&
+             (p = get_page_from_global_pool()) != NULL) {
+-        free(p);
++        mcp_page_discard(p);
+         mem_malloced -= settings.slab_page_size;
+     }
+ }
+--- a/cache.c
++++ b/cache.c
+@@ -1,5 +1,6 @@
+ /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+ #include "mc_cache_shim.h"
++#include "port.h"
+ 
+ #ifndef NDEBUG
+ #include <signal.h>
+@@ -13,12 +14,12 @@
+ #endif
+ 
+ cache_t* cache_create(const char *name, size_t bufsize, size_t align) {
+-    cache_t* ret = calloc(1, sizeof(cache_t));
+-    char* nm = strdup(name);
++    cache_t* ret = mcp_meta_calloc(1, sizeof(cache_t));
++    char* nm = mcp_meta_strdup(name);
+     if (ret == NULL || nm == NULL ||
+         pthread_mutex_init(&ret->mutex, NULL) == -1) {
+-        free(ret);
+-        free(nm);
++        mcp_meta_free(ret);
++        mcp_meta_free(nm);
+         return NULL;
+     }
+ 
+@@ -54,11 +55,11 @@
+     while (!STAILQ_EMPTY(&cache->head)) {
+         struct cache_free_s *o = STAILQ_FIRST(&cache->head);
+         STAILQ_REMOVE_HEAD(&cache->head, c_next);
+-        free(o);
++        mcp_object_discard(o);
+     }
+-    free(cache->name);
++    mcp_meta_free(cache->name);
+     pthread_mutex_destroy(&cache->mutex);
+-    free(cache);
++    mcp_meta_free(cache);
+ }
+ 
+ void* cache_alloc(cache_t *cache) {
+@@ -75,10 +76,12 @@
+     if (cache->freecurr > 0) {
+         ret = STAILQ_FIRST(&cache->head);
+         STAILQ_REMOVE_HEAD(&cache->head, c_next);
++        /* The free list's alias ends here and the caller's begins. */
++        ret = mcp_object_issue(ret);
+         object = get_object(ret);
+         cache->freecurr--;
+     } else if (cache->limit == 0 || cache->total < cache->limit) {
+-        object = ret = malloc(cache->bufsize);
++        object = ret = mcp_object_backing(cache->bufsize);
+         if (ret != NULL) {
+             object = get_object(ret);
+ 
+@@ -127,9 +130,12 @@
+     ptr = pre;
+ #endif
+     if (cache->limit != 0 && cache->limit < cache->total) {
+-        free(ptr);
++        mcp_object_discard(ptr);
+         cache->total--;
+     } else {
++        /* The caller's alias has been read for the last time; the list
++         * links through the one the adapter hands back. */
++        ptr = mcp_object_release(ptr);
+         STAILQ_INSERT_HEAD(&cache->head, (struct cache_free_s *)ptr, c_next);
+         cache->freecurr++;
+     }

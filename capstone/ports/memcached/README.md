@@ -1,9 +1,12 @@
 # memcached 1.6.45: what allocates, counted
 
-A census, not a port. `census-memcached.sh` reads the pinned source and
-prints every number below; the source is `fetch-memcached.sh`'s, pinned by
-`sources.sha256`. Run it before believing this file — if the two disagree,
-the script is the authority and this file is stale.
+The census that preceded the port. `census-memcached.sh` reads the pinned
+source and prints every number below; the source is `fetch-memcached.sh`'s,
+pinned by `sources.sha256`. Run it before believing this file — if the two
+disagree, the script is the authority and this file is stale. The port that
+grew out of it is [`allocators/`](allocators/README.md): `slabs.c` and
+`cache.c` through the shims in [`adapted/`](adapted/), which this census
+estimated and did not write.
 
     bash census-memcached.sh
 
@@ -78,11 +81,16 @@ a process that ended 100 000 objects, and every eviction's slot was taken
 within three allocations. That is the property this census names from the
 source; that measurement is the same property seen from the other side.
 
-## Recommended order
+## Recommended order, and what was done
 
 1. **slabs**, as the httpd/APR and pymalloc ports were done: the real
-   `slabs.c` through a one-source seam, hooks on `slots` push and pop, the
-   mover handled as a lifetime event, a corpus case per defect shape.
-2. **cache.c**, cheap and exact, as a second allocator in the same port.
+   `slabs.c` through a one-source seam, hooks on `slots` push and pop, a
+   corpus case per defect shape. Done in [`allocators/`](allocators/README.md),
+   with one departure: the mover is **not** handled as a lifetime event but
+   excluded, and named as the boundary — it is the one place a chunk's storage
+   changes class, and every slabs-level lifetime defect on record lives in it.
+2. **cache.c**, cheap and exact, as a second allocator in the same port. Done;
+   both of the corpus's cases are its.
 3. **extstore**, optional, as a comparison rather than a port: its versioning
    is the closest thing in any of these codebases to what the discipline does.
+   Not started.
