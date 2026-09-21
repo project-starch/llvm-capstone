@@ -19,5 +19,10 @@ else()
     add_test(NAME source-preparation COMMAND "${Python3_EXECUTABLE}"
       "${PROJECT_SOURCE_DIR}/tests/native/test-source.py" "${APRP_ARCHIVE}" "${APRP_SOURCE}")
     add_test(NAME allocator-example COMMAND allocator-example)
+    if(APRP_BUCKETS)
+      add_test(NAME apr-util-source-preparation COMMAND "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/native/test-apr-util-source.py" "${APU_ARCHIVE}" "${APU_SOURCE}")
+      add_test(NAME bucket-example COMMAND bucket-example)
+    endif()
   endif()
 endif()

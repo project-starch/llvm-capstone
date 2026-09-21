@@ -57,3 +57,7 @@ int apr_vformatter(int (*flush)(apr_vformatter_buff_t *), apr_vformatter_buff_t 
   (void)ap;
   aprp_fail(608);
 }
+#ifdef APRP_DOMAIN
+/* apr_buckets_alloc.c aborts when a create cannot get its first block. */
+_Noreturn void abort(void) { aprp_fail(606); }
+#endif

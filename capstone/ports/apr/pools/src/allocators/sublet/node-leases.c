@@ -32,7 +32,7 @@ struct record {
   void *alias;
   size_t size;
   uint32_t index;
-  unsigned live, released_once, discarded;
+  unsigned live, released_once, discarded, lent;
 };
 static capstone_cap_slot remaining;
 static uintptr_t base, cursor, end;
@@ -115,6 +115,7 @@ void *aprp_node_release(void *node) {
   if (!r->live || r->discarded)
     aprp_fail(519);
   r->live = 0;
+  r->lent = 0;
   r->released_once = 1;
   ++releases;
   if (!protected_mode)
@@ -133,6 +134,32 @@ void aprp_node_discard(void *node) {
    * never handed out again, so reclaiming the authority is all there is. */
   if (protected_mode)
     sublet_give(&r->region);
+}
+unsigned aprp_mode(void) { return protected_mode; }
+/* The bucket allocator carves a node it was given. Under revocation the node
+ * must be linear to be split, so the alias just issued dies, a handle senior
+ * to the whole node stays here, the header is retaken as the alias upstream
+ * keeps and the rest leaves LINEAR. The node's release, as before, revokes
+ * the senior handle: every piece dies with the block, and the region comes
+ * back initialized. */
+void *aprp_node_lend(void *node, struct capstone_cap_slot *rest) {
+  struct record *r = record_for(node);
+  if (!r->live || r->discarded || r->lent)
+    aprp_fail(521);
+  r->lent = 1;
+  if (!protected_mode) {
+    capstone_cap_clear(rest);
+    return r->alias;
+  }
+  capstone_cap_slot senior, header;
+  sublet_give(&r->region);
+  sublet_handle(&r->region, &senior);
+  sublet_carve(&r->region, (uintptr_t)r->alias + APR_MEMNODE_T_SIZE, &header);
+  capstone_cap_move(&r->region, rest);
+  r->alias = sublet_take(&header);
+  capstone_cap_clear(&header); /* the header's own handle: the senior one covers it */
+  capstone_cap_move(&senior, &r->region);
+  return restore_header(r);
 }
 void aprp_stats(struct aprp_header *out) {
   out->nodes = count;

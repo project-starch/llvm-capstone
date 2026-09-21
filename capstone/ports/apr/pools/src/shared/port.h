@@ -60,6 +60,30 @@ void *aprp_node_issue(void *node);
 void *aprp_node_release(void *node);
 
 void aprp_stats(struct aprp_header *out);
+/* The mode the run was started in: 0 spatial, 1 sublet. */
+unsigned aprp_mode(void);
+
+/* Lend a live node to a client that carves it -- apr-util's bucket allocator.
+ * Domain, mode 1: the node's alias is revoked, a handle senior to the whole
+ * node stays in the record, the part behind the memnode header moves out
+ * LINEAR into `rest` for the client to carve, and the header is retaken as the
+ * alias upstream keeps. Mode 0, native and CheriBSD: `rest` is cleared and the
+ * node's own pointer is returned; the client carves by address. The node's
+ * release revokes everything carved from it, as before. */
+struct capstone_cap_slot; /* the runtime's slot type; declared, not included, so every target reads this header */
+void *aprp_node_lend(void *node, struct capstone_cap_slot *rest);
+
+/* The bucket allocator's seam (APRP_BUCKETS). Upstream still decides which
+ * block, which node and in which order; the adapter supplies the authority
+ * over a piece and keeps the freelist the freed node can no longer hold. */
+void *aprb_block_lend(void *block);
+void *aprb_carve(void *block, size_t size);
+void aprb_file(void *list, void *node);
+struct apr_memnode_t;
+void *aprb_reissue(void *list, struct apr_memnode_t **memnode);
+void aprb_blocks_returning(void *blocks);
+void *aprb_probe(void *mem);
+void aprb_stats(unsigned long *pieces, unsigned long *reissues, unsigned long *files);
 
 /* Supplied by the program built through the seam: the corpus case, or a test. */
 void aprp_replay(const struct aprp_header *input, struct aprp_header *out);

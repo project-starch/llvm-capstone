@@ -24,6 +24,10 @@
 
 #define APU_DECLARE_NONSTD(type)  type
 #define APU_DECLARE(type)         type
+/* <stdlib.h>, which the port's freestanding patch removes: the one thing the
+ * allocator takes from it. Hosted, this is libc's; in a domain the port's
+ * services supply it, ending the run with a code. */
+_Noreturn void abort(void);
 
 /* APR_HAS_MMAP decides whether apr_bucket_mmap is a union member and whether
  * apr_bucket_file carries can_mmap. Neither is the union's largest member --

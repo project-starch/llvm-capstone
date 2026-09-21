@@ -30,6 +30,8 @@ command:
 |---|---|
 | `0001-freestanding-includes` | replaces the fourteen APR includes with [`../adapted/apr_shim.h`](../adapted/apr_shim.h): the census seam, recorded as a patch so the prepared source is reproducible from the archive and the patch alone. The shim is included from where the census keeps it, not copied |
 | `0002-node-lifetime-hooks` | connects the node transitions to the adapter; six non-debug call sites |
+| `apr-util/0001-freestanding-includes` | the bucket allocator against [`../adapted/apr_bucket_shim.h`](../adapted/apr_bucket_shim.h), the census seam as a patch; `upstream-apr-util.json` pins apr-util 1.6.3 |
+| `apr-util/0002-bucket-lifetime-hooks` | connects the bucket allocator's transitions to the adapter; six hunks, described below |
 
 ## Lifetime mapping
 
@@ -69,6 +71,49 @@ same value so header sizes agree across the seam.
 The fixed regions are 64 MiB payload, 16 MiB metadata, 8 MiB trace and 4 KiB
 report; at most 8,192 nodes. `metadata` in the report is heap high-water usage.
 No timing or memory-overhead claim is made.
+
+## The bucket allocator (apr-util 1.6.3)
+
+`-DAPRP_BUCKETS=ON` adds apr-util's `buckets/apr_buckets_alloc.c` to the same
+library, byte for byte but for two patches under `patches/apr-util/`, and it
+is the component the [httpd bucket corpus](../../../bug-corpora/httpd/bucket-repros/README.md)
+builds through. The bucket allocator is a client of the pool allocator: it
+takes 8 KiB blocks from `apr_allocator_alloc`, carves `SMALL_NODE_SIZE` nodes
+from them by bumping `first_avail`, files a freed small node on its own LIFO
+freelist by writing the link into the freed node, and returns whole blocks
+when it is destroyed. Large nodes are whole APR nodes and pass through the
+pool hooks above. Its level below is this port, which is why it is carried
+here and not as a component of its own.
+
+The hooks replace a bump and two list operations with calls that do the same
+thing under authority, and leave every decision where it was -- which block,
+which node, in which order:
+
+| hook | where | what |
+|---|---|---|
+| `aprb_block_lend` | after `apr_allocator_alloc` of a block | the node is lent to the bucket allocator to carve: `aprp_node_lend` revokes the node's alias, keeps a handle senior to the whole node in the pool record, retakes the memnode header as the alias upstream keeps, and moves the rest out LINEAR |
+| `aprb_carve` | in place of the bump | `sublet_carve` off the block's rest and `sublet_take`; the piece's handle stays in its record; `first_avail` is written through the header alias so upstream's end-of-block test reads what it always read |
+| `aprb_file` | in place of the freelist push | `sublet_give`, and the node onto the list's freelist -- kept in the adapter's records by index, because a link written into a freed node would be written into a revoked region |
+| `aprb_reissue` | in place of the freelist pop | the same node, under a fresh `sublet_take`; upstream rewrites the node header because a revoked region gives nothing back |
+| `aprb_blocks_returning` | before the block chain goes back to APR | the records of what was carved from those blocks are dropped; the pool's release of each block revokes the senior handle and every piece dies with it |
+| `aprb_probe` | first thing in `apr_bucket_free` | a labelled read through the pointer handed back, so a stale or twice-freed one fails there and not in the bookkeeping |
+
+Both domain modes use the same layout: a piece is a `shrink` of the block's
+alias in `spatial` and a split of the lent block in `sublet`, at the same
+address either way. The list struct is still the first piece of the first
+block, as upstream carves it. A double free is refused by the records in
+mode 0 (`538`) where upstream would corrupt its freelist silently, and faults
+at `aprb_probe` in mode 1.
+
+`security-tests/capstone-domain/bucket-lifetimes.c` is the positive control
+for these transitions, seven fixtures run by `security-tests/qemu/run-buckets.py`:
+a freed small node reissued at the same address (live control), read and
+written through the old alias after the free, a large node freed, the
+allocator destroyed, one byte past a piece, and a double free. Natively,
+`bucket-example` must observe the LIFO reissue and the adapter's counters.
+Measured 2026-09-22 under QEMU: 14 of 14 arms
+(`security-tests/results/20260922-buckets-qemu/`); the corpus's own
+measurement is with the corpus.
 
 ## CheriBSD
 

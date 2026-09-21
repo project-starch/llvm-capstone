@@ -9,6 +9,18 @@ target_compile_definitions(pools-options INTERFACE APRP_PORT APR_ALIGN_DEFAULT_B
 target_compile_options(pools-options INTERFACE -ffunction-sections -fdata-sections -Wall -Wextra)
 add_library(apr-pools OBJECT "${APRP_SOURCE}/memory/unix/apr_pools.c"
   src/shared/metadata.c src/shared/services.c)
+# apr-util's bucket allocator, a client of the pool allocator, carried by the
+# same library when asked for: its blocks are pool nodes, its level below is
+# this one, and a second component would only duplicate the seam.
+option(APRP_BUCKETS "Build apr-util's bucket allocator on top of the pools" OFF)
+if(APRP_BUCKETS)
+  include(cmake/APRUtilSource.cmake)
+  target_sources(apr-pools PRIVATE "${APU_SOURCE}/buckets/apr_buckets_alloc.c")
+  set_source_files_properties("${APU_SOURCE}/buckets/apr_buckets_alloc.c"
+    PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
+  target_compile_definitions(pools-options INTERFACE APRP_BUCKETS)
+  add_dependencies(apr-pools apr-util-source)
+endif()
 # Upstream's unused-parameter warnings are upstream's; ours stay on.
 set_source_files_properties("${APRP_SOURCE}/memory/unix/apr_pools.c"
   PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
@@ -24,6 +36,9 @@ if(PORT_HOSTED)
     # is asked the question at the level where it lives. No payload region.
     target_compile_definitions(pools-options INTERFACE APRP_NODES_FROM_MALLOC)
     target_sources(apr-pools PRIVATE src/cheribsd/node-malloc.c)
+    if(APRP_BUCKETS)
+      target_sources(apr-pools PRIVATE src/native/bucket-pointers.c)
+    endif()
     # The positive control: this guest's libc revocation, made to fire at the
     # corpus's own labelled load shape. Pure libc, no port library.
     add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
@@ -31,6 +46,9 @@ if(PORT_HOSTED)
     set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
   else()
     target_sources(apr-pools PRIVATE src/native/node-pointers.c)
+    if(APRP_BUCKETS)
+      target_sources(apr-pools PRIVATE src/native/bucket-pointers.c)
+    endif()
   endif()
   add_library(apr-pools-library STATIC $<TARGET_OBJECTS:apr-pools>)
   set_target_properties(apr-pools-library PROPERTIES OUTPUT_NAME apr-pools)
@@ -39,6 +57,11 @@ if(PORT_HOSTED)
   add_executable(allocator-example examples/pools.c)
   target_link_libraries(allocator-example PRIVATE APR::Pools)
   add_dependencies(allocator-example apr-source)
+  if(APRP_BUCKETS)
+    add_executable(bucket-example examples/buckets.c)
+    target_link_libraries(bucket-example PRIVATE APR::Pools)
+    add_dependencies(bucket-example apr-util-source)
+  endif()
   include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
   port_add_client(APR::Pools)
   if(APRP_CORPUS_SRC)
@@ -54,6 +77,9 @@ else()
   enable_language(ASM)
   target_compile_definitions(pools-options INTERFACE APRP_DOMAIN)
   target_sources(apr-pools PRIVATE src/allocators/sublet/node-leases.c)
+  if(APRP_BUCKETS)
+    target_sources(apr-pools PRIVATE src/allocators/sublet/bucket-leases.c)
+  endif()
   if(APRP_CORPUS_SRC)
     set(link_script "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/link.ld")
     add_executable(defects src/capstone-domain/entry.c "${APRP_CORPUS_SRC}"
