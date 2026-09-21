@@ -1,112 +1,146 @@
-# R-35's root cause is the CPMP per-entry revnode tracker adopting an unseen revnode as VALID — not the LSU block, which a domain cannot reach
+# R-35's root cause is the LSU's single core-wide revnode tracker, optimistically re-adopting — and my own CPMP correction is retracted
 
-**2026-09-21.** R-35 is *"on silicon a revoked capability still reads and writes the storage its object
-has given up, at every age, and the access does not trap"*, reproduced four times on the board with
-controls. This note replaces its root cause. Two of my own intermediate claims are retracted below.
+**2026-09-21.** This file was published earlier today claiming R-35's root cause was CPMP's per-entry
+revnode tracker. **That is wrong and is retracted below.** The original attribution —
+`load_store_unit.sv` — was right, and my retraction of it was the error. An adversarial audit caught
+it; every load-bearing point below was then re-verified against the board RTL directly.
+
+The filename is now wrong too. It is kept rather than renamed so the earlier commit's link still
+resolves.
 
 ## The answer
 
-The S-mode data path enforces capabilities in **CPMP**, `core/pmp/src/pmp_data_if.sv`, and that block
-**does** check revocation — `cpmp_check` requires `cpmp_revnode_valid_q[i]` before it will allow an
-access. What defeats it is how that bit is maintained, in `cpmp_revnode_tracking` (board RTL
-`054cea69b`, `pmp_data_if.sv:82-102`), quoted verbatim:
+On this silicon the harness's plain loads and stores are checked by `cap_violation_detection` in
+`core/load_store_unit.sv` (board RTL `054cea69b`, `:948-996`). Its revocation term depends on a
+**single core-wide tracked revnode id**, and an access presenting a different id re-adopts itself as
+valid (`:966-971`):
 
 ```systemverilog
-// When the CPMP entry gains a new revnode_id (entry was (re)written),
-// assume the revnode is live until proven otherwise.
-if (cpmp_tag_i[i]
-    && cap_type_t'(cpmp_i[i].comp_metadata.cap_type) != NOT_CAP
-    && cpmp_i[i].comp_metadata.revnode_id != cpmp_tracked_revnode_id_q[i]) begin
-  cpmp_tracked_revnode_id_d[i] = cpmp_i[i].comp_metadata.revnode_id;
-  cpmp_revnode_valid_d[i]      = 1'b1;          // <-- an UNSEEN revnode is assumed VALID
+// update revnode tracking when a new instruction arrives with a different revnode
+if (lsu_cap_type != NOT_CAP
+    && lsu_cap_a.metadata.revnode_id != lsu_revnode_id_d) begin
+  lsu_revnode_id_d    = lsu_cap_a.metadata.revnode_id;
+  lsu_revnode_valid_d = 1'b1;        // <-- an UNTRACKED revnode is assumed VALID
 end
 ```
 
-There is one tracked id per CPMP entry (16 entries) and invalidation is by exact index match:
-`revnode_invalidation_id_i[15:0] == cpmp_tracked_revnode_id_q[i][15:0]`. So a **revoked** capability
-installed into an entry whose tracked id is anything else is **re-adopted as valid on arrival**, and
-`cpmp_check` then permits the access. Bounds and permissions still hold, because those are read from
-the capability itself and a stale reference's own bounds are genuinely its old storage.
+With the M1 harness's 16 rotating slots, essentially every access presents a different id, so
+`lsu_revnode_valid_d` is 1 whenever the check is reached and the `!lsu_revnode_valid_d` clause
+(cause 25) can never fire. **Bounds (28) and permissions (27) survive because they are read from the
+capability's own metadata**, which is exactly the folder's observed scope: the same path enforces
+bounds and not tags.
 
-**That is exactly the folder's observed scope — "the same path enforces BOUNDS and not TAGS" — and it
-is now a mechanism rather than a description.**
+Worse than the CPMP block in two specific ways: the invalidation broadcast is applied at `:945-946`,
+*before* the adopt at `:966-971`, so an adopt always wins its cycle; and there is **one** tracked id
+for the whole core, not sixteen.
 
-**The approved M1 specification predicted this in these words:** *"the same stale capability installed
-into a different CPMP entry is re-adopted until the next broadcast of that index — a property of the
-tracker, not the reclaimer."* It says **CPMP entry**. The prediction was on file and named the right
-module.
+## RETRACTED: "the root cause is CPMP (pmp_data_if.sv:82-102)"
 
-## Why the M1 harness is the worst case by construction
+Refuted on four independent grounds, each re-verified here against `054cea69b` rather than taken on
+report:
 
-The harness keeps 16 live slots rotating. Every `take()` installs a capability into a CPMP entry, so
-consecutive installs into one entry almost always carry different revnode ids, the tracker is thrashed,
-and nearly every install re-adopts itself as valid. That is why the board saw it at **every** age —
-`k=0` (2,706 storage reuses later), `k=21648`, and `k=43295` alike.
+1. **The two blocks are gated on complementary values of the same signal.** `cap_violation_detection`
+   requires `ld_st_priv_lvl_i == riscv::PRIV_LVL_M` (`load_store_unit.sv:949`); the CPMP data check
+   requires `ld_st_priv_lvl_i != riscv::PRIV_LVL_M` (`pmp_data_if.sv:292-293`). Exactly one runs.
+2. **CPMP cannot emit the cause the board returned.** Its only exception is
+   `ST_ACCESS_FAULT`/`LD_ACCESS_FAULT` — 7 and 5 (`pmp_data_if.sv:296-297`). The board's bounds probe
+   returned **28**: `results/board-bounds-probe.wedge.txt`, `sw=255 TRAP LOG {seen,mcause[6:0]} 0x9c`
+   → `0x9c = 1001_1100` → seen=1, `mcause[6:0] = 28`. Latched in hardware
+   (`cva6.sv:1116-1124`, `recent_nontrivial_mcause_log_q <= ex_commit.cause`), not derived by the
+   monitor. Cause 28 therefore proves the M-gated block evaluated.
+3. **The harness never installs a CPMP entry.** `grep -ci 'cpmp\|ccsr' sublet/r1/r1_slots_pools.c`
+   returns **0**. CPMP entries are written only by the monitor, via the domain-switch register restore
+   (`csr_regfile.sv:1931`) and the `CCSR_CPMP0..15` writes (`:2418-2559`). CPMP holds whole-region
+   monitor capabilities, so it could never fault at leaf+64 — and the board's `tval` is `0xac100040`,
+   the byte past the 64-byte leaf. Only a check reading `rs1`'s own metadata can produce that.
+4. **The premise "domains run in S-mode" is false**, and that is the root of my error — see below.
 
-## RETRACTED: "the root cause is load_store_unit.sv:984-989"
+## The prior-art note that misled me is itself wrong on its central premise
 
-I read the optimistic re-validation in `load_store_unit.sv`'s `cap_violation_detection` and attributed
-R-35 to it. **The mechanism is identical and the module is wrong.** That block is gated on
+`docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md` concludes that a domain
+cannot satisfy the gate's privilege half because domains run in S-mode. **Entering a domain does not
+change privilege at all.** Verified twice in the board RTL:
 
-    capmode_i && ld_st_priv_lvl_i == riscv::PRIV_LVL_M
+- `priv_lvl_d` has exactly six writers in `csr_regfile.sv` — `:1048` (hold), `:2155` (trap entry),
+  `:2318` (MRET), `:2341` (SRET), `:2362` (VS-RET), `:2376` (DRET). **None is on a capability or
+  domain-switch path.**
+- `core/anvil_build/capstone_dom_switcher.anvil` contains **zero** occurrences of `mstatus`, `priv` or
+  `mpp`.
 
-and **a domain runs in S-mode**, so it never evaluates for the harness at all. This was already
-recorded, six days earlier, in `docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`,
-whose own measured conclusion is that in M-mode with the gate demonstrably satisfied a load through a
-write-only capability, a load at `bound_end`, a store through a read-only capability and a load through
-an untagged base **all retire with no trap**. CLAUDE.md's "search prior art before investigating" rule
-names this exact cost; the note existed and I re-derived it instead of reading it.
+So a domain entered from M-mode monitor code runs at M-mode, the gate is satisfied, and the block is
+live — which is what cause 28 independently shows. That note's derivation rests on `sbi_capstone.S`'s
+`mret`s, which are labelled `call_into_smode` / `resume_smode`: the **S-mode host**, not a domain. A
+domain is entered by `__domcallsaves` from monitor code.
 
-## RETRACTED: "R-35 is therefore a symptom of R-34 plus the capmode privilege gate"
+**This is owed to the RTL lane**, since it changes that note's conclusion and the note is committed.
+I have not edited their note; this is the correction, and it needs their sign-off.
 
-My immediate next inference was also wrong. The LSU block being unreachable in S-mode does not make
-R-35 a duplicate: the S-mode path is **CPMP**, which *is* reachable and *does* check revocation. R-35
-is a standalone defect in CPMP's tracker. The folder's existing exclusion of R-34 and R-24 stands.
+**Still unresolved, flagged rather than assumed:** whether *every* domain access is at M, or only the
+class measured. It is established for the accesses that produced cause 28 — same instruction class,
+same alias array, same image family as the stale probe — and not beyond that.
 
-## A second instance, and one that is NOT a duplicate of it
+## Also corrected: the folder's "untagged reference" wording
 
-`load_store_unit.sv:984-989` and `commit_stage.sv:239` carry the same optimistic-adopt shape for the
-M-mode data path and the PC capability respectively. They are real and should be fixed with this one,
-but they are not what the board measured.
+The tag *does* reach this check. `cap_rmetadata` → `operand_a_cap_regfile` (65-bit,
+`issue_read_operands.sv:206-208`) → `cap_metadata_a` (`cva6.sv:249`, "S-06 fix: {tag, metadata}") →
+`lsu_ctrl.cap_metadata_a` → `decompress_cap_tagged` (`ariane_pkg.sv:762-781`), which returns `NOT_CAP`
+when the tag bit is 0. An untagged `rs1` would have raised **cause 24** at `:973`. It did not — so the
+stale alias was **still tagged** on silicon, and the defect is the revocation clause, not the tag.
+QEMU's "x[rs1] is not a capability" is a model divergence and is its own item.
 
-## The fix is tractable here, unlike in the LSU, because a query path already exists
+## The fix is architectural, and that difficulty is the real one
 
-The LSU has no revnode query port, which is what made a fix there architectural. The **rev-node unit
-already exposes one**: `capstone_rev_node.anvil`'s `IDLE_STAGE` serves `ep.query_req` and answers
-`ep.query_res(node_in.valid)`. So the candidate fix for CPMP is to **query on adopt instead of
-assuming**, i.e. replace `cpmp_revnode_valid_d[i] = 1'b1` with a lookup, stalling the access until the
-answer returns.
+The LSU's only revnode ports are the two broadcast inputs (`load_store_unit.sv:198-199`): **there is no
+query path**, so on a miss the block cannot ask and can only guess. Flipping `1'b1` to `1'b0` fails
+closed and would raise on every rotation, i.e. constantly. A real fix needs either a lookup into the
+revocation node table — `capstone_rev_node.anvil`'s `IDLE_STAGE` already serves `ep.query_req` and
+answers `ep.query_res(node_in.valid)`, but the LSU has no port to it and adding one puts a stall on the
+access path in the common case — or a wider tracker with a miss path.
 
-Costs and risks, written down rather than waved at:
+**CLAUDE.md's rule about adding a signal into a cone that already carries a combinational loop applies
+directly, and only synthesis proves synthesizability.** No RTL is changed by this note; the fix and any
+respin are the RTL lane's and the lead's calls.
 
-- **Adopt is on the access path**, so a query turns a first touch of a re-installed entry into a stall
-  of the rev-node unit's read latency. The M1 rotation makes that the common case, not the rare one.
-- **Failing closed instead (`1'b0`) is not an option**: every rotation would then raise on first touch.
-- **Who else uses `query_req` today** must be established before proposing it — if nothing does, this
-  would be its first consumer and the channel's arbitration is untested.
-- `pmp_data_if.sv` feeds the address path; CLAUDE.md's rule about adding signals into a cone that
-  already carries a combinational loop applies, and **only synthesis proves synthesizability**.
+`commit_stage.sv:239` carries the same optimistic-adopt shape for the PC capability and should be
+fixed with it. `pmp_data_if.sv:82-102` carries it too and is a genuine latent defect — it is simply not
+what the board measured, and ISSUES.md:4079 already records it under R-12 A5.
 
-**No RTL is changed by this note.** The fix belongs to the RTL lane and to the lead's decision on a
-bitstream respin.
+## Two further defects found while auditing, neither of them R-35
 
-## What the directed reproducer does and does not do
+- **A same-cycle race in CPMP.** `pmp_data_if.sv:95-101` compares the broadcast against
+  `cpmp_tracked_revnode_id_q` — the *old* tracked id — so a broadcast arriving in the same cycle as an
+  adopt cannot clear the freshly adopted id. `commit_stage.sv:239-244` documents that it alone compares
+  against `_d`.
+- **A CPMP re-install livelock, fail-safe but not benign.** Once an entry is invalidated, re-installing
+  the *same* capability never re-adopts (the `!=` guard fails), so the access faults, `swap_cpmp`
+  reinstalls the identical region, and it faults again.
 
-`capstone-ariane/verif/tests/custom/capstone/r35-stale-deref.S` on `board/r35-directed-repro` targets
-the **LSU** block and therefore cannot reproduce this. Measured, not assumed: it exits 16 (its control
-did not trap) because it never executes CAPENTER, so `capmode_i` is 0 and the whole block is inert; a
-64-nop barrier after `REVOKE` did not change the reading, ruling out walk timing. Its `CAPPRINT` dump
-also proved the test could never have worked anyway — `CAPCREATE` hardcodes `revnode_id = 2`
-(`capstone_flu_unit.anvil:337`), so both of its regions shared one revnode and neither could displace
-the other's tracker entry.
+The 16-bit invalidation compare against a 30-bit adopt guard over-invalidates rather than
+under-invalidates, so it is fail-safe; everything currently runs at generation 0 (ISSUES.md:3887).
+Robustness item, not a safety gap.
 
-Two further facts it established, both worth keeping:
+## What the directed reproducer established
 
-- **`MREV` inserts the new node immediately before its parent in DFS order and pushes the parent one
-  level deeper**, so `REVOKE(handle)` does reach the parent. Confirmed against the log: `s1`=node 3,
-  `s3`=node 4, `a5`=`s2`=node 2.
-- **The branch the reproducer sits on is not the board's RTL.** `054cea69b` is *not* an ancestor of
-  `board/r35-directed-repro`; `load_store_unit.sv` differs by 22 lines and `capstone_rev_node.anvil` by
-  278. Any simulation of R-35 must be done on the `m1-reclaimer` line. A sim reproducer would also have
-  to run **in a domain** to reach CPMP at all — `cpmp-su-mode.S` and `domain-switch-S-mode.S` are the
-  templates, not `revocation.S`.
+`capstone-ariane/verif/tests/custom/capstone/r35-stale-deref.S` on `board/r35-directed-repro` did not
+reproduce R-35, and its own header records why. Measured, not assumed: it exits 16 because it never
+executes CAPENTER, so `capmode_i` is 0 and the block is inert; a 64-nop barrier after `REVOKE` did not
+change the reading, ruling out walk timing; and `CAPCREATE` hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:337`), so both its regions shared one revnode and neither could displace the
+other's tracker entry.
+
+**With the privilege question settled the test is now fixable rather than misconceived** — it needs
+CAPENTER (capmode is sticky thereafter) and two genuinely distinct revnodes, which means SPLIT rather
+than two CAPCREATEs. It must also move to the **m1-reclaimer** line: `054cea69b` is not an ancestor of
+`board/r35-directed-repro`, and `load_store_unit.sv` differs by 22 lines and `capstone_rev_node.anvil`
+by 278 between them.
+
+`MREV` semantics, confirmed against the simulation log rather than assumed: it inserts the new node
+immediately before its parent in DFS order and pushes the parent one level deeper, so `REVOKE(handle)`
+does reach the parent capability.
+
+## Process note, since this is the second retraction on one issue in one session
+
+Both errors have the same shape: I trusted a written conclusion over the RTL. The first time it was my
+own reading of the wrong branch; the second time it was a committed note whose premise was wrong. The
+check that caught both was the same one — read the gate, then ask which side of it the measured cause
+could have come from. **Cause 28 was in the folder from the start and settles the module by itself.**
