@@ -131,8 +131,9 @@ sweep later the registry's stale name is dead, and the read faults —
 read `epochs=1 released_chunks=0`. The reason Sublet cannot be made
 to do the same on this allocator is not the bug but the allocator: `block`
 coalesces neighbouring free chunks, and Capstone has `SPLIT` but no merge, so
-per-chunk authority cannot be faithfully re-joined. The port's README says
-what a variant would have to give up.
+per-chunk authority cannot be faithfully re-joined.
+`docs/design/capability-merge-primitive-proposal.md` states the missing
+primitive and what a non-coalescing variant would give up.
 
 ## Building and running
 

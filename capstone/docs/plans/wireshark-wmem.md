@@ -88,7 +88,11 @@ PostgreSQL adapter once did, and the pair does not count.
 *Measured 2026-09-21: all three predicted readings held — plain 0 / 13,
 PoisonCap mode 0 13 / 13 completed, mode 1 13 / 13 SIGPROT at the probe, case
 12 with `released_chunks=1`. Record in
-`bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd/`.*
+`bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd/`. The one
+alternative not taken — a non-coalescing `block` variant that would let the
+Sublet port be per-chunk — is option (a) in
+`docs/design/capability-merge-primitive-proposal.md`, with what it would
+give up.*
 
 ## What the replay proves, and what it does not
 
