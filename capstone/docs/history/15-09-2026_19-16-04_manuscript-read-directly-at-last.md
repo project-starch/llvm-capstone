@@ -752,3 +752,31 @@ cost, which is a materially different input to decision 1 than an architectural 
 **Not mine to edit:** `15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md` is the RTL
 lane's and its conclusion changes, so it needs their sign-off. The correction is written up by the
 board lane in `docs/history/21-09-2026_r35-root-cause-is-cpmp-optimistic-adopt.md`.
+
+
+## 15. The node/line question is settled: one revnode is exactly one cache line
+
+I could not tell whether `ISSUES.md`'s two phrasings — *"the dcache holds exactly 2,048 **nodes**"*
+and *"the distinct-index set never approaches 2,048 **lines**"* — described the same boundary, and
+flagged that if the line were 64 B the knee in nodes would be 8,192 and any ladder centred on 2,048
+would be centred wrong. `apollo-board` answered from the board config; verified here:
+
+| | | |
+|---|---|---|
+| `capstone_cv64a6_imafdc_sv39_config_pkg.sv:48` | `CVA6ConfigDcacheByteSize = 32768` | 32 KiB |
+| `…:50` | `CVA6ConfigDcacheLineWidth = 128` | **16-byte line** |
+| `ex_stage.sv:1121-1122` | `CAP_REVNODE_MEM_BASE + {22'd0, node_query_addr, 4'd0}` | the `4'd0` is a shift of 4 ⇒ **16-byte revnode stride** |
+
+So 32768 / 16 = **2048 lines**, and 16 B per node against a 16 B line is **1 node : 1 line**. Both
+phrasings are correct and describe the same boundary. The ladder is centred correctly; 1,792 sits
+just inside it.
+
+**The 1:1 mapping buys something beyond re-centring, and it is worth stating because it removes an
+assumption from the experiment.** With several nodes per line, a walk of N nodes could touch as few
+as N/k distinct lines when ids happen to be dense, so the node axis and the line axis would differ
+by an unknown factor and the knee's position would depend on id density. At 1:1 **each node is its
+own line**, so N nodes touch N distinct lines always, whatever the density. The ladder therefore
+measures distinct-line count directly, with no locality to hide behind — and the deep-cold points
+(8,192 and 16,384) show the full dependent-load latency rather than an amortised one. Those two are
+also the only points at which the cold slope is measured over more than one segment, which is the
+specific defect in the number we have today.
