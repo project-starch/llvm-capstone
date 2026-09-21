@@ -1,0 +1,37 @@
+{
+  "case": 3,
+  "upstream_fix": "ed394c4bdf",
+  "title": "a partition set freed through one alias and read through another",
+  "consumer": "src/backend/optimizer/util/inherit.c",
+  "live_in_pin": true,
+  "live_proof": "inspection: the pre-fix shape is present in REL_17_0 src/backend/optimizer/util/inherit.c; nothing is reverted to reproduce it (PROVENANCE.md)",
+  "object": "the RelOptInfo's live_parts Bitmapset",
+  "lifetime_ender": "bms_del_member frees the set through the field when the last member goes",
+  "shape": "alias freed through a sibling",
+  "sibling_issue": "04_727bc6ac33f6_child_sjinfo_shared_relids",
+  "allocator_layer": "aset",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "oracle": "stale-read-returns-other-object",
+      "note": "ASan cannot fire here and its silence is not a finding; the discriminating arm is Valgrind, reported SKIPPED when it cannot run"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}

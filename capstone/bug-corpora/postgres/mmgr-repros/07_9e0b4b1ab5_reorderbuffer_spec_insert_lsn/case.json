@@ -1,0 +1,36 @@
+{
+  "case": 7,
+  "upstream_fix": "9e0b4b1ab5",
+  "title": "the reorder buffer reads a change record it returned to the slab",
+  "consumer": "src/backend/replication/logical/reorderbuffer.c",
+  "live_in_pin": true,
+  "live_proof": "inspection: verified in REL_17_0 with the defect given by line in PROVENANCE.md; nothing is reverted",
+  "object": "a ReorderBufferChange record from a Slab context",
+  "lifetime_ender": "ReorderBufferReturnChange puts it back on the slab's LIFO free list",
+  "shape": "same-address reuse from a fixed-size free list",
+  "allocator_layer": "slab",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "oracle": "stale-read-returns-successor-lsn",
+      "note": "ASan cannot fire here and its silence is not a finding; the discriminating arm is Valgrind, reported SKIPPED when it cannot run"
+    }
+  },
+  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case."
+}
