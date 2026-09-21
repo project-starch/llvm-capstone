@@ -4,7 +4,7 @@
 how many consumer defects each one would make visible. Assembled 2026-09-21
 against APR 1.7.4 and apr-util 1.6.3, from a full clone of `apache/httpd`.*
 
-**Answer: the bucket allocator, by about fifteen to one.**
+**Answer: the bucket allocator, by eight to one.**
 
 ## Apache has two allocators, stacked
 
@@ -43,35 +43,52 @@ Neither number is a defect count. Both were triaged.
 is `9e6be73065`, mod_watchdog reusing a pool it destroyed, and it is built in
 [`bug-corpora/httpd/apr-pool-repros`](../../bug-corpora/httpd/apr-pool-repros/README.md).
 
-**Buckets: about 15 of 118.** After removing leaks (8), threading and MPM (4),
-mod_http2's own strand (16) and build/doc noise (4), 86 remain, and reading
-their subjects leaves roughly fifteen that carry the shape in their own words:
+**Buckets: 8 of 118, with 3 more unresolved.** After removing leaks (8),
+threading and MPM (4), mod_http2's own strand (16) and build/doc noise (4), 86
+remained; reading their subjects left fifteen, and reading the fifteen messages
+in full left eight.
 
-    106d0761c0  core: fix ap_request_core_filter()'s brigade lifetime
-    d9c2352952  buckets inserted to it can be created from scpool and this pool [dies]
-    38437740bb  Fix pool lifetime issues when the proxy backend connection terminates early
-    c81adad105  Fix a pool lifetime issue: clean up our brigade before handing the connection back
-    1c7a70c9d9  mod_proxy_http2: fixed using the wrong bucket_alloc from the backend connection
-    60919177e8  Fixed a read from a deleted brigade
-    4930450013  Fix bucket lifetime [issue]
-    edc450c8ac  buckets associated with a subrequest having private data in the wrong pool
-    6a533d0bf9  Fix winnt bucket_alloc to borrow memory from the transaction pool
-    0ae93ad6f9  a separate subpool for the socket and connection members, as we destroy [...]
-    bcbfbe4ace  mod_cache_socache: cached entity body corruption, buckets need setaside
-    d2a1cf5f8c  a SEGFAULT by ensuring buckets buffered in the network filters get flushed
-    2fe752e16b  memory issues with ranges, by keeping the original brigade untouched
-    70b40483dc  a core dump in mod_cache when it stored uncopyable buckets
-    826f90e639  mod_lua: fix memory handling in output filters
+The two purest are defects in the **allocator identity itself**, which no other
+corpus here has:
 
-`106d0761c0` states the mechanism in its own message: *"For EOR it can't use a
-brigade created on `r->pool`, so retain one created on `c->pool`."* Buckets move
-between pools of different lifetimes — request, connection, subpool — while the
-filter chain hands them across module boundaries, sets them aside, clones them
-and moves them between brigades. That is where the defects are.
+| fix | what it is |
+|---|---|
+| `1c7a70c9d9` | *"using the wrong `bucket_alloc` from the backend connection when sending data on the frontend one. This caused crashes or infinite loops"* |
+| `d2a1cf5f8c` | buckets *"created with the bucket allocator of the backend connection"*, which *"either gets destroyed ... or it will be used again by another frontend connection that wants to recycle the"* connection |
 
-**And one of them names a CVE.** `d814b83206` fixes **CVE-2010-1623** in
-`mod_reqtimeout`, with a non-blocking variant of `apr_brigade_split_line()`. No
-other corpus in this repository has a CVE on the allocator's own surface.
+`apr_bucket_free` reads `node->alloc` and pushes onto **that** list, so a bucket
+freed through the wrong allocator lands on a freelist whose owner does not own
+the block — and the next `apr_bucket_alloc` on that list hands it out.
+
+Six more are lifetime defects on pool or bucket storage, each naming its own
+mechanism:
+
+    106d0761c0  "For EOR it can't use a brigade created on r->pool"
+    d9c2352952  "buckets inserted to it can be created from scpool and this
+                 pool can be freed before this brigade"
+    c81adad105  clean up the brigade before handing the backend connection
+                back to the connection pool
+    60919177e8  "a read from a deleted brigade ... an ap_get_brigade() call
+                 after the brigade had been destroyed"
+    4930450013  "Fix bucket lifetimes so that they don't live longer than
+                 their brigades"
+    edc450c8ac  "buckets associated with a subrequest having private data in
+                 the wrong (i.e., subrequest) pool, leading to a segfault
+                 later in processing the main request"
+
+Three are unresolved and need their diffs read: `38437740bb` and `bcbfbe4ace`
+(both turn on whether a missing setaside leaves the storage pool-backed), and
+`70b40483dc` (uncopyable pipe buckets).
+
+Five were rejected, and one rejection corrects an earlier claim in this file:
+
+| fix | why not |
+|---|---|
+| `6a533d0bf9` | pchild **exhaustion**, not a lifetime defect |
+| `0ae93ad6f9` | its message says memory **leak** |
+| `826f90e639` | brigade iteration in **constant memory** |
+| `2fe752e16b` | CVE-2011-3192, the byte-range **memory exhaustion** DoS |
+| `d814b83206` | **CVE-2010-1623 is a denial of service**, not a temporal defect. An earlier version of this file offered it as "a CVE on the allocator's own surface". That was wrong: the fix's own changelog entry reads *"Fix a denial of service attack against mod_reqtimeout"*, and its new helper is commented *"to avoid DoS by high memory usage"*. **This corpus has no CVE.** |
 
 ## Why the pool surface is thin, and the bucket surface is not
 

@@ -39,6 +39,6 @@ printf "  %-46s %s\n" "  destroy gives the blocks back whole" "$(grep -c 'apr_al
 
 echo "why this one and not the pools, counted from httpd's own history:"
 printf "  %-46s %s\n" "consumer lifetime fixes, pool surface" "1 of 46 candidates survived triage"
-printf "  %-46s %s\n" "consumer lifetime fixes, bucket surface" "about 15 of 118, and in-tree"
+printf "  %-46s %s\n" "consumer lifetime fixes, bucket surface" "8 of 118 after triage, and in-tree"
 printf "  %s\n" "the pool consumers that matter are third-party modules, outside any clone;"
 printf "  %s\n" "the bucket consumers are server/ and modules/, shipped with httpd"
