@@ -780,3 +780,67 @@ measures distinct-line count directly, with no locality to hide behind — and t
 (8,192 and 16,384) show the full dependent-load latency rather than an amortised one. Those two are
 also the only points at which the cold slope is measured over more than one segment, which is the
 specific defect in the number we have today.
+
+## 16. R1 on silicon: both target macros are now fillable, and E1 is retired
+
+*Measured by `apollo-board`, 90 invocations over 8 boots. **Recomputed here from `points.csv` on
+`board/r1-results-2026-09-21`, not taken from the summary.***
+
+**Everything reproduces.** 420 records, **0** not-completed, **0** bad survivors. And the fits:
+
+| | their figure | recomputed here |
+|---|---|---|
+| revoke vs affected nodes, shared | 22.91 cyc/node, R² 0.99966 | **22.91**, R² 0.99966 |
+| revoke vs affected nodes, combined | 15.92 cyc/node, R² 0.99967 | **15.92**, R² 0.99967 |
+| **fill vs bytes (POSITIVE CONTROL)** | 1.8125 cyc/byte, R² 0.9999999993 | **1.8123**, R² 0.99999995 |
+| revoke vs released bytes / unrelated heap / depth / object size | no dependence | slopes ~1e-4 or smaller, R² ≤ 0.003 |
+
+**A denominator check worth recording, because it is the trap this registry already named.** My first
+fit gave exactly **twice** their slope with **identical R²** — 45.82 against 22.91, 31.84 against
+15.92. The cause is the denominator: `nodes_minted = 2n` in every row, so each object mints **two**
+revocation nodes, and "cycles per **affected node**" divides by `nodes_minted`, not by the object
+count. Their figure is right and mine was the naive one. Matching R² with a factor-of-two slope is
+the signature of a denominator disagreement rather than a data disagreement — worth knowing as a
+diagnostic.
+
+**The positive control is what makes this publishable rather than merely reported.** On the *same
+records*, the same instrument resolves a byte-proportional quantity at R² ≈ 1.0. So four null axes
+are a property of revocation, not a blind instrument. The driver had pre-registered the alternative
+in as many words — *"rv flat in n if the RTL's revoke is O(1); a rise with n is the node-linear
+finding R1 asks about"* — and it rises.
+
+### Both placeholders can now be filled — with the fit range the appendix demands
+
+`appendices/b-target-results.tex:83-86` requires these two over *"at least three legal levels"* with
+*"fit range and error"* stated, and says *"neither is a universal architectural constant"*.
+
+* **`\targetNodeSlope`** — 22.91 (shared) / 15.92 (combined) cycles per affected node, **five
+  levels** (n = 1, 4, 16, 64, 256), R² 0.9997.
+* **`\targetByteSlope`** — 1.8123 cycles per byte, R² 0.99999995.
+
+**The fit range is not optional here and it is the whole of §B3's remaining purpose.** Every R1
+point is **cache-resident**: `nodes_minted` reaches **512 against a 2,048-node table — 25 %** — and
+at the 1:1 node-to-line mapping (§15) that is 512 lines of 2,048. So **22.91 is a WARM coefficient**,
+and a bare 22.91 in the manuscript would be a cache-resident number presented as the cost of
+revocation.
+
+### E1 is retired; B3's framing sharpens
+
+* **E1 (occupancy independence) is answered and can be dropped.** Unrelated heap from 0 to 4 MiB
+  moves revocation cost not at all — on **silicon**, with a positive control on the same records.
+  That was E1's entire purpose. At most it survives as corroboration.
+* **B3 is no longer "is splicing valuable".** R1 has fixed the **shape** as linear with R² 0.9997;
+  the only open quantity is **the coefficient in the cold regime**. The 8,192 and 16,384 points are
+  the ones that matter, because they are the only ones measuring the cold slope over more than one
+  segment.
+
+### Two limits the bundle records rather than leaves to inference
+
+The bitstream does not close timing; and **R1 step 1's invalid-access companion is UNMEASURED, not
+passed** — it needs an access through a released reference to trap, and R-35 is a defect in exactly
+that check. Its absence is not a safety result, and the bundle says so in those words. That is the
+right handling and it is the sentence a reviewer would otherwise construct for us.
+
+**One shape gap:** the bundle carries all seven entries including `work-order.md` — the first to do
+so — but no `SHA256SUMS`, which is the §11 finding still outstanding across every bundle on this
+remote.
