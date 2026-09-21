@@ -7,7 +7,9 @@ Deliberately outside `ports/`, which holds the ports themselves and their build.
     cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
     sqlite/cve-repros/     the CVE rows, one directory per row
     postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
+    httpd/bucket-repros/     defects in consumers of Apache's two stacked allocators
     postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
+    httpd/bucket-repros/     defects in consumers of Apache's two stacked allocators
     sqlite/cve-repros/       the CVE rows, one directory per row
     cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
 

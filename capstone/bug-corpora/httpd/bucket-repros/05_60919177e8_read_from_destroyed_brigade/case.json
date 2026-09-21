@@ -1,0 +1,38 @@
+{
+  "case": 5,
+  "upstream_fix": "60919177e8",
+  "title": "ap_rgetline's folding path reads a brigade it has already destroyed",
+  "consumer": "server/protocol.c, ap_rgetline()",
+  "live_in_pin": null,
+  "live_proof": "this corpus pins the allocators (APR 1.7.4, apr-util 1.6.3), not httpd; a case reproduces the call sequence rather than a shipped tree, and says so instead of asserting liveness",
+  "object": "the brigade holder, whose storage the destroy gave back",
+  "lifetime_ender": "the brigade's destroy, returning its pool storage",
+  "shape": "the holder used after it was destroyed",
+  "allocator_layer": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t -- two recycling levels, neither reaching malloc",
+  "fidelity": "model-consumer, real allocators: apr_buckets_alloc.c and apr_pools.c are upstream byte for byte through the port's shims; brigades, filters, connections and requests are reduced to the holder and the storage",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm leaves storage named after its owner gave it back; the fixed arm does not",
+      "note": "this pair differs by whether the upstream fix is applied, not by protection",
+      "measures": "free() is interposed and counted, so freed_to_malloc is measured per case and not inherited from the census"
+    },
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
+    }
+  },
+  "status": "native pair run 2026-09-21; both passed. No protected arm exists: the allocators build freestanding but no domain workload does",
+  "note": "the protected arms are unwritten because the port is a census plus this corpus, not a domain workload. The gap is declared rather than absent"
+}

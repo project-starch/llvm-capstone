@@ -1,0 +1,38 @@
+{
+  "case": 3,
+  "upstream_fix": "d9c2352952",
+  "title": "a brigade holds buckets created from a pool that is freed before it",
+  "consumer": "modules/ssl, the brigade outliving scpool",
+  "live_in_pin": null,
+  "live_proof": "this corpus pins the allocators (APR 1.7.4, apr-util 1.6.3), not httpd; a case reproduces the call sequence rather than a shipped tree, and says so instead of asserting liveness",
+  "object": "bucket payload allocated from scpool",
+  "lifetime_ender": "apr_pool_destroy of scpool while the brigade still names the payload",
+  "shape": "a pool outlived by its holder or its contents",
+  "allocator_layer": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t -- two recycling levels, neither reaching malloc",
+  "fidelity": "model-consumer, real allocators: apr_buckets_alloc.c and apr_pools.c are upstream byte for byte through the port's shims; brigades, filters, connections and requests are reduced to the holder and the storage",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm leaves storage named after its owner gave it back; the fixed arm does not",
+      "note": "this pair differs by whether the upstream fix is applied, not by protection",
+      "measures": "free() is interposed and counted, so freed_to_malloc is measured per case and not inherited from the census"
+    },
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
+    }
+  },
+  "status": "native pair run 2026-09-21; both passed. No protected arm exists: the allocators build freestanding but no domain workload does",
+  "note": "the protected arms are unwritten because the port is a census plus this corpus, not a domain workload. The gap is declared rather than absent"
+}
