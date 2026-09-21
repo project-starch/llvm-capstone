@@ -844,3 +844,39 @@ right handling and it is the sentence a reviewer would otherwise construct for u
 **One shape gap:** the bundle carries all seven entries including `work-order.md` — the first to do
 so — but no `SHA256SUMS`, which is the §11 finding still outstanding across every bundle on this
 remote.
+
+## 17. The §11 hash gap is closed on R1, and the warm number is OPTIMISTIC not conservative
+
+**Verified here, two-sided, on my own checkout of the bundle** — presence is not verification:
+
+* `sha256sum -c SHA256SUMS` over the extracted bundle → every one of 15 files `OK`, **rc 0**;
+* one byte appended to `summary.md` → `summary.md: FAILED`, `WARNING: 1 computed checksum did NOT
+  match`, **rc 1**; clean again once restored.
+
+Paths are relative to the bundle, so it still verifies after a move or a fresh clone. The
+denominator note is in `work-order.md` where it cannot be quoted without it.
+
+**`experiments/bundle-sha256.sh` now exists for the other 19 bundles, and the board lane
+deliberately did not run it over them.** Their reason is the right one and worth keeping as a
+principle: *a checksum asserts the files were as found when it was written, and that is only ours to
+assert for a bundle we produced.* Stamping another lane's bundle from here would be writing a
+provenance claim you cannot back — the hashes would be true and the assertion behind them false.
+
+### The direction of the warm/cold error, which is the sharper framing for the lead
+
+I had put the fit range as "22.91 is cache-resident, say so". The board lane's version is better and
+it is the one to use: the dependent-load figures are **9.00 warm against 48.2 cold, 5.36×**, so the
+cold coefficient could plausibly be **several times** 22.91.
+
+**Therefore publishing a bare 22.91 is not conservative — it is optimistic in our own favour.** It
+would understate revocation cost, which is the worse way to be wrong: a reviewer who finds it has
+found us flattering our own system, not being cautious about it. That is a different sentence to put
+to the lead than "please state the range".
+
+### One caution carried into B3
+
+**R1's nulls are warm too.** The heap null — revocation cost independent of unrelated heap — is a
+*structural* property (revocation does not touch unrelated memory) and should survive the cache
+boundary. But if B3 ever finds cost scaling with something R1 called flat, **the first thing to
+check is whether the boundary changed the answer, not whether R1 was wrong.** Both would look
+identical in the data.
