@@ -117,6 +117,11 @@ cannot exercise."*
 
 **And it may touch a performance headline, not only a capacity limit.** The board lane measured P1 on
 silicon today: `give_cyc/n` grows **superlinearly** with table occupancy (221 → 1558 cycles, sd 7-12,
+⚠ **BOTH HALVES OF THIS PARENTHESIS ARE WRONG — corrected 2026-09-21, see §12.** The variable is
+per-domain minting, **not** table occupancy (`docs/history/15-09-2026_19-25-14_m1-revoke-cost-variable.md`
+refutes it by overlay). And `221 → 1558` appears nowhere but this line — the primary document gives
+**176.4 → 2114.7** for the same arm. The rise itself was real, on the **superseded** bitstream
+`1bfff7776`; on the resident `054cea69b` it is gone.⚠
 flat at 16 under `-icount`). A reclaimer that keeps the table smaller plausibly moves that curve. It
 could complicate P1 rather than improve it, which is worth knowing before the build rather than
 after.
@@ -588,3 +593,108 @@ M2's `studies.json` edit. Its bundle is now on the remote, which removes the exc
 unreachability but none of the constraint: `check_experiments.py:267-268` plus a live
 `appendices/a-evidence-status.tex` still make it a two-file change whose second file is manuscript
 (§3). Merging the branch into `main` is a merge and is not a lane's call either.
+
+
+## 12. RETRACTION (2026-09-21): the revoke-cost story in §8 and §11 was wrong in four ways
+
+*Filed after a claim-auditor refuted a new entry I was about to open as **R-36**, and after I
+verified each refutation myself. R-36 was never filed. Nothing here touches R-35, which stands.*
+
+**What I was about to claim:** that the RTL revoke walk never unlinks dead nodes, that this is why
+`give_cyc/n` grows superlinearly, and that implementing splicing would fix it.
+
+**1. The splice already exists and is in the resident bitstream.** `379248185` is an ancestor of
+`054cea69b` (`git merge-base --is-ancestor`, checked), and `docs/state/current-state.md:192,230`
+names `caplifive_m1_054cea69b.bit` as the resident splice-plus-reclaimer build. What I read was
+`capstone_rev_node.anvil` at `ed049abd8` — which is **`board/r35-directed-repro`**, a side branch,
+not the fix line. My quoted lines and the `// TODO: optimise` are accurate *for that branch* and
+false for the design and for the board. **I recorded the sha and never asked what the sha was.**
+
+**2. It duplicates R-12.** `ISSUES.md:3711` already carries *"2026-09-16 — THE REVOKE-WALK SPLICE:
+built, measured, synthesised. R-12's COST half, not its capacity half."*
+
+**3. The mechanism predicts the wrong SHAPE.** An unspliced walk at a constant 3 cycles per dead
+node is **linear**. I used it to explain a **superlinear** curve. The real knee was already
+localised by two independent readings: the d-cache holds 2,048 nodes, the 3.000 slope holds to
+1,024 and breaks at 2,048 (`ISSUES.md:3808-3810`), and `sublet/r1/r1_slots_pools.c:470-473` says
+*"the knee looks like node-table capacity"*. So the observed curve is a **linear walk multiplied by
+a memory-hierarchy cliff**, not one mechanism.
+
+**4. The variable was already retracted by this project.** `docs/history/15-09-2026_19-25-14_m1-revoke-cost-variable.md`
+is titled *"The independent variable is not table occupancy"* and refutes it with an overlay:
+invocation 9, with 18,684 nodes already consumed, traces invocation 1's curve to **0.06 %**.
+
+### And the answer to "so is there superlinearity at all?" — not on the current build
+
+`ISSUES.md:4278-4284`, deployed `1bfff7776` against reclaimer `054cea69b`:
+
+| | `1bfff7776` (superseded) | `054cea69b` (resident) |
+|---|---|---|
+| `take_cyc/n` | floor 66.7 → 130-218, knee at alloc ~1,792 | **72.1, FLAT to 200,000** |
+| `give_cyc/n` | grew ~12x | **103.2, FLAT to 200,000** |
+
+103.2 at alloc 1,250 and 103.2 at alloc 195,000. *"The 12x release growth is gone and the capacity
+knee is gone."* Splicing removes the walk term; reclamation stops the node table ever spanning
+enough cache lines for the knee to form.
+
+**The honest caveat that comes with it**, and it is where the remaining experimental value sits: a
+pre-registered falsifier said *"one curve flattens, the other does not; if both flatten or neither,
+my account is wrong"*. **Both flattened.** It is not counted as a refutation only because two other
+lanes had written the reason down in advance. And `ISSUES.md:4295` records that **the coefficient is
+BOUNDED, NOT MEASURED** (`c < 65,532/200,000 = 0.3277`), with a retirement effect that the 200,000
+pilot is already past unless index reuse spreads over sixteen or more.
+
+**So the open question is not "does splicing help".** It is *what is `c`, and does the flat curve
+survive past index retirement* — and that is a board question, not an emulator one (§13).
+
+## 13. These experiments must run on the BOARD. QEMU cannot measure them at all
+
+*The lead ruled the experiments board-only and asked for justification if I disagreed. I do not —
+and the reason is stronger than "the emulator is approximate".*
+
+**QEMU is structurally incapable of producing this measurement.** The entire revoke walk lives
+inside a single helper: `helper_csrevoke` (`target/riscv/op_helper.c:920`) calls
+`cap_rev_tree_revoke` once (`:937`, the only call site), and the loop over the chain is inside that
+C function. Under `-icount`, the guest is charged **one instruction for the whole walk**, whatever
+its length. So an `-icount` curve is flat by construction — flat whether the walk crossed 8 nodes
+or 8,000, and flat whether or not the emulator splices.
+
+That is exactly the trap this project already named: *"'QEMU NEVER DOES' IS AN ABSENCE OF THE
+FEATURE, NOT AN INDEPENDENT WITNESS"* (`ISSUES.md:5638`). A flat emulator curve here would have been
+recorded as agreement and would have meant nothing. **My earlier plan put E1 and E3 on QEMU. That
+was wrong and is withdrawn.**
+
+Three further reasons, each independently sufficient:
+
+* **the emulator's node accounting is not the silicon's.** `cap_rev_tree_update_refcount` has
+  exactly one occurrence in all of `target/riscv/` — its own definition (`cap_rev_tree.h:63`) — so
+  it is never called, `cap_rev_tree_release` never runs, and the free list is unreachable. The
+  header says so (`:29-30`, *"this emulator reuses no node"*); a comment in the `.c` (`:8-10`)
+  asserts the opposite and is reasoning from dead code. **Reclamation is the thing the current flat
+  curve is attributed to, and the emulator does not have it.**
+* **`drop` differs.** `helper_csdrop` (`op_helper.c:958-992`) never touches the revocation tree at
+  all, where the RTL's `drop_req` invalidates a node in memory without splicing. Dead-node
+  accumulation therefore has a shape on silicon that the emulator cannot exhibit.
+* **enforcement differs** — R-35.
+
+**What QEMU is still good for, stated so it is not over-corrected away:** it is an **oracle for
+structure, not for time.** Instrumenting `cap_rev_tree.c` gives ground truth for *how many* nodes
+exist, how many are dead, and how many a walk would cross. Pair it with the board's cycles and each
+instrument does what it can: QEMU supplies N, the board supplies cycles per N. Never let it supply
+a cycle count.
+
+### The plan, re-specified for the board
+
+The question is no longer "does splicing help" (§12: it is in the resident build and the curve is
+already flat). It is **what the flat result rests on, and where it ends.**
+
+| | varies | holds fixed | metric | why it is worth a boot |
+|---|---|---|---|---|
+| **B1** | allocations, out to and past index retirement | one domain, fixed live set | `give_cyc/n`, `take_cyc/n` | the flat curve is verified only to 200,000, and retirement falls at ~16,384/32,768/65,536/262,144 depending on how far reuse spreads. **Does 103.2 survive its first retirement?** |
+| **B2** | index-reuse spread (1 / 2 / 4 / 16 slots) | allocation count | first-retirement allocation; `give_cyc/n` at it | `c < 0.3277` is a **bound, not a measurement**; this is what turns it into one |
+| **B3** | dead nodes inside one revoked run | live nodes in that run | cycles per revoke | isolates the **linear** term on the build that has the splice — the coefficient the paper's `\targetNodeSlope` needs |
+| **B4** | — | real workload | revoke cycles as a fraction of runtime | speedtest1 and the PostgreSQL tpcb/readonly replay, for which the manuscript already reserves `\pgNodes` / `\pgRONodes` |
+
+B1 is the one that matters, because it attacks the result we would otherwise publish. B3 supplies
+the number the manuscript has a slot for. B2 converts a bound into a value. B4 is the "what does it
+cost in practice" line.
