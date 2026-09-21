@@ -1,0 +1,34 @@
+{
+  "case": 8,
+  "upstream_fix": "gh-112127",
+  "title": "possible use-after-free in atexit.unregister()",
+  "consumer": "Modules/atexitmodule.c",
+  "object": "a callback tuple borrowed out of the live callbacks list",
+  "lifetime_ender": "a user __eq__ calls atexit.unregister again and mutates the list",
+  "shape": "free / reuse / stale read",
+  "distinguishing": "the loop carries on to the next index through the same list after the free, so the container outlives the entry",
+  "live_in_pin": true,
+  "live_proof": "back-patched into the 3.13 branch after v3.13.7",
+  "allocator_layer": "pymalloc",
+  "fidelity": "model-consumer, real allocator",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    }
+  },
+  "status": "run 2026-09-18 under QEMU"
+}

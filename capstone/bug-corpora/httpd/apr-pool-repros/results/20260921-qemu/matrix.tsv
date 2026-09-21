@@ -1,0 +1,3 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	delivered	completed	runner_exit
+0	9e6be73065	watchdog-destroyed-pool-reused	stale allocator handle / reuse / allocation through the dead handle	spatial	complete	True					1	0
+0	9e6be73065	watchdog-destroyed-pool-reused	stale allocator handle / reuse / allocation through the dead handle	sublet	fault	True	24	0x101866a8c	0x101866a8c	False		1

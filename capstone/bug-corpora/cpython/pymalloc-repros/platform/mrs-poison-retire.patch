@@ -1,0 +1,70 @@
+--- a/lib/libc/stdlib/malloc/mrs/mrs.c
++++ b/lib/libc/stdlib/malloc/mrs/mrs.c
+@@ -636,6 +636,35 @@
+ 	}
+ }
+ 
++/*
++ * LOCAL FIX (not upstream): retire poison left on a block that is being
++ * handed out again.
++ *
++ * POISON_ON_FREE marks a freed block so that stale capabilities into it trap.
++ * Nothing in the shipped configuration ever takes that mark off again:
++ * CLEAR_ON_ALLOC only memsets (poison is out-of-band metadata, so zeroing the
++ * payload does not touch it -- and the write would itself trap), the
++ * cclearpoison path lives behind CLEAR_ON_ALLOC_NWZ, and the version-bump
++ * retirement lives behind CLEAR_ON_ALLOC_PVER; neither is defined here.  Only
++ * CLEAR_ON_ALLOC_PVER_INIT is, and it resets the version to 0 -- the same
++ * value the stale poison carries, so the two match and the trap fires on the
++ * NEW owner's first write.
++ *
++ * Measured symptom before this fix: any program that frees a block and then
++ * allocates the same size class again dies with a poison exception, e.g.
++ * feature_present() -> asprintf() -> malloc(128).
++ *
++ * This must run before anything writes into the region.
++ */
++static inline void
++mrs_retire_poison(void *region)
++{
++	if (region == NULL)
++		return;
++	for (size_t i = 0; i < cheri_getlen(region); i += 16)
++		cheri_poison_clear((char *)region + i);
++}
++
+ static inline void
+ clear_region(void *mem, size_t len)
+ {
+@@ -1574,6 +1603,7 @@
+ 		    allocated_region);
+ 		return (allocated_region);
+ 	}
++	mrs_retire_poison(allocated_region);
+ #ifdef CLEAR_ON_ALLOC_PVER_INIT
+ 	cheri_poison_set_version(allocated_region, 0);
+ 	if (init_enable) {
+@@ -1679,6 +1709,7 @@
+ 		    allocated_region);
+ 		return (allocated_region);
+ 	}
++	mrs_retire_poison(allocated_region);
+ 
+ 	increment_allocated_size(allocated_region);
+ 
+@@ -1727,6 +1758,7 @@
+ 	if (ret != 0) {
+ 		return (ret);
+ 	}
++	mrs_retire_poison(*ptr);
+ 
+ 
+ #ifdef CLEAR_ON_ALLOC_PVER
+@@ -1802,6 +1834,7 @@
+ 		    allocated_region);
+ 		return (allocated_region);
+ 	}
++	mrs_retire_poison(allocated_region);
+ #ifdef CLEAR_ON_ALLOC_PVER
+ 	if (size >= PVER_THRESHOLD) {
+ 		int pver = cheri_poison_get_version(allocated_region);

@@ -1,0 +1,18 @@
+# Path, bucket, purpose. No measured port-effort claim is derived from this inventory.
+patches/apr-1.7.4-0001-freestanding-includes.patch compat the census seam as a patch: fourteen includes become one shim
+patches/apr-1.7.4-0002-node-lifetime-hooks.patch allocator node transitions on the free list, backing and metadata heap
+../adapted/apr_shim.h compat freestanding interface to upstream apr_pools.c, shared with the census
+src/shared/port.h glue fixed-width protocol and adapter interface
+src/shared/metadata.c glue metadata heap for adapter records and the allocator struct
+src/shared/services.c glue the nine off-path services apr_pools.c references, each ending the run
+src/allocators/sublet/node-leases.c allocator retained node authority, revoked on release and issue
+src/native/node-pointers.c glue hosted node backing with plain pointers, mode 0 only
+src/cheribsd/node-malloc.c glue stock CheriBSD: nodes from the platform's malloc, mode 0 only
+security-tests/cheribsd/revocation-control.c test libc revocation made to fire at the corpus's labelled load
+host/cheribsd/build.sh test shared CheriBSD build entry
+host/cheribsd/run.sh test shared CheriBSD run entry
+src/native/main.c test hosted entry through the seam
+src/capstone-domain/entry.c test domain entry and shared region setup
+src/linux-guest/domain-loader.c test guest domain loader
+examples/pools.c test direct-link client that must observe the node reissue
+tests/native/test-source.py test patch order, duplicate rejection, preservation on failure

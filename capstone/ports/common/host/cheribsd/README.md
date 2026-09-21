@@ -1,6 +1,6 @@
 # CheriBSD allocator ports
 
-Four extracted allocator libraries share one CHERI-RISC-V purecap toolchain
+Five extracted allocator libraries share one CHERI-RISC-V purecap toolchain
 and one QEMU runner. Each component builds a replay and a small program that
 links the allocator directly, without a trace driver.
 
@@ -10,6 +10,7 @@ links the allocator directly, without a trace driver.
 | [PostgreSQL](../../../postgres/memory-contexts/README.md) | `PostgreSQL::MemoryContexts` | [contexts.c](../../../postgres/memory-contexts/examples/contexts.c) |
 | [CPython](../../../cpython/pymalloc/README.md) | `CPython::Pymalloc` | [pymalloc.c](../../../cpython/pymalloc/examples/pymalloc.c) |
 | [Whisper](../../../whisper/ggml-context/README.md) | `Whisper::GgmlContext` | [context.c](../../../whisper/ggml-context/examples/context.c) |
+| [APR](../../../apr/pools/README.md) | `APR::Pools` | [pools.c](../../../apr/pools/examples/pools.c) |
 
 ## Build and run one component
 
@@ -32,7 +33,7 @@ bash "$PORT/host/cheribsd/run.sh" "$BUILD" /tmp/capstone/cpython-run-1 \
   --sdk "$CHERI_SDK" --rootfs "$CHERI_SYSROOT" --image "$CHERI_IMAGE"
 ```
 
-The same two script names exist in all four components. Alternatively, from
+The same two script names exist in all five components. Alternatively, from
 any component directory use `cmake --preset cheribsd` and
 `cmake --build --preset cheribsd`. Cross binaries run through the QEMU runner,
 not host CTest. The `cheribsd` preset disables host tests and recorder builds.
@@ -141,6 +142,7 @@ an ephemeral SSH private key and guest banners: keep them outside Git.
 | PostgreSQL CheriBSD | Capability-compatible manager with 16-byte chunk/free-list layouts; ordinary libc backing allocation |
 | CPython CheriBSD | Capability-compatible pymalloc with retained arena/pool authority; inner pool frees remain ordinary allocator operations |
 | ggml CheriBSD | Capability-compatible context extraction and backing ownership; reset does not revoke old aliases |
+| APR CheriBSD | Nodes from the platform's own malloc, as upstream; APR reuses a destroyed pool's node from its own free list without ever calling free(), so libc revocation is never asked |
 
 Running on CheriBSD does not automatically make inner frees temporally safe.
 The default suite explicitly disables libc revocation in test processes and verifies that state;

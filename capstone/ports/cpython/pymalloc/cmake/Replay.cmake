@@ -8,6 +8,11 @@ target_compile_options(replay-options INTERFACE -ffunction-sections -fdata-secti
 add_library(pymalloc OBJECT "${PYMALLOC_SOURCE}/Objects/obmalloc.c" src/shared/backing.c)
 target_link_libraries(pymalloc PUBLIC replay-options)
 add_dependencies(pymalloc cpython-source)
+# The seam the bug corpus builds through. It supplies its own pym_replay, the
+# way security-tests/shared/lifetimes.c does, so the corpus stays outside the
+# port and the port keeps one way in. Both the Capstone domain build and a
+# hosted build read it; the corpus source picks its own probes and markers.
+set(PY_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied defect program")
 option(PYMALLOC_POISONCAP "Use the experimental PoisonCap pymalloc lifetime adapter" OFF)
 if(PYMALLOC_POISONCAP)
   if(NOT PORT_PLATFORM STREQUAL "cheribsd")
@@ -50,6 +55,13 @@ if(PORT_HOSTED)
   target_link_libraries(allocator-example PRIVATE CPython::Pymalloc)
   include("${PORT_SUPPORT_ROOT}/cmake/Client.cmake")
   port_add_client(CPython::Pymalloc)
+  if(PY_CORPUS_SRC)
+    add_executable(defects src/native/main.c "${PY_CORPUS_SRC}")
+    target_link_libraries(defects PRIVATE pymalloc)
+    add_dependencies(defects cpython-source)
+    # The corpus probes use GNU inline asm, as the published revoke.h does.
+    set_target_properties(defects PROPERTIES C_EXTENSIONS ON)
+  endif()
   if(PORT_PLATFORM STREQUAL "native")
     set(reference_source "${CMAKE_BINARY_DIR}/reference/Python-${UPSTREAM_version}")
     add_custom_command(OUTPUT "${reference_source}/prepared.stamp"
@@ -85,10 +97,6 @@ else()
   add_dependencies(pool-security cpython-source)
   target_link_options(pool-security PRIVATE --gc-sections -T "${link_script}")
   set_target_properties(pool-security PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
-  # The seam the bug corpus builds through. It supplies its own pym_replay, the
-  # way security-tests/shared/lifetimes.c does, so the corpus stays outside the
-  # port and the port keeps one way in.
-  set(PY_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied domain defect program")
   if(PY_CORPUS_SRC)
     add_executable(defects src/capstone-domain/entry.c "${PY_CORPUS_SRC}"
       "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
