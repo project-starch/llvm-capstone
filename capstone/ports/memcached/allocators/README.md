@@ -7,9 +7,11 @@ an allocator component port for the
 It does not execute memcached, its item layer, its threads or its page mover:
 the port is single-threaded, the mutexes are no-ops in a domain and the host's
 uncontended ones natively, and `slabs_mover.c` -- the one place a page changes
-class -- is not built. A [stock CheriBSD build](host/cheribsd/README.md)
-exists -- the platform's own `malloc` under every page and object, no adapter
-authority -- and there is no PoisonCap build of these allocators.
+class -- is not built. Two CheriBSD builds exist: a
+[stock one](host/cheribsd/README.md), the platform's own `malloc` under every
+page and object with no adapter authority, and an experimental
+[PoisonCap one](host/cheribsd/poisoncap/README.md) that puts poison authority
+there instead.
 
 ## Layout and source boundary
 
@@ -17,9 +19,10 @@ This component uses `../../common` for verified downloads, cross toolchains,
 external builds and the shared QEMU lock, in the layout the port catalog
 describes. `src/shared/` holds the protocol, the metadata heap, the service
 stubs and the lifetime ledger; `src/allocators/sublet/` and `src/native/` the
-two authority layers under it; `src/cheribsd/` the stock-platform ledger over
-`malloc`; `src/capstone-domain/` the domain entry; `src/linux-guest/` the
-staging loader. Generated sources stay outside the
+two authority layers under it; `src/cheribsd/` the two CheriBSD adapters -- the stock
+ledger over `malloc`, and the PoisonCap authority layer that runs under the
+shared ledger instead; `src/capstone-domain/` the domain entry;
+`src/linux-guest/` the staging loader. Generated sources stay outside the
 repository.
 
 `upstream.json` pins the official memcached 1.6.45 archive by SHA256 -- the
@@ -139,6 +142,21 @@ On CheriBSD `allocator-example` prints `ALLOCATOR_EXAMPLE memcached PASS
 pointer_bytes=16`, which is what the shared runner's component registration
 expects.
 
+## PoisonCap
+
+`host/cheribsd/poisoncap/build.sh` builds the same allocators with
+`-DMCP_POISONCAP=ON`, which replaces the authority layer and nothing else: one
+`mmap`'d arena carrying `CHERI_PERM_POISON` and `CHERI_PERM_SW_VMEM` is the
+adapter's, every alias handed to memcached is bounded to its unit and stripped
+of both permissions, and **the ledger is the one the Capstone domain runs**
+(`src/shared/leases.c`, unchanged). Mode 0 is bounded leases with no
+invalidation; mode 1 poisons the unit's granules on release, sweeps
+synchronously, clears the poison and zeroes the payload before upstream writes
+its free-list link through the fresh alias. That file, 160 lines, is the whole
+of the difference between this system and the domain. Its
+[manual](host/cheribsd/poisoncap/README.md) has the geometry rules and the
+platform's own instruction controls.
+
 ## Build
 
 From the repository root, source `capstone/tests/capstone-test-env.sh` and set
@@ -151,6 +169,7 @@ ctest --test-dir /tmp/capstone/memcached-allocators/build/native
 cmake --preset capstone-domain && cmake --build /tmp/capstone/memcached-allocators/build/capstone-domain
 cmake --preset linux-guest && cmake --build /tmp/capstone/memcached-allocators/build/linux-guest
 CHERI_SDK=... CHERI_SYSROOT=... cmake --preset cheribsd && cmake --build /tmp/capstone/memcached-allocators/build/cheribsd
+CHERI_SDK=... CHERI_SYSROOT=... bash host/cheribsd/poisoncap/build.sh /tmp/capstone/poisoncap-memcached/build
 ```
 
 Presets build under `/tmp/capstone/memcached-allocators/build/`. A hosted
@@ -160,7 +179,9 @@ corpus supplies `mcp_replay`, and the build produces `bin/defects` (hosted) or
 `bin/defects.dom` (domain). The corpus's `shared/build-cases.sh` invokes it
 once per case. `allocator-example` prints
 `ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=8` as its last line natively,
-`pointer_bytes=16` on CheriBSD.
+`pointer_bytes=16` on either CheriBSD build. On the PoisonCap build it runs
+**mode 1** unless told otherwise, so the registered example is itself a
+protected run.
 
 ## Verification
 

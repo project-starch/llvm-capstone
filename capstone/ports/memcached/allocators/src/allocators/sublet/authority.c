@@ -25,6 +25,9 @@ void mcp_authority_init(void *payload) {
   sublet_split(&remaining[MCP_PAGES], end[MCP_PAGES], &remaining[MCP_OBJECTS]);
 }
 int mcp_authority_can_revoke(void) { return 1; }
+/* Sublet revokes at whichever transitions the ledger asks about; which ones
+ * those are is the ledger's decision, not this layer's. */
+void mcp_authority_set_mode(unsigned mode) { (void)mode; }
 uintptr_t mcp_authority_base(unsigned half) { return base[half]; }
 size_t mcp_authority_used(unsigned half) { return cursor[half] - base[half]; }
 int mcp_authority_carve(unsigned half, size_t size, capstone_cap_slot *out, uintptr_t *at) {

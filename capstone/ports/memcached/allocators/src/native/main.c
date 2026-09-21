@@ -7,6 +7,9 @@
 #include "slabs.h"
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef MCP_POISONCAP
+#include "poisoncap.h"
+#endif
 _Noreturn void mcp_fail(unsigned code) {
   fprintf(stderr, "MCP failed=%u\n", code);
   exit(1);
@@ -32,12 +35,12 @@ int main(int argc, char **argv) {
     out.mode = mode;
   }
   void *metadata = aligned_alloc(4096, MCP_META_BYTES);
-#ifdef MCP_UNITS_FROM_MALLOC
-  void *payload = NULL; /* the platform's malloc is the region */
+#ifdef MCP_ADAPTER_BACKING
+  void *payload = NULL; /* the CheriBSD adapter owns its own backing */
 #else
   void *payload = aligned_alloc(4096, MCP_PAYLOAD_BYTES);
 #endif
-#ifndef MCP_UNITS_FROM_MALLOC
+#ifndef MCP_ADAPTER_BACKING
   if (!payload)
     return 4;
 #endif
@@ -58,6 +61,11 @@ int main(int argc, char **argv) {
          (unsigned long long)out.chunk_releases,
          (unsigned long long)out.object_reuses,
          (unsigned long long)out.object_releases);
+#ifdef MCP_POISONCAP
+  /* What the protection cost, beside what the allocators did. In the spatial
+   * arm every counter here must be zero. */
+  mcp_poisoncap_report();
+#endif
   free(metadata);
   free(payload);
   free(input);

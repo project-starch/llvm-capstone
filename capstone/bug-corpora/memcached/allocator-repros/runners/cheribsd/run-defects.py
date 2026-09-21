@@ -297,7 +297,8 @@ def main():
     a = p.parse_args()
     selected = numbers(a.cases, set(claims), "case")
     if numbers(a.modes, {0, 1}, "mode") != [0]:
-        p.error("the stock CheriBSD build has only mode 0; there is no PoisonCap build of memcached's allocators")
+        p.error("the stock CheriBSD build has only mode 0; the protected pair is "
+                "the PoisonCap build's, under runners/poisoncap/")
     if a.timeout < 1:
         p.error("the per-arm timeout must be positive")
     bins = a.build.resolve() / "bin"

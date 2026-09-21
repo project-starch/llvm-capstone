@@ -12,6 +12,9 @@ src/shared/leases.c allocator the lifetime ledger: pages, chunks and objects, th
 src/allocators/sublet/authority.c allocator Sublet authority: carve, take, renew, reclaim over the payload region
 src/native/authority.c glue hosted authority with plain pointers, mode 0 only
 src/cheribsd/malloc-leases.c glue stock CheriBSD: pages and objects from the platform's malloc, chunks as offsets into a page, mode 0 only
+src/cheribsd/poisoncap-authority.c allocator PoisonCap authority under the shared ledger: one poisoned arena, bounded client aliases, sweep on release in mode 1
+src/cheribsd/poisoncap.h glue what the PoisonCap layer counted, for the entry and the example to print
+host/cheribsd/poisoncap/build.sh test PoisonCap build entry
 security-tests/cheribsd/revocation-control.c test libc revocation made to fire at the corpus's labelled load
 host/cheribsd/build.sh test shared CheriBSD build entry
 host/cheribsd/run.sh test shared CheriBSD run entry

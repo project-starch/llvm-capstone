@@ -66,8 +66,11 @@ guest through `malloc_revoke_enabled()`.
 oracle must report FAIL, and `revocation-control` — which takes no fixture —
 must still pass.
 
-**What this does not do.** There is no PoisonCap build of memcached's
-allocators, so no protected arm exists on this target; `--modes 1` is refused. The guest image is the
+**What this does not do.** This is the stock build and has no protected arm:
+`--modes 1` is refused, because the build it runs takes its storage from the
+platform's `malloc` and has no authority of its own to withhold. The protected
+pair lives on the PoisonCap build and has
+[its own runner](../poisoncap/README.md). The guest image is the
 PoisonCap platform's with its libc patched (`../../../cpython/pymalloc-repros/platform/`);
 without that patch a process with revocation on dies in libc's own start-up,
 before any of this runs.

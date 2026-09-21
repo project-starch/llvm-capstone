@@ -90,6 +90,10 @@ void mcp_replay(const struct mcp_header *input, struct mcp_header *out);
  * holds a plain pointer and there is nothing to revoke. */
 void mcp_authority_init(void *payload);
 int mcp_authority_can_revoke(void);
+/* The ledger's mode, passed down because one layer acts on it: PoisonCap must
+ * not poison or sweep in the spatial arm, or the pair would measure one thing
+ * twice. The Sublet and hosted layers have nothing to do with it. */
+void mcp_authority_set_mode(unsigned mode);
 uintptr_t mcp_authority_base(unsigned half);
 size_t mcp_authority_used(unsigned half);
 /* The next `size` bytes of a half; 0 when it is exhausted. */

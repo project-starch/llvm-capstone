@@ -28,12 +28,16 @@
       "note": "the probe is the first read through rcurr after do_cache_free; the mark precedes it and nothing between them touches the buffer"
     },
     "poisoncap-spatial": {
-      "status": "not written",
-      "requires": "no PoisonCap build of memcached's allocators exists; the stock CheriBSD build is the cheribsd-revocation arm"
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
+      "role": "control for poisoncap-protected: the same binary in the same boot, one difference. Bounded leases and no invalidation, so the freed object stays addressable and the stale access succeeds -- the defect as upstream ships it. sweeps=0 is part of the oracle: a control that swept would be a second protected arm under the control's name"
     },
     "poisoncap-protected": {
-      "status": "not written",
-      "requires": "no PoisonCap build of memcached's allocators exists; the stock CheriBSD build is the cheribsd-revocation arm"
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
+      "signal": 34,
+      "si_code": 2,
+      "note": "si_code separates the platform's two refusals and only one of them is this arm: 3 is an access to a granule that is poisoned but not yet swept, with the capability still tagged; 2 is an access through an alias the sweep revoked. The platform's own controls produce both in the same boot"
     },
     "native-detect": {
       "status": "not written",
@@ -48,6 +52,6 @@
       "note": "cache.c pushes the freed object on its STAILQ and pops it back uncleared; it calls free() only over a limit these caches do not have, so libc's quarantine never holds the object"
     }
   },
-  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds; negative control fires. Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes (completed=1, object_reuses=1) while revocation-control faults at mc_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 2/2 with the control still faulting. No poisoncap arm: no PoisonCap build of memcached's allocators exists",
+  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds; negative control fires. Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes (completed=1, object_reuses=1) while revocation-control faults at mc_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 2/2 with the control still faulting. PoisonCap 2026-09-21: spatial completes with the adapter reporting sweeps=0, protected faults at mc_defect_read with SIGPROT si_code=PROT_CHERI_TAG at the address the supervisor resolved, 2 of 2 rounds; the platform's five instruction controls hold in every boot and the negative control fires 2/2.",
   "note": "damage is the copied command differing from what was read: natively the first 8 bytes become the free list's link, in a domain the first 16. Upstream reported an unhelpful ERROR to the client; this records the byte-level cause of it"
 }

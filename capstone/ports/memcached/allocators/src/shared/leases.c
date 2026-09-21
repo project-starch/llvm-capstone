@@ -65,6 +65,7 @@ void mcp_set_mode(unsigned mode) {
   if (mode == 1 && !mcp_authority_can_revoke())
     mcp_fail(505);
   protected_mode = mode;
+  mcp_authority_set_mode(mode);
   pages = mcp_meta_calloc(MAX_PAGES, sizeof *pages);
   page_map = mcp_meta_calloc(GRAINS, sizeof *page_map);
   objects = mcp_meta_calloc(MAX_OBJECTS, sizeof *objects);

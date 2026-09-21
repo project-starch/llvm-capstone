@@ -61,8 +61,10 @@ referenced rather than copied. Where this corpus differs:
   CheriBSD with its own libc revocation, pages and objects from the platform's
   `malloc`, mode 0 only, with a positive control in the same boot. It is the
   APR and FFmpeg corpora's arm of that name.
-* **`poisoncap-*`** are declared and not written: no PoisonCap build of
-  memcached's allocators exists.
+* **`poisoncap-spatial` / `poisoncap-protected`** are the contract's own arms
+  and are written: the port's PoisonCap adapter, one binary, the mode chosen at
+  run time. The spatial arm additionally requires the adapter to report
+  `sweeps=0`, because a control that swept would be a second protected arm.
 * **`live_in_pin` is `false`** for both cases with the proof beside it: each
   fix is an ancestor of the 1.6.45 tag (GitHub compare `status=behind`), so
   the shipped allocator is exercised by a pre-fix consumer shape the commit's
@@ -71,12 +73,13 @@ referenced rather than copied. Where this corpus differs:
   race; the fixture performs the interleaving the commit message describes in
   program order, and says so.
 
-## Three targets, one sequence
+## Four targets, one sequence
 
 Real: `cache.c` (and `slabs.c`, initialised and idle) from the 1.6.45 pin,
 unmodified but for the two patches the port
 [`ports/memcached/allocators`](../../../ports/memcached/allocators/README.md)
-applies -- one replaces the includes with the port's shims, the other connects
+applies -- and the same two patches on every target, because what changes
+between them is the authority under the allocators, never the allocators -- one replaces the includes with the port's shims, the other connects
 the free-list transitions to the adapter. Reduced: the consumer. Each `case.c`
 writes its sequence inside `MC_CASE(NN)` and is a complete translation unit on
 both targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
@@ -84,6 +87,7 @@ both targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
     shared/build-cases.sh native <out>            then runners/run-native.sh
     shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
     shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
+    shared/build-cases.sh poisoncap <out>         then runners/poisoncap/
 
 The [domain runner's manual](runners/capstone-domain/README.md) has the
 commands, the two modes and the oracle. In short: `spatial` must complete,
@@ -92,6 +96,8 @@ the run and never hardcoded, and `--negative-control` must make every oracle
 say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/README.md)
 runs the same cases against the platform's own `malloc` with libc revocation on
 or off, beside a control that shows the revocation can fire at the same shape.
+The [PoisonCap manual](runners/poisoncap/README.md) runs the pair the contract
+names, behind the platform's own instruction controls.
 
 One thing the first run taught, now in `corpus.h`: in this emulator,
 arithmetic on a revoked alias faults at the arithmetic (`cincoffsetimm with an

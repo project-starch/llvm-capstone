@@ -18,6 +18,8 @@ void mcp_authority_init(void *payload) {
   used[MCP_PAGES] = used[MCP_OBJECTS] = 0;
 }
 int mcp_authority_can_revoke(void) { return 0; }
+/* Nothing to switch: this layer has no authority to withhold. */
+void mcp_authority_set_mode(unsigned mode) { (void)mode; }
 uintptr_t mcp_authority_base(unsigned half) { return (uintptr_t)base[half]; }
 size_t mcp_authority_used(unsigned half) { return used[half]; }
 int mcp_authority_carve(unsigned half, size_t size, capstone_cap_slot *out, uintptr_t *at) {
