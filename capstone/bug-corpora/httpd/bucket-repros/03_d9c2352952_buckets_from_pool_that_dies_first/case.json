@@ -16,6 +16,19 @@
       "note": "this pair differs by whether the upstream fix is applied, not by protection",
       "measures": "free() is interposed and counted, so freed_to_malloc is measured per case and not inherited from the census"
     },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap, libc heap revocation enabled",
+      "cases": [
+        "bucket-3-fixed",
+        "bucket-3-buggy"
+      ],
+      "oracle": "both arms complete and print their native verdict unchanged: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
+      "measured": "brigade_still_holds=1 reissued_same_address=1 now=0xB2 freed_to_malloc=0",
+      "control": "the run's cheribsd-abi probe prints CHERI_ABI pointer_bytes=16 runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
+      "guest_default": "preserved -- nothing is disabled to make room for this measurement",
+      "runner": "runners/run-cheribsd.sh",
+      "note": "freed_to_malloc is measured in the guest by the same interposed free() as the native arm, so the reason the revoker is idle is read off this run and not carried over from the census"
+    },
     "spatial": {
       "status": "not written"
     },
@@ -33,6 +46,6 @@
       "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
     }
   },
-  "status": "native pair run 2026-09-21; both passed. No protected arm exists: the allocators build freestanding but no domain workload does",
+  "status": "native pair run 2026-09-21; both passed. CheriBSD purecap with revocation on, same day: both arms complete, the revoker sees nothing. No Capstone, Sublet or PoisonCap arm exists: the allocators build freestanding but no domain workload does",
   "note": "the protected arms are unwritten because the port is a census plus this corpus, not a domain workload. The gap is declared rather than absent"
 }

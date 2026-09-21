@@ -43,10 +43,11 @@ referenced rather than copied. Where this corpus differs:
 
 * **`native-fix-differential`** replaces the protection axis: the pair differs
   by whether the upstream fix is applied.
-* **Every protection arm is declared and not written.** The allocators build
-  freestanding and this corpus runs against them, but no domain workload does,
-  so `spatial`, `sublet` and both `poisoncap` arms carry `"status": "not
-  written"` and the gap is visible rather than absent.
+* **One protection arm is measured, the rest are declared and not written.**
+  `cheribsd-revocation` ran (below). The allocators build freestanding and this
+  corpus runs against them, but no *domain* workload does, so `spatial`,
+  `sublet` and both `poisoncap` arms carry `"status": "not written"` and the gap
+  is visible rather than absent.
 * **`native-detect`** is not merely unwritten but tautological: neither level
   reaches `malloc`, so ASan has no event. Valgrind against APR's own annotations
   is the arm that could discriminate.
@@ -64,6 +65,27 @@ One program per case, each run twice, control first; an infrastructure failure
 exits 75 with no verdict. Each case interposes `free()` and prints
 `freed_to_malloc`, so "nothing reaches malloc" is measured per case rather than
 inherited from the census.
+
+## What CheriBSD's revoker sees
+
+Measured, 2026-09-21: all eight cases, both arms, under stock CheriBSD purecap
+with libc heap revocation on. **All sixteen complete and print their native
+verdict unchanged.** The eight buggy arms still report
+`VERDICT DEFECT-REPRODUCED`; the revoker does not intervene.
+
+The control is in the same run, in the same guest, immediately before the cases:
+the ABI probe prints `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, read
+from CheriBSD's own `malloc_revoke_enabled()`. The guest default is left
+`preserved` — nothing is disabled to make room for this result.
+
+The reason is measured too, not argued: every arm prints `freed_to_malloc=0`
+from the same interposed `free()` the native arm uses. Storage that never
+reaches `malloc` never enters the quarantine the revoker sweeps. This is the
+informative negative for the two-level shape — the mechanism exists and is
+switched on, one level below where the lifetime ends.
+
+    export CHERI_SDK=... CHERI_SYSROOT=... CHERI_IMAGE=...
+    bash runners/run-cheribsd.sh [builddir] [outdir]
 
 ## Limits
 
