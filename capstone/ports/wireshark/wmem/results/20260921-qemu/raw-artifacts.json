@@ -1,0 +1,7 @@
+{
+  "storage": "local archive; raw guest logs and every attempt are not committed",
+  "path": "~/artifacts/wireshark/20260921-wmem/raw-campaign.tar.gz",
+  "bytes": 1183949,
+  "sha256": "3f508c5ec1043a223d56cb11aac4225ae87709bbe331c6aafc2034b1f3c52e10",
+  "contents": "the passing campaign, and the two failed attempts before it: a runner host without pexpect, and a replay image of 2,901,776 loadable bytes that the loader module refused"
+}

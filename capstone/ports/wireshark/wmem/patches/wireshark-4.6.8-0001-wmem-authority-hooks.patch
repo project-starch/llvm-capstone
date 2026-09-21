@@ -1,0 +1,338 @@
+Subject: Bind wmem object bounds and block epochs to the port's authority hooks
+Upstream: wireshark 4.6.8
+Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
+Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
+Build-Variants: native port, Capstone domain; inert in full Wireshark (every hunk is guarded by WMEM_PORT_HOOKS)
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+--- a/wsutil/wmem/wmem_allocator_block.c
++++ b/wsutil/wmem/wmem_allocator_block.c
+@@ -17,6 +17,9 @@
+ #include "wmem_core.h"
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_block.h"
++#ifdef WMEM_PORT_HOOKS
++#include "wmem-port-hooks.h"
++#endif
+ 
+ /* This has turned into a very interesting exercise in algorithms and data
+  * structures.
+@@ -794,8 +797,13 @@
+     chunk->len   = 0;
+     chunk->prev  = 0;
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* and return the data pointer */
++    return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
++#else
+     /* and return the data pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
++#endif
+ }
+ 
+ /* Frees special 'jumbo' blocks of sizes that won't fit normally. */
+@@ -837,7 +845,11 @@
+         allocator->block_list = block;
+     }
+ 
++#ifdef WMEM_PORT_HOOKS
++    return wm_narrow(WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block)), size);
++#else
+     return WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block));
++#endif
+ }
+ 
+ /* API */
+@@ -885,8 +897,13 @@
+     /* mark it as used */
+     chunk->used = true;
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* and return the user's pointer */
++    return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
++#else
+     /* and return the user's pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
++#endif
+ }
+ 
+ static void
+@@ -895,6 +912,9 @@
+     wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
+     wmem_block_chunk_t     *chunk;
+ 
++#ifdef WMEM_PORT_HOOKS
++    ptr = wm_widen(ptr);
++#endif
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
+ 
+     if (chunk->jumbo) {
+@@ -919,6 +939,9 @@
+     wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
+     wmem_block_chunk_t     *chunk;
+ 
++#ifdef WMEM_PORT_HOOKS
++    ptr = wm_widen(ptr);
++#endif
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
+ 
+     if (chunk->jumbo) {
+@@ -969,8 +992,13 @@
+             /* Now cycle the recycler */
+             wmem_block_cycle_recycler(allocator);
+ 
++#ifdef WMEM_PORT_HOOKS
++            /* And return the same old pointer */
++            return wm_narrow(ptr, size);
++#else
+             /* And return the same old pointer */
+             return ptr;
++#endif
+         }
+         else {
+             /* no room to grow, need to alloc, copy, free */
+@@ -991,6 +1019,15 @@
+         wmem_block_split_used_chunk(allocator, chunk, size);
+ 
+         /* Now cycle the recycler */
++#ifdef WMEM_PORT_HOOKS
++        wmem_block_cycle_recycler(allocator);
++
++        return wm_narrow(ptr, size);
++    }
++
++    /* no-op */
++    return wm_narrow(ptr, size);
++#else
+         wmem_block_cycle_recycler(allocator);
+ 
+         return ptr;
+@@ -998,6 +1035,7 @@
+ 
+     /* no-op */
+     return ptr;
++#endif
+ }
+ 
+ static void
+@@ -1014,6 +1052,37 @@
+     /* iterate through the blocks, reinitializing each one */
+     cur = allocator->block_list;
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* Every retained block starts a new epoch under fresh authority, so the
++     * block list is rebuilt from the renewed aliases rather than relinked
++     * through pointers the epoch has just retired. */
++    {
++        wmem_block_hdr_t *nxt, *tail = NULL;
++        allocator->block_list = NULL;
++        while (cur) {
++            chunk = WMEM_BLOCK_TO_CHUNK(cur);
++            nxt = cur->next;
++            if (chunk->jumbo) {
++                wmem_free(NULL, WMEM_CHUNK_TO_BLOCK(chunk));
++            }
++            else {
++                cur = (wmem_block_hdr_t *)wm_epoch(cur);
++                cur->prev = tail;
++                cur->next = NULL;
++                if (tail) {
++                    tail->next = cur;
++                }
++                else {
++                    allocator->block_list = cur;
++                }
++                tail = cur;
++                wmem_block_init_block(allocator, cur);
++            }
++            cur = nxt;
++        }
++    }
++}
++#else
+     while (cur) {
+         chunk = WMEM_BLOCK_TO_CHUNK(cur);
+         if (chunk->jumbo) {
+@@ -1027,6 +1096,7 @@
+         }
+     }
+ }
++#endif
+ 
+ static void
+ wmem_block_gc(void *private_data)
+--- a/wsutil/wmem/wmem_allocator_block_fast.c
++++ b/wsutil/wmem/wmem_allocator_block_fast.c
+@@ -18,6 +18,9 @@
+ #include "wmem_core.h"
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_block_fast.h"
++#ifdef WMEM_PORT_HOOKS
++#include "wmem-port-hooks.h"
++#endif
+ 
+ /* https://mail.gnome.org/archives/gtk-devel-list/2004-December/msg00091.html
+  * The 2*sizeof(size_t) alignment here is borrowed from GNU libc, so it should
+@@ -104,9 +107,15 @@
+         allocator->jumbo_list = block;
+ 
+         chunk = ((wmem_block_fast_chunk_t*)((uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE));
++#ifdef WMEM_PORT_HOOKS
++        chunk->len = JUMBO_MAGIC;
++
++        return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
++#else
+         chunk->len = JUMBO_MAGIC;
+ 
+         return WMEM_CHUNK_TO_DATA(chunk);
++#endif
+     }
+ 
+     real_size = (int32_t)(WMEM_ALIGN_SIZE(size) + WMEM_CHUNK_HEADER_SIZE);
+@@ -123,8 +132,13 @@
+ 
+     allocator->block_list->pos += real_size;
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* and return the user's pointer */
++    return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
++#else
+     /* and return the user's pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
++#endif
+ }
+ 
+ static void
+@@ -138,6 +152,9 @@
+ {
+     wmem_block_fast_chunk_t *chunk;
+ 
++#ifdef WMEM_PORT_HOOKS
++    ptr = wm_widen(ptr);
++#endif
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
+ 
+     if (chunk->len == JUMBO_MAGIC) {
+@@ -156,7 +173,11 @@
+         if (block->next) {
+             block->next->prev = block;
+         }
++#ifdef WMEM_PORT_HOOKS
++        return wm_narrow((uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE, size);
++#else
+         return ((void*)((uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
++#endif
+     }
+     else if (chunk->len < size) {
+         /* grow */
+@@ -169,8 +190,13 @@
+         return newptr;
+     }
+ 
++#ifdef WMEM_PORT_HOOKS
++    /* shrink or same space - great we can do nothing */
++    return wm_narrow(ptr, chunk->len);
++#else
+     /* shrink or same space - great we can do nothing */
+     return ptr;
++#endif
+ }
+ 
+ static void
+@@ -184,12 +210,25 @@
+      * that one */
+     cur = allocator->block_list;
+ 
++#ifdef WMEM_PORT_HOOKS
++    if (cur) {
++         /* The retained block starts a new epoch: every earlier alias into
++          * it loses its authority, and the allocator keeps the fresh one. */
++         nxt = cur->next;
++         cur = (wmem_block_fast_hdr_t *)wm_epoch(cur);
++         allocator->block_list = cur;
++         cur->pos = WMEM_BLOCK_HEADER_SIZE;
++         cur->next = NULL;
++         cur = nxt;
++    }
++#else
+     if (cur) {
+          cur->pos = WMEM_BLOCK_HEADER_SIZE;
+          nxt = cur->next;
+          cur->next = NULL;
+          cur = nxt;
+     }
++#endif
+ 
+     while (cur) {
+         nxt  = cur->next;
+--- a/wsutil/wmem/wmem_allocator_simple.c
++++ b/wsutil/wmem/wmem_allocator_simple.c
+@@ -18,6 +18,9 @@
+ #include "wmem_core.h"
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_simple.h"
++#ifdef WMEM_PORT_HOOKS
++#include "wmem-port-hooks.h"
++#endif
+ 
+ #define DEFAULT_ALLOCS 8192
+ 
+@@ -40,7 +43,11 @@
+                 sizeof(void*) * allocator->size);
+     }
+ 
++#ifdef WMEM_PORT_HOOKS
++    return allocator->ptrs[allocator->count++] = wm_narrow(wmem_alloc(NULL, size), size);
++#else
+     return allocator->ptrs[allocator->count++] = wmem_alloc(NULL, size);
++#endif
+ }
+ 
+ static void
+--- a/wsutil/wmem/wmem_allocator_strict.c
++++ b/wsutil/wmem/wmem_allocator_strict.c
+@@ -18,6 +18,9 @@
+ #include "wmem_core.h"
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_strict.h"
++#ifdef WMEM_PORT_HOOKS
++#include "wmem-port-hooks.h"
++#endif
+ 
+ /* In this allocator, we do everything we can to catch invalid memory accesses.
+  * This includes using canaries (what Valgrind calls redzones) and
+@@ -96,8 +99,13 @@
+     block->prev = NULL;
+     allocator->blocks = block;
+ 
++#ifdef WMEM_PORT_HOOKS
++    return wm_narrow(WMEM_BLOCK_TO_DATA(block), size);
++}
++#else
+     return WMEM_BLOCK_TO_DATA(block);
+ }
++#endif
+ 
+ static void
+ wmem_strict_free(void *private_data, void *ptr)
+@@ -107,6 +115,9 @@
+ 
+     allocator = (wmem_strict_allocator_t*) private_data;
+ 
++#ifdef WMEM_PORT_HOOKS
++    ptr = wm_widen(ptr);
++#endif
+     block = WMEM_DATA_TO_BLOCK(ptr);
+ 
+     wmem_strict_block_check_canaries(block);
+@@ -133,6 +144,9 @@
+     wmem_strict_allocator_block_t *block;
+     void                          *new_ptr;
+ 
++#ifdef WMEM_PORT_HOOKS
++    ptr = wm_widen(ptr);
++#endif
+     block = WMEM_DATA_TO_BLOCK(ptr);
+ 
+     /* create a new block */

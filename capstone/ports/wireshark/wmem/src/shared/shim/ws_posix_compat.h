@@ -1,0 +1,3 @@
+#ifndef WM_SHIM_WS_POSIX_COMPAT_H
+#define WM_SHIM_WS_POSIX_COMPAT_H
+#endif

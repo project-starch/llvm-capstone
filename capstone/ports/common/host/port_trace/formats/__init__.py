@@ -4,5 +4,6 @@ from .ffmpeg import Ffmpeg
 from .ggml import Ggml
 from .postgres import Postgres
 from .pymalloc import Pymalloc
+from .wmem import Wmem
 
-FORMATS = tuple(cls() for cls in (Ffmpeg, Postgres, Pymalloc, Ggml))
+FORMATS = tuple(cls() for cls in (Ffmpeg, Postgres, Pymalloc, Ggml, Wmem))
