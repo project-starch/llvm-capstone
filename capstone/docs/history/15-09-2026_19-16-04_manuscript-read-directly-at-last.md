@@ -698,3 +698,57 @@ already flat). It is **what the flat result rests on, and where it ends.**
 B1 is the one that matters, because it attacks the result we would otherwise publish. B3 supplies
 the number the manuscript has a slot for. B2 converts a bound into a value. B4 is the "what does it
 cost in practice" line.
+
+## 14. RETRACTION (2026-09-21): domains DO run at M-mode — the gate is satisfied, the check is defective
+
+*This retracts a claim I recorded as confirmed and put to the lead three times as the basis for
+decision 1. Raised by `apollo-board`; all three legs verified here before retracting.*
+
+**What I asserted** (`…16-37-49…md:387`, `:471`, `:513`): *"a domain cannot satisfy that gate, so the
+check protects nothing about domain code"*, *"it does not extend the check to domain code, which
+cannot satisfy the gate at all"*, *"the gate still excludes domains"*.
+
+**It is false. Entering a domain does not change privilege at all.**
+
+* `priv_lvl_d` has exactly **six** writers in `core/csr_regfile.sv` — `:1048` hold, `:2144` trap
+  entry, `:2307` MRET (from `mstatus.mpp`), `:2330` SRET, `:2351` VS-RET, `:2365` DRET. **None is on
+  a capability or domain-switch path.**
+* `core/anvil_build/capstone_dom_switcher.anvil` contains **zero** occurrences of `mstatus`, `priv`
+  or `mpp`.
+* and the load/store privilege is `ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o`
+  (`csr_regfile.sv:2273`) — with `mprv` clear it is simply the current privilege.
+
+So a domain entered from M-mode monitor code **runs at M**, and `ld_st_priv_lvl_i == PRIV_LVL_M`
+**holds**. The gate condition I verified at `load_store_unit.sv:966-969` is correct; the inference I
+endorsed from it was not. The source of the error is `docs/history/15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md`,
+whose `mret`s are labelled `call_into_smode` / `resume_smode` — the S-mode **host**, not a domain. I
+took its conclusion without checking its premise.
+
+**The measurement says the same thing independently.** R-35's bounds probe returned **mcause 28**,
+latched in hardware. CPMP cannot have produced it: its data check is gated `!= PRIV_LVL_M` and emits
+only `ST_ACCESS_FAULT`/`LD_ACCESS_FAULT` (7/5) — verified at `pmp/src/pmp_data_if.sv:292-294`. So 28
+can only have come from the M-gated `cap_violation_detection` block, which means **that block is the
+live path for domain data accesses**.
+
+### What this changes for the paper, and it is better news than what I gave the lead
+
+| | what I told the lead | what holds |
+|---|---|---|
+| why the four `tab:safety` rows fail | the check is **unreachable** from a domain | the check **runs** and its **revocation half is defective** |
+| nature of the gap | **structural** — no fix makes the rows hold | a **root-caused defect** with a written-up fix |
+| what silicon enforces | nothing for domain data | **bounds and permissions YES, revocation NO** |
+
+R-35 is now closed and root-caused to `load_store_unit.sv:966-971`: a single core-wide tracked
+revnode id that **re-adopts itself as VALID** whenever an access presents a different one. With 16
+rotating slots nearly every access presents a different one, so cause 25 can never fire. Bounds and
+permissions survive because they are read from the capability's own metadata — which is exactly the
+"**bounds but not revocation**" scope the board observed.
+
+**So my "structural gap" framing is withdrawn.** "R-34 is fixed must not read as the four rows now
+hold" was right for the wrong reason: the rows do not hold because revocation checking is broken,
+not because domains are locked out of the check. That is a defect with a known fix and a stated
+cost, which is a materially different input to decision 1 than an architectural impossibility.
+
+**Not mine to edit:** `15-09-2026_lsu-capmode-gate-why-domains-cannot-satisfy-it.md` is the RTL
+lane's and its conclusion changes, so it needs their sign-off. The correction is written up by the
+board lane in `docs/history/21-09-2026_r35-root-cause-is-cpmp-optimistic-adopt.md`.
