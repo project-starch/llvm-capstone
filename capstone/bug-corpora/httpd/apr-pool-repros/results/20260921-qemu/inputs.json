@@ -1,0 +1,39 @@
+{
+  "defect-00.dom": "d631dd02c5ade7abfadb54f4942941f98e79c72a20eaddf81d1b114ecf97985b",
+  "domain_loader": "f435f44fe34b157e4b4c4e3d42c3f6642ccbaf809649d08717c537c2d23414bb",
+  "qemu": "a02f755a8649f5957639202e1282b0b9b2b72b9a3375c5ca1f4f759617813a52",
+  "clang": "8e328b520523954fc89f56c61e8092ef4dba953f0eb62e25417c3381adde9664",
+  "trace_input": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113",
+  "arms": 2,
+  "cases": 1,
+  "negative_control_first_attempt": {
+    "spatial": "fired",
+    "sublet": "no result after 97 s: exit 75, no verdict"
+  },
+  "repetition_matrix": {
+    "neg-sublet": {
+      "runs": 8,
+      "rc0": 8,
+      "noresult": 0,
+      "slow": 1
+    },
+    "neg-spatial": {
+      "runs": 8,
+      "rc0": 8,
+      "noresult": 0,
+      "slow": 2
+    },
+    "pos-spatial": {
+      "runs": 8,
+      "rc0": 8,
+      "noresult": 0,
+      "slow": 1
+    },
+    "pos-sublet": {
+      "runs": 8,
+      "rc0": 7,
+      "noresult": 1,
+      "slow": 1
+    }
+  }
+}

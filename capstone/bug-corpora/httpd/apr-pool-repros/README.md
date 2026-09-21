@@ -21,32 +21,41 @@ The layout and the `case.json` fields are the corpus contract in
 [`cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md),
 referenced rather than copied. Where this corpus differs:
 
-* **`native-fix-differential`** replaces the protection axis: this pair differs
-  by whether the upstream fix is applied.
-* **`spatial` and `sublet` are declared and not written.** The APR port is a
-  compilation census, not a domain workload, so no protected arm exists yet and
-  the gap is visible in each `case.json` rather than silently absent.
+* **`native-fix-differential`** is an extra axis beside protection: natively
+  the pair differs by whether the upstream fix is applied, and the driver
+  prints what the case observed. In a domain the pair differs by protection,
+  and the program prints nothing.
 * **`native-detect`** is not merely unwritten: the nodes never reach `malloc`,
   so ASan has no event. Valgrind, against APR's own annotations, is the arm that
   could discriminate.
+* **`poisoncap-*`** are declared and not written: no CheriBSD or PoisonCap
+  build of APR exists.
 
-## Running
+## Two targets, one sequence
 
-    bash runners/run-native.sh [outdir]
+Real: `apr_pools.c` from the 1.7.4 pin, unmodified but for the two patches the
+port [`ports/apr/pools`](../../../ports/apr/pools/README.md) applies — one
+replaces fourteen APR includes with the census's shim, the other connects the
+node transitions to the adapter. Reduced: the consumer. Each `case.c` writes
+its sequence inside `APR_CASE(NN)` and is a complete translation unit on both
+targets; [`shared/corpus.h`](shared/corpus.h) is the seam.
 
-Real: `apr_pools.c` from the 1.7.4 pin, unmodified, with `apr_shim.h` standing
-in for the fourteen headers a configure run would have generated. Reduced: the
-consumer. `shared/stubs.c` answers the symbols the allocator references and no
-case reaches — and each one **aborts with exit 75** rather than returning
-quietly, so a case that came to depend on a stub could not pass unnoticed.
+    shared/build-cases.sh native <out>            then runners/run-native.sh
+    shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
+
+The [domain runner's manual](runners/capstone-domain/README.md) has the
+commands, the two modes and the oracle. In short: `spatial` must complete,
+`sublet` must fault at the labelled probe, the expected address is published by
+the run and never hardcoded, and `--negative-control` must make every oracle
+say FAIL before a PASS is believed.
 
 ## Where this corpus deviates from the contract, and why
 
 `tests/check-corpus.py` in the pymalloc corpus enforces
 [SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
-reports exactly two kinds of problem, all of them deliberate. They are listed
-here rather than silenced, and no copy of that checker is shipped beside them: a
-fork would be a second contract, and a checker that fails by design is noise.
+reports two kinds of problem, both deliberate. They are listed here rather than
+silenced, and no copy of that checker is shipped beside them: a fork would be a
+second contract, and a checker that fails by design is noise.
 
 | what it reports | why |
 |---|---|

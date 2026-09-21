@@ -1,8 +1,10 @@
 # Provenance
 
 **Tier: LITERAL-traceable allocator, reduced consumer.** `apr_pools.c` is
-upstream's file at the port's 1.7.4 pin, byte for byte, compiled through the
-census seam. Reduced: `wd_worker`'s loop, its watchdog callbacks and its
+upstream's file at the port's 1.7.4 pin, compiled through
+[`ports/apr/pools`](../../../../ports/apr/pools/README.md): two patches, one
+replacing fourteen includes with the census's shim, one connecting the node
+transitions to the port's adapter. Every allocation decision is upstream's. Reduced: `wd_worker`'s loop, its watchdog callbacks and its
 threading, none of which changes which pool is destroyed or which handle
 survives.
 
@@ -16,8 +18,11 @@ survives.
 variable set. A later `if (!ctx)` therefore saw a live-looking handle and the
 loop reused a destroyed pool.
 
-    arm=fixed pool_struct_reissued=1 allocated_through_stale=0 other_pool_corrupted=0 freed_to_malloc=0
-    arm=buggy pool_struct_reissued=1 allocated_through_stale=1 other_pool_corrupted=0 freed_to_malloc=0
+    arm=fixed pool_struct_reissued=1 allocated_through_stale=0 other_pool_corrupted=0 node_reuses=1 freed_to_malloc=0
+    arm=buggy pool_struct_reissued=1 allocated_through_stale=1 other_pool_corrupted=0 node_reuses=1 freed_to_malloc=0
+
+`node_reuses=1` is the adapter's own count of a node leaving the free list for
+the second time, not an inference from addresses.
 
 ## What the two arms show, and what they do not
 

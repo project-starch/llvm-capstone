@@ -9,19 +9,24 @@
   "lifetime_ender": "apr_pool_destroy, which returns the pool's nodes to the allocator's size-bucketed free list (apr_pools.c:1014 -> :414), never to malloc",
   "shape": "stale allocator handle / reuse / allocation through the dead handle",
   "allocator_layer": "apr_pool_t over apr_allocator_t, APR 1.7.4",
-  "fidelity": "model-consumer, real allocator: apr_pools.c is upstream's file byte for byte through the census seam; wd_worker's loop, its callbacks and its threading are reduced",
+  "fidelity": "model-consumer, real allocator: apr_pools.c is upstream's file at the 1.7.4 pin through the port's two patches (freestanding includes, node lifetime hooks); wd_worker's loop, its callbacks and its threading are reduced",
   "distinguishing": "in the other corpora the dangling pointer names an object; here it names the allocator, and because the allocator recycles its own control structure the stale handle is silently rebound to a live pool",
-  "layer_note": "the default APR_ALLOCATOR_MAX_FREE_UNLIMITED frees no nodes at all, so no free() occurs on this path",
+  "layer_note": "the default APR_ALLOCATOR_MAX_FREE_UNLIMITED frees no nodes at all, so no free() occurs on this path; the port's hooks therefore sit on APR's own free-list transitions, where the reuse happens",
   "arms": {
     "native-fix-differential": {
       "oracle": "the buggy arm allocates through the destroyed pool's handle after the allocator has reissued its node; the fixed arm cleared the handle and takes a fresh pool",
       "note": "pool_struct_reissued is 1 in BOTH arms by design -- the reissue belongs to the allocator, and the arms differ only in whether the consumer still holds the handle"
     },
     "spatial": {
-      "status": "not written"
+      "mode": 0,
+      "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
+      "role": "control for sublet: same binary and guest, one difference. A node keeps the alias it was carved with, so the stale handle names the next pool's storage and apr_palloc through it succeeds"
     },
     "sublet": {
-      "status": "not written"
+      "mode": 1,
+      "oracle": "fault at the labelled read probe apr_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
+      "cause": 24,
+      "note": "the probe is the first read through the handle after apr_pool_destroy; the CHECK that the same node came back as the other pool runs before the marker, so the marker's presence is itself evidence that reuse happened"
     },
     "poisoncap-spatial": {
       "status": "not written",
@@ -36,6 +41,6 @@
       "requires": "the nodes never reach malloc, so ASan has no event; Valgrind with APR's own annotations is the arm that could discriminate"
     }
   },
-  "status": "native pair run 2026-09-20; both passed. No protected arm exists: the APR port is a compilation census, not a domain workload",
+  "status": "native pair run 2026-09-20 and again 2026-09-21 through the port, both arms as expected. spatial and sublet run in QEMU 2026-09-21: spatial completes (nodes=3, node_reuses=1), sublet faults at apr_defect_read with cause=24 at the published address; negative control fires both oracles; 31 of 32 repetitions returned a result, the one stall a pre-login boot flake. See results/20260921-qemu/. No poisoncap arm: no CheriBSD build of APR exists",
   "note": "other_pool_corrupted is 0 and stays 0: the fixture shows allocation proceeding through the stale handle into another arena, not that existing bytes were overwritten, which depends on sizes and ordering. Upstream reports crashes; this records the step before them"
 }
