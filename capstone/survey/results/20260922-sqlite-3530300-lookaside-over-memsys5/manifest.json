@@ -1,0 +1,79 @@
+{
+  "study": "W3",
+  "level": "sqlite-lookaside",
+  "completes_w3_row": true,
+  "program": "SQLite",
+  "allocator": "lookaside",
+  "level_name": "lookaside",
+  "below": "memsys5",
+  "upstream": {
+    "version": "3.53.3",
+    "sources": [
+      "sqlite3.c"
+    ]
+  },
+  "workload": "speedtest1-size100",
+  "workload_command": "--heap 268435456 64 --memdb --size 100 --verify --stats",
+  "instrument": {
+    "base": "memhook.c at llvm-capstone 72f580c55cd2d245a842c00105ba7c337321e248",
+    "patch": "patches/memhook-stamp-level-beneath.patch"
+  },
+  "hook_patch": "nested-allocators-paper experiments/a1/x86/hook-3530300.patch",
+  "companion_pass": "nested-allocators-paper experiments/a1/results/x86/20260921T213027Z",
+  "compiler": "gcc 13.3.0",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "allocations": 4550089,
+      "reuses": 4549921,
+      "before_release": 4549921,
+      "after_release": 0,
+      "distinct_addresses": 168,
+      "max_objects_at_one_address": 281923,
+      "memsys5_allocations": 1693135,
+      "memsys5_releases": 1693134,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    },
+    {
+      "repetition": 2,
+      "allocations": 4550089,
+      "reuses": 4549921,
+      "before_release": 4549921,
+      "after_release": 0,
+      "distinct_addresses": 168,
+      "max_objects_at_one_address": 281923,
+      "memsys5_allocations": 1693135,
+      "memsys5_releases": 1693134,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    },
+    {
+      "repetition": 3,
+      "allocations": 4550089,
+      "reuses": 4549921,
+      "before_release": 4549921,
+      "after_release": 0,
+      "distinct_addresses": 168,
+      "max_objects_at_one_address": 281923,
+      "memsys5_allocations": 1693135,
+      "memsys5_releases": 1693134,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    }
+  ],
+  "diagnostic": {
+    "file": "raw/diag.hook.txt",
+    "patch": "patches/memhook-diagnostic.patch",
+    "first_stamp_at_alloc": 4550089,
+    "total_allocs": 4550089,
+    "addresses_seen": 168,
+    "addresses_ever_stamped": 168
+  },
+  "control": {
+    "file": "raw/memsys5.pinned.rep1.hook.txt",
+    "reads": "the pinned instrument on the same arm, its clock idle"
+  },
+  "limits": [
+    "one workload",
+    "releases through a1_memsys5_realloc are unstamped, so the share is a lower bound"
+  ],
+  "recorded": "20260922"
+}

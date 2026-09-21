@@ -65,8 +65,14 @@ def check(doc, repo=REPO, manuscript=None):
             errors.append(f"{where}: a level cannot sit beneath itself")
         if not level["upstream"].get("sources"):
             errors.append(f"{where}: no upstream source file named")
-        if level.get("confirmed") not in {"port-patch", "port-document", "to-confirm"}:
+        if level.get("confirmed") not in {"port-patch", "port-document", "to-confirm", "measured"}:
             errors.append(f"{where}: seam confidence must be stated")
+
+        recorded = level.get("recorded")
+        if recorded and not (HERE / recorded / "manifest.json").is_file():
+            errors.append(f"{where}: recorded bundle has no manifest: {recorded}")
+        if level.get("confirmed") == "measured" and not recorded:
+            errors.append(f"{where}: a measured seam must name its bundle")
 
         port = level["port"]
         present = (repo / port["path"]).exists()
@@ -172,6 +178,9 @@ def main():
           f"{len(nested)} of them on another custom level")
     print(f"{len(levels) - len(pending)} levels have their port here, "
           f"{len(pending)} wait on a pull request")
+    done = [l for l in levels if l.get("recorded")]
+    print(f"{len(done)} of {len(levels)} levels are recorded"
+          + (": " + ", ".join(l["id"] for l in done) if done else ""))
     if args.manuscript:
         print("every manuscript allocator has exactly one survey level")
     return 0

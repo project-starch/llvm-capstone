@@ -54,8 +54,16 @@
       "allocator": "lookaside",
       "level": "lookaside",
       "below": "memsys5",
-      "upstream": {"version": "3.53.3", "sources": ["sqlite3.c"]},
-      "port": {"path": "capstone/ports/sqlite", "status": "merged"},
+      "upstream": {
+        "version": "3.53.3",
+        "sources": [
+          "sqlite3.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/sqlite",
+        "status": "merged"
+      },
       "workload": "speedtest1-size100",
       "container": "the connection's lookaside buffer",
       "seam": {
@@ -64,8 +72,9 @@
         "bulk": "connection close releasing the lookaside buffer",
         "evidence": "capstone/ports/sqlite/sublet/README.md"
       },
-      "confirmed": "port-document",
-      "why": "The only level the existing survey records for SQLite. It is kept so the new table can be compared with the old one, and because its level 0 is not libc."
+      "confirmed": "measured",
+      "why": "The only level the existing survey records for SQLite. It is kept so the new table can be compared with the old one, and because its level 0 is not libc.",
+      "recorded": "results/20260922-sqlite-3530300-lookaside-over-memsys5"
     },
     {
       "id": "sqlite-memsys5",
@@ -73,8 +82,16 @@
       "allocator": "memsys5",
       "level": "memsys5",
       "below": "libc",
-      "upstream": {"version": "3.53.3", "sources": ["sqlite3.c"]},
-      "port": {"path": "capstone/ports/sqlite", "status": "merged"},
+      "upstream": {
+        "version": "3.53.3",
+        "sources": [
+          "sqlite3.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/sqlite",
+        "status": "merged"
+      },
       "workload": "speedtest1-size100",
       "container": "the memsys5 arena",
       "seam": {
@@ -92,8 +109,16 @@
       "allocator": "pymalloc",
       "level": "pymalloc",
       "below": "libc",
-      "upstream": {"version": "3.13.7", "sources": ["Objects/obmalloc.c"]},
-      "port": {"path": "capstone/ports/cpython/pymalloc", "status": "merged"},
+      "upstream": {
+        "version": "3.13.7",
+        "sources": [
+          "Objects/obmalloc.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/cpython/pymalloc",
+        "status": "merged"
+      },
       "workload": "pyperformance-regex",
       "container": "the pymalloc arena",
       "seam": {
@@ -111,8 +136,16 @@
       "allocator": "AllocSet",
       "level": "aset",
       "below": "libc",
-      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/aset.c"]},
-      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "upstream": {
+        "version": "17.0",
+        "sources": [
+          "src/backend/utils/mmgr/aset.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/postgres/memory-contexts",
+        "status": "merged"
+      },
       "workload": "pgbench-tpcb",
       "container": "the memory context",
       "seam": {
@@ -130,8 +163,16 @@
       "allocator": "Generation",
       "level": "generation",
       "below": "libc",
-      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/generation.c"]},
-      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "upstream": {
+        "version": "17.0",
+        "sources": [
+          "src/backend/utils/mmgr/generation.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/postgres/memory-contexts",
+        "status": "merged"
+      },
       "workload": "pgbench-tpcb",
       "container": "the memory context",
       "seam": {
@@ -149,8 +190,16 @@
       "allocator": "Slab",
       "level": "slab",
       "below": "libc",
-      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/slab.c"]},
-      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "upstream": {
+        "version": "17.0",
+        "sources": [
+          "src/backend/utils/mmgr/slab.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/postgres/memory-contexts",
+        "status": "merged"
+      },
       "workload": "pgbench-tpcb",
       "container": "the memory context",
       "seam": {
@@ -168,8 +217,16 @@
       "allocator": "Bump",
       "level": "bump",
       "below": "libc",
-      "upstream": {"version": "17.0", "sources": ["src/backend/utils/mmgr/bump.c"]},
-      "port": {"path": "capstone/ports/postgres/memory-contexts", "status": "merged"},
+      "upstream": {
+        "version": "17.0",
+        "sources": [
+          "src/backend/utils/mmgr/bump.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/postgres/memory-contexts",
+        "status": "merged"
+      },
       "workload": "pgbench-tpcb",
       "container": "the memory context",
       "seam": {
@@ -187,8 +244,17 @@
       "allocator": "wmem block",
       "level": "wmem_block",
       "below": "libc",
-      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_block.c"]},
-      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "upstream": {
+        "version": "4.6.8",
+        "sources": [
+          "wsutil/wmem/wmem_allocator_block.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/wireshark/wmem",
+        "status": "pending",
+        "lands_with": "PR #73"
+      },
       "workload": "tshark-corpus-captures",
       "container": "the wmem pool",
       "seam": {
@@ -206,8 +272,17 @@
       "allocator": "wmem block_fast",
       "level": "wmem_block_fast",
       "below": "libc",
-      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_block_fast.c"]},
-      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "upstream": {
+        "version": "4.6.8",
+        "sources": [
+          "wsutil/wmem/wmem_allocator_block_fast.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/wireshark/wmem",
+        "status": "pending",
+        "lands_with": "PR #73"
+      },
       "workload": "tshark-corpus-captures",
       "container": "the wmem pool",
       "seam": {
@@ -225,8 +300,17 @@
       "allocator": "wmem simple",
       "level": "wmem_simple",
       "below": "libc",
-      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_simple.c"]},
-      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "upstream": {
+        "version": "4.6.8",
+        "sources": [
+          "wsutil/wmem/wmem_allocator_simple.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/wireshark/wmem",
+        "status": "pending",
+        "lands_with": "PR #73"
+      },
       "workload": "tshark-corpus-captures",
       "container": "the wmem pool",
       "seam": {
@@ -244,8 +328,17 @@
       "allocator": "wmem strict",
       "level": "wmem_strict",
       "below": "libc",
-      "upstream": {"version": "4.6.8", "sources": ["wsutil/wmem/wmem_allocator_strict.c"]},
-      "port": {"path": "capstone/ports/wireshark/wmem", "status": "pending", "lands_with": "PR #73"},
+      "upstream": {
+        "version": "4.6.8",
+        "sources": [
+          "wsutil/wmem/wmem_allocator_strict.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/wireshark/wmem",
+        "status": "pending",
+        "lands_with": "PR #73"
+      },
       "workload": "tshark-corpus-captures",
       "container": "the wmem pool",
       "seam": {
@@ -263,8 +356,16 @@
       "allocator": "AVBufferPool",
       "level": "avbufferpool",
       "below": "libc",
-      "upstream": {"version": "9.0.1", "sources": ["libavutil/buffer.c"]},
-      "port": {"path": "capstone/ports/ffmpeg/buffer-pool", "status": "merged"},
+      "upstream": {
+        "version": "9.0.1",
+        "sources": [
+          "libavutil/buffer.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/ffmpeg/buffer-pool",
+        "status": "merged"
+      },
       "workload": "ffmpeg-decode-300s",
       "container": "the AVBufferPool",
       "seam": {
@@ -282,8 +383,16 @@
       "allocator": "AVRefStructPool",
       "level": "avrefstructpool",
       "below": "libc",
-      "upstream": {"version": "9.0.1", "sources": ["libavutil/refstruct.c"]},
-      "port": {"path": "capstone/ports/ffmpeg/buffer-pool", "status": "merged"},
+      "upstream": {
+        "version": "9.0.1",
+        "sources": [
+          "libavutil/refstruct.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/ffmpeg/buffer-pool",
+        "status": "merged"
+      },
       "workload": "ffmpeg-decode-300s",
       "container": "the AVRefStructPool",
       "seam": {
@@ -301,8 +410,17 @@
       "allocator": "slab classes",
       "level": "slabs",
       "below": "libc",
-      "upstream": {"version": "1.6.45", "sources": ["slabs.c"]},
-      "port": {"path": "capstone/ports/memcached/allocators", "status": "pending", "lands_with": "PR #71"},
+      "upstream": {
+        "version": "1.6.45",
+        "sources": [
+          "slabs.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/memcached/allocators",
+        "status": "pending",
+        "lands_with": "PR #71"
+      },
       "workload": "memcached-churn",
       "container": "the size class",
       "seam": {
@@ -320,8 +438,17 @@
       "allocator": "object cache",
       "level": "objcache",
       "below": "libc",
-      "upstream": {"version": "1.6.45", "sources": ["cache.c"]},
-      "port": {"path": "capstone/ports/memcached/allocators", "status": "pending", "lands_with": "PR #71"},
+      "upstream": {
+        "version": "1.6.45",
+        "sources": [
+          "cache.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/memcached/allocators",
+        "status": "pending",
+        "lands_with": "PR #71"
+      },
       "workload": "memcached-churn",
       "container": "the per-thread cache",
       "seam": {
@@ -339,8 +466,16 @@
       "allocator": "APR pools",
       "level": "apr_pool",
       "below": "libc",
-      "upstream": {"version": "1.7.4", "sources": ["memory/unix/apr_pools.c"]},
-      "port": {"path": "capstone/ports/apr/pools", "status": "merged"},
+      "upstream": {
+        "version": "1.7.4",
+        "sources": [
+          "memory/unix/apr_pools.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/apr/pools",
+        "status": "merged"
+      },
       "workload": "ab-keepalive",
       "container": "the pool",
       "seam": {
@@ -358,8 +493,17 @@
       "allocator": "APR buckets",
       "level": "apr_bucket",
       "below": "apr_pool",
-      "upstream": {"version": "apr-util 1.6.3", "sources": ["buckets/apr_buckets_alloc.c"]},
-      "port": {"path": "capstone/ports/apr/census-buckets.sh", "status": "pending", "lands_with": "PR #74"},
+      "upstream": {
+        "version": "apr-util 1.6.3",
+        "sources": [
+          "buckets/apr_buckets_alloc.c"
+        ]
+      },
+      "port": {
+        "path": "capstone/ports/apr/census-buckets.sh",
+        "status": "pending",
+        "lands_with": "PR #74"
+      },
       "workload": "ab-keepalive",
       "container": "the bucket allocator",
       "seam": {
