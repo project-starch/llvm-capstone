@@ -32,8 +32,8 @@ referenced rather than copied. Where this corpus differs:
   CheriBSD with its own libc revocation, nodes from the platform's `malloc`,
   mode 0 only, with a positive control in the same boot. It is the FFmpeg
   corpus's arm of that name.
-* **`poisoncap-*`** are declared and not written: no PoisonCap build of APR
-  exists.
+* **`poisoncap-*`** run the port's PoisonCap build (`-DAPRP_POISONCAP=ON`) as a pair under `supervise`, measured 2026-09-22: mode 0 completes, mode 1 faults at the labelled read (`results/20260922-poisoncap/`). Formerly declared and not written, when no PoisonCap build of APR
+  existed.
 
 ## Three targets, one sequence
 

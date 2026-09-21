@@ -8,8 +8,9 @@ It does not execute httpd, APR's other subsystems, or any threaded use of a
 pool: `APR_HAS_THREADS` and `APR_ALLOCATOR_USES_MMAP` are zero, as in the
 census, and the `APR_POOL_DEBUG` implementation is not built. A
 [stock CheriBSD build](host/cheribsd/README.md) exists -- the platform's own
-`malloc` under every node, no adapter authority -- and there is no PoisonCap
-build of APR.
+`malloc` under every node, no adapter authority -- and a PoisonCap build
+(`-DAPRP_POISONCAP=ON`), whose adapters map every node and poison it where
+the Sublet adapter revokes it.
 
 ## Layout and source boundary
 
@@ -114,6 +115,23 @@ allocator destroyed, one byte past a piece, and a double free. Natively,
 Measured 2026-09-22 under QEMU: 14 of 14 arms
 (`security-tests/results/20260922-buckets-qemu/`); the corpus's own
 measurement is with the corpus.
+
+## PoisonCap
+
+`-DAPRP_POISONCAP=ON` on the `cheribsd` preset replaces the stock adapters
+with `src/cheribsd/node-poison.c` and, with buckets, `src/cheribsd/bucket-poison.c`.
+Every node is one mapped region that keeps `SW_VMEM` and `POISON` authority
+for the manager; what APR and the bucket allocator are handed is an exactly
+bounded alias without either, so a sweep revokes it and nothing else. Mode 0
+invalidates nothing. Mode 1 poisons and sweeps -- every granule, one
+synchronous sweep, clear, zero -- a node at `aprp_node_release` and at
+discard, and a bucket piece at its individual `apr_bucket_free`: the same
+transitions the Sublet adapters act on, from the memory side. The memnode
+header fields upstream reads across a transition are put back through the
+fresh alias, as in the Sublet adapter. Regions stay mapped until process exit,
+so libc can never explain a pair. The corpora build it through
+`shared/build-cases.sh poisoncap` and run mode 0 and 1 as a pair under
+`supervise` (`runners/poisoncap/`).
 
 ## CheriBSD
 

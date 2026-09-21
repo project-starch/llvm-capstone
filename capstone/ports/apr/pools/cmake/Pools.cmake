@@ -34,10 +34,19 @@ if(PORT_HOSTED)
   if(PORT_PLATFORM STREQUAL "cheribsd")
     # Stock CheriBSD: nodes from the platform's own malloc, so its revocation
     # is asked the question at the level where it lives. No payload region.
-    target_compile_definitions(pools-options INTERFACE APRP_NODES_FROM_MALLOC)
-    target_sources(apr-pools PRIVATE src/cheribsd/node-malloc.c)
-    if(APRP_BUCKETS)
-      target_sources(apr-pools PRIVATE src/native/bucket-pointers.c)
+    option(APRP_POISONCAP "PoisonCap lifetimes on CheriBSD: mapped nodes, poison and sweep at release" OFF)
+    if(APRP_POISONCAP)
+      target_compile_definitions(pools-options INTERFACE APRP_POISONCAP)
+      target_sources(apr-pools PRIVATE src/cheribsd/node-poison.c)
+      if(APRP_BUCKETS)
+        target_sources(apr-pools PRIVATE src/cheribsd/bucket-poison.c)
+      endif()
+    else()
+      target_compile_definitions(pools-options INTERFACE APRP_NODES_FROM_MALLOC)
+      target_sources(apr-pools PRIVATE src/cheribsd/node-malloc.c)
+      if(APRP_BUCKETS)
+        target_sources(apr-pools PRIVATE src/native/bucket-pointers.c)
+      endif()
     endif()
     # The positive control: this guest's libc revocation, made to fire at the
     # corpus's own labelled load shape. Pure libc, no port library.

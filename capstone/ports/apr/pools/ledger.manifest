@@ -27,4 +27,7 @@ security-tests/capstone-domain/bucket-lifetimes.c test seven bucket lifetime fix
 security-tests/qemu/run-buckets.py test the fixtures' runner and oracle
 examples/buckets.c test direct-link client that must observe the LIFO reissue
 tests/native/test-apr-util-source.py test apr-util patch order, duplicate rejection, byte identity
+src/cheribsd/poison.h glue what the two PoisonCap adapters share: the manager's authority and its three operations
+src/cheribsd/node-poison.c allocator PoisonCap: mapped nodes, exact aliases, poison and sweep at release and discard
+src/cheribsd/bucket-poison.c allocator PoisonCap: bucket pieces published from the block's authority, poisoned at an individual free
 

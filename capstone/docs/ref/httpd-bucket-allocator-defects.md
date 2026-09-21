@@ -111,7 +111,8 @@ faults at the labelled read on all eight -- case 4, the corpus's one
 reuse-not-free case, once its reduced consumer declares the connection
 handback as the lender's epoch, the operation upstream expresses only as a
 copying discipline; stock CheriBSD with libc revocation on completes all
-eight through the same port build. Records and mechanism per case:
+eight through the same port build; PoisonCap, through the port's adapters,
+completes all eight in mode 0 and faults on all eight in mode 1. Records and mechanism per case:
 [`bug-corpora/httpd/bucket-repros/`](../../bug-corpora/httpd/bucket-repros/README.md).
 The paragraph below is the estimate that preceded it, kept as written.
 

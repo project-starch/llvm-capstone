@@ -43,9 +43,9 @@ referenced rather than copied. Where this corpus differs:
 
 * **`native-fix-differential`** replaces the protection axis: the pair differs
   by whether the upstream fix is applied.
-* **Three protection arms are measured: `spatial`, `sublet`, `cheribsd-revocation`.**
-  The PoisonCap arms carry `"status": "not written"`: there is no PoisonCap
-  build of APR, and the gap is visible rather than absent.
+* **Five protection arms are measured: `spatial`, `sublet`, `cheribsd-revocation`,
+  `poisoncap-spatial`, `poisoncap-protected`.** The PoisonCap pair runs the
+  port's PoisonCap adapters (`-DAPRP_POISONCAP=ON`) under `supervise`.
 * **`native-detect`** is not merely unwritten but tautological: neither level
   reaches `malloc`, so ASan has no event. Valgrind against APR's own annotations
   is the arm that could discriminate.
@@ -63,6 +63,7 @@ apr-util's bucket allocator on top of the pool allocator it is a client of.
     shared/build-cases.sh native <out>            then runners/run-native.sh
     shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
     shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
+    shared/build-cases.sh poisoncap <out>         then runners/poisoncap/
 
 The native arms are the fix differential, one program per case run twice,
 control first; an infrastructure failure exits 75 with no verdict. The
@@ -71,13 +72,15 @@ control first; an infrastructure failure exits 75 with no verdict. The
 how the negative control must make every oracle say FAIL before a PASS is
 believed.
 
-## What the three systems see, measured 2026-09-22
+## What the four systems see, measured 2026-09-22
 
 | arm | what acts | result |
 |---|---|---|
 | `spatial` | bounds and tags; a pool node and a bucket piece keep their alias across the free lists | 8 / 8 complete |
 | `sublet` | the pool port's release of a node, reached directly or through the bucket allocator's lend | **8 / 8 fault** at `apr_defect_read`, cause 24 |
 | `cheribsd-revocation` | libc's quarantine and revoker, on, verified in the guest | 8 / 8 complete; the control beside them faults |
+| `poisoncap-spatial` | exact bounds, nothing invalidated | 8 / 8 complete |
+| `poisoncap-protected` | poison and sweep of a node when APR files it, of a bucket piece at its individual free | **8 / 8 SIGPROT** at `apr_defect_read`, paired |
 
 Which event each case ends at, and therefore which mechanism catches it:
 
@@ -112,8 +115,14 @@ destroy. It is the port's fixture suite instead
 modes), which is where a stale read through a filed node, a stale write into
 its next holder and a double free are shown to fault at the labelled site.
 
-Records: `results/20260922-qemu/`, its negative control beside it, and
-`results/20260922-cheribsd/`.
+Under PoisonCap case 4 is caught for the same reason it is under Sublet:
+the reduced consumer's handback ends the allocator's tenancy, and the
+memory-side retirement acts on that event exactly as the authority-side
+revocation does. What no system catches is the case with the declaration
+left out, because then there is no event -- which is the point of class 3.
+
+Records: `results/20260922-qemu/`, its negative control beside it,
+`results/20260922-cheribsd/` and `results/20260922-poisoncap/`.
 
 ## What CheriBSD's revoker sees
 
