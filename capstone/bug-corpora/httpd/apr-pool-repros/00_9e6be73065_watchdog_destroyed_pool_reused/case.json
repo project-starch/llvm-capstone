@@ -1,0 +1,41 @@
+{
+  "case": 0,
+  "upstream_fix": "9e6be73065",
+  "title": "mod_watchdog's worker loop reuses a pool it destroyed",
+  "consumer": "modules/core/mod_watchdog.c, wd_worker()",
+  "live_in_pin": null,
+  "live_proof": "this corpus pins the allocator, not httpd; the fixture reproduces the call sequence rather than a shipped tree, and says so instead of asserting liveness",
+  "object": "the per-iteration pool itself -- the handle, not an object inside it",
+  "lifetime_ender": "apr_pool_destroy, which returns the pool's nodes to the allocator's size-bucketed free list (apr_pools.c:1014 -> :414), never to malloc",
+  "shape": "stale allocator handle / reuse / allocation through the dead handle",
+  "allocator_layer": "apr_pool_t over apr_allocator_t, APR 1.7.4",
+  "fidelity": "model-consumer, real allocator: apr_pools.c is upstream's file byte for byte through the census seam; wd_worker's loop, its callbacks and its threading are reduced",
+  "distinguishing": "in the other corpora the dangling pointer names an object; here it names the allocator, and because the allocator recycles its own control structure the stale handle is silently rebound to a live pool",
+  "layer_note": "the default APR_ALLOCATOR_MAX_FREE_UNLIMITED frees no nodes at all, so no free() occurs on this path",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm allocates through the destroyed pool's handle after the allocator has reissued its node; the fixed arm cleared the handle and takes a fresh pool",
+      "note": "pool_struct_reissued is 1 in BOTH arms by design -- the reissue belongs to the allocator, and the arms differ only in whether the consumer still holds the handle"
+    },
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "poisoncap-spatial": {
+      "status": "not written",
+      "requires": "no CheriBSD or PoisonCap build of APR exists; the port is a compilation census"
+    },
+    "poisoncap-protected": {
+      "status": "not written",
+      "requires": "no CheriBSD or PoisonCap build of APR exists; the port is a compilation census"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the nodes never reach malloc, so ASan has no event; Valgrind with APR's own annotations is the arm that could discriminate"
+    }
+  },
+  "status": "native pair run 2026-09-20; both passed. No protected arm exists: the APR port is a compilation census, not a domain workload",
+  "note": "other_pool_corrupted is 0 and stays 0: the fixture shows allocation proceeding through the stale handle into another arena, not that existing bytes were overwritten, which depends on sizes and ordering. Upstream reports crashes; this records the step before them"
+}
