@@ -1,7 +1,7 @@
 # R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 
-**Status (2026-09-20): REPRODUCED ON THE BOARD, three times, with controls, and the provenance
-question is SETTLED — the flashed bitstream carries the R-34/R-24 fix, verified by a cause comparison
+**Status (2026-09-21): REPRODUCED ON THE BOARD, four times, with controls; the provenance question is
+SETTLED; and the SCOPE is settled too — the same path enforces BOUNDS and not TAGS — the flashed bitstream carries the R-34/R-24 fix, verified by a cause comparison
 on the board itself rather than by the build record. So neither of the two candidate issues explains
 this, and the defect is that the LSU path does not check the tag while the execute path does.**
 
@@ -103,6 +103,40 @@ issues. If so this is a new, and severe, gap: revocation does not deny access.
 **That question — was the flashed `caplifive_m1_054cea69b.bit` built from `054cea69b`, i.e. with
 `c77c65324` in? — is answered YES by the probe above.** An independent answer from the build record
 would be a useful cross-check on the provenance trail, but it is no longer what this folder waits on.
+
+## SCOPE, settled 2026-09-21: the LSU enforces BOUNDS but not TAGS
+
+The obvious next question was whether this path enforces anything. It does. A store one byte past the
+end of a **live, perfectly valid** alias — nothing revoked, nothing stale, the only thing under test
+being the bounds check on a good capability — **faults on the board**:
+
+    mcause  sw=255 = 0x9c -> seen=1, cause 28 (OUT_OF_BOUNDS)
+    mepc    0x81a042f4 - DBAS 0x81A00000 = offset 0x42f4   <- the store
+    tval    0xac100040 = arena base + 64                   <- exactly the byte past the 64-byte leaf
+
+**So the defect is specific, not general.** On the same path, in the same image: a **bounds** violation
+on a valid capability is caught and reported precisely, while a **tag** violation — an access through a
+revoked, untagged reference — is not caught at all. That is a much narrower and more actionable
+statement than "the LSU does not enforce", and it says where to look: the bounds comparison in the
+load/store path works; the tag check on the base operand does not gate the access.
+
+The cause also **corroborates** the post-fix finding independently: `OUT_OF_BOUNDS` is enum 5, and
+5 + 23 = 28 on the spec base, where a pre-fix base 24 would have given 29. (It does not *prove* it on
+its own — 28 also aliases pre-fix `INSUFFICIENT_PERMISSION` — which is why the execute-path comparison
+above is the proof and this is support for it.)
+
+### A model/RTL divergence in cause CLASS, recorded separately because it is not this defect
+
+For the **same instruction at the same offset on the same address**, the two sides classify differently:
+
+| | cause |
+|---|---|
+| emulator | **7** — `STORE_AMO_ACCESS_FAULT`, a *standard* RISC-V code (`op_helper.c:1539`, deliberate) |
+| board | **28** — `CAP_OOB`, the *capability* enum |
+
+Both refuse the access, so neither is a safety gap, and this folder's defect does not depend on it. But
+software that classifies faults by `mcause` will classify this one differently under the emulator and on
+silicon, which is worth knowing before a corpus run is read either way.
 
 ## Reproduce
 
