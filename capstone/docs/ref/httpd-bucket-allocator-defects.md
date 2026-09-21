@@ -99,6 +99,20 @@ request or a connection, so "used after the pool died" rarely survives review.
 Bucket consumers are `server/` and `modules/` — shipped with httpd, in the tree,
 and every byte of the filter chain passes through them.
 
+## The port, done 2026-09-22
+
+The bucket allocator now runs in a Capstone domain with a Sublet adapter,
+carried by the pool port (`ports/apr/pools`, `-DAPRP_BUCKETS=ON`): the pool
+port lends each 8 KiB block linear, the bucket allocator's pieces are split
+from it and die with it, and the freelist a freed node used to hold moved to
+the adapter's records. Two patches, six hunks, every decision upstream's.
+The eight cases measured through it: `spatial` completes all eight; `sublet`
+faults at the labelled read on seven and completes case 4, whose reduced
+sequence ends no lifetime; stock CheriBSD with libc revocation on completes
+all eight through the same port build. Records and mechanism per case:
+[`bug-corpora/httpd/bucket-repros/`](../../bug-corpora/httpd/bucket-repros/README.md).
+The paragraph below is the estimate that preceded it, kept as written.
+
 ## What the port would cost
 
 [`census-buckets.sh`](../../ports/apr/census-buckets.sh) counts it from the

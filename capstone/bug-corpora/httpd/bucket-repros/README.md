@@ -43,11 +43,9 @@ referenced rather than copied. Where this corpus differs:
 
 * **`native-fix-differential`** replaces the protection axis: the pair differs
   by whether the upstream fix is applied.
-* **One protection arm is measured, the rest are declared and not written.**
-  `cheribsd-revocation` ran (below). The allocators build freestanding and this
-  corpus runs against them, but no *domain* workload does, so `spatial`,
-  `sublet` and both `poisoncap` arms carry `"status": "not written"` and the gap
-  is visible rather than absent.
+* **Three protection arms are measured: `spatial`, `sublet`, `cheribsd-revocation`.**
+  The PoisonCap arms carry `"status": "not written"`: there is no PoisonCap
+  build of APR, and the gap is visible rather than absent.
 * **`native-detect`** is not merely unwritten but tautological: neither level
   reaches `malloc`, so ASan has no event. Valgrind against APR's own annotations
   is the arm that could discriminate.
@@ -58,34 +56,70 @@ referenced rather than copied. Where this corpus differs:
 
 ## Running
 
-    bash ../../../ports/apr/build-buckets-census.sh   # builds the allocators
-    bash runners/run-native.sh [outdir]
+The port is `ports/apr/pools` with `-DAPRP_BUCKETS=ON`, which carries
+apr-util's bucket allocator on top of the pool allocator it is a client of.
+`shared/build-cases.sh` invokes the port's one-source seam once per case:
 
-One program per case, each run twice, control first; an infrastructure failure
-exits 75 with no verdict. Each case interposes `free()` and prints
-`freed_to_malloc`, so "nothing reaches malloc" is measured per case rather than
-inherited from the census.
+    shared/build-cases.sh native <out>            then runners/run-native.sh
+    shared/build-cases.sh capstone-domain <out>   then runners/capstone-domain/
+    shared/build-cases.sh cheribsd <out>          then runners/cheribsd/
+
+The native arms are the fix differential, one program per case run twice,
+control first; an infrastructure failure exits 75 with no verdict. The
+[domain runner's manual](runners/capstone-domain/README.md) and the
+[CheriBSD manual](runners/cheribsd/README.md) say what each arm must do and
+how the negative control must make every oracle say FAIL before a PASS is
+believed.
+
+## What the three systems see, measured 2026-09-22
+
+| arm | what acts | result |
+|---|---|---|
+| `spatial` | bounds and tags; a pool node and a bucket piece keep their alias across the free lists | 8 / 8 complete |
+| `sublet` | the pool port's release of a node, reached directly or through the bucket allocator's lend | **7 / 8 fault** at `apr_defect_read`, cause 24; case 4 completes as its oracle requires |
+| `cheribsd-revocation` | libc's quarantine and revoker, on, verified in the guest | 8 / 8 complete; the control beside them faults |
+
+Which event each case ends at, and therefore which mechanism catches it:
+
+| cases | the lifetime ends at | under Sublet |
+|---|---|---|
+| 2, 3, 5, 7 | a pool destroy: the node is released and reissued to the next pool | the pool port's release revokes the node; the holder's alias dies with it |
+| 0, 1, 6 | a bucket allocator's destroy: its blocks go back to APR and are reissued | the same release, reached through the block the pool port lent; every piece dies with its block |
+| 4 | nothing: the bucket is carried over live and read while still allocated | no event, so no mechanism acts; the sublet arm must complete, and it does |
+
+Case 4 is the corpus's recorded non-detection, and it is not a miss of the
+mechanism: the upstream defect (`c81adad105`) is a brigade not cleaned before
+the connection is handed back, which in the reduced sequence leaks a live
+bucket into the next request rather than freeing it. A read of live storage
+is not a temporal fault, on any system.
+
+The bucket allocator's own recycling -- `apr_bucket_free` filing a small node
+on the freelist and `apr_bucket_alloc` reissuing it -- is exercised by no
+case here: the eight upstream defects all end at a pool or an allocator
+destroy. It is the port's fixture suite instead
+(`ports/apr/pools/security-tests/qemu/run-buckets.py`, seven fixtures, both
+modes), which is where a stale read through a filed node, a stale write into
+its next holder and a double free are shown to fault at the labelled site.
+
+Records: `results/20260922-qemu/`, its negative control beside it, and
+`results/20260922-cheribsd/`.
 
 ## What CheriBSD's revoker sees
 
-Measured, 2026-09-21: all eight cases, both arms, under stock CheriBSD purecap
-with libc heap revocation on. **All sixteen complete and print their native
-verdict unchanged.** The eight buggy arms still report
-`VERDICT DEFECT-REPRODUCED`; the revoker does not intervene.
+Measured twice, and the answer is the same. On 2026-09-21 the eight cases ran
+against the census's freestanding build with `free()` interposed and counted:
+all sixteen arms completed and printed their native verdict, every arm with
+`freed_to_malloc=0`. On 2026-09-22 they ran through the port's CheriBSD build,
+the same allocators under the platform's `malloc`, and all eight completed
+again with the run's revocation control faulting at `apr_defect_read` in the
+same guest. The ABI probe prints `CHERI_ABI pointer_bytes=16
+runtime_revocation=1`, read from CheriBSD's own `malloc_revoke_enabled()`;
+the guest default is preserved.
 
-The control is in the same run, in the same guest, immediately before the cases:
-the ABI probe prints `CHERI_ABI pointer_bytes=16 runtime_revocation=1`, read
-from CheriBSD's own `malloc_revoke_enabled()`. The guest default is left
-`preserved` — nothing is disabled to make room for this result.
-
-The reason is measured too, not argued: every arm prints `freed_to_malloc=0`
-from the same interposed `free()` the native arm uses. Storage that never
-reaches `malloc` never enters the quarantine the revoker sweeps. This is the
-informative negative for the two-level shape — the mechanism exists and is
-switched on, one level below where the lifetime ends.
-
-    export CHERI_SDK=... CHERI_SYSROOT=... CHERI_IMAGE=...
-    bash runners/run-cheribsd.sh [builddir] [outdir]
+Storage that never reaches `malloc` never enters the quarantine the revoker
+sweeps. This is the informative negative for the two-level shape -- the
+mechanism exists and is switched on, one level below where the lifetime
+ends.
 
 ## Limits
 

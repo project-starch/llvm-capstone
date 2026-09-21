@@ -1,0 +1,17 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	delivered	completed	runner_exit
+0	1c7a70c9d9	wrong-bucket-alloc-across-connections	foreign or dead allocator	spatial	complete	True					1	0
+0	1c7a70c9d9	wrong-bucket-alloc-across-connections	foreign or dead allocator	sublet	fault	True	24	0x10186a5f8	0x10186a5f8	False		1
+1	d2a1cf5f8c	buckets-outlive-backend-allocator	foreign or dead allocator	spatial	complete	True					1	0
+1	d2a1cf5f8c	buckets-outlive-backend-allocator	foreign or dead allocator	sublet	fault	True	24	0x10186a14c	0x10186a14c	False		1
+2	106d0761c0	brigade-on-request-pool-past-eor	a pool outlived by its holder or its contents	spatial	complete	True					1	0
+2	106d0761c0	brigade-on-request-pool-past-eor	a pool outlived by its holder or its contents	sublet	fault	True	24	0x101866bf0	0x101866bf0	False		1
+3	d9c2352952	buckets-from-pool-that-dies-first	a pool outlived by its holder or its contents	spatial	complete	True					1	0
+3	d9c2352952	buckets-from-pool-that-dies-first	a pool outlived by its holder or its contents	sublet	fault	True	24	0x101866c0c	0x101866c0c	False		1
+4	c81adad105	brigade-not-cleaned-before-reuse	a recycled allocator serving its next user	spatial	complete	True					1	0
+4	c81adad105	brigade-not-cleaned-before-reuse	a recycled allocator serving its next user	sublet	complete	True					1	0
+5	60919177e8	read-from-destroyed-brigade	the holder used after it was destroyed	spatial	complete	True					1	0
+5	60919177e8	read-from-destroyed-brigade	the holder used after it was destroyed	sublet	fault	True	24	0x101866a24	0x101866a24	False		1
+6	4930450013	bucket-outlives-its-brigade	a pool outlived by its holder or its contents	spatial	complete	True					1	0
+6	4930450013	bucket-outlives-its-brigade	a pool outlived by its holder or its contents	sublet	fault	True	24	0x10186a068	0x10186a068	False		1
+7	edc450c8ac	subrequest-pool-private-data	a pool outlived by its holder or its contents	spatial	complete	True					1	0
+7	edc450c8ac	subrequest-pool-private-data	a pool outlived by its holder or its contents	sublet	fault	True	24	0x101866be0	0x101866be0	False		1

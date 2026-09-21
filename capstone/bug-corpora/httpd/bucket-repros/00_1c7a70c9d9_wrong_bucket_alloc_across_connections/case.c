@@ -7,6 +7,8 @@
 #include "../shared/corpus.h"
 
 APRB_CASE(0) {
+  o->defect_text = "the frontend holds storage whose allocator has been destroyed";
+  o->fixed_text = "the storage came from the allocator that outlives it";
   /* Two connections, each with its own bucket allocator, as httpd gives every
    * conn_rec one. */
   apr_pool_t *backend_pool = NULL, *frontend_pool = NULL;
@@ -21,30 +23,30 @@ APRB_CASE(0) {
   /* The defect: data for the FRONTEND connection is allocated with the
    * BACKEND's allocator. The fix uses the frontend's. */
   apr_bucket_alloc_t *chosen = fixed ? frontend : backend;
-  void *data = apr_bucket_alloc(64, chosen);
+  unsigned char *data = apr_bucket_alloc(64, chosen);
   CHECK(data, 713);
   memset(data, 0xA1, 64);
   out.bucket[out.n] = data;
   out.from[out.n] = chosen;
   out.n++;
 
-  unsigned long before = freed_to_malloc;
-  /* The backend connection is done and its allocator goes away. */
+  /* The backend connection is done and its allocator goes away: its blocks
+   * go back to APR's free list. */
   apr_bucket_alloc_destroy(backend);
   apr_pool_destroy(backend_pool);
 
-  /* The frontend now returns what it thinks is its own storage. apr_bucket_free
-   * reads node->alloc, which is the list the destroy just handed back. */
-  int through_dead_list = out.from[0] != frontend;
-  unsigned long freed = freed_to_malloc - before;
-
-  printf("allocator_used=%s outlived_by_holder=%d freed_to_malloc=%lu\n",
-         through_dead_list ? "backend" : "frontend", through_dead_list, freed);
-  APRB_VERDICT(!fixed && through_dead_list, fixed && !through_dead_list,
-               "the frontend holds storage whose allocator has been destroyed",
-               "the storage came from the allocator that outlives it");
-  if (!through_dead_list)
+  /* The frontend now returns what it thinks is its own storage. The first
+   * thing apr_bucket_free does with the pointer is read the node header
+   * behind it; that read is the probe. */
+  o->through_dead_allocator = out.from[0] != frontend;
+  if (o->through_dead_allocator) {
+    held = data;
+    mark(0);
+    o->now = read_probe(held);
+  } else {
     apr_bucket_free(out.bucket[0]); /* only safe in the fixed arm */
+  }
   apr_bucket_alloc_destroy(frontend);
-  return !fixed ? !through_dead_list : !!through_dead_list;
+  o->defect = o->through_dead_allocator;
+  o->held_up = !o->through_dead_allocator;
 }

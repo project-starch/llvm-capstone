@@ -7,35 +7,36 @@
 #include "../shared/corpus.h"
 
 APRB_CASE(6) {
+  o->defect_text = "a bucket is still named after its brigade and allocator went";
+  o->fixed_text = "the bucket was released while its brigade was alive";
   apr_pool_t *bb_pool = NULL;
   CHECK(apr_pool_create(&bb_pool, root) == APR_SUCCESS, 770);
   apr_bucket_alloc_t *ba = apr_bucket_alloc_create(bb_pool);
   CHECK(ba, 771);
-  void *data = apr_bucket_alloc(64, ba);
+  unsigned char *data = apr_bucket_alloc(64, ba);
   CHECK(data, 772);
   memset(data, 0xA1, 64);
 
   /* The filter kept the bucket past the brigade it belonged to. The fix
    * releases it while the brigade, and therefore the allocator, is alive. */
-  void *kept = data;
+  unsigned char *kept = data;
   if (fixed) {
     apr_bucket_free(data);
     kept = NULL;
   }
 
-  unsigned long before = freed_to_malloc;
-  apr_pool_destroy(bb_pool);   /* the brigade goes, and its allocator with it */
+  apr_pool_destroy(bb_pool); /* the brigade goes, and its allocator with it */
   apr_pool_t *other = NULL;
   CHECK(apr_pool_create(&other, root) == APR_SUCCESS, 773);
-  void *reissued = apr_palloc(other, 64);
+  unsigned char *reissued = apr_palloc(other, 64);
   CHECK(reissued, 774);
   memset(reissued, 0xB2, 64);
-  int outlived = kept != NULL;
-  unsigned long freed = freed_to_malloc - before;
-
-  printf("bucket_outlived_brigade=%d freed_to_malloc=%lu\n", outlived, freed);
-  APRB_VERDICT(!fixed && outlived && freed == 0, fixed && !outlived,
-               "a bucket is still named after its brigade and allocator went",
-               "the bucket was released while its brigade was alive");
-  return !fixed ? !(outlived && freed == 0) : !!outlived;
+  o->still_held = kept != NULL;
+  if (o->still_held) {
+    held = kept;
+    mark(6);
+    o->now = read_probe(held);
+  }
+  o->defect = o->still_held;
+  o->held_up = !o->still_held;
 }

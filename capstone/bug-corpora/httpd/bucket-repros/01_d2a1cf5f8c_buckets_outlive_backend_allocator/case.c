@@ -7,6 +7,8 @@
 #include "../shared/corpus.h"
 
 APRB_CASE(1) {
+  o->defect_text = "buckets stay buffered after their allocator's blocks went back";
+  o->fixed_text = "the buckets were flushed before the allocator was destroyed";
   apr_pool_t *conn_pool = NULL;
   CHECK(apr_pool_create(&conn_pool, root) == APR_SUCCESS, 720);
   apr_allocator_t *shared = apr_pool_allocator_get(conn_pool);
@@ -15,38 +17,37 @@ APRB_CASE(1) {
 
   /* Data left buffered in the network filters, made with the backend
    * connection's allocator. */
-  void *buffered = apr_bucket_alloc(64, backend);
+  unsigned char *buffered = apr_bucket_alloc(64, backend);
   CHECK(buffered, 722);
   memset(buffered, 0xA1, 64);
-  struct brigade held = {.pool = conn_pool};
-  held.bucket[held.n] = buffered;
-  held.from[held.n] = backend;
-  held.n++;
+  struct brigade kept = {.pool = conn_pool};
+  kept.bucket[kept.n] = buffered;
+  kept.from[kept.n] = backend;
+  kept.n++;
 
   /* The fix flushes -- the buckets go out and are freed -- before the backend
    * connection's allocator is destroyed. The defect leaves them buffered. */
   if (fixed) {
     apr_bucket_free(buffered);
-    held.n = 0;
+    kept.n = 0;
   }
 
-  unsigned long before = freed_to_malloc;
-  /* conn->close, or the worker address is not reusable: the allocator goes. */
+  /* conn->close, or the worker address is not reusable: the allocator goes,
+   * and its blocks are on APR's free list for the next taker. */
   apr_bucket_alloc_destroy(backend);
-
-  /* Its blocks are now on APR's free list, and the next taker gets them. */
   apr_pool_t *next = NULL;
   CHECK(apr_pool_create(&next, root) == APR_SUCCESS, 723);
-  void *reissued = apr_palloc(next, 64);
+  unsigned char *reissued = apr_palloc(next, 64);
   CHECK(reissued, 724);
   memset(reissued, 0xB2, 64);
-  int still_held = held.n > 0;
-  unsigned long freed = freed_to_malloc - before;
-
-  printf("flushed_before_destroy=%d still_buffered=%d freed_to_malloc=%lu\n",
-         fixed, still_held, freed);
-  APRB_VERDICT(!fixed && still_held && freed == 0, fixed && !still_held,
-               "buckets stay buffered after their allocator's blocks went back",
-               "the buckets were flushed before the allocator was destroyed");
-  return !fixed ? !(still_held && freed == 0) : !!still_held;
+  o->still_held = kept.n > 0;
+  if (o->still_held) {
+    /* The filter chain sends what it still holds: the first read of the
+     * buffered bucket is the probe. */
+    held = buffered;
+    mark(1);
+    o->now = read_probe(held);
+  }
+  o->defect = o->still_held;
+  o->held_up = !o->still_held;
 }

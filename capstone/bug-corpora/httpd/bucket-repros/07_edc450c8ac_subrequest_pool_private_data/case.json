@@ -19,21 +19,19 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap, libc heap revocation enabled",
       "cases": [
-        "bucket-7-fixed",
-        "bucket-7-buggy"
+        "07-subrequest-pool-private-data-mode0"
       ],
-      "oracle": "both arms complete and print their native verdict unchanged: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
-      "measured": "private_data_pool=subrequest reissued_same_address=1 now=0xB2 freed_to_malloc=0",
+      "oracle": "completes: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
+      "measured": "2026-09-22 through the port's CheriBSD build: completed, exit 0; the run's revocation-control faulted at apr_defect_read (signal 34, code 2) in the same guest. 2026-09-21, census build with free() interposed: completed, freed_to_malloc=0",
       "control": "the run's cheribsd-abi probe prints CHERI_ABI pointer_bytes=16 runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
       "guest_default": "preserved -- nothing is disabled to make room for this measurement",
-      "runner": "runners/run-cheribsd.sh",
-      "note": "freed_to_malloc is measured in the guest by the same interposed free() as the native arm, so the reason the revoker is idle is read off this run and not carried over from the census"
+      "runner": "runners/cheribsd/run-defects.py, built by shared/build-cases.sh cheribsd"
     },
     "spatial": {
-      "status": "not written"
+      "oracle": "complete: the stale read returns whatever the storage now holds; a pool node or a bucket piece keeps its alias across the free lists, so nothing is revoked"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "fault at the labelled read probe (cause 24, revoked authority): the subrequest pool's node was released at its destroy and reissued; the private data's alias died with the node"
     },
     "poisoncap-spatial": {
       "status": "not written"
@@ -46,6 +44,6 @@
       "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
     }
   },
-  "status": "native pair run 2026-09-21; both passed. CheriBSD purecap with revocation on, same day: both arms complete, the revoker sees nothing. No Capstone, Sublet or PoisonCap arm exists: the allocators build freestanding but no domain workload does",
-  "note": "the protected arms are unwritten because the port is a census plus this corpus, not a domain workload. The gap is declared rather than absent"
+  "status": "run 2026-09-22 under QEMU through the port (ports/apr/pools with -DAPRP_BUCKETS=ON): spatial completes; sublet faults with cause 24 at the published apr_defect_read, the event being the subrequest pool's node released at its destroy; results/20260922-qemu; stock CheriBSD with libc revocation on completes, 2026-09-22 through the port and 2026-09-21 through the census build; results/20260922-cheribsd",
+  "note": "the Capstone arms run the buggy sequence with protection as the variable; the fix differential is the native pair"
 }

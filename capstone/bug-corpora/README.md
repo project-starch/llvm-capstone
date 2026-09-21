@@ -4,18 +4,11 @@ Reproduction material for defects in third-party software, one directory per pro
 Deliberately outside `ports/`, which holds the ports themselves and their build.
 
     sqlite/cve-repros/       19 CVE rows, one directory per row
-    postgres/mmgr-repros/    2 defects in consumers of PostgreSQL's memory contexts
+    postgres/mmgr-repros/    8 defects in consumers of PostgreSQL's memory contexts
     cpython/pymalloc-repros/ 20 defects in consumers of CPython's small-object allocator
-    sqlite/cve-repros/       the CVE rows, one directory per row
-    cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
-    sqlite/cve-repros/     the CVE rows, one directory per row
-    postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
-    httpd/bucket-repros/     defects in consumers of Apache's two stacked allocators
-    postgres/mmgr-repros/  defects in consumers of PostgreSQL's memory contexts
-    httpd/bucket-repros/     defects in consumers of Apache's two stacked allocators
-    sqlite/cve-repros/       the CVE rows, one directory per row
-    cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
-    ffmpeg/pool-repros/      defects in consumers of FFmpeg's AVBufferPool/AVRefStructPool
+    ffmpeg/pool-repros/      3 defects in consumers of FFmpeg's AVBufferPool/AVRefStructPool
+    httpd/apr-pool-repros/   1 defect in a consumer of APR's pool allocator
+    httpd/bucket-repros/     8 defects in consumers of Apache's two stacked allocators, buckets over pools
 
 Each case is its own directory recording what the defect is and where it came from. The
 file names differ by corpus: sqlite and postgres cases carry `before.c`, `oracle`,
