@@ -4569,3 +4569,81 @@ at every rung, so the entire difference is the walk over corpses. The unspliced 
 ladder (57.6 cyc/node) characterises the testbench's fixed-delay memory model rather than the design,
 is not converged, and **must not be reconciled against the 25.45 cyc/node silicon figure** — different
 memory systems. For the cold per-node cost, use the silicon number.
+
+## M1 on silicon — node reclamation: four arms, twelve repetitions, and the one condition the hardware will not let us measure (boots 2026-09-17 … 2026-09-21)
+
+All numbers are cycles at an **unclosed 25 MHz clock** on `caplifive_m1_054cea69b.bit` (RTL `054cea69b`,
+WNS −8.307, 90,379/174,609 endpoints failing). Platform numbers, not design numbers.
+
+### What is established
+
+**Permitted reuse, demonstrated rather than inferred.** One boot performed **1,314,737 allocations
+against a 65,532-index pool without exhausting it** — 20.1× the pool. Reuse is not an inference: without
+it the first arm cannot finish. The pool does not reset between invocations within a boot (R-12).
+
+**Accounting reconciles, per snapshot and not merely at the end.** `minted − revoked = 31` — exactly the
+fixture's node count — on **every snapshot of every arm of every boot**, and `alloc == revoked` exactly
+on each completed arm.
+
+**Minting cost is flat and O(1) in cumulative allocations.** `take_cyc/n` over 159 snapshots per arm,
+each an average of 4,096 allocations, from allocation 4,096 to 651,264:
+
+| arm | take/n | sd | drift, first tenth → last tenth |
+|---|---|---|---|
+| `drop` | **72.029** | 0.013 | 72.024 → 72.028 |
+| `ring` | **72.006** | 0.005 | 72.004 → 72.007 |
+
+**Repeatability: three boots of one image agree to three decimal places.** Spread across repetitions,
+same image throughout:
+
+| arm | take/n spread | give/n spread |
+|---|---|---|
+| `drop` | **0.000** | **0.000** |
+| `ring` | **0.000** | **0.000** |
+| `pressure` | 0.001 | 0.007 |
+| `release` phase 1 | 0.001 | 0.068 |
+
+### The release cost is a property of GLOBAL PLACEMENT — do not quote it without its image
+
+`give_cyc/n` for the **identical** `pressure` arm, same capacity, same invocation position, on three
+images that differ only in where the globals land:
+
+| image | `m1_ret_alias` | give/n |
+|---|---|---|
+| `249cfda958f22f16` | `0x423170` | **71.052** |
+| `502f5ca1029904e6` | `0x4231b0` | **101.049** |
+| `29d9099326304ee5` | `0x423180` | **130.041** |
+
+Within an image the cost is the same whatever the arm and reproduces across boots to 0.000; **between
+images it moves 83 %**. A 16-byte shift moves every global by one 16-byte line, and one set in a
+32 KiB/8-way/16-byte-line D-cache. The plausible mechanism is cache-set conflict between the node table
+and the fixture's globals; **that mechanism is not established here, only the dependence on the image.**
+`take_cyc/n` is unmoved at 72.00 across all three and is the quantity that can be quoted.
+
+**Retracted 2026-09-19:** an earlier reading of this data as "give ≈ 71 when the obsolete reference is
+retained and ≈ 103 when dropped" does not survive the layout control and is withdrawn.
+
+### Retain-pressure: the buffer never bought pool coverage
+
+**Retracted 2026-09-19.** The retain-pressure arm was reported as holding a stale reference to
+43,296/65,532 = 66 % of the pool. Retained references are **not** distinct indices: `give(i)` frees a
+node to a LIFO free list and the very next statement `take(i)` pops it back, so roughly **`M1_LIVE` = 16**
+indices recycle however large the buffer. Refuted by measurement already on file — the 20.1× pool
+turnover above is only possible if indices recycle. **`M1_LIVE`, not `M1_MAXRET`, sets coverage**, and
+the protocol's "fraction of distinct indices covered" rests on that correction.
+
+### Condition 3 is UNMEASURABLE on this silicon, and that is a hardware finding
+
+A revoked capability still **reads and writes** the storage its object gave up, at every age tested
+(2,706 / 1,353 / 0 reuses since), returning the **current occupant's live data** (`is_live_data=1` on
+every probe, checked against a witness the harness records as the arm runs), and a byte stored through
+it is visible through a **live** alias to the same storage. No trap; both `k800` controls pass.
+
+The emulator refuses the identical instruction in the identical image (`cause 24`, *"`x[rs1]` is not a
+capability"*). R-34 and R-24 are **excluded**: their fix `c77c65324` is in the flashed image, proven on
+the board by a cause comparison — emulator cause 24 at offset `0x42b4`, board `mcause` 24 at offset
+`0x42b4`, same instruction. The execute path checks; the **LSU path does not check tags**.
+
+So the instrument that would show a stale reference being refused has no enforcement to observe.
+Condition 3 is **answered on the emulator with a positive control and unmeasurable on this bitstream** —
+not failed. Full report: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
