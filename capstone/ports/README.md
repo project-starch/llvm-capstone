@@ -19,7 +19,7 @@ and validation workflow linked from that guide.
 | SQLite | In-memory SQL workloads and memsys5/lookaside lifetime experiments | [SQLite](sqlite/README.md), [Sublet](sqlite/sublet/README.md); existing shell drivers |
 | MicroPython | Freestanding interpreter and GC test workloads | [MicroPython](micropython/README.md); existing shell drivers |
 | nginx | Pool allocator replay, pool/block lifetime and stale-access probes; not a web server | [Domain runner](nginx/run-nginx-domain.sh), [Sublet runner](nginx/run-nginx-subpool.sh); existing shell drivers |
-| APR | Freestanding pool-library compilation and adaptation census | [Census](apr/census-apr.sh); no end-to-end domain workload established here |
+| APR | Pool allocator in a Capstone domain with a Sublet adapter, for the httpd/APR defect corpus; not httpd, not threaded pools | [pools](apr/pools/README.md); shared CMake layout. The [census](apr/README.md) that preceded it stays beside it |
 | musl | Domain libc, host-call services and functional tests; incomplete OS/thread support | [musl](musl-capstone/README.md); existing shell drivers |
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
 | PostgreSQL | Memory-context replay and memory profiles; not a database server | [PostgreSQL](postgres/README.md), [CMake component](postgres/memory-contexts/CMakeLists.txt); shared CMake layout plus older shell drivers |
