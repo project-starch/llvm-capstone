@@ -1,0 +1,108 @@
+{
+  "study": "W3",
+  "level": "memcached-objcache",
+  "completes_w3_row": true,
+  "program": "memcached",
+  "allocator": "object cache",
+  "level_name": "objcache",
+  "below": "libc",
+  "upstream": {
+    "version": "1.6.45",
+    "sources": [
+      "cache.c"
+    ]
+  },
+  "workload": "memcached-churn",
+  "workload_command": "client.py --rung churn, server -m 1024 -t 4 -o slab_automove=0",
+  "instrument": {
+    "wiring": "nested-allocators-paper experiments/a1/memcached/mchook-objcache.inc",
+    "placement": "nested-allocators-paper experiments/a1/memcached/hook-objcache.py"
+  },
+  "companion_pass": "nested-allocators-paper experiments/results/W2/20260921T214756Z-memcached",
+  "compiler": "gcc 13.3.0",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "allocations": 23511,
+      "releases": 23510,
+      "reuses": 23499,
+      "before_release": 23499,
+      "after_release": 0,
+      "distinct_addresses": 12,
+      "max_objects_at_one_address": 11507,
+      "libc_allocations": 183,
+      "sha256": "13954c4be170c3bf6b578e7a3b186c560b3899bac43c5713ce3d88a3349f791d"
+    },
+    {
+      "repetition": 2,
+      "allocations": 23214,
+      "releases": 23213,
+      "reuses": 23202,
+      "before_release": 23202,
+      "after_release": 0,
+      "distinct_addresses": 12,
+      "max_objects_at_one_address": 11210,
+      "libc_allocations": 183,
+      "sha256": "53da221d4c9dc8dbc8b8a3b54c04e2b0a502199db85d6f4ef9b4934923580db1"
+    },
+    {
+      "repetition": 3,
+      "allocations": 23216,
+      "releases": 23215,
+      "reuses": 23204,
+      "before_release": 23204,
+      "after_release": 0,
+      "distinct_addresses": 12,
+      "max_objects_at_one_address": 11212,
+      "libc_allocations": 183,
+      "sha256": "b72027a29d840df13288e5e1dd7d0f75e8ac9f7230722ecca8119263740a0af5"
+    }
+  ],
+  "sibling_level": {
+    "level": "slabs",
+    "note": "the same binary's other allocator, recorded in the same run",
+    "repetitions": [
+      {
+        "repetition": 1,
+        "allocations": 100000,
+        "releases": 100000,
+        "reuses": 80000,
+        "before_release": 80000,
+        "after_release": 0,
+        "distinct_addresses": 20000,
+        "max_objects_at_one_address": 5,
+        "libc_allocations": 183,
+        "sha256": "a01359eb7aae497b3bf72c76f12ce2a5a1180dd60d35b0fca46366dfd3d39f68"
+      },
+      {
+        "repetition": 2,
+        "allocations": 100000,
+        "releases": 100000,
+        "reuses": 80000,
+        "before_release": 80000,
+        "after_release": 0,
+        "distinct_addresses": 20000,
+        "max_objects_at_one_address": 5,
+        "libc_allocations": 183,
+        "sha256": "831722bd2a1bdca8e782966bf791d11d67ff8743efda77aabc31c2899a329387"
+      },
+      {
+        "repetition": 3,
+        "allocations": 100000,
+        "releases": 100000,
+        "reuses": 80000,
+        "before_release": 80000,
+        "after_release": 0,
+        "distinct_addresses": 20000,
+        "max_objects_at_one_address": 5,
+        "libc_allocations": 183,
+        "sha256": "ed23c2d6563dc2b08c58a954eba9a3588c21b2b00a802d0f52607c980920827c"
+      }
+    ]
+  },
+  "limits": [
+    "one rung, churn",
+    "the object cache follows connection and IO timing, so its counts vary slightly between repetitions"
+  ],
+  "recorded": "20260922"
+}

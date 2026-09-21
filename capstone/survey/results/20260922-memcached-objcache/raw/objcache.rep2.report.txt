@@ -1,0 +1,191 @@
+mchook: two levels recorded from inside the process
+
+@alloc[0, libc]: 183
+@free[0, libc]: 21
+@bytes[0, libc]: 48193417
+@realloc[0, libc]: 14
+@peak[0, libc]: 172
+@alloc[0, objcache]: 23214
+@free[0, objcache]: 23213
+@bytes[0, objcache]: 380305552
+@peak[0, objcache]: 9
+@kind[0, malloc]: 169
+@kind[0, realloc]: 14
+@kind[0, free]: 19
+
+@hook_alloc[libc]: 183
+@hook_free[libc]: 21
+@hook_bytes[libc]: 48193417
+@hook_realloc[libc]: 14
+@hook_inplace[libc]: 2
+@hook_peak[libc]: 172
+@peakrun[libc]: 172
+@maxreuse[libc]: 2
+@distinct[libc]: 178
+@hook_fbytes[libc]: 8140
+@beyond254[libc]: 0
+@poison16[libc]: 3012128
+@size_libc: 
+[1]                             1 |
+[2, 4)                          8 |
+[4, 8)                          4 |
+[8, 16)                         2 |
+[16, 32)                       23 |
+[32, 64)                        7 |
+[64, 128)                      31 |
+[128, 256)                      6 |
+[256, 512)                     22 |
+[512, 1K)                       5 |
+[1K, 2K)                        0 |
+[2K, 4K)                        1 |
+[4K, 8K)                        2 |
+[8K, 16K)                       1 |
+[16K, 32K)                     12 |
+[32K, 64K)                      0 |
+[64K, 128K)                     7 |
+[128K, 256K)                    6 |
+[256K, 512K)                    0 |
+[512K, 1M)                      1 |
+[1M, 2M)                       44 |
+
+@reuse_libc: 
+[1]                             3 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        2 |
+
+@reusebytes_libc: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       1 |
+[128, 256)                      3 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        1 |
+
+@prior_libc: 
+[0]                           178 |
+[1]                             5 |
+
+@addresses_libc: 
+[1]                           173 |
+[2, 4)                          5 |
+
+@hook_alloc[objcache]: 23214
+@hook_free[objcache]: 23213
+@hook_bytes[objcache]: 380305552
+@hook_realloc[objcache]: 0
+@hook_inplace[objcache]: 0
+@hook_peak[objcache]: 9
+@peakrun[objcache]: 9
+@maxreuse[objcache]: 11210
+@distinct[objcache]: 12
+@hook_fbytes[objcache]: 380289168
+@beyond254[objcache]: 20925
+@poison16[objcache]: 23769098
+@size_objcache: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       2 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       0 |
+[16K, 32K)                  23212 |
+
+@reuse_objcache: 
+[1]                         16009 |
+[2, 4)                       2190 |
+[4, 8)                       3980 |
+[8, 16)                       995 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        4 |
+[2K, 4K)                       24 |
+
+@reusebytes_objcache: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       0 |
+[16K, 32K)                  16009 |
+[32K, 64K)                   2190 |
+[64K, 128K)                  3980 |
+[128K, 256K)                  995 |
+[256K, 512K)                    0 |
+[512K, 1M)                      0 |
+[1M, 2M)                        0 |
+[2M, 4M)                        0 |
+[4M, 8M)                        0 |
+[8M, 16M)                       0 |
+[16M, 32M)                      4 |
+[32M, 64M)                     24 |
+
+@prior_objcache: 
+[0]                            12 |
+[1]                             9 |
+[2, 4)                         18 |
+[4, 8)                         36 |
+[8, 16)                        72 |
+[16, 32)                      144 |
+[32, 64)                      288 |
+[64, 128)                     576 |
+[128, 256)                   1152 |
+[256, 512)                   2292 |
+[512, 1K)                    3976 |
+[1K, 2K)                     3072 |
+[2K, 4K)                     4453 |
+[4K, 8K)                     4096 |
+[8K, 16K)                    3018 |
+
+@addresses_objcache: 
+[1]                             3 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      1 |
+[512, 1K)                       5 |
+[1K, 2K)                        0 |
+[2K, 4K)                        2 |
+[4K, 8K)                        0 |
+[8K, 16K)                       1 |
+
+@bulk_releases: 0
+@bulk_events: 0
+@ctx_overflow: 0
+@reused_before_return: 23202
+@reused_after_return: 0
+@reused_block_never_returned: 23202
+@page_overflow: 0
+@pid: 71906

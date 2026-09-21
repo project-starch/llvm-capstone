@@ -1,0 +1,170 @@
+mchook: two levels recorded from inside the process
+
+@alloc[0, libc]: 183
+@free[0, libc]: 21
+@bytes[0, libc]: 48193417
+@realloc[0, libc]: 14
+@peak[0, libc]: 172
+@alloc[0, slabs]: 100000
+@free[0, slabs]: 100000
+@bytes[0, slabs]: 216480000
+@peak[0, slabs]: 20000
+@kind[0, malloc]: 169
+@kind[0, realloc]: 14
+@kind[0, free]: 19
+
+@hook_alloc[libc]: 183
+@hook_free[libc]: 21
+@hook_bytes[libc]: 48193417
+@hook_realloc[libc]: 14
+@hook_inplace[libc]: 2
+@hook_peak[libc]: 172
+@peakrun[libc]: 172
+@maxreuse[libc]: 2
+@distinct[libc]: 178
+@hook_fbytes[libc]: 8140
+@beyond254[libc]: 0
+@poison16[libc]: 3012128
+@size_libc: 
+[1]                             1 |
+[2, 4)                          8 |
+[4, 8)                          4 |
+[8, 16)                         2 |
+[16, 32)                       23 |
+[32, 64)                        7 |
+[64, 128)                      31 |
+[128, 256)                      6 |
+[256, 512)                     22 |
+[512, 1K)                       5 |
+[1K, 2K)                        0 |
+[2K, 4K)                        1 |
+[4K, 8K)                        2 |
+[8K, 16K)                       1 |
+[16K, 32K)                     12 |
+[32K, 64K)                      0 |
+[64K, 128K)                     7 |
+[128K, 256K)                    6 |
+[256K, 512K)                    0 |
+[512K, 1M)                      1 |
+[1M, 2M)                       44 |
+
+@reuse_libc: 
+[1]                             3 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        2 |
+
+@reusebytes_libc: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       1 |
+[128, 256)                      3 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        1 |
+
+@prior_libc: 
+[0]                           178 |
+[1]                             5 |
+
+@addresses_libc: 
+[1]                           173 |
+[2, 4)                          5 |
+
+@hook_alloc[slabs]: 100000
+@hook_free[slabs]: 100000
+@hook_bytes[slabs]: 216480000
+@hook_realloc[slabs]: 0
+@hook_inplace[slabs]: 0
+@hook_peak[slabs]: 20000
+@peakrun[slabs]: 20000
+@maxreuse[slabs]: 5
+@distinct[slabs]: 20000
+@hook_fbytes[slabs]: 216480000
+@beyond254[slabs]: 0
+@poison16[slabs]: 13540000
+@size_slabs: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                  20000 |
+[256, 512)                  20000 |
+[512, 1K)                   20000 |
+[1K, 2K)                        0 |
+[2K, 4K)                    20000 |
+[4K, 8K)                    20000 |
+
+@reuse_slabs: 
+[1]                             4 |
+[2, 4)                          8 |
+[4, 8)                         16 |
+[8, 16)                        32 |
+[16, 32)                       64 |
+[32, 64)                      128 |
+[64, 128)                     256 |
+[128, 256)                    512 |
+[256, 512)                   1024 |
+[512, 1K)                    2048 |
+[1K, 2K)                     4096 |
+[2K, 4K)                     8192 |
+[4K, 8K)                    16384 |
+[8K, 16K)                   32768 |
+[16K, 32K)                  14468 |
+
+@reusebytes_slabs: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        4 |
+[8K, 16K)                      16 |
+[16K, 32K)                     40 |
+[32K, 64K)                     60 |
+[64K, 128K)                   120 |
+[128K, 256K)                  240 |
+[256K, 512K)                  480 |
+[512K, 1M)                    968 |
+[1M, 2M)                     1936 |
+[2M, 4M)                     3876 |
+[4M, 8M)                     7760 |
+[8M, 16M)                   15500 |
+[16M, 32M)                  31000 |
+[32M, 64M)                  18000 |
+
+@prior_slabs: 
+[0]                         20000 |
+[1]                         20000 |
+[2, 4)                      40000 |
+[4, 8)                      20000 |
+
+@addresses_slabs: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                      20000 |
+
+@bulk_releases: 0
+@bulk_events: 0
+@ctx_overflow: 0
+@reused_before_return: 80000
+@reused_after_return: 0
+@reused_block_never_returned: 80000
+@page_overflow: 0
+@pid: 71803

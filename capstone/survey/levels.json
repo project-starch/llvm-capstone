@@ -457,8 +457,9 @@
         "bulk": "cache_destroy",
         "evidence": "capstone/bug-corpora/memcached/allocator-repros/README.md"
       },
-      "confirmed": "port-document",
-      "why": "memcached's second allocator, ported and never surveyed. It calls free only over a limit its three per-thread instances do not have, so its releases are invisible by construction."
+      "confirmed": "measured",
+      "why": "memcached's second allocator, ported and never surveyed. It calls free only over a limit its three per-thread instances do not have, so its releases are invisible by construction.",
+      "recorded": "results/20260922-memcached-objcache"
     },
     {
       "id": "apr-pool",
