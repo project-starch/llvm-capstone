@@ -11,7 +11,6 @@ Deliberately outside `ports/`, which holds the ports themselves and their build.
     sqlite/cve-repros/       the CVE rows, one directory per row
     cpython/pymalloc-repros/ defects in consumers of CPython's small-object allocator
     ffmpeg/pool-repros/      defects in consumers of FFmpeg's AVBufferPool/AVRefStructPool
-    httpd/apr-pool-repros/   defects in consumers of APR's pools
 
 Each case is its own directory with a `run.sh` that builds, runs its control first, and
 prints a verdict against what the case records. A run whose control fails exits 75 with NO
