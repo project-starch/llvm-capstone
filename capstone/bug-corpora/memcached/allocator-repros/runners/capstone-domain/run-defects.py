@@ -44,6 +44,16 @@ CASES = [
         "tail-repair-frees-referenced-item",
         "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer",
     ),
+    (
+        "a8c4a82787",
+        "refcount-overflow-frees-linked-item",
+        "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer",
+    ),
+    (
+        "152ddb68f7",
+        "unlocked-refcount-drift",
+        "unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer",
+    ),
 ]
 
 MAGIC = 0x315342414C53434D  # "MCSLABS1"

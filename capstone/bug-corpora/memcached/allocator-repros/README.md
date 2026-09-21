@@ -20,20 +20,28 @@ not build.
     00_7af02b0c87_rbuf_copied_after_cache_free/       a multiget's read buffer copied after it went back
     01_0ad4de66ae_io_walk_reads_freed_link/           a list walk reads the next-link out of a returned IO
     02_59bd02ce29_tail_repair_frees_referenced_item/  the allocator frees an item somebody is holding
+    03_a8c4a82787_refcount_overflow_frees_linked_item/ the count stops counting at 65536
+    04_152ddb68f7_unlocked_refcount_drift/            an unlocked decrement loses a concurrent get
 
 | shape | cases |
 |---|---|
 | stale object pointer / cache.c reuse / read through the dead pointer | 0 |
 | stale object pointer / cache.c reuse / list link read through the dead pointer | 1 |
 | allocator-forced free of a referenced item / slabs reuse / read through the dead pointer | 2 |
+| reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer | 3 |
+| unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer | 4 |
 
-Three cases in three shapes, across both of the allocators the port carries.
+Five cases in five shapes, across both of the allocators the port carries.
 Cases 0 and 1 are consumer mistakes in `cache.c`'s object caches, read one
 level apart: the freed object's payload, and the freed object's own list link
 -- the field the walk needs next is the one the allocator's push and the next
-owner overwrite. Case 2 is not a consumer mistake at all: it is `slabs`'
-own escape hatch, in which the item layer overwrites the reference count of an
-item it knows is held and frees it anyway.
+owner overwrite.
+
+Cases 2, 3 and 4 are all items reaching `slabs_free` while somebody is still
+holding them, and they differ in *why the count was wrong*: case 2 overwrites
+it deliberately, case 3 lets it overflow, case 4 loses an update to a missing
+lock. Nothing in the allocator can tell the three apart -- each free looks
+correct at every step -- which is the point of having them separately.
 
 **Case 2 is the only one live in the pin.** Cases 0 and 1 reconstruct shapes
 upstream has since fixed; case 2 runs the branch that is in the pinned tree,
@@ -49,15 +57,13 @@ classified by which allocator owned the storage. The published CVE record was
 searched too, through the CVE Program and NVD APIs, and the open issues were
 read.
 
-Seven candidates are in scope and unbuilt; the three cases here are the three
-shapes built so far. The rest, and why each is not here yet:
+Nine candidates were in scope. Five are built, in five shapes; the rest are
+listed with the reason each is not a separate case:
 
 | candidate | why not (yet) |
 |---|---|
-| `a8c4a82` = **CVE-2018-1000127** (+ DSA-4218, USN-3601-1, RHSA-2018:2290) | `refcount` is `unsigned short` and wraps during ASCII multigets, so an item is freed while still in the hash table; issue #271 carries the gdb evidence (`h_next == it`, infinite loop in `assoc_find`). The strongest provenance available and the next case to build |
-| `e3b7d33` (2026-07-02), `bc080ab` (2020) | the same overflow through the binary and meta protocols; upstream calls the binary one a remote-code-execution path. One shape, three protocols |
-| `152ddb6` (2026-07-09) | `refcount--` without the item lock on the `mg` error path: *"could cause the refcount to drift on a busy item and lead to memory corruption"* |
-| `f4983b2` (2012) and the 2011-12 `do_item_alloc`/`do_item_get` races | that era reused the LRU tail **in place** rather than through `slabs_free`, so the reuse is at the item layer, not the allocator's free list |
+| `e3b7d33` (2026-07-02), `bc080ab` (2020) | the same overflow as case 3 through the binary and meta protocols; upstream calls the binary one a remote-code-execution path. One defect, three front ends -- cited in case 3's provenance rather than built three times |
+| `f4983b2` (2012) and the 2011-12 `do_item_alloc`/`do_item_get` races | that era reused the LRU tail **in place** rather than through `slabs_free`. The reuse never passes the allocator's seam, so a protected arm would not see it either: the case would fail its own oracle, and saying so here is worth more than a case that cannot discriminate |
 | `41aa0a5` (2008) | hash corruption in `do_item_alloc`; pre-dates most of the structure the port builds |
 
 Out of scope until another allocator is ported: the page mover (7 defects on
@@ -77,6 +83,28 @@ Rejected outright, with the maintainer's own adjudication:
 No published CVE is live at the pin. `master` is the pin
 (`compare/1.6.45...master` is `identical`), so there are no post-pin fixes to
 mine either; what is live is what upstream has chosen not to fix.
+
+### Fixes that were applied in one place and not another
+
+A fix can leave the same defect standing at a sibling call site, and this
+project has one confirmed instance of exactly that: the reference-count
+overflow was capped for ASCII in 2017 (`a8c4a82787`, case 3), for meta in 2020
+(`bc080ab`), and for the binary protocol only in `e3b7d33` -- 2026-07-02, eight
+days before the pin, after nine years in which the same defect was reachable
+through a different front end. So the pinned tree was searched for further
+instances along three axes. All three came back negative, and the checks are
+written down here because a negative result nobody can reproduce is worth
+nothing:
+
+| axis | what was checked | result |
+|---|---|---|
+| the `152ddb68f7` unlocked decrement | every `do_item_remove` call site outside `items.c` (11 in `proto_parser.c`, 3 in `proto_bin.c`, 3 in `proto_text.c`, plus `thread.c`, `memcached.c`, `storage.c`, `crawler.c`, `slabs_mover.c`) for whether the item lock is held | none unfixed. `process_marithmetic_cmd`'s error path *looks* like the pre-fix shape -- `do_item_remove(it)` guarded only by `if (it != NULL)`, `item_unlock` guarded by `if (locked)` -- but `item *it = NULL` at declaration and `it` is only assigned by `do_add_delta`, which runs after `item_lock`. Whenever `it` is non-NULL the lock is held |
+| the `a8c4a82787` refcount cap | every site that takes an item reference without going through `limited_get`/`limited_get_locked`: `proto_parser.c:802,923,965,1384,1564`, `proto_text.c:869,885`, `proto_bin.c:1160,1322`, `memcached.c:1549,2242` | none reachable. The overflow needs references to ACCUMULATE, which only a multiget does, and all three multiget front ends are capped. The others take one reference and release it in the same function |
+| deliberate reference leaks | `debugitem ref`, which leaks one reference per call by design and would accumulate without bound | `#ifdef MEMCACHED_DEBUG` (`proto_text.c:1511`), and `-DMEMCACHED_DEBUG` appears only in `memcached_debug_CFLAGS` (`Makefile.am:133`), never in `memcached_CPPFLAGS`. Not in the shipped binary |
+
+This is a search along named axes, not a proof of absence. What it does
+establish is that the one temporal defect live in the pin is not a fix that
+was forgotten somewhere: it is case 2, which upstream left in deliberately.
 
 ## The contract
 
