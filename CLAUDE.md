@@ -266,7 +266,8 @@ the loss.
 ## Search prior art before investigating, and read PAST the root cause
 
 Before spending board time or building an instrument, search the **issue registry, the per-bug
-repro folders including archived ones, and the commit history** — not only `docs/`. A
+repro folders including archived ones, the commit history, and the other ports' adapter headers
+and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
 of a bug believed to be fixed.
 

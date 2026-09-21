@@ -152,6 +152,69 @@ was sound; the handle step is what the ISA refuses, and it is the step that
 matters. The variant is withdrawn, and the sentence "linearity is not
 optional" above is its residue.
 
+## Prior art across the ports: coalescing is the boundary
+
+Every Sublet port in this repository was read for the same question — did
+the port change the allocator's policy, meaning which chunk serves which
+request, block sizes, size classes, free-list order, coalescing, reuse
+order — and where it holds authority. Quotes are from each port's own
+README or adapter source.
+
+| port | allocator | authority under Sublet | policy | evidence |
+|---|---|---|---|---|
+| PostgreSQL | `aset.c` | per chunk, side table | **unchanged**: "the same block sizes, the same doubling, the same keeper block, the same free lists, the same chunks in the same order" | `ports/postgres/sublet/README.md:40-44`, `:196-198` |
+| | | | one reported exception: `realloc` of a chunk above `allocChunkLimit` becomes carve, copy, revoke — "That is a policy change and it is reported as one"; priced by the recording: "of 1 228 019 allocations on the pgbench tpcb rung there are two reallocs and one takes that path" | `:207-213`, `memory-contexts/patches/postgresql-17.0-0004-*.patch:63-68` |
+| | | | ABI exception, both arms: `ALLOC_MINBITS` 3 → 4 and one size class fewer, "not Sublet's change … any machine whose pointers are 16 bytes needs it", so "the sequence of blocks differs from the x86 run" | `memory-contexts/patches/postgresql-17.0-0001-allocset-capstone-size-classes.patch:15-24` |
+| PostgreSQL | aset, generation, slab, bump | per chunk / per block | unchanged: "All three capability-ABI policy hashes match the spatial arm"; slab's free chain as side-table indices, block selection upstream | `ports/postgres/memory-contexts/README.md:36-37`, `:121` |
+| SQLite | memsys5, lookaside | per block / per slot | **unchanged although memsys5 merges**: "the same blocks split and merge" — a merge is `sublet_give_to` on the parent's handle, taken before the split | `ports/sqlite/sublet/README.md:24-27`, `:32-35` |
+| CPython | pymalloc | per object | unchanged: "Upstream still selects size classes, pools, lazy block carving, free-list order, empty-pool reassignment, and arena retention"; evidence an allocation-decision hash normalised by arena identity | `ports/cpython/pymalloc/README.md:40-41`, `:29-30` |
+| | | | layout exception: pool header 48 → 80 bytes, `POOL_OVERHEAD` kept; identical addresses to the original workload explicitly not claimed | `:34-36`, `:133-134` |
+| APR | pools / allocator | per node | unchanged: "Upstream still decides everything about nodes -- the size buckets, LIFO order, which node the next apr_pool_create pops" | `ports/apr/pools/README.md:38-39` |
+| | | | layout exception: `APR_ALIGN_DEFAULT` 16 not 8; the census keeps upstream's 8 | `:60-65` |
+| nginx | `ngx_palloc.c` | per block (two handles: destroy, reset), objects carved | block decisions unchanged; `ngx_palloc_small` "carves from the block's region instead of bumping d.last", sizes rounded to 16, and "A REQUEST FOR NOTHING still costs a capability" — admitted as "a cost of the discipline"; the level below "NEVER MERGES, and it does not need to" — blocks come back whole at `ngx_destroy_pool` | `ports/nginx/patches/0001-pool-under-sublet.patch.classes:16`, the patch's `ngx_palloc_small` comment, `port/ngx_subpool.c:11-16` |
+| | | | ABI exception, both arms: `NGX_ALIGNMENT` 16 where upstream says the platform word, 8 | `ports/nginx/adapted/ngx_shim.h:23-29` |
+| FFmpeg | AVBufferPool | per lease | unchanged: "All accepted event sequences match native observations", "including pool backing decisions" | `ports/ffmpeg/buffer-pool/README.md:74`, `results/measurements/20260919-replay/README.md:5` |
+| whisper | ggml-context | one handle per backing buffer, epochs | unchanged (bump, no free); layout as upstream | `ports/whisper/ggml-context/README.md:26-29`, `:47-49` |
+| Wireshark | wmem | per region | unchanged, byte-identical under replay; **one** case missed | `ports/wireshark/wmem/README.md` |
+| **MicroPython** | `gc.c`, bitmap | no Sublet arm | **would have had to change**, measured, and therefore not built | `ports/micropython/patches/0025-gc-model-what-the-discipline-forbids-no-coalescing.patch` |
+| SQLite, row 3 fork B2 | `revoke_on_free_alloc.h`, a replacement for memsys5 | per object | **changed by construction**: "NEVER coalescing … a long-running or realloc-heavy workload FRAGMENTS. That is the deliberate cost" — an experiment's comparison arm, not a port | `ports/sqlite/revoke_on_free_alloc.h:3-25` |
+
+The MicroPython patch is the precedent, and it states this note's argument
+before this note did: "Sublet merges two regions through a handle taken
+BEFORE the split that separated them, and revoking that handle kills
+everything below it. MicroPython carves from the front of a free region, so
+the splits form a right-leaning chain and the common ancestor of two
+adjacent free regions always covers everything between and to the right of
+them, live objects included. There is therefore no handle that merges
+exactly two neighbours." And: "Imposing a mergeable tree would mean changing
+the fit strategy, which is a policy change." It priced the alternative with
+no capability code at all (`MPY_GC_NO_COALESCE`): collections 53 → 475,
+6,768 failed allocations, four upstream tests dead with `MemoryError` — "a
+finding rather than a week of work". The next port was nginx, "an allocator
+whose freed space returns through a structure rather than into a flat
+bitmap". The same repository also already held the fact this note's
+withdrawn variant died on, twice: "csmrev refuses anything that is not
+CAP_TYPE_LIN, so nothing carved from such a block could ever be revoked"
+(`ports/nginx/port/ngx_subpool.c:7-8`), and, from 2026-07-09, "the pool must
+be delin'd before SQLite copies it, after which csmrev asserts. SPLIT is the
+only fresh-node derivation, and it is one-way (the emulator has no
+merge/unsplit op)" (`ports/sqlite/revoke_on_free_alloc.h:13-18`).
+
+**The pattern.** aset, pymalloc, the lookaside, APR, nginx, AVBufferPool and
+ggml return storage through *structures* — size-class lists, whole blocks,
+fixed slots — so linear pieces are their policy already, and per-object
+Sublet is exact in its decisions. What the capability ABI changes on its
+own, in both arms, is layout: 16-byte alignment and size classes (PostgreSQL,
+APR, nginx, pymalloc's pool header), reported by each port as the ABI's cost,
+not Sublet's. memsys5 merges, but as a buddy system: every merge undoes
+exactly one split, so the parent's handle covers exactly the two halves and
+the revoking merge is the allocator's own merge. Only the bitmap collector
+and `wmem` `block` join *arbitrary* neighbours, and those are the two ports
+that did not go per-object: one stopped on the measured price, the other
+kept block granularity and one missed case. Coalescing of arbitrary
+neighbours is the boundary of the discipline on this ISA, and `merge` is the
+instruction that would move it.
+
 ## The primitive
 
     merge rd, rs1, rs2
