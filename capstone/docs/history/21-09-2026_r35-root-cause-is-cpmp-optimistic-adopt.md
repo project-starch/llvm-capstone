@@ -41,9 +41,9 @@ report:
 
 1. **The two blocks are gated on complementary values of the same signal.** `cap_violation_detection`
    requires `ld_st_priv_lvl_i == riscv::PRIV_LVL_M` (`load_store_unit.sv:949`); the CPMP data check
-   requires `ld_st_priv_lvl_i != riscv::PRIV_LVL_M` (`pmp_data_if.sv:292-293`). Exactly one runs.
+   requires `ld_st_priv_lvl_i != riscv::PRIV_LVL_M` (`pmp_data_if.sv:293`). Exactly one runs.
 2. **CPMP cannot emit the cause the board returned.** Its only exception is
-   `ST_ACCESS_FAULT`/`LD_ACCESS_FAULT` — 7 and 5 (`pmp_data_if.sv:296-297`). The board's bounds probe
+   `ST_ACCESS_FAULT`/`LD_ACCESS_FAULT` — 7 and 5 (`pmp_data_if.sv:297-298`). The board's bounds probe
    returned **28**: `results/board-bounds-probe.wedge.txt`, `sw=255 TRAP LOG {seen,mcause[6:0]} 0x9c`
    → `0x9c = 1001_1100` → seen=1, `mcause[6:0] = 28`. Latched in hardware
    (`cva6.sv:1116-1124`, `recent_nontrivial_mcause_log_q <= ex_commit.cause`), not derived by the
@@ -125,7 +125,7 @@ Robustness item, not a safety gap.
 reproduce R-35, and its own header records why. Measured, not assumed: it exits 16 because it never
 executes CAPENTER, so `capmode_i` is 0 and the block is inert; a 64-nop barrier after `REVOKE` did not
 change the reading, ruling out walk timing; and `CAPCREATE` hardcodes `revnode_id = 2`
-(`capstone_flu_unit.anvil:337`), so both its regions shared one revnode and neither could displace the
+(`capstone_flu_unit.anvil:385` @ `054cea69b` (`:337` on the repro branch)), so both its regions shared one revnode and neither could displace the
 other's tracker entry.
 
 **With the privilege question settled the test is now fixable rather than misconceived** — it needs

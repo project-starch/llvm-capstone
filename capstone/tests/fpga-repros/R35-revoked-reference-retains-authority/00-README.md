@@ -125,7 +125,7 @@ not caught at all.
 An earlier version of this section said it was. The tag reaches the check — `cap_rmetadata` →
 `operand_a_cap_regfile` → `cap_metadata_a` (`cva6.sv:249`, "S-06 fix: {tag, metadata}") →
 `decompress_cap_tagged` (`ariane_pkg.sv:762-781`), which returns `NOT_CAP` for a clear tag — and an
-untagged `rs1` raises **cause 24** at `load_store_unit.sv:973`. Cause 24 was never observed. The alias
+untagged `rs1` raises **cause 24** at `load_store_unit.sv:973-975`. Cause 24 was never observed. The alias
 was still **tagged** on silicon, and the clause that was defeated is the **revocation** one. The
 emulator's "x[rs1] is not a capability" is a model divergence, not a description of the silicon.
 
@@ -157,7 +157,7 @@ access and they are gated on **complementary values of one signal**:
 | block | gate | can emit |
 |---|---|---|
 | `load_store_unit.sv:948-996` `cap_violation_detection` | `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M` | 24, 25, 26, 27, **28** |
-| `pmp_data_if.sv:292-305` CPMP data check | `capmode_i && ld_st_priv_lvl_i != PRIV_LVL_M` | **5 / 7 only** |
+| `pmp_data_if.sv:292-306` CPMP data check | `capmode_i && ld_st_priv_lvl_i != PRIV_LVL_M` | **5 / 7 only** |
 
 The bounds probe above returned **28**, latched in hardware (`cva6.sv:1116-1124`,
 `recent_nontrivial_mcause_log_q <= ex_commit.cause`). CPMP cannot emit 28. **So the M-gated LSU block is
@@ -208,6 +208,25 @@ cone that already carries a combinational loop applies directly, **only synthesi
 synthesizability**, and a bitstream is ~90 minutes plus a reflash. The change and any respin are the RTL
 lane's and the project lead's calls. **No RTL has been changed on the strength of this folder.**
 
+### Acceptance criteria for a fix — two traps, both of which make a CORRECT fix look broken
+
+Raised by the RTL lane on review, and both are properties of the code rather than opinions.
+
+**1. Cause 28 pre-empts cause 25.** The revnode test is the **last** arm of the priority chain —
+`:973` NOT_CAP → `:976` type → `:979`/`:982` permissions → `:985` bounds → `:989` revnode. So an access
+that is both revoked *and* out of bounds reports **28**, even with the tracker repaired. Pre-register
+cause 25 only for an access that is **in bounds and permitted**, or a working fix reads as a failure.
+
+**2. A single-capability test cannot see this bug at all.** With one capability no access ever presents
+a differing revnode id, so the adopt at `:967-971` never runs, the tracker stays correctly invalid, and
+**cause 25 fires** — the test passes and reports the defect absent. The ids must **rotate**. This is the
+"the synthetic test must CREATE the triggering condition, not merely contain the shape" trap that cost
+S-12 a day. `CAPCREATE` cannot supply the rotation — it hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:385` @ `054cea69b`) — so distinct ids need `SPLIT`.
+
+A two-sided simulation test is therefore: cause 25 **fires** on repaired RTL and **does not fire** on
+`054cea69b`, for an in-bounds permitted access through a revoked capability, with the ids rotating.
+
 ### Related instances, none of which is this defect
 
 - `commit_stage.sv:239` — the same optimistic re-adopt for the **PC** capability.
@@ -222,7 +241,7 @@ lane's and the project lead's calls. **No RTL has been changed on the strength o
 `capstone-ariane/verif/tests/custom/capstone/r35-stale-deref.S` (`board/r35-directed-repro`) does **not**
 yet reproduce this, and its header records exactly why: it never executes CAPENTER, so `capmode_i` is 0
 and the block is inert (exit 16), and `CAPCREATE` hardcodes `revnode_id = 2`
-(`capstone_flu_unit.anvil:337`), so its two regions shared one revnode and neither could displace the
+(`capstone_flu_unit.anvil:385` @ `054cea69b`), so its two regions shared one revnode and neither could displace the
 other. A working version needs CAPENTER, two genuinely distinct revnodes via SPLIT, and must sit on the
 **m1-reclaimer** line — `054cea69b` is not an ancestor of that branch.
 

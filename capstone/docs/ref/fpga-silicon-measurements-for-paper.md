@@ -4646,13 +4646,13 @@ the board by a cause comparison — emulator cause 24 at offset `0x42b4`, board 
 
 **CORRECTED 2026-09-21 — "the LSU path does not check tags" is superseded, and the mechanism is now
 known.** The LSU path *does* check the tag: an untagged `rs1` raises cause 24 at
-`load_store_unit.sv:973`, and cause 24 was never observed, so the stale alias was still **tagged** on
+`load_store_unit.sv:973-975`, and cause 24 was never observed, so the stale alias was still **tagged** on
 silicon. What fails is the **revocation** clause. `load_store_unit.sv:966-971` keeps a **single
 core-wide** tracked revnode id and re-adopts any access presenting a different id as VALID; with 16
 rotating slots nearly every access presents a different id, so cause 25 can never fire. Bounds (28) and
 permissions (27) survive because they are read from the capability's own metadata. The module is
 settled by cause **28** itself: the CPMP data check is gated `ld_st_priv_lvl_i != PRIV_LVL_M` and can
-emit only causes 5 and 7 (`pmp_data_if.sv:292-297`), so 28 can only be the M-gated block's. Domains run
+emit only causes 5 and 7 (gate `pmp_data_if.sv:293`, causes `:297-298`), so 28 can only be the M-gated block's. Domains run
 at **M** — entering a domain does not change privilege (`priv_lvl_d` has six writers in
 `csr_regfile.sv`, none on a capability or domain-switch path; `capstone_dom_switcher.anvil` has zero
 `mstatus`/`priv`/`mpp` references).
