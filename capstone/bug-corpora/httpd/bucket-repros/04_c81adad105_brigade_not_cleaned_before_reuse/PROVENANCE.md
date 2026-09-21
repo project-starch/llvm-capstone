@@ -12,6 +12,25 @@ advisory database was searched for this entry.
 
 The connection, and with it the allocator, being handed to the next request.
 
+**Upstream does not express that as an allocator event.** `ap_proxy_release_connection`
+→ `connection_cleanup` (`proxy_util.c`) puts the backend connection on the
+worker's reslist and leaves its bucket allocator -- created once per backend
+connection in `ap_proxy_connection_create` on `conn->scpool` -- exactly as it
+is. The rule that nothing of the old request may outlive the handback is a
+copying discipline: `ap_proxy_buckets_lifetime_transform` moves the buckets to
+the frontend's allocator, and the brigade is cleaned; the defect is that the
+cleanup came after the release. Nothing is freed at the handback, which is
+what makes this the corpus's one **reuse-not-free** case (taxonomy class 3).
+
+**The reduced consumer expresses it.** Under the Sublet discipline a lender
+that reuses without freeing revokes at the point of reuse, and the reduced
+consumer models the lender. So at the handback it ends the allocator's
+tenancy -- `apr_bucket_alloc_destroy` and a fresh `apr_bucket_alloc_create`
+on the connection pool, the operation `connection_cleanup` would perform --
+in both arms; the fix differential stays the cleanup before it. This is the
+one step the reduced sequence takes that upstream does not, and the reason
+the sublet arm can catch a defect no free-triggered mechanism can see.
+
 The storage is **nodes from the connection's bucket allocator, still named by the brigade**.
 
 ## Why it is invisible to a malloc-level tool

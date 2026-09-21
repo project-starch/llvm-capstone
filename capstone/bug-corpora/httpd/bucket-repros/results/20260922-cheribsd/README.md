@@ -14,7 +14,9 @@ take.
     matrix.tsv    one line per case, the control's outcome beside it
     inputs.json   binaries, platform fingerprint, the ABI-control line
 
-This is the second CheriBSD record of this corpus. The first, 2026-09-21,
+This is the day's second run through the port (the first, before case 4's
+handback became the lender's epoch, is in the archive) and the second
+CheriBSD record of this corpus. The first, 2026-09-21,
 ran the cases against the census's freestanding build with `free()`
 interposed and counted (`freed_to_malloc=0` on every arm); this one runs
 them through the port's CheriBSD build, `bucket-pointers.c` over

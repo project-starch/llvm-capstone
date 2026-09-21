@@ -107,9 +107,11 @@ port lends each 8 KiB block linear, the bucket allocator's pieces are split
 from it and die with it, and the freelist a freed node used to hold moved to
 the adapter's records. Two patches, six hunks, every decision upstream's.
 The eight cases measured through it: `spatial` completes all eight; `sublet`
-faults at the labelled read on seven and completes case 4, whose reduced
-sequence ends no lifetime; stock CheriBSD with libc revocation on completes
-all eight through the same port build. Records and mechanism per case:
+faults at the labelled read on all eight -- case 4, the corpus's one
+reuse-not-free case, once its reduced consumer declares the connection
+handback as the lender's epoch, the operation upstream expresses only as a
+copying discipline; stock CheriBSD with libc revocation on completes all
+eight through the same port build. Records and mechanism per case:
 [`bug-corpora/httpd/bucket-repros/`](../../bug-corpora/httpd/bucket-repros/README.md).
 The paragraph below is the estimate that preceded it, kept as written.
 

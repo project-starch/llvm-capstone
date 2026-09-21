@@ -44,6 +44,6 @@
       "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
     }
   },
-  "status": "run 2026-09-22 under QEMU through the port (ports/apr/pools with -DAPRP_BUCKETS=ON): spatial completes; sublet faults with cause 24 at the published apr_defect_read, the event being the subrequest pool's node released at its destroy; results/20260922-qemu; stock CheriBSD with libc revocation on completes, 2026-09-22 through the port and 2026-09-21 through the census build; results/20260922-cheribsd",
+  "status": "run 2026-09-22 under QEMU through the port (ports/apr/pools with -DAPRP_BUCKETS=ON): spatial completes; sublet faults with cause 24 at the published apr_defect_read, the event being the subrequest pool's node released at its destroy; stock CheriBSD with libc revocation on completes, 2026-09-22 through the port and 2026-09-21 through the census build; results/20260922-qemu and results/20260922-cheribsd",
   "note": "the Capstone arms run the buggy sequence with protection as the variable; the fix differential is the native pair"
 }

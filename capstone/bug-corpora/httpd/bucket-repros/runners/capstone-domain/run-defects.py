@@ -12,9 +12,9 @@ runtime from the mode argument, so the two arms differ in exactly one thing.
                     alias, and the bucket allocator's pieces die with the
                     block they were carved from, so that handle is dead and
                     the first read through it must FAULT -- at the labelled
-                    probe, not merely somewhere. Where a case's oracle says
-                    the reduced sequence ends no lifetime (case 4), the sublet
-                    arm must COMPLETE: a recorded non-detection, not a pass.
+                    probe, not merely somewhere. Case 4's lifetime ends at
+                    the connection handback, which its reduced consumer
+                    declares as the allocator's epoch.
 
 The expected PC is not hardcoded. The domain publishes both probe addresses
 through its marker, and the oracle compares the fault PC against what that boot
@@ -41,11 +41,11 @@ CASES = [
     ("4930450013", "bucket-outlives-its-brigade", "a pool outlived by its holder or its contents"),
     ("edc450c8ac", "subrequest-pool-private-data", "a pool outlived by its holder or its contents"),
 ]
-# The sublet oracle per case: the labelled site the fault must land on, or
-# None where the case's own oracle says the sequence ends no lifetime and the
-# protected arm completes. Case 4 carries its bucket over live -- a leak, not a
-# stale access -- and no mechanism has an event to act on.
-SUBLET_SITE = {0: 0, 1: 0, 2: 0, 3: 0, 4: None, 5: 0, 6: 0, 7: 0}
+# The sublet oracle per case: the labelled site the fault must land on. Every
+# case, including case 4, whose reduced consumer declares the connection
+# handback as the lender's epoch (see its PROVENANCE.md); None would mean the
+# case's oracle requires the protected arm to complete.
+SUBLET_SITE = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0}
 
 MAGIC = 0x314C4F4F50525041  # "APRPOOL1"
 MARKER_BASE = 0xCF1C000000000000

@@ -3,7 +3,7 @@ case	fix	name	revocation	expected	passed	exit	completed	nodes	node_reuses	contro
 1	d2a1cf5f8c	buckets_outlive_backend_allocator	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
 2	106d0761c0	brigade_on_request_pool_past_eor	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
 3	d9c2352952	buckets_from_pool_that_dies_first	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
-4	c81adad105	brigade_not_cleaned_before_reuse	on	completed	True	0	1	4	0	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
+4	c81adad105	brigade_not_cleaned_before_reuse	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
 5	60919177e8	read_from_destroyed_brigade	on	completed	True	0	1	3	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
 6	4930450013	bucket_outlives_its_brigade	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6
 7	edc450c8ac	subrequest_pool_private_data	on	completed	True	0	1	4	1	tag fault at apr_defect_read	True	0x101dd6	0x101dd6

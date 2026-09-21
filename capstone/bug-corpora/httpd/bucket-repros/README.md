@@ -76,7 +76,7 @@ believed.
 | arm | what acts | result |
 |---|---|---|
 | `spatial` | bounds and tags; a pool node and a bucket piece keep their alias across the free lists | 8 / 8 complete |
-| `sublet` | the pool port's release of a node, reached directly or through the bucket allocator's lend | **7 / 8 fault** at `apr_defect_read`, cause 24; case 4 completes as its oracle requires |
+| `sublet` | the pool port's release of a node, reached directly or through the bucket allocator's lend | **8 / 8 fault** at `apr_defect_read`, cause 24 |
 | `cheribsd-revocation` | libc's quarantine and revoker, on, verified in the guest | 8 / 8 complete; the control beside them faults |
 
 Which event each case ends at, and therefore which mechanism catches it:
@@ -85,13 +85,24 @@ Which event each case ends at, and therefore which mechanism catches it:
 |---|---|---|
 | 2, 3, 5, 7 | a pool destroy: the node is released and reissued to the next pool | the pool port's release revokes the node; the holder's alias dies with it |
 | 0, 1, 6 | a bucket allocator's destroy: its blocks go back to APR and are reissued | the same release, reached through the block the pool port lent; every piece dies with its block |
-| 4 | nothing: the bucket is carried over live and read while still allocated | no event, so no mechanism acts; the sublet arm must complete, and it does |
+| 4 | the connection handback -- **reuse without free**, taxonomy class 3: the lender hands its connection and allocator to the next request and nothing is freed | the reduced consumer declares the handback as the allocator's epoch, the lender's operation under the discipline; the blocks go back and are reissued, and the old brigade's alias dies with them |
 
-Case 4 is the corpus's recorded non-detection, and it is not a miss of the
-mechanism: the upstream defect (`c81adad105`) is a brigade not cleaned before
-the connection is handed back, which in the reduced sequence leaks a live
-bucket into the next request rather than freeing it. A read of live storage
-is not a temporal fault, on any system.
+Case 4 is the corpus's one **reuse-not-free** case, and the one that
+separates the systems by kind rather than by degree. Upstream's handback
+(`ap_proxy_release_connection` → `connection_cleanup`) puts the backend
+connection on the reslist and leaves its bucket allocator as it is; the rule
+that nothing of the old request may outlive the handback is a copying
+discipline (`ap_proxy_buckets_lifetime_transform`, then cleanup), not an
+allocator event, and the defect (`c81adad105`) is that cleanup coming after
+the release. No free happens, so no free-triggered mechanism -- libc's
+revoker, PoisonCap, ASan -- has anything to act on, by construction. Under
+the Sublet discipline a lender that reuses without freeing revokes at the
+point of reuse, and the reduced consumer, which models the lender, does:
+it ends the allocator's tenancy at the handback (destroy and recreate, the
+operation `connection_cleanup` would perform), in both arms. That is the one
+step the reduced sequence takes that upstream does not, its PROVENANCE.md
+says so, and it is what the class-3 row of the taxonomy means by the
+Capstone column: the boundary is enforceable once it is declared.
 
 The bucket allocator's own recycling -- `apr_bucket_free` filing a small node
 on the freelist and `apr_bucket_alloc` reissuing it -- is exercised by no

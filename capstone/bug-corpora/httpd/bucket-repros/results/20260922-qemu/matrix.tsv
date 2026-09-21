@@ -8,10 +8,10 @@ case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	delivered	complete
 3	d9c2352952	buckets-from-pool-that-dies-first	a pool outlived by its holder or its contents	spatial	complete	True					1	0
 3	d9c2352952	buckets-from-pool-that-dies-first	a pool outlived by its holder or its contents	sublet	fault	True	24	0x101866c0c	0x101866c0c	False		1
 4	c81adad105	brigade-not-cleaned-before-reuse	a recycled allocator serving its next user	spatial	complete	True					1	0
-4	c81adad105	brigade-not-cleaned-before-reuse	a recycled allocator serving its next user	sublet	complete	True					1	0
+4	c81adad105	brigade-not-cleaned-before-reuse	a recycled allocator serving its next user	sublet	fault	True	24	0x10186a704	0x10186a704	False		1
 5	60919177e8	read-from-destroyed-brigade	the holder used after it was destroyed	spatial	complete	True					1	0
 5	60919177e8	read-from-destroyed-brigade	the holder used after it was destroyed	sublet	fault	True	24	0x101866a24	0x101866a24	False		1
 6	4930450013	bucket-outlives-its-brigade	a pool outlived by its holder or its contents	spatial	complete	True					1	0
 6	4930450013	bucket-outlives-its-brigade	a pool outlived by its holder or its contents	sublet	fault	True	24	0x10186a068	0x10186a068	False		1
 7	edc450c8ac	subrequest-pool-private-data	a pool outlived by its holder or its contents	spatial	complete	True					1	0
-7	edc450c8ac	subrequest-pool-private-data	a pool outlived by its holder or its contents	sublet	fault	True	24	0x101866be0	0x101866be0	False		1
+7	edc450c8ac	subrequest-pool-private-data	a pool outlived by its holder or its contents	sublet	fault	True	24	0x1018a6be0	0x1018a6be0	False		1

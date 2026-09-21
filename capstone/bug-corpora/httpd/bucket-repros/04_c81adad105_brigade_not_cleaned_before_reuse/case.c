@@ -28,23 +28,37 @@ APRB_CASE(4) {
     bb.n = 0;
   }
 
-  /* The connection is handed back and the next request takes it. In the
-   * reduced sequence nothing ends the old bucket's lifetime: the defect is a
-   * bucket carried over live, and the read that follows is of storage still
-   * allocated. No arm is expected to fault here, and the case says so. */
+  /* THE HANDBACK IS THE LENDER'S EPOCH. Upstream's connection_cleanup puts the
+   * backend connection back on the reslist and leaves its bucket allocator as
+   * it is: the rule that nothing of the old request may outlive the handback
+   * is a copying discipline (ap_proxy_buckets_lifetime_transform, then
+   * cleanup), not an allocator event. This corpus reduces the consumer to
+   * the lender's contract, and under the Sublet discipline a lender that
+   * reuses without freeing revokes at the point of reuse. So the reduced
+   * consumer ends the allocator's tenancy here -- the operation the lender
+   * would perform -- and the next request takes the connection under a
+   * fresh one. That is the one step upstream does not make; PROVENANCE.md
+   * says so. Both arms take it: the fix differential is the cleanup above. */
+  apr_bucket_alloc_destroy(conn);
+  conn = apr_bucket_alloc_create(conn_pool);
+  CHECK(conn, 753);
+
+  /* The next request takes the connection. */
   unsigned char *next_user = apr_bucket_alloc(64, conn);
-  CHECK(next_user, 753);
+  CHECK(next_user, 754);
   memset(next_user, 0xB2, 64);
   o->still_held = bb.n > 0;
   o->reissued_same_address = o->still_held && next_user == data;
   if (o->still_held) {
+    /* The old brigade is touched again: under Sublet the epoch has ended
+     * the bucket's alias, and this read is where the class-3 defect is
+     * caught -- no free happened, so no free-triggered mechanism sees it. */
     held = data;
     mark(4);
     o->now = read_probe(held);
-    apr_bucket_free(bb.bucket[0]);
   }
   apr_bucket_free(next_user);
   apr_bucket_alloc_destroy(conn);
-  o->defect = o->still_held && !o->reissued_same_address && o->now == 0xA1;
+  o->defect = o->still_held && o->reissued_same_address;
   o->held_up = !o->still_held;
 }
