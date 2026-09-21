@@ -1,0 +1,64 @@
+--- build-3420000/memhook.c	2026-09-22 05:18:09.647014919 +0800
++++ build-3420000/memhook-diag.c	2026-09-22 05:22:17.255434882 +0800
+@@ -252,12 +252,14 @@
+   return NULL;
+ }
+ /* a level-0 release of [a, a+n): every 16-byte slot takes the clock */
++static uint64_t a1_stamp_calls, a1_stamp_cells;
+ static void a1_returned_range(uint64_t a, uint64_t n) {
++  a1_stamp_calls++;
+   uint64_t t = L1.nalloc;
+   uint64_t end = a + (n ? ((n + 15) & ~(uint64_t)15) : 16);
+   for (uint64_t x = a & ~(uint64_t)15; x < end; x += 16) {
+     uint64_t *pg = a1_page(x >> 12, 1);
+-    if (pg) pg[(x >> 4) & 255] = t;
++    if (pg) { pg[(x >> 4) & 255] = t; a1_stamp_cells++; }
+   }
+ }
+ /* the custom level is about to hand p out: was the last object at p already
+@@ -275,6 +277,33 @@
+   fprintf(f, "@reused_after_return: %llu\n", (unsigned long long)a1_rbr_after);
+   fprintf(f, "@reused_block_never_returned: %llu\n", (unsigned long long)a1_rbr_never);
+   fprintf(f, "@page_overflow: %llu\n", (unsigned long long)a1_pages_overflow);
++  fprintf(f, "@stamp_calls: %llu\n", (unsigned long long)a1_stamp_calls);
++  fprintf(f, "@stamp_cells: %llu\n", (unsigned long long)a1_stamp_cells);
++  {
++    uint64_t seen = 0, stamped = 0;
++    for (uint64_t i = 0; i < ((uint64_t)1 << L1.bits); i++) {
++      uint64_t a = L1.keys[i];
++      if (!a) continue;
++      seen++;
++      uint64_t *pg = a1_page(a >> 12, 0);
++      if (pg && pg[(a >> 4) & 255]) stamped++;
++    }
++    fprintf(f, "@lookaside_addresses_seen: %llu\n", (unsigned long long)seen);
++    fprintf(f, "@lookaside_addresses_ever_stamped: %llu\n", (unsigned long long)stamped);
++    uint64_t lo = ~(uint64_t)0, hi = 0;
++    for (uint64_t i = 0; i < ((uint64_t)1 << L1.bits); i++) {
++      uint64_t a = L1.keys[i];
++      if (!a) continue;
++      uint64_t *pg = a1_page(a >> 12, 0);
++      uint64_t st = pg ? pg[(a >> 4) & 255] : 0;
++      if (!st) continue;
++      if (st < lo) lo = st;
++      if (st > hi) hi = st;
++    }
++    fprintf(f, "@lookaside_first_stamp_at_alloc: %llu\n", (unsigned long long)(lo == ~(uint64_t)0 ? 0 : lo));
++    fprintf(f, "@lookaside_last_stamp_at_alloc: %llu\n", (unsigned long long)hi);
++    fprintf(f, "@lookaside_total_allocs: %llu\n", (unsigned long long)L1.nalloc);
++  }
+ }
+ #else
+ static void a1_returned_range(uint64_t a, uint64_t n) { (void)a; (void)n; }
+@@ -303,7 +332,10 @@
+ void a1_memsys5_realloc(void) {}
+ #else
+ void *a1_memsys5_alloc(void *p, size_t n) { allocated(&L2, n); returned(&L2, p, n); return p; }
+-void a1_memsys5_free(void *p) { released(&L2, p); }
++void a1_memsys5_free(void *p) {
++  a1_returned_range(ADDR(p), ent(&L2, ADDR(p))->size);
++  released(&L2, p);
++}
+ void a1_memsys5_realloc(void) { L2.realloc++; L2.t[cur].realloc++; }
+ #endif
+ 

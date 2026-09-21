@@ -1,0 +1,84 @@
+{
+  "study": "W3",
+  "level": "sqlite-lookaside",
+  "completes_w3_row": false,
+  "completes_w3_row_reason": "recorded on SQLite 3.42.0, the W3 row needs the ported 3.53.3",
+  "program": "SQLite",
+  "allocator": "lookaside",
+  "level_name": "lookaside",
+  "below": "memsys5",
+  "upstream": {
+    "version": "3.42.0",
+    "sources": [
+      "sqlite3.c"
+    ]
+  },
+  "workload": "speedtest1-size100",
+  "workload_command": "--heap 268435456 64 --memdb --size 100 --verify --stats",
+  "instrument": {
+    "base": "memhook.c at llvm-capstone 72f580c55cd2d245a842c00105ba7c337321e248",
+    "base_sha256": "e8c7a752e1509336ea91c9627ac4ab62b8fe0bcd0e7bbd2fc5fa63e21762b431",
+    "patch": "patches/memhook-stamp-level-beneath.patch",
+    "patched_sha256": "70f6178253722a3d01992192fa8e2b9793582662e5f4f9d34ee57cfb8d41389b"
+  },
+  "compiler": "gcc 13.3.0",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "allocations": 1876673,
+      "reuses": 1876536,
+      "before_release": 1876536,
+      "after_release": 0,
+      "distinct_addresses": 137,
+      "max_objects_at_one_address": 280102,
+      "memsys5_allocations": 652201,
+      "memsys5_releases": 652201,
+      "sha256": "5f3afa0f6a72b71388eb7eec1581e8d1c487b541b2d7d88d96673e1b801086b0"
+    },
+    {
+      "repetition": 2,
+      "allocations": 1876673,
+      "reuses": 1876536,
+      "before_release": 1876536,
+      "after_release": 0,
+      "distinct_addresses": 137,
+      "max_objects_at_one_address": 280102,
+      "memsys5_allocations": 652201,
+      "memsys5_releases": 652201,
+      "sha256": "5f3afa0f6a72b71388eb7eec1581e8d1c487b541b2d7d88d96673e1b801086b0"
+    },
+    {
+      "repetition": 3,
+      "allocations": 1876673,
+      "reuses": 1876536,
+      "before_release": 1876536,
+      "after_release": 0,
+      "distinct_addresses": 137,
+      "max_objects_at_one_address": 280102,
+      "memsys5_allocations": 652201,
+      "memsys5_releases": 652201,
+      "sha256": "5f3afa0f6a72b71388eb7eec1581e8d1c487b541b2d7d88d96673e1b801086b0"
+    }
+  ],
+  "control": {
+    "what": "the pinned instrument on the same arm",
+    "files": [
+      "raw/memsys5.pinned.rep1.hook.txt",
+      "raw/memsys5.pinned.rep2.hook.txt",
+      "raw/memsys5.pinned.rep3.hook.txt"
+    ],
+    "reads": "reused_before_return equals reused_block_never_returned, so its clock never ran"
+  },
+  "diagnostic": {
+    "file": "raw/diag2.hook.txt",
+    "patch": "patches/memhook-diagnostic.patch",
+    "first_stamp_at_alloc": 1876673,
+    "total_allocs": 1876673,
+    "reads": "all 137 lookaside addresses were first covered at the last allocation, so the block is returned once at teardown"
+  },
+  "limits": [
+    "one workload",
+    "15807 of 652201 memsys5 releases go through realloc and are unstamped, so the share is a lower bound"
+  ],
+  "recorded": "20260922"
+}

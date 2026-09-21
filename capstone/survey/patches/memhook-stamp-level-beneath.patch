@@ -1,0 +1,37 @@
+Stamp the release clock at whichever level sits beneath lookaside
+
+memhook.c asks its reuse question at lookaside and answers it against a
+stamp arena that only `hk_free` and `hk_realloc` write. Those two wrap
+SQLite's `sqlite3_mem_methods`, so the clock is the system allocator's.
+The instrument says so itself: with `--heap`, speedtest1 replaces that
+table by memsys5 and level 0 "sees nothing, which is the truth: nothing
+below lookaside reaches the system allocator then".
+
+The consequence is that the `memsys5` arm cannot answer the question W3
+asks of the nested pair. Its `reused_before_return` equals its
+`reused_block_never_returned` exactly, because no stamp is ever written,
+so the number says "the system allocator never got the block back" and
+not "memsys5 had not got the block back yet". The two are different
+claims and only the second is new.
+
+This writes the stamp at `a1_memsys5_free` as well, so the clock follows
+the level directly beneath lookaside whichever one is installed. In the
+shipped arm memsys5 is idle and nothing changes, which the arm's own
+counters show. In the memsys5 arm the clock now runs.
+
+Not covered: `a1_memsys5_realloc` receives no pointer, so a release
+through realloc is still unstamped. On speedtest1 at size 100 that is
+15,807 of 652,201 memsys5 releases, 2.4 percent, and every one of them
+can only move a reuse from "before" to "after", so the reported
+before-release share is a lower bound rather than an estimate.
+
+--- a/memhook.c
++++ b/memhook.c
+@@
+ void *a1_memsys5_alloc(void *p, size_t n) { allocated(&L2, n); returned(&L2, p, n); return p; }
+-void a1_memsys5_free(void *p) { released(&L2, p); }
++void a1_memsys5_free(void *p) {
++  a1_returned_range(ADDR(p), ent(&L2, ADDR(p))->size);
++  released(&L2, p);
++}
+ void a1_memsys5_realloc(void) { L2.realloc++; L2.t[cur].realloc++; }
