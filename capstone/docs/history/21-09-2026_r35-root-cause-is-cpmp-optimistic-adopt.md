@@ -77,10 +77,16 @@ commits — `6aabb7a6781c` (original) and `70463e759cd3` (the "raised and droppe
 under the lead's own identity. I first recorded this as owed to the RTL lane, which was wrong: I
 inferred ownership from the note's RTL content, i.e. from adjacency rather than from an assignment.
 
-That inference is unsafe here in both directions. `Capstone Lane` is a **shared** git identity on this
-host — `git log --author="Capstone Lane"` returns commits from more than one session — so a commit
-header establishes neither authorship nor ownership. **Ownership comes from an assignment, never from
-adjacency or from a commit header.**
+That inference is unsafe here in both directions, and for a stronger reason than a shared agent
+identity. **Every lane commits under the project lead's own git identity**, set globally since
+2026-09-16, in every repo including submodules; verified on this host, where `git config user.name`,
+its `--global` value and the `capstone-ariane` submodule all return that one identity, and the recent
+history carries no lane identity at all. So **an author line
+identifies no lane, by construction rather than by accident** — it is not a fixable configuration slip.
+(Before that date `Capstone Lane` was shared across sessions and produced the same blindness by a
+different route, so the conclusion held then too.)
+
+**Ownership comes from an assignment, never from adjacency or from a commit header.**
 
 I have not edited the note. The correction is above and the amendment is the lead's to make.
 
