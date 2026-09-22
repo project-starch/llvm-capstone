@@ -64,6 +64,7 @@ beebs_cnt:beebs_cnt_kernel.h:cnt_compute:-O1
 beebs_duff:beebs_duff_kernel.h:duff_compute:-O1
 ctrsanity:ctrsanity_kernel.h:cs_compute:-O1
 ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
+ctrsanitys:ctrsanitys_kernel.h:cs_compute:-O1
 # Crypto/bitwise profile, added 2026-07-28. The rest of the RV8 set is blocked by
 # known issues, not by this measurement: aes ~8 KB of tables (C-4/C-5), dhrystone 684
 # lines (C-5), qsort sorts in place (R-1), miniz mixed-extend i128 logic (C-2).

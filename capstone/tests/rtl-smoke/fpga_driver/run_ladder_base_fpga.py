@@ -257,27 +257,55 @@ def main():
         except Exception as e: log(f"capture save err: {e}")
         console.close()
 
+    # REPORT THE FLOOR, NOT PASS 2 (fixed 2026-09-22). This table used to print
+    # pass 2 as `warm`, while the BEST pass -- the minimum-instret one this loop
+    # already computes and logs above -- went unused. Pass 2 is ONE sample from a
+    # wide distribution: measured on 2026-09-22 the spread on identical code
+    # reached 350% (beebs_prime instret 2,704..12,172), because this half runs in
+    # Linux userspace and takes timer interrupts the domain half never sees.
+    # Reading pass 2 as a measurement produced a control-rung discrepancy of
+    # 7.8% that was entirely an artefact of the sample, and a retraction.
+    #
+    # `clean` is the evidence that the floor IS a floor: passes tied at the
+    # minimum instret, out of warm passes. A high count means the kernel ran
+    # undisturbed repeatedly. A count of 1 means it never did, so that row's
+    # minimum is still contaminated and is NOT a denominator -- which is exactly
+    # what ctrsanity reports here (1/15 in every probe run, its minimum varying
+    # by 6,415 between runs, because ~500k instructions cannot complete between
+    # timer interrupts). A control must be short enough to run clean.
     lines = [f"counters = {counter_used}",
-             "cold = first call (pays Linux demand-paging); warm = immediate repeat.",
-             "The domain half has no paging, so WARM is the comparable column --",
-             "but only where the kernel is idempotent (idem=YES).",
+             "cold = first call (pays Linux demand-paging).",
+             "best = the MINIMUM-instret warm pass, i.e. the least-interrupted run --",
+             "this is the comparable column, because the domain half takes no",
+             "interrupts and no paging. Valid only where idem=YES.",
+             "clean = passes tied at that minimum / warm passes. It is the evidence",
+             "that the floor was actually reached: clean=1/N means it was NOT, and",
+             "that row must not be used as a denominator.",
              "",
-             f"{'rung':<18} {'oracle':<12} {'cold_cyc':>10} {'warm_cyc':>10} "
-             f"{'delta':>9} {'cold_ins':>10} {'warm_ins':>10}  idem correct"]
+             f"{'rung':<18} {'oracle':<12} {'cold_cyc':>10} {'best_cyc':>10} "
+             f"{'cold_ins':>10} {'best_ins':>10} {'clean':>7} {'spread':>9}  idem correct"]
     allok = True
     for r in RUNGS:
         p = results.get(r)
         if not p:
             lines.append(f"{r:<18} {oracles[r]:<12} {'--':>10} {'--':>10} "
-                         f"{'--':>9} {'--':>10} {'--':>10}  --   NO")
+                         f"{'--':>10} {'--':>10} {'--':>7} {'--':>9}  --   NO")
             allok = False
             continue
         (rv1, c1, i1), (rv2, c2, i2) = p[1], p[2]
         ok = (rv1 == oracles[r])
         allok = allok and ok
-        lines.append(f"{r:<18} {oracles[r]:<12} {c1:>10} {c2:>10} {c1 - c2:>9} "
-                     f"{i1:>10} {i2:>10}  {'YES' if rv2 == rv1 else 'no ':<4} "
-                     f"{'YES' if ok else 'NO'}")
+        best = p.get("best")
+        if best:
+            _, bc, bi, tied, nwarm, spread = best
+            clean = f"{tied}/{nwarm}"
+            suspect = "  <-- floor NOT reached" if tied < 2 else ""
+        else:
+            bc = bi = "--"; clean = "--"; spread = "--"; suspect = ""
+        lines.append(f"{r:<18} {oracles[r]:<12} {c1:>10} {bc:>10} "
+                     f"{i1:>10} {bi:>10} {clean:>7} {spread:>9}  "
+                     f"{'YES' if rv2 == rv1 else 'no ':<4} "
+                     f"{'YES' if ok else 'NO'}{suspect}")
     report = "\n".join(lines)
     print("\n==== silicon-ladder FPGA BASELINE (plain RISC-V) ====\n" + report)
     pathlib.Path(RESULTS_OUT).parent.mkdir(parents=True, exist_ok=True)

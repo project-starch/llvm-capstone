@@ -126,3 +126,47 @@ nothing it guards is skipped.
 
 **Not fixed here.** A launcher fix is a separate change and must not ride along with a measurement
 pre-registration.
+
+---
+
+# Phase 2 addendum — a control the baseline half can actually measure (2026-09-22, before the run)
+
+Phase 1 produced no overhead rows because `ctrsanity` failed as a control. The runner's own evidence
+column said why: **`clean = 1/15` in every one of the three counter-probe runs**, with the minimum
+instret varying by 6,415 between them. At ~500,000 instructions it never completes one uninterrupted
+pass in Linux userspace, so its floor is never reached. `beebs_janne` fails the other way — clean at
+15/15 but only ~200 instructions, so bracket scaffolding is ~6 % and it reads 0.938×.
+
+Two changes, both made before this run:
+
+1. **`run_ladder_base_fpga.py` now reports the floor, not pass 2.** The minimum-instret warm pass was
+   already computed and logged as `BEST`; the summary table printed pass 2 beside it. Pass 2 is one
+   sample of a distribution whose spread reaches 350 % on identical code. The table now prints
+   `best_cyc`/`best_ins` plus **`clean` = passes tied at that minimum**, which is the evidence the
+   floor was reached, and flags `clean < 2` as **floor NOT reached**. Verified by replaying the
+   2026-09-22 capture through the same logic: it reproduces every `BEST` line and flags `ctrsanity`.
+2. **New rung `ctrsanitys`** — `CTRSANITY_N = 1000`, ~1/100th of `ctrsanity`, same kernel, same
+   `-O1`, identical code on both halves. It targets the window the phase-1 data brackets: 7,272
+   instructions read 14/15 clean, 25,666 read 2/15.
+
+## Pre-registered, before the boot
+
+1. **`ctrsanitys` reads `clean` ≥ 10/15 on the baseline half.** This is the whole point of the rung;
+   if it does not, the window hypothesis is wrong and the baseline half cannot measure a control at
+   any length, which is a bigger finding than the overhead table.
+2. **`ctrsanitys` reads an instruction ratio within 1 % of 1.000.** It is identical code on both
+   halves. **This is the gate: if it does not, no overhead row is published**, exactly as in phase 1.
+3. **Deliberately unpredicted: the cycle ratio.** `ctrsanity` published at 1.000× cycles on the July
+   bitstream, but that bitstream's CPI has since moved 16.7 % on this very kernel, so predicting the
+   cycle ratio here would be predicting the new silicon rather than testing it.
+4. **`ctrsanity` itself is run again as the NEGATIVE control** — it should once more read
+   `clean = 1/15` or similar. A control rung that is supposed to fail and doesn't would mean phase 1's
+   diagnosis was wrong.
+
+## Refutation and VOID
+
+- `clean < 10/15` on `ctrsanitys` refutes prediction 1 and the run publishes no ratios.
+- An instruction ratio outside 1 % on `ctrsanitys` blocks every row, as in phase 1.
+- Both halves are built from the same `ladder-rungs.spec` at `-O1` with `LADDER_OPT` unset, and the
+  baseline half's own `capability-instructions=0` check must pass.
+- Oracles frozen: `ctrsanitys = 3688591409`, QEMU parity exit 0 before any board time.
