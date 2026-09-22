@@ -1,0 +1,42 @@
+{
+  "runtime_revocation": "on",
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+    "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+  },
+  "binaries": {
+    "cheribsd-abi": "f9ec4ad12a941ecec2fbeb6f32f90046c99879d186977d2e6a9f3f9e9e952736",
+    "cheribsd-bounds": "f9ec4ad12a941ecec2fbeb6f32f90046c99879d186977d2e6a9f3f9e9e952736",
+    "00-wrong-bucket-alloc-across-connections-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "00-wrong-bucket-alloc-across-connections-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "01-buckets-outlive-backend-allocator-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "01-buckets-outlive-backend-allocator-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "02-brigade-on-request-pool-past-eor-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "02-brigade-on-request-pool-past-eor-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "03-buckets-from-pool-that-dies-first-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "03-buckets-from-pool-that-dies-first-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "04-brigade-not-cleaned-before-reuse-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "04-brigade-not-cleaned-before-reuse-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "05-read-from-destroyed-brigade-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "05-read-from-destroyed-brigade-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "06-bucket-outlives-its-brigade-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "06-bucket-outlives-its-brigade-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "07-subrequest-pool-private-data-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "07-subrequest-pool-private-data-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb"
+  },
+  "platform_controls": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true
+    }
+  ],
+  "arms_total": 16,
+  "arms_passed": 16
+}

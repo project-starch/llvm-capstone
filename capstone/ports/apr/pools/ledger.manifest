@@ -16,3 +16,18 @@ src/capstone-domain/entry.c test domain entry and shared region setup
 src/linux-guest/domain-loader.c test guest domain loader
 examples/pools.c test direct-link client that must observe the node reissue
 tests/native/test-source.py test patch order, duplicate rejection, preservation on failure
+patches/apr-util/apr-util-1.6.3-0001-freestanding-includes.patch compat the bucket allocator's census seam as a patch: five includes and stdlib become one shim
+patches/apr-util/apr-util-1.6.3-0002-bucket-lifetime-hooks.patch allocator the bucket allocator's transitions: lend, carve, file, reissue, blocks returning, probe
+../adapted/apr_bucket_shim.h compat freestanding interface to upstream apr_buckets_alloc.c, geometry carried verbatim, shared with the census
+upstream-apr-util.json glue the apr-util 1.6.3 pin
+cmake/APRUtilSource.cmake glue apr-util's archive and patch series prepared beside APR's
+src/allocators/sublet/bucket-leases.c allocator a piece per bucket node under the block's senior handle, the freelist by index
+src/native/bucket-pointers.c glue hosted and CheriBSD bucket seam with plain pointers, same records and LIFO
+security-tests/capstone-domain/bucket-lifetimes.c test seven bucket lifetime fixtures, one program, the fixture from the trace
+security-tests/qemu/run-buckets.py test the fixtures' runner and oracle
+examples/buckets.c test direct-link client that must observe the LIFO reissue
+tests/native/test-apr-util-source.py test apr-util patch order, duplicate rejection, byte identity
+src/cheribsd/poison.h glue what the two PoisonCap adapters share: the manager's authority and its three operations
+src/cheribsd/node-poison.c allocator PoisonCap: mapped nodes, exact aliases, poison and sweep at release and discard
+src/cheribsd/bucket-poison.c allocator PoisonCap: bucket pieces published from the block's authority, poisoned at an individual free
+

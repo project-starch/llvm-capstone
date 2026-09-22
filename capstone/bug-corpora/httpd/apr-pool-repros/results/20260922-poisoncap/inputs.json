@@ -1,0 +1,28 @@
+{
+  "runtime_revocation": "on",
+  "platform": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "libc": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+    "image": "3571a6d273515a5da067141b82d97a995e1b7388cdf6b1009953e701b3eb65ea"
+  },
+  "binaries": {
+    "cheribsd-abi": "964703d148be7777b68425f3f9b8a04e46ce8aea219bad1d148eecaeeaec8d73",
+    "cheribsd-bounds": "964703d148be7777b68425f3f9b8a04e46ce8aea219bad1d148eecaeeaec8d73",
+    "00-watchdog-destroyed-pool-reused-mode0": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb",
+    "00-watchdog-destroyed-pool-reused-mode1": "d4f58225e0d2a587cb35a9ecb1c9e882a70bac4540af8cb815b3818b9cccaddb"
+  },
+  "platform_controls": [
+    {
+      "name": "cheribsd-abi",
+      "passed": true
+    },
+    {
+      "name": "cheribsd-bounds",
+      "passed": true
+    }
+  ],
+  "arms_total": 2,
+  "arms_passed": 2
+}

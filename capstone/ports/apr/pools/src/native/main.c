@@ -32,8 +32,8 @@ int main(int argc, char **argv) {
     out.mode = mode;
   }
   void *metadata = aligned_alloc(4096, APRP_META_BYTES);
-#ifdef APRP_NODES_FROM_MALLOC
-  void *payload = NULL; /* the platform's malloc is the region */
+#if defined(APRP_NODES_FROM_MALLOC) || defined(APRP_POISONCAP)
+  void *payload = NULL; /* the platform's malloc, or mapped regions, is the region */
 #else
   void *payload = aligned_alloc(4096, APRP_PAYLOAD_BYTES);
   if (!payload)
@@ -48,6 +48,12 @@ int main(int argc, char **argv) {
     return 4;
   aprp_replay(input, &out);
   apr_pool_terminate();
+#ifdef APRP_POISONCAP
+  {
+    void aprp_poison_report(void);
+    aprp_poison_report();
+  }
+#endif
   f = fopen(argv[2], "wb");
   if (!f || fwrite(&out, sizeof out, 1, f) != 1 || fclose(f))
     return 5;

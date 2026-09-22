@@ -10,6 +10,7 @@
  * revoke here that libc does not already own, and a mode number does not
  * conjure one. */
 #include "port.h"
+#include <capstone/capability-slot.h>
 #include <stdlib.h>
 
 #define RECORDS (APRP_PAYLOAD_BYTES / (2 * 4096UL))
@@ -17,7 +18,7 @@
 struct record {
   void *node;
   size_t size;
-  unsigned live, released_once, discarded;
+  unsigned live, released_once, discarded, lent;
 };
 static struct record *records;
 static unsigned count;
@@ -68,6 +69,7 @@ void *aprp_node_release(void *node) {
     aprp_fail(519);
   r->live = 0;
   r->released_once = 1;
+  r->lent = 0;
   ++releases;
   return r->node;
 }
@@ -78,6 +80,15 @@ void aprp_node_discard(void *node) {
   r->discarded = 1;
   ++discards;
   free(r->node); /* the one and only free(): apr_allocator_destroy */
+}
+unsigned aprp_mode(void) { return 0; }
+void *aprp_node_lend(void *node, struct capstone_cap_slot *rest) {
+  struct record *r = record_for(node);
+  if (!r->live || r->discarded || r->lent)
+    aprp_fail(521);
+  r->lent = 1;
+  rest->c = NULL;
+  return node;
 }
 void aprp_stats(struct aprp_header *out) {
   out->nodes = count;

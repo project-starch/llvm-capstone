@@ -1,0 +1,3 @@
+case	fix	name	mode	expected	passed	exit	fault_pc	expect_pc	fault_at_probe	completed	counters
+0	9e6be73065	watchdog_destroyed_pool_reused	0	completed	True	0		0x1055b4		1	APRP_POISONCAP mode=0 sweeps=0 poison_bytes=0 node_invalidations=0 piece_invalidations=0 nodes=3 pointer_bytes=16
+0	9e6be73065	watchdog_destroyed_pool_reused	1	tag fault at apr_defect_read	True	162	0x1055b4	0x1055b4	True		

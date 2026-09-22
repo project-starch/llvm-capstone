@@ -1,0 +1,53 @@
+{
+  "case": 0,
+  "upstream_fix": "1c7a70c9d9",
+  "title": "mod_proxy_http2 sends frontend data allocated with the backend connection's bucket_alloc",
+  "consumer": "modules/http2/mod_proxy_http2.c",
+  "live_in_pin": null,
+  "live_proof": "this corpus pins the allocators (APR 1.7.4, apr-util 1.6.3), not httpd; a case reproduces the call sequence rather than a shipped tree, and says so instead of asserting liveness",
+  "object": "a node from the backend connection's apr_bucket_alloc_t, held by the frontend",
+  "lifetime_ender": "apr_bucket_alloc_destroy on the backend connection, which returns its blocks to APR's allocator",
+  "shape": "foreign or dead allocator",
+  "allocator_layer": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t -- two recycling levels, neither reaching malloc",
+  "fidelity": "model-consumer, real allocators: apr_buckets_alloc.c and apr_pools.c are upstream byte for byte through the port's shims; brigades, filters, connections and requests are reduced to the holder and the storage",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm leaves storage named after its owner gave it back; the fixed arm does not",
+      "note": "this pair differs by whether the upstream fix is applied, not by protection",
+      "measures": "free() is interposed and counted, so freed_to_malloc is measured per case and not inherited from the census"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap, libc heap revocation enabled",
+      "cases": [
+        "00-wrong-bucket-alloc-across-connections-mode0"
+      ],
+      "oracle": "completes: the storage never reached malloc, so it never entered the quarantine the revoker sweeps",
+      "measured": "2026-09-22 through the port's CheriBSD build: completed, exit 0; the run's revocation-control faulted at apr_defect_read (signal 34, code 2) in the same guest. 2026-09-21, census build with free() interposed: completed, freed_to_malloc=0",
+      "control": "the run's cheribsd-abi probe prints CHERI_ABI pointer_bytes=16 runtime_revocation=1 from CheriBSD's own malloc_revoke_enabled(), in the same guest, immediately before these cases",
+      "guest_default": "preserved -- nothing is disabled to make room for this measurement",
+      "runner": "runners/cheribsd/run-defects.py, built by shared/build-cases.sh cheribsd"
+    },
+    "spatial": {
+      "oracle": "complete: the stale read returns whatever the storage now holds; a pool node or a bucket piece keeps its alias across the free lists, so nothing is revoked"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe (cause 24, revoked authority): the backend allocator's blocks went back to APR at its destroy, the pool port revoked each block, and the frontend's read through the bucket's alias finds it dead"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete: exactly bounded aliases, nothing invalidated; sweeps=0"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe: the node was poisoned and swept when APR filed it",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "neither level reaches malloc, so ASan has no event; Valgrind against APR's own annotations is the arm that could discriminate"
+    }
+  },
+  "status": "run 2026-09-22 under QEMU through the port (ports/apr/pools with -DAPRP_BUCKETS=ON): spatial completes; sublet faults with cause 24 at the published apr_defect_read, the event being the backend allocator's blocks going back to APR at its destroy, the pool port's release; stock CheriBSD with libc revocation on completes, 2026-09-22 through the port and 2026-09-21 through the census build; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe (paired, 2026-09-22); results/20260922-qemu, results/20260922-cheribsd and results/20260922-poisoncap",
+  "note": "the Capstone arms run the buggy sequence with protection as the variable; the fix differential is the native pair"
+}

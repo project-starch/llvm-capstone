@@ -4,6 +4,7 @@
  * shipped. Selecting mode 1 here is refused rather than silently accepted: a
  * native execution does not acquire revocation from a mode number. */
 #include "port.h"
+#include <capstone/capability-slot.h>
 
 #define PAGE 4096UL
 #define MIN_NODE (2 * PAGE)
@@ -13,7 +14,7 @@
 struct record {
   unsigned char *node;
   size_t size;
-  unsigned live, released_once, discarded;
+  unsigned live, released_once, discarded, lent;
 };
 static unsigned char *base;
 static size_t used;
@@ -76,6 +77,7 @@ void *aprp_node_release(void *node) {
   if (!r->live || r->discarded)
     aprp_fail(519);
   r->live = 0;
+  r->lent = 0;
   r->released_once = 1;
   ++releases;
   return r->node;
@@ -86,6 +88,15 @@ void aprp_node_discard(void *node) {
     aprp_fail(520);
   r->discarded = 1;
   ++discards;
+}
+unsigned aprp_mode(void) { return 0; }
+void *aprp_node_lend(void *node, struct capstone_cap_slot *rest) {
+  struct record *r = record_for(node);
+  if (!r->live || r->discarded || r->lent)
+    aprp_fail(521);
+  r->lent = 1;
+  rest->c = NULL;
+  return node;
 }
 void aprp_stats(struct aprp_header *out) {
   out->nodes = count;

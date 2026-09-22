@@ -1,0 +1,137 @@
+Subject: [PATCH 2/2] Connect the bucket allocator's lifetime transitions to the adapter
+Upstream: apr-util 1.6.3
+Upstream-Archive: https://archive.apache.org/dist/apr/apr-util-1.6.3.tar.gz
+Upstream-SHA256: 2b74d8932703826862ca305b094eef2983c27b39d5c9414442e9976a9acf1983
+Build-Variants: native port, Capstone domain
+Depends-On: 0001-freestanding-includes
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+The bucket allocator is a client of APR's allocator: it takes 8 KiB blocks,
+carves small nodes from them by bumping first_avail, files a freed small node
+on its own LIFO freelist by writing the link into the freed node, and returns
+whole blocks when it is destroyed. Large nodes are whole APR nodes and already
+pass through the pool port's hooks.
+
+Six hunks connect the small-node path to the adapter, and every one leaves
+upstream's decisions where they were: which block, which node, in which order.
+  aprb_block_lend     after apr_allocator_alloc of a block: the block is lent to
+                      this allocator to carve, and the alias upstream keeps for
+                      the header is what the adapter returns
+  aprb_carve          replaces the bump of first_avail: the same bytes, the
+                      same order, under authority of their own
+  aprb_file           replaces the freelist push, which wrote a link into the
+                      freed node -- a region that has just been revoked cannot
+                      hold it, so the list lives in the adapter's records
+  aprb_reissue        replaces the freelist pop; the node's header is rewritten
+                      because a revoked region gives nothing back
+  aprb_blocks_returning before the block chain goes back to APR, so the records
+                      of what was carved from it are dropped with it
+  aprb_probe          the first thing apr_bucket_free does with the pointer it
+                      is handed: a labelled read through its own authority
+
+The list struct is still the first piece of the first block, as upstream
+carves it. list->freelist stays in the struct and stays NULL.
+
+--- b/buckets/apr_buckets_alloc.c
++++ c/buckets/apr_buckets_alloc.c	2026-09-22 00:13:02.366507874 +0800
+@@ -1,4 +1,5 @@
+ #include "apr_bucket_shim.h"
++#include "port.h"
+ /* Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+@@ -52,6 +53,7 @@
+     }
+ #endif
+ 
++    aprb_blocks_returning(list->blocks);
+     apr_allocator_free(list->allocator, list->blocks);
+ 
+ #if APR_POOL_DEBUG
+@@ -103,12 +105,15 @@
+     if (!block) {
+         return NULL;
+     }
+-    list = (apr_bucket_alloc_t *)block->first_avail;
++    /* The block is lent to this allocator to carve; the list struct is its
++     * first piece, and the carve advances first_avail. The freelist lives in
++     * the adapter's records rather than in the freed nodes. */
++    block = aprb_block_lend(block);
++    list = aprb_carve(block, APR_ALIGN_DEFAULT(sizeof(*list)));
+     list->pool = NULL;
+     list->allocator = allocator;
+     list->freelist = NULL;
+     list->blocks = block;
+-    block->first_avail += APR_ALIGN_DEFAULT(sizeof(*list));
+ 
+     return list;
+ }
+@@ -119,6 +124,7 @@
+         apr_pool_cleanup_kill(list->pool, list, alloc_cleanup);
+     }
+ 
++    aprb_blocks_returning(list->blocks);
+     apr_allocator_free(list->allocator, list->blocks);
+ 
+ #if APR_POOL_DEBUG
+@@ -168,9 +174,14 @@
+ 
+     size += SIZEOF_NODE_HEADER_T;
+     if (size <= SMALL_NODE_SIZE) {
+-        if (list->freelist) {
+-            node = list->freelist;
+-            list->freelist = node->next;
++        apr_memnode_t *memnode;
++        if ((node = aprb_reissue(list, &memnode)) != NULL) {
++            /* The same node upstream would have popped, under the alias the
++             * adapter returns; the header is rewritten because a revoked
++             * region gives nothing back. */
++            node->alloc = list;
++            node->memnode = memnode;
++            node->size = SMALL_NODE_SIZE;
+         }
+         else {
+             endp = active->first_avail + SMALL_NODE_SIZE;
+@@ -180,15 +191,14 @@
+                     list->blocks = active;
+                     return NULL;
+                 }
++                list->blocks = aprb_block_lend(list->blocks);
+                 list->blocks->next = active;
+                 active = list->blocks;
+-                endp = active->first_avail + SMALL_NODE_SIZE;
+             }
+-            node = (node_header_t *)active->first_avail;
++            node = aprb_carve(active, SMALL_NODE_SIZE);
+             node->alloc = list;
+             node->memnode = active;
+             node->size = SMALL_NODE_SIZE;
+-            active->first_avail = endp;
+         }
+     }
+     else {
+@@ -225,13 +235,20 @@
+ 
+ APU_DECLARE_NONSTD(void) apr_bucket_free(void *mem)
+ {
+-    node_header_t *node = (node_header_t *)((char *)mem - SIZEOF_NODE_HEADER_T);
+-    apr_bucket_alloc_t *list = node->alloc;
++    node_header_t *node;
++    apr_bucket_alloc_t *list;
+ 
++    /* A pointer handed back is read through its own authority first, at a
++     * labelled site, so a stale or twice-freed one fails there and not in the
++     * allocator's bookkeeping. The header arithmetic that follows uses the
++     * pointer the probe returns, so it cannot be scheduled ahead of it: on
++     * Capstone that arithmetic on a revoked capability would itself fault. */
++    mem = aprb_probe(mem);
++    node = (node_header_t *)((char *)mem - SIZEOF_NODE_HEADER_T);
++    list = node->alloc;
+     if (node->size == SMALL_NODE_SIZE) {
+         check_not_already_free(node);
+-        node->next = list->freelist;
+-        list->freelist = node;
++        aprb_file(list, node);
+     }
+     else {
+         apr_allocator_free(list->allocator, node->memnode);
