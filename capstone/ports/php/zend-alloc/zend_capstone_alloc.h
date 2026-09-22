@@ -95,14 +95,18 @@ typedef struct _zend_mem_header {
 #  define ZEND_ARENA_BYTES 16384
 #endif
 
-static unsigned char zend_arena[ZEND_ARENA_BYTES] __attribute__((aligned(16)));
-static unsigned long zend_arena_off;
-
 /* AG(...) globals, flattened: one non-threaded heap. Building non-ZTS is not a
  * simplification but a requirement -- __thread cannot be lowered on this target
  * (ISSUES.md C-47, "Cannot select: c128 = GlobalTLSAddress"). */
 static zend_mem_header *AG_head;
-static zend_mem_header *AG_cache[MAX_CACHED_MEMORY][MAX_CACHED_ENTRIES];
+/* Block capabilities, UNSHRUNK. PHP parks a zend_mem_header* here; that cannot
+ * work when the block is bounded per-request, because the bound belongs to the
+ * SIZE THE BLOCK WAS LAST HANDED OUT AT, not to the next request. The cache is a
+ * size-CLASS cache: bucket i holds anything that rounded to i*8, so a block freed
+ * as 9 bytes can be re-served for 11. Parking the unshrunk block and re-bounding
+ * on handout keeps the size-class policy exactly as PHP has it while giving each
+ * new lifetime its own correct bound. */
+static void *AG_cache[MAX_CACHED_MEMORY][MAX_CACHED_ENTRIES] __attribute__((aligned(16)));
 static unsigned int     AG_cache_count[MAX_CACHED_MEMORY];
 
 /* zend_alloc.c:117-126 */
@@ -118,24 +122,104 @@ static unsigned int     AG_cache_count[MAX_CACHED_MEMORY];
     else { (p)->pLast->pNext = (p)->pNext; }      \
     if ((p)->pNext) { (p)->pNext->pLast = (p)->pLast; }
 
-/* Carve `bytes` from the arena and return a capability whose bounds are
- * [block, block + bound_bytes). The arena capability itself stays wide and is
- * never handed out; every block is a narrowed derivation of it. */
+/* ---------------------------------------------------------------------------
+ * ARENA
+ *
+ * Every allocation is carved with SPLIT, which is the ONLY derivation that
+ * produces a FRESH revocation-tree node (revoke_on_free_alloc.h:31-36). A
+ * cincoffset into a shared pool inherits the pool's node, so revoking one
+ * allocation would sweep the entire heap -- that is precisely why memsys5 cannot
+ * do revoke-on-free. SHRINK is not a substitute: it copies rev_node_id unchanged.
+ * So the order is SPLIT (fresh node) -> MREV (handle, senior, while still LIN)
+ * -> DELIN (the copyable alias the caller gets) -> SHRINK (the option-A bound).
+ *
+ * The arena is made LINEAR with csdebuggencap, a QEMU DEBUG OP. That is how the
+ * in-tree revoke probes mint a linear capability without firmware
+ * (capstone-qemu/tests/capstone-revoke-probes/README.md), and it means this port
+ * runs under the emulator only, not on silicon.
+ * --------------------------------------------------------------------------- */
+
+static unsigned char zend_arena[ZEND_ARENA_BYTES] __attribute__((aligned(16)));
+static void *zend_arena_lin;    /* LINEAR; never handed out */
+static int   zend_arena_ready;
+
+/* csdebuggencap rd, rs1, rs2 -> LINEAR capability over [rs1, rs2), tag = 1. */
+static inline void *zend_gencap(unsigned long b, unsigned long e)
+{
+    void *c;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x40, %0, %1, %2" : "=r"(c) : "r"(b), "r"(e));
+    return c;
+}
+
+/* cssplit rd, rs1, rs2: rs1 keeps [base,mid), rd gets [mid,end) with a fresh
+ * node. No builtin exists. The emulator no-ops it unless rd != rs1, hence the
+ * early-clobber. Copied from revoke_on_free_alloc.h:37-45. */
+static inline void *zend_split(void **lo, unsigned long mid)
+{
+    void *hi; void *l = *lo;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x06, %0, %1, %2" : "=&r"(hi), "+r"(l) : "r"(mid));
+    *lo = l;
+    return hi;
+}
+
+#ifndef ZEND_MAX_SLOTS
+#define ZEND_MAX_SLOTS 64u
+#endif
+/* `rev` is a capability, so this struct is 16-aligned with rev at offset 0. */
+typedef struct {
+    void          *rev;     /* revocation handle, senior to the alias */
+    void          *blk;     /* the UNSHRUNK block capability; what the cache parks */
+    unsigned long  base;    /* the SPLIT mid; 0 marks a free slot */
+} zend_slot;
+static zend_slot   zend_slots[ZEND_MAX_SLOTS] __attribute__((aligned(16)));
+static unsigned    zend_nslots;
+
+static void zend_arena_init(void)
+{
+    unsigned long b = __builtin_capstone_cap_get_cursor((void *)&zend_arena[0]);
+    zend_arena_lin  = zend_gencap(b, b + (unsigned long)ZEND_ARENA_BYTES);
+    zend_arena_ready = 1;
+}
+
+/* Carve `bytes`, return an alias bounded to [block, block + bound_bytes). */
 static void *zend_arena_carve(unsigned long bytes, unsigned long bound_bytes)
 {
-    unsigned long off = (zend_arena_off + 15UL) & ~15UL;
-    if (off + bytes > (unsigned long)ZEND_ARENA_BYTES) {
-        return (void *)0;
-    }
-    zend_arena_off = off + bytes;
+    if (!zend_arena_ready) { zend_arena_init(); }
 
-    unsigned char *block = &zend_arena[off];
-    /* The CURSOR is the block address. Taking it directly rather than computing
-     * arena_base + off matters: -capstone-shrink-globals is on by default, so
-     * `zend_arena`'s own capability may already be narrowed and its base is not
-     * a fixed reference point. */
-    unsigned long base = __builtin_capstone_cap_get_cursor((void *)block);
-    return __builtin_capstone_cap_shrink((void *)block, base, base + bound_bytes);
+    bytes = (bytes + 15UL) & ~15UL;             /* SPLIT wants 16-byte grain */
+    void *cur = zend_arena_lin;
+    unsigned long base = __builtin_capstone_cap_get_base(cur);
+    unsigned long end  = __builtin_capstone_cap_get_end(cur);
+    /* cssplit asserts base < mid < end, so the arena must keep a non-empty head. */
+    if (end <= base || end - base <= bytes) { return (void *)0; }
+
+    void *hi   = zend_split(&cur, end - bytes); /* [end-bytes, end), fresh node, LIN */
+    zend_arena_lin = cur;
+
+    void *rev   = __builtin_capstone_cap_mrev(hi);    /* senior, while still LIN */
+    void *alias = __builtin_capstone_cap_delin(hi);   /* NONLIN, what callers hold */
+
+    unsigned i;
+    for (i = 0; i < zend_nslots; ++i) { if (zend_slots[i].base == 0) { break; } }
+    if (i == zend_nslots) {
+        if (zend_nslots >= ZEND_MAX_SLOTS) { return (void *)0; }
+        i = zend_nslots++;
+    }
+    zend_slots[i].rev  = rev;
+    zend_slots[i].blk  = alias;          /* unshrunk: the cache parks THIS */
+    zend_slots[i].base = end - bytes;
+
+    unsigned long ab = __builtin_capstone_cap_get_cursor(alias);
+    return __builtin_capstone_cap_shrink(alias, ab, ab + bound_bytes);
+}
+
+static zend_slot *zend_find(void *p)
+{
+    unsigned long b = __builtin_capstone_cap_get_base(p);
+    for (unsigned i = 0; i < zend_nslots; ++i) {
+        if (zend_slots[i].base == b) { return &zend_slots[i]; }
+    }
+    return (zend_slot *)0;
 }
 
 /* ---- zend_alloc.c:142-217, _emalloc, structure preserved ---- */
@@ -148,11 +232,46 @@ static void *_emalloc(size_t size)
     real_size   = REAL_SIZE(size);      /* :135 */
     cache_index = real_size >> 3;       /* :136 */
 
-    /* zend_alloc.c:151-168. The cache is ON, exactly as PHP ships it. A cached
-     * block is handed back with its ORIGINAL capability bounds, which were set
-     * from the size it was first allocated with -- see the note in _efree. */
+    /* zend_alloc.c:151-168. The cache is ON, exactly as PHP ships it, in BOTH
+     * arms. Recycling is a capability operation here, not a pointer assignment:
+     * the parked block is re-bounded for the new request, and under
+     * ZEND_TEMPORAL it is also given a FRESH revocation node, so the new
+     * lifetime is revocable independently of the old one -- and the previous
+     * tenant's alias, revoked at its own _efree, stays dead. Verified by
+     * probes/revoke-reuse-safety.c. */
     if ((cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] > 0)) {
-        p = AG_cache[cache_index][--AG_cache_count[cache_index]];
+        void *blk = AG_cache[cache_index][--AG_cache_count[cache_index]];
+
+        unsigned i;
+        for (i = 0; i < zend_nslots; ++i) { if (zend_slots[i].base == 0) { break; } }
+        if (i == zend_nslots) {
+            if (zend_nslots >= ZEND_MAX_SLOTS) { return (void *)0; }
+            i = zend_nslots++;
+        }
+#if defined(ZEND_TEMPORAL) && !defined(ZEND_NO_REVOKE)
+        /* `blk` is the authority REVOKE handed back at _efree: tagged, LINEAR,
+         * bounds intact over the block. MREV while it is still LIN, exactly as a
+         * first allocation does, so the new lifetime gets its own node.
+         *
+         * THE GUARD IS NOT OPTIONAL. Without the revoke there is no reclaimed
+         * LIN authority and `blk` is still the DELINEARIZED alias -- MREV on a
+         * NONLIN capability trips `assert(rs1_v->val.cap.type == CAP_TYPE_LIN)`
+         * in QEMU's helper_csmrev and ABORTS THE EMULATOR, which reads as an
+         * infrastructure failure rather than a result. Not re-minting is a
+         * direct consequence of removing the revoke, not a second difference:
+         * the control then recycles the block by handing the same alias straight
+         * back, which is exactly what stock PHP does. */
+        zend_slots[i].rev = __builtin_capstone_cap_mrev(blk);
+        blk = __builtin_capstone_cap_delin(blk);
+#else
+        zend_slots[i].rev = (void *)0;
+#endif
+        zend_slots[i].blk  = blk;
+        zend_slots[i].base = __builtin_capstone_cap_get_base(blk);
+
+        unsigned long bb = __builtin_capstone_cap_get_cursor(blk);
+        p = (zend_mem_header *) __builtin_capstone_cap_shrink(blk, bb,
+                bb + sizeof(zend_mem_header) + MEM_HEADER_PADDING + ZEND_CAP_BOUND_BYTES(size));
         p->cached = 0;
         p->size   = size;
         return (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING);
@@ -183,20 +302,44 @@ static void _efree(void *ptr)
     unsigned int real_size   = REAL_SIZE(p->size);
     unsigned int cache_index = real_size >> 3;
 
-    /* zend_alloc.c:271-278. Blocks <= 80 bytes never reach the "free" path at
-     * all; they are parked here and handed straight back by the next _emalloc.
-     * This is what ZEND_DISABLE_MEMORY_CACHE exists to defeat for ASan. It is
-     * left ON. A revoke-on-free arm would go here, and is deliberately NOT in
-     * this build: this port measures the SPATIAL axis only, and adding a revoke
-     * would make a temporal fault indistinguishable from a bounds fault. */
-    if ((cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] < MAX_CACHED_ENTRIES)) {
-        AG_cache[cache_index][AG_cache_count[cache_index]++] = p;
-        p->cached = 1;
+    zend_slot *s = zend_find(ptr);
+    void *blk = s ? s->blk : (void *)0;
+
+#ifdef ZEND_TEMPORAL
+    /* REVOKE-ON-FREE. Every alias derived from this allocation stops
+     * dereferencing here -- including one the caller cached before the free.
+     *
+     * REVOKE RETURNS THE AUTHORITY BACK. That is the point that makes recycling
+     * possible: the returned capability is tagged and its bounds still cover the
+     * block (probes/revoke-reclaim.c reports tag + base + end intact). So the
+     * block is parked in the cache as PHP does, and the next _emalloc re-mints
+     * it with a fresh node.
+     *
+     * Reuse is SAFE, not merely possible: probes/revoke-reuse-safety.c writes
+     * through the PREVIOUS tenant's alias after the range has been re-minted and
+     * it still faults. Address reuse does not resurrect a stale pointer, which
+     * is exactly the hazard it would be in a conventional allocator. */
+    if (s) {
+#ifndef ZEND_NO_REVOKE
+        blk = __builtin_capstone_cap_revoke(s->rev);   /* the control removes ONLY this */
+#endif
+        s->base = 0;
+    }
+#else
+    if (s) { s->base = 0; }
+#endif
+
+    /* zend_alloc.c:271-278, UNPATCHED in both arms: blocks <= 80 bytes never
+     * reach a free path at all, they are parked here and handed straight back.
+     * This is what ZEND_DISABLE_MEMORY_CACHE exists to defeat for ASan, and it
+     * is left ON. */
+    if (blk && (cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] < MAX_CACHED_ENTRIES)) {
+        AG_cache[cache_index][AG_cache_count[cache_index]++] = blk;
         return;
     }
 
     REMOVE_POINTER_FROM_LIST(p);        /* :281 */
-    /* ZEND_DO_FREE(p) -- the bump arena does not reclaim. */
+    /* ZEND_DO_FREE(p) -- the arena does not reclaim address space. */
 }
 
 #endif /* ZEND_CAPSTONE_ALLOC_H */

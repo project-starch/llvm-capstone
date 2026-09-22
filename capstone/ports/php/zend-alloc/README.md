@@ -1,6 +1,11 @@
-# PHP 5.0.0 Zend allocator as a Capstone domain — CRASH-008
+# PHP 5.0.0 Zend allocator as a Capstone domain
 
-**Status: CAUGHT.** Matched pair passes; `run-crash008.sh` exits 0.
+Two axes, each a matched pair, each passing.
+
+| axis | trigger | runner | result |
+|---|---|---|---|
+| spatial | **CRASH-008**, a real corpus case | `run-crash008.sh` | CAUGHT, out-of-bounds store |
+| temporal | synthetic, allocator-level | `run-uaf.sh` | CAUGHT, revoked alias |
 
 ## The claim
 
@@ -80,14 +85,100 @@ so `sizeof(zend_mem_header)` is **48**, not the 24 measured on x86-64, and the
 region is 59 bytes, not 35. Verified by `_Static_assert`. The *shape* reproduces
 exactly; the arithmetic does not. Do not quote ASan's figures against this build.
 
+## Temporal axis — revoke-on-free (`run-uaf.sh`)
+
+**Synthetic, and labelled as such.** Not a CRASH-nnn case: all 23 cache-masked
+use-after-free cases in the corpus are entangled with the zval/refcount/executor
+machinery. What this reproduces is the allocator-level property the corpus itself
+isolates at `logic-bugs.md:643-644` — `efree()` parks the block in `AG(cache)` and
+never calls `free()`, so the shadow still says "addressable" and the dangling write
+is legal to ASan.
+
+Every allocation is carved with **SPLIT**, the only derivation that produces a
+fresh revocation-tree node; `cincoffset` would inherit the arena's node and a
+revoke would sweep the whole heap. Order: SPLIT → MREV (handle, while still LIN) →
+DELIN (the caller's alias) → SHRINK (the option-A bound).
+
+| arm | outcome |
+|---|---|
+| control (`-DZEND_NO_REVOKE`) | completes, `retval = 213` — the use-after-free **survived**, as on stock PHP |
+| fault (`-DZEND_TEMPORAL`) | halts, `Cap mem access requires capability`, cause **24** |
+
+The trigger allocates 32 bytes, frees it, **reallocates the same size class** (PHP
+hands back the same block), writes through the new pointer, then writes through
+the stale one. That is the classic reuse hazard: on stock PHP the stale write
+lands in the new tenant's memory, and ASan cannot see it because the block was
+never released. The domain fails loudly with `ZEND_UAF_NOREUSE` if the block was
+*not* recycled — otherwise a fault, or its absence, would say nothing about
+use-after-free.
+
+**Cause 24 (tag gone), not 25 (revoked).** At `-O0` the alias is spilled and
+reloaded, so the tag is already gone by the time the access issues. That is
+indistinguishable from an unrelated spill until the control shows the same program
+completing — which is exactly why the control is mandatory, not politeness.
+
+### Address reuse under revoke-on-free — measured, not assumed
+
+An earlier version of this file claimed revoke-on-free and address reuse were
+**mutually exclusive**, reasoning that a revoked capability cannot be parked in
+`AG(cache)` and that `SPLIT` is one-way so the range cannot be re-minted. The
+first half is true. **The second half is false, and the conclusion was wrong.**
+It was inferred from `revoke_on_free_alloc.h:148` *discarding* revoke's return
+value — someone else's design choice — rather than tested. Two probes settle it:
+
+| probe | question | answer |
+|---|---|---|
+| `probes/revoke-reclaim.c` | does REVOKE hand authority back? | **yes** — returns tagged, `base` and `end` intact over the block, and a re-minted write lands |
+| `probes/revoke-reuse-safety.c` | after re-minting, is the PREVIOUS tenant's alias still dead? | **yes** — it faults (cause 24); reuse does not resurrect it |
+
+So the cache stays **on in both arms**, and recycling is a capability operation
+rather than a pointer assignment:
+
+    _efree   REVOKE(handle) -> reclaimed LIN authority -> park THAT in AG(cache)
+    _emalloc pop -> MREV (fresh node) -> DELIN -> SHRINK to the NEW request
+
+Two consequences worth stating:
+
+- **What the cache parks changes.** PHP parks a `zend_mem_header *`. That cannot
+  work when the block is bounded per request, because the bound belongs to the
+  size the block was last handed out at, and the cache is a size-*class* cache:
+  bucket `i` holds anything that rounded to `i*8`, so a block freed as 9 bytes can
+  be re-served for 11. The unshrunk block is parked and re-bounded on handout,
+  which keeps PHP's size-class policy exactly and gives each lifetime its own
+  correct bound.
+- **The arena still is not reclaimed.** `SPLIT` remains one-way, so address space
+  is consumed monotonically by *first* allocations. Reuse recycles a block through
+  the cache; it does not return space to the arena.
+
+**Both arms therefore run PHP's allocator unpatched** — `REAL_SIZE` still rounds to
+8, `AG(cache)` still recycles — which is the whole claim, and is now true of the
+temporal arm as well as the spatial one.
+
+Rejected alternative: park the block without revoking and revoke only on eviction.
+That preserves recycling, but the use-after-free window becomes exactly the cache
+residency — i.e. it does not fix the bug at all.
+
+### A control is not free of the mechanism it removes
+
+`-DZEND_NO_REVOKE` cannot simply delete the revoke and leave the rest: with no
+revoke there is no reclaimed LIN authority, so the parked block is still the
+*delinearized* alias, and `MREV` on a NONLIN capability trips
+`assert(rs1_v->val.cap.type == CAP_TYPE_LIN)` in QEMU's `helper_csmrev` and
+**aborts the emulator**. The control therefore recycles by handing the same alias
+straight back — which is precisely what stock PHP does. Not re-minting is a
+consequence of removing the revoke, not a second difference.
+
+This was found only because the trigger was changed to reallocate after freeing.
+The single-allocation version passed while never executing the cache path at all.
+
+### Keeping the axes apart
+
+The temporal trigger is correctly sized and every access is well inside its
+bounds, so a bounds fault cannot masquerade as a temporal one. `run-uaf.sh` fails
+explicitly if it sees a `Cap mem access OOB` line.
+
 ## What is NOT measured here
 
-- **The temporal axis.** `_efree` still parks blocks in `AG(cache)` exactly as PHP
-  ships it, and there is **no revoke**. That is deliberate: this port measures the
-  spatial axis, and a revoke-on-free arm would make a temporal fault
-  indistinguishable from a bounds fault. The 23 corpus use-after-free cases masked
-  by the cache are a separate experiment, and all of them are entangled with the
-  zval/executor machinery.
 - **Reclamation.** `ZEND_DO_MALLOC` is a bump arena; a domain has no libc and no OS.
   Nothing here says anything about fragmentation.
 - **`_erealloc`.** Not exercised by this case.
@@ -108,4 +199,9 @@ exactly; the arithmetic does not. Do not quote ASan's figures against this build
 |---|---|
 | `zend_capstone_alloc.h` | the ported allocator; `_emalloc`/`_efree`, cache and `REAL_SIZE` unpatched |
 | `crash008_domain.c` | `php_date()`'s `'U'` arm plus the freestanding string helpers it needs |
-| `run-crash008.sh` | matched pair, control first, build gate |
+| `uaf_domain.c` | the synthetic use-after-free trigger |
+| `run-crash008.sh` | spatial matched pair, control first, build gate |
+| `run-uaf.sh` | temporal matched pair; also fails on an OOB line |
+| `probes/revoke-primitive.c` | Step-0: SPLIT → MREV → DELIN → REVOKE, with its own control |
+| `probes/revoke-reclaim.c` | does REVOKE return usable authority? (reports; never asserts) |
+| `probes/revoke-reuse-safety.c` | after re-minting, does the old alias stay dead? |
