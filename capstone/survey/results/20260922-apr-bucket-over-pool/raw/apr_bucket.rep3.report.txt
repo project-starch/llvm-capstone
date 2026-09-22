@@ -1,0 +1,193 @@
+aprhook-buckets: two levels recorded from inside the process
+
+@alloc[0, apr_pool]: 40003
+@free[0, apr_pool]: 40003
+@bytes[0, apr_pool]: 326104456
+@peak[0, apr_pool]: 3
+@alloc[0, apr_bucket]: 440022
+@free[0, apr_bucket]: 440022
+@bytes[0, apr_bucket]: 385299264
+@peak[0, apr_bucket]: 11
+@kind[0, malloc]: 40003
+@kind[0, free]: 40003
+
+@hook_alloc[apr_pool]: 40003
+@hook_free[apr_pool]: 40003
+@hook_bytes[apr_pool]: 326104456
+@hook_realloc[apr_pool]: 0
+@hook_inplace[apr_pool]: 0
+@hook_peak[apr_pool]: 3
+@peakrun[apr_pool]: 3
+@maxreuse[apr_pool]: 10001
+@distinct[apr_pool]: 5
+@hook_fbytes[apr_pool]: 326104456
+@beyond254[apr_pool]: 38986
+@poison16[apr_pool]: 20401530
+@size_apr_pool: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                    40003 |
+
+@reuse_apr_pool: 
+[1]                             0 |
+[2, 4)                      19999 |
+[4, 8)                      19999 |
+
+@reusebytes_apr_pool: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       0 |
+[16K, 32K)                  39998 |
+
+@prior_apr_pool: 
+[0]                             5 |
+[1]                             4 |
+[2, 4)                          8 |
+[4, 8)                         16 |
+[8, 16)                        32 |
+[16, 32)                       64 |
+[32, 64)                      128 |
+[64, 128)                     256 |
+[128, 256)                    512 |
+[256, 512)                   1024 |
+[512, 1K)                    2048 |
+[1K, 2K)                     4096 |
+[2K, 4K)                     8192 |
+[4K, 8K)                    16384 |
+[8K, 16K)                    7234 |
+
+@addresses_apr_pool: 
+[1]                             1 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       4 |
+
+@hook_alloc[apr_bucket]: 440022
+@hook_free[apr_bucket]: 440022
+@hook_bytes[apr_bucket]: 385299264
+@hook_realloc[apr_bucket]: 0
+@hook_inplace[apr_bucket]: 0
+@hook_peak[apr_bucket]: 11
+@peakrun[apr_bucket]: 11
+@maxreuse[apr_bucket]: 60007
+@distinct[apr_bucket]: 13
+@hook_fbytes[apr_bucket]: 385299264
+@beyond254[apr_bucket]: 436720
+@poison16[apr_bucket]: 24081204
+@size_apr_bucket: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                 400020 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                    40002 |
+
+@reuse_apr_bucket: 
+[1]                        200009 |
+[2, 4)                      60002 |
+[4, 8)                      40000 |
+[8, 16)                     20000 |
+[16, 32)                    99999 |
+[32, 64)                    19999 |
+
+@reusebytes_apr_bucket: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                 200009 |
+[256, 512)                  80002 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                  100000 |
+[16K, 32K)                  39999 |
+[32K, 64K)                  19999 |
+
+@prior_apr_bucket: 
+[0]                            13 |
+[1]                            13 |
+[2, 4)                         26 |
+[4, 8)                         52 |
+[8, 16)                       104 |
+[16, 32)                      208 |
+[32, 64)                      416 |
+[64, 128)                     832 |
+[128, 256)                   1664 |
+[256, 512)                   3328 |
+[512, 1K)                    6656 |
+[1K, 2K)                    13312 |
+[2K, 4K)                    26624 |
+[4K, 8K)                    53248 |
+[8K, 16K)                   80962 |
+[16K, 32K)                 121922 |
+[32K, 64K)                 130642 |
+
+@addresses_apr_bucket: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        0 |
+[4K, 8K)                        0 |
+[8K, 16K)                       4 |
+[16K, 32K)                      2 |
+[32K, 64K)                      7 |
+
+@bulk_releases: 0
+@bulk_events: 0
+@ctx_overflow: 0
+@reused_before_return: 400011
+@reused_after_return: 39998
+@reused_block_never_returned: 400011
+@page_overflow: 0
+@pid: 425509

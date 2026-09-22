@@ -524,8 +524,10 @@
         "bulk": "apr_bucket_alloc_destroy",
         "evidence": "capstone/ports/apr/census-buckets.sh"
       },
-      "confirmed": "port-document",
-      "why": "The second genuinely nested pair in the set. Its level 0 is the APR pool, not libc, so its row shows releases that are invisible even to the custom allocator beneath it."
+      "confirmed": "measured",
+      "why": "The second genuinely nested pair in the set. Its level 0 is the APR pool, not libc, so its row shows releases that are invisible even to the custom allocator beneath it.",
+      "recorded": "results/20260922-apr-bucket-over-pool",
+      "exercised": true
     }
   ]
 }

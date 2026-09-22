@@ -1,0 +1,112 @@
+{
+  "study": "W3",
+  "level": "apr-bucket",
+  "completes_w3_row": true,
+  "program": "Apache",
+  "allocator": "APR buckets",
+  "level_name": "apr_bucket",
+  "below": "apr_pool",
+  "nested": true,
+  "upstream": {
+    "version": "apr-util 1.6.3",
+    "sources": [
+      "buckets/apr_buckets_alloc.c"
+    ]
+  },
+  "workload": "ab-keepalive",
+  "workload_command": "ab, static rung, 20000 requests",
+  "instrument": {
+    "wiring": "nested-allocators-paper experiments/a1/apache/aprhook-buckets.inc",
+    "placement": "nested-allocators-paper experiments/a1/apache/hook-buckets.py",
+    "level0_shape": "recorded, not interposed; the do-it-yourself entry points abort"
+  },
+  "companion_pass": "nested-allocators-paper experiments/a1/results/apache/20260922T031110Z",
+  "compiler": "gcc 13.3.0",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "allocations": 440022,
+      "releases": 440022,
+      "bulk_releases": 0,
+      "reuses": 440009,
+      "before_release": 400011,
+      "after_release": 39998,
+      "before_release_share_pct": 90.9,
+      "distinct_addresses": 13,
+      "sha256": "6e41f6e27487a622e8157cce8bcdb119abbc11ecde1fc0e14b5cdbfe2d1287ac"
+    },
+    {
+      "repetition": 2,
+      "allocations": 440022,
+      "releases": 440022,
+      "bulk_releases": 0,
+      "reuses": 440009,
+      "before_release": 400011,
+      "after_release": 39998,
+      "before_release_share_pct": 90.9,
+      "distinct_addresses": 13,
+      "sha256": "076efab22bded19443794a4b3c4ac5ca5bb44a1bb0cb06cd795c183714cc7458"
+    },
+    {
+      "repetition": 3,
+      "allocations": 440022,
+      "releases": 440022,
+      "bulk_releases": 0,
+      "reuses": 440009,
+      "before_release": 400011,
+      "after_release": 39998,
+      "before_release_share_pct": 90.9,
+      "distinct_addresses": 13,
+      "sha256": "ac99bea42d7d5986db218d502d462ea4c2b0104f38c75e302306cfd9386c7b54"
+    }
+  ],
+  "sibling_level": {
+    "level": "pool",
+    "below": "libc",
+    "note": "the same program's other allocator, recorded in the same run",
+    "repetitions": [
+      {
+        "repetition": 1,
+        "allocations": 3249222,
+        "releases": 3244874,
+        "bulk_releases": 3244874,
+        "reuses": 3241109,
+        "before_release": 3241109,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 8113,
+        "sha256": "4200e6a8673753872b200b24737ed4f33040dc795989ea00a15959e1042fe5e8"
+      },
+      {
+        "repetition": 2,
+        "allocations": 3249222,
+        "releases": 3244874,
+        "bulk_releases": 3244874,
+        "reuses": 3241109,
+        "before_release": 3241109,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 8113,
+        "sha256": "e8d508d3f68ced7c53cd9b3130725749df3e6cad2f09bb399e2570d715be37c4"
+      },
+      {
+        "repetition": 3,
+        "allocations": 3249222,
+        "releases": 3244874,
+        "bulk_releases": 3244874,
+        "reuses": 3241109,
+        "before_release": 3241109,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 8113,
+        "sha256": "70d97e9097ad07b59edacc8da4a8f8f122ea871385c3f54bdf19af3006a8708d"
+      }
+    ]
+  },
+  "oracle": "20000 complete requests in every arm, the shipped arm's report does not differ",
+  "limits": [
+    "one rung, static",
+    "APR itself is 1.7.6 here against the port's 1.7.4; apr-util, which owns this allocator, is the port's 1.6.3"
+  ],
+  "recorded": "20260922"
+}
