@@ -3289,6 +3289,73 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > lands in an entry whose tracked id differs. The narrow true statement is the "same capability, same
 > entry, no intervening occupant" one above.
 
+### R-39 — the rev-node unit broadcasts an invalidation for INDEX 0 during ordinary operation, unguarded, and every tracker treats a matching index as a reason to clear validity `OPEN but believed HARMLESS, on an invariant that is verified for RTL and UNRESOLVED for software. Found by a claim-auditor while auditing the R-37 ordering fix; PRE-EXISTING and not introduced by it. No exploit and no observation -- filed so the invariant is written down rather than relied on silently`
+
+> **Folder:** none of its own; the analysis sits with **R-35**'s
+> (`capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`). Siblings **R-35**, **R-37**,
+> **R-38**.
+>
+> **What it is.** `core/ex_stage.sv` fires an invalidation broadcast on any node write whose `valid`
+> bit is clear, and the id on the wire is a **bare 16-bit index**. Three writes carry `valid = 0` on a
+> node that is *already* dead and stays dead — the deadness-preserving neighbour fixups. Two of them
+> can name **index 0**: `capstone_rev_node.anvil:224` (INIT's next-node `prev` fixup, reachable because
+> `node_2.next = 30'd0` at INIT_STAGE, so any INIT whose parent is the chain tail) and `:270` (MREV's
+> prev-node `next` fixup, reachable because `node_1.prev = 30'd0`). **Only the REVOKE splice guards
+> index 0** (`:42`), and its comment shows the author knew the shape but treated it as local to that
+> site.
+>
+> **Why it is believed harmless, stated as an invariant so it can be checked rather than assumed:**
+> *no live capability carries revnode index 0.* Exhausted for the RTL mint sites — root capabilities
+> are `30'd1`/`30'd2` (`capstone_flu_unit.anvil`), the monitor's PC capability is hardcoded `30'd1`
+> (`commit_stage.sv:197`), allocated indices are **>= 3** because `head` starts at 3 and the free-list
+> push requires index > 2, the id-0 responses are *failure* responses on which the DYN unit raises
+> rather than minting, and untagged ingestion forces `NOT_CAP` with `revnode_id = 0`, which every
+> adopt guard excludes. The compressed `revnode_id` is a full 30-bit field, so no two indices can
+> alias in a tracker.
+>
+> **UNRESOLVED, and it is the whole residual:** whether software — the monitor, the boot image, a
+> debug/CSR path, or any residual partial-store tag-retention hole — can materialise a **tagged** word
+> with `revnode_id[15:0] == 0` and a LINEAR/NONLIN type. If it can, an unguarded index-0 broadcast
+> would clear a tracker holding it, producing a **false DENY** (never an authority escape). That would
+> be a forgery hole in its own right rather than a defect in this broadcast, which is why this entry
+> records the invariant instead of proposing a guard.
+>
+> **Why it is not simply guarded anyway.** A guard at `:224`/`:270` is two comparisons and would be
+> cheap — but it would also make the invariant *unstated and unchecked* at the cost of looking
+> addressed. The useful artefact here is the written invariant plus the software question.
+
+### R-40 — the monitor's region ecalls have NO guard on region ids 0-2, so an S-mode caller can revoke a GENESIS region whose capability carries the same rev-node as the monitor's own PC capability `OPEN. Mechanism read from source and each leg verified independently; NOT observed, and the one link from an unprivileged caller to the ecall is NOT verified (see below). Found while enumerating the monitor trap path for R-35`
+
+> **Folder:** none of its own; analysis with **R-35**'s. Related: **R-39** (the other id-0/low-id
+> invariant), **R-35** (the tracker family).
+>
+> **What it is.** Three facts that compose:
+> 1. `cap_env_init` installs **genesis regions 0, 1, 2** into `cpmp(0..2)` and marks them live —
+>    `region_cpmp[0..2] = 0/1/2` and `region_live[0..2] = 1` (`sbi_capstone_dom.c:19-32`).
+> 2. `revoke_region` guards **only** `region_id >= region_n` and `region_live[region_id] == 0`
+>    (`sbi_capstone.c:1605-1616`). **There is no guard on ids 0-2**, and the genesis regions pass both
+>    existing guards by construction. The share path is likewise guarded only on range and liveness.
+> 3. The monitor's own PC capability is hardcoded to **revnode 1** (`commit_stage.sv:197`,
+>    `capenter_code_cap.metadata.revnode_id = 30'd1`), and `commit_stage.sv:224-226` raises **cause
+>    25** for the PC capability off an identical tracker.
+>
+> So a caller reaching `revoke_region(0)` drives `__mrev` + `__revoke` on a genesis capability, and if
+> that capability carries revnode 1 the broadcast clears the **commit-stage** tracker — faulting the
+> monitor's own **instruction fetch**, which has less recourse than any data fault. Note this would be
+> a *correct* revocation mechanically; the defect is that the ids are reachable at all.
+>
+> **Two links NOT verified, named so nobody treats this as established.** (a) That genesis region 0's
+> capability really carries revnode 1 in the built image — derived from `split_out_cap`'s
+> `base == region_base` branch returning the parent's own capability with its revnode intact, which is
+> an inference from source, not a reading from a run. (b) That the region ecalls are reachable from an
+> **unprivileged** domain without a further check upstream of the dispatcher. Either link failing
+> downgrades this to a latent robustness gap. **Settling (a) is cheap: read the revnode of region 0 in
+> an RTL sim rather than deriving it.**
+>
+> **Why file it anyway.** The missing id guard is real and independent of both links, the fix is a
+> two-line range check in the monitor, and the reason it was found is worth keeping: it turned up only
+> because the R-35 work asked "which capabilities can be revoked?" rather than "is this reachable?".
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +
