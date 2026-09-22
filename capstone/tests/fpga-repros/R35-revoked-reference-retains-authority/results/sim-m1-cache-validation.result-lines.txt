@@ -1,0 +1,76 @@
+# R-35 FIX VALIDATED IN SIMULATION -- the LSU revocation cache (M1), capstone-ariane 079dc720a
+# on branch r35-m1-revnode-cache, built on 247b76896 (Stage 0) whose parent is 054cea69b, the
+# flashed build's RTL. Verilator, target capstone_cv64a6_imafdc_sv39, iss=veri-testharness,
+# S12_MEM_DELAY=12, --sv_seed 20260922 PINNED on both arms. Run 2026-09-22.
+
+== WHAT CHANGED ==
+# The LSU's single core-wide revnode tracker, whose adopt arm asserted valid=1 for any access
+# presenting a different id, is replaced by a tagged 4-way x 64-set positive validity cache filled
+# ONLY by observing the rev-node unit's own node-memory traffic (a write tap and a read tap in
+# ex_stage). An access is allowed only if its exact 30-bit (generation,index) is resident AND was
+# last seen live. THIS REVISION DENIES ON A MISS -- see LIMITATION.
+
+== ARM 1: THE ACCEPTANCE FIXTURE INVERTS (src/r35-rotate-stale.S) ==
+# Baseline of record (sim-rotate-stale.result-lines.txt): 4 traps. M1: 7 traps.
+# The three new traps are exactly the three accesses that previously succeeded through a REVOKED
+# capability. Decoded from the trace, not inferred:
+#   0x800001f8  0x00053c03  ld  x24,0(x10)   ARM B stale read   was 0x00a5a5a5a5a5a5a5 -> now TRAPS
+#   0x80000210  0x00653023  sd  x6,0(x10)    ARM C store        was LANDED             -> now TRAPS
+#   0x8000021c  0x00053d83  ld  x27,0(x10)   ARM C readback     was 0xa5               -> now TRAPS
+# Six traps retire mcause 0x19 (=25 INVALID_CAPABILITY); the seventh retires 0x18 (=24), the
+# pre-existing control from the host's integer-base store at 0x8000024c. All 7 accounted for.
+
+== THE NEGATIVE CONTROLS STILL PASS -- this is not a blanket denial ==
+#   0x800001f0  x23 = 0x005b5b5b5b5b5b5b   load through the LIVE sibling  -> still returns data
+#   0x80000218  x27 = 0x005b5b5b5b5b5b5b   live-alias read                -> still returns data
+# The second line is also independent proof ARM C's store never reached memory: in the baseline run
+# that location had been overwritten to 0xa5 THROUGH THE REVOKED REFERENCE. Here it still reads
+# 0x5b5b..., so the storage is uncorrupted. Refusing to retire a value and refusing to perform the
+# write are different claims; this establishes both.
+
+== ARM 2: MATCHED-PAIR SWEEP, 95 TESTS, SINGLE VARIABLE ==
+# Same worktree, same pinned seed, same classification; the ONLY difference is the two files under
+# test reverted to 247b76896. Both arms emitted 95 TEST lines and 'SWEEP-RAN 95 TESTS' (the count
+# is checked because a wrapper that fails to start exits 127 and reads exactly like a pass).
+#
+#   PER-TEST TRAP COUNTS ARE IDENTICAL ON ALL 92 COMPARABLE TESTS. Zero differ.
+#
+# => M1 is behaviourally neutral on the entire existing suite, and produced ZERO FALSE DENIES on it.
+# The two fill taps learned every revnode id these 92 fixtures dereference, with no query mechanism.
+
+== FIVE TRAP STORMS ARE PRE-EXISTING, NOT CAUSED BY THIS CHANGE ==
+# call-hot 332,762 traps / s06sec-ctx-scalar-roundtrip 199,700 / cpmp-su-mode 35,696 /
+# cpmp-if-check 35,696 / s06sec-csr-raw-no-forge 35,072. IDENTICAL counts on both arms, so they are
+# properties of 247b76896 and earlier. They are recorded here only so a later reader meeting them
+# does not attribute them to the cache. (They are consistent with baseline's 26 TIMEOUTs.)
+
+== THE INSTRUMENT IS POSITIVE-CONTROLLED IN BOTH DIRECTIONS ==
+# A zero difference is exactly what a STALE BUILD would also produce, so the build was proved to
+# track source rather than assumed: the acceptance fixture was re-run on the reverted tree and
+# returned 4 traps, against 7 with the cache in place. Same command, same seed, same container.
+# Without that control the 92-test zero-diff would license nothing.
+# The lint gate is likewise positive-controlled from this session: it FAILED at LATCH 59 on the
+# first attempt (way-selection locals declared `automatic` inside conditional blocks infer latches)
+# before passing at 52.
+
+== LINT ==
+# PASS at exactly the committed baseline on all nine counters: LATCH 52 / MULTIDRIVEN 3 /
+# ALWCOMBORDER 0 / COMBDLY 0 / UNOPTFLAT 40 / BLKSEQ 2 / UNDRIVEN 25 / UNUSEDSIGNAL 736 /
+# ANVIL_UNOPTFLAT 0, over 6,447 lint lines. UNOPTFLAT UNCHANGED at 40 is the load-bearing one: no
+# new combinational loop, despite both edited modules already being in the loop set.
+
+== LIMITATION -- WHAT THIS DOES NOT LICENSE ==
+# 1. THIS REVISION DENIES ON A MISS, and a miss is not proof of revocation, only absence of proof of
+#    liveness. Zero false denies HERE bounds nothing for the monitor or for SQLite: these 92
+#    fixtures are small bare-metal .S tests. The named stress cases are absent -- the monitor's
+#    trap prologue performs 30 plain stores through a CSCRATCH-derived capability and NO fixture
+#    replicates that shape, and SQLite's entry glue performs 1,059 splits.
+# 2. Fail-OPEN on a miss is not an alternative: a revoked id is cleared from liveness by the
+#    invalidation broadcast, so a revoked access would MISS and be allowed -- R-35 unchanged.
+#    Removing the false denies requires query-on-miss with a pre-issue stall, which is a later change.
+# 3. SYNTHESIS HAS NOT RUN on this hash. Lint sees none of retiming, congestion or Vivado's own loop
+#    analysis, and this adds ~8k flops plus comparators inside two modules in the UNOPTFLAT set.
+# 4. r12-recl-cpmp.S is UNCHANGED, by construction rather than by luck: the privilege gates are
+#    complementary (load_store_unit.sv checks == PRIV_LVL_M, pmp_data_if.sv checks != PRIV_LVL_M)
+#    and that fixture runs from S-mode, so an LSU-only change cannot reach it. The CPMP tracker
+#    carries the same defect shape and is knowingly untouched.

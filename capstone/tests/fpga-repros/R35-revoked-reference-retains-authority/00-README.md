@@ -8,6 +8,20 @@ on a **single core-wide tracked revnode id**, and an access presenting a differe
 as valid**. See "ROOT CAUSE" below. Bounds and permissions survive because they are read from the
 capability's own metadata, which is why this path enforces bounds and not revocation.
 
+**FIX VALIDATED IN SIMULATION (2026-09-22), NOT YET SYNTHESISED AND NOT ON SILICON.**
+`capstone-ariane` **`079dc720a`** (branch `r35-m1-revnode-cache`) replaces the single core-wide tracker
+with a tagged 4-way x 64-set positive validity cache filled only by observing the rev-node unit's own
+node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
+and was last seen live. On the acceptance fixture the pair **inverts**: the three accesses that
+previously succeeded through the revoked capability now trap 25, both live-alias controls still return
+data, and the surviving read proves the store never reached memory. A matched-pair 95-test sweep shows
+**identical per-test trap counts on all 92 comparable tests**, with the build proved to track source by
+re-running the fixture on the reverted tree (4 traps against 7). Lint at exactly the committed baseline,
+`UNOPTFLAT` unchanged at 40. Full readings and the limitations — chiefly that **this revision denies on
+a cache miss**, which is safe but produces false denies the existing suite is too small to bound — are
+in `results/sim-m1-cache-validation.result-lines.txt`. **Synthesis has not run on this hash**, so
+nothing here licenses a reflash.
+
 Sibling issues, so a reader who arrived with the wrong symptom is redirected now:
 `../R34-lsu-exception-lost-on-immediate-grant/` is the LSU dropping exceptions it generates, and its fix
 (`c77c65324`) **is an ancestor of this bitstream's RTL `054cea69b`** — verified by `git merge-base
