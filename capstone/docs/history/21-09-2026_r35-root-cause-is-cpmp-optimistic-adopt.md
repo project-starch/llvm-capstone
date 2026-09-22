@@ -115,14 +115,18 @@ access path in the common case — or a wider tracker with a miss path.
 **CLAUDE.md's rule about adding a signal into a cone that already carries a combinational loop applies
 directly, and only synthesis proves synthesizability.** No RTL is changed by this note.
 
-**Ownership of the fix, stated because it is currently held by nobody.** `load_store_unit.sv` is the
-same file and the same block as R-34/R-24, so the fix belongs to **whichever lane holds R-34/R-24** —
-two lanes editing that file is the thing the split exists to prevent. It is **not** held by the lane
-that verified this root cause; verifying a claim is not claiming the work, and the incentive there runs
-backwards, since the lane that checks your `file:line` numbers is the one that looks like it owns your
-file. A simulation lane has separately **offered** to validate a fix once it exists — two-sided, cause
-25 firing on repaired RTL and not on `054cea69b`, no board and no bitstream — and that offer is not an
-assignment either. **Assigning the fix, and accepting that offer, are the lead's calls.**
+**Ownership of the fix — ASSIGNED 2026-09-22.** The project lead has assigned it to the incoming RTL
+lane, together with the two open items it carries: the **in-flight access** question (what happens to an
+access already in the pipe when an invalidation broadcast lands, given the tracker is one core-wide
+register and the compare is only `[15:0]`), and the `pmp_data_if.sv:95-101` same-cycle race. The lead
+also approved the bitstream respin and accepted the offer to validate the fix in simulation two-sided —
+cause 25 firing on repaired RTL and not on `054cea69b`, needing no board and no bitstream.
+
+Recorded because for several hours it was held by **nobody**: `load_store_unit.sv` is the same file and
+block as R-34/R-24, so it was never the board lane's, and it was briefly minuted as belonging to the
+lane that merely *verified* the root cause. **Verifying a claim is not claiming the work** — and the
+incentive runs backwards, since the lane that checks your `file:line` numbers is the one that looks like
+it owns your file. The fix moved by an assignment, which is the only way it should have.
 
 `commit_stage.sv:239` carries the same optimistic-adopt shape for the PC capability and should be
 fixed with it. `pmp_data_if.sv:82-102` carries it too and is a genuine latent defect — it is simply not
