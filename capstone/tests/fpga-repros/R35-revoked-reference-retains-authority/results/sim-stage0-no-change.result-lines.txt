@@ -1,0 +1,76 @@
+# R-37/R-38 Stage 0 validation: the reproducer is BIT-IDENTICAL after the tracker-ordering fix.
+# Branch r37-stage0-tracker-ordering (247b76896) off capstone-ariane 054cea69b, in the worktree
+# <worktree>. S12_MEM_DELAY=12, target capstone_cv64a6_imafdc_sv39,
+# iss=veri-testharness. Run 2026-09-22.
+#
+# WHAT THIS IS, AND WHAT IT IS EMPHATICALLY NOT.
+# It is a NO-REGRESSION result. Stage 0 reorders the invalidate and retargets one compare; it does
+# NOT touch the optimistic adopt, which is R-35's actual defect. So the correct reading of an
+# unchanged reproducer is "Stage 0 changed no behaviour here", and it would be WRONG to read it as
+# progress on R-35. The pre-registered prediction was exactly this, written before the run:
+# arms unchanged, because no invalidation broadcast coincides with an adopt anywhere in this fixture.
+#
+# Pre-registered and MET: all four traps present, exactly one anvil-logged exception (ARM D, the
+# DYN unit), three cause-25 readings and one cause-24, and x22/x19 still never retire.
+
+== TRAP STRUCTURE: identical to the 054cea69b baseline ==
+                                        baseline    stage 0
+  'exception @' in the retirement trace         4          4
+  'Exception:' in the console (anvil units)     1          1
+  cause-25 readings (x20 == 0x19)               3          3
+  cause-24 readings (x20 == 0x18)               1          1
+  *** SUCCESS *** (tohost = 0)                yes        yes
+
+== RETIRED register writes -- arm registers (x19,20,22,23,24,26,27), in order: 19 rows, ALL MATCH ==
+  pc=0x0000000080000014  x26 = 0x0000000000000000
+  pc=0x0000000080000018  x20 = 0x0000000000000000
+  pc=0x00000000800001cc  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000001
+  pc=0x00000000800001dc  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000002
+  pc=0x00000000800001ec  x20 = 0x0000000000000000
+  pc=0x00000000800001f0  x23 = 0x005b5b5b5b5b5b5b
+  pc=0x00000000800001f8  x24 = 0x00a5a5a5a5a5a5a5
+  pc=0x0000000080000204  x20 = 0x0000000000000000
+  pc=0x0000000080000218  x27 = 0x005b5b5b5b5b5b5b
+  pc=0x000000008000021c  x27 = 0x00000000000000a5
+  pc=0x0000000080000224  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000003
+  pc=0x0000000080000260  x20 = 0x0000000000000018
+  pc=0x0000000080000264  x26 = 0x0000000000000004
+
+# x22 (ARM A) and x19 (ARM A2) still never retire a write -- both loads still REFUSED.
+# x24 = 0x00a5a5a5a5a5a5a5 (ARM B) and x27 = 0xa5 (ARM C) still retire -- the stale read still
+# returns the revoked object's data and the stale store still LANDS. R-35 remains OPEN, as designed.
+
+== A METHODOLOGICAL FINDING, and it qualifies the house acceptance standard ==
+# The one number that moved is the anvil exception's cycle stamp: 3648 (baseline) -> 3656 (stage 0).
+# That is NOT attributable to Stage 0, because the simulation seed is RANDOM PER RUN:
+# verif/sim/cva6.py:785 declares --sv_seed with default=str(random.getrandbits(31)), so unless the
+# seed is passed explicitly every run draws a fresh one. This run used +ntb_random_seed=1328145522
+# and the baseline's seed was never recorded.
+#
+# CONSEQUENCE: "zero cycle drift" -- the acceptance phrasing inherited from 054cea69b's own commit
+# message -- is NOT assertable across two runs unless --sv_seed is pinned on both. Any future
+# cycle-level comparison here must pass --sv_seed explicitly, and any past one that did not is
+# confounded.
+#
+# WHAT THIS RUN DOES GIVE, and it is the stronger statement: the 19 retired writes are identical
+# under a DIFFERENT random seed, so the functional result is seed-robust rather than merely
+# reproducible. Register-level equality is the evidence; cycle-level equality is unavailable.
+
+== LINT, same branch ==
+# Gate PASS at the committed baseline, all nine counters unchanged: LATCH 52, MULTIDRIVEN 3,
+# ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 736,
+# ANVIL_UNOPTFLAT 0, over 6,511 lint lines. No new signal declarations.
+# UNOPTFLAT cone membership parsed per warning block (NOT by a fixed-size window, which gave a
+# false alarm): 40 blocks before and after, load_store_unit in 5 both, pmp_data_if in 5 both,
+# commit_stage in 6 both.
+#
+# STILL NEEDS SYNTHESIS. Retargeting a compare from _q to _d swaps a flip-flop output for a
+# combinational node, lengthening a comb path inside two modules that are both in the standing
+# UNOPTFLAT loop set. The nine counters cannot see that, so this goes to synthesis before it goes
+# to a board or to another lane.

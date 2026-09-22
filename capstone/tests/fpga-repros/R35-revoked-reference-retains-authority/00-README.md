@@ -227,6 +227,50 @@ S-12 a day. `CAPCREATE` cannot supply the rotation — it hardcodes `revnode_id 
 A two-sided simulation test is therefore: cause 25 **fires** on repaired RTL and **does not fire** on
 `054cea69b`, for an in-bounds permitted access through a revoked capability, with the ids rotating.
 
+### Two analytical notes for anyone reasoning about the trackers, added 2026-09-22 on the RTL lane's request
+
+**1. A DATA-DEPENDENCY argument is strong; a CYCLE-COUNT argument is not. Do not mix them up.**
+Several same-cycle races appear around these trackers, and they are not all the same kind of thing:
+
+* An **independent** coincidence — two causally unrelated events that happen to land in one cycle,
+  e.g. an invalidation broadcast for index *i* arriving while an access adopts index *i*. Nothing
+  orders them, so the only honest statement is that it *will* happen eventually. These are the races
+  worth fixing in RTL.
+* A **sequenced** coincidence — two events on one causal chain with a `>>` between them, e.g. the
+  reclaim pop's generation bump and the handing out of `(g+1, i)`. The Anvil `>>` across a `send` is
+  **ack-gated** (the successor event is conditioned on the write grant, visible in the generated SV),
+  so these cannot be reordered at all and the "race" is not a race.
+
+The practical rule: *"these probably will not coincide"* is a cycle-count argument and is worth
+little — it degrades silently when frequencies, latencies or a `S12_MEM_DELAY` change. *"these cannot
+be reordered, because B's enable is derived from A's acknowledgement"* is a data-dependency argument
+and holds under any timing. **When deferring a race, say which of the two you have.**
+
+**2. The two broadcast compares have OPPOSITE widths, and each has a worked example of getting it
+wrong.** The invalidation compare must be **16-bit** (a bare index) and any future validation compare
+must be **30-bit** (`{generation, index}`). Anyone "harmonising" them breaks one or the other, so both
+are commented at both ends. The two traps, both real and both found the hard way:
+
+* **A field that is 30 bits WIDE but carries a bare INDEX.** `node_wr_req[29:0]` looks like a
+  composed id and is not: `send_revnode_update` masks the generation off at source, and its own
+  comment says *"the generation lives in the node, never in a link or an address."* A 30-bit compare
+  fed from that field would test `(0, i)` against a tracker holding `(g+1, i)`, **never match at any
+  generation ≥ 1**, and so silently stop working after the first reclaim. The width being right is
+  exactly what makes it look safe. This caught a peer lane mid-review, on this wire, an hour after
+  they had written the opposite-widths rule themselves.
+* **A payload whose generation already reads `g+1` on the write that means DEAD.** The reclaim pop
+  stores `{… generation = g+1; free = 1'd0}` while `valid` is still 0 — and *that write is the
+  invalidation broadcast*. So an unconditional compose would put `(g+1, i)` on the **invalidation**
+  path, and a 30-bit compare there would fail to clear a tracker holding the stale `(g, i)` — the one
+  tracker you most want cleared. The compose must therefore be **gated on the `valid` bit**, the same
+  bit that already decides whether to fire at all.
+
+**A note on the enumeration, because the tempting version of it is wrong.** It is natural to justify
+the mask by counting broadcast call sites — but the count is easy to get wrong (13 syntactic, 16 after
+inlining, and an earlier version of this folder said 14). The property worth relying on is structural
+instead: there is exactly **one** `send mem_ch.write_req` in the whole rev-node unit, and it masks the
+id, so **every** broadcast is a bare index by construction rather than by enumeration.
+
 ### Related instances, none of which is this defect
 
 - `commit_stage.sv:239` — the same optimistic re-adopt for the **PC** capability.
