@@ -3146,6 +3146,149 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > path implies (`load_unit.sv:718-721`: the responding load's id, the next request's cause) needs two DIFFERENT
 > causes back to back to show.
 
+### R-35 — on silicon a REVOKED capability still READS AND WRITES the storage its object gave up, and the access does not trap, because the LSU's single core-wide revnode tracker RE-ADOPTS any unseen id as valid `OPEN — root-caused in source at 054cea69b (load_store_unit.sv, the optimistic adopt) and REPRODUCED TWO-SIDED IN RTL SIMULATION 2026-09-22 with a single-variable arm pair, a witnessed revoke and the faulting unit attributed by a control that demonstrably fires. Board evidence exists but is build-contaminated (WNS -8.307, 90,379 failing endpoints) and the simulation supersedes it. NO FIX YET: the obvious one-liner fails CLOSED and the tracker cannot be fixed locally at all, because the invalidation broadcast carries a bare INDEX and the generation is masked off at source -- so the defect is in the BROADCAST PROTOCOL, not the tracker. A two-stage fix is designed and Stage 0 (ordering) is cleared to proceed; the fail-closed stage additionally requires a refill path (see R-38 and the plan)`
+
+> **Folder (the report):** `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/` — the
+> board probe, the RTL-simulation reproducer `src/r35-rotate-stale.S`, its 117 result lines, and the
+> acceptance criteria a fix must invert. Siblings: **R-37** (the ordering defect at the same trackers)
+> and **R-38** (the permanent false-deny at the CPMP tracker).
+>
+> **What it is.** `core/load_store_unit.sv` keeps **one core-wide** tracked `(generation, index)`
+> revnode id plus a `valid` bit. Its adopt arm takes any access whose capability presents a
+> **different** id and asserts `valid = 1'b1` **without asking the rev-node unit**. Cause 25
+> (`INVALID_CAPABILITY`) is the **last** arm of the priority chain and tests only that bit, so once the
+> tracker has been displaced by an access through any other capability the clause **cannot fire**.
+> Bounds (28) and permissions (27) survive because they read the capability's own metadata.
+>
+> **The severity framing, which is what makes it more than a corner case:** a single core-wide tracker
+> rotates on **every** access through a different capability, so for any M-mode program touching two or
+> more capabilities the revocation check is effectively **VACUOUS** — cause 25 can only ever fire for a
+> program that never rotates. The reproducer's arm A is exactly that never-rotating program, which is
+> why it is the positive control rather than the finding.
+>
+> **Witnessed conditions (RTL simulation at `054cea69b`, `S12_MEM_DELAY=12`, M-mode, capmode set).**
+> The data grant was `SPLIT` into halves carrying **distinct revnodes 2 and 3**, each `MREV`'d and
+> `DELIN`'d to a NONLIN alias. `LCC` witnesses the revoke in-run: alias A reads **1 before** and **0
+> after**, sibling B stays **1**. Then: **arm A** (no rotation) traps 25 and retires no value; **arm A2**
+> (a second un-rotated load) **also** traps 25 — this is what makes the pair single-variable, since it
+> proves the trap did not itself re-validate the tracker; **arm B** (one intervening access through the
+> *other* revnode) returns the revoked object's data with **cause 0**; **arm C** stores `0xA5` through
+> the revoked alias and **it lands**, read back through a live alias.
+>
+> **Unit attribution, and it does not rest on silence.** The run's fourth trap is a plain `sd` through
+> an integer base retiring **cause 24**, and cause 24 for a store is emitted at exactly one place in
+> `load_store_unit.sv` — so `cap_violation_detection` demonstrably reached the exception path **in this
+> run** and is silent for arms B and C. Plus decode routing (a plain `ld` never enters the DYN unit) and
+> a separate `commit_stage` exclusion. Counts: **4** `exception @` in the retirement trace against
+> **1** `Exception:` in the console.
+>
+> **Why no fix has landed.** Three independent walls, each verified: (1) flipping the assumption to
+> `1'b0` fails **closed** — under id rotation nearly every access would raise 25, and R-12's reclaimer
+> *relies* on the adopt to re-adopt a fresh `(g+1, i)`; (2) giving the LSU a port on the rev-node query
+> channel is refused on five counts, the binding one being that `capstone_rev_node` and `ex_stage` are
+> both named members of the standing combinational ring; (3) **the tracker's only external input carries
+> no generation** — `send_revnode_update` masks the id to 16 bits and its own comment states *"the
+> generation lives in the node, never in a link or an address"*, and all 14 broadcast call sites go
+> through it. So the optimistic adopt is the only thing the tracker *could* have done, and a
+> DEAD-SET is provably unsound (per-index generation would cost 65,536 x 14 bits, aliasing
+> false-denies the frequent generation-0 nodes, and the live-index set does not saturate — 0.529
+> linear). **Record these as negative results so they are not re-derived.**
+>
+> **Sibling instances of the same adopt, not this defect:** `core/commit_stage.sv` for the **PC**
+> capability (genuinely latent — needs a stale *code* capability via CALL/RETURN, never constructed) and
+> `core/pmp/src/pmp_data_if.sv` per CPMP entry (already sim-measured by
+> `verif/tests/custom/capstone/r12-recl-cpmp.S` probe 4). The two privilege gates are
+> **complementary, not redundant** — the LSU block is `== PRIV_LVL_M` and the CPMP check is
+> `!= PRIV_LVL_M` — so the CPMP instance is **100 % of S/U-mode capability enforcement** and is LIVE IN
+> PRODUCTION, not latent: `capmode` is a sticky core-wide bit and the monitor sets it before the first
+> S-mode instruction, so capability-unaware Linux and userspace run under full CPMP enforcement and
+> cannot opt out. It is deferred on a **boot-kill risk** (a permanent deny on `cpmp(0..2)`, whose ids
+> are hardcoded and produced with zero rev-node traffic, predicts an unbootable board on the first
+> S-mode instruction fetch) — **not** on reachability, and **not** on a fault-loop argument, both of
+> which were raised and refuted.
+
+### R-36 — NUMBER WITHDRAWN BEFORE FILING; DO NOT REUSE `NOT AN ISSUE. Drafted 2026-09-21 and refuted by a claim-auditor before it was filed; the refutation was then verified independently and recorded. Kept as a stub only because the number is referenced in history/`
+
+> **What it would have claimed.** That the RTL revoke walk never unlinks dead nodes, that this is why
+> `give_cyc/n` grows superlinearly, and that implementing splicing would fix it.
+>
+> **Why it is wrong**, per `docs/history/15-09-2026_19-16-04_manuscript-read-directly-at-last.md` §12:
+> the splice **already exists and is in the resident bitstream** (`379248185` is an ancestor of
+> `054cea69b`; the draft had read `capstone_rev_node.anvil` on the side branch
+> `board/r35-directed-repro` and mistaken it for the fix line); it duplicates **R-12**'s cost half; and
+> the mechanism **predicts the wrong shape** — an unspliced walk at a constant ~3 cycles per dead node
+> is **linear**, and it was being used to explain a **superlinear** curve. The curve is a linear walk
+> multiplied by a **memory-hierarchy cliff**: the d-cache holds exactly **2,048** nodes (32 KiB / 16 B,
+> = 256 sets x 8 ways, one node per line) and the 3.000 slope holds to 1,024 and breaks at 2,048.
+>
+> **What survived the refutation**, because a dead mechanism can leave a live variable: the independent
+> variable is **per-domain minting, not table occupancy**
+> (`history/15-09-2026_19-25-14_m1-revoke-cost-variable.md`), and the give-vs-take *shape* asymmetry is
+> a direct RTL reading that stands on its own — `REVOKE_NODE` advances via `walk_next := node_in.next`,
+> a serial **dependent** node-read chain with no memory-level parallelism, against a fixed handful of
+> up-front addresses for INIT/DELIN.
+
+### R-37 — the revnode trackers' INVALIDATE and ADOPT are mis-ordered, so an invalidation broadcast arriving in the same cycle as an adopt is LOST at the LSU and mis-applied at the CPMP `OPEN, read from source at 054cea69b; NOT INDEPENDENTLY OBSERVABLE until R-35 is fixed (today the access is permitted anyway, so the lost broadcast changes nothing measurable). Fix designed as "Stage 0" and CLEARED TO PROCEED 2026-09-22 after a trap-path enumeration established that the monitor's own trap-entry window cannot be false-denied by it; expected lint delta is zero on all nine counters, which makes the resulting hash a usable bisection control`
+
+> **Folder:** shares `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`. Parent
+> defect **R-35**; see also **R-38**.
+>
+> **What it is.** `core/commit_stage.sv` has the safe shape — it adopts first and invalidates **last**,
+> comparing the **post-adopt** value. The other two sites do not:
+> - **LSU:** the invalidate runs **before** the adopt, and the adopt then unconditionally asserts
+>   `valid = 1'b1`. So a broadcast landing in the adopt's cycle is **overwritten and LOST** — the
+>   adopt wins, which is a **false ALLOW** and therefore R-35's own defect class.
+> - **CPMP:** adopt runs first and invalidate last (so the invalidate *wins*, the conservative
+>   direction) but it compares the **pre-adopt** id. See **R-38** for the consequence.
+>
+> **Two traps for whoever fixes or reviews this.** (1) A clean directed sweep after the fix proves
+> *no behaviour change*, **not** that anything was fixed — the finding is unobservable while R-35
+> stands. (2) The sub-case where the lost broadcast is for the id being **evicted** behaves
+> identically under both orderings, so a reader checking only that case will wrongly conclude the
+> finding is bogus.
+>
+> **And do NOT "normalise" the two sites by moving the CPMP to the LSU's order.** Implementing
+> "adopt first, invalidate last" with the LSU's *adopt-wins* semantics would leave an entry rewritten
+> to `(g,i)` racing that id's invalidation reading `valid = 1` for an already-revoked node, with no
+> further broadcast for it ever arriving — a **permanent false ALLOW**. The target shape is the
+> CPMP's direction (invalidate-wins); the LSU must move *toward* it.
+
+### R-38 — the CPMP tracker's invalidation compares the PRE-ADOPT id, so an entry rewritten in the same cycle as a broadcast for its old id is left tracking a LIVE capability marked permanently INVALID `OPEN, read from source at 054cea69b. Consequence is a false DENY (liveness/DoS), never an authority escape, which is what makes it lower severity than R-35 despite being reachable; one route is open because the invalidate has no tag guard while the adopt does. Fixed by the same "Stage 0" edit as R-37 (_q -> _d)`
+
+> **Folder:** shares `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`. Siblings
+> **R-35** (parent) and **R-37** (the ordering half).
+>
+> **What it is.** At `core/pmp/src/pmp_data_if.sv` the adopt runs first and the invalidate last, but
+> the invalidate compares the broadcast index against the **pre-adopt** tracked id. The same-cycle race
+> therefore fails in **opposite directions** depending on which id the broadcast names — which is why
+> one sentence cannot describe it, and why an earlier one-sentence version of this finding was wrong:
+> - broadcast names the **newly adopted** id → no match against the old value → validity **not**
+>   cleared → a live-looking entry for an id just invalidated (**false ALLOW**; that is the CPMP
+>   instance of **R-37**);
+> - broadcast names the **displaced** id → match → validity **is** cleared → but the entry now tracks
+>   the **new** id, left marked invalid with **no further broadcast for it ever arriving**, so the deny
+>   is **permanent** (**false DENY**; this issue).
+>
+> **What the fix does and does not cover.** The `_q -> _d` retarget closes the case above. It does
+> **not** help where an entry is rewritten to `(g+1,i)` and a broadcast for `(g,i)` arrives, because
+> the broadcast is a bare 16-bit index and **no compare width can separate them** — however, that
+> second case is believed unreachable by `>>` **sequencing** (the reclaim pop's generation advance is
+> ordered before `(g+1,i)` is handed out), which is a stronger argument than a cycle-count one and is
+> recorded in the plan. A separate route to a stuck entry is **not** fixed by any compare change: an
+> invalidated entry cannot re-adopt **the same** capability into **the same** entry, because the adopt
+> guard requires a *differing* id. Any commit must say **which** of these it closes.
+>
+> **Correction to the first write-up of this, recorded because it was cited circularly.** It was
+> initially claimed that `swap_cpmp` reinstalls such an entry into a **fault loop**. It does not:
+> `swap_cpmp` skips a region already loaded (`region_cpmp[region_id] != -1 → continue`,
+> `sbi_capstone.c:1911`), falls through to the no-covering-region path, and takes a **one-shot**
+> terminal exit — `print_regions()`, a `CPMX`/`CAPSTONE_NO_CPMP_REGION` report over UART, then
+> `fault_return_from_domain`, which does not return. So the symptom is **a single domain kill with a
+> diagnostic report**. It was also claimed that such an entry can **never** re-adopt; re-adoption does
+> happen, because the round-robin eject sets `region_cpmp[ejected_region_id] = -1` and a later install
+> lands in an entry whose tracked id differs. The narrow true statement is the "same capability, same
+> entry, no intervening occupant" one above.
+
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
 a missing icache invalidate on the domain switch. This forced **one full power-cycle +

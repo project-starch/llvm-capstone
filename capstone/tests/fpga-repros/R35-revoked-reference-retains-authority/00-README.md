@@ -232,9 +232,31 @@ A two-sided simulation test is therefore: cause 25 **fires** on repaired RTL and
 - `commit_stage.sv:239` — the same optimistic re-adopt for the **PC** capability.
 - `pmp_data_if.sv:82-102` — the same shape per CPMP entry; a real latent defect, already on file as
   ISSUES.md:4079 under R-12 A5, but **not** what was measured here.
-- Found while auditing, both worth their own items: CPMP's invalidation compares against the *old*
-  tracked id, so a broadcast arriving in the same cycle as an adopt cannot clear it; and an invalidated
-  CPMP entry can never re-adopt the same capability, so `swap_cpmp` can reinstall it into a fault loop.
+- Found while auditing, both worth their own items. **Both were stated too loosely in the first
+  version of this paragraph and are corrected here (2026-09-22); the second was simply wrong.**
+  - `pmp_data_if.sv:88-101` runs the adopt **first** and the invalidate **last**, comparing the
+    **pre-adopt `_q`**. That makes the same-cycle race fail in *opposite directions* depending on
+    which id the broadcast names, which is why one sentence could not describe it:
+    - broadcast names the **newly adopted** id: `_q` still holds the old id, no match, validity is
+      **not** cleared -> a live-looking entry for an id that was just invalidated (**false ALLOW**,
+      the CPMP instance of finding 4);
+    - broadcast names the **displaced** id: `_q` matches, validity **is** cleared -- but the entry
+      now tracks the *new* id, which is left marked invalid with no further broadcast for it ever
+      arriving (**false DENY**, permanent; finding 5).
+  - **The "reinstall into a fault loop" claim is RETRACTED.** `swap_cpmp` skips a region that is
+    already loaded -- `if(region_cpmp[region_id] != -1) continue;`
+    (`sbi_capstone.c:1911`) -- so a second fault for the same region does **not** reinstall. It falls
+    through to `region_id >= region_n` and takes the one-shot terminal path: `print_regions()`,
+    `CAPSTONE_TAG_CPMX`/`CAPSTONE_NO_CPMP_REGION` over UART, then `fault_return_from_domain`, which does
+    not return (`:1925-1941`). So the symptom is **a single domain kill with a diagnostic report**,
+    not a loop.
+  - And **re-adoption does happen**, so "can never re-adopt" is too strong. The round-robin eject
+    sets `region_cpmp[ejected_region_id] = -1` (`:1958`), so a later install lands in an entry whose
+    tracked id differs and the adopt fires normally. The narrow true statement is: *an invalidated
+    entry cannot re-adopt **the same** capability into **the same** entry with **no intervening
+    occupant**.*
+  - Recorded because this paragraph was cited as independent corroboration for a scope decision
+    while being itself unverified -- a circular citation. Verify a citation in its own tree.
 
 ### REPRODUCED IN SIMULATION, 2026-09-22 — two-sided, by the RTL lane
 
