@@ -1,0 +1,26 @@
+# r35-rotate-stale, Verilator RTL simulation at capstone-ariane 054cea69b (the flashed build's RTL)
+# S12_MEM_DELAY=12, target capstone_cv64a6_imafdc_sv39, iss=veri-testharness
+# Run 2026-09-22. Readings in execution order; scalars print without a Cursor field.
+
+[Cycle       1038] Reg[18]: 00a5a5a5a5a5a5a5
+[Cycle       1042] Reg[10]: Cursor: 0000000080800000 | Metadata-> Revnode_id :          2 | Type : 1| Perm : 7 | Start : 0000000080800000 | End : 0000000082000000 | async = 0 | reg =  0 
+[Cycle       1043] Reg[11]: Cursor: 0000000000000000 | Metadata-> Revnode_id :          1 | Type : 3| Perm : 7 | Start : 0000000000000000 | End : 0000010000000000 | async = 0 | reg =  0 
+[Cycle       1212] Reg[10]: Cursor: 0000000080800000 | Metadata-> Revnode_id :          2 | Type : 1| Perm : 7 | Start : 0000000080800000 | End : 0000000080800020 | async = 0 | reg =  0 
+[Cycle       1214] Reg[16]: Cursor: 0000000080800020 | Metadata-> Revnode_id :          3 | Type : 1| Perm : 7 | Start : 0000000080800020 | End : 0000000082000000 | async = 0 | reg =  0 
+[Cycle       1219] mrev_req on parent          2
+[Cycle       1365] mrev_req on parent          3
+[Cycle       1619] Reg[10]: Cursor: 0000000080800000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 7 | Start : 0000000080800000 | End : 0000000080800020 | async = 0 | reg =  0 
+[Cycle       1627] Reg[16]: Cursor: 0000000080800020 | Metadata-> Revnode_id :          3 | Type : 2| Perm : 7 | Start : 0000000080800020 | End : 0000000082000000 | async = 0 | reg =  0 
+[Cycle       1636] Reg[29]: 0000000000000001
+[Cycle       1645] Reg[30]: 0000000000000001
+[Cycle       1653] Reg[28]: 00a5a5a5a5a5a5a5
+[Cycle       2927] Reg[31]: 0000000000000000
+[Cycle       2936] Reg[ 7]: 0000000000000001
+[Cycle       3137] Reg[22]: 0000000000000000
+[Cycle       3138] Reg[20]: 0000000000000019
+[Cycle       3310] Reg[23]: 005b5b5b5b5b5b5b
+[Cycle       3314] Reg[24]: 00a5a5a5a5a5a5a5
+[Cycle       3315] Reg[20]: 0000000000000000
+[Cycle       3359] Reg[20]: 0000000000000000
+[Cycle       3408] Reg[27]: 00000000000000a5
+[Cycle       3410] Reg[26]: 0000000000000001

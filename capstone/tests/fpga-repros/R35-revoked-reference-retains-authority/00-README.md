@@ -236,6 +236,42 @@ A two-sided simulation test is therefore: cause 25 **fires** on repaired RTL and
   tracked id, so a broadcast arriving in the same cycle as an adopt cannot clear it; and an invalidated
   CPMP entry can never re-adopt the same capability, so `swap_cpmp` can reinstall it into a fault loop.
 
+### REPRODUCED IN SIMULATION, 2026-09-22 — two-sided, by the RTL lane
+
+**Produced by the RTL lane; VERIFIED here against the transcript they left in `results/`, reading
+`sim-rotate-stale.result-lines.txt` line by line rather than taking the summary.** On
+`054cea69b` RTL at `S12_MEM_DELAY=12`, every pre-registered value matched:
+
+| arm | rotation between revoke and access | reading |
+|---|---|---|
+| **A** — positive control | none | value 0, **cause 25 — the check FIRES** |
+| **B** — the defect | an access through a different revnode intervenes | sentinel returned, **cause 0** |
+| **C** — stale store | as B | **cause 0, the store LANDS** |
+
+Checked against the transcript rather than the summary: `SPLIT` yields genuinely distinct ids
+(`Reg[10]` revnode **2**, `Reg[16]` revnode **3**, and the unit logs `mrev_req on parent 2` then
+`parent 3`, so the rotation is real); Arm A's cause reads `Reg[20] = 0x19` = **25**; Arm B returns
+`0x00a5a5a5a5a5a5a5`, sentinel **A** — the revoked region's own data — through a reference whose node
+`LCC` has just reported invalid; Arm C reads back `0xa5`. Sources and transcript are in `src/` and
+`results/`.
+
+Arms A and B differ in **exactly one thing**: whether an access carrying a different revnode id
+intervenes. That is the matched pair this folder's earlier attempts could not build.
+
+The revoke is **witnessed in-run** rather than assumed: `LCC` reads alias A as valid `1` before the
+revoke and `0` after, while its sibling B stays `1` — the sibling surviving is the depth arithmetic
+confirming itself, and it independently confirms that `REVOKE` on an `MREV` handle does invalidate the
+original capability's own node.
+
+**Why this is stronger than the board evidence above.** Simulation carries no timing artefact, which is
+precisely what the bitstream caveat at the end of this folder says the board measurements cannot shed.
+The board shows the defect on silicon; the simulation shows it on a clean instrument with a control
+that fires.
+
+The rotation came from `SPLIT`, not two `CAPCREATE`s — `CAPCREATE` hardcodes `revnode_id = 2`
+(`capstone_flu_unit.anvil:385` @ `054cea69b`), so two created regions share one node and cannot
+displace each other. That is the same trap recorded below.
+
 ### Directed reproducer
 
 `capstone-ariane/verif/tests/custom/capstone/r35-stale-deref.S` (`board/r35-directed-repro`) does **not**
