@@ -265,28 +265,36 @@ R-6, R-7 and R-9 rather than R-1. R-1's own probes (`rawhazard5/6/7`) read the r
 every live slot. Evidence and method:
 `tests/rtl-smoke/ladder-revival-2026-09-22/` (pre-registration committed before the first boot).
 
-**The overhead TABLE above is NOT extended by that run, and the reason is its own control.**
-`ctrsanity` exists because both its halves run identical code; published, they were eleven
-instructions apart (500,033 vs 500,022). The capability half is unchanged at 500,030; the baseline
-**floor** across the runner's sixteen passes is 509,212 — **+1.8 % over its own published value**, at
-matching `-O1` on both sides. Two other rungs return instruction ratios *below 1.0* (`beebs_janne`
-0.938, `beebs_crc32` 0.959), which the ABI cannot produce. So the denominators are not matched today
-and **no new overhead row may be quoted**.
+**The overhead TABLE above is NOT extended, and the reason is its own control — but not the reason
+first written here.** An earlier version of this note blamed the baseline vehicle and reported a 7.8 %
+control discrepancy. **That was measured with the RETIRED baseline**, `run_ladder_base_fpga.py`, whose
+limitation is `ISSUES-ARCHIVE.md:4221` — *"I-2 — Linux baseline served interrupts inside the bracket
+`FIXED` … Fixed 2026-07-28 by removing the OS"*, with the exact signature observed (`1/15 passes tied
+at min instret`). The table above already says which instrument it used, in its own heading:
+**bare-metal baseline**. Both that figure and its mechanism are withdrawn.
 
-Separately and importantly for anyone re-running this: **the baseline runner's `warm` column is not a
-measurement.** It is one sample of sixteen, and the spread on identical code reaches 350 %
-(`beebs_prime` instret 2,704…12,172) because the baseline half runs in Linux userspace and takes
-scheduler interference the domain half never sees. The **per-pass minimum** is the clean statistic and
-it verifies — `beebs_prime`'s minimum is exactly its published 2,704. A first version of this note
-quoted the `warm` column and reported the control as 7.8 % out; that figure is **withdrawn**.
+Re-run on the correct instrument, the bare-metal baseline **reproduces this table's denominators
+exactly** — `ctrsanity` 600,041/500,022, `beebs_prime` 9,283/2,704, `rv8_sha512` 540,073/462,646 —
+cycles and instructions to the digit, at `15/15 passes at min instret, spread 0`, two months later.
 
-Two things follow, and they are different. **The coverage claim below is now false** — these rungs are
-measurable. **The overhead numbers above remain the numbers of record**, on their own bitstream, until
-the baseline vehicle is repaired and both halves are re-measured together.
+What actually blocks the merge is a silicon change, and it is worth more than the rows would have
+been. **`ctrsanity`, the control, published at 1.000× and now reads 1.167×.** Its instruction ratio is
+1.00002 — eight instructions in 500,030 — so the halves are matched; its baseline is byte-identical to
+July; the capability half alone moved, **600,309 → 700,268 cycles for the same work**. On this
+bitstream, capability-mode execution of a pure-compute loop costs 16.7 % more cycles than on the build
+this table was taken on. A second control at 1/100th the length reads 1.045×, so the penalty **grows
+with run length rather than amortising away**.
 
-Do not mix vintages in the meantime: pairing this run's capability instret against the July baselines
-printed below puts `rv8_sha512` at 0.996 and `beebs_ns` at 0.987 — capabilities apparently retiring
-fewer instructions than plain RISC-V, which is eight weeks of compiler movement, not a measurement.
+Ten rungs are measured against the clean baseline and recorded in
+`tests/rtl-smoke/ladder-revival-2026-09-22/01-baseline-instrument-correction.md`, including eight that
+have never had a row. Two of the table's existing rows reproduce there within ~1.3 % (`beebs_prime`
+1.054 → 1.043, `beebs_aha_mont64` 1.023 → 1.010), which is what shows the pairing is sound. They are
+**not merged in** because this table's control reads 1.000× and theirs reads 1.167×: a reader
+comparing across the two would read a silicon change as an ABI cost.
+
+Settling it needs either an explanation of the control's 16.7 %, or a re-measurement of these eight
+rows on the current bitstream. **The second is now cheap** — the bare-metal baseline ran all 65 rungs
+in 81 seconds, against ~15 minutes for the Linux one.
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 

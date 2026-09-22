@@ -1,0 +1,21 @@
+counters = cycle+instret
+cold = first call (pays Linux demand-paging).
+best = the MINIMUM-instret warm pass, i.e. the least-interrupted run --
+this is the comparable column, because the domain half takes no
+interrupts and no paging. Valid only where idem=YES.
+clean = passes tied at that minimum / warm passes. It is the evidence
+that the floor was actually reached: clean=1/N means it was NOT, and
+that row must not be used as a denominator.
+
+rung               oracle         cold_cyc   best_cyc   cold_ins   best_ins   clean    spread  idem correct
+ctrsanitys         3688591409        40515       6178       7948       5021   12/15     40506  YES  YES
+ctrsanity          43260934         848695     674842     531974     511963    1/15     36031  YES  YES  <-- floor NOT reached
+beebs_prime        582955588         43913       9567       5631       2704   12/15     14261  YES  YES
+matmult_int        774662735         14462      12134       7272       7272    9/15     54986  YES  YES
+coremark_matrix    14343             76337      38637      28593      25666    4/15     42388  YES  YES
+beebs_insertsort   271779359         36116       1559       3740        813   14/15     13979  YES  YES
+beebs_janne        484656629         34715        378       3138        211   15/15       581  YES  YES
+rv8_sha512         1390718314       743751     602058     477826     462422    2/15     52591  YES  YES
+rv8_sha512s        2842840124       225758     142199      80990      73778    3/15     43516  YES  YES
+beebs_aha_mont64   2185097489       413248     329240     273355     262575    1/15     59464  YES  YES  <-- floor NOT reached
+beebs_ns           1184999093       190619     102488      74065      64020    1/15     52052  YES  YES  <-- floor NOT reached

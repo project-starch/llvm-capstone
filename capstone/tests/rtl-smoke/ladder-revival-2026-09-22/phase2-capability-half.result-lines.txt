@@ -1,0 +1,8 @@
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6312            5029          YES
+ctrsanity            43260934      43260934      700268          500030        YES
+beebs_prime          582955588     582955588     9684            2703          YES
+matmult_int          774662735     774662735     19134           9722          YES
+coremark_matrix      14343         14343         53345           31560         YES
+beebs_insertsort     271779359     271779359     2518            962           YES
+beebs_janne          484656629     484656629     593             198           YES
