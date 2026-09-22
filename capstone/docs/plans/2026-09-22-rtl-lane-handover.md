@@ -17,15 +17,25 @@ Synthesis stays with the `synth` lane (never run it elsewhere). The board stays 
 1. **A fresh clone does NOT give you the reclaimer.** Parent `origin/dev` pins the submodule gitlink
    at `f6ec6c198` (`s12-ldc-rolling-filter`), and `054cea69b` is **not** an ancestor of it. Verified
    2026-09-22. So `git submodule update` hands you pre-reclaimer RTL that looks entirely plausible and
-   is the wrong design. You must explicitly:
+   is the wrong design — and there is **no fast-forward relationship in either direction** (`f6ec6c198`
+   is not an ancestor of `054cea69b` either), so nothing about the resulting checkout will look wrong.
+   You must explicitly:
 
        git -C capstone/capstone-ariane fetch origin m1-reclaimer
        git -C capstone/capstone-ariane worktree add --detach <path> 054cea69b   # never checkout in place
 
 2. **Two SHAs matter and they are different.** `054cea69b` is *the build* — synthesised, flashed, and
    cited throughout `ISSUES.md` and `current-state.md`. `12b11e9ed` is the *branch tip*, four commits
-   ahead: fixtures and measurement notes, **no RTL change**. Cite `054cea69b` for anything about
-   silicon or synthesis; use the tip when you want the measurement fixtures too.
+   ahead. Cite `054cea69b` for anything about silicon or synthesis; use the tip when you want the
+   measurement fixtures too.
+
+   **No FUNCTIONAL RTL change between them — but a `--name-only` diff will show two core files
+   touched.** `054cea69b..12b11e9ed` reports `core/ex_stage.sv` (+8) and `core/pmp/src/pmp_data_if.sv`
+   (+17), and every one of those 25 lines is a comment, with nothing removed and no `anvil_build/`
+   source touched (so regeneration is byte-identical). Stated this way round because a successor
+   verifying the cheap way — `--name-only`, a file hash, a bundle manifest — would otherwise see core
+   RTL differing from the flashed build and have to decide whether this document is wrong. Correction
+   contributed by `apollo-rtl` on handover, who checked rather than took it.
 
 3. **`ISSUES.md` line numbers in older notes are stale.** The parent moves fast (186 commits landed
    while M1 was being built). Locate by the `### R-12 —` heading, never by line number.
@@ -92,8 +102,26 @@ that has been refuted.
 **Anvil renumbers every wire on any change.** Diff generated units by (message, width, bit-range)
 shape; a name diff of the generated SV is pure noise.
 
-**`S12_MEM_DELAY` is a 4-bit period-16 sawtooth.** 40 realises as 8; 16 gives *less* delay than 2.
-Usable range 2–15; 12 is what the R-12 fixtures use.
+**`S12_MEM_DELAY` is a 4-bit period-16 sawtooth, and WHEN IT IS WRONG IT IS NEVER LOUD.** The define
+is truncated to its low nibble: 40 realises as 8, and anything congruent to 0 mod 16 gives *less* delay
+than 2. Usable range 2–15; 12 is what the R-12 fixtures use.
+
+The failure mode is the expensive kind — **a plausible cycle count, every time.** Measured on one tree
+and test: define 0 → 708, 2 → 1,415, 12 → 3,427, **16 → 1,004**. So the knob is not monotone, and
+turning it *up* from 12 to 16 turns latency *down* to near bypass; a mental model of "larger define,
+more latency" produces a result that looks fine and is wrong. Nothing errors, nothing warns.
+
+**Neither half of the obvious check is sufficient alone.** Reading the define back from
+`work-ver/Variane_testharness__verFiles.dat` proves it LANDED, not what it does — confirmed by defines
+12 and 28 (28 mod 16 = 12) producing *identical* cycle counts while the readback proved the two builds
+received different defines. Only behaviour tells you what the value means.
+
+**The specific trap for the R-12 fixtures: a reading that IS a cache contrast degenerates into a
+convincing null.** At delay 12 a cold MREV costs 276 cycles against a warm 21 — a 13× separation that
+carries the age sweep and the capacity-boundary result. At delay 0 the same pair reads 26 against 21.
+Run `r12-mint-vs-age` at an effectively-zero delay and every sample reads warm, the sweep is flat, and
+**flat is exactly what "there is no capacity effect" looks like.** That is a null produced by the
+instrument meeting a regime it cannot resolve, not by the subject.
 
 **`CAPPRINT` prints at execute**, so a late exception flushes and re-executes younger prints. Use
 `capstone/tests/capprint-retired.py`, which aligns `$display` lines to *retired* CAPPRINT instructions
@@ -223,6 +251,34 @@ walk's non-push branch (sentinels and retired indices), and DROP via `change_rev
 (stays linked, never freed). With the exit splice unlinking each revoked run, **a workload that never
 DROPs has every walked node valid** — so that fraction is 1 by construction and is worth asserting,
 never measuring.
+
+## 5b. Is `054cea69b` REPRODUCIBLE, or only resident?
+
+Asked by `apollo-rtl` on handover. The honest answer is in two halves and the second is a caveat nobody
+had written down.
+
+**The anvil → SV step is proven reproducible across machines.** Before synthesising, the synth lane
+regenerated from committed source and matched all five `sha256` digests of `core/*.anvil.sv` against
+the ones produced here. That is a real cross-host reproducibility datum, not an assumption.
+
+**The SV → bitstream step is UNVERIFIED.** No SHA on this design has been synthesised twice, so nobody
+knows whether the flow is bit-reproducible. `run.tcl` has no seed (`apollo-rtl`'s reading is right), but
+it does set `STEPS.SYNTH_DESIGN.ARGS.RETIMING true` and `RuntimeOptimized` place/route directives, and
+the router's behaviour has visibly varied between builds (one showed an oscillating overlap trace no
+other did). Treat bit-identity as untested rather than expected.
+
+**And the flow depends on host state that is not in any commit.** Every synthesis worktree carries four
+locally-modified files: the `RISCV` toolchain export patched into `env.sh`, `env_cap.sh` and
+`fpga-env.sh`, and a copy of `synth-guard.sh` that **carries three uncommitted fixes** (kill scoping,
+the `exit=` line on the ceiling path, guarded collection). So `054cea69b` alone does not rebuild the
+flashed artifact — it rebuilds the *design*; the *flow* lives on the synth machine. Ask the synth lane
+for the current `synth-guard.sh` rather than reconstructing it, and treat its uncommitted state as a
+standing risk worth raising with the lead.
+
+**What that means for the readiness bar.** "Synthesis has RUN" is cleared for `054cea69b` and the
+artifact plus routed checkpoint are retained on the synth machine, so the bar is re-clearable — but the
+specific bitstream is currently a single copy, and re-deriving it would be a new build with an
+unverified relationship to the old one.
 
 ## 6. The fixtures, and what each is for
 
