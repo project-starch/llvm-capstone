@@ -4714,8 +4714,11 @@ by construction.
 
 - **Every point is cache-resident.** `nd` reaches 512; the revocation node table's cache-resident
   capacity is **2048 nodes**, and a node is exactly one 16-byte line (`CVA6ConfigDcacheLineWidth = 128`,
-  and the revnode stride is `{…, 4'd0}` = ×16 in `ex_stage.sv`). So **22.91 cycles/node is a warm figure
-  and a lower bound on the cold one.** Crossing 2048 is a separate experiment.
+  and the revnode stride is `{…, 4'd0}` = ×16 in `ex_stage.sv`). So **22.91 cycles/node is a warm
+  figure.** ~~It is a lower bound on the cold one, and crossing 2048 is a separate experiment.~~
+  **SUPERSEDED 2026-09-22 — that experiment ran.** The cold constant is **28.15 cycles/node**, +23 % on
+  22.91, and the approach to it is a ramp rather than a step. See *"R1's fit range"* at the end of this
+  document. The bound was right in direction and modest in size.
 - **The bitstream's timing does not close** (WNS −8.307, 90,379 failing endpoints). No cycle count here
   separates a design property from an artefact of this build.
 - **R1 step 1's invalid-access companion is UNMEASURED on this bitstream, not passed.** It requires an
@@ -4723,3 +4726,73 @@ by construction.
   this path. Measurable on the emulator, which enforces. Same standing as M1's condition 3. **Its
   absence is not a safety result.**
 - Comparator arms outside Capstone's own two (custom-spatial, custom-sublet) were not run.
+
+
+## R1's fit range — the revocation constant COLD is 28.15 cycles/node, and the approach is a RAMP (5 boots, 2026-09-22)
+
+**Bundle** `experiments/results/R1/2026-09-22-cold-coefficient/`, manifest
+`R1-2026-09-22-cold-coefficient`, **60 records over 5 fresh boots**, bitstream
+**`caplifive_m1_054cea69b.bit`**, monitor `2dcd3a5`, harness image `46f99c7b5bf2556e`. Each boot ran one
+repetition of the whole 12-point `wide` series; controls read 4/4 on every boot and each boot has its
+own firmware hash, so these are five independent samples and not one run relabelled.
+
+This is **not a separate study**. It is R1's fit range: the same harness, the same metric, the series
+extended across the node table's cache-resident capacity. R1's release-cost series stops at `nd = 512`,
+entirely cache-resident, which is why its 22.91 was explicitly a warm figure.
+
+### The result
+
+`rv` is the revocation bracket; `nd` is nodes destroyed. Medians across the five repetitions:
+
+| `nd` | `rv` | `rv`/`nd` | step |
+|---:|---:|---:|---:|
+| 64 | 1,258 | **19.66** | — |
+| 256 | 5,339 | 20.86 | +1.20 |
+| 512 | 11,289 | 22.05 | +1.19 |
+| 1,024 | 24,190 | 23.62 | **+1.57** |
+| 1,536 | 36,565 | 23.81 | +0.18 |
+| 1,792 | 43,176 | 24.09 | +0.29 |
+| 2,048 | 51,390 | 25.09 | +1.00 |
+| 2,304 | 59,472 | 25.81 | +0.72 |
+| 3,072 | 82,560 | 26.88 | +1.06 |
+| 4,096 | 113,643 | 27.74 | +0.87 |
+| 8,192 | 230,544 | 28.14 | +0.40 |
+| 16,384 | 461,246 | **28.15** | +0.01 |
+
+Three things, and the third is the one that was not predicted:
+
+1. **The cold constant is 28.15 cycles/node**, against 19.66 at the warmest point — **1.43×**. Measured
+   against R1's published 22.91 it is **+23 %**.
+2. **It saturates.** 8,192 → 16,384 moves the constant by **0.034 %**, across a doubling that adds 8,192
+   nodes. There is no further cliff above the table's capacity.
+3. **The approach is a RAMP, not a STEP.** The largest single interval is +1.57 cycles/node at
+   `nd = 1,024`, which is **18.5 %** of the total 8.50 rise — and it occurs *below* the 2,048-node
+   capacity, not at it. A pure capacity effect predicts most of the rise concentrated at one boundary.
+   Whether this was a step or a ramp was **deliberately left unpredicted** in the pre-registration,
+   precisely because it is what separates pure capacity from capacity plus something else.
+
+### The pre-registered ~5× is REFUTED
+
+`drivers/lists/b3-cold-coefficient.README.md:33` predicted the deep-cold points would rise *"toward
+~5×"*, reasoned from the 9.00-vs-48.2-cycle dependent-load gap. The measured figure is **1.43×**. The
+prediction was wrong by a factor of about three and a half, in the direction of over-estimating the
+penalty.
+
+That reasoning treated every crossed node as an independent dependent load at full miss latency. The
+data says the walk recovers most of that — consistent with the nodes being crossed in index order, so
+the access stream is sequential rather than pointer-chased once the subtree is large.
+
+**This is a pre-registration working, not a retraction.** The ~5× was never written into a claim; it
+existed only in the pre-registration, which is where a number you are about to test belongs. The
+positive control held throughout: `bk` and `fl` rise across the identical records (2,187 → 475,545 and
+7,133 → 1,900,242), so a flat `rv` would have been a property of revocation and not a dead instrument.
+
+### What this does and does not license
+
+- **Quote 28.15 cycles/node for a revocation that exceeds the node table**, and 22.91 for one that fits
+  inside it. Quoting either without its range is what this section exists to prevent.
+- **It does not establish a wall-clock cost.** The bitstream's timing does not close (WNS −8.307), so
+  no MHz-normalised or wall-clock figure may be derived from any cycle count here.
+- **It does not separate the mechanism.** That the rise begins below the capacity boundary says a pure
+  cache-capacity account is incomplete; it does not say what the remainder is. Nothing here attributes
+  it, and the ramp is reported as measured rather than explained.
