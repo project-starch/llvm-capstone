@@ -135,6 +135,23 @@ operands** and grants `[0x80800000, 0x82000000)` — *not* your `.data`; and und
 **fetch** is checked against the CPMP entries (`pmp_data_if.sv:227`), so S-mode code needs a covering
 entry or every PC traps `INSTR_ACCESS_FAULT` forever.
 
+**Two lint counters, two policies — and the gate does not tell you which is which.**
+`verif/sim/rtl-lint.REF.txt` on `054cea69b` reads LATCH 52 / MULTIDRIVEN 3 / UNOPTFLAT **40** / BLKSEQ 2
+/ UNDRIVEN 25 / UNUSEDSIGNAL 736, and `rtl-lint-gate.sh` compares against it automatically. What the
+gate cannot tell you is that these are **not** the same kind of number:
+
+* **UNUSEDSIGNAL is re-baselineable with attribution.** It moved five times across M1 (717 → 718 → 731
+  → 736 → 733 → 736) and each step was justified signal-by-signal by (message, bit-range) shape before
+  `--update` was run. That is the normal path.
+* **UNOPTFLAT is a STOP, not a counter.** It held at exactly **40** through every M1 commit. It is the
+  combinational-loop count, and `CLAUDE.md` is explicit that feeding a new signal into a cone that
+  already carries a loop is the highest-risk edit available and **goes to synthesis before it goes
+  anywhere else**. If a change moves it, the answer is a synthesis run and a decision that is the
+  lead's — never a `--update`.
+
+The trap is that `--update` works identically on both, and having legitimately re-baselined
+UNUSEDSIGNAL five times makes re-baselining UNOPTFLAT feel like the same move. It is not.
+
 **`precommit-scan.sh` discipline.** Absolute path, gated on its exit status with `&&`, never piped
 (a pipe replaces `$?`). For a **submodule** range it must be run **from inside the submodule** or it
 exits 2 — the parent cannot resolve the range. It also scans *removed* lines, so a commit that deletes
