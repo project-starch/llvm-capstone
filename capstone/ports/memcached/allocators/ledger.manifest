@@ -1,0 +1,25 @@
+# Path, bucket, purpose. No measured port-effort claim is derived from this inventory.
+patches/memcached-1.6.45-0001-freestanding-shims.patch compat the census seam as a patch: memcached.h and fifteen system includes become three shims; stats and huge-page prealloc gated
+patches/memcached-1.6.45-0002-lifetime-hooks.patch allocator chunk and object transitions on the free lists, page backing, metadata heap
+../adapted/mc_slabs_shim.h compat what slabs.c reads from memcached.h, each line cited; the CHUNK_ALIGN_BYTES knob
+../adapted/mc_slabs_libc.h compat the system headers slabs.c still needs, renamed so a hosted client never sees them
+../adapted/mc_cache_shim.h compat what cache.c and cache.h need in place of their five includes
+../adapted/mc_pthread_shim.h compat no-op mutexes freestanding, the host's <pthread.h> hosted
+src/shared/port.h glue fixed-width protocol, adapter seam and authority interface
+src/shared/metadata.c glue metadata heap for adapter records, slab lists and cache control blocks
+src/shared/services.c glue the settings object with upstream's defaults, four libc services that end the run
+src/shared/leases.c allocator the lifetime ledger: pages, chunks and objects, their states and counters, one file for both targets
+src/allocators/sublet/authority.c allocator Sublet authority: carve, take, renew, reclaim over the payload region
+src/native/authority.c glue hosted authority with plain pointers, mode 0 only
+src/cheribsd/malloc-leases.c glue stock CheriBSD: pages and objects from the platform's malloc, chunks as offsets into a page, mode 0 only
+src/cheribsd/poisoncap-authority.c allocator PoisonCap authority under the shared ledger: one poisoned arena, bounded client aliases, sweep on release in mode 1
+src/cheribsd/poisoncap.h glue what the PoisonCap layer counted, for the entry and the example to print
+host/cheribsd/poisoncap/build.sh test PoisonCap build entry
+security-tests/cheribsd/revocation-control.c test libc revocation made to fire at the corpus's labelled load
+host/cheribsd/build.sh test shared CheriBSD build entry
+host/cheribsd/run.sh test shared CheriBSD run entry
+src/native/main.c test hosted entry through the seam
+src/capstone-domain/entry.c test domain entry and shared region setup; soft-float builtins linked for slabs_init
+src/linux-guest/domain-loader.c test guest domain loader
+examples/allocators.c test direct-link client that must observe both reissues
+tests/native/test-source.py test patch order, duplicate rejection, preservation on failure

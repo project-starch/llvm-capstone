@@ -1,0 +1,58 @@
+{
+  "case": 3,
+  "upstream_fix": "a8c4a82787",
+  "title": "the item reference count overflows and the item is freed with its holders still holding it",
+  "consumer": "memcached.c, process_get_command()'s multiget loop, through items.c do_item_get",
+  "live_in_pin": false,
+  "live_proof": "the fix is in the pinned tree: IT_REFCOUNT_LIMIT 60000 at memcached.c:2185, applied through limited_get and limited_get_locked, which proto_parser.c, proto_bin.c and proto_text.c all call. The case reconstructs the pre-fix path, in which do_item_get incremented without a ceiling",
+  "object": "an item, i.e. one chunk of a slab class, referenced once per occurrence of its key in the multiget",
+  "lifetime_ender": "do_item_remove (items.c:538) when the wrapped count reaches zero: item_free -> slabs_free, and the chunk goes on its class's slots list (slabs.c:501), never to free()",
+  "shape": "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer",
+  "allocator_layer": "slabs.c size classes over 1 MiB pages, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator: slabs.c is upstream's file at the 1.6.45 pin and makes every allocation decision. The item layer is reduced to item_free and do_item_remove with their arithmetic verbatim; the hash table, the LRU queues, the stats and the locks are left out because none of them takes part in the decision to free. The 65536 references are taken for real, one at a time, so the wrap is performed rather than asserted",
+  "distinguishing": "the corpus's only case with a CVE and distribution advisories behind it, and the only one whose cause is an arithmetic limit rather than a control-flow mistake: nobody wrote a wrong line. unsigned short simply stopped counting",
+  "sibling_issue": "the same overflow was still reachable through the binary protocol until e3b7d33 (2026-07-02), which upstream describes as a remote-code-execution path, and the meta protocol was hardened separately in bc080ab (2020-02-27). One defect, three front ends, nine years",
+  "arms": {
+    "spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
+      "role": "control for sublet: same binary and guest, one difference. A chunk keeps the alias it was carved with, so the holder's pointer still names live storage -- the next item's -- and the read succeeds"
+    },
+    "sublet": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
+      "cause": 24,
+      "note": "release and issue each revoke the chunk, so the holder's pointer is dead by the time it is read"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
+      "role": "control for poisoncap-protected: bounded leases and no invalidation, so the freed chunk stays addressable and the stale read succeeds"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
+      "signal": 34,
+      "si_code": 2,
+      "note": "si_code 2 and not 3: the sweep has run and the holder's alias is revoked, which is a different refusal from an access to a poisoned but unswept granule"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: slab pages from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == mc_defect_read; with --runtime-revocation off it must complete instead",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "item_free ends in slabs_free, which pushes the chunk on its class's slots list; the chunk never reaches free(), so libc's quarantine never holds it"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the chunk never reaches free(), so ASan has no event; it would see the reuse only as an ordinary live object"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm lets the count wrap, so the first two releases free an item 65536 clients still hold, the next slabs_alloc returns the same chunk, and the holder reads the other item's bytes; the fixed arm answers the get as a miss at the limit and the count never wraps",
+      "note": "unit_reissued differs between the arms, as in case 2: the premature free IS the defect, so the control cannot show the reuse it enables"
+    }
+  },
+  "status": "native pair 2026-09-21 through the port, both arms as expected (buggy: unit_reissued=1, accessed_through_stale=1, damage=1, chunk_reuses=1; fixed: all zero). Capstone domain 2026-09-21: spatial completes, sublet faults at mc_defect_read cause=24 at the published address; negative control fires. PoisonCap 2026-09-21: spatial completes with sweeps=0, protected faults with SIGPROT si_code=PROT_CHERI_TAG at the resolved address, behind the platform's five instruction controls; negative control fires. Stock CheriBSD 2026-09-21: completes with revocation on and verified, reporting chunk_reuses=1 -- the chunk really was freed and reissued -- while revocation-control faults in the same boot; with revocation off it completes too; negative control fires",
+  "note": "damage is the holder reading another item's bytes where it stored its own. Upstream's issue #271 reports the other consequence of the same free -- the hash chain closing on itself, h_next == it, and assoc_find looping forever"
+}

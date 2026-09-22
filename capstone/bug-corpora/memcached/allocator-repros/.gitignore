@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+# Run summaries stay outside the repository; the case files' status carries the outcome.
+results/

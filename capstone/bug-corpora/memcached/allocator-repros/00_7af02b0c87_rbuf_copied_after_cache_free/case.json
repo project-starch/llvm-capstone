@@ -1,0 +1,57 @@
+{
+  "case": 0,
+  "upstream_fix": "7af02b0c87",
+  "title": "a text multiget's read buffer is copied after it went back to the rbuf cache",
+  "consumer": "memcached.c, rbuf_switch_to_malloc()",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of the 1.6.45 tag: GitHub compare 1.6.45...7af02b0c87 reports status=behind, behind_by=566; the case reconstructs the pre-fix order of the two lines, which the commit's own diff shows",
+  "object": "the connection's READ_BUFFER_SIZE read buffer, an object of the thread's rbuf cache (cache.c)",
+  "lifetime_ender": "do_cache_free, which pushes the buffer on the cache's STAILQ (cache.c:135) and writes the list link into its first pointer-sized bytes; free() is never called",
+  "shape": "stale object pointer / cache.c reuse / read through the dead pointer",
+  "allocator_layer": "cache.c object cache over malloc, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator: cache.c is upstream's file at the 1.6.45 pin through the port's two patches (freestanding shim, object lifetime hooks); the connection, the parser and the thread are reduced to the two lines the fix reorders, plus one prior buffer on the free list so the link read back is a pointer",
+  "layer_note": "upstream's commit message names the mechanism -- the cache 'can reuse the first 8 bytes as a pointer to the internal freelist' -- and that is the only reason the defect was visible: for years the free list did not touch the buffer. The port's hook sits on that push, which is where the buffer's lifetime ends",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm copies the command after the buffer was pushed on the free list, so the copy's first bytes are the STAILQ link and differ from the command; the fixed arm copies first and the bytes are intact",
+      "note": "unit_reissued is 1 in BOTH arms by design -- the next connection's cache_alloc pops the buffer either way; the arms differ only in whether the copy read it after the push"
+    },
+    "spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
+      "role": "control for sublet: same binary and guest, one difference. An object keeps the alias it was carved with, so the freed buffer is readable and the copy proceeds -- with the link in it, as upstream saw"
+    },
+    "sublet": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
+      "cause": 24,
+      "note": "the probe is the first read through rcurr after do_cache_free; the mark precedes it and nothing between them touches the buffer"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
+      "role": "control for poisoncap-protected: the same binary in the same boot, one difference. Bounded leases and no invalidation, so the freed object stays addressable and the stale access succeeds -- the defect as upstream ships it. sweeps=0 is part of the oracle: a control that swept would be a second protected arm under the control's name"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
+      "signal": 34,
+      "si_code": 2,
+      "note": "si_code separates the platform's two refusals and only one of them is this arm: 3 is an access to a granule that is poisoned but not yet swept, with the capability still tagged; 2 is an access through an alias the sweep revoked. The platform's own controls produce both in the same boot"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the buffer never reaches free(), so ASan has no event at the push; it would see the reuse only as an ordinary live object"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: slab pages and cache objects from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == mc_defect_read; with --runtime-revocation off it must complete instead. The ABI control reports runtime_revocation from malloc_revoke_enabled()",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "cache.c pushes the freed object on its STAILQ and pops it back uncleared; it calls free() only over a limit these caches do not have, so libc's quarantine never holds the object"
+    }
+  },
+  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds; negative control fires. Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes (completed=1, object_reuses=1) while revocation-control faults at mc_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 2/2 with the control still faulting. PoisonCap 2026-09-21: spatial completes with the adapter reporting sweeps=0, protected faults at mc_defect_read with SIGPROT si_code=PROT_CHERI_TAG at the address the supervisor resolved, 2 of 2 rounds; the platform's five instruction controls hold in every boot and the negative control fires 2/2.",
+  "note": "damage is the copied command differing from what was read: natively the first 8 bytes become the free list's link, in a domain the first 16. Upstream reported an unhelpful ERROR to the client; this records the byte-level cause of it"
+}

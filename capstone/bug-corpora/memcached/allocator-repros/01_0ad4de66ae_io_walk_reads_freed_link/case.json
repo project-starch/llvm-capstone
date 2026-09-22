@@ -1,0 +1,58 @@
+{
+  "case": 1,
+  "upstream_fix": "0ad4de66ae",
+  "title": "resetting a bad proxy backend reads the next-link out of a pending IO it has already returned",
+  "consumer": "proxy_network.c, _reset_bad_backend()",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of the 1.6.45 tag: GitHub compare 1.6.45...0ad4de66ae reports status=behind, behind_by=493; the case reconstructs the STAILQ_FOREACH the commit's own diff replaces",
+  "object": "io_pending_proxy_t, an object of the worker thread's io cache (cache.c)",
+  "lifetime_ender": "return_io_pending, which hands the IO back to its worker thread; the worker's do_cache_free pushes the object on the cache's STAILQ (cache.c:135), and its next request pops it uncleared (cache.c:80)",
+  "shape": "stale object pointer / cache.c reuse / list link read through the dead pointer",
+  "allocator_layer": "cache.c object cache over malloc, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator: cache.c is upstream's file at the 1.6.45 pin through the port's two patches; the proxy backend, its event thread and the worker thread are reduced to the loop the fix rewrites, a three-entry list, and the worker's return-and-reissue performed in the order the commit message describes ('the return call can free and potentially reuse the object if the thread gets suspended')",
+  "distinguishing": "the stale read is of the list link itself: the freed object is the loop's cursor, so the very field the walk needs next is the one the allocator's push and the next owner overwrite",
+  "layer_note": "the upstream fix does not touch the allocator; it removes each IO from the list before returning it, so no read follows the free. The fixed arm here does the same",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm's walk ends after 1 of 3 pending IOs, because the reissued object's link reads as end-of-list; the fixed arm returns all 3",
+      "note": "unit_reissued is 1 in BOTH arms by design -- the worker's next request pops the object either way; the arms differ only in whether the walk reads its link afterwards"
+    },
+    "spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: report.completed == 1, no fault, the case marker printed",
+      "role": "control for sublet: same binary and guest, one difference. An object keeps the alias it was carved with, so the link is readable and the truncated walk proceeds"
+    },
+    "sublet": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, and nowhere else: exactly one fault, pc equal to the address the run's own marker published",
+      "cause": 24,
+      "note": "the probe reads the first byte of io->io_next after the object was released and reissued; both transitions minted fresh aliases, so the cursor's is dead twice over"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor, and the adapter's own line reports sweeps=0",
+      "role": "control for poisoncap-protected: the same binary in the same boot, one difference. Bounded leases and no invalidation, so the freed object stays addressable and the stale access succeeds -- the defect as upstream ships it. sweeps=0 is part of the oracle: a control that swept would be a second protected arm under the control's name"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "fault at the labelled read probe mc_defect_read, observed from outside: SIGPROT with si_code PROT_CHERI_TAG, and the faulting address and the PC both equal to the address the supervisor resolved from the child's ELF and memory map",
+      "signal": 34,
+      "si_code": 2,
+      "note": "si_code separates the platform's two refusals and only one of them is this arm: 3 is an access to a granule that is poisoned but not yet swept, with the capability still tagged; 2 is an access through an alias the sweep revoked. The platform's own controls produce both in the same boot"
+    },
+    "native-detect": {
+      "status": "not written",
+      "requires": "the object never reaches free(), so ASan has no event; the reissue is an ordinary live object to it"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap: slab pages and cache objects from the platform's own malloc, its kernel-defaulted libc revocation on",
+      "mode": 0,
+      "oracle": "the sequence completes: exit 0, report status=0 completed=1 count=1 mode=0, no fault observed by the supervisor",
+      "control": "revocation-control in the same boot, before the case: free a block, sweep, read through the old pointer at the same labelled clbu -- must fault with SIGPROT si_code=PROT_CHERI_TAG at pc == mc_defect_read; with --runtime-revocation off it must complete instead. The ABI control reports runtime_revocation from malloc_revoke_enabled()",
+      "guest_default": "preserved -- the kernel default stays on; the common runner sets the per-process policy explicitly",
+      "note": "cache.c pushes the freed object on its STAILQ and pops it back uncleared; it calls free() only over a limit these caches do not have, so libc's quarantine never holds the object"
+    }
+  },
+  "status": "native pair 2026-09-21 through the port, both arms as expected. Capstone domain 2026-09-21: spatial completes (completed=1, object_reuses=1), sublet faults at mc_defect_read cause=24 at the published address, 2 of 2 rounds, after a first fixture that took the probe's address after the free had faulted at the arithmetic and been refused by the oracle; negative control fires. Stock CheriBSD 2026-09-21: with revocation on and verified, the case completes (completed=1, object_reuses=1) while revocation-control faults at mc_defect_read (SIGPROT, PROT_CHERI_TAG); with revocation off both complete; negative control fires 2/2 with the control still faulting. PoisonCap 2026-09-21: spatial completes with the adapter reporting sweeps=0, protected faults at mc_defect_read with SIGPROT si_code=PROT_CHERI_TAG at the address the supervisor resolved, 2 of 2 rounds; the platform's five instruction controls hold in every boot and the negative control fires 2/2.",
+  "note": "damage is the walk ending early: upstream reports a crash, because the reused object's link is whatever its new owner wrote there; the reduction's new owner zeroes it, which reads as end-of-list. The consequence differs, the stale read is the same"
+}

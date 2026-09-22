@@ -41,5 +41,13 @@
     "examples": {
       "allocator-example": "ALLOCATOR_EXAMPLE apr PASS pointer_bytes=16"
     }
+  },
+  "memcached": {
+    "path": "memcached/allocators",
+    "archive_option": "MC_ARCHIVE",
+    "library": "Memcached::Allocators",
+    "examples": {
+      "allocator-example": "ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=16"
+    }
   }
 }
