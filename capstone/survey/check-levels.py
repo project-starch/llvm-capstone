@@ -73,6 +73,8 @@ def check(doc, repo=REPO, manuscript=None):
             errors.append(f"{where}: recorded bundle has no manifest: {recorded}")
         if level.get("confirmed") == "measured" and not recorded:
             errors.append(f"{where}: a measured seam must name its bundle")
+        if level.get("reuse_share_unmeasurable") and not recorded:
+            errors.append(f"{where}: an unmeasurable share must name the bundle that shows why")
         if level.get("exercised") is False and not level.get("not_exercised"):
             errors.append(f"{where}: a level the workload never exercises must say so")
         if level.get("exercised") is not None and not level.get("recorded"):
@@ -150,6 +152,12 @@ def self_test():
         if level.get("exercised") is False:
             level.pop("not_exercised", None)
     cases.append(("unexercised level without a reason", doc))
+
+    doc = json.loads(json.dumps(base))
+    for level in doc["levels"]:
+        if level.get("reuse_share_unmeasurable"):
+            level.pop("recorded", None)
+    cases.append(("unmeasurable share with no bundle", doc))
 
     failures = []
     for label, broken in cases:

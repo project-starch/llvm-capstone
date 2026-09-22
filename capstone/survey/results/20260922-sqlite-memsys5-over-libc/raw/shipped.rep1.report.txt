@@ -1,0 +1,1428 @@
+memhook: three levels recorded from inside the process
+
+@alloc[0, libc]: 39
+@free[0, libc]: 13953
+@bytes[0, libc]: 80408
+@peak[0, libc]: 13633
+@alloc[0, lookaside]: 58
+@free[0, lookaside]: 431
+@bytes[0, lookaside]: 5230
+@peak[0, lookaside]: 59
+@kind[0, malloc]: 39
+@kind[0, free]: 13953
+@escaped[0]: 8
+@alloc[1, libc]: 804
+@free[1, libc]: 113
+@bytes[1, libc]: 2944960
+@realloc[1, libc]: 15
+@peak[1, libc]: 727
+@alloc[1, lookaside]: 100086
+@free[1, lookaside]: 100081
+@bytes[1, lookaside]: 24405065
+@peak[1, lookaside]: 49
+@kind[1, malloc]: 789
+@kind[1, realloc]: 15
+@kind[1, free]: 98
+@escaped[1]: 102
+@tnum[1]: 100
+@tname[1]: %d INSERTs into table with no index
+@alloc[2, libc]: 3261
+@free[2, libc]: 2439
+@bytes[2, libc]: 26437792
+@realloc[2, libc]: 7
+@peak[2, libc]: 1554
+@alloc[2, lookaside]: 200091
+@free[2, lookaside]: 200083
+@bytes[2, lookaside]: 46390011
+@peak[2, lookaside]: 51
+@kind[2, malloc]: 3254
+@kind[2, realloc]: 7
+@kind[2, free]: 2432
+@escaped[2]: 69
+@tnum[2]: 110
+@tname[2]: %d ordered INSERTS with one index/PK
+@alloc[3, libc]: 4882
+@free[3, libc]: 4063
+@bytes[3, libc]: 42529904
+@realloc[3, libc]: 7
+@peak[3, libc]: 2373
+@alloc[3, lookaside]: 200091
+@free[3, lookaside]: 200083
+@bytes[3, lookaside]: 46397808
+@peak[3, lookaside]: 51
+@kind[3, malloc]: 4875
+@kind[3, realloc]: 7
+@kind[3, free]: 4056
+@escaped[3]: 69
+@tnum[3]: 120
+@tname[3]: %d unordered INSERTS with one index/PK
+@alloc[4, libc]: 99
+@free[4, libc]: 99
+@bytes[4, libc]: 31696
+@realloc[4, libc]: 76
+@peak[4, libc]: 2365
+@alloc[4, lookaside]: 285
+@free[4, lookaside]: 270
+@bytes[4, lookaside]: 37632
+@peak[4, lookaside]: 51
+@kind[4, malloc]: 23
+@kind[4, realloc]: 76
+@kind[4, free]: 23
+@tnum[4]: 130
+@tname[4]: %d SELECTS, numeric BETWEEN, unindexed
+@alloc[5, libc]: 159
+@free[5, libc]: 159
+@bytes[5, libc]: 23337312
+@realloc[5, libc]: 135
+@peak[5, libc]: 2366
+@alloc[5, lookaside]: 692
+@free[5, lookaside]: 676
+@bytes[5, lookaside]: 84909
+@peak[5, lookaside]: 60
+@kind[5, malloc]: 24
+@kind[5, realloc]: 135
+@kind[5, free]: 24
+@escaped[5]: 10
+@tnum[5]: 140
+@tname[5]: %d SELECTS, LIKE, unindexed
+@alloc[6, libc]: 153761
+@free[6, libc]: 153761
+@bytes[6, libc]: 10429944
+@peak[6, libc]: 26016
+@alloc[6, lookaside]: 565
+@free[6, lookaside]: 551
+@bytes[6, lookaside]: 76037
+@peak[6, lookaside]: 50
+@kind[6, malloc]: 153761
+@kind[6, free]: 153761
+@tnum[6]: 142
+@tname[6]: %d SELECTS w/ORDER BY, unindexed
+@alloc[7, libc]: 94
+@free[7, libc]: 94
+@bytes[7, libc]: 201808
+@peak[7, libc]: 2373
+@alloc[7, lookaside]: 557
+@free[7, lookaside]: 543
+@bytes[7, lookaside]: 76253
+@peak[7, lookaside]: 52
+@kind[7, malloc]: 94
+@kind[7, free]: 94
+@tnum[7]: 145
+@tname[7]: %d SELECTS w/ORDER BY and LIMIT, unindexed
+@alloc[8, libc]: 262410
+@free[8, libc]: 260336
+@bytes[8, libc]: 74003096
+@realloc[8, libc]: 5
+@peak[8, libc]: 53836
+@alloc[8, lookaside]: 356
+@free[8, lookaside]: 356
+@bytes[8, lookaside]: 45551
+@peak[8, lookaside]: 53
+@kind[8, malloc]: 262405
+@kind[8, realloc]: 5
+@kind[8, free]: 260331
+@escaped[8]: 194
+@tnum[8]: 150
+@tname[8]: CREATE INDEX five times
+@alloc[9, libc]: 32719
+@free[9, libc]: 32718
+@bytes[9, libc]: 1764416
+@realloc[9, libc]: 25107
+@peak[9, libc]: 4440
+@alloc[9, lookaside]: 98528
+@free[9, lookaside]: 98510
+@bytes[9, lookaside]: 11827688
+@peak[9, lookaside]: 51
+@kind[9, malloc]: 7612
+@kind[9, realloc]: 25107
+@kind[9, free]: 7611
+@tnum[9]: 160
+@tname[9]: %d SELECTS, numeric BETWEEN, indexed
+@alloc[10, libc]: 33451
+@free[10, libc]: 33450
+@bytes[10, libc]: 1844128
+@realloc[10, libc]: 25839
+@peak[10, libc]: 4441
+@alloc[10, lookaside]: 98528
+@free[10, lookaside]: 98510
+@bytes[10, lookaside]: 11820443
+@peak[10, lookaside]: 51
+@kind[10, malloc]: 7612
+@kind[10, realloc]: 25839
+@kind[10, free]: 7611
+@tnum[10]: 161
+@tname[10]: %d SELECTS, numeric BETWEEN, PK
+@alloc[11, libc]: 17957
+@free[11, libc]: 17956
+@bytes[11, libc]: 2281024
+@realloc[11, libc]: 7877
+@peak[11, libc]: 4443
+@alloc[11, lookaside]: 129998
+@free[11, lookaside]: 129979
+@bytes[11, lookaside]: 12537920
+@peak[11, lookaside]: 58
+@kind[11, malloc]: 10080
+@kind[11, realloc]: 7877
+@kind[11, free]: 10079
+@escaped[11]: 75
+@tnum[11]: 170
+@tname[11]: %d SELECTS, text BETWEEN, indexed
+@alloc[12, libc]: 19455
+@free[12, libc]: 17824
+@bytes[12, libc]: 130067808
+@realloc[12, libc]: 9
+@peak[12, libc]: 6104
+@alloc[12, lookaside]: 247
+@free[12, lookaside]: 247
+@bytes[12, lookaside]: 34815
+@peak[12, lookaside]: 51
+@kind[12, malloc]: 19446
+@kind[12, realloc]: 9
+@kind[12, free]: 17815
+@escaped[12]: 145
+@tnum[12]: 180
+@tname[12]: %d INSERTS with three indexes
+@alloc[13, libc]: 17765
+@free[13, libc]: 17686
+@bytes[13, libc]: 123318032
+@peak[13, libc]: 6185
+@alloc[13, lookaside]: 44
+@free[13, lookaside]: 44
+@bytes[13, lookaside]: 8559
+@peak[13, lookaside]: 23
+@kind[13, malloc]: 17765
+@kind[13, free]: 17686
+@tnum[13]: 190
+@tname[13]: DELETE and REFILL one table
+@alloc[14, libc]: 45174
+@free[14, libc]: 45463
+@bytes[14, libc]: 133321128
+@realloc[14, libc]: 38
+@peak[14, libc]: 35601
+@alloc[14, lookaside]: 1083
+@free[14, lookaside]: 1083
+@bytes[14, lookaside]: 139900
+@peak[14, lookaside]: 68
+@kind[14, malloc]: 45136
+@kind[14, realloc]: 38
+@kind[14, free]: 45425
+@escaped[14]: 530
+@tnum[14]: 200
+@tname[14]: VACUUM
+@alloc[15, libc]: 411
+@free[15, libc]: 340
+@bytes[15, libc]: 52992
+@realloc[15, libc]: 38
+@peak[15, libc]: 5989
+@alloc[15, lookaside]: 89
+@free[15, lookaside]: 89
+@bytes[15, lookaside]: 11770
+@peak[15, lookaside]: 49
+@kind[15, malloc]: 373
+@kind[15, realloc]: 38
+@kind[15, free]: 302
+@escaped[15]: 319
+@tnum[15]: 210
+@tname[15]: ALTER TABLE ADD COLUMN, and query
+@alloc[16, libc]: 3562
+@free[16, libc]: 3404
+@bytes[16, libc]: 7181008
+@peak[16, libc]: 8774
+@alloc[16, lookaside]: 35256
+@free[16, lookaside]: 35247
+@bytes[16, lookaside]: 9511856
+@peak[16, lookaside]: 32
+@kind[16, malloc]: 3562
+@kind[16, free]: 3404
+@tnum[16]: 230
+@tname[16]: %d UPDATES, numeric BETWEEN, indexed
+@alloc[17, libc]: 3330
+@free[17, libc]: 3327
+@bytes[17, libc]: 3467904
+@peak[17, libc]: 9404
+@alloc[17, lookaside]: 176296
+@free[17, lookaside]: 176288
+@bytes[17, lookaside]: 47512229
+@peak[17, lookaside]: 21
+@kind[17, malloc]: 3330
+@kind[17, free]: 3327
+@tnum[17]: 240
+@tname[17]: %d UPDATES of individual rows
+@alloc[18, libc]: 3337
+@free[18, libc]: 3337
+@bytes[18, libc]: 3503512
+@peak[18, libc]: 9407
+@alloc[18, lookaside]: 22
+@free[18, lookaside]: 22
+@bytes[18, lookaside]: 3870
+@peak[18, lookaside]: 17
+@kind[18, malloc]: 3337
+@kind[18, free]: 3337
+@tnum[18]: 250
+@tname[18]: One big UPDATE of the whole %d-row table
+@alloc[19, libc]: 2
+@free[19, libc]: 2
+@bytes[19, libc]: 64
+@peak[19, libc]: 6095
+@alloc[19, lookaside]: 25
+@free[19, lookaside]: 25
+@bytes[19, lookaside]: 4153
+@peak[19, lookaside]: 21
+@kind[19, malloc]: 2
+@kind[19, free]: 2
+@tnum[19]: 260
+@tname[19]: Query added column after filling
+@alloc[20, libc]: 9661
+@free[20, libc]: 9661
+@bytes[20, libc]: 20427832
+@peak[20, libc]: 12716
+@alloc[20, lookaside]: 34793
+@free[20, lookaside]: 34783
+@bytes[20, lookaside]: 13232625
+@peak[20, lookaside]: 26
+@kind[20, malloc]: 9661
+@kind[20, free]: 9661
+@tnum[20]: 270
+@tname[20]: %d DELETEs, numeric BETWEEN, indexed
+@alloc[21, libc]: 5644
+@free[21, libc]: 5643
+@bytes[21, libc]: 5878456
+@peak[21, libc]: 11713
+@alloc[21, lookaside]: 148112
+@free[21, lookaside]: 148105
+@bytes[21, lookaside]: 55164832
+@peak[21, lookaside]: 15
+@kind[21, malloc]: 5644
+@kind[21, free]: 5643
+@tnum[21]: 280
+@tname[21]: %d DELETEs of individual rows
+@alloc[22, libc]: 31854
+@free[22, libc]: 31787
+@bytes[22, libc]: 173484456
+@peak[22, libc]: 11908
+@alloc[22, lookaside]: 81
+@free[22, lookaside]: 81
+@bytes[22, lookaside]: 12753
+@peak[22, lookaside]: 29
+@kind[22, malloc]: 31854
+@kind[22, free]: 31787
+@escaped[22]: 2
+@tnum[22]: 290
+@tname[22]: Refill two %d-row tables using REPLACE
+@alloc[23, libc]: 19732
+@free[23, libc]: 19732
+@bytes[23, libc]: 127447912
+@peak[23, libc]: 8049
+@alloc[23, lookaside]: 109
+@free[23, lookaside]: 109
+@bytes[23, lookaside]: 14832
+@peak[23, lookaside]: 39
+@kind[23, malloc]: 19732
+@kind[23, free]: 19732
+@escaped[23]: 2
+@tnum[23]: 300
+@tname[23]: Refill a %d-row table using (b&1)==(a&1)
+@alloc[24, libc]: 8
+@free[24, libc]: 6
+@bytes[24, libc]: 3152
+@peak[24, libc]: 6166
+@alloc[24, lookaside]: 90097
+@free[24, lookaside]: 90081
+@bytes[24, lookaside]: 31142979
+@peak[24, lookaside]: 68
+@kind[24, malloc]: 8
+@kind[24, free]: 6
+@escaped[24]: 2
+@tnum[24]: 310
+@tname[24]: %d four-ways joins
+@alloc[25, libc]: 3
+@free[25, libc]: 2
+@bytes[25, libc]: 1488
+@peak[25, libc]: 6166
+@alloc[25, lookaside]: 87
+@free[25, lookaside]: 75
+@bytes[25, lookaside]: 9878
+@peak[25, lookaside]: 61
+@kind[25, malloc]: 3
+@kind[25, free]: 2
+@escaped[25]: 1
+@tnum[25]: 320
+@tname[25]: subquery in result set
+@alloc[26, libc]: 8567
+@free[26, libc]: 8154
+@bytes[26, libc]: 46507368
+@realloc[26, libc]: 4
+@peak[26, libc]: 6590
+@alloc[26, lookaside]: 140085
+@free[26, lookaside]: 140080
+@bytes[26, lookaside]: 33219789
+@peak[26, lookaside]: 49
+@kind[26, malloc]: 8563
+@kind[26, realloc]: 4
+@kind[26, free]: 8150
+@escaped[26]: 42
+@tnum[26]: 400
+@tname[26]: %d REPLACE ops on an IPK
+@alloc[27, libc]: 2
+@free[27, libc]: 2
+@bytes[27, libc]: 72
+@peak[27, libc]: 6578
+@alloc[27, lookaside]: 140017
+@free[27, lookaside]: 140011
+@bytes[27, lookaside]: 33232933
+@peak[27, lookaside]: 17
+@kind[27, malloc]: 2
+@kind[27, free]: 2
+@tnum[27]: 410
+@tname[27]: %d SELECTS on an IPK
+@alloc[28, libc]: 7643
+@free[28, libc]: 7210
+@bytes[28, libc]: 40732504
+@realloc[28, libc]: 5
+@peak[28, libc]: 7020
+@alloc[28, lookaside]: 140087
+@free[28, lookaside]: 140080
+@bytes[28, lookaside]: 33281085
+@peak[28, lookaside]: 49
+@kind[28, malloc]: 7638
+@kind[28, realloc]: 5
+@kind[28, free]: 7205
+@escaped[28]: 69
+@tnum[28]: 500
+@tname[28]: %d REPLACE on TEXT PK
+@alloc[29, libc]: 3
+@free[29, libc]: 2
+@bytes[29, libc]: 88
+@peak[29, libc]: 7012
+@alloc[29, lookaside]: 140020
+@free[29, lookaside]: 140012
+@bytes[29, lookaside]: 32483332
+@peak[29, lookaside]: 19
+@kind[29, malloc]: 3
+@kind[29, free]: 2
+@tnum[29]: 510
+@tname[29]: %d SELECTS on a TEXT PK
+@alloc[30, libc]: 9341
+@free[30, libc]: 9341
+@bytes[30, libc]: 61099864
+@peak[30, libc]: 7427
+@alloc[30, lookaside]: 43
+@free[30, lookaside]: 43
+@bytes[30, lookaside]: 8480
+@peak[30, lookaside]: 16
+@kind[30, malloc]: 9341
+@kind[30, free]: 9341
+@tnum[30]: 520
+@tname[30]: %d SELECT DISTINCT
+@alloc[31, libc]: 35
+@free[31, libc]: 28
+@bytes[31, libc]: 55160
+@realloc[31, libc]: 3
+@peak[31, libc]: 7029
+@alloc[31, lookaside]: 128
+@free[31, lookaside]: 128
+@bytes[31, lookaside]: 5840
+@peak[31, lookaside]: 123
+@kind[31, malloc]: 32
+@kind[31, realloc]: 3
+@kind[31, free]: 25
+@escaped[31]: 21
+@tnum[31]: 980
+@tname[31]: PRAGMA integrity_check
+@alloc[32, libc]: 159
+@free[32, libc]: 151
+@bytes[32, libc]: 33632
+@realloc[32, libc]: 9
+@peak[32, libc]: 7117
+@alloc[32, lookaside]: 116
+@free[32, lookaside]: 116
+@bytes[32, lookaside]: 16306
+@peak[32, lookaside]: 50
+@kind[32, malloc]: 150
+@kind[32, realloc]: 9
+@kind[32, free]: 142
+@escaped[32]: 129
+@tnum[32]: 990
+@tname[32]: ANALYZE
+@alloc[33, libc]: 388
+@free[33, libc]: 472
+@bytes[33, libc]: 500728
+@realloc[33, libc]: 2
+@peak[33, libc]: 7088
+@alloc[33, lookaside]: 970
+@free[33, lookaside]: 970
+@bytes[33, lookaside]: 142561
+@peak[33, lookaside]: 31
+@kind[33, malloc]: 386
+@kind[33, realloc]: 2
+@kind[33, free]: 470
+@escaped[33]: 11
+@tnum[33]: 999
+@tname[33]: Reset the database
+@alloc[34, libc]: 22938
+@free[34, libc]: 22806
+@bytes[34, libc]: 62656752
+@realloc[34, libc]: 252
+@peak[34, libc]: 7209
+@alloc[34, lookaside]: 1137
+@free[34, lookaside]: 1137
+@bytes[34, lookaside]: 941969
+@peak[34, lookaside]: 123
+@kind[34, malloc]: 22686
+@kind[34, realloc]: 252
+@kind[34, free]: 22554
+@escaped[34]: 11969
+@tnum[34]: 100
+@tname[34]: Fill %d rows
+@alloc[35, libc]: 6624
+@free[35, libc]: 6380
+@bytes[35, libc]: 8654104
+@realloc[35, libc]: 3
+@peak[35, libc]: 7435
+@alloc[35, lookaside]: 743279
+@free[35, lookaside]: 743279
+@bytes[35, lookaside]: 21241236
+@peak[35, lookaside]: 123
+@kind[35, malloc]: 6621
+@kind[35, realloc]: 3
+@kind[35, free]: 6377
+@escaped[35]: 6619
+@tnum[35]: 110
+@tname[35]: Query %d rows by rowid
+@alloc[36, libc]: 50
+@free[36, libc]: 175
+@bytes[36, libc]: 52272
+@peak[36, libc]: 7111
+@alloc[36, lookaside]: 155
+@free[36, lookaside]: 155
+@bytes[36, lookaside]: 23538
+@peak[36, lookaside]: 31
+@kind[36, malloc]: 50
+@kind[36, free]: 175
+@escaped[36]: 1
+@tnum[36]: 999
+@tname[36]: Reset the database
+@alloc[37, libc]: 478
+@free[37, libc]: 463
+@bytes[37, libc]: 534184
+@realloc[37, libc]: 8
+@peak[37, libc]: 7256
+@alloc[37, lookaside]: 3690
+@free[37, lookaside]: 3686
+@bytes[37, lookaside]: 250178
+@peak[37, lookaside]: 123
+@kind[37, malloc]: 470
+@kind[37, realloc]: 8
+@kind[37, free]: 455
+@escaped[37]: 339
+@tnum[37]: 100
+@tname[37]: Sudoku with recursive 'digits'
+@alloc[38, libc]: 545
+@free[38, libc]: 522
+@bytes[38, libc]: 529872
+@realloc[38, libc]: 8
+@peak[38, libc]: 7336
+@alloc[38, lookaside]: 3676
+@free[38, lookaside]: 3672
+@bytes[38, lookaside]: 250082
+@peak[38, lookaside]: 123
+@kind[38, malloc]: 537
+@kind[38, realloc]: 8
+@kind[38, free]: 514
+@escaped[38]: 414
+@tnum[38]: 200
+@tname[38]: Sudoku with VALUES 'digits'
+@alloc[39, libc]: 33747
+@free[39, libc]: 33731
+@bytes[39, libc]: 28157520
+@realloc[39, libc]: 71
+@peak[39, libc]: 33025
+@alloc[39, lookaside]: 28781
+@free[39, lookaside]: 28771
+@bytes[39, lookaside]: 1238857
+@peak[39, lookaside]: 123
+@kind[39, malloc]: 33676
+@kind[39, realloc]: 71
+@kind[39, free]: 33660
+@escaped[39]: 286
+@tnum[39]: 300
+@tname[39]: Mandelbrot Set with spacing=%f
+@alloc[40, libc]: 166732
+@free[40, libc]: 166729
+@bytes[40, libc]: 4051256
+@realloc[40, libc]: 6
+@peak[40, libc]: 173630
+@alloc[40, lookaside]: 166820
+@free[40, lookaside]: 166810
+@bytes[40, lookaside]: 1319249
+@peak[40, lookaside]: 123
+@kind[40, malloc]: 166726
+@kind[40, realloc]: 6
+@kind[40, free]: 166723
+@escaped[40]: 36
+@tnum[40]: 400
+@tname[40]: EXCEPT operator on %d-element tables
+@alloc[41, libc]: 3
+@free[41, libc]: 3
+@bytes[41, libc]: 168
+@peak[41, libc]: 6943
+@alloc[41, lookaside]: 68
+@free[41, lookaside]: 68
+@bytes[41, lookaside]: 9966
+@peak[41, lookaside]: 31
+@kind[41, malloc]: 3
+@kind[41, free]: 3
+@tnum[41]: 999
+@tname[41]: Reset the database
+@alloc[42, libc]: 14928
+@free[42, libc]: 11239
+@bytes[42, libc]: 216068432
+@realloc[42, libc]: 4532
+@peak[42, libc]: 10817
+@alloc[42, lookaside]: 6460
+@free[42, lookaside]: 6460
+@bytes[42, lookaside]: 511021
+@peak[42, lookaside]: 123
+@kind[42, malloc]: 10396
+@kind[42, realloc]: 4532
+@kind[42, free]: 6707
+@escaped[42]: 996
+@tnum[42]: 100
+@tname[42]: table J1 is %d rows of JSONB
+@alloc[43, libc]: 3465
+@free[43, libc]: 1158
+@bytes[43, libc]: 40484624
+@realloc[43, libc]: 902
+@peak[43, libc]: 12953
+@alloc[43, lookaside]: 193
+@free[43, lookaside]: 193
+@bytes[43, lookaside]: 19265
+@peak[43, lookaside]: 49
+@kind[43, malloc]: 2563
+@kind[43, realloc]: 902
+@kind[43, free]: 256
+@escaped[43]: 41
+@tnum[43]: 110
+@tname[43]: table J2 is %d rows from J1 converted to text
+@alloc[44, libc]: 3205
+@free[44, libc]: 3175
+@bytes[44, libc]: 129388816
+@realloc[44, libc]: 3
+@peak[44, libc]: 13489
+@alloc[44, lookaside]: 3216
+@free[44, lookaside]: 3216
+@bytes[44, lookaside]: 143933
+@peak[44, lookaside]: 52
+@kind[44, malloc]: 3202
+@kind[44, realloc]: 3
+@kind[44, free]: 3172
+@escaped[44]: 156
+@tnum[44]: 120
+@tname[44]: create indexes on JSON expressions on J1
+@alloc[45, libc]: 1094
+@free[45, libc]: 1069
+@bytes[45, libc]: 56365336
+@realloc[45, libc]: 3
+@peak[45, libc]: 13123
+@alloc[45, lookaside]: 822
+@free[45, lookaside]: 822
+@bytes[45, lookaside]: 51373
+@peak[45, lookaside]: 58
+@kind[45, malloc]: 1091
+@kind[45, realloc]: 3
+@kind[45, free]: 1066
+@escaped[45]: 456
+@tnum[45]: 130
+@tname[45]: create indexes on JSON expressions on J2
+@alloc[46, libc]: 7526
+@free[46, libc]: 7526
+@bytes[46, libc]: 646233344
+@realloc[46, libc]: 2
+@peak[46, libc]: 13004
+@alloc[46, lookaside]: 25288
+@free[46, lookaside]: 25288
+@bytes[46, lookaside]: 802782
+@peak[46, lookaside]: 75
+@kind[46, malloc]: 7524
+@kind[46, realloc]: 2
+@kind[46, free]: 7524
+@tnum[46]: 140
+@tname[46]: queries against J1
+@alloc[47, libc]: 66
+@free[47, libc]: 66
+@bytes[47, libc]: 3640536
+@realloc[47, libc]: 1
+@peak[47, libc]: 13029
+@alloc[47, lookaside]: 203
+@free[47, lookaside]: 203
+@bytes[47, lookaside]: 16866
+@peak[47, lookaside]: 96
+@kind[47, malloc]: 65
+@kind[47, realloc]: 1
+@kind[47, free]: 65
+@escaped[47]: 4
+@tnum[47]: 141
+@tname[47]: queries involving json_type()
+@alloc[48, libc]: 89159
+@free[48, libc]: 89138
+@bytes[48, libc]: 350695888
+@peak[48, libc]: 96069
+@alloc[48, lookaside]: 27289
+@free[48, lookaside]: 27289
+@bytes[48, lookaside]: 1463541
+@peak[48, lookaside]: 66
+@kind[48, malloc]: 89159
+@kind[48, free]: 89138
+@escaped[48]: 1512
+@tnum[48]: 150
+@tname[48]: json_insert()/set()/remove() on every row of J1
+@alloc[49, libc]: 22479
+@free[49, libc]: 22479
+@bytes[49, libc]: 183681408
+@realloc[49, libc]: 2800
+@peak[49, libc]: 31064
+@alloc[49, lookaside]: 3159
+@free[49, lookaside]: 3159
+@bytes[49, lookaside]: 113336
+@peak[49, lookaside]: 47
+@kind[49, malloc]: 19679
+@kind[49, realloc]: 2800
+@kind[49, free]: 19679
+@escaped[49]: 609
+@tnum[49]: 160
+@tname[49]: json_insert()/set()/remove() on every row of J2
+@alloc[50, libc]: 192
+@free[50, libc]: 247
+@bytes[50, libc]: 254024
+@realloc[50, libc]: 2
+@peak[50, libc]: 13123
+@alloc[50, lookaside]: 362
+@free[50, lookaside]: 362
+@bytes[50, lookaside]: 53062
+@peak[50, lookaside]: 31
+@kind[50, malloc]: 190
+@kind[50, realloc]: 2
+@kind[50, free]: 245
+@escaped[50]: 4
+@tnum[50]: 999
+@tname[50]: Reset the database
+@alloc[51, libc]: 68
+@free[51, libc]: 61
+@bytes[51, libc]: 17616
+@realloc[51, libc]: 3
+@peak[51, libc]: 12993
+@alloc[51, lookaside]: 30085
+@free[51, lookaside]: 30080
+@bytes[51, lookaside]: 6776191
+@peak[51, lookaside]: 49
+@kind[51, malloc]: 65
+@kind[51, realloc]: 3
+@kind[51, free]: 58
+@escaped[51]: 42
+@tnum[51]: 100
+@tname[51]: Fill a table with %d FP values
+@alloc[52, libc]: 2
+@free[52, libc]: 2
+@bytes[52, libc]: 64
+@peak[52, libc]: 12967
+@alloc[52, lookaside]: 44
+@free[52, lookaside]: 37
+@bytes[52, lookaside]: 5903
+@peak[52, lookaside]: 35
+@kind[52, malloc]: 2
+@kind[52, free]: 2
+@tnum[52]: 110
+@tname[52]: %d range queries
+@alloc[53, libc]: 45991
+@free[53, libc]: 45985
+@bytes[53, libc]: 6774720
+@realloc[53, libc]: 3
+@peak[53, libc]: 28006
+@alloc[53, lookaside]: 213
+@free[53, lookaside]: 213
+@bytes[53, lookaside]: 27966
+@peak[53, lookaside]: 52
+@kind[53, malloc]: 45988
+@kind[53, realloc]: 3
+@kind[53, free]: 45982
+@escaped[53]: 116
+@tnum[53]: 120
+@tname[53]: CREATE INDEX three times
+@alloc[54, libc]: 3
+@free[54, libc]: 2
+@bytes[54, libc]: 80
+@peak[54, libc]: 12974
+@alloc[54, lookaside]: 48
+@free[54, lookaside]: 38
+@bytes[54, lookaside]: 6158
+@peak[54, lookaside]: 36
+@kind[54, malloc]: 3
+@kind[54, free]: 2
+@tnum[54]: 130
+@tname[54]: %d indexed range queries
+@alloc[55, libc]: 15536
+@free[55, libc]: 15536
+@bytes[55, libc]: 134752
+@peak[55, libc]: 12975
+@alloc[55, lookaside]: 37
+@free[55, lookaside]: 37
+@bytes[55, lookaside]: 5172
+@peak[55, lookaside]: 33
+@kind[55, malloc]: 15536
+@kind[55, free]: 15536
+@tnum[55]: 140
+@tname[55]: %d calls to round()
+@alloc[56, libc]: 4
+@free[56, libc]: 3
+@bytes[56, libc]: 216
+@peak[56, libc]: 12975
+@alloc[56, lookaside]: 60082
+@free[56, lookaside]: 60082
+@bytes[56, lookaside]: 2015898
+@peak[56, lookaside]: 74
+@kind[56, malloc]: 4
+@kind[56, free]: 3
+@tnum[56]: 150
+@tname[56]: %d printf() calls
+@alloc[57, libc]: 72
+@free[57, libc]: 87
+@bytes[57, libc]: 101496
+@realloc[57, libc]: 1
+@peak[57, libc]: 13040
+@alloc[57, lookaside]: 215
+@free[57, lookaside]: 215
+@bytes[57, lookaside]: 31550
+@peak[57, lookaside]: 31
+@kind[57, malloc]: 71
+@kind[57, realloc]: 1
+@kind[57, free]: 86
+@escaped[57]: 2
+@tnum[57]: 999
+@tname[57]: Reset the database
+@alloc[58, libc]: 1
+@free[58, libc]: 1
+@bytes[58, libc]: 32
+@peak[58, libc]: 12960
+@alloc[58, lookaside]: 72500
+@free[58, lookaside]: 72500
+@bytes[58, lookaside]: 10212500
+@peak[58, lookaside]: 27
+@kind[58, malloc]: 1
+@kind[58, free]: 1
+@tnum[58]: 100
+@tname[58]: parsing %d small integers
+@alloc[59, libc]: 1
+@free[59, libc]: 1
+@bytes[59, libc]: 32
+@peak[59, libc]: 12960
+@alloc[59, lookaside]: 87500
+@free[59, lookaside]: 87500
+@bytes[59, lookaside]: 11330000
+@peak[59, lookaside]: 33
+@kind[59, malloc]: 1
+@kind[59, free]: 1
+@tnum[59]: 110
+@tname[59]: parsing %d large integers
+@alloc[60, libc]: 1
+@free[60, libc]: 1
+@bytes[60, libc]: 32
+@peak[60, libc]: 12960
+@alloc[60, lookaside]: 87500
+@free[60, lookaside]: 87500
+@bytes[60, lookaside]: 10470000
+@peak[60, lookaside]: 33
+@kind[60, malloc]: 1
+@kind[60, free]: 1
+@tnum[60]: 200
+@tname[60]: parsing %d small reals
+@alloc[61, libc]: 1
+@free[61, libc]: 1
+@bytes[61, libc]: 32
+@peak[61, libc]: 12960
+@alloc[61, lookaside]: 87500
+@free[61, lookaside]: 87500
+@bytes[61, lookaside]: 11390000
+@peak[61, lookaside]: 33
+@kind[61, malloc]: 1
+@kind[61, free]: 1
+@tnum[61]: 210
+@tname[61]: parsing %d large reals
+@alloc[62, libc]: 3
+@free[62, libc]: 3
+@bytes[62, libc]: 168
+@peak[62, libc]: 12960
+@alloc[62, lookaside]: 68
+@free[62, lookaside]: 68
+@bytes[62, lookaside]: 9966
+@peak[62, lookaside]: 31
+@kind[62, malloc]: 3
+@kind[62, free]: 3
+@tnum[62]: 999
+@tname[62]: Reset the database
+@alloc[63, libc]: 20379
+@free[63, libc]: 20296
+@bytes[63, libc]: 33464808
+@realloc[63, libc]: 45
+@peak[63, libc]: 13076
+@alloc[63, lookaside]: 29491
+@free[63, lookaside]: 29484
+@bytes[63, lookaside]: 8799668
+@peak[63, lookaside]: 53
+@kind[63, malloc]: 20334
+@kind[63, realloc]: 45
+@kind[63, free]: 20251
+@escaped[63]: 6540
+@tnum[63]: 100
+@tname[63]: %d INSERTs into an r-tree
+@alloc[64, libc]: 1660
+@free[64, libc]: 1648
+@bytes[64, libc]: 6993144
+@realloc[64, libc]: 14
+@peak[64, libc]: 13082
+@alloc[64, lookaside]: 108
+@free[64, lookaside]: 108
+@bytes[64, lookaside]: 15048
+@peak[64, lookaside]: 51
+@kind[64, malloc]: 1646
+@kind[64, realloc]: 14
+@kind[64, free]: 1634
+@escaped[64]: 52
+@tnum[64]: 101
+@tname[64]: Copy from rtree to a regular table
+@alloc[65, libc]: 80771
+@free[65, libc]: 80770
+@bytes[65, libc]: 126682352
+@peak[65, libc]: 13062
+@alloc[65, lookaside]: 14112
+@free[65, lookaside]: 14105
+@bytes[65, lookaside]: 3942849
+@peak[65, lookaside]: 27
+@kind[65, malloc]: 80771
+@kind[65, free]: 80770
+@tnum[65]: 110
+@tname[65]: %d one-dimensional intersect slice queries
+@alloc[66, libc]: 2
+@free[66, libc]: 2
+@bytes[66, libc]: 96
+@peak[66, libc]: 13056
+@alloc[66, lookaside]: 4114
+@free[66, lookaside]: 4107
+@bytes[66, lookaside]: 948927
+@peak[66, lookaside]: 30
+@kind[66, malloc]: 2
+@kind[66, free]: 2
+@tnum[66]: 111
+@tname[66]: Verify result from 1-D intersect slice queries
+@alloc[67, libc]: 88685
+@free[67, libc]: 88684
+@bytes[67, libc]: 139977872
+@peak[67, libc]: 13062
+@alloc[67, lookaside]: 16028
+@free[67, lookaside]: 16021
+@bytes[67, lookaside]: 3958177
+@peak[67, lookaside]: 27
+@kind[67, malloc]: 88685
+@kind[67, free]: 88684
+@tnum[67]: 120
+@tname[67]: %d one-dimensional overlap slice queries
+@alloc[68, libc]: 2
+@free[68, libc]: 2
+@bytes[68, libc]: 96
+@peak[68, libc]: 13056
+@alloc[68, lookaside]: 6030
+@free[68, lookaside]: 6023
+@bytes[68, lookaside]: 996255
+@peak[68, lookaside]: 30
+@kind[68, malloc]: 2
+@kind[68, free]: 2
+@tnum[68]: 121
+@tname[68]: Verify result from 1-D overlap slice queries
+@alloc[69, libc]: 96688
+@free[69, libc]: 96684
+@bytes[69, libc]: 140729960
+@peak[69, libc]: 13069
+@alloc[69, lookaside]: 16040
+@free[69, lookaside]: 16029
+@bytes[69, lookaside]: 3959233
+@peak[69, lookaside]: 39
+@kind[69, malloc]: 96688
+@kind[69, free]: 96684
+@tnum[69]: 125
+@tname[69]: %d custom geometry callback queries
+@alloc[70, libc]: 32098
+@free[70, libc]: 32097
+@bytes[70, libc]: 36289248
+@peak[70, libc]: 13065
+@alloc[70, lookaside]: 28160
+@free[70, lookaside]: 28152
+@bytes[70, lookaside]: 7882653
+@peak[70, lookaside]: 48
+@kind[70, malloc]: 32098
+@kind[70, free]: 32097
+@tnum[70]: 130
+@tname[70]: %d three-dimensional intersect box queries
+@alloc[71, libc]: 10020
+@free[71, libc]: 10020
+@bytes[71, libc]: 9883408
+@peak[71, libc]: 13076
+@alloc[71, lookaside]: 70049
+@free[71, lookaside]: 70030
+@bytes[71, lookaside]: 12970583
+@peak[71, lookaside]: 48
+@kind[71, malloc]: 10020
+@kind[71, free]: 10020
+@escaped[71]: 18
+@tnum[71]: 140
+@tname[71]: %d rowid queries
+@alloc[72, libc]: 16173
+@free[72, libc]: 16173
+@bytes[72, libc]: 19530192
+@peak[72, libc]: 13160
+@alloc[72, lookaside]: 9415
+@free[72, lookaside]: 9410
+@bytes[72, lookaside]: 3268243
+@peak[72, lookaside]: 29
+@kind[72, malloc]: 16173
+@kind[72, free]: 16173
+@escaped[72]: 2233
+@tnum[72]: 150
+@tname[72]: %d UPDATEs using rowid
+@alloc[73, libc]: 54352
+@free[73, libc]: 54350
+@bytes[73, libc]: 84842032
+@peak[73, libc]: 13313
+@alloc[73, lookaside]: 42410
+@free[73, lookaside]: 42406
+@bytes[73, lookaside]: 16254806
+@peak[73, lookaside]: 37
+@kind[73, malloc]: 54352
+@kind[73, free]: 54350
+@escaped[73]: 16965
+@tnum[73]: 155
+@tname[73]: %d UPDATEs using one-dimensional overlap
+@alloc[74, libc]: 13649
+@free[74, libc]: 13649
+@bytes[74, libc]: 15802256
+@peak[74, libc]: 13164
+@alloc[74, lookaside]: 7841
+@free[74, lookaside]: 7837
+@bytes[74, lookaside]: 2819475
+@peak[74, lookaside]: 19
+@kind[74, malloc]: 13649
+@kind[74, free]: 13649
+@escaped[74]: 1622
+@tnum[74]: 160
+@tname[74]: %d DELETEs using rowid
+@alloc[75, libc]: 26301
+@free[75, libc]: 26300
+@bytes[75, libc]: 38291672
+@peak[75, libc]: 13300
+@alloc[75, lookaside]: 18797
+@free[75, lookaside]: 18793
+@bytes[75, lookaside]: 7644637
+@peak[75, lookaside]: 26
+@kind[75, malloc]: 26301
+@kind[75, free]: 26300
+@escaped[75]: 7647
+@tnum[75]: 165
+@tname[75]: %d DELETEs using one-dimensional overlap
+@alloc[76, libc]: 16321
+@free[76, libc]: 16321
+@bytes[76, libc]: 19555136
+@peak[76, libc]: 13398
+@alloc[76, lookaside]: 125384
+@free[76, lookaside]: 125384
+@bytes[76, lookaside]: 17818105
+@peak[76, lookaside]: 57
+@kind[76, malloc]: 16321
+@kind[76, free]: 16321
+@escaped[76]: 3181
+@tnum[76]: 170
+@tname[76]: Restore deleted entries using INSERT OR IGNORE
+@alloc[77, libc]: 112
+@free[77, libc]: 207
+@bytes[77, libc]: 127248
+@peak[77, libc]: 13095
+@alloc[77, lookaside]: 380
+@free[77, lookaside]: 380
+@bytes[77, lookaside]: 58274
+@peak[77, lookaside]: 41
+@kind[77, malloc]: 112
+@kind[77, free]: 207
+@tnum[77]: 999
+@tname[77]: Reset the database
+@alloc[78, libc]: 5140
+@free[78, libc]: 5124
+@bytes[78, libc]: 134456
+@realloc[78, libc]: 25
+@peak[78, libc]: 13013
+@alloc[78, lookaside]: 10201
+@free[78, lookaside]: 10201
+@bytes[78, lookaside]: 100601
+@peak[78, lookaside]: 123
+@kind[78, malloc]: 5115
+@kind[78, realloc]: 25
+@kind[78, free]: 5099
+@escaped[78]: 76
+@tnum[78]: 100
+@tname[78]: Create a fact table with %d entries
+@alloc[79, libc]: 40720
+@free[79, libc]: 40703
+@bytes[79, libc]: 3683432
+@realloc[79, libc]: 8
+@peak[79, libc]: 18017
+@alloc[79, lookaside]: 552
+@free[79, lookaside]: 552
+@bytes[79, lookaside]: 68414
+@peak[79, lookaside]: 57
+@kind[79, malloc]: 40712
+@kind[79, realloc]: 8
+@kind[79, free]: 40695
+@escaped[79]: 304
+@tnum[79]: 110
+@tname[79]: Create indexes on all attributes columns
+@alloc[80, libc]: 1433
+@free[80, libc]: 1353
+@bytes[80, libc]: 454648
+@realloc[80, libc]: 64
+@peak[80, libc]: 13133
+@alloc[80, lookaside]: 2020
+@free[80, lookaside]: 2020
+@bytes[80, lookaside]: 220549
+@peak[80, lookaside]: 83
+@kind[80, malloc]: 1369
+@kind[80, realloc]: 64
+@kind[80, free]: 1289
+@escaped[80]: 680
+@tnum[80]: 120
+@tname[80]: Create dimension tables
+@alloc[81, libc]: 44
+@free[81, libc]: 36
+@bytes[81, libc]: 12216
+@peak[81, libc]: 13109
+@alloc[81, lookaside]: 156
+@free[81, lookaside]: 156
+@bytes[81, lookaside]: 18001
+@peak[81, lookaside]: 123
+@kind[81, malloc]: 44
+@kind[81, free]: 36
+@escaped[81]: 34
+@tnum[81]: 130
+@tname[81]: Star query over the entire fact table
+@alloc[82, libc]: 50
+@free[82, libc]: 49
+@bytes[82, libc]: 19656
+@realloc[82, libc]: 2
+@peak[82, libc]: 13121
+@alloc[82, lookaside]: 160
+@free[82, lookaside]: 160
+@bytes[82, lookaside]: 17919
+@peak[82, lookaside]: 123
+@kind[82, malloc]: 48
+@kind[82, realloc]: 2
+@kind[82, free]: 47
+@escaped[82]: 45
+@tnum[82]: 130
+@tname[82]: Star query with LEFT JOINs
+@alloc[83, libc]: 461
+@free[83, libc]: 583
+@bytes[83, libc]: 646440
+@realloc[83, libc]: 2
+@peak[83, libc]: 13211
+@alloc[83, lookaside]: 1172
+@free[83, lookaside]: 1172
+@bytes[83, lookaside]: 171950
+@peak[83, lookaside]: 40
+@kind[83, malloc]: 459
+@kind[83, realloc]: 2
+@kind[83, free]: 581
+@escaped[83]: 18
+@tnum[83]: 999
+@tname[83]: Reset the database
+@alloc[84, libc]: 5591
+@free[84, libc]: 4969
+@bytes[84, libc]: 1412776
+@realloc[84, libc]: 475
+@peak[84, libc]: 13651
+@alloc[84, lookaside]: 4726
+@free[84, lookaside]: 4726
+@bytes[84, lookaside]: 568673
+@peak[84, lookaside]: 123
+@kind[84, malloc]: 5116
+@kind[84, realloc]: 475
+@kind[84, free]: 4494
+@escaped[84]: 4121
+@tnum[84]: 100
+@tname[84]: Generate a Fossil-like database schema
+@alloc[85, libc]: 160602
+@free[85, libc]: 160555
+@bytes[85, libc]: 57808688
+@realloc[85, libc]: 5438
+@peak[85, libc]: 13758
+@alloc[85, lookaside]: 764599
+@free[85, lookaside]: 764589
+@bytes[85, lookaside]: 66344884
+@peak[85, lookaside]: 123
+@kind[85, malloc]: 155164
+@kind[85, realloc]: 5438
+@kind[85, free]: 155117
+@escaped[85]: 136228
+@tnum[85]: 110
+@tname[85]: Open and use the database %d times
+
+@hook_alloc[libc]: 1801880
+@hook_free[libc]: 1801879
+@hook_bytes[libc]: 3537791256
+@hook_realloc[libc]: 73849
+@hook_inplace[libc]: 9117
+@hook_peak[libc]: 173630
+@peakrun[libc]: 173630
+@maxreuse[libc]: 105624
+@distinct[libc]: 500392
+@hook_fbytes[libc]: 3537771256
+@beyond254[libc]: 731220
+@poison16[libc]: 221511590
+@size_libc: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                     90855 |
+[16, 32)                   339098 |
+[32, 64)                   180238 |
+[64, 128)                  326817 |
+[128, 256)                  30526 |
+[256, 512)                  34045 |
+[512, 1K)                    6027 |
+[1K, 2K)                   586033 |
+[2K, 4K)                     4764 |
+[4K, 8K)                   163874 |
+[8K, 16K)                   18981 |
+[16K, 32K)                   3993 |
+[32K, 64K)                    916 |
+[64K, 128K)                 15569 |
+[128K, 256K)                  111 |
+[256K, 512K)                   14 |
+[512K, 1M)                     16 |
+[1M, 2M)                        3 |
+
+@reuse_libc: 
+[1]                        398176 |
+[2, 4)                     181512 |
+[4, 8)                     133020 |
+[8, 16)                     45180 |
+[16, 32)                    27276 |
+[32, 64)                    23262 |
+[64, 128)                   23145 |
+[128, 256)                  36364 |
+[256, 512)                  54642 |
+[512, 1K)                   24865 |
+[1K, 2K)                    28414 |
+[2K, 4K)                    47192 |
+[4K, 8K)                    57680 |
+[8K, 16K)                   64085 |
+[16K, 32K)                  33470 |
+[32K, 64K)                  34106 |
+[64K, 128K)                 25129 |
+[128K, 256K)                25924 |
+[256K, 512K)                36367 |
+[512K, 1M)                   1444 |
+[1M, 2M)                      235 |
+
+@reusebytes_libc: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                     40527 |
+[16, 32)                    21498 |
+[32, 64)                     1951 |
+[64, 128)                   10269 |
+[128, 256)                  42091 |
+[256, 512)                  59347 |
+[512, 1K)                   20550 |
+[1K, 2K)                   235520 |
+[2K, 4K)                    98166 |
+[4K, 8K)                   125648 |
+[8K, 16K)                   73581 |
+[16K, 32K)                  46592 |
+[32K, 64K)                  34236 |
+[64K, 128K)                 63149 |
+[128K, 256K)                76447 |
+[256K, 512K)                77321 |
+[512K, 1M)                  67410 |
+[1M, 2M)                    37982 |
+[2M, 4M)                    27180 |
+[4M, 8M)                    18698 |
+[8M, 16M)                   15055 |
+[16M, 32M)                  35907 |
+[32M, 64M)                  10684 |
+[64M, 128M)                  2317 |
+[128M, 256M)                 2874 |
+[256M, 512M)                 1429 |
+[512M, 1G)                  27281 |
+[1G, 2G)                    26823 |
+[2G, 4G)                      955 |
+
+@prior_libc: 
+[0]                        500392 |
+[1]                        115929 |
+[2, 4)                     106054 |
+[4, 8)                     113280 |
+[8, 16)                     67800 |
+[16, 32)                    26567 |
+[32, 64)                    33046 |
+[64, 128)                   45263 |
+[128, 256)                  63168 |
+[256, 512)                  73478 |
+[512, 1K)                   79258 |
+[1K, 2K)                    75005 |
+[2K, 4K)                    76688 |
+[4K, 8K)                    93754 |
+[8K, 16K)                   87484 |
+[16K, 32K)                  50348 |
+[32K, 64K)                  98304 |
+[64K, 128K)                 96062 |
+
+@addresses_libc: 
+[1]                        384463 |
+[2, 4)                      73455 |
+[4, 8)                      19958 |
+[8, 16)                     19779 |
+[16, 32)                     1480 |
+[32, 64)                      362 |
+[64, 128)                     314 |
+[128, 256)                    163 |
+[256, 512)                    189 |
+[512, 1K)                     124 |
+[1K, 2K)                       56 |
+[2K, 4K)                       18 |
+[4K, 8K)                       11 |
+[8K, 16K)                      16 |
+[16K, 32K)                      1 |
+[32K, 64K)                      0 |
+[64K, 128K)                     3 |
+
+@hook_alloc[lookaside]: 4489977
+@hook_free[lookaside]: 4489977
+@hook_bytes[lookaside]: 682479406
+@hook_realloc[lookaside]: 0
+@hook_inplace[lookaside]: 0
+@hook_peak[lookaside]: 123
+@peakrun[lookaside]: 123
+@maxreuse[lookaside]: 288169
+@distinct[lookaside]: 123
+@hook_fbytes[lookaside]: 682479406
+@beyond254[lookaside]: 4458988
+@poison16[lookaside]: 43898854
+@size_lookaside: 
+[1]                             1 |
+[2, 4)                      42108 |
+[4, 8)                     354355 |
+[8, 16)                    381588 |
+[16, 32)                   459795 |
+[32, 64)                  1384975 |
+[64, 128)                  641378 |
+[128, 256)                  30113 |
+[256, 512)                1121161 |
+[512, 1K)                   69825 |
+[1K, 2K)                     4678 |
+
+@reuse_lookaside: 
+[1]                       1173763 |
+[2, 4)                     985217 |
+[4, 8)                     538110 |
+[8, 16)                    386482 |
+[16, 32)                   535764 |
+[32, 64)                   453438 |
+[64, 128)                  391701 |
+[128, 256)                  13254 |
+[256, 512)                   6324 |
+[512, 1K)                     217 |
+[1K, 2K)                     3881 |
+[2K, 4K)                      221 |
+[4K, 8K)                      184 |
+[8K, 16K)                     287 |
+[16K, 32K)                    226 |
+[32K, 64K)                    105 |
+[64K, 128K)                   194 |
+[128K, 256K)                  266 |
+[256K, 512K)                  117 |
+[512K, 1M)                    103 |
+
+@reusebytes_lookaside: 
+[1]                             0 |
+[2, 4)                       1367 |
+[4, 8)                      46641 |
+[8, 16)                    153036 |
+[16, 32)                    96162 |
+[32, 64)                   290834 |
+[64, 128)                  150103 |
+[128, 256)                 108720 |
+[256, 512)                1249022 |
+[512, 1K)                  561645 |
+[1K, 2K)                   590273 |
+[2K, 4K)                  1075339 |
+[4K, 8K)                   104745 |
+[8K, 16K)                   37825 |
+[16K, 32K)                  17936 |
+[32K, 64K)                    480 |
+[64K, 128K)                   174 |
+[128K, 256K)                 4032 |
+[256K, 512K)                  176 |
+[512K, 1M)                    281 |
+[1M, 2M)                      235 |
+[2M, 4M)                       70 |
+[4M, 8M)                       83 |
+[8M, 16M)                     185 |
+[16M, 32M)                    149 |
+[32M, 64M)                    196 |
+[64M, 128M)                    65 |
+[128M, 256M)                   75 |
+[256M, 512M)                    5 |
+
+@prior_lookaside: 
+[0]                           123 |
+[1]                           122 |
+[2, 4)                        244 |
+[4, 8)                        488 |
+[8, 16)                       976 |
+[16, 32)                     1952 |
+[32, 64)                     3904 |
+[64, 128)                    7808 |
+[128, 256)                  15616 |
+[256, 512)                  31232 |
+[512, 1K)                   62464 |
+[1K, 2K)                   124860 |
+[2K, 4K)                   247808 |
+[4K, 8K)                   486507 |
+[8K, 16K)                  806793 |
+[16K, 32K)                 987728 |
+[32K, 64K)                 858480 |
+[64K, 128K)                617113 |
+[128K, 256K)               209734 |
+[256K, 512K)                26025 |
+
+@addresses_lookaside: 
+[1]                             1 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        1 |
+[2K, 4K)                        0 |
+[4K, 8K)                        7 |
+[8K, 16K)                      36 |
+[16K, 32K)                     35 |
+[32K, 64K)                     27 |
+[64K, 128K)                    12 |
+[128K, 256K)                    3 |
+[256K, 512K)                    1 |
+
+@reused_before_return: 4489854
+@reused_after_return: 0
+@reused_block_never_returned: 4489854
+@page_overflow: 0

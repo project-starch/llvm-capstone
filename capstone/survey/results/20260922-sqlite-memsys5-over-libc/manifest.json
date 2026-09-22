@@ -1,0 +1,65 @@
+{
+  "study": "W3",
+  "level": "sqlite-memsys5",
+  "completes_w3_row": false,
+  "completes_w3_row_reason": "the level's own counters are measured; its reuse share against libc is not measurable with this instrument",
+  "program": "SQLite",
+  "allocator": "memsys5",
+  "level_name": "memsys5",
+  "below": "libc",
+  "upstream": {
+    "version": "3.53.3",
+    "sources": [
+      "sqlite3.c"
+    ]
+  },
+  "workload": "speedtest1-size100",
+  "workload_command": "--heap 268435456 64 --memdb --size 100 --verify --stats",
+  "measured": [
+    {
+      "repetition": 1,
+      "allocations": 1693135,
+      "releases": 1693134,
+      "reallocs": 24944,
+      "distinct_addresses": 389532,
+      "max_objects_at_one_address": 198299,
+      "libc_level_present": false,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    },
+    {
+      "repetition": 2,
+      "allocations": 1693135,
+      "releases": 1693134,
+      "reallocs": 24944,
+      "distinct_addresses": 389532,
+      "max_objects_at_one_address": 198299,
+      "libc_level_present": false,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    },
+    {
+      "repetition": 3,
+      "allocations": 1693135,
+      "releases": 1693134,
+      "reallocs": 24944,
+      "distinct_addresses": 389532,
+      "max_objects_at_one_address": 198299,
+      "libc_level_present": false,
+      "sha256": "30f98b5a31a9142568eb5f31750c6bdc81b5b6721c82bb2ef6f4ce0b1f14a501"
+    }
+  ],
+  "reuse_share_unmeasurable": {
+    "why": "memhook.c watches sqlite3_mem_methods, and the memsys5 heap never crosses it",
+    "evidence": [
+      "speedtest1.c:3218 pHeap = malloc(nHeap), a plain libc malloc before the work",
+      "speedtest1.c:3220 sqlite3_config(SQLITE_CONFIG_HEAP, pHeap, ...) installs memsys5 over it",
+      "speedtest1.c:3475 free(pHeap), after all of it",
+      "the memsys5 arm's report carries no libc level at all, so level 0 recorded nothing",
+      "the shipped arm's report carries hook_alloc[libc] = 1801880, so the instrument does record that level when the mem methods are the default"
+    ],
+    "what_the_source_shows": "one allocation before the work and one release after all of it, so every memsys5 reuse necessarily precedes the release. That is read off the workload's source, not measured.",
+    "what_would_measure_it": "interposing the malloc family, which the APR and memcached wirings do and memhook.c does not"
+  },
+  "companion_pass": "nested-allocators-paper experiments/a1/results/x86/20260921T213027Z",
+  "compiler": "gcc 13.3.0",
+  "recorded": "20260922"
+}

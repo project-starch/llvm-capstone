@@ -100,8 +100,11 @@
         "bulk": "none: the arena is not released during a run",
         "evidence": "capstone/ports/sqlite/sublet/README.md"
       },
-      "confirmed": "port-document",
-      "why": "The buddy allocator beneath lookaside. Recording it turns SQLite's two-level nesting into two measured rows instead of one."
+      "confirmed": "measured",
+      "why": "The buddy allocator beneath lookaside. Recording it turns SQLite's two-level nesting into two measured rows instead of one.",
+      "recorded": "results/20260922-sqlite-memsys5-over-libc",
+      "exercised": true,
+      "reuse_share_unmeasurable": "memhook.c watches sqlite3_mem_methods, and the memsys5 heap never crosses it"
     },
     {
       "id": "cpython-pymalloc",
