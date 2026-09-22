@@ -1,0 +1,196 @@
+{
+  "study": "W3",
+  "levels": [
+    "postgres-aset",
+    "postgres-generation",
+    "postgres-slab",
+    "postgres-bump"
+  ],
+  "program": "PostgreSQL",
+  "below": "libc",
+  "upstream": {
+    "version": "17.0",
+    "sources": [
+      "src/backend/utils/mmgr/{aset,generation,slab,bump}.c"
+    ],
+    "sha256": "7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de",
+    "pin_cross_checked_against": "capstone/ports/postgres/memory-contexts/upstream.json"
+  },
+  "workloads": [
+    "pgbench-tpcb",
+    "pgbench-sort"
+  ],
+  "selection": "A1_PG_LEVEL names one manager at startup; unset gives the aggregated context level",
+  "instrument": {
+    "wiring": "nested-allocators-paper experiments/a1/postgres/pghook.c",
+    "placement": "nested-allocators-paper experiments/a1/postgres/hook.py"
+  },
+  "companion_passes": [
+    "20260922T023555Z"
+  ],
+  "compiler": "gcc 13.3.0",
+  "measurements": {
+    "tpcb": {
+      "context": [
+        {
+          "repetition": 1,
+          "allocations": 1228005,
+          "bulk_releases": 1029570,
+          "reuses": 1224280,
+          "before_release": 679862,
+          "after_release": 544418,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3724,
+          "sha256": "75c4f9ec0e14f4d5f875f224c14de2e24c73d4e49feb63e27ab5903583d6a8f6"
+        },
+        {
+          "repetition": 2,
+          "allocations": 1228117,
+          "bulk_releases": 1029570,
+          "reuses": 1224392,
+          "before_release": 679926,
+          "after_release": 544466,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3724,
+          "sha256": "7de879382cb778e2843e82d725193e93d544ce0dde24ea464f8c13b2b7ed8275"
+        },
+        {
+          "repetition": 3,
+          "allocations": 1228015,
+          "bulk_releases": 1029570,
+          "reuses": 1224277,
+          "before_release": 679864,
+          "after_release": 544413,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3737,
+          "sha256": "fb181fec7c8275026d61ecf2da6b63aced970d56cc802f32055f6e2c78b68e82"
+        }
+      ],
+      "aset": [
+        {
+          "repetition": 1,
+          "allocations": 1228068,
+          "bulk_releases": 1029570,
+          "reuses": 1224343,
+          "before_release": 679898,
+          "after_release": 544445,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3724,
+          "sha256": "c820d52819caa7a53fd373a108011813005d5d580e4ddb7bb3c2cd261d05be0c"
+        },
+        {
+          "repetition": 2,
+          "allocations": 1228085,
+          "bulk_releases": 1029570,
+          "reuses": 1224347,
+          "before_release": 679904,
+          "after_release": 544443,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3737,
+          "sha256": "5b8d32ddbffba7bea2df7e0fb5f0bf0a4bd44e1e17fdcfd01f6910b3048b02c6"
+        },
+        {
+          "repetition": 3,
+          "allocations": 1228022,
+          "bulk_releases": 1029570,
+          "reuses": 1224284,
+          "before_release": 679868,
+          "after_release": 544416,
+          "before_release_share_pct": 55.5,
+          "distinct_addresses": 3737,
+          "sha256": "f2e146642431fa8cf06c995b35c57da4d52a4eca71b267cd0203624b95292894"
+        }
+      ],
+      "generation": "level never created on this rung",
+      "slab": [
+        {
+          "repetition": 1,
+          "allocations": 2,
+          "bulk_releases": 2,
+          "reuses": 1,
+          "before_release": 0,
+          "after_release": 1,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 1,
+          "sha256": "0d357070d409c4fab268a5fcaf7a003a9f71e7d4f1d4fe1a568ed1e611246e0e"
+        },
+        {
+          "repetition": 2,
+          "allocations": 2,
+          "bulk_releases": 2,
+          "reuses": 1,
+          "before_release": 0,
+          "after_release": 1,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 1,
+          "sha256": "46f2a8b30352e8edd33544abc5b09f790c6e0b5e4f9c6a8c80f547f58dcfcfb4"
+        },
+        {
+          "repetition": 3,
+          "allocations": 2,
+          "bulk_releases": 2,
+          "reuses": 1,
+          "before_release": 0,
+          "after_release": 1,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 1,
+          "sha256": "48422f9ccf88a35c97f67b92e6768d5fb9799a01d5a37ac5af62fd019e5d1460"
+        }
+      ],
+      "bump": [
+        {
+          "repetition": 1,
+          "allocations": 5,
+          "bulk_releases": 5,
+          "reuses": 2,
+          "before_release": 0,
+          "after_release": 2,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 3,
+          "sha256": "bed59ce5db0a7b68822c6b3c5c0f9a44df11c5561812b353d247b0d238e29a5d"
+        },
+        {
+          "repetition": 2,
+          "allocations": 5,
+          "bulk_releases": 5,
+          "reuses": 2,
+          "before_release": 0,
+          "after_release": 2,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 3,
+          "sha256": "44199529ddad353c4d082a28b844262251ebb5f375aee9c1bf8f6de1a558e8c9"
+        },
+        {
+          "repetition": 3,
+          "allocations": 5,
+          "bulk_releases": 5,
+          "reuses": 2,
+          "before_release": 0,
+          "after_release": 2,
+          "before_release_share_pct": 0.0,
+          "distinct_addresses": 3,
+          "sha256": "ba063d97d11fa153a1b633f1e1c929462309d0c0ee6de81da7f28a6fae60f5b4"
+        }
+      ]
+    },
+    "sort": {
+      "context": "level never created on this rung",
+      "aset": "level never created on this rung",
+      "generation": "level never created on this rung",
+      "slab": "level never created on this rung",
+      "bump": "level never created on this rung"
+    }
+  },
+  "exercised": {
+    "aset": true,
+    "bump": true,
+    "generation": false,
+    "slab": false
+  },
+  "limits": [
+    "two rungs, tpcb and sort",
+    "Generation is never created on either rung and Slab twice, so neither has a reuse share here",
+    "the aggregated context level is kept beside the four as the row the survey has always reported"
+  ],
+  "recorded": "20260922"
+}

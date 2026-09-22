@@ -73,6 +73,10 @@ def check(doc, repo=REPO, manuscript=None):
             errors.append(f"{where}: recorded bundle has no manifest: {recorded}")
         if level.get("confirmed") == "measured" and not recorded:
             errors.append(f"{where}: a measured seam must name its bundle")
+        if level.get("exercised") is False and not level.get("not_exercised"):
+            errors.append(f"{where}: a level the workload never exercises must say so")
+        if level.get("exercised") is not None and not level.get("recorded"):
+            errors.append(f"{where}: only a recorded level can claim to be exercised or not")
 
         port = level["port"]
         present = (repo / port["path"]).exists()
@@ -140,6 +144,12 @@ def self_test():
     doc = json.loads(json.dumps(base))
     doc["levels"][0]["seam"]["evidence"] = "capstone/ports/sqlite/no-such-file.md"
     cases.append(("missing seam evidence", doc))
+
+    doc = json.loads(json.dumps(base))
+    for level in doc["levels"]:
+        if level.get("exercised") is False:
+            level.pop("not_exercised", None)
+    cases.append(("unexercised level without a reason", doc))
 
     failures = []
     for label, broken in cases:

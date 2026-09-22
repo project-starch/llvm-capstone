@@ -1,0 +1,155 @@
+pghook: two levels recorded from inside the process
+
+@alloc[0, libc]: 1228
+@free[0, libc]: 849
+@bytes[0, libc]: 22082267
+@realloc[0, libc]: 10
+@peak[0, libc]: 393
+@alloc[0, slab]: 2
+@free[0, slab]: 2
+@bytes[0, slab]: 80
+@peak[0, slab]: 1
+@kind[0, malloc]: 1218
+@kind[0, realloc]: 10
+@kind[0, free]: 840
+
+@hook_alloc[libc]: 1228
+@hook_free[libc]: 849
+@hook_bytes[libc]: 22082267
+@hook_realloc[libc]: 10
+@hook_inplace[libc]: 3
+@hook_peak[libc]: 393
+@peakrun[libc]: 393
+@maxreuse[libc]: 79
+@distinct[libc]: 427
+@hook_fbytes[libc]: 20224819
+@beyond254[libc]: 0
+@poison16[libc]: 1380583
+@size_libc: 
+[1]                             0 |
+[2, 4)                          3 |
+[4, 8)                          2 |
+[8, 16)                        82 |
+[16, 32)                       42 |
+[32, 64)                       26 |
+[64, 128)                      41 |
+[128, 256)                     26 |
+[256, 512)                     19 |
+[512, 1K)                       8 |
+[1K, 2K)                      141 |
+[2K, 4K)                       27 |
+[4K, 8K)                       18 |
+[8K, 16K)                      55 |
+[16K, 32K)                    714 |
+[32K, 64K)                     16 |
+[64K, 128K)                     4 |
+[128K, 256K)                    2 |
+[256K, 512K)                    1 |
+[512K, 1M)                      1 |
+
+@reuse_libc: 
+[1]                           685 |
+[2, 4)                         55 |
+[4, 8)                         19 |
+[8, 16)                        15 |
+[16, 32)                       17 |
+[32, 64)                        5 |
+[64, 128)                       2 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       1 |
+[1K, 2K)                        2 |
+
+@reusebytes_libc: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          1 |
+[8, 16)                         0 |
+[16, 32)                        3 |
+[32, 64)                        0 |
+[64, 128)                       1 |
+[128, 256)                      8 |
+[256, 512)                     14 |
+[512, 1K)                       4 |
+[1K, 2K)                        3 |
+[2K, 4K)                        3 |
+[4K, 8K)                       14 |
+[8K, 16K)                       3 |
+[16K, 32K)                    695 |
+[32K, 64K)                     11 |
+[64K, 128K)                    11 |
+[128K, 256K)                   14 |
+[256K, 512K)                   12 |
+[512K, 1M)                      0 |
+[1M, 2M)                        0 |
+[2M, 4M)                        1 |
+[4M, 8M)                        0 |
+[8M, 16M)                       1 |
+[16M, 32M)                      2 |
+
+@prior_libc: 
+[0]                           427 |
+[1]                           130 |
+[2, 4)                        203 |
+[4, 8)                        233 |
+[8, 16)                        88 |
+[16, 32)                       81 |
+[32, 64)                       51 |
+[64, 128)                      15 |
+
+@addresses_libc: 
+[1]                           297 |
+[2, 4)                         35 |
+[4, 8)                         67 |
+[8, 16)                        19 |
+[16, 32)                        7 |
+[32, 64)                        1 |
+[64, 128)                       1 |
+
+@hook_alloc[slab]: 2
+@hook_free[slab]: 2
+@hook_bytes[slab]: 80
+@hook_realloc[slab]: 0
+@hook_inplace[slab]: 0
+@hook_peak[slab]: 1
+@peakrun[slab]: 1
+@maxreuse[slab]: 2
+@distinct[slab]: 1
+@hook_fbytes[slab]: 80
+@beyond254[slab]: 0
+@poison16[slab]: 6
+@size_slab: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        2 |
+
+@reuse_slab: 
+[1]                             1 |
+
+@reusebytes_slab: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        1 |
+
+@prior_slab: 
+[0]                             1 |
+[1]                             1 |
+
+@addresses_slab: 
+[1]                             0 |
+[2, 4)                          1 |
+
+@bulk_releases: 2
+@bulk_events: 10
+@ctx_overflow: 0
+@reused_before_return: 0
+@reused_after_return: 1
+@reused_block_never_returned: 0
+@page_overflow: 0
+@pid: 325638

@@ -154,8 +154,10 @@
         "bulk": "AllocSetReset and AllocSetDelete",
         "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0004-allocset-sublet-context-revocation.patch"
       },
-      "confirmed": "port-patch",
-      "why": "The existing survey records one aggregated `context` level. Splitting it is what lets the table say which manager the reuse belongs to."
+      "confirmed": "measured",
+      "why": "The existing survey records one aggregated `context` level. Splitting it is what lets the table say which manager the reuse belongs to.",
+      "recorded": "results/20260922-postgres-four-managers",
+      "exercised": true
     },
     {
       "id": "postgres-generation",
@@ -181,8 +183,11 @@
         "bulk": "GenerationReset and GenerationDelete",
         "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0006-generation-sublet-lifetimes.patch"
       },
-      "confirmed": "port-patch",
-      "why": "Keeps its block recycling policy, so its reuse profile is not the AllocSet one."
+      "confirmed": "measured",
+      "why": "Keeps its block recycling policy, so its reuse profile is not the AllocSet one.",
+      "recorded": "results/20260922-postgres-four-managers",
+      "exercised": false,
+      "not_exercised": "neither pgbench rung creates this manager, so the recording states that and carries no reuse share"
     },
     {
       "id": "postgres-slab",
@@ -208,8 +213,11 @@
         "bulk": "SlabReset and SlabDelete",
         "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0005-slab-sublet-lifetimes.patch"
       },
-      "confirmed": "port-patch",
-      "why": "Fixed-size free list with deterministic same-address reuse, which is the shape the mmgr corpus case 7 turns on."
+      "confirmed": "measured",
+      "why": "Fixed-size free list with deterministic same-address reuse, which is the shape the mmgr corpus case 7 turns on.",
+      "recorded": "results/20260922-postgres-four-managers",
+      "exercised": false,
+      "not_exercised": "neither pgbench rung creates this manager, so the recording states that and carries no reuse share"
     },
     {
       "id": "postgres-bump",
@@ -235,8 +243,10 @@
         "bulk": "BumpReset and BumpDelete",
         "evidence": "capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0007-bump-sublet-lifetimes.patch"
       },
-      "confirmed": "port-patch",
-      "why": "The one ported manager with no individual free at all. Its row is the clean case of a level whose every death is a bulk release."
+      "confirmed": "measured",
+      "why": "The one ported manager with no individual free at all. Its row is the clean case of a level whose every death is a bulk release.",
+      "recorded": "results/20260922-postgres-four-managers",
+      "exercised": true
     },
     {
       "id": "wireshark-block",
