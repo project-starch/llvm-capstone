@@ -1,0 +1,18 @@
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanity            43260934      43260934      700268          500030        YES
+beebs_prime          582955588     582955588     9697            2703          YES
+beebs_aha_mont64     2185097489    2185097489    286485          256697        YES
+rawhazard5           48879         48879         5283            None          YES
+rawhazard6           48879         48879         8112            None          YES
+rawhazard7           48879         48879         4320            None          YES
+matmult_int          774662735     774662735     19159           9722          YES
+coremark_matrix      14343         14343         53363           31560         YES
+beebs_crc32          1703161001    1703161001    48310           29723         YES
+beebs_insertsort     271779359     271779359     2520            962           YES
+beebs_janne          484656629     484656629     603             198           YES
+rv8_sha512           1390718314    1390718314    543646          460950        YES
+rv8_sha512s          2842840124    2842840124    118603          75477         YES
+beebs_ns             1184999093    1184999093    102661          61299         YES
+rawhazard5 raw probes: dbg0=5 dbg1=5 dbg2=5 dbg3=5 dbg4=5 [remaining slots 0]
+rawhazard6 raw probes: dbg0=5 dbg1=5 dbg2=5 dbg3=5 dbg4=5 dbg5=5 [remaining slots 0]
+rawhazard7 raw probes: dbg0=5 dbg1=5 dbg2=5 dbg3=5 [remaining slots 0]
