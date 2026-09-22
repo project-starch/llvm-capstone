@@ -1,0 +1,55 @@
+wmhook: two levels recorded from inside the process
+
+@free[0, libc]: 1
+@alloc[0, block_fast]: 128
+@free[0, block_fast]: 128
+@bytes[0, block_fast]: 9233
+@peak[0, block_fast]: 128
+@kind[0, free]: 1
+
+@hook_alloc[block_fast]: 128
+@hook_free[block_fast]: 128
+@hook_bytes[block_fast]: 9233
+@hook_realloc[block_fast]: 0
+@hook_inplace[block_fast]: 0
+@hook_peak[block_fast]: 128
+@peakrun[block_fast]: 128
+@maxreuse[block_fast]: 1
+@distinct[block_fast]: 128
+@hook_fbytes[block_fast]: 9233
+@beyond254[block_fast]: 0
+@poison16[block_fast]: 614
+@size_block_fast: 
+[1]                             0 |
+[2, 4)                          1 |
+[4, 8)                          6 |
+[8, 16)                         7 |
+[16, 32)                       11 |
+[32, 64)                       47 |
+[64, 128)                      45 |
+[128, 256)                      1 |
+[256, 512)                      9 |
+[512, 1K)                       0 |
+[1K, 2K)                        1 |
+
+@reuse_block_fast: 
+[1]                             0 |
+
+@reusebytes_block_fast: 
+[1]                             0 |
+
+@prior_block_fast: 
+[0]                           128 |
+[1]                             0 |
+
+@addresses_block_fast: 
+[1]                           128 |
+
+@bulk_releases: 127
+@bulk_events: 3
+@ctx_overflow: 0
+@reused_before_return: 0
+@reused_after_return: 0
+@reused_block_never_returned: 0
+@page_overflow: 0
+@pid: 501536

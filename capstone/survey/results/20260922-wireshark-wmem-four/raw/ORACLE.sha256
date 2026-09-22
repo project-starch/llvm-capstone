@@ -1,0 +1,20 @@
+# The oracle, recorded rather than kept.
+# Two tshark arms dissected the same 163 captures with -V and cmp found no
+# difference. The outputs are 169 MiB each and reproducible, so their hashes
+# stand here and the text does not travel.
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  oracle.stock.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  oracle.hooked.txt
+
+# The per-level dissection outputs, same reason.
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block_fast.rep1.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block_fast.rep2.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block_fast.rep3.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block.rep1.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block.rep2.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  block.rep3.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  simple.rep1.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  simple.rep2.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  simple.rep3.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  strict.rep1.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  strict.rep2.out.txt
+d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1  strict.rep3.out.txt

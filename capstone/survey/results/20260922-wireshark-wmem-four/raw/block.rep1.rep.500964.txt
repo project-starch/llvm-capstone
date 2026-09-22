@@ -1,0 +1,95 @@
+wmhook: two levels recorded from inside the process
+
+@free[0, libc]: 1
+@alloc[0, block]: 46593
+@free[0, block]: 46593
+@bytes[0, block]: 23810630
+@peak[0, block]: 45990
+@kind[0, free]: 1
+
+@hook_alloc[block]: 46593
+@hook_free[block]: 46593
+@hook_bytes[block]: 23810630
+@hook_realloc[block]: 0
+@hook_inplace[block]: 0
+@hook_peak[block]: 45990
+@peakrun[block]: 45990
+@maxreuse[block]: 31
+@distinct[block]: 46394
+@hook_fbytes[block]: 23809451
+@beyond254[block]: 0
+@poison16[block]: 1506130
+@size_block: 
+[1]                             0 |
+[2, 4)                        122 |
+[4, 8)                       3711 |
+[8, 16)                      5050 |
+[16, 32)                     5297 |
+[32, 64)                    26416 |
+[64, 128)                    5068 |
+[128, 256)                     36 |
+[256, 512)                    441 |
+[512, 1K)                      21 |
+[1K, 2K)                      412 |
+[2K, 4K)                       10 |
+[4K, 8K)                        4 |
+[8K, 16K)                       0 |
+[16K, 32K)                      1 |
+[32K, 64K)                      0 |
+[64K, 128K)                     1 |
+[128K, 256K)                    0 |
+[256K, 512K)                    1 |
+[512K, 1M)                      0 |
+[1M, 2M)                        0 |
+[2M, 4M)                        0 |
+[4M, 8M)                        1 |
+[8M, 16M)                       0 |
+[16M, 32M)                      1 |
+
+@reuse_block: 
+[1]                            45 |
+[2, 4)                         13 |
+[4, 8)                          0 |
+[8, 16)                         5 |
+[16, 32)                        3 |
+[32, 64)                        0 |
+[64, 128)                       1 |
+
+@reusebytes_block: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          1 |
+[8, 16)                        21 |
+[16, 32)                        9 |
+[32, 64)                       14 |
+[64, 128)                       3 |
+[128, 256)                      0 |
+[256, 512)                      9 |
+[512, 1K)                       4 |
+[1K, 2K)                        5 |
+[2K, 4K)                        0 |
+[4K, 8K)                        1 |
+
+@prior_block: 
+[0]                         46394 |
+[1]                            81 |
+[2, 4)                         10 |
+[4, 8)                         16 |
+[8, 16)                        32 |
+[16, 32)                       60 |
+
+@addresses_block: 
+[1]                         46313 |
+[2, 4)                         77 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        4 |
+
+@bulk_releases: 44619
+@bulk_events: 6
+@ctx_overflow: 0
+@reused_before_return: 67
+@reused_after_return: 0
+@reused_block_never_returned: 67
+@page_overflow: 0
+@pid: 500964

@@ -1,0 +1,163 @@
+{
+  "study": "W3",
+  "levels": [
+    "wireshark-block",
+    "wireshark-block-fast",
+    "wireshark-simple",
+    "wireshark-strict"
+  ],
+  "program": "Wireshark",
+  "below": "libc",
+  "upstream": {
+    "version": "4.6.8",
+    "sources": [
+      "wsutil/wmem/wmem_core.c and the four allocator files"
+    ],
+    "sha256": "c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0",
+    "pin_cross_checked_against": "capstone/ports/wireshark/wmem/upstream.json"
+  },
+  "workload": "tshark-source-captures",
+  "workload_command": "tshark -r <capture> -V over the 163 captures the pinned tree ships that tshark can read",
+  "selection": "A1_WMEM_LEVEL picks the allocator at startup, wrapped at wmem_core.c's wmem_allocator_new",
+  "instrument": {
+    "wiring": "nested-allocators-paper experiments/a1/wireshark/wmhook.inc",
+    "placement": "nested-allocators-paper experiments/a1/wireshark/hook.py"
+  },
+  "oracle": {
+    "kind": "hash",
+    "note": "both arms dissect the same captures with -V and the outputs hash equal",
+    "sha256": "d2cc12fdb500f750659dca24835ca390bb711c7869db2c0b58647be55bebdce1"
+  },
+  "companion_pass": "nested-allocators-paper experiments/a1/results/wireshark/20260922T033032Z.tar.xz",
+  "compiler": "gcc 13.3.0",
+  "measurements": {
+    "block": [
+      {
+        "repetition": 1,
+        "processes": 163,
+        "allocations": 7714525,
+        "releases": 7714529,
+        "bulk_releases": 7388576,
+        "reuses": 15040,
+        "before_release": 15040,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 7677929
+      },
+      {
+        "repetition": 2,
+        "processes": 163,
+        "allocations": 7714525,
+        "releases": 7714529,
+        "bulk_releases": 7388576,
+        "reuses": 15040,
+        "before_release": 15040,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 7677929
+      },
+      {
+        "repetition": 3,
+        "processes": 163,
+        "allocations": 7714525,
+        "releases": 7714529,
+        "bulk_releases": 7388576,
+        "reuses": 15040,
+        "before_release": 15040,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 7677929
+      }
+    ],
+    "block_fast": [
+      {
+        "repetition": 1,
+        "processes": 162,
+        "allocations": 9270146,
+        "releases": 9270386,
+        "bulk_releases": 9178891,
+        "reuses": 9003932,
+        "before_release": 9003932,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 266233
+      },
+      {
+        "repetition": 2,
+        "processes": 162,
+        "allocations": 9270146,
+        "releases": 9270386,
+        "bulk_releases": 9178891,
+        "reuses": 9003932,
+        "before_release": 9003932,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 266233
+      },
+      {
+        "repetition": 3,
+        "processes": 162,
+        "allocations": 9270146,
+        "releases": 9270386,
+        "bulk_releases": 9178891,
+        "reuses": 9003932,
+        "before_release": 9003932,
+        "after_release": 0,
+        "before_release_share_pct": 100.0,
+        "distinct_addresses": 266233
+      }
+    ],
+    "simple": [
+      {
+        "repetition": 1,
+        "processes": 2,
+        "allocations": 8,
+        "releases": 8,
+        "bulk_releases": 8,
+        "reuses": 0,
+        "before_release": 0,
+        "after_release": 0,
+        "before_release_share_pct": null,
+        "distinct_addresses": 8
+      },
+      {
+        "repetition": 2,
+        "processes": 2,
+        "allocations": 8,
+        "releases": 8,
+        "bulk_releases": 8,
+        "reuses": 0,
+        "before_release": 0,
+        "after_release": 0,
+        "before_release_share_pct": null,
+        "distinct_addresses": 8
+      },
+      {
+        "repetition": 3,
+        "processes": 2,
+        "allocations": 8,
+        "releases": 8,
+        "bulk_releases": 8,
+        "reuses": 0,
+        "before_release": 0,
+        "after_release": 0,
+        "before_release_share_pct": null,
+        "distinct_addresses": 8
+      }
+    ],
+    "strict": "allocator never created in an ordinary run"
+  },
+  "exercised": {
+    "block": true,
+    "block_fast": true,
+    "simple": true,
+    "strict": false
+  },
+  "limits": [
+    "one workload, the tree's own captures",
+    "strict is never created in an ordinary run: upstream reaches it only through WIRESHARK_DEBUG_WMEM_OVERRIDE",
+    "simple is created twice and serves eight objects",
+    "a small excess of frees over allocations, four on block and 240 on block_fast, is the core's rule that a bulk death counts as a free as well as in the bulk count"
+  ],
+  "recorded": "20260922"
+}

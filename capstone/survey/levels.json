@@ -130,8 +130,11 @@
         "bulk": "arena release",
         "evidence": "capstone/ports/cpython/pymalloc/README.md"
       },
-      "confirmed": "port-document",
-      "why": "Already recorded by the existing survey at 3.13. The new run only moves it onto the pinned 3.13.7 the port builds."
+      "confirmed": "measured",
+      "why": "Already recorded by the existing survey at 3.13. The new run only moves it onto the pinned 3.13.7 the port builds.",
+      "recorded": "nested-allocators-paper experiments/a1/results/cpython/20260912T073438Z",
+      "exercised": true,
+      "recorded_as": "the existing survey's own row, already on the revision the port pins, 3.13.7, so it needed no new run"
     },
     {
       "id": "postgres-aset",
@@ -276,8 +279,10 @@
         "bulk": "wmem_block_free_all at the pool reset",
         "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
       },
-      "confirmed": "port-patch",
-      "why": "The file and epan scopes. It keeps every block across a reset and rebuilds its free lists, which is exactly the retained-backing shape the survey looks for."
+      "confirmed": "measured",
+      "why": "The file and epan scopes. It keeps every block across a reset and rebuilds its free lists, which is exactly the retained-backing shape the survey looks for.",
+      "recorded": "results/20260922-wireshark-wmem-four",
+      "exercised": true
     },
     {
       "id": "wireshark-block-fast",
@@ -304,8 +309,10 @@
         "bulk": "wmem_block_fast_free_all at the packet-scope reset",
         "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
       },
-      "confirmed": "port-patch",
-      "why": "The per-dissection packet pool. It keeps its first 2 MiB block and rewinds, so every packet reuses the same storage without any system free."
+      "confirmed": "measured",
+      "why": "The per-dissection packet pool. It keeps its first 2 MiB block and rewinds, so every packet reuses the same storage without any system free.",
+      "recorded": "results/20260922-wireshark-wmem-four",
+      "exercised": true
     },
     {
       "id": "wireshark-simple",
@@ -332,8 +339,10 @@
         "bulk": "wmem_simple_free_all",
         "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
       },
-      "confirmed": "port-patch",
-      "why": "Passes every object straight to the system allocator. It is the control row: a nested allocator whose releases level 0 does see."
+      "confirmed": "measured",
+      "why": "Passes every object straight to the system allocator. It is the control row: a nested allocator whose releases level 0 does see.",
+      "recorded": "results/20260922-wireshark-wmem-four",
+      "exercised": true
     },
     {
       "id": "wireshark-strict",
@@ -360,8 +369,11 @@
         "bulk": "wmem_strict_free_all",
         "evidence": "capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch"
       },
-      "confirmed": "port-patch",
-      "why": "The debugging allocator upstream substitutes to make these defects visible to Valgrind. Recording it states what the production allocators cost in visibility."
+      "confirmed": "measured",
+      "why": "The debugging allocator upstream substitutes to make these defects visible to Valgrind. Recording it states what the production allocators cost in visibility.",
+      "recorded": "results/20260922-wireshark-wmem-four",
+      "exercised": false,
+      "not_exercised": "upstream creates this allocator only through WIRESHARK_DEBUG_WMEM_OVERRIDE, so an ordinary run never has one"
     },
     {
       "id": "ffmpeg-avbufferpool",
@@ -387,8 +399,11 @@
         "bulk": "av_buffer_pool_uninit",
         "evidence": "capstone/bug-corpora/ffmpeg/pool-repros/README.md"
       },
-      "confirmed": "port-document",
-      "why": "The level the existing FFmpeg survey row already records, moved onto the pinned 9.0.1."
+      "confirmed": "measured",
+      "why": "The level the existing FFmpeg survey row already records, moved onto the pinned 9.0.1.",
+      "recorded": "results/20260922-ffmpeg-avrefstructpool",
+      "exercised": true,
+      "recorded_as": "recorded in that bundle as the sibling level, on the revision the port pins"
     },
     {
       "id": "ffmpeg-avrefstructpool",
@@ -443,8 +458,11 @@
         "bulk": "none in this build: a page leaves its class only through the mover, which the port does not build",
         "evidence": "capstone/bug-corpora/memcached/allocator-repros/README.md"
       },
-      "confirmed": "port-document",
-      "why": "The level the existing memcached survey row records, moved onto the pinned 1.6.45."
+      "confirmed": "measured",
+      "why": "The level the existing memcached survey row records, moved onto the pinned 1.6.45.",
+      "recorded": "results/20260922-memcached-objcache",
+      "exercised": true,
+      "recorded_as": "recorded in that bundle as the sibling level, on the revision the port pins"
     },
     {
       "id": "memcached-objcache",
@@ -499,8 +517,11 @@
         "bulk": "apr_pool_clear and apr_pool_destroy",
         "evidence": "capstone/ports/apr/pools/README.md"
       },
-      "confirmed": "port-document",
-      "why": "The level the existing Apache survey row records. Its own wiring already says the second allocator is not measured, which is what this branch fixes."
+      "confirmed": "measured",
+      "why": "The level the existing Apache survey row records. Its own wiring already says the second allocator is not measured, which is what this branch fixes.",
+      "recorded": "results/20260922-apr-bucket-over-pool",
+      "exercised": true,
+      "recorded_as": "recorded in that bundle as the sibling level; APR itself is 1.7.6 here against the port's 1.7.4"
     },
     {
       "id": "apr-bucket",

@@ -69,8 +69,13 @@ def check(doc, repo=REPO, manuscript=None):
             errors.append(f"{where}: seam confidence must be stated")
 
         recorded = level.get("recorded")
-        if recorded and not (HERE / recorded / "manifest.json").is_file():
-            errors.append(f"{where}: recorded bundle has no manifest: {recorded}")
+        # A level may point at a bundle here, or at a pass in the manuscript
+        # when the existing survey already recorded it; the second must say so.
+        if recorded and recorded.startswith("results/"):
+            if not (HERE / recorded / "manifest.json").is_file():
+                errors.append(f"{where}: recorded bundle has no manifest: {recorded}")
+        elif recorded and not level.get("recorded_as"):
+            errors.append(f"{where}: a recording outside this branch must say where it came from")
         if level.get("confirmed") == "measured" and not recorded:
             errors.append(f"{where}: a measured seam must name its bundle")
         if level.get("reuse_share_unmeasurable") and not recorded:

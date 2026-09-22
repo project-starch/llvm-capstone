@@ -1,0 +1,9 @@
+date            2026-09-22T03:34:30Z
+wireshark       4.6.8, cmake Release, tshark only, no pcap, no lua, no plugins
+workload        163 captures from the pinned tree's test/captures, tshark -r <f> -V
+levels          simple,strict,block,block_fast, reps 3, one process per capture
+arms            shipped (no instrument, the oracle), and one per wmem allocator
+instrument      wmhook.inc beside hook.py, wrapped at wmem_core.c's allocator_new;
+                the counting core is memhook.c's, see ../hook/checkcore.sh
+host            Linux 6.18.7-76061807-generic x86_64, 28 cpus
+compiler        cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0

@@ -1,0 +1,76 @@
+wmhook: two levels recorded from inside the process
+
+@free[0, libc]: 1
+@alloc[0, block_fast]: 361
+@free[0, block_fast]: 361
+@bytes[0, block_fast]: 24419
+@peak[0, block_fast]: 193
+@kind[0, free]: 1
+
+@hook_alloc[block_fast]: 361
+@hook_free[block_fast]: 361
+@hook_bytes[block_fast]: 24419
+@hook_realloc[block_fast]: 0
+@hook_inplace[block_fast]: 0
+@hook_peak[block_fast]: 193
+@peakrun[block_fast]: 193
+@maxreuse[block_fast]: 2
+@distinct[block_fast]: 310
+@hook_fbytes[block_fast]: 24419
+@beyond254[block_fast]: 0
+@poison16[block_fast]: 1631
+@size_block_fast: 
+[1]                             2 |
+[2, 4)                          2 |
+[4, 8)                         24 |
+[8, 16)                        16 |
+[16, 32)                       36 |
+[32, 64)                      129 |
+[64, 128)                     125 |
+[128, 256)                      2 |
+[256, 512)                     23 |
+[512, 1K)                       0 |
+[1K, 2K)                        2 |
+
+@reuse_block_fast: 
+[1]                             1 |
+[2, 4)                          2 |
+[4, 8)                          4 |
+[8, 16)                         8 |
+[16, 32)                        3 |
+[32, 64)                        0 |
+[64, 128)                      30 |
+[128, 256)                      3 |
+
+@reusebytes_block_fast: 
+[1]                             0 |
+[2, 4)                          0 |
+[4, 8)                          0 |
+[8, 16)                         0 |
+[16, 32)                        0 |
+[32, 64)                        0 |
+[64, 128)                       0 |
+[128, 256)                      0 |
+[256, 512)                      0 |
+[512, 1K)                       0 |
+[1K, 2K)                        0 |
+[2K, 4K)                        3 |
+[4K, 8K)                       30 |
+[8K, 16K)                      18 |
+
+@prior_block_fast: 
+[0]                           310 |
+[1]                            51 |
+
+@addresses_block_fast: 
+[1]                           259 |
+[2, 4)                         51 |
+
+@bulk_releases: 359
+@bulk_events: 4
+@ctx_overflow: 0
+@reused_before_return: 51
+@reused_after_return: 0
+@reused_block_never_returned: 51
+@page_overflow: 0
+@pid: 501539
