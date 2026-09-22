@@ -1,0 +1,96 @@
+# Image identification for this bundle's boots.
+#
+# WHY THIS FILE AND NOT THE CONSOLES. Two images in this series have BYTE-IDENTICAL start
+# lines -- R1_STACK appears in no output field -- so the domain's own transcript cannot say
+# which ran. The driver's bake-time hash check can, and it lives in the console. The consoles
+# themselves are NOT committed: they carry absolute build paths, and this repository's rule is
+# to commit result lines rather than the capture they came from. These are those lines.
+
+
+== boot1-mx43296 ==
+  04:38:19 pieces: R1 harness 249cfda958f22f16 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  04:39:00 fw_payload fc8f67352449 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   249cfda958f22f16  ok
+  build<path>/test-domains  r1_slots_pools.dom   249cfda958f22f16  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot2-relbuf ==
+  04:59:14 pieces: R1 harness 29d9099326304ee5 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  04:59:55 fw_payload 368d916786fd (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   29d9099326304ee5  ok
+  build<path>/test-domains  r1_slots_pools.dom   29d9099326304ee5  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot3-order9ctl ==
+  04:48:34 pieces: R1 harness c685b0d7a95492ef (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  04:49:15 fw_payload 6a377564a321 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   c685b0d7a95492ef  ok
+  build<path>/test-domains  r1_slots_pools.dom   c685b0d7a95492ef  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot4-c3ctl ==
+  13:34:21 pieces: R1 harness aed492ab985653f3 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  13:35:02 fw_payload 5eeee0ff3390 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   aed492ab985653f3  ok
+  build<path>/test-domains  r1_slots_pools.dom   aed492ab985653f3  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot5-c3probe ==
+  13:48:34 pieces: R1 harness feacd8a621cce681 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  13:49:15 fw_payload fe67a1de9feb (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   feacd8a621cce681  ok
+  build<path>/test-domains  r1_slots_pools.dom   feacd8a621cce681  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot6-c3answer ==
+  14:13:35 pieces: R1 harness 502f5ca1029904e6 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  14:14:16 fw_payload fd9dff649e15 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   502f5ca1029904e6  ok
+  build<path>/test-domains  r1_slots_pools.dom   502f5ca1029904e6  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot7-layout ==
+  14:03:04 pieces: R1 harness 29d9099326304ee5 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  14:03:45 fw_payload ff88d0f95626 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   29d9099326304ee5  ok
+  build<path>/test-domains  r1_slots_pools.dom   29d9099326304ee5  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot8-c3full ==
+  20:08:57 pieces: R1 harness 35fb3fec3196841b (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  20:09:38 fw_payload 741913660fc9 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   35fb3fec3196841b  ok
+  build<path>/test-domains  r1_slots_pools.dom   35fb3fec3196841b  ok
+  initramfs membership: all present
+  initramfs carries the #3 module: yes
+
+== boot9-rep2-dropring ==
+  16:45:17 pieces: R1 harness 1b7a04fe237e1580 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  16:46:02 fw_payload cffdc0de0d4f (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   1b7a04fe237e1580  ok
+  build<path>/test-domains  r1_slots_pools.dom   1b7a04fe237e1580  ok
+
+== boot10-rep2-pressrel ==
+  16:56:58 pieces: R1 harness 249cfda958f22f16 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  16:57:48 fw_payload 12e74bc6eed7 (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   249cfda958f22f16  ok
+  build<path>/test-domains  r1_slots_pools.dom   249cfda958f22f16  ok
+
+== boot11-rep3-dropring ==
+  17:07:22 pieces: R1 harness 1b7a04fe237e1580 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  17:08:04 fw_payload f8fb3077df8d (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   1b7a04fe237e1580  ok
+  build<path>/test-domains  r1_slots_pools.dom   1b7a04fe237e1580  ok
+
+== boot12-rep3-pressrel ==
+  17:18:50 pieces: R1 harness 249cfda958f22f16 (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+  17:19:30 fw_payload ae32fd643ccc (monitor 2dcd3a5, buildroot d04bd83)
+  overlay/test-domains       r1_slots_pools.dom   249cfda958f22f16  ok
+  build<path>/test-domains  r1_slots_pools.dom   249cfda958f22f16  ok
