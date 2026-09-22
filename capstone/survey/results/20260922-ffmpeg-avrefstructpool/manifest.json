@@ -1,0 +1,109 @@
+{
+  "study": "W3",
+  "level": "ffmpeg-avrefstructpool",
+  "completes_w3_row": true,
+  "program": "FFmpeg",
+  "allocator": "AVRefStructPool",
+  "level_name": "refstructpool",
+  "below": "libc",
+  "upstream": {
+    "version": "9.0.1",
+    "sources": [
+      "libavutil/refstruct.c"
+    ]
+  },
+  "workload": "ffmpeg-decode-300s",
+  "workload_command": "ffmpeg -i in.mkv -f framemd5 -",
+  "instrument": {
+    "wiring": "nested-allocators-paper experiments/a1/ffmpeg/ffhook-refstruct.inc",
+    "placement": "nested-allocators-paper experiments/a1/ffmpeg/hook-refstruct.py"
+  },
+  "companion_pass": "nested-allocators-paper experiments/results/W2/20260922T021602Z-ffmpeg",
+  "compiler": "gcc 13.3.0",
+  "repetitions": [
+    {
+      "repetition": 1,
+      "allocations": 108001,
+      "releases": 107985,
+      "reuses": 107957,
+      "before_release": 107957,
+      "after_release": 0,
+      "distinct_addresses": 44,
+      "max_objects_at_one_address": 4514,
+      "libc_allocations": 343115,
+      "sha256": "5a39ec8c0b2de399934c8768ce60499f6c7ddacb2d7161992f40935c8cbec394"
+    },
+    {
+      "repetition": 2,
+      "allocations": 108001,
+      "releases": 107985,
+      "reuses": 107957,
+      "before_release": 107957,
+      "after_release": 0,
+      "distinct_addresses": 44,
+      "max_objects_at_one_address": 4513,
+      "libc_allocations": 343115,
+      "sha256": "3111bcb173ef7927cd696df32053747a6fcb1d5c25a0862179ecc5100dd1c6e5"
+    },
+    {
+      "repetition": 3,
+      "allocations": 108001,
+      "releases": 107985,
+      "reuses": 107957,
+      "before_release": 107957,
+      "after_release": 0,
+      "distinct_addresses": 44,
+      "max_objects_at_one_address": 4511,
+      "libc_allocations": 343109,
+      "sha256": "326db994ef770534b207591eef3ee20d8463e632a0b4d03c10d715f95ed91e7f"
+    }
+  ],
+  "sibling_level": {
+    "level": "bufpool",
+    "note": "the same binary's other pooled allocator, recorded in the same run",
+    "repetitions": [
+      {
+        "repetition": 1,
+        "allocations": 27000,
+        "releases": 27000,
+        "reuses": 26979,
+        "before_release": 26979,
+        "after_release": 0,
+        "distinct_addresses": 21,
+        "max_objects_at_one_address": 1291,
+        "libc_allocations": 343121,
+        "sha256": "072447d55c10c803be25ccbadef5e7514fce675579054a8ade09246fc428b5b4"
+      },
+      {
+        "repetition": 2,
+        "allocations": 27000,
+        "releases": 27000,
+        "reuses": 26979,
+        "before_release": 26979,
+        "after_release": 0,
+        "distinct_addresses": 21,
+        "max_objects_at_one_address": 1290,
+        "libc_allocations": 343112,
+        "sha256": "e2be7feadb0ea64af8fb749f94e4bae01bcdd9309503cedc23e4c759ad4beca1"
+      },
+      {
+        "repetition": 3,
+        "allocations": 27000,
+        "releases": 27000,
+        "reuses": 26979,
+        "before_release": 26979,
+        "after_release": 0,
+        "distinct_addresses": 21,
+        "max_objects_at_one_address": 1290,
+        "libc_allocations": 343112,
+        "sha256": "27f925fb0d82988133873e8926ad49bb66571acfc2a326fbb45a33a36b476043"
+      }
+    ]
+  },
+  "oracle": "the shipped arm's framemd5 output, matched byte for byte",
+  "limits": [
+    "one rung, decode",
+    "no bulk release: refstruct_pool_uninit frees only entries already dead"
+  ],
+  "recorded": "20260922"
+}

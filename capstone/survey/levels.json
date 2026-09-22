@@ -401,8 +401,9 @@
         "bulk": "av_refstruct_pool_uninit",
         "evidence": "capstone/ports/ffmpeg/buffer-pool/patches/ffmpeg-9.0.1-0002-libavutil-pool-payload-lifetime-hooks.patch"
       },
-      "confirmed": "port-patch",
-      "why": "FFmpeg's second pooled allocator, ported but never surveyed. Counting one of a program's two allocators can only understate the share of invisible releases."
+      "confirmed": "measured",
+      "why": "FFmpeg's second pooled allocator, ported but never surveyed. Counting one of a program's two allocators can only understate the share of invisible releases.",
+      "recorded": "results/20260922-ffmpeg-avrefstructpool"
     },
     {
       "id": "memcached-slabs",
