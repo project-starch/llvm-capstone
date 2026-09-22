@@ -3296,7 +3296,11 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > **R-38**.
 >
 > **What it is.** `core/ex_stage.sv` fires an invalidation broadcast on any node write whose `valid`
-> bit is clear, and the id on the wire is a **bare 16-bit index**. Three writes carry `valid = 0` on a
+> bit is clear. **The wire is 30 bits wide (`node_wr_req[29:0]`) and carries a bare index** — the
+> generation is masked off at source by `send_revnode_update`, so bits `[29:16]` are hard zero, and the
+> **16-bit compare lives at each consumer** (e.g. `commit_stage.sv:247`), not in the broadcast.
+> Calling the broadcast itself "16-bit" is the loose phrasing that makes the opposite-widths rule hard
+> to apply correctly. Three writes carry `valid = 0` on a
 > node that is *already* dead and stays dead — the deadness-preserving neighbour fixups. Two of them
 > can name **index 0**: `capstone_rev_node.anvil:224` (INIT's next-node `prev` fixup, reachable because
 > `node_2.next = 30'd0` at INIT_STAGE, so any INIT whose parent is the chain tail) and `:270` (MREV's
@@ -3324,37 +3328,117 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > cheap — but it would also make the invariant *unstated and unchecked* at the cost of looking
 > addressed. The useful artefact here is the written invariant plus the software question.
 
-### R-40 — the monitor's region ecalls have NO guard on region ids 0-2, so an S-mode caller can revoke a GENESIS region whose capability carries the same rev-node as the monitor's own PC capability `OPEN. Mechanism read from source and each leg verified independently; NOT observed, and the one link from an unprivileged caller to the ecall is NOT verified (see below). Found while enumerating the monitor trap path for R-35`
+### R-40 — the monitor's region ecalls have NO authorization check on the GENESIS region ids 0-2, so an unprivileged caller can aim `share` + `revoke` at the region whose capability carries the monitor's own PC rev-node `OPEN, and MATERIALLY CORRECTED 2026-09-22 after a claim-auditor REFUTED the single-ecall mechanism this entry was first filed with. VERIFIED: no id guard on either the share or the revoke path; genesis region 0's capability carries revnode 1; the ecall path has no authorization check; /dev/capstone is mode 0666 with an ioctl forwarding a caller-supplied region id. NOT VERIFIED, and now the whole open question: whether the resulting walk actually invalidates node 1 and faults the monitor's own fetch. NOT OBSERVED -- no run has been made`
 
-> **Folder:** none of its own; analysis with **R-35**'s. Related: **R-39** (the other id-0/low-id
-> invariant), **R-35** (the tracker family).
+> **Folder:** none of its own; analysis with **R-35**'s. Related: **R-39** (the index-0 invariant),
+> **R-41** (a regression in the very guard that blocks the single-ecall form), **R-35**.
 >
-> **What it is.** Three facts that compose:
-> 1. `cap_env_init` installs **genesis regions 0, 1, 2** into `cpmp(0..2)` and marks them live —
->    `region_cpmp[0..2] = 0/1/2` and `region_live[0..2] = 1` (`sbi_capstone_dom.c:19-32`).
-> 2. `revoke_region` guards **only** `region_id >= region_n` and `region_live[region_id] == 0`
->    (`sbi_capstone.c:1605-1616`). **There is no guard on ids 0-2**, and the genesis regions pass both
->    existing guards by construction. The share path is likewise guarded only on range and liveness.
-> 3. The monitor's own PC capability is hardcoded to **revnode 1** (`commit_stage.sv:197`,
->    `capenter_code_cap.metadata.revnode_id = 30'd1`), and `commit_stage.sv:224-226` raises **cause
->    25** for the PC capability off an identical tracker.
+> ## RETRACTED 2026-09-22 — the single-ecall mechanism this entry was first filed with
 >
-> So a caller reaching `revoke_region(0)` drives `__mrev` + `__revoke` on a genesis capability, and if
-> that capability carries revnode 1 the broadcast clears the **commit-stage** tracker — faulting the
-> monitor's own **instruction fetch**, which has less recourse than any data fault. Note this would be
-> a *correct* revocation mechanically; the defect is that the ids are reachable at all.
+> It claimed **one** ecall, `revoke_region(0)`, revokes the monitor's PC capability. **False, and the
+> refutation is a line of source the first version stopped short of reading.** `revoke_region` contains
+> **no `__mrev` at all** — the premise "`revoke_region` does `__mrev(r)` then `__revoke(rev)`"
+> describes no version in the tree. It does this (`sbi_capstone.c:1669-1675`, FPGA build input):
 >
-> **Two links NOT verified, named so nobody treats this as established.** (a) That genesis region 0's
-> capability really carries revnode 1 in the built image — derived from `split_out_cap`'s
-> `base == region_base` branch returning the parent's own capability with its revnode intact, which is
-> an inference from source, not a reading from a run. (b) That the region ecalls are reachable from an
-> **unprivileged** domain without a further check upstream of the dispatcher. Either link failing
-> downgrades this to a latent robustness gap. **Settling (a) is cheap: read the revnode of region 0 in
-> an RTL sim rather than deriving it.**
+> ```c
+> if (region_cpmp[region_id] != -1) {
+>     rev = read_cpmp(region_cpmp[region_id]);
+>     if (cap_type(rev) != CAP_TYPE_REV) {   // <-- region 0 exits HERE
+>         return 2;
+>     }
+>     r = __revoke(rev);
+> ```
 >
-> **Why file it anyway.** The missing id guard is real and independent of both links, the fix is a
-> two-line range check in the monitor, and the reason it was found is worth keeping: it turned up only
-> because the R-35 work asked "which capabilities can be revoked?" rather than "is this reachable?".
+> Genesis region 0's capability is **`CAP_TYPE_LINEAR`**, not REV: `capstone_flu_unit.anvil:504-505`
+> sets `revnode_id = 30'd1` and `cap_type = cap_type_t::CAP_TYPE_LINEAR` on **consecutive lines** — the
+> first version quoted the revnode and not the type. The guard is on the `regions[]` arm too and is
+> present in the **compiled** artifact (`sbi_capstone_dom.c.S:5628-5642`: `lcc`, compare, `bnez` ahead
+> of `revoke(t0)`), so this is not a source-only argument.
+>
+> **It also fails at the RTL, independently of that C guard**, which makes the refutation
+> firmware-age-independent: `capstone_dyn_unit.anvil:48-64` reaches `send rev_node_ep.rev_req` only
+> inside the `else` of a type test, so `csrevoke` on a LINEAR capability raises **cause 26
+> UNEXPECTED_CAP_TYPE at the `csrevoke` itself** and the walk never starts. **Corrected severity of the
+> single-ecall form: a refused ecall, not a monitor fault.**
+>
+> ## What IS verified, and the mechanism that survives — it needs TWO ecalls
+>
+> 1. **Genesis region 0's capability carries revnode 1.** `CAPENTER`'s else branch (taken, since
+>    `_cap_text_start/_end` are non-zero) emits **both** outputs at `revnode_id = 30'd1`
+>    (`capstone_flu_unit.anvil:489`, `:504`). `a0` is never written between there and
+>    `call cap_env_init`: only SPLITs on a1/a2, two `mv`s, a `CCSRRW`, `MOVC(a2,a3)`, and
+>    `call dom_init` — which in the FPGA asm (`sbi_capstone_dom.c.S:8426-8505`) neither writes `a0`
+>    nor makes any call. **Correction:** `cap_env_init` writes **`cpmp(0..2)`**, *not* `regions[0..2]`
+>    (`sbi_capstone_dom.c:11-33`), so `regions[0]` is an untagged zero (`NOT_CAP`) and the live
+>    capability lives in the CPMP entry. The first version said both.
+> 2. **Neither path guards ids 0-2.** `revoke_region` checks only `region_id >= region_n` and
+>    `region_live[region_id] == 0`; `shared_region_annotated` only
+>    `dom_id >= dom_n || region_id >= region_n` plus the same liveness flag. **Zero** comparisons of
+>    `region_id` against any literal on either path, and genesis regions pass by construction
+>    (`region_live[0..2] = 1`).
+> 3. **The ecall path has no authorization check.** `sbi_capstone.S:69-76` tests `mcause` against
+>    `CAUSE_SUPERVISOR_ECALL` then calls `handle_trap_ecall`, which runs straight from its signature
+>    into `switch(ext_code)`. `grep` for `MPP|mstatus` over that file returns **0**, positive-controlled
+>    (the same pattern returns 3 on `sbi_capstone_init.S`, so the instrument fires).
+> 4. **The caller who chooses the id is UNPRIVILEGED.** `/dev/capstone` is **mode 0666**
+>    (`modcapstone/module/capstone.c:658`) and `ioctl_revoke_region` (`:390-398`) forwards a
+>    user-supplied id straight into `sbi_ecall(SBI_EXT_CAPSTONE, SBI_EXT_CAPSTONE_REGION_REVOKE, …)`.
+>    The ecall is S-mode *by design* — S-mode is the legitimate SBI client, which is why "no privilege
+>    check" was the wrong framing — but the **region id originates in U-mode**. The defect is a missing
+>    **authorization** check on genesis ids.
+> 5. **THE SURVIVING MECHANISM, and it is UNRESOLVED at its last step.**
+>    `shared_region_annotated(dom, 0, …, REV_DEFAULT)` accepts region 0 and does
+>    `__rev void *rev = __mrev(r);` then `write_cpmp(region_cpmp[0], rev)` (`:1363-1371`) — installing a
+>    **genuine REV** into `cpmp(0)`. A following `REGION_REVOKE(0)` then reads a REV, **passes the type
+>    guard**, and runs the walk on node 1's subtree. Everything up to the walk is verified above.
+>    **NOT verified: that the walk ends with node 1 `valid = 0`, and that this faults the monitor's
+>    fetch** via `commit_stage.sv:197` (`revnode_id = 30'd1`) and `:224-226`.
+>
+> **Cheapest settling experiment — simulation, not the board:** a directed `.S` that MREVs node 1 and
+> issues `csrevoke` on the senior handle, asserting on the next monitor fetch. One run, no boot.
+>
+> **A wider reachability question this opened, also UNRESOLVED:** `split_out_cap`'s
+> `if(base == region_base) region = mem_l;` (`:784-787`) returns the parent capability **with its
+> revnode intact**, and `SPLIT` gives the fresh node only to `rd`. So an ordinary `create_region` whose
+> base equals a genesis region's base may inherit **revnode 1** with no genesis id ever being named,
+> which would make this reachable without ids 0-2 at all. No shipped board run is established as a
+> control for that branch.
+>
+> ## Lineage correction — the third instance of this same error in one session
+>
+> The first version cited the **102,389-byte** `package/` copy and asserted the lineages were
+> "byte-identical (verified: diff = 0)". **That check compared `package/` to `package/`.** The FPGA
+> firmware is built from a **third** copy,
+> `caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.c`,
+> **106,935 bytes**, dated Sep 17 01:38 — matching `sbi_capstone_dom.c.S`'s timestamp and reached via
+> `sbi_capstone_dom.c`, which is the single line `#include "capstone-sbi/sbi_capstone.c"`. Every line
+> number in this entry is now that file's. The refutation itself is lineage-independent (the type
+> guard's commit is an ancestor of both lineages); the citations were not.
+
+### R-41 — `revoke_region`'s type-guard early return DROPS the CPMP entry it just read, because `read_cpmp` is destructive and the refusal path never writes back `OPEN, PLAUSIBLE-BUT-UNPROVEN: the read's destructiveness is traced through the RTL and the missing write-back is plain in the source, but the downstream consequence is NOT verified and no run has been made. Found by a claim-auditor while refuting R-40's first mechanism -- so this is a regression in the very guard that blocks that mechanism`
+
+> **Folder:** none; analysis with **R-35**'s. Context: **R-40**.
+>
+> **What it is.** `revoke_region`'s CPMP arm does `rev = read_cpmp(region_cpmp[region_id]);` and then,
+> if the type is not REV, `return 2` — **with no write-back** (`sbi_capstone.c:1669-1675`, FPGA build
+> input). But `read_cpmp` is **destructive**: `C_READ_CCSR` expands to `ccsrrw(rd, cpmp(n), x0)`
+> (`:16`); `capstone_csr_unit.anvil`'s `ccrw_handle_pmp` returns `3'b110`/`3'b111`, so **bit 2 is set
+> unconditionally**; `commit_stage.sv:386` drives `ccsr_we_o = cap_check[2]`, and
+> `csr_regfile.sv:2418-2425` writes `cpmp_d[0]`/`cpmp_tag_d[0]` from the `x0` operand. So the read
+> *moves* the capability out of the entry and the refusal path leaves it cleared. The pre-guard code
+> always wrote back.
+>
+> **Exposure:** the **direct** `REGION_REVOKE` ecall on a non-REV region — one call, no authorization
+> check (R-40), reachable from the 0666 ioctl. Not exposed through the kernel module's release path,
+> which pops the region afterwards.
+>
+> **NOT VERIFIED: the downstream consequence.** Asserting one without a run would repeat exactly the
+> over-reach R-40's first version was refuted for. Settling test, no board: issue `REGION_REVOKE(0)`,
+> then read `cpmp(0)` back, or make any access into `[MEM_BASE, _cap_text_start)`.
+>
+> **Why filed despite being unproven:** it is the *same class* the monitor already documents at
+> `sbi_capstone.c:1355` — *"REV_SHARED's type test simply fails, silently skipping its `__delin` AND
+> its write-back"* — a sibling branch of the same function, so the pattern has bitten this code before.
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND, ROOT DEFECT LIVE AND NOW UNTESTABLE (2026-09-10): the monitor still lacks the icache invalidate on domain switch, and preflight C15 refuses the same-VA staging that would exercise it, so no boot since it landed has been able to measure this issue either way`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
