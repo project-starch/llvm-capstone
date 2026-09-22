@@ -140,6 +140,54 @@ The sweep, once its size is known:
 `take_cyc/n` rides along as the per-image control for free: it must stay at 72.00 throughout, and any
 image where it moves is excluded from the plot rather than explained.
 
+## The cache-set-conflict mechanism is REFUTED, twice, by arithmetic (2026-09-22)
+
+The section above says the set ordering does not fit. Two further checks, both free, close it off —
+and the second one refutes the mechanism rather than merely failing to support it.
+
+**Refutation 1 — every placement is INSIDE the hot window, so nothing flips in or out.** The rotation
+re-uses a fixed, small set of indices: `give(i)` pushes slot *i*'s node onto the LIFO free head and the
+very next `take(i)` pops the head, which is the node just pushed. The **generation** increments while
+the **index does not**, and the address is `base + index*16` with the generation masked off, so the
+node footprint is **16 fixed cache lines, permanently**. The harness reports the build's allocating-op
+count directly — `fixture_nodes = 2 * M1_LIVE - 1`, confirmed across the sweep (3/7/15/31/127 for
+M1_LIVE 2/4/8/16/64). At M1_LIVE = 16 that is 31, and with `head` starting at 3 and bumping:
+
+```
+   ids consumed by the build   :  3 .. 33      (31 allocating ops)
+   the 16 rotating slots hold  : 18 .. 33      -> hot sets 18 .. 33
+
+   globals 0x423170 -> set 23   give/n =  71.052    INSIDE
+   globals 0x423180 -> set 24   give/n = 130.041    INSIDE
+   globals 0x4231b0 -> set 27   give/n = 101.049    INSIDE
+```
+
+All three are interior. A 16-byte shift never moves a global out of the window, so "in or out of the
+hot set range" cannot produce the spread.
+
+**Refutation 2 — the mechanism predicts ZERO where the data swings 83 %.** The cache is 8-way, so
+evicting a hot node line needs real pressure in its set, not merely a line landing there. The globals
+block in that image is **76,832 B = 4,802 lines** over 256 sets:
+
+```
+   4,802 lines / 256 sets = 18.8 global lines per set
+   ways per set           =  8
+   -> EVERY set is over-subscribed 2.3x by the globals alone
+```
+
+So the set a line leaves and the set it enters were **both already over-subscribed before it moved**.
+Under the serial-dependent-chain reading — cost = hops x (hit or miss), placement deciding which hops
+hit — the node lines are evicted in *every* placement, every hop misses always, and the predicted
+response to a 16-byte shift is **zero**. The matched pair measures **83 %**. A mechanism that predicts
+flat where the data swings is refuted.
+
+**What the mechanism must instead depend on.** Not how many lines map to a set, but **which** lines are
+hot and **in what order** they are touched. One RTL fact constrains that search: `REVOKE_NODE` advances
+strictly via `walk_next := node_in.next`, so the traversal is in **chain order, not id order**. With
+LIFO reuse those diverge — the 16 ids are reissued in push order while the chain threads them in link
+order — so the touched-address sequence is a *permutation* of the 16 that depends on the give/take
+history rather than a scan. If order is the variable, that permutation is where to look.
+
 ## What to do about it TODAY, before anyone settles the mechanism
 
 The mechanism is open, but the reporting rule that follows from it is not, and it is enforceable now:
