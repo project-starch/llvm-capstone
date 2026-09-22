@@ -54,6 +54,32 @@ held, only the layout differing. Raw transcripts are in `results/`.
                               the entire measurement's reproducibility budget
 ```
 
+## The shape of it, spatially
+
+Nothing about the *work* changes between these runs. The same arm allocates and releases the same
+number of objects of the same size. The only thing that moves is where the fixture's globals were
+linked — by 16 and 64 bytes:
+
+```
+   ADDRESS SPACE                          what the run does          give_cyc/n
+
+   0x0042_3170  [globals]  image A        ~~ identical work ~~         71.052   <-- cheap
+   0x0042_3180  [globals]  image C        ~~ identical work ~~        130.041   <-- 1.83x
+   0x0042_31b0  [globals]  image B        ~~ identical work ~~        101.049
+                    |
+                    | 16 B and 64 B apart. Same code, same arm,
+                    | same capacity, same invocation list.
+                    v
+   0xBFF0_0000  [revocation node table]   <- the only other structure the
+                                             release path walks
+
+   take_cyc/n = 72.00 in ALL THREE  <-- the control: minting does not move at all
+```
+
+The measurement is not noisy and the arms are not different. **A pure relocation of data the program
+never reads differently changes the cost of releasing it by 83 %, while the cost of allocating it does
+not move by a single cycle.**
+
 ## The obvious mechanism, and why it does NOT fit
 
 The D-cache is 32 KiB, 8-way, 16-byte lines — 2,048 lines over **256 sets**, so a 16-byte shift moves
@@ -89,6 +115,33 @@ One sweep, no new hardware, no reflash:
 
 `take_cyc/n` rides along as the per-image control for free: it must stay at 72.00 throughout, and any
 image where it moves is excluded from the plot rather than explained.
+
+## What to do about it TODAY, before anyone settles the mechanism
+
+The mechanism is open, but the reporting rule that follows from it is not, and it is enforceable now:
+
+```
+   about to quote a cost figure measured on this platform?
+                 |
+       +---------+---------+
+       |                   |
+   take_cyc/n          give_cyc/n
+   (minting)           (release)
+       |                   |
+   72.00 in all        71 / 101 / 130 across three images
+   three images        that differ by 16 bytes
+       |                   |
+       v                   v
+   SAFE to quote       QUOTE ONLY WITH ITS IMAGE HASH
+   unqualified         - name the image in the same sentence
+                       - never compare two images' absolute figures
+                       - growth WITHIN one image is still a result
+                       - the spread between images (83 %) is 250x the
+                         measurement's own reproducibility (0.3 %)
+```
+
+The distinction is not cosmetic: `take` is bit-identical at 294,912 cycles across the pair, so this is
+a property of the **release** path specifically, not of the harness or of the board's variability.
 
 ## Why this matters beyond the study that found it
 
