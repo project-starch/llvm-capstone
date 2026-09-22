@@ -267,12 +267,18 @@ every live slot. Evidence and method:
 
 **The overhead TABLE above is NOT extended by that run, and the reason is its own control.**
 `ctrsanity` exists because both its halves run identical code; published, they were eleven
-instructions apart (500,033 vs 500,022). Re-measured on this bitstream they are **38,905 apart
-(7.8 %)**, and two other rungs return instruction ratios *below 1.0*, which the ABI cannot produce.
-The baseline half is measured through Linux userspace and its counters are taking interference the
-domain half does not — visible directly as `matmult_int` instret varying 7,272…13,687 across sixteen
-passes of identical code. So the denominators are not matched today and **no new overhead row may be
-quoted**; the pre-registration set that condition before the run.
+instructions apart (500,033 vs 500,022). The capability half is unchanged at 500,030; the baseline
+**floor** across the runner's sixteen passes is 509,212 — **+1.8 % over its own published value**, at
+matching `-O1` on both sides. Two other rungs return instruction ratios *below 1.0* (`beebs_janne`
+0.938, `beebs_crc32` 0.959), which the ABI cannot produce. So the denominators are not matched today
+and **no new overhead row may be quoted**.
+
+Separately and importantly for anyone re-running this: **the baseline runner's `warm` column is not a
+measurement.** It is one sample of sixteen, and the spread on identical code reaches 350 %
+(`beebs_prime` instret 2,704…12,172) because the baseline half runs in Linux userspace and takes
+scheduler interference the domain half never sees. The **per-pass minimum** is the clean statistic and
+it verifies — `beebs_prime`'s minimum is exactly its published 2,704. A first version of this note
+quoted the `warm` column and reported the control as 7.8 % out; that figure is **withdrawn**.
 
 Two things follow, and they are different. **The coverage claim below is now false** — these rungs are
 measurable. **The overhead numbers above remain the numbers of record**, on their own bitstream, until

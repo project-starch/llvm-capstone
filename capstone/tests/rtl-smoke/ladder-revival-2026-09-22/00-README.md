@@ -89,47 +89,80 @@ not a pre-registration.
 
 ## The baseline half was measured on this silicon, and the CONTROL FAILED
 
-The baseline half ran on the same bitstream (`baseline-half.result-lines.txt`). Pairing its **warm**
-column — the one the tool's own header names as comparable, *"the domain half has no paging, so WARM
-is the comparable column"* — against the capability half gives:
+**RETRACTION, same day.** This section first reported the control as 7.8 % out and attributed it to
+scheduler interference. **Both the magnitude and the mechanism were wrong**, and the error was in
+reading the runner's `warm` column as a measurement. It is one sample from a wide distribution, not a
+floor. Corrected below; the *conclusion* — no new overhead row — is unchanged.
 
-| rung | cap instret | base instret | instr ratio | cycle ratio | idem |
-|---|---:|---:|---:|---:|---|
-| **`ctrsanity`** (control) | 500,030 | 538,935 | **0.928** | **0.877** | YES |
-| `beebs_prime` | 2,703 | 2,704 | 1.000 | 1.000 | YES |
-| `matmult_int` | 9,722 | 7,272 | 1.337 | 1.541 | YES |
-| `coremark_matrix` | 31,560 | 28,071 | 1.124 | 1.055 | YES |
-| `beebs_crc32` | 29,723 | 33,752 | 0.881 | 0.844 | **no** |
-| `beebs_insertsort` | 962 | 813 | 1.183 | 1.484 | YES |
-| `beebs_janne` | 198 | 211 | **0.938** | 1.090 | YES |
+### The runner's `warm` column is not a clean measurement
 
-**`ctrsanity` is the control, and its defining property is that both halves run identical code.**
-Published 2026-07-28 it read 500,033 against 500,022 — eleven instructions apart. Today it reads
-**500,030 against 538,935 — 38,905 apart, 7.8 %.** The halves have diverged.
+The baseline runs each rung **16 times** and prints one `warm` value. Across those passes, on
+identical code:
 
-The pre-registration named this exact condition in advance:
+| rung | instret values seen | spread |
+|---|---|---:|
+| `beebs_prime` | 2,704 … 12,172 | **350 %** |
+| `matmult_int` | 7,272 … 13,687 | 88 % |
+| `ctrsanity` | 509,212 … 552,689 | 8.5 % |
 
-> If any anchor's instruction count differs from its published value by more than 1 %, the vehicle is
-> not comparable with the published table. **No new row may be added to §2.**
+The baseline half runs as ordinary Linux userspace, so its counters take scheduler interference the
+domain half never sees. Interference only ever *adds*, so **the per-pass minimum is the clean
+statistic** — and it verifies: `beebs_prime`'s minimum is **2,704, exactly the published July
+baseline**. The `warm` column is not the minimum (`ctrsanity` warm = 538,935 against a floor of
+509,212), which is where the retracted 7.8 % came from.
 
-and the verification section said the same of the control specifically: *"If `ctrsanity` does not read
-1.000×, the vehicle is not measuring what the published table measured, and no new row may be added."*
+### Recomputed from per-pass minima
 
-**So no row is added.** Two further readings agree with the control rather than against it:
-`beebs_janne` at **0.938** and `beebs_crc32` at **0.881** are instruction ratios *below 1.0* —
-capabilities retiring fewer instructions than plain RISC-V, which the ABI cannot do. And the raw
-16-pass data varies wildly on identical code (`matmult_int` instret 7,272 … 13,687), because the
-baseline half runs as ordinary Linux userspace and its counters take scheduler interference that the
-domain half does not.
+| rung | cap instret | base instret (min) | instr ratio | cycle ratio |
+|---|---:|---:|---:|---:|
+| **`ctrsanity`** (control) | 500,030 | 509,212 | **0.982** | 1.060 |
+| `beebs_prime` | 2,703 | 2,704 | 1.000 | 1.017 |
+| `matmult_int` | 9,722 | 7,272 | 1.337 | 1.591 |
+| `coremark_matrix` | 31,560 | 25,666 | 1.230 | 1.391 |
+| `beebs_crc32` | 29,723 | 31,001 | **0.959** | 1.115 |
+| `beebs_insertsort` | 962 | 813 | 1.183 | 1.627 |
+| `beebs_janne` | 198 | 211 | **0.938** | 1.855 |
 
-Four rungs produced no baseline at all — `beebs_aha_mont64`, `rv8_sha512`, `rv8_sha512s`, `beebs_ns`
-(`--`, `correct=NO`), which is why the runner exited 1. The cause is **not** established and is not
-size-ordered: 538k-instruction `ctrsanity` completed while 256k `beebs_aha_mont64` did not.
+### The control still fails, by 1.8 % rather than 7.8 %
 
-**What this means.** The coverage result below stands — it is about correctness, and the capability
-half is scored against native oracles that need no denominator. The *overhead* half of §2 cannot be
-regenerated until the baseline vehicle is repaired. That is a separate piece of work and it is
-cheaper than it looks, because it is a host-side measurement problem, not a board one.
+`ctrsanity`'s defining property is that both halves run identical code; published, they were eleven
+instructions apart (500,033 vs 500,022). Today the capability half is unchanged at 500,030, and the
+baseline **floor** is 509,212 — **+1.8 % over its own published value**, on a rung whose two halves
+are supposed to be identical. Interference cannot explain a raised floor, and the `-O` levels match:
+`optlevels.txt` reads `-O1` on both sides.
+
+So a residual remains after the interference is accounted for, it is real, and **its cause is not
+established.** Two further rungs read instruction ratios below 1.0 — `beebs_janne` 0.938 and
+`beebs_crc32` 0.959 — which the ABI cannot produce.
+
+**No new overhead row is added**, because a control that does not read 1.000 cannot separate a
+capability cost from whatever is moving the control. The plan's verification section set exactly this
+condition before the run: *"If `ctrsanity` does not read 1.000×, the vehicle is not measuring what the
+published table measured, and no new row may be added."*
+
+**Note on which gate actually fired.** The committed pre-registration's own numbered gate was *any
+anchor's instruction count moving more than 1 % from its published value* — and that gate **PASSED**
+(0.0006 %, 0.18 %, 0.0008 %). It could not have caught this: it compares the capability half against
+its own July value, so a drift on the *baseline* side is invisible to it. The condition that fired
+came from the plan's verification section, not from the pre-registration. **The pre-registered gate
+was the wrong discriminator**, and that is worth more than the result it missed: a gate on one half
+cannot police a ratio.
+
+### Four rungs produced no baseline
+
+`beebs_aha_mont64`, `rv8_sha512`, `rv8_sha512s`, `beebs_ns` returned `--` / `correct=NO`, which is why
+the runner exited 1. They stop after `beebs_janne` with a `^C` in the UART capture, which is
+**consistent with the runner's per-rung timeout firing** rather than with a rung defect. Not
+confirmed, but there is a signature and it is not size-ordered in the way a memory limit would be:
+`ctrsanity`'s 500k instructions completed while `beebs_aha_mont64`'s 256k did not.
+
+### What this means
+
+The coverage result above stands — it is about correctness, scored against native oracles, and needs
+no denominator. The *overhead* half of §2 cannot be regenerated until the baseline vehicle reports a
+floor rather than a sample and the control's residual 1.8 % is explained. Both are host-side
+measurement work, not board time, and the first is cheap: take the minimum across the passes the
+runner already performs.
 
 ## What this does NOT establish
 
