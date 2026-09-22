@@ -1,7 +1,92 @@
-# r35-rotate-stale, Verilator RTL simulation at capstone-ariane 054cea69b (the flashed build's RTL)
-# S12_MEM_DELAY=12, target capstone_cv64a6_imafdc_sv39, iss=veri-testharness
-# Run 2026-09-22. Readings in execution order; scalars print without a Cursor field.
+# R-35 reproduced in Verilator RTL simulation at capstone-ariane 054cea69b -- the flashed build's RTL.
+# S12_MEM_DELAY=12, target capstone_cv64a6_imafdc_sv39, iss=veri-testharness. Run 2026-09-22.
+# Worktree verified at 054cea69bcba7b597d5b4582feb1e80bea02f42a with zero modifications under
+# core/ common/ corev_apu/ verilator_config.vlt Flist.ariane, so the simulated RTL is the claimed RTL.
 
+== WHAT THIS LICENSES, AND WHAT IT DOES NOT ==
+# LICENSES: the optimistic adopt exists in the RTL SOURCES and is sufficient on its own to let an
+#   in-bounds, permitted access through a revoked NONLIN capability read and write without trapping.
+#   That is a source-level property of 054cea69b, independent of placement, routing and timing, so
+#   it removes the 'artefact of a build with WNS -8.307 / 90,379 failing endpoints' alternative for
+#   the MECHANISM. The board probe is rotated too (reuses_since 0/1353/2706 with live-alias writes
+#   in between), so the two observations line up.
+# DOES NOT LICENSE: that the placed-and-routed netlist behaves this way -- only that it need not be
+#   blamed. And it does NOT account for results/board-cause-probe.wedge.txt or
+#   results/board-bounds-probe.wedge.txt: those wedges were NOT reproduced here and stay unexplained.
+
+== THE FOUR TRAPS, and which unit raised each ==
+# load_store_unit.sv at 054cea69b contains ZERO $display / $write / dprint. The string
+# 'Exception: <NAME>' has exactly one source in the whole tree, capstone_unit.anvilh:465-478, which
+# only the ANVIL units reach. So a trap with no such line did not come from an anvil unit.
+
+  faulting pc / instruction                  retired mcause             anvil log line
+  0x800001d0  ld s6,0(a0)     ARM A          25 INVALID_CAPABILITY      ABSENT  -> not an anvil unit
+  0x800001e0  ld s3,0(a0)     ARM A2         25 INVALID_CAPABILITY      ABSENT  -> not an anvil unit
+  0x80000234  SPLIT t0,a0,a5  ARM D          25 INVALID_CAPABILITY      PRESENT cyc 3648 -> DYN unit
+  0x8000024c  sd (integer base, host)        24 UNEXPECTED_OPERAND_TYPE ABSENT  -> the LSU, see below
+
+# Counts, both reproducible in one command each: 4 'exception @' in the .log, 1 'Exception:' in
+# the .log.iss. Three silent traps, one printed.
+
+== ATTRIBUTING THE SILENT TRAPS TO THE LSU, which the silence alone does NOT establish ==
+# commit_stage.sv ALSO contains zero $display, so 'absent' licenses only 'not an anvil unit'.
+# The LSU attribution rests on three further facts:
+#  1. UNIT-LEVEL POSITIVE CONTROL. The fourth trap is a plain sd through an integer base retiring
+#     mcause 24. Cause 24 for a STORE is emitted at exactly one place, load_store_unit.sv:973-975.
+#     So cap_violation_detection demonstrably reached the exception path IN THIS RUN, and its
+#     exceptions are silent. This is the control the earlier FLU-based attempt lacked.
+#  2. DECODE ROUTING. decoder.sv:1080-1081 gives OpcodeLoad fu = LOAD with no capmode remap, and
+#     the DYN dispatch matches only capability fu_ops, so a plain ld never enters the DYN unit.
+#     pmp_data_if.sv cannot emit 25 at all (only 1/5/7) and is gated priv != M; we are at M.
+#  3. COMMIT_STAGE EXCLUDED. commit_stage.sv:197 sets the entry PC cap's revnode_id = 1 and nothing
+#     here changes the PC capability, so its adopt can never re-fire; once its valid bit went to 0
+#     every later committed instruction would trap. ~296k clean retirements say it never did.
+
+== THE PAIR IS SINGLE-VARIABLE ==
+# ARM A and ARM B differed in TWO things: the intervening access through a different revnode, and
+# the trap-and-mret arm A takes. ARM A2 -- a second un-rotated load -- also traps 25, so the trap
+# did not re-validate the tracker. ARM A2 and ARM B therefore differ in exactly ONE thing.
+# Corroborated in source: nothing but cap_violation_detection writes the tracker; its always_ff
+# has no flush, exception or kill term.
+
+== READ THE RETIREMENT TRACE, NOT THE DISPLAY OUTPUT ==
+# CAPPRINT prints at EXECUTE, so the .iss can carry speculative copies of prints younger than a
+# faulting op. CHECKED DIRECTLY FOR THIS RUN rather than assumed: zero duplicate cycle stamps, and
+# per-register print counts match program order. THE HAZARD DID NOT MANIFEST HERE. (capprint-retired.py
+# refuses on this run because 4 trace traps do not align with 1 logged exception -- that is a tool
+# limitation, not evidence.) The values below are RETIRED writes from the RVFI trace.
+
+== RETIRED register writes -- FILTERED to the arm registers (x19,20,22,23,24,26,27), in order ==
+  pc=0x0000000080000014  x26 = 0x0000000000000000
+  pc=0x0000000080000018  x20 = 0x0000000000000000
+  pc=0x00000000800001cc  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000001
+  pc=0x00000000800001dc  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000002
+  pc=0x00000000800001ec  x20 = 0x0000000000000000
+  pc=0x00000000800001f0  x23 = 0x005b5b5b5b5b5b5b
+  pc=0x00000000800001f8  x24 = 0x00a5a5a5a5a5a5a5
+  pc=0x0000000080000204  x20 = 0x0000000000000000
+  pc=0x0000000080000218  x27 = 0x005b5b5b5b5b5b5b
+  pc=0x000000008000021c  x27 = 0x00000000000000a5
+  pc=0x0000000080000224  x20 = 0x0000000000000000
+  pc=0x0000000080000260  x20 = 0x0000000000000019
+  pc=0x0000000080000264  x26 = 0x0000000000000003
+  pc=0x0000000080000260  x20 = 0x0000000000000018
+  pc=0x0000000080000264  x26 = 0x0000000000000004
+#  x22 (ARM A) and x19 (ARM A2) never retire a write: both loads were REFUSED, no value returned.
+#  x24 = a5a5.. (ARM B stale read) and x27 = a5 (ARM C readback) DO retire: data returned, store landed.
+#  s10 (x26) reads 1, 2, 3, 4 -- arm A, arm A2, arm D, and the closing host store.
+
+== WHY THIS IS NOT A CORNER CASE ==
+# A single core-wide tracker rotates on EVERY access through a different capability, so for any
+# M-mode program touching two or more capabilities the revocation check is effectively VACUOUS:
+# cause 25 can only ever fire for a program that never rotates. The adopt is gated on lsu_ctrl.valid
+# at EXECUTE rather than commit, so a SPECULATIVE access rotates the tracker as well.
+
+== CAPPRINT readings (execute-time; the witnesses) ==
 [Cycle       1038] Reg[18]: 00a5a5a5a5a5a5a5
 [Cycle       1042] Reg[10]: Cursor: 0000000080800000 | Metadata-> Revnode_id :          2 | Type : 1| Perm : 7 | Start : 0000000080800000 | End : 0000000082000000 | async = 0 | reg =  0 
 [Cycle       1043] Reg[11]: Cursor: 0000000000000000 | Metadata-> Revnode_id :          1 | Type : 3| Perm : 7 | Start : 0000000000000000 | End : 0000010000000000 | async = 0 | reg =  0 
@@ -18,9 +103,15 @@
 [Cycle       2936] Reg[ 7]: 0000000000000001
 [Cycle       3137] Reg[22]: 0000000000000000
 [Cycle       3138] Reg[20]: 0000000000000019
-[Cycle       3310] Reg[23]: 005b5b5b5b5b5b5b
-[Cycle       3314] Reg[24]: 00a5a5a5a5a5a5a5
-[Cycle       3315] Reg[20]: 0000000000000000
-[Cycle       3359] Reg[20]: 0000000000000000
-[Cycle       3408] Reg[27]: 00000000000000a5
-[Cycle       3410] Reg[26]: 0000000000000001
+[Cycle       3255] Reg[19]: 0000000000000000
+[Cycle       3256] Reg[20]: 0000000000000019
+[Cycle       3428] Reg[23]: 005b5b5b5b5b5b5b
+[Cycle       3432] Reg[24]: 00a5a5a5a5a5a5a5
+[Cycle       3433] Reg[20]: 0000000000000000
+[Cycle       3477] Reg[20]: 0000000000000000
+[Cycle       3526] Reg[27]: 00000000000000a5
+[Cycle       3651] Reg[20]: 0000000000000000
+[Cycle       3652] Reg[26]: 0000000000000002
+[Cycle       3656] Exception: INVALID_CAPABILITY (trans: 4)
+[Cycle       3716] Reg[20]: 0000000000000019
+[Cycle       3717] Reg[26]: 0000000000000003

@@ -30,6 +30,9 @@
 #          presented id DIFFERS, the adopt arm runs and asserts validity
 #          -> cause 25 suppressed -> NO TRAP and the data is returned.
 #   ARM C  the write half, same rotation -> the stale STORE lands.
+#   ARM D  a DELIBERATE anvil-unit refusal raising the SAME cause 25, so that
+#          arm A's 25 can be attributed to the LSU by the ABSENCE of the log
+#          log line that arm D produces. The emitter is proven live in-run.
 #
 # ARM A IS THE POSITIVE CONTROL for the whole instrument: it can only trap if
 # capmode is set, the block is live, the renumbered cause 25 is reachable and
@@ -59,9 +62,13 @@
 #   pre-revoke  LCC     A 1, B 1
 #   post-revoke LCC     A 0, B 1             A dead, B a sibling and untouched
 #   ARM A  cause        25                   INVALID_CAPABILITY
+#   ARM A2 cause        25                   the trap did not re-validate it
 #   ARM B  cause        0, value = sentinel A
 #   ARM C  cause        0, readback 00000000000000a5
-#   traps               1, arm A's
+#   ARM D  cause        25, and an "Exception: INVALID_CAPABILITY" line PRESENT
+#   ARM A                     the same cause 25 with that line ABSENT
+#   traps               s10 reads 1 after arm A, 2 after A2, 3 after arm D;
+#                       a fourth is taken on the closing host store, cause 24
 # On repaired RTL arms B and C must also read 25 and neither return nor store,
 # with arm A unchanged. That two-sidedness is what a fix has to show.
 #
@@ -88,6 +95,14 @@
 #   - DELIN rewrites the existing record's linear field in place. It does not
 #     create a node, so the alias keeps the same revnode id and dies exactly
 #     when that record dies.
+#   - THE ADOPT IS GATED ON lsu_ctrl.valid, i.e. at EXECUTE rather than commit,
+#     so a SPECULATIVE access rotates the tracker as well. That widens the
+#     defect beyond the architectural instruction stream.
+#   - A COMMENT LINE WHOSE FIRST WORD IS A CPP DIRECTIVE NAME IS A DIRECTIVE.
+#     ".S" goes through the preprocessor, so a line reading hash-space-"line"
+#     becomes a hash-line directive and the assembly dies with "not a positive
+#     integer". This is the same family as a macro call inside a comment, and it
+#     is checked for in the same way before every run.
 #   - The access under test is a PLAIN ld or sd through a capability base, which
 #     is what cap_violation_detection checks; not LDC, which would load a
 #     128-bit capability out of untagged storage.
@@ -173,6 +188,19 @@ _start:
   CAPPRINT(s6)                   # value if it wrongly retired
   CAPPRINT(s4)                   # ARM A cause -- expect 25
 
+# ---- ARM A2: a SECOND un-rotated stale read. Expect 25 again. ----
+# Arm A and arm B differ in TWO things, not one: the intervening access through a
+# different revnode, and the trap-and-mret that arm A takes. Nothing in the LSU
+# writes the tracker except cap_violation_detection itself -- the always_ff has
+# no flush, exception or kill term -- so a trap cannot perturb it. This arm shows
+# that by measurement rather than by reading: if the trap had re-validated the
+# tracker, A2 would not trap. With A2 trapping, A2 and arm B differ in exactly
+# ONE thing and the pair is single-variable.
+  li   s4, 0
+  ld   s3, 0(a0)
+  CAPPRINT(s3)                   # value if it wrongly retired
+  CAPPRINT(s4)                   # ARM A2 cause -- expect 25, as arm A
+
 # ---- ARM B: rotate the tracker through B, then repeat the stale read ----
   li   s4, 0
   ld   s7, 0(a6)                 # displaces the tracker to node B
@@ -191,7 +219,23 @@ _start:
   ld   s11, 0(a0)
   CAPPRINT(s11)                  # expect 00000000000000a5: the store LANDED
 
-  CAPPRINT(s10)                  # traps so far -- expect 1
+# ---- ARM D: the EMITTER's positive control, and the discriminator for arm A ----
+# load_store_unit.sv contains ZERO $display. Every "Exception: INVALID_CAPABILITY"
+# log lines come from one shared anvil helper, capstone_unit.anvilh:470,
+# which only the anvil units reach. So arm A's cause 25 arriving with NO such
+# a log line says it did not come from the DYN unit or the FLU, which on this
+# design leaves the LSU's cap_violation_detection. An argument from SILENCE,
+# and a silence is only evidence once the emitter is shown to be live in the
+# SAME run -- otherwise a compiled-out print reads identically.
+# So: SPLIT through the revoked alias. SPLIT accepts a NONLIN operand, queries
+# the node, and raises INVALID_CAPABILITY from the DYN unit when it is dead.
+# Same cause as arm A, different unit, same run.
+  li   s4, 0
+  li   a5, 0x80800010            # a cursor INSIDE alias A's bounds
+  SPLIT(t0, a0, a5)
+  CAPPRINT(s4)                   # ARM D cause -- expect 25, WITH an Exception line
+
+  CAPPRINT(s10)                  # traps -- expect 2: arm A and arm D
 
   RVTEST_PASS                    # expected to trap with cause 24, then spin
 
