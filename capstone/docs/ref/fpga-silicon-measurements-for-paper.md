@@ -257,7 +257,32 @@ is a property of DATA ACCESS, not of execution.**
 limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
 internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
 
-### Rungs that do NOT appear in the table, and why (2026-07-28)
+### ⚠ SUPERSEDED 2026-09-22 — all eight of these rungs now MEASURE on `caplifive_m1_054cea69b`
+
+The table below is a 2026-07-28 coverage bound and its blocker is retired. Re-run on the current
+bitstream, **all eight return their correct native oracle** — including the three whose entries name
+R-6, R-7 and R-9 rather than R-1. R-1's own probes (`rawhazard5/6/7`) read the reference model on
+every live slot. Evidence and method:
+`tests/rtl-smoke/ladder-revival-2026-09-22/` (pre-registration committed before the first boot).
+
+**The overhead TABLE above is NOT extended by that run, and the reason is its own control.**
+`ctrsanity` exists because both its halves run identical code; published, they were eleven
+instructions apart (500,033 vs 500,022). Re-measured on this bitstream they are **38,905 apart
+(7.8 %)**, and two other rungs return instruction ratios *below 1.0*, which the ABI cannot produce.
+The baseline half is measured through Linux userspace and its counters are taking interference the
+domain half does not — visible directly as `matmult_int` instret varying 7,272…13,687 across sixteen
+passes of identical code. So the denominators are not matched today and **no new overhead row may be
+quoted**; the pre-registration set that condition before the run.
+
+Two things follow, and they are different. **The coverage claim below is now false** — these rungs are
+measurable. **The overhead numbers above remain the numbers of record**, on their own bitstream, until
+the baseline vehicle is repaired and both halves are re-measured together.
+
+Do not mix vintages in the meantime: pairing this run's capability instret against the July baselines
+printed below puts `rv8_sha512` at 0.996 and `beebs_ns` at 0.987 — capabilities apparently retiring
+fewer instructions than plain RISC-V, which is eight weeks of compiler movement, not a measurement.
+
+### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
 bound is **not** a single cause — that is the honest statement and it differs from what
