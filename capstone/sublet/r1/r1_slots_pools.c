@@ -71,7 +71,16 @@ static inline ulong cyc(void) { ulong v; __asm__ volatile("csrr %0, mcycle" : "=
 static inline ulong ret(void) { ulong v; __asm__ volatile("csrr %0, minstret" : "=r"(v)); return v; }
 
 /* ------------------------------------------------------------------ the fixture ----------- */
-#define MAXN 256
+/* 8192, raised from 256 on 2026-09-22 for the B3 ladder. This is the SAFE direction and the arena
+ * was not: storing a sublet_cap into arena-carved memory means a capability written to ordinary
+ * storage, and on this silicon such a capability can come back UNTAGGED (S-07) -- INIT then rejects
+ * it with ILLEGAL_OPERAND_VALUE, which is exactly the wedge B3's first two board attempts hit, at
+ * n=8192 and at n=32 alike. The emulator does not model tag loss, so it passed both.
+ * Globals ARE capability-storable, so leaf[] and alias[] belong here. The cost is the globals carve:
+ * declared dom_data goes 344,160 -> 598,112, and the largest carve KNOWN TO RUN on this board is
+ * 704,032 (image 249cfda958f22f16), with the wedge bracketed at 1,059,808. So this stays inside the
+ * proven range -- check that arithmetic again before raising it further. */
+#define MAXN 8192
 #define MAXDELEG 16
 static sublet_cap pool;                 /* the released region, linear between repetitions */
 static sublet_cap H;                    /* the handle senior to the pool: the shared death */
@@ -86,7 +95,6 @@ static sublet_cap leaf_backing[MAXN + 1];
 static void *alias_backing[MAXN + 1];
 static sublet_cap *leaf = leaf_backing;
 static void **alias = alias_backing;
-static sublet_cap wide_lreg, wide_areg;  /* the carved backing for the wide series */
 static sublet_cap deleg[MAXDELEG];      /* unary delegations (depth series), one chain per branch */
 static sublet_cap unrel;                /* the unrelated region */
 static void *unrel_alias;
@@ -316,8 +324,17 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
    * power-of-two leaf sizes instead of 1365/1170/910 B. One full pass mints 41,280 nodes, 63% of
    * the 65,532 pool, so it fits even if nothing is reclaimed. */
   static const unsigned w_pts[12] = {32, 128, 256, 512, 768, 896, 1024, 1152, 1536, 2048, 4096, 8192};
+  /* `widelo` is the BISECTING ladder, and it exists because a wedge on this platform destroys the
+   * whole run's output: the harness writes its transcript into the shared readback region, but the
+   * host prints that region only after the domain RETURNS. B3's first board attempt wedged with
+   * ILLEGAL_OPERAND_VALUE and emitted not one line -- confirmed, `s=wide` appears zero times in the
+   * raw probe output, and the R1 lines that ARE in that file belong to an earlier boot.
+   * So the ladder must step ONE rung beyond proven territory at a time. R1's largest fixture on this
+   * board was n = 256; these are the three rungs at or below it plus the first one never built. */
+  static const unsigned wlo_pts[4] = {32, 128, 256, 512};
   unsigned npts = streq(series, "depth") || streq(series, "object") ? 4
-                : streq(series, "wide") ? 12 : 5;
+                : streq(series, "wide") ? 12
+                : streq(series, "widelo") ? 4 : 5;
   for (k = 0; k < npts; k++) {
     memset(&pt, 0, sizeof pt);
     pt.series = series; pt.pattern = pattern; pt.arm_sublet = arm_sublet; pt.touch_unrel = touch_unrel;
@@ -328,15 +345,8 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
     else if (streq(series, "depth")) { pt.chain = d_chain[k]; pt.ndeleg = 15; }
     else if (streq(series, "object")) { pt.S = s_pts[k]; pt.n = 17; pt.B = 16 * 64UL + pt.S; pt.U = 0; pt.pattern = "individual"; }
     else if (streq(series, "wide")) { pt.n = w_pts[k]; pt.B = (ulong)pt.n * 128UL; pt.U = 0; }
+    else if (streq(series, "widelo")) { pt.n = wlo_pts[k]; pt.B = (ulong)pt.n * 128UL; pt.U = 0; }
     else { out("R1 unknown series\n"); return; }
-    /* the wide series needs leaf[]/alias[] larger than MAXN: carve them from the arena, exactly as
-       run_chase carves its own lookup/leafslot. Done BEFORE the pool so the nodes these mint are
-       outside the point's `issue` measurement, which starts its own minted() baseline. */
-    if (streq(series, "wide")) {
-      carve_root((ulong)(pt.n + 1) * sizeof(sublet_cap) + 64UL, &wide_lreg);
-      carve_root((ulong)(pt.n + 1) * sizeof(void *) + 64UL, &wide_areg);
-      if (!root_short) { leaf = (sublet_cap *)sublet_take(&wide_lreg); alias = (void **)sublet_take(&wide_areg); }
-    } else { leaf = leaf_backing; alias = alias_backing; }
     /* fresh regions for the point: the pool and the unrelated region, carved from the root */
     if (arm_sublet) {
       carve_root(pt.B, &pool); pool_base = sublet_base(&pool);
