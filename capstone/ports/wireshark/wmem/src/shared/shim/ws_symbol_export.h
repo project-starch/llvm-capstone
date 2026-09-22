@@ -1,0 +1,5 @@
+#ifndef WM_SHIM_WS_SYMBOL_EXPORT_H
+#define WM_SHIM_WS_SYMBOL_EXPORT_H
+#define WS_DLL_PUBLIC
+#define WS_DLL_LOCAL
+#endif

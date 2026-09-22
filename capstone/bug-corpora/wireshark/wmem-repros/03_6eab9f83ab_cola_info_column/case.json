@@ -1,0 +1,37 @@
+{
+  "case": 3,
+  "upstream_fix": "6eab9f83ab",
+  "title": "packet-scope string handed to col_set_str, which keeps the pointer, and printed after the scope ended",
+  "consumer": "epan/dissectors/packet-cola.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: the fix is in v4.6.0 and packet-cola.c allocates the column string from pinfo->pool. The pre-fix shape is quoted from 6eab9f83ab^ at packet-cola.c:2304.",
+  "object": "the command string read by tvb_get_string_enc, 45 bytes in wmem_packet_scope()",
+  "lifetime_ender": "wmem_leave_packet_scope at the end of epan_dissect_run_with_taps (epan.c:680 at the fix's parent), before the packet is printed",
+  "shape": "packet-scope object held by a column or address past the scope's end",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the seam's packet pool stands in for the separate wmem_packet_scope() pool, the same allocator type with the same reset",
+  "distinguishing": "the fix moves the allocation to pinfo->pool; the same capture also exercised an RPC defect fixed separately (523e6aa11a), which the trace does not show and this case does not model",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd"
+}

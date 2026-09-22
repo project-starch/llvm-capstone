@@ -49,5 +49,13 @@
     "examples": {
       "allocator-example": "ALLOCATOR_EXAMPLE memcached PASS pointer_bytes=16"
     }
+  },
+  "wireshark": {
+    "path": "wireshark/wmem",
+    "archive_option": "WM_ARCHIVE",
+    "library": "Wireshark::Wmem",
+    "examples": {
+      "allocator-example": "ALLOCATOR_EXAMPLE wireshark PASS pointer_bytes=16"
+    }
   }
 }

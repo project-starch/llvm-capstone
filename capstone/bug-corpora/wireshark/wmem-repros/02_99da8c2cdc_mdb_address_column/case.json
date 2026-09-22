@@ -1,0 +1,37 @@
+{
+  "case": 2,
+  "upstream_fix": "99da8c2cdc",
+  "title": "val_to_str default string in packet scope kept by an AT_STRINGZ address and printed after the scope ended",
+  "consumer": "epan/dissectors/packet-mdb.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: wmem_packet_scope() no longer exists there (epan/wmem_scopes.c holds only the file and epan scopes), and packet-mdb.c allocates the string with val_to_str_wmem(pinfo->pool, ...). The pre-fix shape is quoted from 99da8c2cdc^ at packet-mdb.c:257 (the allocation) and :263/:267 (the stores).",
+  "object": "the formatted default string of val_to_str, 55 bytes in the packet scope of release-4.4",
+  "lifetime_ender": "wmem_leave_packet_scope at the end of epan_dissect_run_with_taps (epan.c:668 at the fix's parent), before the packet is printed",
+  "shape": "packet-scope object held by a column or address past the scope's end",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the seam's packet pool stands in for the separate wmem_packet_scope() pool of release-4.4, which is the same allocator type with the same reset",
+  "distinguishing": "the holder is an address (set_address keeps the pointer), not a column set directly; no allocation intervenes before the read, so the unprotected arm returns the old bytes",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd"
+}

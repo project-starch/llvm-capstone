@@ -1,0 +1,6 @@
+{
+  "name": "wireshark",
+  "version": "4.6.8",
+  "url": "https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz",
+  "sha256": "c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0"
+}

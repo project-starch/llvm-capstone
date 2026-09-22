@@ -1,6 +1,6 @@
 # Shared allocator trace tooling
 
-`port_trace` reads the four existing allocator trace formats through one host
+`port_trace` reads the five existing allocator trace formats through one host
 API. It does not change their bytes, execute allocator operations or reinterpret
 an allocator's ownership rules. Python 3.11+ and the standard library suffice.
 
@@ -27,6 +27,7 @@ read-only, and no build or guest is needed.
 | `postgres.a11` | 1 | 80 / 40 | Context kinds/hierarchy, bulk reset/delete, old/new realloc identities and process-prefix references |
 | `cpython.pymalloc` | 1 | 96 / 32 | alloc/calloc/realloc/free; a replay-table ID can persist through realloc |
 | `whisper.ggml-context` | 1 | 128 / 48 | Separate descriptor/buffer identities, buffer ownership and allocation epochs |
+| `wireshark.wmem` | 1 | 128 / 48 | Pool identities; a reset or destroy retires every object of one pool, an individual free only its own |
 
 The wire definitions remain in each port's C headers. The Python adapters
 implement their current versions explicitly; an incompatible future layout
@@ -87,7 +88,7 @@ an unknown historical recording revision.
 
 ## Port integration and results
 
-The four normal QEMU replay launchers validate the staged input before guest
+The five normal QEMU replay launchers validate the staged input before guest
 execution and retain `trace.json` beside the existing run manifest. Failed
 validation retains the input and a `capstone.trace-error/v1` sidecar; the VM
 is not started. Dedicated PostgreSQL lifetime fixtures do not interpret their

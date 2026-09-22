@@ -1,0 +1,27 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	site	delivered	completed	runner_exit
+0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	spatial	complete	True						True	0
+0	3c8be14c82	00-rpcrdma-write-offsets-global	stale pointer held by a global across packets	sublet	fault	True	24	0x101901364	0x101901364	read	False		1
+1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	spatial	complete	True						True	0
+1	c14d731e45	01-cms-oid-global	stale pointer held by a global across packets	sublet	fault	True	24	0x101901394	0x101901394	read	False		1
+2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	spatial	complete	True						True	0
+2	99da8c2cdc	02-mdb-address-column	packet-scope object held by a column or address past the scope's end	sublet	fault	True	24	0x1019012f4	0x1019012f4	read	False		1
+3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	spatial	complete	True						True	0
+3	6eab9f83ab	03-cola-info-column	packet-scope object held by a column or address past the scope's end	sublet	fault	True	24	0x1019012f0	0x1019012f0	read	False		1
+4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	spatial	complete	True						True	0
+4	b48759e4a4	04-qnet6-col-set-str	packet-scope object held by a column or address past the scope's end	sublet	fault	True	24	0x1019012f4	0x1019012f4	read	False		1
+5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	spatial	complete	True						True	0
+5	5a109265a6	05-usbll-address-struct	packet-scope object held by a column or address past the scope's end	sublet	fault	True	24	0x1019012ac	0x1019012ac	read	False		1
+6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	spatial	complete	True						True	0
+6	a8b16d74e1	06-x509if-last-dn-static	stale pointer held by a global across packets	sublet	fault	True	24	0x1019012f0	0x1019012f0	read	False		1
+7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	spatial	complete	True						True	0
+7	fb504bc76c	07-mysql-auth-method	packet-scope object kept by file-scope state across packets	sublet	fault	True	24	0x101901338	0x101901338	read	False		1
+8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	spatial	complete	True						True	0
+8	31ab1a0a17	08-sip-cseq-method	packet-scope object kept by file-scope state across packets	sublet	fault	True	24	0x10190133c	0x10190133c	read	False		1
+9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	spatial	complete	True						True	0
+9	693dc40936	09-geonw-proto-data-tvb	packet-scope object kept by file-scope state across packets	sublet	fault	True	24	0x101901308	0x101901308	read	False		1
+10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	spatial	complete	True						True	0
+10	6fd3af5e99	10-t38-reassembly-buffer	packet-scope object kept by file-scope state across packets	sublet	fault	True	24	0x1019012f4	0x1019012f4	read	False		1
+11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	spatial	complete	True						True	0
+11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	sublet	fault	True	24	0x101901368	0x101901368	read	False		1
+12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	spatial	complete	True						True	0
+12	90bb3a5c9e	12-xml-root-name-recycled	stale pointer after an individual recycler free	sublet	complete	True							0

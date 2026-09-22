@@ -1,0 +1,12 @@
+# Path, bucket, purpose. Inventory only, not a measured effort claim.
+patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch allocator object bounds, block epochs, chunk releases and stale-pointer refusal in the four allocators
+src/shared/shim/glib.h compat the GLib surface wmem uses, mapped onto port services
+src/shared/shim/wsutil/ws_assert.h compat scope assertions kept active
+src/shared/wmem-port-hooks.h glue object narrowing for the patched allocators
+src/shared/backing.c allocator one region per system request, size-exact reuse, epoch and widen services
+src/shared/scopes.c allocator the dissection-loop pool lifecycle modelled on upstream's scope layer
+src/shared/freestanding.c compat environment and string services the domain lacks
+src/allocators/sublet/regions.c allocator retained authority and revocation
+src/shared/replay.c test event validation and synthetic payload checks across all four allocators
+security-tests/shared/lifetimes.c test live, stale, bounds and refusal controls with labelled access sites
+src/cheribsd/poisoncap.c allocator PoisonCap backing: mapped regions, exact published bounds, invalidation at reset, release and chunk free

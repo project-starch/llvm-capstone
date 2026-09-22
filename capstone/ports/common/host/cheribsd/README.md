@@ -10,6 +10,7 @@ links the allocator directly, without a trace driver.
 | [PostgreSQL](../../../postgres/memory-contexts/README.md) | `PostgreSQL::MemoryContexts` | [contexts.c](../../../postgres/memory-contexts/examples/contexts.c) |
 | [CPython](../../../cpython/pymalloc/README.md) | `CPython::Pymalloc` | [pymalloc.c](../../../cpython/pymalloc/examples/pymalloc.c) |
 | [Whisper](../../../whisper/ggml-context/README.md) | `Whisper::GgmlContext` | [context.c](../../../whisper/ggml-context/examples/context.c) |
+| [Wireshark](../../../wireshark/wmem/README.md) | `Wireshark::Wmem` | [wmem.c](../../../wireshark/wmem/examples/wmem.c) |
 | [APR](../../../apr/pools/README.md) | `APR::Pools` | [pools.c](../../../apr/pools/examples/pools.c) |
 | [memcached](../../../memcached/allocators/README.md) | `Memcached::Allocators` | [allocators.c](../../../memcached/allocators/examples/allocators.c) |
 

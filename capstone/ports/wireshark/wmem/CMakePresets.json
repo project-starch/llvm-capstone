@@ -1,0 +1,87 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "/tmp/capstone/wireshark-wmem/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": true
+      }
+    },
+    {
+      "name": "native",
+      "inherits": "base"
+    },
+    {
+      "name": "capstone-domain",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-domain.cmake",
+      "cacheVariables": {
+        "PORT_HEADER_PROVIDER": "musl"
+      }
+    },
+    {
+      "name": "linux-guest",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/linux-guest.cmake"
+    },
+    {
+      "name": "cheribsd",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/cheribsd.cmake",
+      "cacheVariables": {
+        "BUILD_TESTING": false,
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "poisoncap",
+      "inherits": "cheribsd",
+      "cacheVariables": {
+        "WM_POISONCAP": true
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "jobs": 4
+    },
+    {
+      "name": "capstone-domain",
+      "configurePreset": "capstone-domain",
+      "jobs": 4
+    },
+    {
+      "name": "linux-guest",
+      "configurePreset": "linux-guest",
+      "jobs": 4
+    },
+    {
+      "name": "cheribsd",
+      "configurePreset": "cheribsd",
+      "jobs": 2
+    },
+    {
+      "name": "poisoncap",
+      "configurePreset": "poisoncap",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "native",
+      "configurePreset": "native",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

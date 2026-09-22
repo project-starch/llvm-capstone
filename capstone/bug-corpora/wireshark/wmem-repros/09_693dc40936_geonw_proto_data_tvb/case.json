@@ -1,0 +1,37 @@
+{
+  "case": 9,
+  "upstream_fix": "693dc40936",
+  "title": "unescaped PPP buffer in pinfo->pool kept by proto data added with file scope and read by a later frame",
+  "consumer": "epan/dissectors/packet-geonw.c (buffer from epan/dissectors/packet-ppp.c)",
+  "live_in_pin": false,
+  "live_proof": "absent at the 4.6.8 pin by inspection: packet-geonw.c adds the entry with p_add_proto_data(pinfo->pool, ..., SEC_TVB_KEY, ...). The pre-fix shape is quoted from 693dc40936^ at packet-ppp.c:5914 (the buffer), packet-geonw.c:1913 and :2116 (the file-scope stores), :2229 (the retrieval) and :2234 (the read).",
+  "object": "the unescaped frame buffer, 55 bytes in pinfo->pool, wrapped in a child tvb",
+  "lifetime_ender": "epan_dissect_reset between packets (epan.c:581 at the fix's parent); the file-scope proto-data entry keeps the tvb",
+  "shape": "packet-scope object kept by file-scope state across packets",
+  "allocator_layer": "block_fast",
+  "fidelity": "model-consumer, real allocator; the tvb wrapper is elided and the entry holds the buffer directly, since the read goes through the tvb to its backing bytes",
+  "distinguishing": "the holder is proto data whose scope argument was simply wrong; upstream even tried to clear it with a NULL entry, which p_get_proto_data never returned",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 24
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "complete"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "SIGPROT at the labelled read probe",
+      "signal": 34,
+      "si_code": 2
+    },
+    "native-detect": {
+      "status": "not written"
+    }
+  },
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd"
+}
