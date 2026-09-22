@@ -195,8 +195,18 @@ def main():
                 # pass (run_pass), so there is nothing to select. Passing the
                 # report label "cycle+instret" here made the controller reject it
                 # as a counter name and cost a boot.
+                # Run exactly the REQUESTED rungs, not `all` (fixed 2026-09-22).
+                # `all` walks the controller's whole dispatch table, which is now
+                # generated from ladder-rungs.spec and therefore has every rung in
+                # it -- 65 of them, including rv8_primes at ~7M instructions and
+                # ctrsanity4 at ~2M, times BASE_PASSES. That does not fit the sweep
+                # timeout, and it spends the board's time on rungs nobody asked
+                # for. The controller already accepts a single rung name, so ask
+                # for the ones LADDER_RUNGS names. A rung that traps on a gated CSR
+                # then kills only its own invocation instead of the sweep.
+                seq = "; ".join(f"{CTL_REMOTE} {r}" for r in RUNGS)
                 out = console.run_command(
-                    f"echo A''LLB; {CTL_REMOTE} all; echo A''LLE=$?",
+                    f"echo A''LLB; {seq}; echo A''LLE=$?",
                     r"ALLE=\d+", timeout=300)
             except ActionTimeout:
                 log(f"  sweep: no END marker (attempt {attempt})"); time.sleep(2); continue

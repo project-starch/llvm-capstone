@@ -119,46 +119,29 @@ static int ctr_by_name(const char *s) {
  *  names match the capability sweep's rung names so the two result
  *  tables join on the first column.
  * ------------------------------------------------------------------ */
-unsigned base_null(void);
-unsigned base_matmult_int(void);
-unsigned base_coremark_matrix(void);
-unsigned base_rv8_primes(void);
-unsigned base_beebs_crc32(void);
-unsigned base_beebs_insertsort(void);
-unsigned base_beebs_prime(void);
-unsigned base_beebs_recursion(void);
-unsigned base_beebs_bs(void);
-unsigned base_beebs_janne(void);
-unsigned base_beebs_fibcall(void);
-unsigned base_beebs_fac(void);
-unsigned base_beebs_cnt(void);
-unsigned base_beebs_duff(void);
-unsigned base_ctrsanity(void);
-unsigned base_ctrsanity4(void);
+/* GENERATED, not hand-maintained (2026-09-22). The declarations and the dispatch
+   table below come from base_rungs.inc, which build-ladder-base-fpga.sh emits from
+   ladder-rungs.spec in the same loop that compiles the kernels -- so a rung cannot
+   be in one and not the other.
 
+   It used to be a literal table here, and the comment that sat in it said: "This
+   table is hand-maintained and is SEPARATE from the RUNGS list in
+   build-ladder-base-fpga.sh. Adding a rung there but not here builds fine and then
+   reports '--' for every column at run time -- which cost a board boot on
+   2026-07-27. Add to both, always."
+
+   "Add to both, always" is an instruction to a human, and on 2026-09-22 it failed
+   again in the same way: the table stopped at sixteen entries, so rv8_sha512,
+   rv8_sha512s, beebs_aha_mont64, beebs_ns and a newly added control rung all
+   reported "--" across a full board sweep that exited 0. The sweep was not
+   truncated and nothing timed out -- those rungs were simply never dispatched.
+   The shared spec exists precisely so the two halves cannot drift; a hand-kept
+   table one file over re-introduced that drift. Generating it removes the class.
+
+   struct rung stays here because base_rungs.inc defines RUNGS in terms of it. */
 struct rung { const char *name; unsigned (*fn)(void); };
-static const struct rung RUNGS[] = {
-  { "null",             base_null             },
-  { "matmult_int",      base_matmult_int      },
-  { "coremark_matrix",  base_coremark_matrix  },
-  { "rv8_primes",       base_rv8_primes       },
-  { "beebs_crc32",      base_beebs_crc32      },
-  { "beebs_insertsort", base_beebs_insertsort },
-  { "beebs_prime",      base_beebs_prime      },
-  { "beebs_recursion",  base_beebs_recursion  },
-  { "beebs_bs",         base_beebs_bs         },
-  { "beebs_janne",      base_beebs_janne      },
-  /* This table is hand-maintained and is SEPARATE from the RUNGS list in
-     build-ladder-base-fpga.sh. Adding a rung there but not here builds fine and
-     then reports "--" for every column at run time -- which cost a board boot on
-     2026-07-27. Add to both, always. */
-  { "beebs_fibcall",    base_beebs_fibcall    },
-  { "beebs_fac",        base_beebs_fac        },
-  { "beebs_cnt",        base_beebs_cnt        },
-  { "beebs_duff",       base_beebs_duff       },
-  { "ctrsanity",        base_ctrsanity        },
-  { "ctrsanity4",       base_ctrsanity4       },
-};
+#include "base_rungs.inc"
+
 #define NRUNGS ((int)(sizeof RUNGS / sizeof RUNGS[0]))
 
 /* Each rung is measured TWICE, back to back, and both passes are reported.
