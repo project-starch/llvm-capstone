@@ -100,7 +100,31 @@ mechanism is not.** Do not write "cache-set conflict" into anything citing this 
 
 ## What would settle it
 
-One sweep, no new hardware, no reflash:
+**The RTL lane priced this and 256 images is over-buying** (answers from source at `054cea69b`):
+
+- The node table base is a **compile-time `localparam`** — `CAP_REVNODE_MEM_BASE = 56'hBFF0_0000`
+  (`core/include/ariane_pkg.sv:591`), consumed at `ex_stage.sv:1165-1166` as
+  `base + {36'd0, node_addr[15:0], 4'd0}`. So node *i* sits at `0xBFF00000 + i*16`, one node per line,
+  and with the base's low 20 bits zero, **set = i mod 256 with the table origin at set 0**. The set
+  arithmetic above is sound and there is no fencepost.
+- **What `give` touches that `take` does not is a serialized, data-dependent miss chain.** `REVOKE_NODE`
+  reads node `revoke_index` and only then learns the next address (`capstone_rev_node.anvil:15`, with
+  the read serialized behind `mem_wait_flag` at `:92-94`), so hop *k+1*'s address is unknown until hop
+  *k* returns: **zero memory-level parallelism**, r dependent 16-byte reads in r distinct sets. `take`
+  is the opposite — a fixed handful of addresses known up front. That is why `take` coming back
+  bit-identical is **the matched control proving the sensitivity is in the walk**, not a null result.
+- **The response has a period, and the period is computable.** The walk's set footprint is fixed by the
+  **mint-id sequence** — a property of the fixture, not of its link address. Sequential minting gives a
+  contiguous run of sets and a *step* response; round-robin over k slots gives stride k and **period k**.
+  Either way the sweep needed is ~the period, not 256.
+
+**So: derive the period in simulation first, then spend ~period images on the board** with `take_cyc` as
+the matched control. The Verilator build instantiates the real `wt_dcache` from the same config package,
+so the conflict effect itself reproduces there. Caveat kept explicit: `S12_MEM_DELAY` is a flat
+period-16 sawtooth rather than DDR, so **simulation owns the shape and the period; the board still owns
+the magnitude.**
+
+The sweep, once its size is known:
 
 ```
   build N images that walk m1_ret_alias across all 256 sets in 16-byte steps

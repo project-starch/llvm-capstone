@@ -4623,6 +4623,13 @@ and the fixture's globals; **that mechanism is not established here, only the de
 **Retracted 2026-09-19:** an earlier reading of this data as "give ≈ 71 when the obsolete reference is
 retained and ≈ 103 when dropped" does not survive the layout control and is withdrawn.
 
+**Filed as a defect with its own folder, 2026-09-22:**
+`capstone/tests/fpga-repros/RTL-give-cost-tracks-global-placement/`. It carries the matched pair (boot 7
+running boot 1's list on boot 2's image, `take_cyc` **bit-identical at 294,912** while `give_cyc` goes
+291,427 → 533,056), the raw transcripts, and the refutation of the set-conflict mechanism — the set
+indices rise 23, 24, 27 while the cost goes 71, 130, 101, which is **not monotone**, so nothing here
+licenses "cache-set conflict". Anything quoting these numbers should cite the folder, not this section.
+
 ### Retain-pressure: the buffer never bought pool coverage
 
 **Retracted 2026-09-19.** The retain-pressure arm was reported as holding a stale reference to
