@@ -300,6 +300,62 @@ On `m1-reclaimer`, `verif/tests/custom/capstone/`:
 **A pair is the unit of evidence here.** The approval test means nothing alone — it is the *same*
 fixture on two consecutive commits, differing by exactly the mechanism. Keep that habit.
 
+## 6b. What makes an M1 arm VOID rather than negative
+
+The board-side analogue of the degenerate null, asked by `apollo-rtl` on handover. Four shapes; the
+first is the one that returns clean numbers meaning nothing.
+
+**1. "Stale refused" is VACUOUS unless reissue is witnessed in the same run.** On the pre-reclaimer
+build a revoked node is never reclaimed, so it stays `valid == 0` forever and a stale reference is
+refused — **for the wrong reason.** The reading is identical on both builds. This is recorded from the
+simulation side, where `wt-probe` had to be rejected as the control for exactly this: *a dead node is
+refused there too, for `valid == 0`, and the log is identical on every stale arm.* So an arm reporting
+"stale operations never regained authority" proves the safety property **only if the same transcript
+also shows the index reclaimed and reissued to a fresh owner**. Without that, it is the reading that
+means "safe" taken from a run where the property was never exercised.
+
+**2. An arm that never exceeds the pool cannot say which build it ran on.** The cite-by-hash rule is
+unsatisfiable here (§7), so the *only* identification available is behavioural, and the only
+behavioural discriminator anyone has found is exceeding 65,532 distinct indices — impossible without
+reclamation, and a wedge on the deployed build. An arm that stays under the pool runs identically on
+both designs. Either exceed the pool somewhere in the boot, or carry a discriminator from an arm that
+did.
+
+**3. A retain-pressure arm that stops at `M1_MAXRET` reports a HARNESS limit, not a node property.**
+The protocol anticipates this and asks for the largest retained set that fits. Report the fraction of
+distinct indices covered alongside the number, or it is uninterpretable. And note a null there is the
+*expected* result — retention cannot prevent reuse in this design, since no old reference is consulted
+at reclaim time — so that arm tests the generation check under load, not throttling.
+
+**4. The general board rule still applies:** the known-good control fails on its own about one boot in
+five, and **a boot whose control fails is VOID**, carrying no verdict about anything
+(`.claude/skills/board-run/SKILL.md`). A control failing the same way twice is the harness, not the flake.
+
+Plus one wrong-number rather than void: an exhaustion run crossing **retirement** yields a combined
+index-consumption rate, not the handle-leak fraction. Correct with `retired ≈ A/16,384`.
+
+## 6c. The two forbidden claims — what the TRUE version is
+
+Also asked on handover: is a weaker true claim being carried, or no claim? **A weaker true claim, in
+both cases — and for the loops it is stronger than "not separated".**
+
+**The ceiling / leak fraction — measured for one workload, bounded for the other.** It is *not* true
+that the fraction is measured for none. For the `r12-recl-freelist` shape (allocates two nodes per
+round, frees one) it is **0.529, linear and flat to three digits from 64 to 34,821 allocations, with no
+saturation** — so for that workload the boundary moves by 1/0.529 = **1.89×** and that is a measured
+claim. For the board harness's own workload it is **bounded only: c < 0.3277**, from a run that reached
+200,000 allocations without exhausting. The honest general statement: *the boundary moves by the
+reciprocal of the workload's leak fraction; the fraction is a property of the allocate-to-free ratio,
+measured at 0.529 for one synthetic workload and bounded below 0.3277 for the realistic one.* Never
+carry 0.529 across to another workload.
+
+**The loops — the attributable number is ZERO, which is a result and not an absence.** The attribution
+build `f714d2a72` exists precisely to separate the reclaimer from the merge, and it did: **merge alone**
+loops 13 → 1, LUTs +1,165, WNS +1.350; **reclaimer alone** loops **1 → 1**, LUTs **−2,352**, WNS
+**−0.432**. So "the reclaimer removes no combinational loops" is attributable and measured, as are the
+LUT return and the timing cost. What is forbidden is attributing the *composite* build's figures to the
+reclaimer — not the reclaimer's own, which exist.
+
 ## 7. In flight, and the lanes
 
 - **`apollo-board`** — running M1's four arms plus a dedicated exhaustion run, against a consolidated
