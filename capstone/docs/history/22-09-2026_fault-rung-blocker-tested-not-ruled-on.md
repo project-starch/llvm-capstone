@@ -94,3 +94,39 @@ assertion, not a comment.** Recorded; not fixed here.
   is a separate question and is not answered here.
 - **It does not retire the ruling.** The lead still has to choose. It changes what the choice is
   between, and removes the option nobody should pick — waiting for a better-built fault rung.
+
+## Scoping the fix: the monitor's re-entry point is a two-instruction hang
+
+`design/domain-fault-delivery-proposal.md:159-163` leaves one question open for whoever implements it:
+
+> **Monitor (`sbi_capstone.c`):** … Confirm whether the existing `__domcallsaves` return path already
+> distinguishes an async/cause re-entry (the async-interrupt return uses this same machinery) or
+> whether a small new branch is needed.
+
+**Answered: it does not, and the gap is larger than "a small new branch".** `DOM_REENTRY_POINT`
+resolves to `_dom_reentry` at `capstone-sbi/sbi_capstone.S:4-10`, and the label is:
+
+```asm
+_dom_reentry:
+#ifdef CAPSTONE_TARGET_FPGA
+    csrr t1, mepc
+    csrr t2, mcause
+#endif
+    j _dom_reentry          /* spins forever */
+```
+
+Two CSR reads on the FPGA build, then an unconditional branch to itself. It is the stub the QEMU
+comment refers to (*"`DOM_REENTRY_POINT` is a stub"*), and it does not distinguish anything — a
+domain returning through it hangs the monitor. `__domreturnsaves(caller_dom, DOM_REENTRY_POINT, 0)`
+at `sbi_capstone.c:1697` is the only site that hands it out.
+
+**Why this bears on the design decision the proposal reserves.** The proposal asks whether QEMU should
+synthesize the domain-exit for a synchronous fault (symmetry with the async path) or whether the
+monitor should own more of it, and calls it a TCB choice. That choice does **not** turn on avoiding
+monitor work: the monitor needs a real re-entry handler either way, because today it has none. What
+the choice actually decides is how much of the *cause plumbing* lives in the emulator versus the
+trusted monitor — a narrower question than it first reads, and one worth putting back to the lead in
+those terms.
+
+**Not implemented here.** This edits the trusted trap path and a currently-green authority suite
+(25/0), and the proposal's own "why propose-first" section asks for direction before Step B.
