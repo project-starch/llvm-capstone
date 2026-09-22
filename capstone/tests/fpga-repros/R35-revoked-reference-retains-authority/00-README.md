@@ -19,8 +19,27 @@ data, and the surviving read proves the store never reached memory. A matched-pa
 re-running the fixture on the reverted tree (4 traps against 7). Lint at exactly the committed baseline,
 `UNOPTFLAT` unchanged at 40. Full readings and the limitations — chiefly that **this revision denies on
 a cache miss**, which is safe but produces false denies the existing suite is too small to bound — are
-in `results/sim-m1-cache-validation.result-lines.txt`. **Synthesis has not run on this hash**, so
-nothing here licenses a reflash.
+in `results/sim-m1-cache-validation.result-lines.txt`.
+
+**SYNTHESIS HAS NOW RUN AND THIS HASH DOES NOT FIT — 2026-09-23. NOT REFLASHABLE.**
+`079dc720a` post-synth is **195,092 LUTs / 103,030 FFs = 95.73 % of the device**; the cache alone costs
+**+22,968 LUTs and +8,356 FFs**. No build on this design has ever routed above 84.98 %, and this is
+21,755 LUTs beyond the only build that ever failed to route. The flop cost was as predicted (within
+2 %); the LUT cost is a **defect in the RTL, not the price of a cache** — the lookup reads the
+combinational `_d` array through a dynamic 64-way index while the update rebuilds all 8,192 bits every
+cycle with four dynamically-indexed write sites, so Vivado built a crossbar rather than a register
+file. The remedy is known (per-set write enables in `always_ff`, look up `_q`, and a far smaller
+array) but it is a rebuild of the cache's access structure. **The fix is correct in simulation and not
+implementable as written.**
+
+**AND THE UNDERLYING STAGE 0 HASH IS A TIMING REGRESSION.** `247b76896` routed at **WNS -12.900 /
+TNS -654,920 / 99,635 failing endpoints** against its parent `054cea69b`'s **-8.307 / -312,530 /
+90,379** — i.e. **-4.593 ns and roughly double the TNS from a 32-line change with zero new signal
+declarations**. So neither hash in this folder is a reflash candidate, and the `_q` -> `_d` retarget
+needs rework at the CPMP site too, not just the LSU.
+
+**Every one of these costs was invisible to our pre-synthesis checks**: nine lint counters at exactly
+the committed baseline and `UNOPTFLAT` unmoved at 40, on both hashes.
 
 Sibling issues, so a reader who arrived with the wrong symptom is redirected now:
 `../R34-lsu-exception-lost-on-immediate-grant/` is the LSU dropping exceptions it generates, and its fix
