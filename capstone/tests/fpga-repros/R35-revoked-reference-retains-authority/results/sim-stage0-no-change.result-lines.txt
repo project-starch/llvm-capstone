@@ -90,6 +90,42 @@
 # (R-38's other route and R-35's adopt are both untouched by design) and P6 still 0, which is the
 # positive control that the reclaimer's legitimate re-adoption was NOT broken.
 
+== FULL DIRECTED SWEEP: A MATCHED PAIR, ZERO STATUS CHANGES AND ZERO CYCLE DRIFT ==
+# 95 tests (every '- test:' in verif/tests/testlist_capstone.yaml), run one at a time through
+# cva6.py. Seed PINNED at --sv_seed 20260922 on BOTH sides, S12_MEM_DELAY=12.
+# The pair is single-variable: ONE worktree, with only the two Stage 0 files reverted via
+# `git checkout 054cea69b -- core/load_store_unit.sv core/pmp/src/pmp_data_if.sv` for the baseline
+# arm, then restored. Same model build path, same seed, same classification code.
+#
+#                              baseline (054cea69b)   stage 0 (247b76896)
+#   PASS                                       66                    66
+#   TIMEOUT (ran to the 2,000,000 ceiling)      26                    26
+#   NOBUILD (no log produced)                    3                     3
+#   FAILED                                       0                     0
+#
+#   per-test status differences .................. 0
+#   per-test cycle-count differences ............. 0   (92 comparable tests, all identical)
+#
+# So Stage 0 is status-neutral AND cycle-neutral. Both halves of the house standard, and the cycle
+# half is only assertable because the seed was pinned on both sides -- see the note above on why the
+# earlier reproducer comparison could NOT support it.
+#
+# THE 3 NOBUILD ARE STRUCTURAL, not a failure: `rand`, `perf_tcache_random`, `perf_riscv_random`
+# produce no log on either side.
+#
+# AND AN APPARENT STATUS CHANGE WAS ATTRIBUTED TO THE REFERENCE FIGURE, NOT TO THIS CHANGE.
+# docs/history/16-09-2026_20-30-00_m1-reclaimer-built.md records the sweep as 65 PASS / 27 TIMEOUT /
+# 3 NOBUILD. Stage 0 measured 66/26/3, which looks like one TIMEOUT -> PASS. The matched baseline
+# ALSO measures 66/26/3, so the discrepancy is in the older reference aggregate -- measured on a
+# different tree state ("full sweep vs the Phase 0 baseline") -- and not in this change.
+# Worth recording because a single-sided sweep against a remembered aggregate would have read as a
+# real regression-or-improvement, and it is neither.
+#
+# WHY A FLIP COULD NOT HAVE BEEN A SEED OR BOUNDARY ARTEFACT, which is what made the discrepancy
+# worth chasing rather than shrugging at: the highest PASSING test is 325,864 cycles, six times
+# under the 2,000,000 ceiling, and a timeout burns the full ceiling. Nothing sits near the boundary,
+# so no small cycle change and no seed draw can move a test across it.
+
 == LINT, same branch ==
 # Gate PASS at the committed baseline, all nine counters unchanged: LATCH 52, MULTIDRIVEN 3,
 # ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 736,

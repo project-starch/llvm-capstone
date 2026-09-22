@@ -161,6 +161,38 @@ Check `git diff --stat <REV> HEAD` first: if no submodule pins moved, hardlinkin
 **Run the IDENTICAL test on both sides.** A comparison of a four-arm run against an eight-arm
 run was once reported as a revision difference; it was not one.
 
+**PIN `--sv_seed` on BOTH sides before comparing any CYCLE number.** `cva6.py` declares it with
+`default=str(random.getrandbits(31))`, so every invocation that omits it draws a **fresh random
+seed**. On 2026-09-22 an 8-cycle move (3648 -> 3656) looked like a result of the RTL change and was
+purely the seed. So `--sv_seed <fixed>` on both runs, and **record the seed beside the numbers** —
+without it, "zero cycle drift" is not a claim you can make, including in the commit messages that
+already quote it. Functional readings (retired register writes, trap causes and counts) are
+seed-robust and comparable without pinning; **cycles are not**.
+
+**A matched pair means reverting only the files under test, in ONE worktree.** `git checkout <BASE>
+-- core/<the two files>` in the same tree, run, then restore from the branch. Same model build path,
+same seed, same classification code — the only difference is the files. A second worktree adds a
+separate model build and a second chance to differ by something you did not intend.
+
+### Running the FULL sweep, and why its exit status lies
+
+The sweep is every `- test:` in `verif/tests/testlist_capstone.yaml` (95 as of 2026-09-22), run one
+at a time through `cva6.py` — **not** via `capstone_tests.sh`, which with no arguments runs exactly
+ONE test (the rest of its list is commented out) and then cleans the model.
+
+**`cva6.py` returns 0 for a TIMEOUT as well as a PASS**, so an RC tally cannot classify a sweep.
+Classify from each `*.log.iss`: `*** SUCCESS ***` with a cycle count **at the `+time_out` ceiling is
+a TIMEOUT**, below it a PASS; no log at all is a NOBUILD. Three tests build nothing (`rand`,
+`perf_tcache_random`, `perf_riscv_random`), so a 3-NOBUILD tail is normal rather than a failure.
+
+**No passing test exceeds ~326k cycles** — six times under the 2,000,000 ceiling. That is the useful
+structural fact: a PASS/TIMEOUT flip can therefore **never** be a near-boundary or seed artefact, so
+if one appears it means something real and must be attributed, not absorbed.
+
+**Scope the classification to the sweep's own test list.** `out_<date>/veri-testharness_sim/` also
+holds logs from any other test run that day, and a `*.log.iss` glob silently counts them — which
+inflated a first count to 66/28 before the list was applied.
+
 ## Bring-up, if `cva6-build-rv` or `tools/` is missing
 
 Four things, in order, and each has a wrong answer that wastes an hour:

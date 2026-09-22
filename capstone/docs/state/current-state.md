@@ -2,6 +2,59 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-22 — R-35 registered, and Stage 0 of its fix is ready for synthesis
+
+**R-35 — a REVOKED capability still reads and writes the storage its object gave up, and the access
+does not trap.** Root-caused at `054cea69b` to `load_store_unit.sv`'s single core-wide revnode
+tracker, whose adopt arm takes any unseen id as valid without asking the rev-node unit. Reproduced
+**two-sided in RTL simulation** with a single-variable arm pair, a witnessed revoke and the faulting
+unit attributed by a control that demonstrably fires — strictly better evidence than the board
+capture, which sits on a bitstream whose timing does not close. Folder:
+`capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
+
+**Now in the registry**, which stopped at R-34 before today: **R-35** (the defect), **R-37** (the
+trackers' invalidate/adopt mis-ordering), **R-38** (the CPMP tracker's pre-adopt compare, a permanent
+false deny), **R-39** (unguarded index-0 invalidation broadcasts, believed harmless on a stated
+invariant), **R-40** (no authorization check on genesis region ids 0-2 — **materially corrected**
+after an auditor refuted its first mechanism), **R-41** (the type guard's early return drops the CPMP
+entry it read; unproven). **R-36 is a stub**: the number was drafted 2026-09-21 and withdrawn before
+filing, and `history/` references it.
+
+**Stage 0 of the fix is implemented, validated and awaiting synthesis.**
+`capstone-ariane` branch **`r37-stage0-tracker-ordering`**, commit **`247b76896`**, pushed. It moves
+each tracker's invalidate **after** the adopt and compares the **post-adopt** value — the shape
+`commit_stage` has always had.
+
+* **Lint: identical to the committed baseline on all nine counters** — LATCH 52 / MULTIDRIVEN 3 /
+  ALWCOMBORDER 0 / COMBDLY 0 / UNOPTFLAT **40** / BLKSEQ 2 / UNDRIVEN 25 / UNUSEDSIGNAL 736 /
+  ANVIL_UNOPTFLAT 0, over 6,511 lint lines. Two files, 32 insertions, no new signal declarations.
+* **Full directed sweep, matched pair, seed pinned both sides: ZERO status changes and ZERO cycle
+  drift** (66 PASS / 26 TIMEOUT / 3 NOBUILD / 0 FAILED on each side; 92 comparable tests with
+  bit-identical cycle counts). The baseline arm reverted only the two files, in the same worktree.
+* **Both halves validated functionally.** The M-mode reproducer is bit-identical, and the CPMP half
+  was validated separately on `r12-recl-cpmp.S` — the only fixture that reaches the CPMP gate, since
+  that check is gated on privilege *not* being M and the M-mode fixture is structurally blind to it.
+  Pre-registered `0 1 1 0 1 0 1` / total 4, matched exactly.
+
+**IT STILL NEEDS SYNTHESIS, and "signal-neutral" was wrong.** Retargeting a compare from `_q` to `_d`
+swaps a flip-flop output for a **combinational** node inside two modules that are both in the standing
+`UNOPTFLAT` loop set, which no lint counter can see. Per the project rule about feeding a signal into
+a cone that already carries a loop, this goes to synthesis before a board or another lane.
+**`054cea69b` is NOT an ancestor of the submodule's working-tree HEAD**, so any hash handed on must
+name its line.
+
+**Stage 1+2 (the validation broadcast and registry-gated adopt) is NOT started, and its price went
+up.** A trap-path enumeration established that the LSU's plain-dereference working set is **~20 ids
+and rising**, so registry-capacity eviction can miss *any* id — including the monitor trap stack's,
+whose 30-store prologue would then nest silently. So **Stage C (refill) is mandatory rather than
+likely**, and it is either a hardware query with a stall (crosses the combinational ring) or a
+retryable cause 25 (an ABI commitment). That is a project decision, not a lane's.
+
+**Two instrument facts from today that outlive this work**, both now in the `rtl-sim` skill:
+`cva6.py`'s `--sv_seed` defaults to a **fresh random value**, so "zero cycle drift" is unassertable
+unless it is pinned on both sides; and `cva6.py` returns **0 for a TIMEOUT as well as a PASS**, so an
+exit-status tally cannot classify a sweep.
+
 ## 2026-09-18 — Whisper ggml context component
 
 `capstone/ports/whisper/ggml-context/` ports whisper.cpp 1.9.4's real context
