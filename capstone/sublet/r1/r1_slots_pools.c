@@ -75,9 +75,19 @@ static inline ulong ret(void) { ulong v; __asm__ volatile("csrr %0, minstret" : 
 #define MAXDELEG 16
 static sublet_cap pool;                 /* the released region, linear between repetitions */
 static sublet_cap H;                    /* the handle senior to the pool: the shared death */
-static sublet_cap leaf[MAXN + 1];
+/* leaf[] and alias[] are POINTERS with static backing, not arrays. Every use is indexed
+ * (leaf[i], &leaf[i], alias[i]) -- checked, 25 and 40 sites, none takes sizeof or the whole-array
+ * address -- so the indirection is transparent to every existing series and none of their codegen
+ * or measured path changes. The `wide` series repoints them at arena-carved storage because MAXN
+ * cannot hold n up to 8192, and raising MAXN is the one thing that must not happen: it enlarges
+ * the globals carve, and the M1 wedge is bracketed between 704,032 and 1,059,808 bytes of exactly
+ * that carve. run_chase already carves its own arrays this way (:818-845); this follows it. */
+static sublet_cap leaf_backing[MAXN + 1];
+static void *alias_backing[MAXN + 1];
+static sublet_cap *leaf = leaf_backing;
+static void **alias = alias_backing;
+static sublet_cap wide_lreg, wide_areg;  /* the carved backing for the wide series */
 static sublet_cap deleg[MAXDELEG];      /* unary delegations (depth series), one chain per branch */
-static void *alias[MAXN + 1];           /* what the fixture's users hold */
 static sublet_cap unrel;                /* the unrelated region */
 static void *unrel_alias;
 static ulong pool_base, pool_bytes, unrel_bytes;
@@ -297,7 +307,17 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
   static const ulong u_pts[5] = {0, 64 * 1024UL, 256 * 1024UL, 1024 * 1024UL, 4096 * 1024UL};
   static const unsigned d_chain[4] = {1, 2, 4, 8};       /* 15 delegations as 15x1, 7x2+1, 3x4+3, 1x8+7 */
   static const ulong s_pts[4] = {16, 64, 256, 4096};
-  unsigned npts = streq(series, "depth") || streq(series, "object") ? 4 : 5;
+  /* B3: the revoked-subtree size swept ACROSS the 2048-node cache boundary. nd = 2n, so these are
+   * nd = 64 .. 16,384 against a node table that holds exactly 2,048 (32 KiB D$ / 16 B line, and a
+   * node is 16 B, so one node is one line). R1's nodes series stops at nd = 512 -- entirely
+   * cache-resident -- which is why its 22.91 cycles/node is a lower bound and not the cost.
+   * Leaf is fixed at 128 B and B scales with n: R1 measured revoke cost independent of released
+   * bytes (R^2 = 0.069 over a 256x range), so letting B follow n costs nothing and buys clean
+   * power-of-two leaf sizes instead of 1365/1170/910 B. One full pass mints 41,280 nodes, 63% of
+   * the 65,532 pool, so it fits even if nothing is reclaimed. */
+  static const unsigned w_pts[12] = {32, 128, 256, 512, 768, 896, 1024, 1152, 1536, 2048, 4096, 8192};
+  unsigned npts = streq(series, "depth") || streq(series, "object") ? 4
+                : streq(series, "wide") ? 12 : 5;
   for (k = 0; k < npts; k++) {
     memset(&pt, 0, sizeof pt);
     pt.series = series; pt.pattern = pattern; pt.arm_sublet = arm_sublet; pt.touch_unrel = touch_unrel;
@@ -307,7 +327,16 @@ static void run_series(const char *series, const char *pattern, int arm_sublet, 
     else if (streq(series, "heap")) pt.U = u_pts[k];
     else if (streq(series, "depth")) { pt.chain = d_chain[k]; pt.ndeleg = 15; }
     else if (streq(series, "object")) { pt.S = s_pts[k]; pt.n = 17; pt.B = 16 * 64UL + pt.S; pt.U = 0; pt.pattern = "individual"; }
+    else if (streq(series, "wide")) { pt.n = w_pts[k]; pt.B = (ulong)pt.n * 128UL; pt.U = 0; }
     else { out("R1 unknown series\n"); return; }
+    /* the wide series needs leaf[]/alias[] larger than MAXN: carve them from the arena, exactly as
+       run_chase carves its own lookup/leafslot. Done BEFORE the pool so the nodes these mint are
+       outside the point's `issue` measurement, which starts its own minted() baseline. */
+    if (streq(series, "wide")) {
+      carve_root((ulong)(pt.n + 1) * sizeof(sublet_cap) + 64UL, &wide_lreg);
+      carve_root((ulong)(pt.n + 1) * sizeof(void *) + 64UL, &wide_areg);
+      if (!root_short) { leaf = (sublet_cap *)sublet_take(&wide_lreg); alias = (void **)sublet_take(&wide_areg); }
+    } else { leaf = leaf_backing; alias = alias_backing; }
     /* fresh regions for the point: the pool and the unrelated region, carved from the root */
     if (arm_sublet) {
       carve_root(pt.B, &pool); pool_base = sublet_base(&pool);
