@@ -59,6 +59,7 @@ for build paths, release-layout restrictions and artifact retention.
 | LLD / ELF emulation | native `EM_CAPSTONE` emulation behavior | linker/emulation changes | `lld/test/ELF/emulation-capstone.s` |
 | Linux driver | hosted driver link-line construction only | driver/sysroot logic changes | `clang/test/Driver/capstone-linux-toolchain.c` |
 | Sample/runtime smoke | sample-domain path still works | sample/runtime packaging changes | `capstone/tests/runtime-qemu/run-smoke.sh` |
+| QEMU runner self-test | `run-domain-smoke.py` itself: an image with an undefined weak symbol is refused before boot; output containing `# ` is not taken for the prompt; a guest command over 1 KiB runs whole; the previous runner (pinned) must fail the same boot | changes to `run-domain-smoke.py` | `capstone/tests/runtime-qemu/run-domain-smoke-selftest.sh` |
 | Shared-region proof | shared-region mutations are visible again | region/runtime ABI changes | `capstone/tests/runtime-qemu/run-shared-region-probe.sh` |
 | HostCall stdout proof | domain -> helper payload flow | HostCall metadata/output flow changes | `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` |
 | HostCall filewrite proof | same ABI reused for a second coarse service | HostCall service-family changes | `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` |
