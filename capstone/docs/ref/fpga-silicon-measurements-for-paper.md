@@ -248,7 +248,9 @@ subsection but one). Two things bound it without explaining it:
 
 So it is not a flat per-instruction silicon tax on capability mode. **Phase 6 narrows it** (subsection "Phase 6 …"). On identical instructions, the control's loop
 costs 7 cycles/iteration when its loop starts at `…1ac` and 6 when it starts at `…1a8`, wherever it
-sits in the boot (phase 7 ruled out position). Whether some of it hides inside
+sits in the boot (phase 7 ruled out position). **Phase 8 settles it:** one alignment `nop` puts the control at **1.0005×**.
+The 16.7 % is loop alignment, and every row's capability cycles may carry the same layout term until
+re-measured with aligned loops. Whether some of it hides inside
 the stall-dominated rows is **open**. That question is phase 6 of
 `ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
 control's reading beside the table.
@@ -478,7 +480,7 @@ That it is *this kernel's* property and not the bitstream's is what the eight ro
 its saturation; they do not identify a mechanism, and the pre-registration forbade offering one
 afterwards from these points alone. **Quote the rows above; do not quote a cause.**
 
-### Phase 6 (2026-09-23): the step is not a length effect, and phase 7 rules out boot position: it follows the loop's address
+### Phases 6–8 (2026-09-23): the control's 16.7 % is a loop-alignment artifact (aligned, it reads 1.0005×)
 
 Six lengths were run in one boot per half (`ladder-revival-2026-09-22/phase6-control-length-series.result-lines.txt`).
 The run is valid: every baseline CPI is 1.2000–1.2029, and the three lengths measured before
@@ -559,6 +561,39 @@ moves ⇒ alignment" applies.
   alignment.
 - The mechanism still has to come from the RTL simulation trace of the two images (E2b).
 - Until then, "loop alignment" is the best-supported description, not an explanation.
+
+**PHASE 8 RESULT (2026-09-23): the control's 16.7 % is a LOOP-ALIGNMENT artifact.** The capability
+half was rebuilt with `-falign-loops=8`. Against the plain images measured in phase 7, the only change
+in `domain_main` is one `nop`, executed once, which moves the loop from `…1ac` to `…1b0`
+(`phase8-aligned-loop-pair.result-lines.txt`):
+
+| rung | loop at `…1ac` (plain) | loop at `…1b0` (+1 `nop`) | pre-registered |
+|---|---:|---:|---:|
+| **`ctrsanity` (control)** | 1.1671× | **1.0005×** (600,336 / 600,042) | ~1.000 |
+| `ctrsanity20k` | 1.1777× | **1.0113×** | ~1.010 |
+| `ctrsanitys` (loop at `…1a8`, unchanged) | 1.0402× | 1.0409× | unchanged |
+
+- **The run is valid.** Instret rose by exactly 1 (the `nop`), the `nop` is present in the images
+  that ran, the in-boot control moved 0.06 %, and every oracle is correct.
+- **The finding.** On this silicon, the control's 5-instruction loop costs **one extra cycle per
+  iteration when it starts at 4 mod 8**. Aligned, the control reads **1.000×, as it did in July**.
+  The CPI "rise" since July was the loop landing misaligned in today's build, not a capability cost
+  and not a silicon regression in the ordinary sense.
+- **What remains open.**
+  - The mechanism: E2b simulates the two `ctrsanity20k` images; a fetch/realign bubble on a
+    misaligned taken-branch target is the obvious candidate, **not yet shown**.
+  - Why the baseline's compressed loop is insensitive at three offsets.
+
+**CONSEQUENCE FOR THE CURRENT TABLE, and it is not small.** Every row's capability cycles include
+whatever this penalty its hot loops happened to incur, and loop placement is effectively random per
+build. A kernel whose hot loop landed at 4 mod 8 may carry one cycle per iteration of pure layout
+cost. The relative size of that cost is 1/(cycles per iteration), so it is larger for tighter loops:
+16.7 % for the control's 6-cycle loop. The baseline half's compressed loop was insensitive at three
+offsets, but that is **one loop**, so the sign of the net effect on other rows is not established
+either. It is most likely an overstatement of capability overhead, but not shown to be. **The per-kernel numbers above are
+therefore not yet separable from layout.** The fix is a re-measurement with loops aligned in BOTH
+halves (phase 9). Whether the paper then quotes the aligned table, the default one, or both is the
+lead's call; this subsection only establishes that the difference exists.
 
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
