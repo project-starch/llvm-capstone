@@ -540,3 +540,66 @@ bitstream, or `extraflags.txt` in the baseline dir not reading `-falign-loops=8`
 
 **Not decided here:** which table the paper quotes (default layout, aligned, or both). That is the
 lead's call. This run only supplies the aligned numbers.
+
+---
+
+# Phase 10 addendum: layout-randomised table, 4 layouts × both halves (2026-09-23, before the run)
+
+Phase 9 showed that per-kernel cycle ratios move with code layout (`cover` 0.951× ↔ 1.141×). The
+lead chose a layout-randomised measurement: each kernel at several layouts, reported as a median and
+a band.
+
+## The layout knob, and what was checked at the desk
+
+`-DLADDER_PAD=K` emits a **file-scope** block at the top of each rung's translation unit:
+`.p2align 6`, then K four-byte `nop`s. It goes in `ladder_perf_domain.h` for the capability half and
+`ladder_base_kern.c` for the baseline, passed through `DOMAIN_EXTRA_CFLAGS` / `BASE_EXTRA_CFLAGS`.
+Every function in that object, including non-inlined helpers, shifts by 4K bytes from a 64-byte
+boundary. Nothing extra executes.
+
+Checked at the desk:
+- **Undefined is unchanged.** Default builds are byte-identical (3 capability images, 6 baseline
+  objects).
+- **The shift is 4K bytes per step, in both halves:**
+  - capability `domain_main` 0x180 / 184 / 188 / 18c, and the helpers `fib`/`anka` likewise;
+  - baseline `base_beebs_recursion` and `fib` step by 4;
+  - the baseline `ctrsanity20k` offset within its 64-byte block steps 0 / 4 / 8 / 12.
+- **K=0 capability code is identical to the default build** (disassembly diff empty). So the K=0
+  boot is a reproduction of the CURRENT capability half.
+- **The rejected first design, recorded so it is not reinvented:** an in-function pad behind a `j`.
+  In the baseline image every earlier rung's function grew too, so a rung's loop moved 16 bytes per K
+  and **never changed residue mod 16**. It was a silently void knob, caught at the desk.
+
+## Run
+
+Launcher: `/tmp/capstone/ladder-revival/p10.sh`. For K = 0, 1, 2, 3 it runs one capability boot and
+one bare sweep, 17 rungs each (both controls and the 15 kernels), at spec `-O`, with no
+`-falign-loops`. About 45 minutes.
+
+## Pre-registered
+
+1. **Gate.** `pair-halves.py` passes at every K: control instruction ratio 1.000, baseline CPI 1.2000,
+   15/15.
+2. **Reproduction.** Capability K=0 matches the CURRENT capability cycles within 0.5 % for every rung.
+   The code is identical, so a miss means boot-to-boot drift is larger than assumed. It is reported,
+   not voided.
+3. **The sharp one.** The control's loop sits at `…1ac` / `…1b0` / `…1b4` / `…1b8` for K = 0..3.
+   - If "a loop starting at 4 mod 8 costs one cycle per iteration" is the rule, `ctrsanity` reads
+     **~1.167× at K=0 and K=2 and ~1.000× at K=1 and K=3**.
+   - Any other pattern refutes that rule as stated.
+4. **Deliberately not predicted:** per-kernel magnitudes.
+   - Reported per kernel: the 4 ratios, their **median and min–max**, and the instruction ratio
+     (which should not move).
+   - The headline range and geometric mean are recomputed from the per-kernel medians.
+   - Kernels whose band exceeds ±2 % are named.
+
+## VOID
+
+- a wrong oracle, a baseline below 15/15, or a stale result file (per K);
+- `extraflags.txt` not reading `-DLADDER_PAD=K` for the K run;
+- the wrong bitstream;
+- a failed gate at some K voids **that K**, and the median is then over the remaining layouts,
+  stated as such.
+
+**Not decided here:** which statistic the paper quotes (median, band, or both). That is the lead's
+call.
