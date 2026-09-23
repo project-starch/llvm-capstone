@@ -754,8 +754,17 @@ Register CapstoneRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *M
   MachineRegisterInfo &MFI = MF->getRegInfo();
   const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
 
-  Register BaseReg = MFI.createVirtualRegister(&Capstone::GPRRegClass);
-  BuildMI(*MBB, MBBI, DL, TII->get(Capstone::ADDI), BaseReg)
+  // The base is a pointer into the frame, so it is what the frame register is:
+  // a capability, built by CIncOffsetImm, when that is C2/C8. This used to be
+  // RISC-V's GPR and ADDI whatever the frame register was, which handed every
+  // load and store rewritten onto it a GPR base where it needs a GPCR (C-52):
+  // the verifier rejects it, and the Greedy allocator, asked for the common
+  // class of the two, got none and dereferenced it.
+  bool Cap = isCapabilityFrameReg(getFrameRegister(*MF));
+  Register BaseReg = MFI.createVirtualRegister(
+      Cap ? &Capstone::GPCRRegClass : &Capstone::GPRRegClass);
+  BuildMI(*MBB, MBBI, DL, TII->get(Cap ? Capstone::CIncOffsetImm : Capstone::ADDI),
+          BaseReg)
       .addFrameIndex(FrameIdx)
       .addImm(Offset);
   return BaseReg;
