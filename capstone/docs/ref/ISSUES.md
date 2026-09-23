@@ -6252,6 +6252,66 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-50 — an integer-valued pointer in a union passed BY VALUE is stored through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side; found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly; worked around in the port`
+
+**Symptom.** Capability fault **cause 24** (untagged operand) on a store to the caller's own stack
+slot. FFmpeg's `ff_mpv_alloc_pic_pool` faulted in the first `avformat_find_stream_info` of the
+mpeg4 decoder:
+
+```
+[CAPSTONE] Cap mem access requires capability: pc = 102480548, rs1 = x12, imm = 0, value = 1027ff2f8
+[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x102480548
+   x2 (sp) = C(1027ff2f0 [102774400,102800000) type 1)      x12 = 1027ff2f8   <- sp + 8, an INTEGER
+```
+
+**Shape.** A union of two pointers, `typedef union { void *nc; const void *c; } T;` (FFmpeg's
+`AVRefStructOpaque`), passed **by value**, whose value is an **integer cast to `void *`**. The caller
+materialises the 16-byte argument on its stack as two 8-byte stores (value, then a zero high half).
+The first address is a proper bounded capability (`cincoffsetimm` + `shrink`). **The second is
+formed with integer `addi` off `s0`/`sp`**, so the store faults.
+
+**Reproducer** (`-target capstone64-unknown-elf +m +a -ffreestanding -fno-builtin -O1`):
+
+```c
+#include <stdint.h>
+typedef union { void *nc; const void *c; } opaque_t;
+void *sink(unsigned long size, unsigned flags, opaque_t o, void *cb);
+void *repro(int x)       { return sink(64, 1, (opaque_t){ .nc = (void *)(uintptr_t)x }, 0); }
+void *control(void *p)   { return sink(64, 1, (opaque_t){ .nc = p }, 0); }
+```
+
+`repro` compiles to:
+
+```
+	cincoffsetimm	a1, s0, -48
+	...
+	shrink	a1, a3, a2
+	addi	a2, s0, -56          <- integer address off the capability frame pointer
+	sext.w	a0, a0
+	sd	a0, 0(a1)
+	sd	zero, 8(a1)
+	sd	zero, 0(a2)          <- faults: cause 24
+	sd	a0, -64(s0)
+```
+
+**The control does not reproduce it.** `control`, the same shape with a REAL pointer, stores with
+`stc a0, 0(a1)` and `stc a0, -64(s0)`: two capability stores and no `addi` on the frame pointer. So
+the trigger is the **integer-valued** pointer, which the backend splits into scalar halves, and
+the defect is in how it forms the second half's address.
+
+**How common, measured in one real image.** The FFmpeg domain image (354,657 instructions) was
+scanned for the signature: an `addi rX, sp|s0, k` whose result is then used as a load/store base
+within 7 instructions. The unpatched image gave **exactly this one hit**, which also serves as the
+scan's positive control. After the port's workaround it gives 0. The scan covers only
+`sp`/`s0`-based `addi` used as a base within 7 instructions; other shapes are not covered.
+
+**Workaround (FFmpeg port, `ffmpeg-app` branch, patch 0003).** Pass a real pointer to a static mode
+value instead of smuggling the int through `void *`. Unrelated to the source-level
+`-Wcapstone-pointer-roundtrip` class: that warning flags this site too
+(`mpegpicture.c:94`), but correctly, as harmless *if lowered right*. The integer in a `void *` is
+never dereferenced by the program. The compiler's own store is what faults.
+
+
 ### C-49 — WITHDRAWN. The `shrink` that trapped in libc-test's `setjmp` was fed by a `sigsetjmp` that called `setjmp` instead of being it `WITHDRAWN 2026-09-17, same day it was filed — NOT a compiler defect`
 
 **What it looked like.** libc-test's `setjmp`, run as a domain, trapped with cause 29,
