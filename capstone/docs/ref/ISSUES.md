@@ -6252,6 +6252,69 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-52 — the Greedy register allocator segfaults in `SplitEditor::rematWillIncreaseRestriction` on CPython's `compiler_visit_stmt` `OPEN — COMPILER; found 2026-09-23 by the CPython compile survey; reduced to 208 instructions; cause not looked at; per-file workaround -O0 or -regalloc=basic`
+
+**What happens.** `Python/compile.c` (CPython 3.13.7) kills clang with SIGSEGV in pass `Greedy
+Register Allocator` on `compiler_visit_stmt`, at `-O1 -g`, `-O2 -g`, `-O3 -g` and `-O3`. The stack
+runs `RAGreedy::tryBlockSplit` → `SplitEditor::splitSingleBlock` → `enterIntvBefore` →
+`defFromParent` → `rematWillIncreaseRestriction`. The basic allocator (`-regalloc=basic`) and the
+fast one (`-O0`) compile the same input. It is the one object of the survey this stops, and it is
+the bytecode compiler.
+
+**Not established.** Which pointer in `rematWillIncreaseRestriction` (`SplitKit.cpp:591`, read at
+`d030df93d4a4`) is null here. `d5b5f11cae8f` crashes identically and does not contain C-32's
+rematerializable bridge (`46c53b7b6ae2`), so that change is not required for it.
+
+**Reproducer.** `capstone/tests/compiler-repros/C52-greedy-regalloc-segfault/run.sh` (basic-allocator
+control, verdict) on `src/compiler_visit_stmt.reduced.ll`. It needs `-Xclang -disable-llvm-passes`:
+clang `-O1` on the `.ll` re-optimizes it and the crash disappears. PRESENT on `d030df93d4a4` and
+`d5b5f11cae8f`.
+
+### C-51 — `llvm.ptrmask` on a capability crashes isel (`Shift amount is not an integer type!`), and every 8- and 16-bit atomic reaches it `OPEN — COMPILER; found 2026-09-23 by the CPython compile survey, 26 of its 253 objects; no source-level workaround`
+
+**What happens.** `llvm.ptrmask.p200.i64(%p, -4)` alone, five lines of IR, asserts in
+`SelectionDAG::getShiftAmountConstant` called from `SelectionDAGBuilder::visitIntrinsicCall`.
+AtomicExpand aligns the address of every sub-word atomic with exactly that call, so any 8- or
+16-bit compare-exchange, fetch-op or exchange on a capability address crashes, while 32- and
+64-bit ones (which need no alignment) compile. `__builtin_align_down` on a `char *` lowers to the
+same intrinsic and crashes the same way. CPython's `PyMutex` is one byte locked by
+compare-exchange, which is how 26 CPython objects reach it.
+
+**Mechanism, read at `d030df93d4a4`.** `case Intrinsic::ptrmask` compares the mask (`i64`, the
+index width) with the pointer's memory width (128), takes the branch written for AMDGPU buffer
+descriptors, and pads the mask by building `SHL` on the pointer's value type, `c128`, which is not
+an integer. Past the assert that branch would still AND the whole capability; on a capability
+the mask has to act on the address alone, so this is a lowering to design, not a guard to add.
+`d5b5f11cae8f` (capability-address 32/64-bit atomics) records the edge in its message:
+"Subword and capability-valued atomics are outside this change."
+
+**Reproducer.** `capstone/tests/compiler-repros/C51-ptrmask-on-capability/run.sh` — `ptrmask.ll`
+alone, the operation × width matrix with u32/u64 as controls, CPython's `PyMutex_Lock` shape and
+`__builtin_align_down`; PRESENT on `d030df93d4a4` and `d5b5f11cae8f`; on `f7b50f081ca4`
+`ptrmask.ll` crashes too and the 32/64-bit controls fail, as that compiler predates `d5b5f11cae8f`.
+
+### C-50 — with `-g` at `-O1`+, Assignment Tracking asserts on any local whose address escapes `OPEN — COMPILER, generic LLVM; localized by a matched fixed/unfixed build 2026-09-23; one-line candidate fix not yet through lit or the QEMU suites; WORKED AROUND in the CPython port with -fexperimental-assignment-tracking=disabled`
+
+**What happens.** `void g(char *); void f(void) { char buf[32]; buf[5] = 1; g(buf); }` at `-g -O1`
+asserts in `Value::stripAndAccumulateConstantOffsets`: "The offset bit width does not match the DL
+specification", in pass `Assignment Tracking Analysis`. Without `-g`, at `-O0`, or when SROA
+removes the local, it compiles. No port had built with `-g` and optimisation before CPython, which
+builds with `-g -O3`: the defect alone failed 146 of its 253 objects.
+
+**Where, read at `d030df93d4a4`.** `llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp:271`
+(`walkToAllocaAndPrependOffsetDeref`) sizes its offset accumulator with
+`DL.getTypeSizeInBits(Start->getType())`, 128 for a capability, where the callee requires the
+index width, 64; the same pass sizes its other accumulator with `getIndexTypeSizeInBits` (`:2093`).
+**Established by a matched pair:** a clang of the same tree with that one line changed to
+`getIndexTypeSizeInBits` compiles both reproducers and CPython's `Objects/bytesobject.c` at `-g -O3`
+without the workaround; the unchanged tree rebuilt afterwards is byte-identical to the original.
+**Not established:** lit and the QEMU suites on the fix, and whether the DWARF it then emits for a
+capability-addressed local is right.
+
+**Reproducer.** `capstone/tests/compiler-repros/C50-assignment-tracking-index-width/run.sh` (three
+controls, verdict; `workaround` arm) and `candidate-fix.diff`. PRESENT on `d030df93d4a4`,
+`d5b5f11cae8f` and `f7b50f081ca4`.
+
 ### C-49 — WITHDRAWN. The `shrink` that trapped in libc-test's `setjmp` was fed by a `sigsetjmp` that called `setjmp` instead of being it `WITHDRAWN 2026-09-17, same day it was filed — NOT a compiler defect`
 
 **What it looked like.** libc-test's `setjmp`, run as a domain, trapped with cause 29,
