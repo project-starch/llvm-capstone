@@ -21,13 +21,18 @@ source "$APP_DIR/../../../tests/capstone-test-env.sh"
 
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 JOBS=${FFAPP_JOBS:-48}
-SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
+SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)                  # patched
+PRISTINE=$(bash "$SCRIPT_DIR/prepare-source.sh" --pristine | tail -1)  # unpatched
 OUT="$WORK/native"
 mkdir -p "$OUT/stock" "$OUT/minimal"
 
 # --- 1. stock ffmpeg and the workload -------------------------------------------------
-if [ ! -x "$OUT/stock/ffmpeg" ]; then
-  ( cd "$OUT/stock" && "$SRC/configure" \
+# The STOCK reference comes from the UNPATCHED tree: it must not share our patches, or a
+# wrong patch would appear on both sides and still MATCH (audit, 2026-09-23). Rebuilt
+# whenever its source tree changes, never reused from an older one.
+if [ ! -x "$OUT/stock/ffmpeg" ] || [ "$(cat "$OUT/stock/.src" 2>/dev/null)" != "$PRISTINE" ]; then
+  rm -rf "$OUT/stock"; mkdir -p "$OUT/stock"
+  ( cd "$OUT/stock" && "$PRISTINE/configure" \
       --disable-everything --disable-autodetect --disable-doc --disable-network \
       --disable-x86asm --disable-debug --disable-ffplay --disable-ffprobe --enable-ffmpeg \
       --enable-protocol=file,pipe --enable-indev=lavfi \
@@ -36,6 +41,7 @@ if [ ! -x "$OUT/stock/ffmpeg" ]; then
       --enable-parser=mpeg4video --enable-muxer=matroska,framemd5,md5,null \
       --enable-demuxer=matroska --enable-static --disable-shared > configure.log 2>&1 \
     && make -j"$JOBS" ffmpeg > build.log 2>&1 )
+  echo "$PRISTINE" > "$OUT/stock/.src"
 fi
 COMMON=(-nostdin -hide_banner -loglevel warning -threads 1 -filter_threads 1 -filter_complex_threads 1)
 "$OUT/stock/ffmpeg" "${COMMON[@]}" -f lavfi -i "testsrc2=size=320x180:rate=30:duration=1" \
@@ -50,7 +56,10 @@ open(sys.argv[2], 'wb').write(b)
 PY
 
 # --- 2. the minimal library set, native ------------------------------------------------
-if [ ! -f "$OUT/minimal/libavformat/libavformat.a" ]; then
+# The MINIMAL native libraries are the domain's own code built for the host (patched), and
+# are rebuilt whenever the patch set changes.
+if [ ! -f "$OUT/minimal/libavformat/libavformat.a" ] || [ "$(cat "$OUT/minimal/.src" 2>/dev/null)" != "$SRC" ]; then
+  rm -rf "$OUT/minimal"; mkdir -p "$OUT/minimal"
   ( cd "$OUT/minimal" && "$SRC/configure" \
       --disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm \
       --disable-pthreads --disable-programs --disable-debug --disable-iconv \
@@ -58,6 +67,7 @@ if [ ! -f "$OUT/minimal/libavformat/libavformat.a" ]; then
       --enable-demuxer=matroska --enable-decoder=mpeg4 --enable-parser=mpeg4video \
       --enable-protocol=file --enable-static --disable-shared > configure.log 2>&1 \
     && make -j"$JOBS" > build.log 2>&1 )
+  echo "$SRC" > "$OUT/minimal/.src"
 fi
 cc -O1 -I"$OUT/minimal" -I"$SRC" -I"$APP_DIR/src/shared" \
   "$APP_DIR/src/native/ffapp_native.c" "$APP_DIR/src/shared/ffapp_decode.c" \

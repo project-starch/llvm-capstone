@@ -107,24 +107,26 @@ if [ ! -f "$CFGSTUBS" ]; then
   "$CLANG" "${FLAGS[@]}" -w -c "$OUT/cfgstubs.c" -o "$CFGSTUBS"
 fi
 
-CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" | sha256sum | cut -c1-12)
+CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm
+  --disable-pthreads --disable-programs --disable-debug --disable-iconv
+  --disable-swresample --disable-swscale --disable-avfilter --disable-avdevice
+  --enable-demuxer=matroska --enable-decoder=mpeg4 --enable-parser=mpeg4video
+  --enable-protocol=file --enable-static --disable-shared)
+CONFIG_EDIT='s/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s/^#define HAVE_MEMALIGN 1$/#define HAVE_MEMALIGN 0/'
+# Everything that decides what the libraries contain goes into the key, so changing any of it
+# rebuilds instead of silently reusing stale libraries (audit, 2026-09-23).
+CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" | sha256sum | cut -c1-12)
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
   ( cd "$XB" && "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
       --arch=riscv64 --target-os=none \
       --extra-cflags="${FLAGS[*]}" --extra-ldflags="-e main --no-warn-mismatch" \
-      --extra-libs="$ARCHIVE $CFGSTUBS" \
-      --disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm \
-      --disable-pthreads --disable-programs --disable-debug --disable-iconv \
-      --disable-swresample --disable-swscale --disable-avfilter --disable-avdevice \
-      --enable-demuxer=matroska --enable-decoder=mpeg4 --enable-parser=mpeg4video \
-      --enable-protocol=file --enable-static --disable-shared > configure.log 2>&1 ) \
+      --extra-libs="$ARCHIVE $CFGSTUBS" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
     || { echo "FFmpeg configure failed; see $XB/configure.log and $XB/ffbuild/config.log" >&2; exit 1; }
   # av_malloc -> plain malloc: with asm off ALIGN is 16 (libavutil/mem.c:65), exactly
   # level0's alignment, and musl's posix_memalign sits on an allocator this image does
   # not use.
-  sed -i 's/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/;
-          s/^#define HAVE_MEMALIGN 1$/#define HAVE_MEMALIGN 0/' "$XB/config.h"
+  sed -i "$CONFIG_EDIT" "$XB/config.h"
   grep -qx '#define HAVE_POSIX_MEMALIGN 0' "$XB/config.h" \
     || { echo "config.h override did not take" >&2; exit 1; }
   make -C "$XB" -j"$JOBS" libavutil/libavutil.a libavcodec/libavcodec.a \
@@ -132,7 +134,9 @@ if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev
     || { echo "FFmpeg domain build failed; see $XB/build.log" >&2; exit 1; }
   echo "$CONFIG_KEY" > "$XB/.config-key"
 fi
-grep -hE 'warning: .*\[-Wcapstone-pointer-roundtrip\]' "$XB/build.log" \
+# `|| true`: zero warnings is a legitimate outcome, and under pipefail grep's exit 1 would
+# otherwise stop the build silently at this line (audit, 2026-09-23).
+{ grep -hE 'warning: .*\[-Wcapstone-pointer-roundtrip\]' "$XB/build.log" || true; } \
   | sed -E 's#^(src/)?##; s/: warning:.*//' | sort -u > "$OUT/pointer-roundtrip-sites.txt"
 FFLIBS=("$XB/libavformat/libavformat.a" "$XB/libavcodec/libavcodec.a" "$XB/libavutil/libavutil.a")
 
@@ -202,12 +206,27 @@ echo "diag images $OUT/ffapp_m6diag.dom ($INPUT) and $OUT/ffapp_m6diag9p.dom (/m
 echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 
 # --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------
-# The compiler miscompiles an integer-valued pointer in a by-value union (ISSUES.md C-50);
-# patch 0003 removes the one instance. This scan found exactly that instance in the
-# unpatched image (its positive control) and must find none now.
+# The compiler miscompiles an integer-valued pointer in a by-value aggregate (ISSUES.md
+# C-50); patch 0003 removes the instance that faulted. The scan tracks integer addresses
+# derived from a capability sp/s0 into any load/store base. Its positive controls are the
+# C-50 reproducer and three instruction layouts that evaded an earlier version (label in
+# between, the register used as a store SOURCE first, register-form add); all must hit.
 "$CAPSTONE_LLVM_BIN/llvm-objdump" -d --no-show-raw-insn "$OUT/ffapp_m5.dom" > "$OUT/ffapp_m5.dis"
 python3 "$SCRIPT_DIR/scan-addi-sp.py" "$OUT/ffapp_m5.dis" \
   || { echo "C-50 GATE: integer sp/s0 address used as a store base (see above)" >&2; exit 1; }
+
+# --- every image, not just M1..M6: budget, and the layout the budget model assumes ------
+# The declaration above covers the STACK only. That is right only while the image has no
+# .capstone_gp_initdesc (the monitor then copies and carves nothing, and .bss -- the heap
+# arena included -- sits inside code_len). If that section ever appears, the stack-only
+# declaration is silently too small, which is how MicroPython failed; so it is a gate.
+for img in "$OUT"/ffapp_m*.dom; do
+  read -r code_len alloc verdict < <(budget "$img")
+  [ "$verdict" = FITS ] || { echo "BUDGET: $img needs a $alloc-byte region, over the 4 MiB order ceiling" >&2; exit 1; }
+  n=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$img" | grep -c 'capstone_gp_initdesc' || true)
+  [ "$n" = 0 ] || { echo "LAYOUT: $img has .capstone_gp_initdesc; the stack-only domreq no longer covers dom_data" >&2; exit 1; }
+done
+echo "budget and layout gates: $(ls "$OUT"/ffapp_m*.dom | wc -l) images FIT, none has .capstone_gp_initdesc"
 
 # --- negative control ---------------------------------------------------------------
 cat > "$OUT/stub_main.c" <<'STUB'

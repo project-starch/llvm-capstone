@@ -30,6 +30,7 @@
 #define FFAPP_E_NODECODER   32  /* no decoder for the stream's codec             */
 #define FFAPP_E_CODEC       33  /* avcodec_open2 failed                          */
 #define FFAPP_E_NOPACKET    34  /* the file yielded no packet at all             */
+#define FFAPP_E_READ        35  /* av_read_frame failed with an error, not EOF   */
 #define FFAPP_E_HASH        41  /* could not allocate the frame-packing buffer   */
 #define FFAPP_E_NOFRAME     42  /* stream ended before any frame decoded         */
 

@@ -2,6 +2,11 @@
 # Fetch the pinned FFmpeg tarball, verify it against upstream.json, extract it and apply
 # this port's patches at fuzz 0. Prints the prepared source directory on its last line.
 #
+#   prepare-source.sh             patched tree (what the domain and ffapp_native build)
+#   prepare-source.sh --pristine  the verified tarball, NO patches: the stock reference
+#                                 ffmpeg is built from this, so a wrong patch cannot hide by
+#                                 appearing on both sides of the comparison
+#
 # The tree is keyed by the patch set's hash, so editing a patch produces a fresh tree
 # instead of silently reusing one prepared from the old patches.
 set -euo pipefail
@@ -24,6 +29,16 @@ if [ ! -f "$TARBALL" ]; then
 fi
 echo "$SHA  $TARBALL" | sha256sum -c --quiet - \
   || { echo "prepare-source: $TARBALL does not match upstream.json; refusing to build from it" >&2; exit 1; }
+
+if [ "${1:-}" = --pristine ]; then
+  SRC="$WORK/src-$VERSION-pristine"
+  if [ ! -f "$SRC/.ffapp-prepared" ]; then
+    rm -rf "$SRC" "$SRC.tmp"; mkdir -p "$SRC.tmp"
+    tar xf "$TARBALL" -C "$SRC.tmp" --strip-components=1
+    touch "$SRC.tmp/.ffapp-prepared"; mv "$SRC.tmp" "$SRC"
+  fi
+  echo "$SRC"; exit 0
+fi
 
 PATCH_KEY=$(cat "$APP_DIR"/patches/*.patch | sha256sum | cut -c1-12)
 SRC="$WORK/src-$VERSION-$PATCH_KEY"
