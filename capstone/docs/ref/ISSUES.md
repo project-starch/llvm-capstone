@@ -6252,7 +6252,46 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
-### C-50 — an integer-valued pointer in a union passed BY VALUE is stored through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side; found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly; worked around in the port`
+### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
+
+> **CORRECTED 2026-09-23 after an adversarial audit. The text below the box stands, but four
+> things in it were wrong or too narrow.**
+>
+> 1. **It is not about unions.** A plain `struct { void *p; }` triggers it too. So do a
+>    single-member union, a `uintptr_t`-valued pointer, and a 32-byte struct whose int-valued
+>    pointer is at offset 0 (`addi a4, s0, -88`). The trigger is a **by-value aggregate whose
+>    first 16-byte chunk the optimiser knows holds a NON-CONSTANT int-to-pointer value**, at
+>    -O1 and above. It does not trigger at -O0, for a plain `void *` argument, for a constant
+>    `(void *)0` or `(void *)5`, for an int-valued pointer at offset 16 of a 32-byte struct,
+>    or when the union is written through a `long` member.
+> 2. **The root cause is identified, not just the symptom.** Caller-side byval lowering creates
+>    the local copy's frame index with the DEFAULT pointer type:
+>    `SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));`
+>    (`llvm/lib/Target/Capstone/CapstoneISelLowering.cpp:24316`), which is `i64`, not `c128`.
+>    That frame index then feeds `DAG.getMemcpy` (`:24318`). `-debug-only=isel` shows the copy as
+>    `store (s128) into %stack.1 ... FrameIndex:i64<1>`. Once the known-integer value is split
+>    into two i64 stores, the +8 half's address is an i64 `add`, which selects to `addi`. The
+>    other `getFrameIndex` sites in that file (`:10544`, `:24149`, `:23921`) should be checked
+>    for the same slip.
+> 3. **Prior art: the same defect class, at a different site.** Archived **C-18**'s second
+>    exposure (`ISSUES-ARCHIVE.md:2573-2593`): the S-06 memcpy hook built chunk addresses with
+>    `ISD::ADD`, giving `addi a5, s0, -0xd8; sd a4, 0x0(a5)`. That hook is flag-gated off and is
+>    not involved here. What is shared is an integer add on a frame-derived capability inside a
+>    memcpy expansion, and C-50 reaches `getMemcpy` too.
+> 4. **The prose below mislabels one detail.** The `cincoffsetimm` + `shrink` capability in `a1`
+>    addresses the compound-literal TEMPORARY, whose two stores are `sd a0, 0(a1); sd zero,
+>    8(a1)`. The ARGUMENT slot is the other object: its first half is `sd a0, -64(s0)`, with
+>    the offset folded into the immediate, so it is fine. Only its second half goes through
+>    `addi a2, s0, -56`. The listing is right; "the first address ... the second" is not.
+>
+> **Scan.** "The unpatched image gave exactly this one hit" **cannot be re-verified**: the
+> unpatched image and its disassembly were not preserved. The first scan could also be
+> evaded: by a `.L` label in between, by the register being used as a store SOURCE first, and
+> by the register form `add`. It was rewritten to track taint through writes. The new
+> version's positive controls are this reproducer plus those three layouts, and all four
+> hit. On the patched FFmpeg image it reports 0 hits in 354,666 instructions. Separately,
+> that image has no integer add off a capability frame pointer anywhere: its 82
+> `addi …, s0, …` all sit in functions where `s0` is an ordinary integer.
 
 **Symptom.** Capability fault **cause 24** (untagged operand) on a store to the caller's own stack
 slot. FFmpeg's `ff_mpv_alloc_pic_pool` faulted in the first `avformat_find_stream_info` of the
