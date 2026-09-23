@@ -5,9 +5,10 @@
 
 PASS only if:
   * the candidate has exactly as many frame lines as the reference, every hash equal;
-  * with --control: the control output DIFFERS from the reference (a frame count mismatch
-    or at least one changed hash). A comparison that cannot fail is not evidence, so a
-    control that matches the reference is a FAILURE of this check, not a pass.
+  * with --control: the control decoded the SAME number of frames as the reference and at
+    least one hash differs. A comparison that cannot fail is not evidence, so a control that
+    matches the reference is a FAILURE of this check. So is a control that produced fewer
+    frames (or none): a crashed control run proves nothing about the comparison.
 No frame lines in the reference is an ERROR, never an empty pass.
 """
 import re
@@ -35,7 +36,7 @@ def main(argv):
     if len(argv) == 5:
         ctl = hashes(argv[4])
         changed = sum(1 for a, b in zip(ref, ctl) if a != b)
-        fired = len(ctl) != len(ref) or changed > 0
+        fired = len(ctl) == len(ref) and changed > 0
         print(f'control: {len(ctl)} frames, {changed} changed hashes -> '
               f'{"FIRES" if fired else "DID NOT FIRE"}')
         ok = ok and fired

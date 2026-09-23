@@ -154,6 +154,10 @@ int ffapp_run(const char *path, int stop_at)
         }
         av_packet_unref(pkt);
     }
+    if (ret != AVERROR_EOF) {                 /* a read error must not pass as end of file */
+        status = FFAPP_E_READ;
+        goto out;
+    }
     if (packets == 0) {
         status = FFAPP_E_NOPACKET;
         goto out;

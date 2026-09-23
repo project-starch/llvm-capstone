@@ -8,15 +8,20 @@
 # QEMU runs are serialized across lanes: this takes $CAPSTONE_QEMU_LOCK itself (the shared
 # rootfs.ext2 must never see two guests), unless the caller already holds it.
 #
-# MARKERS, each ruling out a different way of passing by accident:
-#   the boot control   -- a boot that never reaches a shell prints nothing, so its absence
-#                         VOIDS the run instead of reading as an FFmpeg failure;
-#   "STAGE M<n>"       -- the program itself got that far (printed by ffapp_decode.c);
-#   the reached line   -- the host saw capstone_main return exactly the milestone this
-#                         image was built for (src/linux-guest/ffapp_host.c).
-# For stage 5 the same boot also runs the flipped-input control image, and the frame
-# lines from both are then compared against the native reference with
-# host/compare-md5.py: the real image must MATCH and the control must NOT.
+# WHAT DECIDES A PASS. run-domain-smoke.py checks its markers as SUBSTRINGS of the guest's
+# output, and that output includes the shell's echo of the whole command. So the boot
+# control and every __FFAPP_BEGIN/END__ marker are satisfied by the echo alone, "STAGE M2"
+# also matches "STAGE M2a", and the chain's exit status is always the last echo's. They are
+# kept as a coarse smoke check; they are NOT the verdict (audit, 2026-09-23). The verdict is:
+#   * per image: its OWN section of the log -- between the whole-line BEGIN/END markers, the
+#     echoed command cannot match them -- must contain the whole line
+#     "__CAPSTONE_FFAPP_STAGE_REACHED__ <n>", printed by the host only when capstone_main
+#     returned exactly the milestone the image was built for (src/linux-guest/ffapp_host.c);
+#   * for stage 5: the M5 section's frame lines must equal the native reference, and the
+#     flipped-input control -- which must itself have REACHED 5 -- must decode as many
+#     frames with at least one changed hash (host/compare-md5.py).
+# The kernel console is raised to level 7, so the module's own allocation line
+# ("code size = ..., tot_size = ...") lands in the log beside the loader's.
 #
 # Prerequisites: build-native.sh (the oracle) and build-domain.sh (the images).
 set -euo pipefail
@@ -34,7 +39,7 @@ case $STAGE in
   m2diag) STAGES="6 2v" ;;
   # probe: the FFAPP_DIAG M2a image (first bytes read, demuxers, probe verdict, open error)
   probe) STAGES="6diag9p 6diag" ;;   # matched pair: 9p path, then /tmp path
-  *) echo "stage must be 1..5, all or m2diag" >&2; exit 2;;
+  *) echo "stage must be 1..5, all, m2diag or probe" >&2; exit 2;;
 esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 DOM="$WORK/domain"
@@ -46,8 +51,9 @@ done
 rm -rf "$SHARE"; mkdir -p "$SHARE"
 cp "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/input.flip.mkv" "$SHARE/"
 
-RUN="cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input.mkv /mnt/host/input.flip.mkv /tmp/"
+RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input.mkv /mnt/host/input.flip.mkv /tmp/"
 MARKERS=(--success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__')
+SECTIONS=()          # "BEGIN END expected-stage" per image, verified after the boot
 for spec in $STAGES; do
   st=${spec%v}; verbose=; [ "$spec" != "$st" ] && verbose=" verbose"
   img=ffapp_m$st.dom
@@ -55,12 +61,14 @@ for spec in $STAGES; do
   [ -f "$DOM/$img" ] || { echo "missing $DOM/$img; run build-domain.sh" >&2; exit 2; }
   cp "$DOM/$img" "$SHARE/"
   RUN="$RUN; echo __FFAPP_BEGIN_M${st}__; /tmp/ffapp.user /mnt/host/$img $st$verbose; echo __FFAPP_END_M${st}__"
+  SECTIONS+=("__FFAPP_BEGIN_M${st}__ __FFAPP_END_M${st}__ $st")
   label=M$st; [ "$st" = 6 ] && label=M2a
   MARKERS+=(--success-marker "STAGE $label" --success-marker "__CAPSTONE_FFAPP_STAGE_REACHED__ $st")
 done
 case " $STAGES " in *" 5 "*)
   cp "$DOM/ffapp_m5flip.dom" "$SHARE/"
   RUN="$RUN; echo __FFAPP_BEGIN_FLIP__; /tmp/ffapp.user /mnt/host/ffapp_m5flip.dom 5; echo __FFAPP_END_FLIP__"
+  SECTIONS+=("__FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ 5")
   MARKERS+=(--success-marker '__FFAPP_END_FLIP__') ;;
 esac
 
@@ -85,11 +93,10 @@ set -e
 echo "run-domain-smoke exit status $rc; serial log $LOG"
 [ "$rc" = 0 ] || exit "$rc"
 
-case " $STAGES " in *" 5 "*)
-  # Only a line that IS the marker delimits a section: the shell echoes the whole guest
-  # command, markers and all, and a pattern match on that line would pull M1..M4's output
-  # (including M4's frame-0 hash) into M5's.
-  section() { python3 -c '
+# Only a line that IS the marker delimits a section: the shell echoes the whole guest
+# command, markers and all, and a pattern match on that line would pull M1..M4's output
+# (including M4's frame-0 hash) into M5's.
+section() { python3 -c '
 import sys
 begin, end, cur, out = sys.argv[2], sys.argv[3], False, []
 for line in open(sys.argv[1], errors="replace"):
@@ -98,6 +105,19 @@ for line in open(sys.argv[1], errors="replace"):
     if t == end: break
     if cur: out.append(line.rstrip("\r\n"))
 print("\n".join(out))' "$LOG" "$1" "$2"; }
+
+verdict=0
+for sec in "${SECTIONS[@]}"; do
+  read -r b e want <<<"$sec"
+  if section "$b" "$e" | grep -xF "__CAPSTONE_FFAPP_STAGE_REACHED__ $want" >/dev/null; then
+    echo "section $b: REACHED $want"
+  else
+    echo "section $b: did NOT reach $want" >&2; verdict=1
+  fi
+done
+[ "$verdict" = 0 ] || { echo "FAILED: at least one image did not return its own milestone" >&2; exit 1; }
+
+case " $STAGES " in *" 5 "*)
   section __FFAPP_BEGIN_M5__ __FFAPP_END_M5__     > "$WORK/domain-m5.out"
   section __FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ > "$WORK/domain-m5flip.out"
   python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock.framemd5" "$WORK/domain-m5.out" \
