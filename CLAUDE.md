@@ -348,8 +348,10 @@ Before RTL is handed to synthesis, to another lane, or called ready:
 
 **Lint and audit are NECESSARY, NOT SUFFICIENT. Only synthesis proves synthesizability.**
 Both passed — twice, with positive and negative controls — on a change that then drove
-`synth_design` past 100 GB. Verilator models none of what actually breaks: retiming (enabled
-in `run.tcl`), congestion, or Vivado's own loop analysis. So **a hash is ready when synthesis
+`synth_design` past 100 GB. A second instance (2026-09-23) failed on area and slack instead:
+every lint counter at exact baseline, `UNOPTFLAT` unmoved, and the design came out far heavier
+and slower. Verilator models none of what actually breaks: retiming (enabled in `run.tcl`),
+congestion, or Vivado's own loop analysis. So **a hash is ready when synthesis
 has RUN, not when the checks pass.** Do not hand one to another lane, and never spend a
 reflash or a board session on one, before that.
 

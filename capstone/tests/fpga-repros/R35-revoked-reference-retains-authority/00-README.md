@@ -70,7 +70,9 @@ declarations**. So neither hash in this folder is a reflash candidate.
 CPMP site too, not just the LSU". **That is wrong, and acting on it would reintroduce an escape.**)* An
 audit localized the 4.593 ns to Stage 0's **LSU** half, whose post-adopt value fed `cap_exception`
 combinationally. Every CPMP consumer reads the **registered** value, so the CPMP half is flop-to-flop into
-16 endpoints and cannot account for +9,256 failing endpoints. And reverting the CPMP half to compare `_q`
+16 endpoints and cannot account for +9,256 failing endpoints. *That is the audit's structural argument,
+not a measurement — Stage 0 changed both halves in one commit, and the one build that would separate them
+(`247b76896` with `pmp_data_if.sv` reverted) has not been run.* And reverting the CPMP half to compare `_q`
 **admits a persistent false ALLOW**: an entry holding X adopts Y while the same cycle's broadcast names Y,
 the compare against the stale X misses, and the entry vouches for a dead Y indefinitely. Leave the CPMP
 half as it is.

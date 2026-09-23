@@ -21,7 +21,7 @@ revoked accesses trap 25, both live-alias controls still return data. Lint at th
 
 **The cheap-looking edit was the expensive one.** Stage 0 — 32 lines, zero new signal declarations —
 cost **4.593 ns**; the entire first cache cost 1.515 ns more. A before-audit localized Stage 0's cost to
-its **LSU** half (the post-adopt value fed `cap_exception` combinationally); every CPMP consumer reads
+its **LSU** half — *audited, not measured: no build has separated the two halves Stage 0 changed* (the post-adopt value fed `cap_exception` combinationally); every CPMP consumer reads
 the registered value, so the CPMP half is flop-to-flop into 16 endpoints. Loops stayed at 1 on every
 build: these are path-depth costs, not new cycles. The first cache's LUTs came from describing a
 crossbar — a `_d`/`_q` pair rebuilt by dynamic index every cycle, about 90 LUTs per entry.
