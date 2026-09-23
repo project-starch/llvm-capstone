@@ -48,7 +48,7 @@ changes it. Choosing is the first design decision this port needs.
 
 | ID | feature | today | owner |
 |---|---|---|---|
-| C1 | working `-Os` / `-Oz` | **crash, not yet registered**: `Objects/dictobject.c` at `-Os` asserts in `LiveVariables` ("getVarInfo: not a virtual register") on `dict___contains__`; `-O3` compiles | compiler; reduce and register first |
+| C1 | working `-Os` | **C-55**, one object (`dictobject.c`), a residual of `d5b5de228b38`; otherwise `-Os` compiles 222 of 253 like `-O3`. **Measured to save only 5.4 %** over `-O3` (221 objects in both), so it is not a lever on the wall | compiler; low priority |
 | C2 | code density: capstone64 objects are 1.30× their x86-64 counterparts (measured over the 222) | where the 30 % goes is NOT measured; candidates: capability loads, cap-table indirection, soft-float calls | port measures, compiler acts |
 | C3 | hardware-float ABI instead of soft-float | every float operation is a compiler-rt call | **lead** (does the silicon have an FPU?) |
 
@@ -77,12 +77,12 @@ image size too (commit `10322a2fb795`, by its subject), so this is not CPython's
 ## Order
 
 1. **A1 + A2** — together they are what stands between the survey and a complete link.
-2. **C1** — cheap to reduce, and size is the wall.
+2. **R1** — size is the wall, and `-Os` was measured not to move it (5.4 %); the compiler cannot close a 3x gap.
 3. **B1 or B2** — a decision for the lead; it sets how much of CPython the port rewrites.
-4. **R1** in parallel — without it nothing runs, whatever the compiler does.
+4. **C1** (C-55) whenever the compiler lane is in `emitSelectPseudo`; it is one object.
 5. Then R2-R4 and a first boot of the smallest interpreter that links.
 
 ## Next action
 
-Port: reduce the `-Os` crash (C1) and register it. Compiler lane: A1 and A2, reproducers above.
-Lead: B1 vs B2, and R1.
+Compiler lane: A1 and A2, reproducers above. Lead: B1 vs B2, and R1. Port: measure where the
+1.30x code size goes (C2), then what a minimal interpreter needs (R2).

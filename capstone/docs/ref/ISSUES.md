@@ -6252,6 +6252,23 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-55 — two cascaded selects on a capability with a null operand put the physical `$c0` into a PHI; LiveVariables / PHIElimination assert `OPEN — COMPILER; a RESIDUAL of d5b5de228b38; found 2026-09-23 by the CPython survey at -Os; one object`
+
+**What happens.** `select c, a, null` followed by `select c, null, <that>` on `ptr addrspace(200)`
+asserts in LiveVariables at `-O1`..`-O3` ("getVarInfo: not a virtual register") and in
+PHIElimination at `-O0`. One select with null, two without null, and the same shape on `i64` all
+compile. CPython's `Objects/dictobject.c` reaches it at `-Os` (`dict___contains__`), not at `-O3`.
+
+**Mechanism.** Seen in the machine code after `finalize-isel`: `PHI $c0, %bb.0, %0, %bb.1, $c0,
+%bb.2`. Read at `d030df93d4a4`, not confirmed by a fix: `EmitLoweredCascadedSelect` builds its PHI
+from raw operand registers, while the general path in `emitSelectPseudo` routes physical sources
+through `materializeSelectPHISource` -- the fix `d5b5de228b38` made for the single-select case,
+which the cascaded path never received.
+
+**Reproducer.** `capstone/tests/compiler-repros/C55-cascaded-select-null-capability/run.sh` (three
+controls; needs `-disable-llvm-passes`, which it passes). PRESENT on `d030df93d4a4`,
+`d5b5f11cae8f` and `f7b50f081ca4`.
+
 ### C-54 — an atomic operation on a pointer compiles to `__atomic_*_16` library calls that nothing in a domain provides `OPEN — COMPILER GAP (stated out of scope by d5b5f11cae8f); first consumer the CPython link 2026-09-23`
 
 **What happens.** Load, store, compare-exchange and exchange on a `void **` each compile to a call

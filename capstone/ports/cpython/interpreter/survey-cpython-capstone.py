@@ -141,7 +141,12 @@ def make_var(build: pathlib.Path, name: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("build_dir")
-    parser.add_argument("--expect-ok", type=int, default=BASELINE_OK)
+    parser.add_argument("--expect-ok", type=int, default=None,
+                        help=f"default {BASELINE_OK}, the baseline at CPython's own -O3; "
+                             f"with --opt there is no default and no regression gate")
+    parser.add_argument("--opt", metavar="LEVEL",
+                        help="replace the -O3 in CPython's OPT with LEVEL; write --opt=-Os, not --opt -Os; "
+                             "everything else CPython chose stays")
     parser.add_argument("--jobs", type=int, default=min(16, os.cpu_count() or 4))
     parser.add_argument("--list-failures", action="store_true")
     parser.add_argument("--sites", type=int, default=30,
@@ -186,9 +191,18 @@ def main() -> int:
     log = build / "survey-compile.log"
     log.unlink(missing_ok=True)
     env = dict(os.environ, CPY_SURVEY_LOG=str(log))
+    overrides = []
+    if args.opt:
+        opt = make_var(build, "OPT")
+        if "-O3" not in opt:
+            print(f"ERROR: CPython's OPT is {opt!r}, no -O3 to replace", file=sys.stderr)
+            return 2
+        overrides = ["OPT=" + " ".join(args.opt if f == "-O3" else f for f in opt)]
+    if args.expect_ok is None:
+        args.expect_ok = BASELINE_OK if not args.opt else 0
     with open(build / "survey-make.log", "w") as out:
-        subprocess.run(["make", "-k", f"-j{args.jobs}", *expected], cwd=build, env=env,
-                       stdout=out, stderr=subprocess.STDOUT)
+        subprocess.run(["make", "-k", f"-j{args.jobs}", *overrides, *expected], cwd=build,
+                       env=env, stdout=out, stderr=subprocess.STDOUT)
 
     if not log.is_file() or log.stat().st_size == 0:
         print(f"ERROR: make ran but capstone-cc logged nothing ({log}); "
@@ -219,6 +233,8 @@ def main() -> int:
     names = applied.read_text().split() if applied.is_file() else None
     print(f"patches        {'UNKNOWN (no applied-patches.txt)' if names is None else len(names)}"
           + (f"  {' '.join(names)}" if names else ""))
+    print(f"optimisation   {overrides[0] if overrides else 'CPython default OPT'}"
+          + ("  (no baseline gate)" if args.opt and args.expect_ok == 0 else ""))
     print(f"surveyed       {len(expected)} objects (CPython's Makefile list)")
     print(f"compiled       {len(ok)}")
     print(f"failed         {len(bad)}")
@@ -326,7 +342,7 @@ def main() -> int:
     if len(ok) < args.expect_ok:
         print(f"\nREGRESSION: {len(ok)} compiled, baseline is {args.expect_ok}", file=sys.stderr)
         return 1
-    if len(ok) > args.expect_ok:
+    if len(ok) > args.expect_ok and not args.opt:
         print(f"\nIMPROVED: {len(ok)} compiled, baseline is {args.expect_ok}. Raise BASELINE_OK.")
     return 0
 

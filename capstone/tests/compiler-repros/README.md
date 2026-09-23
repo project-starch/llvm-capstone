@@ -18,6 +18,7 @@ which and what the 2026-09-05 sweep (`docs/plans/bug-sweep-2026-09.md`) found fo
 | `C52-greedy-regalloc-segfault` | C-52 | the Greedy register allocator segfaults on CPython's `compiler_visit_stmt` | filed 2026-09-23 by the CPython compile survey; PRESENT on dev |
 | `C53-inline-asm-memory-input` | C-53 | an inline-asm `"m"` input operand crashes isel | filed 2026-09-23 via CPython's configure; PRESENT on dev |
 | `C54-capability-atomics-libcalls` | C-54 | atomics on a pointer become `__atomic_*_16` calls nothing provides | filed 2026-09-23 by the CPython link; PRESENT on dev |
+| `C55-cascaded-select-null-capability` | C-55 | two selects with a null capability put `$c0` into a PHI; residual of `d5b5de228b38` | filed 2026-09-23 by the CPython survey at `-Os`; PRESENT on dev |
 
 A folder stays after its defect is fixed: the `run.sh` is the instrument that shows the fix, and
 a sweep re-runs it on the compiler the bug was filed against before calling anything GONE.

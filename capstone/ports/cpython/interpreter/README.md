@@ -101,6 +101,15 @@ attributed to the first CPython frame -- glibc and a dynamic loader, so an appro
 The remaining rows `strace` shows are glibc's (`brk` from its `malloc`, locale `mmap`, `futex`)
 or the dynamic loader's; a domain has the port's allocator and a static image instead.
 
+## At `-Os`, 2026-09-23
+
+`survey-cpython-capstone.sh --opt=-Os` replaces only the `-O3` in CPython's `OPT`. It compiles
+**222 of 253** too, a different 222: `Python/compile.c` compiles (C-52 does not arise), and
+`Objects/dictobject.c` stops on **C-55** (two cascaded selects with a null capability). C-51 still
+takes 26. Over the 221 objects that compile at both levels, `-Os` is **5.4 % smaller** than `-O3`
+(text+data+bss 7,580,186 against 8,014,557; `.text` 5.8 %). That does not move a ~11.5 MiB image
+toward 4 MiB. With `--opt` there is no baseline gate unless `--expect-ok` is given.
+
 ## How the survey measures
 
     source capstone/tests/capstone-test-env.sh
