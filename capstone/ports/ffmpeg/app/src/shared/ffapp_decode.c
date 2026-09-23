@@ -29,6 +29,40 @@ static int emit_frame(const AVFrame *f, int n)
     return 0;
 }
 
+#ifdef FFAPP_DIAG
+/* Diagnostic only, compiled into diagnostic images alone so the production decode path stays
+ * byte-identical. Separates "the bytes arrived wrong" (hostcall read path) from "the right
+ * bytes, but probing failed" (demuxer registration or probe logic in the domain). */
+#include <libavutil/error.h>
+static void ffapp_diag_probe(const char *path)
+{
+    static unsigned char buf[4096 + AVPROBE_PADDING_SIZE];
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        printf("DIAG fopen failed\n");
+        return;
+    }
+    size_t n = fread(buf, 1, 4096, f);
+    fclose(f);
+    printf("DIAG fread %zu bytes, first 16:", n);
+    for (int i = 0; i < 16 && i < (int)n; i++)
+        printf(" %02x", buf[i]);
+    unsigned sum = 0;
+    for (size_t i = 0; i < n; i++)
+        sum = sum * 31u + buf[i];
+    printf("  hash31=%08x\n", sum);
+    int count = 0;
+    void *it = NULL;
+    const AVInputFormat *fmt;
+    while ((fmt = av_demuxer_iterate(&it)))
+        printf("DIAG demuxer[%d] %s\n", count++, fmt->name);
+    AVProbeData pd = { .filename = path, .buf = buf, .buf_size = (int)n };
+    int score = 0;
+    const AVInputFormat *best = av_probe_input_format3(&pd, 1, &score);
+    printf("DIAG probe -> %s score %d\n", best ? best->name : "(none)", score);
+}
+#endif
+
 int ffapp_run(const char *path, int stop_at)
 {
     AVFormatContext *fmt = NULL;
@@ -41,8 +75,23 @@ int ffapp_run(const char *path, int stop_at)
     if (stop_at <= FFAPP_M1_MAIN)
         return FFAPP_M1_MAIN;
 
+#ifdef FFAPP_DIAG
+    ffapp_diag_probe(path);
+    ret = avformat_open_input(&fmt, path, NULL, NULL);
+    if (ret < 0) {
+        char e[AV_ERROR_MAX_STRING_SIZE];
+        printf("DIAG avformat_open_input = %d (%s)\n", ret, av_make_error_string(e, sizeof e, ret));
+        return FFAPP_E_OPEN;
+    }
+#else
     if (avformat_open_input(&fmt, path, NULL, NULL) < 0)
         return FFAPP_E_OPEN;
+#endif
+    printf("STAGE M2a open_input format=%s\n", fmt->iformat ? fmt->iformat->name : "?");
+    if (stop_at == FFAPP_M2A_OPENED) {
+        status = FFAPP_M2A_OPENED;
+        goto out;
+    }
     if (avformat_find_stream_info(fmt, NULL) < 0) {
         status = FFAPP_E_INFO;
         goto out;

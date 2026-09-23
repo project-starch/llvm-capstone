@@ -29,7 +29,11 @@ WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 JOBS=${FFAPP_JOBS:-48}
 ARENA=${FFAPP_ARENA_BYTES:-$((1536 * 1024))}      # level0 heap; native peak is 0.71 MB
 STACK=${FFAPP_STACK_BYTES:-$((256 * 1024))}       # declared stack (dom_data)
-INPUT=${FFAPP_INPUT:-/mnt/host/input.mkv}
+# /tmp, not the 9p share: the host pread()s straight into the shared-region mapping, and a 9p
+# read that large goes zero-copy (it pins the destination pages), which a region mapping
+# refuses -> EFAULT (2026-09-23; the probe images below keep the /mnt/host twin for the
+# matched pair). run-qemu.sh copies the inputs into the guest's /tmp first.
+INPUT=${FFAPP_INPUT:-/tmp/input.mkv}
 ORDER_CEILING=$((4 * 1024 * 1024))
 OUT="$WORK/domain"
 RT="$OUT/runtime"
@@ -160,7 +164,7 @@ alloc = p2 * 4096
 print(code_len, alloc, "FITS" if alloc <= ceiling else "DOES-NOT-FIT")' "$STACK" "$ORDER_CEILING"
 }
 
-for stage in 1 2 3 4 5; do
+for stage in 1 2 3 4 5 6; do   # 6 = M2a, open_input only (bisection stage)
   "$CLANG" "${APPF[@]}" -DFFAPP_STOP_AT="$stage" -DFFAPP_INPUT="\"$INPUT\"" \
     -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m$stage.o"
   "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m$stage.dom" \
@@ -172,6 +176,21 @@ for stage in 1 2 3 4 5; do
   [ "$verdict" = FITS ] || { echo "BUDGET: M$stage needs a $alloc-byte region, over the 4 MiB order ceiling" >&2; exit 1; }
 done
 
+# DIAGNOSTIC image (M2a with FFAPP_DIAG): a separate decode object, so the production images
+# above are byte-identical with or without it. It prints the first bytes a plain fread gets,
+# the registered demuxers, the probe's verdict, and avformat_open_input's error.
+"$CLANG" "${APPF[@]}" -DFFAPP_DIAG -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode_diag.o"
+"$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m6diag.dom" \
+  "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+  "$OUT/ffapp_domain_m6.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
+# Its matched twin: identical except that it reads the input from the 9p share.
+"$CLANG" "${APPF[@]}" -DFFAPP_STOP_AT=6 -DFFAPP_INPUT='"/mnt/host/input.mkv"' \
+  -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m6_9p.o"
+"$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m6diag9p.dom" \
+  "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+  "$OUT/ffapp_domain_m6_9p.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
+echo "diag images $OUT/ffapp_m6diag.dom ($INPUT) and $OUT/ffapp_m6diag9p.dom (/mnt/host/input.mkv)"
+
 # The M5 POSITIVE CONTROL image: identical except that it decodes the one-byte-flipped
 # input. In the same boot as M5 its hashes must DIFFER from the reference, or the domain
 # comparison could not have failed and proves nothing (host/compare-md5.py --control).
@@ -181,6 +200,14 @@ done
   "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
   "$OUT/ffapp_domain_m5flip.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE"
 echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
+
+# --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------
+# The compiler miscompiles an integer-valued pointer in a by-value union (ISSUES.md C-50);
+# patch 0003 removes the one instance. This scan found exactly that instance in the
+# unpatched image (its positive control) and must find none now.
+"$CAPSTONE_LLVM_BIN/llvm-objdump" -d --no-show-raw-insn "$OUT/ffapp_m5.dom" > "$OUT/ffapp_m5.dis"
+python3 "$SCRIPT_DIR/scan-addi-sp.py" "$OUT/ffapp_m5.dis" \
+  || { echo "C-50 GATE: integer sp/s0 address used as a store base (see above)" >&2; exit 1; }
 
 # --- negative control ---------------------------------------------------------------
 cat > "$OUT/stub_main.c" <<'STUB'

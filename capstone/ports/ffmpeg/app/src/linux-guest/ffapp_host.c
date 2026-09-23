@@ -27,8 +27,8 @@
 
 int main(int argc, char **argv)
 {
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s <ffapp.dom> <expected-stage>\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s <ffapp.dom> <expected-stage> [verbose]\n", argv[0]);
         return 2;
     }
     long long expected = atoll(argv[2]);
@@ -66,7 +66,10 @@ int main(int argc, char **argv)
 
     static struct hc_host host;
     host.tag = "ffapp";
-    host.verbose = 0;           /* a few hundred rounds; the stage lines say enough */
+    /* Quiet by default: a few hundred rounds, and the stage lines say enough. Verbose
+       prints every request, which is what separates "slow" from "stuck" when a stage
+       does not return: rounds that keep coming are progress, rounds that stop are not. */
+    host.verbose = argc == 4;
 
     unsigned serviced = 0;
     for (unsigned round = 0; round < FFAPP_MAX_ROUNDS; ++round) {
