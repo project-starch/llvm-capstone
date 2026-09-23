@@ -72,3 +72,20 @@ None was localised by guessing from a hang.
   domain's peak heap was not measured, and 305 KB of allocation slack is little.
 - **Any other workload.** One file, one frame size. 640x360 does not fit one region.
 - **Performance.** TCG timing means nothing here.
+
+## Reproduced from scratch, same day
+
+A fresh `FFAPP_WORK` (`/tmp/capstone/ffmpeg-app-verify`) was run from the committed branch:
+- the tarball was re-fetched and hash-verified;
+- `build-native.sh`, `build-domain.sh` and `run-qemu.sh all` were run.
+
+Same verdict: M1–M5 each returned its own stage, `oracle ... MATCH` (30/30), and the control FIRES
+(10/30).
+
+**The build is deterministic.** Against `SHA256SUMS` above, all six domain images and the guest
+host rebuilt byte-identical (`OK`), and so did the reference `stock.framemd5`. Only `input.mkv` and
+`input.flip.mkv` differ, as expected, because of the random SegmentUID.
+
+The musl-capstone archive and the private rootfs copy were reused, not rebuilt. The first attempt
+failed on a transient `Connection reset by peer` from the tarball mirror. `prepare-source.sh` now
+retries.
