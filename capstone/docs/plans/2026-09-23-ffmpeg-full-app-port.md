@@ -14,7 +14,8 @@ The port is in `capstone/ports/ffmpeg/app/`.
 
 **M1–M5 were REACHED the same day, on QEMU.** FFmpeg demuxes and decodes all 30 frames inside a
 domain, **bit-identical to native framemd5**, and the flipped-input control fires. The run of
-record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `41355570eda7`.
+record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `5f05b2148b40` (a first one, at
+`41355570eda7`, was superseded after the audit below).
 - **Friday target:** it was M0 + M1, and is exceeded.
 - **Rootfs:** runs booted a private repaired copy of the rootfs; the shared image is untouched.
 - **Three defects were found on the way:**
@@ -29,6 +30,20 @@ record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `41355570eda7`.
   ≥75,000 times in the run. With fabrication off, the domain dies in musl-capstone's start code
   before `capstone_main`. So M1–M5 prove FFmpeg correct under capability enforcement in QEMU,
   not runnable on the board as built.
+- **Correct is not safe (correction, 2026-09-23).** The run of record uses the `level0` heap:
+  arena-wide bounds, and `free` revokes nothing. So heap overflows and every temporal error go
+  undetected in it.
+  - **Arms:** a question about temporal faults led to three heap arms, measured with
+    pre-registered fixtures (`ports/ffmpeg/app/results/2026-09-23-qemu-safety/`).
+  - **Correctness holds on every arm:** M1–M5 are bit-identical with per-object heap bounds, and
+    with bounds plus revocation (`musl-capstone/runtime/sublet_heap.c`).
+  - **On QEMU** the latter faults every temporal fixture (4–7) and both heap-overflow fixtures
+    (2, 3). The merged-globals fixture (10) still returns.
+  - **Silicon:** the deployed silicon is documented to let a stale data access retire
+    (ISSUES Q-11, measurements §7r), so the temporal result is emulator evidence.
+  - **Globals:** at -O1 on this ABI, GlobalMerge puts a translation unit's globals into one
+    block whose bounds they share. The gp-captable ABI (M6) disables GlobalMerge for this
+    reason.
 - **What remains is M6** (silicon ABI) and the §4 one-translation-unit question. M6 is what
   removes the `gp` dependence.
 
