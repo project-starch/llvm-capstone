@@ -57,6 +57,7 @@ llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITI
 llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
 llvm/lib/Analysis/ValueTracking.cpp | +30 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
 llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
+llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndAccumulate... wants the INDEX width, which is not the
 llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
