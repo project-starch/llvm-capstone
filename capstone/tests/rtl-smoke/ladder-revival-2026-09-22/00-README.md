@@ -172,3 +172,22 @@ runner already performs.
 - **Nothing about why each blocker retired.** Four rungs' entries name R-1, which is recorded GONE;
   the other three name R-6, R-7 and R-9 and are not investigated here. "It measures now" is the
   claim; "R-1's fix is why" is not.
+
+## Why `bare-metal-baseline.result-lines.txt` carries all 65 rungs, not the paired subset
+
+Only a handful of these rungs pair against a capability half in this folder, so the file looks like
+an over-capture. It is kept whole deliberately, for two reasons.
+
+**It is the instrument's own certificate.** The sweep is what established that the bare-metal
+baseline reproduces the July denominators *to the digit* after two months and several bitstreams
+(`ctrsanity` 600,041/500,022, `beebs_prime` 9,283/2,704, `rv8_sha512` 540,073/462,646), at `15/15`
+passes tied at min instret with spread 0 on nearly every rung. That claim is about the **instrument
+across its whole range**, and a trimmed file cannot support it — the rows that do not pair here are
+exactly the ones that make it more than an anecdote.
+
+**It is the denominator source for the next rung.** These are 65 floors measured in one 81-second
+boot on one bitstream. Any future capability-half rung drawn from `ladder-rungs.spec` has its
+baseline here already and needs no second board session.
+
+This is **result lines, not a capture** — 65 parsed rows, not the 1040-row UART log they came from,
+which is not committed.
