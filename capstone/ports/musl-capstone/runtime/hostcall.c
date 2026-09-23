@@ -453,9 +453,17 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
 
   /* stdio asks whether stdout is a terminal, to choose line buffering over full
      buffering. ENOTTY is the true answer for a domain and the one musl handles:
-     it picks full buffering, which is also what we want. Returning ENOSYS would
-     work by accident; returning the right error means the next reader does not
-     have to wonder. */
+     it picks full buffering. Returning ENOSYS would work by accident; returning
+     the right error means the next reader does not have to wonder.
+     CAVEAT (2026-09-23): full buffering is only safe if someone flushes. musl
+     switches stdout to full buffering on its FIRST flush (__stdout_write.c), and
+     domain_main below runs no exit path when capstone_main RETURNS, so buffered
+     stdout is lost: exactly the first line of a returning program reaches the
+     host. exit() is fine (musl flushes on its exit path). A program that returns
+     must flush itself, or set stdout line-buffered with setvbuf, which sets F_SVB
+     and skips the switch (the FFmpeg app port does both). The durable fix is a
+     flush in domain_main after capstone_main returns; not made here, because
+     every musl domain would then change behaviour at once. */
   case SYS_ioctl:
     return -ENOTTY;
 
