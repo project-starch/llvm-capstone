@@ -2,6 +2,16 @@
 
 **Status:** a plan, not the port. It lives on branch `ffmpeg-app`.
 
+**M0 was REACHED on 2026-09-23 (`eb53d4e`):**
+- **Images:** six domain images link: M1–M5, plus the M5 flipped-input control.
+- **Budget:** `code_len` is 3,618,720 B, including a 1.5 MiB heap arena. With the
+  `.capstone_domreq`-declared 256 KiB stack that is a 4 MiB allocation, exactly the order-10
+  ceiling, with 305,248 B spare.
+- **Negative control:** it fires.
+- **Pointer round trips:** 21 compiler-flagged, down from 28 after the two patches.
+
+The port is in `capstone/ports/ffmpeg/app/`. M1 onward waits on the QEMU rootfs repair.
+
 **Question answered:** can FFmpeg 9.0.1 run file-to-file inside a Capstone domain the way SQLite
 does, and what is the shortest path to evidence?
 
@@ -18,8 +28,10 @@ httpd are pools by architecture.
 **The probes show the port is further along than expected.**
 - The minimal FFmpeg configures for `capstone64` on apollo. It compiles to three domain libraries
   with **zero errors after one 3-line patch**.
-- It links into a **1.8 MB domain image** with nothing undefined, and it fits the 4 MiB domain limit
-  at the reference workload's frame size.
+- It links into a domain image with nothing undefined: 1.53 MB of text, which becomes a
+  3.62 MB `code_len` once the 1.5 MiB heap arena is in `.bss`. It fits the 4 MiB domain limit
+  at the reference frame size, **with only 305 KB to spare**, and only with a `.capstone_domreq`
+  declaration. Without one the module would allocate `2 × code_len`, which does not fit.
 - The compiler's own `-Wcapstone-pointer-roundtrip` finds every pointer→integer→pointer site:
   **28 of them**. 16 are provably harmless, and the other 12 have 1–3-line fixes.
 - **The first milestone (M0: builds and links as a domain) is within reach by Friday.**
@@ -36,8 +48,12 @@ The native recordings behind the buffer-pool traces are made by
 
 The probe regenerated the **short** workload (1 s, 320x180, 30 frames) with those exact command
 lines. Its `stock.framemd5` hashes to `663177980a01…aeda89`, **identical to the committed value** in
-`buffer-pool/results/measurements/20260919-replay/measurements.json`. The input the repo never
-recorded now has a hash: `input.mkv` = `2148cce4921727e8…38d5d1` (155,701 B).
+`buffer-pool/results/measurements/20260919-replay/measurements.json`. ~~The input the repo never recorded now has a hash: `input.mkv` = `2148cce4921727e8…38d5d1`.~~
+**Withdrawn the same day.** `input.mkv` is not byte-reproducible: Matroska writes a random
+SegmentUID, and two generations from the same binary and command line differ in 44 bytes. Their
+decoded framemd5 is identical (`663177980a01…`). So that hash identified one file, not the
+workload. The oracle is, and always was, the decoded frames. The repo's missing `input.mkv` hash
+stays missing for the same reason.
 
 **The domain program is a small libav\* driver, not the `ffmpeg` CLI.** The CLI requires
 libavfilter, and the image budget below has no room for it. The driver:
@@ -159,7 +175,7 @@ unless it is dereferenced.
 | heap | native peak **0.71 MB** (731 allocs) | measured with a malloc-counting shim |
 | level0 arena to hold it | ~1.5 MiB | `-DCAPSTONE_LEVEL0_ARENA_BYTES` (`level0.c:35`); the default 256 KiB is too small |
 | stack | ~0.25 MiB | SQLite's 2 MiB default is not needed. **UNRESOLVED** until measured at M4 |
-| **total** | **≈ 3.3 MiB, fits** | |
+| **total** | ~~≈ 3.3 MiB~~ **measured at M0: `code_len` 3,618,720 + 8 KiB + 256 KiB = 3.89 MB, which rounds to a 4 MiB allocation, 305,248 B spare** | the module's power-of-two rounding (`modcapstone/module/capstone.c:152-161`) takes the rest of the slack |
 
 Two caveats on the heap figure:
 - The capability build inflates pointer-heavy structs. The 0.71 MB is native; the domain figure is
