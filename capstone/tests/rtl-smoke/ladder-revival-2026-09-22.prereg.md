@@ -467,3 +467,39 @@ is the same −O1 build and has not been rebuilt since. Launcher: `/tmp/capstone
 - The board is not on `caplifive_m1_054cea69b`.
 
 As before, no mechanism comes from these points; the E2b simulation trace comes next.
+
+---
+
+# Phase 8 addendum: same N, loop padding the ONLY difference (2026-09-23, before the run)
+
+Phase 7 ruled out boot position. The fast and slow builds still differed by an extra `lui` ahead of
+the loop as well as by the loop's address. Phase 8 removes that second difference. The capability
+half is rebuilt with `DOMAIN_EXTRA_CFLAGS=-falign-loops=8`. For `ctrsanity20k` a masked-address diff
+of `domain_main` against the plain image measured in phase 7 shows **one** added line: a single
+`nop`, executed once, which moves the loop from `…1ac` to `…1b0`. `ctrsanitys` is unchanged; its loop
+was already at `…1a8`.
+
+Rungs, one capability boot: `ctrsanity20k ctrsanity ctrsanitys`. They are paired against the phase-6
+bare-metal −O1 baseline, which does not read `DOMAIN_EXTRA_CFLAGS` and so is unchanged. The plain
+values are the phase 6/7 readings: 20k at 28,291 / 28,312 cycles, and 500k at 700,312 / 700,316.
+
+## Pre-registered
+
+| rung | if the 8-byte-aligned loop start IS the variable | if it is NOT |
+|---|---:|---:|
+| `ctrsanity20k` (loop `…1b0`) | 1.2 × instret + ~250 → ratio **~1.010** | 1.4 × instret → ~1.177 |
+| `ctrsanity` (loop `…1b0`) | ratio **~1.000**: the control's 16.7 % disappears | ~1.167 |
+| `ctrsanitys` (loop `…1a8`, unchanged) | ~1.045, as before | ~1.045 |
+
+- Classify by cycles per iteration (1.2 or 1.4, ± 1 %).
+- `…1b0` is also 16-byte aligned while `…1a8` is not. So a positive result supports "aligned to at
+  least 8", while a negative one says `…1a8` is fast for some other reason. Either reading is
+  reported as it falls.
+
+**VOID** if:
+- the images on the board lack the `nop` (checked after the run);
+- `ctrsanitys` moves by more than 0.5 %;
+- any oracle is wrong;
+- the result file is stale.
+
+No mechanism comes from this run; E2b simulates the two `ctrsanity20k` images.
