@@ -1,0 +1,4 @@
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6315            5029          YES
+ctrsanity            43260934      43260934      700269          500030        YES
+ctrsanity4           2999801679    2999801679    2800297         2000030       YES

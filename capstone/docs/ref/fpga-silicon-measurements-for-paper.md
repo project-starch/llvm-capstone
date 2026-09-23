@@ -253,7 +253,13 @@ data. Beside `cnt` (+31.9 % instructions, bulk array work) and `bs` (+44.6 % CPI
 dependency-chained loads), the table now separates the cost cleanly: **capability overhead
 is a property of DATA ACCESS, not of execution.**
 
-[*] **`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0 — a real
+[*] ~~**`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0~~ — **STALE,
+corrected 2026-09-23.** Its blocker **C-3** has read `GONE` since **2026-09-05**
+(`ISSUES-ARCHIVE.md:1801`, `rv8_primes` returning oracle 99991 at −O2 on silicon), and this footnote
+never followed. Re-measured at −O1 on `caplifive_m1_054cea69b` it returns its oracle and reads
+**1.005× cycles at a 1.000 instruction ratio**, against the 1.263× below taken at −O0 with a 1.130
+instruction ratio. **The published 1.263× is largely an optimisation-level artefact, not a capability
+cost.** Retained below only as the −O0 row it always was — a real
 limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
 internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
 
@@ -265,36 +271,59 @@ R-6, R-7 and R-9 rather than R-1. R-1's own probes (`rawhazard5/6/7`) read the r
 every live slot. Evidence and method:
 `tests/rtl-smoke/ladder-revival-2026-09-22/` (pre-registration committed before the first boot).
 
-**The overhead TABLE above is NOT extended, and the reason is its own control — but not the reason
-first written here.** An earlier version of this note blamed the baseline vehicle and reported a 7.8 %
-control discrepancy. **That was measured with the RETIRED baseline**, `run_ladder_base_fpga.py`, whose
-limitation is `ISSUES-ARCHIVE.md:4221` — *"I-2 — Linux baseline served interrupts inside the bracket
-`FIXED` … Fixed 2026-07-28 by removing the OS"*, with the exact signature observed (`1/15 passes tied
-at min instret`). The table above already says which instrument it used, in its own heading:
-**bare-metal baseline**. Both that figure and its mechanism are withdrawn.
+**These rows are RE-MEASURED on the current bitstream, and the earlier reason for withholding them is
+withdrawn.** An earlier version of this note reported a control discrepancy of 7.8 %, then 1.8 %, and
+blamed the baseline vehicle. Those were measured with the **retired** baseline
+(`run_ladder_base_fpga.py`), whose limitation is `ISSUES-ARCHIVE.md:4221` — *"I-2 — Linux baseline
+served interrupts inside the bracket `FIXED` … Fixed 2026-07-28 by removing the OS"* — with the exact
+`1/15 passes tied at min instret` signature observed. This table names its own instrument in its
+heading: **bare-metal baseline**. Both figures and their mechanisms are withdrawn.
 
-Re-run on the correct instrument, the bare-metal baseline **reproduces this table's denominators
-exactly** — `ctrsanity` 600,041/500,022, `beebs_prime` 9,283/2,704, `rv8_sha512` 540,073/462,646 —
-cycles and instructions to the digit, at `15/15 passes at min instret, spread 0`, two months later.
+On the correct instrument the denominators **reproduce this table to the digit** — `ctrsanity`
+600,041/500,022, `beebs_prime` 9,283/2,704, `rv8_sha512` 540,073/462,646 — at `15/15 passes at min
+instret, spread 0`, two months and several bitstreams later.
 
-What actually blocks the merge is a silicon change, and it is worth more than the rows would have
-been. **`ctrsanity`, the control, published at 1.000× and now reads 1.167×.** Its instruction ratio is
-1.00002 — eight instructions in 500,030 — so the halves are matched; its baseline is byte-identical to
-July; the capability half alone moved, **600,309 → 700,268 cycles for the same work**. On this
-bitstream, capability-mode execution of a pure-compute loop costs 16.7 % more cycles than on the build
-this table was taken on. A second control at 1/100th the length reads 1.045×, so the penalty **grows
-with run length rather than amortising away**.
+### All eight rows, re-measured (2026-09-23, `caplifive_m1_054cea69b`)
 
-Ten rungs are measured against the clean baseline and recorded in
-`tests/rtl-smoke/ladder-revival-2026-09-22/01-baseline-instrument-correction.md`, including eight that
-have never had a row. Two of the table's existing rows reproduce there within ~1.3 % (`beebs_prime`
-1.054 → 1.043, `beebs_aha_mont64` 1.023 → 1.010), which is what shows the pairing is sound. They are
-**not merged in** because this table's control reads 1.000× and theirs reads 1.167×: a reader
-comparing across the two would read a silicon change as an ABI cost.
+| rung | published | re-measured | shift | instr ratio then → now |
+|---|---:|---:|---:|---|
+| `beebs_cover` | 0.953× | 0.951× | −0.3 % | 0.999 → 0.999 |
+| **`ctrsanity`** | 1.000× | **1.167×** | **+16.7 %** | 1.000 → 1.000 |
+| `beebs_aha_mont64` | 1.023× | 1.010× | −1.2 % | 1.000 → 1.000 |
+| `beebs_prime` | 1.054× | 1.043× | −1.0 % | 1.001 → 1.000 |
+| `rv8_primes` | 1.263× (−O0) | 1.005× (−O1) | — | 1.130 → 1.000 |
+| `beebs_cnt` | 1.353× | 1.204× | −11.0 % | 1.319 → 1.197 |
+| `beebs_bs` | 1.537× | 1.397× | −9.1 % | 1.058 → 0.992 |
+| `beebs_recursion` | 1.957× | 1.983× | +1.3 % | 1.458 → 1.500 |
 
-Settling it needs either an explanation of the control's 16.7 %, or a re-measurement of these eight
-rows on the current bitstream. **The second is now cheap** — the bare-metal baseline ran all 65 rungs
-in 81 seconds, against ~15 minutes for the Linux one.
+**Four rows reproduce within ±1.3 %.** Two moved because their **codegen** changed, which their own
+instruction ratios show (`beebs_cnt` 1.319 → 1.197, `beebs_bs` 1.058 → 0.992) — the compiler got
+better at those kernels, and the cycle ratio followed. `rv8_primes` is not a shift at all, it is
+−O0 against −O1. **Seven rows reproducing or explaining themselves is a stronger certification of the
+pairing than a single control rung**, which matters because the control is the one row that does not.
+
+### `ctrsanity`'s +16.7 % is a SATURATING CPI step, and it is that kernel's, not this silicon's
+
+Its instruction ratio is 1.000 in both vintages and its baseline is byte-identical to July, so the
+capability half alone moved: **600,309 → 700,268 cycles for the same work.** The same kernel at three
+lengths, all in one boot (`ladder-revival-2026-09-22/phase4-control-length-series.result-lines.txt`):
+
+| length (instr) | cycle ratio | capability CPI | baseline CPI |
+|---:|---:|---:|---:|
+| 5,029 | 1.0457 | 1.2557 | 1.2027 |
+| 500,030 | **1.1670** | 1.4005 | 1.2000 |
+| 2,000,030 | **1.1668** | 1.4001 | 1.2000 |
+
+**It saturates.** 500k → 2M moves the ratio by **−0.02 %** across a 4× increase in work, while the
+baseline CPI sits at exactly 1.2000 throughout — so the denominator contributes nothing and the rise
+is entirely capability-side. Capability CPI climbs 1.256 → 1.400 and stops.
+
+That it is *this kernel's* property and not the bitstream's is what the eight rows above establish:
+`beebs_aha_mont64` runs 256,697 instructions — half a `ctrsanity` — and reads 1.010×.
+
+**What this does NOT say.** Nothing here explains the step. Three points characterise its shape and
+its saturation; they do not identify a mechanism, and the pre-registration forbade offering one
+afterwards from these points alone. **Quote the rows above; do not quote a cause.**
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
