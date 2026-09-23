@@ -61,3 +61,31 @@ sublet   7  FAULT  temporal
 sublet   8  FAULT  oob
 sublet   9  FAULT  oob
 sublet  10  RETURN a0005b
+
+# THE POOL ARMS (build-domain.sh FFAPP_HEAP=sublet FFAPP_POOL=0|2): FFmpeg's own pools under the
+# buffer-pool port's lifetime hooks. Registered 2026-09-24, BEFORE the pool arms were first
+# built, and committed and pushed before their first run. pool0 and pool2 differ only in the
+# pool mode (0 bounds only, 2 a Sublet lease per get, revoked on return).
+#   POOLFAIL <code>  the pool code refused what it was given (ff2_fail), after the touch line
+# Fixture 17 on pool2 is predicted to be REFUSED, not to fault: av_refstruct_unref copies the
+# stale pointer and ff2_ref_meta compares its capability bits against the current lease before
+# anything dereferences it (refstruct.c av_refstruct_unref -> get_refcount -> pool-allocator.c
+# by_authority -> ff2_fail(304)). On pool0 the bits still match, the unref is accepted, and it
+# drops the live owner's reference: a third get then aliases the live object.
+pool0   11  RETURN b00001
+pool0   11  LEN    64
+pool0   12  RETURN c000a0
+pool0   13  RETURN d0015b
+pool0   14  FAULT  oob
+pool0   15  RETURN f000a0
+pool0   16  FAULT  oob
+pool0   17  RETURN 1100177
+
+pool2   11  RETURN b00001
+pool2   11  LEN    64
+pool2   12  FAULT  temporal
+pool2   13  FAULT  temporal
+pool2   14  FAULT  oob
+pool2   15  FAULT  temporal
+pool2   16  FAULT  oob
+pool2   17  POOLFAIL 304
