@@ -16,12 +16,18 @@
  * environment of its own, so they are fixed here; the paths are the helper's
  * (the guest's), where the runner mounts its share at /mnt/host.
  *
- *   PYTHONHOME  where getpath finds lib/python313.zip, the stdlib; import
- *               reads a zip with open/read/lseek/fstat, all served. A stdlib
- *               DIRECTORY on sys.path would not work yet: listing it needs
- *               getdents64, which the hostcall does not serve.
- *   -P          keeps the script's directory off sys.path, for that reason.
+ *   PYTHONHOME  where getpath finds lib/python313.zip, the stdlib: one file
+ *               opened once, where a stdlib directory costs a listing and an
+ *               open per import. (Listing works since the hostcall's
+ *               DIR_READ; large reads since its bounce buffer.)
+ *   -P          keeps the script's directory off sys.path, where it would be
+ *               searched before the zip.
  *   -S          no site: the first boot runs without it.
+ *   argv[0]     an ABSOLUTE path under PYTHONHOME. getpath makes the program
+ *               name absolute, and a bare "python3" with no PATH falls back to
+ *               abspath('.'), i.e. getcwd, which the hostcall does not serve
+ *               ("failed to make path absolute", measured). The file need not
+ *               exist: getpath tolerates a realpath that fails on a missing one.
  */
 #ifndef CPY_DOMAIN_HOME
 #define CPY_DOMAIN_HOME "/mnt/host/pyhome"
@@ -35,8 +41,14 @@ int main(int argc, char **argv);
 
 int capstone_main(void)
 {
-	static char *argv[] = { "python3", "-P", "-S", CPY_DOMAIN_SCRIPT, 0 };
-	static char *envp[] = { "PYTHONHOME=" CPY_DOMAIN_HOME, 0 };
+	static char *argv[] = { CPY_DOMAIN_HOME "/bin/python3", "-P", "-S", CPY_DOMAIN_SCRIPT, 0 };
+	/* CPY_DOMAIN_EXTRA_ENV adds one more variable at build time, e.g.
+	   -DCPY_DOMAIN_EXTRA_ENV='"PYTHONVERBOSE=1"' to trace imports. */
+	static char *envp[] = { "PYTHONHOME=" CPY_DOMAIN_HOME,
+#ifdef CPY_DOMAIN_EXTRA_ENV
+				CPY_DOMAIN_EXTRA_ENV,
+#endif
+				0 };
 	__environ = envp;
 	/* Returning from main is exit(): atexit handlers run and stdio is flushed.
 	   Returning from capstone_main would do neither, and musl buffers stdout
