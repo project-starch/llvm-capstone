@@ -99,9 +99,15 @@ struct hc_file {
 static struct hc_file hc_files[HC_MAX_FILES];
 
 /* Optional: what a domain wants done when the program exits from inside a call
-   rather than by returning from main. Weak, so a domain that does not define it
-   links unchanged and the exit path simply skips it. */
-__attribute__((__weak__)) int __capstone_at_exit(int status);
+   rather than by returning from main. A domain overrides it with a strong
+   definition; this weak one is what every other domain gets.
+
+   DEFINED, not merely declared weak. An undefined weak symbol's address is not
+   NULL in a domain (C-56): it is formed pc-relative against gp, the linker
+   resolves the symbol to 0 at the link address, and the image runs at another
+   base without relocation, so the old `if (__capstone_at_exit)` was always true
+   and exit() called the image base. */
+__attribute__((__weak__)) int __capstone_at_exit(int status) { return status; }
 
 /* Where exit() lands. Armed once domain_main is ready to receive it. */
 static jmp_buf hc_exit_jb;
@@ -600,8 +606,7 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
       /* Whatever the program would have done after main returned still has to
          happen, and only the program knows what that is. A domain that has
          something to report defines this; one that has not pays nothing. */
-      if (__capstone_at_exit)
-        hc_exit_status = __capstone_at_exit(hc_exit_status);
+      hc_exit_status = __capstone_at_exit(hc_exit_status);
       longjmp(hc_exit_jb, 1);
     }
     return -ENOSYS;
