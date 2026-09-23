@@ -1,10 +1,15 @@
-# FFmpeg app, QEMU run of record, 2026-09-23. Stage and verdict lines from the serial log.
+# FFmpeg app, QEMU run of record (branch ffmpeg-app at 5f05b2148b40), 2026-09-23.
+# Stage and verdict lines from the serial log, plus the kernel module's own sizing lines.
 __FFAPP_BEGIN_M1__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 ffapp-host: DONE, serviced 1 request(s), capstone_main = 1, expected 1
 __CAPSTONE_FFAPP_STAGE_REACHED__ 1
 __FFAPP_END_M1__
 __FFAPP_BEGIN_M2__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 STAGE M2a open_input format=matroska,webm
 STAGE M2 open streams=1 video=0 320x180
@@ -12,6 +17,8 @@ ffapp-host: DONE, serviced 21 request(s), capstone_main = 2, expected 2
 __CAPSTONE_FFAPP_STAGE_REACHED__ 2
 __FFAPP_END_M2__
 __FFAPP_BEGIN_M3__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 STAGE M2a open_input format=matroska,webm
 STAGE M2 open streams=1 video=0 320x180
@@ -20,6 +27,8 @@ ffapp-host: DONE, serviced 23 request(s), capstone_main = 3, expected 3
 __CAPSTONE_FFAPP_STAGE_REACHED__ 3
 __FFAPP_END_M3__
 __FFAPP_BEGIN_M4__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 STAGE M2a open_input format=matroska,webm
 STAGE M2 open streams=1 video=0 320x180
@@ -29,6 +38,8 @@ ffapp-host: DONE, serviced 26 request(s), capstone_main = 4, expected 4
 __CAPSTONE_FFAPP_STAGE_REACHED__ 4
 __FFAPP_END_M4__
 __FFAPP_BEGIN_M5__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 STAGE M2a open_input format=matroska,webm
 STAGE M2 open streams=1 video=0 320x180
@@ -39,6 +50,8 @@ ffapp-host: DONE, serviced 122 request(s), capstone_main = 5, expected 5
 __CAPSTONE_FFAPP_STAGE_REACHED__ 5
 __FFAPP_END_M5__
 __FFAPP_BEGIN_FLIP__
+kernel: domain declares dom_data >= 262144 (stack 262144); sizing the region from it
+kernel: code size = 3619024, tot_size = 400000, entry_offset = 0
 STAGE M1 main
 STAGE M2a open_input format=matroska,webm
 STAGE M2 open streams=1 video=0 320x180
@@ -79,7 +92,7 @@ __FFAPP_END_FLIP__
 0,       27,       27,        1,    86400, 50ae5f96af8d4bc39557d731032f4652
 0,       28,       28,        1,    86400, 5ab82cfa8c04e9b078c5f0ba083846de
 0,       29,       29,        1,    86400, 66e8341badc9aa94312a6823dc60b144
-# Reference stock.framemd5 hash column, native:
+# Reference stock.framemd5 hash column (stock ffmpeg built from the UNPATCHED tarball):
 dbb175ec2857ef67b22f4281247625f9
 e0d39c1211bb8dbd7810bb2bef9d6157
 ec7cdea4430755d96b8740e66eb30708
