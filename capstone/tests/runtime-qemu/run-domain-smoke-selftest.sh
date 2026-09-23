@@ -48,7 +48,7 @@ pad=$(printf ': ; %.0s' $(seq 1 380))   # separate no-op commands, not one ':' w
 LONG="echo LONG-BEGIN; $pad echo LONG-END; echo SELFTEST-OK"
 boot() { # runner log
   set +e
-  flock -w 3600 "$CAPSTONE_QEMU_LOCK" "$PYTHON" "$1" --share-dir "$OUT/share" --log-file "$2" \
+  capstone_with_qemu_lock "$PYTHON" "$1" --share-dir "$OUT/share" --log-file "$2" \
     --timeout-multiplier 4 \
     --guest-command "echo 'PROMPT-LIKE # a comment'; echo 's/# /#_/g'; echo PROMPT-DONE; echo SELFTEST-OK" \
     --guest-command "$LONG" \
