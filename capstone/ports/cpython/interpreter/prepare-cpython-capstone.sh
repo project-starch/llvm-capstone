@@ -94,9 +94,15 @@ ASF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreesta
 for s in start-musl set_thread_area setjmp; do
   "$CAPSTONE_CLANG" "${ASF[@]}" -c "$MRT/$s.S" -o "$RT/$s.o"
 done
-for f in hostcall tls level0 string_bounds_safe fputwc_null_safe; do
+for f in hostcall tls string_bounds_safe fputwc_null_safe atomic_libcalls; do
   "$CAPSTONE_CLANG" "${CF[@]}" -c "$MRT/$f.c" -o "$RT/$f.o"
 done
+# The domain's heap is level0's static arena, 256 KiB by default: enough for
+# stdio, not for an interpreter. pymalloc takes its 1 MiB arenas from it (mmap
+# is off, see config.site), and every larger object comes straight from it.
+CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
+"$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$CPY_HEAP_BYTES" \
+  -c "$MRT/level0.c" -o "$RT/level0.o"
 "$CAPSTONE_CLANG" "${CF[@]}" -I"$MUSL_DIR/src/multibyte" \
   -c "$MRT/mbsrtowcs_bounds_safe.c" -o "$RT/mbsrtowcs_bounds_safe.o"
 "$CAPSTONE_CLANG" "${CF[@]}" -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$RT/domain_entry.o"
@@ -161,11 +167,22 @@ ac_cv_file__dev_ptc=no
 # getaddrinfo is never run (no socket opcode); "not buggy" only stops configure
 # from refusing to continue without a run test.
 ac_cv_buggy_getaddrinfo=no
+# mmap links (musl defines it) but the hostcall does not serve it. With
+# HAVE_MMAP obmalloc maps its arenas directly (_PyMem_ArenaAlloc, 3 calls at
+# startup measured natively), and every one would fail; without it obmalloc
+# takes them from malloc. The mmap module goes with it, which a domain cannot
+# use anyway.
+ac_cv_func_mmap=no
 # Left to itself this check CRASHES the compiler (C-51: its conftest uses
 # _Py_atomic_or_uint8), configure reads the crash as "libatomic needed", and
 # LIBS gains a -latomic no capstone64 library provides. With +a every width the
 # check uses is lowered inline, so the answer is no.
 ac_cv_libatomic_needed=no
+# Process pools and POSIX shared memory: a domain is one hart and cannot fork,
+# and _multiprocessing does not compile here anyway -- multiprocessing.h stops
+# with #error because its HANDLE is an integer as wide as a pointer, and none is.
+py_cv_module__multiprocessing=n/a
+py_cv_module__posixshmem=n/a
 EOF
 log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # --without-computed-gotos: a table of &&label values is emitted WITHOUT
@@ -233,6 +250,13 @@ if not crashed <= EXPECTED:
     sys.exit(2)
 print(f"[prepare] configure checks that crashed the compiler: {len(crashed)}, all reviewed", file=sys.stderr)
 PY
+for m in _MULTIPROCESSING _POSIXSHMEM; do
+  grep -q "^MODULE_${m}_STATE=n/a" "$BUILD_DIR/Makefile" \
+    || { echo "configure did not take py_cv_module_${m,,}=n/a from config.site" >&2; exit 2; }
+done
+if grep -q '^#define HAVE_MMAP 1' "$BUILD_DIR/pyconfig.h"; then
+  echo "configure found mmap; obmalloc would map arenas through an unserved syscall" >&2; exit 2
+fi
 if grep -qE '^LIBS=.*-latomic' "$BUILD_DIR/Makefile"; then
   echo "configure put -latomic in LIBS; no capstone64 libatomic exists" >&2; exit 2
 fi
