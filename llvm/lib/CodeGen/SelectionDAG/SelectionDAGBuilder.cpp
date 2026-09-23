@@ -8082,6 +8082,20 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     EVT MemVT =
         TLI.getMemValueType(DAG.getDataLayout(), I.getOperand(0)->getType());
     assert(PtrVT == Ptr.getValueType());
+    if (PtrVT.isCheriCapability()) {
+      // A capability is not an integer to AND: its bounds, permissions and
+      // tag must survive. Mask the ADDRESS (the mask has the index width) and
+      // move the capability there by the difference, which is an offset
+      // increment and keeps everything else. AtomicExpand aligns every 8- and
+      // 16-bit atomic this way; the generic path below would pad the mask by
+      // shifting a capability-typed value, which is not an integer.
+      EVT AddrVT = Mask.getValueType();
+      SDValue Addr = DAG.getZExtOrTrunc(Ptr, sdl, AddrVT);
+      SDValue Masked = DAG.getNode(ISD::AND, sdl, AddrVT, Addr, Mask);
+      SDValue Delta = DAG.getNode(ISD::SUB, sdl, AddrVT, Masked, Addr);
+      setValue(&I, DAG.getNode(ISD::PTRADD, sdl, PtrVT, Ptr, Delta));
+      return;
+    }
     if (Mask.getValueType().getFixedSizeInBits() < MemVT.getFixedSizeInBits()) {
       // For AMDGPU buffer descriptors the mask is 48 bits, but the pointer is
       // 128-bit, so we have to pad the mask with ones for unused bits.
