@@ -420,3 +420,50 @@ tolerance is set by layout, because each rung sits at its own entry VA.
   penalises (a table, a buffer, a counter), and that is exactly what the RTL A/B in simulation (E2b)
   must then find **in the trace**, at a length just past K. A model fitting three points does not
   stand in for that trace.
+
+---
+
+# Phase 7 addendum: loop alignment vs boot position (2026-09-23, before the run)
+
+## The confound phase 6 left
+
+On identical loop instructions, the control ran at 6 cycles/iteration in exactly one rung,
+`ctrsanitys`. That rung differs from all the slow ones in **two** ways:
+- its hot loop starts at `…1a8`, 8-byte aligned, where theirs start at `…1ac`;
+- it has run **first in the boot** (entry VA `0x10000`) in every run: phases 2, 4 and 6.
+
+## Design: reorder, rebuild nothing
+
+`LADDER_DISTINCT_VA` relocates each rung by a multiple of `0x10000`, so a rung's low address bits,
+and hence its loop alignment, do not change with its position. Swapping the first two rungs fills
+the two missing cells of the 2×2:
+
+| | first in boot | not first |
+|---|---|---|
+| loop at `…1a8` (`ctrsanitys`) | phase 6: **fast** (1.2 CPI) | **phase 7** |
+| loop at `…1ac` (`ctrsanity20k`) | **phase 7** | phase 6: **slow** (1.4 CPI) |
+
+Rungs, one capability boot, spec −O1: **`ctrsanity20k ctrsanitys ctrsanity`**. The third rung is the
+reproduction control. The capability half is paired against the phase-6 bare-metal baseline, which
+is the same −O1 build and has not been rebuilt since. Launcher: `/tmp/capstone/ladder-revival/p7.sh`.
+
+## Pre-registered
+
+| reading | if ALIGNMENT | if POSITION |
+|---|---:|---:|
+| `ctrsanity20k` (first, `…1ac`) cycle ratio | **~1.177** (7 cyc/iter) | **~1.011** (6 cyc/iter) |
+| `ctrsanitys` (second, `…1a8`) cycle ratio | **~1.045** | **~1.207** |
+
+- Classify by cycles per iteration (capability cycles against 1.2 × or 1.4 × instret, ± 1 %), not
+  by the ratio alone.
+- **Both move** means position. **Neither moves** means alignment. **Exactly one moves** means
+  neither hypothesis alone; report it as such, with no forcing into a category.
+
+## VOID
+
+- `ctrsanity` (third) misses 700,312 by more than 0.5 %.
+- Any oracle is wrong.
+- The result file is older than the run.
+- The board is not on `caplifive_m1_054cea69b`.
+
+As before, no mechanism comes from these points; the E2b simulation trace comes next.
