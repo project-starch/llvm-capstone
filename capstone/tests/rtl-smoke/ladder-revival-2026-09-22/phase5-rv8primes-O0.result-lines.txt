@@ -1,0 +1,8 @@
+# phase 5 -- rv8_primes at -O0, both halves LADDER_OPT=-O0, caplifive_m1_054cea69b, 2026-09-23
+# capability half (run_ladder_perf_fpga.py, one boot):
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanity            43260934      43260934      3300928         2000120       YES
+rv8_primes           99991         99991         17876546        8773753       YES
+# bare-metal baseline half (run_base_bare_fpga.py):
+rv8_primes: BEST cycles=13861379 instret=7764899 (15/15 passes at min instret, spread=349) retval=99991
+ctrsanity: BEST cycles=2500121 instret=1500057 (15/15 passes at min instret, spread=0) retval=43260934

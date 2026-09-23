@@ -218,7 +218,7 @@ cycles. Raw lines are in the same folder.
 | kernel | cap cycles | base cycles | **cycles** | instr | CPI | dominated by | vs 2026-07-28 |
 |---|---:|---:|---:|---:|---:|---|---|
 | `beebs_cover` | 159,732 | 167,999 | **0.951×** | 0.999 | 0.951 | layout — report as *no measurable overhead* | 0.953× |
-| `rv8_primes` | 6,320,385 | 6,286,697 | **1.005×** | 1.000 | 1.005 | neither | *not comparable* (July row was −O0) |
+| `rv8_primes` | 6,320,385 | 6,286,697 | **1.005×** | 1.000 | 1.005 | neither | July's −O0 row reproduces at 1.290×; −O1 removes the cost |
 | `rv8_sha512` | 543,646 | 540,073 | **1.007×** | 0.996 | 1.010 | neither | new |
 | `beebs_aha_mont64` | 286,485 | 283,612 | **1.010×** | 1.000 | 1.010 | neither | 1.023× |
 | `rv8_sha512s` | 118,603 | 117,035 | **1.013×** | 1.092 | 0.928 | extra instructions, offset by CPI | new |
@@ -364,11 +364,29 @@ note made that attribution anyway; it is withdrawn as unearned. The −O0 row is
 own row rather than explained away. (Its −O0 pair is internally consistent, so that ratio is valid;
 only cross-row `-O` comparison is affected.)
 
-**PENDING — the measurement that would settle it.** Rebuild both halves at `LADDER_OPT=-O0` and run
-`ctrsanity rv8_primes`: the published row is then its own control, with the −O level held fixed and
-only the bitstream/compiler varying. Pre-registered as phase 5 with its refutation condition named
-(`tests/rtl-smoke/ladder-revival-2026-09-22.prereg.md`). Both halves are **built and staged at −O0**;
-the board run itself has not been taken.
+**SETTLED 2026-09-23 (phase 5) — the attribution is now EARNED, by a measurement where only the −O
+level varies.** Both halves were rebuilt at `LADDER_OPT=-O0` and run on `caplifive_m1_054cea69b`
+(`ladder-revival-2026-09-22/phase5-rv8primes-O0.result-lines.txt`). Every pre-registered prediction
+held:
+
+| `rv8_primes` | capability | baseline | cycles | instr |
+|---|---:|---:|---:|---:|
+| −O0, July bitstream (published) | 17,283,292 / 8,773,753 | 13,679,903 / 7,764,899 | 1.263× | 1.1299 |
+| **−O0, this bitstream** | 17,876,546 / **8,773,753** | 13,861,379 / **7,764,899** | **1.290×** | **1.1299** |
+| −O1, this bitstream | 6,320,385 / 3,245,855 | 6,286,697 / 3,245,861 | 1.005× | 1.000 |
+
+- **Both halves retire exactly July's instruction counts at −O0.** The codegen has not moved, so the
+  cycle shift is the silicon's.
+- **The −O0 row reproduces:** 1.290× against 1.263× is +2.1 %, inside the pre-registered ±3 %.
+  The refutation (≈ 1.00×) did not fire.
+- So on one bitstream, **`rv8_primes` costs 1.290× at −O0 and 1.005× at −O1.** The overhead in
+  the published row is a −O0 codegen cost: 13 % more instructions, which the −O1 build removes.
+- The small silicon drift is capability-side-weighted: capability CPI +3.4 % since July, baseline
+  +1.3 %. That is the same direction as the control's capability-only rise, and much smaller. It is
+  recorded, not explained.
+- At −O0 `ctrsanity` is **not** a matched control (instruction ratio 1.333, because the capability
+  target emits more at −O0). As pre-registered it served only as the oracle and floor check (correct,
+  15/15, spread 0), and its ratio is not quoted.
 
 ### ⚠ SUPERSEDED 2026-09-22 — all eight of these rungs now MEASURE on `caplifive_m1_054cea69b`
 
@@ -398,7 +416,7 @@ instret, spread 0`, two months and several bitstreams later.
 | **`ctrsanity`** | 1.000× | **1.167×** | **+16.7 %** | 1.000 → 1.000 |
 | `beebs_aha_mont64` | 1.023× | 1.010× | −1.2 % | 1.000 → 1.000 |
 | `beebs_prime` | 1.054× | 1.043× | −1.0 % | 1.001 → 1.000 |
-| `rv8_primes` | 1.263× (−O0) | 1.005× (−O1) | **not comparable** — differs in −O level AND bitstream | 1.130 → 1.000 |
+| `rv8_primes` | 1.263× (−O0) | 1.290× at −O0 / 1.005× at −O1 | −O0: +2.1 % | 1.130 → 1.130 (−O0) |
 | `beebs_cnt` | 1.353× | 1.204× | −11.0 % | 1.319 → 1.197 |
 | `beebs_bs` | 1.537× | 1.397× | −9.1 % | 1.058 → 0.992 |
 | `beebs_recursion` | 1.957× | 1.983× | +1.3 % | 1.458 → 1.500 |
@@ -416,8 +434,8 @@ A falling instruction *ratio* on its own is equally consistent with the baseline
 unchanged denominators above are what rule that out and make this an attribution rather than an
 assertion. **Capability codegen improved on these two kernels and the cycle ratio followed.**
 
-`rv8_primes` is **not** a comparable pair: −O0 against −O1, on different silicon. It is listed for
-completeness and **must not be quoted as a shift** until the −O0 re-measurement above is taken.
+`rv8_primes` reproduces at −O0 (1.263× → 1.290×, identical instruction counts on both halves), and
+its −O1 cost is 1.005× on the same silicon. See the SETTLED block above.
 
 **Six rows reproducing or explaining themselves is a stronger certification of the pairing than a
 single control rung**, which matters because the control is the one row that does not.
