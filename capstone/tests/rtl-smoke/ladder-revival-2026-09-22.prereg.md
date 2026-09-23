@@ -214,3 +214,43 @@ cannot discriminate here — it passed at −O1 — because the documented failu
   reproduce the published denominators to the digit. Re-using them is what makes this a one-boot job.
 - Oracles frozen and QEMU parity exit 0 before any board time: `beebs_cnt` 2356896837, `beebs_bs`
   887447230, `beebs_recursion` 1579141629, `beebs_cover` 1993178309, `rv8_primes` 99991.
+
+---
+
+# Phase 4 addendum — the length series on the control kernel (2026-09-23, before the run)
+
+Phase 3 **refuted** phase 3's own prediction 2. The eight published rows did not shift uniformly with
+the control: four are stable within ±1.3 %, two moved because their codegen improved (`beebs_cnt`
+instruction ratio 1.319 → 1.197, `beebs_bs` 1.058 → 0.992), one is −O-confounded, and **`ctrsanity`
+alone moved +16.7 %** at an instruction ratio of 1.000 both times. So the control's shift is a
+property of that kernel, not of capability-mode execution on this bitstream.
+
+Within that kernel the effect tracks length: `ctrsanitys` (5,021 instructions) reads **1.045×**,
+`ctrsanity` (500,022) reads **1.167×**. `ctrsanity4` is the same kernel again at 2,000,022, its
+baseline is already measured at `15/15, spread 0`, and separating this is the reason the pair exists —
+its own header: *"Two lengths separate a PROPORTIONAL counter effect (ratio unchanged as work grows)
+from a FIXED one (ratio moves toward 1.0)."*
+
+**All three lengths run in ONE boot** so that boot-to-boot variation cannot be mistaken for the effect.
+
+## Pre-registered
+
+1. **The two shorter rungs reproduce their previous readings** — `ctrsanitys` 1.045×, `ctrsanity`
+   1.167×, from separate boots. If they do not, the effect is boot-dependent and neither earlier
+   number means what it was taken to mean.
+2. **`ctrsanity4` exceeds 1.167×** if the mechanism keeps accumulating with run length. **Roughly
+   1.167×** if it has saturated by 500k instructions. **Below 1.167×** would mean the ratio peaks and
+   falls, which no fixed-or-proportional account predicts and which would refute the framing rather
+   than the number.
+3. **Instruction ratio stays 1.000** on all three. It has been 1.000 on this kernel at every length
+   and in both vintages; a move would mean the comparison stopped being about cycles.
+4. **Baseline CPI stays flat at 1.200.** Measured across a 400× length range yesterday
+   (1.203 / 1.200 / 1.200), so the bare-metal denominator contributes nothing to the rise. Not re-run
+   here — it is quoted from the 2026-09-22 sweep.
+
+## Refutation and VOID
+
+- Any rung returning a value that is not its oracle is a wrong-answer result, never a measurement.
+- If prediction 1 fails the run is VOID as a length series, because the points would not be comparable.
+- This characterises the effect; it does not explain it. No mechanism is offered in advance, and none
+  may be written afterwards from these three points alone.

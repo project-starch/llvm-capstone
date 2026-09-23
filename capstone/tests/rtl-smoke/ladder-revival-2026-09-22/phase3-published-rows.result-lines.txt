@@ -1,0 +1,6 @@
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+beebs_cnt            2356896837    2356896837    114106          69387         YES
+beebs_bs             887447230     887447230     2054            820           YES
+beebs_recursion      1579141629    1579141629    19226           3029          YES
+beebs_cover          1993178309    1993178309    159732          76469         YES
+rv8_primes           99991         99991         6320385         3245855       YES
