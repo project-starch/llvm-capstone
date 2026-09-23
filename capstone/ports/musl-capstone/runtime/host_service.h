@@ -46,6 +46,15 @@ static inline void hc_host_ok(struct hostcall_v0 *m, long long v) {
   m->error = 0;
 }
 
+/* File data goes through this buffer, never straight between the payload region
+ * and the kernel. The region is a /dev/capstone mapping, not ordinary user pages,
+ * and a kernel path that pins the user buffer for zero-copy I/O -- 9p's read of
+ * more than a few hundred bytes -- cannot pin it and fails with EFAULT. Measured:
+ * every 4 KiB read of a file on the 9p share came back EFAULT, so a domain could
+ * read small files there and not large ones. A copy through ordinary memory costs
+ * a memcpy per round and works for every file system. */
+static unsigned char hc_host_bounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
+
 /* Returns 0 if the opcode was recognised, -1 if not (caller decides). */
 static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *req,
                                   struct hostcall_v0 *metadata, char *payload) {
@@ -75,7 +84,8 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    ssize_t n = pwrite(fd, payload + req->offset, (size_t)req->length, (off_t)off);
+    memcpy(hc_host_bounce, payload + req->offset, (size_t)req->length);
+    ssize_t n = pwrite(fd, hc_host_bounce, (size_t)req->length, (off_t)off);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
@@ -84,7 +94,8 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    ssize_t n = pread(fd, payload + req->offset, (size_t)req->length, (off_t)off);
+    ssize_t n = pread(fd, hc_host_bounce, (size_t)req->length, (off_t)off);
+    if (n > 0) memcpy(payload + req->offset, hc_host_bounce, (size_t)n);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
