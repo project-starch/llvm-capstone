@@ -75,7 +75,12 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    ssize_t n = pwrite(fd, payload + req->offset, (size_t)req->length, (off_t)off);
+    /* Through a bounce buffer, never straight from the region mapping: see FILE_READ. */
+    static char wbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
+    size_t wlen = (size_t)req->length;
+    if (wlen > sizeof wbounce) { hc_host_error(metadata, EINVAL); return 0; }
+    memcpy(wbounce, payload + req->offset, wlen);
+    ssize_t n = pwrite(fd, wbounce, wlen, (off_t)off);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
@@ -84,7 +89,17 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    ssize_t n = pread(fd, payload + req->offset, (size_t)req->length, (off_t)off);
+    /* Through a bounce buffer, never straight into the region mapping. For a file on the
+       9p share (/mnt/host) a read this size goes zero-copy: the kernel pins the destination's
+       user pages, and a Capstone region mapping cannot be pinned, so pread fails with EFAULT.
+       Files on tmpfs copy normally, which is why the musl probes (all under /tmp) never saw
+       it. Found 2026-09-23 by a matched pair: the same domain image read 0 bytes and got
+       EFAULT from /mnt/host/input.mkv, and read the correct 4096 bytes from a /tmp copy. */
+    static char rbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
+    size_t rlen = (size_t)req->length;
+    if (rlen > sizeof rbounce) { hc_host_error(metadata, EINVAL); return 0; }
+    ssize_t n = pread(fd, rbounce, rlen, (off_t)off);
+    if (n > 0) memcpy(payload + req->offset, rbounce, (size_t)n);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }

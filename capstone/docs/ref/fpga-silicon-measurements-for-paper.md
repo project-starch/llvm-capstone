@@ -202,7 +202,12 @@ overhead ratios (capability ÷ baseline) for cycles and for instructions respect
 
 ### CURRENT — 15 kernels, one bitstream, one compiler, one baseline (2026-09-23)
 
-**This is the table to cite.** Everything in it comes from `caplifive_m1_054cea69b` (WNS −8.307,
+> **⚠ READ PHASES 8–9 (below) BEFORE QUOTING A SINGLE ROW.** On this silicon, cycle ratios move
+> with code layout. The control's 16.7 % was one misaligned loop, and with loops aligned it reads
+> 1.000×. The same layout change moves `cover` 0.951× → 1.141× and `janne` +5.4 %. Instruction
+> ratios and the table's overall shape are robust; per-kernel cycle ratios are one draw of layout.
+
+**This is the table to cite, with that caveat.** Everything in it comes from `caplifive_m1_054cea69b` (WNS −8.307,
 monitor `2dcd3a5`), with each rung built from `ladder-rungs.spec` at its spec `-O` for **both** halves.
 The denominators come from the **bare-metal baseline**: one 81 s boot, every row at `15/15` passes
 tied at min instret. Every capability value is scored against its native oracle, and every baseline
@@ -594,6 +599,54 @@ either. It is most likely an overstatement of capability overhead, but not shown
 therefore not yet separable from layout.** The fix is a re-measurement with loops aligned in BOTH
 halves (phase 9). Whether the paper then quotes the aligned table, the default one, or both is the
 lead's call; this subsection only establishes that the difference exists.
+
+**PHASE 9 RESULT (2026-09-23): aligning loops fixes the CONTROL but does NOT stabilise the table.
+Layout sensitivity is broader than loop entry, and it affects BOTH halves.** All 15 kernels and both
+controls were re-measured with `-falign-loops=8` in both halves
+(`phase9-aligned-full-table.result-lines.txt`). The run is valid:
+- the pairing gate passed and the control reads **1.0004×**, so pre-registered prediction 1 held;
+- all 17 baselines are 15/15, every oracle is correct, and the bitstream and flags are confirmed.
+
+| kernel | default layout (CURRENT) | loops aligned, both halves | shift |
+|---|---:|---:|---:|
+| `rv8_sha512` | 1.007× | 1.006× | −0.1 % |
+| `rv8_primes` | 1.005× | 1.007× | +0.2 % |
+| `rv8_sha512s` | 1.013× | 1.014× | +0.1 % |
+| `beebs_aha_mont64` | 1.010× | 1.015× | +0.5 % |
+| `beebs_prime` | 1.043× | 1.050× | +0.7 % |
+| `beebs_crc32` | 1.129× | 1.122× | −0.6 % |
+| `beebs_ns` | 1.161× | 1.139× | −1.9 % |
+| **`beebs_cover`** | **0.951×** | **1.141×** | **+20.0 %** (capability +12.2 %, baseline −6.5 %) |
+| `beebs_cnt` | 1.204× | 1.200× | −0.4 % |
+| `beebs_bs` | 1.397× | 1.439× | **+3.0 %** |
+| `coremark_matrix` | 1.454× | 1.460× | +0.4 % |
+| `matmult_int` | 1.691× | 1.683× | −0.5 % |
+| `beebs_janne` | 1.836× | 1.936× | **+5.4 %** |
+| `beebs_recursion` | 1.983× | 1.957× | −1.3 % |
+| `beebs_insertsort` | 2.111× | 2.069× | −2.0 % |
+| geometric mean | 1.285× | 1.303× | |
+
+**How the pre-registered predictions scored:**
+- **Prediction 2 ("no row rises > 2 %") is REFUTED for three rows:** `cover`, `janne` and `bs`.
+- **The expectation that rows would fall was wrong:** 12 of 15 move by less than ±2 %.
+- `-falign-loops=8` is not a layout neutraliser. It pads every loop, which moves all the code after
+  each pad, and in some kernels that moves branch targets or other hot code into a worse position.
+- Instruction counts barely move (`cover` 76,469 → 76,501), so the swings are cycles, i.e. layout.
+- `cover` is the extreme case. It is 180 switch dispatches per call with jump tables disabled, so it
+  is branch-dense. Its **baseline** moved 6.5 % under the same flag, so the "baseline is layout-
+  insensitive" hint from phase 6 does not generalise.
+
+**What this means for citing the table:**
+1. **Robust to layout:** the range's shape. Several kernels at ~1.00–1.05×, several at 1.1–1.5×, and
+   `janne`/`recursion`/`insertsort` near 2×. The instruction ratios are robust too, because they are
+   layout-independent.
+2. **Not robust:** any single kernel's cycle ratio to better than a few percent. For branch-dense
+   kernels it is not robust to better than ~20 %. `cover`'s "0.951×, report as no measurable
+   overhead" and its "1.141×" are both one draw of layout.
+3. **The honest measurement is a layout-RANDOMISED one.** For each kernel, build K layouts (e.g. a
+   variable pad ahead of the kernel in both halves) and report the median and the band. That is the
+   standard remedy for this well-known class of measurement bias, and it is a methods decision for the
+   lead before the paper quotes per-kernel cycle ratios.
 
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
