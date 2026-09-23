@@ -56,6 +56,53 @@ static size_t l0_round(size_t n)
 	return (n + (L0_ALIGN - 1)) & ~(size_t)(L0_ALIGN - 1);
 }
 
+/* CAPSTONE_LEVEL0_SHRINK: per-object heap bounds, opt-in. Without it every pointer this
+ * allocator returns carries the bounds of the WHOLE ARENA, so an overflow from one object
+ * into the next is not a fault -- which is the default, and which is what every port built
+ * on this file has had. With it, malloc narrows the returned capability to exactly the n
+ * bytes asked for (the rv8 allocators' shrink, benchmarks/rv8/adapted/rv8_malloc.c).
+ *
+ * Two things follow, and both are the reason this is a macro and not a one-line change:
+ *  - the header sits BELOW the payload, outside a narrowed pointer, so free and realloc
+ *    recover it through the arena capability from the pointer's ADDRESS (read as a number,
+ *    never turned back into a pointer), not through the pointer;
+ *  - realloc may copy only what the old pointer's bounds cover, and must re-narrow the
+ *    pointer it returns in place, or a block grown within its slack keeps the old bounds.
+ * What it does NOT give: temporal safety. free still only marks the block free, so a stale
+ * pointer keeps working and reads whatever occupies the memory next. Bounds are exact in a
+ * register. On silicon, a narrowed capability of 4 KiB or more that is stored and reloaded is
+ * rounded outward to its representable granule (the RTL's encoder), since block bases here are
+ * only 16-aligned; capstone-qemu keeps full precision for stored capabilities (cap_mem_map.h)
+ * and does not show that. */
+#if defined(CAPSTONE_LEVEL0_SHRINK) && CAPSTONE_LEVEL0_SHRINK
+static void *l0_narrow(void *p, size_t n)
+{
+	unsigned long c = __builtin_capstone_cap_get_cursor(p);
+	return __builtin_capstone_cap_shrink(p, c, c + n);
+}
+static struct l0_block *l0_header(void *p)
+{
+	unsigned long off = __builtin_capstone_cap_get_cursor(p) -
+	                    __builtin_capstone_cap_get_cursor(l0_arena);
+	return (struct l0_block *)(l0_arena + off - sizeof(struct l0_block));
+}
+static size_t l0_readable(void *p, size_t block)
+{
+	unsigned long have = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
+	return have < block ? have : block;
+}
+#define L0_RETURN(p, n) l0_narrow((p), (n))
+#define L0_REALLOC_IN_PLACE(p, b, n) l0_narrow((char *)(b) + sizeof(struct l0_block), (n))
+#else
+static struct l0_block *l0_header(void *p)
+{
+	return (struct l0_block *)((char *)p - sizeof(struct l0_block));
+}
+#define L0_RETURN(p, n) (p)
+#define L0_REALLOC_IN_PLACE(p, b, n) (p)
+#define l0_readable(p, block) (block)
+#endif
+
 static void l0_init(void)
 {
 	l0_head = (struct l0_block *)l0_arena;
@@ -86,7 +133,7 @@ void *malloc(size_t n)
 			b->next = tail;
 		}
 		b->free = 0;
-		return (char *)b + sizeof(struct l0_block);
+		return L0_RETURN((char *)b + sizeof(struct l0_block), n);
 	}
 	/* POSIX: a failed allocation sets errno. libc-test's search_hsearch is
 	   what asked: hcreate((size_t)-1) must fail with ENOMEM, and musl's
@@ -99,8 +146,7 @@ void free(void *p)
 {
 	if (!p)
 		return;
-	struct l0_block *b =
-	    (struct l0_block *)((char *)p - sizeof(struct l0_block));
+	struct l0_block *b = l0_header(p);
 	b->free = 1;
 	/* Coalesce forward. One pass is enough because every free does it, so a
 	   run of adjacent free blocks can only ever be two long at rest. */
@@ -134,17 +180,16 @@ void *realloc(void *p, size_t n)
 		free(p);
 		return 0;
 	}
-	struct l0_block *b =
-	    (struct l0_block *)((char *)p - sizeof(struct l0_block));
+	struct l0_block *b = l0_header(p);
 	if (b->size >= l0_round(n))
-		return p;
+		return L0_REALLOC_IN_PLACE(p, b, n);
 	char *q = malloc(n);
 	if (!q)
 		return 0;
 	/* memmove, not a byte loop: a byte loop drops the tag of every pointer
 	   stored in the block, and the whole point of moving a block is that its
 	   contents keep meaning what they meant. See string_bounds_safe.c. */
-	memmove(q, p, b->size);
+	memmove(q, p, l0_readable(p, b->size));
 	free(p);
 	return q;
 }
