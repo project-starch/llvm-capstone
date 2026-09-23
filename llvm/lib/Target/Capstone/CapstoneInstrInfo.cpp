@@ -21,6 +21,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineCombinerPattern.h"
@@ -2052,6 +2053,63 @@ unsigned CapstoneInstrInfo::getInstBundleLength(const MachineInstr &MI) const {
     Size += getInstSizeInBytes(*I);
   }
   return Size;
+}
+
+// Capability instructions that trap when an operand is not a tagged
+// capability (UNEXPECTED_OPERAND, cause 24) and that LLVM otherwise treats as
+// free of side effects. Taken from the QEMU model, where these are the helpers
+// that raise on an untagged rs1 and are emitted for ordinary pointer code.
+static bool trapsOnUntaggedOperand(unsigned Opcode) {
+  switch (Opcode) {
+  case Capstone::CIncOffset:
+  case Capstone::CIncOffsetImm:
+  case Capstone::LCC:
+  case Capstone::SHRINK:
+    return true;
+  default:
+    return false;
+  }
+}
+
+// Whether BB runs on every iteration of L that reaches an exit: true when no
+// exiting block of L can be reached from the header without passing BB. This
+// is MachineLICM's own "guaranteed to execute" test (BB dominates every
+// exiting block), computed here because the hook gets no dominator tree.
+static bool executesOnEveryIteration(const MachineBasicBlock *BB,
+                                     const MachineLoop *L) {
+  const MachineBasicBlock *Header = L->getHeader();
+  if (BB == Header)
+    return true;
+  SmallPtrSet<const MachineBasicBlock *, 32> Seen;
+  SmallVector<const MachineBasicBlock *, 32> Work;
+  Seen.insert(BB); // blocked: paths through BB do not count
+  Seen.insert(Header);
+  Work.push_back(Header);
+  while (!Work.empty()) {
+    const MachineBasicBlock *Cur = Work.pop_back_val();
+    if (L->isLoopExiting(Cur))
+      return false; // an exit reached without BB
+    for (const MachineBasicBlock *Succ : Cur->successors())
+      if (L->contains(Succ) && Seen.insert(Succ).second)
+        Work.push_back(Succ);
+  }
+  return true;
+}
+
+// MachineLICM hoists a loop-invariant instruction to the preheader when it is
+// safe to move, and only loads additionally have to be guaranteed to execute.
+// Pointer arithmetic on a capability is not safe to speculate: CIncOffset of
+// an untagged value -- a NULL pointer, say -- traps instead of computing a
+// harmless address. CPython's argument parser tests `kwnames` for NULL and
+// only then forms &kwnames->ob_item; early MachineLICM moved that CIncOffsetImm
+// into the outer loop's preheader, above the test, and every call without
+// keyword arguments trapped (C-58). So these instructions follow the rule for
+// loads: hoisted only from a block that runs on every iteration.
+bool CapstoneInstrInfo::shouldHoist(const MachineInstr &MI,
+                                    const MachineLoop *FromLoop) const {
+  if (!trapsOnUntaggedOperand(MI.getOpcode()))
+    return true;
+  return executesOnEveryIteration(MI.getParent(), FromLoop);
 }
 
 bool CapstoneInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
