@@ -25,6 +25,7 @@ clang/lib/AST/TypePrinter.cpp | +26 -0 | case CC_CapstoneVectorCall:
 clang/lib/Basic/CMakeLists.txt | +1 -0 | Targets/Capstone.cpp
 clang/lib/Basic/Targets.cpp | +53 -0 | #include "Targets/Capstone.h"
 clang/lib/CodeGen/ABIInfoImpl.cpp | +17 -1 | // pointers live there and wrong for one whose do not. On capstone64 a
+clang/lib/CodeGen/CGAtomic.cpp | +40 -0 | static bool movesOrComparesOnly(AtomicExpr::AtomicOp Op) {
 clang/lib/CodeGen/CGBuiltin.cpp | +3 -0 | case llvm::Triple::capstone32:
 clang/lib/CodeGen/CGDebugInfo.cpp | +17 -0 | case CC_CapstoneVectorCall:
 clang/lib/CodeGen/CGDecl.cpp | +32 -3 | // Capstone: a capability tag is out-of-band metadata, so a bytewise memcpy from
@@ -57,6 +58,7 @@ llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITI
 llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
 llvm/lib/Analysis/ValueTracking.cpp | +30 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
 llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
+llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | if (UseSizedLibcall && DL.isNonIntegralPointerType(ValTy))
 llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
