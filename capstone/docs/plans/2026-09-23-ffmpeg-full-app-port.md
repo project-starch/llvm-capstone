@@ -44,6 +44,13 @@ record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `5f05b2148b40` (
   - **Globals:** at -O1 on this ABI, GlobalMerge puts a translation unit's globals into one
     block whose bounds they share. The gp-captable ABI (M6) disables GlobalMerge for this
     reason.
+- **FFmpeg's own pools under Sublet leases (2026-09-24, QEMU).**
+  - **Where:** the buffer-pool port's lifetime hooks now run inside the whole decoder
+    (`ports/ffmpeg/app/results/2026-09-24-qemu-pool-safety/`).
+  - **What they cover:** `AVBufferPool` buffers and every refstruct object get a lease per get,
+    revoked on return.
+  - **Result:** M1–M5 stay bit-identical. The pre-registered pool fixtures come out 14/14.
+  - **Found on the way:** ISSUES C-56 (a second consumer), and 9p read stalls in the guest.
 - **What remains is M6** (silicon ABI) and the §4 one-translation-unit question. M6 is what
   removes the `gp` dependence.
 

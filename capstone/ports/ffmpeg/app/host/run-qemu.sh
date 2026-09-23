@@ -46,7 +46,8 @@ WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 case ${FFAPP_HEAP:-level0} in
   level0) DOM="$WORK/domain"; LOG=${LOG_FILE:-$WORK/qemu-$STAGE.log} ;;
   shrink) DOM="$WORK/domain-shrink"; LOG=${LOG_FILE:-$WORK/qemu-shrink-$STAGE.log} ;;
-  sublet) DOM="$WORK/domain-sublet"; LOG=${LOG_FILE:-$WORK/qemu-sublet-$STAGE.log} ;;
+  sublet) DOM="$WORK/domain-sublet${FFAPP_POOL:+-pool$FFAPP_POOL}"
+          LOG=${LOG_FILE:-$WORK/qemu-sublet${FFAPP_POOL:+-pool$FFAPP_POOL}-$STAGE.log} ;;
   *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
 esac
 SHARE="$WORK/share"
@@ -65,18 +66,23 @@ for spec in $STAGES; do
   case $st in *diag|*diag9p) img=ffapp_m$st.dom; st=${st%%diag*} ;; esac
   [ -f "$DOM/$img" ] || { echo "missing $DOM/$img; run build-domain.sh" >&2; exit 2; }
   cp "$DOM/$img" "$SHARE/"
-  RUN="$RUN; echo __FFAPP_BEGIN_M${st}__; /tmp/ffapp.user /mnt/host/$img $st$verbose; echo __FFAPP_END_M${st}__"
+  RUN="$RUN; echo __FFAPP_BEGIN_M${st}__; /tmp/ffapp.user /tmp/$img $st$verbose; echo __FFAPP_END_M${st}__"
   SECTIONS+=("__FFAPP_BEGIN_M${st}__ __FFAPP_END_M${st}__ $st")
   label=M$st; [ "$st" = 6 ] && label=M2a
   MARKERS+=(--success-marker "STAGE $label" --success-marker "__CAPSTONE_FFAPP_STAGE_REACHED__ $st")
 done
 case " $STAGES " in *" 5 "*)
   cp "$DOM/ffapp_m5flip.dom" "$SHARE/"
-  RUN="$RUN; echo __FFAPP_BEGIN_FLIP__; /tmp/ffapp.user /mnt/host/ffapp_m5flip.dom 5; echo __FFAPP_END_FLIP__"
+  RUN="$RUN; echo __FFAPP_BEGIN_FLIP__; /tmp/ffapp.user /tmp/ffapp_m5flip.dom 5; echo __FFAPP_END_FLIP__"
   SECTIONS+=("__FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ 5")
   MARKERS+=(--success-marker '__FFAPP_END_FLIP__') ;;
 esac
 
+# The images are loaded from the guest's /tmp, not from the 9p share. The loader mmaps the image
+# file and copies its segments out of that mapping (libcapstone.c create_dom), so every read of
+# an image is a 9p page fault; two pool2 M1-M5 runs on 2026-09-24 stalled inside exactly those
+# reads (between the loader's own prints), with no fault and no kernel message.
+RUN="${RUN/; echo __FFAPP_BEGIN_/; cp /mnt/host/*.dom /tmp/; echo __FFAPP_BEGIN_}"
 smoke=(python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py"
        --share-dir "$SHARE" --log-file "$LOG" --timeout-multiplier "${TIMEOUT_MULTIPLIER:-8}"
        --guest-command "echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; $RUN" "${MARKERS[@]}")

@@ -58,9 +58,28 @@ case $HEAP in
           ENTRYF=(-DFFAPP_SUBLET_HEAP=1) ;;
   *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
 esac
+# FFAPP_POOL (on the sublet heap only): FFmpeg's OWN pools under the buffer-pool port's
+# lifetime hooks, in the whole program. libavutil comes from prepare-source.sh --pool (its own
+# build directory), the buffer-pool port's payload allocator and Capstone backend are linked,
+# and the guest host shares a fourth region for the payloads (program region 1).
+#   0  the payloads are bounded per object and never revoked
+#   2  a Sublet lease per pool get, revoked when the buffer returns to its pool
+# The two differ in nothing but that mode: the matched pair for the pool fixtures.
+POOL=${FFAPP_POOL:-}
+POOL_REGION=${FFAPP_POOL_REGION_BYTES:-$((4 * 1024 * 1024))}
+POOLF=()
+if [ -n "$POOL" ]; then
+  [ "$HEAP" = sublet ] || { echo "FFAPP_POOL needs FFAPP_HEAP=sublet" >&2; exit 2; }
+  case $POOL in 0|2) ;; *) echo "FFAPP_POOL must be 0 or 2" >&2; exit 2 ;; esac
+  OUT="$WORK/domain-sublet-pool$POOL"
+  POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
+         -I"$APP_DIR/../buffer-pool/src/shared")
+  HOSTF+=(-DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL")
+fi
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
 XB="$BASE/ffmpeg-build"
+[ -n "$POOL" ] && XB="$BASE/ffmpeg-build-pool"
 mkdir -p "$RT" "$XB"
 
 CLANG=${CAPSTONE_CLANG:?}
@@ -69,7 +88,11 @@ LD_LLD=${CAPSTONE_LD_LLD:?}
 ARCHIVE="$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a"
 [ -f "$ARCHIVE" ] || { echo "no $ARCHIVE; run ports/musl-capstone/build-musl-capstone.sh (CAPSTONE_LLVM_AR=llvm-ar-18 if the build has no llvm-ar)" >&2; exit 2; }
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
-SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
+if [ -n "$POOL" ]; then
+  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --pool | tail -1)
+else
+  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
+fi
 
 TARGET=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -Xclang -target-feature -Xclang +a)
@@ -170,8 +193,21 @@ fi
   | sed -E 's#^(src/)?##; s/: warning:.*//' | sort -u > "$OUT/pointer-roundtrip-sites.txt"
 FFLIBS=("$XB/libavformat/libavformat.a" "$XB/libavcodec/libavcodec.a" "$XB/libavutil/libavutil.a")
 
+# The pool arms' payload allocator and Capstone backend: the buffer-pool port's files,
+# unmodified. Compiled after FFmpeg, because libavutil/mem.h needs the generated avconfig.h.
+if [ -n "$POOL" ]; then
+  BPS="$APP_DIR/../buffer-pool/src"
+  POOLINC=(-I"$REPO_ROOT/capstone/runtime/include" -I"$BPS/shared" -I"$BPS/capstone-domain"
+           -I"$BPS/allocators/sublet" -I"$XB" -I"$SRC")
+  for f in shared/pool-allocator.c capstone-domain/payload-capabilities.c allocators/sublet/pool-leases.c; do
+    o="$RT/bp-$(basename "${f%.c}").o"
+    "$CLANG" "${FLAGS[@]}" "${POOLINC[@]}" -c "$BPS/$f" -o "$o"
+    RUNTIME+=("$o")
+  done
+fi
+
 # --- the program --------------------------------------------------------------------
-APPF=("${FLAGS[@]}" -I"$XB" -I"$SRC" -I"$APP_DIR/src/shared")
+APPF=("${FLAGS[@]}" "${POOLF[@]}" -I"$XB" -I"$SRC" -I"$APP_DIR/src/shared")
 "$CLANG" "${APPF[@]}" -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode.o"
 "$CLANG" "${ASM[@]}" -DCAPSTONE_DOMREQ_DATA="$STACK" -DCAPSTONE_DOMREQ_STACK="$STACK" \
   -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OUT/domreq.o"
@@ -238,14 +274,16 @@ echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 # --- safety fixtures (src/capstone-domain/ffapp_safety.c) ------------------------------
 # One image per fixture: a fault ends the emulator, so a faulting fixture reports nothing else.
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
-for fx in 1 2 3 4 5 6 7 8 9 10; do
+FIXTURES="1 2 3 4 5 6 7 8 9 10"
+[ -n "$POOL" ] && FIXTURES="$FIXTURES $(seq -s ' ' 11 17)"   # the pool fixtures
+for fx in $FIXTURES; do
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"
   "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_fx$fx.dom" \
     "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
     "$OUT/ffapp_safety_$fx.o" "${FFLIBS[@]}" "$ARCHIVE"
 done
-echo "safety fixture images ($HEAP heap): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
+echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
 
 # --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------
 # The compiler miscompiles an integer-valued pointer in a by-value aggregate (ISSUES.md

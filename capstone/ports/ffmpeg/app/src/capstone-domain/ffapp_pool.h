@@ -18,6 +18,22 @@
 
 void *__capstone_region(unsigned index);
 
+/* The runtime's exit hook, DEFINED here because of ISSUES C-56 (recorded and fixed on the
+ * runtime branches, not yet on dev): hostcall.c guards the hook with `if (__capstone_at_exit)`,
+ * and the address of an UNDEFINED weak symbol is not NULL in a domain -- these run
+ * position-independent with no load-time relocation, so auipc+addi yields the run-time address
+ * of link address 0 (image base - 0x10000), the guard passes, and exit() jumps there. The pool
+ * arms are the first code here to call exit() (ff2_fail); before this definition, fixture 17 on
+ * pool2 halted cause 2 at that address, three times, on one image. Once C-56's runtime fix
+ * (a weak default, called unconditionally) reaches this branch, this strong definition still
+ * overrides it and flushes stdout first. */
+int __capstone_at_exit(int status);
+int __capstone_at_exit(int status)
+{
+    fflush(stdout);
+    return status;
+}
+
 static void ffapp_pool_init(void)
 {
     ff2_set_mode(FFAPP_POOL_MODE);

@@ -1,0 +1,71 @@
+diff --git a/libavutil/buffer.c b/libavutil/buffer.c
+index 9ee4f32..a5362a4 100644
+--- a/libavutil/buffer.c
++++ b/libavutil/buffer.c
+@@ -72,7 +72,7 @@ AVBufferRef *av_buffer_create(uint8_t *data, size_t size,
+ 
+ void av_buffer_default_free(void *opaque, uint8_t *data)
+ {
+-    ff2_payload_free(data);
++    av_free(data);
+ }
+ 
+ AVBufferRef *av_buffer_alloc(size_t size)
+@@ -80,13 +80,13 @@ AVBufferRef *av_buffer_alloc(size_t size)
+     AVBufferRef *ret = NULL;
+     uint8_t    *data = NULL;
+ 
+-    data = ff2_payload_alloc(size);
++    data = av_malloc(size);
+     if (!data)
+         return NULL;
+ 
+     ret = av_buffer_create(data, size, av_buffer_default_free, NULL, 0);
+     if (!ret)
+-        ff2_payload_free(data);
++        av_freep(&data);
+ 
+     return ret;
+ }
+@@ -377,17 +377,38 @@ static void pool_release_buffer(void *opaque, uint8_t *data)
+ 
+ /* allocate a new buffer and override its free() callback so that
+  * it is returned to the pool on free */
++/* CAPSTONE (FFmpeg app port): a pool buffer's payload is a lease from the pool payload
++ * allocator (buffer-pool port, patch 0002), and it goes back there when the pool frees it.
++ * Only POOL buffers: the replay routed av_buffer_alloc and av_buffer_default_free themselves
++ * through that allocator, which in a whole program also catches every non-pool buffer
++ * (demuxed packets, av_buffer_realloc, av_buffer_create with the default free) and fails on
++ * the first of them. Those stay on the program heap here. */
++static void ff2_pool_payload_free(void *opaque, uint8_t *data)
++{
++    ff2_payload_free(data);
++}
++
+ static AVBufferRef *pool_alloc_buffer(AVBufferPool *pool)
+ {
+     BufferPoolEntry *buf;
+     AVBufferRef     *ret;
++    uint8_t         *data;
+ 
+     av_assert0(pool->alloc || pool->alloc2);
++    /* patch 0001 already refuses any other allocator at pool creation */
++    if (pool->alloc2 || (pool->alloc != av_buffer_alloc && pool->alloc != av_buffer_allocz))
++        ff2_fail(126);
+ 
+-    ret = pool->alloc2 ? pool->alloc2(pool->opaque, pool->size) :
+-                         pool->alloc(pool->size);
+-    if (!ret)
++    data = ff2_payload_alloc(pool->size);
++    if (!data)
++        return NULL;
++    if (pool->alloc == av_buffer_allocz)
++        memset(data, 0, pool->size);   /* as av_buffer_allocz: zeroed when first made */
++    ret = av_buffer_create(data, pool->size, ff2_pool_payload_free, NULL, 0);
++    if (!ret) {
++        ff2_payload_free(data);
+         return NULL;
++    }
+ 
+     buf = av_mallocz(sizeof(*buf));
+     if (!buf) {
