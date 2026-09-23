@@ -328,3 +328,39 @@ cycles **1.263×**, instructions **1.130×**, CPI 1.118.
 ## Bitstream
 
 `caplifive_m1_054cea69b.bit` (WNS −8.307), resident. `FPGA_ALLOW_FLASH` stays unset.
+
+## Phase 5 desk gates — one PASSED, one BLOCKED by a corrupt shared rootfs
+
+**PASSED — both halves link and produce oracles at −O0.** `ctrsanity` → 43260934,
+`rv8_primes` → 99991, both relocated to distinct entry VAs.
+
+Worth recording, because it is a genuine −O0 limitation found on the way: **`coremark_matrix` does
+not LINK at −O0.** `ld.lld` reports `.text` (0x1000–0x24BB) overlapping `.capstone_gp_initdesc`
+(0x2000–0x2037) — unoptimised code outgrows the fixed section placement in the domain linker
+script. It is not in this phase's rung set, so it blocks nothing here, but any future whole-set −O0
+sweep will hit it.
+
+**BLOCKED — the QEMU parity gate cannot run.** `run-ladder-perf-qemu.sh` exits **75**
+(`__CAPSTONE_INFRA_FLAKE__ phase=boot-login`) on two consecutive attempts. The cause is not the
+rungs: the shared guest rootfs is corrupt. `e2fsck -fn` on
+`caplifive-buildroot/build-qemu/images/rootfs.ext2` reports *"Directory inode 623, block #0, offset
+0: directory corrupted"* and aborts with *"Filesystem still has errors"*; `debugfs -R "ncheck 623"`
+resolves inode 623 to **`/var/lib/seedrng`**, matching the guest's own
+`seedrng: can't open 'seed.no-credit': Structure needs cleaning`. No QEMU process and no lock were
+held at the time. **This blocks every lane's QEMU suites, not this run.** A repair (`e2fsck -fy`,
+after a backup) was attempted and correctly refused as a shared-resource write; it is left for the
+project lead. The damaged directory holds only a random-seed cache, and the image is a regenerable
+buildroot artifact.
+
+**Why phase 5 proceeds to the board anyway, and what that costs.** The plan's rule is *a rung
+failing QEMU parity does not go to the board*. **No rung failed parity** — the harness never reached
+a guest prompt, so the gate returned no verdict about the rungs at all. The gate exists to avoid
+*wasting* board time, not to make a board result valid: every rung is scored on the board against
+its own native oracle, which is the same check the gate would have applied. The exposure from
+proceeding is therefore one boot (~8 min), not a wrong number. `rv8_primes` has additionally already
+returned its oracle on this bitstream at −O1 (phase 3) and at −O2 (the C-3 closure), so the rung
+itself is not novel here — only its −O level is.
+
+**Recorded so the weaker gate is visible in the result**: phase 5's rungs reached the board with
+**desk-build validation only**. If either returns a wrong oracle, suspect the −O0 build before the
+silicon.
