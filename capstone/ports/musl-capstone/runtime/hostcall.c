@@ -479,6 +479,16 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                       HC_PATH_ACCESS_FLAG_EXISTS);
 
   case SYS_fstat: {
+    /* stdout and stderr exist in every domain -- the service writes them --
+       so fstat describes them: a character device, and not a terminal (the
+       tty ioctl answers ENOTTY). Answering EBADF made programs that check a
+       descriptor before using it conclude they have no output: CPython sets
+       sys.stdout and sys.stderr to None that way, and print() then writes
+       nothing, silently. stdin has no service here and stays EBADF. */
+    if ((long)a == 1 || (long)a == 2) {
+      hc_fill_stat((struct stat *)b, 0, S_IFCHR | 0620);
+      return 0;
+    }
     struct hc_file *f = hc_slot((long)a);
     if (!f)
       return -EBADF;
@@ -517,9 +527,14 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return 0;
 
   /* open() issues this once, for O_CLOEXEC, and discards the result. There are
-     no other processes here for a descriptor to leak into. */
+     no other processes here for a descriptor to leak into. It does answer
+     whether a descriptor EXISTS, though: musl's fstat asks F_GETFD after an
+     EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
+     and ENOENT, so fstat(0) reported the wrong error. */
   case SYS_fcntl:
-    return 0;
+    if ((long)a == 1 || (long)a == 2 || hc_slot((long)a))
+      return 0;
+    return -EBADF;
 
   /* A domain has exactly one thread, and 1 is its identifier. This is not an
      invented value in the way a fabricated st_dev would be: nothing outside the
