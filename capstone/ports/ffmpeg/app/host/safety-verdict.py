@@ -97,9 +97,16 @@ def classify(sec, n):
             return ('FAULT-BEFORE-TOUCH', kind, text), info
         if kind == 'poolfail':
             # a refusal, not a fault: the pool code rejected what it was given and the program
-            # exited with the code. After the touch, and with no return line, like a fault.
+            # exited with the code. After the touch, and with no return line, like a fault --
+            # AND the domain must then have ended CLEANLY, the host reporting capstone_main equal
+            # to the code. The first pool run printed the refusal and then crashed in the exit
+            # path (an undefined weak hook, see ffapp_pool.h), and a refusal line alone passed.
             if returned is not None:
                 return ('POOLFAIL-AFTER-RETURN', str(addr), text), info
+            if any(HALT.search(l) for l in sec[i:]):
+                return ('POOLFAIL-THEN-HALT', str(addr), text), info
+            if done != addr:
+                return ('POOLFAIL-NO-CLEAN-EXIT', str(addr), f'{text}; capstone_main = {done}'), info
             return ('POOLFAIL', str(addr), text), info
         if returned is not None:
             return ('FAULT-AFTER-RETURN', kind, text), info

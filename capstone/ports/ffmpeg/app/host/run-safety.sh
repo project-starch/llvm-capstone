@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run safety fixtures of one heap arm in ONE boot and judge them against the pre-registered
-# predictions.     usage: run-safety.sh <level0|shrink|sublet> <fixture>...
+# predictions.     usage: run-safety.sh <level0|shrink|sublet|pool0|pool2> <fixture>...
 #
 # A capability fault inside a domain ENDS THE EMULATOR (capstone-qemu cpu_helper.c prints
 # "domain halted by capability fault" and exits), so a boot can hold at most one fixture
@@ -18,10 +18,11 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 APP_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 source "$APP_DIR/../../../tests/capstone-test-env.sh"
 
-ARM=${1:?arm: level0, shrink or sublet}; shift
+ARM=${1:?arm: level0, shrink, sublet, pool0 or pool2}; shift
 [ $# -gt 0 ] || { echo "no fixtures given" >&2; exit 2; }
 case $ARM in level0) DOM_DIR=domain ;; shrink) DOM_DIR=domain-shrink ;; sublet) DOM_DIR=domain-sublet ;;
-  *) echo "arm must be level0, shrink or sublet" >&2; exit 2 ;; esac
+  pool0|pool2) DOM_DIR=domain-sublet-$ARM ;;   # FFAPP_HEAP=sublet FFAPP_POOL=0|2
+  *) echo "arm must be level0, shrink, sublet, pool0 or pool2" >&2; exit 2 ;; esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 DOM="$WORK/$DOM_DIR"
 SHARE="$WORK/share-safety"
@@ -44,11 +45,12 @@ done
 [ -f "$DOM/ffapp.user" ] || { echo "missing $DOM/ffapp.user; run FFAPP_HEAP=$ARM build-domain.sh" >&2; exit 2; }
 rm -rf "$SHARE"; mkdir -p "$SHARE"
 cp "$DOM/ffapp.user" "$SHARE/"
-RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user"
+# images load from the guest's /tmp, not through 9p-backed mmap faults (see run-qemu.sh)
+RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/*.dom /tmp/"
 for fx in "$@"; do
   [ -f "$DOM/ffapp_fx$fx.dom" ] || { echo "missing $DOM/ffapp_fx$fx.dom" >&2; exit 2; }
   cp "$DOM/ffapp_fx$fx.dom" "$SHARE/"
-  RUN="$RUN; echo __FFAPP_BEGIN_FX${fx}__; /tmp/ffapp.user /mnt/host/ffapp_fx$fx.dom 0; echo __FFAPP_END_FX${fx}__"
+  RUN="$RUN; echo __FFAPP_BEGIN_FX${fx}__; /tmp/ffapp.user /tmp/ffapp_fx$fx.dom 0; echo __FFAPP_END_FX${fx}__"
 done
 ( cd "$SHARE" && sha256sum ffapp.user ffapp_fx*.dom ) > "$LOG.sha256"
 

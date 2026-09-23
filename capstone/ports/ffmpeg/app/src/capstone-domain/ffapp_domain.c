@@ -28,13 +28,22 @@ extern char **__environ;
 #ifdef FFAPP_SUBLET_HEAP
 void __capstone_sublet_heap_stats(unsigned long out[9]);
 #endif
+#ifdef FFAPP_POOL_MODE
+#include "ffapp_pool.h"
+#endif
 static char *ffapp_empty_environ[1] = { 0 };
 
 int capstone_main(void)
 {
     __environ = ffapp_empty_environ;
     setvbuf(stdout, NULL, _IOLBF, 0);
+#ifdef FFAPP_POOL_MODE
+    ffapp_pool_init();
+#endif
     int status = ffapp_run(FFAPP_INPUT, FFAPP_STOP_AT);
+#ifdef FFAPP_POOL_MODE
+    ffapp_pool_report();
+#endif
 #ifdef FFAPP_SUBLET_HEAP
     /* What the revoking heap spent: split + mrev is the revocation-node count, which silicon
        caps at 65,532 for the life of the machine (runtime/sublet_heap.c). */
