@@ -39,12 +39,28 @@
  *                     through the FIRST. Added after fixture 8 showed the global's bounds
  *                     covering a merged group (.L_MergedGlobals), not the object alone: if the
  *                     compiler merges the pair, per-object global bounds do not hold for it.
+ *
+ * FFmpeg's OWN pools (built only on the pool arms, build-domain.sh FFAPP_POOL). These go
+ * through the real API -- av_buffer_pool_*, av_refstruct_* -- which a pool returns to and
+ * reissues from WITHOUT calling free, so no heap arm can see them:
+ *  11 pool_len        an AVBufferPool buffer's capability length (setup control: returns)
+ *  12 pool_after_ret  a pool buffer read after av_buffer_unref returned it to the pool
+ *  13 pool_reuse      ... after the pool reissued it to a new get that wrote a new pattern
+ *  14 pool_one_past   one byte past a 64-byte pool buffer
+ *  15 rs_after_ret    a refstruct pool object read after av_refstruct_unref returned it
+ *  16 rs_underflow    one byte BELOW a refstruct object, where stock keeps its RefCount
+ *  17 rs_stale_unref  a stale refstruct pointer unref'd after its entry went to a new owner:
+ *                     does the live owner lose its reference (a third get then aliases it)?
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "libavutil/buffer.h"
 #include "libavutil/mem.h"
+#include "libavutil/refstruct.h"
+#ifdef FFAPP_POOL_MODE
+#include "ffapp_pool.h"
+#endif
 
 #ifndef FFAPP_FIXTURE
 #error "FFAPP_FIXTURE selects the fixture (1..9)"
@@ -248,6 +264,97 @@ static int fixture(void)
     printf("FFAPP-FIX 10 returned gb[0]-through-ga=%02x (0x5b = the second array's byte)\n", v);
     return FX_MARK(v);
 
+#elif FFAPP_FIXTURE >= 11 && FFAPP_FIXTURE <= 14
+    AVBufferPool *pool = av_buffer_pool_init(64, av_buffer_alloc);
+    AVBufferRef *r = pool ? av_buffer_pool_get(pool) : NULL;
+    if (!r)
+        return FX_MARK(0xE0001);
+    unsigned char *d = r->data;
+    fill(d, 0xA0, 64);
+    show("p", d);
+    unsigned long d_addr = cur(d);
+#if FFAPP_FIXTURE == 11
+    v = ffapp_fix_touch(d, 63) == 0xA0 + 63;
+    printf("FFAPP-FIX 11 in-bounds %s\n", v ? "ok" : "WRONG");
+    return FX_MARK(v ? 0x1 : 0xE0002);
+#elif FFAPP_FIXTURE == 14
+    idx = 64;
+    touching(d_addr + 64);
+    v = ffapp_fix_touch(d, idx);
+    printf("FFAPP-FIX 14 returned p[64]=%02x\n", v);
+    return FX_MARK(v);
+#else
+    av_buffer_unref(&r);                /* back to its pool: not freed */
+#if FFAPP_FIXTURE == 12
+    idx = 0;
+    touching(d_addr);
+    v = ffapp_fix_touch(d, idx);
+    printf("FFAPP-FIX 12 returned p[0]=%02x (0xa0 = its own byte, still readable)\n", v);
+    return FX_MARK(v);
+#else
+    AVBufferRef *r2 = av_buffer_pool_get(pool);
+    if (!r2)
+        return FX_MARK(0xE0002);
+    fill(r2->data, 0x5B, 64);
+    show("q", r2->data);
+    unsigned same = cur(r2->data) == d_addr;
+    printf("FFAPP-FIX 13 same-address=%u\n", same);
+    idx = 0;
+    touching(d_addr);
+    v = ffapp_fix_touch(d, idx);
+    printf("FFAPP-FIX 13 returned p[0]=%02x (0x5b = the new owner's byte)\n", v);
+    return FX_MARK((same << 8) | v);
+#endif
+#endif
+
+#elif FFAPP_FIXTURE == 15 || FFAPP_FIXTURE == 17
+    AVRefStructPool *rp = av_refstruct_pool_alloc(64, 0);
+    unsigned char *o = rp ? av_refstruct_pool_get(rp) : NULL;
+    if (!o)
+        return FX_MARK(0xE0001);
+    fill(o, 0xA0, 64);
+    show("p", o);
+    unsigned long o_addr = cur(o);
+    unsigned char *stale = o;
+    av_refstruct_unref(&o);             /* back to its pool */
+#if FFAPP_FIXTURE == 15
+    idx = 0;
+    touching(o_addr);
+    v = ffapp_fix_touch(stale, idx);
+    printf("FFAPP-FIX 15 returned p[0]=%02x\n", v);
+    return FX_MARK(v);
+#else
+    unsigned char *o2 = av_refstruct_pool_get(rp);
+    if (!o2)
+        return FX_MARK(0xE0002);
+    fill(o2, 0x5B, 64);
+    show("q", o2);
+    printf("FFAPP-FIX 17 q-took-p's-address=%u\n", cur(o2) == o_addr);
+    touching(o_addr);                   /* the "touch" is the stale unref */
+    av_refstruct_unref(&stale);
+    unsigned char *o3 = av_refstruct_pool_get(rp);
+    if (!o3)
+        return FX_MARK(0xE0003);
+    show("r", o3);
+    unsigned alias = cur(o3) == cur(o2);
+    if (alias)
+        fill(o3, 0x77, 64);             /* the new owner writes; the live o2 sees it */
+    v = ffapp_fix_touch(o2, 0);
+    printf("FFAPP-FIX 17 returned r-aliases-q=%u q[0]=%02x\n", alias, v);
+    return FX_MARK((alias << 8) | v);
+#endif
+
+#elif FFAPP_FIXTURE == 16
+    unsigned char *o = av_refstruct_allocz(64);
+    if (!o)
+        return FX_MARK(0xE0001);
+    show("p", o);
+    idx = -1;
+    touching(cur(o) - 1);
+    v = ffapp_fix_touch(o, idx);
+    printf("FFAPP-FIX 16 returned p[-1]=%02x (a byte of the RefCount header, in stock)\n", v);
+    return FX_MARK(v);
+
 #else
 #error "unknown FFAPP_FIXTURE"
 #endif
@@ -257,6 +364,9 @@ int capstone_main(void)
 {
     __environ = ffapp_empty_environ;
     setvbuf(stdout, NULL, _IOLBF, 0);
+#ifdef FFAPP_POOL_MODE
+    ffapp_pool_init();
+#endif
     printf("FFAPP-FIX %d begin\n", FFAPP_FIXTURE);
     int status = fixture();
     printf("FFAPP-FIX %d mark=%x\n", FFAPP_FIXTURE, status);

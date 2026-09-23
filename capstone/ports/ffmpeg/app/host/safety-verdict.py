@@ -10,6 +10,7 @@ log) is classified as exactly one of:
   RETURN <mark>   the host's DONE line reports capstone_main = <mark>, and no fault line
   FAULT <kind>    a capability-fault line, AFTER the fixture's "FFAPP-FIX <n> touch" line,
                   with no "FFAPP-FIX <n> returned" line; kind is oob / temporal / other
+  POOLFAIL <code> the pool arms' refusal line "FFAPP-POOL fail <code>", after the touch line
   NOTHING         neither -- the image did not run, or died some other way. Always a failure.
 
 A FAULT is attributed to the touch only if the touch line precedes it. An oob FAULT must
@@ -23,8 +24,13 @@ import re
 import sys
 
 OOB = re.compile(r'Cap mem access OOB:.*?addr = ([0-9a-f]+), size = (\d+), bounds = \(([0-9a-f]+), ([0-9a-f]+)\)')
-TEMPORAL = re.compile(r'Cap mem access (?:on revoked capability|requires capability)'
-                      r'(?:.*?value = ([0-9a-f]+))?')
+TEMPORAL = re.compile(r'Cap mem access requires capability(?:.*?value = ([0-9a-f]+))?')
+# A revoked capability still held in a REGISTER (never reloaded, so still tagged) faults at the
+# access with this line instead; its cursor is the address the access used (imm is 0 at every
+# fixture's touch). Added with the pool fixtures, before any pool run.
+REVOKED = re.compile(r'Cap mem access on revoked capability:.*?imm = (-?\d+)(?:, cursor = ([0-9a-f]+))?')
+# The pool arms' refusals: buffer-pool's ff2_fail, printed by the app's glue before it exits.
+POOLFAIL = re.compile(r'^FFAPP-POOL fail (\d+)$')
 # capstone-qemu reloads a revoked capability UNTAGGED, so a touch that does pointer arithmetic
 # first faults there, before any memory access, with this line instead of a "Cap mem access"
 # one. Added 2026-09-23 after the first sublet boot: fixture 4 faulted in ffapp_fix_touch at
@@ -73,6 +79,12 @@ def classify(sec, n):
             elif TEMPORAL.search(line):
                 v = TEMPORAL.search(line).group(1)
                 fault = (i, 'temporal', int(v, 16) if v else None, line.strip())
+            elif REVOKED.search(line):
+                m = REVOKED.search(line)
+                addr = int(m.group(2), 16) + int(m.group(1)) if m.group(2) else None
+                fault = (i, 'temporal', addr, line.strip())
+            elif POOLFAIL.match(line.strip()):
+                fault = (i, 'poolfail', int(POOLFAIL.match(line.strip()).group(1)), line.strip())
             elif UNTAGGED_OP.search(line):
                 fault = (i, 'temporal-untagged-op', int(UNTAGGED_OP.search(line).group(2), 16), line.strip())
             elif HALT.search(line):
@@ -83,6 +95,12 @@ def classify(sec, n):
         i, kind, addr, text = fault
         if touch is None or i < touch:
             return ('FAULT-BEFORE-TOUCH', kind, text), info
+        if kind == 'poolfail':
+            # a refusal, not a fault: the pool code rejected what it was given and the program
+            # exited with the code. After the touch, and with no return line, like a fault.
+            if returned is not None:
+                return ('POOLFAIL-AFTER-RETURN', str(addr), text), info
+            return ('POOLFAIL', str(addr), text), info
         if returned is not None:
             return ('FAULT-AFTER-RETURN', kind, text), info
         if kind == 'oob' and addr != target:
@@ -138,6 +156,8 @@ def main(argv):
                                            or val == detail)
             elif kind == 'FAULT':
                 hit = got == 'FAULT' and (val == 'any' or val == detail)
+            elif kind == 'POOLFAIL':
+                hit = got == 'POOLFAIL' and val == detail
             elif kind == 'LEN':
                 hit = info['len'] is not None and (info['len'] > 65536 if val == 'arena' else info['len'] == int(val))
             else:
