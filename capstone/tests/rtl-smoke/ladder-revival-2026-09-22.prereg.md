@@ -170,3 +170,47 @@ Two changes, both made before this run:
 - Both halves are built from the same `ladder-rungs.spec` at `-O1` with `LADDER_OPT` unset, and the
   baseline half's own `capability-instructions=0` check must pass.
 - Oracles frozen: `ctrsanitys = 3688591409`, QEMU parity exit 0 before any board time.
+
+---
+
+# Phase 3 addendum — re-measure the EIGHT PUBLISHED rows on this bitstream (2026-09-23, before the run)
+
+Phase 2 produced ten rungs of overhead against a clean bare-metal baseline but could not merge them
+into §2, because that table's control reads **1.000×** and this bitstream's reads **1.167×**. One
+consistent table settles it. All eight published baselines were already captured by the 2026-09-22
+bare-metal sweep at `15/15, spread 0`, and seven of them reproduce the published denominators exactly,
+so only the capability half is missing for five rungs: `beebs_cnt`, `beebs_bs`, `beebs_recursion`,
+`beebs_cover`, `rv8_primes`.
+
+## Ordering, and the one rung expected to fail
+
+`LADDER_ONE_BOOT=1` runs the sweep in one boot, so a wedge costs every rung after it. **`rv8_primes`
+goes last**, alone in that position, because the published table's own footnote says it *"HANGS at
+−O1 on this silicon and is measurable only at −O0"* and the spec now carries it at −O1. QEMU parity
+cannot discriminate here — it passed at −O1 — because the documented failure is a silicon one.
+
+## Pre-registered
+
+1. **`beebs_cnt`, `beebs_bs`, `beebs_recursion`, `beebs_cover` return their oracles.** All four have a
+   clean baseline and a published capability row, so a failure would be a regression against a
+   measurement that already exists.
+2. **Their cycle ratios move UP relative to the published table**, in the same direction and rough
+   proportion as the control's 1.000 → 1.167. That is the hypothesis this run exists to test: if the
+   control's shift is a uniform property of capability-mode execution on this bitstream, every row
+   should carry it. **If the rows move by materially different amounts, the control's 16.7 % is not a
+   uniform penalty and no single correction can reconcile the two tables.**
+3. **Deliberately unpredicted: `rv8_primes` at −O1.** Either it hangs, confirming the footnote holds on
+   this bitstream, or it returns, which retires a documented platform limitation. Both are results.
+4. **Instruction ratios stay within a few percent of the published ones**, since both halves are built
+   from one spec at one `-O`. A large instruction-ratio move would mean the comparison is measuring
+   codegen drift rather than silicon.
+
+## Refutation and VOID
+
+- A rung returning a value that is **not** its oracle is a wrong-answer result, reported as such and
+  never counted as a measurement.
+- If `rv8_primes` hangs, every rung after it is lost — there are none, by construction.
+- Baselines are **not** re-run: they are the 2026-09-22 bare-metal figures, `15/15, spread 0`, which
+  reproduce the published denominators to the digit. Re-using them is what makes this a one-boot job.
+- Oracles frozen and QEMU parity exit 0 before any board time: `beebs_cnt` 2356896837, `beebs_bs`
+  887447230, `beebs_recursion` 1579141629, `beebs_cover` 1993178309, `rv8_primes` 99991.
