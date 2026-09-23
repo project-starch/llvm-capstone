@@ -28,10 +28,11 @@
 #                             (a generic musl-domain host: file service, stdout,
 #                             exit status)
 #   capstone-cma.ko           the kernel module with CMA-backed domain blocks. The
-#                             image needs ~60 MiB (48 MiB of it the heap arena);
-#                             the pinned module stops at 4 MiB. Built from
-#                             $CPY_MODCAPSTONE_SRC, which must carry that change
-#                             (caplifive-buildroot domain/1-cma-large-domains).
+#                             image needs ~60 MiB (48 MiB of it the heap arena),
+#                             and the buddy allocator stops at 4 MiB. Built from
+#                             the caplifive-buildroot submodule, pinned at its
+#                             domain/1-cma-large-domains branch, or from
+#                             $CPY_MODCAPSTONE_SRC; either must carry that change.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
