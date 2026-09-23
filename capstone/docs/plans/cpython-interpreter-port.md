@@ -84,5 +84,7 @@ image size too (commit `10322a2fb795`, by its subject), so this is not CPython's
 
 ## Next action
 
-Compiler lane: A1 and A2, reproducers above. Lead: B1 vs B2, and R1. Port: measure where the
+Compiler lane: A1 and A2, reproducers above. Lead: the four questions in
+[DECISIONS-WAITING-2026-09-23-cpython-port.md](DECISIONS-WAITING-2026-09-23-cpython-port.md)
+(R1, B1 vs B2, A1/A2 priority, C3). Port: measure where the
 1.30x code size goes (C2), then what a minimal interpreter needs (R2).
