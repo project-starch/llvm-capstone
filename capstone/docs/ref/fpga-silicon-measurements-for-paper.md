@@ -246,7 +246,9 @@ subsection but one). Two things bound it without explaining it:
 - `beebs_aha_mont64` runs half a `ctrsanity` of straight-line compute and reads 1.010×;
 - `rv8_primes` runs 3.2 M instructions and reads 1.005×.
 
-So it is not a flat per-instruction silicon tax on capability mode. Whether some of it hides inside
+So it is not a flat per-instruction silicon tax on capability mode. **Phase 6 narrows it** (subsection "Phase 6 …"). On identical instructions, the control's loop
+costs 7 cycles/iteration in every rung except the one that both starts at `…1a8` and runs first in
+the boot, which costs 6. Which of those two it is remains open (phase 7). Whether some of it hides inside
 the stall-dominated rows is **open**. That question is phase 6 of
 `ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
 control's reading beside the table.
@@ -442,6 +444,12 @@ single control rung**, which matters because the control is the one row that doe
 
 ### `ctrsanity`'s +16.7 % is a SATURATING CPI step, and it is that kernel's, not this silicon's
 
+> **Heading SUPERSEDED by phase 6 below.** The step is not a length effect. The one fast rung differs
+> from the slow ones in its hot loop's start address (`…1a8` vs `…1ac`, identical instructions) **and**
+> in always running first in the boot at VA `0x10000`. Either would make this a property of this
+> silicon's layout or position handling rather than of the kernel. "Saturating" was a fixed
+> ~250-cycle term being diluted. The table below is still correct as data.
+
 Its instruction ratio is 1.000 in both vintages and its baseline is byte-identical to July, so the
 capability half alone moved: **600,309 → 700,268 cycles for the same work.** The same kernel at three
 lengths, all in one boot (`ladder-revival-2026-09-22/phase4-control-length-series.result-lines.txt`):
@@ -469,6 +477,67 @@ That it is *this kernel's* property and not the bitstream's is what the eight ro
 **What this does NOT say.** Nothing here explains the step. Three points characterise its shape and
 its saturation; they do not identify a mechanism, and the pre-registration forbade offering one
 afterwards from these points alone. **Quote the rows above; do not quote a cause.**
+
+### Phase 6 (2026-09-23): the step is not a length effect. It is loop address OR boot position; untied
+
+Six lengths were run in one boot per half (`ladder-revival-2026-09-22/phase6-control-length-series.result-lines.txt`).
+The run is valid: every baseline CPI is 1.2000–1.2029, and the three lengths measured before
+reproduce to within 0.016 %.
+
+| length | cycle ratio | capability cycles − 1.4 × instret | capability loop starts at |
+|---:|---:|---:|---|
+| 5,029 | 1.0449 | −730 (runs at **1.2** CPI + 276) | `0x101a8` (8-byte aligned) |
+| 20,030 | **1.1768** | 249 | `0x201ac` |
+| 100,030 | 1.1687 | 249 | `0x301ac` |
+| 250,030 | 1.1675 | 251 | `0x401ac` |
+| 500,030 | 1.1671 | 270 | `0x501ac` |
+| 2,000,030 | 1.1668 | 270 | `0x601ac` |
+
+**The pre-registered onset model is REFUTED.** It predicted 1.1365 at 20k; the board read 1.1768, a
+miss of +0.040, and 100k also misses (+0.0078). A "first ~3.7k instructions free" prefix does not
+exist: at 20k **every** iteration pays. The other pre-registered labels do not describe the data
+either. 20k exceeds 1.172 (the "bump" threshold), but only because a fixed ~250 cycles is diluted less
+at short length; it is not a transient.
+
+**What the data do show exactly:**
+- **At every length ≥ 20k,** capability cycles = **1.4000 × instret + ~250**. That is **7 cycles per
+  5-instruction iteration**, against the baseline's 6, on byte-matched work.
+- **At 5k** the capability loop runs at the baseline's **6 cycles per iteration**.
+- **The boundary is a property of the binary, not of elapsed time.** `CTRSANITY_N` is a compile-time
+  constant: 1000 fits a 12-bit `li`, while 4000 and above need `lui`+`addiw`. That one extra
+  instruction moves the otherwise **instruction-identical** 20-byte loop (`srai/xor/addi/add/bne`,
+  registers renamed) from `…1a8` to `…1ac`.
+
+**And a confound.** The one fast rung, `ctrsanitys`, has also been **first in the boot** in every
+run so far. So it is always at entry VA `0x10000`, and every slow rung sits at `0x20000` or above.
+"Loop starts 8-byte aligned" and "first rung / lowest VA" are perfectly confounded in this data. It
+has **not** been shown that the 16.7 % tracks loop alignment rather than position; the two
+explanations are tied.
+
+**What this does NOT establish:**
+- **A mechanism.** Fetch-block counting does not separate the two addresses.
+- **That alignment alone is the variable.** Nearby code differs too: `blez a3` vs `blez a4`.
+- **Why the baseline does not show it.** Its RVC-compressed 14-byte loop runs at 6 cycles/iteration at
+  `…200`, `…294` and `…2de` alike.
+
+**Consequence for the CURRENT table, stated as a risk and not a correction:**
+- Every capability-half cycle count may carry a layout term of up to one cycle per hot-loop iteration,
+  depending on where its loop happens to land.
+- The July control reading 1.000× is consistent with its loop having landed aligned. This was not
+  checked; that image is gone.
+- It also fits the 2026-07-26 finding that four added instructions flipped a rung, and `cover`'s
+  0.951×.
+- Until the pair below is run, read per-kernel differences of a few percent as within layout noise.
+
+**Next, phase 7 (to be pre-registered before it runs):** break the confound with a 2×2. Two
+variables, each changed alone:
+- **alignment:** the same kernel and N built with the loop at `…1a8` and at `…1ac`, e.g. by
+  loop-alignment padding in one build only;
+- **position:** each built image placed both first and not-first in the boot.
+
+If the aligned build is fast wherever it sits, it is alignment; if whichever rung is first is fast, it
+is position. After that, run both images in RTL simulation (E2b, same RTL). The simulation trace, not
+these points, is where a mechanism can come from.
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
