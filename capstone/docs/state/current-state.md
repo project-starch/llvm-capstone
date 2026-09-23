@@ -2,7 +2,48 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-22 — R-35 registered, and Stage 0 of its fix is ready for synthesis
+## 2026-09-23 — R-35 is fixed in simulation at `f83fe9342`; it is NOT yet deployable, and neither synthesized hash is
+
+**Current fix: `capstone-ariane` commit `f83fe9342`, branch `r35-m1-revnode-cache`, pushed. It has
+NOT been synthesized.** It replaces the LSU's single core-wide revnode tracker with a tagged 4-way ×
+64-set positive validity cache, filled **only** by two passive taps on the rev-node unit's own
+node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
+and was last seen live. Acceptance fixture (`r35-rotate-stale.S`): exactly **7 traps**, the three
+revoked accesses trap 25, both live-alias controls still return data. Lint at the committed baseline.
+
+**Neither synthesized hash is a reflash candidate:**
+
+| hash | what it is | routed WNS | failing endpoints | routed LUTs |
+|---|---|---|---|---|
+| `054cea69b` | flashed base | −8.307 | 51.76 % | 168,757 |
+| `247b76896` | Stage 0 (tracker reorder) | **−12.900** | 57.25 % | 169,953 |
+| `079dc720a` | first cache | **−14.415** | 60.82 % | **192,642 = 94.53 %** |
+
+**The cheap-looking edit was the expensive one.** Stage 0 — 32 lines, zero new signal declarations —
+cost **4.593 ns**; the entire first cache cost 1.515 ns more. A before-audit localized Stage 0's cost to
+its **LSU** half (the post-adopt value fed `cap_exception` combinationally); every CPMP consumer reads
+the registered value, so the CPMP half is flop-to-flop into 16 endpoints. Loops stayed at 1 on every
+build: these are path-depth costs, not new cycles. The first cache's LUTs came from describing a
+crossbar — a `_d`/`_q` pair rebuilt by dynamic index every cycle, about 90 LUTs per entry.
+
+**All of these costs were invisible to lint:** nine counters at exact baseline and `UNOPTFLAT` unmoved at
+40, on every hash.
+
+**The register-file rebuild (`6ee277cc3`) introduced an authority escape — R-35's own class — closed at
+`f83fe9342`.** An adversarial after-audit found it with a microtest built from verbatim extracts plus
+mutants as positive controls. **The acceptance fixture returned exactly 7 traps both before and after the
+fix**: it cannot see same-cycle coincidences. Do not treat a passing fixture as evidence about paths it
+does not reach.
+
+**Next:** synthesize `f83fe9342` against pre-registered area and slack predictions (see the plan). The
+reflash, and the board run after it, are the lead's call.
+
+**Do NOT:** flash `079dc720a` — at −14.4 ns and 60.82 % failing endpoints a flake would be
+indistinguishable from the fix not working. Do NOT revert the CPMP half of Stage 0 to compare the
+registered value as a timing "fix" — it admits a persistent false ALLOW (entry adopts Y while a
+broadcast names Y; the compare against the stale X misses; the entry vouches for a dead Y forever).
+
+## 2026-09-22 — R-35 registered, and Stage 0 of its fix is ready for synthesis — **SUPERSEDED 2026-09-23: Stage 0 was synthesized and is a 4.593 ns regression, and the "Stage 1+2 / Stage C refill" framing below was replaced by the positive cache. See above.**
 
 **R-35 — a REVOKED capability still reads and writes the storage its object gave up, and the access
 does not trap.** Root-caused at `054cea69b` to `load_store_unit.sv`'s single core-wide revnode

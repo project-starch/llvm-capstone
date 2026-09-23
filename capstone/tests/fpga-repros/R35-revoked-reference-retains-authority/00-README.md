@@ -8,7 +8,31 @@ on a **single core-wide tracked revnode id**, and an access presenting a differe
 as valid**. See "ROOT CAUSE" below. Bounds and permissions survive because they are read from the
 capability's own metadata, which is why this path enforces bounds and not revocation.
 
-**FIX VALIDATED IN SIMULATION (2026-09-22), NOT YET SYNTHESISED AND NOT ON SILICON.**
+**CURRENT STATUS (2026-09-23): the fix is `capstone-ariane` `f83fe9342`, branch `r35-m1-revnode-cache`.
+It is correct in simulation and has NOT been synthesized, so it is not yet a reflash candidate.** It
+keeps the positive-validity-cache design below but rebuilds its access structure as an ordinary
+register file — no `_d` array, narrow per-set write enables, a lookup that reads the registered array,
+and the same-cycle invalidation as one 16-bit comparator — which removes the crossbar that made
+`079dc720a` unimplementable. Geometry is deliberately unchanged at 4 ways × 64 sets. Acceptance fixture:
+**exactly 7 traps**, the three revoked accesses trapping 25 and both live-alias controls still returning
+`0x005b5b5b5b5b5b5b`. Lint at the committed baseline.
+
+**A worked example of a fixture blind to what it certifies.** The first register-file rebuild,
+`6ee277cc3`, introduced an authority escape of **this issue's own class**: its invalidate matched the
+array *before* the same cycle's install, so a read-tap install for an index being invalidated that cycle
+created a **live** entry for a node just written dead — and every later access through that id would
+have been allowed. `f83fe9342` closes it. **This fixture returned exactly 7 traps before and after that
+fix.** It cannot see it: all three cause-25 arms emit the same cause and `tval`, it never evicts, and it
+never presents a same-cycle install/invalidate coincidence. The escape was found by an adversarial audit
+that built a microtest from verbatim extracts of the committed logic, with mutants as positive controls.
+A passing run of this fixture is evidence about the rotation defect it was built for, not about
+coincidence paths.
+
+The paragraphs below record the two hashes that were synthesized and rejected, in order. Neither is a
+reflash candidate.
+
+**FIX VALIDATED IN SIMULATION (2026-09-22), NOT YET SYNTHESISED AND NOT ON SILICON.** *[superseded by the
+status above]*
 `capstone-ariane` **`079dc720a`** (branch `r35-m1-revnode-cache`) replaces the single core-wide tracker
 with a tagged 4-way x 64-set positive validity cache filled only by observing the rev-node unit's own
 node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
@@ -28,15 +52,28 @@ in `results/sim-m1-cache-validation.result-lines.txt`.
 2 %); the LUT cost is a **defect in the RTL, not the price of a cache** — the lookup reads the
 combinational `_d` array through a dynamic 64-way index while the update rebuilds all 8,192 bits every
 cycle with four dynamically-indexed write sites, so Vivado built a crossbar rather than a register
-file. The remedy is known (per-set write enables in `always_ff`, look up `_q`, and a far smaller
-array) but it is a rebuild of the cache's access structure. **The fix is correct in simulation and not
+file. The remedy was a rebuild of the cache's access structure — per-set write enables in `always_ff`
+and a lookup against `_q` — now done at `f83fe9342`. *(Corrected 2026-09-23: this sentence also proposed
+"a far smaller array". That is withdrawn. Under deny-on-miss a smaller cache converts misses into false
+denies, so what is size-independent is **authority escape**, not correctness; the zero-miss sweep result
+is evidence about 256 entries only.)* The post-synth occupancy also overstated the routing risk:
+`079dc720a` **did route**, at 192,642 LUTs = 94.53 %, so this design's routable ceiling is about nine
+points higher than the 84.98 % it had been calibrated on. **The fix is correct in simulation and not
 implementable as written.**
 
 **AND THE UNDERLYING STAGE 0 HASH IS A TIMING REGRESSION.** `247b76896` routed at **WNS -12.900 /
 TNS -654,920 / 99,635 failing endpoints** against its parent `054cea69b`'s **-8.307 / -312,530 /
 90,379** — i.e. **-4.593 ns and roughly double the TNS from a 32-line change with zero new signal
-declarations**. So neither hash in this folder is a reflash candidate, and the `_q` -> `_d` retarget
-needs rework at the CPMP site too, not just the LSU.
+declarations**. So neither hash in this folder is a reflash candidate.
+
+*(Corrected 2026-09-23 — this paragraph used to end "and the `_q` -> `_d` retarget needs rework at the
+CPMP site too, not just the LSU". **That is wrong, and acting on it would reintroduce an escape.**)* An
+audit localized the 4.593 ns to Stage 0's **LSU** half, whose post-adopt value fed `cap_exception`
+combinationally. Every CPMP consumer reads the **registered** value, so the CPMP half is flop-to-flop into
+16 endpoints and cannot account for +9,256 failing endpoints. And reverting the CPMP half to compare `_q`
+**admits a persistent false ALLOW**: an entry holding X adopts Y while the same cycle's broadcast names Y,
+the compare against the stale X misses, and the entry vouches for a dead Y indefinitely. Leave the CPMP
+half as it is.
 
 **Every one of these costs was invisible to our pre-synthesis checks**: nine lint counters at exactly
 the committed baseline and `UNOPTFLAT` unmoved at 40, on both hashes.
