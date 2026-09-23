@@ -59,18 +59,19 @@ for s in start-musl set_thread_area setjmp; do
   "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
     -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
 done
-for f in hostcall tls level0 string_bounds_safe fputwc_null_safe; do
+for f in hostcall tls level0; do
   "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/$f.c" -o "$O/$f.o"
 done
-"$CAPSTONE_CLANG" "${RF[@]}" -I"$MUSL/src/multibyte" -c "$MRT/mbsrtowcs_bounds_safe.c" \
-  -o "$O/mbsrtowcs_bounds_safe.o"
+# The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
+source "$MRT/libc_overrides.sh"
+build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
 CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$REPO/compiler-rt/lib/builtins
 COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
               -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
 source "$REPO/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -c "$HERE/entry.c" -o "$O/entry.o"
 COMMON=("$O/start-musl.o" "$O/tls.o" "$O/set_thread_area.o" "$O/setjmp.o"
-        "$O/string_bounds_safe.o" "$O/mbsrtowcs_bounds_safe.o" "$O/fputwc_null_safe.o"
+        "${MUSL_OVERRIDE_OBJS[@]}"
         "$O/level0.o" "${softfloat_objs[@]}" "$O/entry.o" "$O/hostcall.o")
 rm -f "$OUT/share"/*.dom "$OUT/share"/stdout-*.txt "$OUT/share/written.bin"
 for p in large_read big_stdout; do

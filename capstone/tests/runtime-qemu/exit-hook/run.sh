@@ -3,14 +3,17 @@
 #
 #   bash run.sh        build exit_test.c three times, run all in one boot; exit 0 only
 #                      if exit-default ends with status 7 and exit-hook with 42, both
-#                      print the line buffered before exit(), neither faults, AND
-#                      exit-control halts
+#                      print the line buffered before exit() and the atexit handler's
+#                      line, neither faults, AND both controls halt
 #
 # exit-control is exit-default linked against the hostcall.c of 40eefa09420c (dev
 # before this fix; pinned, so it stays a control after this lands), which only
 # declares the hook weak and tests its address: in a domain that address is not
-# NULL (C-56), so exit() jumps to the image base and halts. It runs LAST because a
-# halted domain can take the guest with it.
+# NULL (C-56), so exit() jumps to the image base and halts. exit-muslatexit is
+# exit-default linked WITHOUT runtime/atexit_capability_safe.o, so musl's own
+# atexit() runs: it passes the handler through uintptr_t and the call at exit
+# faults (cause 24). A halted domain can take the guest with it, so each control
+# runs last in a boot of its own: two boots, the second only for exit-muslatexit.
 #
 # Needs: CAPSTONE_LLVM_BUILD_DIR (clang, ld.lld, llvm-ar), CAPSTONE_BUILDROOT_DIR
 # and CAPSTONE_QEMU_BINARY (the tree that has them), and a python with pexpect
@@ -49,18 +52,19 @@ for s in start-musl set_thread_area setjmp; do
   "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
     -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
 done
-for f in hostcall tls level0 string_bounds_safe fputwc_null_safe; do
+for f in hostcall tls level0; do
   "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/$f.c" -o "$O/$f.o"
 done
-"$CAPSTONE_CLANG" "${RF[@]}" -I"$MUSL/src/multibyte" -c "$MRT/mbsrtowcs_bounds_safe.c" \
-  -o "$O/mbsrtowcs_bounds_safe.o"
+# The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
+source "$MRT/libc_overrides.sh"
+build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
 CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$REPO/compiler-rt/lib/builtins
 COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
               -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
 source "$REPO/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -c "$HERE/entry.c" -o "$O/entry.o"
 RUNTIME=("$O/start-musl.o" "$O/hostcall.o" "$O/tls.o" "$O/set_thread_area.o" "$O/setjmp.o"
-         "$O/string_bounds_safe.o" "$O/mbsrtowcs_bounds_safe.o" "$O/fputwc_null_safe.o"
+         "${MUSL_OVERRIDE_OBJS[@]}"
          "$O/level0.o" "${softfloat_objs[@]}" "$O/entry.o")
 
 # The control's one difference: 40eefa09420c's hostcall.c. Its one relative include is
@@ -79,6 +83,12 @@ for arm in default hook; do
     -o "$OUT/share/exit-$arm.dom" "${RUNTIME[@]}" "$O/test-$arm.o" "$ARCHIVE"
 done
 CONTROL_RT=("${RUNTIME[@]/#$O\/hostcall.o/$O/hostcall-control.o}")
+MUSLATEXIT_RT=()
+for o in "${RUNTIME[@]}"; do [[ $o == "$O/atexit_capability_safe.o" ]] || MUSLATEXIT_RT+=("$o"); done
+(( ${#MUSLATEXIT_RT[@]} == ${#RUNTIME[@]} - 1 )) \
+  || { echo "atexit_capability_safe.o is not in the runtime list; the atexit control controls nothing" >&2; exit 2; }
+"$CAPSTONE_LD_LLD" --gc-sections -T "$REPO/capstone/my_first_domain/link.ld" \
+  -o "$OUT/share/exit-muslatexit.dom" "${MUSLATEXIT_RT[@]}" "$O/test-default.o" "$ARCHIVE"
 "$CAPSTONE_LD_LLD" --gc-sections -T "$REPO/capstone/my_first_domain/link.ld" \
   -o "$OUT/share/exit-control.dom" "${CONTROL_RT[@]}" "$O/test-default.o" "$ARCHIVE"
 
@@ -105,19 +115,27 @@ LIBCAPSTONE_DIR=$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib
   -o "$OUT/share/lt.user" "$REPO/capstone/ports/musl-capstone/libc-test/libc_test_host.c" \
   "$LIBCAPSTONE_DIR/libcapstone.c"
 
+# boot <log> <image...>: one QEMU boot running the images in order.
+boot() {
+  local log=$1; shift
+  local guest="echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; for d in $*; do echo RUN-BEGIN \$d; /tmp/lt.user /mnt/host/\$d.dom 60; echo RUN-END \$d rc=\$?; done; echo __ALL_DONE__"
+  set +e
+  capstone_with_qemu_lock "$PYTHON" "$REPO/capstone/tests/runtime-qemu/run-domain-smoke.py" \
+    --share-dir "$OUT/share" --log-file "$log" --timeout-multiplier 8 \
+    --guest-command "$guest" --success-marker __BOOT_OK__ --success-marker __ALL_DONE__ >/dev/null 2>&1
+  set -e
+}
 LOG=$OUT/run-$(date +%Y%m%d-%H%M%S).log
-GUEST='echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; for d in exit-default exit-hook exit-control; do echo RUN-BEGIN $d; /tmp/lt.user /mnt/host/$d.dom 60; echo RUN-END $d rc=$?; done; echo __ALL_DONE__'
-set +e
-capstone_with_qemu_lock "$PYTHON" "$REPO/capstone/tests/runtime-qemu/run-domain-smoke.py" \
-  --share-dir "$OUT/share" --log-file "$LOG" --timeout-multiplier 8 \
-  --guest-command "$GUEST" --success-marker __BOOT_OK__ --success-marker __ALL_DONE__ >/dev/null 2>&1
-set -e
+LOG2=${LOG%.log}-muslatexit.log
+boot "$LOG" exit-default exit-hook exit-control
+boot "$LOG2" exit-muslatexit
 
 verdict=0
 for arm in default:7 hook:42; do
   name=exit-${arm%%:*}; want=${arm##*:}
   block=$(sed -n "/RUN-BEGIN $name\$/,/RUN-END $name /p" "$LOG")
   if grep -aq "EXIT-TEST before exit" <<<"$block" &&
+     grep -aq "EXIT-TEST atexit handler ran" <<<"$block" &&
      grep -aq "LT-RESULT $name.dom status=$want " <<<"$block" &&
      ! grep -aq "halted by capability fault" <<<"$block"; then
     echo "  $name: PASS (status $want)"
@@ -132,6 +150,15 @@ if grep -aq "halted by capability fault" <<<"$block"; then
   echo "  exit-control: halts, as it must when the runtime tests the hook's address"
 else
   echo "  exit-control: did NOT halt -- the test cannot tell the fix from its absence"
+  grep -aE "EXIT-TEST|LT-RESULT" <<<"$block" | sed 's/^/    /'
+  verdict=1
+fi
+block=$(sed -n "/RUN-BEGIN exit-muslatexit\$/,\$p" "$LOG2")
+if grep -aq "EXIT-TEST before exit" <<<"$block" && grep -aq "halted by capability fault" <<<"$block" &&
+   ! grep -aq "EXIT-TEST atexit handler ran" <<<"$block"; then
+  echo "  exit-muslatexit: halts before the handler runs, as musl's own atexit() must"
+else
+  echo "  exit-muslatexit: did NOT run to exit() and halt there -- the test cannot see the atexit override"
   grep -aE "EXIT-TEST|LT-RESULT" <<<"$block" | sed 's/^/    /'
   verdict=1
 fi
