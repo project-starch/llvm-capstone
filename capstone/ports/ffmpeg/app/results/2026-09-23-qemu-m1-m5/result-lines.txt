@@ -1,0 +1,143 @@
+# FFmpeg app, QEMU run of record, 2026-09-23. Stage and verdict lines from the serial log.
+__FFAPP_BEGIN_M1__
+STAGE M1 main
+ffapp-host: DONE, serviced 1 request(s), capstone_main = 1, expected 1
+__CAPSTONE_FFAPP_STAGE_REACHED__ 1
+__FFAPP_END_M1__
+__FFAPP_BEGIN_M2__
+STAGE M1 main
+STAGE M2a open_input format=matroska,webm
+STAGE M2 open streams=1 video=0 320x180
+ffapp-host: DONE, serviced 21 request(s), capstone_main = 2, expected 2
+__CAPSTONE_FFAPP_STAGE_REACHED__ 2
+__FFAPP_END_M2__
+__FFAPP_BEGIN_M3__
+STAGE M1 main
+STAGE M2a open_input format=matroska,webm
+STAGE M2 open streams=1 video=0 320x180
+STAGE M3 first packet size=10574
+ffapp-host: DONE, serviced 23 request(s), capstone_main = 3, expected 3
+__CAPSTONE_FFAPP_STAGE_REACHED__ 3
+__FFAPP_END_M3__
+__FFAPP_BEGIN_M4__
+STAGE M1 main
+STAGE M2a open_input format=matroska,webm
+STAGE M2 open streams=1 video=0 320x180
+STAGE M3 first packet size=10574
+STAGE M4 first frame
+ffapp-host: DONE, serviced 26 request(s), capstone_main = 4, expected 4
+__CAPSTONE_FFAPP_STAGE_REACHED__ 4
+__FFAPP_END_M4__
+__FFAPP_BEGIN_M5__
+STAGE M1 main
+STAGE M2a open_input format=matroska,webm
+STAGE M2 open streams=1 video=0 320x180
+STAGE M3 first packet size=10574
+STAGE M4 first frame
+STAGE M5 frames=30 packets=30
+ffapp-host: DONE, serviced 122 request(s), capstone_main = 5, expected 5
+__CAPSTONE_FFAPP_STAGE_REACHED__ 5
+__FFAPP_END_M5__
+__FFAPP_BEGIN_FLIP__
+STAGE M1 main
+STAGE M2a open_input format=matroska,webm
+STAGE M2 open streams=1 video=0 320x180
+STAGE M3 first packet size=10574
+STAGE M4 first frame
+STAGE M5 frames=30 packets=30
+ffapp-host: DONE, serviced 122 request(s), capstone_main = 5, expected 5
+__CAPSTONE_FFAPP_STAGE_REACHED__ 5
+__FFAPP_END_FLIP__
+# M5 domain frame lines (the oracle compares the last column):
+0,        0,        0,        1,    86400, dbb175ec2857ef67b22f4281247625f9
+0,        1,        1,        1,    86400, e0d39c1211bb8dbd7810bb2bef9d6157
+0,        2,        2,        1,    86400, ec7cdea4430755d96b8740e66eb30708
+0,        3,        3,        1,    86400, 14170606a34604b9efe538d0c97b2d50
+0,        4,        4,        1,    86400, 5622c78288e90520b1da4cb818b56c29
+0,        5,        5,        1,    86400, 1ae994bbe362b601431dc068c3244726
+0,        6,        6,        1,    86400, b9d677fa711e5d8e52ed96aa95829ddc
+0,        7,        7,        1,    86400, 264cd75571294495f883461c3d3982b6
+0,        8,        8,        1,    86400, 40fb65738970452c4cf4b7ec8c0a3834
+0,        9,        9,        1,    86400, 52a7db9dbc87857cf31b0fc382216a55
+0,       10,       10,        1,    86400, e70a2fcdc79ec8b4c440590068addc46
+0,       11,       11,        1,    86400, d3df093e9c62ba74b52198321567669a
+0,       12,       12,        1,    86400, 8bd3050536472ac75956537f587c66ad
+0,       13,       13,        1,    86400, cba9c9fbcc28cb7ff16585a3e4354b11
+0,       14,       14,        1,    86400, 35451c0aab98d5c1f94cab6b57404fcd
+0,       15,       15,        1,    86400, 56d48bdb5cc25e28ae1424d753a435f7
+0,       16,       16,        1,    86400, a688cb679acd5d5a1d70627c97a5017b
+0,       17,       17,        1,    86400, 725f31d5b71e7ecc219e8076a7b74458
+0,       18,       18,        1,    86400, fa3554cd6bde5f45cf5ffa33ebbef1f2
+0,       19,       19,        1,    86400, 5b87439c3be18fec989a63c4254cd0ca
+0,       20,       20,        1,    86400, 0e9d21bf6b18c450df6c927662774f57
+0,       21,       21,        1,    86400, d85e095f01bc672196981f1d564f20cf
+0,       22,       22,        1,    86400, fa6455fe69859726c46a362b96f8adcc
+0,       23,       23,        1,    86400, 89455a17ce78a6b66e83a7a50c16aecb
+0,       24,       24,        1,    86400, 116f81a8822224b470f747cd3a888f6e
+0,       25,       25,        1,    86400, e49c3d0531a5e647fbe7ca46f06750fe
+0,       26,       26,        1,    86400, f45303a57aa4947410cfbfb2d8cc02be
+0,       27,       27,        1,    86400, 50ae5f96af8d4bc39557d731032f4652
+0,       28,       28,        1,    86400, 5ab82cfa8c04e9b078c5f0ba083846de
+0,       29,       29,        1,    86400, 66e8341badc9aa94312a6823dc60b144
+# Reference stock.framemd5 hash column, native:
+dbb175ec2857ef67b22f4281247625f9
+e0d39c1211bb8dbd7810bb2bef9d6157
+ec7cdea4430755d96b8740e66eb30708
+14170606a34604b9efe538d0c97b2d50
+5622c78288e90520b1da4cb818b56c29
+1ae994bbe362b601431dc068c3244726
+b9d677fa711e5d8e52ed96aa95829ddc
+264cd75571294495f883461c3d3982b6
+40fb65738970452c4cf4b7ec8c0a3834
+52a7db9dbc87857cf31b0fc382216a55
+e70a2fcdc79ec8b4c440590068addc46
+d3df093e9c62ba74b52198321567669a
+8bd3050536472ac75956537f587c66ad
+cba9c9fbcc28cb7ff16585a3e4354b11
+35451c0aab98d5c1f94cab6b57404fcd
+56d48bdb5cc25e28ae1424d753a435f7
+a688cb679acd5d5a1d70627c97a5017b
+725f31d5b71e7ecc219e8076a7b74458
+fa3554cd6bde5f45cf5ffa33ebbef1f2
+5b87439c3be18fec989a63c4254cd0ca
+0e9d21bf6b18c450df6c927662774f57
+d85e095f01bc672196981f1d564f20cf
+fa6455fe69859726c46a362b96f8adcc
+89455a17ce78a6b66e83a7a50c16aecb
+116f81a8822224b470f747cd3a888f6e
+e49c3d0531a5e647fbe7ca46f06750fe
+f45303a57aa4947410cfbfb2d8cc02be
+50ae5f96af8d4bc39557d731032f4652
+5ab82cfa8c04e9b078c5f0ba083846de
+66e8341badc9aa94312a6823dc60b144
+# Flipped-input control, domain frame lines:
+0,        0,        0,        1,    86400, dbb175ec2857ef67b22f4281247625f9
+0,        1,        1,        1,    86400, e0d39c1211bb8dbd7810bb2bef9d6157
+0,        2,        2,        1,    86400, ec7cdea4430755d96b8740e66eb30708
+0,        3,        3,        1,    86400, 14170606a34604b9efe538d0c97b2d50
+0,        4,        4,        1,    86400, 5622c78288e90520b1da4cb818b56c29
+0,        5,        5,        1,    86400, 1ae994bbe362b601431dc068c3244726
+0,        6,        6,        1,    86400, b9d677fa711e5d8e52ed96aa95829ddc
+0,        7,        7,        1,    86400, 264cd75571294495f883461c3d3982b6
+0,        8,        8,        1,    86400, 40fb65738970452c4cf4b7ec8c0a3834
+0,        9,        9,        1,    86400, 52a7db9dbc87857cf31b0fc382216a55
+0,       10,       10,        1,    86400, e70a2fcdc79ec8b4c440590068addc46
+0,       11,       11,        1,    86400, d3df093e9c62ba74b52198321567669a
+0,       12,       12,        1,    86400, 8bd3050536472ac75956537f587c66ad
+0,       13,       13,        1,    86400, cba9c9fbcc28cb7ff16585a3e4354b11
+0,       14,       14,        1,    86400, d9e23e6b861cb663bc25547b4d1ebed6
+0,       15,       15,        1,    86400, 53199ff39fba0687eac966e7c071b13a
+0,       16,       16,        1,    86400, 3c9246ad02948e3738e655322b9ce965
+0,       17,       17,        1,    86400, b50950234b50cc8bceb7b7002c7faa5a
+0,       18,       18,        1,    86400, 6486382c91e241e1b08a6d2fb3e2967f
+0,       19,       19,        1,    86400, f9eac4d1ef51840a3d47993260c73404
+0,       20,       20,        1,    86400, bf445745bc27693e1ca6dcb9fc89ed66
+0,       21,       21,        1,    86400, ceccca80df23f28743016001ef4b5139
+0,       22,       22,        1,    86400, 9bb09373af458c2f780b04e43cb37eff
+0,       23,       23,        1,    86400, f26ad8bcbbf9552a41255fb3e8d96124
+0,       24,       24,        1,    86400, 116f81a8822224b470f747cd3a888f6e
+0,       25,       25,        1,    86400, e49c3d0531a5e647fbe7ca46f06750fe
+0,       26,       26,        1,    86400, f45303a57aa4947410cfbfb2d8cc02be
+0,       27,       27,        1,    86400, 50ae5f96af8d4bc39557d731032f4652
+0,       28,       28,        1,    86400, 5ab82cfa8c04e9b078c5f0ba083846de
+0,       29,       29,        1,    86400, 66e8341badc9aa94312a6823dc60b144

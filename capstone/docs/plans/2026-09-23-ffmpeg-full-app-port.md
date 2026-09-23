@@ -10,7 +10,18 @@
 - **Negative control:** it fires.
 - **Pointer round trips:** 21 compiler-flagged, down from 28 after the two patches.
 
-The port is in `capstone/ports/ffmpeg/app/`. M1 onward waits on the QEMU rootfs repair.
+The port is in `capstone/ports/ffmpeg/app/`.
+
+**M1–M5 were REACHED the same day, on QEMU.** FFmpeg demuxes and decodes all 30 frames inside a
+domain, **bit-identical to native framemd5**, and the flipped-input control fires. The run of
+record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `41355570eda7`.
+- **Friday target:** it was M0 + M1, and is exceeded.
+- **Rootfs:** runs booted a private repaired copy of the rootfs; the shared image is untouched.
+- **Three defects were found on the way:**
+  - stdout lost after its first line (port);
+  - `EFAULT` on 9p reads (host, fixed on `dev` `e852b3951476`);
+  - compiler miscompile **C-50** (`dev` `0e5b7b991629`; patch 0003 plus a gate).
+- **What remains is M6** (silicon ABI) and the §4 one-translation-unit question.
 
 **Question answered:** can FFmpeg 9.0.1 run file-to-file inside a Capstone domain the way SQLite
 does, and what is the shortest path to evidence?
