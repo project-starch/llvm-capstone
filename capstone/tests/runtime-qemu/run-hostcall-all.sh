@@ -22,6 +22,7 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-path-delete-probe.sh"
   "$SCRIPT_DIR/run-hostcall-combined-file-object-probe.sh"
   "$SCRIPT_DIR/run-hostcall-large-io-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-dir-read-probe.sh"
 )
 
 capstone_select_banner hostcall
