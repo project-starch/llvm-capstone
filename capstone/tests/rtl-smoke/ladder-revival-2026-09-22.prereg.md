@@ -364,3 +364,59 @@ itself is not novel here — only its −O level is.
 **Recorded so the weaker gate is visible in the result**: phase 5's rungs reached the board with
 **desk-build validation only**. If either returns a wrong oracle, suspect the −O0 build before the
 silicon.
+
+---
+
+# Phase 6 addendum — where the control's 16.7 % switches on (2026-09-23, before the run)
+
+## What is known, and what is not
+
+`ctrsanity` (identical code both halves) reads **1.0457× at 5,029 instructions** and
+**1.1670× / 1.1668× at 500k / 2M**, with the baseline CPI flat at 1.2000. Nothing was sampled between
+5k and 500k, a 100× gap. The CURRENT §2 table carries this reading beside every row, so its shape is
+now the table's biggest open question.
+
+## Rungs, one boot per half, all at spec −O1, controls ascending
+
+`ctrsanitys` (5k), **`ctrsanity20k`**, **`ctrsanity100k`**, **`ctrsanity250k`** (new, `CTRSANITY_N` =
+4,000 / 20,000 / 50,000), `ctrsanity` (500k), `ctrsanity4` (2M). The loop is the same across all six;
+only N differs. The baseline is the bare-metal sweep rebuilt at −O1 from the same six spec lines.
+Launcher: `/tmp/capstone/ladder-revival/p6.sh`.
+
+## Pre-registered: one model with numbers, and what each alternative would read instead
+
+**The onset model.** Suppose the first K instructions run at baseline speed and every instruction
+after them costs +c cycles. The 5k and 500k points fix **c = 0.2004 cycles/instruction and
+K ≈ 3,667 instructions**. The 2M point (1.1667 predicted, 1.1668 measured) is *not* a test of the
+model, since it sits on the asymptote. The three new points are. The model predicts:
+
+| rung | instructions | onset-model ratio |
+|---|---:|---:|
+| `ctrsanity20k` | ~20,030 | **1.1365** |
+| `ctrsanity100k` | ~100,030 | **1.1609** |
+| `ctrsanity250k` | ~250,030 | **1.1646** |
+
+Tolerance is **±0.005**. The existing points reproduce across boots to 1 cycle in 700k, so the
+tolerance is set by layout, because each rung sits at its own entry VA.
+
+**What each alternative predicts, so the reading discriminates:**
+- **Step at some length L\*:** every new point reads near **1.046** (below L\*) or near **1.167** (above
+  it). In particular, 20k near 1.046 or 1.167, **not** near 1.136.
+- **Some other smooth ramp:** points lie monotone between 1.046 and 1.167 but miss the onset values
+  by more than the tolerance.
+- **Bump-and-settle:** any point above **1.172**.
+
+## Refutation and VOID
+
+- **The onset model is REFUTED** if any of the three new points misses its predicted value by more
+  than 0.005. The reading is then reported as whichever alternative it matches, or as "none of the
+  three".
+- **VOID** if the baseline CPI of any of the six rungs leaves **1.2000 ± 0.005** (5k is allowed
+  1.2027, as measured). VOID also if `ctrsanitys`, `ctrsanity` or `ctrsanity4` misses its
+  previously measured capability cycles by more than 0.5 %. Those three are this boot's positive
+  control that nothing else moved. VOID also on any result file older than the run.
+- **Even if the onset model holds, no mechanism is inferred from it.** "The first ~3.7k instructions
+  are free, then +0.2 cycles each" is a *shape*. The shape suggests state that fills up and then
+  penalises (a table, a buffer, a counter), and that is exactly what the RTL A/B in simulation (E2b)
+  must then find **in the trace**, at a length just past K. A model fitting three points does not
+  stand in for that trace.
