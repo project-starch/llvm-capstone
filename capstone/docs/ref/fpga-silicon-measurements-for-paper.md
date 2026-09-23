@@ -258,10 +258,21 @@ corrected 2026-09-23.** Its blocker **C-3** has read `GONE` since **2026-09-05**
 (`ISSUES-ARCHIVE.md:1801`, `rv8_primes` returning oracle 99991 at −O2 on silicon), and this footnote
 never followed. Re-measured at −O1 on `caplifive_m1_054cea69b` it returns its oracle and reads
 **1.005× cycles at a 1.000 instruction ratio**, against the 1.263× below taken at −O0 with a 1.130
-instruction ratio. **The published 1.263× is largely an optimisation-level artefact, not a capability
-cost.** Retained below only as the −O0 row it always was — a real
-limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
-internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
+instruction ratio.
+
+**What that does and does not establish.** At −O1, on this bitstream, `rv8_primes` carries **no
+measurable capability overhead**. It does **not** establish that the published 1.263× was "an
+optimisation-level artefact": the two figures differ in **two** variables, the −O level *and* the
+bitstream/compiler, and **no −O0 measurement exists on current silicon**. An earlier version of this
+note made that attribution anyway; it is withdrawn as unearned. The −O0 row is retained below as its
+own row rather than explained away. (Its −O0 pair is internally consistent, so that ratio is valid;
+only cross-row `-O` comparison is affected.)
+
+**PENDING — the measurement that would settle it.** Rebuild both halves at `LADDER_OPT=-O0` and run
+`ctrsanity rv8_primes`: the published row is then its own control, with the −O level held fixed and
+only the bitstream/compiler varying. Pre-registered as phase 5 with its refutation condition named
+(`tests/rtl-smoke/ladder-revival-2026-09-22.prereg.md`). Both halves are **built and staged at −O0**;
+the board run itself has not been taken.
 
 ### ⚠ SUPERSEDED 2026-09-22 — all eight of these rungs now MEASURE on `caplifive_m1_054cea69b`
 
@@ -291,7 +302,7 @@ instret, spread 0`, two months and several bitstreams later.
 | **`ctrsanity`** | 1.000× | **1.167×** | **+16.7 %** | 1.000 → 1.000 |
 | `beebs_aha_mont64` | 1.023× | 1.010× | −1.2 % | 1.000 → 1.000 |
 | `beebs_prime` | 1.054× | 1.043× | −1.0 % | 1.001 → 1.000 |
-| `rv8_primes` | 1.263× (−O0) | 1.005× (−O1) | — | 1.130 → 1.000 |
+| `rv8_primes` | 1.263× (−O0) | 1.005× (−O1) | **not comparable** — differs in −O level AND bitstream | 1.130 → 1.000 |
 | `beebs_cnt` | 1.353× | 1.204× | −11.0 % | 1.319 → 1.197 |
 | `beebs_bs` | 1.537× | 1.397× | −9.1 % | 1.058 → 0.992 |
 | `beebs_recursion` | 1.957× | 1.983× | +1.3 % | 1.458 → 1.500 |
@@ -307,9 +318,13 @@ cheaper**.
 
 A falling instruction *ratio* on its own is equally consistent with the baseline getting worse; the
 unchanged denominators above are what rule that out and make this an attribution rather than an
-assertion. **Capability codegen improved on these two kernels and the cycle ratio followed.** `rv8_primes` is not a shift at all, it is
-−O0 against −O1. **Seven rows reproducing or explaining themselves is a stronger certification of the
-pairing than a single control rung**, which matters because the control is the one row that does not.
+assertion. **Capability codegen improved on these two kernels and the cycle ratio followed.**
+
+`rv8_primes` is **not** a comparable pair: −O0 against −O1, on different silicon. It is listed for
+completeness and **must not be quoted as a shift** until the −O0 re-measurement above is taken.
+
+**Six rows reproducing or explaining themselves is a stronger certification of the pairing than a
+single control rung**, which matters because the control is the one row that does not.
 
 ### `ctrsanity`'s +16.7 % is a SATURATING CPI step, and it is that kernel's, not this silicon's
 
