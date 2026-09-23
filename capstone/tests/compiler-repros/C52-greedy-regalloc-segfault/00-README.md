@@ -50,5 +50,6 @@ not been looked at.
 **Workaround for the port.** Compile `Python/compile.c` alone at `-O0`, or with
 `-mllvm -regalloc=basic`; both were measured to compile it. At `-Os` it compiles too (the
 survey with `--opt=-Os`, 2026-09-23), with the Greedy allocator: `-Os` shapes the function
-differently, so that is an avoidance, not a sign the defect is gone. Neither is applied by the survey,
-which reports the object as failed.
+differently, so that is an avoidance, not a sign the defect is gone. The survey at its default
+`-O3` applies none of these and reports the object as failed; `link-cpython-capstone.py` compiles
+it with `-regalloc=basic` for the link.
