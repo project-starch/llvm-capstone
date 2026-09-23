@@ -52,6 +52,25 @@ static volatile struct hostcall_v0 *hc_metadata;
 static volatile char *hc_payload;
 static unsigned hc_shared_region_count;
 
+#ifdef CAPSTONE_PROGRAM_REGIONS
+/* Regions the host shares AFTER the two HostCall v0 regions belong to the program: parked here
+   as they arrive and handed over once each by __capstone_region. The first use is a heap the
+   host transfers LINEAR (REV_TRANSFERRED), which the Sublet heap (sublet_heap.c) carves and
+   revokes; without this they would be counted and dropped. Opt-in, so every domain built
+   without it is byte-identical to before. A linear capability moves when it is loaded on
+   hardware that enforces linearity, so the slot is read once and cleared. */
+#define HC_PROGRAM_REGIONS 2
+static void *hc_program_region[HC_PROGRAM_REGIONS];
+
+void *__capstone_region(unsigned index) {
+  if (index >= HC_PROGRAM_REGIONS)
+    return 0;
+  void *r = hc_program_region[index];
+  hc_program_region[index] = 0;
+  return r;
+}
+#endif
+
 /* One round of the HostCall v0 state machine. Returns 0 if the host answered
    with RESP, nonzero otherwise. */
 static int hc_round(unsigned long opcode, unsigned long offset,
@@ -670,6 +689,10 @@ void domain_main(unsigned *res, unsigned func) {
       hc_metadata = (volatile struct hostcall_v0 *)res;
     else if (hc_shared_region_count == 1)
       hc_payload = (volatile char *)res;
+#ifdef CAPSTONE_PROGRAM_REGIONS
+    else if (hc_shared_region_count - 2 < HC_PROGRAM_REGIONS)
+      hc_program_region[hc_shared_region_count - 2] = res;
+#endif
     ++hc_shared_region_count;
     return;
   }
