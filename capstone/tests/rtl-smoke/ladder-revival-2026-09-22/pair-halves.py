@@ -1,67 +1,134 @@
 #!/usr/bin/env python3
 """Pair the ladder's two halves into overhead ratios, and REFUSE to if the control fails.
 
-Usage: pair-halves.py <capability-result-lines> <baseline-result-lines>
+Usage: pair-halves.py <baseline-result-lines> <capability-result-lines> [more capability files ...]
 
-The capability half is a domain measurement: no paging, no interrupts, and it
-reproduces to the instruction across boots. The baseline half runs in Linux
-userspace, so its per-pass counters take timer interrupts; the runner reports the
-minimum-instret pass (`best_*`) plus `clean` = passes tied at that minimum.
+The baseline file is either format:
+  * BARE-METAL (the instrument of record, issue I-2):
+      `<rung>: BEST cycles=C instret=I (T/N passes at min instret, spread=S) retval=R`
+  * the retired LINUX-userspace table (kept readable only so older captures in this
+    folder can still be re-checked; its rows are floors only when clean is high).
 
-`clean` is the gate, not decoration. clean=1/N means the floor was never reached
-and that row is not a denominator. The control rung must additionally read an
-instruction ratio within 1% of 1.000, because both its halves run identical code
--- if it does not, nothing else here is trustworthy and no ratio is emitted.
+Capability files are the driver's `rung retval oracle cycles instret correct` tables.
+A rung measured in several boots keeps its MINIMUM cycle count; its instret must be
+identical across boots (the domain half is deterministic) or the rung is excluded.
+
+Gates, all of which refuse rather than warn:
+  * the control rung must be present in both halves;
+  * its baseline must be a floor (clean >= CLEAN_MIN);
+  * its instruction ratio must be within CONTROL_TOL of 1.000 (identical code both sides);
+  * its baseline CPI must be within CPI_TOL of CONTROL_BASE_CPI -- the value the bare-metal
+    baseline has read since 2026-07-28, so a denominator that drifted from the July floor
+    is caught before any row is printed.
+Per row: a capability value that is not its oracle, a baseline retval that differs from the
+capability retval, a baseline floor below CLEAN_MIN, or a missing instret excludes the row.
 """
 import re, sys
 
-CONTROL = "ctrsanitys"
-CLEAN_MIN = 10          # passes tied at the minimum, out of the warm passes
+CONTROL = "ctrsanity"
+CONTROL_BASE_CPI = 1.2000
+CPI_TOL = 0.005
+CLEAN_MIN = 10
 CONTROL_TOL = 0.01
+NOT_BENCHMARKS = {"null", "rawhazard5", "rawhazard6", "rawhazard7"}
 
-def read_cap(path):
-    out = {}
-    for ln in open(path):
-        m = re.match(r"(\w+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+|None)\s+(YES|NO)", ln.strip())
-        if m and m.group(6) == "YES" and m.group(5) != "None":
-            out[m.group(1)] = (int(m.group(4)), int(m.group(5)))   # cycles, instret
-    return out
+BARE = re.compile(r"(\w+): BEST cycles=(\d+) instret=(\d+) \((\d+)/(\d+) passes at min "
+                  r"instret, spread=(\d+)\) retval=(\d+)")
+LINUX = re.compile(r"(\w+)\s+(\d+)\s+(\d+|--)\s+(\d+|--)\s+(\d+|--)\s+(\d+|--)\s+(\S+)\s+(\S+)"
+                   r"\s+(\S+)\s+(YES|NO)")
+CAP = re.compile(r"(\w+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+|None)\s+(YES|NO)")
+
 
 def read_base(path):
+    """rung -> (cycles, instret, tied, total, retval-or-None)"""
     out = {}
     for ln in open(path):
-        m = re.match(r"(\w+)\s+(\d+)\s+(\d+|--)\s+(\d+|--)\s+(\d+|--)\s+(\d+|--)\s+(\S+)\s+(\S+)\s+(\S+)\s+(YES|NO)", ln.strip())
-        if not m: continue
-        rung, _, cold_c, best_c, cold_i, best_i, clean, spread, idem, ok = m.groups()
-        if "--" in (best_c, best_i) or ok != "YES": continue
-        tied, _, tot = clean.partition("/")
-        out[rung] = (int(best_c), int(best_i), int(tied), int(tot or 0), idem)
+        ln = ln.strip()
+        m = BARE.match(ln)
+        if m:
+            r, c, i, t, n, _s, rv = m.groups()
+            out[r] = (int(c), int(i), int(t), int(n), int(rv))
+            continue
+        m = LINUX.match(ln)
+        if m:
+            r, _, _cc, bc, _ci, bi, clean, _sp, idem, ok = m.groups()
+            if "--" in (bc, bi) or ok != "YES" or not idem.startswith("YES"):
+                continue
+            t, _, n = clean.partition("/")
+            out[r] = (int(bc), int(bi), int(t), int(n or 0), None)
     return out
 
-def main(capf, basef):
-    cap, base = read_cap(capf), read_base(basef)
+
+def read_caps(paths):
+    """rung -> (min cycles, instret, retval, boots); None instret or wrong oracle excluded."""
+    seen, bad = {}, {}
+    for p in paths:
+        for ln in open(p):
+            m = CAP.match(ln.strip())
+            if not m or m.group(1) == "rung":
+                continue
+            r, rv, orc, cyc, ins, ok = m.groups()
+            if ok != "YES" or rv != orc:
+                bad[r] = "capability value is not its oracle"; continue
+            if ins == "None":
+                bad[r] = "no instret recorded"; continue
+            seen.setdefault(r, []).append((int(cyc), int(ins), int(rv)))
+    out = {}
+    for r, obs in seen.items():
+        if len({o[1] for o in obs}) != 1:
+            bad[r] = f"instret differs across boots {sorted({o[1] for o in obs})}"; continue
+        out[r] = (min(o[0] for o in obs), obs[0][1], obs[0][2], len(obs),
+                  max(o[0] for o in obs) - min(o[0] for o in obs))
+    return out, bad
+
+
+def main(basef, capfs):
+    base = read_base(basef)
+    cap, bad = read_caps(capfs)
+    if not base:
+        sys.exit(f"REFUSED: no baseline rows parsed from {basef} (neither known format)")
     if CONTROL not in cap or CONTROL not in base:
         sys.exit(f"REFUSED: control {CONTROL} missing from a half; no ratio is valid without it")
-    bc, bi, tied, tot, idem = base[CONTROL]
-    cc, ci = cap[CONTROL]
-    ratio = ci / bi
-    print(f"control {CONTROL}: clean={tied}/{tot}  instr ratio={ratio:.4f}  cycle ratio={cc/bc:.4f}")
+    bc, bi, tied, tot, _ = base[CONTROL]
+    cc, ci = cap[CONTROL][:2]
+    iratio, bcpi = ci / bi, bc / bi
+    print(f"control {CONTROL}: clean={tied}/{tot}  instr ratio={iratio:.5f}  "
+          f"baseline CPI={bcpi:.4f}  cycle ratio={cc/bc:.4f}")
     if tied < CLEAN_MIN:
-        sys.exit(f"REFUSED: control floor not reached (clean={tied}/{tot} < {CLEAN_MIN}); "
-                 "the baseline half cannot measure a control, so no overhead row is emitted")
-    if abs(ratio - 1.0) > CONTROL_TOL:
-        sys.exit(f"REFUSED: control instruction ratio {ratio:.4f} is outside "
-                 f"{CONTROL_TOL:.0%} of 1.000 on identical code; the halves are not matched")
-    print(f"\ncontrol PASSED -- ratios below are admissible\n")
-    print(f"{'rung':<20}{'cap cyc':>10}{'base cyc':>10}{'cyc ratio':>11}"
-          f"{'cap ins':>10}{'base ins':>10}{'ins ratio':>11}{'clean':>8}")
-    for r in sorted(cap):
-        if r not in base or r == CONTROL: continue
-        bc, bi, tied, tot, idem = base[r]
-        cc, ci = cap[r]
-        note = "" if tied >= CLEAN_MIN and idem.startswith("YES") else "   <- excluded"
-        print(f"{r:<20}{cc:>10,}{bc:>10,}{cc/bc:>11.3f}{ci:>10,}{bi:>10,}"
-              f"{ci/bi:>11.3f}{f'{tied}/{tot}':>8}{note}")
+        sys.exit(f"REFUSED: control baseline is not a floor (clean={tied}/{tot} < {CLEAN_MIN})")
+    if abs(iratio - 1.0) > CONTROL_TOL:
+        sys.exit(f"REFUSED: control instruction ratio {iratio:.4f} is outside {CONTROL_TOL:.0%} "
+                 "of 1.000 on identical code; the halves are not matched")
+    if abs(bcpi - CONTROL_BASE_CPI) > CPI_TOL:
+        sys.exit(f"REFUSED: control baseline CPI {bcpi:.4f} is not the {CONTROL_BASE_CPI:.4f} "
+                 "floor the bare-metal baseline has read since 2026-07-28; the denominator moved")
+    print("control PASSED -- rows below are admissible "
+          "(the control's own cycle ratio is reported, not gated)\n")
+    print(f"{'rung':<18}{'cap cyc':>11}{'base cyc':>11}{'cycles':>9}{'cap ins':>11}"
+          f"{'base ins':>11}{'instr':>8}{'CPI':>8}{'boots':>6}{'cap spread':>11}")
+    rows = []
+    for r in sorted(cap, key=lambda r: (cap[r][0] / base[r][0]) if r in base else 9e9):
+        if r in NOT_BENCHMARKS:
+            continue
+        if r not in base:
+            print(f"{r:<18}  -- no baseline row"); continue
+        cc, ci, crv, boots, cspread = cap[r]
+        bc, bi, tied, tot, brv = base[r]
+        why = []
+        if tied < CLEAN_MIN: why.append(f"baseline not a floor ({tied}/{tot})")
+        if brv is not None and brv != crv: why.append(f"baseline retval {brv} != {crv}")
+        tag = "   <- EXCLUDED: " + "; ".join(why) if why else ""
+        ctl = "  (control)" if r.startswith(CONTROL) else ""
+        print(f"{r:<18}{cc:>11,}{bc:>11,}{cc/bc:>8.3f}x{ci:>11,}{bi:>11,}{ci/bi:>8.3f}"
+              f"{(cc/ci)/(bc/bi):>8.3f}{boots:>6}{cspread:>11}{ctl}{tag}")
+        if not why: rows.append(r)
+    for r, why in sorted(bad.items()):
+        if r not in NOT_BENCHMARKS:
+            print(f"{r:<18}  -- EXCLUDED: {why}")
+    print(f"\n{len(rows)} admissible rows")
+
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    main(sys.argv[1], sys.argv[2:])

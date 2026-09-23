@@ -168,7 +168,7 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 > Build: `build-ladder-base-bare.sh`; run: `fpga_driver/run_base_bare_fpga.py`.
 > Trail: `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*.md`.
 
-## 2. Pervasive spatial safety costs 0 %–96 % in cycles (bare-metal baseline)
+## 2. Pervasive spatial safety costs 0 %–111 % in cycles across 15 kernels (bare-metal baseline, current bitstream)
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
@@ -200,7 +200,78 @@ halves bracket the compute only, so domain entry/exit is excluded from both.
 The `capability` and `baseline` columns are **cycles**. The two bold columns are the
 overhead ratios (capability ÷ baseline) for cycles and for instructions respectively.
 
-### FINAL — uniform −O1, bare-metal baseline, one harness, one session (2026-07-28)
+### CURRENT — 15 kernels, one bitstream, one compiler, one baseline (2026-09-23)
+
+**This is the table to cite.** Everything in it comes from `caplifive_m1_054cea69b` (WNS −8.307,
+monitor `2dcd3a5`), with each rung built from `ladder-rungs.spec` at its spec `-O` for **both** halves.
+The denominators come from the **bare-metal baseline**: one 81 s boot, every row at `15/15` passes
+tied at min instret. Every capability value is scored against its native oracle, and every baseline
+retval has to match it. Pairing is done by
+`tests/rtl-smoke/ladder-revival-2026-09-22/pair-halves.py`, which **refuses** to print a row unless
+the control passes three checks: an instruction ratio within 1 % of 1.000, a baseline CPI at the
+1.2000 July floor, and a baseline that is a floor (`clean ≥ 10`). All seven of its refusal paths
+were negative-tested on perturbed inputs. Fed the retired Linux baseline, it refuses on exactly the
+I-2 signature (`clean=1/15`). Where a rung ran in several boots, the table keeps the minimum cycle
+count; its instret was identical in every boot, and the largest cross-boot cycle spread was 25
+cycles. Raw lines are in the same folder.
+
+| kernel | cap cycles | base cycles | **cycles** | instr | CPI | dominated by | vs 2026-07-28 |
+|---|---:|---:|---:|---:|---:|---|---|
+| `beebs_cover` | 159,732 | 167,999 | **0.951×** | 0.999 | 0.951 | layout — report as *no measurable overhead* | 0.953× |
+| `rv8_primes` | 6,320,385 | 6,286,697 | **1.005×** | 1.000 | 1.005 | neither | *not comparable* (July row was −O0) |
+| `rv8_sha512` | 543,646 | 540,073 | **1.007×** | 0.996 | 1.010 | neither | new |
+| `beebs_aha_mont64` | 286,485 | 283,612 | **1.010×** | 1.000 | 1.010 | neither | 1.023× |
+| `rv8_sha512s` | 118,603 | 117,035 | **1.013×** | 1.092 | 0.928 | extra instructions, offset by CPI | new |
+| `beebs_prime` | 9,684 | 9,283 | **1.043×** | 1.000 | 1.044 | neither | 1.054× |
+| `beebs_crc32` | 48,310 | 42,795 | **1.129×** | 0.959 | 1.177 | stalls | new |
+| `beebs_ns` | 102,661 | 88,451 | **1.161×** | 0.987 | 1.176 | stalls | new |
+| `beebs_cnt` | 114,106 | 94,736 | **1.204×** | 1.197 | 1.006 | extra instructions | 1.353× (capability codegen improved) |
+| `beebs_bs` | 2,054 | 1,470 | **1.397×** | 0.992 | 1.409 | stalls | 1.537× (capability codegen improved) |
+| `coremark_matrix` | 53,345 | 36,691 | **1.454×** | 1.229 | 1.183 | both | new |
+| `matmult_int` | 19,134 | 11,312 | **1.691×** | 1.337 | 1.265 | both | new |
+| `beebs_janne` | 593 | 323 | **1.836×** | 0.943 | 1.947 | stalls | new |
+| `beebs_recursion` | 19,226 | 9,696 | **1.983×** | 1.500 | 1.322 | both | 1.957× |
+| `beebs_insertsort` | 2,518 | 1,193 | **2.111×** | 1.183 | 1.784 | stalls | new |
+| *control* `ctrsanity` | 700,268 | 600,041 | **1.167×** | 1.000 | 1.167 | CPI only, identical code | **1.000×** — see below |
+
+**Summary, over the 15 kernels:** 0 %–111 % in cycles, median **1.161×**, geometric mean
+**1.285×**. On the six kernels that are comparable like-for-like with July, the geometric mean went
+from 1.269× to 1.223×: five fell, and `recursion` rose 1.3 %. **The range widened from 96 % to 111 % because
+eight kernels were added, not because any old row got worse.** The new maximum is `insertsort`, a
+kernel that could not be measured in July.
+
+**The control does not read 1.000×, and every row above shares its bitstream.** Its 16.7 % is pure
+CPI on byte-matched work. It is flat from 500k to 2M instructions and is 1.045× at 5k (next
+subsection but one). Two things bound it without explaining it:
+- `beebs_aha_mont64` runs half a `ctrsanity` of straight-line compute and reads 1.010×;
+- `rv8_primes` runs 3.2 M instructions and reads 1.005×.
+
+So it is not a flat per-instruction silicon tax on capability mode. Whether some of it hides inside
+the stall-dominated rows is **open**. That question is phase 6 of
+`ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
+control's reading beside the table.
+
+**Four rows retire FEWER instructions with capabilities than without:** `janne` 0.943, `crc32` 0.959,
+`ns` 0.987 and `sha512` 0.996. Both halves come from one source at one `-O`, so this is a real codegen
+difference between the two targets, **not yet explained**. It has to be read in the disassembly
+before any row is described as "instruction-neutral". Their CPI ratios, not their instruction
+ratios, carry their cost.
+
+**A claim this table now puts under pressure.** "Capability overhead is a property of DATA ACCESS,
+not of execution" (below) rested on `cover` and `mont64`, which touch no data and cost nothing.
+`rv8_sha512` does array work through globals in every one of its 80 rounds: four indexed loads from
+the 16-word rolling window `sha_w[16]`, a store back into it, and one read of `sha512_k[80]`
+(`silicon-ladder/rv8_sha512_kernel.h:98-106`). It also costs nothing (1.007×). The
+sentence may still hold in some narrower form, such as *irregular* or *pointer-chased* access, but
+that narrowing is the lead's to make, not this table's. It is flagged here and not rewritten.
+
+**The paper's `tab:spatialcost` is now stale.** It carries the July rows, including `rv8_primes`
+1.263× at −O0. Edits to the paper are ask-first; this subsection is the source for them.
+
+### HISTORICAL — uniform −O1, bare-metal baseline, one harness, one session (2026-07-28)
+
+> **Superseded by CURRENT above.** It was taken on a July bitstream with a July compiler. Keep it for
+> the record and for the vs-July column; do not cite it beside the current table.
 
 | benchmark | opt | capability | baseline | **cycles** | **instr** | **CPI ratio** |
 |---|---|---:|---:|---:|---:|---:|
@@ -383,6 +454,11 @@ Do not write "all remaining failures are the register-indexed-load defect" — i
 written once and R-9 falsified it the next day.
 
 ### Why the overheads are what they are
+
+> **The decomposition table below uses the JULY numbers.** The current decomposition for all 15
+> kernels is in the `instr` / `CPI` / `dominated by` columns of the CURRENT table at the top of §2.
+> The per-kernel explanations below still apply to the kernels they name, except `cnt` and `bs`,
+> whose capability instruction counts fell 9.2 % and 6.3 % since.
 
 `cycles_ratio = instr_ratio × CPI_ratio`, and **which factor dominates is the finding**:
 
