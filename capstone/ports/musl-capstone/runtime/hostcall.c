@@ -118,6 +118,14 @@ static volatile int hc_exit_status;
 static long hc_unserved[HC_UNSERVED_MAX];
 static unsigned long hc_unserved_n;
 
+/* stdout and stderr are served by WRITE_STDOUT, so they exist from the start;
+   a domain may close them, and a closed one then answers like any descriptor
+   nobody opened. stdin has no service here and never exists. Every syscall that
+   takes a descriptor asks this and hc_slot, so all of them agree on which
+   descriptors exist: fstat, fcntl, ioctl, lseek, write and close. */
+static int hc_stdio_closed[3];
+static int hc_is_stdio(long fd) { return (fd == 1 || fd == 2) && !hc_stdio_closed[fd]; }
+
 static struct hc_file *hc_slot(long fd) {
   if (fd < HC_FD_BASE || fd >= HC_FD_BASE + HC_MAX_FILES)
     return 0;
@@ -303,6 +311,10 @@ static long hc_open(const char *path, long flags, long mode) {
 }
 
 static long hc_close(long fd) {
+  if (hc_is_stdio(fd)) {
+    hc_stdio_closed[fd] = 1;
+    return 0;
+  }
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
@@ -368,6 +380,8 @@ static long hc_getdents(long fd, char *buf, unsigned long count) {
 }
 
 static long hc_lseek(long fd, long long off, long whence) {
+  if (hc_is_stdio(fd))
+    return -ESPIPE; /* a stream, as on a pipe or a terminal */
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
@@ -444,7 +458,7 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
      FILE_WRITE with its own position. */
   if (fd >= HC_FD_BASE)
     return hc_file_rw(fd, (char *)buf, count, 1);
-  if (fd != 1 && fd != 2)
+  if (!hc_is_stdio(fd))
     return -EBADF;
 
   while (done < count) {
@@ -518,6 +532,8 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      flush in domain_main after capstone_main returns; not made here, because
      every musl domain would then change behaviour at once. */
   case SYS_ioctl:
+    if (!hc_is_stdio((long)a) && !hc_slot((long)a))
+      return -EBADF;
     return -ENOTTY;
 
   case SYS_fsync:
@@ -540,6 +556,16 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                       HC_PATH_ACCESS_FLAG_EXISTS);
 
   case SYS_fstat: {
+    /* stdout and stderr exist in every domain -- the service writes them --
+       so fstat describes them: a character device, and not a terminal (the
+       tty ioctl answers ENOTTY). Answering EBADF made programs that check a
+       descriptor before using it conclude they have no output: CPython sets
+       sys.stdout and sys.stderr to None that way, and print() then writes
+       nothing, silently. stdin has no service here and stays EBADF. */
+    if (hc_is_stdio((long)a)) {
+      hc_fill_stat((struct stat *)b, 0, S_IFCHR | 0620);
+      return 0;
+    }
     struct hc_file *f = hc_slot((long)a);
     if (!f)
       return -EBADF;
@@ -578,9 +604,14 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return 0;
 
   /* open() issues this once, for O_CLOEXEC, and discards the result. There are
-     no other processes here for a descriptor to leak into. */
+     no other processes here for a descriptor to leak into. It does answer
+     whether a descriptor EXISTS, though: musl's fstat asks F_GETFD after an
+     EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
+     and ENOENT, so fstat(0) reported the wrong error. */
   case SYS_fcntl:
-    return 0;
+    if (hc_is_stdio((long)a) || hc_slot((long)a))
+      return 0;
+    return -EBADF;
 
   /* A domain has exactly one thread, and 1 is its identifier. This is not an
      invented value in the way a fabricated st_dev would be: nothing outside the
