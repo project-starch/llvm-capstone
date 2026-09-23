@@ -40,7 +40,8 @@ int main(void)
 	snprintf(detail, sizeof detail, "n=%zd errno=%d (want %d)", n, n < 0 ? errno : 0, SIZE);
 	check("read-whole", n == SIZE && pattern_ok(buf, 0, SIZE), detail);
 
-	/* Odd sizes and offsets: the service chunks at the payload size. */
+	/* Odd sizes and offsets: the service chunks at the payload size. The sizes
+	   below take 14 reads to cover the file. */
 	long total = 0, bad = 0;
 	lseek(fd, 0, SEEK_SET);
 	for (int k = 1; total < SIZE; k++) {
