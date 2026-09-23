@@ -33,6 +33,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | `capstone-c-reference-control.md` | 2026-07-28 |
 | `cheri-baseline-xlang.md` | 2026-08-02 |
 | `compatibility-eval-silicon-app.md` | 2026-07-22 |
+| `cpython-interpreter-port.md` | 2026-09-23 |
 | `full-boundary-interface-benchmark.md` | 2026-07-22 |
 | `gp-cap-derive-on-silicon-proposal.md` | 2026-07-24 |
 | `gp-captable-codegen-plan.md` | 2026-07-23 |
