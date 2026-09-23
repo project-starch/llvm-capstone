@@ -7199,6 +7199,32 @@ being absurd otherwise. Upstream `capstone-qemu` implements the clear for this f
 (`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
 not**, so the reference model is itself inconsistent on one instruction.
 
+**2026-09-23 — re-read at the deployed RTL, the monitor checked, and the silicon probe built (not yet
+run).**
+- **Deployed RTL, `capstone-ariane 054cea69b`.** Both functions are still copies: `SHRINKTO`
+  (`core/anvil_build/capstone_flu_unit.anvil:268-296`) and `TIGHTEN`
+  (`core/anvil_build/capstone_dyn_unit.anvil:262-289`) always return the unmodified `rs1`. Neither has
+  the `rd == rs1` / `LINEAR` → `cnull` branch that `CINCOFFSET` (`:29-52`) now carries, and no shared
+  helper exists that they could route through. The line numbers above predate this revision.
+- **QEMU is inconsistent in its own way.** It copies on `shrinkto`, like the RTL, but on `tighten` it
+  moves (`op_helper.c:1176-1180`), like the spec. QEMU's `tighten` also delinearises a LINEAR result
+  that has lost write permission (`:1185-1188`). The RTL does not do that; its downstream effect is not
+  examined here.
+- **Which code can hit it.** The duplication needs `rd != rs1`. The monitor image booted in the
+  2026-09-22/23 ladder runs contains 9 `tighten` and 1 `shrinkto`, and all 10 are in place
+  (`rd = rs1 = x5`). The check: `fw_payload.elf`, GNU objdump, 16,984 32-bit instructions decoded,
+  2,481 of them opcode 0x5b. The scanner was positive-controlled on an image with one known
+  `rd != rs1` tighten. So **the monitor never takes the duplicating path**, and what remains exposed
+  is compiled or hand-written domain code that tightens or shrinks a linear capability into a
+  *different* register.
+- **Silicon probe.** Arms 8-11 of `sublet/r1/r1_slots_pools.c --series linear`: `tighten` to RW and
+  `shrinkto 64`, each on a LINEAR source and a NONLIN control. Predicted from the RTL source:
+  - on silicon, arms 8 and 10 read **0**, i.e. the linear source survives;
+  - under QEMU, arm 8 reads 7 and arm 10 reads 0.
+
+  The emulator pass is blocked by the corrupt shared `rootfs.ext2` (inode 623), so the arms are not
+  yet committed.
+
 ### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; fixed by b047f32eb (2026-08-12), an ancestor of the deployed RTL — the entry's analysis predates it; the emulator still omits the clear (Q-12); nothing to report`
 
 > **On silicon 2026-09-15 (boot sw8x-f4, §7w):** `ldc t0 <- slot` (LINEAR), `stc t0 -> other slot`, then the
