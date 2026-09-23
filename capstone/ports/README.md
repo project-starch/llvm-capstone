@@ -25,6 +25,7 @@ and validation workflow linked from that guide.
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
 | PostgreSQL | Memory-context replay and memory profiles; not a database server | [PostgreSQL](postgres/README.md), [CMake component](postgres/memory-contexts/CMakeLists.txt); shared CMake layout plus older shell drivers |
 | CPython | Real pymalloc replay from native interpreter recordings; not a domain interpreter | [pymalloc](cpython/pymalloc/README.md); shared CMake layout |
+| CPython interpreter | Compile survey of the whole 3.13.7 interpreter for a musl domain: 222 of 253 objects, the compiler and source causes of the rest, and the integer-to-pointer round trips in what compiles; not linked, not run | [interpreter](cpython/interpreter/README.md); survey driver |
 | Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
 | Wireshark / wmem | All four wmem allocators with pool-reset epochs and lifetime fixtures; not domain packet dissection | [wmem](wireshark/wmem/README.md); shared CMake layout |
 
