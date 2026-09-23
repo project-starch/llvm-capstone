@@ -46,14 +46,48 @@ static inline void hc_host_ok(struct hostcall_v0 *m, long long v) {
   m->error = 0;
 }
 
+/* Every byte the KERNEL moves to or from the payload region goes through this
+ * buffer; the region is never handed to a syscall. Services that only memcpy
+ * (paths, fixed-size request and response structs) need not use it.
+ *
+ * OBSERVED (2026-09-23, matched pair): the same domain image read 0 bytes and got
+ * EFAULT from /mnt/host/input.mkv on the 9p share, and read the correct 4096 bytes
+ * from a /tmp copy; reading through a bounce buffer, with no other change, made the
+ * 9p read succeed. The stdout direction (WRITE_STDOUT with the host's stdout on a 9p
+ * file) is measured by tests/runtime-qemu/large-io.
+ * MECHANISM, INFERRED FROM THE GUEST KERNEL SOURCE (Linux 6.1), NOT MEASURED: the
+ * region is mapped with remap_pfn_range (modcapstone module/capstone.c), i.e.
+ * VM_IO|VM_PFNMAP, and get-user-pages refuses such a mapping with -EFAULT (mm/gup.c);
+ * an uncached 9p read or write larger than 1024 bytes goes zero-copy
+ * (net/9p/client.c, trans_virtio.c) and pins the user pages that way. tmpfs and the
+ * console use copy_to/from_user, which work on the mapping -- why the musl probes
+ * (all under /tmp, all printing to the console) never saw it.
+ *
+ * Returns the buffer, or NULL after answering EINVAL for a request longer than one
+ * region (the domain chunks at the region size, so a longer one is malformed). */
+static char hc_host_bounce_buf[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
+static inline char *hc_host_bounce(struct hostcall_v0 *metadata, size_t len) {
+  if (len > sizeof hc_host_bounce_buf) { hc_host_error(metadata, EINVAL); return NULL; }
+  return hc_host_bounce_buf;
+}
+
 /* Returns 0 if the opcode was recognised, -1 if not (caller decides). */
 static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *req,
                                   struct hostcall_v0 *metadata, char *payload) {
   const hostcall_u64_t max = HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES;
   switch (req->opcode) {
   case HC_V0_OP_WRITE_STDOUT: {
-    ssize_t n = write(STDOUT_FILENO, payload + req->offset, (size_t)req->length);
+    size_t len = (size_t)req->length;
+    char *b = hc_host_bounce(metadata, len);
+    if (!b) return 0;
+    memcpy(b, payload + req->offset, len);
+    /* Flush the host's own buffered output FIRST. The domain's bytes go out with
+       write() on the descriptor, past stdio's buffer; flushing afterwards, as this
+       did, put whatever the host had printed (the loader's messages) in the middle
+       of the domain's line. Invisible on a console, where stdio is line-buffered;
+       with stdout redirected to a file it split a 5000-byte line at 4096. */
     fflush(stdout);
+    ssize_t n = write(STDOUT_FILENO, b, len);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
@@ -75,13 +109,11 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    /* Through a bounce buffer, never straight from the region mapping: see FILE_READ. The
-       write direction is changed for symmetry; its failure was not reproduced. */
-    static char wbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
     size_t wlen = (size_t)req->length;
-    if (wlen > sizeof wbounce) { hc_host_error(metadata, EINVAL); return 0; }
-    memcpy(wbounce, payload + req->offset, wlen);
-    ssize_t n = pwrite(fd, wbounce, wlen, (off_t)off);
+    char *b = hc_host_bounce(metadata, wlen);
+    if (!b) return 0;
+    memcpy(b, payload + req->offset, wlen);
+    ssize_t n = pwrite(fd, b, wlen, (off_t)off);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
@@ -90,25 +122,11 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    /* Through a bounce buffer, never straight into the region mapping.
-       OBSERVED (2026-09-23, matched pair): the same domain image read 0 bytes and got EFAULT
-       from /mnt/host/input.mkv on the 9p share, and read the correct 4096 bytes from a /tmp
-       copy; with this bounce buffer and no other change the 9p read succeeds.
-       MECHANISM, INFERRED FROM THE GUEST KERNEL SOURCE (Linux 6.1), NOT MEASURED: the region
-       is mapped with remap_pfn_range (modcapstone module/capstone.c), i.e. VM_IO|VM_PFNMAP,
-       and get-user-pages refuses such a mapping with -EFAULT (mm/gup.c); an uncached 9p read
-       larger than 1024 bytes goes zero-copy (net/9p/client.c, trans_virtio.c) and pins the
-       destination pages that way. tmpfs uses copy_to_user, which works on the mapping --
-       why the musl probes (all under /tmp) never saw it. Unmeasured discriminator: a
-       <=1024-byte read from /mnt/host straight into the region should succeed.
-       RESIDUAL: HC_V0_OP_WRITE_STDOUT above still write()s straight from the mapping; with
-       the host's stdout redirected to a 9p file, a line over 1024 bytes would be exposed the
-       same way (untested; runs print to the console). */
-    static char rbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
     size_t rlen = (size_t)req->length;
-    if (rlen > sizeof rbounce) { hc_host_error(metadata, EINVAL); return 0; }
-    ssize_t n = pread(fd, rbounce, rlen, (off_t)off);
-    if (n > 0) memcpy(payload + req->offset, rbounce, (size_t)n);
+    char *b = hc_host_bounce(metadata, rlen);
+    if (!b) return 0;
+    ssize_t n = pread(fd, b, rlen, (off_t)off);
+    if (n > 0) memcpy(payload + req->offset, b, (size_t)n);
     if (n < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, n);
     return 0;
   }
