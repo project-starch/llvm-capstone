@@ -6252,6 +6252,36 @@ disagreeing with the history.
 
 ## Compiler / toolchain (ours)
 
+### C-54 — an atomic operation on a pointer compiles to `__atomic_*_16` library calls that nothing in a domain provides `OPEN — COMPILER GAP (stated out of scope by d5b5f11cae8f); first consumer the CPython link 2026-09-23`
+
+**What happens.** Load, store, compare-exchange and exchange on a `void **` each compile to a call
+of `__atomic_{load,store,compare_exchange,exchange}_16` (clang: "the access size (16 bytes) exceeds
+the max lock-free size (8 bytes)"); the same four on a `long` are inline. No libatomic exists for
+capstone64 and compiler-rt does not define these. `d5b5f11cae8f` says so: "Subword and
+capability-valued atomics are outside this change"; C-51 is the subword half.
+
+**Consumer.** Linking everything the CPython survey compiles leaves exactly three undefined symbols
+not explained by an absent CPython object: `__atomic_compare_exchange_16` (`Python/getargs.c`),
+`__atomic_load_16` and `__atomic_store_16` (`Modules/signalmodule.c`). More are expected once C-51
+lets `ceval_gil.c`, `typeobject.c`, `pystate.c` and `unicodeobject.c` compile.
+
+**Reproducer.** `capstone/tests/compiler-repros/C54-capability-atomics-libcalls/run.sh` (the `long`
+control must need no call); PRESENT on `d030df93d4a4` and `d5b5f11cae8f`.
+
+### C-53 — an inline-asm `"m"` INPUT operand crashes isel ("Memory operands expect pointer values"); `"=m"` outputs compile `OPEN — COMPILER; found 2026-09-23 through CPython's configure; blocks no port today`
+
+**What happens.** `__asm__ volatile("lw zero, %0" : : "m"(*p))` asserts in
+`SelectionDAGBuilder::visitInlineAsm` at `-O0` and `-O1`, whether the memory is reached through a
+pointer, a local or a global; `"=m"` output operands compile. CPython's `configure` reached it in
+its x87 and mc68881 FPU checks, which read the crash as "no" -- right for this target by accident.
+
+**Mechanism, read at `d030df93d4a4`, not confirmed by a fix.** `SelectionDAGBuilder.cpp:10392`
+asserts the operand's type is `TLI.getPointerTy(DL)`, address space 0's `i64`; the operand is an
+`addrspace(200)` capability, `c128`.
+
+**Reproducer.** `capstone/tests/compiler-repros/C53-inline-asm-memory-input/run.sh` (the two
+output shapes are controls); PRESENT on `d030df93d4a4`, `d5b5f11cae8f` and `f7b50f081ca4`.
+
 ### C-52 — the Greedy register allocator segfaults in `SplitEditor::rematWillIncreaseRestriction` on CPython's `compiler_visit_stmt` `OPEN — COMPILER; found 2026-09-23 by the CPython compile survey; reduced to 208 instructions; cause not looked at; per-file workaround -O0 or -regalloc=basic`
 
 **What happens.** `Python/compile.c` (CPython 3.13.7) kills clang with SIGSEGV in pass `Greedy
