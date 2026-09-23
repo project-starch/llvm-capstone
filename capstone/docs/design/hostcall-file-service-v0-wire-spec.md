@@ -185,6 +185,19 @@ counter whose frequency is in a device tree the domain does not see, so both wal
 monotonic time are helper-supplied. First consumer is musl's `clock_gettime`, reached from
 `mkstemp` through `__randname`.
 
+`HC_V0_OP_DIR_READ = 26` (added 2026-09-23). Request: `hc_dir_read_req_v0` (`handle`, `cookie`)
+at payload offset 0; `metadata.offset = 16` and `metadata.length` = the most bytes the domain will
+take (at most the region size minus 16). The handle comes from an ordinary `FILE_OPEN` of the
+directory: musl's `opendir` passes `O_DIRECTORY`, which the helper hands to `open` unchanged.
+Response: the helper seeks the directory to `cookie` and calls `getdents64` into the payload at
+`metadata.offset`; `result` = the byte count, 0 at the end of the listing, `metadata.length` the
+same. The records are `linux_dirent64` and travel unconverted: the domain's musl `struct dirent`
+has the same 64-bit layout. The cookie is not a byte offset. It is the `d_off` of the last record
+the domain received (0 = the start), so the domain keeps it as the handle's position and
+`seekdir`/`rewinddir` reach it through `lseek(SEEK_SET)`. Only whole records are returned, so a
+short buffer gets fewer of them and the next request resumes at the cookie. First consumer is
+musl's `readdir`, and behind it CPython's `os.listdir` and the directory cache of `import`.
+
 ## 5. Region contract
 
 ## 5a. Metadata region
