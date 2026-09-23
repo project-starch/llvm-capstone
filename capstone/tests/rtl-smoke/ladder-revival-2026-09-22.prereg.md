@@ -254,3 +254,77 @@ from a FIXED one (ratio moves toward 1.0)."*
 - If prediction 1 fails the run is VOID as a length series, because the points would not be comparable.
 - This characterises the effect; it does not explain it. No mechanism is offered in advance, and none
   may be written afterwards from these three points alone.
+
+---
+
+# Phase 5 addendum — `rv8_primes` at −O0, the measurement phase 3 assumed (2026-09-23, before the run)
+
+## What this closes
+
+Phase 3 measured `rv8_primes` at **−O1** (1.005×, instruction ratio 1.000) and §2 then called the
+published **1.263× at −O0** "largely an optimisation-level artefact". **That sentence outruns its
+evidence.** The two numbers differ in *two* variables, not one:
+
+- the **−O level** (−O0 published, −O1 measured), and
+- the **bitstream and compiler** (July 2026 vs `caplifive_m1_054cea69b`).
+
+No −O0 measurement exists on the current silicon, so "artefact of the optimisation level" is an
+attribution that was never tested. Every other row in the re-measured table is a like-for-like pair;
+this one is not, and it is the only row where the shift was explained by a variable that was not
+isolated.
+
+## Design — the row controls itself
+
+Both halves are rebuilt with `LADDER_OPT=-O0`, which the spec supports precisely so the two halves
+cannot drift (`build-ladder-fpga.sh:54`, `build-ladder-base-fpga.sh:61`). The published `rv8_primes`
+row **is** an −O0 row, so reproducing it is the control: an −O0 pair taken today is directly
+comparable to the −O0 pair published in July, with the −O level held fixed and only the
+bitstream/compiler varying. That is the variable phase 3 could not separate.
+
+`ctrsanity` rides along as an independent known-good control (oracle correctness and `clean`/spread
+only — its ratio at −O0 is NOT comparable to its published −O1 1.000×, and will not be quoted).
+
+Rungs, in order: `ctrsanity rv8_primes`. Both expected to return.
+
+## Pre-registered, before the boot
+
+Published −O0 reference: capability **17,283,292 / 8,773,753**, baseline **13,679,903 / 7,764,899**,
+cycles **1.263×**, instructions **1.130×**, CPI 1.118.
+
+1. **`rv8_primes` returns oracle 99991 at −O0.** C-3 has read `GONE` since 2026-09-05 and the rung
+   already returned its oracle at −O1 (phase 3) and −O2 (the C-3 closure). A non-return here refutes
+   the C-3 closure rather than anything about −O levels, and is reported as such.
+2. **The INSTRUCTION ratio is the discriminator.** *(Corrected before the run: an earlier draft of
+   this addendum said it "is decided at the desk, before the board". It is not — instret is a
+   DYNAMIC count, and the parity runner `run-ladder-perf-qemu.sh` is a correctness gate that reports
+   no counters at all. The ratio is read from the board run's own instret column. The discriminating
+   LOGIC is unaffected: instruction counts are emitted by the compiler and merely counted by the
+   silicon, so the ratio still separates a compiler change from a silicon one — only the claim about
+   where it gets read was wrong.)*
+   - **reproduces ~1.130** → the −O0 codegen is materially unchanged since July, and any cycle-ratio
+     movement is the silicon's;
+   - **has collapsed toward 1.000** → the capability compiler improved at −O0 too, and the cycle
+     shift is the compiler's, exactly as for `beebs_cnt`/`beebs_bs`.
+3. **The CYCLE ratio reproduces 1.263× within ±3 %.** If it does, the published row stands on current
+   silicon, and "−O1 removes this overhead" becomes a clean, isolated optimisation finding — the
+   strongest available version of §2's claim, now earned.
+4. **REFUTATION, named:** if the −O0 cycle ratio comes back at ~1.00×, then **the published 1.263× does
+   not reproduce on this bitstream at its own −O level**, the "optimisation-level artefact" attribution
+   in §2 is **false**, and the cause lies in the bitstream or the compiler. That sentence is then
+   struck, not softened.
+5. **`ctrsanity` returns oracle 43260934** with `15/15` passes tied at min instret, spread 0, on both
+   halves. A `clean` below 15/15 on the bare-metal baseline contradicts I-2's closure and VOIDs the run.
+
+## Refutation and VOID
+
+- **VOID** if `ctrsanity` fails its oracle on either half, or if the baseline half's `clean` is not
+  15/15 at spread 0 — the denominators are then not floors and no ratio may be read.
+- **VOID** if the result file's mtime predates the run (the phase-2 staleness trap: a failed run
+  writes nothing and a stale artifact copies clean). Delete before, check mtime after.
+- **Not a VOID, a result:** `rv8_primes` failing to return at −O0. That is reported against C-3.
+- **No mechanism will be offered for whatever the cycle ratio does.** As in phase 4, two points
+  bound a difference; they do not explain one.
+
+## Bitstream
+
+`caplifive_m1_054cea69b.bit` (WNS −8.307), resident. `FPGA_ALLOW_FLASH` stays unset.

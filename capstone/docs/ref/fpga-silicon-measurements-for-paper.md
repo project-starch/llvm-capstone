@@ -296,9 +296,18 @@ instret, spread 0`, two months and several bitstreams later.
 | `beebs_bs` | 1.537× | 1.397× | −9.1 % | 1.058 → 0.992 |
 | `beebs_recursion` | 1.957× | 1.983× | +1.3 % | 1.458 → 1.500 |
 
-**Four rows reproduce within ±1.3 %.** Two moved because their **codegen** changed, which their own
-instruction ratios show (`beebs_cnt` 1.319 → 1.197, `beebs_bs` 1.058 → 0.992) — the compiler got
-better at those kernels, and the cycle ratio followed. `rv8_primes` is not a shift at all, it is
+**Four rows reproduce within ±1.3 %.** Two moved, and the paired halves say which side moved: in
+both cases the **baseline is byte-for-byte the July measurement** and the **capability half got
+cheaper**.
+
+| rung | baseline instret | baseline cycles | capability instret |
+|---|---|---|---|
+| `beebs_cnt` | 57,949 → 57,949 (unchanged) | 94,736 → 94,736 (unchanged) | 76,429 → 69,387 (**−9.2 %**) |
+| `beebs_bs` | 827 → 827 (unchanged) | 1,470 → 1,470 (unchanged) | 875 → 820 (**−6.3 %**) |
+
+A falling instruction *ratio* on its own is equally consistent with the baseline getting worse; the
+unchanged denominators above are what rule that out and make this an attribution rather than an
+assertion. **Capability codegen improved on these two kernels and the cycle ratio followed.** `rv8_primes` is not a shift at all, it is
 −O0 against −O1. **Seven rows reproducing or explaining themselves is a stronger certification of the
 pairing than a single control rung**, which matters because the control is the one row that does not.
 
@@ -314,9 +323,16 @@ lengths, all in one boot (`ladder-revival-2026-09-22/phase4-control-length-serie
 | 500,030 | **1.1670** | 1.4005 | 1.2000 |
 | 2,000,030 | **1.1668** | 1.4001 | 1.2000 |
 
-**It saturates.** 500k → 2M moves the ratio by **−0.02 %** across a 4× increase in work, while the
-baseline CPI sits at exactly 1.2000 throughout — so the denominator contributes nothing and the rise
-is entirely capability-side. Capability CPI climbs 1.256 → 1.400 and stops.
+**The ratio is flat by 500k.** 500k → 2M moves it by **−0.02 %** across a 4× increase in work,
+while the baseline CPI sits at exactly 1.2000 throughout — so the denominator contributes nothing
+and the whole of the rise is capability-side.
+
+**Two regimes are measured; the transition between them is NOT.** Capability CPI reads 1.256 at 5k
+and 1.400 at both 500k and 2M. Nothing was sampled between 5k and 500k — a 100× gap — so these
+three points cannot distinguish a smooth ramp from a step at 50k from a bump-and-settle. Read them
+as *at 5k the overhead is 1.046×; by 500k it is 1.167× and unchanged at four times that length*.
+**Do not read a curve off this table.** One rung at `CTRSANITY_N = 10000` (~50 k instructions) would
+give the shape; until it is run, the climb is undescribed.
 
 That it is *this kernel's* property and not the bitstream's is what the eight rows above establish:
 `beebs_aha_mont64` runs 256,697 instructions — half a `ctrsanity` — and reads 1.010×.
