@@ -2055,16 +2055,26 @@ unsigned CapstoneInstrInfo::getInstBundleLength(const MachineInstr &MI) const {
   return Size;
 }
 
-// Capability instructions that trap when an operand is not a tagged
-// capability (UNEXPECTED_OPERAND, cause 24) and that LLVM otherwise treats as
-// free of side effects. Taken from the QEMU model, where these are the helpers
-// that raise on an untagged rs1 and are emitted for ordinary pointer code.
+// Capability instructions that LLVM treats as free of side effects but that
+// must not run on an operand that is not a tagged capability. Taken from the
+// QEMU model: CIncOffset(Imm), LCC, SHRINK and SEAL raise UNEXPECTED_OPERAND
+// (cause 24) on an untagged rs1; SCC, TIGHTEN and INIT assert that it is
+// tagged. The first four come from ordinary pointer code, the rest from the
+// capability intrinsics. SEAL and INIT are selected as their tied pseudos,
+// which is what MachineLICM sees. MOVC is absent: it moves an untagged value
+// without complaint.
 static bool trapsOnUntaggedOperand(unsigned Opcode) {
   switch (Opcode) {
   case Capstone::CIncOffset:
   case Capstone::CIncOffsetImm:
   case Capstone::LCC:
   case Capstone::SHRINK:
+  case Capstone::SCC:
+  case Capstone::TIGHTEN:
+  case Capstone::SEAL:
+  case Capstone::PseudoSEAL:
+  case Capstone::INIT:
+  case Capstone::PseudoINIT:
     return true;
   default:
     return false;
