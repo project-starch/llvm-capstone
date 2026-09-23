@@ -42,9 +42,14 @@ case $STAGE in
   *) echo "stage must be 1..5, all, m2diag or probe" >&2; exit 2;;
 esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
-DOM="$WORK/domain"
+# FFAPP_HEAP picks the heap arm's images (build-domain.sh); level0 is the run of record's.
+case ${FFAPP_HEAP:-level0} in
+  level0) DOM="$WORK/domain"; LOG=${LOG_FILE:-$WORK/qemu-$STAGE.log} ;;
+  shrink) DOM="$WORK/domain-shrink"; LOG=${LOG_FILE:-$WORK/qemu-shrink-$STAGE.log} ;;
+  sublet) DOM="$WORK/domain-sublet"; LOG=${LOG_FILE:-$WORK/qemu-sublet-$STAGE.log} ;;
+  *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+esac
 SHARE="$WORK/share"
-LOG=${LOG_FILE:-$WORK/qemu-$STAGE.log}
 for f in "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/stock.framemd5"; do
   [ -f "$f" ] || { echo "missing $f; run build-native.sh and build-domain.sh first" >&2; exit 2; }
 done

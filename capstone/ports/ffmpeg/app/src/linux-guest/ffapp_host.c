@@ -63,6 +63,20 @@ int main(int argc, char **argv)
     shared_region_annotated(domain, payload_region,
                             HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
                             HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
+#ifdef FFAPP_HEAP_REGION_BYTES
+    /* The Sublet heap arm: a third region, TRANSFERRED, so it arrives LINEAR (mrev needs that,
+       and REV_SHARED cannot give it) and the host keeps no authority over it. hostcall.c parks
+       it for the heap (CAPSTONE_PROGRAM_REGIONS). Created zeroed (dma_alloc_pages). */
+    region_id_t heap_region = create_region(FFAPP_HEAP_REGION_BYTES);
+    if (heap_region == (region_id_t)-1) {
+        fprintf(stderr, "ffapp-host: create_region(%lu) for the heap failed\n",
+                (unsigned long)FFAPP_HEAP_REGION_BYTES);
+        capstone_cleanup();
+        return 1;
+    }
+    shared_region_annotated(domain, heap_region, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
+                            0x3UL /* REV_TRANSFERRED, as the SQLite and nginx arenas */);
+#endif
 
     static struct hc_host host;
     host.tag = "ffapp";
