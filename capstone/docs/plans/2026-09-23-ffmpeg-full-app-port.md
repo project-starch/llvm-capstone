@@ -21,7 +21,16 @@ record is `ports/ffmpeg/app/results/2026-09-23-qemu-m1-m5/`, at `41355570eda7`.
   - stdout lost after its first line (port);
   - `EFAULT` on 9p reads (host, fixed on `dev` `e852b3951476`);
   - compiler miscompile **C-50** (`dev` `0e5b7b991629`; patch 0003 plus a gate).
-- **What remains is M6** (silicon ABI) and the §4 one-translation-unit question.
+- **Audited the same day.** Three adversarial audits confirmed the result and exposed instrument
+  holes, all since fixed. A fresh run of record was made at `5f05b2148b40`, with the reference
+  now built from unpatched FFmpeg.
+- **The audits also found the result's main limit.** On this `link.ld` ABI, every global access
+  uses a cursor-0 `gp` that **QEMU fabricates and silicon cannot represent**. It happened
+  ≥75,000 times in the run. With fabrication off, the domain dies in musl-capstone's start code
+  before `capstone_main`. So M1–M5 prove FFmpeg correct under capability enforcement in QEMU,
+  not runnable on the board as built.
+- **What remains is M6** (silicon ABI) and the §4 one-translation-unit question. M6 is what
+  removes the `gp` dependence.
 
 **Question answered:** can FFmpeg 9.0.1 run file-to-file inside a Capstone domain the way SQLite
 does, and what is the shortest path to evidence?

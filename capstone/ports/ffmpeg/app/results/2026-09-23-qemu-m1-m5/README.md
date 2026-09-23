@@ -1,91 +1,127 @@
-# FFmpeg as a full application in a Capstone domain: M1–M5 on QEMU, bit-identical
+# FFmpeg as an application in a Capstone domain: M1–M5 on QEMU, bit-identical
 
-**Verdict.** FFmpeg 9.0.1 (matroska demuxer → mpeg4 decoder), running whole inside one
-pure-capability domain on musl-capstone:
-- **demuxes and decodes all 30 frames** of the reference workload;
-- its per-frame MD5s are **identical to native `ffmpeg -f framemd5`** on the same input (30/30);
-- the flipped-input **positive control FIRES** in the same boot: 10 of 30 hashes change,
-  exactly as they do natively.
+**Verdict.** FFmpeg 9.0.1 (matroska demuxer → mpeg4 decoder) runs whole inside one Capstone
+domain on musl-capstone, under capability enforcement, on QEMU.
+- It **demuxes and decodes all 30 frames** of the reference workload.
+- Its per-frame MD5s are **identical to native `ffmpeg -f framemd5`** on the same input (30/30).
+- The native reference is built from **unpatched** FFmpeg.
+- In the same boot, the flipped-input positive control decodes all 30 frames and changes 10
+  hashes, exactly as it does natively.
 
-This is QEMU, not silicon. See "What this does not establish".
+**Read "What this does not establish" before citing it.** In particular, the domain gets its
+global-access capability (`gp`) from a QEMU convenience that cannot exist on silicon.
 
 ## Identity
 
 | | |
 |---|---|
-| source | branch `ffmpeg-app` at **`41355570eda7`**, FFmpeg 9.0.1 (`upstream.json`) plus patches 0001–0003 |
-| images | `SHA256SUMS`, hashed **before** the boot; the guest booted byte-identical copies (re-verified after) |
-| budget | `code_len` 3,619,024 B, allocation 4 MiB (order-10 ceiling) |
-| C-50 gate | 0 hits in 354,666 instructions |
-| pointer round trips flagged by the compiler | 20 |
-| emulator | capstone-qemu, main clone build; `run-domain-smoke.py`, one boot, `$CAPSTONE_QEMU_LOCK` held |
-| guest rootfs | a **private, fsck-repaired copy** of the shared `rootfs.ext2` (inode 623, `/var/lib/seedrng`). The shared image was left untouched: its hash was verified unchanged |
-| workload | the buffer-pool "short" recording (`buffer-pool/host/record.sh`): 1 s, 320x180, 30 frames. Reference `stock.framemd5` = `663177980a01…`, as committed in `buffer-pool/results/measurements/20260919-replay/measurements.json` |
+| source | branch `ffmpeg-app` at **`5f05b2148b40`**: FFmpeg 9.0.1 (`upstream.json`) plus patches 0001–0003 |
+| images | `SHA256SUMS`, hashed **before** the boot. The copies the guest booted were re-verified identical afterwards |
+| reference | `stock.framemd5` from stock `ffmpeg` built from the **pristine** tarball. Hash `663177980a01…`, the same value the buffer-pool lane committed from its own independent stock build (`buffer-pool/results/measurements/20260919-replay/measurements.json`) |
+| budget | `code_len` 3,619,024 B, plus 8 KiB, plus the declared 256 KiB stack, gives a 4 MiB allocation. **The kernel module's own line agrees for every image:** `code size = 3619024, tot_size = 400000` (six lines, in `result-lines.txt`) |
+| gates | See the table below |
+| emulator | capstone-qemu (main clone build), `run-domain-smoke.py`, one boot, `$CAPSTONE_QEMU_LOCK` held |
+| guest rootfs | A **private, fsck-repaired copy** of the shared `rootfs.ext2` (inode 623, `/var/lib/seedrng`). The shared image was left untouched, and its hash was verified unchanged |
 
-The input's own bytes vary per generation (Matroska writes a random SegmentUID), so the input
-and its flipped twin are hashed here for this run only. The decoded frames are the stable oracle.
+The gates, each shown to fire before it was trusted:
 
-## Result (from `result-lines.txt`)
+| gate | result in this run | shown to fire on |
+|---|---|---|
+| C-50 scan | 0 hits in 354,669 instructions | the reproducer and three evading layouts |
+| budget and layout | 9/9 images fit, none has `.capstone_gp_initdesc` | a gp-captable image, for the layout check |
+| negative link control | fires | — |
+| per-section verdict | every image reached its own milestone | a doctored log |
+| `compare-md5.py` | MATCH, control fires | a mismatch, a truncated output, an empty reference, a 0-frame control, and a control that cannot fire |
 
-Each milestone image returned exactly the stage it was built for, all in the same boot:
+The input's bytes vary per generation, because Matroska writes a random SegmentUID. So the
+input and its flipped twin are hashed for this run only; the decoded frames are the stable
+oracle.
+
+## Result (`result-lines.txt`)
+
+Each image returned exactly the milestone it was built for, checked **inside its own section**
+of the serial log:
 
 | image | host requests | `capstone_main` |
 |---|---:|---|
 | M1 main | 1 | 1 |
 | M2 `avformat_open_input` + `find_stream_info` → `streams=1 video=0 320x180` | 21 | 2 |
-| M3 first packet, `size=10574` (native: 10574) | 23 | 3 |
+| M3 first packet, `size=10574` (native 10574) | 23 | 3 |
 | M4 first frame | 26 | 4 |
 | M5 `frames=30 packets=30` | 122 | 5 |
-| M5, flipped input (control) | 122 | 5 |
-
-Then, outside the guest (`host/compare-md5.py`, whose failure paths are negative-tested):
+| M5 on the flipped input (control) | 122 | 5 |
 
 ```
 oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
 control: 30 frames, 10 changed hashes -> FIRES
 ```
 
-No `capstone-domain: UNSERVED syscalls` line was printed: every syscall FFmpeg made was served.
-
-## What it took, in order (details in the branch history)
-
-1. **M0 (`eb53d4e`):** a cross-configured minimal FFmpeg links as a domain, within the 4 MiB
-   budget only with a `.capstone_domreq` declaration. Two patches keep pointer provenance.
-2. **Lost stdout:** musl goes fully buffered after its first flush (`ENOTTY`), and the runtime
-   never flushes on return. The domain entry now sets stdout line-buffered and flushes.
-3. **`EFAULT` on 9p reads:** the host `pread` into the region mapping failed for zero-copy 9p.
-   This is fixed for everyone on `dev` (`e852b3951476`), and the port also stages its inputs to
-   `/tmp`.
-4. **A compiler miscompile, C-50** (`dev` `0e5b7b991629`): an integer-valued pointer in a
-   by-value union is stored through an integer address. Worked around by patch 0003, and
-   guarded by a build gate.
-
-Every one of these was localised by a run that **returned** a result: staged images, a
-diagnostic image built from a separate object, and a matched pair differing in one variable.
-None was localised by guessing from a hang.
+No `capstone-domain: UNSERVED syscalls` line was printed.
 
 ## What this does not establish
 
-- **Silicon.** This is the musl / `link.ld` ABI on QEMU. The board needs the gp-captable ABI (M6)
-  and its one-translation-unit question (plan §4). Silicon-only defects are not ruled out.
-- **Heap and stack headroom under the capability build.** The run fits and completes, but the
-  domain's peak heap was not measured, and 305 KB of allocation slack is little.
-- **Any other workload.** One file, one frame size. 640x360 does not fit one region.
-- **Performance.** TCG timing means nothing here.
+**1. Silicon: not run, and this ABI cannot run there as-is.**
 
-## Reproduced from scratch, same day
+The musl-capstone `my_first_domain/link.ld` ABI reaches globals through a `gp` with cursor 0.
+Its own start code does this (`start-musl.S`, `.Lpcrel_domret_entry`:
+`auipc; addi; cincoffset t0, gp, t0; stc`). capstone-qemu **fabricates** that `gp` when an
+untagged one reaches `CINCOFFSET`, and its source says the result "CANNOT EXIST ON SILICON"
+(`target/riscv/op_helper.c`).
 
-A fresh `FFAPP_WORK` (`/tmp/capstone/ffmpeg-app-verify`) was run from the committed branch:
-- the tarball was re-fetched and hash-verified;
-- `build-native.sh`, `build-domain.sh` and `run-qemu.sh all` were run.
+This run relied on it: the fabrication counter, which logs every 1000th, reached **#75,000**.
+Measured on the previous run-of-record images (same ABI and runtime), in two separate boots:
 
-Same verdict: M1–M5 each returned its own stage, `oracle ... MATCH` (30/30), and the control FIRES
-(10/30).
+- **`CAPSTONE_GP_FABRICATE=0`:** QEMU stops before the shell prompt; the domain never runs.
+- **`CAPSTONE_GP_FABRICATE=0 CAPSTONE_GP_STANDIN=1`**, i.e. a representable image-covering `gp`
+  as the monitor would deliver on silicon: the domain takes a capability fault (cause 7) at
+  `pc 0x102000064`. That is in musl-capstone's start code, **before `capstone_main`**.
 
-**The build is deterministic.** Against `SHA256SUMS` above, all six domain images and the guest
-host rebuilt byte-identical (`OK`), and so did the reference `stock.framemd5`. Only `input.mkv` and
-`input.flip.mkv` differ, as expected, because of the random SegmentUID.
+This is the known reason silicon uses the gp-captable ABI (prior art:
+`my_first_domain/start-fpga-gpseed.S`). The board therefore needs **M6**: the port rebuilt on
+that ABI, with its one-translation-unit question (plan §4). **It is the same dependency every
+musl-capstone domain on this ABI has, not an FFmpeg defect.**
 
-The musl-capstone archive and the private rootfs copy were reused, not rebuilt. The first attempt
-failed on a transient `Connection reset by peer` from the tarball mirror. `prepare-source.sh` now
-retries.
+**2. Patch 0002's `frame.c` changes.**
+
+They are correct by reading, but almost certainly **never executed** here. The decoder
+allocates frames through `avcodec_default_get_buffer2`, and only `hwcontext.o` and `encode.o`
+call `av_frame_get_buffer`. So the MD5 match says nothing about them.
+
+**3. Heap and stack headroom.**
+
+The capability build's peak heap is unmeasured; it is bounded above by the 1.5 MiB arena. The
+256 KiB stack is a guess. The declared total is about 298 KiB below the next power of two.
+
+**4. Determinism in general.**
+
+The earlier run of record's images rebuilt byte-identical from scratch, on this host, with this
+LLVM build and a reused `libc-capstone.a`. That is reproducibility here, not a general claim.
+
+**5. Any other workload, and performance.**
+
+This is one file at one frame size; 640x360 does not fit one region. TCG timing means nothing.
+
+**Instrument notes.**
+- `run-domain-smoke.py`'s substring markers are satisfied by the shell's echo of the guest
+  command. They are kept as a smoke check only. The verdict is the per-section `REACHED` line
+  plus `compare-md5.py` (see the header of `run-qemu.sh`).
+- The flip image is built from the same objects except its entry object. It is not a
+  byte-level twin of M5: the longer path string shifts the layout.
+
+## How it got here (branch history)
+
+1. **M0:** a cross-configured minimal FFmpeg links as a domain. It fits the 4 MiB budget only
+   with a `.capstone_domreq` declaration. Patches 0001–0002 keep pointer provenance.
+2. **Three defects between M1 and M5,** each localised by a run that returned a result:
+   - **stdout lost after its first line:** musl goes fully buffered, and the runtime never
+     flushes on return. Fixed in the port; the runtime caveat is recorded on `dev`.
+   - **`EFAULT` on 9p reads:** host bounce buffer, `dev` `e852b3951476`.
+   - **Compiler miscompile C-50:** `dev` `0e5b7b991629`, corrected in `ef636ba1d05f`. Worked
+     around by patch 0003, and gated.
+3. **The first run of record,** at `41355570eda7`, passed, and was reproduced from scratch
+   with byte-identical images.
+4. **Three adversarial audits** confirmed the result and exposed instrument holes: a
+   reference sharing the patches, a 0-frame control counted as firing, an evadable C-50 scan,
+   echo-satisfied markers, and a `pipefail` trap. They also found the `gp` dependence above.
+   All the holes are fixed in `5f05b2148b40`, and **this** run of record was made from
+   scratch afterwards.

@@ -16,8 +16,8 @@ recording from `buffer-pool/host/record.sh:23-34`.
 | milestone | state |
 |---|---|
 | **M0** builds and links as a domain, within budget | **reached 2026-09-23** (apollo) |
-| **M1–M5** | **reached 2026-09-23 on QEMU.** Per-frame MD5 is **bit-identical to native** (30/30), and the flipped-input control fires. Run of record: `results/2026-09-23-qemu-m1-m5/` |
-| M6 | silicon ABI, see the plan's §4 (one-translation-unit question) |
+| **M1–M5** | **reached 2026-09-23 on QEMU.** Per-frame MD5 is **bit-identical to native** (30/30, reference built from unpatched FFmpeg), and the flipped-input control fires. Run of record: `results/2026-09-23-qemu-m1-m5/`. **Relies on QEMU's fabricated cursor-0 `gp`**, which cannot exist on silicon; with fabrication off, the domain dies in musl-capstone's start code. That is common to every domain on this ABI |
+| M6 | the gp-captable (silicon) ABI, which is also what removes the fabricated-`gp` dependence. See the plan's §4 (one-translation-unit question) |
 
 **What M0 establishes:**
 
