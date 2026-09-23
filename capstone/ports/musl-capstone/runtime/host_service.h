@@ -75,7 +75,8 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    /* Through a bounce buffer, never straight from the region mapping: see FILE_READ. */
+    /* Through a bounce buffer, never straight from the region mapping: see FILE_READ. The
+       write direction is changed for symmetry; its failure was not reproduced. */
     static char wbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
     size_t wlen = (size_t)req->length;
     if (wlen > sizeof wbounce) { hc_host_error(metadata, EINVAL); return 0; }
@@ -89,12 +90,20 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     hostcall_u64_t handle = r->handle, off = r->file_offset;
     int fd = hostcall_lookup_handle_fd(h->slots, max, handle);
     if (fd < 0) { hc_host_error(metadata, errno); return 0; }
-    /* Through a bounce buffer, never straight into the region mapping. For a file on the
-       9p share (/mnt/host) a read this size goes zero-copy: the kernel pins the destination's
-       user pages, and a Capstone region mapping cannot be pinned, so pread fails with EFAULT.
-       Files on tmpfs copy normally, which is why the musl probes (all under /tmp) never saw
-       it. Found 2026-09-23 by a matched pair: the same domain image read 0 bytes and got
-       EFAULT from /mnt/host/input.mkv, and read the correct 4096 bytes from a /tmp copy. */
+    /* Through a bounce buffer, never straight into the region mapping.
+       OBSERVED (2026-09-23, matched pair): the same domain image read 0 bytes and got EFAULT
+       from /mnt/host/input.mkv on the 9p share, and read the correct 4096 bytes from a /tmp
+       copy; with this bounce buffer and no other change the 9p read succeeds.
+       MECHANISM, INFERRED FROM THE GUEST KERNEL SOURCE (Linux 6.1), NOT MEASURED: the region
+       is mapped with remap_pfn_range (modcapstone module/capstone.c), i.e. VM_IO|VM_PFNMAP,
+       and get-user-pages refuses such a mapping with -EFAULT (mm/gup.c); an uncached 9p read
+       larger than 1024 bytes goes zero-copy (net/9p/client.c, trans_virtio.c) and pins the
+       destination pages that way. tmpfs uses copy_to_user, which works on the mapping --
+       why the musl probes (all under /tmp) never saw it. Unmeasured discriminator: a
+       <=1024-byte read from /mnt/host straight into the region should succeed.
+       RESIDUAL: HC_V0_OP_WRITE_STDOUT above still write()s straight from the mapping; with
+       the host's stdout redirected to a 9p file, a line over 1024 bytes would be exposed the
+       same way (untested; runs print to the console). */
     static char rbounce[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
     size_t rlen = (size_t)req->length;
     if (rlen > sizeof rbounce) { hc_host_error(metadata, EINVAL); return 0; }

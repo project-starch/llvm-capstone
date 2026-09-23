@@ -202,7 +202,10 @@ overhead ratios (capability ÷ baseline) for cycles and for instructions respect
 
 ### CURRENT — 15 kernels, one bitstream, one compiler, one baseline (2026-09-23)
 
-> **⚠ READ PHASES 8–9 (below) BEFORE QUOTING A SINGLE ROW.** On this silicon, cycle ratios move
+> **⭐ The layout-randomised table (phase 10, below) supersedes this one for per-kernel numbers:
+> medians of 4 layouts with bands. 15 kernels 0.990×–2.154×, median 1.160×, geomean 1.299×.**
+>
+> **⚠ READ PHASES 8–10 (below) BEFORE QUOTING A SINGLE ROW.** On this silicon, cycle ratios move
 > with code layout. The control's 16.7 % was one misaligned loop, and with loops aligned it reads
 > 1.000×. The same layout change moves `cover` 0.951× → 1.141× and `janne` +5.4 %. Instruction
 > ratios and the table's overall shape are robust; per-kernel cycle ratios are one draw of layout.
@@ -647,6 +650,78 @@ controls were re-measured with `-falign-loops=8` in both halves
    variable pad ahead of the kernel in both halves) and report the median and the band. That is the
    standard remedy for this well-known class of measurement bias, and it is a methods decision for the
    lead before the paper quotes per-kernel cycle ratios.
+
+### LAYOUT-RANDOMISED TABLE, phase 10 (2026-09-23): 15 kernels × 4 layouts, both halves
+
+The lead chose the layout-randomised measurement.
+- **The knob.** `-DLADDER_PAD=K` emits a file-scope `.p2align 6` + K four-byte `nop`s at the top of
+  each rung's translation unit, in both halves. It shifts every function in that object by 4K bytes,
+  helpers included, and executes nothing.
+- **The run.** K = 0..3, each a full capability boot plus a full bare-metal sweep of 17 rungs (two
+  controls + 15 kernels), at spec `-O` (`phase10-layout-randomised.result-lines.txt`).
+- **Validity.** Checked at every K:
+  - the gate passed (control instruction ratio 1.00002, baseline CPI 1.2000, 15/15);
+  - all 68 baselines are 15/15, every oracle is correct, and all 8 sessions ran on
+    `caplifive_m1_054cea69b` with the matching flags.
+
+| kernel | K=0 | K=1 | K=2 | K=3 | **median** | band (min–max) | spread | instr |
+|---|---:|---:|---:|---:|---:|---|---:|---:|
+| `beebs_cover` | 0.984 | 0.991 | 0.994 | 0.990 | **0.990×** | 0.984–0.994 | 1.0 % | 0.999 |
+| `rv8_sha512` | 1.006 | 1.007 | 1.006 | 1.007 | **1.006×** | 1.006–1.007 | 0.1 % | 0.996 |
+| `rv8_primes` | 1.010 | 1.007 | 1.008 | 1.008 | **1.008×** | 1.007–1.010 | 0.3 % | 1.000 |
+| `beebs_aha_mont64` | 1.010 | 1.010 | 1.010 | 1.011 | **1.010×** | 1.010–1.011 | 0.1 % | 1.000 |
+| `rv8_sha512s` | 1.014 | 1.014 | 1.015 | 1.014 | **1.014×** | 1.014–1.015 | 0.1 % | 1.092 |
+| `beebs_prime` | 1.046 | 1.047 | 1.049 | 1.052 | **1.048×** | 1.046–1.052 | 0.6 % | 1.000 |
+| `beebs_crc32` | 1.129 | 1.127 | 1.129 | 1.129 | **1.129×** | 1.127–1.129 | 0.2 % | 0.959 |
+| `beebs_ns` | 1.160 | 1.160 | 1.162 | 1.161 | **1.160×** | 1.160–1.162 | 0.2 % | 0.987 |
+| `beebs_cnt` | 1.200 | 1.200 | 1.200 | 1.200 | **1.200×** | 1.200–1.200 | 0.0 % | 1.197 |
+| `beebs_bs` | 1.456 | 1.468 | 1.422 | 1.377 | **1.439×** | 1.377–1.468 | **6.6 %** | 0.992 |
+| `coremark_matrix` | 1.462 | 1.460 | 1.458 | 1.459 | **1.460×** | 1.458–1.462 | 0.3 % | 1.229 |
+| `matmult_int` | 1.691 | 1.684 | 1.689 | 1.687 | **1.688×** | 1.684–1.691 | 0.4 % | 1.337 |
+| `beebs_recursion` | 1.980 | 1.955 | 1.964 | 1.979 | **1.972×** | 1.955–1.980 | 1.3 % | 1.500 |
+| `beebs_janne` | 1.994 | 1.906 | 2.031 | 1.991 | **1.993×** | 1.906–2.031 | **6.6 %** | 0.943 |
+| `beebs_insertsort` | 2.160 | 2.139 | 2.147 | 2.185 | **2.154×** | 2.139–2.185 | **2.2 %** | 1.183 |
+| *control* `ctrsanity` | 1.167 | 1.000 | 1.000 | 1.000 | 1.000× | 1.000–1.167 | 16.7 % | 1.000 |
+| *control* `ctrsanitys` | 1.045 | 1.210 | 1.037 | 1.048 | 1.046× | 1.037–1.210 | 16.7 % | 1.002 |
+
+**Over the 15 kernels' medians:** 0 %–115 % (0.990×–2.154×), median **1.160×**, geometric mean
+**1.299×**.
+
+**What this establishes:**
+1. **12 of 15 kernels are layout-stable to within ±1.3 %.** Their CURRENT numbers were already good
+   to that precision. Instruction ratios do not move at all across layouts, as expected.
+2. **Three kernels carry a real layout band.** `bs` and `janne` each spread 6.6 %, `insertsort`
+   2.2 %. These three are the shortest-running kernels in the table, so a handful of cycles is a
+   visible fraction. Quote them with their band.
+3. **`cover` is ≈ 0.99× in all four layouts.** "No measurable overhead" is supported again, now as
+   a band rather than one draw. Its phase-9 reading of 1.141× came from what `-falign-loops=8` did
+   to it, not from layout in general.
+4. **Pre-registered prediction 3 is REFUTED.** It said a loop starting at 4 mod 8 costs a cycle per
+   iteration, so `ctrsanity` would be slow at K=0 and K=2.
+   - At K=2 its loop sits at `…1b4` (4 mod 8) and it is **fast**.
+   - What the two control kernels share is narrower: across `…1a8 / …1ac / …1b0 / …1b4 / …1b8`,
+     **only `…1ac` is slow**. `ctrsanitys` turns slow (1.210×) exactly at K=1, when its loop moves
+     to `…1ac`.
+   - For that loop the backward `bne` then sits in the **last 4 bytes of a 16-byte block**
+     (`…1bc`), and so does the loop's end at a 64-byte boundary. Several candidate mechanisms fit.
+     **None is claimed.** This is the specific pair E2b must simulate: `…1ac` against `…1b4`.
+5. **Pre-registered prediction 2 (K=0 reproduces CURRENT within 0.5 %) rested on a premise that held
+   for only 11 of 17 rungs.**
+   - The premise was checked at the desk on one rung. For 6 rungs the TU's `.text` does not start
+     64-byte aligned by default, so `.p2align 6` moves their code even at K=0.
+   - Among the 11 code-identical rungs, 9 reproduce within 0.5 %.
+   - `janne` (+7.3 %, 636 vs 593 cycles) and `insertsort` (+3.2 %) do not, on identical code. That
+     is boot-to-boot or entry-VA variation. `janne` has now read 593 / 603 / 636 in three boots.
+   - So sub-few-thousand-cycle kernels vary by a few percent across boots **as well as** across
+     layouts. Their bands above understate that, because each layout is one boot.
+
+**Recommendation to the lead:** cite the **median-of-layouts** column with its band. Which statistic
+to quote is the lead's call.
+- For the 12 stable kernels, the band is narrower than any claim the paper makes.
+- For `bs`, `janne` and `insertsort`, quote the band, or re-run each layout 3× to separate layout
+  variation from boot variation.
+- The **control belongs in the paper as the demonstration of the layout effect**, not as a certificate
+  of the pairing: 1.000× in three layouts, 1.167× in one.
 
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
