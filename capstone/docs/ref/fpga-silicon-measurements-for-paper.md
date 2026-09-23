@@ -247,8 +247,8 @@ subsection but one). Two things bound it without explaining it:
 - `rv8_primes` runs 3.2 M instructions and reads 1.005×.
 
 So it is not a flat per-instruction silicon tax on capability mode. **Phase 6 narrows it** (subsection "Phase 6 …"). On identical instructions, the control's loop
-costs 7 cycles/iteration in every rung except the one that both starts at `…1a8` and runs first in
-the boot, which costs 6. Which of those two it is remains open (phase 7). Whether some of it hides inside
+costs 7 cycles/iteration when its loop starts at `…1ac` and 6 when it starts at `…1a8`, wherever it
+sits in the boot (phase 7 ruled out position). Whether some of it hides inside
 the stall-dominated rows is **open**. That question is phase 6 of
 `ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
 control's reading beside the table.
@@ -446,8 +446,8 @@ single control rung**, which matters because the control is the one row that doe
 
 > **Heading SUPERSEDED by phase 6 below.** The step is not a length effect. The one fast rung differs
 > from the slow ones in its hot loop's start address (`…1a8` vs `…1ac`, identical instructions) **and**
-> in always running first in the boot at VA `0x10000`. Either would make this a property of this
-> silicon's layout or position handling rather than of the kernel. "Saturating" was a fixed
+> in always running first in the boot at VA `0x10000`. Phase 7 ruled out position, so this is a layout
+> sensitivity of this silicon rather than a property of the kernel. "Saturating" was a fixed
 > ~250-cycle term being diluted. The table below is still correct as data.
 
 Its instruction ratio is 1.000 in both vintages and its baseline is byte-identical to July, so the
@@ -478,7 +478,7 @@ That it is *this kernel's* property and not the bitstream's is what the eight ro
 its saturation; they do not identify a mechanism, and the pre-registration forbade offering one
 afterwards from these points alone. **Quote the rows above; do not quote a cause.**
 
-### Phase 6 (2026-09-23): the step is not a length effect. It is loop address OR boot position; untied
+### Phase 6 (2026-09-23): the step is not a length effect, and phase 7 rules out boot position: it follows the loop's address
 
 Six lengths were run in one boot per half (`ladder-revival-2026-09-22/phase6-control-length-series.result-lines.txt`).
 The run is valid: every baseline CPI is 1.2000–1.2029, and the three lengths measured before
@@ -538,6 +538,28 @@ variables, each changed alone:
 If the aligned build is fast wherever it sits, it is alignment; if whichever rung is first is fast, it
 is position. After that, run both images in RTL simulation (E2b, same RTL). The simulation trace, not
 these points, is where a mechanism can come from.
+
+**PHASE 7 RESULT (2026-09-23): boot position is RULED OUT.** The rungs were reordered, with no
+rebuild (`phase7-alignment-vs-position.result-lines.txt`): `ctrsanity20k` ran **first** at `0x10000`
+with its loop at `0x101ac`, and `ctrsanitys` ran **second** with its loop at `0x201a8`. Neither
+moved:
+
+| | first in boot | not first |
+|---|---|---|
+| loop at `…1a8` | fast (phase 6) | **fast (phase 7)**: 1.2 × instret + 248 |
+| loop at `…1ac` | **slow (phase 7)**: 1.4 × instret + 270 | slow (phase 6) |
+
+The reproduction control `ctrsanity` read 700,316 against 700,312. The pre-registered rule "neither
+moves ⇒ alignment" applies.
+
+**What that licenses, precisely:**
+- The 16.7 % tracks the hot loop's start address (`…1a8` vs `…1ac`), not its position in the boot.
+- The fast and slow builds still differ by one more thing: the extra `lui` ahead of the loop (and
+  `blez a3`/`a4`). A **same-N pair differing only in loop padding** is the clean final test of
+  alignment.
+- The mechanism still has to come from the RTL simulation trace of the two images (E2b).
+- Until then, "loop alignment" is the best-supported description, not an explanation.
+
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
