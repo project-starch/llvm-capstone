@@ -503,3 +503,40 @@ values are the phase 6/7 readings: 20k at 28,291 / 28,312 cycles, and 500k at 70
 - the result file is stale.
 
 No mechanism comes from this run; E2b simulates the two `ctrsanity20k` images.
+
+---
+
+# Phase 9 addendum: the whole CURRENT table with loops aligned in BOTH halves (2026-09-23, before the run)
+
+Phase 8 showed that on this silicon a hot loop starting at 4 mod 8 can cost one extra cycle per
+iteration: the control went from 1.167× to 1.0005× on one `nop`. Loop placement is effectively
+random per build, so every CURRENT row's capability cycles may carry that term. Phase 9 re-measures
+all 15 kernels and both controls with `-falign-loops=8` applied to BOTH halves:
+- the capability half through `DOMAIN_EXTRA_CFLAGS`;
+- the baseline through the new opt-in `BASE_EXTRA_CFLAGS` hook in `build-ladder-base-bare.sh`.
+
+That hook is empty by default, and a default rebuild of the phase-6 rungs produced byte-identical
+kernel objects. It records its flags in `extraflags.txt`.
+
+Order: `ctrsanitys ctrsanity`, then the 15 kernels. Everything is at spec `-O`, one capability boot
+plus one 17-rung bare sweep. Launcher: `/tmp/capstone/ladder-revival/p9.sh`.
+
+## Pre-registered
+
+1. **`ctrsanity` reads 1.000 ± 0.005×**, reproducing phase 8 in a full-table boot. Otherwise the run
+   is **VOID**: the alignment effect would not be under control in this build.
+2. **No row rises by more than 2 %** against CURRENT. Alignment removes a penalty; it cannot add one
+   to the capability half. A rise means the baseline was penalised or helped by the flag, and it is
+   reported per row, not averaged away.
+3. **Rows fall by varying amounts, some by ~0, and the headline range and geometric mean are
+   recomputed from the aligned table.** No per-row magnitudes are predicted: that would need
+   hot-loop placement analysis for all 15, which was not done. Silence here is deliberate, not a
+   hidden prediction.
+4. Instruction ratios may move slightly, because the `nop`s run once per loop entry. Each row's
+   instret change is reported next to its cycle change.
+
+**VOID** also on: any wrong oracle, a baseline floor below 15/15, a stale result file, the wrong
+bitstream, or `extraflags.txt` in the baseline dir not reading `-falign-loops=8`.
+
+**Not decided here:** which table the paper quotes (default layout, aligned, or both). That is the
+lead's call. This run only supplies the aligned numbers.
