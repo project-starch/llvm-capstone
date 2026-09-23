@@ -27,6 +27,7 @@
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
 #include <setjmp.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -522,15 +523,9 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      buffering. ENOTTY is the true answer for a domain and the one musl handles:
      it picks full buffering. Returning ENOSYS would work by accident; returning
      the right error means the next reader does not have to wonder.
-     CAVEAT (2026-09-23): full buffering is only safe if someone flushes. musl
-     switches stdout to full buffering on its FIRST flush (__stdout_write.c), and
-     domain_main below runs no exit path when capstone_main RETURNS, so buffered
-     stdout is lost: exactly the first line of a returning program reaches the
-     host. exit() is fine (musl flushes on its exit path). A program that returns
-     must flush itself, or set stdout line-buffered with setvbuf, which sets F_SVB
-     and skips the switch (the FFmpeg app port does both). The durable fix is a
-     flush in domain_main after capstone_main returns; not made here, because
-     every musl domain would then change behaviour at once. */
+     Full buffering is only safe if someone flushes: musl switches stdout to full
+     buffering on its FIRST flush (__stdout_write.c). exit() flushes, and since
+     domain_main ends a returning program with exit() too, so does returning. */
   case SYS_ioctl:
     if (!hc_is_stdio((long)a) && !hc_slot((long)a))
       return -EBADF;
@@ -784,7 +779,13 @@ void domain_main(unsigned *res, unsigned func) {
   if (jumped)
     status = hc_exit_status;
   else
-    status = capstone_main();
+    /* A program that returns ends as returning from main ends in C: through
+       exit(), so its atexit handlers run and stdio is flushed, and the exit
+       syscall brings the status back here through the jump above. Returning
+       straight to the host skipped both: musl buffers stdout fully after its
+       first flush, so exactly the first line of a returning program reached the
+       host and the rest was lost (FFmpeg and CPython each worked around it). */
+    exit(capstone_main());
   hc_exit_armed = 0;
   hc_report_unserved();
 
