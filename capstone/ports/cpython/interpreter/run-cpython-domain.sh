@@ -64,7 +64,11 @@ make -C "$WORK/mod/module" LINUX_DIR="$BR/build/linux-custom" KERNEL_ARCH=riscv 
 cp "$WORK/mod/module/capstone.ko" "$SHARE/capstone-cma.ko"
 want=$(strings "$BR/target/lib/modules"/*/extra/capstone.ko 2>/dev/null | grep -m1 '^vermagic=' || true)
 [[ -n "$want" ]] || want=$(strings "$BR/target/capstone.ko" 2>/dev/null | grep -m1 '^vermagic=' || true)
-got=$(strings "$SHARE/capstone-cma.ko" | grep -m1 '^vermagic=')
+# grep -m1 can close the pipe before strings is done; under pipefail that
+# SIGPIPE (141) aborted the whole run now and then, hence "|| true" here as
+# above, and an empty result is an error of its own.
+got=$(strings "$SHARE/capstone-cma.ko" | grep -m1 '^vermagic=' || true)
+[[ -n "$got" ]] || { echo "no vermagic in the built module $SHARE/capstone-cma.ko" >&2; exit 2; }
 [[ -z "$want" || "$want" == "$got" ]] \
   || { echo "module vermagic '$got' does not match the image's '$want'" >&2; exit 2; }
 
@@ -82,12 +86,20 @@ fi
 # passes through sed because run-domain-smoke.py takes "# " for the shell
 # prompt, and CPython's output has it ("import _imp # builtin" under -v): the
 # runner then typed its exit-code probe into the running program and gave up.
+# The same holds for the command itself, which the guest echoes: with a literal
+# "hash, space" in it (as the first version of this sed had) the runner matched
+# the echo, typed its probe before the domain had printed anything, and gave up
+# after its exit-code wait. Hence "#[ ]", and the check below.
 GUEST="echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; \
 cp /mnt/host/python.dom /tmp/python.dom && echo CPY-IMAGE-COPIED; \
 $SWAP_MODULE \
 echo CPY-RUN-BEGIN t=\$(date +%s); \
-{ /tmp/lt.user /tmp/python.dom $SECONDS_LIMIT; echo CPY-RUN-END rc=\$? t=\$(date +%s); } 2>&1 | sed 's/# /#_/g'; \
+{ /tmp/lt.user /tmp/python.dom $SECONDS_LIMIT; echo CPY-RUN-END rc=\$? t=\$(date +%s); } 2>&1 | sed 's/#[ ]/#_/g'; \
 dmesg | grep -iE 'Domain block|beyond the buddy|Failed to allocate' | tail -3; echo __ALL_DONE__"
+if [[ $GUEST == *"# "* ]]; then
+  echo "the guest command contains '# ', which run-domain-smoke.py takes for the prompt" >&2
+  exit 2
+fi
 
 python3 -c "import pexpect" 2>/dev/null \
   || { echo "run-domain-smoke.py needs pexpect in this python3 (activate the venv)" >&2; exit 2; }
