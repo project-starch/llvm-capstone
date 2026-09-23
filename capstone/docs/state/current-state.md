@@ -4,8 +4,9 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-09-23 — R-35 is fixed in simulation at `f83fe9342`; it is NOT yet deployable, and neither synthesized hash is
 
-**Current fix: `capstone-ariane` commit `f83fe9342`, branch `r35-m1-revnode-cache`, pushed. It has
-NOT been synthesized.** It replaces the LSU's single core-wide revnode tracker with a tagged 4-way ×
+**Current fix: `capstone-ariane` commit `f83fe9342`, branch `r35-m1-revnode-cache`, pushed.** `f83fe9342` WAS SYNTHESIZED 2026-09-23 AND IS NOT DEPLOYABLE. Area: fixed -- 177,669 post-synth LUTs, -17,423 against the crossbar build with -111 FFs, i.e. the crossbar rewritten as a register file and nothing else. Slack: REFUTED -- routed WNS -27.665, the worst this design has produced, against a pre-registered prediction of roughly -12.9. The worst path is SHALLOWER than Stage 0's (94 vs 121 logic levels, less logic delay) but carries +15.45 ns of ROUTE delay: congestion, absent from every earlier build. Traced at pin level by the synthesis lane: D-cache read-port grant (fan-out 88) -> the rev-node's memory-channel write-request selector, a deep combinational Anvil mux (fan-out 70) -> the cache's WRITE decode. The fix hung a 256-entry write decode off that selector. The read mux is not on the path. Next: register the fill taps, so the decode sees flops.
+
+What follows was written before that result: It replaces the LSU's single core-wide revnode tracker with a tagged 4-way ×
 64-set positive validity cache, filled **only** by two passive taps on the rev-node unit's own
 node-memory traffic, so an access is allowed only if its exact 30-bit `(generation, index)` is resident
 and was last seen live. Acceptance fixture (`r35-rotate-stale.S`): exactly **7 traps**, the three
