@@ -161,6 +161,11 @@ ac_cv_file__dev_ptc=no
 # getaddrinfo is never run (no socket opcode); "not buggy" only stops configure
 # from refusing to continue without a run test.
 ac_cv_buggy_getaddrinfo=no
+# Left to itself this check CRASHES the compiler (C-51: its conftest uses
+# _Py_atomic_or_uint8), configure reads the crash as "libatomic needed", and
+# LIBS gains a -latomic no capstone64 library provides. With +a every width the
+# check uses is lowered inline, so the answer is no.
+ac_cv_libatomic_needed=no
 EOF
 log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # --without-computed-gotos: a table of &&label values is emitted WITHOUT
@@ -204,6 +209,33 @@ grep -q "loading site script $BUILD_DIR/config.site" "$BUILD_DIR/configure.log" 
   || { echo "configure did not read $BUILD_DIR/config.site" >&2; exit 2; }
 grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile" \
   || { echo "configure did not carry -D_Py_THREAD_LOCAL_AS_GLOBAL into the Makefile" >&2; exit 2; }
+# A configure check whose conftest crashes the compiler reads as "feature
+# absent", silently. Every such check must be one whose answer is right anyway.
+python3 - "$BUILD_DIR/config.log" <<'PY' || exit 2
+import re, sys
+EXPECTED = {
+    # x86 and m68k FPU control words: foreign to this target, "no" is correct.
+    # The crash itself is C-53 (an inline-asm "m" input operand).
+    "whether we can use gcc inline assembler to get and set x87 control word",
+    "whether we can use gcc inline assembler to get and set mc68881 fpcr",
+}
+check, crashed = None, set()
+for line in open(sys.argv[1], errors="replace"):
+    m = re.match(r"configure:\d+: checking (.*)", line)
+    if m:
+        check = m.group(1).strip()
+    elif re.search(r"PLEASE submit a bug report|Assertion `.*' failed|error in backend|exit code 139", line):
+        crashed.add(check)
+if not crashed <= EXPECTED:
+    print("configure checks that crashed the compiler, answer unreviewed:", file=sys.stderr)
+    for c in sorted(crashed - EXPECTED):
+        print("  " + c, file=sys.stderr)
+    sys.exit(2)
+print(f"[prepare] configure checks that crashed the compiler: {len(crashed)}, all reviewed", file=sys.stderr)
+PY
+if grep -qE '^LIBS=.*-latomic' "$BUILD_DIR/Makefile"; then
+  echo "configure put -latomic in LIBS; no capstone64 libatomic exists" >&2; exit 2
+fi
 if grep -q '^#define USE_COMPUTED_GOTOS 1' "$BUILD_DIR/pyconfig.h"; then
   echo "configure enabled computed gotos" >&2; exit 2
 fi

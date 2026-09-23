@@ -2,7 +2,8 @@
 
 The first step of porting the whole interpreter, not only its allocator
 ([pymalloc](../pymalloc/README.md)), into a pure-capability musl domain: **how much of CPython
-compiles for `capstone64`, and what stops the rest.** Nothing here is linked or run yet. A file
+compiles for `capstone64`, and what stops the rest**, then what a first link of it says.
+Nothing has run yet. A file
 that compiles is not a file that is correct; the round-trip census below is the first list of
 the difference.
 
@@ -50,6 +51,55 @@ object -- then `Objects/obmalloc.c` (13; the pymalloc port already carries the r
 `../pymalloc/patches/cpython-3.13.7-0002`). `Modules/_elementtree.c` (19) and
 `Python/tracemalloc.c` (8) are off the startup path. The warning sees explicit casts only, not a
 pointer carried through `memcpy` or a union, so the census is a lower bound.
+
+## First link, 2026-09-23
+
+    source $CPY_ROOT/build/capstone-env.sh
+    python3 link-cpython-capstone.py $CPY_ROOT/build --native <native CPython 3.13.7 build>
+    python3 host/startup-syscalls.py <native>/python $CPY_ROOT/build/link-attempt/domain-support.txt
+
+`link-cpython-capstone.py` links, after a survey, what CPython's Makefile would link for a static
+interpreter, the way every musl domain here is linked. Two absent objects get a measured per-file
+workaround first: `Python/compile.o` with `-mllvm -regalloc=basic` (C-52) and
+`Modules/getbuildinfo.o` by its own rule. Each undefined symbol is attributed with the native
+build of the same source: which native object defines it. Controls: `PyLong_FromVoidPtr` must be
+undefined and attributed to `Objects/longobject.o`; `Py_BytesMain` must not be undefined.
+
+**Undefined symbols: 388, and only 3 of them are new information.**
+
+| | symbols | |
+|---|---:|---|
+| defined by one of the 29 absent CPython objects | 385 | 26 of them C-51; `longobject.o` alone 45 |
+| from a module configure left out here | 0 | |
+| compiler-rt builtins that did not compile | 0 | |
+| **provided by nothing in the link** | **3** | `__atomic_compare_exchange_16`, `__atomic_load_16`, `__atomic_store_16`: atomics on a pointer, **C-54** |
+
+musl, the port runtime and compiler-rt supply every other symbol the 206 linked objects need.
+There are no link errors besides undefined symbols, and no `.init_array` (nothing in a domain
+would run one).
+
+**Size.** Linked with undefined symbols ignored, the image is **8.37 MiB** (`PT_LOAD` memsz;
+5.0 MiB `.text`, 2.5 MiB `.rodata`) *without* the 29 absent objects, among them `unicodeobject`,
+`typeobject` and `ceval`. Scaling their native size by the capstone/native ratio of the present
+objects (1.30) adds ~3.1 MiB: **~11.5 MiB for the whole static image, an estimate**, before any
+heap. A domain gets 4 MiB.
+
+**Linking is not working.** `musl-capstone/check-domain-support.py` on that image: 100 linked
+libc symbols need one of **53 syscalls the domain does not serve**. Which of those CPython
+itself makes while starting (`-S -I -c pass`), measured natively under `strace -k` and
+attributed to the first CPython frame -- glibc and a dynamic loader, so an approximation:
+
+| syscall | calls | made by | in a domain |
+|---|---:|---|---|
+| `rt_sigaction` | 66 | `PyOS_getsig` / `PyOS_setsig`, signal setup | fails; whether startup tolerates it is not known |
+| `mmap` | 3 | `_PyMem_ArenaAlloc`: obmalloc's arenas, mapped directly | arenas cannot be allocated; configure's `HAVE_MMAP` has to say no so obmalloc uses `malloc` |
+| `getdents64` | 4 | `os_listdir`, from the import system | importing from a directory fails; needs a hostcall or frozen/zipped modules |
+| `getrandom` | 1 | `_Py_HashRandomization_Init` | CPython falls back to `/dev/urandom`, or `PYTHONHASHSEED` |
+| `gettid` | 1 | `PyThread_get_thread_native_id` | returns an error value |
+| `getcwd` | 0-1 | `_Py_wgetcwd` (only when started from some directories) | |
+
+The remaining rows `strace` shows are glibc's (`brk` from its `malloc`, locale `mmap`, `futex`)
+or the dynamic loader's; a domain has the port's allocator and a static image instead.
 
 ## How the survey measures
 
@@ -108,6 +158,7 @@ What keeps the number honest:
 | `--with-pkg-config=no` | the host's pkg-config would hand over host library flags |
 | `config.site` | no `/dev/ptmx` or `/dev/ptc`; `getaddrinfo` not buggy (it is never run) |
 | `--disable-test-modules --disable-ipv6 --without-ensurepip` | not part of the interpreter |
+| `ac_cv_libatomic_needed=no` | left to itself the check's conftest crashes the compiler (C-51), configure reads the crash as "needed" and puts a `-latomic` in `LIBS` that no capstone64 library provides. `prepare` now fails on any configure check that crashed the compiler unless its answer was reviewed; the two x87/mc68881 FPU checks crash on C-53 and "no" is right for this target anyway |
 
 `configure` found, with these answers: `SIZEOF_VOID_P 16`, `SIZEOF_UINTPTR_T 8`,
 `SIZEOF_LONG_DOUBLE 16`, `ALIGNOF_MAX_ALIGN_T 16`. 53 stdlib modules are built in; 13 are
@@ -140,7 +191,7 @@ None of them makes a pointer↔integer ROUND TRIP safe; the census above is wher
 
 ## What this does not establish
 
-* **Linking.** No interpreter image has been linked; undefined symbols are unmeasured.
+* **A complete link.** 29 objects are still absent, so the link above is of what compiles.
 * **Running.** Nothing has executed. The 4 MiB contiguous domain limit
   (`../../musl-capstone/README.md`, `sscanf_long`) is far below what CPython needs to start.
 * **The round trips.** 62 explicit sites are listed, not fixed, and implicit ones are not seen.
