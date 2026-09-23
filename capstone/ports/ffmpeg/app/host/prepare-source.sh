@@ -18,7 +18,8 @@ import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u[
 TARBALL="$WORK/ffmpeg-$VERSION.tar.xz"
 
 if [ ! -f "$TARBALL" ]; then
-  curl -sSfL -o "$TARBALL.part" "$URL"
+  # --retry: a transient reset from the mirror (seen 2026-09-23, curl rc 56) must not fail a build.
+  curl -sSfL --retry 5 --retry-all-errors --retry-delay 3 -o "$TARBALL.part" "$URL"
   mv "$TARBALL.part" "$TARBALL"
 fi
 echo "$SHA  $TARBALL" | sha256sum -c --quiet - \

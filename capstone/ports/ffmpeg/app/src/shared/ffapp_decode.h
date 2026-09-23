@@ -18,6 +18,9 @@
 #define FFAPP_M3_PACKET      3  /* first packet read                             */
 #define FFAPP_M4_FRAME       4  /* first frame decoded and hashed                */
 #define FFAPP_M5_ALL         5  /* every frame decoded, decoder drained          */
+/* A finer bisection stage, requested by exact value (it is not ordered with M1..M5):
+ * return right after avformat_open_input, before avformat_find_stream_info. */
+#define FFAPP_M2A_OPENED     6
 
 /* Failures: 10 * stage + detail, so the stage is readable from the number alone. */
 #define FFAPP_E_OPEN        21  /* avformat_open_input failed                    */

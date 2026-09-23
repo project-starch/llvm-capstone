@@ -16,7 +16,7 @@ recording from `buffer-pool/host/record.sh:23-34`.
 | milestone | state |
 |---|---|
 | **M0** builds and links as a domain, within budget | **reached 2026-09-23** (apollo) |
-| M1–M5 | **blocked**: the shared QEMU `rootfs.ext2` is corrupt (inode 623), and its repair belongs to the board lane. `host/run-qemu.sh` is ready |
+| **M1–M5** | **reached 2026-09-23 on QEMU.** Per-frame MD5 is **bit-identical to native** (30/30), and the flipped-input control fires. Run of record: `results/2026-09-23-qemu-m1-m5/` |
 | M6 | silicon ABI, see the plan's §4 (one-translation-unit question) |
 
 **What M0 establishes:**
@@ -37,13 +37,20 @@ recording from `buffer-pool/host/record.sh:23-34`.
 `__capstone_hostcall` undefined. FFmpeg's libc calls reach the hostcall, and nothing else is
 missing.
 
-**The compiler flags 21 pointer round trips (`-Wcapstone-pointer-roundtrip`), down from 28.**
+**At M0 the compiler flagged 21 pointer round trips (`-Wcapstone-pointer-roundtrip`), down from 28.** Patch 0003 later removed one more, leaving 20.
 - The 7 removed are exactly the sites the patches fix.
 - 16 of the remaining 21 are integers carried in a `void*` and never dereferenced. Their lowering
   is a no-op, so they are safe.
 - The last 5 are off the demux/decode path; see the plan's §3.
 
-**What M0 does NOT establish:** that the image runs. Every runtime claim starts at M1.
+**What M0 did not establish, and M1–M5 then did:** that the image runs.
+
+Three defects stood between M1 and M5. They are recorded in the result folder, and fixed as
+follows:
+- **stdout lost after its first line:** fixed in the domain entry.
+- **`EFAULT` reading a file on the 9p share:** fixed on `dev`, host bounce buffer
+  `e852b3951476`.
+- **Compiler miscompile ISSUES.md C-50:** worked around by patch 0003, plus a build gate.
 
 ## Build and run
 
@@ -53,13 +60,18 @@ bash host/build-native.sh    # the oracle: stock ffmpeg makes the workload + ref
                              # 1-byte-flipped input must NOT (positive control)
 bash host/build-domain.sh    # M0: runtime objects, cross-configured FFmpeg, 6 images,
                              # budget gate, negative control, guest host
-bash host/run-qemu.sh 1      # M1 .. 5; takes $CAPSTONE_QEMU_LOCK; stage 5 also runs the
-                             # flipped-input control and compares both against the reference
+bash host/run-qemu.sh all    # M1..M5 + the flipped-input control in ONE boot, then the MD5
+                             # comparison; takes $CAPSTONE_QEMU_LOCK. Also: a single stage 1..5,
+                             # `m2diag`, and `probe` (FFAPP_DIAG images, 9p-vs-/tmp matched pair)
 ```
 
 **From a git worktree:** it has no LLVM build, and its buildroot submodule is empty. Export
 `CAPSTONE_LLVM_BUILD_DIR=<main clone>/llvm/cmake-build-debug` and
 `CAPSTONE_BUILDROOT_DIR=<main clone>/capstone/caplifive-buildroot`.
+
+Also for a worktree: export `FFAPP_QEMU_BINARY=<main clone>/capstone/capstone-qemu/build/qemu-system-riscv64`.
+`FFAPP_BUILDROOT_DIR` boots a directory whose `build/images/` holds a private rootfs copy. That
+was used while the shared image was corrupt.
 
 **Prerequisite:** `ports/musl-capstone/build-musl-capstone.sh`. If the LLVM build has no
 `llvm-ar`, run it with `CAPSTONE_LLVM_AR=/usr/bin/llvm-ar-18`; the archive format is
@@ -73,6 +85,8 @@ All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The 
 | path | what |
 |---|---|
 | `patches/0001-capstone-log-callback-stays-a-pointer.patch` | `log.c` kept the log callback as `atomic_uintptr_t`. That initializer does not compile for capstone64, and a call through it would jump through an untagged integer |
+| `patches/0003-capstone-mpegpicture-pool-opaque-is-a-real-pointer.patch` | works around ISSUES.md C-50. `ff_mpv_alloc_pic_pool` passes a real pointer to a static mode, not an int through `void*` |
+| `host/scan-addi-sp.py` | C-50 build gate: an integer address off `sp`/`s0` used as a load/store base |
 | `patches/0002-capstone-keep-pointer-provenance.patch` | `av_x_if_null`, `av_stristr`, `avcodec_fill_audio_frame`'s const cast, and `frame.c`'s three `FFALIGN`-on-a-pointer sites. They now align by adding an offset, and NULL stays NULL |
 | `src/shared/ffapp_decode.c` | the decode core, staged `M1..M5` (`ffapp_decode.h` has the codes) |
 | `src/native/ffapp_native.c` | native entry, the oracle's self-check |
@@ -90,7 +104,7 @@ today. Moving them there is shared-infrastructure work, so it goes to `dev` as i
 - **One workload:** 320x180, 1 s. 640x360 needs 2.2 MB of native heap and does not fit one
   region.
 - **The heap is measured natively only** (0.71 MB peak). The capability build's own peak is
-  measured at M4.
+  **UNRESOLVED**: M5 completes inside the 1.5 MiB arena, which bounds it but does not measure it.
 - **`localtime_r` and `mktime` are UNRESOLVED** (timezone), and are not expected on the decode
   path.
 - **`input.mkv` bytes are NOT reproducible** across generations: Matroska writes a random
