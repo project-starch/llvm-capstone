@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -130,6 +131,21 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     h->path[req->length] = '\0';
     int rc = req->opcode == HC_V0_OP_PATH_ACCESS ? access(h->path, F_OK) : unlink(h->path);
     if (rc < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
+    return 0;
+  }
+  case HC_V0_OP_DIR_READ: {
+    /* lseek to the cookie, then getdents64 straight into the payload: the
+       records are linux_dirent64 on both sides (the domain's musl uses the same
+       64-bit layout), so they travel unconverted. A cookie of 0 restarts the
+       listing, which is also what rewinddir sends. */
+    const struct hc_dir_read_req_v0 *r = (const struct hc_dir_read_req_v0 *)payload;
+    int fd = hostcall_lookup_handle_fd(h->slots, max, r->handle);
+    if (fd < 0) { hc_host_error(metadata, errno); return 0; }
+    if (lseek(fd, (off_t)r->cookie, SEEK_SET) < 0) { hc_host_error(metadata, errno); return 0; }
+    long n = syscall(SYS_getdents64, fd, payload + req->offset, (size_t)req->length);
+    if (n < 0) { hc_host_error(metadata, errno); return 0; }
+    metadata->length = (hostcall_u64_t)n;
+    hc_host_ok(metadata, n);
     return 0;
   }
   case HC_V0_OP_CLOCK_GETTIME: {

@@ -317,6 +317,50 @@ static long hc_close(long fd) {
   return rc;
 }
 
+/* getdents64 through DIR_READ. The handle is an ordinary FILE_OPEN of the
+ * directory (musl's opendir passes O_DIRECTORY, which the helper hands to
+ * open), and f->pos is the directory cookie rather than a byte offset: the d_off
+ * of the last record returned, 0 at the start. seekdir and rewinddir reach it
+ * through lseek(SEEK_SET), which sets exactly that. The records arrive in the
+ * layout musl's struct dirent already has (linux_dirent64) and are copied as
+ * they are; only whole records are ever returned, so a short buffer gets fewer
+ * of them and the cookie picks up at the next. */
+static long hc_getdents(long fd, char *buf, unsigned long count) {
+  struct hc_file *f = hc_slot(fd);
+  if (!f)
+    return -EBADF;
+  const unsigned long data_off = HC_DIR_READ_REQ_V0_DATA_OFFSET;
+  if (count > HC_PAYLOAD_SIZE - data_off)
+    count = HC_PAYLOAD_SIZE - data_off;
+
+  hc_put_u64(0, f->handle);
+  hc_put_u64(8, f->pos);
+  if (hc_round(HC_V0_OP_DIR_READ, data_off, count) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return hc_err();
+  long n = (long)hc_metadata->result;
+  if (n < 0 || (unsigned long)n > count)
+    return -EIO;
+
+  unsigned long long last_off = f->pos;
+  for (long off = 0; off < n;) {
+    const unsigned char *rec = (const unsigned char *)&hc_payload[data_off + off];
+    unsigned reclen = rec[16] | (unsigned)rec[17] << 8;
+    if (reclen < 19 || off + (long)reclen > n)
+      return -EIO; /* a record the helper cannot have produced */
+    unsigned long long d_off = 0;
+    for (int i = 7; i >= 0; i--)
+      d_off = d_off << 8 | rec[8 + i];
+    last_off = d_off;
+    off += reclen;
+  }
+  for (long i = 0; i < n; i++)
+    buf[i] = hc_payload[data_off + i];
+  f->pos = last_off;
+  return n;
+}
+
 static long hc_lseek(long fd, long long off, long whence) {
   struct hc_file *f = hc_slot(fd);
   if (!f)
@@ -450,6 +494,9 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
 
   case SYS_readv:
     return hc_readv((long)a, (const struct iovec *)b, (long)c);
+
+  case SYS_getdents64:
+    return hc_getdents((long)a, (char *)b, (unsigned long)c);
 
   /* stdio asks whether stdout is a terminal, to choose line buffering over full
      buffering. ENOTTY is the true answer for a domain and the one musl handles:
