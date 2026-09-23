@@ -251,11 +251,36 @@ the stall-dominated rows is **open**. That question is phase 6 of
 `ladder-revival-2026-09-22.prereg.md` plus an RTL A/B in simulation; until it is answered, quote the
 control's reading beside the table.
 
-**Four rows retire FEWER instructions with capabilities than without:** `janne` 0.943, `crc32` 0.959,
-`ns` 0.987 and `sha512` 0.996. Both halves come from one source at one `-O`, so this is a real codegen
-difference between the two targets, **not yet explained**. It has to be read in the disassembly
-before any row is described as "instruction-neutral". Their CPI ratios, not their instruction
-ratios, carry their cost.
+**Four rows retire FEWER instructions with capabilities than without, and all four are now
+explained.** Each difference reconciles **exactly** to the board's instret, from the disassembly of
+the measured capability images and the baseline kernel objects. It was audited adversarially on
+2026-09-23. Two of my first-draft attributions did not survive that audit and are corrected here.
+
+| kernel | cap / base instret | what the difference is |
+|---|---|---|
+| `beebs_crc32` | 29,723 / 31,000 | **Baseline codegen.** The RV64 baseline masks to low bits with a `slli`+`srli` pair; the capability target hoists the mask and uses one `and`. That is +1 per table entry (×256) and +1 per CRC byte (×1024), = 1,280. The capability half has 3 more straight-line instructions: it spills `ra`/`s0` inside its bracket. |
+| `beebs_ns` | 61,299 / 62,097 | **Baseline codegen.** The baseline strength-reduces with two induction pointers per loop level, costing +2 per *j*- and *i*-iteration and per repetition, = 774. The rest (24) is straight-line code. (My draft said per *k*-iteration; wrong.) |
+| `rv8_sha512` | 460,950 / 462,646 | **A net of per-loop differences** in both directions. Per rep, the capability half is +16 on the chain copy, +48 on w-init, +32 on rounds 0–15 and +8 on the fold, and −128 on rounds 16–79, where the baseline's loop is 96 against 94. That totals −26 × 64 reps. The residual 32 is the baseline's 13-register save/restore, which sits inside its call-wrapped bracket. |
+| `beebs_janne` | 198 / 210 | **The measurement bracket, not codegen.** The loops are 190 dynamic instructions on both sides. The capability half inlines the kernel between `volatile` CSR reads, and the compiler moved the pure-arithmetic FNV hash tail *after* the closing read: measured image, `csrr minstret` at `0x70470`, hash from `0x70478`. The baseline brackets an indirect call and counts call, return and the whole tail. Already noted for `janne` in `ctrsanitys_kernel.h`. |
+
+**The bracket asymmetry is a real bias in the instrument. Its sign varies by kernel.** The capability
+half brackets inlined code between CSR reads, and the baseline brackets a call. The straight-line
+instructions each side counts therefore differ, in a way that depends on the kernel:
+- it **understates** capability overhead for `janne`, `ns` and `sha512`;
+- it **overstates** it for `crc32` (+3) and for the control (a constant +8 at every length).
+
+For every kernel above ~2k instructions the effect is well below 1 %. For `janne` (~200 instructions)
+it is ~6 % of the instruction count, and **it favours the capability half**. The same holds to first
+order for cycles, since the baseline's cycle window wraps its instret window. The cycle bias is **not
+quantified**: that needs a capability-half *null* rung to pair with the baseline's
+`null: cycles=16 instret=7`, and none exists. It cannot explain `janne`'s cycle ratio: 593 vs 323 is
++270 cycles on 12 *fewer* instructions. So `janne`'s 1.836× is a real cost, measured by an instrument
+that slightly understates it.
+
+**Summary for citing:** none of the four sub-1.0 instruction ratios is a capability effect. Two are
+the RISC-V backend emitting slightly worse baseline code (`crc32`, `ns`). One is a net of small
+per-loop differences (`sha512`). One is the bracket (`janne`). Their costs are carried by their CPI
+ratios.
 
 **A claim this table now puts under pressure.** "Capability overhead is a property of DATA ACCESS,
 not of execution" (below) rested on `cover` and `mont64`, which touch no data and cost nothing.
