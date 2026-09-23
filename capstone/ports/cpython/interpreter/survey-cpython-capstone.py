@@ -33,22 +33,30 @@ import re
 import subprocess
 import sys
 
+
+HERE = pathlib.Path(__file__).resolve().parent
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # change improves things, never lower it to make a run pass.
 # SET 2026-09-23: 222 of 253, clang d030df93d4a4 (= origin/dev), patches 0001-0006.
-BASELINE_OK = 222
+# RAISED 2026-09-23: 250 of 253, clang 97d5978c6402 (dev + the C-50, C-51, C-52,
+# C-54 and C-55 fixes), patches 0001-0009. The three left are _multiprocessing's
+# two objects (no integer is as wide as a pointer) and getbuildinfo.o (NOTRUN).
+# A compiler without those fixes is expected to fall below this and fail.
+BASELINE_OK = 250
 
 # MUST_PASS: a core object that includes every header patches 0001-0006 touch
 # (longobject.h, pycore_pymem.h, pycore_obmalloc.h, pycore_pyhash.h,
-# pycore_qsbr.h, pyport.h) and needs the capstone-cc assignment-tracking
-# workaround. If any of those regresses, this flips first.
+# pycore_qsbr.h, pyport.h) and, built with -g -O3, failed on C-50 until the
+# compiler fix. If any of those regresses, this flips first.
 CONTROL_MUST_PASS = "Objects/boolobject.o"
-# MUST_FAIL: longobject.c stops at #error "PyLong_FromVoidPtr: sizeof(long long)
-# < sizeof(void*)". That is structural -- no integer type holds a capability --
-# and it stays until the port decides what PyLong_FromVoidPtr/AsVoidPtr (and so
-# id() and ctypes-style round trips) mean here. A patch that makes it compile is
-# that decision, and retiring this control is part of making it.
-CONTROL_MUST_FAIL = "Objects/longobject.o"
+# MUST_FAIL: a synthetic object, toolchain/survey-control-must-fail.c, compiled
+# after the make run through the same capstone-cc and log, with CPython's core
+# flags. It asserts that some integer is as wide as a pointer, which is false
+# only on a capability target. Until 2026-09-23 the control was
+# Objects/longobject.o, failing on that same fact; patch 0007 made it compile,
+# and a port on its way to linking should not keep a real object broken.
+CONTROL_MUST_FAIL = "survey-control-must-fail.o"
+CONTROL_MUST_FAIL_SRC = HERE / "toolchain" / "survey-control-must-fail.c"
 
 # Variables of CPython's generated Makefile that together are the interpreter:
 # libpython's objects, the program's main, and the bundled static libraries the
@@ -203,6 +211,11 @@ def main() -> int:
     with open(build / "survey-make.log", "w") as out:
         subprocess.run(["make", "-k", f"-j{args.jobs}", *overrides, *expected], cwd=build,
                        env=env, stdout=out, stderr=subprocess.STDOUT)
+        # The MUST_FAIL control: same wrapper, same log, CPython's core flags.
+        (build / CONTROL_MUST_FAIL).unlink(missing_ok=True)
+        subprocess.run([*cc, *make_var(build, "PY_CORE_CFLAGS"), "-c",
+                        str(CONTROL_MUST_FAIL_SRC), "-o", CONTROL_MUST_FAIL], cwd=build,
+                       env=env, stdout=out, stderr=subprocess.STDOUT)
 
     if not log.is_file() or log.stat().st_size == 0:
         print(f"ERROR: make ran but capstone-cc logged nothing ({log}); "
@@ -218,7 +231,7 @@ def main() -> int:
     ok = [o for o in expected if outcome.get(o, (None,))[0] is True]
     bad = [o for o in expected if outcome.get(o, (None,))[0] is False]
     notrun = [o for o in expected if o not in outcome]
-    extra = sorted(set(outcome) - set(expected))
+    extra = sorted(set(outcome) - set(expected) - {CONTROL_MUST_FAIL})
 
     print(f"build tree     {build}")
     print(f"compiler       {clang}")

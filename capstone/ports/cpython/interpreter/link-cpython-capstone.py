@@ -21,9 +21,15 @@ A second link that ignores undefined symbols gives an image, whose segment size
 is a LOWER bound (the absent objects are not in it) to compare with the 4 MiB a
 domain can have.
 
-Controls: PyLong_FromVoidPtr must come out undefined and attributed to
-Objects/longobject.o, which the survey requires to fail; Py_BytesMain, defined
-by Modules/main.o which compiles, must not. Either flipping exits 2.
+When the strict link leaves nothing undefined, its output python.dom is the
+interpreter image, ready to run.
+
+Controls: the same link with one more object, toolchain/link-control-undefined.c,
+which calls a function nothing defines, must fail with exactly that symbol added
+to the undefined ones; Py_BytesMain, defined by Modules/main.o, must not come
+out undefined. Either flipping exits 2. (Until 2026-09-23 the first control was
+PyLong_FromVoidPtr, undefined while Objects/longobject.o failed; patch 0007
+made it compile.)
 
 Usage:  link-cpython-capstone.py <build-dir> --native <native-build-dir> [--out DIR]
 """
@@ -43,7 +49,8 @@ spec = importlib.util.spec_from_file_location("survey", HERE / "survey-cpython-c
 survey = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(survey)
 
-MUST_BE_UNDEFINED = ("PyLong_FromVoidPtr", "Objects/longobject.o")
+CONTROL_UNDEFINED_SRC = HERE / "toolchain" / "link-control-undefined.c"
+CONTROL_UNDEFINED_SYM = "capstone_link_control_nowhere"
 MUST_BE_DEFINED = "Py_BytesMain"
 
 # The bundled static libraries CPython links for enabled modules, by Makefile
@@ -259,6 +266,21 @@ def main() -> int:
         for l in other_errors[:30]:
             print(f"  {l}")
 
+    # The undefined-symbol control: the same link plus one object that calls a
+    # function nothing defines. It must fail on exactly that one more symbol.
+    ctl_obj = out / "link-control-undefined.o"
+    ctl_obj.unlink(missing_ok=True)
+    ctl_cc = run([*survey.make_var(build, "CC"), "-c", str(CONTROL_UNDEFINED_SRC), "-o",
+                  str(ctl_obj)], cwd=build, env=env)
+    ctl_undefined = None
+    if ctl_cc.returncode == 0:
+        # -u keeps the caller alive: with --gc-sections lld reports only the
+        # undefined symbols that live code references.
+        ctl = run([*base, "-u", "capstone_link_control_caller", str(ctl_obj),
+                   "-o", str(out / "link-control.dom")])
+        ctl_undefined = set(parse_undefined(ctl.stderr)) if ctl.returncode else set()
+        (out / "link-control.dom").unlink(missing_ok=True)
+
     loose = run([*base, "--unresolved-symbols=ignore-all", "--noinhibit-exec",
                  "-o", str(out / "python-lowerbound.dom")])
     (out / "link-lowerbound.log").write_text(loose.stdout + loose.stderr)
@@ -271,7 +293,9 @@ def main() -> int:
         sizes = section_sizes(sections)
         print(f"\nimage without the absent objects (a LOWER bound):")
         print(f"  PT_LOAD memsz {sum(memsz):,} bytes ({sum(memsz) / 2**20:.2f} MiB), "
-              f"filesz {sum(filesz):,}; a domain gets at most 4 MiB")
+              f"filesz {sum(filesz):,}; the buddy allocator's block ends at 4 MiB, a larger "
+              f"domain needs the CMA-backed module (caplifive-buildroot "
+              f"domain/1-cma-large-domains)")
         for name in (".text", ".rodata", ".data", ".bss", ".init_array", ".fini_array",
                      ".capstone_cap_init", ".gct"):
             if name in sizes:
@@ -328,10 +352,11 @@ def main() -> int:
         print(f"\nno lower-bound image; see {out / 'link-lowerbound.log'}")
 
     ok = True
-    sym, obj = MUST_BE_UNDEFINED
-    if sym not in undefined or defined_by.get(sym) != obj:
-        print(f"\nERROR: control {sym} should be undefined and attributed to {obj}; got "
-              f"{'defined' if sym not in undefined else defined_by.get(sym)}", file=sys.stderr)
+    if ctl_undefined != set(undefined) | {CONTROL_UNDEFINED_SYM}:
+        got = ("no control link (its object did not compile)" if ctl_undefined is None
+               else f"difference {sorted(ctl_undefined ^ set(undefined))}")
+        print(f"\nERROR: the control link should add exactly {CONTROL_UNDEFINED_SYM} to the "
+              f"undefined symbols; got {got}", file=sys.stderr)
         ok = False
     if MUST_BE_DEFINED in undefined:
         print(f"\nERROR: control {MUST_BE_DEFINED} came out undefined", file=sys.stderr)

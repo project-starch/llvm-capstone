@@ -27,20 +27,14 @@ set -uo pipefail
 # Same target flags as musl-capstone/libc-test/build-libc-test.sh (CF/TF), minus
 # the -std and feature macros: CPython sets its own (-std=c11, pyconfig.h).
 #
-# -fexperimental-assignment-tracking=disabled: with -g at -O1 and above, clang's
-# Assignment Tracking Analysis asserts ("The offset bit width does not match the
-# DL specification") on a local whose address escapes. The accumulator at
-# llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp:271 is sized with
-# getTypeSizeInBits of the pointer (128 for a capability) where
-# stripAndAccumulate... requires the index width (64); the same pass sizes its
-# other accumulator (:2093) correctly. Not yet confirmed by a fixed build.
-# CPython builds with -g -O3, so this alone failed 146 objects. The flag turns
-# off one debug-info analysis and keeps -g.
-# Reproducer: capstone/tests/compiler-repros/C50-assignment-tracking-index-width/ (C-50).
+# No -fexperimental-assignment-tracking=disabled any more: it worked around C-50
+# (Assignment Tracking asserting on any escaping local with -g at -O1+, which
+# alone failed 146 objects), and the compiler fix is on
+# compiler/c50-assignment-tracking-index-width. A compiler without that fix
+# fails those objects again, which is the answer it should give.
 TARGET=(-target capstone64-unknown-elf
         -Xclang -target-feature -Xclang +m
         -Xclang -target-feature -Xclang +a
-        -Xclang -fexperimental-assignment-tracking=disabled
         -ffreestanding -fno-builtin -fno-jump-tables
         -nostdinc
         -isystem "$CPY_MUSL/arch/capstone64" -isystem "$CPY_MUSL/arch/generic"
