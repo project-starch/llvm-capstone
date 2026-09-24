@@ -472,7 +472,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; the fix is a design change for the hardware side`
+### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX IN SIMULATION at capstone-ariane 6cbdaeeb4, not yet synthesized or on silicon`
 
 **Symptom.** Search terms: cycle anomaly, loop alignment, layout-dependent CPI, 7 vs 6 cycles
 per iteration. The ladder control `ctrsanity` (identical code on both halves) read **1.167×**
@@ -514,12 +514,30 @@ Verilator, `--sv_seed 1`.
   `bs`/`janne`/`insertsort` carry bands.
 - **Any cycle comparison across a rebuild or a reflash must hold loop layout fixed.** The R-35
   lane already excludes `take_cyc`/`give_cyc` from cross-reflash comparison for this reason.
-- It affects silicon performance only; no value is ever wrong.
+- It affects silicon performanc**Fix (capstone-ariane `6cbdaeeb4`, branch `r42-icache-killed-miss`, one commit on `4ad0df694`).**
+In READ's killed-miss branch the FSM now accepts the redirected request in the same cycle,
+under the hit path's guards: `!inv_q && !mem_rtrn_vld_i` raise `ready`, a pending `req` stays
+in READ, and a `kill_s1` cycle still goes to IDLE, because the frontend then presents a stale
+address. **The killed miss is still abandoned**: no refill and no wrong-path fetch. Only the
+one-cycle IDLE detour goes.
+- **This is NOT the shape first noted here** ("let a right-path demand miss complete its
+  refill"), and that sentence was wrong. The killed fetch is the fall-through, which the loop
+  never executes, so it is a wrong-path fetch. Completing its refill would be a wrong-path
+  prefetch, blocking the cache for a miss latency and possibly evicting useful lines.
+- **Sim evidence** (Verilator, `S12_MEM_DELAY=12`, seed pinned):
+  - on the loop-alignment pair, the slow-offset arms go 28035 → 24036 cycles, exactly one
+    cycle per taken branch (3,999), and the fast offsets are unchanged;
+  - warm arm A goes 477 → 415, and B/C are unchanged;
+  - the baseline arm reproduced all 13 of the board lane's numbers;
+  - the neutrality sweep shows 0 differing trap counts across 92 tests;
+  - `rtl-lint-gate` PASS, at baseline.
+- **Open, and only synthesis can close it:** `dreq_o.ready` now depends on `kill_s2`, computed
+  in the frontend. `cva6_icache` and `frontend` already share a struct-level UNOPTFLAT, so lint
+  cannot see a new loop. A bit-level trace found none; Vivado's loop check must confirm it
+  before any board time. Sent to the synth lane 2026-09-24.
+- **Board acceptance:** slow offset 7.009 → ~6.008 cyc/iter, and fast offsets unchanged.
 
-**Fix shape (not started; the hardware side's call).** Let a demand miss that is on the right
-path complete its refill instead of abandoning it on `kill_s2`. That touches the front end's
-kill protocol, which is high-risk, so it needs audit and synthesis before anyone trusts it.
-Noted as a candidate by the RTL lane, 2026-09-24.
+te by the RTL lane, 2026-09-24.
 
 ## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
 
