@@ -7401,8 +7401,12 @@ run).**
   - on silicon, arms 8 and 10 read **0**, i.e. the linear source survives;
   - under QEMU, arm 8 reads 7 and arm 10 reads 0.
 
-  The emulator pass is blocked by the corrupt shared `rootfs.ext2` (inode 623), so the arms are not
-  yet committed.
+  **Emulator pass, 2026-09-24** (rootfs repaired): image `5852fb06f92394d0`, `R1_RC=0`, 2 reps,
+  identical. Arm 8 (`tighten`, LINEAR) reads **7**, so QEMU moves. Arm 10 (`shrinkto`, LINEAR)
+  reads **0**, so **QEMU duplicates the linear capability**. The NONLIN controls (arms 9 and 11)
+  read 1, and arms 0–7 read as they always have. So QEMU matches the RTL on `shrinkto` (both
+  copy) and the spec on `tighten`. The silicon reading is the open item: the arms ride the next
+  board boot as a separate H1 record.
 
 ### R-22 — `stc` does not write `cnull` to its register source `RESOLVED ON SILICON 2026-09-15 for the deployed bitstream (boot sw8x-f4): the register after `stc` of a LINEAR capability reads cleared in six readings, the NONLIN control unchanged; fixed by b047f32eb (2026-08-12), an ancestor of the deployed RTL — the entry's analysis predates it; the emulator still omits the clear (Q-12); nothing to report`
 

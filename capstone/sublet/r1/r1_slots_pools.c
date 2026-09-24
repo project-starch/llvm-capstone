@@ -416,6 +416,13 @@ static void run_latency(unsigned reps) {
    arm 5 LDC of a NONLIN capability           -- control: the slot must still read 1
    arm 6 STC of a LINEAR register             -- the register after the store: spec 7; R-22 says 0
    arm 7 STC of a NONLIN register             -- control: must read 1
+   arm 8 TIGHTEN to RW, LINEAR source (rd != rs) -- spec 7; R-21-class 0. RW (0x6) keeps write, so the
+                                                    result is not delinearised and the arm has no rev-tree side effect
+   arm 9 TIGHTEN to RW, NONLIN source         -- control: must read 1
+   arm 10 SHRINKTO 64, LINEAR source (rd != rs) -- spec 7 if SHRINKTO moves like the ops above, 0 if it copies.
+                                                    QEMU's helper_csshrinkto copies (never clears rs1); the RTL's
+                                                    behaviour is what this arm reads (added 2026-09-23 for H1)
+   arm 11 SHRINKTO 64, NONLIN source          -- control: must read 1
    Operands come from the arena: fresh linear carves, and NONLIN aliases taken from them. */
 static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong arg) {
   ulong ty = 99;
@@ -425,21 +432,24 @@ static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong a
   case 3: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x05, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"(arg) : "t0", "t1", "memory"); break;           /* scc t1, t0, arg */
   case 4: case 5: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn i 0x5b, 0x3, t1, 0(%1)\n .insn r 0x5b, 0x1, 0x04, %0, t1, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;                          /* ldc t0 <- src; park t0 in dst; ldc t1 <- src again: the slot's type after the first load */
   case 6: case 7: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "memory"); break;                                                              /* stc t0 -> dst; the register's type after the store */
+  case 8: case 9: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x02, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"((ulong)6) : "t0", "t1", "memory"); break;  /* tighten t1, t0, RW */
+  case 10: case 11: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn i 0x5b, 0x0, t1, t0, 64\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;              /* shrinkto t1, t0, 64 */
   }
   return ty;
 }
 static void run_linear(unsigned reps) {
-  static const char *what[8] = {"movc-LIN(instrument-control)", "cincoffset-NONLIN(conformance-control)", "cincoffset-LIN", "scc-LIN", "ldc-LIN(slot-after)", "ldc-NONLIN(slot-after,control)", "stc-LIN(reg-after)", "stc-NONLIN(reg-after,control)"};
-  static const ulong expect_spec[8] = {7, 1, 7, 7, 7, 1, 7, 1};
-  static const ulong expect_r21r22[8] = {7, 1, 0, 0, 0, 1, 0, 1};
+  static const char *what[12] = {"movc-LIN(instrument-control)", "cincoffset-NONLIN(conformance-control)", "cincoffset-LIN", "scc-LIN", "ldc-LIN(slot-after)", "ldc-NONLIN(slot-after,control)", "stc-LIN(reg-after)", "stc-NONLIN(reg-after,control)",
+                                 "tighten-LIN", "tighten-NONLIN(control)", "shrinkto-LIN", "shrinkto-NONLIN(control)"};
+  static const ulong expect_spec[12] = {7, 1, 7, 7, 7, 1, 7, 1, 7, 1, 7, 1};
+  static const ulong expect_r21r22[12] = {7, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1};
   unsigned r, arm;
   for (r = 1; r <= reps; r++) {
-    for (arm = 0; arm < 8; arm++) {
+    for (arm = 0; arm < 12; arm++) {
       sublet_cap src, dst, park; ulong ty, before;
       sublet_clear(&src); sublet_clear(&dst); sublet_clear(&park);
       carve_root(4096, &src);                                   /* a fresh LINEAR region in src */
       if (root_short) { out("R1 refused: arena s=linear"); kv("arm", arm); kv("need", root_short); out("\n"); return; }
-      if (arm == 1 || arm == 5 || arm == 7) {                    /* the NONLIN controls: an alias of it in src */
+      if (arm == 1 || arm == 5 || arm == 7 || arm == 9 || arm == 11) {   /* the NONLIN controls: an alias of it in src */
         void *a = sublet_take(&src); sublet_move(&src, &park); sublet_store(&src, a);
       }
       before = sublet_type(&src);
