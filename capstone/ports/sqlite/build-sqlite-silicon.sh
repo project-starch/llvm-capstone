@@ -2732,7 +2732,7 @@ COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-featur
         # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
-        -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
+        -I"$ADAPTED/stubinc" -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"
