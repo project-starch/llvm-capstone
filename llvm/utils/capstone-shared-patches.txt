@@ -62,6 +62,7 @@ llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndA
 llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | if (UseSizedLibcall && DL.isNonIntegralPointerType(ValTy))
 llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
+llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability target (Capstone: addrspace(200), declared
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +116 -14 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
