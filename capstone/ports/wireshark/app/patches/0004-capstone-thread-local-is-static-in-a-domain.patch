@@ -1,0 +1,16 @@
+--- a/include/ws_attributes.h
++++ b/include/ws_attributes.h
+@@ -106,7 +106,12 @@
+  * the major UN*X C compilers support __thread and the major Windows C
+  * compilers support __declspec(thread).
+  */
+-#ifdef _MSC_VER
++#if defined(CAPSTONE_SINGLE_THREAD_DOMAIN)
++  /* CAPSTONE (tshark app port): a domain runs one thread, and a __thread variable of any type
++     cannot be lowered for capstone64 (ISSUES C-47: "Cannot select: GlobalTLSAddress").
++     Thread-local is plain static storage there. */
++  #define WS_THREAD_LOCAL
++#elif defined(_MSC_VER)
+   #define WS_THREAD_LOCAL __declspec(thread)
+ #else
+   #define WS_THREAD_LOCAL __thread
