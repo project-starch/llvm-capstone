@@ -6532,6 +6532,36 @@ thread pointer survives.
 
 ### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
 
+> **⚠ CAVEAT on "not a live miscompile" (2026-09-24). A reproduced fault contradicts it, on an
+> unmerged branch.**
+>
+> **The branch and its evidence.** `origin/compiler/c47-tls` carries `5fbdfb139c7d` ("C-46: a direct
+> call's target capability is built non-linear"), by the external collaborator. Its commit
+> message records a QEMU fault in a `-O2` domain that calls one static function nine times:
+> - `selectCall` built each target as a bare `cincoffset rd, gp, off`, which is LINEAR and pure, so
+>   MachineCSE merged the nine targets into one register;
+> - under register pressure the allocator copied it (`movc s8, s11`), which consumes the source;
+> - the next call went through the source, `cjalr ra, 0(s11)`: cause 24, with `s11` null and the
+>   copy `type 0`;
+> - it reports 6 musl libc-test faults on `dev` from this shape (fwscanf, memstream, setjmp, string,
+>   strtod_simple, tgmath). Each hides the rest of its chunk, 27 tests in all. With the fix: 0 faults.
+>
+> **Not yet validated by this registry** (same status as the C-47 note, which shares the branch).
+> The verdict above stands until the merge changes it, which is the lead's call. But it should not
+> be read as "C-46 is not live".
+>
+> **Why the 2026-09-10 argument did not catch it** (compiler lane, re-read at source 2026-09-24).
+> The argument says MOVC has no IR pattern and is emitted only by `copyPhysReg` and frame-index
+> elimination, at or after register allocation. So MachineCSE and MachineSinking never see a MOVC.
+> That is **correct about MOVC and answers the wrong question.** The fault needs no pre-RA pass to
+> touch a MOVC. A pre-RA pass (MachineCSE) **extended a LINEAR value's live range**, and the
+> allocator's own copy of it IS the MOVC. So reasoning about the copy instruction's reachability
+> cannot establish latency. What has to be bounded is **which LINEAR (or untagged) values can reach
+> register allocation with a live range the allocator may split**. It is the same pre-RA/RA
+> boundary C-32 turned on (there, `PerformSinkAndFold` deciding whether a value reaches RA as a
+> copyable capability). The branch's own C-46 entry agrees (its `ISSUES.md`, C-46 box): "any other
+> LINEAR value the allocator can copy with a live source is still exposed."
+
 > **2026-09-15: the read-after-copy precondition this entry defers to C-32 is OBSERVED on silicon** —
 > `movc a0, s3` of an integer-bridged base with `s3` live afterwards, emitted by -O1 and -O2 in the
 > SQLite Sublet port's `setupLookaside`, and the machine model saw a plain copy. See C-32's box.
