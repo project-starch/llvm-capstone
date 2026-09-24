@@ -15,7 +15,9 @@
 # - a declared stack (.capstone_domreq, TSAPP_STACK_BYTES, default 1 MiB): manuf.c's
 #   capability-initialiser frame alone is 322,080 bytes (results item 5);
 # - level0 built with CAPSTONE_LEVEL0_STATS, and src/tsapp-heap.c as the runtime's exit hook: every
-#   image ends with one `TSAPP-HEAP ... peak_end=<bytes>` line on stderr, the arena it needed.
+#   image ends with one `TSAPP-HEAP ... peak_end=<bytes>` line on stderr, the arena it needed;
+# - src/tsapp-init-fini.c: the constructors (GLib, libgpg-error) and the destructor (libxml2) run,
+#   which nothing else in a domain does, and exit no longer walks .fini_array through integers.
 #
 # GATES, each failing the build:
 # - LINK: no undefined symbols, and no undefined weak symbol (the runner refuses the image; C-56);
@@ -69,6 +71,7 @@ RTF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang -
 "$CAPSTONE_CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" -DCAPSTONE_LEVEL0_STATS \
   -c "$CAPSTONE_REPO_ROOT/capstone/ports/musl-capstone/runtime/level0.c" -o "$OUT/level0.o"
 "$CAPSTONE_CLANG" "${RTF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
+"$CAPSTONE_CLANG" "${RTF[@]}" -c "$APP/src/tsapp-init-fini.c" -o "$OUT/tsapp-init-fini.o"
 "$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding -O0 -DCAPSTONE_DOMREQ_DATA="$STACK" \
   -DCAPSTONE_DOMREQ_STACK="$STACK" -c "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OUT/domreq.o"
 RT=(); for o in "$TS_RUNTIME_DIR"/*.o; do [ "$(basename "$o")" = level0.o ] || RT+=("$o"); done
@@ -78,7 +81,7 @@ link() {  # out-image tshark-object [runtime objects...]
   local ins=(); for i in "${INPUTS[@]}"; do
     if [ "$i" = "$TSO" ]; then ins+=("$tso"); elif [ "${i#/}" != "$i" ]; then ins+=("$i"); else ins+=("$B/$i"); fi
   done
-  "$LD" --gc-sections -T "$TS_LINKER_SCRIPT" -o "$out" "$@" "$OUT/level0.o" "$OUT/tsapp-heap.o" "$OUT/domreq.o" \
+  "$LD" --gc-sections -T "$TS_LINKER_SCRIPT" -o "$out" "$@" "$OUT/level0.o" "$OUT/tsapp-heap.o" "$OUT/tsapp-init-fini.o" "$OUT/domreq.o" \
     "${ins[@]}" "$TS_LIBC_ARCHIVE"
 }
 for n in 1 2 3 4 5; do
@@ -86,6 +89,11 @@ for n in 1 2 3 4 5; do
     || { echo "LINK FAILED: m$n"; grep -m5 -E 'error' "$OUT/link-m$n.log"; exit 1; }
   w=$("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/tshark_m$n.dom" | grep -cE ' [wv] ' || true)
   [ "$w" = 0 ] || { echo "LINK GATE: m$n has $w undefined weak symbols"; exit 1; }
+  # Constructors and destructors run only from link.ld's plain .init_array/.fini_array, which
+  # src/tsapp-init-fini.c walks. A priority section (.init_array.NNN) or .ctors/.dtors is an orphan
+  # outside those markers, and would silently never run.
+  o=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT/tshark_m$n.dom" | grep -oE '\.(init_array|fini_array)\.[^ ]+|\.(ctors|dtors)[^ ]*' | sort -u | tr '\n' ' ' || true)
+  [ -z "$o" ] || { echo "LINK GATE: m$n has constructor sections nothing runs: $o"; exit 1; }
 done
 
 # Negative control: M5 without hostcall.o.

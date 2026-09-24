@@ -25,6 +25,12 @@
 extern char **__environ;
 int main(int argc, char **argv);
 
+/* The program's constructors (.init_array), run before main. Nothing else in a domain runs them.
+ * DEFINED weak with an empty body, not declared weak: an undefined weak symbol's address is not
+ * NULL in a domain (ISSUES C-56). The tshark images link the real one (app/src/tsapp-init-fini.c);
+ * configure's link tests get this one, and have no constructors. */
+__attribute__((__weak__)) void __capstone_run_init_array(void) {}
+
 enum { ARGS_MAX = 32, ENVS_MAX = 16, LINE_MAX_BYTES = 512 };
 
 static int read_lines(const char *path, char lines[][LINE_MAX_BYTES], int max)
@@ -66,5 +72,6 @@ int capstone_main(void)
 	}
 	envp[envc] = NULL;
 	__environ = envp;
+	__capstone_run_init_array();
 	exit(main(argc, argv));
 }
