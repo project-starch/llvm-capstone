@@ -210,6 +210,16 @@ what the consumer relies on: PostgreSQL's `durable_rename` writes `x.tmp` and re
 `renameat2` flag is refused with `EINVAL` on the domain side, and the directory descriptors are
 accepted and not used, as `openat`'s is.
 
+`HC_V0_OP_PATH_MKDIR = 28` (added 2026-09-24). Request: `PATH_ACCESS`'s layout, the mode in the
+flags word at payload offset 0 (the low 12 bits of `mkdirat`'s mode), the path at
+`metadata.offset = 8`, `metadata.length = strlen(path)`. Response: `result = 0`; failure as in
+section 11 (`EEXIST`, `ENOENT` for a missing parent, as `mkdir(2)` gives them). Its counterpart is
+not a new opcode: `PATH_DELETE` now reads its flags word, and `HC_PATH_DELETE_FLAG_DIRECTORY = 1`
+makes the helper call `rmdir(2)` instead of `unlink(2)` (`ENOTEMPTY`, `ENOTDIR`; without the flag a
+directory answers `EISDIR`). musl reaches the pair through `mkdirat` and `unlinkat(...,
+AT_REMOVEDIR)`. First consumer is PostgreSQL's `CREATE DATABASE`, which makes `base/<oid>` under
+its data directory.
+
 ## 5. Region contract
 
 ## 5a. Metadata region

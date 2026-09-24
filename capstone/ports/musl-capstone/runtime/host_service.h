@@ -168,10 +168,19 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     return 0;
   }
   case HC_V0_OP_PATH_ACCESS:
-  case HC_V0_OP_PATH_DELETE: {
+  case HC_V0_OP_PATH_DELETE:
+  case HC_V0_OP_PATH_MKDIR: {
+    /* One layout for the three: the flags word at 0 (PATH_DELETE's directory
+       flag, PATH_MKDIR's mode), the path at req->offset. */
+    const struct hc_file_open_req_v0 *r = (const struct hc_file_open_req_v0 *)payload;
+    unsigned long long flags = r->flags;
     memcpy(h->path, payload + req->offset, (size_t)req->length);
     h->path[req->length] = '\0';
-    int rc = req->opcode == HC_V0_OP_PATH_ACCESS ? access(h->path, F_OK) : unlink(h->path);
+    int rc;
+    if (req->opcode == HC_V0_OP_PATH_ACCESS) rc = access(h->path, F_OK);
+    else if (req->opcode == HC_V0_OP_PATH_MKDIR) rc = mkdir(h->path, (mode_t)flags);
+    else if (flags & HC_PATH_DELETE_FLAG_DIRECTORY) rc = rmdir(h->path);
+    else rc = unlink(h->path);
     if (rc < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
     return 0;
   }

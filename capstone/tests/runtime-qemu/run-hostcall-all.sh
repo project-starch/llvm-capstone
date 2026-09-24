@@ -32,6 +32,7 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-mmap-shm-probe.sh"
   "$SCRIPT_DIR/run-hostcall-pid-timer-probe.sh"
   "$SCRIPT_DIR/run-hostcall-pipe-poll-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-mkdir-rmdir-probe.sh"
 )
 
 capstone_select_banner hostcall

@@ -912,16 +912,24 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_ftruncate:
     return hc_handle_op((long)a, HC_V0_OP_FILE_TRUNCATE, (unsigned long long)b);
 
-  /* musl's unlink() and access() both go through the *at forms. The dirfd is
-     accepted and unused for the same reason it is in openat; the path is
-     joined with the domain's cwd the same way. */
+  /* musl's unlink(), rmdir(), access() and mkdir() all go through the *at
+     forms. The dirfd is accepted and unused for the same reason it is in
+     openat; the path is joined with the domain's cwd the same way. rmdir() is
+     unlinkat with AT_REMOVEDIR, which becomes PATH_DELETE's directory flag:
+     the helper then calls rmdir(2), so a file answers ENOTDIR and a directory
+     without the flag EISDIR, as they would anywhere. */
   case SYS_unlinkat:
     return hc_path_op(HC_V0_OP_PATH_DELETE, (const char *)b,
-                      HC_PATH_DELETE_FLAG_NONE);
+                      ((long)c & AT_REMOVEDIR) ? HC_PATH_DELETE_FLAG_DIRECTORY
+                                               : HC_PATH_DELETE_FLAG_NONE);
 
   case SYS_faccessat:
     return hc_path_op(HC_V0_OP_PATH_ACCESS, (const char *)b,
                       HC_PATH_ACCESS_FLAG_EXISTS);
+
+  case SYS_mkdirat:
+    return hc_path_op(HC_V0_OP_PATH_MKDIR, (const char *)b,
+                      (unsigned long long)((long)c & 07777));
 
   /* musl's rename() is renameat2(AT_FDCWD, old, AT_FDCWD, new, 0) here: this
      target has neither rename nor renameat. The directory descriptors are
