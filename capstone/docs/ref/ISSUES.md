@@ -7182,7 +7182,26 @@ model, which is a design question and not a missing pattern.
 `-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
 thread pointer survives.
 
-### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — OBSERVED LIVE 2026-09-24 for direct-call targets (fixed on compiler/c46-call-target-nonlinear); the MOVC modelling itself is unchanged. The fix shape this entry first implied is WRONG — see the box`
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — OBSERVED LIVE 2026-09-24 for direct-call targets (the direct-call instance fixed at 563e0765953e, merged 2026-09-25 at 3979abd8e9a3); the MOVC modelling itself is unchanged. The fix shape this entry first implied is WRONG — see the box`
+
+> **What the merged fix does NOT guard.** `llvm/test/CodeGen/Capstone/c46-call-target-nonlinear.ll` is
+> a codegen-SHAPE test: it checks that the target is built non-linear, not that a program survives.
+> The runtime reproducer lives on the stacked C-47 commit: the thread-local QEMU test, whose -O2 arm
+> is how the fault was found. So `563e0765953e` alone ships no runtime regression guard, and reverting
+> the C-47 work would take C-46's runtime coverage with it.
+>
+> **libc-test, measured 2026-09-25 by the helper lane.** Same compiler binary for each tree, clean
+> rebuilt musl, EXT4 errors uniform across all runs.
+> - Before, dev `da4c9a5`: 37/6/6 + 1 NOBOOT, with the six C-46 tests faulting cause 24.
+> - After, `3979abd8e9a3`: 43 PASS / 7 FAIL / 2 FAULT. fwscanf, memstream, string, strtod_simple and
+>   tgmath now pass. setjmp runs and FAILs on an unserved `rt_sigprocmask`. The 2 FAULTs are
+>   tls_init and tls_local_exec, which C-47 now lets build; both halt in `pthread_create.c`, because a
+>   domain has no threads.
+> - **Among tests that were already building, FAULT went 6 → 0.** "FAULT 2" does NOT mean C-46
+>   underperformed: both faults are new arrivals that C-47 made buildable. The contributor's
+>   43 PASS / 7 FAIL is exact for the population it described.
+> - The musl README's 43/7/0 for 2026-09-17 predates a later regression of dev. It was not a wrong
+>   baseline.
 
 > **2026-09-24: OBSERVED LIVE under QEMU, and the "What would settle it" case below now exists.**
 > A direct call's target was built as a bare `cincoffset rd, gp, off` (selectCall), which is LINEAR

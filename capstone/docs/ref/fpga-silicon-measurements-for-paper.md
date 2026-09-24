@@ -886,8 +886,17 @@ first (`r42-acceptance-r1boots.result-lines.txt`).
   - no revocation-heavy workload, P1's Sublet cell included, runs on it until the R-43 fix is on a
     bitstream;
   - the numbers measured on 054cea69b stand as they were, with their recorded caveats.
-- **Not measured:** B6 and B7 (the R-43 live128 / live512 sweep at one VA) wait for their emulator
-  records.
+- **B6 and B7, the R-43 sweep at one VA: BOTH trap cause 25 in the MINTING phase, before the sweep**
+  (`r42-acceptance-r43sweep.result-lines.txt`).
+  - live128 traps at `ld t0,0(s10)` right after an `mrev`/`delin`; s10 is a globals capability that
+    the same code read successfully earlier.
+  - live512 traps at `ld t0,0(s8)`.
+  - live16 (B5) passes.
+  - live128 was predicted to fit, and that prediction was the RTL lane's and is RETRACTED: each alias
+    carries two live ids (leaf plus alias), so live128 is about 256 live ids against a 256-entry
+    cache.
+  - The false-deny threshold on this silicon is therefore **roughly 256 simultaneously live
+    revocation ids**. The fix, probe-on-miss, is on capstone-ariane branch `r43-query-on-miss`.
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
