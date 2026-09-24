@@ -83,6 +83,21 @@ P2.6  stderr. Found natively before this boot: the minimal build (native-min-pa:
       - M1: no stderr besides domain_entry's echoes and the TSAPP lines;
       - M2, M3, M4, M5: exactly those 194 lines, in the same order, before any stdout byte.
       Refuted by: any other stderr line, or those lines differing from the native minimal build's.
+P2.8  Unserved syscalls (added before the M0 link; the runtime writes one `capstone-domain:
+      UNSERVED syscalls:` line at exit, and the runner reports it per stage). From reading the
+      source and a native strace of the minimal build on dhcp:
+      - M1: none.
+      - M2, M3: 160 (uname) twice: filesystem.c:397 (the executable's path, which then falls back to
+        argv[0]) and ws_init_version_info (tshark.c:1197, the OS version, os_version_info.c:609);
+        179 (sysinfo, memory size, version_info.c:334); 134 (rt_sigaction, epan.c:328 ignores SIGPIPE); 278 (getrandom)
+        at least once, from c-ares, which on ENOSYS marks the OS source bad and reads /dev/urandom
+        instead (ares_rand.c).
+      - M4, M5: those, plus 134 four more times (process_cap_file, tshark.c:4246-4250).
+      (Line numbers are Wireshark 4.6.8's, before patch 0006.)
+      Nothing else. In particular NOT libgcrypt's entropy source: it is built USE_RNDGETENTROPY,
+      and rndgetentropy.c:111-112 is a log_fatal on ENOSYS, so a gcrypt random request would end the
+      run, not appear in this list. Natively nothing on this workload asks it for randomness.
+      Refuted by: any other number in the list, or a missing 160.
 P2.7  The runner checks what each stage printed, apart from the banner, the echoes and the
       TSAPP-HEAP/LT-RESULT lines, and prints `output MATCH` for every stage:
       - M1: its TSAPP-STAGE line and nothing else;
@@ -115,8 +130,14 @@ What a pass does NOT establish
 - The board. Every musl-capstone domain on the my_first_domain link.ld ABI relies on QEMU
   fabricating a cursor-0 gp that cannot exist on silicon (the FFmpeg app port measured it: with
   fabrication off it did not reach main). This image is on that ABI, so a pass shows the program
-  is correct under capability enforcement, not that it can run on the board. The serial log's
-  `gp FABRICATED` lines will be counted and reported. The board needs the gp-captable ABI.
+  is correct under capability enforcement, not that it can run on the board. The board needs the
+  gp-captable ABI.
+  WITHDRAWN (same day, before any tshark boot): "the serial log's `gp FABRICATED` lines will be
+  counted and reported". That line is printed only by the cincoffset fallback (op_helper.c:718),
+  for a gp that arrives untagged. With CAPSTONE_GP_NONLIN=1, gp is fabricated at every cjalr and
+  domain entry without a print (op_helper.c:2497-2501, 2556-2559) and stays tagged, so the count is
+  0 whatever the dependency: the stand-in boots gave 4 without NONLIN and 0 with it. A zero there
+  would have read as "no dependency".
 - Safety. level0 is one arena with no per-object bounds (CAPSTONE_LEVEL0_SHRINK off) and no
   revocation: this is a compatibility result.
 - Captures beyond these ten, and any tshark option other than -r -V -n.
