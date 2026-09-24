@@ -355,11 +355,11 @@ for its -c build (debug clang). That is a build-time cost, not a blocker.
 domain is single-threaded: `epan_init` runs registration inline (`tshark.c:1370`), and a native
 run makes 0 `clone` calls.
 
-**The compiler fix is on a branch, unmerged.** C-47 has an implemented fix on branch
-`compiler/c47-tls` (`07829e435e0d`): local-exec TLS on `tp`'s capability, with a runtime
-`tls.c`. It is not merged, and this port has not built or run it. Until it lands, the define
-stays. When it does, patch 0004 can go, after one run shows the three files unchanged in
-output.
+**The compiler fix is merged (2026-09-25).** C-47's fix is local-exec TLS on `tp`'s capability,
+with a runtime `tls.c`. It was branch `compiler/c47-tls` (`8abb7757fbf2`; first cited here as
+`07829e435e0d`, before the branch was rebased) and was merged into dev as `3979abd8e9a3`.
+This port has not yet been rebuilt with it, so the define stays for now. Patch 0004 can go
+after one run on the new compiler shows the three files' output unchanged.
 
 **Checked from both sides.** The three `__thread` files (`except.c`, `wtap.c`,
 `filesystem.c`) fail the gate without the define, each with `Cannot select:

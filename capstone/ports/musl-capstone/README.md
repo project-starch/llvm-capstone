@@ -280,10 +280,25 @@ reads 41 PASS and 2 FAULT.
   allocator's MOVC had moved away. `setjmp` moved from FAIL to FAULT.
 - **The shared rootfs was ext4-corrupt during the run.** Every boot showed the same two
   `EXT4-fs error` lines, passing ones included, so the corruption does not single out these six.
-- **Not measured here:** the C-46 fix, merged with `compiler/c47-tls` on 2026-09-25. Its commit
-  records all six cleared. The same merge changes the NOBUILD row too (C-47); that was not
-  measured here either.
 - **Logs:** `/tmp/capstone/libc-clean-0925/musl-libc-test/logs/20260925-043541/`.
+
+**After the C-46 and C-47 fixes, the same day** (merge `3979abd8e9a3`, which went into dev as
+`08e5f91945ef`; the compiler was built from `3979abd8e9a3`; musl rebuilt fresh; same libc-test,
+one test per boot):
+- **Counts:** 43 PASS, 7 FAIL, 2 FAULT, 3 NOBUILD, 22 EXCLUDED.
+- **The six:** fwscanf, memstream, string, strtod_simple and tgmath PASS. `setjmp` returns to its
+  FAIL, on the unserved `rt_sigprocmask` (the table below).
+- **The two FAULTs** are `tls_init` and `tls_local_exec`. C-47 now lets them build, and both halt in
+  `pthread_create.c`: a domain has no threads.
+- **NOBUILD falls from 5 to 3:**
+  - `tls_init_dso` meets C-47's new compile error ("thread-local variable 'tls' is initialized with
+    the address of a global or function");
+  - `tls_align` and `tls_align_dso` fail to link.
+- **The shared rootfs:** the same two EXT4 errors in every boot.
+- **Logs:** `/tmp/capstone/libc-after-0925/musl-libc-test/logs/20260925-061202/`.
+
+So the 2026-09-17 table's 43 PASS / 7 FAIL holds again after the fix. Its FAULT 0 has become 2,
+from two tests that did not build before.
 
 **What the reds were on 2026-09-17.** None of them was a capability fault then. On 2026-09-25 six
 are, see above.
