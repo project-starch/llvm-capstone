@@ -42,13 +42,21 @@ Procedure 4-6) and `METHODS.md`. Where this file and the protocol disagree, the 
    Two limits the pilot will hit:
    - **⑥'s tables grow with the pool.** They take about 41 B per 64 B atom (§7s formula), so a
      128 MiB pool needs about 86 MB of tables: 214 MB of regions against a 256 MiB CMA area.
-   - **⑤'s heap is static, so it lives in the domain block, which is capped at 4 MiB.** That caps
-     the matched arena at about 2 MiB, and so the workload at about size 1, unless either:
-     - ⑤ takes its heap from a region, as ⑥ does; or
-     - the domain block moves to CMA. That module change is already planned by the helper lane
-       for tshark, as its own `dev` commit.
+   - **⑤'s heap as measured was static, so it lived in the domain block, which is capped at 4 MiB.**
+     `speedtest1_measure.c` builds `static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]` in `.bss`;
+     the measured ⑤ used 2 MiB. **Confirmed by the board lane, 2026-09-25.**
+     - **The escape already exists in code.** `SPEEDTEST1_REGION_ARENA=1`
+       (`run-speedtest1-measure.sh`) defines `CAPSTONE_SPEEDTEST1_REGION_ARENA`, and ⑤'s heap then
+       comes from a CMA-backed shared region, demonstrated at 130 MiB. This file's first version
+       said "unless ⑤ takes its heap from a region" as if that were still to be built. It is not.
+     - **Not yet established:** no board run of ⑤ with the region arena exists, and switching changes
+       ⑤'s image and geometry against the measured `ccb73bc08db39990`. So the pilot question is
+       "does ⑤ with `SPEEDTEST1_REGION_ARENA` run on silicon at a size above 1". The build needs
+       the SQLite-capable host.
+     - **An arm asymmetry that the protocol has to name:** ⑤'s region is `REV_SHARED` (the grant
+       arrives non-linear), while ⑥'s `--arena` is `REV_BORROWED` (a linear borrow). The two
+       options claim the same slot and the host refuses them together.
 
-     This is inferred from the image layout, not measured. **It decides whether any size above 1 can be matched.**
 6. **Schedule:** 5 independent runs per arm over at least 3 boots, in the shared seeded order, with
    no workload warm-up (P1 step 7).
    - A fresh boot for each Sublet repetition applies only to an unreclaimed configuration.
