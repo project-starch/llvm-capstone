@@ -157,6 +157,13 @@ public:
 
   bool isAsCheapAsAMove(const MachineInstr &MI) const override;
 
+  /// MachineLICM may hoist an instruction out of a conditionally executed block
+  /// when it neither loads nor stores. Capability arithmetic traps on an
+  /// untagged operand, so hoisting it is speculation LLVM does not know it is
+  /// doing; see the definition.
+  bool shouldHoist(const MachineInstr &MI,
+                   const MachineLoop *FromLoop) const override;
+
   std::optional<DestSourcePair>
   isCopyInstrImpl(const MachineInstr &MI) const override;
 
