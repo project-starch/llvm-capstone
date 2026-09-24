@@ -1,0 +1,43 @@
+# E3 ride-along: R1 linear series (arms 0-11; 8-11 = tighten/shrinkto) on caplifive_r42_6cbdaeeb4.bit, 2026-09-25
+# image 55cc4c4db72fb1f7 (build-r1-silicon.sh @ dev c462d0a40a83, DOMAIN_BASE_VA 0x410000, -O1), rr host 2c9e82d101b48160
+## QEMU (capstone-qemu, same image, --arm S --series linear --pattern shared --reps 1, arena 4194304):
+R1 lin arm=0 what=movc-LIN(instrument-control) rep=1 before=0 type=7 spec=7 r21r22=7 reads=spec
+R1 lin arm=1 what=cincoffset-NONLIN(conformance-control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=2 what=cincoffset-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=3 what=scc-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=4 what=ldc-LIN(slot-after) rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=5 what=ldc-NONLIN(slot-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=6 what=stc-LIN(reg-after) rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=7 what=stc-NONLIN(reg-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=8 what=tighten-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=9 what=tighten-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=10 what=shrinkto-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=11 what=shrinkto-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1_RC=0
+## board, boot r42e3:
+#  06:50:19 fw_payload 20805234651d (monitor 2dcd3a5, buildroot d04bd83)
+#  06:50:19 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 12 'R1 lin' lines; silicon reads = the r21r22 column for EVERY arm: 7,1,0,0,0,1,0,1,0,1,0,1 (arm 8 tighten-LIN 0 and arm 10 shrinkto-LIN 0 = the RTL COPIES; QEMU read 7 and 0). Controls 1,5,7,9,11 = 1. Any arm != r21r22 = the RTL model in R-21/R-22 is wrong for that op. No cause-25 (few live ids).; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation,
+#  07:03:14 runner ended after 775 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4536 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT0:00000001
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x9d 10011101
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0x0c 00001100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x20 00100000
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0x00 00000000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0x80 10000000
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0x10 00010000
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0xac 10101100
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+# decode: mcause 0x1d = 29 (ILLEGAL_OPERAND_VALUE); mepc DBAS+0x200c = run_linear `tighten t1, t0, 0xc` (arm 8, tighten-LIN, selected by `li a0,0x300; srl a0,a0,s1`), source t0 from `ldc t0,0x0(a0)`

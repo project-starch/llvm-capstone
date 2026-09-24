@@ -7971,6 +7971,19 @@ the project lead's call.
 
 ### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
 
+> **`tighten` on silicon, 2026-09-25 (E3, boot r42e3, `caplifive_r42_6cbdaeeb4.bit`): it TRAPS rather than
+> copying.** Image `55cc4c4db72fb1f7`, R1 `--series linear`. Arm 8 (`tighten-LIN`) raises **cause 29
+> (ILLEGAL_OPERAND_VALUE)** at `tighten t1, t0, 0xc` (DBAS+0x200c, tval `0xac108000`).
+> - capstone-qemu runs the same image to completion; arm 8 reads type 7, so QEMU moves.
+> - This entry's prediction was a copy, reading 0. Silicon does neither: it refuses the operation.
+> - Arms 0–7 ran first, but their output was lost to the trap. Arms 10/11 (`shrinkto`) never ran.
+> - **Whether cause 29 is the RTL's specified behaviour for a linear source or for this perm
+>   immediate is with the RTL lane.**
+> - If it is specified, then the QEMU model of `tighten` is what diverges, and the copy-vs-move
+>   question for `tighten` does not arise on silicon.
+>
+> Result lines: `tests/rtl-smoke/ladder-revival-2026-09-22/r42-e3-linear.result-lines.txt`.
+
 > **On silicon 2026-09-15 (boot sw8x-f4, §7w of the measurements doc):** through the R1 harness's `--series
 > linear` on `caplifive_r30r31_1bfff7776`, the LINEAR source of `cincoffset` and of `scc` reads cleared (7)
 > after the operation in six readings each, the `movc` instrument control reads cleared and the NONLIN
