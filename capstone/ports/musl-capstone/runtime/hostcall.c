@@ -26,6 +26,7 @@
  * mismatch at the one boundary that cannot be debugged from C. Found 2026-09-16
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
+#include <fcntl.h>
 #include <setjmp.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -240,18 +241,68 @@ static long hc_stat_basic(struct hc_file *f, unsigned long long *size,
   return 0;
 }
 
+/* THE DOMAIN'S WORKING DIRECTORY. The protocol has no notion of one: the helper
+ * resolves every path in its own working directory, and until a domain calls
+ * chdir() that is what a relative path means here, unchanged. chdir() gives the
+ * domain a directory of its own, kept on this side as a string: from then on
+ * every relative path that goes over the wire is written as "<cwd>/<path>"
+ * first, so the helper sees a path that no longer depends on where it runs.
+ * Nothing is normalised -- "a/../b" goes out as written and the helper's kernel
+ * resolves it, which is also what a chdir("..") leaves in the string -- and a
+ * first chdir() to a RELATIVE path keeps a relative cwd (still relative to the
+ * helper), which musl's getcwd() then refuses with ENOENT because it does not
+ * start with "/". getcwd() answers ENOENT before the first chdir() too: there is
+ * no directory to name, and inventing one would be a lie some path would later
+ * be relative to. chdir() is checked the way opendir() checks a directory: the
+ * helper opens the path with O_DIRECTORY and the name is kept only if that
+ * succeeds, so a missing or non-directory target answers ENOENT/ENOTDIR and the
+ * cwd stays where it was. First consumer is PostgreSQL, whose backend does
+ * chdir(DataDir) and names every file relative to it from then on. */
+static char hc_cwd[HC_PAYLOAD_SIZE];
+static unsigned long hc_cwd_len; /* 0: none set */
+
+/* "<cwd>/<path>" for a relative path under a cwd, path as written otherwise,
+   into dst without a terminator; the length, or -ENAMETOOLONG past room. */
+static long hc_join(char *dst, unsigned long room, const char *path) {
+  unsigned long n = 0;
+  if (hc_cwd_len && path[0] != '/') {
+    for (unsigned long i = 0; i < hc_cwd_len; i++) {
+      if (n >= room) return -ENAMETOOLONG;
+      dst[n++] = hc_cwd[i];
+    }
+    if (hc_cwd[hc_cwd_len - 1] != '/') {
+      if (n >= room) return -ENAMETOOLONG;
+      dst[n++] = '/';
+    }
+  }
+  for (unsigned long i = 0; path[i]; i++) {
+    if (n >= room) return -ENAMETOOLONG;
+    dst[n++] = path[i];
+  }
+  return (long)n;
+}
+
+/* Every path that goes over the wire goes through here: joined with the cwd,
+   written into the payload at `at`; the length, or -ENAMETOOLONG. */
+static long hc_put_path(unsigned long at, const char *path) {
+  static char joined[HC_PAYLOAD_SIZE];
+  long n = hc_join(joined, HC_PAYLOAD_SIZE - at, path);
+  if (n < 0)
+    return n;
+  for (long i = 0; i < n; i++)
+    hc_payload[at + i] = joined[i];
+  return n;
+}
+
 /* PATH_ACCESS and PATH_DELETE share FILE_OPEN's layout: flags at 0, the path at
  * offset 8, length in bytes. Written once because only the opcode differs. */
 static long hc_path_op(unsigned long long opcode, const char *path,
                        unsigned long long flags) {
-  unsigned long len = 0;
-  while (path[len]) len++;
-  if (len > HC_PAYLOAD_SIZE - HC_PATH_ACCESS_REQ_V0_PATH_OFFSET)
-    return -ENAMETOOLONG;
   hc_put_u64(0, flags);
-  for (unsigned long i = 0; i < len; i++)
-    hc_payload[HC_PATH_ACCESS_REQ_V0_PATH_OFFSET + i] = path[i];
-  if (hc_round(opcode, HC_PATH_ACCESS_REQ_V0_PATH_OFFSET, len) != 0)
+  long len = hc_put_path(HC_PATH_ACCESS_REQ_V0_PATH_OFFSET, path);
+  if (len < 0)
+    return len;
+  if (hc_round(opcode, HC_PATH_ACCESS_REQ_V0_PATH_OFFSET, (unsigned long)len) != 0)
     return -EIO;
   return hc_metadata->error != 0 ? hc_err() : 0;
 }
@@ -263,19 +314,18 @@ static long hc_path_op(unsigned long long opcode, const char *path,
 static long hc_path_rename(const char *old, const char *new, long flags) {
   if (flags != 0)
     return -EINVAL;
-  unsigned long lo = 0, ln = 0;
-  while (old[lo]) lo++;
-  while (new[ln]) ln++;
-  if (lo + 1 + ln > HC_PAYLOAD_SIZE - HC_PATH_RENAME_REQ_V0_PATH_OFFSET)
-    return -ENAMETOOLONG;
   hc_put_u64(0, 0);
   const unsigned long at = HC_PATH_RENAME_REQ_V0_PATH_OFFSET;
-  for (unsigned long i = 0; i < lo; i++)
-    hc_payload[at + i] = old[i];
+  long lo = hc_put_path(at, old);
+  if (lo < 0)
+    return lo;
+  if (at + (unsigned long)lo + 1 >= HC_PAYLOAD_SIZE)
+    return -ENAMETOOLONG;
   hc_payload[at + lo] = '\0';
-  for (unsigned long i = 0; i < ln; i++)
-    hc_payload[at + lo + 1 + i] = new[i];
-  if (hc_round(HC_V0_OP_PATH_RENAME, at, lo + 1 + ln) != 0)
+  long ln = hc_put_path(at + (unsigned long)lo + 1, new);
+  if (ln < 0)
+    return ln;
+  if (hc_round(HC_V0_OP_PATH_RENAME, at, (unsigned long)(lo + 1 + ln)) != 0)
     return -EIO;
   return hc_metadata->error != 0 ? hc_err() : 0;
 }
@@ -308,7 +358,10 @@ static void hc_fill_stat(struct stat *st, unsigned long long size,
   st->st_blocks = (blkcnt_t)((size + 511) / 512);
 }
 
-static long hc_open(const char *path, long flags, long mode) {
+/* FILE_OPEN. `joined` says whether the path is resolved against the cwd (every
+   caller's path is) or sent as written (chdir's, which has been joined already
+   and must not be joined twice when the cwd itself is relative). */
+static long hc_open_wire(const char *path, long flags, long mode, int joined) {
   int slot = -1;
   for (int i = 0; i < HC_MAX_FILES; i++)
     if (!hc_files[i].used) {
@@ -318,18 +371,23 @@ static long hc_open(const char *path, long flags, long mode) {
   if (slot < 0)
     return -EMFILE;
 
-  unsigned long len = 0;
-  while (path[len])
-    len++;
-  if (len > HC_PAYLOAD_SIZE - HC_FILE_OPEN_REQ_V0_PATH_OFFSET)
-    return -ENAMETOOLONG;
-
   hc_put_u64(0, (unsigned long long)flags);
   hc_put_u64(8, (unsigned long long)mode);
-  for (unsigned long i = 0; i < len; i++)
-    hc_payload[HC_FILE_OPEN_REQ_V0_PATH_OFFSET + i] = path[i];
+  long len;
+  if (joined) {
+    len = 0;
+    while (path[len]) len++;
+    if ((unsigned long)len > HC_PAYLOAD_SIZE - HC_FILE_OPEN_REQ_V0_PATH_OFFSET)
+      return -ENAMETOOLONG;
+    for (long i = 0; i < len; i++)
+      hc_payload[HC_FILE_OPEN_REQ_V0_PATH_OFFSET + i] = path[i];
+  } else {
+    len = hc_put_path(HC_FILE_OPEN_REQ_V0_PATH_OFFSET, path);
+    if (len < 0)
+      return len;
+  }
 
-  if (hc_round(HC_V0_OP_FILE_OPEN, HC_FILE_OPEN_REQ_V0_PATH_OFFSET, len) != 0)
+  if (hc_round(HC_V0_OP_FILE_OPEN, HC_FILE_OPEN_REQ_V0_PATH_OFFSET, (unsigned long)len) != 0)
     return -EIO;
   if (hc_metadata->error != 0)
     return hc_err();
@@ -342,6 +400,45 @@ static long hc_open(const char *path, long flags, long mode) {
   hc_files[slot].pos = 0;
   hc_files[slot].used = 1;
   return HC_FD_BASE + slot;
+}
+
+static long hc_open(const char *path, long flags, long mode) {
+  return hc_open_wire(path, flags, mode, 0);
+}
+
+static long hc_close(long fd);
+
+static long hc_chdir(const char *path) {
+  static char next[HC_PAYLOAD_SIZE];
+  long n = hc_join(next, HC_PAYLOAD_SIZE - 1, path);
+  if (n < 0)
+    return n;
+  if (n == 0)
+    return -ENOENT;
+  next[n] = '\0';
+  /* The wire has no "is this a directory" question. Opening it as one asks
+     the helper's kernel, whose ENOENT or ENOTDIR is the answer chdir owes. */
+  long fd = hc_open_wire(next, O_RDONLY | O_DIRECTORY, 0, 1);
+  if (fd < 0)
+    return fd;
+  hc_close(fd);
+  for (long i = 0; i < n; i++)
+    hc_cwd[i] = next[i];
+  hc_cwd_len = (unsigned long)n;
+  return 0;
+}
+
+/* The kernel's getcwd returns the length INCLUDING the terminator; musl's
+   getcwd() then checks for a leading "/" and says ENOENT without one. */
+static long hc_getcwd(char *buf, unsigned long size) {
+  if (!hc_cwd_len)
+    return -ENOENT;
+  if (hc_cwd_len + 1 > size)
+    return -ERANGE;
+  for (unsigned long i = 0; i < hc_cwd_len; i++)
+    buf[i] = hc_cwd[i];
+  buf[hc_cwd_len] = '\0';
+  return (long)hc_cwd_len + 1;
 }
 
 static long hc_close(long fd) {
@@ -574,12 +671,18 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return hc_write((long)a, (const char *)b, (unsigned long)c);
 
   /* musl's open() issues openat(AT_FDCWD, ...). The dirfd is accepted and not
-     used: the helper resolves paths in its own working directory and there is
-     no *at family behind this protocol to be relative to. A relative path
-     therefore means "relative to the helper", which is stated here rather than
-     silently assumed. */
+     used: there is no *at family behind this protocol to be relative to. A
+     relative path is relative to the domain's own working directory once
+     chdir() has set one (hc_put_path joins it), and to the helper's before
+     that, which is stated here rather than silently assumed. */
   case SYS_openat:
     return hc_open((const char *)b, (long)c, (long)d);
+
+  case SYS_chdir:
+    return hc_chdir((const char *)a);
+
+  case SYS_getcwd:
+    return hc_getcwd((char *)a, (unsigned long)b);
 
   case SYS_read:
     return hc_file_rw((long)a, (char *)b, (unsigned long)c, 0);
@@ -631,9 +734,8 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return hc_handle_op((long)a, HC_V0_OP_FILE_TRUNCATE, (unsigned long long)b);
 
   /* musl's unlink() and access() both go through the *at forms. The dirfd is
-     accepted and unused for the same reason it is in openat: the helper
-     resolves paths in its own working directory and there is no *at family
-     behind this protocol for a relative path to be relative to. */
+     accepted and unused for the same reason it is in openat; the path is
+     joined with the domain's cwd the same way. */
   case SYS_unlinkat:
     return hc_path_op(HC_V0_OP_PATH_DELETE, (const char *)b,
                       HC_PATH_DELETE_FLAG_NONE);
