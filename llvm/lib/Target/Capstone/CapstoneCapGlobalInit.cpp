@@ -182,10 +182,27 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
     // Never touch LLVM intrinsic/metadata globals (llvm.used, llvm.compiler.used,
     // llvm.global_ctors, ...): they have appending linkage / the llvm.metadata
     // section and are not runtime data to materialize.
-    if (GV.hasAppendingLinkage() || GV.isThreadLocal() ||
-        GV.getName().starts_with("llvm.") ||
+    if (GV.hasAppendingLinkage() || GV.getName().starts_with("llvm.") ||
         GV.getSection() == "llvm.metadata")
       continue;
+    // A thread-local's initializer is the TLS TEMPLATE, which the runtime copies
+    // into each thread's block. A tag cannot live in that image any more than in
+    // .data, and this pass cannot store the capability for it: its stores run
+    // once, at startup, before any thread's block exists. Skipping it silently
+    // (as this pass did) left the variable holding an untagged address that
+    // traps on first use, so refuse it where the source can still be changed.
+    if (GV.isThreadLocal()) {
+      SmallVector<StoreItem, 4> TLSItems;
+      SmallVector<uint64_t, 4> TLSPath;
+      collectCapInits(&GV, GV.getValueType(), GV.getInitializer(), TLSPath,
+                      TLSItems);
+      if (!TLSItems.empty())
+        Ctx.emitError("thread-local variable '" + GV.getName() +
+                      "' is initialized with the address of a global or "
+                      "function; a capability cannot be part of the TLS "
+                      "template. Initialize it at run time instead");
+      continue;
+    }
     SmallVector<uint64_t, 4> Path;
     collectCapInits(&GV, GV.getValueType(), GV.getInitializer(), Path, Items);
   }

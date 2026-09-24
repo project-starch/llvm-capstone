@@ -44,7 +44,9 @@ static cl::opt<bool> UsePseudoMovImm(
 // handing out the broad gp-derived (whole-segment) bounds. Gated so the
 // "before" (segment-granular) behaviour can be measured by passing
 // -capstone-shrink-globals=false.
-static cl::opt<bool> CapstoneShrinkGlobals(
+// Not static: thread-locals are narrowed under the same flag, in
+// CapstoneTargetLowering::getCapabilityTLSAddr.
+cl::opt<bool> CapstoneShrinkGlobals(
     "capstone-shrink-globals", cl::Hidden,
     cl::desc("Narrow capabilities for global data objects to their size "
              "(emit SHRINK at materialization)"),

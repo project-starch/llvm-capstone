@@ -60,6 +60,7 @@ extern llvm::cl::opt<bool> CapstoneGpCaptable;
 // Defined in CapstoneISelDAGToDAG.cpp; read by lowerDYNAMIC_STACKALLOC so
 // dynamic allocas are narrowed under the same -capstone-shrink-stack flag.
 extern cl::opt<bool> CapstoneShrinkStack;
+extern cl::opt<bool> CapstoneShrinkGlobals;
 
 #define DEBUG_TYPE "capstone-lower"
 
@@ -409,6 +410,8 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::c128, Custom);
   setOperationAction(ISD::BlockAddress, MVT::c128, Custom);
   setOperationAction(ISD::ConstantPool, MVT::c128, Custom);
+  // Thread-local storage (C-47): tp plus the variable's tprel offset.
+  setOperationAction(ISD::GlobalTLSAddress, MVT::c128, Custom);
   // SETCC's action is keyed on the operand type, the rest on the result type.
   setOperationAction(ISD::SETCC, MVT::c128, Custom);
   setOperationAction(ISD::SELECT, MVT::c128, Custom);
@@ -9855,6 +9858,61 @@ SDValue CapstoneTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
   return DAG.getNode(CapstoneISD::ADD_LO, DL, Ty, MNAdd, AddrLo);
 }
 
+// A thread-local's address in a capability domain (C-47).
+//
+// A domain is one statically linked image: there are no shared objects, so no
+// thread-local can live anywhere but the executable's own TLS segment, and every
+// model collapses to local-exec -- the offset from the thread pointer is a
+// link-time constant. The RISC-V local-exec sequence cannot be used as it is,
+// because it ADDs tp as an integer: `add a0, a0, tp` keeps the address and drops
+// the tag, and the first access through the result traps. Here the offset is
+// built as an integer and applied to tp's capability instead:
+//
+//     lui        a0, %tprel_hi(sym)
+//     addi       a0, a0, %tprel_lo(sym)
+//     cincoffset a0, tp, a0
+//
+// tp's capability must span the thread's whole TLS block. That is the runtime's
+// side (musl's __init_tp installs it; the layout is RISC-V's variant I, the
+// block starting at tp, which is what lld computes %tprel against). The
+// %tprel_add relaxation hint is not emitted: there is no integer `add` of tp
+// left for the linker to relax.
+//
+// Then the result is narrowed to the variable, as a sized global's is under
+// -capstone-shrink-globals (selectLGA): tp's bounds cover every thread-local
+// AND the struct pthread below the block, so without this an overrun of one
+// thread-local array would reach the others and the thread's own control block.
+SDValue CapstoneTargetLowering::getCapabilityTLSAddr(GlobalAddressSDNode *N,
+                                                     SelectionDAG &DAG) const {
+  SDLoc DL(N);
+  const GlobalValue *GV = N->getGlobal();
+  SDValue AddrHi =
+      DAG.getTargetGlobalAddress(GV, DL, MVT::i64, 0, CapstoneII::MO_TPREL_HI);
+  SDValue AddrLo =
+      DAG.getTargetGlobalAddress(GV, DL, MVT::i64, 0, CapstoneII::MO_TPREL_LO);
+  SDValue Hi = DAG.getNode(CapstoneISD::HI, DL, MVT::i64, AddrHi);
+  SDValue Off = DAG.getNode(CapstoneISD::ADD_LO, DL, MVT::i64, Hi, AddrLo);
+  SDValue TP = DAG.getRegister(Capstone::C4, MVT::c128);
+  SDValue Ptr = DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::c128, TP, Off);
+
+  const auto *GVar = dyn_cast<GlobalVariable>(GV);
+  if (!CapstoneShrinkGlobals || !GVar || !GVar->getValueType()->isSized())
+    return Ptr;
+  uint64_t Size = DAG.getDataLayout().getTypeAllocSize(GVar->getValueType());
+  if (Size == 0)
+    return Ptr;
+  SDValue CursorId = DAG.getTargetConstant(Intrinsic::capstone_cap_get_cursor,
+                                           DL, MVT::i64);
+  SDValue Cursor =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::i64, CursorId, Ptr);
+  SDValue End = DAG.getNode(ISD::ADD, DL, MVT::i64, Cursor,
+                            DAG.getConstant(Size, DL, MVT::i64));
+  SDValue ShrinkId =
+      DAG.getTargetConstant(Intrinsic::capstone_cap_shrink, DL, MVT::i64);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::c128, ShrinkId, Ptr,
+                     Cursor, End);
+}
+
 SDValue CapstoneTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
                                                SelectionDAG &DAG) const {
   SDLoc DL(N);
@@ -9905,6 +9963,11 @@ SDValue CapstoneTargetLowering::lowerGlobalTLSAddress(SDValue Op,
                                                    SelectionDAG &DAG) const {
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   assert(N->getOffset() == 0 && "unexpected offset in global node");
+
+  // A capability address: local-exec whatever the requested model, including
+  // an emulated one, which would need an __emutls runtime no domain has.
+  if (Op.getValueType() == MVT::c128)
+    return getCapabilityTLSAddr(N, DAG);
 
   if (DAG.getTarget().useEmulatedTLS())
     return LowerToTLSEmulatedModel(N, DAG);

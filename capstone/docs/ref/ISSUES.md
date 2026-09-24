@@ -6871,30 +6871,33 @@ directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on
 the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 `capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
 
-### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
+### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `FIXED 2026-09-24 on compiler/c47-tls: local-exec on tp's capability, a PT_TLS segment in my_first_domain/link.ld, and the block runtime/tls.c builds from it`
 
-> **A fix exists, unmerged and not yet validated by this registry (2026-09-24).**
-> `origin/compiler/c47-tls` at `07829e435e0d`, by the external collaborator. It is stacked on a C-46
-> fix (`5fbdfb139c7d`) in the same branch, 2 ahead and 7 behind `dev`, based at `56c39b13369d`.
-> What it does:
-> - every thread-local becomes local-exec (a domain is one static image);
-> - the `%tprel` offset is built as an integer and applied to `tp`'s **capability**
->   (`lui`/`addi`, then `cincoffset …, tp, …`), where RISC-V's integer ADD would drop the tag;
-> - it narrows to the variable under `-capstone-shrink-globals`;
-> - it disables emulated TLS for the target;
-> - it adds a PT_TLS linker-script change (`my_first_domain/link.ld`) and a `runtime/tls.c` that
->   lays the block out from linker symbols, because a domain has no auxv.
+> **2026-09-24: FIXED on `compiler/c47-tls`.** The "capability TLS model" this entry called a design
+> question has a narrow answer for domains: one static image, so every thread-local is local-exec.
+> The compiler builds `lui %tprel_hi` / `addi %tprel_lo` as an integer and applies it to tp's
+> CAPABILITY with `cincoffset` (the RISC-V sequence ADDs tp as an integer and drops the tag), then
+> narrows the result to the variable as a sized global is. `my_first_domain/link.ld` gives the image
+> a PT_TLS segment (empty, and nothing moved, for every existing domain), and `runtime/tls.c` builds
+> the block -- struct pthread below tp, the copied template at tp -- that musl's `__init_tls` would,
+> since a domain has no auxv. -femulated-tls is served by the same lowering (the emutls pass asserted
+> here). A thread-local initialised with a global's address is now a compile error: the
+> capability-initializer pass used to skip it and leave an untagged value. Test:
+> `tests/runtime-qemu/thread-local/`, 9 checks at -O0 and -O2 with an overrun control and an
+> old-runtime control; the -O2 arm is what exposed C-46 live, so this branch sits on that fix.
+> Still not covered: libc-test's `tls_*` tests need threads or DSOs. With this fix `tls_init` and
+> `tls_local_exec` build and run, and both fault in `pthread_create`, because a domain has no
+> threads (`tls_local_exec`'s main thread reports no failed check before that). `tls_init_dso` does
+> not build: it initialises a thread-local with a global's address, which is the new error.
+
+> **The registry's note on this fix, written 2026-09-24 while it sat on an unmerged branch, is
+> reconciled with the box above at merge, as the note asked.** What it checked independently (the
+> `cincoffset …, tp` CHECK lines, the emulated-TLS removal, the pinned old-runtime control) is what
+> that box describes. On the workarounds it named: CPython runs its port's `checks.py` 6/6 in a
+> domain with patch 0006 deleted and this fix; the tshark port's single-thread define has not been
+> tried against it. Dropping either is that port's own change.
 >
-> It carries two lit tests (`tls-local-exec.ll`, `tls-capability-initializer.ll`) and a QEMU probe
-> (`runtime-qemu/thread-local/run.sh`). The probe's controls include the previous `tls.c`, pinned
-> at `56c39b13369d`, which must NOT pass. Verified against the branch on 2026-09-24: its head and
-> counts, its authorship, the `cincoffset …, tp` CHECK lines, the emulated-TLS removal in
-> `CapstoneTargetMachine.cpp`, and the pinned control. **Nobody in this registry has built or run
-> it.** Merging is the lead's call. Until then, the workarounds in the tshark port (a single-thread
-> define) and in CPython's patch 0006 (thread-locals turned into plain globals) stand. Note that the
-> branch also edits this entry itself, so merging it means reconciling with this text.
->
-> **Scope, measured 2026-09-24.**
+> **Scope of the defect before the fix, measured 2026-09-24.**
 > - **What dies.** Any reference to a `__thread` variable that SURVIVES to instruction selection
 >   dies with `Cannot select: c128 = GlobalTLSAddress`. That covers `int`, pointer-typed,
 >   struct-typed, address-taken, written, or read through external linkage, at `-O0` through `-O2`.
