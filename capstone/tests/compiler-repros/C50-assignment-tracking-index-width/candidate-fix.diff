@@ -1,0 +1,13 @@
+diff --git a/llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp b/llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp
+index 260ce8fb7aae..910af44ad966 100644
+--- a/llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp
++++ b/llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp
+@@ -268,7 +268,7 @@ void FunctionVarLocs::clear() {
+ static std::pair<Value *, DIExpression *>
+ walkToAllocaAndPrependOffsetDeref(const DataLayout &DL, Value *Start,
+                                   DIExpression *Expression) {
+-  APInt OffsetInBytes(DL.getTypeSizeInBits(Start->getType()), false);
++  APInt OffsetInBytes(DL.getIndexTypeSizeInBits(Start->getType()), false);
+   Value *End =
+       Start->stripAndAccumulateInBoundsConstantOffsets(DL, OffsetInBytes);
+   SmallVector<uint64_t, 3> Ops;

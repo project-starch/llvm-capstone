@@ -268,7 +268,10 @@ void FunctionVarLocs::clear() {
 static std::pair<Value *, DIExpression *>
 walkToAllocaAndPrependOffsetDeref(const DataLayout &DL, Value *Start,
                                   DIExpression *Expression) {
-  APInt OffsetInBytes(DL.getTypeSizeInBits(Start->getType()), false);
+  // Capstone: stripAndAccumulate... wants the INDEX width, which is not the
+  // pointer's width where a pointer is a capability (128 vs 64); sized by the
+  // pointer it asserted on every local whose address escapes (C-50).
+  APInt OffsetInBytes(DL.getIndexTypeSizeInBits(Start->getType()), false);
   Value *End =
       Start->stripAndAccumulateInBoundsConstantOffsets(DL, OffsetInBytes);
   SmallVector<uint64_t, 3> Ops;
