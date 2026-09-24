@@ -62,19 +62,15 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/set_thread_area.S" -o "$OBJ_DIR/set_thread_area.o"
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 -c "$PORT_DIR/runtime/setjmp.S" -o "$OBJ_DIR/setjmp.o"
-for f in hostcall tls level0 string_bounds_safe fputwc_null_safe atomic_libcalls; do
+for f in hostcall tls level0 atomic_libcalls; do
   "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/$f.c" -o "$OBJ_DIR/$f.o"
 done
-# Its own line, not the loop: it needs musl's src/multibyte on the include path
-# for the decoder's internal.h, and putting that directory in front of every
-# runtime file would let a bare "internal.h" resolve there by accident.
-"$CLANG" "${CF[@]}" -I"$MUSL/src/multibyte" \
-  -c "$PORT_DIR/runtime/mbsrtowcs_bounds_safe.c" -o "$OBJ_DIR/mbsrtowcs_bounds_safe.o"
+# The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
+source "$PORT_DIR/runtime/libc_overrides.sh"
+build_musl_overrides "$CLANG" "$OBJ_DIR" "$MUSL" "${CF[@]}"
 "$CLANG" "${TF[@]}" -c "$SCRIPT_DIR/libc_test_domain.c" -o "$OBJ_DIR/libc_test_domain.o"
 RUNTIME=("$OBJ_DIR/start-musl.o" "$OBJ_DIR/hostcall.o" "$OBJ_DIR/tls.o" "$OBJ_DIR/set_thread_area.o"
-         "$OBJ_DIR/setjmp.o"
-         "$OBJ_DIR/string_bounds_safe.o" "$OBJ_DIR/mbsrtowcs_bounds_safe.o"
-         "$OBJ_DIR/fputwc_null_safe.o" "$OBJ_DIR/atomic_libcalls.o"
+         "$OBJ_DIR/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" "$OBJ_DIR/atomic_libcalls.o"
          "$OBJ_DIR/level0.o" "${softfloat_objs[@]}" "$OBJ_DIR/libc_test_domain.o")
 
 # libc-test's own harness, minus runtest.c (a fork-based driver, replaced by
