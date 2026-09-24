@@ -472,7 +472,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX IN SIMULATION at capstone-ariane 6cbdaeeb4, not yet synthesized or on silicon`
+### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX SYNTHESIZED at capstone-ariane 6cbdaeeb4 (2026-09-24): no new combinational loop, bitstream written, routed WNS -10.615 against 4ad0df694's -8.341; not on silicon, and the flash is the lead's call`
 
 **Symptom.** Search terms: cycle anomaly, loop alignment, layout-dependent CPI, 7 vs 6 cycles
 per iteration. The ladder control `ctrsanity` (identical code on both halves) read **1.167×**
@@ -531,10 +531,26 @@ one-cycle IDLE detour goes.
   - the baseline arm reproduced all 13 of the board lane's numbers;
   - the neutrality sweep shows 0 differing trap counts across 92 tests;
   - `rtl-lint-gate` PASS, at baseline.
-- **Open, and only synthesis can close it:** `dreq_o.ready` now depends on `kill_s2`, computed
-  in the frontend. `cva6_icache` and `frontend` already share a struct-level UNOPTFLAT, so lint
-  cannot see a new loop. A bit-level trace found none; Vivado's loop check must confirm it
-  before any board time. Sent to the synth lane 2026-09-24.
+- **Synthesis (synth lane, 2026-09-24, sealed at `6cbdaeeb4`), against `4ad0df694`:**
+  - **No new combinational loop.** `check_timing` reports 1 in both, and it is the SAME loop: the
+    TIMING-23 arc is `ex_stage_i/lsu_i/state_q[3]_i_19` (I1→O) in both builds. So a count of 1 → 1
+    is not hiding a swap. `LUTLP-1` = 0 in `drc_routed.rpt` (`CFGBVS-1` present as control).
+    `write_bitstream` completed; all 241,250 routable nets routed. This settles the one question
+    lint could not: `ready`'s new dependence on `kill_s2` closes no loop.
+  - **Area neutral:** LUT 171,503 (+3), FF 93,812 (+2), LUTRAM unchanged. `i_cva6_icache` 736 LUT /
+    136 FF (746 / 136 before).
+  - **WNS −10.615 against −8.341 (Δ −2.274); failing endpoints 55.23 % against 51.70 %.**
+    Pre-registered ±0.5 ns, so the prediction MISSED. The band was too narrow, and prior art said
+    so: the S2 null-duplication control moved WNS by 3.74 ns with no functional change (see S2
+    below). The worst path is the base's own class (`csr_regfile cpmp_q_reg` →
+    `issue_read_operands fu_data_q`), with fewer logic levels and more wire. It has 0 I-cache and
+    0 frontend cells, and so do all of the worst 500 (0/500 in both builds; control: the sibling
+    `i_wt_dcache` appears on 500/500). The new failing endpoints fall in the D-cache and the issue
+    stage, while the I-cache's count is unchanged (294 → 294). That fits placement variance, but
+    ONE build cannot separate variance from a real effect.
+  - Bitstream sha256 `0cd45bb099a22b0636363ce7d955766803b6fd193dccc23f24478046032b8c05`, on the
+    synthesis host. Not staged anywhere. Flashing trades ~2.3 ns of WNS for one cycle per affected
+    loop iteration; the board has run a flashed bitstream at −12.425 (`1bfff7776`).
 - **Board acceptance:** slow offset 7.009 → ~6.008 cyc/iter, and fast offsets unchanged.
 
 te by the RTL lane, 2026-09-24.
