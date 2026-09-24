@@ -23252,12 +23252,30 @@ EmitLoweredCascadedSelect(MachineInstr &First, MachineInstr &Second,
 
   Register DestReg = Second.getOperand(0).getReg();
   Register Op2Reg4 = Second.getOperand(4).getReg();
+
+  // A PHI takes only virtual registers, but an operand can be a physical one
+  // (the null capability is $c0). Copy it into a virtual register at the end
+  // of the predecessor, as emitSelectPseudo does for a single select.
+  MachineRegisterInfo &MRI = F->getRegInfo();
+  auto materializePHISource = [&](MachineBasicBlock *PredMBB, Register SrcReg) {
+    if (!SrcReg.isPhysical())
+      return SrcReg;
+    Register VReg = MRI.createVirtualRegister(MRI.getRegClass(DestReg));
+    BuildMI(*PredMBB, PredMBB->getFirstTerminator(), DL,
+            TII.get(TargetOpcode::COPY), VReg)
+        .addReg(SrcReg);
+    return VReg;
+  };
+  Register ThisReg = materializePHISource(ThisMBB, Op2Reg4);
+  Register FirstReg = materializePHISource(FirstMBB, Op1Reg4);
+  Register SecondReg = materializePHISource(SecondMBB, Op1Reg5);
+
   BuildMI(*SinkMBB, SinkMBB->begin(), DL, TII.get(Capstone::PHI), DestReg)
-      .addReg(Op2Reg4)
+      .addReg(ThisReg)
       .addMBB(ThisMBB)
-      .addReg(Op1Reg4)
+      .addReg(FirstReg)
       .addMBB(FirstMBB)
-      .addReg(Op1Reg5)
+      .addReg(SecondReg)
       .addMBB(SecondMBB);
 
   // Now remove the Select_FPRX_s.
