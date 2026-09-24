@@ -4538,8 +4538,14 @@ ladder rung approaches it (bigmany: 65).~~
 > | routed FFs | 93,145 | 92,939 | 93,140 | 93,085 |
 > | `capstone_rev_node` LUT/FF | 1,052/606 | 1,141/678 | 1,093/607 | 985/740 |
 >
-> `capstone_dyn_unit` 2,579 LUT / 1,095 FF. Post-synth Total LUTs 170,928 (83.87 %). DRC clean of
-> `LUTLP-1`, with TIMING-4/6/7 present in the same file as the control that the matcher sees it.
+> `capstone_dyn_unit` 2,579 LUT / 1,095 FF. Post-synth Total LUTs 170,928 (83.87 %). `LUTLP-1` = 0 in
+> `drc_routed.rpt` (a real DRC table: 20 rules, all Warning, `CFGBVS-1` present as control), and independently
+> confirmed by `write_bitstream` completing, since `LUTLP-1` is Error-severity and blocks bitgen.
+> *Basis corrected 2026-09-24:* the control first stated here, "TIMING-4/6/7 present in the same file", was
+> invalid. It was read from `methodology.rpt`, and `LUTLP-1` is a DRC rule that can never appear there. The
+> same re-read gives `LUTLP-1` = 0, with `CFGBVS-1` present and a bitstream produced, for every build reported
+> this way: `379248185`, `54ac25f97`, `054cea69b`, `f714d2a72`, `247b76896`, `079dc720a`, `f83fe9342`,
+> `4ad0df694`.
 >
 > **Predictions, written before the build and all met:** WNS no worse than −9.225 → **−8.307**, the best
 > ever recorded on this design; LUTs at or below 171,497 → met at both stages; loops ≤ 13 → **1**.
