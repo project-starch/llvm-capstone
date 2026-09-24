@@ -89,3 +89,14 @@ pool2   14  FAULT  oob
 pool2   15  FAULT  temporal
 pool2   16  FAULT  oob
 pool2   17  POOLFAIL 304
+
+# FIXTURE 16 ON THE HEAP ARMS: the stock-build control for the pool arms' "one byte below a
+# refstruct object faults". Stock refstruct allocates [RefCount | object] as one block and returns
+# a pointer past the header, so the byte below the object is inside the pointer's capability on
+# every heap arm (level0's arena, shrink's and sublet's per-object bounds alike cover the whole
+# block). Predicted to RETURN a header byte; on the pool arms, where patch 0002 moves the header
+# out of band, the same fixture faults. Registered 2026-09-24, before fixture 16 was first built
+# on a heap arm, and pushed before its first run.
+level0  16  RETURN *
+shrink  16  RETURN *
+sublet  16  RETURN *
