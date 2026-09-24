@@ -124,12 +124,13 @@ else
   "$CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" "${HEAPF[@]}" \
                        -c "$MUSL_PORT/runtime/level0.c"        -o "$RT/level0.o"
 fi
-"$CLANG" "${RTF[@]}" -c "$MUSL_PORT/runtime/string_bounds_safe.c" -o "$RT/string_bounds_safe.o"
-"$CLANG" "${RTF[@]}" -I"$MUSL/src/multibyte" \
-                     -c "$MUSL_PORT/runtime/mbsrtowcs_bounds_safe.c" -o "$RT/mbsrtowcs_bounds_safe.o"
-"$CLANG" "${RTF[@]}" -c "$MUSL_PORT/runtime/fputwc_null_safe.c" -o "$RT/fputwc_null_safe.o"
+# The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
+# This port used to compile three of them by hand, and missed atexit_capability_safe when it
+# was added to the list.
+source "$MUSL_PORT/runtime/libc_overrides.sh"
+build_musl_overrides "$CLANG" "$RT" "$MUSL" "${RTF[@]}"
 RUNTIME=("$RT/start-musl.o" "$RT/tls.o" "$RT/set_thread_area.o" "$RT/setjmp.o"
-         "$RT/string_bounds_safe.o" "$RT/mbsrtowcs_bounds_safe.o" "$RT/fputwc_null_safe.o")
+         "${MUSL_OVERRIDE_OBJS[@]}")
 if [ "$HEAP" = sublet ]; then RUNTIME+=("$RT/heap.o"); else RUNTIME+=("$RT/level0.o"); fi
 
 # Soft-float builtins from the shared list (a domain has no FP hardware ABI).
@@ -174,7 +175,18 @@ CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disabl
 CONFIG_EDIT='s/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s/^#define HAVE_MEMALIGN 1$/#define HAVE_MEMALIGN 0/'
 # Everything that decides what the libraries contain goes into the key, so changing any of it
 # rebuilds instead of silently reusing stale libraries (audit, 2026-09-23).
-CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" | sha256sum | cut -c1-12)
+# That includes the compiler. It is a shared-libraries build, so its codegen lives in the
+# libLLVM*/libclang* objects clang loads, not in the clang binary; the key takes the size and
+# mtime of each (a rebuilt compiler changes them). Before 2026-09-24 it did not, and libraries
+# compiled before C-50..C-58 would have been reused on a fixed compiler.
+toolchain_id() {
+  local bin; bin=$(readlink -f "$CLANG")
+  # `|| true`: a statically linked clang loads no LLVM libraries, and its codegen is in the binary.
+  { echo "$bin"; ldd "$bin" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } |
+    xargs stat -L -c '%n %s %Y'
+}
+TOOLCHAIN_ID=$(toolchain_id | sha256sum | cut -c1-12)
+CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
   ( cd "$XB" && "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
