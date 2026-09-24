@@ -1,0 +1,43 @@
+CAPSTONE (tshark app port): g_qsort_with_data's copy mode 2 moved pointer-aligned elements in
+guintptr words: on capstone64 (16-byte pointers, 8-byte guintptr) that splits every pointer in the
+array and clears its tag. It copies pointer-sized words there. Found by an audit reading the code:
+the cast census cannot see it, because the cast is of the pointer's TYPE, not its value.
+
+--- a/glib/gqsort.c
++++ b/glib/gqsort.c
+@@ -128,23 +128,32 @@
+     case 2:
+       while (n1 > 0 && n2 > 0)
+ 	{
++	  /* CAPSTONE (tshark app port): this mode is chosen when the element size is a multiple of
++	     sizeof (void *) and the array is pointer-aligned, so its elements may hold pointers. On
++	     capstone64 a pointer is 16 bytes and guintptr 8: copying by guintptr splits every
++	     pointer and clears its tag. Copy by pointer-sized words, which keep it. */
++#ifdef __CAPSTONE__
++	  gpointer *tmpl = (gpointer *) tmp;
++	  gpointer *bl;
++#else
+ 	  guintptr *tmpl = (guintptr *) tmp;
+ 	  guintptr *bl;
++#endif
+ 
+ 	  tmp += s;
+ 	  if ((*cmp) (b1, b2, arg) <= 0)
+ 	    {
+-	      bl = (guintptr *) b1;
++	      bl = (void *) b1;
+ 	      b1 += s;
+ 	      --n1;
+ 	    }
+ 	  else
+ 	    {
+-	      bl = (guintptr *) b2;
++	      bl = (void *) b2;
+ 	      b2 += s;
+ 	      --n2;
+ 	    }
+-	  while (tmpl < (guintptr *) tmp)
++	  while ((gchar *) tmpl < tmp)
+ 	    *tmpl++ = *bl++;
+ 	}
+       break;

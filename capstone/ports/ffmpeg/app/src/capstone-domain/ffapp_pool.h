@@ -18,15 +18,15 @@
 
 void *__capstone_region(unsigned index);
 
-/* The runtime's exit hook, DEFINED here because of ISSUES C-56 (recorded and fixed on the
- * runtime branches, not yet on dev): hostcall.c guards the hook with `if (__capstone_at_exit)`,
+/* The runtime's exit hook, DEFINED here because of C-56. On dev since merge b9b23ba09e89
+ * (2026-09-24), hostcall.c DEFINES a weak default and calls it unconditionally, and this strong
+ * definition overrides it. Before that merge, hostcall.c guarded the hook with `if (__capstone_at_exit)`,
  * and the address of an UNDEFINED weak symbol is not NULL in a domain -- these run
  * position-independent with no load-time relocation, so auipc+addi yields the run-time address
  * of link address 0 (image base - 0x10000), the guard passes, and exit() jumps there. The pool
  * arms are the first code here to call exit() (ff2_fail); before this definition, fixture 17 on
- * pool2 halted cause 2 at that address, three times, on one image. Once C-56's runtime fix
- * (a weak default, called unconditionally) reaches this branch, this strong definition still
- * overrides it and flushes stdout first. */
+ * pool2 halted cause 2 at that address, three times, on one image. It still flushes stdout
+ * first. */
 int __capstone_at_exit(int status);
 int __capstone_at_exit(int status)
 {

@@ -1,0 +1,190 @@
+# FFmpeg app, revalidation on dev (2026-09-24). Toolchain clang b7b31421e9fa. One block per attempt.
+# M1-M5: run-qemu.sh all per arm.
+## m-level0
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+## m-shrink
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+## m-sublet
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+## m-pool0
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+## m-pool2
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+## m-level0-5s
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 150 frames, candidate 150 frames, 0 hash mismatches -> MATCH
+control: 150 frames, 5 changed hashes -> FIRES
+## m-sublet-5s
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 150 frames, candidate 150 frames, 0 hash mismatches -> MATCH
+control: 150 frames, 5 changed hashes -> FIRES
+## m-pool2-5s
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 150 frames, candidate 150 frames, 0 hash mismatches -> MATCH
+control: 150 frames, 5 changed hashes -> FIRES
+# Fixtures: run-safety.sh per boot; verdicts against host/safety-expect.txt.
+## fx-level0-a
+run-domain-smoke exit status 1 (not the verdict); serial log safety-level0-1-2-3-4-5-6-7-10-16-8.log
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN arena  got: RETURN 100001  len=1572816
+fx2: AS PREDICTED  predicted: RETURN 2000ee  got: RETURN 2000ee  len=1572816
+fx3: AS PREDICTED  predicted: RETURN *  got: RETURN 300060  len=1572816
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=1572816
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=1572816
+fx6: AS PREDICTED  predicted: RETURN 6000a0  got: RETURN 6000a0
+fx7: AS PREDICTED  predicted: RETURN 700177  got: RETURN 700177  len=1572816
+fx10: AS PREDICTED  predicted: RETURN a0005b  got: RETURN a0005b
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=1572752
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 102883fec, pcc_base = 102880000, va = 3fec, rs1 = x10, cursor = 10288bfe0, imm =
+## fx-level0-b
+run-domain-smoke exit status 1 (not the verdict); serial log safety-level0-9.log
+fx9: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101603fec, pcc_base = 101600000, va = 3fec, rs1 = x10, cursor = 10167fd08, imm =
+## fx-shrink-a
+run-domain-smoke exit status 75 (not the verdict); serial log safety-shrink-1-4-5-6-7-10-16-2.log
+fx1: ERROR no section in the log -- the image never started
+fx4: ERROR no section in the log -- the image never started
+fx5: ERROR no section in the log -- the image never started
+fx6: ERROR no section in the log -- the image never started
+fx7: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx16: ERROR no section in the log -- the image never started
+fx2: ERROR no section in the log -- the image never started
+## fx-shrink-a.retry1
+run-domain-smoke exit status 75 (not the verdict); serial log safety-shrink-1-4-5-6-7-10-16-2.try2.log
+fx1: ERROR no section in the log -- the image never started
+fx4: ERROR no section in the log -- the image never started
+fx5: ERROR no section in the log -- the image never started
+fx6: ERROR no section in the log -- the image never started
+fx7: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx16: ERROR no section in the log -- the image never started
+fx2: ERROR no section in the log -- the image never started
+## fx-shrink-a.retry2
+run-domain-smoke exit status 1 (not the verdict); serial log safety-shrink-1-4-5-6-7-10-16-2.try3.log
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=64
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=64
+fx6: AS PREDICTED  predicted: RETURN 6000a0  got: RETURN 6000a0
+fx7: AS PREDICTED  predicted: RETURN 700177  got: RETURN 700177  len=64
+fx10: AS PREDICTED  predicted: RETURN a0005b  got: RETURN a0005b
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = 102804a9c, pcc_base = 102800000, va = 4a9c, rs1 = x10, cursor = 1028153c0, imm =
+## fx-shrink-3
+run-domain-smoke exit status 1 (not the verdict); serial log safety-shrink-3.log
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101604a70, pcc_base = 101600000, va = 4a70, rs1 = x10, cursor = 101615270, imm =
+## fx-shrink-8
+run-domain-smoke exit status 1 (not the verdict); serial log safety-shrink-8.log
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101603fec, pcc_base = 101600000, va = 3fec, rs1 = x10, cursor = 10160bfe0, imm =
+## fx-shrink-9
+run-domain-smoke exit status 1 (not the verdict); serial log safety-shrink-9.log
+fx9: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101583fec, pcc_base = 101580000, va = 3fec, rs1 = x10, cursor = 1015ffd08, imm =
+## fx-sublet-a
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-1-10-16-2.log
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx10: AS PREDICTED  predicted: RETURN a0005b  got: RETURN a0005b
+fx16: AS PREDICTED  predicted: RETURN *  got: RETURN 1000000  len=64
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = 1028053a8, pcc_base = 102800000, va = 53a8, rs1 = x10, cursor = 102c00100, imm =
+## fx-sublet-3
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-3.log
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 10160537c, pcc_base = 101600000, va = 537c, rs1 = x10, cursor = 101c00040, imm =
+## fx-sublet-4
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-4.log
+fx4: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101605378 rd=x10 rs1=x10 val=0x101c00000 priv=3]  len=64
+## fx-sublet-5
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-5.log
+fx5: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101605378 rd=x10 rs1=x10 val=0x101c00000 priv=3]  len=64
+## fx-sublet-6
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-6.log
+fx6: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101605378 rd=x10 rs1=x10 val=0x101c00000 priv=3]
+## fx-sublet-7
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-7.log
+fx7: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 1016012c8, rs1 = x10, imm = 0, value = 101c00000, value_hi = 518810000
+## fx-sublet-8
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-8.log
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101584028, pcc_base = 101580000, va = 4028, rs1 = x10, cursor = 10158c040, imm =
+## fx-sublet-9
+run-domain-smoke exit status 1 (not the verdict); serial log safety-sublet-9.log
+fx9: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101584028, pcc_base = 101580000, va = 4028, rs1 = x10, cursor = 1015ffd08, imm =
+## fx-pool0-a
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool0-11-12-13-15-17-14.log
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx12: AS PREDICTED  predicted: RETURN c000a0  got: RETURN c000a0  len=64
+fx13: AS PREDICTED  predicted: RETURN d0015b  got: RETURN d0015b  len=64
+fx15: AS PREDICTED  predicted: RETURN f000a0  got: RETURN f000a0  len=64
+fx17: AS PREDICTED  predicted: RETURN 1100177  got: RETURN 1100177  len=64
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 104c060d4, pcc_base = 104c00000, va = 60d4, rs1 = x10, cursor = 105400040, imm 
+## fx-pool0-16
+run-domain-smoke exit status 75 (not the verdict); serial log safety-pool0-16.log
+fx16: ERROR no section in the log -- the image never started
+## fx-pool0-16.retry1
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool0-16.try2.log
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101606104, pcc_base = 101600000, va = 6104, rs1 = x10, cursor = 101ffffff, imm 
+## fx-pool2-a
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-11-17-12.log
+fx11: AS PREDICTED  predicted: RETURN b00001, LEN 64  got: RETURN b00001  len=64
+fx17: AS PREDICTED  predicted: POOLFAIL 304  got: POOLFAIL 304  [FFAPP-POOL fail 304]  len=64
+fx12: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x1026060d0 rd=x10 rs1=x10 val=0x103400000 priv=3]  len=64
+## fx-pool2-13
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-13.log
+fx13: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x1016060d0 rd=x10 rs1=x10 val=0x102000000 priv=3]  len=64
+## fx-pool2-14
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-14.log
+fx14: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 1016060d4, pcc_base = 101600000, va = 60d4, rs1 = x10, cursor = 102000040, imm 
+## fx-pool2-15
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-15.log
+fx15: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x1016066a0 rd=x10 rs1=x10 val=0x1020000c0 priv=3]  len=64
+## fx-pool2-16
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-16.log
+fx16: ERROR no section in the log -- the image never started
+## fx-pool2-16.retry1
+run-domain-smoke exit status 1 (not the verdict); serial log safety-pool2-16.try2.log
+fx16: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = 101606104, pcc_base = 101600000, va = 6104, rs1 = x10, cursor = 101ffffff, imm 

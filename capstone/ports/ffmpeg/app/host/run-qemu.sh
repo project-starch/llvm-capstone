@@ -55,11 +55,14 @@ CLIP=${FFAPP_CLIP_SECONDS:-1}
 SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
 DOM="$DOM$SFX"
 [ -n "$SFX" ] && LOG=${LOG_FILE:-${LOG%.log}$SFX.log}
-SHARE="$WORK/share"
+# A share PER INVOCATION, removed on exit (the fixed $WORK/share could be replaced under a running
+# boot by a second invocation; see run-safety.sh).
+mkdir -p "$WORK"
+SHARE=$(mktemp -d "$WORK/share.XXXXXX")
+trap 'rm -rf "$SHARE"' EXIT
 for f in "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/stock$SFX.framemd5"; do
   [ -f "$f" ] || { echo "missing $f; run build-native.sh and build-domain.sh first" >&2; exit 2; }
 done
-rm -rf "$SHARE"; mkdir -p "$SHARE"
 cp "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/input$SFX.flip.mkv" "$SHARE/"
 
 RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input$SFX.mkv /mnt/host/input$SFX.flip.mkv /tmp/"
@@ -88,6 +91,8 @@ esac
 # an image is a 9p page fault; two pool2 M1-M5 runs on 2026-09-24 stalled inside exactly those
 # reads (between the loader's own prints), with no fault and no kernel message.
 RUN="${RUN/; echo __FFAPP_BEGIN_/; cp /mnt/host/*.dom /tmp/; echo __FFAPP_BEGIN_}"
+# What this boot mounts, hashed from its own share (which nothing else can touch).
+( cd "$SHARE" && sha256sum ffapp.user ./*.dom ./*.mkv ) > "$LOG.sha256"
 smoke=(python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py"
        --share-dir "$SHARE" --log-file "$LOG" --timeout-multiplier "${TIMEOUT_MULTIPLIER:-8}"
        --guest-command "echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; $RUN" "${MARKERS[@]}")

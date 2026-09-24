@@ -1,0 +1,79 @@
+# M-infra gate, run by run.sh from build.sh's artifacts (2026-09-24, cma=1G for B and E).
+# An earlier run.sh attempt stalled before login in B and E (kept in attempt1/, not counted).
+## bootB
+MODULE-MD5 4ecfd15f712636a97b6ff0e5964ae6fe  /capstone.ko
+RUN small
+Called dom (1-th time) retval = 42
+EXIT small rc=0
+DMESG small: [    5.777342] Domain block (buddy, NOT a capability region) vaddr = ff600000816a0000, paddr = 1018a0000
+DMESG small: [    5.777461] code size = 480, tot_size = 20000, entry_offset = 0
+RUN smalldecl
+Called dom (1-th time) retval = 2841
+EXIT smalldecl rc=0
+DMESG smalldecl: [    5.777461] code size = 480, tot_size = 20000, entry_offset = 0
+DMESG smalldecl: [    6.126145] Domain block (buddy, NOT a capability region) vaddr = ff60000081700000, paddr = 101900000
+DMESG smalldecl: [    6.126214] code size = 608, tot_size = 80000, entry_offset = 0
+RUN big128
+Called dom (1-th time) retval = 2841
+EXIT big128 rc=0
+DMESG big128: [    7.105270] Domain block of order 15 is beyond the buddy allocator (max 10): 134217728 bytes from CMA
+DMESG big128: [    7.105437] Domain block (CMA, NOT a capability region) vaddr = ff60000040000000, paddr = c0200000
+DMESG big128: [    7.105493] code size = 608, tot_size = 8000000, entry_offset = 0
+RUN edge64
+[CAPSTONE] Cap mem access OOB: insn = 20b63823, pc = c8200198, pcc_base = c8200000, va = 198, rs1 = x12, cursor = c8206fa0, imm = 528, addr = c82071b0, size = 8, bounds = (c8220000, cc200000)
+[CAPSTONE] domain halted by capability fault: cause = 7, pc = 0xc8200198, tval = 0xc82071b0, badaddr = 0xc82071b0
+## bootE
+MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302  /capstone.ko
+RUN small
+Called dom (1-th time) retval = 42
+EXIT small rc=0
+DMESG small: [    5.987028] Domain block (buddy, NOT a capability region) vaddr = ff60000081660000, paddr = 101860000
+DMESG small: [    5.987154] code size = 480, tot_size = 20000, entry_offset = 0
+RUN smalldecl
+Called dom (1-th time) retval = 2841
+EXIT smalldecl rc=0
+DMESG smalldecl: [    6.283767] Domain block (buddy, NOT a capability region) vaddr = ff60000081700000, paddr = 101900000
+DMESG smalldecl: [    6.283836] code size = 608, tot_size = 80000, entry_offset = 0
+RUN big128
+Called dom (1-th time) retval = 2841
+EXIT big128 rc=0
+DMESG big128: [    7.247782] Domain block of order 15 is beyond the buddy allocator (max 10): 134217728 bytes from CMA
+DMESG big128: [    7.247951] Domain block (CMA, NOT a capability region) vaddr = ff60000040000000, paddr = c0200000
+DMESG big128: [    7.248010] code size = 608, tot_size = 8000000, entry_offset = 0
+RUN edge64
+Called dom (1-th time) retval = 2841
+EXIT edge64 rc=0
+DMESG edge64: [    7.527667] declared dom_data 67095968 does not survive the monitor's split of order 14; doubling
+DMESG edge64: [    8.212900] Domain block of order 15 is beyond the buddy allocator (max 10): 134217728 bytes from CMA
+DMESG edge64: [    8.213063] Domain block (CMA, NOT a capability region) vaddr = ff60000048000000, paddr = c8200000
+DMESG edge64: [    8.213122] code size = 608, tot_size = 8000000, entry_offset = 0
+RUN corruptwrap
+GATE REFUSED /mnt/host/corruptwrap.dom
+EXIT corruptwrap rc=3
+DMESG corruptwrap: [    8.483608] declared dom_data 18446744073709551615 with code 608 overflows; refusing the domain
+DMESG corruptwrap: [    8.483674] Failed to allocate memory for domain (order 2).
+RUN corrupthuge
+GATE REFUSED /mnt/host/corrupthuge.dom
+EXIT corrupthuge rc=3
+DMESG corrupthuge: [    8.750012] declared dom_data 1099511627776 needs a block past order 20; refusing the domain
+DMESG corrupthuge: [    8.750067] Failed to allocate memory for domain (order 29).
+RUN small
+Called dom (1-th time) retval = 4294967338
+EXIT small rc=0
+DMESG small: [    9.012790] Domain block (buddy, NOT a capability region) vaddr = ff600000816c0000, paddr = 1018c0000
+DMESG small: [    9.012893] code size = 480, tot_size = 20000, entry_offset = 0
+GATEE-END
+## bootD
+MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302  /capstone.ko
+RUN small
+Called dom (1-th time) retval = 42
+EXIT small rc=0
+DMESG small: [    5.883745] Domain block (buddy, NOT a capability region) vaddr = ff600000813a0000, paddr = 1015a0000
+DMESG small: [    5.883867] code size = 480, tot_size = 20000, entry_offset = 0
+RUN big128
+GATE REFUSED /mnt/host/big128.dom
+EXIT big128 rc=3
+DMESG big128: [    5.883745] Domain block (buddy, NOT a capability region) vaddr = ff600000813a0000, paddr = 1015a0000
+DMESG big128: [    5.883867] code size = 480, tot_size = 20000, entry_offset = 0
+DMESG big128: [    6.298806] Failed to allocate memory for domain (order 15).
+GATED-END

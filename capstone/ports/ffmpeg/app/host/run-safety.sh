@@ -25,7 +25,13 @@ case $ARM in level0) DOM_DIR=domain ;; shrink) DOM_DIR=domain-shrink ;; sublet) 
   *) echo "arm must be level0, shrink, sublet, pool0 or pool2" >&2; exit 2 ;; esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 DOM="$WORK/$DOM_DIR"
-SHARE="$WORK/share-safety"
+# A share PER INVOCATION, removed on exit. It used to be the fixed $WORK/share-safety, prepared
+# before the QEMU lock was taken, so a second invocation could replace the images under a boot
+# that was already running. That happened on 2026-09-24 (the stall retries of the dev
+# revalidation), and the hash sidecar then described a share the guest never booted.
+mkdir -p "$WORK"
+SHARE=$(mktemp -d "$WORK/share-safety.XXXXXX")
+trap 'rm -rf "$SHARE"' EXIT
 LOG=${LOG_FILE:-$WORK/safety-$ARM-$(printf '%s' "$*" | tr ' ' '-').log}
 # Never overwrite an earlier attempt: a stalled boot's log is the evidence that it stalled
 # before any image loaded (audit, 2026-09-23: two retries overwrote theirs).
@@ -43,7 +49,6 @@ for fx in "$@"; do
 done
 
 [ -f "$DOM/ffapp.user" ] || { echo "missing $DOM/ffapp.user; run FFAPP_HEAP=$ARM build-domain.sh" >&2; exit 2; }
-rm -rf "$SHARE"; mkdir -p "$SHARE"
 cp "$DOM/ffapp.user" "$SHARE/"
 # images load from the guest's /tmp, not through 9p-backed mmap faults (see run-qemu.sh)
 RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/*.dom /tmp/"

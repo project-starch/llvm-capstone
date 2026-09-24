@@ -114,6 +114,10 @@ non-reclaiming bitstreams before that date.
   - **Merge hazard for whoever lands C-56:** its runner check refuses images that carry an
     undefined weak symbol. This port's level0, shrink and sublet images carry
     `w __capstone_at_exit`, so that check must land together with the `hostcall.c` fix.
+  - UPDATE 2026-09-24: both landed on `dev` together (merge `b9b23ba09e89`, in the runtime stack
+    `556863938d46`). The runner check then refused this folder's heap-arm images, which still
+    carry the undefined weak. A rebuild on that `dev` clears it, because `hostcall.c` now defines
+    the weak default. See `../2026-09-24-qemu-dev-revalidation/`.
   - **Classifier:** it had scored the crashing run's fixture 17 AS PREDICTED from the refusal line
     alone. It now requires a clean exit with the refusal code, and reclassifies that run as
     `POOLFAIL-THEN-HALT`. Round 2 re-ran every pool cell.

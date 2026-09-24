@@ -132,6 +132,8 @@ This is one file at one frame size; 640x360 does not fit one region. TCG timing 
 2. **Three defects between M1 and M5,** each localised by a run that returned a result:
    - **stdout lost after its first line:** musl goes fully buffered, and the runtime never
      flushes on return. Fixed in the port; the runtime caveat is recorded on `dev`.
+     UPDATE 2026-09-24: the runtime now ends a returning program through `exit()`, which
+     flushes (merge `556863938d46`). This folder's runs predate that.
    - **`EFAULT` on 9p reads:** host bounce buffer, `dev` `e852b3951476`.
    - **Compiler miscompile C-50:** `dev` `0e5b7b991629`, corrected in `ef636ba1d05f`. Worked
      around by patch 0003, and gated.

@@ -7,8 +7,11 @@
  *    (musl-capstone/libc-test/libc_test_domain.c).
  *  - There is no argv, so the input path and the stop stage are compile-time. One image
  *    per milestone keeps every run returning a result (ffapp_decode.h).
- *  - stdout is never flushed when capstone_main RETURNS (runtime/hostcall.c domain_main calls
- *    no exit path), and musl switches stdout to FULL buffering on its first flush, because the
+ *  - stdout was never flushed when capstone_main RETURNED (runtime/hostcall.c domain_main called
+ *    no exit path). Since the runtime merge 556863938d46 (2026-09-24) it does: hostcall.c ends a
+ *    returning program with exit(), which flushes. The setup below predates that and is kept,
+ *    because it is harmless and bounds what a wedge loses. musl switches stdout to FULL buffering
+ *    on its first flush, because the
  *    TIOCGWINSZ ioctl fails (ENOTTY). Found 2026-09-23: exactly the first line of every run
  *    reached the host and the rest was lost. So stdout is set LINE-buffered here (each line
  *    is one hostcall round, and a wedge loses at most a partial line), and flushed before

@@ -6216,6 +6216,150 @@ dynamic linker.
 namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
 Verify it with a static build of `llvm-ar`, which is exactly what fails today.
 
+### C-60 — any `-fstack-protector*` asserts in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `OPEN — COMPILER, crash; found 2026-09-24 by the tshark port; root cause from source (mechanism corrected the same day: the SLOT mismatches, not the guard); reproduced with the tree's clang`
+
+**What happens.** `-fstack-protector`, `-fstack-protector-strong` and `-fstack-protector-all` abort
+with `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
+`Insert stack protectors` pass. `-fno-stack-protector` compiles.
+
+    printf 'void use(char *);\nvoid f(void) { char buf[64]; use(buf); }\n' > ssp.c
+    clang -target capstone64-unknown-elf -ffreestanding -O2 -fstack-protector-strong -c ssp.c
+
+Reproduced on 2026-09-24 with `llvm/cmake-build-debug/bin/clang`:
+
+- `-fstack-protector-strong` exits 1 with the assertion;
+- `-fno-stack-protector` exits 0;
+- `int main(void){return 0;}` under `-fstack-protector-strong` exits 0.
+
+**Root cause. The mechanism was CORRECTED the same day.** The first version of this entry said both
+arguments were AS200 and that the guard came from `@__stack_chk_guard`. That is wrong. Exactly ONE
+argument mismatches, and it is the slot. Checked against source on origin/dev:
+
+- `CreatePrologue` (`llvm/lib/CodeGen/StackProtector.cpp:562-566`) allocates the guard slot and
+  passes it to `llvm.stackprotector`.
+- The alloca's result type is `ptr addrspace(200)`, because the datalayout sets the alloca address
+  space to 200 (`-A200` in `clang/lib/Basic/Targets/Capstone.h:249`). The emitted IR shows
+  `alloca ..., addrspace(200)`.
+- `llvm.stackprotector` is declared `[llvm_ptr_ty, llvm_ptr_ty]` (`llvm/include/llvm/IR/Intrinsics.td:937`),
+  which is AS0 and not overloaded. **The slot operand mismatches.**
+- The guard VALUE is fine. `CapstoneTargetLowering::getIRStackGuard` returns a value only for Fuchsia,
+  Android or `-mstack-protector-guard=tls`. Otherwise it falls through (`CapstoneISelLowering.cpp:26051`)
+  to `TargetLoweringBase::getIRStackGuard` (`TargetLoweringBase.cpp:2049`), which returns `nullptr`
+  for everything but OpenBSD.
+- With a null guard, `getStackGuard` sets `SupportsSelectionDAGSP`, calls `insertSSPDeclarations`,
+  and emits `llvm.stackguard`. That intrinsic is declared `[llvm_ptr_ty]` (`Intrinsics.td:938`), so its
+  result is AS0 and matches.
+
+`StackProtector.cpp` never calls `getAllocaAddrSpace`. This is an upstream assumption that capstone64
+violates, and no in-tree target with a non-zero alloca address space enables SSP.
+
+**Why it escapes configure and CMake probes.** A protector is inserted only for a function with
+something to protect, so a flag probe compiles cleanly and the flag is enabled build-wide. The
+peer's measurements:
+
+| Probe | Result |
+|---|---|
+| `int main(void){return 0;}` | compiles |
+| an unused local array | compiles |
+| `char buf[64]; use(buf);` | crashes |
+| `int x; use((char*)&x);` | crashes |
+
+The last row shows an address-taken scalar is enough, so this is not array-specific. Wireshark's
+CMake adds `-fstack-protector-strong` whenever the compiler accepts it, and 82 tshark files failed.
+Any autotools or CMake port that probes the flag hits the same trap.
+
+**Workaround.** `-fno-stack-protector`. The tshark port passes it and is not blocked.
+
+**Fix shape: not chosen, and the lead's call.** A compiler must not assert, so the crash is a defect
+whichever shape wins.
+
+- **(a)** Overload the intrinsics on address space and use `DL.getAllocaAddrSpace()` in
+  `CreatePrologue`. This is upstreamable, but it changes generic CodeGen.
+  - The fix must cover BOTH `llvm.stackprotector` and `llvm.stackguard`.
+  - It must also decide the guard's own address space on a capability target. The guard is a
+    pointer-sized cookie, and whether it should be a capability at all is a real question, not a
+    mechanical retype.
+- **(b)** Have Capstone decline the IR stack protector, giving a clear diagnostic or a no-op. The
+  argument for (b) is that bounds already catch a stack-buffer overflow spatially, which subsumes
+  most of SSP's value. That is a threat-model claim, not a compiler detail.
+
+**Other passes: shallow probes only, not clearances.** No fix has been built. Eight files in
+`llvm/lib/CodeGen` hardcode `PointerType::getUnqual`: StackProtector (this defect), LowerEmuTLS,
+SjLjEHPrepare, ShadowStackGCLowering, DwarfEHPrepare, JMCInstrumenter, AtomicExpandPass and
+TargetLoweringBase. The compiler lane probed each once, on dev:
+
+| Pass | What the probe showed |
+|---|---|
+| LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
+| DwarfEHPrepare | **CONFIRMED, filed as C-61.** The first probe, a C++ `throw` at -O2, compiled clean only because it had no cleanup and so no `resume` to rewrite. That was a false negative. |
+| AtomicExpandPass | **CLEAN, and already FIXED by this project.** Both sites are guarded on `DL.isNonIntegralPointerType()`: `:1929` and `:2030`. The guards came from C-54, `c7f0de349b4b` (2026-09-23), and `ni:200` makes AS200 non-integral, so the AS0 cast is skipped. The probe was loaded: a 32-byte struct through `__atomic_load` emits a real `__atomic_load` call at -O1, re-checked here. An earlier oversized-`_Atomic` probe was VOID, because the frontend rejected it. |
+| SjLjEHPrepare | No hard case was constructed. |
+| ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
+| JMCInstrumenter | Unused by this project: needs `-fjmc`. |
+
+### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang`
+
+**What happens.** `DwarfEHPrepare::InsertUnwindResumeCalls` aborts with
+`Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
+`Exception handling preparation` pass. No `try`/`catch` is needed: a destructor in scope across a call
+is enough.
+
+    printf 'struct D { ~D(); };\nvoid g();\nvoid f(){ D d; g(); }\n' > eh.cc
+    clang -target capstone64-unknown-elf -ffreestanding -fexceptions -c -x c++ eh.cc
+
+Reproduced 2026-09-24 with `llvm/cmake-build-debug/bin/clang`:
+
+| Case | Result |
+|---|---|
+| `-fexceptions -O0` | crash |
+| `-fexceptions -O1` | crash |
+| `-fno-exceptions -O1` | compiles |
+| `void f(){ throw 1; }` at `-fexceptions -O2` | compiles (no cleanup, so no `resume` for the pass to rewrite) |
+
+The compiler lane measured two more cases: try/catch with a rethrow crashes under `-fexceptions`, and
+under `-fno-exceptions` it gets a clean frontend error rather than a crash. Exceptions are on by default
+for C++, so this blocks essentially any nontrivial C++ at default flags.
+
+**Root cause.**
+- `DwarfEHPrepare.cpp:230-231` builds the rewind function's type as
+  `FunctionType::get(void, PointerType::getUnqual(Ctx))`. The `_Unwind_Resume` parameter is therefore
+  AS0.
+- `ExnObj = GetExceptionObject(RI)` (`:243`) takes the exception object out of the `resume`. On capstone64
+  that object is `ptr addrspace(200)`: the IR carries `resume { ptr addrspace(200), i32 }`.
+- The call at `:250` passes the AS200 argument against the AS0 parameter, which trips the assertion.
+
+A third instance sits on the multiple-resume path, `PHINode::Create(PointerType::getUnqual(Ctx), ...)`
+at `:273`. The reproducer does not exercise that path, so it is not confirmed.
+
+**Same class as C-60, different site. The two are less alike than they first look.** C-60 is an AS0
+intrinsic *declaration*, fixed in `Intrinsics.td`. This one is an AS0 function type *synthesized inside
+the pass*, so a fix for C-60 does not fix it.
+
+**There is an in-tree remedy pattern.** C-54 (`c7f0de349b4b`, 2026-09-23) guarded
+`AtomicExpandPass.cpp:1929` and `:2030` on `DL.isNonIntegralPointerType()` instead of assuming AS0, and
+`CodeGenPrepare.cpp` uses the same predicate at 7 sites.
+- **For C-61 it applies directly:** build `_Unwind_Resume`'s `FunctionType`, and the `:273` PHI, with
+  the exception pointer's real address space. This is exactly how libatomic is assumed to be built for
+  AS200.
+- **C-60 resists it:** `llvm.stackprotector`'s signature is fixed in `Intrinsics.td` and cannot be
+  guarded the same way.
+
+**C-54 has no entry in this registry.** Its branch is merged and its lit tests are on dev, but the
+defect and its remedy are undocumented. That is why C-60 and C-61 were found, and their fix shapes
+proposed, a day later without knowledge of the pattern.
+
+**How it was first missed.** The first probe was `throw 1` with no cleanup, recorded in C-60's audit
+table as "compiled clean". It had no `resume`, so it could not have exhibited the defect. The loaded
+probe is a destructor in scope across a call.
+
+**Workaround.** `-fno-exceptions`, for code that does not use `try`/`catch` syntax. No C++ port is in
+flight, but this should be known before anyone scopes one.
+
+**Not established.**
+- **SjLjEHPrepare:** capstone64 does not appear to select SjLj EH, and no case was constructed.
+- **The libcall path at `AtomicExpandPass.cpp:2030`:** RESOLVED as CLEAN. It is guarded by C-54; see
+  C-60's audit table.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`

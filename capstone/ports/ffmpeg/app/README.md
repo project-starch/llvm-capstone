@@ -53,7 +53,8 @@ missing.
 
 Three defects stood between M1 and M5. They are recorded in the result folder, and fixed as
 follows:
-- **stdout lost after its first line:** fixed in the domain entry.
+- **stdout lost after its first line:** fixed in the domain entry. Since 2026-09-24 the runtime
+  also flushes, because a returning program now ends through `exit()` (merge `556863938d46`).
 - **`EFAULT` reading a file on the 9p share:** fixed on `dev`, host bounce buffer
   `e852b3951476`.
 - **Compiler miscompile ISSUES.md C-50:** worked around by patch 0003, plus a build gate.

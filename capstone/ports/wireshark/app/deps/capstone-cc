@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# The C compiler the tshark port's third-party libraries are configured and built with, as CC.
+# Modelled on CPython's interpreter/toolchain/capstone-cc (branch cpython/6-integration).
+#
+# Two jobs, chosen from the arguments the way a real driver chooses them:
+#
+#   compile   (-c, -E, -S, -M, -MM)  the capstone64 clang against musl-capstone's headers, with
+#             the flags the working musl domains are built with.
+#   link      (anything else)        a real domain link: start-musl, the port runtime, an adapter
+#             from capstone_main to main, libc-capstone.a, and soft-float.
+#
+# The link is the point. configure decides HAVE_<func> by linking a program that calls <func>.
+# A wrapper that always "linked" would report every function present, and one that never did
+# would report none; linking against the archive musl was actually compiled to makes each answer
+# true of this libc. env.sh checks both directions before anything is built with it.
+#
+# -l<name> resolves to $TS_DEPS_PREFIX/lib/lib<name>.a when an earlier library has been built
+# there. musl's folded libraries (m, pthread, ...) are libc. Any other -l fails, loudly.
+#
+# TS_CENSUS=1 adds clang's pointer<->integer cast warnings to every compile (the census the
+# codegen gate takes, host/codegen-gate.py). With TS_CENSUS_LOG=<file> each compile's cast
+# warnings are also appended to that file whole, under a lock, whatever -j the build runs at.
+set -uo pipefail
+
+: "${CAPSTONE_CLANG:?}" "${CAPSTONE_LD_LLD:?}" "${TS_MUSL:?musl source tree}"
+: "${TS_RUNTIME_DIR:?prepared runtime objects}" "${TS_LIBC_ARCHIVE:?libc-capstone.a}"
+: "${TS_LINKER_SCRIPT:?domain linker script}" "${TS_DEPS_PREFIX:?install prefix}"
+
+TARGET=(-target capstone64-unknown-elf
+        -Xclang -target-feature -Xclang +m
+        -Xclang -target-feature -Xclang +a
+        -ffreestanding -fno-builtin -fno-jump-tables
+        -nostdinc
+        -isystem "$TS_MUSL/arch/capstone64" -isystem "$TS_MUSL/arch/generic"
+        -isystem "$TS_MUSL/obj/include" -isystem "$TS_MUSL/include"
+        -isystem "$("$CAPSTONE_CLANG" -print-resource-dir)/include")
+[[ "${TS_CENSUS:-0}" == 1 ]] && TARGET+=(-Wvoid-pointer-to-int-cast -Wpointer-to-int-cast
+                                         -Wint-to-void-pointer-cast -Wint-to-pointer-cast)
+
+mode=link
+out=""
+prev=""
+# ... and the linker (meson runs `cc -Wl,--version`): it is ld.lld, which links every domain.
+for a in "$@"; do
+  case "$a" in -Wl,--version|-Wl,-v) exec "$CAPSTONE_LD_LLD" --version ;; esac
+done
+for a in "$@"; do
+  case "$a" in
+    -c|-S|-E|-M|-MM) mode=compile ;;
+    # A build system asking about the compiler (meson runs --version to identify it): answer
+    # as the capstone64 clang, never as a link.
+    --version|-v|-dumpversion|-dumpmachine|-print-*|--print-*|-###) mode=compile ;;
+  esac
+  [[ "$prev" == "-o" ]] && out="$a"
+  prev="$a"
+done
+
+if [[ "$mode" == compile ]]; then
+  if [[ -n "${TS_CENSUS_LOG:-}" ]]; then
+    # One compile's cast warnings, appended whole under a lock: a parallel make interleaves
+    # stderr, and grepping a -j16 build log split and merged warning lines (libgcrypt, 34 of 119).
+    err=$(mktemp "${TMPDIR:-/tmp}/ts-cc-err.XXXXXX")
+    "$CAPSTONE_CLANG" "${TARGET[@]}" "$@" 2> "$err"
+    rc=$?
+    cat "$err" >&2
+    # ANSI colour codes stripped first: meson turns diagnostics colour on, and a coloured line
+    # parses as nothing (GLib's first census read 63 lines and 0 sites).
+    sed 's/\x1b\[[0-9;]*m//g' "$err" |
+      grep -E 'warning: .*\[-W(void-pointer-to-int-cast|pointer-to-int-cast|int-to-void-pointer-cast|int-to-pointer-cast)\]' |
+      flock "$TS_CENSUS_LOG.lock" tee -a "$TS_CENSUS_LOG" > /dev/null
+    rm -f "$err"
+    exit $rc
+  fi
+  exec "$CAPSTONE_CLANG" "${TARGET[@]}" "$@"
+fi
+
+# ---- link ---------------------------------------------------------------------------------
+MUSL_LIBS=" c m pthread rt dl util crypt xnet resolv "
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/ts-capstone-cc.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+inputs=()
+libs=()
+cflags=()
+skip_next=0
+for a in "$@"; do
+  if [[ $skip_next -eq 1 ]]; then skip_next=0; continue; fi
+  case "$a" in
+    -o) skip_next=1 ;;
+    -l*)
+      lib=${a#-l}
+      if [[ -f "$TS_DEPS_PREFIX/lib/lib$lib.a" ]]; then
+        libs+=("$TS_DEPS_PREFIX/lib/lib$lib.a")
+      elif [[ "$MUSL_LIBS" != *" $lib "* ]]; then
+        echo "capstone-cc: -l$lib: no such library for capstone64 (not musl, not in $TS_DEPS_PREFIX/lib)" >&2
+        exit 1
+      fi ;;
+    -L*|-Wl,*|-Xlinker|-rdynamic|-pthread|-shared|-static|-pie|-no-pie) ;;
+    *.c)
+      o="$tmp/$(basename "$a" .c).$RANDOM.o"
+      "$CAPSTONE_CLANG" "${TARGET[@]}" "${cflags[@]}" -c "$a" -o "$o" || exit 1
+      inputs+=("$o") ;;
+    *.o|*.a|*.lo) inputs+=("$a") ;;
+    -D*|-U*|-I*|-std=*|-O*|-g*|-f*|-W*|-m*) cflags+=("$a") ;;
+    *) ;;
+  esac
+done
+[[ -n "$out" ]] || out=a.out
+
+# Libraries after the objects that use them, then libc: the order a static link needs.
+exec "$CAPSTONE_LD_LLD" --gc-sections -T "$TS_LINKER_SCRIPT" -o "$out" \
+  "$TS_RUNTIME_DIR"/*.o "${inputs[@]}" "${libs[@]}" "$TS_LIBC_ARCHIVE"
