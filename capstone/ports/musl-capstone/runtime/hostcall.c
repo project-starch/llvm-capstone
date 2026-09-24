@@ -120,6 +120,22 @@ static volatile int hc_exit_status;
 static long hc_unserved[HC_UNSERVED_MAX];
 static unsigned long hc_unserved_n;
 
+/* Syscalls answered here with a success that has no service behind it -- a
+   timer that will never fire -- recorded like the unserved ones and printed at
+   exit beside them, so that "served" never quietly comes to mean "pretended". */
+#define HC_NOOP_MAX 16
+static long hc_noop[HC_NOOP_MAX];
+static unsigned long hc_noop_n;
+static void hc_note_noop(long n) {
+  if (hc_noop_n < HC_NOOP_MAX)
+    hc_noop[hc_noop_n] = n;
+  hc_noop_n++;
+}
+
+/* The mask a program sees when it asks; the helper's own applies to the files
+   it creates. 022, the usual default. */
+static long hc_umask = 022;
+
 /* stdout and stderr are served by WRITE_STDOUT, so they exist from the start;
    a domain may close them, and a closed one then answers like any descriptor
    nobody opened. stdin has no service here and never exists. Every syscall that
@@ -817,6 +833,53 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_set_tid_address:
     return 1;
 
+  /* A domain is one process: 1 is its pid, as 1 is its tid above, and 0 its
+     parent, as init's is. Not invented the way a st_dev would be: nothing
+     outside the domain consumes the number, callers write it into lock files
+     and log lines and compare it with their own. PostgreSQL puts getpid() in
+     postmaster.pid and probes a stale one with kill(pid, 0), which is unserved
+     and so says "no such process", which is the right answer. */
+  case SYS_getpid:
+    return 1;
+
+  case SYS_getppid:
+    return 0;
+
+  case SYS_umask: {
+    long old = hc_umask;
+    hc_umask = (long)a & 0777;
+    return old;
+  }
+
+  /* setitimer and getitimer: ACCEPTED, AND THE TIMER NEVER FIRES. A domain gets
+     no signals (rt_sigaction is unserved), so a running timer could not deliver
+     SIGALRM anyway; refusing setitimer is fatal to PostgreSQL (timeout.c: "could
+     not enable SIGALRM timer"), whose timeouts never matter in single-user mode.
+     Serving it as a no-op is the honest middle: the call succeeds, the timer
+     reads as unarmed, and the exit report lists it under NO-OP so a success is
+     never mistaken for a timer. A program that waits for the alarm waits for
+     ever; the report is what says why. The struct is two timevals, four longs
+     on this target, as musl's wrappers pass it. */
+  case SYS_setitimer:
+    if ((long)a < 0 || (long)a > 2)
+      return -EINVAL;
+    if (c) {
+      long *old = (long *)c;
+      old[0] = old[1] = old[2] = old[3] = 0;
+    }
+    hc_note_noop(n);
+    return 0;
+
+  case SYS_getitimer:
+    if ((long)a < 0 || (long)a > 2)
+      return -EINVAL;
+    if (b) {
+      long *cur = (long *)b;
+      cur[0] = cur[1] = cur[2] = cur[3] = 0;
+    }
+    hc_note_noop(n);
+    return 0;
+
   /* exit_group and exit: see domain_main. The status is the program's and the
      jump lands where capstone_main() would have returned, so everything after
      it runs exactly once either way. This case used to return 0 on the
@@ -890,28 +953,28 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
  * prints them by name, and check-domain-support.py says which CALL needs each
  * one, which is the question a person actually has.
  */
-static void hc_report_unserved(void) {
-  if (hc_unserved_n == 0)
+static void hc_report_list(const char *head, const long *list,
+                           unsigned long total, unsigned long max) {
+  if (total == 0)
     return;
-  static const char head[] = "capstone-domain: UNSERVED syscalls:";
   char buf[256];
   unsigned long p = 0;
-  for (unsigned long i = 0; i < sizeof head - 1; i++)
+  for (unsigned long i = 0; head[i]; i++)
     buf[p++] = head[i];
-  unsigned long shown = hc_unserved_n < HC_UNSERVED_MAX ? hc_unserved_n : HC_UNSERVED_MAX;
+  unsigned long shown = total < max ? total : max;
   for (unsigned long i = 0; i < shown && p + 32 < sizeof buf; i++) {
     unsigned long seen = 0, times = 0;
     for (unsigned long j = 0; j < shown; j++) {
-      if (hc_unserved[j] != hc_unserved[i])
+      if (list[j] != list[i])
         continue;
       if (j < i)
         seen = 1;
       times++;
     }
-    if (seen)   /* one line per distinct number, with how often it was asked */
+    if (seen)   /* one entry per distinct number, with how often it was asked */
       continue;
     buf[p++] = ' ';
-    long v = hc_unserved[i];
+    long v = list[i];
     char d[20];
     unsigned long k = 0;
     do { d[k++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -925,13 +988,19 @@ static void hc_report_unserved(void) {
         buf[p++] = d[--k];
     }
   }
-  if (hc_unserved_n > shown && p + 8 < sizeof buf) {
+  if (total > shown && p + 8 < sizeof buf) {
     static const char more[] = " ...";
     for (unsigned long i = 0; i < sizeof more - 1; i++)
       buf[p++] = more[i];
   }
   buf[p++] = '\n';
   write(1, buf, p);
+}
+
+static void hc_report_unserved(void) {
+  hc_report_list("capstone-domain: UNSERVED syscalls:", hc_unserved, hc_unserved_n,
+                 HC_UNSERVED_MAX);
+  hc_report_list("capstone-domain: NO-OP syscalls:", hc_noop, hc_noop_n, HC_NOOP_MAX);
 }
 
 unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
