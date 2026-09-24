@@ -34,8 +34,12 @@ under capability enforcement; it never tested **safety**. This folder tests it, 
      caught inside `free` before anything is revoked.
    - **Spatial:** the two heap-overflow fixtures (2, 3) fault; the merged-globals one (10)
      still returns, as item 2 says.
-   - **Cost:** the decode spends **1,262 revocation nodes**, 1.9% of the deployed bitstream's
-     per-boot pool (65,532, never reclaimed: ISSUES R-12).
+   - **Cost:** the decode spends **1,262 revocation nodes** in the heap's primitives (split + mrev).
+     CORRECTED 2026-09-24: this said "1.9% of the deployed bitstream's per-boot pool (65,532, never
+     reclaimed)". The resident bitstream (`054cea69b`) reclaims the nodes a revoke walk
+     invalidates, though never a handle's own node (ISSUES R-12, fixed on silicon 2026-09-17). So
+     its ceiling depends on a per-workload leak fraction that has not been measured for FFmpeg.
+     1.9% of 65,532 holds only for the non-reclaiming bitstreams before that date.
 5. **The temporal faults are EMULATOR evidence, and the deployed silicon is documented to
    differ.**
    - **Mechanism here:** capstone-qemu's `ldc` untags a capability whose revocation node is

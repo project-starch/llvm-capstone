@@ -48,9 +48,10 @@
  * split): with the defaults, 4 MiB pool and 256-byte atoms, about 0.6 MiB. A merge writes the
  * merged block through before init (sublet.h, sublet_give_to), so freeing is O(block) when it
  * coalesces, and O(object) always, for the scrub. Revocation nodes: one per split and one per
- * allocation. The deployed bitstream has 65,532 per boot and never reclaims them (ISSUES R-12;
- * the M1 reclamation bitstream does reuse them), so the counts are exported
- * (__capstone_sublet_heap_stats) for a program to report.
+ * allocation, 65,532 per boot. The resident bitstream (054cea69b) reclaims the nodes a revoke
+ * walk invalidates but never a handle's own node, so how far that ceiling moves depends on the
+ * workload's leak fraction (ISSUES R-12; bitstreams before 2026-09-17 reclaimed nothing). The
+ * counts are exported (__capstone_sublet_heap_stats) for a program to report.
  *
  * Linear capabilities never sit in C variables here, only in sublet_cap slots, except the
  * grant between the one call that hands it over and the store that parks it.
