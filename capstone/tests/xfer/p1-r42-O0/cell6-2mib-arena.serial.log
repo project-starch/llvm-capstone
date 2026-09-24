@@ -1,0 +1,1234 @@
+> starting qemu with:
+/home/<user>/dev/llvm-capstone/capstone/capstone-qemu/build/qemu-system-riscv64 -M virt-capstone -m 8G -smp 1 -nographic -bios /home/<user>/dev/llvm-capstone/capstone/caplifive-buildroot/build/images/fw_jump.elf -kernel /home/<user>/dev/llvm-capstone/capstone/caplifive-buildroot/build/images/Image -append root=/dev/vda ro -snapshot -drive file=/home/<user>/dev/llvm-capstone/capstone/caplifive-buildroot/build/images/rootfs.ext2,format=raw,id=hd0 -device virtio-blk-device,drive=hd0 -virtfs local,path=/tmp/claude-1005/-home-<user>-dev-llvm-capstone/fea3eec8-e31e-459d-82aa-366f35932b14/scratchpad/e2/share-2097152,mount_tag=hostshare,security_model=none,id=hostshare -chardev stdio,mux=on,id=ch0,signal=on -mon chardev=ch0,mode=readline -serial chardev:ch0 -cpu rv64,sstc=false,h=false -icount shift=0,sleep=off -append root=/dev/vda ro cma=256M
+
+
+OpenSBI v1.3 for Capstone
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Timer: mtime = 0x200bff8, mtimecmp = 0x2004000
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 678 KB
+Firmware RW Offset        : 0x80000
+Firmware RW Size          : 166 KB
+Firmware Heap Offset      : 0xa1000
+Firmware Heap Size        : 34 KB (total), 2 KB (reserved), 9 KB (used), 22 KB (free)
+Firmware Scratch Size     : 4096 B (total), 328 B (used), 3768 B (free)
+Runtime SBI Version       : 1.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080080000-0x00000000800bffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008007ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x0000000082200000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdc
+Boot HART ISA Extensions  : zicntr,zihpm
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 4
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART MIDELEG         : 0x0000000000000222
+Boot HART MEDELEG         : 0x000000000000b109
+[    0.000000] Linux version 6.1.0 (<user>@<host>) (riscv64-buildroot-linux-gnu-gcc.br_real (Buildroot 2023.08) 12.3.0, GNU ld (GNU Binutils) 2.40) #9 SMP Thu Sep 10 19:11:40 +08 2026
+[    0.000000] random: crng init done
+[    0.000000] OF: fdt: Ignoring memory range 0x80000000 - 0x80200000
+[    0.000000] Machine model: riscv-virtio,qemu
+[    0.000000] efi: UEFI not found.
+[    0.000000] cma: Reserved 256 MiB at 0x00000000f0000000
+[    0.000000] Zone ranges:
+[    0.000000]   DMA32    [mem 0x0000000080200000-0x00000000ffffffff]
+[    0.000000]   Normal   [mem 0x0000000100000000-0x000000027fffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000080200000-0x000000027fffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000080200000-0x000000027fffffff]
+[    0.000000] SBI specification v1.0 detected
+[    0.000000] SBI implementation ID=0x0 Version=0x0
+[    0.000000] SBI TIME extension detected
+[    0.000000] riscv: base ISA extensions acdfim
+[    0.000000] riscv: ELF capabilities acdfim
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] remote fence extension is not available in SBI v1.0
+[    0.000000] percpu: Embedded 18 pages/cpu s34744 r8192 d30792 u73728
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 2063880
+[    0.000000] Kernel command line: root=/dev/vda ro cma=256M
+[    0.000000] Dentry cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 524288 (order: 10, 4194304 bytes, linear)
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] software IO TLB: area num 1.
+[    0.000000] software IO TLB: mapped [mem 0x00000000ec000000-0x00000000f0000000] (64MB)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]       fixmap : 0xff1bfffffee00000 - 0xff1bffffff000000   (2048 kB)
+[    0.000000]       pci io : 0xff1bffffff000000 - 0xff1c000000000000   (  16 MB)
+[    0.000000]      vmemmap : 0xff1c000000000000 - 0xff20000000000000   (1024 TB)
+[    0.000000]      vmalloc : 0xff20000000000000 - 0xff60000000000000   (16384 TB)
+[    0.000000]      modules : 0xffffffff01362000 - 0xffffffff80000000   (2028 MB)
+[    0.000000]       lowmem : 0xff60000000000000 - 0xff600001ffe00000   (8190 MB)
+[    0.000000]       kernel : 0xffffffff80000000 - 0xffffffffffffffff   (2047 MB)
+[    0.000000] Memory: 7894108K/8386560K available (7480K kernel code, 4917K rwdata, 4096K rodata, 2177K init, 462K bss, 230308K reserved, 262144K cma-reserved)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=1.
+[    0.000000] rcu: 	RCU debug extended QS entry/exit.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] riscv-intc: 64 local interrupts mapped
+[    0.000000] plic: plic@c000000: mapped 95 interrupts with 1 handlers for 2 contexts.
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] riscv-timer: riscv_timer_init_dt: Registering clocksource cpuid [0] hartid [0]
+[    0.000000] clocksource: riscv_clocksource: mask: 0xffffffffffffffff max_cycles: 0x24e6a1710, max_idle_ns: 440795202120 ns
+[    0.000000] sched_clock: 64 bits at 10MHz, resolution 100ns, wraps every 4398046511100ns
+[    0.000022] remote fence extension is not available in SBI v1.0
+[    0.000026] remote fence extension is not available in SBI v1.0
+[    0.000030] remote fence extension is not available in SBI v1.0
+[    0.000034] remote fence extension is not available in SBI v1.0
+[    0.000039] remote fence extension is not available in SBI v1.0
+[    0.000043] remote fence extension is not available in SBI v1.0
+[    0.000047] remote fence extension is not available in SBI v1.0
+[    0.000051] remote fence extension is not available in SBI v1.0
+[    0.000055] remote fence extension is not available in SBI v1.0
+[    0.000059] remote fence extension is not available in SBI v1.0
+[    0.000064] remote fence extension is not available in SBI v1.0
+[    0.000068] remote fence extension is not available in SBI v1.0
+[    0.000072] remote fence extension is not available in SBI v1.0
+[    0.000076] remote fence extension is not available in SBI v1.0
+[    0.000080] remote fence extension is not available in SBI v1.0
+[    0.000084] remote fence extension is not available in SBI v1.0
+[    0.000088] remote fence extension is not available in SBI v1.0
+[    0.000093] remote fence extension is not available in SBI v1.0
+[    0.000097] remote fence extension is not available in SBI v1.0
+[    0.000101] remote fence extension is not available in SBI v1.0
+[    0.000105] remote fence extension is not available in SBI v1.0
+[    0.000109] remote fence extension is not available in SBI v1.0
+[    0.000113] remote fence extension is not available in SBI v1.0
+[    0.000118] remote fence extension is not available in SBI v1.0
+[    0.000122] remote fence extension is not available in SBI v1.0
+[    0.000126] remote fence extension is not available in SBI v1.0
+[    0.000130] remote fence extension is not available in SBI v1.0
+[    0.000134] remote fence extension is not available in SBI v1.0
+[    0.000139] remote fence extension is not available in SBI v1.0
+[    0.000143] remote fence extension is not available in SBI v1.0
+[    0.000229] Console: colour dummy device 80x25
+[    0.003532] printk: console [tty0] enabled
+[    0.003557] remote fence extension is not available in SBI v1.0
+[    0.003572] Calibrating delay loop (skipped), value calculated using timer frequency.. 20.00 BogoMIPS (lpj=40000)
+[    0.003598] pid_max: default: 32768 minimum: 301
+[    0.003659] LSM: Security Framework initializing
+[    0.003747] Mount-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.003789] Mountpoint-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.004606] cblist_init_generic: Setting adjustable number of callback queues.
+[    0.004625] cblist_init_generic: Setting shift to 0 and lim to 1.
+[    0.004676] riscv: ELF compat mode supported
+[    0.004683] remote fence extension is not available in SBI v1.0
+[    0.004707] remote fence extension is not available in SBI v1.0
+[    0.004722] ASID allocator using 16 bits (65536 entries)
+[    0.004799] rcu: Hierarchical SRCU implementation.
+[    0.004811] rcu: 	Max phase no-delay instances is 1000.
+[    0.004910] EFI services will not be available.
+[    0.005015] smp: Bringing up secondary CPUs ...
+[    0.005028] smp: Brought up 1 node, 1 CPU
+[    0.005599] devtmpfs: initialized
+[    0.006519] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.006544] futex hash table entries: 256 (order: 2, 16384 bytes, linear)
+[    0.010344] pinctrl core: initialized pinctrl subsystem
+[    0.010621] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.010996] DMA: preallocated 1024 KiB GFP_KERNEL pool for atomic allocations
+[    0.011119] DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    0.011160] audit: initializing netlink subsys (disabled)
+[    0.011393] cpuidle: using governor menu
+[    0.019097] audit: type=2000 audit(0.008:1): state=initialized audit_enabled=0 res=1
+[    0.019287] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+[    0.019303] HugeTLB: 0 KiB vmemmap can be freed for a 1.00 GiB page
+[    0.019319] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.019335] HugeTLB: 0 KiB vmemmap can be freed for a 2.00 MiB page
+[    0.019603] iommu: Default domain type: Translated 
+[    0.019617] iommu: DMA domain TLB invalidation policy: strict mode 
+[    0.019833] SCSI subsystem initialized
+[    0.020017] usbcore: registered new interface driver usbfs
+[    0.020062] usbcore: registered new interface driver hub
+[    0.020091] usbcore: registered new device driver usb
+[    0.020598] vgaarb: loaded
+[    0.020643] clocksource: Switched to clocksource riscv_clocksource
+[    0.024079] remote fence extension is not available in SBI v1.0
+[    0.024094] remote fence extension is not available in SBI v1.0
+[    0.024110] remote fence extension is not available in SBI v1.0
+[    0.025029] NET: Registered PF_INET protocol family
+[    0.025239] IP idents hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    0.045617] tcp_listen_portaddr_hash hash table entries: 4096 (order: 5, 131072 bytes, linear)
+[    0.045766] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.045793] TCP established hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.046559] TCP bind hash table entries: 65536 (order: 10, 4194304 bytes, linear)
+[    0.049993] TCP: Hash tables configured (established 65536 bind 65536)
+[    0.050065] UDP hash table entries: 4096 (order: 6, 393216 bytes, linear)
+[    0.050377] UDP-Lite hash table entries: 4096 (order: 6, 393216 bytes, linear)
+[    0.050718] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.050934] RPC: Registered named UNIX socket transport module.
+[    0.050948] RPC: Registered udp transport module.
+[    0.050961] RPC: Registered tcp transport module.
+[    0.050974] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.050990] PCI: CLS 0 bytes, default 64
+[    0.051488] workingset: timestamp_bits=46 max_order=21 bucket_order=0
+[    0.058323] NFS: Registering the id_resolver key type
+[    0.058345] Key type id_resolver registered
+[    0.058358] Key type id_legacy registered
+[    0.058431] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[    0.058446] nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+[    0.058524] 9p: Installing v9fs 9p2000 file system support
+[    0.058722] NET: Registered PF_ALG protocol family
+[    0.058753] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 250)
+[    0.058772] io scheduler mq-deadline registered
+[    0.058785] io scheduler kyber registered
+[    0.059140] pci-host-generic 30000000.pci: host bridge /soc/pci@30000000 ranges:
+[    0.059180] pci-host-generic 30000000.pci:       IO 0x0003000000..0x000300ffff -> 0x0000000000
+[    0.059218] pci-host-generic 30000000.pci:      MEM 0x0040000000..0x007fffffff -> 0x0040000000
+[    0.059249] pci-host-generic 30000000.pci:      MEM 0x0400000000..0x07ffffffff -> 0x0400000000
+[    0.059282] pci-host-generic 30000000.pci: Memory resource size exceeds max for 32 bits
+[    0.060399] pci-host-generic 30000000.pci: ECAM at [mem 0x30000000-0x3fffffff] for [bus 00-ff]
+[    0.060495] pci-host-generic 30000000.pci: PCI host bridge to bus 0000:00
+[    0.060513] pci_bus 0000:00: root bus resource [bus 00-ff]
+[    0.060530] pci_bus 0000:00: root bus resource [io  0x0000-0xffff]
+[    0.060548] pci_bus 0000:00: root bus resource [mem 0x40000000-0x7fffffff]
+[    0.060568] pci_bus 0000:00: root bus resource [mem 0x400000000-0x7ffffffff]
+[    0.060594] pci 0000:00:00.0: [1b36:0008] type 00 class 0x060000
+[    0.060748] pci 0000:00:01.0: [1af4:1009] type 00 class 0x000200
+[    0.060770] pci 0000:00:01.0: reg 0x10: [io  0x0000-0x003f]
+[    0.060789] pci 0000:00:01.0: reg 0x14: [mem 0x00000000-0x00000fff]
+[    0.060813] pci 0000:00:01.0: reg 0x20: [mem 0x00000000-0x00003fff 64bit pref]
+[    0.061252] pci 0000:00:01.0: BAR 4: assigned [mem 0x400000000-0x400003fff 64bit pref]
+[    0.061278] pci 0000:00:01.0: BAR 1: assigned [mem 0x40000000-0x40000fff]
+[    0.061299] pci 0000:00:01.0: BAR 0: assigned [io  0x0040-0x007f]
+[    0.061929] virtio-pci 0000:00:01.0: enabling device (0000 -> 0003)
+[    0.087202] Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+[    0.088015] 10000000.serial: ttyS0 at MMIO 0x10000000 (irq = 2, base_baud = 230400) is a 16550A
+[    0.092790] printk: console [ttyS0] enabled
+[    0.096241] loop: module loaded
+[    0.096278] virtio_blk virtio0: 1/0/0 default/read/poll queues
+[    0.096489] virtio_blk virtio0: [vda] 4194304 512-byte logical blocks (2.15 GB/2.00 GiB)
+[    0.098299] e1000e: Intel(R) PRO/1000 Network Driver
+[    0.098321] e1000e: Copyright(c) 1999 - 2015 Intel Corporation.
+[    0.098739] usbcore: registered new interface driver uas
+[    0.098789] usbcore: registered new interface driver usb-storage
+[    0.098879] mousedev: PS/2 mouse device common for all mice
+[    0.099105] goldfish_rtc 101000.rtc: registered as rtc0
+[    0.099134] goldfish_rtc 101000.rtc: setting system clock to 2026-09-14T12:21:21 UTC (1789388481)
+[    0.099388] cpuidle-riscv-sbi: HSM suspend not available
+[    0.099505] sdhci: Secure Digital Host Controller Interface driver
+[    0.099531] sdhci: Copyright(c) Pierre Ossman
+[    0.099565] sdhci-pltfm: SDHCI platform and OF driver helper
+[    0.099709] usbcore: registered new interface driver usbhid
+[    0.099734] usbhid: USB HID core driver
+[    0.100169] NET: Registered PF_INET6 protocol family
+[    0.100625] Segment Routing with IPv6
+[    0.100664] In-situ OAM (IOAM) with IPv6
+[    0.100722] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    0.101071] NET: Registered PF_PACKET protocol family
+[    0.101203] 9pnet: Installing 9P2000 support
+[    0.101310] Key type dns_resolver registered
+[    0.107622] debug_vm_pgtable: [debug_vm_pgtable         ]: Validating architecture page table helpers
+[    0.107673] remote fence extension is not available in SBI v1.0
+[    0.107699] remote fence extension is not available in SBI v1.0
+[    0.107725] remote fence extension is not available in SBI v1.0
+[    0.107752] remote fence extension is not available in SBI v1.0
+[    0.108108] remote fence extension is not available in SBI v1.0
+[    0.108313] Legacy PMU implementation is available
+[    0.108794] EXT4-fs (vda): mounting ext2 file system using the ext4 subsystem
+[    0.109406] EXT4-fs (vda): mounted filesystem without journal. Quota mode: disabled.
+[    0.109445] VFS: Mounted root (ext2 filesystem) readonly on device 254:0.
+[    0.109519] devtmpfs: mounted
+[    0.109544] remote fence extension is not available in SBI v1.0
+[    0.109566] remote fence extension is not available in SBI v1.0
+[    0.110155] Freeing unused kernel image (initmem) memory: 2176K
+[    0.120660] remote fence extension is not available in SBI v1.0
+[    0.120681] remote fence extension is not available in SBI v1.0
+[    0.120704] Run /sbin/init as init process
+[    0.121807] remote fence extension is not available in SBI v1.0
+[    0.121829] remote fence extension is not available in SBI v1.0
+[    0.121851] remote fence extension is not available in SBI v1.0
+[    0.121872] remote fence extension is not available in SBI v1.0
+[    0.121894] remote fence extension is not available in SBI v1.0
+[    0.121916] remote fence extension is not available in SBI v1.0
+[    0.121937] remote fence extension is not available in SBI v1.0
+[    0.121959] remote fence extension is not available in SBI v1.0
+[    0.121980] remote fence extension is not available in SBI v1.0
+[    0.122002] remote fence extension is not available in SBI v1.0
+[    0.122024] remote fence extension is not available in SBI v1.0
+[    0.122045] remote fence extension is not available in SBI v1.0
+[    0.122079] remote fence extension is not available in SBI v1.0
+[    0.122101] remote fence extension is not available in SBI v1.0
+[    0.122124] remote fence extension is not available in SBI v1.0
+[    0.122146] remote fence extension is not available in SBI v1.0
+[    0.122167] remote fence extension is not available in SBI v1.0
+[    0.122189] remote fence extension is not available in SBI v1.0
+[    0.122211] remote fence extension is not available in SBI v1.0
+[    0.122232] remote fence extension is not available in SBI v1.0
+[    0.122254] remote fence extension is not available in SBI v1.0
+[    0.122275] remote fence extension is not available in SBI v1.0
+[    0.122297] remote fence extension is not available in SBI v1.0
+[    0.122319] remote fence extension is not available in SBI v1.0
+[    0.122340] remote fence extension is not available in SBI v1.0
+[    0.122416] remote fence extension is not available in SBI v1.0
+[    0.122437] remote fence extension is not available in SBI v1.0
+[    0.122459] remote fence extension is not available in SBI v1.0
+[    0.122480] remote fence extension is not available in SBI v1.0
+[    0.122509] remote fence extension is not available in SBI v1.0
+[    0.122530] remote fence extension is not available in SBI v1.0
+[    0.122552] remote fence extension is not available in SBI v1.0
+[    0.122573] remote fence extension is not available in SBI v1.0
+[    0.122595] remote fence extension is not available in SBI v1.0
+[    0.122617] remote fence extension is not available in SBI v1.0
+[    0.122638] remote fence extension is not available in SBI v1.0
+[    0.122660] remote fence extension is not available in SBI v1.0
+[    0.122682] remote fence extension is not available in SBI v1.0
+[    0.122703] remote fence extension is not available in SBI v1.0
+[    0.122725] remote fence extension is not available in SBI v1.0
+[    0.122752] remote fence extension is not available in SBI v1.0
+[    0.122842] remote fence extension is not available in SBI v1.0
+[    0.122869] remote fence extension is not available in SBI v1.0
+[    0.123051] remote fence extension is not available in SBI v1.0
+[    0.123072] remote fence extension is not available in SBI v1.0
+[    0.123094] remote fence extension is not available in SBI v1.0
+[    0.123115] remote fence extension is not available in SBI v1.0
+[    0.123137] remote fence extension is not available in SBI v1.0
+[    0.123159] remote fence extension is not available in SBI v1.0
+[    0.123180] remote fence extension is not available in SBI v1.0
+[    0.123202] remote fence extension is not available in SBI v1.0
+[    0.123224] remote fence extension is not available in SBI v1.0
+[    0.123528] remote fence extension is not available in SBI v1.0
+[    0.123550] remote fence extension is not available in SBI v1.0
+[    0.123571] remote fence extension is not available in SBI v1.0
+[    0.123593] remote fence extension is not available in SBI v1.0
+[    0.123615] remote fence extension is not available in SBI v1.0
+[    0.123636] remote fence extension is not available in SBI v1.0
+[    0.123658] remote fence extension is not available in SBI v1.0
+[    0.123679] remote fence extension is not available in SBI v1.0
+[    0.123701] remote fence extension is not available in SBI v1.0
+[    0.123723] remote fence extension is not available in SBI v1.0
+[    0.123744] remote fence extension is not available in SBI v1.0
+[    0.123876] remote fence extension is not available in SBI v1.0
+[    0.123906] remote fence extension is not available in SBI v1.0
+[    0.123928] remote fence extension is not available in SBI v1.0
+[    0.123949] remote fence extension is not available in SBI v1.0
+[    0.123971] remote fence extension is not available in SBI v1.0
+[    0.123992] remote fence extension is not available in SBI v1.0
+[    0.124014] remote fence extension is not available in SBI v1.0
+[    0.124037] remote fence extension is not available in SBI v1.0
+[    0.124059] remote fence extension is not available in SBI v1.0
+[    0.124080] remote fence extension is not available in SBI v1.0
+[    0.124102] remote fence extension is not available in SBI v1.0
+[    0.124124] remote fence extension is not available in SBI v1.0
+[    0.124145] remote fence extension is not available in SBI v1.0
+[    0.124167] remote fence extension is not available in SBI v1.0
+[    0.124189] remote fence extension is not available in SBI v1.0
+[    0.124210] remote fence extension is not available in SBI v1.0
+[    0.124232] remote fence extension is not available in SBI v1.0
+[    0.124253] remote fence extension is not available in SBI v1.0
+[    0.124275] remote fence extension is not available in SBI v1.0
+[    0.124297] remote fence extension is not available in SBI v1.0
+[    0.124318] remote fence extension is not available in SBI v1.0
+[    0.124340] remote fence extension is not available in SBI v1.0
+[    0.124361] remote fence extension is not available in SBI v1.0
+[    0.124518] remote fence extension is not available in SBI v1.0
+[    0.124547] remote fence extension is not available in SBI v1.0
+[    0.124569] remote fence extension is not available in SBI v1.0
+[    0.124591] remote fence extension is not available in SBI v1.0
+[    0.124652] remote fence extension is not available in SBI v1.0
+[    0.124673] remote fence extension is not available in SBI v1.0
+[    0.124695] remote fence extension is not available in SBI v1.0
+[    0.124716] remote fence extension is not available in SBI v1.0
+[    0.124738] remote fence extension is not available in SBI v1.0
+[    0.124760] remote fence extension is not available in SBI v1.0
+[    0.124781] remote fence extension is not available in SBI v1.0
+[    0.124803] remote fence extension is not available in SBI v1.0
+[    0.124825] remote fence extension is not available in SBI v1.0
+[    0.125074] remote fence extension is not available in SBI v1.0
+[    0.125754] remote fence extension is not available in SBI v1.0
+[    0.125775] remote fence extension is not available in SBI v1.0
+[    0.125797] remote fence extension is not available in SBI v1.0
+[    0.125818] remote fence extension is not available in SBI v1.0
+[    0.125840] remote fence extension is not available in SBI v1.0
+[    0.125862] remote fence extension is not available in SBI v1.0
+[    0.125883] remote fence extension is not available in SBI v1.0
+[    0.125905] remote fence extension is not available in SBI v1.0
+[    0.125927] remote fence extension is not available in SBI v1.0
+[    0.125948] remote fence extension is not available in SBI v1.0
+[    0.125970] remote fence extension is not available in SBI v1.0
+[    0.125991] remote fence extension is not available in SBI v1.0
+[    0.126013] remote fence extension is not available in SBI v1.0
+[    0.126035] remote fence extension is not available in SBI v1.0
+[    0.126056] remote fence extension is not available in SBI v1.0
+[    0.126078] remote fence extension is not available in SBI v1.0
+[    0.126101] remote fence extension is not available in SBI v1.0
+[    0.126123] remote fence extension is not available in SBI v1.0
+[    0.126144] remote fence extension is not available in SBI v1.0
+[    0.126166] remote fence extension is not available in SBI v1.0
+[    0.126187] remote fence extension is not available in SBI v1.0
+[    0.126209] remote fence extension is not available in SBI v1.0
+[    0.126231] remote fence extension is not available in SBI v1.0
+[    0.126252] remote fence extension is not available in SBI v1.0
+[    0.126274] remote fence extension is not available in SBI v1.0
+[    0.126296] remote fence extension is not available in SBI v1.0
+[    0.126317] remote fence extension is not available in SBI v1.0
+[    0.126339] remote fence extension is not available in SBI v1.0
+[    0.126360] remote fence extension is not available in SBI v1.0
+[    0.126382] remote fence extension is not available in SBI v1.0
+[    0.126404] remote fence extension is not available in SBI v1.0
+[    0.126425] remote fence extension is not available in SBI v1.0
+[    0.126741] remote fence extension is not available in SBI v1.0
+[    0.126763] remote fence extension is not available in SBI v1.0
+[    0.126784] remote fence extension is not available in SBI v1.0
+[    0.126806] remote fence extension is not available in SBI v1.0
+[    0.126828] remote fence extension is not available in SBI v1.0
+[    0.126849] remote fence extension is not available in SBI v1.0
+[    0.126871] remote fence extension is not available in SBI v1.0
+[    0.126892] remote fence extension is not available in SBI v1.0
+[    0.126914] remote fence extension is not available in SBI v1.0
+[    0.126936] remote fence extension is not available in SBI v1.0
+[    0.126957] remote fence extension is not available in SBI v1.0
+[    0.126979] remote fence extension is not available in SBI v1.0
+[    0.127000] remote fence extension is not available in SBI v1.0
+[    0.127022] remote fence extension is not available in SBI v1.0
+[    0.127044] remote fence extension is not available in SBI v1.0
+[    0.127207] remote fence extension is not available in SBI v1.0
+[    0.127229] remote fence extension is not available in SBI v1.0
+[    0.127251] remote fence extension is not available in SBI v1.0
+[    0.127272] remote fence extension is not available in SBI v1.0
+[    0.127294] remote fence extension is not available in SBI v1.0
+[    0.127316] remote fence extension is not available in SBI v1.0
+[    0.127337] remote fence extension is not available in SBI v1.0
+[    0.127359] remote fence extension is not available in SBI v1.0
+[    0.127380] remote fence extension is not available in SBI v1.0
+[    0.127402] remote fence extension is not available in SBI v1.0
+[    0.127424] remote fence extension is not available in SBI v1.0
+[    0.127445] remote fence extension is not available in SBI v1.0
+[    0.127467] remote fence extension is not available in SBI v1.0
+[    0.127489] remote fence extension is not available in SBI v1.0
+[    0.127510] remote fence extension is not available in SBI v1.0
+[    0.127536] remote fence extension is not available in SBI v1.0
+[    0.127558] remote fence extension is not available in SBI v1.0
+[    0.127579] remote fence extension is not available in SBI v1.0
+[    0.127601] remote fence extension is not available in SBI v1.0
+[    0.127623] remote fence extension is not available in SBI v1.0
+[    0.127751] remote fence extension is not available in SBI v1.0
+[    0.127783] remote fence extension is not available in SBI v1.0
+[    0.127805] remote fence extension is not available in SBI v1.0
+[    0.127826] remote fence extension is not available in SBI v1.0
+[    0.127848] remote fence extension is not available in SBI v1.0
+[    0.127965] remote fence extension is not available in SBI v1.0
+[    0.127986] remote fence extension is not available in SBI v1.0
+[    0.128008] remote fence extension is not available in SBI v1.0
+[    0.128029] remote fence extension is not available in SBI v1.0
+[    0.128051] remote fence extension is not available in SBI v1.0
+[    0.128073] remote fence extension is not available in SBI v1.0
+[    0.128094] remote fence extension is not available in SBI v1.0
+[    0.128116] remote fence extension is not available in SBI v1.0
+[    0.128138] remote fence extension is not available in SBI v1.0
+[    0.128159] remote fence extension is not available in SBI v1.0
+[    0.128181] remote fence extension is not available in SBI v1.0
+[    0.128204] remote fence extension is not available in SBI v1.0
+[    0.128226] remote fence extension is not available in SBI v1.0
+[    0.128247] remote fence extension is not available in SBI v1.0
+[    0.128269] remote fence extension is not available in SBI v1.0
+[    0.128291] remote fence extension is not available in SBI v1.0
+[    0.128312] remote fence extension is not available in SBI v1.0
+[    0.128334] remote fence extension is not available in SBI v1.0
+[    0.128355] remote fence extension is not available in SBI v1.0
+[    0.128377] remote fence extension is not available in SBI v1.0
+[    0.128399] remote fence extension is not available in SBI v1.0
+[    0.128420] remote fence extension is not available in SBI v1.0
+[    0.128442] remote fence extension is not available in SBI v1.0
+[    0.128571] remote fence extension is not available in SBI v1.0
+[    0.128593] remote fence extension is not available in SBI v1.0
+[    0.128614] remote fence extension is not available in SBI v1.0
+[    0.128636] remote fence extension is not available in SBI v1.0
+[    0.128664] remote fence extension is not available in SBI v1.0
+[    0.128686] remote fence extension is not available in SBI v1.0
+[    0.128707] remote fence extension is not available in SBI v1.0
+[    0.128729] remote fence extension is not available in SBI v1.0
+[    0.128750] remote fence extension is not available in SBI v1.0
+[    0.128772] remote fence extension is not available in SBI v1.0
+[    0.128794] remote fence extension is not available in SBI v1.0
+[    0.128815] remote fence extension is not available in SBI v1.0
+[    0.128837] remote fence extension is not available in SBI v1.0
+[    0.128858] remote fence extension is not available in SBI v1.0
+[    0.128880] remote fence extension is not available in SBI v1.0
+[    0.129022] remote fence extension is not available in SBI v1.0
+[    0.129043] remote fence extension is not available in SBI v1.0
+[    0.129065] remote fence extension is not available in SBI v1.0
+[    0.129087] remote fence extension is not available in SBI v1.0
+[    0.129108] remote fence extension is not available in SBI v1.0
+[    0.129130] remote fence extension is not available in SBI v1.0
+[    0.129151] remote fence extension is not available in SBI v1.0
+[    0.129173] remote fence extension is not available in SBI v1.0
+[    0.129195] remote fence extension is not available in SBI v1.0
+[    0.129216] remote fence extension is not available in SBI v1.0
+[    0.129238] remote fence extension is not available in SBI v1.0
+[    0.129260] remote fence extension is not available in SBI v1.0
+[    0.129281] remote fence extension is not available in SBI v1.0
+[    0.129303] remote fence extension is not available in SBI v1.0
+[    0.129324] remote fence extension is not available in SBI v1.0
+[    0.129489] remote fence extension is not available in SBI v1.0
+[    0.129511] remote fence extension is not available in SBI v1.0
+[    0.129533] remote fence extension is not available in SBI v1.0
+[    0.129554] remote fence extension is not available in SBI v1.0
+[    0.129576] remote fence extension is not available in SBI v1.0
+[    0.129597] remote fence extension is not available in SBI v1.0
+[    0.129619] remote fence extension is not available in SBI v1.0
+[    0.129641] remote fence extension is not available in SBI v1.0
+[    0.129662] remote fence extension is not available in SBI v1.0
+[    0.129684] remote fence extension is not available in SBI v1.0
+[    0.129705] remote fence extension is not available in SBI v1.0
+[    0.129727] remote fence extension is not available in SBI v1.0
+[    0.129749] remote fence extension is not available in SBI v1.0
+[    0.129770] remote fence extension is not available in SBI v1.0
+[    0.129792] remote fence extension is not available in SBI v1.0
+[    0.129814] remote fence extension is not available in SBI v1.0
+[    0.129837] remote fence extension is not available in SBI v1.0
+[    0.129859] remote fence extension is not available in SBI v1.0
+[    0.129880] remote fence extension is not available in SBI v1.0
+[    0.129902] remote fence extension is not available in SBI v1.0
+[    0.129923] remote fence extension is not available in SBI v1.0
+[    0.129945] remote fence extension is not available in SBI v1.0
+[    0.130033] remote fence extension is not available in SBI v1.0
+[    0.130054] remote fence extension is not available in SBI v1.0
+[    0.130076] remote fence extension is not available in SBI v1.0
+[    0.130098] remote fence extension is not available in SBI v1.0
+[    0.130119] remote fence extension is not available in SBI v1.0
+[    0.130141] remote fence extension is not available in SBI v1.0
+[    0.130162] remote fence extension is not available in SBI v1.0
+[    0.130184] remote fence extension is not available in SBI v1.0
+[    0.130206] remote fence extension is not available in SBI v1.0
+[    0.130227] remote fence extension is not available in SBI v1.0
+[    0.130252] remote fence extension is not available in SBI v1.0
+[    0.130273] remote fence extension is not available in SBI v1.0
+[    0.130295] remote fence extension is not available in SBI v1.0
+[    0.130317] remote fence extension is not available in SBI v1.0
+[    0.130338] remote fence extension is not available in SBI v1.0
+[    0.130360] remote fence extension is not available in SBI v1.0
+[    0.130382] remote fence extension is not available in SBI v1.0
+[    0.130406] remote fence extension is not available in SBI v1.0
+[    0.130428] remote fence extension is not available in SBI v1.0
+[    0.130449] remote fence extension is not available in SBI v1.0
+[    0.130471] remote fence extension is not available in SBI v1.0
+[    0.130587] remote fence extension is not available in SBI v1.0
+[    0.130608] remote fence extension is not available in SBI v1.0
+[    0.130630] remote fence extension is not available in SBI v1.0
+[    0.130652] remote fence extension is not available in SBI v1.0
+[    0.130673] remote fence extension is not available in SBI v1.0
+[    0.130695] remote fence extension is not available in SBI v1.0
+[    0.130716] remote fence extension is not available in SBI v1.0
+[    0.130738] remote fence extension is not available in SBI v1.0
+[    0.130760] remote fence extension is not available in SBI v1.0
+[    0.130781] remote fence extension is not available in SBI v1.0
+[    0.130803] remote fence extension is not available in SBI v1.0
+[    0.130824] remote fence extension is not available in SBI v1.0
+[    0.130850] remote fence extension is not available in SBI v1.0
+[    0.130872] remote fence extension is not available in SBI v1.0
+[    0.130893] remote fence extension is not available in SBI v1.0
+[    0.130915] remote fence extension is not available in SBI v1.0
+[    0.130937] remote fence extension is not available in SBI v1.0
+[    0.130958] remote fence extension is not available in SBI v1.0
+[    0.130980] remote fence extension is not available in SBI v1.0
+[    0.131001] remote fence extension is not available in SBI v1.0
+[    0.131023] remote fence extension is not available in SBI v1.0
+[    0.131045] remote fence extension is not available in SBI v1.0
+[    0.131066] remote fence extension is not available in SBI v1.0
+[    0.131088] remote fence extension is not available in SBI v1.0
+[    0.131109] remote fence extension is not available in SBI v1.0
+[    0.131131] remote fence extension is not available in SBI v1.0
+[    0.131153] remote fence extension is not available in SBI v1.0
+[    0.131184] remote fence extension is not available in SBI v1.0
+[    0.131206] remote fence extension is not available in SBI v1.0
+[    0.131227] remote fence extension is not available in SBI v1.0
+[    0.131249] remote fence extension is not available in SBI v1.0
+[    0.131271] remote fence extension is not available in SBI v1.0
+[    0.131292] remote fence extension is not available in SBI v1.0
+[    0.131314] remote fence extension is not available in SBI v1.0
+[    0.131335] remote fence extension is not available in SBI v1.0
+[    0.131357] remote fence extension is not available in SBI v1.0
+[    0.131379] remote fence extension is not available in SBI v1.0
+[    0.131400] remote fence extension is not available in SBI v1.0
+[    0.131422] remote fence extension is not available in SBI v1.0
+[    0.131554] remote fence extension is not available in SBI v1.0
+[    0.131575] remote fence extension is not available in SBI v1.0
+[    0.131597] remote fence extension is not available in SBI v1.0
+[    0.131618] remote fence extension is not available in SBI v1.0
+[    0.131640] remote fence extension is not available in SBI v1.0
+[    0.131662] remote fence extension is not available in SBI v1.0
+[    0.131683] remote fence extension is not available in SBI v1.0
+[    0.131705] remote fence extension is not available in SBI v1.0
+[    0.131726] remote fence extension is not available in SBI v1.0
+[    0.131748] remote fence extension is not available in SBI v1.0
+[    0.131770] remote fence extension is not available in SBI v1.0
+[    0.131791] remote fence extension is not available in SBI v1.0
+[    0.131813] remote fence extension is not available in SBI v1.0
+[    0.131835] remote fence extension is not available in SBI v1.0
+[    0.131856] remote fence extension is not available in SBI v1.0
+[    0.131878] remote fence extension is not available in SBI v1.0
+[    0.131914] remote fence extension is not available in SBI v1.0
+[    0.131936] remote fence extension is not available in SBI v1.0
+[    0.131957] remote fence extension is not available in SBI v1.0
+[    0.131979] remote fence extension is not available in SBI v1.0
+[    0.132001] remote fence extension is not available in SBI v1.0
+[    0.132022] remote fence extension is not available in SBI v1.0
+[    0.132044] remote fence extension is not available in SBI v1.0
+[    0.132065] remote fence extension is not available in SBI v1.0
+[    0.132087] remote fence extension is not available in SBI v1.0
+[    0.132109] remote fence extension is not available in SBI v1.0
+[    0.132230] remote fence extension is not available in SBI v1.0
+[    0.132252] remote fence extension is not available in SBI v1.0
+[    0.132273] remote fence extension is not available in SBI v1.0
+[    0.132295] remote fence extension is not available in SBI v1.0
+[    0.132316] remote fence extension is not available in SBI v1.0
+[    0.132338] remote fence extension is not available in SBI v1.0
+[    0.132361] remote fence extension is not available in SBI v1.0
+[    0.132383] remote fence extension is not available in SBI v1.0
+[    0.132405] remote fence extension is not available in SBI v1.0
+[    0.132426] remote fence extension is not available in SBI v1.0
+[    0.132453] remote fence extension is not available in SBI v1.0
+[    0.132475] remote fence extension is not available in SBI v1.0
+[    0.132497] remote fence extension is not available in SBI v1.0
+[    0.132655] remote fence extension is not available in SBI v1.0
+[    0.132677] remote fence extension is not available in SBI v1.0
+[    0.132699] remote fence extension is not available in SBI v1.0
+[    0.132720] remote fence extension is not available in SBI v1.0
+[    0.132742] remote fence extension is not available in SBI v1.0
+[    0.132763] remote fence extension is not available in SBI v1.0
+[    0.132785] remote fence extension is not available in SBI v1.0
+[    0.132807] remote fence extension is not available in SBI v1.0
+[    0.132828] remote fence extension is not available in SBI v1.0
+[    0.132850] remote fence extension is not available in SBI v1.0
+[    0.132872] remote fence extension is not available in SBI v1.0
+[    0.132893] remote fence extension is not available in SBI v1.0
+[    0.132915] remote fence extension is not available in SBI v1.0
+[    0.132936] remote fence extension is not available in SBI v1.0
+[    0.132958] remote fence extension is not available in SBI v1.0
+[    0.132980] remote fence extension is not available in SBI v1.0
+[    0.133139] remote fence extension is not available in SBI v1.0
+[    0.133671] remote fence extension is not available in SBI v1.0
+[    0.133693] remote fence extension is not available in SBI v1.0
+[    0.133714] remote fence extension is not available in SBI v1.0
+[    0.133736] remote fence extension is not available in SBI v1.0
+[    0.133758] remote fence extension is not available in SBI v1.0
+[    0.133779] remote fence extension is not available in SBI v1.0
+[    0.134379] remote fence extension is not available in SBI v1.0
+[    0.134401] remote fence extension is not available in SBI v1.0
+[    0.134423] remote fence extension is not available in SBI v1.0
+[    0.134469] remote fence extension is not available in SBI v1.0
+[    0.134490] remote fence extension is not available in SBI v1.0
+[    0.134512] remote fence extension is not available in SBI v1.0
+[    0.134588] remote fence extension is not available in SBI v1.0
+[    0.134610] remote fence extension is not available in SBI v1.0
+[    0.134631] remote fence extension is not available in SBI v1.0
+[    0.134916] remote fence extension is not available in SBI v1.0
+[    0.134938] remote fence extension is not available in SBI v1.0
+[    0.134959] remote fence extension is not available in SBI v1.0
+[    0.134981] remote fence extension is not available in SBI v1.0
+[    0.135002] remote fence extension is not available in SBI v1.0
+[    0.135024] remote fence extension is not available in SBI v1.0
+[    0.135046] remote fence extension is not available in SBI v1.0
+[    0.135067] remote fence extension is not available in SBI v1.0
+[    0.135089] remote fence extension is not available in SBI v1.0
+[    0.135111] remote fence extension is not available in SBI v1.0
+[    0.135132] remote fence extension is not available in SBI v1.0
+[    0.135154] remote fence extension is not available in SBI v1.0
+[    0.135175] remote fence extension is not available in SBI v1.0
+[    0.135197] remote fence extension is not available in SBI v1.0
+[    0.135219] remote fence extension is not available in SBI v1.0
+[    0.135260] remote fence extension is not available in SBI v1.0
+[    0.135282] remote fence extension is not available in SBI v1.0
+[    0.135304] remote fence extension is not available in SBI v1.0
+[    0.135325] remote fence extension is not available in SBI v1.0
+[    0.135347] remote fence extension is not available in SBI v1.0
+[    0.135368] remote fence extension is not available in SBI v1.0
+[    0.135390] remote fence extension is not available in SBI v1.0
+[    0.135412] remote fence extension is not available in SBI v1.0
+[    0.135433] remote fence extension is not available in SBI v1.0
+[    0.135455] remote fence extension is not available in SBI v1.0
+[    0.135477] remote fence extension is not available in SBI v1.0
+[    0.135498] remote fence extension is not available in SBI v1.0
+[    0.135524] remote fence extension is not available in SBI v1.0
+[    0.135545] remote fence extension is not available in SBI v1.0
+[    0.135567] remote fence extension is not available in SBI v1.0
+[    0.135589] remote fence extension is not available in SBI v1.0
+[    0.135610] remote fence extension is not available in SBI v1.0
+[    0.135632] remote fence extension is not available in SBI v1.0
+[    0.135653] remote fence extension is not available in SBI v1.0
+[    0.135675] remote fence extension is not available in SBI v1.0
+[    0.135697] remote fence extension is not available in SBI v1.0
+[    0.135718] remote fence extension is not available in SBI v1.0
+[    0.135740] remote fence extension is not available in SBI v1.0
+[    0.135761] remote fence extension is not available in SBI v1.0
+[    0.137608] remote fence extension is not available in SBI v1.0
+[    0.137630] remote fence extension is not available in SBI v1.0
+[    0.137692] remote fence extension is not available in SBI v1.0
+[    0.137713] remote fence extension is not available in SBI v1.0
+[    0.137735] remote fence extension is not available in SBI v1.0
+[    0.137757] remote fence extension is not available in SBI v1.0
+[    0.137778] remote fence extension is not available in SBI v1.0
+[    0.137800] remote fence extension is not available in SBI v1.0
+[    0.137822] remote fence extension is not available in SBI v1.0
+[    0.137843] remote fence extension is not available in SBI v1.0
+[    0.137865] remote fence extension is not available in SBI v1.0
+[    0.137886] remote fence extension is not available in SBI v1.0
+[    0.137908] remote fence extension is not available in SBI v1.0
+[    0.137930] remote fence extension is not available in SBI v1.0
+[    0.137951] remote fence extension is not available in SBI v1.0
+[    0.137973] remote fence extension is not available in SBI v1.0
+[    0.138096] remote fence extension is not available in SBI v1.0
+[    0.138184] EXT4-fs (vda): warning: mounting unchecked fs, running e2fsck is recommended
+[    0.138662] EXT4-fs (vda): re-mounted. Quota mode: disabled.
+[    0.140649] remote fence extension is not available in SBI v1.0
+[    0.140671] remote fence extension is not available in SBI v1.0
+[    0.140693] remote fence extension is not available in SBI v1.0
+[    0.140714] remote fence extension is not available in SBI v1.0
+[    0.140736] remote fence extension is not available in SBI v1.0
+[    0.140758] remote fence extension is not available in SBI v1.0
+[    0.141049] remote fence extension is not available in SBI v1.0
+[    0.141071] remote fence extension is not available in SBI v1.0
+[    0.141092] remote fence extension is not available in SBI v1.0
+[    0.141114] remote fence extension is not available in SBI v1.0
+[    0.141136] remote fence extension is not available in SBI v1.0
+[    0.141157] remote fence extension is not available in SBI v1.0
+[    0.141179] remote fence extension is not available in SBI v1.0
+[    0.141201] remote fence extension is not available in SBI v1.0
+[    0.141222] remote fence extension is not available in SBI v1.0
+[    0.141244] remote fence extension is not available in SBI v1.0
+[    0.141265] remote fence extension is not available in SBI v1.0
+[    0.141287] remote fence extension is not available in SBI v1.0
+[    0.141309] remote fence extension is not available in SBI v1.0
+[    0.141330] remote fence extension is not available in SBI v1.0
+[    0.141352] remote fence extension is not available in SBI v1.0
+[    0.146916] remote fence extension is not available in SBI v1.0
+[    0.148779] remote fence extension is not available in SBI v1.0
+[    0.148801] remote fence extension is not available in SBI v1.0
+[    0.148823] remote fence extension is not available in SBI v1.0
+[    0.148844] remote fence extension is not available in SBI v1.0
+[    0.150261] remote fence extension is not available in SBI v1.0
+[    0.150282] remote fence extension is not available in SBI v1.0
+[    0.153585] remote fence extension is not available in SBI v1.0
+[    0.155167] remote fence extension is not available in SBI v1.0
+[    0.155189] remote fence extension is not available in SBI v1.0
+[    0.155210] remote fence extension is not available in SBI v1.0
+[    0.155232] remote fence extension is not available in SBI v1.0
+[    0.155253] remote fence extension is not available in SBI v1.0
+[    0.155275] remote fence extension is not available in SBI v1.0
+[    0.155297] remote fence extension is not available in SBI v1.0
+[    0.155318] remote fence extension is not available in SBI v1.0
+[    0.155340] remote fence extension is not available in SBI v1.0
+[    0.155362] remote fence extension is not available in SBI v1.0
+[    0.155383] remote fence extension is not available in SBI v1.0
+[    0.155405] remote fence extension is not available in SBI v1.0
+[    0.155426] remote fence extension is not available in SBI v1.0
+[    0.155448] remote fence extension is not available in SBI v1.0
+[    0.155470] remote fence extension is not available in SBI v1.0
+[    0.157374] remote fence extension is not available in SBI v1.0
+[    0.157395] remote fence extension is not available in SBI v1.0
+[    0.157417] remote fence extension is not available in SBI v1.0
+[    0.157438] remote fence extension is not available in SBI v1.0
+[    0.157460] remote fence extension is not available in SBI v1.0
+[    0.157482] remote fence extension is not available in SBI v1.0
+[    0.157503] remote fence extension is not available in SBI v1.0
+[    0.157525] remote fence extension is not available in SBI v1.0
+[    0.157547] remote fence extension is not available in SBI v1.0
+[    0.157568] remote fence extension is not available in SBI v1.0
+[    0.157596] remote fence extension is not available in SBI v1.0
+[    0.157618] remote fence extension is not available in SBI v1.0
+[    0.157640] remote fence extension is not available in SBI v1.0
+[    0.157661] remote fence extension is not available in SBI v1.0
+[    0.157683] remote fence extension is not available in SBI v1.0
+[    0.157704] remote fence extension is not available in SBI v1.0
+[    0.157726] remote fence extension is not available in SBI v1.0
+[    0.157748] remote fence extension is not available in SBI v1.0
+[    0.157769] remote fence extension is not available in SBI v1.0
+[    0.157791] remote fence extension is not available in SBI v1.0
+[    0.157812] remote fence extension is not available in SBI v1.0
+[    0.157834] remote fence extension is not available in SBI v1.0
+[    0.157856] remote fence extension is not available in SBI v1.0
+[    0.157877] remote fence extension is not available in SBI v1.0
+[    0.157899] remote fence extension is not available in SBI v1.0
+[    0.157921] remote fence extension is not available in SBI v1.0
+[    0.158163] remote fence extension is not available in SBI v1.0
+[    0.158215] remote fence extension is not available in SBI v1.0
+[    0.158510] remote fence extension is not available in SBI v1.0
+[    0.159999] remote fence extension is not available in SBI v1.0
+[    0.160021] remote fence extension is not available in SBI v1.0
+[    0.160074] remote fence extension is not available in SBI v1.0
+Starting syslogd: [    0.162187] remote fence extension is not available in SBI v1.0
+[    0.162209] remote fence extension is not available in SBI v1.0
+[    0.162230] remote fence extension is not available in SBI v1.0
+[    0.162252] remote fence extension is not available in SBI v1.0
+[    0.162274] remote fence extension is not available in SBI v1.0
+OK
+[    0.164108] remote fence extension is not available in SBI v1.0
+[    0.164129] remote fence extension is not available in SBI v1.0
+[    0.164151] remote fence extension is not available in SBI v1.0
+[    0.164173] remote fence extension is not available in SBI v1.0
+[    0.164669] remote fence extension is not available in SBI v1.0
+Starting klogd: OK
+[    0.170494] remote fence extension is not available in SBI v1.0
+[    0.173987] remote fence extension is not available in SBI v1.0
+[    0.174009] remote fence extension is not available in SBI v1.0
+[    0.174222] remote fence extension is not available in SBI v1.0
+[    0.174244] remote fence extension is not available in SBI v1.0
+[    0.174265] remote fence extension is not available in SBI v1.0
+[    0.174287] remote fence extension is not available in SBI v1.0
+[    0.174309] remote fence extension is not available in SBI v1.0
+[    0.174330] remote fence extension is not available in SBI v1.0
+Running sysctl: [    0.188033] remote fence extension is not available in SBI v1.0
+[    0.188127] remote fence extension is not available in SBI v1.0
+[    0.188149] remote fence extension is not available in SBI v1.0
+[    0.188170] remote fence extension is not available in SBI v1.0
+[    0.188192] remote fence extension is not available in SBI v1.0
+[    0.188213] remote fence extension is not available in SBI v1.0
+[    0.188235] remote fence extension is not available in SBI v1.0
+[    0.188257] remote fence extension is not available in SBI v1.0
+[    0.188278] remote fence extension is not available in SBI v1.0
+[    0.188300] remote fence extension is not available in SBI v1.0
+[    0.188322] remote fence extension is not available in SBI v1.0
+[    0.188343] remote fence extension is not available in SBI v1.0
+[    0.188365] remote fence extension is not available in SBI v1.0
+[    0.188386] remote fence extension is not available in SBI v1.0
+[    0.194321] remote fence extension is not available in SBI v1.0
+[    0.194343] remote fence extension is not available in SBI v1.0
+[    0.196146] remote fence extension is not available in SBI v1.0
+[    0.196167] remote fence extension is not available in SBI v1.0
+[    0.198121] remote fence extension is not available in SBI v1.0
+[    0.198142] remote fence extension is not available in SBI v1.0
+[    0.198164] remote fence extension is not available in SBI v1.0
+[    0.200368] remote fence extension is not available in SBI v1.0
+[    0.200390] remote fence extension is not available in SBI v1.0
+[    0.200412] remote fence extension is not available in SBI v1.0
+[    0.200433] remote fence extension is not available in SBI v1.0
+[    0.200455] remote fence extension is not available in SBI v1.0
+[    0.200477] remote fence extension is not available in SBI v1.0
+[    0.200498] remote fence extension is not available in SBI v1.0
+[    0.200520] remote fence extension is not available in SBI v1.0
+[    0.200934] remote fence extension is not available in SBI v1.0
+[    0.200956] remote fence extension is not available in SBI v1.0
+[    0.200978] remote fence extension is not available in SBI v1.0
+[    0.200999] remote fence extension is not available in SBI v1.0
+OK
+[    0.213878] remote fence extension is not available in SBI v1.0
+[    0.213900] remote fence extension is not available in SBI v1.0
+[    0.213921] remote fence extension is not available in SBI v1.0
+[    0.213943] remote fence extension is not available in SBI v1.0
+[    0.213965] remote fence extension is not available in SBI v1.0
+[    0.213986] remote fence extension is not available in SBI v1.0
+[    0.214008] remote fence extension is not available in SBI v1.0
+[    0.214030] remote fence extension is not available in SBI v1.0
+[    0.214484] remote fence extension is not available in SBI v1.0
+[    0.214505] remote fence extension is not available in SBI v1.0
+[    0.214527] remote fence extension is not available in SBI v1.0
+Saving 256 bits of creditable seed for next boot
+[    0.214667] EXT4-fs error (device vda): __ext4_new_inode:1276: comm seedrng: failed to insert inode 8193: doubly allocated?
+seedrng: can't open 'seed.no-credit': Input/output error
+Starting network: [    0.221235] remote fence extension is not available in SBI v1.0
+[    0.221257] remote fence extension is not available in SBI v1.0
+[    0.221279] remote fence extension is not available in SBI v1.0
+[    0.221300] remote fence extension is not available in SBI v1.0
+[    0.229012] remote fence extension is not available in SBI v1.0
+[    0.229033] remote fence extension is not available in SBI v1.0
+[    0.229055] remote fence extension is not available in SBI v1.0
+[    0.229077] remote fence extension is not available in SBI v1.0
+[    0.229098] remote fence extension is not available in SBI v1.0
+[    0.229120] remote fence extension is not available in SBI v1.0
+[    0.229142] remote fence extension is not available in SBI v1.0
+[    0.229163] remote fence extension is not available in SBI v1.0
+[    0.229185] remote fence extension is not available in SBI v1.0
+[    0.229207] remote fence extension is not available in SBI v1.0
+[    0.229228] remote fence extension is not available in SBI v1.0
+[    0.229250] remote fence extension is not available in SBI v1.0
+[    0.229272] remote fence extension is not available in SBI v1.0
+[    0.229302] remote fence extension is not available in SBI v1.0
+OK
+
+Welcome to Buildroot
+
+buildroot login: root
+# dmesg -n 1
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# stty columns 29999
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# mkdir -p /mnt/host
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# insmod /capstone.ko
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# cp /mnt/host/h.user /tmp/h && chmod 0755 /tmp/h; /tmp/h /mnt/host/d.dom --speedtest1 --arena 2097152 --tables 1750285 '--testset main --size 1 --verify'; echo HOST_RC=$?; echo CTL_END
+Ok, good file.
+Found 2 segments
+Loadable executable segment found.
+Entry address = 10000
+Virtual address = 10000
+File offset = 1000
+Segment size = 16a418
+Domain requirement = 1268832 (stack 1048576)
+Globals offset = 0x150000
+Loadable size = 1483800
+SQ: A/dom-ok
+SQ: id=0
+SQ: libc=72057592435126220
+SQ: self=48038396503158864
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: r1=10
+SQ: r2=11
+SQ: speedtest1=32
+SQ: E/share1
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x0)
+[CAPSTONE] CINCOFFSET rs1=gp (#1): pc = 101c00034, rd = x18, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#2): pc = 101d49000, rd = x10, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#3): pc = 101d49000, rd = x10, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#4): pc = 101d491b0, rd = x14, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#5): pc = 101d491b0, rd = x14, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#6): pc = 101d491b0, rd = x10, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#7): pc = 101d49360, rd = x7, tag = 1, type = 1
+[CAPSTONE] CINCOFFSET rs1=gp (#8): pc = 101d49360, rd = x6, tag = 1, type = 1
+SQ: F/share2
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x0)
+SQ: F2/mkregion3
+SQ: r3=13
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x0)
+SQ: arena=2097152
+SQ: F3/mkregion4
+SQ: r4=14
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x0)
+SQ: tables=1750285
+SQ: G/enter
+capstone-qemu: REV-NODE WATERMARK -- cumulative allocation #1022; on silicon (10-bit bump head from 3, no reclamation) this is where the head WRAPS to 0 and starts reusing LIVE ids
+SQ: H/return
+SPEEDTEST1-ARGS --testset main --size 1 --verify
+-- Speedtest1 for SQLite 3.53.3 2026-06-26 20:14:12 d4c0e51e4aeb96955b99185ab9cd
+       Begin testset "main"
+ 100 - 500 INSERTs into table with no index........................    0.435s
+ 110 - 500 ordered INSERTS with one index/PK.......................    0.656s
+ 120 - 500 unordered INSERTS with one index/PK.....................    0.762s
+ 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    1.137s
+ 140 - 10 SELECTS, LIKE, unindexed.................................    1.284s
+ 142 - 10 SELECTS w/ORDER BY, unindexed............................    1.566s
+ 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    1.189s
+ 150 - CREATE INDEX five times.....................................    1.561s
+ 160 - 100 SELECTS, numeric BETWEEN, indexed.......................    0.481s
+ 161 - 100 SELECTS, numeric BETWEEN, PK............................    0.482s
+ 170 - 100 SELECTS, text BETWEEN, indexed..........................    0.626s
+ 180 - 500 INSERTS with three indexes..............................    0.965s
+ 190 - DELETE and REFILL one table.................................    0.898s
+ 200 - VACUUM......................................................    2.277s
+ 210 - ALTER TABLE ADD COLUMN, and query...........................    0.203s
+ 230 - 100 UPDATES, numeric BETWEEN, indexed.......................    0.486s
+ 240 - 500 UPDATES of individual rows..............................    0.661s
+ 250 - One big UPDATE of the whole 500-row table...................    0.249s
+ 260 - Query added column after filling............................    0.061s
+ 270 - 100 DELETEs, numeric BETWEEN, indexed.......................    0.769s
+ 280 - 500 DELETEs of individual rows..............................    0.781s
+ 290 - Refill two 500-row tables using REPLACE.....................    2.353s
+ 300 - Refill a 500-row table using (b&1)==(a&1)...................    1.130s
+ 310 - 100 four-ways joins.........................................    1.236s
+ 320 - subquery in result set......................................    0.016s
+ 400 - 700 REPLACE ops on an IPK...................................    0.731s
+ 410 - 700 SELECTS on an IPK.......................................    0.458s
+ 500 - 700 REPLACE on TEXT PK......................................    0.663s
+ 510 - 700 SELECTS on a TEXT PK....................................    0.546s
+ 520 - 700 SELECT DISTINCT.........................................    0.268s
+ 980 - PRAGMA integrity_check......................................    1.981s
+ 990 - ANALYZE.....................................................    0.633s
+       TOTAL.......................................................   27.544s
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 692392094 HIGHWATER n/a HEAP 1344064 DROPPED 0 RC 0
+sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401
+__CAPSTONE_SPEEDTEST1_RAN__
+SQ: released pool rc=1
+SQ: RR/share-A
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x0)
+SQ: RR/share-A-returned
+SQ: RR/share-B
+SQ: RR/probe-region=16
+[CAPSTONE] Print = Scalar(0x52434c4d)
+[CAPSTONE] Print = Scalar(0x1)
+SQ: RR/share-B-returned
+SQ: RR/done
+SQ: released tables rc=1
+SQ: speedtest1-ran=1320222720
+HOST_RC=0
+CTL_END
+# printf '__EXIT_CODE__%s\n' $?
+__EXIT_CODE__0
+# poweroff -f
+[    1.326067] reboot: Power down

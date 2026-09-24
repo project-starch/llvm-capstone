@@ -1,0 +1,5 @@
+ceeded2533a74bce813536dac02ac46bb9c599c561cf6b9b62441cdaca75011a  sqlite_silicon.dom
+args=--testset main --size 1 --verify
+cma_mb=none
+log=/tmp/claude-1005/-home-<user>-dev-llvm-capstone/fea3eec8-e31e-459d-82aa-366f35932b14/scratchpad/e1/cell6-rebuild/sqlite-speedtest1.log
+when=2026-09-14T04:30:05Z
