@@ -66,7 +66,7 @@ neither header, and GLib falls back.
   direction, `strlcpy`, `/proc`).
 - **libffi** is a stub `.pc`, since only libglib is built, not GObject.
 
-Seven patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
+Eight patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
 subtests) covers the rewrite:
 - `glib-0001`: `gintptr`/`guintptr` are `long`, the address, because no integer type is as wide as
   a capstone64 pointer and the compiler has no `__intcap_t`;
@@ -85,6 +85,14 @@ subtests) covers the rewrite:
   Found by the tshark M0 link gate, not by GLib's suite. The recipe now refuses an archive with any
   undefined weak symbol; that check fired on the unpatched archive (`__lsan_enable`,
   `__lsan_ignore_object`) and passes with the patch, and none of the other six archives has one.
+- `glib-0008`: GCond does not reach `pthread_cond_*` in a domain. musl-capstone's
+  `pthread_cond_t` is 48 bytes on capstone64, room for three pointers, but musl's internal macros
+  put `_c_tail` at `__u.__p[5]`, 32 bytes past the object (`src/internal/pthread_impl.h`), and
+  `_c_shared`/`_c_head` overlap its int fields. A broadcast from GLib halted the tshark domain in
+  `epan_init` (cause 24 in `__private_cond_signal`); `g_once_init_leave()` broadcasts on every call. A
+  domain runs one thread, so a signal or broadcast has no waiter (no effect, as documented) and a
+  wait could never be woken (it aborts). GLib's `gthread-posix.c` is the only user of
+  `pthread_cond_*` among the seven libraries and tshark. The defect itself is musl-capstone's.
 
 Of the 63 census lines left, the 23 rebuilt sites all carry real integers (quarks, fds, log
 depths, error numbers, unichars) or are the `ghash` small-array code, dead with 16-byte pointers.
