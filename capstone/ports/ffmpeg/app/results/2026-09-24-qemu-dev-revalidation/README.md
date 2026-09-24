@@ -130,7 +130,8 @@ The corruption is reported separately; nothing counted here depends on the rootf
   - no other job's preparation falls inside a counted boot's window (audit);
   - arms that share a size differ in predicted outcome on other fixtures (pool0 vs pool2 on 12,
     13, 15 and 17).
-- **The harness race is a defect to fix:** prep inside the lock, or use a share per invocation.
+- **The harness race is fixed since:** `run-safety.sh` and `run-qemu.sh` now use a share per
+  invocation (`mktemp`), and hash exactly that directory. The runs in this folder predate the fix.
 - **Other work in this private root, serialized by the same lock:** the port's M-infra gate boots
   and their private rootfs copies (`br-*`). It used its own share directory.
 - **The comment edits cannot have changed the images.** The notes in `ffapp_domain.c` and
