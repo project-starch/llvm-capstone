@@ -1,0 +1,29 @@
+# PostgreSQL 17.5 backend compile survey, capstone64/musl, 2026-09-24
+# compiler: clang 595e757cb696 (= compiler/capability-alignment-warnings on dev; none of C-50/51/52/54/55/58)
+# capstone-cc: the CPython port's toolchain/capstone-cc (cpython/6-integration), env from its prepare on the same clang
+# CFLAGS=-O2 (no -g: Assignment Tracking, C-50, runs only with debug info)
+# configure --host=riscv64-unknown-linux-musl --without-readline --without-zlib --without-icu --with-system-tzdata
+# make -k -j16 -C src/backend after `make -C src/backend generated-headers`; one line per object (objects.tsv)
+objects compiled: 957 of 966 (9 failed)
+   6  static assertion: sizeof(struct ExprEvalStep) <= 64 (arraysubs execExpr execExprInterp jsonbsubs jsonpath_exec nodeAgg)
+   2  clang exit 139 in code generation (gram.o jsonpath_gram.o: the bison parsers)
+   1  static assertion: sizeof(struct AllocFreeListLink) <= 8 (aset.o; the mmgr port's port/aset-capstone.patch)
+# warnings over the 957: -Wvoid-pointer-to-int-cast 1571; -Wcapstone-pointer-roundtrip 912; -Wint-to-pointer-cast 910;
+#   -Wpointer-to-int-cast 136; -Wcapstone-capability-alignment 6; -Wint-to-void-pointer-cast 3
+# -Wcapstone-pointer-roundtrip: 85 distinct explicit sites in 34 files (top: tsvector_op 12, rangetypes 8, arrayfuncs 8,
+#   heaptuple 7); DatumGetPointer is an inline function in postgres.h and fires once per translation unit, so this is
+#   not the Datum count (see the plan)
+# configure answers:
+#define ALIGNOF_DOUBLE 8
+#define HAVE_COMPUTED_GOTO 1
+#define HAVE_POSIX_FADVISE 1
+#define HAVE_SYNC_FILE_RANGE 1
+#define HAVE_SYS_EPOLL_H 1
+#define HAVE_SYS_SIGNALFD_H 1
+#define MAXIMUM_ALIGNOF 8
+#define PG_INT128_TYPE __int128
+#define SIZEOF_LONG 8
+#define SIZEOF_SIZE_T 8
+#define SIZEOF_VOID_P 16
+#define USE_SYSV_SHARED_MEMORY 1
+#define USE_UNNAMED_POSIX_SEMAPHORES 1
