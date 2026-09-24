@@ -47,7 +47,7 @@ Porting it into a domain is a different order of work from FFmpeg (updated 2026-
     turns 3 codegen failures into 0.
   - The 6 remaining failures are all an ICU header pulled in by libxml2's configuration. With
     ICU disabled in that configuration they compile (audit).
-  - `manuf.c` is still compiling (PENDING).
+  - `manuf.c`, the largest table, compiles too: 0 failures, in 91 minutes with a debug clang.
 - **Provenance: tshark itself is clean on its linked path.** Of 95 lossy pointer→integer casts
   it has one real round trip, and tshark never reaches it (only sharkd does).
 - **GLib is where the work is:**
@@ -82,9 +82,17 @@ Porting it into a domain is a different order of work from FFmpeg (updated 2026-
   - **"`ui/voip_calls.c:145` is not linked into tshark."** It **is** linked
     (`linked-sources.txt`). It is unreached: its only entry, `voip_calls_init_all_taps`, is
     called only from `sharkd_session.c:3896,3953`.
-  - **"Pointer-typed `__thread` fails."** ANY real use of `__thread` fails codegen, struct-typed
-    too. An `int __thread` sample that compiled had only read a never-written variable, which
-    was folded to a constant.
+  - **"Pointer-typed `__thread` fails."** ANY real use of `__thread` fails codegen, whatever
+    its type and at every `-O` level (`Cannot select: GlobalTLSAddress`). A `__thread` compiles
+    only when no TLS address survives to instruction selection: when it is never referenced, or
+    when it is `static`, never written, and its reads fold to the initial value at `-O1` and
+    above. The `int __thread` sample that seemed to compile was the second case. External,
+    written or address-taken variables fail, and so does everything at `-O0` (a matrix checked
+    2026-09-24, with the compiler lane).
+  - **So a compiling `__thread` is not a stable signal to gate on.** The case that compiles
+    breaks as soon as a later patch writes the variable or takes its address, and a build at
+    `-O0` breaks it without any patch. The gate compiles at `-O1`. This port does not depend on
+    that case: patch 0004 removes every `__thread` from the build.
   - **"The domain block is 64–128 MiB until the heap is measured."** Superseded by the
     measurement (results, item 4).
 - **Corrected by the M0-open audit (2026-09-24), after they were reported in session:**
@@ -300,7 +308,7 @@ time. After a native build, **20 of 96 do not compile.** (The 96 are compile-dat
 ## M0 open items: results (2026-09-24)
 
 The audit left eight items open before implementation. Each is settled below, or marked
-PENDING/UNRESOLVED with its reason. The census builds are the ones described above: `src-min`,
+UNRESOLVED with its reason. The census builds are the ones described above: `src-min`,
 with patches 0001–0005 applied, and the native builds `native-min` and `native-min-pa`.
 
 ### 1. Codegen gate (`host/codegen-gate.py`)
@@ -328,19 +336,24 @@ with patches 0001–0005 applied, and the native builds `native-min` and `native
 | 392 | compile |
 | **6** | fail, all on `libxml2/encoding.h` → `unicode/ucnv.h` (`epan/epan.c` and 5 wiretap readers): the host libxml2 is configured with ICU. With `LIBXML_ICU_ENABLED` removed from a copy of `xmlversion.h`, all 6 compile, 0 failures (audit). M-deps builds libxml2 without ICU |
 | `pci-ids.c`, `enterprises.c`, `services.c` | compile, in 1,083 s, 620 s and 234 s (16-way load) |
-| **`epan/manuf.c`** | **PENDING**: a serial `-S` run with a 4 h budget, and a `-c` build for its initialiser (item 5) |
+| **`epan/manuf.c`** | compiles, 0 casts, in 5,474 s (a serial run, 4 h budget); its object's initialiser is measured in item 5 |
 
 **manuf.c's compile time.** Compile time grows faster than linearly with a file's
 initialisers. A synthetic table shaped like manuf's took 115 s for 8,000 initialisers and 451 s
-for 16,000; the real tables do not follow one law (item 5). If manuf.c runs past its budget,
-that is a build-time cost with a known workaround (split or stub the table), not a
-correctness blocker.
+for 16,000; the real tables do not follow one law (item 5). manuf.c took 5,474 s for its -S run and 5,540 s
+for its -c build (debug clang). That is a build-time cost, not a blocker.
 
 ### 2. `__thread` (patch 0004)
 
 **The patch.** `WS_THREAD_LOCAL` is empty when `CAPSTONE_SINGLE_THREAD_DOMAIN` is defined. The
 domain is single-threaded: `epan_init` runs registration inline (`tshark.c:1370`), and a native
 run makes 0 `clone` calls.
+
+**The compiler fix is on a branch, unmerged.** C-47 has an implemented fix on branch
+`compiler/c47-tls` (`07829e435e0d`): local-exec TLS on `tp`'s capability, with a runtime
+`tls.c`. It is not merged, and this port has not built or run it. Until it lands, the define
+stays. When it does, patch 0004 can go, after one run shows the three files unchanged in
+output.
 
 **Checked from both sides.** The three `__thread` files (`except.c`, `wtap.c`,
 `filesystem.c`) fail the gate without the define, each with `Cannot select:
@@ -495,6 +508,7 @@ cost per NATIVE pointer relocation, `R_X86_64_64` outside debug sections):
 | `packet-tcp.c` | 1,404 | 64,444 | 45.9 | 12,096 | 8.6 | 11.5 |
 | `services.c` | 12,728 | 722,404 | 56.8 | 87,136 | 6.8 | 14.2 |
 | synthetic, 8,000 entries × 2 strings | 16,000 | 949,504 | 59.3 | 130,320 | 8.1 | 14.8 |
+| **`manuf.c`, whole** | 115,856 | 4,971,832 | 42.9 | 322,080 | 2.8 | |
 
 `-O2` gives the same as `-O1`: dhcp's init code is 167,692 bytes with the same frame.
 
@@ -539,12 +553,12 @@ dynamic pointer relocations total 256,674, and `libwireshark` alone has 253,969.
   relocations. With all-distinct targets the cost is about 7–9 bytes each, linear from 1k to 16k
   (synthetic: 10,176 → 130,320 bytes). Real manuf slices cost 3.5 and 2.8 bytes each, about
   2.2 bytes at the margin (audit).
-  - enterprises.c, nearly all distinct, is probably the largest frame, at about 0.5 MB.
-  - manuf.c's is likely smaller.
-  - **Unmeasured above 16k.** Declaring **at least 1 MiB** of stack is safe on every reading;
-    the FFmpeg domains declare 256 KiB.
-- **Measured case to follow:** manuf.c's own object is being built (PENDING). Its size and frame
-  replace these estimates.
+  - **manuf.c, measured whole:** 4,971,832 bytes of init code (42.9 per relocation, as the
+    audit's slices predicted) and a 322,080-byte frame (2.8 per relocation).
+  - enterprises.c, nearly all distinct, is probably the largest frame, at about 0.5 MB
+    (unmeasured).
+  - Declaring **at least 1 MiB** of stack is safe on every reading; the FFmpeg domains declare
+    256 KiB.
 
 **For the compiler lane (a cost, not a blocker):** every initialiser is materialised, spilled to
 a stack temporary, reloaded and then stored (dhcp: 6,352 `stc`, 3,098 `ldc`). A table-driven
@@ -598,10 +612,7 @@ folded in above and listed under "Withdrawn".
 1. **Compiler:** no blocker in the 398 linked translation units that finished, plus the six
    libxml2 files compiled without ICU.
    - C-47 is avoided by patch 0004.
-   - `manuf.c` is PENDING (item 1). A codegen failure there would be a finding for the compiler
-     lane.
-   - **The fallback is to SPLIT the table:** stubbing it would break the oracle, because
-     `arp.pcap` prints an OUI organisation. A table-driven initialiser lowering would also do.
+   - `manuf.c` compiles too (item 1), in 91 minutes.
    - Every compile time here comes from a debug build of clang.
 2. **Hard prerequisite: M-infra.** The block cannot come from the buddy allocator (a 4 MiB
    ceiling).
@@ -635,7 +646,7 @@ push without the lead's approval (a new branch).
 
 | milestone | content | exit criterion |
 |---|---|---|
-| **M0-open** | the eight items above | each settled or recorded as UNRESOLVED with its reason. Done 2026-09-24, except `manuf.c`'s codegen (PENDING) |
+| **M0-open** | the eight items above | each settled or recorded as UNRESOLVED with its reason. Done 2026-09-24 |
 | **M-infra** | the domain block from CMA: `capstone.c:163` → `dma_alloc_pages`, `cma=<size>@<base below 4 GiB>` for the QEMU guest, the monitor's rules checked | an existing small domain still runs byte-identically from a CMA block; a 64 MiB and a 128 MiB block allocate and a domain runs in each. Shared infra, reviewed separately, never folded into the port commit |
 | **M-deps** | GLib, libgcrypt/libgpg-error (no asm), c-ares, PCRE2, libxml2 and zlib cross-built for capstone64 on musl-capstone | each library's own tests pass natively and it links for capstone64; the GLib pointer-is-a-word sites patched, each with a reason; the once-init `guintptr` cast and `gqsort`'s `guintptr` copy mode fixed (and `gdataset`'s flag bits, if anything pulls it in); the 9 header-failing files read for typed copies; libgcrypt's `fips.c` `__thread` behind the single-thread define; libxml2 built without ICU; the cast census (results, item 3) rerun over the libraries, including GLib's 20 files that do not compile yet |
 | **M0** | the minimal tshark cross-configured and linked as a domain, `-DNDEBUG`, `CAPSTONE_HF_PREALLOC=4096`, a declared stack of at least 1 MiB (results, item 5) | the image links; its `code_len`, its initialiser code and its block size are measured against results, items 4 and 5 |
