@@ -6198,7 +6198,7 @@ dynamic linker.
 namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
 Verify it with a static build of `llvm-ar`, which is exactly what fails today.
 
-### C-60 — any `-fstack-protector*` asserts in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `OPEN — COMPILER, crash; found 2026-09-24 by the tshark port; root cause from the datalayout and the intrinsic declaration; reproduced with the tree's clang`
+### C-60 — any `-fstack-protector*` asserts in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `OPEN — COMPILER, crash; found 2026-09-24 by the tshark port; root cause from source (mechanism corrected the same day: the SLOT mismatches, not the guard); reproduced with the tree's clang`
 
 **What happens.** `-fstack-protector`, `-fstack-protector-strong` and `-fstack-protector-all` abort
 with `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
@@ -6213,20 +6213,27 @@ Reproduced on 2026-09-24 with `llvm/cmake-build-debug/bin/clang`:
 - `-fno-stack-protector` exits 0;
 - `int main(void){return 0;}` under `-fstack-protector-strong` exits 0.
 
-**Root cause.**
-- `CreatePrologue` (`llvm/lib/CodeGen/StackProtector.cpp:562-566`) creates the guard slot as
-  `PointerType::getUnqual(...)`, which is address space 0.
-- It then calls `CreateIntrinsic(Intrinsic::stackprotector, {GuardSlot, AI})`.
-- `int_stackprotector` is declared `[llvm_ptr_ty, llvm_ptr_ty]` (`llvm/include/llvm/IR/Intrinsics.td:937`),
-  which is plain AS0 and not overloaded.
-- capstone64's datalayout ends `-ni:200-A200-P200-G200` (`clang/lib/Basic/Targets/Capstone.h:249`), so
-  allocas and globals are AS200.
-- `CapstoneTargetLowering::getIRStackGuard` falls through to the generic version
-  (`CapstoneISelLowering.cpp:26051`), which loads `@__stack_chk_guard`, an AS200 global.
+**Root cause. The mechanism was CORRECTED the same day.** The first version of this entry said both
+arguments were AS200 and that the guard came from `@__stack_chk_guard`. That is wrong. Exactly ONE
+argument mismatches, and it is the slot. Checked against source on origin/dev:
 
-The intrinsic is declared AS0 and receives AS200, hence the assertion. `StackProtector.cpp` never
-calls `getAllocaAddrSpace`. This is an upstream assumption that capstone64 violates, and no in-tree
-target with a non-zero alloca address space enables SSP.
+- `CreatePrologue` (`llvm/lib/CodeGen/StackProtector.cpp:562-566`) allocates the guard slot and
+  passes it to `llvm.stackprotector`.
+- The alloca's result type is `ptr addrspace(200)`, because the datalayout sets the alloca address
+  space to 200 (`-A200` in `clang/lib/Basic/Targets/Capstone.h:249`). The emitted IR shows
+  `alloca ..., addrspace(200)`.
+- `llvm.stackprotector` is declared `[llvm_ptr_ty, llvm_ptr_ty]` (`llvm/include/llvm/IR/Intrinsics.td:937`),
+  which is AS0 and not overloaded. **The slot operand mismatches.**
+- The guard VALUE is fine. `CapstoneTargetLowering::getIRStackGuard` returns a value only for Fuchsia,
+  Android or `-mstack-protector-guard=tls`. Otherwise it falls through (`CapstoneISelLowering.cpp:26051`)
+  to `TargetLoweringBase::getIRStackGuard` (`TargetLoweringBase.cpp:2049`), which returns `nullptr`
+  for everything but OpenBSD.
+- With a null guard, `getStackGuard` sets `SupportsSelectionDAGSP`, calls `insertSSPDeclarations`,
+  and emits `llvm.stackguard`. That intrinsic is declared `[llvm_ptr_ty]` (`Intrinsics.td:938`), so its
+  result is AS0 and matches.
+
+`StackProtector.cpp` never calls `getAllocaAddrSpace`. This is an upstream assumption that capstone64
+violates, and no in-tree target with a non-zero alloca address space enables SSP.
 
 **Why it escapes configure and CMake probes.** A protector is inserted only for a function with
 something to protect, so a flag probe compiles cleanly and the flag is enabled build-wide. The
@@ -6248,14 +6255,29 @@ Any autotools or CMake port that probes the flag hits the same trap.
 **Fix shape: not chosen, and the lead's call.** A compiler must not assert, so the crash is a defect
 whichever shape wins.
 
-- **(a)** Overload `llvm.stackprotector` on address space and use `DL.getAllocaAddrSpace()` in
-  `CreatePrologue`. This is correct and upstreamable, but it changes generic CodeGen.
+- **(a)** Overload the intrinsics on address space and use `DL.getAllocaAddrSpace()` in
+  `CreatePrologue`. This is upstreamable, but it changes generic CodeGen.
+  - The fix must cover BOTH `llvm.stackprotector` and `llvm.stackguard`.
+  - It must also decide the guard's own address space on a capability target. The guard is a
+    pointer-sized cookie, and whether it should be a capability at all is a real question, not a
+    mechanical retype.
 - **(b)** Have Capstone decline the IR stack protector, giving a clear diagnostic or a no-op. The
   argument for (b) is that bounds already catch a stack-buffer overflow spatially, which subsumes
   most of SSP's value. That is a threat-model claim, not a compiler detail.
 
-**Not checked.** No fix has been built. Whether other generic CodeGen passes make the same AS0
-assumption has not been checked either, and that question deserves its own look.
+**Other passes: shallow probes only, not clearances.** No fix has been built. Eight files in
+`llvm/lib/CodeGen` hardcode `PointerType::getUnqual`: StackProtector (this defect), LowerEmuTLS,
+SjLjEHPrepare, ShadowStackGCLowering, DwarfEHPrepare, JMCInstrumenter, AtomicExpandPass and
+TargetLoweringBase. The compiler lane probed each once, on dev:
+
+| Pass | What the probe showed |
+|---|---|
+| LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
+| DwarfEHPrepare | A C++ `throw` at -O2 compiled clean. Not confirmed. |
+| AtomicExpandPass | An `_Atomic(void*)` load compiled clean. Not confirmed: `AtomicExpandPass.cpp:2031` casts to `getUnqual` on the atomic LIBCALL path, which the probe may not have reached. |
+| SjLjEHPrepare | No hard case was constructed. |
+| ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
+| JMCInstrumenter | Unused by this project: needs `-fjmc`. |
 
 ## Infrastructure / procedure
 
