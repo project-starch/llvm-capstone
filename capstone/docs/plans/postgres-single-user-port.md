@@ -10,7 +10,7 @@ is the memory manager alone, and its README says the program "wants an operating
 system, sockets and processes". `postgres --single` is the one way to run the backend without the
 postmaster: one process, SQL on stdin, no sockets. That is the door, and this is what is behind it.
 
-## Layer 1: the operating system (bounded, runtime work)
+## Layer 1: the operating system (done on branches, 2026-09-24)
 
 `survey-native.sh` builds 17.5 natively, runs `initdb`, then one single-user session over
 `work.sql` (DDL, 2000 rows, an index, a scan, a join, update, delete, vacuum, count) under
@@ -19,30 +19,39 @@ trace. It ran `work.sql` to its end (`count = "1500"`).
 
 What it asked for, against what the domain runtime serves today (`hostcall.c`):
 
-| need | calls | served today | what a port adds |
+| need | calls | served | how |
 |---|---:|---|---|
-| `pread64`, `pwrite64` | 255, 142 | no (`read`/`write`/`readv`/`writev` only) | two opcodes; the wire already carries a file offset |
-| `openat`, `close`, `lseek`, `read`, `write`, `fstat`, `newfstatat`, `getdents64`, `fsync`, `fdatasync`, `unlink`, `access` | 208 … 11 | yes | — |
+| `pread64`, `pwrite64` (and `preadv`, `pwritev`) | 255, 142 | **`runtime/pread-pwrite`** | the wire always carried an offset; the domain side now uses it |
+| `openat`, `close`, `lseek`, `read`, `write`, `fstat`, `newfstatat`, `getdents64`, `fsync`, `fdatasync`, `unlink`, `access` | 208 … 11 | yes (dev) | — |
 | `sync_file_range` | 44 | no | refusal is tolerated (`pg_flush_data` warns) |
-| `rename` | 2 | no | needed (`pg_stat`, `replorigin_checkpoint`; WAL and control files in general) |
-| `mmap(MAP_SHARED\|MAP_ANONYMOUS)` 16.6 MB, `shmget`/`shmat` 56 bytes, `mmap(MAP_SHARED, fd)` for dynamic shared memory | 1, 1, 2 | no | one process: all three can be served in the domain from the heap; `dynamic_shared_memory_type=sysv` folds the third into the second |
-| `chdir(DataDir)` | 1 | no | fatal if refused; a domain-side cwd (prefixing paths before the hostcall) |
-| `getpid`, `getppid` | 5, 1 | no | any fixed value; they go into the lock file |
+| `rename` | 2 | **`runtime/path-rename`** | opcode `PATH_RENAME` (27) |
+| `mmap(MAP_SHARED\|MAP_ANONYMOUS)` 16.6 MB, `shmget`/`shmat` 56 bytes, `mmap(MAP_SHARED, fd)` for dynamic shared memory | 1, 1, 2 | **`runtime/mmap-shm`** for the first two | a libc override on level0 (musl's `mmap`/`shmat` return the syscall's long as a pointer); file mappings answer `ENODEV`, so `dynamic_shared_memory_type=sysv` |
+| `chdir(DataDir)` | 1 | **`runtime/cwd`** | a domain-side cwd joined onto every relative path; `getcwd` too |
+| `getpid`, `getppid` | 5, 1 | **`runtime/pid-timer`** | 1 and 0 |
 | `rt_sigaction`, `rt_sigprocmask` | 10, 6 | refused | tolerated (`pqsignal` returns `SIG_ERR`, unchecked) |
-| `setitimer` | 1 | no | `timeout.c:339` treats failure as fatal on the schedule path; serve it as a no-op (no signals in a domain) |
-| `epoll_create1`, `signalfd4` | 1, 1 | no | fatal at latch setup; build with `WAIT_USE_POLL` and a self-pipe, which needs a domain-side `pipe2` (nothing ever waited in the session) |
-| `prlimit64`, `umask`, `getrandom`, `readlink` | 2, 1, 1, 18 | no | tolerated; the 18 `readlink`s fail natively too (`find_my_exec`) |
+| `setitimer` | 1 | **`runtime/pid-timer`** | accepted and never fires, listed under `NO-OP` in the exit report |
+| `epoll_create1`, `signalfd4` | 1, 1 | no; **`runtime/pipe-poll`** for the alternative | build with `WAIT_USE_POLL` + `WAIT_USE_SELF_PIPE`: `pipe2`, the pipe's `read`/`write`/`fcntl`/`fstat`, and `ppoll` are served in the domain (a wait with nothing ready returns at once, `NO-OP`) |
+| `mkdir` (initdb's `CREATE DATABASE`), `rmdir` | 27 in initdb | **`runtime/mkdir-rmdir`** | opcode `PATH_MKDIR` (28), `PATH_DELETE`'s directory flag |
+| `prlimit64`, `umask`, `getrandom`, `readlink` | 2, 1, 1, 18 | `umask` on `runtime/pid-timer`; the rest no | tolerated; the 18 `readlink`s fail natively too (`find_my_exec`) |
 | `socket`, `connect` | 2 | no | glibc's nscd lookup, not PostgreSQL; musl does not make it |
 | stdin | — | fd 0 is not a file in a domain | a few lines in `InteractiveBackend` to read from a named file |
 
+The runtime rows were done on 2026-09-24, one branch each, stacked on the runtime PR chain
+(`runtime/flush-on-return`, #87) in the order above, each with a QEMU probe and a control on the
+runtime before it, and each gated on the whole `run-hostcall-all.sh` suite (23 probes at the end).
+They are on the remote and not in `dev`. What the runtime still does not have is what PostgreSQL
+tolerates: signals, `sync_file_range`, `getrandom`, `readlink`, `getrlimit`.
+
 `initdb` is a driver: 13 `execve`s of `postgres --boot` and `postgres --single`, 27 `mkdir`, and
 the rest is writing files. In a domain it becomes a host script that runs those two backends as
-domain runs with their input files, plus `mkdirat` served. The data directory the native session
-left is 39 MB in 977 files; the native `postgres` is 9.7 MB of text, so the image would be about
-13 MB at the ports' usual ×1.3, and the session fits a 128 MiB block with `shared_buffers` small.
+domain runs with their input files. The data directory the native session left is 39 MB in 977
+files; the native `postgres` is 9.7 MB of text, so the image would be about 13 MB at the ports'
+usual ×1.3, and the session fits a 128 MiB block with `shared_buffers` small.
 
-None of this is new in kind: every row is an opcode or a local answer of the size the CPython
-port added for R2, R7-R10. About two weeks of runtime work, if the other two layers were solved.
+None of this was new in kind: every row is an opcode or a local answer of the size the CPython
+port added for R2, R7-R10; the rows took one day, where this plan had estimated two weeks. What
+remains on this layer is on the PostgreSQL side: the `InteractiveBackend` input file, the initdb
+driver, and the build settings of layer 2.
 
 ## Layer 2: the compiler (nearly nothing)
 
@@ -87,12 +96,13 @@ ISA rule and would run on QEMU only. Either way, PostgreSQL waits for that decis
 
 ## What this says
 
-The two layers a port usually fails on are open doors here: single-user mode is one process with
-a syscall list of about a dozen additions, and the backend compiles. The layer that is closed is
-the value representation, and it is closed by the ISA, not by PostgreSQL. So the honest order is:
-the intcap decision first; then `postgres --single` is a two-to-four-week port on top of it, with
-`initdb` driven from the host and the memory manager port already in hand. Without intcap there
-is no PostgreSQL in a domain, on QEMU or on silicon, that is more than the memory manager.
+The two layers a port usually fails on are open doors here: single-user mode is one process, its
+dozen syscall additions are served on the runtime branches above, and the backend compiles. The
+layer that is closed is the value representation, and it is closed by the ISA, not by PostgreSQL.
+So the honest order is: the intcap decision first; then `postgres --single` is a two-to-four-week
+port on top of it, with `initdb` driven from the host and the memory manager port already in
+hand. Without intcap there is no PostgreSQL in a domain, on QEMU or on silicon, that is more than
+the memory manager.
 
 Not done here: a link of the 957 objects (the undefined-symbol list would name the libc gaps as
 CPython's first link did), and the two crashes on the integration compiler.
