@@ -75,7 +75,13 @@ against `../2026-09-23-qemu-m1-m5/SHA256SUMS`).
 | pool2 | **30/30 MATCH** | fires | 43 blocks, **406 leases taken, 406 revocations**, mrev 482, split 43 | 721 alloc/free, peak 155 |
 
 Revocation nodes per pool2 decode: heap 1,375 (split 327 + mrev 1,048) + pools 525 (43 + 482)
-= **1,900**, 2.9% of the deployed bitstream's per-boot pool (65,532; ISSUES R-12).
+= **1,900**.
+
+CORRECTED 2026-09-24: this said "2.9% of the deployed bitstream's per-boot pool (65,532)". The
+resident bitstream (`054cea69b`) reclaims the nodes a revoke walk invalidates, though never a
+handle's own node (ISSUES R-12, fixed on silicon 2026-09-17). So the ceiling for this workload
+depends on a leak fraction that has not been measured. 2.9% of 65,532 holds only for the
+non-reclaiming bitstreams before that date.
 
 ## What this does not establish
 
