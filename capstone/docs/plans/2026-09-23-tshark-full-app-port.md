@@ -1,9 +1,15 @@
 # tshark as a full application in a Capstone domain — M0 census and port plan (2026-09-23)
 
-**Status:** a plan with its M0 census, not the port. It lives on branch `tshark-app`, like the
-FFmpeg app port it follows (`2026-09-23-ffmpeg-full-app-port.md`). An adversarial audit ran
-before implementation; its corrections are folded in, and the three claims it refuted are listed
-under "Withdrawn" so the trail survives.
+**Status (2026-09-24, late):** M-infra, M-deps, M0 and M1–M5 are done on QEMU. The safety
+milestone has not started. See "Progress on the full port" below.
+- **The tshark domain:** 66.3 MiB, in a 128 MiB CMA block. It reaches all five stages. Its
+  `-V -n` output is byte-identical to native stock tshark on the four workload captures, their
+  flipped copies and dns-ooo.
+- **Evidence:** `ports/wireshark/app/results/2026-09-24-qemu-tshark-staged/`.
+
+The plan and M0 census below are as written before implementation. An adversarial audit ran on
+them; its corrections are folded in, and the three claims it refuted are listed under
+"Withdrawn" so the trail survives.
 
 **Question:** can tshark (Wireshark 4.6.8) read a capture file and print its full dissection
 inside one Capstone domain, and what does it cost? In particular, what does it cost with the
@@ -674,12 +680,34 @@ recipe each, gated as in its README. What that took:
   - an aligned allocator is built from `malloc`;
   - `gqsort` copies pointer-sized words whole.
 
-**Next: M0**, the minimal tshark linked as a domain against these libraries.
+**M0: done.** `host/cross-build.sh` builds the minimal tshark with Wireshark's own CMake, 397 of
+397 steps. `host/build-domain.sh` links it with the port's own link.
+- **Size:** 66.3 MiB. Without the 40 MiB level0 arena that is 26.3 MiB, below this plan's 29–36 MiB
+  estimate. The block is 128 MiB.
+- **Link gates:** no undefined symbol; no undefined weak symbol, after glib-0007 fixed GLib's two
+  LeakSanitizer hooks (ISSUES C-56's open half); the negative control fires.
+
+**M1–M5: done on QEMU.** Evidence: `results/2026-09-24-qemu-tshark-staged/`.
+- **Stages and oracle:** every stage returns. M5's `-V -n` stdout is byte-identical to stock on
+  dhcp, dns_port, http and arp, on their flipped copies (each flip changes stock's output) and on
+  dns-ooo. Its stderr is identical to the native minimal build's. ntp differs, as the negative
+  control must.
+- **Heap:** the level0 peak is 26.8 MiB.
+- **It took three runtime fixes this plan did not foresee,** each port-local:
+  - constructors and destructors (`.init_array` never ran in any domain, and musl's exit walked
+    `.fini_array` through integers);
+  - GCond (musl-capstone's `pthread_cond_t` is too small for its own fields, glib-0008);
+  - the unserved-syscall report, which was lost when the program closed fd 1.
+- **Stalls:** one ntp section stalled in the guest before its domain started, the known QEMU stall
+  class. Two later ntp runs returned.
+
+**Next: Safety** (the table below). It needs the smaller wmem arenas or a larger sublet pool
+first.
 
 ## Plan
 
-Everything happens on `tshark-app`. Nothing lands on `dev` without the lead's OK, and there is no
-push without the lead's approval (a new branch).
+Work lands on `dev` at stable points, as the lead directed on 2026-09-24 ("squash … and then
+merge"). The branch `tshark-app` is a local worktree branch and has not been pushed.
 
 | milestone | content | exit criterion |
 |---|---|---|

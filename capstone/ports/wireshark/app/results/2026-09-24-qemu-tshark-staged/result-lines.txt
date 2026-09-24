@@ -1,0 +1,77 @@
+# tshark on QEMU, M1-M5 and the oracle: the verdict lines of every counted boot, as host/run-qemu.sh printed them.
+# Logs, serial output and each section's files: /tmp/capstone/tshark-app/runs/<log>{,.out/,.sha256,.runner}.
+
+## qemu-stages-20260924-223202-gu4p.log
+#   run-qemu: 5 runs, block 128 MiB, cma=1536M, CAPSTONE_GP_NONLIN=1
+#   MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302 /capstone.ko   EXT4-fs errors: 0
+#   94132db555f79bbb244b26b99bef51fd01ebbaa437f8ba08b934f0d3c4198238  lt.user
+#   934dd7bd0ae84ad6a9d598f7ad7bf5ab80f7ea15e818e6091f0f101222bb55be  ./tshark_m1.dom
+#   1d60b0c22b4513e0b2682d10b86d20ca1e82b384999d190ffd47fe32b57fd97a  ./tshark_m2.dom
+#   3e350d00ff7423a7100f73ad555a980da7b506929321efc11fed5e60a9cbd79f  ./tshark_m3.dom
+#   05d76efb9ce4538bc7684addc97ad7a9729476174757005e082014c79d538c25  ./tshark_m4.dom
+#   8d294cc386af19214d663ff1a5ae7f42e4e36471d2bd483e1f2525584a39931d  ./tshark_m5.dom
+run-domain-smoke exit status 0 (not the verdict)
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=475 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+
+# oracle, boot B (http, arp and their flips; its ntp section spun and was stopped, see README)
+## qemu-oracle-20260924-230505-Amjk.log
+#   run-qemu: 5 runs, block 128 MiB, cma=1536M, CAPSTONE_GP_NONLIN=1
+#   MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302 /capstone.ko   EXT4-fs errors: 0
+#   94132db555f79bbb244b26b99bef51fd01ebbaa437f8ba08b934f0d3c4198238  lt.user
+#   8d294cc386af19214d663ff1a5ae7f42e4e36471d2bd483e1f2525584a39931d  ./tshark_m5.dom
+run-domain-smoke exit status 143 (not the verdict)
+http: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=449 PASS)
+http.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=449 PASS)
+arp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=443 PASS)
+arp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=443 PASS)
+ntp: ERROR no output (the section started; nothing was copied back and no halt was logged)
+http.flip: flip control FIRES (stock changed 2 lines)
+arp.flip: flip control FIRES (stock changed 2 lines)
+
+# oracle, boot A (dhcp, dns_port and their flips, dns-ooo, ntp), third attempt; the first two stalled at boot-login
+## qemu-oracle-20260924-233850-lFvW.log
+#   run-qemu: 6 runs, block 128 MiB, cma=1792M, CAPSTONE_GP_NONLIN=1
+#   MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302 /capstone.ko   EXT4-fs errors: 0
+#   94132db555f79bbb244b26b99bef51fd01ebbaa437f8ba08b934f0d3c4198238  lt.user
+#   8d294cc386af19214d663ff1a5ae7f42e4e36471d2bd483e1f2525584a39931d  ./tshark_m5.dom
+run-domain-smoke exit status 0 (not the verdict)
+dhcp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=475 PASS)
+dhcp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=475 PASS)
+dns_port: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=499 PASS)
+dns_port.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=499 PASS)
+dns-ooo: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=481 PASS)
+ntp: stdout DIFFERS (24 diff lines), stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=445 PASS)
+dhcp.flip: flip control FIRES (stock changed 2 lines)
+dns_port.flip: flip control FIRES (stock changed 2 lines)
+
+# ntp localisation after boot B's spin: the stages on ntp.pcap (TSAPP_STAGES_CAPTURE=ntp). DIFFERS for M4/M5 is
+# expected here: stock dissects NTP and the minimal build does not; M5's stdout equals the native minimal build's.
+## qemu-stages-20260924-233319-CVwR.log
+#   run-qemu: 5 runs, block 128 MiB, cma=1536M, CAPSTONE_GP_NONLIN=1
+#   MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302 /capstone.ko   EXT4-fs errors: 0
+#   94132db555f79bbb244b26b99bef51fd01ebbaa437f8ba08b934f0d3c4198238  lt.user
+#   934dd7bd0ae84ad6a9d598f7ad7bf5ab80f7ea15e818e6091f0f101222bb55be  ./tshark_m1.dom
+#   1d60b0c22b4513e0b2682d10b86d20ca1e82b384999d190ffd47fe32b57fd97a  ./tshark_m2.dom
+#   3e350d00ff7423a7100f73ad555a980da7b506929321efc11fed5e60a9cbd79f  ./tshark_m3.dom
+#   05d76efb9ce4538bc7684addc97ad7a9729476174757005e082014c79d538c25  ./tshark_m4.dom
+#   8d294cc386af19214d663ff1a5ae7f42e4e36471d2bd483e1f2525584a39931d  ./tshark_m5.dom
+run-domain-smoke exit status 0 (not the verdict)
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=433 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=443 FAIL)
+M4: output DIFFERS (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3128 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=445 PASS)
+M5: output DIFFERS (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
