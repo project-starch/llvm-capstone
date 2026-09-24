@@ -6273,11 +6273,61 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 | Pass | What the probe showed |
 |---|---|
 | LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
-| DwarfEHPrepare | A C++ `throw` at -O2 compiled clean. Not confirmed. |
+| DwarfEHPrepare | **CONFIRMED, filed as C-61.** The first probe, a C++ `throw` at -O2, compiled clean only because it had no cleanup and so no `resume` to rewrite. That was a false negative. |
 | AtomicExpandPass | An `_Atomic(void*)` load compiled clean. Not confirmed: `AtomicExpandPass.cpp:2031` casts to `getUnqual` on the atomic LIBCALL path, which the probe may not have reached. |
 | SjLjEHPrepare | No hard case was constructed. |
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
+
+### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang`
+
+**What happens.** `DwarfEHPrepare::InsertUnwindResumeCalls` aborts with
+`Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
+`Exception handling preparation` pass. No `try`/`catch` is needed: a destructor in scope across a call
+is enough.
+
+    printf 'struct D { ~D(); };\nvoid g();\nvoid f(){ D d; g(); }\n' > eh.cc
+    clang -target capstone64-unknown-elf -ffreestanding -fexceptions -c -x c++ eh.cc
+
+Reproduced 2026-09-24 with `llvm/cmake-build-debug/bin/clang`:
+
+| Case | Result |
+|---|---|
+| `-fexceptions -O0` | crash |
+| `-fexceptions -O1` | crash |
+| `-fno-exceptions -O1` | compiles |
+| `void f(){ throw 1; }` at `-fexceptions -O2` | compiles (no cleanup, so no `resume` for the pass to rewrite) |
+
+The compiler lane measured two more cases: try/catch with a rethrow crashes under `-fexceptions`, and
+under `-fno-exceptions` it gets a clean frontend error rather than a crash. Exceptions are on by default
+for C++, so this blocks essentially any nontrivial C++ at default flags.
+
+**Root cause.**
+- `DwarfEHPrepare.cpp:230-231` builds the rewind function's type as
+  `FunctionType::get(void, PointerType::getUnqual(Ctx))`. The `_Unwind_Resume` parameter is therefore
+  AS0.
+- `ExnObj = GetExceptionObject(RI)` (`:243`) takes the exception object out of the `resume`. On capstone64
+  that object is `ptr addrspace(200)`: the IR carries `resume { ptr addrspace(200), i32 }`.
+- The call at `:250` passes the AS200 argument against the AS0 parameter, which trips the assertion.
+
+A third instance sits on the multiple-resume path, `PHINode::Create(PointerType::getUnqual(Ctx), ...)`
+at `:273`. The reproducer does not exercise that path, so it is not confirmed.
+
+**Same class as C-60, different site.** C-60 is an AS0 intrinsic *declaration*. This is an AS0
+function type *synthesized inside the pass*. A fix for C-60 therefore does not fix this, and the class
+needs a policy rather than point fixes.
+
+**How it was first missed.** The first probe was `throw 1` with no cleanup, recorded in C-60's audit
+table as "compiled clean". It had no `resume`, so it could not have exhibited the defect. The loaded
+probe is a destructor in scope across a call.
+
+**Workaround.** `-fno-exceptions`, for code that does not use `try`/`catch` syntax. No C++ port is in
+flight, but this should be known before anyone scopes one.
+
+**Not established.**
+- **SjLjEHPrepare:** capstone64 does not appear to select SjLj EH, and no case was constructed.
+- **The libcall path at `AtomicExpandPass.cpp:2031`:** still VOID, not clean. The oversized-atomic probe
+  was rejected by the frontend before reaching the pass.
 
 ## Infrastructure / procedure
 
