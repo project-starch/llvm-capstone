@@ -6463,17 +6463,34 @@ the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 > define) and in CPython's patch 0006 (thread-locals turned into plain globals) stand. Note that the
 > branch also edits this entry itself, so merging it means reconciling with this text.
 >
-> **Scope, measured 2026-09-24 and reproduced independently.**
-> - **Every reference fails.** ANY reference to a `__thread` variable dies with
->   `Cannot select: c128 = GlobalTLSAddress`. That holds for `int`, pointer-typed, struct-typed,
->   address-taken, initialised and `extern` variables, read or written, at `-O0` and `-O2` alike.
+> **Scope, measured 2026-09-24.**
+> - **What dies.** Any reference to a `__thread` variable that SURVIVES to instruction selection
+>   dies with `Cannot select: c128 = GlobalTLSAddress`. That covers `int`, pointer-typed,
+>   struct-typed, address-taken, written, or read through external linkage, at `-O0` through `-O2`.
 >   Neither the type nor the optimisation level is the discriminator.
-> - **The only thing that compiles** is a `__thread` that is **declared and never referenced**,
->   whether a definition or `extern`, because no `GlobalTLSAddress` node is ever created.
-> - **So a sample that "compiled" proves the variable was unused, not that its type was
->   acceptable.** The port census hit exactly that trap.
-> - The matrix was run once by the compiler lane on its toolchain and again here: 9 cases × 2 levels
->   on a C-50…C-58 build without C-47. Both runs got the same 14 failures and 4 compiles.
+> - **What compiles, and neither case is TLS support:**
+>   - a `__thread` that is **declared and never referenced**;
+>   - an **internal-linkage (`static`) `__thread` that is never written**, whose reads fold to the
+>     initial value at `-O1` and above. The same source fails at `-O0`.
+> - **So a sample that "compiled" proves its reference was optimised away**, not that the type or
+>   the access pattern is supported. A `static` one that compiles at `-O2` fails the moment anything
+>   writes it or takes its address.
+>
+> | `__thread` | `-O0` | `-O1` | `-O2` |
+> |---|---|---|---|
+> | `static`, read only (with or without initialiser) | C-47 | ok | ok |
+> | `static`, read + written | C-47 | C-47 | C-47 |
+> | `static`, address taken | C-47 | C-47 | C-47 |
+> | external, read only | C-47 | C-47 | C-47 |
+>
+> Measured by the compiler lane and reproduced here, on a C-50…C-58 build without C-47.
+>
+> **Correction, recorded because the first draft of this block was wrong and nearly landed.** It said
+> the only compiling case is an unreferenced `__thread`. Two matrices supported that: the compiler
+> lane's, and a "reproduction" here. **Both used external linkage in every case**, so neither
+> contained the construct that read-folding needs. The static cases, found by the tshark lane, are
+> the counterexample. A negative result is void unless the input contained the thing that could
+> change it.
 
 **What happens.** A `__thread` variable dies in isel with `Cannot select: c128 = GlobalTLSAddress`,
 and `-femulated-tls` does not help. No capability TLS relocation or captable-style TLS slot exists.
