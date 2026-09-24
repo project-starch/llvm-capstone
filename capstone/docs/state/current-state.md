@@ -2,7 +2,7 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-25 — R-42 FLASHED and ladder-accepted; R-42 is the PLATFORM OF RECORD
+## 2026-09-25 — R-42 FLASHED; ladder ACCEPTED, but R-43 false denies block revocation-heavy workloads (R1, P1 cell 6)
 
 **Resident bitstream is `caplifive_r42_6cbdaeeb4.bit`**, sha256 `0cd45bb0…8c05`.
 - **The reflash:** it was flashed at 04:16 and `nv_bitstream_name` was read back on the same session
@@ -12,12 +12,26 @@ Minimal snapshot. Read first in every session.
   - `ctrsanity` K=0 1.167× → 1.000×, and `ctrsanitys` K=1 1.210× → 1.045×;
   - 68/68 rows correct, with retval and instret unchanged;
   - the baseline gate reads CPI 1.2000 at every K.
-- **The R1-harness acceptance boots** (workload regression, the R-35 stale probe as a regression check,
-  and the R-43 live sweep) run next, one image per boot.
+- **The R1-harness acceptance boots, one image per boot**
+  (`ladder-revival-2026-09-22/r42-acceptance-r1boots.result-lines.txt`):
+  - PASSED: the workload regression (the q0 speedtest1 + m1 drop run, values identical to 054cea69b)
+    and the R-43 live16 control (sum 544);
+  - the R-35 stale probe still traps cause 25 at +0x4354 (regression check passed);
+  - **BOTH R1 release-cost harnesses TRAP cause 25 on their first invocation**, inside `run_series`,
+    on loads into the domain's own memory. B3's load is through a capability to a GLOBAL, read from
+    the cap table.
+  - These are **R-43 false denies of live capabilities**: deny-on-miss after id churn evicts the entry.
+    The RTL lane reproduced it in RTL simulation on 6cbdaeeb4 (`r43-evict-live.S`,
+    capstone-ariane 93f509f54).
 
 **The lead decided (2026-09-25) that R-42 is the platform of record for the remaining Sublet paper
-numbers.** P1 restarts here with E2's own -O0 images (`e6ee5255`/`ceeded25`, from
-`xfer/p1-r42-O0-2026-09-25`). The -O2 arms stay blocked on C-32.
+numbers. That is now BLOCKED by R-43:** no image that churns more than a few hundred revocation ids
+can run on R-42.
+- **Blocked:** R1 re-measurement, and P1's Sublet cell 6. P1 is held, with E2's own -O0 images ready
+  (`e6ee5255`/`ceeded25`, from `xfer/p1-r42-O0-2026-09-25`).
+- **Unblocks when:** the R-43 fix (query the rev-node unit on a miss instead of denying) is on a
+  bitstream.
+- **The -O2 arms** stay blocked on C-32 regardless.
 
 ## 2026-09-25 — R-35 CLOSED (fixed on the M-mode LSU data path); R-43 and R-44 filed; R-42 reflash authorized
 

@@ -270,7 +270,23 @@ Measured 2026-09-17. Against the same tree without the C-48 compiler fix the sam
 31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN, and without the last two replacements below it
 reads 41 PASS and 2 FAULT.
 
-**What the reds are.** None of them is a capability fault any more.
+**Re-measured 2026-09-25: the table above no longer describes dev.**
+- **Setup:** dev `da4c9a59c16c`, clang `b7b31421e9fa` (a dev build without the C-46 fix
+  `5fbdfb139c7d`), musl rebuilt fresh with that compiler, libc-test `7b95dfa`, one test per boot.
+- **Counts:** 37 PASS, 6 FAIL, **6 FAULT**, 1 NOBOOT, 5 NOBUILD, 22 EXCLUDED. The NOBOOT is
+  `ungetc`, a boot-login stall and not a verdict.
+- **The six FAULTs** are fwscanf, memstream, setjmp, string, strtod_simple and tgmath. Each is
+  "cs.cjalr requires capability in rs1", cause 24: C-46, a call through a register whose value the
+  allocator's MOVC had moved away. `setjmp` moved from FAIL to FAULT.
+- **The shared rootfs was ext4-corrupt during the run.** Every boot showed the same two
+  `EXT4-fs error` lines, passing ones included, so the corruption does not single out these six.
+- **Not measured here:** the C-46 fix, merged with `compiler/c47-tls` on 2026-09-25. Its commit
+  records all six cleared. The same merge changes the NOBUILD row too (C-47); that was not
+  measured here either.
+- **Logs:** `/tmp/capstone/libc-clean-0925/musl-libc-test/logs/20260925-043541/`.
+
+**What the reds were on 2026-09-17.** None of them was a capability fault then. On 2026-09-25 six
+are, see above.
 
 | test | what it is |
 |---|---|
