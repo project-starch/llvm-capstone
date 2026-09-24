@@ -2,7 +2,18 @@
 # M0 and the staged images: the cross-built minimal tshark (host/cross-build.sh) linked as
 # Capstone domains, FFmpeg-app style (ports/ffmpeg/app/host/build-domain.sh).
 #
-#   build-domain.sh      -> $TS_WORK/domain/tshark_m{1,2,3,4,5}.dom
+#   build-domain.sh      -> $TS_WORK/domain/tshark_m{1,2,3,4,5}.dom, tsapp_fx{1..12}.dom
+#   TSAPP_HEAP=shrink build-domain.sh   -> the same in $TS_WORK/domain-shrink
+#
+# THE HEAP ARM (TSAPP_HEAP) is the one thing that differs between the two directories:
+# - level0 (the default): runtime/level0.c as every port has it; each pointer it returns carries
+#   the bounds of the whole arena;
+# - shrink: level0.c built with CAPSTONE_LEVEL0_SHRINK=1; each pointer carries exactly the bytes
+#   asked for. No temporal safety on either.
+#
+# The safety fixtures (src/tsapp-safety.c, one image per fixture) are built on every arm, compiled
+# with tshark.c's own command and linked in tshark.c.o's place, as M1-M4 are. Their predictions
+# are host/safety-expect.txt; host/run-qemu.sh safety runs and judges them.
 #
 # M1-M4 are tshark.c recompiled with -DTSAPP_STOP_AT=<n> (patch 0006): at milestone n the image
 # prints `TSAPP-STAGE n` and exits with 100 + n. M5 is the unmodified program. Everything else is the same objects and archives
@@ -31,7 +42,12 @@
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh"
-B=$TS_WORK/xbuild OUT=$TS_WORK/domain
+B=$TS_WORK/xbuild
+case ${TSAPP_HEAP:-level0} in
+  level0) OUT=$TS_WORK/domain HEAPF=() ;;
+  shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
+  *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;;
+esac
 ARENA=${TSAPP_ARENA_BYTES:-$((40 << 20))}
 STACK=${TSAPP_STACK_BYTES:-$((1 << 20))}
 LD=${CAPSTONE_LD_LLD:?}
@@ -68,7 +84,7 @@ RTF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang -
      -Wno-int-conversion -D_XOPEN_SOURCE=700 -nostdinc
      -isystem "$TS_MUSL/arch/capstone64" -isystem "$TS_MUSL/arch/generic" -isystem "$TS_MUSL/obj/include"
      -isystem "$TS_MUSL/include" -I"$TS_MUSL/src/include" -I"$TS_MUSL/src/internal" -I"$TS_MUSL/obj/src/internal")
-"$CAPSTONE_CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" -DCAPSTONE_LEVEL0_STATS \
+"$CAPSTONE_CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" -DCAPSTONE_LEVEL0_STATS "${HEAPF[@]}" \
   -c "$CAPSTONE_REPO_ROOT/capstone/ports/musl-capstone/runtime/level0.c" -o "$OUT/level0.o"
 "$CAPSTONE_CLANG" "${RTF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
 "$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding -O0 -DCAPSTONE_DOMREQ_DATA="$STACK" \
@@ -83,16 +99,32 @@ link() {  # out-image tshark-object [runtime objects...]
   "$LD" --gc-sections -T "$TS_LINKER_SCRIPT" -o "$out" "$@" "$OUT/level0.o" "$OUT/tsapp-heap.o" "$OUT/domreq.o" \
     "${ins[@]}" "$TS_LIBC_ARCHIVE"
 }
-for n in 1 2 3 4 5; do
-  link "$OUT/tshark_m$n.dom" "$OUT/tshark_m$n.o" "${RT[@]}" > "$OUT/link-m$n.log" 2>&1 \
-    || { echo "LINK FAILED: m$n"; grep -m5 -E 'error' "$OUT/link-m$n.log"; exit 1; }
-  w=$("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/tshark_m$n.dom" | grep -cE ' [wv] ' || true)
-  [ "$w" = 0 ] || { echo "LINK GATE: m$n has $w undefined weak symbols"; exit 1; }
+gates() {  # image label
+  local w o
+  w=$("$CAPSTONE_LLVM_BIN/llvm-nm" "$1" | grep -cE ' [wv] ' || true)
+  [ "$w" = 0 ] || { echo "LINK GATE: $2 has $w undefined weak symbols"; exit 1; }
   # Constructors and destructors run only from between link.ld's array markers, which the runtime
   # walks (hostcall.c, C-64). .ctors/.dtors, or a priority section link.ld does not place, would be
   # an orphan outside them and silently never run.
-  o=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT/tshark_m$n.dom" | grep -oE '\.(init_array|fini_array)\.[^ ]+|\.(ctors|dtors)[^ ]*' | sort -u | tr '\n' ' ' || true)
-  [ -z "$o" ] || { echo "LINK GATE: m$n has constructor sections nothing runs: $o"; exit 1; }
+  o=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$1" | grep -oE '\.(init_array|fini_array)\.[^ ]+|\.(ctors|dtors)[^ ]*' | sort -u | tr '\n' ' ' || true)
+  [ -z "$o" ] || { echo "LINK GATE: $2 has constructor sections nothing runs: $o"; exit 1; }
+}
+for n in 1 2 3 4 5; do
+  link "$OUT/tshark_m$n.dom" "$OUT/tshark_m$n.o" "${RT[@]}" > "$OUT/link-m$n.log" 2>&1 \
+    || { echo "LINK FAILED: m$n"; grep -m5 -E 'error' "$OUT/link-m$n.log"; exit 1; }
+  gates "$OUT/tshark_m$n.dom" "m$n"
+done
+
+# The safety fixtures. tshark.c.o's own compile command, less its dependency-file flags (they would
+# overwrite ninja's record for tshark.c.o with the fixture's), for another source and object.
+DEPF=" -MD -MT $TSO -MF $TSO.d -o $TSO -c $TS_WORK/xsrc/tshark.c"
+[[ $CMD == *"$DEPF" ]] || { echo "tshark.c.o's compile command does not end as expected: ${CMD: -200}" >&2; exit 1; }
+for n in $(seq 1 12); do
+  ( cd "$B" && eval "${CMD%"$DEPF"} -DTSAPP_FIXTURE=$n -o $OUT/tsapp_fx$n.o -c $APP/src/tsapp-safety.c" ) \
+    || { echo "compile failed: fixture $n" >&2; exit 1; }
+  link "$OUT/tsapp_fx$n.dom" "$OUT/tsapp_fx$n.o" "${RT[@]}" > "$OUT/link-fx$n.log" 2>&1 \
+    || { echo "LINK FAILED: fixture $n"; grep -m5 -E 'error' "$OUT/link-fx$n.log"; exit 1; }
+  gates "$OUT/tsapp_fx$n.dom" "fixture $n"
 done
 
 # Negative control: M5 without hostcall.o.
@@ -116,4 +148,5 @@ print(f"{img.rsplit('/', 1)[1]}  code_len={memsz} ({memsz / 2**20:.1f} MiB)  dec
       f"block=order {order} = {(1 << order) * 4096 >> 20} MiB")
 PY
 done
-( cd "$OUT" && sha256sum tshark_m*.dom ) > "$OUT/SHA256SUMS"
+( cd "$OUT" && sha256sum tshark_m*.dom tsapp_fx*.dom ) > "$OUT/SHA256SUMS"
+echo "heap arm ${TSAPP_HEAP:-level0}: $OUT"

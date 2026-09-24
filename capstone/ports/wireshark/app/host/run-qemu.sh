@@ -6,6 +6,17 @@
 #                                        its own section, ascending, one boot
 #   run-qemu.sh oracle <capture>...      M5 on each capture (a name under test/captures, or
 #                                        <name>.flip for the one-byte-flipped copy): one boot
+#   run-qemu.sh safety <fixture>...      the safety fixtures (src/tsapp-safety.c), in the order
+#                                        given, one boot, judged by host/safety-verdict.py against
+#                                        host/safety-expect.txt
+#
+# TSAPP_HEAP=level0|shrink picks the heap arm's images (build-domain.sh), from $TS_WORK/domain or
+# $TS_WORK/domain-shrink; TSAPP_DOMAIN_DIR overrides the directory.
+#
+# SAFETY MODE. A capability fault inside a domain ends the emulator, so a boot holds at most one
+# fixture predicted to FAULT on its arm, and it must come last: the runner refuses any other
+# order. Each fixture's output goes straight to the serial log between __TSAPP_BEGIN_FX<n>__ and
+# __TSAPP_END_FX<n>__, because a fault takes the boot down before anything could be copied back.
 #
 # The domain runs `/tmp/tshark -r /tmp/input.pcap -V -n` with TZ=UTC, HOME=/tmp and an empty
 # WIRESHARK_CONFIG_DIR, given by /tmp/domain.argv and /tmp/domain.env (deps/domain_entry.c). The
@@ -43,8 +54,11 @@
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh" > /dev/null
-MODE=${1:?stages | oracle <capture>...}; shift || true
-OUT=${TSAPP_DOMAIN_DIR:-$TS_WORK/domain} CAPS=$TS_WORK/xsrc/test/captures RUNS=$TS_WORK/runs
+MODE=${1:?stages | oracle <capture>... | safety <fixture>...}; shift || true
+HEAP=${TSAPP_HEAP:-level0}
+case $HEAP in level0) d=domain ;; shrink) d=domain-shrink ;; *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;; esac
+OUT=${TSAPP_DOMAIN_DIR:-$TS_WORK/$d} CAPS=$TS_WORK/xsrc/test/captures RUNS=$TS_WORK/runs
+EXPECT=$APP/host/safety-expect.txt
 STOCK=${TSAPP_STOCK:-$TS_WORK/native-stock/run/tshark}
 MINIMAL=${TSAPP_MINIMAL:-$TS_WORK/native-min-pa/run/tshark}
 ROOTFS=${TSAPP_ROOTFS:-$TS_WORK/br-clean}
@@ -114,24 +128,47 @@ case $MODE in
         echo "dmesg -c > /tmp/dmesg-$c.txt; grep -v 'remote fence' /tmp/dmesg-$c.txt | sed 's/^/DMESG $c: /'; echo __TS_END_$c""__"; } >> "$G"
       SECTIONS+=("$c")
     done ;;
-  *) echo "mode must be stages or oracle" >&2; exit 2 ;;
+  safety)
+    [ $# -gt 0 ] || { echo "safety needs fixtures" >&2; exit 2; }
+    i=0
+    for fx in "$@"; do
+      i=$((i + 1))
+      [ -f "$OUT/tsapp_fx$fx.dom" ] || { echo "no image $OUT/tsapp_fx$fx.dom" >&2; exit 2; }
+      grep -qE "^$HEAP +$fx +" "$EXPECT" || { echo "fixture $fx has no prediction for $HEAP" >&2; exit 2; }
+      if [ "$i" -lt $# ] && grep -qE "^$HEAP +$fx +FAULT" "$EXPECT"; then
+        echo "fixture $fx is predicted to FAULT on $HEAP and is not last; the rest would never run" >&2; exit 2
+      fi
+      cp "$OUT/tsapp_fx$fx.dom" "$SHARE/"
+      echo "echo __TSAPP_BEGIN_FX${fx}__; /tmp/lt.user /tmp/tsapp_fx$fx.dom $RUN_ALARM; echo __TSAPP_END_FX${fx}__" >> "$G"
+      SECTIONS+=("fx$fx")
+    done ;;
+  *) echo "mode must be stages, oracle or safety" >&2; exit 2 ;;
 esac
 echo 'echo __TS_ALL_DONE__' >> "$G"
 
-# cma: (runs + 1) blocks, each twice the size build-domain.sh prints, because a74a856 doubles a
-# block whose declared data does not survive the monitor's split (M-infra item 2). The module never
-# frees a domain block (capstone.c has no dma_free_pages for it), so every run takes a new one.
-BLOCK_MB=$(python3 - "$OUT/tshark_m5.dom" "${TSAPP_STACK_BYTES:-$((1 << 20))}" <<'PY2'
+# cma: (runs + 1) blocks of the largest image this boot runs, each twice the size build-domain.sh
+# prints, because a74a856 doubles a block whose declared data does not survive the monitor's split
+# (M-infra item 2). The module never frees a domain block (capstone.c has no dma_free_pages for it),
+# so every run takes a new one.
+BLOCK_MB=$(python3 - "${TSAPP_STACK_BYTES:-$((1 << 20))}" "$SHARE"/*.dom <<'PY2'
 import subprocess, sys
-out = subprocess.run(['readelf', '-lW', sys.argv[1]], capture_output=True, text=True).stdout
-memsz = max(int(l.split()[5], 16) for l in out.splitlines() if l.split()[:1] == ['LOAD'])
-pages = (memsz + 8192 + int(sys.argv[2]) - 1) // 4096 + 1
-print(max(4, (1 << (pages - 1).bit_length()) * 4096 >> 20))
+mb = 4
+for img in sys.argv[2:]:
+    out = subprocess.run(['readelf', '-lW', img], capture_output=True, text=True).stdout
+    memsz = max(int(l.split()[5], 16) for l in out.splitlines() if l.split()[:1] == ['LOAD'])
+    pages = (memsz + 8192 + int(sys.argv[1]) - 1) // 4096 + 1
+    mb = max(mb, (1 << (pages - 1).bit_length()) * 4096 >> 20)
+print(mb)
 PY2
 )
 CMA=$(( (${#SECTIONS[@]} + 1) * BLOCK_MB * 2 ))
-LOG=$(mktemp "$RUNS/qemu-$MODE-$(date +%Y%m%d-%H%M%S)-XXXX.log")
-( cd "$SHARE" && sha256sum lt.user ./*.dom ./*.pcap domain.argv domain.env ) > "$LOG.sha256"
+# The largest cma a boot has been seen to take (the six-capture oracle, 2026-09-24). Beyond it the
+# reservation is untested, and it may not fit below the 4 GiB the kernel places CMA under; a boot
+# that fails there would read as a stall. Split the runs instead.
+[ "$CMA" -le 1792 ] || { echo "cma=${CMA}M for ${#SECTIONS[@]} runs is more than the 1792M measured to boot; use fewer runs per boot" >&2; exit 2; }
+tag=$MODE; if [ "$MODE" = safety ] || [ "$HEAP" != level0 ]; then tag=$MODE-$HEAP; fi
+LOG=$(mktemp "$RUNS/qemu-$tag-$(date +%Y%m%d-%H%M%S)-XXXX.log")
+( cd "$SHARE" && sha256sum lt.user domain.argv domain.env ./*.dom $(find . -maxdepth 1 -name '*.pcap' | sort) ) > "$LOG.sha256"
 echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, cma=${CMA}M, CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN, log $LOG" | tee "$LOG.head"
 set +e
 CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS[@]} * 150 + 300 ))} \
@@ -146,6 +183,13 @@ mkdir "$LOG.out"; cp "$SHARE"/out-*.txt "$SHARE"/err-*.txt "$LOG.out/" 2>/dev/nu
 # run, and the share goes when this script exits, so otherwise a counted result would be left with
 # only the hashes of what it ran (2026-09-24).
 mkdir "$LOG.images"; cp "$SHARE"/*.dom "$SHARE"/lt.user "$LOG.images/"
+
+if [ "$MODE" = safety ]; then
+  # The verdict is per fixture, from the serial log; its exit status is this script's. Redirected,
+  # not piped, so nothing stands between the verdict and that status.
+  set +e; python3 "$APP/host/safety-verdict.py" "$LOG" "$EXPECT" "$HEAP" "$@" > "$LOG.verdict"; rc=$?; set -e
+  cat "$LOG.verdict"; exit "$rc"
+fi
 
 # Verdicts.
 # The references, made on the host from the same capture bytes the guest was given. An empty one is
