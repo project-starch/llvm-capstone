@@ -6274,7 +6274,7 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 |---|---|
 | LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
 | DwarfEHPrepare | **CONFIRMED, filed as C-61.** The first probe, a C++ `throw` at -O2, compiled clean only because it had no cleanup and so no `resume` to rewrite. That was a false negative. |
-| AtomicExpandPass | An `_Atomic(void*)` load compiled clean. Not confirmed: `AtomicExpandPass.cpp:2031` casts to `getUnqual` on the atomic LIBCALL path, which the probe may not have reached. |
+| AtomicExpandPass | **CLEAN, and already FIXED by this project.** Both sites are guarded on `DL.isNonIntegralPointerType()`: `:1929` and `:2030`. The guards came from C-54, `c7f0de349b4b` (2026-09-23), and `ni:200` makes AS200 non-integral, so the AS0 cast is skipped. The probe was loaded: a 32-byte struct through `__atomic_load` emits a real `__atomic_load` call at -O1, re-checked here. An earlier oversized-`_Atomic` probe was VOID, because the frontend rejected it. |
 | SjLjEHPrepare | No hard case was constructed. |
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
@@ -6313,9 +6313,22 @@ for C++, so this blocks essentially any nontrivial C++ at default flags.
 A third instance sits on the multiple-resume path, `PHINode::Create(PointerType::getUnqual(Ctx), ...)`
 at `:273`. The reproducer does not exercise that path, so it is not confirmed.
 
-**Same class as C-60, different site.** C-60 is an AS0 intrinsic *declaration*. This is an AS0
-function type *synthesized inside the pass*. A fix for C-60 therefore does not fix this, and the class
-needs a policy rather than point fixes.
+**Same class as C-60, different site. The two are less alike than they first look.** C-60 is an AS0
+intrinsic *declaration*, fixed in `Intrinsics.td`. This one is an AS0 function type *synthesized inside
+the pass*, so a fix for C-60 does not fix it.
+
+**There is an in-tree remedy pattern.** C-54 (`c7f0de349b4b`, 2026-09-23) guarded
+`AtomicExpandPass.cpp:1929` and `:2030` on `DL.isNonIntegralPointerType()` instead of assuming AS0, and
+`CodeGenPrepare.cpp` uses the same predicate at 7 sites.
+- **For C-61 it applies directly:** build `_Unwind_Resume`'s `FunctionType`, and the `:273` PHI, with
+  the exception pointer's real address space. This is exactly how libatomic is assumed to be built for
+  AS200.
+- **C-60 resists it:** `llvm.stackprotector`'s signature is fixed in `Intrinsics.td` and cannot be
+  guarded the same way.
+
+**C-54 has no entry in this registry.** Its branch is merged and its lit tests are on dev, but the
+defect and its remedy are undocumented. That is why C-60 and C-61 were found, and their fix shapes
+proposed, a day later without knowledge of the pattern.
 
 **How it was first missed.** The first probe was `throw 1` with no cleanup, recorded in C-60's audit
 table as "compiled clean". It had no `resume`, so it could not have exhibited the defect. The loaded
@@ -6326,8 +6339,8 @@ flight, but this should be known before anyone scopes one.
 
 **Not established.**
 - **SjLjEHPrepare:** capstone64 does not appear to select SjLj EH, and no case was constructed.
-- **The libcall path at `AtomicExpandPass.cpp:2031`:** still VOID, not clean. The oversized-atomic probe
-  was rejected by the frontend before reaching the pass.
+- **The libcall path at `AtomicExpandPass.cpp:2030`:** RESOLVED as CLEAN. It is guarded by C-54; see
+  C-60's audit table.
 
 ## Infrastructure / procedure
 
