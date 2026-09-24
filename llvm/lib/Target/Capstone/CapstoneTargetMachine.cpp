@@ -162,6 +162,14 @@ CapstoneTargetMachine::CapstoneTargetMachine(const Target &T, const Triple &TT,
       TLOF(std::make_unique<CapstoneELFTargetObjectFile>()) {
   initAsmInfo();
 
+  // No emulated TLS (C-47). A domain is one static image with no __emutls
+  // runtime, and native TLS needs none: every thread-local is local-exec
+  // (CapstoneTargetLowering::getCapabilityTLSAddr). The generic emutls pass
+  // cannot even build its control variables here -- their struct has integer
+  // fields where this target's pointers are capabilities, and it asserted -- so
+  // an -femulated-tls request is served by the native lowering instead.
+  this->Options.EmulatedTLS = false;
+
   // Capstone supports the MachineOutliner.
   setMachineOutliner(true);
   setSupportsDefaultOutlining(true);
