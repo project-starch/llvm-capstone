@@ -15,9 +15,11 @@ The extended in-domain workload exercises transactions, a secondary `INDEX`,
 sorter, index-driven `WHERE`, `JOIN`, `GROUP BY`, and string functions. No
 file-backed database path is used (in-memory only).
 
-Residual notes: bindings must use `SQLITE_STATIC`, not `SQLITE_TRANSIENT` (gap 9,
-a `.h`/`.c` sentinel mismatch in the TRANSIENT patch); the 8-byte-alignment class
-(gaps 6/8) may surface more instances under wider workloads (e.g. `speedtest1`).
+Residual notes: the 8-byte-alignment class (gaps 6/8) may surface more instances under wider
+workloads (e.g. `speedtest1`). Gap 9 is closed: it was the `.h`/`.c` sentinel mismatch of the
+`SQLITE_TRANSIENT` rewrite, retired 2026-09-24. With the workload binding through
+`SQLITE_TRANSIENT`, `run-sqlite-memory.sh` halted with cause 24 on the `xDel` call through -1
+before the retirement and passes after it.
 
 ## Workload
 
@@ -74,21 +76,22 @@ compiler-rt builtins.
 ## Generated-source adaptations
 
 The downloaded amalgamation remains unchanged. The build creates
-`$CAPSTONE_TMP_ROOT/sqlite-build/sqlite3-capstone.c` with bounded adaptations:
+`$CAPSTONE_TMP_ROOT/sqlite-build/sqlite3-capstone.c` with bounded adaptations, each asserted
+after the rewrite:
 
-- use a real identity-only function for `SQLITE_TRANSIENT` instead of the
-  capability function-pointer value `-1`;
 - correct SQLite 3.53.3's `z`/`zIn` typo in its no-floating-point path;
-- replace capability-valued pointer ternaries and one boolean pointer
-  subtraction with equivalent control flow;
+- gate atomic detection on `SQLITE_THREADSAFE`: without it the domain links against
+  `__atomic_load_4`/`__atomic_store_4`, which nothing in the domain provides;
 - disable Lemon's dynamic parser stack and use `YYSTACKDEPTH=1000`;
-- use capability cursors for two sorter-local same-array index differences;
-- gate atomic detection on `SQLITE_THREADSAFE`;
-- move integer-valued built-in `pUserData` fields out of static initializers;
-- initialize memsys5's function-pointer methods table at runtime.
+- 16-align `sqlite3NestedParse`'s `saveBuf`, which carries capabilities (gap 6);
+- 16-align the `BtCursor` that `allocateCursor` embeds after the `VdbeCursor` (gap 8).
 
-The last two avoided unsupported 128-bit integer-pointer constants and one
-non-recursive capability-global shape.
+Retired: the pointer ternaries, the boolean pointer subtraction, the sorter cursors and the
+`pUserData` initialisers on 2026-08-26, and the `SQLITE_TRANSIENT` sentinel and the
+runtime-initialised memsys5 methods table on 2026-09-24 (see the comment above the `sed` in
+`build-sqlite-capstone.sh`). The parser-stack rewrite stays for now: the silicon gate passes
+without it, but the growth path it disables runs only once a parse exceeds 1000 stack entries,
+and no gate was checked to reach that depth.
 
 ## Run
 
@@ -118,8 +121,9 @@ kept apart from 3.53.3's because the silicon build stages `sqlite3.h` by glob.
 
 Adaptations, all in `adapt-sqlite-322.sh`:
 
-- carried over from the 3.53.3 pass unchanged: the `SQLITE_TRANSIENT` sentinel, the
-  runtime-initialised memsys5 methods table, and the 16-byte-aligned `saveBuf`;
+- carried over from the 3.53.3 pass unchanged: the 16-byte-aligned `saveBuf`. Removing it
+  leaves today's 3.22.0 image byte-identical, but only because the frame layout happens to
+  16-align an array that is `align 1` in the IR, so it stays;
 - restated for 3.22.0: `allocateCursor` 16-aligns the embedded `BtCursor`, which 3.53.3 does
   through `SZ_VDBECURSOR` and 3.22.0 spells as `ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField`;
 - backported: `typedef const char *sqlite3_filename;` (SQLite 3.41.0), the type the shared VFS's
@@ -130,8 +134,8 @@ Not needed, because 3.22.0 has none of the code they rewrite: the `Atoi64` `z`/`
 
 Scope: the workload is the 3.53.3 one (three rows plus the extended workload). The Sublet port
 is not applied, since `sublet/sublet-3530300.patch` targets 3.53.3, and neither speedtest1 nor
-sqllogictest has been run. The 3.22.0 domain is 1,030,488 bytes of code with 169 globals,
-against 1,444,040 and 211 for 3.53.3.
+sqllogictest has been run. The 3.22.0 image is 1,030,560 bytes (937,228 of them `.text`) with
+168 globals, against 1,444,136 (1,311,136) and 210 for 3.53.3.
 
 ## speedtest1 and the Sublet port
 
