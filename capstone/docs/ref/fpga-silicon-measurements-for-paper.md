@@ -837,6 +837,31 @@ the full 17-rung list, so every entry VA is unchanged (`phase11-boot-vs-layout.r
   instret are identical across boots, so the variance is in the machine's state, for example
   cache or DRAM placement, not in the code.
 
+### R-42 acceptance, Boot A (2026-09-25): the I-cache fix removes the controls' layout penalty and nothing else
+
+This run repeats the same builds and flags as phase 10 and the R-35 refresh, both halves, on
+`caplifive_r42_6cbdaeeb4.bit` (`r42-acceptance-bootA.result-lines.txt`). The pre-registration was
+written before launch and is quoted in the file.
+
+| check (pre-registered) | result |
+|---|---|
+| capability `ctrsanity` K=0: 1.167× → ≈1.000× | **1.0004×** (700,312 → 600,293 cycles: 100,019 recovered on a 100k-iteration loop) |
+| K=1..3 stay at 1.000× | 1.0004–1.0005× |
+| every retval and instret unchanged; 68/68 correct | yes |
+| baseline unchanged, INCLUDING K=1, where `base_ctrsanity`'s `bne` sits at `0x8020029c` (mod 16 = 12) | CPI 1.2000 at every K. 12/17 baseline rows at K=1 are cycle-identical; the other 5 are at most 0.56 % faster |
+
+- **`ctrsanitys` recovered too, without being predicted.** Its slow layout, K=1 at 1.210×, reads
+  1.045×. The controls' 16.7 % layout band was entirely R-42, and it is now about 0.4 %.
+- **The baseline was immune for the reason predicted.** Its BEST-of-15 runs warm: the loop's exit
+  path fills the next I-cache line on the first pass. So the R-42 penalty only ever hit the one-shot,
+  cold capability run.
+- **The kernels did not move.** The 15 kernels' medians are 0.990×–2.160×, median **1.161×**,
+  geometric mean **1.300×** (R-35 refresh: 1.161× / 1.298×).
+  - Only the short, boot-variable kernels shifted: `janne` K=0 read 2.188×, and `insertsort` K=2
+    read 2.205×. Both are inside the phase-11 boot bands.
+- **Not tested by this boot:** R-35's regression and R-43's false deny. Those are the R1-harness
+  acceptance boots.
+
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the

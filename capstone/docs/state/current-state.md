@@ -2,6 +2,23 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-25 — R-42 FLASHED and ladder-accepted; R-42 is the PLATFORM OF RECORD
+
+**Resident bitstream is `caplifive_r42_6cbdaeeb4.bit`**, sha256 `0cd45bb0…8c05`.
+- **The reflash:** it was flashed at 04:16 and `nv_bitstream_name` was read back on the same session
+  after the power cycle.
+- **Acceptance Boot A, the ladder, PASSED every pre-registered check**
+  (`ladder-revival-2026-09-22/r42-acceptance-bootA.result-lines.txt`):
+  - `ctrsanity` K=0 1.167× → 1.000×, and `ctrsanitys` K=1 1.210× → 1.045×;
+  - 68/68 rows correct, with retval and instret unchanged;
+  - the baseline gate reads CPI 1.2000 at every K.
+- **The R1-harness acceptance boots** (workload regression, the R-35 stale probe as a regression check,
+  and the R-43 live sweep) run next, one image per boot.
+
+**The lead decided (2026-09-25) that R-42 is the platform of record for the remaining Sublet paper
+numbers.** P1 restarts here with E2's own -O0 images (`e6ee5255`/`ceeded25`, from
+`xfer/p1-r42-O0-2026-09-25`). The -O2 arms stay blocked on C-32.
+
 ## 2026-09-25 — R-35 CLOSED (fixed on the M-mode LSU data path); R-43 and R-44 filed; R-42 reflash authorized
 
 **R-35 is closed**, decided by the RTL lane on the lead's delegation after an adversarial audit. It is scoped: the fix covers the M-mode LSU check. The same optimistic adopt **still exists at the CPMP**, which is all of S/U-mode enforcement and live in production. That is now **R-44**, deferred on a boot-kill risk (the hardcoded `cpmp(0..2)` ids have no rev-node traffic). The fix's own cost, false denies from deny-on-miss, is **R-43**, whose first test is a SQLite run on the fix bitstream. R-37/R-38's Stage 0 is in the flashed build (fixed in source, not verified on silicon).
