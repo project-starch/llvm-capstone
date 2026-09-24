@@ -432,7 +432,11 @@ static ulong lcc_type_after_op(int op, sublet_cap *src, sublet_cap *dst, ulong a
   case 3: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x05, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"(arg) : "t0", "t1", "memory"); break;           /* scc t1, t0, arg */
   case 4: case 5: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn i 0x5b, 0x3, t1, 0(%1)\n .insn r 0x5b, 0x1, 0x04, %0, t1, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;                          /* ldc t0 <- src; park t0 in dst; ldc t1 <- src again: the slot's type after the first load */
   case 6: case 7: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn s 0x5b, 0x4, t0, 0(%2)\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "memory"); break;                                                              /* stc t0 -> dst; the register's type after the store */
-  case 8: case 9: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x02, t1, t0, %3\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst), "r"((ulong)6) : "t0", "t1", "memory"); break;  /* tighten t1, t0, RW */
+  /* TIGHTEN's rs2 FIELD is the permission IMMEDIATE, not a register. An "r" operand here encoded the
+   * allocated register's NUMBER (a2 = 12) as the immediate, which the RTL refuses with cause 29 (imm > 7)
+   * and QEMU clamps to NA -- so both models tested the wrong perm (E3, boot r42e3, 2026-09-25). `x6`
+   * puts the literal 6 = RW in the field. */
+  case 8: case 9: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn r 0x5b, 0x1, 0x02, t1, t0, x6\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;  /* tighten t1, t0, RW */
   case 10: case 11: __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n .insn i 0x5b, 0x0, t1, t0, 64\n .insn r 0x5b, 0x1, 0x04, %0, t0, x1\n .insn s 0x5b, 0x4, t1, 0(%2)\n" : "=&r"(ty) : "r"(src), "r"(dst) : "t0", "t1", "memory"); break;              /* shrinkto t1, t0, 64 */
   }
   return ty;

@@ -747,6 +747,20 @@ passes on the emulator and loses it on silicon — the opposite polarity from Q-
 every loaded linear capability back and reads the base before the store, so the Sublet port is unaffected.
 Related: R-21, R-22 (resolved on silicon), Q-04.
 
+
+## Q-13 — an out-of-range TIGHTEN permission immediate (> 7): the RTL faults, capstone-qemu clamps it to NA `OPEN — model divergence and a spec question for the lead; found 2026-09-25 (E3 boot r42e3) through a harness encoding bug`
+
+**The two models disagree:**
+- **RTL**, `capstone_dyn_unit.anvil:262-273` @6cbdaeeb4: `(imm_v > 5'd7) || ((imm_v & rs1_perm) !=
+  imm_v)` → ILLEGAL_OPERAND_VALUE, mcause 29 (`capstone_unit.anvilh:319`).
+- **capstone-qemu**, `target/riscv/op_helper.c:1164-1189` (`helper_cstighten`): `perms > 7 ?
+  CAP_PERMS_NA : perms`. An out-of-range immediate silently means "no access", and the operation
+  proceeds.
+
+A program that passes an invalid immediate therefore runs on the emulator and traps on silicon. The
+first instance was E3's R1 harness encoding a register NUMBER (12) into the immediate field; see
+R-21's box. **Which behaviour is intended is a spec question**, and neither source reads as the
+specification. The RTL's refusal is the safer default.
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -7971,18 +7985,25 @@ the project lead's call.
 
 ### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
 
-> **`tighten` on silicon, 2026-09-25 (E3, boot r42e3, `caplifive_r42_6cbdaeeb4.bit`): it TRAPS rather than
-> copying.** Image `55cc4c4db72fb1f7`, R1 `--series linear`. Arm 8 (`tighten-LIN`) raises **cause 29
-> (ILLEGAL_OPERAND_VALUE)** at `tighten t1, t0, 0xc` (DBAS+0x200c, tval `0xac108000`).
-> - capstone-qemu runs the same image to completion; arm 8 reads type 7, so QEMU moves.
-> - This entry's prediction was a copy, reading 0. Silicon does neither: it refuses the operation.
-> - Arms 0–7 ran first, but their output was lost to the trap. Arms 10/11 (`shrinkto`) never ran.
-> - **Whether cause 29 is the RTL's specified behaviour for a linear source or for this perm
->   immediate is with the RTL lane.**
-> - If it is specified, then the QEMU model of `tighten` is what diverges, and the copy-vs-move
->   question for `tighten` does not arise on silicon.
+> **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
+> `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:
+> - **arm 8 `tighten-LIN` reads 0** and **arm 10 `shrinkto-LIN` reads 0**: the linear source survives
+>   in both, i.e. a duplicate.
+> - capstone-qemu reads 7 for `tighten` (it moves) and 0 for `shrinkto` (it copies).
+> - Controls 9/11 read 1, and there was no trap.
+> - Arms 2/3 (`cincoffset`/`scc`) read 7, as this entry's 2026-09-15 resolution says.
+> - Arms 4/6 (`ldc`/`stc`) read 7 on silicon against QEMU's 0, which is Q-12.
 >
-> Result lines: `tests/rtl-smoke/ladder-revival-2026-09-22/r42-e3-linear.result-lines.txt`.
+> **CORRECTION to this box's first version (4c7e6b9).** It read the first boot, r42e3, as "`tighten`
+> traps cause 29 on a linear source". The trap was a HARNESS ENCODING BUG, found by the RTL lane's
+> reading of the RTL:
+> - `.insn r` put an `"r"` operand in TIGHTEN's rs2 FIELD, which is the permission immediate. That
+>   encoded the allocated register's number, a2 = 12, as imm 12.
+> - The RTL refuses imm > 7 with cause 29, and QEMU clamps it to NA. Both are Q-13.
+> - Fixed in `r1_slots_pools.c` with the literal `x6` (6 = RW). The linear source was never the
+>   issue.
+>
+> Result lines: `tests/rtl-smoke/ladder-revival-2026-09-22/r42-e3-linear.result-lines.txt`, both boots.
 
 > **On silicon 2026-09-15 (boot sw8x-f4, §7w of the measurements doc):** through the R1 harness's `--series
 > linear` on `caplifive_r30r31_1bfff7776`, the LINEAR source of `cincoffset` and of `scc` reads cleared (7)

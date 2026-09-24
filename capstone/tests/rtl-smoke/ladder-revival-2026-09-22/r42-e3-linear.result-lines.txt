@@ -41,3 +41,45 @@ ENT1:00000001
 [wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
 [wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
 # decode: mcause 0x1d = 29 (ILLEGAL_OPERAND_VALUE); mepc DBAS+0x200c = run_linear `tighten t1, t0, 0xc` (arm 8, tighten-LIN, selected by `li a0,0x300; srl a0,a0,s1`), source t0 from `ldc t0,0x0(a0)`
+## E3b -- the SAME series with the TIGHTEN immediate FIXED (image cbf8cb41eb56c477: `tighten t1, t0, 0x6` = RW; E3 encoded imm 12 = the allocated register number a2, see r1_slots_pools.c). QEMU:
+R1 lin arm=0 what=movc-LIN(instrument-control) rep=1 before=0 type=7 spec=7 r21r22=7 reads=spec
+R1 lin arm=1 what=cincoffset-NONLIN(conformance-control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=2 what=cincoffset-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=3 what=scc-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=4 what=ldc-LIN(slot-after) rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=5 what=ldc-NONLIN(slot-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=6 what=stc-LIN(reg-after) rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=7 what=stc-NONLIN(reg-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=8 what=tighten-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=9 what=tighten-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=10 what=shrinkto-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=11 what=shrinkto-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1_RC=0
+## board, boot r42e3b:
+#  07:07:53 fw_payload 3efddbd69454 (monitor 2dcd3a5, buildroot d04bd83)
+#  07:07:53 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 12 R1 lin lines; NO trap at the tighten (imm 6 <= 7, RW subset of the source perms); arm 8 type = the RTL copy(0)/move(7) answer for TIGHTEN, arm 10 = the same for SHRINKTO (R-21 predicts 0 for both; QEMU reads 7 and 0); arms 0-7 as their r21r22/spec columns; controls 1,5,7,9,11 = 1; no cause-25.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 
+#  07:15:48 runner ended after 474 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4551 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT1:00000001
+ENT2:4EB10000
+R1 entry shares=4 region=65536 opcode=1397769216 offset=62 phase=0
+R1 start arm=S series=linearECSA:00000001
+R1 lin arm=0 what=movc-LIN(instrument-control) rep=1 before=0 type=7 spec=7 r21r22=7 reads=spec
+R1 lin arm=1 what=cincoffset-NONLIN(conformance-control) rep=1 before=1 type=1 spec=1 r2ECSA:00000001
+R1 lin arm=2 what=cincoffset-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=3 what=scc-LIN rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=4 what=ldc-LIN(slot-after) rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=5 what=ldc-NONLIN(slot-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=6 what=stc-LIN(reg-after) rep=1 before=0 type=7 spec=7 r21r22=0 reads=spec
+R1 lin arm=7 what=stc-NONLIN(reg-after,control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=8 what=tighten-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=9 what=tighten-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 lin arm=10 what=shrinkto-LIN rep=1 before=0 type=0 spec=7 r21r22=0 reads=R21R22
+R1 lin arm=11 what=shrinkto-NONLIN(control) rep=1 before=1 type=1 spec=1 r21r22=1 reads=spec
+R1 end minted=0 split=12 mrev=5 revoke=0 init=0 out=1287 lines=15
+SQ: speedtest1-ran=1320222720
+DBAS:81980000
+ladder-perf: RESULT k800 retval=4 cycles=4538 ran=53406 instret=1089 phase=2
+# arm 1 line is split in the capture by monitor share markers; its visible prefix reads type=1 (NONLIN control)
