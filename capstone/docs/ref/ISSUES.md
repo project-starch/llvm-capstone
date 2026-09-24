@@ -6460,7 +6460,7 @@ representation that capstone64 violates. They lie on two axes:
 - **address space:** C-54 (fixed), C-60 (open), C-61 (open);
 - **width, pointer vs. index:** this one (fixed).
 
-### C-63 — a `landingpad` cannot be selected: the exception pointer is zero-extended as an integer `OPEN — COMPILER, crash; found 2026-09-24 behind C-61; reproduced with the tree's llc; the second layer blocking C++ exceptions`
+### C-63 — a `landingpad` cannot be selected: the exception pointer is zero-extended as an integer `OPEN — COMPILER, crash; found 2026-09-24 behind C-61; reproduced with the tree's llc; its fix needs an EH ABI decision; C++ exceptions are THREE layers deep (C-61, this, no unwinder)`
 
 **What happens.** `Capstone DAG->DAG Pattern Instruction Selection` aborts with
 `Assertion 'VT.isInteger() && N1.getValueType().isInteger() && "Invalid ZERO_EXTEND!"'`
@@ -6492,10 +6492,32 @@ Reproduced 2026-09-24: `llc -mtriple=capstone64-unknown-elf` aborts at both `-O0
 **Family.** This is the fifth upstream pointer-representation assumption, alongside C-54, C-60, C-61
 and C-62. Its axis is a pointer coerced with an integer operation.
 
-**Consequence.** C++ exceptions stay unusable at default flags even once C-61's fix lands.
-`-fno-exceptions` is still the workaround.
+**The fix is not mechanical: it needs an EH ABI decision.** All of the following were checked
+against source on origin/dev.
+- `CapstoneTargetLowering::getExceptionPointerRegister` returns `Capstone::X10`
+  (`CapstoneISelLowering.cpp:25557-25559`). That is an INTEGER register, inherited from RISCV. On a
+  capability target the exception pointer is a capability and belongs in `C10`.
+- `visitLandingPad` copies the register at `getPointerTy()`, whose default is AS 0. That gives `i64`,
+  because Capstone's override returns `c128` only for AS 200 (`CapstoneISelLowering.h:324-328`).
+- The ZERO_EXTEND therefore comes from `i64` to `c128`.
+- `getZExtOrTrunc` (`SelectionDAG.cpp:1513-1517`) is a bare `bitsGT ? ZEXT : TRUNC` with no
+  equal-type short-circuit. Merely making the widths agree would emit a TRUNCATE instead.
+- So the coercion has to be AVOIDED for a capability, not satisfied. The register is a runtime
+  contract, and it has to agree with whatever hands the pointer back.
 
-**Fix: none yet.**
+**C++ exceptions are three layers deep, not one.**
+1. **C-61** (fixed, unmerged) corrects the address space of `_Unwind_Resume`'s parameter.
+2. **This defect** blocks instruction selection, and its fix needs the ABI decision above.
+3. **No unwinder exists for a domain.** Nothing under `capstone/` outside docs and tests defines
+   `_Unwind_Resume` or `_Unwind_RaiseException`, and no unwind runtime is built
+   (`LLVM_ENABLE_RUNTIMES` is empty). Even with C-61 and C-63 fixed, `_Unwind_Resume` would be an
+   undefined symbol at link time.
+
+No link was attempted, and whether a domain personality routine exists was not checked; either
+would only add to the list. **`-fno-exceptions` is not a workaround pending a fix. It is the only
+configuration in which C++ compiles today.** C-61 alone does not make C++ "nearly work".
+
+**Fix: none yet. The ABI decision is the lead's.**
 
 ## Infrastructure / procedure
 
