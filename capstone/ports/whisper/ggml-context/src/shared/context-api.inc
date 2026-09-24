@@ -7,7 +7,11 @@ void *wg_object_alloc(struct ggml_context *ctx, unsigned type, size_t n) {
     return NULL;
   void *p = (char *)ctx->mem_buffer + o->offs;
 #ifdef WG_DOMAIN
-  uintptr_t base = (uintptr_t)p;
+  /* The address, taken with the builtin rather than a (uintptr_t) cast: the
+   * compiler rebuilds a pointer computed from one capability in the same
+   * function (CapstoneRecoverProvenance), so `(void *)(uintptr_t)p` below
+   * would come back as p itself, with the whole buffer's authority. */
+  uintptr_t base = __builtin_capstone_cap_get_cursor(p);
   /* SHRINK cannot encode an empty interval. A zero-byte allocation keeps
    * its address but carries no memory authority; no payload byte exists. */
   if (!n)

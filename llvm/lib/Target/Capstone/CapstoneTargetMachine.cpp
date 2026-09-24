@@ -121,6 +121,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
+  initializeCapstoneRecoverProvenancePass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
   initializeCapstoneOptWInstrsPass(*PR);
@@ -467,6 +468,10 @@ bool CapstonePassConfig::addRegAssignAndRewriteOptimized() {
 }
 
 void CapstonePassConfig::addIRPasses() {
+  // First, while every round trip is still the shape the source wrote: an
+  // address computed from one capability through uintptr_t comes back as that
+  // capability moved, not as an untagged pointer. All opt levels.
+  addPass(createCapstoneRecoverProvenancePass());
   addPass(createAtomicExpandLegacyPass());
   addPass(createCapstoneZacasABIFixPass());
 
