@@ -6422,6 +6422,176 @@ present on `origin/dev`, `clang/lib/CodeGen/CGAtomic.cpp` carries a non-integral
 actually contains an `__atomic_load` call — compiles cleanly, which is how the guard was
 rediscovered.
 
+### C-51 — `llvm.ptrmask` on a capability crashes isel (`Shift amount is not an integer type!`), and every 8- and 16-bit atomic reaches it `FIXED 2026-09-23 on compiler/c51-ptrmask-capability (9335700f339d), merged into dev 2026-09-24 as #76 (4c5cfbec908b): ptrmask moves the capability by the masked difference; masked atomics have _CAP forms; 18 lane/operation checks pass in QEMU; lit, CoreMark and BEEBS (76/81, 5 identical on dev) green`
+
+**What happens.** `llvm.ptrmask.p200.i64(%p, -4)` alone, five lines of IR, asserts in
+`SelectionDAG::getShiftAmountConstant` called from `SelectionDAGBuilder::visitIntrinsicCall`.
+AtomicExpand aligns the address of every sub-word atomic with exactly that call, so any 8- or
+16-bit compare-exchange, fetch-op or exchange on a capability address crashes, while 32- and
+64-bit ones (which need no alignment) compile. `__builtin_align_down` on a `char *` lowers to the
+same intrinsic and crashes the same way. CPython's `PyMutex` is one byte locked by
+compare-exchange, which is how 26 CPython objects reach it.
+
+**Mechanism, read at `d030df93d4a4`.** `case Intrinsic::ptrmask` compares the mask (`i64`, the
+index width) with the pointer's memory width (128), takes the branch written for AMDGPU buffer
+descriptors, and pads the mask by building `SHL` on the pointer's value type, `c128`, which is not
+an integer. Past the assert that branch would still AND the whole capability; on a capability
+the mask has to act on the address alone, so this is a lowering to design, not a guard to add.
+`d5b5f11cae8f` (capability-address 32/64-bit atomics) records the edge in its message:
+"Subword and capability-valued atomics are outside this change."
+
+**Reproducer.** `capstone/tests/compiler-repros/C51-ptrmask-on-capability/run.sh` — `ptrmask.ll`
+alone, the operation × width matrix with u32/u64 as controls, CPython's `PyMutex_Lock` shape and
+`__builtin_align_down`; PRESENT on `d030df93d4a4` and `d5b5f11cae8f`; on `f7b50f081ca4`
+`ptrmask.ll` crashes too and the 32/64-bit controls fail, as that compiler predates `d5b5f11cae8f`.
+
+### C-52 — the Greedy register allocator segfaults in `SplitEditor::rematWillIncreaseRestriction` on CPython's `compiler_visit_stmt` `FIXED 2026-09-23 on compiler/c52-frame-base-capability (fc987bb99d8d), merged into dev 2026-09-24 as #77 (5815527db9bf): the local-stack-slot base register was a GPR; it is a GPCR from CIncOffsetImm now; the Greedy crash was its consequence`
+
+**What happens.** `Python/compile.c` (CPython 3.13.7) kills clang with SIGSEGV in pass `Greedy
+Register Allocator` on `compiler_visit_stmt`, at `-O1 -g`, `-O2 -g`, `-O3 -g` and `-O3`. The stack
+runs `RAGreedy::tryBlockSplit` → `SplitEditor::splitSingleBlock` → `enterIntvBefore` →
+`defFromParent` → `rematWillIncreaseRestriction`. The basic allocator (`-regalloc=basic`) and the
+fast one (`-O0`) compile the same input. It is the one object of the survey this stops, and it is
+the bytecode compiler.
+
+**Not established.** Which pointer in `rematWillIncreaseRestriction` (`SplitKit.cpp:591`, read at
+`d030df93d4a4`) is null here. `d5b5f11cae8f` crashes identically and does not contain C-32's
+rematerializable bridge (`46c53b7b6ae2`), so that change is not required for it.
+
+**Reproducer.** `capstone/tests/compiler-repros/C52-greedy-regalloc-segfault/run.sh` (basic-allocator
+control, verdict) on `src/compiler_visit_stmt.reduced.ll`. It needs `-Xclang -disable-llvm-passes`:
+clang `-O1` on the `.ll` re-optimizes it and the crash disappears. PRESENT on `d030df93d4a4` and
+`d5b5f11cae8f`.
+
+**Root cause, found 2026-09-23 (supersedes "Not established" above).** gdb on the unfixed llc:
+`getRegClassConstraintEffectForVReg` returns null and `rematWillIncreaseRestriction` dereferences
+it, because the use asks for GPCR and the register is a GPR, a pair with no common class. The GPR
+comes from `CapstoneRegisterInfo::materializeFrameBaseRegister`, which Capstone kept from RISC-V:
+`ADDI` into a GPR vreg as the shared base LocalStackSlotAllocation gives accesses far from sp.
+`-verify-machineinstrs` on the original 2.2 MB `compile.ll` stops right after that pass with four
+`SD ..., %4983:gpr` (expected GPCR). In `compile.c` the far accesses are byval-copy stores whose
+temporaries sit more than 2047 bytes from sp. The reduced reproducer shows it too, and it also
+carries 73 `LW $x0` from `llvm-reduce` nulling byval sources, which is C-57, not this.
+
+**Fixed** on `compiler/c52-frame-base-capability` (`fc987bb99d8d`): the base is a GPCR from
+`CIncOffsetImm` whenever the frame register is a capability, which is the test the
+`eliminateFrameIndex` scratch register already makes. The reproducer reports ABSENT with that
+compiler and PRESENT with dev's; `compile.ll` compiles at `-O1`..`-O3` with the verifier and no
+errors. lit: `CodeGen/Capstone/frame-base-register-capability.ll` (12 lines of IR: two byval copies
+ahead of a 4 KiB byval temporary; fails on the unfixed llc). CoreMark validated; BEEBS 76 of 81 with the five known host-header skips.
+
+### C-53 — an inline-asm `"m"` INPUT operand crashes isel ("Memory operands expect pointer values"); `"=m"` outputs compile `OPEN — COMPILER; found 2026-09-23 through CPython's configure; blocks no port today`
+
+**What happens.** `__asm__ volatile("lw zero, %0" : : "m"(*p))` asserts in
+`SelectionDAGBuilder::visitInlineAsm` at `-O0` and `-O1`, whether the memory is reached through a
+pointer, a local or a global; `"=m"` output operands compile. CPython's `configure` reached it in
+its x87 and mc68881 FPU checks, which read the crash as "no" -- right for this target by accident.
+
+**Mechanism, read at `d030df93d4a4`, not confirmed by a fix.** `SelectionDAGBuilder.cpp:10392`
+asserts the operand's type is `TLI.getPointerTy(DL)`, address space 0's `i64`; the operand is an
+`addrspace(200)` capability, `c128`.
+
+**Reproducer.** `capstone/tests/compiler-repros/C53-inline-asm-memory-input/run.sh` (the two
+output shapes are controls); PRESENT on `d030df93d4a4`, `d5b5f11cae8f` and `f7b50f081ca4`.
+
+### C-55 — two cascaded selects on a capability with a null operand put the physical `$c0` into a PHI; LiveVariables / PHIElimination assert `FIXED 2026-09-23 on compiler/c55-cascaded-select (b3fdbbe081e1), merged into dev 2026-09-24 as #79 (59a2c523632c): the cascaded path now COPYs a physical source into a vreg as the single-select path does; a RESIDUAL of d5b5de228b38`
+
+**What happens.** `select c, a, null` followed by `select c, null, <that>` on `ptr addrspace(200)`
+asserts in LiveVariables at `-O1`..`-O3` ("getVarInfo: not a virtual register") and in
+PHIElimination at `-O0`. One select with null, two without null, and the same shape on `i64` all
+compile. CPython's `Objects/dictobject.c` reaches it at `-Os` (`dict___contains__`), not at `-O3`.
+
+**Mechanism.** Seen in the machine code after `finalize-isel`: `PHI $c0, %bb.0, %0, %bb.1, $c0,
+%bb.2`. Read at `d030df93d4a4`, not confirmed by a fix: `EmitLoweredCascadedSelect` builds its PHI
+from raw operand registers, while the general path in `emitSelectPseudo` routes physical sources
+through `materializeSelectPHISource` -- the fix `d5b5de228b38` made for the single-select case,
+which the cascaded path never received.
+
+**Reproducer.** `capstone/tests/compiler-repros/C55-cascaded-select-null-capability/run.sh` (three
+controls; needs `-disable-llvm-passes`, which it passes). PRESENT on `d030df93d4a4`,
+`d5b5f11cae8f` and `f7b50f081ca4`.
+
+**Fixed** on `compiler/c55-cascaded-select` (`b3fdbbe081e1`): `EmitLoweredCascadedSelect` passes
+each PHI source through the same COPY-into-a-vreg as `emitSelectPseudo`, which confirms the
+mechanism above. The reproducer reports ABSENT with that compiler (all three files, `-O0`..`-O3`,
+including CPython's reduced `dict___contains__`) and PRESENT with dev's. lit:
+`CodeGen/Capstone/cascaded-select-null-cap.ll` (fails on the unfixed llc); CoreMark validated;
+BEEBS 76 of 81 with the five known host-header skips.
+
+### C-56 — the address of an undefined weak symbol is not NULL in a domain `OPEN — TOOLCHAIN (the runtime no longer depends on it: #84, merged 2026-09-24); found 2026-09-23 when exit() from a CPython-shaped domain halted at the image base; the runtime's one dependence on it is removed (runtime/c56-weak-at-exit)`
+
+**What happens.** `extern int hook(int) __attribute__((weak)); ... if (hook) hook(x);` with `hook`
+undefined: the test is TRUE in a domain and the call jumps to the image base (cause 2). The address
+is formed pc-relative and added to gp (`auipc`/`addi`, `cincoffset gp`); lld resolves the undefined
+weak symbol to 0 at the LINK address, and the image runs at another base without relocation, so
+the result is neither 0 nor untagged. `my_first_domain/link.ld` already works around the same class
+for `__fini_array_start` by defining the markers. The runtime tested `if (__capstone_at_exit)` on
+its exit path, so every `exit()` from a domain that did not define the hook faulted -- libc-test
+defines it, which is why its suite never showed this.
+
+**Fixed for the runtime** on `runtime/c56-weak-at-exit` (`427006e78950`): the hook is DEFINED weak
+with a default body and called unconditionally. `tests/runtime-qemu/exit-hook/run.sh`: exit(7) with
+no hook ends with status 7 and exit with a hook with 42, stdio flushed, no fault; the same no-hook
+image against dev's hostcall.c halts with cause 2 at the image base.
+
+**Open for the toolchain:** any other `if (&weak_undefined)` in a domain is still wrong. The fix
+belongs in codegen or the linker (an undefined weak must produce a null capability), not in each
+caller.
+
+### C-57 — a load through the null capability selects `$x0`, a GPR, as its base `OPEN — COMPILER; verifier-only on everything seen so far; found 2026-09-23 while reducing C-52`
+
+**What happens.** A load from `ptr addrspace(200) null`, or from null plus a constant, selects the
+integer zero register as the address. A store to the same address does not (it verifies clean), so
+the load path alone differs:
+
+    define i32 @f() addrspace(200) {
+      %v = load volatile i32, ptr addrspace(200) null
+      ret i32 %v
+    }
+
+    %0:gpr = LW $x0, 0 :: (volatile load (s32) from `ptr addrspace(200) null`, addrspace 200)
+    *** Bad machine code: Illegal physical register for instruction ***  ($x0 is not a GPCR register)
+
+The emitted instruction is `lw a0, 0(zero)`: x0 and c0 share an encoding, so it addresses through
+the null capability and traps, which is what the program asked for. Only
+`-verify-machineinstrs` sees it. The same appears for a `byval` argument copied from null, which is
+how `llvm-reduce` made C-52's reduced reproducer carry 73 of these (the original CPython IR has
+none). What is NOT known: whether any pass after isel can act on the wrong class (a copy or spill of
+`$x0` as a GPR would not be a capability), which would make it more than a verifier finding.
+
+**Where to look.** The null capability in a load address reaches the address-mode selection
+as a constant 0 and is materialized as `X0`; `lowerSELECT` already maps a null capability to the
+zero capability register for selects (`d5b5de228b38`), and the address path needs the same.
+
+### C-58 — MachineLICM hoists capability arithmetic above the NULL test that guards it, and CIncOffset of NULL traps `FIXED 2026-09-23 on compiler/c58-no-speculative-cap-arith (c1510d99aa5d), merged into dev 2026-09-24 as #80 (bb246e69f5f4): CIncOffset(Imm), LCC and SHRINK are hoisted only from blocks that run on every iteration`
+
+**What happens.** A CPython call with no keyword arguments halted in
+`_PyArg_UnpackKeywordsWithVararg` with `cincoffsetimm with an UNTAGGED rs1 ... val=0x0`: the
+instruction was `cincoffsetimm s7, s2, 0x30`, `&kwnames->ob_item`, with `kwnames` NULL. The source
+forms that address only after `kwnames` is known to be non-NULL, and so does the optimized IR (the
+GEP follows a load of `kwnames->ob_size`). Early MachineLICM moved the `CIncOffsetImm` from that
+guarded block into the outer loop's preheader, above the test (`-stop-before/-after
+early-machinelicm`). On a conventional target that computes an address nobody uses; on Capstone
+CIncOffset of an untagged value raises UNEXPECTED_OPERAND.
+
+**Why LLVM does it.** MachineLICM hoists any loop-invariant instruction that is safe to move, and
+only loads must also be guaranteed to execute. Pointer arithmetic is assumed not to trap. On Capstone
+`CIncOffset`, `CIncOffsetImm`, `LCC` and `SHRINK` trap on an untagged operand (the QEMU helpers that
+raise UNEXP_OP_TYPE for it) and are otherwise side-effect free, so the assumption is wrong for them.
+
+**Fixed** on `compiler/c58-no-speculative-cap-arith` (`c1510d99aa5d`): `CapstoneInstrInfo::shouldHoist`
+lets those four be hoisted only from a block that runs on every iteration (dominates every exiting
+block -- MachineLICM's own rule for loads, computed by reachability because the hook has no
+dominator tree). lit: `CodeGen/Capstone/no-speculative-cap-arith.ll`, the CPython shape as two nested
+loops (the address formed in a guarded inner-loop preheader; the unfixed llc hoists it into `entry`), and
+a control that is still hoisted. CPython's `getargs.c` keeps the instruction in its guarded block.
+
+**Not covered.** IR-level speculation of a GEP on a possibly-NULL capability (SimplifyCFG,
+LICM), which LLVM also considers free. Not seen yet; the same trap would follow. The SQLite fault
+recorded in `docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`
+(`cincoffsetimm a4, a4, 0xb0` = `&pWInfo->sWC` with `pWInfo` NULL, concluded "a null dereference in
+software") has this shape and was not checked against it.
+
 ### C-62 — with `-g` at `-O1`+, Assignment Tracking asserts on every escaping local, because its offset accumulator is sized at the POINTER width (128) instead of the INDEX width (64) `FIXED 2026-09-23 (external collaborator, f8b140caa818, merged via #75). COMMITTED AS "C-50", a number already taken by an unrelated OPEN defect; renumbered here 2026-09-24`
 
 > **Numbering.** The fix commit (`f8b140caa818`), its merge (`359fb2140caa`, #75), the reproducer

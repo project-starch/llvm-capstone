@@ -1,0 +1,40 @@
+Subject: [PATCH 0010] Start a dict's entries on a pointer boundary
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+A dict keys object is a header, the hash index table, then the entries, and
+the entries start at dk_indices + (1 << dk_log2_index_bytes). The smallest
+dict (8 slots, 1-byte indices) has an 8-byte table, which is pointer-aligned
+wherever a pointer is at most 8 bytes. On capstone64 a pointer is a 16-byte
+capability that must be stored 16-aligned, so every entry of a small dict was
+8 bytes off, and the first capability store into one trapped ("Unaligned cap
+access", cause 4, in insert_to_emptydict, the first boot that got that far).
+
+new_keys_object now pads the table up to the alignment of a pointer. The index
+WIDTH is still chosen from dk_log2_size everywhere, so the extra bytes are
+never read as indices. Where a pointer is at most 8 bytes the loop never runs.
+A static assertion checks that the table itself starts on a pointer boundary.
+
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -810,6 +810,17 @@
+     else {
+         log2_bytes = log2_size + 2;
+     }
++    /* The entries start right after the index table, and they hold pointers,
++       so the table must end on a pointer boundary. Every platform with pointers
++       of at most 8 bytes gets that for free (the smallest table is 8 bytes);
++       where a pointer is a 16-byte capability the 8-byte table of the smallest
++       dict put every entry 8 bytes off, and the first capability store into it
++       trapped. The index width still follows log2_size; this only pads. */
++    while (((size_t)1 << log2_bytes) < _Alignof(PyObject *)) {
++        log2_bytes++;
++    }
++    static_assert(offsetof(PyDictKeysObject, dk_indices) % _Alignof(PyObject *) == 0,
++                  "the dict index table must start on a pointer boundary");
+ 
+ #ifdef WITH_FREELISTS
+     struct _Py_dictkeys_freelist *freelist = get_dictkeys_freelist();

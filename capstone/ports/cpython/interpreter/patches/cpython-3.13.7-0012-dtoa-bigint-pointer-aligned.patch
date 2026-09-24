@@ -1,0 +1,46 @@
+Subject: [PATCH 0012] Carve dtoa's Bigints on a pointer boundary
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+dtoa.c hands out small Bigints from a preallocated array of doubles in the
+interpreter state (Balloc), in units of one double. A Bigint begins with a
+`next` pointer. Where a pointer is a 16-byte capability it must be stored
+16-aligned, and half of the Bigints carved at 8-byte steps were not: the domain
+halted with "Unaligned cap access" (cause 4) in _PyDtoa_Fini, storing `next`
+into a Bigint at _PyRuntime + 0x2a558 while returning it to the free list.
+
+The array is declared with the alignment of a pointer, and Balloc rounds each
+carve up to a multiple of _Alignof(Bigint) doubles. Where a pointer fits in a
+double both are no-ops.
+
+--- a/Include/internal/pycore_dtoa.h
++++ b/Include/internal/pycore_dtoa.h
+@@ -48,7 +48,10 @@
+     struct Bigint *p5s[Bigint_Pow5size];
+     // XXX This should be freed during runtime fini.
+     struct Bigint *freelist[Bigint_Kmax+1];
+-    double preallocated[Bigint_PREALLOC_SIZE];
++    /* Bigints are carved out of this array and hold a pointer, so it is
++       aligned as a pointer is: more than a double where a pointer is a
++       capability, the same everywhere else. */
++    _Alignas(void *) double preallocated[Bigint_PREALLOC_SIZE];
+     double *preallocated_next;
+ };
+ #define _dtoa_state_INIT(INTERP) \
+--- a/Python/dtoa.c
++++ b/Python/dtoa.c
+@@ -350,6 +350,11 @@
+         x = 1 << k;
+         len = (sizeof(Bigint) + (x-1)*sizeof(ULong) + sizeof(double) - 1)
+             /sizeof(double);
++        /* Keep every Bigint carved from private_mem aligned for its `next`
++           pointer. Where a pointer is a 16-byte capability, a Bigint 8 bytes
++           off faulted on the first store of `next` (Bfree, at finalization);
++           everywhere else a pointer fits a double and this does nothing. */
++        len = _Py_SIZE_ROUND_UP(len, _Alignof(Bigint) / sizeof(double));
+         if (k <= Bigint_Kmax &&
+             pmem_next - private_mem + len <= (Py_ssize_t)Bigint_PREALLOC_SIZE
+         ) {
