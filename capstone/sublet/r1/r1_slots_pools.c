@@ -693,6 +693,19 @@ static void run_linear(unsigned reps) {
 #ifndef M1_STALE_DEREF
 #define M1_STALE_DEREF 0
 #endif
+/* R-43 probe, off by default so every default image is byte-identical. The R-35 fix (capstone-ariane
+ * 4ad0df694) keeps a 4-way x 64-set cache of revnode ids seen LIVE and DENIES ON A MISS. Every other access
+ * this harness makes goes through an alias minted moments earlier, whose id was just installed, so no
+ * existing arm can show a false deny. This one can: after the fixture's setup (M1_LIVE aliases taken and
+ * touched, in order), it re-reads every live alias's first byte, twice, in the same order. The set is the
+ * id's low 6 bits, so at M1_LIVE=512 each set sees far more than 4 live ids and the early aliases' entries
+ * are evicted by later installs. Predicted under deny-on-miss: cause 25 at the first re-read (tval = that
+ * alias's leaf). At M1_LIVE=16 nothing is evicted and it must return. No output survives a trap (M-1),
+ * so the reading is the trap latch or this line. It returns from run_m1 immediately after, so the arm's
+ * loop never runs. */
+#ifndef M1_LIVE_SWEEP
+#define M1_LIVE_SWEEP 0
+#endif
 #ifndef M1_STALE_TAKE_LIVE
 #define M1_STALE_TAKE_LIVE 0
 #endif
@@ -753,6 +766,14 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   kv("rel_at_buffer", 1);   /* the release arm's phase 2 fires at buffer-full, NOT at 10C */
 #endif
   out("\n");
+#if M1_LIVE_SWEEP
+  { unsigned p, j; ulong sum = 0;
+    for (p = 0; p < 2u; p++)
+      for (j = 0; j < M1_LIVE; j++) sum += *(volatile unsigned char *)alias[j];
+    out("R1 m1 live-sweep ok"); kv("live", M1_LIVE); kv("reads", 2UL * M1_LIVE);
+    kv("sum", sum); kv("expect", 2UL * M1_LIVE * 0x11UL); out("\n");
+    return; }
+#endif
   i = 0; ini0 = sublet_stats.init;
   for (;;) {
     if (alloc >= target && !releasing) {
