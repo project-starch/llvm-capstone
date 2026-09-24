@@ -77,8 +77,15 @@ kernel module allocated a domain block with `__get_free_pages`, whose ceiling is
   - boot D: `a74a856`, no `cma=`.
 
   Its first attempt stalled before login in B and E. That is the QEMU stall class the FFmpeg rounds
-  report, and it happened while a heavy native build ran beside it. A rerun on a quiet host did
-  not stall. The exploratory boots that came first, including one of the fix before the audit's
+  report. It happened while a heavy native build ran beside it, and a rerun on a quiet host did not
+  stall. That is not evidence that load caused it: the load average was only 7–10 on 64 cores.
+
+  **CORRECTED 2026-09-24:** the better-evidenced candidate is that the shared guest rootfs
+  (`caplifive-buildroot/build/images/rootfs.ext2`) was ext4-corrupt from 13:17 today.
+  - `e2fsck -n` exits 4, and every serial log since then shows `EXT4-fs error ... block bitmap
+    corrupt` at boot.
+  - Every boot here ran on a private copy of that image, the counted ones included.
+  - The outcomes do not depend on it beyond booting. The exploratory boots that came first, including one of the fix before the audit's
   amendments, are recorded in `predictions.txt`. They agree with the counted run.
 
 ## What this does not establish
