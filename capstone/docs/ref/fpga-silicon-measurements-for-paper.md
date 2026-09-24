@@ -862,6 +862,33 @@ written before launch and is quoted in the file.
 - **Not tested by this boot:** R-35's regression and R-43's false deny. Those are the R1-harness
   acceptance boots.
 
+### R-42 acceptance, R1-harness boots (2026-09-25): R-43 false denies stop both R1 harnesses
+
+These are five boots on `caplifive_r42_6cbdaeeb4.bit`, one harness image per boot, each with k800
+first (`r42-acceptance-r1boots.result-lines.txt`).
+
+| boot | image | result |
+|---|---|---|
+| B1 workload regression | `079b1f3a` q0 run | **PASS.** k800 = 4 twice, `speedtest1-ran=1320222911` and `R1 m1 end … alloc=160`, all identical to 054cea69b; no trap |
+| B5 R-43 control live16 | `f1aa05aa` | **PASS.** `live-sweep ok live=16 reads=32 sum=544`; no trap |
+| B2 R-35 regression | `35fb3fec` stale probe | **still traps** cause 25 at +0x4354, tval `0xac100000`, as on 4ad0df694 |
+| B3 R1 warm, campaign boot 1 | `1b7a04fe` | **TRAP cause 25 on invocation 1** (S nodes shared). mepc +0x4ff4 = `ld t0,0(a1)` in `run_series`, where a1 comes from `ldc a1,0x80(gp)`, a global's capability. tval is inside the domain's block |
+| B4 R1 cold, wide rep 1 | `46f99c7b` | **TRAP cause 25 on invocation 1.** mepc +0x51bc = `lwu t0,0x24(s10)` in `run_series`; tval is inside the domain's block |
+
+- **Attribution: R-43**, the R-35 fix's deny-on-miss. After enough fresh revocation ids evict a live
+  capability's entry, the access is denied.
+  - The RTL lane reproduced it in RTL simulation on 6cbdaeeb4 (`r43-evict-live.S`, capstone-ariane
+    93f509f54). A live alias is read correctly after 16 fresh ids but traps 25 after 512, even though
+    the rev-node unit reports it live.
+  - Both R1 series churn thousands of ids; the passing B1 churns 160.
+- **Consequence:**
+  - R1's slopes (22.91 / 15.92 warm, 28.15 cold) **cannot be re-measured on R-42**;
+  - no revocation-heavy workload, P1's Sublet cell included, runs on it until the R-43 fix is on a
+    bitstream;
+  - the numbers measured on 054cea69b stand as they were, with their recorded caveats.
+- **Not measured:** B6 and B7 (the R-43 live128 / live512 sweep at one VA) wait for their emulator
+  records.
+
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the

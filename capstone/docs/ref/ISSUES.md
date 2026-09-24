@@ -7089,30 +7089,33 @@ directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on
 the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 `capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
 
-### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
+### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `FIXED 2026-09-24 on compiler/c47-tls: local-exec on tp's capability, a PT_TLS segment in my_first_domain/link.ld, and the block runtime/tls.c builds from it`
 
-> **A fix exists, unmerged and not yet validated by this registry (2026-09-24).**
-> `origin/compiler/c47-tls` at `07829e435e0d`, by the external collaborator. It is stacked on a C-46
-> fix (`5fbdfb139c7d`) in the same branch, 2 ahead and 7 behind `dev`, based at `56c39b13369d`.
-> What it does:
-> - every thread-local becomes local-exec (a domain is one static image);
-> - the `%tprel` offset is built as an integer and applied to `tp`'s **capability**
->   (`lui`/`addi`, then `cincoffset …, tp, …`), where RISC-V's integer ADD would drop the tag;
-> - it narrows to the variable under `-capstone-shrink-globals`;
-> - it disables emulated TLS for the target;
-> - it adds a PT_TLS linker-script change (`my_first_domain/link.ld`) and a `runtime/tls.c` that
->   lays the block out from linker symbols, because a domain has no auxv.
+> **2026-09-24: FIXED on `compiler/c47-tls`.** The "capability TLS model" this entry called a design
+> question has a narrow answer for domains: one static image, so every thread-local is local-exec.
+> The compiler builds `lui %tprel_hi` / `addi %tprel_lo` as an integer and applies it to tp's
+> CAPABILITY with `cincoffset` (the RISC-V sequence ADDs tp as an integer and drops the tag), then
+> narrows the result to the variable as a sized global is. `my_first_domain/link.ld` gives the image
+> a PT_TLS segment (empty, and nothing moved, for every existing domain), and `runtime/tls.c` builds
+> the block -- struct pthread below tp, the copied template at tp -- that musl's `__init_tls` would,
+> since a domain has no auxv. -femulated-tls is served by the same lowering (the emutls pass asserted
+> here). A thread-local initialised with a global's address is now a compile error: the
+> capability-initializer pass used to skip it and leave an untagged value. Test:
+> `tests/runtime-qemu/thread-local/`, 9 checks at -O0 and -O2 with an overrun control and an
+> old-runtime control; the -O2 arm is what exposed C-46 live, so this branch sits on that fix.
+> Still not covered: libc-test's `tls_*` tests need threads or DSOs. With this fix `tls_init` and
+> `tls_local_exec` build and run, and both fault in `pthread_create`, because a domain has no
+> threads (`tls_local_exec`'s main thread reports no failed check before that). `tls_init_dso` does
+> not build: it initialises a thread-local with a global's address, which is the new error.
+
+> **The registry's note on this fix, written 2026-09-24 while it sat on an unmerged branch, is
+> reconciled with the box above at merge, as the note asked.** What it checked independently (the
+> `cincoffset …, tp` CHECK lines, the emulated-TLS removal, the pinned old-runtime control) is what
+> that box describes. On the workarounds it named: CPython runs its port's `checks.py` 6/6 in a
+> domain with patch 0006 deleted and this fix; the tshark port's single-thread define has not been
+> tried against it. Dropping either is that port's own change.
 >
-> It carries two lit tests (`tls-local-exec.ll`, `tls-capability-initializer.ll`) and a QEMU probe
-> (`runtime-qemu/thread-local/run.sh`). The probe's controls include the previous `tls.c`, pinned
-> at `56c39b13369d`, which must NOT pass. Verified against the branch on 2026-09-24: its head and
-> counts, its authorship, the `cincoffset …, tp` CHECK lines, the emulated-TLS removal in
-> `CapstoneTargetMachine.cpp`, and the pinned control. **Nobody in this registry has built or run
-> it.** Merging is the lead's call. Until then, the workarounds in the tshark port (a single-thread
-> define) and in CPython's patch 0006 (thread-locals turned into plain globals) stand. Note that the
-> branch also edits this entry itself, so merging it means reconciling with this text.
->
-> **Scope, measured 2026-09-24.**
+> **Scope of the defect before the fix, measured 2026-09-24.**
 > - **What dies.** Any reference to a `__thread` variable that SURVIVES to instruction selection
 >   dies with `Cannot select: c128 = GlobalTLSAddress`. That covers `int`, pointer-typed,
 >   struct-typed, address-taken, written, or read through external linkage, at `-O0` through `-O2`.
@@ -7179,25 +7182,35 @@ model, which is a design question and not a missing pattern.
 `-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
 thread pointer survives.
 
-### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — OBSERVED LIVE 2026-09-24 for direct-call targets (fixed on compiler/c46-call-target-nonlinear); the MOVC modelling itself is unchanged. The fix shape this entry first implied is WRONG — see the box`
 
-> **⚠ CAVEAT on "not a live miscompile" (2026-09-24). A reproduced fault contradicts it, on an
-> unmerged branch.**
->
-> **The branch and its evidence.** `origin/compiler/c47-tls` carries `5fbdfb139c7d` ("C-46: a direct
-> call's target capability is built non-linear"), by the external collaborator. Its commit
-> message records a QEMU fault in a `-O2` domain that calls one static function nine times:
-> - `selectCall` built each target as a bare `cincoffset rd, gp, off`, which is LINEAR and pure, so
->   MachineCSE merged the nine targets into one register;
-> - under register pressure the allocator copied it (`movc s8, s11`), which consumes the source;
-> - the next call went through the source, `cjalr ra, 0(s11)`: cause 24, with `s11` null and the
->   copy `type 0`;
-> - it reports 6 musl libc-test faults on `dev` from this shape (fwscanf, memstream, setjmp, string,
->   strtod_simple, tgmath). Each hides the rest of its chunk, 27 tests in all. With the fix: 0 faults.
->
-> **Not yet validated by this registry** (same status as the C-47 note, which shares the branch).
-> The verdict above stands until the merge changes it, which is the lead's call. But it should not
-> be read as "C-46 is not live".
+> **2026-09-24: OBSERVED LIVE under QEMU, and the "What would settle it" case below now exists.**
+> A direct call's target was built as a bare `cincoffset rd, gp, off` (selectCall), which is LINEAR
+> (QEMU prints `type 0` = `CAP_TYPE_LIN`, `cap.h:27`) and pure, so MachineCSE merged the targets of
+> the nine calls `main` makes to one static function into one register. Under the extra register
+> pressure of a thread-local test at -O2, the allocator copied it -- `movc s8, s11` at image offset
+> 0x14290 -- and called through the SOURCE next: `cjalr ra, 0(s11)` at 0x14294, cause 24, "cs.cjalr
+> requires capability in rs1", with the dump showing `x24 = C(... type 0)` and `x27 = 0`.
+> `helper_csmovc` nulls a source that is not copyable (`op_helper.c`), which is exactly this entry's
+> premise. The same program without the thread-locals has the same linear target register but no
+> copy, so the trigger is register pressure, not TLS. A straight-line scan of the 168 images dev's
+> baseline built found three more call-target candidates, all in SQLite (sqlite3BtreeDropTable,
+> sqlite3AlterRenameTable, sqlite3WindowCodeStep) -- candidates, since the scan ignores branches.
+> **It was also behind every libc-test fault on dev:** fwscanf, memstream, setjmp, string,
+> strtod_simple and tgmath all halt with "cs.cjalr requires capability in rs1"; with only the fix
+> below, none faults (five pass, setjmp fails its signal-mask check, which a domain cannot serve),
+> and the 27 tests their chunks hid run: 38 pass / 6 fail / 6 fault becomes 43 / 7 / 0. The
+> straight-line scan above found none of these six, so its count is a floor.
+> **Fixed for call targets** by building them with PseudoCapGlobalBase (cincoffset + delin as one
+> instruction, non-linear), as selectLGA builds a global's base for the same reason; test
+> `c46-call-target-nonlinear.ll`. The MOVC definition is untouched: the trade in the box below
+> (`hasSideEffects = 1` for every capability copy) is still the lead's, and any other LINEAR value
+> the allocator can copy with a live source is still exposed.
+
+> **⚠ CAVEAT on "not a live miscompile" (2026-09-24). A reproduced fault contradicts it.** The fault,
+> its evidence and the fix for call targets are in the 2026-09-24 box above. (This caveat was first
+> written while the fix sat on an unmerged branch; it is reconciled with that box here, as it asked
+> to be at merge.) The 2026-09-10 "latent" verdict below should not be read as "C-46 is not live".
 >
 > **Why the 2026-09-10 argument did not catch it** (compiler lane, re-read at source 2026-09-24).
 > The argument says MOVC has no IR pattern and is emitted only by `copyPhysReg` and frame-index
@@ -7208,8 +7221,8 @@ thread pointer survives.
 > cannot establish latency. What has to be bounded is **which LINEAR (or untagged) values can reach
 > register allocation with a live range the allocator may split**. It is the same pre-RA/RA
 > boundary C-32 turned on (there, `PerformSinkAndFold` deciding whether a value reaches RA as a
-> copyable capability). The branch's own C-46 entry agrees (its `ISSUES.md`, C-46 box): "any other
-> LINEAR value the allocator can copy with a live source is still exposed."
+> copyable capability). The box above agrees: "any other LINEAR value the allocator can copy with a
+> live source is still exposed."
 
 > **2026-09-15: the read-after-copy precondition this entry defers to C-32 is OBSERVED on silicon** —
 > `movc a0, s3` of an integer-bridged base with `s3` live afterwards, emitted by -O1 and -O2 in the

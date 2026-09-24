@@ -2,6 +2,7 @@ ENTRY(_start)
 
 PHDRS {
   domain PT_LOAD FLAGS(0x7);
+  tls PT_TLS;
 }
 
 SECTIONS {
@@ -21,6 +22,46 @@ SECTIONS {
     *(.sdata .sdata.*)
     *(.data .data.*)
   } :domain
+
+  /* THREAD-LOCAL STORAGE (C-47): the TEMPLATE, not a thread's storage.
+   *
+   * .tdata holds the initial values of the __thread variables and .tbss their
+   * zero-initialised size; together they are the PT_TLS segment. The compiler
+   * reaches a thread-local as tp + %tprel(sym), and lld computes %tprel against
+   * this segment (RISC-V variant I: the block starts AT tp). The runtime
+   * (musl-capstone runtime/tls.c) copies .tdata into a block it allocates, zeroes
+   * the rest, and puts tp there -- the template itself is never written.
+   *
+   * The three symbols are how it finds the template. They are read as ADDRESSES
+   * in the image and only ever subtracted from one another: an absolute symbol
+   * (a size or an alignment given as a symbol's value) would come out wrong,
+   * because the domain runs at a different base than it is linked at and forms
+   * every address relative to itself.
+   *
+   * WHY .tdata IS ALIGNED TO .tbss's ALIGNMENT. lld's offset for a symbol is
+   * (its address - p_vaddr) + (p_vaddr mod p_align), and p_align is the larger
+   * of the two sections' alignments. Aligning .tdata to both makes the second
+   * term zero, so the runtime only has to put tp on an address congruent to the
+   * template's (it uses the template's offset within a 4 KiB page, since the
+   * loader places the image on a page boundary) and needs no other number.
+   *
+   * With no thread-locals both sections are empty, nothing moves and nothing is
+   * added to the loaded image; the PT_TLS header is empty and the loader only
+   * reads PT_LOAD headers. */
+  .tdata : ALIGN(MAX(16, ALIGNOF(.tbss))) {
+    __capstone_tls_image = .;
+    *(.tdata .tdata.*)
+    __capstone_tdata_end = .;
+  } :domain :tls
+
+  .tbss : ALIGN(16) {
+    *(.tbss .tbss.*)
+    *(.tcommon)
+    __capstone_tls_end = .;
+  } :domain :tls
+
+  ASSERT(ALIGNOF(.tdata) <= 4096 && ALIGNOF(.tbss) <= 4096,
+         "a thread-local aligned above 4096 bytes: runtime/tls.c aligns tp within a page")
 
   /* THE INIT AND FINI ARRAYS, defined so their MARKERS EXIST.
    *

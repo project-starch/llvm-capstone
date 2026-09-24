@@ -1,0 +1,269 @@
+# R-42 acceptance, R1-harness boots, caplifive_r42_6cbdaeeb4.bit, 2026-09-25. One harness image per boot (board-r1e4.sh), k800 first.
+# Per boot: the driver pre-registration line, then the result lines (RESULT/R1/speedtest1/live-sweep) and, where the domain wedged, the latched trap registers.
+## r42b1: B1 workload regression: R1 079b1f3a2801205a, list "1 drop m1 shared 2097152 --cap 16 --budget 4000"
+#  05:03:06 fw_payload d0c4bf18f5b5 (monitor 2dcd3a5, buildroot d04bd83)
+#  05:03:06 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx (q0 read 1320222911 on 054cea69b); one 'R1 m1 end arm=drop stop=target alloc=160 ...'; wedge dump absent / trap log seen=0. FAIL = any cause-25 (false deny): report mepc-DBAS, tval, image hash.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nod
+#  05:11:34 runner ended after 507 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4509 ran=53406 instret=1089 phase=2
+DBAS:81980000
+ENT0:00000001
+ENT1:00000001
+ENT2:4EB100BF
+R1 m1 start arm=drop C=16 target=160 fixture_nodes=31 budget=4000 maxret=2048 snap_every=1
+R1 m1 snap arm=drop alloc=1 C=16 minted=32 revoked=1 init=0 live=16 retained=0 n=1 take_cyc=146 give_cyc=240 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=2 C=16 minted=33 revoked=2 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=139 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=3 C=16 minted=34 revoked=3 init=0 live=16 retained=0 n=1 take_cyc=73 give_cyc=198 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=4 C=16 minted=35 revoked=4 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=5 C=16 minted=36 revoked=5 init=0 live=16 retained=0 n=1 take_cyc=84 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=6 C=16 minted=37 revoked=6 init=0 live=16 retained=0 n=1 take_cyc=84 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=7 C=16 minted=38 revoked=7 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=8 C=16 minted=39 revoked=8 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=9 C=16 minted=40 revoked=9 init=0 live=16 retained=0 n=1 take_cyc=84 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=10 C=16 minted=41 revoked=10 init=0 live=16 retained=0 n=1 take_cyc=84 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=11 C=16 minted=42 revoked=11 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=12 C=16 minted=43 revoked=12 init=0 live=16 retained=0 n=1 take_cyc=73 give_cyc=198 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=13 C=16 minted=44 revoked=13 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=175 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=14 C=16 minted=45 revoked=14 init=0 live=16 retained=0 n=1 take_cyc=73 give_cyc=198 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=15 C=16 minted=46 revoked=15 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=170 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=16 C=16 minted=47 revoked=16 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=119 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=17 C=16 minted=48 revoked=17 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=18 C=16 minted=49 revoked=18 init=0 live=16 retained=0 n=1 take_cyc=86 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=19 C=16 minted=50 revoked=19 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=20 C=16 minted=51 revoked=20 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=21 C=16 minted=52 revoked=21 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=22 C=16 minted=53 revoked=22 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=23 C=16 minted=54 revoked=23 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=24 C=16 minted=55 revoked=24 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=98 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=25 C=16 minted=56 revoked=25 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=26 C=16 minted=57 revoked=26 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=27 C=16 minted=58 revoked=27 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=28 C=16 minted=59 revoked=28 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=29 C=16 minted=60 revoked=29 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=219 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=30 C=16 minted=61 revoked=30 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=31 C=16 minted=62 revoked=31 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=32 C=16 minted=63 revoked=32 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=33 C=16 minted=64 revoked=33 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=98 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=34 C=16 minted=65 revoked=34 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=35 C=16 minted=66 revoked=35 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=98 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=36 C=16 minted=67 revoked=36 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=37 C=16 minted=68 revoked=37 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=38 C=16 minted=69 revoked=38 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=39 C=16 minted=70 revoked=39 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=40 C=16 minted=71 revoked=40 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=41 C=16 minted=72 revoked=41 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=42 C=16 minted=73 revoked=42 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=43 C=16 minted=74 revoked=43 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=44 C=16 minted=75 revoked=44 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=45 C=16 minted=76 revoked=45 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=46 C=16 minted=77 revoked=46 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=47 C=16 minted=78 revoked=47 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=48 C=16 minted=79 revoked=48 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=49 C=16 minted=80 revoked=49 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=50 C=16 minted=81 revoked=50 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=51 C=16 minted=82 revoked=51 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=52 C=16 minted=83 revoked=52 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=53 C=16 minted=84 revoked=53 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=54 C=16 minted=85 revoked=54 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=55 C=16 minted=86 revoked=55 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=56 C=16 minted=87 revoked=56 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=57 C=16 minted=88 revoked=57 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=58 C=16 minted=89 revoked=58 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=59 C=16 minted=90 revoked=59 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=60 C=16 minted=91 revoked=60 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=61 C=16 minted=92 revoked=61 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=62 C=16 minted=93 revoked=62 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=63 C=16 minted=94 revoked=63 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=64 C=16 minted=95 revoked=64 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=65 C=16 minted=96 revoked=65 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=66 C=16 minted=97 revoked=66 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=67 C=16 minted=98 revoked=67 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=68 C=16 minted=99 revoked=68 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=69 C=16 minted=100 revoked=69 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=70 C=16 minted=101 revoked=70 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=71 C=16 minted=102 revoked=71 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=72 C=16 minted=103 revoked=72 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=73 C=16 minted=104 revoked=73 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=74 C=16 minted=105 revoked=74 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=75 C=16 minted=106 revoked=75 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=76 C=16 minted=107 revoked=76 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=77 C=16 minted=108 revoked=77 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=78 C=16 minted=109 revoked=78 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=79 C=16 minted=110 revoked=79 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=80 C=16 minted=111 revoked=80 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=81 C=16 minted=112 revoked=81 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=82 C=16 minted=113 revoked=82 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=83 C=16 minted=114 revoked=83 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=84 C=16 minted=115 revoked=84 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=85 C=16 minted=116 revoked=85 init=0 live=16 retained=0 n=1 take_cyc=73 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=86 C=16 minted=117 revoked=86 init=0 live=16 retained=0 n=1 take_cyc=126 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=87 C=16 minted=118 revoked=87 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=88 C=16 minted=119 revoked=88 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=89 C=16 minted=120 revoked=89 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=90 C=16 minted=121 revoked=90 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=91 C=16 minted=122 revoked=91 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=92 C=16 minted=123 revoked=92 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=93 C=16 minted=124 revoked=93 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=94 C=16 minted=125 revoked=94 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=98 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=95 C=16 minted=126 revoked=95 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=96 C=16 minted=127 revoked=96 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=97 C=16 minted=128 revoked=97 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=98 C=16 minted=129 revoked=98 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=99 C=16 minted=130 revoked=99 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=100 C=16 minted=131 revoked=100 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=101 C=16 minted=132 revoked=101 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=102 C=16 minted=133 revoked=102 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=103 C=16 minted=134 revoked=103 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=104 C=16 minted=135 revoked=104 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=105 C=16 minted=136 revoked=105 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=106 C=16 minted=137 revoked=106 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=107 C=16 minted=138 revoked=107 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=108 C=16 minted=139 revoked=108 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=109 C=16 minted=140 revoked=109 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=110 C=16 minted=141 revoked=110 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=111 C=16 minted=142 revoked=111 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=112 C=16 minted=143 revoked=112 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=113 C=16 minted=144 revoked=113 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=114 C=16 minted=145 revoked=114 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=115 C=16 minted=146 revoked=115 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=154 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=116 C=16 minted=147 revoked=116 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=117 C=16 minted=148 revoked=117 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=118 C=16 minted=149 revoked=118 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=119 C=16 minted=150 revoked=119 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=120 C=16 minted=151 revoked=120 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=121 C=16 minted=152 revoked=121 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=122 C=16 minted=153 revoked=122 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=123 C=16 minted=154 revoked=123 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=124 C=16 minted=155 revoked=124 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=125 C=16 minted=156 revoked=125 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=126 C=16 minted=157 revoked=126 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=127 C=16 minted=158 revoked=127 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=128 C=16 minted=159 revoked=128 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=129 C=16 minted=160 revoked=129 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=130 C=16 minted=161 revoked=130 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=131 C=16 minted=162 revoked=131 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=132 C=16 minted=163 revoked=132 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=133 C=16 minted=164 revoked=133 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=134 C=16 minted=165 revoked=134 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=135 C=16 minted=166 revoked=135 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=136 C=16 minted=167 revoked=136 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=137 C=16 minted=168 revoked=137 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=138 C=16 minted=169 revoked=138 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=139 C=16 minted=170 revoked=139 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=140 C=16 minted=171 revoked=140 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=141 C=16 minted=172 revoked=141 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=142 C=16 minted=173 revoked=142 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=143 C=16 minted=174 revoked=143 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=144 C=16 minted=175 revoked=144 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=145 C=16 minted=176 revoked=145 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=146 C=16 minted=177 revoked=146 init=0 live=16 retained=0 n=1 take_cyc=98 give_cyc=210 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=147 C=16 minted=178 revoked=147 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=148 C=16 minted=179 revoked=148 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=149 C=16 minted=180 revoked=149 init=0 livECSA:00000001
+R1 m1 snap arm=drop alloc=150 C=16 minted=181 revoked=150 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=126 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=152 C=16 minted=183 revoked=152 init=0 live=16 retained=0 n=1 take_cyc=72 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=153 C=16 minted=184 revoked=153 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=238 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=154 C=16 minted=185 revoked=154 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=155 C=16 minted=186 revoked=155 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=156 C=16 minted=187 revoked=156 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=157 C=16 minted=188 revoked=157 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=158 C=16 minted=189 revoked=158 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=159 C=16 minted=190 revoked=159 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=266 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 snap arm=drop alloc=160 C=16 minted=191 revoked=160 init=0 live=16 retained=0 n=1 take_cyc=127 give_cyc=182 init_n=0 stale_alias_type=99 live_slot_type=2
+R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160 retained=0 released=0
+R1 end minted=191 split=16 mrev=176 revoke=160 init=0 out=25660 lines=165
+SQ: speedtest1-ran=1320222911
+DBAS:81A00000
+ladder-perf: RESULT k800 retval=4 cycles=4540 ran=53406 instret=1089 phase=2
+## r42b5: B5 R-43 control live16: f1aa05aa4fc2e4ff, "1 pressure m1 shared 2097152 --cap 64 --budget 60000"
+#  05:14:20 fw_payload 2bf7dfa763ea (monitor 2dcd3a5, buildroot d04bd83)
+#  05:14:20 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 'R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544'; no trap (seen=0). A cause-25 here = the cache false-denies even when NOT full.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb = B 
+#  05:22:18 runner ended after 478 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4540 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT1:00000001
+ENT2:4EB10000
+R1 m1 start arm=pressure C=64 target=640 fixture_nodes=31 budget=60000ECSA:00000001
+R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544
+R1 end minted=0 split=16 mrev=16 revoke=0 init=0 out=409 lines=5
+SQ: speedtest1-ran=1320222720
+DBAS:81940000
+ladder-perf: RESULT k800 retval=4 cycles=4552 ran=53406 instret=1089 phase=2
+## r42b3: B3 R1 warm, campaign boot 1: 1b7a04fe237e1580, r1-invocations.txt lines 1-12
+#  05:23:41 fw_payload b59793209c0c (monitor 2dcd3a5, buildroot d04bd83)
+#  05:23:41 === pre-registered: retval=4 twice; 12 x speedtest1-ran=0x4EB1xxxx; retval=4 twice; 12 x speedtest1-ran=0x4EB1xxxx; every R1 point line ok=1 bad=0; nd=2n on shared nodes points (Sublet arm); spatial arm rv=fl=in=0; fb=B on shared/combined; 12 x released pool rc=1; no refused; no cause-25 (false deny). Change detector: per-point take/give cycles vs campaign boot 1 on 054cea69b (r1rel-b1); 
+#  05:36:37 runner ended after 776 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4507 ran=53406 instret=1089 phase=2
+DBAS:81980000
+ENT0:00000001
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0xf4 11110100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x4f 01001111
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0x98 10011000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0xe0 11100000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0xfb 11111011
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0x9f 10011111
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+## r42b4: B4 R1 cold, wide rep 1: 46f99c7b5bf2556e, "1 S wide shared 8388608"
+#  05:38:00 fw_payload edd415b88e19 (monitor 2dcd3a5, buildroot d04bd83)
+#  05:38:00 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; retval=4 twice; 12 R1 wide points ok=1 bad=0; no refused; no cause-25. Change detector vs board-b3cold-b1..b5 on 054cea69b (cold 28.15 cycles/node, ramp shape).; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb = B on sh
+#  05:51:08 runner ended after 788 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4533 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT0:00000001
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0xbc 10111100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x51 01010001
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0xc4 11000100
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0xea 11101010
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0xaa 10101010
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+## r42b2: B2 R-35 regression, stale probe: 35fb3fec3196841b, m1-staletake.txt
+#  05:53:21 fw_payload 1f564733296b (monitor 2dcd3a5, buildroot d04bd83)
+#  05:53:21 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; opening RESULT k800 retval=4; domain enters (ENT1); trap log seen=1 mcause=25, latched mepc = DBAS+0x4354, tval = 0xac100000 -- identical to r35probe on 4ad0df694. REFUTED (R-42 broke R-35): no trap / stale-deref reads data.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4
+#  06:06:13 runner ended after 772 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4495 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0x54 01010100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x43 01000011
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0x00 00000000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0x00 00000000
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0x10 00010000
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0xac 10101100
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
