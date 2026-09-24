@@ -2015,12 +2015,17 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
       // (the PseudoCALL/auipc+jalr CALL relocation is not wired for Capstone).
       TargetReg = SDValue(Offset, 0);
     } else {
-      // 2. GP: Get the root data capability
-      SDValue GP = CurDAG->getRegister(Capstone::C3, PtrVT);
-
-      // 3. CIncOffset: Create the final function pointer capability
-      SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT, GP,
-                                           SDValue(Offset, 0));
+      // The callee capability, gp moved to the callee: cincoffset + delin in ONE
+      // pseudo (PseudoCapGlobalBase), exactly as selectLGA builds a global's base
+      // and for the same reason (C-46). A bare CIncOffset of gp is LINEAR, and it
+      // is pure, so MachineCSE merges the targets of several calls to one callee
+      // into a single linear value. Once register allocation copies it -- a
+      // `movc` that CONSUMES a linear source -- every later call through the
+      // original register jumps through a null capability. Observed: `movc s8,
+      // s11` then `cjalr ra, 0(s11)`, cause 24, in a -O2 domain whose main calls
+      // one static function nine times.
+      SDNode *Ptr = CurDAG->getMachineNode(Capstone::PseudoCapGlobalBase, DL,
+                                           PtrVT, SDValue(Offset, 0));
       TargetReg = SDValue(Ptr, 0);
     }
   } else {
