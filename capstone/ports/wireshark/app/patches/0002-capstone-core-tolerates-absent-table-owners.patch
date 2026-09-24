@@ -1,0 +1,72 @@
+--- a/epan/packet.c
++++ b/epan/packet.c
+@@ -240,6 +240,12 @@
+ 	registered_dissectors = g_hash_table_new_full(g_str_hash, g_str_equal,
+ 			NULL, NULL);
+ 
++	/* CAPSTONE (tshark app port): created here, empty, rather than by the first
++	   register_postdissector. A whitelisted build may register none, and three of the seven
++	   loops over it dereference it without a NULL check. */
++	if (!postdissectors)
++		postdissectors = g_array_sized_new(false, false, (unsigned)sizeof(postdissector), 1);
++
+ 	depend_dissector_lists = g_hash_table_new_full(g_str_hash, g_str_equal,
+ 			g_free, destroy_depend_dissector_list);
+ 
+@@ -1371,6 +1377,14 @@
+ 	int proto_id = proto_get_id(handle->protocol);
+ 	uint32_t max_value = 0;
+ 
++	/* CAPSTONE (tshark app port): a whitelisted build registers handoffs to tables whose owner
++	   was left out. Every other registration path reports that and carries on; this one read
++	   pref_dissector_table->ui_name through NULL. Report it the same way and register nothing. */
++	if (pref_dissector_table == NULL) {
++		ws_dissector_oops("dissector table \"%s\" doesn't exist (range preference)\n", name);
++		return NULL;
++	}
++
+ 	/* If a dissector is added for Decode As only, it's dissector
+ 		table value would default to 0.
+ 		Set up a preference value with that information
+--- a/epan/rtd_table.c
++++ b/epan/rtd_table.c
+@@ -155,7 +155,10 @@
+ 
+ void rtd_table_iterate_tables(wmem_foreach_func func, void *user_data)
+ {
+-    wmem_tree_foreach(registered_rtd_tables, func, user_data);
++    /* CAPSTONE (tshark app port): the tree is created by the first registration, and a
++       whitelisted build may have none; wmem_tree_foreach does not accept NULL. */
++    if (registered_rtd_tables)
++        wmem_tree_foreach(registered_rtd_tables, func, user_data);
+ }
+ 
+ /*
+--- a/epan/srt_table.c
++++ b/epan/srt_table.c
+@@ -195,7 +195,10 @@
+ 
+ void srt_table_iterate_tables(wmem_foreach_func func, void *user_data)
+ {
+-    wmem_tree_foreach(registered_srt_tables, func, user_data);
++    /* CAPSTONE (tshark app port): the tree is created by the first registration, and a
++       whitelisted build may have none; wmem_tree_foreach does not accept NULL. */
++    if (registered_srt_tables)
++        wmem_tree_foreach(registered_srt_tables, func, user_data);
+ }
+ 
+ srt_stat_table*
+--- a/epan/stat_tap_ui.c
++++ b/epan/stat_tap_ui.c
+@@ -161,7 +161,10 @@
+ 
+ void stat_tap_iterate_tables(wmem_foreach_func func, void *user_data)
+ {
+-    wmem_tree_foreach(registered_stat_tables, func, user_data);
++    /* CAPSTONE (tshark app port): the tree is created by the first registration, and a
++       whitelisted build may have none; wmem_tree_foreach does not accept NULL. */
++    if (registered_stat_tables)
++        wmem_tree_foreach(registered_stat_tables, func, user_data);
+ }
+ 
+ void stat_tap_get_filter(stat_tap_table_ui* new_stat, const char *opt_arg, const char **filter, char** err)

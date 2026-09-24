@@ -1,0 +1,13 @@
+--- a/epan/proto.h
++++ b/epan/proto.h
+@@ -88,7 +88,9 @@
+  * pointers to 'void *'. This violates ISO C but should be fine on POSIX
+  * and Windows.
+  */
+-#define CF_FUNC(x) ((const void *) (size_t) (x))
++/* CAPSTONE (tshark app port): a function pointer cast through size_t loses its capability tag
++   and is not a constant initializer on capstone64; cast it directly. */
++#define CF_FUNC(x) ((const void *) (x))
+ 
+ /** Make a const range_string[] look like a _range_string pointer, used to set
+  * header_field_info.strings */
