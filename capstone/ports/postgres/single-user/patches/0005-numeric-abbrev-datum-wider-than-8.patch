@@ -1,0 +1,29 @@
+numeric.c: the sort-abbreviation form for a Datum wider than 8 bytes.
+
+numeric_abbrev_convert_var exists in a 64-bit form (SIZEOF_DATUM == 8) and a 32-bit
+form; with a 16-byte Datum neither is compiled and the link fails on the undefined
+static. The abbreviation is an integer carried in a Datum, so the 64-bit form holds.
+
+--- a/src/backend/utils/adt/numeric.c
++++ b/src/backend/utils/adt/numeric.c
+@@ -398,14 +398,18 @@
+  * comments below).  PINF and NINF share the abbreviations of the largest
+  * and smallest finite abbreviation classes.
+  */
+-#define NUMERIC_ABBREV_BITS (SIZEOF_DATUM * BITS_PER_BYTE)
+-#if SIZEOF_DATUM == 8
++/* capstone: a Datum is 16 bytes, a capability; the abbreviation is an integer
++ * carried in one and keeps the 64-bit form. Without this neither form is
++ * compiled and numeric_abbrev_convert_var is left undefined. */
++#if SIZEOF_DATUM >= 8
++#define NUMERIC_ABBREV_BITS 64
+ #define NumericAbbrevGetDatum(X) ((Datum) (X))
+ #define DatumGetNumericAbbrev(X) ((int64) (X))
+ #define NUMERIC_ABBREV_NAN		 NumericAbbrevGetDatum(PG_INT64_MIN)
+ #define NUMERIC_ABBREV_PINF		 NumericAbbrevGetDatum(-PG_INT64_MAX)
+ #define NUMERIC_ABBREV_NINF		 NumericAbbrevGetDatum(PG_INT64_MAX)
+ #else
++#define NUMERIC_ABBREV_BITS 32
+ #define NumericAbbrevGetDatum(X) ((Datum) (X))
+ #define DatumGetNumericAbbrev(X) ((int32) (X))
+ #define NUMERIC_ABBREV_NAN		 NumericAbbrevGetDatum(PG_INT32_MIN)

@@ -1,0 +1,64 @@
+xlogprefetcher.c: the read queue's private context is a pointer, not a uintptr_t.
+
+LsnReadQueue hands its owner's context to the callback as a uintptr_t; the prefetcher
+stores its own struct pointer there, and the cast back gives an integer without the
+capability: the second boot attempt halted in XLogPrefetcherNextBlock on the first load
+through it (StartupXLOG reading the checkpoint BootStrapXLOG had just written). A void *
+carries it whole; the six sites are in this file alone.
+
+--- a/src/backend/access/transam/xlogprefetcher.c
++++ b/src/backend/access/transam/xlogprefetcher.c
+@@ -91,7 +91,7 @@
+  * Type of callback that can decide which block to prefetch next.  For now
+  * there is only one.
+  */
+-typedef LsnReadQueueNextStatus (*LsnReadQueueNextFun) (uintptr_t lrq_private,
++typedef LsnReadQueueNextStatus (*LsnReadQueueNextFun) (void *lrq_private,
+ 													   XLogRecPtr *lsn);
+ 
+ /*
+@@ -103,7 +103,7 @@
+ typedef struct LsnReadQueue
+ {
+ 	LsnReadQueueNextFun next;
+-	uintptr_t	lrq_private;
++	void	   *lrq_private;	/* capstone: a pointer, not an integer carrying one */
+ 	uint32		max_inflight;
+ 	uint32		inflight;
+ 	uint32		completed;
+@@ -193,7 +193,7 @@
+ 											BlockNumber blockno);
+ static inline void XLogPrefetcherCompleteFilters(XLogPrefetcher *prefetcher,
+ 												 XLogRecPtr replaying_lsn);
+-static LsnReadQueueNextStatus XLogPrefetcherNextBlock(uintptr_t pgsr_private,
++static LsnReadQueueNextStatus XLogPrefetcherNextBlock(void *pgsr_private,
+ 													  XLogRecPtr *lsn);
+ 
+ static XLogPrefetchStats *SharedStats;
+@@ -201,7 +201,7 @@
+ static inline LsnReadQueue *
+ lrq_alloc(uint32 max_distance,
+ 		  uint32 max_inflight,
+-		  uintptr_t lrq_private,
++		  void *lrq_private,
+ 		  LsnReadQueueNextFun next)
+ {
+ 	LsnReadQueue *lrq;
+@@ -458,7 +458,7 @@
+  * not to prefetch.
+  */
+ static LsnReadQueueNextStatus
+-XLogPrefetcherNextBlock(uintptr_t pgsr_private, XLogRecPtr *lsn)
++XLogPrefetcherNextBlock(void *pgsr_private, XLogRecPtr *lsn)
+ {
+ 	XLogPrefetcher *prefetcher = (XLogPrefetcher *) pgsr_private;
+ 	XLogReaderState *reader = prefetcher->reader;
+@@ -1011,7 +1011,7 @@
+ 
+ 		prefetcher->streaming_read = lrq_alloc(max_distance,
+ 											   max_inflight,
+-											   (uintptr_t) prefetcher,
++											   prefetcher,
+ 											   XLogPrefetcherNextBlock);
+ 
+ 		prefetcher->reconfigure_count = XLogPrefetchReconfigureCount;

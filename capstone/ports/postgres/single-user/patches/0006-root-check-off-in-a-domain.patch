@@ -1,0 +1,21 @@
+main.c: the refusal to run as uid 0, off inside a domain (PGSU_DOMAIN set).
+
+A domain's identity is the one its runtime reports for the host service, uid 0; there
+is no privilege behind it to drop, and check_root would otherwise end every run at
+its first line. The environment variable keeps the check for a native build of the
+same tree.
+
+--- a/src/backend/main/main.c
++++ b/src/backend/main/main.c
+@@ -381,7 +381,10 @@
+ check_root(const char *progname)
+ {
+ #ifndef WIN32
+-	if (geteuid() == 0)
++	/* capstone: a domain has no user of its own; the identity its runtime
++	 * reports is the host service's, uid 0, and there is no privilege behind
++	 * it to drop. The refusal below would stop every run at this line. */
++	if (geteuid() == 0 && getenv("PGSU_DOMAIN") == NULL)
+ 	{
+ 		write_stderr("\"root\" execution of the PostgreSQL server is not permitted.\n"
+ 					 "The server must be started under an unprivileged user ID to prevent\n"

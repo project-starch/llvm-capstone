@@ -1,9 +1,10 @@
 # PostgreSQL in a domain: what `postgres --single` would need, measured
 
-Branch `postgres/8-single-user-survey`, on `dev`. Component
-`capstone/ports/postgres/single-user/` (two survey scripts, the session's SQL, and
-`results/2026-09-24/`). Written 2026-09-24, the day the question was asked; nothing has been
-ported, and this says what a port would meet, in three layers, with the numbers behind each.
+Branch `postgres/8-single-user-survey`, on `dev`, and `postgres/9-boot-attempt` on it. Component
+`capstone/ports/postgres/single-user/` (the survey scripts, the session's SQL, the build, recorder
+and runner of the boot attempt, its patches, and `results/2026-09-24/`). Written 2026-09-24, the
+day the question was asked; the survey says what a port meets, in three layers, with the numbers
+behind each, and the last section says where the backend, booted, actually stops.
 
 The existing PostgreSQL port ([`../../ports/postgres/README.md`](../../ports/postgres/README.md))
 is the memory manager alone, and its README says the program "wants an operating system, a file
@@ -104,5 +105,60 @@ port on top of it, with `initdb` driven from the host and the memory manager por
 hand. Without intcap there is no PostgreSQL in a domain, on QEMU or on silicon, that is more than
 the memory manager.
 
-Not done here: a link of the 957 objects (the undefined-symbol list would name the libc gaps as
-CPython's first link did), and the two crashes on the integration compiler.
+The link and the boot were done the same evening; the next section says where the boot stops.
+Not done here: the two crashes on the integration compiler.
+
+## The boot attempt (branch `postgres/9-boot-attempt`, 2026-09-24)
+
+Component `capstone/ports/postgres/single-user/` grew a build, a recorder and a runner, and the
+backend was booted in a domain on QEMU, on `initdb`'s own `--boot` invocation. Result lines in
+`results/2026-09-24/boot-attempt.txt`; the pieces:
+
+- `record-initdb.sh` runs the native `initdb` (`-U pg --no-sync --no-locale -E UTF8`) with a
+  recording `postgres` in front of the real one. initdb makes five backend calls: `-V`, two
+  `--check`, `--boot` over the 953,038-byte catalog script, and one `--single` session over the
+  249,422 bytes of setup SQL. Each call's arguments, environment, input and the data directory
+  it started from are kept, so the domain replays one call from the recorded state.
+- `build-domain.sh` builds musl and the runtime from a runtime branch (`RUNTIME_REPO`), configures
+  and makes the backend through `toolchain/capstone-cc` (`MAXIMUM_ALIGNOF` 16, no computed goto,
+  `-DWAIT_USE_POLL`, system tzdata), and links `link/postgres.dom`: 760 objects, 0 undefined
+  symbols. The link needed `src/timezone`'s objects, compiler-rt's int128 builtins
+  (`numeric.c`'s `sqrt_var`), and two runtime branches, `runtime/path-readlink` (musl's
+  `realpath()` under `find_my_exec`) and `runtime/strchrnul-alias` (the string override lacked
+  the public name PostgreSQL's `snprintf.c` calls).
+- `run-domain.sh <call>` stages the image under `bin/`, the native `share/` beside it (the
+  backend derives its share directory from `argv[0]`), the recorded data directory (mode 0700),
+  the input as a file (patch 0003: the backend has no stdin), and the arguments and
+  environment for `toolchain/domain_entry.c`. The catalog script is regenerated from the
+  template with this target's substitutions -- `SIZEOF_POINTER` 16 -- and checked against the
+  recording (two rows differ, `pg_ddl_command` and `internal`). The guest links
+  `/usr/share/zoneinfo` to the staged tzdata. The domain block: 128 MiB from CMA (`br-snap`'s
+  rootfs module); the image with a 64 MiB level0 arena asked for 256 MiB and failed
+  `create_dom`, so the arena is 32 MiB.
+- Patches: 0001-0004 from the compile survey and the memory-manager port; 0005 `numeric.c`'s
+  sort abbreviation for a 16-byte `Datum`; 0006 the root refusal off under `PGSU_DOMAIN`
+  (the runtime reports uid 0); 0007 a `TYPEALIGN` that keeps the capability, with a `_Generic`
+  guard that refused, at the link, the one operand in the backend that is not a byte pointer
+  (0008, `read_stream.c`); 0009 the WAL prefetcher's context as a `void *` instead of a
+  `uintptr_t`.
+
+Five boots. The first failed `create_dom` (block size). The second halted at `XLOGShmemInit`:
+`TYPEALIGN(XLOG_BLCKSZ, allocptr)` rounds the pointer through `uintptr_t`, and the `memset`
+that follows faults on the untagged result -- the first `uintptr_t`-as-pointer site, before any
+`Datum`. The third was a repeat by mistake (no `--enable-depend`; the tree rebuilt nothing for a
+patched header) and stalled in the guest. The fourth, with 0007/0008, ran through
+`checkDataDir`, the lock file, `CreateSharedMemoryAndSemaphores` and `BootStrapXLOG` -- the
+domain wrote `global/pg_control` (native `pg_controldata` reads it: checkpoint 0/1000030, max
+alignment 16), the 16 MiB WAL segment, the clog/subtrans/multixact pages and `postmaster.pid`
+through the file service -- and halted in `StartupXLOG` on the prefetcher's `uintptr_t`
+context. The fifth, with 0009, completes recovery, opens the catalog script, and halts on the
+script's first statement, `create pg_proc`: `GetTableAmRoutine` calls the heap handler through
+the fmgr, the handler returns `PG_RETURN_POINTER(&heapam_methods)` as a `Datum`, and the first
+load through `DatumGetPointer` of it faults (`GetTableAmRoutine+0x38`, x10 = `heapam_methods`
+as an integer).
+
+So the boot stops exactly at the layer the survey named, and not before it: everything the
+operating-system layer had to serve, served (a 16 MiB WAL write, recovery, the lock file, the
+config), the `uintptr_t` alignment idiom is three small patches, and the `Datum` is the fmgr
+calling convention of the whole backend. The next step is the intcap decision, not another
+patch.

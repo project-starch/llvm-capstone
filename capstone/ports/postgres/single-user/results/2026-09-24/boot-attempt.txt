@@ -1,0 +1,67 @@
+PostgreSQL 17.5 backend in a domain: the boot attempt, 2026-09-24
+Compiler 595e757cb696 (compiler/capability-alignment-warnings), runtime branches through
+runtime/strchrnul-alias (PATH_READLINK, strchrnul alias), QEMU, buildroot snapshot br-snap
+(CMA-backed domain blocks in the rootfs module), cma=256M.
+
+record-initdb.sh (native, initdb -U pg --no-sync --no-locale -E UTF8): 5 backend calls
+  call 1: -V
+  call 2: --check -F -c log_checkpoints=false -c max_connections=100 -c shared_buffers=1000 -c dynamic_shared_memory_type=posix
+  call 3: --check -F -c log_checkpoints=false -c max_connections=100 -c shared_buffers=16384 -c dynamic_shared_memory_type=posix
+  call 4: --boot -F -c log_checkpoints=false -X 16777216            input 953038 bytes (the catalog script)
+  call 5: --single -F -O -j -c search_path=pg_catalog -c exit_on_error=true -c log_checkpoints=false template1   input 249422 bytes (the setup SQL, one session)
+  pgdata before call 4: 152K; before call 5: 21M
+
+build-domain.sh: 760 objects (parsers at -O0), link 0 undefined symbols after
+  - src/timezone objects added to the link (19 undefined without them: pg_tz*, pg_localtime, ...)
+  - int128 builtins from compiler-rt (numeric.c's sqrt_var: __divti3, __udivti3)
+  - patch 0005 numeric.c: the 64-bit sort abbreviation for SIZEOF_DATUM >= 8 (was undefined at 16)
+  - runtime/strchrnul-alias: the string override lacked strchrnul's public name (duplicate __strchrnul)
+  image postgres.dom 21500608 bytes; loadable 81312992 with the 64 MiB level0 arena,
+  47758560 with 32 MiB
+
+boot 1 (64 MiB arena): create_dom failed (-1); "Failed to allocate memory for domain (order 16)"
+  the module sizes an undeclared domain's block at the next power of two above twice the
+  loadable size: 155 MiB -> 256 MiB, which cma=256M cannot give. 32 MiB arena -> 128 MiB block.
+
+boot 2 (32 MiB arena, --boot, patches 0001-0006): the backend starts, reads its arguments and
+  environment (PGSU-ARG/PGSU-ENV echoed), and halts on its first shared-memory setup:
+    cincoffset with an UNTAGGED rs1 -- pc=0xf020bee4 rd=x12 rs1=x10 val=0xf0f7e000
+    domain halted by capability fault: cause = 24, pc = 0xf020bee4 (memset+0x18), ra = XLOGShmemInit+0x32c
+  xlog.c XLOGShmemInit: allocptr = (char *) TYPEALIGN(XLOG_BLCKSZ, allocptr); memset(allocptr, 0, 0x20000)
+  TYPEALIGN casts the pointer to uintptr_t, rounds, casts back: mv / add / and, and the tag is gone
+  (x10 = 0xf0f7e000 is l0_arena+0x4eab0, page-aligned, an integer). Before any Datum.
+
+boot 3 (same image as boot 2, by mistake: the tree was configured without --enable-depend, so
+  the patched c.h rebuilt nothing): the guest printed the arguments and then nothing for 3:47
+  with the vCPU at 99.9 %; killed. Neither a result nor a halt -- the shape the CPython runner
+  retries. Recorded as a stall, not a result. build-domain.sh now configures --enable-depend
+  and PGSU_CLEAN=1 rebuilds the objects once; run-domain.sh retries (PGSU_ATTEMPTS) and takes
+  a monitor socket (PGSU_QEMU_MONITOR).
+
+boot 4 (patch 0007: TYPEALIGN keeps the capability; patch 0008: read_stream.c's two wide-pointer
+  operands, the one site the guard named at the link): the backend gets through checkDataDir,
+  the lock file, CreateSharedMemoryAndSemaphores and BootStrapXLOG, and halts in StartupXLOG:
+    Cap mem access requires capability: pc = f033c484 (XLogPrefetcherNextBlock+0x68), rs1 = x23, value = f18a6f90
+    ra = XLogPrefetcherReadRecord+0x184; x23 is the callback's uintptr_t lrq_private (l0_arena+0x976a40)
+  written to /mnt/host/pgdata before the halt (host view, native pg_controldata reads it):
+    global/pg_control 8192 B  (checkpoint 0/1000030, timeline 1, "shut down", max alignment 16)
+    pg_wal/000000010000000000000001 16777216 B, pg_xact/0000, pg_subtrans/0000,
+    pg_multixact/{members,offsets}/0000 (8192 B each), postmaster.pid 58 B
+
+boot 5 (patch 0009: the prefetcher's context as a void *): StartupXLOG completes (the checkpoint
+  BootStrapXLOG wrote is read back through the prefetcher), the catalog script is opened
+  from /mnt/host/pg-input, and the backend halts on the first Datum that carries a pointer:
+    Cap mem access requires capability: pc = f02ea470 (GetTableAmRoutine+0x38), rs1 = x10, value = f0d615e0
+    x10 = heapam_methods (.rodata), an integer: OidFunctionCall0(HEAP_TABLE_AM_HANDLER) returned
+    PG_RETURN_POINTER(&heapam_methods) as a Datum, and DatumGetPointer gave the address back
+    without the capability; the first load through it (IsA(routine, TableAmRoutine)) faults.
+  The one caller of GetTableAmRoutine a bootstrap backend reaches before this is none: the
+  relcache's init phases return early in bootstrap mode, so this is the catalog script's
+  first statement (create pg_proc: heap_create -> RelationBuildLocalRelation ->
+  RelationInitTableAccessMethod). Where the boot attempt stops: layer 3, exactly as the plan
+  said, and not one line before it.
+
+Patches 0007-0009 are the uintptr_t-as-pointer sites met on the way (TYPEALIGN, one wide
+pointer under it, the prefetcher's context); each is a few lines. The Datum is not: a Datum
+is returned by every function the fmgr calls, and the fmgr convention is the ABI of the
+whole backend. That is the intcap decision, plans/intcap-uintptr-model.md.

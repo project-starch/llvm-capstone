@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# The C compiler PostgreSQL's configure and Makefiles are given as CC.
+#
+# The CPython port's toolchain/capstone-cc, with its environment names made
+# general (PGSU_* here, CPY_* there) and nothing else changed; the two should
+# become one file under musl-capstone once the CPython branch is in dev.
+#
+# Two jobs, chosen by the arguments the way a real driver would choose them:
+#
+#   compile   (-c, -E, -S, -M, -MM)  the Capstone pure-cap clang against musl's
+#             headers, with the flags the working musl domains are built with.
+#   link      (none of the above)    a real domain link, the same one libc-test
+#             uses: start-musl + the port runtime + libc-capstone.a + builtins.
+#
+# The link is the point of this file. configure decides HAVE_<func> by linking a
+# program that calls <func>; a wrapper that always "linked" would report every
+# function present, and one that never did would report none. Linking against
+# the archive musl actually compiled to makes each HAVE_ an answer about this
+# libc.
+#
+# When PGSU_SURVEY_LOG is set (the build sets it for `make`, never for
+# configure), every `-c ... -o X.o` appends one tab-separated line to it:
+#   <object as given> <exit status> <source> <first error line>
+# and keeps the full diagnostic beside the object as X.o.err.
+set -uo pipefail
+: "${CAPSTONE_CLANG:?}" "${CAPSTONE_LD_LLD:?}" "${PGSU_MUSL:?musl source tree}"
+: "${PGSU_RUNTIME_DIR:?prepared runtime objects}" "${PGSU_LIBC_ARCHIVE:?libc-capstone.a}"
+: "${PGSU_LINKER_SCRIPT:?domain linker script}"
+TARGET=(-target capstone64-unknown-elf
+        -Xclang -target-feature -Xclang +m
+        -Xclang -target-feature -Xclang +a
+        -ffreestanding -fno-builtin -fno-jump-tables
+        -nostdinc
+        -isystem "$PGSU_MUSL/arch/capstone64" -isystem "$PGSU_MUSL/arch/generic"
+        -isystem "$PGSU_MUSL/obj/include" -isystem "$PGSU_MUSL/include")
+
+mode=link
+out=""
+src=""
+prev=""
+for a in "$@"; do
+  case "$a" in
+    -c|-S|-E|-M|-MM) mode=compile ;;
+  esac
+  if [[ "$prev" == "-o" ]]; then out="$a"; fi
+  case "$a" in *.c) src="$a" ;; esac
+  prev="$a"
+done
+
+if [[ "$mode" == compile ]]; then
+  if [[ -n "${PGSU_SURVEY_LOG:-}" && "$out" == *.o ]]; then
+    # -ferror-limit=0: the survey counts every error site in a file, and clang
+    # otherwise stops at 20 -- the sites past that would read as absent.
+    "$CAPSTONE_CLANG" "${TARGET[@]}" "$@" -ferror-limit=0 2> "$out.err"
+    rc=$?
+    first=""
+    if [[ $rc -ne 0 ]]; then
+      first=$(grep -m1 -E 'error in backend:|Assertion .* failed|UNREACHABLE executed' "$out.err")
+      [[ -n "$first" ]] || first=$(grep -m1 'error:' "$out.err")
+      [[ -n "$first" ]] || first="<no error line; exit $rc>"
+    fi
+    printf '%s\t%d\t%s\t%s\n' "$out" "$rc" "$src" "${first//$'\t'/ }" >> "$PGSU_SURVEY_LOG"
+    exit $rc
+  fi
+  exec "$CAPSTONE_CLANG" "${TARGET[@]}" "$@"
+fi
+
+# ---- link ---------------------------------------------------------------
+# musl folds libm, libpthread, librt, libdl, libutil and libcrypt into libc and
+# ships them as empty archives, so asking for one is asking for libc. Any other
+# -l is a library this target does not have, and the link must say so.
+MUSL_LIBS=" c m pthread rt dl util crypt xnet resolv "
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/capstone-cc.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+inputs=()
+cflags=()
+skip_next=0
+for a in "$@"; do
+  if [[ $skip_next -eq 1 ]]; then skip_next=0; continue; fi
+  case "$a" in
+    -o) skip_next=1 ;;
+    -l*)
+      lib=${a#-l}
+      if [[ "$MUSL_LIBS" != *" $lib "* ]]; then
+        echo "capstone-cc: -l$lib: no such library for capstone64 (musl-only target)" >&2
+        exit 1
+      fi ;;
+    -L*|-Wl,*|-Xlinker|-rdynamic|-pthread|-shared|-static|-pie|-no-pie) ;;
+    *.c)
+      o="$tmp/$(basename "$a" .c).$RANDOM.o"
+      "$CAPSTONE_CLANG" "${TARGET[@]}" "${cflags[@]}" -c "$a" -o "$o" || exit 1
+      inputs+=("$o") ;;
+    *.o|*.a) inputs+=("$a") ;;
+    -D*|-U*|-I*|-std=*|-O*|-g*|-f*|-W*|-m*) cflags+=("$a") ;;
+    *) ;;
+  esac
+done
+[[ -n "$out" ]] || out=a.out
+
+exec "$CAPSTONE_LD_LLD" --gc-sections -T "$PGSU_LINKER_SCRIPT" -o "$out" \
+  "$PGSU_RUNTIME_DIR"/*.o "${inputs[@]}" "$PGSU_LIBC_ARCHIVE"

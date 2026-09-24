@@ -1,0 +1,24 @@
+read_stream.c: the two MAXALIGN operands that are not byte pointers.
+
+The capability-keeping TYPEALIGN (patch 0007) refuses a pointer to a wider element, since
+adding the padding to it would scale the padding; the link named this file, the one
+such site in the backend (a Buffer * and an InProgressIO *). Cast to char * first.
+
+--- a/src/backend/storage/aio/read_stream.c
++++ b/src/backend/storage/aio/read_stream.c
+@@ -484,11 +484,13 @@
+ 	size += MAXIMUM_ALIGNOF * 2;
+ 	stream = (ReadStream *) palloc(size);
+ 	memset(stream, 0, offsetof(ReadStream, buffers));
++	/* capstone: MAXALIGN keeps a byte pointer's capability and refuses any
++	 * other pointer type (c.h), so the operands are byte pointers here. */
+ 	stream->ios = (InProgressIO *)
+-		MAXALIGN(&stream->buffers[queue_size + queue_overflow]);
++		MAXALIGN((char *) &stream->buffers[queue_size + queue_overflow]);
+ 	if (per_buffer_data_size > 0)
+ 		stream->per_buffer_data = (void *)
+-			MAXALIGN(&stream->ios[Max(1, max_ios)]);
++			MAXALIGN((char *) &stream->ios[Max(1, max_ios)]);
+ 
+ #ifdef USE_PREFETCH
+ 

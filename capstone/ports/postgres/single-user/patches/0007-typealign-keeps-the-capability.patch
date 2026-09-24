@@ -1,0 +1,45 @@
+c.h: TYPEALIGN and TYPEALIGN_DOWN keep a pointer's capability.
+
+PostgreSQL aligns pointers by casting them to uintptr_t, masking, and casting back;
+on capstone the value that comes back is an integer, without the tag, and the first
+access through it faults (XLOGShmemInit -> memset, the first boot attempt's fault).
+The padding is computed on the address and added to the operand itself, so a byte
+pointer stays a capability and an integer stays an integer; a pointer to a wider
+element would scale the padding and is refused at link time by name.
+
+--- a/src/include/c.h
++++ b/src/include/c.h
+@@ -801,8 +801,23 @@
+  * ----------------
+  */
+ 
++/* capstone: a pointer rounded through uintptr_t comes back without its
++ * capability tag (the first such site, XLOGShmemInit's page buffers, faulted
++ * on the memset that followed). So the padding is computed on the address and
++ * added to the operand itself: pointer arithmetic on a byte pointer, integer
++ * arithmetic on an integer. Any other operand type -- a pointer to a wider
++ * element would scale the padding -- fails to link on pg_typealign_bad_type,
++ * which names the object. */
++extern long pg_typealign_bad_type(void);
++#define PG_TYPEALIGN_UNIT(X) _Generic((X), \
++	char *: 1, const char *: 1, unsigned char *: 1, const unsigned char *: 1, \
++	signed char *: 1, void *: 1, const void *: 1, \
++	char: 1, signed char: 1, unsigned char: 1, short: 1, unsigned short: 1, \
++	int: 1, unsigned int: 1, long: 1, unsigned long: 1, \
++	long long: 1, unsigned long long: 1, \
++	default: pg_typealign_bad_type())
+ #define TYPEALIGN(ALIGNVAL,LEN)  \
+-	(((uintptr_t) (LEN) + ((ALIGNVAL) - 1)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
++	((LEN) + PG_TYPEALIGN_UNIT(LEN) * (((ALIGNVAL) - ((uintptr_t) (LEN) & ((ALIGNVAL) - 1))) & ((ALIGNVAL) - 1)))
+ 
+ #define SHORTALIGN(LEN)			TYPEALIGN(ALIGNOF_SHORT, (LEN))
+ #define INTALIGN(LEN)			TYPEALIGN(ALIGNOF_INT, (LEN))
+@@ -814,7 +829,7 @@
+ #define CACHELINEALIGN(LEN)		TYPEALIGN(PG_CACHE_LINE_SIZE, (LEN))
+ 
+ #define TYPEALIGN_DOWN(ALIGNVAL,LEN)  \
+-	(((uintptr_t) (LEN)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
++	((LEN) - PG_TYPEALIGN_UNIT(LEN) * ((uintptr_t) (LEN) & ((ALIGNVAL) - 1)))
+ 
+ #define SHORTALIGN_DOWN(LEN)	TYPEALIGN_DOWN(ALIGNOF_SHORT, (LEN))
+ #define INTALIGN_DOWN(LEN)		TYPEALIGN_DOWN(ALIGNOF_INT, (LEN))
