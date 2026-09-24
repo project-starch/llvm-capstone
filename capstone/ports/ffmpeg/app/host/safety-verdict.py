@@ -159,8 +159,11 @@ def main(argv):
         verdicts = []
         for kind, val in want:
             if kind == 'RETURN':
-                hit = got == 'RETURN' and (val == '*' and detail.startswith(f'{n:x}') and len(detail) == 6
-                                           or val == detail)
+                # a mark is 0x100000 * fixture + value: its hex length is that of the fixture's
+                # base (6 digits for 1-15, 7 for 16 and up)
+                base = f'{0x100000 * n:x}'
+                hit = got == 'RETURN' and (val == '*' and detail.startswith(base[:len(base) - 5])
+                                           and len(detail) == len(base) or val == detail)
             elif kind == 'FAULT':
                 hit = got == 'FAULT' and (val == 'any' or val == detail)
             elif kind == 'POOLFAIL':
