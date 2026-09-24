@@ -145,10 +145,46 @@ a QEMU tag watch on the message's slot saw no store clear it. With probes compil
 moved and then disappeared, so it depends on layout. It is off the path now that startup
 succeeds, and not understood.
 
+## Where the rounds go (2026-09-24)
+
+`lt.user` now prints, after its `LT-RESULT` line, one `LT-HIST` line for each HostCall opcode (rounds,
+bytes requested and moved, rounds that reached the end of the payload region) and one `LT-FILE`
+line per opened path. The first `LT-HIST` line checks its total against `LT-RESULT`'s round count
+(`MATCH`); `WRITE_STDOUT`'s bytes were checked against the output (`hello.py`: 149 = the 89 bytes
+of its three lines + the 60 of the domain's `UNSERVED` line). Measured on the boot-36 image, one
+boot per script; a run of `pass` alone is 121 rounds, `hello.py` adds one `WRITE_STDOUT`.
+
+| | `hello.py` | `checks.py` |
+|---|---:|---:|
+| rounds | 122 | 584 |
+| `FILE_READ` (of them at the 4064-byte chunk ceiling) | 69 (43) | 403 (275) |
+| `FILE_OPEN` / `FILE_STAT_BASIC` / `FILE_CLOSE` | 21 / 15 / 14 | 65 / 57 / 56 |
+| `WRITE_STDOUT`, `CLOCK_GETTIME` | 2, 1 | 2, 1 |
+| bytes read | 157 KB | 1.11 MB |
+| of it `python313.zip` | 9 opens, 62 reads, 157 KB | 51 opens, 394 reads, 1.107 MB |
+
+Three things follow. **Every round is an import.** After the last import the interpreter makes
+no HostCall: the two `WRITE_STDOUT` rounds and the one `CLOCK_GETTIME` are the only ones that are
+not the loading of a module, and the eval loop never crosses the boundary. **The stdlib zip is
+the path.** 51 of 65 opens, 394 of 403 reads and 1.107 of 1.113 MB are `python313.zip`, and with
+its `fstat` and `close` about 550 of the 584 rounds; `zipimport` opens the archive again for every
+module it loads (`Lib/zipimport.py:617`, `_get_data`), three rounds before a byte of data. **A
+4 KiB read is two rounds.** The chunk is 4064 bytes, the region less the 32-byte request header
+(`hostcall.c`, `max_chunk = HC_PAYLOAD_SIZE - data_off`), and CPython reads in 4096-byte pieces;
+275 of the 403 read rounds sit at that ceiling.
+
+So the boundary's cost for CPython is at startup, and the change that removes most of it is in the
+runtime, not in the protocol or the monitor: the zip shared once at start as a read-only region and
+served by `hostcall.c` as a memory-backed file, so that `open`, `fstat`, `close` and `read` on that
+path make no round. Not measured: what one round costs on silicon. The copying alone is 272 chunks
+of 4 KiB at the ~14,000 cycles `hostcall.c` cites for CVA6, about 3.8 M cycles per `checks.py`
+start; on QEMU the rounds are not where the ~10 s of a run go.
+
 ## Next action
 
 Port: drop `-S` (import `site`), then run a larger part of the stdlib test suite in a domain, one
 module per run, batched into one boot (`CPY_ENV`/`CPY_DOM`). Runtime: `rt_sigaction` (R4), `getrandom` and
-`readlinkat` (R10), `getcwd` (R7). Compiler: C-57, IR-level GEP speculation (C-58's residual),
+`readlinkat` (R10), `getcwd` (R7); once a round's cost on silicon is known, the zip as a region
+(above). Compiler: C-57, IR-level GEP speculation (C-58's residual),
 C-53, C-56's toolchain side, then B3 (capability TLS) for threads. The `err_msg` fault above if it
 comes back.
