@@ -34,8 +34,14 @@ runner, rootfs and module:
 1. M0: the link (build-domain.sh), before any boot
 ---------------------------------------------------------------------------------------------------
 P1.1  All five images link. No undefined weak symbol. The negative control (M5 without hostcall.o)
-      comes back with exactly __capstone_hostcall undefined.
+      comes back with exactly __capstone_hostcall and domain_main undefined.
       Refuted by: any link error, any weak undefined, or a control with more or fewer symbols.
+      CORRECTED before the M0 link: this first said "exactly __capstone_hostcall". Relinking a
+      stand-in without hostcall.o showed start-musl's call to domain_main, which hostcall.o
+      defines, goes undefined too. The control as first written would have failed a correct link.
+      That test also bounds what the control shows: it proves the link gate can fire (dropping
+      start-musl.o as well changes the set and fails it), but not that every libc override is
+      linked (dropping string_bounds_safe.o too still passes, since musl's own memcpy links in).
 P1.2  code_len (PT_LOAD memsz) = 69-76 MiB: the plan's image estimate (results 4b: 24-28 MiB for
       tshark, 5-8 MiB for the dependencies) plus the level0 arena, which is a static array inside
       the image (40 MiB, TSAPP_ARENA_BYTES). code_len minus the arena therefore 29-36 MiB.
