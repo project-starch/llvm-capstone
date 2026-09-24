@@ -6130,6 +6130,25 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
+### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — latent ODR violation, found 2026-09-24; harmless only because the project builds with BUILD_SHARED_LIBS=ON`
+
+**What happens.** `llvm/lib/Target/Capstone/AsmParser/CapstoneAsmParser.cpp:3476` and
+`llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp:3346` each define
+`bool isValidInsnFormat(StringRef, const MCSubtargetInfo &)` at external linkage. The Capstone
+target began as a copy of RISCV. A static link (the LLVM default) of any tool that pulls in both
+parsers fails:
+`multiple definition of 'isValidInsnFormat(llvm::StringRef, llvm::MCSubtargetInfo const&)'`.
+This was first seen linking `llvm-ar` in a fresh Release+Assertions build on origin/dev.
+
+**Why nobody saw it.** The shared tree builds with `BUILD_SHARED_LIBS=ON`. Each target library is
+its own `.so`, so the duplicate never meets itself at link time, and every lane's gate uses that
+configuration. It is still an ODR violation: which definition a caller binds to is up to the
+dynamic linker.
+
+**Fix shape (not done).** Give the Capstone copy internal linkage (`static`, or an anonymous
+namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
+Verify it with a static build of `llvm-ar`, which is exactly what fails today.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -6249,6 +6268,29 @@ coordination, but ranges strand). The current state — allocate ad hoc and reco
 should get a proper entry, written by whoever has the mruby context, so the registry stops
 disagreeing with the history.
 
+
+### I-9 — fourteen core QEMU suites hardcode `$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot`, so they cannot run from a git worktree `OPEN — found 2026-09-24 while gating PRs #75–#87 from a scratch worktree`
+
+`capstone-test-env.sh` exports `CAPSTONE_BUILDROOT_DIR` precisely so the buildroot tree can live
+elsewhere, and the newer probes honour it. Fourteen core suites do not, and neither do the 12 older
+`build-hostcall-*.sh` probes. They reach the buildroot through a path fixed relative to the repo
+root, either in the shell script or as a literal
+`#include "../../../caplifive-buildroot/.../libcapstone.h"` in the guest C source:
+- authority, smoke, coremark;
+- rv8, beebs (through the shared `beebs_simple_host.c`);
+- revoke-matrix, revoke-on-free, borrow-cost, tree-cost-O2, static-cap-globals, intra-domain-mrev,
+  hier-revoke, shared-region, linear-uninit-corpus.
+
+In a worktree the submodule dir is empty, so every one of these dies at
+`cc1: fatal error: … No such file or directory`. That is a **BLOCKED** suite, which a careless
+reading takes for a failure, or, worse, skips past.
+
+**Workaround used on 2026-09-24:** symlink the worktree's `capstone/caplifive-buildroot` to the
+shared tree's. After that, all of them ran and passed.
+
+**Fix shape (not done):** route every one of those includes and paths through
+`$CAPSTONE_BUILDROOT_DIR`: an `-I"$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib"` on the
+compile, and `#include <libcapstone.h>` in the guest source.
 
 ## Compiler / toolchain (ours)
 
