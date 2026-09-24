@@ -639,6 +639,43 @@ folded in above and listed under "Withdrawn".
    - hour-scale builds of the four generated tables with the current compiler;
    - the sublet heap arm's 4 MiB pool, which the unpatched wmem arenas do not fit.
 
+## Progress on the full port (2026-09-24)
+
+**M-infra: done on QEMU, in review.**
+- **The CMA allocation** already existed: caplifive-buildroot `2b8ad05`, by the external
+  collaborator, merged as `7440cfc`, PR #4. The parent still points at `d04bd83`.
+- **The port's gate found one defect in it.** A declared domain whose size lands just under a
+  power of two gets less `dom_data` than it declared: the monitor's split granule reaches 64 KiB
+  at 64 MiB, and the slack is 8 KiB.
+- **The fix, `a74a856`** (branch `modcapstone/cma-domain-block`, pushed for review):
+  - sizes by the monitor's own arithmetic;
+  - refuses a corrupt declaration;
+  - leaves blocks of 4 MiB or less unchanged.
+- **Evidence:** `ports/wireshark/app/results/2026-09-24-qemu-cma-domain-block/`: a matched pair
+  at 64 MiB, 128 MiB domains from CMA, and both refusals.
+- **Open, and the lead's call:** bumping the parent's submodule pointer rebuilds every lane's guest
+  image.
+
+**M-deps: all seven libraries build and pass their gates.** `ports/wireshark/app/deps/`, one
+recipe each, gated as in its README. What that took:
+- **zlib, PCRE2, libgpg-error, libxml2:** no provenance-losing site.
+- **c-ares:** five "cast off const" round trips, patched.
+- **libgcrypt:**
+  - three pointers rebuilt from integers, patched;
+  - `fips.c`'s `__thread`, now static storage.
+- **GLib (libglib only):** cross-configured by its own meson, so `config.h` is answered by this
+  libc. That alone removed the census's futex/wait failures. Six patches, all
+  `__CAPSTONE__`-guarded except one refactor its native suite covers:
+  - `gintptr` holds an address, because no integer type is pointer-wide on capstone64;
+  - once-init on a `gsize` uses `gsize` atomics;
+  - the pointer bit operations (`and`/`or`/`xor`, `gdataset`, `gbitlock`) move the capability's
+    address;
+  - four size checks become "large enough";
+  - an aligned allocator is built from `malloc`;
+  - `gqsort` copies pointer-sized words whole.
+
+**Next: M0**, the minimal tshark linked as a domain against these libraries.
+
 ## Plan
 
 Everything happens on `tshark-app`. Nothing lands on `dev` without the lead's OK, and there is no

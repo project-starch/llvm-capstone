@@ -1,0 +1,85 @@
+CAPSTONE (tshark app port): once-init on a gsize uses gsize atomics, and the pointer variant
+keeps its pointer. On capstone64 a pointer is 16 bytes and gsize 8, so GLib's gsize once-init
+(which reused pointer-width atomics) read 16 bytes of an 8-byte object and failed its static
+assertion in 8 files; and g_once_init_leave_pointer rebuilt its result through guintptr, which
+keeps only the address. Both are under __CAPSTONE__; other targets are unchanged.
+
+--- a/glib/gthread.h
++++ b/glib/gthread.h
+@@ -264,7 +264,31 @@
+ # define g_once(once, func, arg) g_once_impl ((once), (func), (arg))
+ #endif
+ 
+-#ifdef __GNUC__
++/* CAPSTONE: (gpointer) (guintptr) (result) rebuilds a pointer from its address, untagged. */
++#ifdef __CAPSTONE__
++# define G_ONCE_POINTER_RESULT(result) ((gpointer) (result))
++#else
++# define G_ONCE_POINTER_RESULT(result) ((gpointer) (guintptr) (result))
++#endif
++#if defined(__GNUC__) && defined(__CAPSTONE__)
++/* CAPSTONE (tshark app port): a pointer is a 16-byte capability and gsize 8 bytes, so the gsize
++ * variants cannot use pointer-width atomics (a 16-byte load of an 8-byte object). Since 2.80 a
++ * pointer location has its own _pointer variants; these two are gsize operations, with gsize
++ * atomics, and a pointer location passed to them is a compile error. */
++# define g_once_init_enter(location) \
++  (G_GNUC_EXTENSION ({                                               \
++    G_STATIC_ASSERT (sizeof *(location) == sizeof (gsize));          \
++    (void) (0 ? (gsize) *(location) : 0);                            \
++    (!__atomic_load_n ((gsize *) (location), __ATOMIC_ACQUIRE) &&    \
++     g_once_init_enter (location));                                  \
++  }))
++# define g_once_init_leave(location, result) \
++  (G_GNUC_EXTENSION ({                                               \
++    G_STATIC_ASSERT (sizeof *(location) == sizeof (gsize));          \
++    0 ? (void) (*(location) = (result)) : (void) 0;                  \
++    g_once_init_leave ((location), (gsize) (result));                \
++  }))
++#elif defined(__GNUC__)
+ # define g_once_init_enter(location) \
+   (G_GNUC_EXTENSION ({                                               \
+     G_STATIC_ASSERT (sizeof *(location) == sizeof (gpointer));       \
+@@ -278,6 +302,8 @@
+     0 ? (void) (*(location) = (result)) : (void) 0;                  \
+     g_once_init_leave ((location), (gsize) (result));                \
+   }))
++#endif
++#ifdef __GNUC__
+ # define g_once_init_enter_pointer(location)                   \
+   (G_GNUC_EXTENSION ({                                         \
+     G_STATIC_ASSERT (sizeof *(location) == sizeof (gpointer)); \
+@@ -289,7 +315,7 @@
+   (G_GNUC_EXTENSION ({                                                      \
+     G_STATIC_ASSERT (sizeof *(location) == sizeof (gpointer));              \
+     0 ? (void) (*(location) = (result)) : (void) 0;                         \
+-    g_once_init_leave_pointer ((location), (gpointer) (guintptr) (result)); \
++    g_once_init_leave_pointer ((location), G_ONCE_POINTER_RESULT (result));  \
+   })) GLIB_AVAILABLE_MACRO_IN_2_80
+ #else
+ # define g_once_init_enter(location) \
+--- a/glib/gthread.c
++++ b/glib/gthread.c
+@@ -623,7 +623,11 @@
+   gsize *value_location = (gsize *) location;
+   gboolean need_init = FALSE;
+   g_mutex_lock (&g_once_mutex);
++#ifdef __CAPSTONE__
++  if (__atomic_load_n (value_location, __ATOMIC_ACQUIRE) == 0)   /* gsize, not pointer, width */
++#else
+   if (g_atomic_pointer_get (value_location) == 0)
++#endif
+     {
+       if (!g_slist_find (g_once_init_list, (void*) value_location))
+         {
+@@ -713,7 +717,11 @@
+ 
+   g_return_if_fail (result != 0);
+ 
++#ifdef __CAPSTONE__
++  old_value = __atomic_exchange_n (value_location, result, __ATOMIC_SEQ_CST);  /* gsize width */
++#else
+   old_value = (gsize) g_atomic_pointer_exchange (value_location, result);
++#endif
+   g_return_if_fail (old_value == 0);
+ 
+   g_mutex_lock (&g_once_mutex);

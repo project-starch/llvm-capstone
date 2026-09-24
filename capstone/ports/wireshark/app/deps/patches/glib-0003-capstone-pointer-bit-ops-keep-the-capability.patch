@@ -1,0 +1,129 @@
+CAPSTONE (tshark app port): GLib's pointer bit operations keep the pointer's capability.
+g_atomic_pointer_and/or/xor were integer atomics on a pointer's storage; gdataset's flag macros,
+its lock-and-get and gbitlock's lock mask rebuilt pointers from integers. On capstone64 (16-byte
+pointers) each loses the capability tag. Under __CAPSTONE__ they move the capability's address instead.
+
+--- a/glib/gatomic.h
++++ b/glib/gatomic.h
+@@ -282,6 +282,31 @@
+     (void) (0 ? (val) ^ (val) : 1);                                          \
+     (gintptr) __atomic_fetch_add ((atomic), (val), __ATOMIC_SEQ_CST);        \
+   }))
++#ifdef __CAPSTONE__
++/* CAPSTONE (tshark app port): a pointer is a 16-byte capability. An integer atomic on its storage
++ * would change half of it and clear its tag, so the bit operations are a compare-and-swap on the
++ * pointer itself that moves only its address: new = old + (address' - address). A null pointer
++ * with flag bits stays what it was, an integer carried in a pointer. */
++#define G_CAPSTONE_POINTER_ADDR_OP(atomic, val, op) \
++  (G_GNUC_EXTENSION ({                                                       \
++    gpointer *gapo_atomic = (gpointer *) (atomic);                           \
++    gpointer gapo_old, gapo_new;                                             \
++    G_STATIC_ASSERT (sizeof *(atomic) == sizeof (gpointer));                 \
++    (void) (0 ? (gpointer) *(atomic) : NULL);                                \
++    (void) (0 ? (val) ^ (val) : 1);                                          \
++    gapo_old = __atomic_load_n (gapo_atomic, __ATOMIC_RELAXED);              \
++    do {                                                                     \
++      guintptr gapo_addr = (guintptr) gapo_old;                              \
++      gapo_new = (gchar *) gapo_old + ((gapo_addr op (guintptr) (val)) - gapo_addr); \
++    } while (!__atomic_compare_exchange_n (gapo_atomic, &gapo_old, gapo_new, \
++                                           FALSE, __ATOMIC_SEQ_CST,          \
++                                           __ATOMIC_RELAXED));               \
++    (guintptr) gapo_old;                                                     \
++  }))
++#define g_atomic_pointer_and(atomic, val) G_CAPSTONE_POINTER_ADDR_OP (atomic, val, &)
++#define g_atomic_pointer_or(atomic, val)  G_CAPSTONE_POINTER_ADDR_OP (atomic, val, |)
++#define g_atomic_pointer_xor(atomic, val) G_CAPSTONE_POINTER_ADDR_OP (atomic, val, ^)
++#else
+ #define g_atomic_pointer_and(atomic, val) \
+   (G_GNUC_EXTENSION ({                                                       \
+     guintptr *gapa_atomic = (guintptr *) (atomic);                           \
+@@ -309,6 +334,7 @@
+     (void) (0 ? (val) ^ (val) : 1);                                          \
+     (guintptr) __atomic_fetch_xor (gapx_atomic, (val), __ATOMIC_SEQ_CST);    \
+   }))
++#endif /* __CAPSTONE__ */
+ 
+ #else /* defined(__ATOMIC_SEQ_CST) */
+ 
+--- a/glib/gdataset.c
++++ b/glib/gdataset.c
+@@ -68,8 +68,24 @@
+ 
+ #define G_DATALIST_FLAGS_MASK_INTERNAL 0x7
+ 
++#ifdef __CAPSTONE__
++/* CAPSTONE: clear the flag bits by moving the capability's address, never by rebuilding the
++ * pointer from an integer (which would leave it untagged). */
++#define G_DATALIST_CLEAN_POINTER(ptr) \
++  ((GData *) ((gchar *) (ptr) - (((guintptr) (ptr)) & ((guintptr) G_DATALIST_FLAGS_MASK_INTERNAL))))
++#else
+ #define G_DATALIST_CLEAN_POINTER(ptr) \
+   ((GData *) ((gpointer) (((guintptr) (ptr)) & ~((guintptr) G_DATALIST_FLAGS_MASK_INTERNAL))))
++#endif
++
++/* POINTER with the flag bits of OLD. CAPSTONE: the result is derived from POINTER's capability. */
++#ifdef __CAPSTONE__
++#define G_DATALIST_WITH_FLAGS_OF(pointer, old) \
++  ((gpointer) ((gchar *) (pointer) + ((guintptr) (old) & ((guintptr) G_DATALIST_FLAGS_MASK_INTERNAL))))
++#else
++#define G_DATALIST_WITH_FLAGS_OF(pointer, old) \
++  ((gpointer) (((guintptr) (old) & ((guintptr) G_DATALIST_FLAGS_MASK_INTERNAL)) | (guintptr) (pointer)))
++#endif
+ 
+ /* datalist pointer accesses have to be carried out atomically */
+ #define G_DATALIST_GET_POINTER(datalist) \
+@@ -79,7 +95,7 @@
+   gpointer _oldv = g_atomic_pointer_get (datalist);                                              \
+   gpointer _newv;                                                                                \
+   do {                                                                                           \
+-    _newv = (gpointer) (((guintptr) _oldv & ((guintptr) G_DATALIST_FLAGS_MASK_INTERNAL)) | (guintptr) pointer); \
++    _newv = G_DATALIST_WITH_FLAGS_OF (pointer, _oldv);                                           \
+   } while (!g_atomic_pointer_compare_and_exchange_full ((void**) datalist, _oldv,                \
+                                                         _newv, &_oldv));                         \
+ } G_STMT_END
+@@ -140,10 +156,17 @@
+ G_ALWAYS_INLINE static inline GData *
+ g_datalist_lock_and_get (GData **datalist)
+ {
++#ifdef __CAPSTONE__
++  /* CAPSTONE: g_pointer_bit_lock_and_get returns the pointer as a guintptr (by API), and a pointer
++   * rebuilt from that is untagged. Take the lock, then read the pointer itself. */
++  g_pointer_bit_lock ((void **) datalist, DATALIST_LOCK_BIT);
++  return G_DATALIST_CLEAN_POINTER (g_atomic_pointer_get (datalist));
++#else
+   guintptr ptr;
+ 
+   g_pointer_bit_lock_and_get ((void **) datalist, DATALIST_LOCK_BIT, &ptr);
+   return G_DATALIST_CLEAN_POINTER (ptr);
++#endif
+ }
+ 
+ static void
+--- a/glib/gbitlock.c
++++ b/glib/gbitlock.c
+@@ -412,14 +412,22 @@
+       x_ptr = (x_preserve_ptr & preserve_mask) | (x_ptr & ~preserve_mask);
+     }
+ 
++#ifdef __CAPSTONE__
++  /* CAPSTONE: the result keeps PTR's capability and takes only the computed address; a pointer
++   * rebuilt from x_ptr would be untagged. */
++# define G_BITLOCK_PTR_AT(x) ((gpointer) ((gchar *) ptr + ((x) - (guintptr) ptr)))
++#else
++# define G_BITLOCK_PTR_AT(x) ((gpointer) (x))
++#endif
+   if (lock_bit == G_MAXUINT)
+-    return (gpointer) x_ptr;
++    return G_BITLOCK_PTR_AT (x_ptr);
+ 
+   lock_mask = (guintptr) (1u << lock_bit);
+   if (set)
+-    return (gpointer) (x_ptr | lock_mask);
++    return G_BITLOCK_PTR_AT (x_ptr | lock_mask);
+   else
+-    return (gpointer) (x_ptr & ~lock_mask);
++    return G_BITLOCK_PTR_AT (x_ptr & ~lock_mask);
++#undef G_BITLOCK_PTR_AT
+ }
+ 
+ /**
