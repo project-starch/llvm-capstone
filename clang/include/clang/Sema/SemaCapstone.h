@@ -32,9 +32,10 @@ public:
                                 CallExpr *TheCall);
 
   /// -Wcapstone-pointer-roundtrip: an integer-to-pointer C-style cast whose
-  /// integer was itself converted from a pointer in the same expression, or
-  /// whose type is spelled uintptr_t/intptr_t.  An integer cannot carry a
-  /// capability's tag, so the pointer that comes back is untagged.
+  /// integer's type is spelled uintptr_t/intptr_t.  An integer cannot carry a
+  /// capability's tag; the backend rebuilds the pointer only when the integer
+  /// was computed from one pointer in the same function, so a value that came
+  /// from memory or from a caller is untagged.
   void checkPointerRoundTrip(Expr *Src, QualType DestTy, SourceRange OpRange);
 };
 

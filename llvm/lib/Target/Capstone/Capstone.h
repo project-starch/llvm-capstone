@@ -39,6 +39,12 @@ void initializeCapstoneCapGlobalInitPass(PassRegistry &);
 ModulePass *createCapstoneMergeStrConstantsPass();
 void initializeCapstoneMergeStrConstantsPass(PassRegistry &);
 
+// Rebuilds `(T *)f((uintptr_t)p)` -- an address computed from ONE capability --
+// as that capability moved, instead of an untagged pointer. See
+// CapstoneRecoverProvenance.cpp.
+FunctionPass *createCapstoneRecoverProvenancePass();
+void initializeCapstoneRecoverProvenancePass(PassRegistry &);
+
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);

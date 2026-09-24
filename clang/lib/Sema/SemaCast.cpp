@@ -3258,8 +3258,8 @@ void CastOperation::CheckCStyleCast() {
     checkIntToPointerCast(/* CStyle */ true, OpRange, SrcExpr.get(), DestType,
                           Self);
     // On Capstone an integer cannot carry a capability's tag, so a pointer made
-    // from an integer that came from a pointer is untagged: warn on the two
-    // shapes that spell a round trip (-Wcapstone-pointer-roundtrip).
+    // from a uintptr_t that came from memory or a caller is untagged
+    // (-Wcapstone-pointer-roundtrip).
     if (Self.Context.getTargetInfo().getTriple().isCapstone())
       Self.Capstone().checkPointerRoundTrip(SrcExpr.get(), DestType, OpRange);
   } else if (!SrcType->isArithmeticType()) {

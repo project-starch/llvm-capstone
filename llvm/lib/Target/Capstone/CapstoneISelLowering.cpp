@@ -21083,14 +21083,15 @@ static SDValue performSHLCombine(SDNode *N,
 // "looks like" a pointer: the capability is identified by TYPE, as the operand
 // of the TRUNCATE that read its address, and there must be exactly ONE of them
 // -- a difference of two addresses is arithmetic, not a pointer, and is left
-// alone. Masking (`p & ~31`) is left alone too; cap-i128-and-capability-mask.ll
-// documents that decision.
+// alone. Masking (`p & ~31`) is not recognised here; the IR pass handles it
+// (cap-addr-bitmask.ll).
 //
-// ponytail: only a single add/sub directly under the inttoptr is recognised,
-// which is the shape clang emits for the cast above. A deeper expression keeps
-// the IR's own answer. The real upgrade is a middle-end pass that rewrites
-// uintptr_t round trips back into GEPs while provenance is still in the IR,
-// which is where upstream CHERI does it.
+// Only a single add/sub directly under the inttoptr is recognised here. The
+// general case -- masks, flags, loops, several steps -- is handled earlier, in
+// the IR, by CapstoneRecoverProvenance, which rewrites a round trip computed
+// from one capability into a GEP before this combine ever sees it. This stays
+// as the backstop for a shape that only appears after instruction selection
+// begins (and for -capstone-recover-provenance=false).
 static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
                                                  const CapstoneSubtarget &STI) {
   if (N->getValueType(0) != MVT::c128)

@@ -21,20 +21,52 @@ using namespace clang;
 
 SemaCapstone::SemaCapstone(Sema &S) : SemaBase(S) {}
 
+// How many pointer-to-integer casts an integer expression is built from,
+// looking through the operators an address computation uses. One means the
+// value is an address computed from one pointer right here, which the backend
+// turns back into that pointer moved (CapstoneRecoverProvenance).
+static unsigned countPointerSources(const Expr *E) {
+  E = E->IgnoreParens();
+  if (const auto *CE = dyn_cast<CastExpr>(E)) {
+    if (CE->getSubExpr()->IgnoreParens()->getType()->isPointerType())
+      return 1;
+    return countPointerSources(CE->getSubExpr());
+  }
+  if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
+    switch (BO->getOpcode()) {
+    case BO_Add: case BO_Sub: case BO_And: case BO_Or: case BO_Xor:
+    case BO_Mul: case BO_Shl: case BO_Shr: case BO_Div: case BO_Rem:
+      return countPointerSources(BO->getLHS()) +
+             countPointerSources(BO->getRHS());
+    default:
+      return 0;
+    }
+  }
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    return countPointerSources(UO->getSubExpr());
+  if (const auto *CO = dyn_cast<ConditionalOperator>(E))
+    return countPointerSources(CO->getTrueExpr()) +
+           countPointerSources(CO->getFalseExpr());
+  return 0;
+}
+
 void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
                                          SourceRange OpRange) {
   if (!DestTy->isPointerType() || !Src->getType()->isIntegerType())
     return;
-  // (a) `(T *)(integer)p`: the integer is an explicit cast of a pointer.
-  if (const auto *CE = dyn_cast<CastExpr>(Src->IgnoreParenImpCasts())) {
-    if (CE->getSubExpr()->IgnoreParenImpCasts()->getType()->isPointerType()) {
-      Diag(OpRange.getBegin(), diag::warn_capstone_pointer_roundtrip)
-          << 0 << Src->getType() << DestTy << Src->getSourceRange();
-      return;
-    }
-  }
-  // (b) `(T *)x` with x of a type spelled uintptr_t / intptr_t: the typedef's
-  // whole purpose is to hold a pointer, and on this target it cannot.
+  // An integer computed in this very expression from one pointer --
+  // `(T *)(uintptr_t)p`, `(T *)(((uintptr_t)p + 15) & ~15)` -- is not
+  // diagnosed: the backend (CapstoneRecoverProvenance) rebuilds the result from
+  // that pointer's capability.
+  //
+  // `(T *)x` with x of a type spelled uintptr_t / intptr_t: the typedef's whole
+  // purpose is to hold a pointer, and on this target it can hold only the
+  // address. Whether this cast gets the capability back depends on where x came
+  // from -- computed from one pointer in the same function, yes; loaded from a
+  // struct field or passed in, no -- which the front end cannot see, so the
+  // warning says which case is safe.
+  if (countPointerSources(Src) == 1)
+    return; // e.g. (T *)(((uintptr_t)p + 15) & ~15): computed right here.
   for (QualType T = Src->getType();;) {
     const auto *TT = T->getAs<TypedefType>();
     if (!TT)
@@ -42,7 +74,7 @@ void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
     StringRef Name = TT->getDecl()->getName();
     if (Name == "uintptr_t" || Name == "intptr_t") {
       Diag(OpRange.getBegin(), diag::warn_capstone_pointer_roundtrip)
-          << 1 << Src->getType() << DestTy << Src->getSourceRange();
+          << Src->getType() << DestTy << Src->getSourceRange();
       return;
     }
     T = TT->desugar();
