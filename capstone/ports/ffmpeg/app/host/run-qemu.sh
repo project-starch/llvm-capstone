@@ -42,16 +42,27 @@ case $STAGE in
   *) echo "stage must be 1..5, all, m2diag or probe" >&2; exit 2;;
 esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
-DOM="$WORK/domain"
+# FFAPP_HEAP picks the heap arm's images (build-domain.sh); level0 is the run of record's.
+case ${FFAPP_HEAP:-level0} in
+  level0) DOM="$WORK/domain"; LOG=${LOG_FILE:-$WORK/qemu-$STAGE.log} ;;
+  shrink) DOM="$WORK/domain-shrink"; LOG=${LOG_FILE:-$WORK/qemu-shrink-$STAGE.log} ;;
+  sublet) DOM="$WORK/domain-sublet${FFAPP_POOL:+-pool$FFAPP_POOL}"
+          LOG=${LOG_FILE:-$WORK/qemu-sublet${FFAPP_POOL:+-pool$FFAPP_POOL}-$STAGE.log} ;;
+  *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+esac
+# FFAPP_CLIP_SECONDS: which workload's images, inputs and reference (build-native.sh).
+CLIP=${FFAPP_CLIP_SECONDS:-1}
+SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
+DOM="$DOM$SFX"
+[ -n "$SFX" ] && LOG=${LOG_FILE:-${LOG%.log}$SFX.log}
 SHARE="$WORK/share"
-LOG=${LOG_FILE:-$WORK/qemu-$STAGE.log}
-for f in "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/stock.framemd5"; do
+for f in "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/stock$SFX.framemd5"; do
   [ -f "$f" ] || { echo "missing $f; run build-native.sh and build-domain.sh first" >&2; exit 2; }
 done
 rm -rf "$SHARE"; mkdir -p "$SHARE"
-cp "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/input.flip.mkv" "$SHARE/"
+cp "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/input$SFX.flip.mkv" "$SHARE/"
 
-RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input.mkv /mnt/host/input.flip.mkv /tmp/"
+RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input$SFX.mkv /mnt/host/input$SFX.flip.mkv /tmp/"
 MARKERS=(--success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__')
 SECTIONS=()          # "BEGIN END expected-stage" per image, verified after the boot
 for spec in $STAGES; do
@@ -60,18 +71,23 @@ for spec in $STAGES; do
   case $st in *diag|*diag9p) img=ffapp_m$st.dom; st=${st%%diag*} ;; esac
   [ -f "$DOM/$img" ] || { echo "missing $DOM/$img; run build-domain.sh" >&2; exit 2; }
   cp "$DOM/$img" "$SHARE/"
-  RUN="$RUN; echo __FFAPP_BEGIN_M${st}__; /tmp/ffapp.user /mnt/host/$img $st$verbose; echo __FFAPP_END_M${st}__"
+  RUN="$RUN; echo __FFAPP_BEGIN_M${st}__; /tmp/ffapp.user /tmp/$img $st$verbose; echo __FFAPP_END_M${st}__"
   SECTIONS+=("__FFAPP_BEGIN_M${st}__ __FFAPP_END_M${st}__ $st")
   label=M$st; [ "$st" = 6 ] && label=M2a
   MARKERS+=(--success-marker "STAGE $label" --success-marker "__CAPSTONE_FFAPP_STAGE_REACHED__ $st")
 done
 case " $STAGES " in *" 5 "*)
   cp "$DOM/ffapp_m5flip.dom" "$SHARE/"
-  RUN="$RUN; echo __FFAPP_BEGIN_FLIP__; /tmp/ffapp.user /mnt/host/ffapp_m5flip.dom 5; echo __FFAPP_END_FLIP__"
+  RUN="$RUN; echo __FFAPP_BEGIN_FLIP__; /tmp/ffapp.user /tmp/ffapp_m5flip.dom 5; echo __FFAPP_END_FLIP__"
   SECTIONS+=("__FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ 5")
   MARKERS+=(--success-marker '__FFAPP_END_FLIP__') ;;
 esac
 
+# The images are loaded from the guest's /tmp, not from the 9p share. The loader mmaps the image
+# file and copies its segments out of that mapping (libcapstone.c create_dom), so every read of
+# an image is a 9p page fault; two pool2 M1-M5 runs on 2026-09-24 stalled inside exactly those
+# reads (between the loader's own prints), with no fault and no kernel message.
+RUN="${RUN/; echo __FFAPP_BEGIN_/; cp /mnt/host/*.dom /tmp/; echo __FFAPP_BEGIN_}"
 smoke=(python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py"
        --share-dir "$SHARE" --log-file "$LOG" --timeout-multiplier "${TIMEOUT_MULTIPLIER:-8}"
        --guest-command "echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; $RUN" "${MARKERS[@]}")
@@ -120,6 +136,6 @@ done
 case " $STAGES " in *" 5 "*)
   section __FFAPP_BEGIN_M5__ __FFAPP_END_M5__     > "$WORK/domain-m5.out"
   section __FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ > "$WORK/domain-m5flip.out"
-  python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock.framemd5" "$WORK/domain-m5.out" \
+  python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock$SFX.framemd5" "$WORK/domain-m5.out" \
     --control "$WORK/domain-m5flip.out" ;;
 esac

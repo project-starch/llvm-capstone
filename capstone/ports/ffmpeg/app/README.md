@@ -1,8 +1,12 @@
 # FFmpeg as a full application in a Capstone domain
 
 **Scope.** FFmpeg 9.0.1, configured down to a single-threaded file-to-file program
-(matroska demuxer → mpeg4 decoder), running whole inside a pure-capability domain on the
-musl-capstone libc. It prints one framemd5-style line per decoded frame.
+(matroska demuxer → mpeg4 decoder), running whole inside one Capstone domain on the
+musl-capstone libc, on QEMU. It prints one framemd5-style line per decoded frame.
+- **Not "pure-capability".** That wording was withdrawn on 2026-09-23 and survived here until
+  now: the domain relies on QEMU's fabricated `gp`; see Status.
+- **Correct is not safe.** The run of record's heap has arena-wide bounds and no revocation.
+  What each heap arm actually protects is measured in `results/2026-09-23-qemu-safety/`.
 
 This is **not** `ports/ffmpeg/buffer-pool/`. That port replays recorded pool calls with the
 decoder running natively; nothing here touches it. It *is* the same workload: the "short"
@@ -17,6 +21,8 @@ recording from `buffer-pool/host/record.sh:23-34`.
 |---|---|
 | **M0** builds and links as a domain, within budget | **reached 2026-09-23** (apollo) |
 | **M1–M5** | **reached 2026-09-23 on QEMU.** Per-frame MD5 is **bit-identical to native** (30/30, reference built from unpatched FFmpeg), and the flipped-input control fires. Run of record: `results/2026-09-23-qemu-m1-m5/`. **Relies on QEMU's fabricated cursor-0 `gp`**, which cannot exist on silicon; with fabrication off, the domain dies in musl-capstone's start code. That is common to every domain on this ABI |
+| **Safety** | **measured 2026-09-23 on QEMU**, `results/2026-09-23-qemu-safety/`, with three heap arms (`FFAPP_HEAP`):<br>• **`level0`** (the run of record): heap overflows and every temporal error succeed.<br>• **`shrink`:** per-object heap bounds; overflows fault, temporal errors succeed.<br>• **`sublet`:** per-object bounds plus revoke on free; on QEMU every heap-overflow and temporal fixture faults, while the deployed silicon is documented to let a stale data access retire (ISSUES Q-11, measurements §7r).<br>M1–M5 are bit-identical on all three. Globals share their GlobalMerge group's bounds on this ABI (not on M6's) |
+| **Pools** | **measured 2026-09-24 on QEMU**, `results/2026-09-24-qemu-pool-safety/`: FFmpeg's own `AVBufferPool` buffers and every refstruct object under the buffer-pool port's Sublet leases, inside the whole decoder (`FFAPP_HEAP=sublet FFAPP_POOL=0\|2`).<br>• **Correctness:** M1–M5 bit-identical 30/30 in every completed run.<br>• **Fixtures:** 14/14 pool fixtures as pre-registered. Stale pool reads and a stale unref succeed on `pool0` and fault or are refused on `pool2`.<br>• **Silicon caveat:** as for the heap arms (Q-11).<br>• **Hardened 2026-09-24** (`results/2026-09-24-qemu-hardening/`): every fixture cell at N = 3 (141 runs, all as predicted); fixture 16's stock control measured; a 5-second, 150-frame workload bit-identical on level0, sublet and pool2 |
 | M6 | the gp-captable (silicon) ABI, which is also what removes the fabricated-`gp` dependence. See the plan's §4 (one-translation-unit question) |
 
 **What M0 establishes:**

@@ -1,0 +1,18 @@
+--- a/epan/proto.c
++++ b/epan/proto.c
+@@ -456,7 +456,15 @@
+ 	DISSECTOR_ASSERT_HINT(gpa_hfinfo.hfi[hfindex] != NULL, "Unregistered hf!");	\
+ 	hfinfo = gpa_hfinfo.hfi[hfindex];
+ 
++/* CAPSTONE (tshark app port): the field map is reserved for 300,000 fields up front, sized for
++   the full dissector set. That is 16 MiB of map items natively, twice that with 16-byte
++   pointers, and a whitelisted build registers about 2,200 fields. Both the map and the field
++   array grow on demand, so a build that knows its size may reserve less. */
++#ifdef CAPSTONE_HF_PREALLOC
++#define PROTO_PRE_ALLOC_HF_FIELDS_MEM (CAPSTONE_HF_PREALLOC+PRE_ALLOC_EXPERT_FIELDS_MEM)
++#else
+ #define PROTO_PRE_ALLOC_HF_FIELDS_MEM (300000+PRE_ALLOC_EXPERT_FIELDS_MEM)
++#endif
+ 
+ /* List which stores protocols and fields that have been registered */
+ typedef struct _gpa_hfinfo_t {

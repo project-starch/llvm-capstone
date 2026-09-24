@@ -1,0 +1,102 @@
+# PRE-REGISTERED predictions for the safety fixtures (src/capstone-domain/ffapp_safety.c),
+# written 2026-09-23 BEFORE any fixture had run on any arm. A cell whose outcome differs is a
+# FINDING, never an edit to this file: if a prediction is wrong, the result says so and this
+# file keeps the prediction that was made.
+#
+# arm      fixture  outcome   detail
+#   RETURN <hex>   the image returned exactly this mark (fixture * 0x100000 + value)
+#   RETURN *       the image returned a mark with this fixture's prefix; the value is not
+#                  predictable (fixture 3 on level0 reads a byte of the neighbour's header)
+#   FAULT oob      a bounds fault, AFTER the fixture's touch line, whose address is the target
+#                  the fixture printed
+#   FAULT temporal a fault on a revoked (or, on capstone-qemu, reload-untagged) capability,
+#                  after the touch line. (The CLASSIFIER, not this prediction, was widened after
+#                  the first sublet boot to recognise capstone-qemu's "cincoffset with an UNTAGGED
+#                  rs1" line, and only when its value is the printed target; see safety-verdict.py.)
+#   FAULT any      any capability fault after the touch line
+# LEN lines check fixture 1's printed capability length of a 64-byte av_malloc:
+#   LEN arena      longer than 64 KiB (the pointer covers the rest of the arena)
+#   LEN 64         exactly 64
+
+level0   1  RETURN 100001
+level0   1  LEN    arena
+level0   2  RETURN 2000ee
+level0   3  RETURN *
+level0   4  RETURN 4000a0
+level0   5  RETURN 50015b
+level0   6  RETURN 6000a0
+level0   7  RETURN 700177
+level0   8  FAULT  oob
+level0   9  FAULT  oob
+# fixture 10 registered AFTER fixture 8's first run (level0 boot 1, 2026-09-23) showed the
+# global's capability covering .L_MergedGlobals rather than the global alone; BEFORE fixture 10
+# had ever been built or run. Predicted identical on every arm: it is the compiler's doing.
+level0  10  RETURN a0005b
+
+shrink   1  RETURN 100001
+shrink   1  LEN    64
+shrink   2  FAULT  oob
+shrink   3  FAULT  oob
+shrink   4  RETURN 4000a0
+shrink   5  RETURN 50015b
+shrink   6  RETURN 6000a0
+shrink   7  RETURN 700177
+shrink   8  FAULT  oob
+shrink   9  FAULT  oob
+shrink  10  RETURN a0005b
+
+# sublet: registered now, before the allocator exists, so the arm is judged against what was
+# expected of it rather than against what it turned out to do. Fixture 7's stale free is
+# predicted to FAULT inside free, because the allocator is to touch the object through the
+# pointer it is given before revoking anything (the nginx port's note: a stale free is caught
+# only by a free that dereferences it).
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  temporal
+sublet   8  FAULT  oob
+sublet   9  FAULT  oob
+sublet  10  RETURN a0005b
+
+# THE POOL ARMS (build-domain.sh FFAPP_HEAP=sublet FFAPP_POOL=0|2): FFmpeg's own pools under the
+# buffer-pool port's lifetime hooks. Registered 2026-09-24, BEFORE the pool arms were first
+# built, and committed and pushed before their first run. pool0 and pool2 differ only in the
+# pool mode (0 bounds only, 2 a Sublet lease per get, revoked on return).
+#   POOLFAIL <code>  the pool code refused what it was given (ff2_fail), after the touch line
+# Fixture 17 on pool2 is predicted to be REFUSED, not to fault: av_refstruct_unref copies the
+# stale pointer and ff2_ref_meta compares its capability bits against the current lease before
+# anything dereferences it (refstruct.c av_refstruct_unref -> get_refcount -> pool-allocator.c
+# by_authority -> ff2_fail(304)). On pool0 the bits still match, the unref is accepted, and it
+# drops the live owner's reference: a third get then aliases the live object.
+pool0   11  RETURN b00001
+pool0   11  LEN    64
+pool0   12  RETURN c000a0
+pool0   13  RETURN d0015b
+pool0   14  FAULT  oob
+pool0   15  RETURN f000a0
+pool0   16  FAULT  oob
+pool0   17  RETURN 1100177
+
+pool2   11  RETURN b00001
+pool2   11  LEN    64
+pool2   12  FAULT  temporal
+pool2   13  FAULT  temporal
+pool2   14  FAULT  oob
+pool2   15  FAULT  temporal
+pool2   16  FAULT  oob
+pool2   17  POOLFAIL 304
+
+# FIXTURE 16 ON THE HEAP ARMS: the stock-build control for the pool arms' "one byte below a
+# refstruct object faults". Stock refstruct allocates [RefCount | object] as one block and returns
+# a pointer past the header, so the byte below the object is inside the pointer's capability on
+# every heap arm (level0's arena, shrink's and sublet's per-object bounds alike cover the whole
+# block). Predicted to RETURN a header byte; on the pool arms, where patch 0002 moves the header
+# out of band, the same fixture faults. Registered 2026-09-24, before fixture 16 was first built
+# on a heap arm, and pushed before its first run.
+level0  16  RETURN *
+shrink  16  RETURN *
+sublet  16  RETURN *

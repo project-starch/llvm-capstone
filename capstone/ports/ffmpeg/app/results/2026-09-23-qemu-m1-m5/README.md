@@ -11,6 +11,17 @@ domain on musl-capstone, under capability enforcement, on QEMU.
 **Read "What this does not establish" before citing it.** In particular, the domain gets its
 global-access capability (`gp`) from a QEMU convenience that cannot exist on silicon.
 
+**CORRECTION (2026-09-23): this is a correctness result, not a memory-safety result.** "Under
+capability enforcement" was true but was read as more than it says. The heap is musl-capstone's
+`level0`:
+- every heap pointer carries the bounds of the whole 1.5 MiB arena;
+- `free` revokes nothing.
+
+So in THIS run an overflow from one heap object into another, and every use after free, go
+undetected. Measured, not inferred, in `../2026-09-23-qemu-safety/`. The same decode is also
+bit-identical there with per-object heap bounds, and with revocation on free, on QEMU only; the
+deployed silicon is documented not to stop a stale data access (that folder, verdict item 5).
+
 ## Identity
 
 | | |
@@ -97,7 +108,13 @@ The capability build's peak heap is unmeasured; it is bounded above by the 1.5 M
 The earlier run of record's images rebuilt byte-identical from scratch, on this host, with this
 LLVM build and a reused `libc-capstone.a`. That is reproducibility here, not a general claim.
 
-**5. Any other workload, and performance.**
+**5. Memory safety.** See the correction at the top and `../2026-09-23-qemu-safety/`:
+- **Heap:** arena-wide bounds, and no temporal safety.
+- **Globals:** at -O1 on this ABI, the globals GlobalMerge packs into one block share that
+  block's bounds. The gp-captable ABI disables GlobalMerge.
+- **Stack:** an escaping 64-byte array was bounded exactly.
+
+**6. Any other workload, and performance.**
 
 This is one file at one frame size; 640x360 does not fit one region. TCG timing means nothing.
 
