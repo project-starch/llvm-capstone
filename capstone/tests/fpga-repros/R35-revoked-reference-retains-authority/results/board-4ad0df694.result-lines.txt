@@ -1,0 +1,77 @@
+# R-35 on silicon after the fix: board result lines, bitstream caplifive_r35_4ad0df694.bit
+# (capstone-ariane 4ad0df694). Both boots were run by the board lane, 2026-09-24. The board lane reports
+# hash-checking the bitstream against sha256 8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c
+# before flashing. That check cannot be re-verified from these captures: the board exposes no digest, so
+# the running bitstream is identified by its LABEL plus its BEHAVIOUR. The RTL lane re-decoded every line
+# below from the raw captures, disassembled both images by hash, and had the reading audited adversarially.
+# Result lines only; the captures stay outside the repo.
+#
+# Behaviour: image 35fb3fec read is_live_data=1 on caplifive_m1_054cea69b.bit
+# (results/board-full-probe.r1-lines.txt:16) and traps here. So the flashed bitstream does NOT behave like
+# 054cea69b's. That alone does not prove it is 4ad0df694; the label does.
+
+== STALE ARM -- image r1_slots_pools.dom sha256 35fb3fec3196841b05067b206e938530bfd1f16d94047f8da6b497bedbc9dd07 ==
+  opening control   RESULT k800 retval=4                         (published known-good value)
+  DBAS              0x81A00000   (Entry 0x410000)
+  trap log          seen=1 mcause=25 -- DENIED. On this RTL, cause 25 has three arms that the cause cannot
+                    tell apart (load_store_unit.sv @4ad0df694): hit-and-dead (a genuine revocation),
+                    invalidated in the same cycle, or DENY ON A CACHE MISS.
+  trap mepc         0x81a04354 -> +0x4354 = `lbu s7,0(a0)`, the stale-dereference instruction. It serves all
+                    three gradient probes, which run oldest first: k=0, then 21648, then 43295.
+  trap tval         0xac100000 = leaf[0]. That is the address of k=0 and of k=21648 (both index leaf[0]);
+                    k=43295 (leaf[15]) is excluded. WHICH k TRAPPED IS UNKNOWN: a trap ends the domain and
+                    its output is lost, so an allowed k=0 would leave no line.
+  -> the stale reference is refused. SAME IMAGE HASH on caplifive_m1_054cea69b.bit gave
+     `stale-deref ok k=0 ... is_live_data=1` (results/board-full-probe.r1-lines.txt:16).
+
+== LIVE ARM -- image r1_slots_pools.dom sha256 aed492ab985653f3637c374eda1d7137fcc661d30081d97737cf53851fd90ca9 ==
+  opening control   RESULT k800 retval=4
+  DBAS              0x81A00000   (Entry 0x410000)
+  trap log          seen=1 mcause=26 (UNEXP_CAP_TYPE)
+  trap mepc         0x81a04360 -> +0x4360 = `mrev t1,a0`, the mint. It comes AFTER the live dereference
+                    `lbu a1,0(s2)` at +0x428c, and s2 = alias[0]. Every path to the mint passes that
+                    dereference: no direct branch from outside (+0x428c,+0x4360] enters the window, and every
+                    indirect transfer is a call or a return.
+  trap tval         0xac100000 = leaf[0], the same address as the stale arm. For MREV, tval is the rs1
+                    cursor (cva6.sv:1448 @4ad0df694).
+  -> the live dereference COMMITTED WITHOUT A TRAP; the value it read was not observed. Cause 26 is
+     MREV's type check (a tagged, non-linear capability, i.e. an intact alias); a stripped tag would
+     give 24. The board lane reports that the emulator refuses a live alias's mint the same way.
+  SAME IMAGE HASH on caplifive_m1_054cea69b.bit (2026-09-19): mcause 26 at +0x4360, tval 0xac100000,
+     an identical reading.
+  Also, in both arms every earlier harness access through a live alias (~43k allocations, each touching
+     its new alias through the same LSU path) committed without trapping. That is the larger control for
+     "not a blanket deny".
+
+== LADDER REFRESH, same boot as the stale arm, before it ==
+  17 of 17 rungs returned a RESULT, each equal to its value on caplifive_m1_054cea69b.bit in
+  tests/rtl-smoke/ladder-revival-2026-09-22/phase9-aligned-full-table.result-lines.txt, matched by name
+  and value (negative control: value+1 matches 0 of 17). None trapped, so no rung was falsely denied.
+  ctrsanitys 3688591409 . ctrsanity 43260934 . beebs_cover 1993178309 . rv8_primes 99991
+  rv8_sha512 1390718314 . beebs_aha_mont64 2185097489 . rv8_sha512s 2842840124 . beebs_prime 582955588
+  beebs_crc32 1703161001 . beebs_ns 1184999093 . beebs_cnt 2356896837 . beebs_bs 887447230
+  coremark_matrix 14343 . matmult_int 774662735 . beebs_janne 484656629 . beebs_recursion 1579141629
+  beebs_insertsort 271779359
+
+== WHAT THIS ESTABLISHES ==
+  On this bitstream, N=1 per arm, a revoked alias to leaf[0] is refused (cause 25), while a live alias to
+  the same leaf at the same address is not, and neither are ~43k earlier live accesses. The same images
+  on 054cea69b read live data through the revoked alias. The defect this folder reports -- a revoked
+  reference that reads the current occupant's data -- no longer reproduces on this probe.
+
+== LIMITS -- what these lines do NOT establish ==
+  - WHY it was denied. The oldest ids have been reissued thousands of times (reuses_since 2706/1353), and
+    the cache holds 256 entries under a 30-bit compare, so deny-on-miss is the EXPECTED route. The hit-dead
+    arm (observed revocation) is shown in simulation only (results/sim-rotate-stale.result-lines.txt).
+    The two stay confounded with residency here: the live alias was minted recently and would hit.
+  - Which k trapped (0 or 21648). If k=0 was allowed, a reference that stale still reads -- not settled.
+  - N=1 per arm; neither boot had a closing control.
+  - The cross-reflash pairs share image hash, monitor and buildroot, but NOT fw_payload (stale
+    741913660fc9 -> edf259ada40a; live 5eeee0ff3390 -> d6038a84b658), and the new stale boot ran the ladder
+    first. They are close pairs, not one-variable pairs.
+  - The stale WRITE was never reached on silicon, because the read trapped first. Write refusal is shown in
+    simulation only (results/sim-rotate-stale.result-lines.txt, arm C).
+  - False denies from deny-on-miss under a large live-id population (e.g. SQLite) are untested on silicon.
+  - Discriminator, if needed: a k=43295-only variant (just revoked, likely still resident as dead) against a
+    live alias installed more than 256 fills earlier and untouched since (a probable miss). If the live one
+    traps 25, the denial is selecting on residency, not revocation.

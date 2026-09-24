@@ -2,9 +2,15 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-24 — R-35's fix is synthesized and timing-clean at `4ad0df694`: a reflash candidate, not yet on silicon
+## 2026-09-24 — R-35's fix is on silicon, and the probe that exposed R-35 no longer reproduces it
 
-**R-35 FIX IS SYNTHESIZED, TIMING-CLEAN, AND A REFLASH CANDIDATE (2026-09-24).** `capstone-ariane` **`4ad0df694`** routes at **WNS -8.341, 0.034 ns from the flashed base's -8.307**, with 51.70 % failing endpoints against base's 51.76 %. All five pre-registered synthesis predictions pass. Bitstream sha256 `8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c`. **Nothing is on silicon yet**: the defect this folder reports is closed when the board probe that exposed it traps instead of reading live data. Full readings: the R-35 folder's `results/synth-4ad0df694.result-lines.txt`.
+**ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit):** the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: the R-35 folder's `results/board-4ad0df694.result-lines.txt`.
+
+**Next for R-35:** a SQLite workload on this image, which is the false-deny test at scale. If the lead wants the denial attributed, a k=43295-only variant paired with a long-idle live alias separates revocation from residency. **R-42** (I-cache killed-miss, performance): fix at capstone-ariane `6cbdaeeb4`, one commit on `4ad0df694`, validated in simulation; synthesis running (authorized by the lead 2026-09-24).
+
+## 2026-09-24 (earlier) — R-35's fix is synthesized and timing-clean at `4ad0df694`: a reflash candidate, not yet on silicon — **SUPERSEDED by the section above**
+
+**R-35 FIX IS SYNTHESIZED, TIMING-CLEAN, AND A REFLASH CANDIDATE (2026-09-24).** `capstone-ariane` **`4ad0df694`** routes at **WNS -8.341, 0.034 ns from the flashed base's -8.307**, with 51.70 % failing endpoints against base's 51.76 %. All five pre-registered synthesis predictions pass. Bitstream sha256 `8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c`. *(Flashed since; see the section above.)* Full readings: the R-35 folder's `results/synth-4ad0df694.result-lines.txt`.
 
 **What fixed the timing, in two parts** — `f83fe9342`'s −27.665 had two causes. The rev-node's *combinational* write-request selector drove the cache's write decode; `a87a24a59` registers the fill taps. And the cache's footprint crowded a congested region; `4ad0df694` moves the tag array into distributed RAM. Paths that went *past* the cache recovered ~18.5 ns untouched, which measures the congestion rather than inferring it.
 
