@@ -33,7 +33,12 @@ STACK=${FFAPP_STACK_BYTES:-$((256 * 1024))}       # declared stack (dom_data)
 # read that large goes zero-copy (it pins the destination pages), which a region mapping
 # refuses -> EFAULT (2026-09-23; the probe images below keep the /mnt/host twin for the
 # matched pair). run-qemu.sh copies the inputs into the guest's /tmp first.
-INPUT=${FFAPP_INPUT:-/tmp/input.mkv}
+# FFAPP_CLIP_SECONDS (build-native.sh): the workload. 1 is the run of record's clip and keeps
+# every path; another length compiles its own input path into the images, and they go to their
+# own directory (domain...-<n>s).
+CLIP=${FFAPP_CLIP_SECONDS:-1}
+SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
+INPUT=${FFAPP_INPUT:-/tmp/input$SFX.mkv}
 ORDER_CEILING=$((4 * 1024 * 1024))
 # FFAPP_HEAP: which allocator the images link. It is the only thing the arms differ in; the
 # FFmpeg libraries are shared (built once, under domain/), so an arm cannot differ by accident
@@ -76,6 +81,7 @@ if [ -n "$POOL" ]; then
          -I"$APP_DIR/../buffer-pool/src/shared")
   HOSTF+=(-DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL")
 fi
+OUT="$OUT$SFX"
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
 XB="$BASE/ffmpeg-build"
