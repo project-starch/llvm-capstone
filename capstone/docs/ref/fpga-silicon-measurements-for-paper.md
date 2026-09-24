@@ -713,13 +713,45 @@ The lead chose the layout-randomised measurement.
      test `sim-loopalign-ctrsanity.S`). Offset **44 (`…1ac`) runs 7.009 cycles/iteration; offsets 40,
      48, 52, 56 run 6.008–6.009** -- the board's 7-vs-6 split, cycle for cycle, and **identically in
      plain M-mode and after `capenter`**, so it is a property of the core's front end on 4-byte code,
-     not of capability execution. The geometry: at offset 44 the 20-byte loop fills bytes 44–63, so
-     its taken backward `bne` is the **last word of the 64-byte line (and of its 16-byte fetch
-     block)**; the loop fully inside the line with the branch mid-block (40) and the loops that
-     straddle the line boundary (48/52/56) are all fast. The mechanism (which front-end stage adds the
-     cycle) is the next step -- a waveform of the fetch path on this pair -- and is **not** claimed.
-     For the paper this upgrades the control's anomaly from a board-only observation to a
-     simulation-reproducible, capability-independent front-end layout effect.
+     not of capability execution.
+
+     **MECHANISM, established 2026-09-24 by waveform + a discriminating run + the RTL source.**
+     - **The unit is the 16-byte I-cache line, NOT 64 bytes.** This target's I-cache line is 128
+       bits (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:46`, `CVA6ConfigIcacheLineWidth = 128`) and
+       fetch is 4 bytes/cycle. An earlier version of this paragraph said "last word of the 64-byte
+       line (and of its 16-byte fetch block)"; the 64 was the test's sweep window, and the fetch
+       width is 4 bytes. Corrected here.
+     - **What happens.** Each cycle the front end fetches PC+4 speculatively. When the loop's taken
+       backward `bne` occupies the **last word of its 16-byte line** (address mod 16 = 12), that
+       PC+4 fetch lands in the NEXT line, which a 20-byte loop never executes. So it misses. The
+       predicted-taken redirect asserts `kill_s2` (`frontend.sv:345`: `kill_s2 = kill_s1 |
+       bp_valid`), and the I-cache FSM's miss path, when killed, drops to `IDLE` **without
+       issuing the refill** (`cva6_icache.sv:294-295`; `mem_data_req_o` at `:301` is never
+       reached).
+       - The redirect is then accepted a cycle late, which is the **+1 cycle/iteration**.
+       - Because the refill is abandoned, **the line is never installed and the miss recurs on
+         every iteration**.
+       - On the hit path the killed fetch still lets the FSM accept the redirect in the same cycle
+         (`:275-286`), so there is no bubble.
+     - **Waveform** (`sim-loopalign-wave.S`): at offset 44 the fall-through fetch at `0x80000080`
+       shows `cl_hit=0000`, `kill_s2=1` and the FSM READ→IDLE every iteration (period 7 cycles). At
+       offset 52 the fall-through at `0x80000108` shows `cl_hit=0001` and the FSM stays in READ
+       (period 6).
+     - **Discriminator** (`sim-loopalign-warm.S`): executing the line after the loop ONCE before
+       it removes the penalty, 7.453 → **6.453** cycles/iteration against the fast control's 6.406.
+     - **It predicts all five board offsets by position mod 16.** The branch sits 16 bytes after
+       the loop start, so it has the start's phase: `…1a8`→8, `…1ac`→**12**, `…1b0`→0, `…1b4`→4,
+       `…1b8`→8. Only `…1ac` is slow.
+
+     **For the paper and for the hardware side:**
+     - **The control's 16.7 %** is a front-end performance defect of this core: a speculatively
+       fetched I-cache miss that a taken-branch redirect kills is never refilled. It is not a
+       capability cost. Any loop whose taken backward branch falls in the last word of a 16-byte
+       line pays one cycle per iteration, in either half of the ladder.
+     - **This is also the mechanism behind the ladder's layout bands (phase 10)**, and it is what
+       `-falign-loops` and the layout pad move in and out of.
+     - **Worth handing to the RTL owner**, since refilling (or not killing) a demand miss that is
+       already on the right path would remove it. That is a design change, not ours.
 5. **Pre-registered prediction 2 (K=0 reproduces CURRENT within 0.5 %) rested on a premise that held
    for only 11 of 17 rungs.**
    - The premise was checked at the desk on one rung. For 6 rungs the TU's `.text` does not start

@@ -3,7 +3,7 @@
 # On caplifive_m1_054cea69b the ctrsanity control loop, five 4-byte instructions
 # srai/xor/addi/add/bne, costs 7 cycles per iteration when it starts at VA ...1ac and 6
 # when it starts at ...1a8, ...1b0, ...1b4 or ...1b8. This test reproduces those five
-# start offsets inside a 64-byte line (40, 44, 48, 52, 56) and times each loop with
+# start offsets inside a 64-byte sweep window (40, 44, 48, 52, 56; the I-cache line is 16 bytes) and times each loop with
 # mcycle, first in plain M-mode, then after capenter, because the board loop ran in
 # capability mode. Each arm: 4000 iterations. The RVFI trace records each csrr value.
 #

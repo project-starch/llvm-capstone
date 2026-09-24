@@ -16,3 +16,14 @@ capability  0x80000430  48             24037    6.009     4000
 capability  0x800004b4  52             24035    6.009     4000
 capability  0x80000538  56             24033    6.008     4000
 # board (phase 10): ...1ac (offset 44) = 7 cyc/iter; ...1a8/1b0/1b4/1b8 = 6. Reproduced exactly.
+
+# Waveform pair (sim-loopalign-wave.S, TRACE_FAST, 16 iterations, SUCCESS at 629 cycles):
+# slow loop 0x8000006c..7f: after the predicted-taken bne (npc already at 0x80000080, the NEXT
+#   64-byte line) -> 2 bubble cycles, the first with if_ready=0; period 7 cycles.
+# fast loop 0x800000f4..107: sequential look-ahead 0x80000108 is in a line the loop occupies ->
+#   1 bubble cycle, if_ready stays 1; period 6 cycles.
+# Discriminator (sim-loopalign-warm.S, 64 iterations, SUCCESS at 1704 cycles):
+arm                                   cycles  cyc/iter
+A offset 44, next line cold           477     7.453
+B offset 44, next line warmed once    413     6.453
+C offset 52 (fast control)            410     6.406
