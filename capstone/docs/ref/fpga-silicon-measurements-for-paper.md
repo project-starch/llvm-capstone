@@ -705,6 +705,21 @@ The lead chose the layout-randomised measurement.
    - For that loop the backward `bne` then sits in the **last 4 bytes of a 16-byte block**
      (`…1bc`), and so does the loop's end at a 64-byte boundary. Several candidate mechanisms fit.
      **None is claimed.** This is the specific pair E2b must simulate: `…1ac` against `…1b4`.
+
+     **E2b, RTL simulation (2026-09-24): REPRODUCED, and it is not a capability effect.** The board
+     loop (same five 4-byte instructions, 4000 iterations) was placed at the five board offsets
+     within a 64-byte line and timed by `mcycle` on the RTL of this bitstream (`capstone-ariane
+     054cea69b`, Verilator, `--sv_seed 1`; `ladder-revival-2026-09-22/sim-loopalign.result-lines.txt`,
+     test `sim-loopalign-ctrsanity.S`). Offset **44 (`…1ac`) runs 7.009 cycles/iteration; offsets 40,
+     48, 52, 56 run 6.008–6.009** -- the board's 7-vs-6 split, cycle for cycle, and **identically in
+     plain M-mode and after `capenter`**, so it is a property of the core's front end on 4-byte code,
+     not of capability execution. The geometry: at offset 44 the 20-byte loop fills bytes 44–63, so
+     its taken backward `bne` is the **last word of the 64-byte line (and of its 16-byte fetch
+     block)**; the loop fully inside the line with the branch mid-block (40) and the loops that
+     straddle the line boundary (48/52/56) are all fast. The mechanism (which front-end stage adds the
+     cycle) is the next step -- a waveform of the fetch path on this pair -- and is **not** claimed.
+     For the paper this upgrades the control's anomaly from a board-only observation to a
+     simulation-reproducible, capability-independent front-end layout effect.
 5. **Pre-registered prediction 2 (K=0 reproduces CURRENT within 0.5 %) rested on a premise that held
    for only 11 of 17 rungs.**
    - The premise was checked at the desk on one rung. For 6 rungs the TU's `.text` does not start

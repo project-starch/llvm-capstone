@@ -1,0 +1,18 @@
+# E2b -- the ctrsanity control loop in RTL simulation, capstone-ariane 054cea69b (the RTL of
+# caplifive_m1_054cea69b), Verilator testharness, --sv_seed 1, 2026-09-24.
+# Test: sim-loopalign-ctrsanity.S (the board loop srai/xor/addi/add/bne, 4-byte encodings,
+# 4000 iterations per arm, timed by mcycle), each loop start verified in the RVFI trace.
+# The run ends at the +time_out ceiling AFTER all ten arms (RVTEST_PASS in capability mode
+# traps to wfi); every arm below completed.
+mode        loop-start  offset-in-64B  cycles   cyc/iter  iterations
+M-mode      0x80000068  40             24034    6.008     4000
+M-mode      0x800000ec  44             28035    7.009     4000
+M-mode      0x80000170  48             24037    6.009     4000
+M-mode      0x800001f4  52             24035    6.009     4000
+M-mode      0x80000278  56             24033    6.008     4000
+capability  0x80000328  40             24037    6.009     4000
+capability  0x800003ac  44             28035    7.009     4000
+capability  0x80000430  48             24037    6.009     4000
+capability  0x800004b4  52             24035    6.009     4000
+capability  0x80000538  56             24033    6.008     4000
+# board (phase 10): ...1ac (offset 44) = 7 cyc/iter; ...1a8/1b0/1b4/1b8 = 6. Reproduced exactly.
