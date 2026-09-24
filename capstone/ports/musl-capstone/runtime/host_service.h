@@ -175,6 +175,17 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     if (rc < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
     return 0;
   }
+  case HC_V0_OP_PATH_RENAME: {
+    /* "old NUL new" in one range. The NUL has to be inside it, or there is no
+       second path and the request is malformed rather than a rename to "". */
+    memcpy(h->path, payload + req->offset, (size_t)req->length);
+    h->path[req->length] = '\0';
+    size_t lo = strnlen(h->path, (size_t)req->length);
+    if (lo >= (size_t)req->length) { hc_host_error(metadata, EINVAL); return 0; }
+    if (rename(h->path, h->path + lo + 1) < 0) hc_host_error(metadata, errno);
+    else hc_host_ok(metadata, 0);
+    return 0;
+  }
   case HC_V0_OP_DIR_READ: {
     /* lseek to the cookie, then getdents64 into the bounce buffer and on into
        the payload: the records are linux_dirent64 on both sides (the domain's
