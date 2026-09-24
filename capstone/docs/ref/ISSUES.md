@@ -6276,7 +6276,22 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
-### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — latent ODR violation, found 2026-09-24; harmless only because the project builds with BUILD_SHARED_LIBS=ON. FIX ON BRANCH compiler/c59-odr (efe9b957d538), NOT MERGED: the Capstone copy is made static, verified by symbol binding (T to t); the static link itself is not verified`
+### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
+
+> **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
+> target trees was enumerated and intersected, and each pair was reproduced with `ld -r`. **Sixteen
+> symbols collide** between `llvm/lib/Target/Capstone` and `llvm/lib/Target/RISCV`, not one:
+>
+> - twelve `isTune*Fusion`: ADDILoad, ADDLoad, AUIPCADDI, AUIPCLoad, BFExt, LDADD, LUIADDI,
+>   LUILoad, SHXADDLoad, ShiftedZExtW, ZExtH, ZExtW. They are emitted into `*GenMacroFusion.inc`,
+>   which is **tablegen output, so not a one-word `static` fix**;
+> - three that are a one-word fix: `getPredicatedOpcode` (`CapstoneInstrInfo.cpp`),
+>   `isRegImmLoadOrStore` (`CapstoneISelDAGToDAG.cpp`) and `PreferredLandingPadLabel`
+>   (`CapstoneIndirectBranchTracking.cpp`).
+>
+> Those objects link into any tool with both targets enabled, and they are more central than the
+> AsmParser object whose collision was the one observed. **The entry's original premise, one symbol,
+> was incomplete when filed.** Nothing here means "the static build is fixed".
 
 **What happens.** `llvm/lib/Target/Capstone/AsmParser/CapstoneAsmParser.cpp:3476` and
 `llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp:3346` each define
@@ -6376,7 +6391,24 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
 
-### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang. FIX ON BRANCH compiler/c61-eh-addrspace (8fb7d4461eca), NOT MERGED; C++ exceptions stay blocked behind C-63 even with it`
+### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `FIXED 2026-09-25, merged at 114f9678a670 (branch compiler/c61-eh-addrspace, 8fb7d4461eca): DwarfEHPrepare builds _Unwind_Resume's parameter and the exn.obj PHI in the exception object's own address space, guarded on isNonIntegralPointerType. C++ exceptions stay blocked behind C-63 and the absent unwind runtime`
+
+> **Two residuals, neither a regression, recorded so they are not rediscovered.**
+> 1. **An ARRAY-typed landingpad** (`landingpad [2 x ptr addrspace(200)]`) still aborts identically,
+>    because `dyn_cast<StructType>` cannot match it and the guard falls back to AS0. It is valid IR
+>    and clang never emits it. The fix is `isAggregateType()` plus `getContainedType(0)`.
+> 2. **A module that already declares `_Unwind_Resume` with an AS0 parameter** gets that existing
+>    declaration back from `getOrInsertFunction`, with nothing checking that the two agree. The call
+>    and the declaration can therefore diverge **silently**, where the pre-fix compiler aborted
+>    loudly. clang's C++ path never declares `_Unwind_Resume`, so this is reachable only from
+>    hand-written or linked mixed-address-space IR.
+>
+> **Verification (compiler lane):**
+> - the test is negative-tested two-sided, and the PHI-site CHECK is load-bearing at -O0 and -O2;
+> - no `.ll`/`.mir` in `llvm/test` or `clang/test` carries both a `resume` and an `ni:` datalayout;
+> - `llvm/test/CodeGen` + `llvm/test/Transforms` (38,745 tests) have failure sets identical to dev's
+>   baseline;
+> - Capstone lit passes 115/115.
 
 **What happens.** `DwarfEHPrepare::InsertUnwindResumeCalls` aborts with
 `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
