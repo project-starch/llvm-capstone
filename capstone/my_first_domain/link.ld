@@ -89,26 +89,32 @@ SECTIONS {
    *
    * Defining the sections gives both markers real, EQUAL addresses inside the
    * image, so the comparison is false without any capability being formed out of
-   * bounds. They are empty today -- verified across all 150 objects of the
-   * largest domain and all 1346 archive members, none has an .init_array,
-   * .fini_array, .ctors or .dtors -- so this adds symbols and no bytes.
+   * bounds. They were empty when this was written -- verified across all 150
+   * objects of the then-largest domain and all 1346 archive members, none had an
+   * .init_array, .fini_array, .ctors or .dtors -- so this added symbols and no
+   * bytes. Most domains still have none; see the note below for the first that did.
    *
    * KEEP, and placed HERE rather than left as orphans: an orphan section is
    * placed by the linker wherever it likes, and the .bss note below explains why
    * "wherever it likes" is not a safe answer in this script.
    *
-   * NOTE FOR THE DAY ONE APPEARS: nothing in a domain calls the INIT array.
-   * .capstone_cap_init is a different table with its own loop in start.S, and a
-   * real .init_array would need the same treatment there. The linker will keep
-   * it; the entry glue will not run it. */
+   * THE DAY ONE APPEARED (2026-09-24, the tshark port: GLib's and libgpg-error's
+   * constructors, libxml2's destructor). The musl runtime now runs both arrays
+   * (ports/musl-capstone/runtime/hostcall.c, ISSUES C-64): the slots hold LINK
+   * addresses as plain integers, since nothing relocates them, and it turns each
+   * into a callable capability. Priority sections (`constructor(N)`) are placed
+   * here too, sorted and ahead of the plain ones as the standard scripts do; left
+   * out, they would be orphans outside the markers that nothing runs. */
   .init_array : ALIGN(16) {
     __init_array_start = .;
+    KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
     KEEP(*(.init_array))
     __init_array_end = .;
   } :domain
 
   .fini_array : ALIGN(16) {
     __fini_array_start = .;
+    KEEP(*(SORT_BY_INIT_PRIORITY(.fini_array.*)))
     KEEP(*(.fini_array))
     __fini_array_end = .;
   } :domain

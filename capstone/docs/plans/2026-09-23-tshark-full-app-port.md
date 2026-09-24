@@ -698,6 +698,8 @@ recipe each, gated as in its README. What that took:
     `.fini_array` through integers);
   - GCond (musl-capstone's `pthread_cond_t` is too small for its own fields, glib-0008);
   - the unserved-syscall report, which was lost when the program closed fd 1.
+  On 2026-09-25 the first and third moved into the shared runtime (ISSUES C-64 and I-11 fixed).
+  The GCond one (C-65) awaits the lead's decision on a libc ABI change.
 - **Stalls:** one ntp section stalled in the guest before its domain started, the known QEMU stall
   class. Two later ntp runs returned.
 

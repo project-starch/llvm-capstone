@@ -195,7 +195,9 @@ Not counted, and every log is kept:
 - **Safety.** level0 is one arena without per-object bounds and without revocation. This is a
   compatibility result.
 - **Other captures and options:** only these captures, and only `-r -V -n`.
-- **The runtime fixes outside this port.** `.init_array` and `.fini_array` still do not work in any
-  other domain (C-64). musl-capstone's `pthread_cond_t` is still too small for its own fields
-  (C-65). The runtime's unserved report still goes to fd 1 (I-11). The complete fixes belong in
-  the shared runtime and libc.
+- **The runtime fixes outside this port.** C-64 and I-11 were fixed in the shared runtime on
+  2026-09-25 (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`), and this port's own
+  copy of the constructor support was removed. The stages and the oracle were rerun on that
+  runtime, with the same verdicts. musl-capstone's `pthread_cond_t` (C-65) is still too small for
+  its own fields. A patch is proposed and awaits the lead's decision; GLib avoids it through
+  glib-0008.

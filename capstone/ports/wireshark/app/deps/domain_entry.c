@@ -14,22 +14,19 @@
  * domain_entry.c). Each argument and variable taken is echoed to stderr, so a run shows what it
  * ran with.
  *
- * With neither file present: argv {"domain"} and an empty environment (musl's __environ would
- * otherwise be NULL, which getenv() dereferences). configure links every conftest through this
- * adapter, and reads nothing from the files there.
+ * The environment is read by __capstone_domain_environ(), which the runtime calls BEFORE the
+ * program's constructors (hostcall.c, ISSUES C-64): in C, environ exists before any constructor
+ * runs, and GLib's reads it. The command line is read by capstone_main, before main.
+ *
+ * With neither file present: argv {"domain"} and an empty environment. configure links every
+ * conftest through this adapter, and reads nothing from the files there.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern char **__environ;
 int main(int argc, char **argv);
-
-/* The program's constructors (.init_array), run before main. Nothing else in a domain runs them.
- * DEFINED weak with an empty body, not declared weak: an undefined weak symbol's address is not
- * NULL in a domain (ISSUES C-56). The tshark images link the real one (app/src/tsapp-init-fini.c);
- * configure's link tests get this one, and have no constructors. */
-__attribute__((__weak__)) void __capstone_run_init_array(void) {}
+char **__capstone_domain_environ(void);
 
 enum { ARGS_MAX = 32, ENVS_MAX = 16, LINE_MAX_BYTES = 512 };
 
@@ -50,13 +47,27 @@ static int read_lines(const char *path, char lines[][LINE_MAX_BYTES], int max)
 	return n;
 }
 
+char **__capstone_domain_environ(void)
+{
+	static char envl[ENVS_MAX][LINE_MAX_BYTES];
+	static char *envp[ENVS_MAX + 1];
+	int envc = read_lines("/tmp/domain.env", envl, ENVS_MAX);
+	int i;
+
+	for (i = 0; i < envc; i++) {
+		envp[i] = envl[i];
+		fprintf(stderr, "domain_entry: env %s\n", envl[i]);
+	}
+	envp[envc] = NULL;
+	return envp;
+}
+
 int capstone_main(void)
 {
-	static char argl[ARGS_MAX][LINE_MAX_BYTES], envl[ENVS_MAX][LINE_MAX_BYTES];
-	static char *argv[ARGS_MAX + 1], *envp[ENVS_MAX + 1];
+	static char argl[ARGS_MAX][LINE_MAX_BYTES];
+	static char *argv[ARGS_MAX + 1];
 	static char prog[] = "domain";
 	int argc = read_lines("/tmp/domain.argv", argl, ARGS_MAX);
-	int envc = read_lines("/tmp/domain.env", envl, ENVS_MAX);
 	int i;
 
 	for (i = 0; i < argc; i++) {
@@ -66,12 +77,5 @@ int capstone_main(void)
 	if (argc == 0)
 		argv[argc++] = prog;
 	argv[argc] = NULL;
-	for (i = 0; i < envc; i++) {
-		envp[i] = envl[i];
-		fprintf(stderr, "domain_entry: env %s\n", envl[i]);
-	}
-	envp[envc] = NULL;
-	__environ = envp;
-	__capstone_run_init_array();
 	exit(main(argc, argv));
 }

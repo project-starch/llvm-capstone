@@ -3499,6 +3499,50 @@ and the 2026-09-04 QEMU-pedigree retraction — a bisection that varies one thin
 second thing (the binary's provenance) does the work. The check that would have caught it was
 cheaper than the one run.
 
+### C-64 — a domain never runs `.init_array`, and musl's `exit()` cannot run `.fini_array` `FIXED 2026-09-25 in the musl-capstone runtime (hostcall.c) and my_first_domain/link.ld; regression test tests/runtime-qemu/init-fini/ (control: the runtime of 7b10f5f86db5); found 2026-09-24 by the tshark port, the first domain with either array non-empty; source read at 93860ed`
+
+**What happens.**
+- **`.init_array` is never called.** `start-musl.S` runs only `.capstone_cap_init`,
+  `domain_main` (`runtime/hostcall.c`) calls `capstone_main`, and musl's `__libc_start_main` is not
+  used. `my_first_domain/link.ld` says so ("nothing in a domain calls the INIT array … for the day
+  one appears"). A library constructor silently does not run. In tshark these were GLib's
+  `glib_init_ctor` and libgpg-error's `gpg_err_init`.
+- **`.fini_array` faults on its first slot.** musl's `exit.c` (`libc_exit_fini`) walks the array
+  through `uintptr_t` and loads each slot through an **integer address**: cause 24.
+- **A second defect behind the first, not reached:** each 16-byte slot holds the function's
+  **link** address as a plain integer. A static image carries no relocations, and the capability
+  initialisers do not cover these arrays. An audit scanned all 253 initialiser bodies of the
+  tshark image and found none that writes there.
+- **Priority constructors are orphaned.** `link.ld`'s `KEEP(*(.init_array))` does not match
+  `.init_array.NNN`/`.fini_array.NNN`, which then land outside the markers.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh c64` (two constructors, two
+destructors) halts with cause 24 in `exit.c` (log `qemu-oracle-20260925-002459-IGkM`).
+`run.sh c64-fixed`, the same program with the port's workaround, prints the native build's output
+byte for byte, order included.
+
+**Evidence.**
+- The first tshark boot halted in M1's `exit()` on the one `.fini_array` slot, libxml2's
+  `xmlDestructor` (`ports/wireshark/app/results/2026-09-24-qemu-tshark-staged/`).
+- An audit re-derived the faulting instruction and the slot from the image.
+
+**Worked around (tshark only).** `tsapp-init-fini.c`:
+- runs the constructors before `main`, from `deps/domain_entry.c`, through a DEFINED weak
+  default, so it is C-56-safe;
+- replaces musl's weak `__libc_exit_fini`;
+- calls each slot through an anchor function's code capability, moved by (slot − the anchor's
+  link address).
+`build-domain.sh` refuses an image with orphaned constructor sections.
+
+**Impact.** Any domain linking a C constructor or destructor. A survey of 219 recent domain images
+under `/tmp/capstone` (FFmpeg app, SQLite, the R1 campaigns, …) found none with either array
+non-empty. The check fires on tshark (32 and 16 bytes). So no shipped result is affected. The
+CPython domain's image was not on disk to check.
+
+**FIXED 2026-09-25** (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`): `domain_main` runs `.init_array` after the exit jump is armed, a strong `__libc_exit_fini` in `hostcall.c` replaces musl's, each slot goes through the anchor as above, and `link.ld` places priority sections inside the markers. `init-fini` prints exactly the native order (priority and plain constructors, destructors in reverse); its control halts with cause 24. The tshark port's own copy was removed. As first written: **the fix** belongs in the runtime (`domain_main` runs `.init_array`; the runtime overrides
+`__libc_exit_fini`, converting slots as above) and in `link.ld`
+(`KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))` beside the plain sections).
+
 ## Q-01 — `run-sqlite-memory.sh` cannot create its domain · ~~`RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`~~ `FIXED 2026-09-05 — the memory arm fits the module's allocation again (-O1 amalgamation, 256 KB arena)`
 
 > **Sweep 2026-09-05 — STILL PRESENT, same signature.** `run-sqlite-memory.sh` with the full console captured: `SQ: obs=18446744073709551615`, `create_dom failed`, rc 1. Cause line: the memory arm's image is `LOAD filesz 0x265307 memsz 0x365bb0` (.text 2.44 MB, .bss 1.05 MB of which `sqlite_heap` is 1 MB) against the silicon arm's 0x150818 (.text 1.31 MB, 256 KB arena), both at -O0; the module doubles the request, ~7 MB = order 11 > MAX_ORDER 10, as the entry says. **FIXED 2026-09-05 (compiler lane), verified:** `run-sqlite-memory.sh` now builds the amalgamation at -O1 with a 256 KB arena (`SQLITE_OPT_LEVEL`, `DOMAIN_EXTRA_FLAGS=-DSQLITE_HEAP_SIZE=262144`, default ABI kept, glue/libc/VFS still -O0); the image is `LOAD filesz 0x12bf17 memsz 0x16c7c0` (1.49 MB: .text 1.15 MB, .bss 258 KB), the doubled request fits order 10, and the run reaches all five markers (`row name=alpha/beta/gamma`, `__CAPSTONE_SQLITE_EXTENDED_PASSED__`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`), rc 0. -O0 SQLite coverage stays with the SLT twins. The module is not touched.
@@ -4393,3 +4437,18 @@ Until then, check which of the two `.dom` names a result cites before rebuilding
 add/add pairs on the merged tree — run it against the pre-rename tip `890c02fc0512` instead and it
 reports two. An instrument that cannot produce the non-zero answer has not cleared anything.
 
+### I-11 — the runtime's unserved-syscall report is lost, and reads as "none", when the program has closed fd 1 `FIXED 2026-09-25 in the musl-capstone runtime (hostcall.c: the report goes through the WRITE_STDOUT rounds directly); regression test tests/runtime-qemu/unserved-report/ (control: the runtime of 7b10f5f86db5); found 2026-09-24 by the tshark port; source read at 93860ed`
+
+**What happens.** `hc_report_unserved` (`runtime/hostcall.c`) writes its
+`capstone-domain: UNSERVED syscalls: …` line with `write(1, …)` after the program has ended. `hc_close`
+marks a closed stdio descriptor in `hc_stdio_closed`, and later writes to it fail with EBADF. A
+program that closed fd 1 therefore loses the report without a trace. A missing line is what "none
+unserved" looks like, so the loss reads as a clean result. The full tshark run closes fd 1: its M5
+image printed no line, while M4 (the same program, stopped earlier) listed fifteen calls.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh i11` calls uname twice and then
+`close(1)`. The domain's output has 0 runtime UNSERVED lines; the port's exit hook, on fd 2,
+reports `unserved=160x2 stdout=closed` (log `qemu-oracle-20260925-002557-yPoh`).
+
+**FIXED 2026-09-25:** `hc_report_unserved` calls `hc_stdout_bytes`, the WRITE_STDOUT rounds without the descriptor check, so a program's `close(1)` cannot drop it. The full tshark run now ends with the runtime's line, identical to the port's fd-2 report. As first written: **the fix:** write the report to fd 2, or let the runtime's own report bypass the program's
+closed flag. Until then, a missing line is not evidence that nothing was unserved.

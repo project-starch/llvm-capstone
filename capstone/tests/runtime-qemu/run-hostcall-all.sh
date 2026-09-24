@@ -27,6 +27,8 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-stdio-descriptors-probe.sh"
   "$SCRIPT_DIR/run-hostcall-return-flush-probe.sh"
   "$SCRIPT_DIR/run-hostcall-thread-local-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-init-fini-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-unserved-report-probe.sh"
 )
 
 capstone_select_banner hostcall

@@ -471,16 +471,13 @@ static long hc_readv(long fd, const struct iovec *iov, long count) {
   return (long)done;
 }
 
-static long hc_write(long fd, const char *buf, unsigned long count) {
+/* The WRITE_STDOUT rounds themselves, with no descriptor check: the program's
+   own writes reach this through hc_write, and the runtime's own report at exit
+   calls it directly (hc_report_unserved). */
+static long hc_stdout_bytes(const char *buf, unsigned long count) {
   unsigned long done = 0;
-
-  /* Anything above stderr is a handle this domain opened, and goes through
-     FILE_WRITE with its own position. */
-  if (fd >= HC_FD_BASE)
-    return hc_file_rw(fd, (char *)buf, count, 1);
-  if (!hc_is_stdio(fd))
-    return -EBADF;
-
+  if (!hc_payload)
+    return -EIO; /* no region shared yet: there is nowhere to put the bytes */
   while (done < count) {
     unsigned long chunk = count - done;
     if (chunk > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
@@ -501,6 +498,16 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
       break; /* short write is a legal result; do not spin */
   }
   return (long)done;
+}
+
+static long hc_write(long fd, const char *buf, unsigned long count) {
+  /* Anything above stderr is a handle this domain opened, and goes through
+     FILE_WRITE with its own position. */
+  if (fd >= HC_FD_BASE)
+    return hc_file_rw(fd, (char *)buf, count, 1);
+  if (!hc_is_stdio(fd))
+    return -EBADF;
+  return hc_stdout_bytes(buf, count);
 }
 
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
@@ -700,9 +707,11 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
  * that asked ever saw it, so a domain that never asked was silently wrong.
  * Every domain now says so on its way out.
  *
- * write(2) and not printf: this runs after the program is finished, and on the
- * exit() path musl's stdio has already been torn down. write goes straight
- * through the hostcall and needs nothing that may have been taken apart.
+ * Straight through the hostcall, not printf and not write(2): this runs after
+ * the program is finished, and on the exit() path musl's stdio has already been
+ * torn down. Not write(2) either, because that goes through the program's
+ * descriptors: a program that closed fd 1 (a full tshark run does) had the report
+ * refused with EBADF, and a missing line reads as "nothing unserved" (ISSUES I-11).
  *
  * Numbers, not names: a table of three hundred names is not worth the bytes in
  * every domain image when both readers already translate. The suite's runner
@@ -750,12 +759,93 @@ static void hc_report_unserved(void) {
       buf[p++] = more[i];
   }
   buf[p++] = '\n';
-  write(1, buf, p);
+  hc_stdout_bytes(buf, p);
 }
 
 unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
 long __capstone_unserved_at(unsigned long i) {
   return i < HC_UNSERVED_MAX && i < hc_unserved_n ? hc_unserved[i] : -1;
+}
+
+/* Constructors and destructors: .init_array and .fini_array (ISSUES C-64).
+ *
+ * Nothing else in a domain runs them. start-musl.S runs only .capstone_cap_init,
+ * and musl's __libc_start_main, which would, is not used. musl's exit() walks
+ * .fini_array through uintptr_t,
+ *
+ *     uintptr_t a = (uintptr_t)&__fini_array_end;
+ *     for (; a > (uintptr_t)&__fini_array_start; a -= sizeof(void(*)()))
+ *         (*(void (**)())(a - sizeof(void(*)())))();
+ *
+ * and loads each slot through an integer address: cause 24 on the first one.
+ * Both stayed invisible while no domain had either array. The tshark port was
+ * the first, with GLib's and libgpg-error's constructors and libxml2's
+ * destructor.
+ *
+ * THE SLOTS ARE NOT CAPABILITIES. A static domain image carries no relocations,
+ * and the capability initialisers do not cover these arrays, so each 16-byte slot
+ * holds the function's LINK address as a plain integer in its low 8 bytes, and
+ * the domain runs at another base. The callable capability is derived from the
+ * code capability of a function in this file, the anchor, moved by the distance
+ * between the two link addresses. The anchor's own link address is written into
+ * .rodata by the assembler (`.quad`), which the static link resolves exactly as
+ * it resolves the slots. A slot that does hold a tagged capability is called as
+ * it is.
+ *
+ * The array markers are defined by my_first_domain/link.ld, the script every musl
+ * domain links with, so their addresses are real ones (an undefined weak symbol's
+ * would not be: C-56). __libc_exit_fini replaces musl's weak alias of the same
+ * name (src/exit/exit.c); musl's version also calls _fini(), which in a domain is
+ * its empty default. */
+extern const unsigned char __init_array_start[], __init_array_end[];
+extern const unsigned char __fini_array_start[], __fini_array_end[];
+
+void __capstone_init_fini_anchor(void);
+void __capstone_init_fini_anchor(void) {}
+
+extern const unsigned long __capstone_init_fini_anchor_link;
+__asm__(".section .rodata\n"
+        ".p2align 3\n"
+        ".globl __capstone_init_fini_anchor_link\n"
+        "__capstone_init_fini_anchor_link:\n"
+        ".quad __capstone_init_fini_anchor\n"
+        ".previous\n");
+
+typedef void (*hc_array_fn)(void);
+
+static void hc_call_array_slot(const unsigned char *slot) {
+  hc_array_fn f = *(const hc_array_fn *)slot;
+  if (!__builtin_capstone_cap_get_tag(f)) {
+    unsigned long link = *(const unsigned long *)slot;
+    f = (hc_array_fn)((const char *)__capstone_init_fini_anchor +
+                      (long)(link - __capstone_init_fini_anchor_link));
+  }
+  f();
+}
+
+/* The environment the program starts with. In C, environ exists before any
+ * constructor runs, and a constructor may read it: GLib's reads G_DEBUG and
+ * G_MESSAGES_PREFIXED. A domain has no environment of its own, so its entry says
+ * what it is, and domain_main sets it before the constructors run. DEFINED weak,
+ * not declared (C-56): the default is an empty environment, and an entry whose
+ * program has one defines this. An entry may still set __environ itself in
+ * capstone_main, as every entry did before this existed. */
+extern char **__environ;
+__attribute__((__weak__)) char **__capstone_domain_environ(void) {
+  static char *none[] = { 0 };
+  return none;
+}
+
+static void hc_run_init_array(void) {
+  for (const unsigned char *p = __init_array_start; p < __init_array_end;
+       p += sizeof(hc_array_fn))
+    hc_call_array_slot(p);
+}
+
+void __libc_exit_fini(void) {
+  for (const unsigned char *p = __fini_array_end; p > __fini_array_start;
+       p -= sizeof(hc_array_fn))
+    hc_call_array_slot(p - sizeof(hc_array_fn));
 }
 
 /* Domain entry. The first two entries carry the shared regions; the third runs
@@ -799,9 +889,13 @@ void domain_main(unsigned *res, unsigned func) {
   volatile int status;
   int jumped = setjmp(hc_exit_jb);
   hc_exit_armed = 1;
-  if (jumped)
+  if (jumped) {
     status = hc_exit_status;
-  else
+  } else {
+    /* The environment, then the constructors, then main, as in C; after the
+       exit jump is armed, since a constructor may call exit() (C-64). */
+    __environ = __capstone_domain_environ();
+    hc_run_init_array();
     /* A program that returns ends as returning from main ends in C: through
        exit(), so its atexit handlers run and stdio is flushed, and the exit
        syscall brings the status back here through the jump above. Returning
@@ -809,6 +903,7 @@ void domain_main(unsigned *res, unsigned func) {
        first flush, so exactly the first line of a returning program reached the
        host and the rest was lost (FFmpeg and CPython each worked around it). */
     exit(capstone_main());
+  }
   hc_exit_armed = 0;
   hc_report_unserved();
 
